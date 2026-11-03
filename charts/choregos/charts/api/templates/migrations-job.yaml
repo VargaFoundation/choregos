@@ -85,11 +85,11 @@ spec:
       containers:
         - name: migrations
           image: {{ include "choregos.image" (dict "global" .Values.global "image" .Values.image) }}
-          # `migrer` finds the migrations INSIDE the package, wherever it is launched from, and also runs the
+          # `migrate` finds the migrations INSIDE the package, wherever it is launched from, and also runs the
           # branches declared by plugins (`choregos.migrations`): `upgrade heads`, not
           # `head`. The former `alembic -c alembic.ini upgrade head` required `/app/apps/api` as the
           # working directory, and only saw the core.
-          command: ["python", "-m", "choregos_api.migrer"]
+          command: ["python", "-m", "choregos_api.migrate"]
           env: {{- include "choregos.commonEnv" . | nindent 12 }}
           securityContext: {{- toYaml .Values.global.securityContext | nindent 12 }}
           resources:

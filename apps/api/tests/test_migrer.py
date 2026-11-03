@@ -158,7 +158,7 @@ def test_un_emplacement_declare_mais_absent_arrete_la_commande(tmp_path: pathlib
     try:
         from choregos_api.migrer import emplacements_des_greffons
 
-        with pytest.raises(RuntimeError, match=r"greffon_vide.*n'existe pas"):
+        with pytest.raises(RuntimeError, match=r"greffon_vide.*does not exist"):
             emplacements_des_greffons()
     finally:
         sys.path.remove(str(racine))

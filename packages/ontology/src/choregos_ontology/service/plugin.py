@@ -6,7 +6,8 @@
     [project.entry-points."choregos.migrations"]
     choregos-ontology = "choregos_ontology.service.plugin:MIGRATIONS"
 
-**The plugin ships inactive.** It turns on only with `CHOREGOS_ESSAI_ONTOLOGIE=1` (in the chart:
+**The plugin ships inactive.** It turns on only with `CHOREGOS_ONTOLOGY_TRIAL=1` (the former name,
+`CHOREGOS_ESSAI_ONTOLOGIE`, works until 0.22.0 and logs a deprecation warning; in the chart:
 `global.extraEnv`, which gives it to the API, the workers and the migration Job). Inactive, `register()`
 declares nothing and `MIGRATIONS` names a directory without any revision: an installation that did not
 ask for it serves none of its routes, announces none of its tools, and has none of its tables. This is
@@ -15,21 +16,43 @@ what lets the platform trial ship without changing anyone's platform.
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 
 NAME = "choregos-ontology"
 #: The name under which a template ships an ontology: `defaults.extensions.ontology`.
 INSTALLER = "ontology"
-#: The switch, as deployments already set it: a configuration name, kept as it is.
-ACTIVATION = "CHOREGOS_ESSAI_ONTOLOGIE"  # lang: fr-ok - an environment variable deployments set
+#: The switch (ADR 0098 §3 (f)).
+ACTIVATION = "CHOREGOS_ONTOLOGY_TRIAL"
+#: The switch as deployments set it until 0.21: still honoured until 0.22.0, with a warning.
+FORMER_ACTIVATION = "CHOREGOS_ESSAI_ONTOLOGIE"  # lang: fr-ok alias:external
+_TRUE = {"1", "true", "yes"}
+_log = logging.getLogger(__name__)
+_warned: list[bool] = []
 _HERE = Path(__file__).resolve().parent
 VERSIONS = _HERE / "migrations" / "versions"
 INACTIVE = _HERE / "migrations" / "inactive"
 
 
+def _on(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in _TRUE
+
+
 def active() -> bool:
-    return os.environ.get(ACTIVATION, "").strip().lower() in {"1", "true", "yes"}
+    """The extension is active when `CHOREGOS_ONTOLOGY_TRIAL` or its former name is on."""
+    if _on(ACTIVATION):
+        return True
+    if _on(FORMER_ACTIVATION):
+        if not _warned:
+            _warned.append(True)
+            _log.warning(
+                "%s is deprecated: set %s instead (the former name is removed in 0.22.0)",
+                FORMER_ACTIVATION,
+                ACTIVATION,
+            )
+        return True
+    return False
 
 
 class _Location(os.PathLike[str]):

@@ -854,7 +854,8 @@ global:
 
 ## Database migrations
 
-Alembic runs as a Helm hook before the API starts, through `python -m choregos_api.migrer`
+Alembic runs as a Helm hook before the API starts, through `python -m choregos_api.migrate`
+(the former `python -m choregos_api.migrer` works until 0.22.0)
 (`upgrade heads`: the core, then the branch of any installed plugin that ships a schema):
 
 ```yaml

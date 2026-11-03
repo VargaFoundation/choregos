@@ -248,7 +248,7 @@ def test_an_eval_names_an_agent_of_the_plugin(plugin: Path) -> None:
 
 
 def _catalogue_cases() -> list[Any]:
-    from choregos_core.catalogue_d_agents.evals import cases
+    from choregos_core.agent_catalogue.evals import cases
 
     return cases()
 
