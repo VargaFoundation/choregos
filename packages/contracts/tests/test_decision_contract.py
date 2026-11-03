@@ -137,8 +137,8 @@ def _question(name: str, question: dict[str, Any]) -> dict[str, Any]:
         ),
         pytest.param(_question("risk", {"type": "score", "instructions": "x"}), id="score without levels"),
         pytest.param(
-            _question("risk", {"type": "score", "instructions": "x", "levels": ["a", "b"] * 6}),
-            id="twelve levels",
+            _question("risk", {"type": "score", "instructions": "x", "levels": [str(i) for i in range(11)]}),
+            id="eleven levels: the gateway caps a score at 10",
         ),
         pytest.param(_question("ok", {"type": "yes_no", "instructions": ""}), id="empty instructions"),
         pytest.param(

@@ -162,7 +162,8 @@ class ScoreQuestion(Strict):
 
     type: Literal["score"] = "score"
     instructions: DecisionInstructions
-    levels: list[DecisionLabel] = Field(min_length=2, max_length=11)
+    #: At most 10: the gateway's decision route (LiteLLM 1.105.5) refuses more criteria.
+    levels: list[DecisionLabel] = Field(min_length=2, max_length=10)
 
     @field_validator("levels")
     @classmethod

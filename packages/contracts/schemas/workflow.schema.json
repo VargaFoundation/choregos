@@ -1032,14 +1032,14 @@
             "levels": {
               "type": "array",
               "minItems": 2,
-              "maxItems": 11,
+              "maxItems": 10,
               "uniqueItems": true,
               "items": {
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 200
               },
-              "description": "The ordered levels of the score, lowest first; the answer is one of them."
+              "description": "The ordered levels of the score, lowest first; the answer is one of them. At most 10: the gateway's decision route (LiteLLM 1.105.5) refuses more."
             }
           }
         }
