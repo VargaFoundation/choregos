@@ -17,6 +17,9 @@ const OUTCOME: Record<string, { label: string; tone: Tone }> = {
   labels_updated: { label: "labels updated", tone: "neutral" },
   ignored_no_item_key: { label: "ignored: names no work item", tone: "warn" },
   ignored_not_agent_ready: { label: "ignored: not labelled agent-ready", tone: "warn" },
+  already_open: { label: "already open: same key", tone: "neutral" },
+  refused: { label: "refused", tone: "warn" },
+  ignored: { label: "ignored: did not match the trigger's filter", tone: "neutral" },
 };
 
 /**
@@ -35,8 +38,9 @@ export function ReceivedEvents({ slug }: { slug: string }) {
   return (
     <Card title="Received events" data-testid="received-events">
       <p className="mb-3 text-sm text-ink-muted">
-        The webhook events the project&apos;s tools sent (tracker, repository, CI, deployment, alerts) and what Choregos
-        did with each. Only what reached this project is listed; nothing a person wrote is kept.
+        The webhook events the project&apos;s tools sent (tracker, repository, CI, deployment, alerts), the calls to its
+        HTTP triggers and the firings of its schedules, and what Choregos did with each. Only what reached this project
+        is listed; nothing a person wrote is kept.
       </p>
       {pages.error ? (
         <ErrorNote>{String(pages.error)}</ErrorNote>
