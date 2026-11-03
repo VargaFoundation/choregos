@@ -208,7 +208,7 @@ class MemoryAdapter(Protocol):
 #:   (ADR 0084): a policy with `sandbox.llm_security_analyzer` is refused on a gateway without it;
 #: - `systemone`: serves decision models on `POST /v1/systemone` under a virtual key, with the same
 #:   budgets and spend logs as chat models (LiteLLM >= 1.104.2), which a decision step needs
-#:   (ADR 0120): one is refused for a project whose gateway does not.
+#:   (ADR 0121): one is refused for a project whose gateway does not.
 GATEWAY_CAPABILITIES: frozenset[str] = frozenset(
     {
         "list_models",
@@ -241,7 +241,7 @@ def llm_guard_refusal(gateway: Any) -> str | None:
 
 
 def decision_route_refusal(gateway: Any) -> str | None:
-    """Why `gateway` cannot serve a decision step (ADR 0120), or None when it can.
+    """Why `gateway` cannot serve a decision step (ADR 0121), or None when it can.
 
     A decision step calls its model through the gateway, never directly, so that its cost is counted
     and capped at the source: a gateway without the decision route has nowhere to send it.

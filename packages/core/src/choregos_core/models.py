@@ -92,7 +92,7 @@ RUNTIME_BACKENDS: tuple[str, ...] = ("code", "prompt", "hosted")
 
 
 #: What a catalogue entry may serve (ADR 0060): `route` picks a work item's workflow (ADR 0116),
-#: `decide` answers a decision step's typed questions (ADR 0120).
+#: `decide` answers a decision step's typed questions (ADR 0121).
 USAGES: tuple[str, ...] = ("agent", "embed", "distill", "eval", "route", "decide")
 TIERS: tuple[str, ...] = ("cheap", "standard", "strong", "aux", "embed", "local")
 
@@ -121,7 +121,7 @@ class ModelPolicy:
     tiers: dict[str, str | None] = field(default_factory=dict)
 
     def check_decision(self, name: str) -> str | None:
-        """The refusal for a decision step's model (ADR 0120 §3), or `None` when it may serve one.
+        """The refusal for a decision step's model (ADR 0121 §3), or `None` when it may serve one.
 
         Stricter than `check`: even in `open` mode the model needs an entry that enables `decide`. A
         decision model answers typed questions with probabilities and a chat model does not, so a

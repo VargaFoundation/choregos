@@ -62,7 +62,7 @@ def test_only_a_gateway_that_holds_the_llm_guard_can_carry_a_marked_key() -> Non
 
 
 def test_only_a_gateway_with_the_decision_route_can_serve_a_decision_step() -> None:
-    """ADR 0120 §4: LiteLLM serves `/v1/systemone` (>= 1.104.2); the other gateways have no such route."""
+    """ADR 0121 §4: LiteLLM serves `/v1/systemone` (>= 1.104.2); the other gateways have no such route."""
     from choregos_adapters.base import decision_route_refusal
 
     client = httpx.AsyncClient()

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The `decide` usage (ADR 0120 §3): only a catalogue entry that enables it serves a decision step."""
+"""The `decide` usage (ADR 0121 §3): only a catalogue entry that enables it serves a decision step."""
 
 from __future__ import annotations
 

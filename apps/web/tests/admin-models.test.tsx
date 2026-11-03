@@ -152,7 +152,7 @@ describe("the Models page", () => {
     );
   });
 
-  it("enables a model for decision steps (ADR 0120)", async () => {
+  it("enables a model for decision steps (ADR 0121)", async () => {
     show();
     fireEvent.click(await screen.findByLabelText("decide usage of platform/standard"));
     await waitFor(() =>
