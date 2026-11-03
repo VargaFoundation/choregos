@@ -88,4 +88,3 @@ def test_the_dated_action_history_is_the_renamed_file_and_is_written_under_that_
     assert (HISTORIES / "wi-dated-action-S20-05.json").is_file()
     assert not (HISTORIES / "wi-action-a-date-S20-05.json").exists()  # lang: fr-ok
     assert '"wi-dated-action-S20-05.json"' in (TESTS / "test_dated_action.py").read_text("utf-8")
-
