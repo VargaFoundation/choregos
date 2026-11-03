@@ -1663,6 +1663,15 @@ for a project, `GET /projects/{id}/memory/search?q=â€¦&memory=decisions` and `â€
 (`memory` defaults to `shared`). Global memories are stored by the organisation's `memory` connector when
 it declares one (`/orgs/{org}/connectors`), else by the deployment default.
 
+**The project's policy decides first.** A project whose policy says `memory: {enabled: false}` binds
+**no** memory, whatever its agents ask for: the run's `memories` is empty, its `memory_scope` is `none`,
+the memory MCP server is not handed to it, and each binding the agent asked for is listed on the run
+page as a `memory.skipped` event, reason "the project's policy disables memory (memory.enabled: false)".
+Nothing is refused (ADR 0007): the project validation the workflow editor calls
+(`POST /projects/{id}/workflows/validate`) warns on each actor whose agent binds memory under such a
+policy (`agent.memory_disabled_by_policy`, path `/actors/<id>/agent`), and publishing such a workflow, or
+a policy that turns memory off under one, logs a `policy.memory_disabled` warning per agent.
+
 **At run time.** When a stage is prepared, each binding is resolved for the run's project, in order. A
 global memory must exist, be active and reach the project; a named project memory must exist and be
 active in it; a binding that does not resolve is **skipped, never fatal**, and the run page lists it

@@ -129,7 +129,8 @@ memories hold the same subject, the first is kept, and what fits the token budge
 memory in turn. At most one binding **writes**: the run's lessons and the agent's proposals go there; for
 a **global** memory they are only ever **proposals**, accepted by an administrator. A version that
 says nothing keeps its legacy `memory` field (`project`, `agent`, `none`), which means the same
-bindings as before; nothing already published changes.
+bindings as before; nothing already published changes. The project's **policy** has the last word:
+with `memory.enabled: false`, a run binds no memory at all, whatever its agent asks for.
 
 ## Knowledge bases
 
