@@ -1,6 +1,7 @@
 # 0044 — People are declared in the workflow; the policy's `approvals` and human review are not guards
 
 - **Status**: accepted, 2026-10-10
+  Amended by [ADR 0101](0101-governance-the-platform-does-not-enforce-is-refused.md)
 - **Concerns**: `choregos_core.policy` (`PolicyEngine`, `policy_warnings`), the `solo`, `team` and
   `regulated` presets, the `github-software-delivery` template, `PUT /projects/{id}/policy`, the
   console's settings screen; follows [ADR 0041](0041-approval-follows-what-the-batch-ships.md)
