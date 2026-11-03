@@ -779,10 +779,11 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S52-05 | S52 | ⬜ | — | The decision ledger, outcomes observed after the fact (overridden, terminal outcome, reopened) and calibration measured from it ([ADR 0121](../adr/0121-a-decision-is-a-step-recorded-and-measured.md) §6, §7). Not started. |
 | S52-06 | S52 | ⬜ | — | The decision step on the map and the calibration card ([ADR 0121](../adr/0121-a-decision-is-a-step-recorded-and-measured.md) §7). Not started. |
 | S52-07 | S52 | ⬜ | — | A catalogue workflow: classify, route, escalate below a threshold ([ADR 0121](../adr/0121-a-decision-is-a-step-recorded-and-measured.md)). Not started. |
+| S52-09 | S52 | ✅ | — | The catalogue knows a decision model ([ADR 0121](../adr/0121-a-decision-is-a-step-recorded-and-measured.md) §3). LiteLLM lists Jev and Laya as `mode: evaluation` (read in `litellm==1.105.5`'s price map: every `typesafe/*` and `laya/*` entry); `GatewayModel.mode` carries it (core, API DTOs, OpenAPI `GatewayModel` and `ModelGatewayFacts`), the LiteLLM adapter reads it and says such a model calls no tool (LiteLLM leaves `supports_function_calling` null for them, which the catalogue read as a yes), and a sync creates its entry with the `decide` usage only (`usages_of`), so `platform/decide` is never an agent's model by default. **Proves**: `packages/adapters/tests/test_http_contracts.py::test_litellm_a_decision_model_is_listed_as_one_and_calls_no_tool`, `apps/api/tests/test_model_catalogue.py::test_a_decision_model_arrives_for_decision_steps_only`. **Does not prove**: an entry synced before this change keeps the `agent` usage it was given (the sync never rewrites what exists); a gateway that is not LiteLLM reports no mode, so its models stay `chat`. |
 
 
 
-**Total** : 472 livrées, 275 partielles, 12 non commencées. <!-- lang: fr-ok: parsed by tests/docs/test_comptes_de_status.py -->
+**Total** : 473 livrées, 275 partielles, 12 non commencées. <!-- lang: fr-ok: parsed by tests/docs/test_comptes_de_status.py -->
 
 
 **2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est
