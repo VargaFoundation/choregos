@@ -81,6 +81,7 @@ from ..schemas.knowledge import (
 )
 from ..secret_store import resolved_configuration
 from ..services.egress import egress_scope, ensure_or_409, knowledge_source_targets, targets_of_connector
+from ..services.organisations import organisation_by_slug
 from ..services.outbound_proxy import proxy_scope
 from ..services.platform_network import check_platform_host
 from ..temporal import get_temporal, knowledge_distill_id, knowledge_sync_id
@@ -92,15 +93,6 @@ router = APIRouter(tags=["knowledge"])
 Slug = Annotated[str, Path(pattern=r"^[a-z][a-z0-9-]{1,62}$")]
 #: What a multipart envelope adds around the file, at most, before the size cap refuses it.
 ENVELOPE = 64 * 1024
-
-
-async def _organisation(session: AsyncSession, slug: str) -> Organization:
-    organisation = (
-        await session.execute(select(Organization).where(Organization.slug == slug))
-    ).scalar_one_or_none()
-    if organisation is None:
-        raise not_found("Organisation", slug)
-    return organisation
 
 
 def _member(principal: Me, org: str) -> None:
@@ -154,7 +146,7 @@ async def _base(session: AsyncSession, principal: Me, org: str, slug: str) -> Kn
 
     Reading is the reach, or any role granted on the base (ADR 0081), so the grants are loaded here.
     """
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     base = (
         await session.execute(
             select(KnowledgeBase).where(KnowledgeBase.org_id == organisation.id, KnowledgeBase.slug == slug)
@@ -325,7 +317,7 @@ async def _index_state(session: AsyncSession, base: KnowledgeBase) -> dict[str, 
 @router.get("/orgs/{org}/knowledge", response_model=list[KnowledgeBaseDto], operation_id="listKnowledgeBases")
 async def list_knowledge_bases(org: str, session: Db, principal: Me) -> list[KnowledgeBaseDto]:
     _member(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     bases = list(
         (
             await session.execute(
@@ -354,7 +346,7 @@ async def create_knowledge_base(
     org: str, body: KnowledgeBaseCreate, session: Db, principal: Me
 ) -> KnowledgeBaseDto:
     _manage(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     if (
         await session.execute(
             select(KnowledgeBase.id).where(
@@ -403,7 +395,7 @@ async def create_project_knowledge_base(
     """A base owned by this project (S39-14): served to its runs only, curated by its owners
     (`project:write`). Its owners, like the administrator, may widen its reach."""
     ctx.require(Permission.PROJECT_WRITE)
-    organisation = await _organisation(session, ctx.org_slug)
+    organisation = await organisation_by_slug(session, ctx.org_slug)
     if (
         await session.execute(
             select(KnowledgeBase.id).where(
@@ -475,7 +467,9 @@ async def update_knowledge_base(
         raise unprocessable("scope `projects` names at least one project")
     if scope == "groups" and not groups:
         raise unprocessable("scope `groups` names at least one group")
-    await _known_projects(session, await _organisation(session, org), projects if scope == "projects" else [])
+    await _known_projects(
+        session, await organisation_by_slug(session, org), projects if scope == "projects" else []
+    )
     reindex = changes.get("serving_mode") == "index" and base.serving_mode != "index"
     for field in ("name", "description", "serving_mode", "status", "restricted"):
         if field in changes and changes[field] is not None:
@@ -617,7 +611,7 @@ async def put_knowledge_grants(
     _member(principal, org)
     base = await _base(session, principal, org, slug)
     _require(principal, org, base, KnowledgeAction.SHARE)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     wanted = await _checked_grants(session, organisation, body.grants)
     current = {(grant.subject_type, grant.subject): grant for grant in await _load_grants(session, base)}
     added = sorted(
@@ -1264,7 +1258,7 @@ async def create_knowledge_source(
     repository; synced at once, then every `interval_minutes`. `agent:manage`."""
     base = await _base(session, principal, org, slug)
     _require(principal, org, base, KnowledgeAction.EDIT)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     config = await _checked_source_config(session, organisation, body.kind, body.connector, body.config)
     await _egress_gate(
         session, principal, organisation, body.kind, body.connector, config, body.name, body.allow_egress
@@ -1338,7 +1332,7 @@ async def update_knowledge_source(
             else refresh.next_sync_after(source, now if mode == "cron" else source.last_synced_at)
         )
     if body.config is not None:
-        organisation = await _organisation(session, org)
+        organisation = await organisation_by_slug(session, org)
         source.config = await _checked_source_config(
             session, organisation, source.kind, source.connector, body.config
         )

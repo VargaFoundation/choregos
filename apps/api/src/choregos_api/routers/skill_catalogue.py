@@ -25,10 +25,11 @@ from ..schemas import CatalogueMetaDto, SkillCatalogueDto, SkillCatalogueEntryDt
 from ..schemas.catalogues import SkillCatalogueInstall
 from ..services.catalogues import egress_of
 from ..services.egress import egress_scope, ensure_or_409, skill_import_targets
+from ..services.organisations import organisation_by_slug
 from ..services.platform_network import check_platform_host
 from ..services.skill_sources import GitSource, SourceRefused, allowed, get_fetcher, parse_repo_url
 from ..services.skills import empreinte, publish_version
-from .skills import _dto, _lire, _organisation, _skill_sources, _snapshot
+from .skills import _dto, _lire, _skill_sources, _snapshot
 
 router = APIRouter(tags=["agents"])
 
@@ -112,7 +113,7 @@ async def list_skill_catalogue(
 ) -> SkillCatalogueDto:
     """The shipped catalogue and what each entry means in this organisation. Its members can read it."""
     _lire(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     loaded = catalogue.load()
     sources, _ = await _skill_sources(session, organisation)
     latest = await _latest(session, organisation.id, [e.id for e in loaded.entries])
@@ -159,7 +160,7 @@ async def install_skill_catalogue_entry(
     entry = catalogue.entry(entry_id)
     if entry is None:
         raise not_found("Skill catalogue entry", entry_id)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     source = _entry_source(entry)
     sources, _ = await _skill_sources(session, organisation)
     existing = (await _latest(session, organisation.id, [entry.id])).get(entry.id)

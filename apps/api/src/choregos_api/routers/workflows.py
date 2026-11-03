@@ -55,6 +55,7 @@ from ..services import (
 from ..services.definitions import CEILING_KEY, ceiling_of, policy_model
 from ..services.llm_routing import book
 from ..services.network import project_effective_network
+from ..services.organisations import organisation_by_slug
 from ..services.routage import Naissance, route
 
 router = APIRouter(tags=["workflows"])
@@ -633,21 +634,16 @@ def _ceiling_dto(organisation: Organization) -> PolicyCeilingDto:
     )
 
 
-async def _organisation(session: AsyncSession, principal: Principal, org: str) -> Organization:
+async def _member_organisation(session: AsyncSession, principal: Principal, org: str) -> Organization:
     if principal.org_roles.get(org) is None:
         raise forbidden(f"reading the policy ceiling of {org} requires being a member of it")
-    organisation = (
-        await session.execute(select(Organization).where(Organization.slug == org))
-    ).scalar_one_or_none()
-    if organisation is None:
-        raise not_found("Organisation", org)
-    return organisation
+    return await organisation_by_slug(session, org)
 
 
 @router.get("/orgs/{org}/policy-ceiling", response_model=PolicyCeilingDto, operation_id="getPolicyCeiling")
 async def get_policy_ceiling(org: str, session: Db, principal: Me) -> PolicyCeilingDto:
     """The caps every project policy of the organisation stays under (S27-05)."""
-    return _ceiling_dto(await _organisation(session, principal, org))
+    return _ceiling_dto(await _member_organisation(session, principal, org))
 
 
 @router.put("/orgs/{org}/policy-ceiling", response_model=PolicyCeilingDto, operation_id="putPolicyCeiling")
@@ -656,7 +652,7 @@ async def put_policy_ceiling(
 ) -> PolicyCeilingDto:
     """Sets the ceiling (`org_admin`). A project policy already above it is not refused: the policy
     that runs is clamped to it, and the project's policy page says what was clamped."""
-    organisation = await _organisation(session, principal, org)
+    organisation = await _member_organisation(session, principal, org)
     if principal.org_roles.get(org) != Role.ORG_ADMIN:
         raise forbidden("setting the policy ceiling needs the org_admin role")
     settings = dict(organisation.settings or {})

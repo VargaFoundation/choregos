@@ -7,9 +7,9 @@ from pathlib import Path
 
 from .layering_kit import API_PACKAGE
 
-# Measured at 87ea1831d (12), plus routers/workflow_catalogue.py that main's #1094 (S49) added before
-# this ratchet landed (13). Lower it in the PR that removes helpers; raise it only by amending ADR 0099.
-CEILING = 13
+# Measured on main at S47-09: only routers/org_connectors.py is left (S47-10 removes it).
+# Raise it only by amending ADR 0099.
+CEILING = 1
 NAMES = ("_organisation", "_org")
 
 

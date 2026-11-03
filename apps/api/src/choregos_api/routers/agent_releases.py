@@ -31,7 +31,8 @@ from ..schemas import (
 )
 from ..services import agent_live_evals, agent_releases
 from ..services.agent_governance import PERSONAL, Action, decide, visible_clause
-from .agents import Slug, _charger, _dto, _exiger, _lire, _organisation
+from ..services.organisations import organisation_by_slug
+from .agents import Slug, _charger, _dto, _exiger, _lire
 
 router = APIRouter(tags=["agents"])
 
@@ -108,7 +109,7 @@ async def list_org_agent_releases(
     """Releases of the agents the caller may see, newest first; `status=pending_approval` is the
     approver's inbox."""
     _lire(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     visible = Agent.org_id == organisation.id
     visible = visible & await visible_clause(session, principal, organisation)
     rows = await agent_releases.list_releases(session, visible, status_, limit)

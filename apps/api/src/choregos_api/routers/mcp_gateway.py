@@ -24,6 +24,7 @@ from ..rbac import Principal
 from ..schemas.mcp_gateway import McpGatewayAssertion
 from ..services import mcp_gateway_identity as identity
 from ..services.connector_secrets import require_store
+from ..services.organisations import organisation_by_slug
 
 router = APIRouter(tags=["admin"])
 
@@ -31,12 +32,7 @@ router = APIRouter(tags=["admin"])
 async def _admin_organisation(session: AsyncSession, principal: Principal, org: str) -> Organization:
     if principal.org_roles.get(org) != Role.ORG_ADMIN:
         raise forbidden(f"the MCP gateway of {org} is managed by its org_admin")
-    organisation = (
-        await session.execute(select(Organization).where(Organization.slug == org))
-    ).scalar_one_or_none()
-    if organisation is None:
-        raise not_found("Organisation", org)
-    return organisation
+    return await organisation_by_slug(session, org)
 
 
 @router.post(
