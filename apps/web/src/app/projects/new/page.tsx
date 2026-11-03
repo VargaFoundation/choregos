@@ -117,15 +117,15 @@ export default function NewProjectPage() {
 
   const raisonDAttente =
     step === 0 && form.sansDepot === null
-      ? "say what the project delivers to go on"
+      ? "Say what the project delivers to go on"
       : step === 1 && !form.slug
-      ? "an identifier is needed to go on"
+      ? "An identifier is needed to go on"
       : step === 1 && !slugValid
-        ? "the identifier is not valid yet"
+        ? "The identifier is not valid yet"
         : step === 1 && !repoValid
           ? form.repo
-            ? "the repository is not valid yet"
-            : "a repository is needed — or choose a business process in the first step"
+            ? "The repository is not valid yet"
+            : "A repository is needed — or choose a business process in the first step"
           : null;
 
   const recapitulatif: [string, string][] = [

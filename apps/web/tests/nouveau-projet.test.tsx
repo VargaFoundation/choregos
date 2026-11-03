@@ -54,7 +54,7 @@ describe("l'assistant de création d'un projet (S23-06)", () => {
     fireEvent.click(screen.getByLabelText(/no code repository/));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Next" })).toHaveAccessibleDescription("an identifier is needed to go on");
+    expect(screen.getByRole("button", { name: "Next" })).toHaveAccessibleDescription("An identifier is needed to go on");
     fireEvent.change(screen.getByLabelText("Identifier (slug)"), { target: { value: "people-ops" } });
     expect(screen.queryByText("An identifier is needed to go on")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
@@ -105,7 +105,7 @@ describe("l'assistant de création d'un projet (S23-06)", () => {
 
   it("asks what the project delivers first, and asks a business process for no repository, language or Slack channel (owner review of 2026-11-03)", async () => {
     ouvrir();
-    expect(screen.getByRole("button", { name: "Next" })).toHaveAccessibleDescription("say what the project delivers to go on");
+    expect(screen.getByRole("button", { name: "Next" })).toHaveAccessibleDescription("Say what the project delivers to go on");
     expect(screen.queryByLabelText("Stack template")).toBeNull();
     fireEvent.click(screen.getByLabelText(/^A business process/));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
