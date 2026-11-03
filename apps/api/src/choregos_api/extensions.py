@@ -259,12 +259,12 @@ def tool_providers() -> dict[str, ToolProvider]:
     return dict(_TOOL_PROVIDERS)
 
 
-# ───────────────────────────── tools served to humans, through the MCP gate ─────────────────────────────
+# ───────────────────────────── tools served to humans, through the MCP door ─────────────────────────────
 
 
 @dataclass(frozen=True, init=False)
 class HumanToolProvider:
-    """The tools an extension serves at the MCP gate of external clients (ADR 0030), with the rights
+    """The tools an extension serves at the MCP door of external clients (ADR 0030), with the rights
     of the HUMAN who minted the token, never those of a platform agent.
 
     - `list_tools(session, principal, project, org)` returns tools in the MCP format (`name`,
