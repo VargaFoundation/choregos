@@ -158,10 +158,10 @@ describe("a decision step is told apart from the platform (ADR 0121)", () => {
 
   it("is a teal diamond on the diagram, named in the legend only where the workflow has one", () => {
     const { unmount } = render(<CarteEnSerpentin graph={GRAPH} process={[STEP]} initial="inbox" />);
-    const carte = screen.getByTestId("carte-en-serpentin");
-    const forme = carte.querySelector('[data-etape="t-route"] .parcours-forme')!;
-    expect(forme.tagName.toLowerCase()).toBe("polygon");
-    expect(forme.getAttribute("stroke")).toBe(COULEUR_DU_GENRE.decision.bord);
+    const diagram = screen.getByTestId("carte-en-serpentin");
+    const shape = diagram.querySelector('[data-etape="t-route"] .parcours-forme')!;
+    expect(shape.tagName.toLowerCase()).toBe("polygon");
+    expect(shape.getAttribute("stroke")).toBe(COULEUR_DU_GENRE.decision.bord);
     expect(screen.getByTestId("etape-t-route")).toHaveAccessibleName(/^Router\s*decides: route ticket/);
     expect(screen.getByTestId("etape-t-route")).toHaveAccessibleDescription("decision — 0 attempts");
     expect(screen.getByRole("list", { name: "Who carries each step" })).toHaveTextContent("Decision");

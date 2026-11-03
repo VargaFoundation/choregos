@@ -123,7 +123,7 @@ const LEGENDE_DES_GENRES: [Etape["genre"], string][] = [
 ];
 
 /** A decision step (ADR 0121) is named in the legend only where the workflow has one. */
-const LEGENDE_DE_LA_DECISION: [Etape["genre"], string] = ["decision", "Decision"];
+const DECISION_LEGEND: [Etape["genre"], string] = ["decision", "Decision"];
 
 /**
  * La carte d'un workflow, sans ticket (S22-05 ; « l'affichage est très linéaire, pas comme les
@@ -161,7 +161,7 @@ export function CarteEnSerpentin({
       <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted" aria-label="Who carries each step">
         {[
           ...LEGENDE_DES_GENRES,
-          ...([...modele.parId.values()].some((e) => e.genre === "decision") ? [LEGENDE_DE_LA_DECISION] : []),
+          ...([...modele.parId.values()].some((e) => e.genre === "decision") ? [DECISION_LEGEND] : []),
         ].map(([genre, libelle]) => (
           <li key={genre} className="inline-flex items-center gap-1.5">
             <span

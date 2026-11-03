@@ -215,7 +215,7 @@ def to_process(wf: Workflow) -> list[dict[str, Any]]:
             phrase += f" It times out after {t.timeout_hours} h."
         acteur = wf.actors.get(t.by) if t.by else None
         # A decision writes its answers and their probabilities: what a `when` compares (ADR 0121).
-        sorties = (
+        outputs = (
             acteur.outputs + [o for o in t.outputs if o not in acteur.outputs]
             if isinstance(acteur, DecisionActor)
             else list(t.outputs)
@@ -230,7 +230,7 @@ def to_process(wf: Workflow) -> list[dict[str, Any]]:
                 "actor": nom,
                 "actor_type": type_,
                 "who": qui,
-                "outputs": sorties,
+                "outputs": outputs,
                 "gates": garanties,
                 "on_fail": echec,
                 "on_reject": rejet,
