@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { jetonsDuMode } from "./jetons";
+import { jetonsDuMode } from "./tokens";
 import {
   Alert,
   Badge,

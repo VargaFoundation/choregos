@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * Ce qui attend une personne dans l'organisation (S23-02) : les tickets arrêtés sur une demande
- * humaine — une approbation, une question, un changement de périmètre, une tâche — et les actions
- * gouvernées en attente d'approbation (ADR 0035).
+ * What waits for a person in the organisation (S23-02): the tickets stopped on a human request
+ * (an approval, a question, a scope change, a task) and the governed actions waiting for approval
+ * (ADR 0035).
  *
- * Avant, `/approvals` ne montrait que les actions : un ticket arrêté sur « Spec to approve » ne se
- * voyait qu'en ouvrant le board de son projet (revue du 07/10, point 5 : « aucune page ne dit ce qui
- * m'attend »). L'API n'a pas de lecture à l'échelle de l'organisation : on lit les tickets projet par
- * projet, sous les MÊMES clés que le board (`["items", slug]`) — une décision prise ici rafraîchit le
- * board, et l'inverse.
+ * Before, `/approvals` showed only the actions: a ticket stopped on "Spec to approve" was only
+ * visible by opening its project's board (review of 07/10, point 5: "no page tells me what is
+ * waiting for me"). The API has no organisation-wide read: the project tickets are read one
+ * project at a time, under the SAME keys as the board (`["items", slug]`), so a decision taken here
+ * refreshes the board, and the other way round.
  */
 "use client";
 
@@ -17,12 +17,13 @@ import { scopeOf } from "@/components/coquille/navigation";
 import { api } from "./api";
 import type { Action, BudgetAlert, EgressRule, HumanRequest, WorkItemDto } from "./types";
 
-export interface Attente {
+export interface Waiting {
   item: WorkItemDto;
   demande: HumanRequest;
-  /** L'échéance est passée : la demande sera relancée, puis escaladée. */
+  /** The due date has passed: the request will be chased, then escalated. */
   enRetard: boolean;
 }
+export type Attente = Waiting; // lang: fr-ok alias:internal
 
 const LIBELLES: Record<string, string> = {
   approval: "approval",
@@ -31,40 +32,42 @@ const LIBELLES: Record<string, string> = {
   task: "task",
 };
 
-export function libelleDeDemande(kind: string): string {
+export function requestLabel(kind: string): string {
   return LIBELLES[kind] ?? kind.replace(/_/g, " ");
 }
+export const libelleDeDemande = requestLabel; // lang: fr-ok alias:internal
 
-/** Ce que la demande dit d'elle-même : sa question, son résumé, sinon son genre. */
-export function resumeDeDemande(demande: HumanRequest): string {
-  const payload = demande.payload ?? {};
-  for (const cle of ["question", "summary", "title", "instructions"]) {
-    const valeur = payload[cle];
-    if (typeof valeur === "string" && valeur.trim()) return valeur.trim();
+/** What the request says about itself: its question, its summary, otherwise its kind. */
+export function requestSummary(request: HumanRequest): string {
+  const payload = request.payload ?? {};
+  for (const key of ["question", "summary", "title", "instructions"]) {
+    const value = payload[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
   }
-  return libelleDeDemande(demande.kind);
+  return requestLabel(request.kind);
 }
+export const resumeDeDemande = requestSummary; // lang: fr-ok alias:internal
 
 /**
- * Les tickets qui attendent quelqu'un, dans l'ordre où les traiter : ce qui est en retard d'abord,
- * puis l'échéance la plus proche, puis ce qui attend depuis le plus longtemps. Une demande déjà
- * décidée n'attend plus personne.
+ * The tickets that wait for someone, in the order to handle them: what is overdue first, then the
+ * nearest due date, then what has waited the longest. A request already decided waits for no one.
  */
-export function ticketsEnAttente(items: WorkItemDto[], maintenant: number = Date.now()): Attente[] {
-  const echeance = (a: Attente) => (a.demande.due_at ? new Date(a.demande.due_at).getTime() : Infinity);
+export function waitingTickets(items: WorkItemDto[], now: number = Date.now()): Waiting[] {
+  const dueTime = (a: Waiting) => (a.demande.due_at ? new Date(a.demande.due_at).getTime() : Infinity);
   return items
     .filter((item) => item.pending_request && !item.pending_request.decided_at)
     .map((item) => {
-      const demande = item.pending_request as HumanRequest;
-      return { item, demande, enRetard: !!demande.due_at && new Date(demande.due_at).getTime() < maintenant };
+      const request = item.pending_request as HumanRequest;
+      return { item, demande: request, enRetard: !!request.due_at && new Date(request.due_at).getTime() < now };
     })
     .sort(
       (a, b) =>
         Number(b.enRetard) - Number(a.enRetard) ||
-        echeance(a) - echeance(b) ||
+        dueTime(a) - dueTime(b) ||
         new Date(a.demande.requested_at).getTime() - new Date(b.demande.requested_at).getTime(),
     );
 }
+export const ticketsEnAttente = waitingTickets; // lang: fr-ok alias:internal
 
 /**
  * What waits in ONE project (S39-04): its actions, and the budget alerts of the project itself. An
@@ -87,13 +90,13 @@ export function waitingInProject(
  * only that project's tickets are read (same query key as its board), and the lists are narrowed.
  */
 export function useADecider(org: string, project?: string) {
-  const projets = useQuery({
+  const projects = useQuery({
     queryKey: ["projects", org],
     queryFn: () => api.projects(org),
     staleTime: 30_000,
     enabled: !project,
   });
-  const slugs = project ? [project] : (projets.data?.items ?? []).map((projet) => projet.slug);
+  const slugs = project ? [project] : (projects.data?.items ?? []).map((projet) => projet.slug);
   const tickets = useQueries({
     queries: slugs.map((slug) => ({
       queryKey: ["items", slug],
@@ -119,31 +122,31 @@ export function useADecider(org: string, project?: string) {
     staleTime: 30_000,
     enabled: !project,
   });
-  const lus = tickets.flatMap((lecture) => lecture.data?.items ?? []);
-  const enAttente = ticketsEnAttente(lus);
+  const read = tickets.flatMap((lecture) => lecture.data?.items ?? []);
+  const waiting = waitingTickets(read);
   const narrowed = project
     ? waitingInProject(actions.data ?? [], budgets.data ?? [], project)
     : { actions: actions.data ?? [], budgets: budgets.data ?? [] };
   const egressRequests: EgressRule[] = project ? [] : (egress.data?.requests ?? []);
   const canDecideEgress = !project && !!egress.data?.can_decide;
   return {
-    tickets: enAttente,
+    tickets: waiting,
     actions: narrowed.actions,
     budgets: narrowed.budgets,
     /** The requests for network access that wait for an administrator (S39-22). */
     egressRequests,
     canDecideEgress,
-    /** Les projets dont les tickets n'ont pas pu se lire : ils ne sont pas comptés, et on le dit. */
+    /** The projects whose tickets could not be read: they are not counted, and we say so. */
     projetsIllisibles: slugs.filter((_, index) => tickets[index]?.error),
-    erreur: projets.error ?? actions.error ?? budgets.error ?? egress.error ?? null,
+    erreur: projects.error ?? actions.error ?? budgets.error ?? egress.error ?? null,
     pret:
-      (!!project || !!projets.data) &&
+      (!!project || !!projects.data) &&
       tickets.every((lecture) => !lecture.isPending) &&
       !!actions.data &&
       !!budgets.data &&
       (!!project || !!egress.data || !!egress.error),
     // Only those who can decide are told: a request someone else must answer is not their inbox.
-    total: enAttente.length + narrowed.actions.length + narrowed.budgets.length + (canDecideEgress ? egressRequests.length : 0),
+    total: waiting.length + narrowed.actions.length + narrowed.budgets.length + (canDecideEgress ? egressRequests.length : 0),
   };
 }
 

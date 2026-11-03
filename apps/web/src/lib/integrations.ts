@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * Les extraits de la page Integrations (ADR 0030), en fonctions pures : ce qu'on colle dans un
- * client MCP se teste sans navigateur.
+ * The snippets of the Integrations page (ADR 0030), as pure functions: what one pastes into an MCP
+ * client is tested without a browser.
  *
- * Deux règles, chacune tenue par un test : un extrait MCP ne porte jamais un jeton `*` (la page n'en
- * frappe que de portée `mcp:*`), et `--allow-http` n'apparaît que pour une URL en `http:`.
+ * Two rules, each held by a test: an MCP snippet never carries a `*` token (the page only mints
+ * tokens scoped `mcp:*`), and `--allow-http` appears only for an `http:` URL.
  *
- * Quand la porte accepte les jetons de l'IdP et que le déploiement nomme le client que l'IdP a
- * enregistré (`oauth.clients`), l'extrait le dit : on se connecte par l'authentification unique,
- * sans jeton à coller — et un secret de client n'apparaît jamais ici.
+ * When the gate accepts the IdP's tokens and the deployment names the client the IdP registered
+ * (`oauth.clients`), the snippet says so: one signs in through single sign-on, with no token to
+ * paste, and a client secret never appears here.
  */
 
 import type { Integrations } from "@choregos/contracts/api";
@@ -27,10 +27,10 @@ export type ClientId =
 export interface ClientInfo {
   id: ClientId;
   label: string;
-  /** D'où le client appelle : de la machine de la personne, ou du réseau de son éditeur. */
+  /** Where the client calls from: the person's machine, or its vendor's network. */
   calls_from: "your machine" | "the vendor's cloud";
   auth: "MCP token" | "OAuth" | "full-access token";
-  /** Ce qu'il faut pour qu'il marche ici et maintenant. */
+  /** What it takes for it to work here and now. */
   status: "ready" | "needs a public HTTPS address and OAuth" | "needs a public HTTPS address";
 }
 
@@ -71,32 +71,33 @@ export function estClient(valeur: string): valeur is ClientId {
   return CLIENTS.some((client) => client.id === valeur);
 }
 
-/** Le client que l'IdP a enregistré pour ce client de la page — `null` quand la porte n'accepte pas OAuth. */
+/** The client the IdP registered for this client of the page, or `null` when the gate does not accept OAuth. */
 export function clientOAuth(client: ClientId, oauth?: OAuth | null): ClientOAuth | null {
   if (!oauth?.enabled) return null;
   return oauth.clients?.[client] ?? null;
 }
 
 /**
- * Ce qu'un client demande ICI : un client OAuth enregistré change la façon de se connecter, et
- * claude.ai n'est prêt qu'avec une adresse publique en HTTPS — ce que la page ne peut pas deviner,
- * sinon par le schéma de l'URL.
+ * What a client needs HERE: a registered OAuth client changes the way to connect, and claude.ai is
+ * only ready with a public HTTPS address, which the page cannot guess except from the URL's scheme.
  */
-export function etatDuClient(info: ClientInfo, url: string, oauth?: OAuth | null): ClientInfo {
+export function clientState(info: ClientInfo, url: string, oauth?: OAuth | null): ClientInfo {
   if (!clientOAuth(info.id, oauth)) return info;
   if (info.calls_from === "the vendor's cloud") {
     return { ...info, auth: "OAuth", status: url.startsWith("https:") ? "ready" : "needs a public HTTPS address" };
   }
   return { ...info, auth: "OAuth", status: "ready" };
 }
+export const etatDuClient = clientState; // lang: fr-ok alias:internal
 
-/** L'URL de la porte d'un projet : `/mcp/projects/org:slug`. Sans projet, la porte de tous. */
-export function urlDeLaPorte(base: string, projet?: string | null): string {
-  const racine = base.replace(/\/+$/, "");
-  return projet ? `${racine}/projects/${projet}` : racine;
+/** The URL of a project's gate: `/mcp/projects/org:slug`. Without a project, the gate of all. */
+export function gateUrl(base: string, projet?: string | null): string {
+  const root = base.replace(/\/+$/, "");
+  return projet ? `${root}/projects/${projet}` : root;
 }
+export const urlDeLaPorte = gateUrl; // lang: fr-ok alias:internal
 
-/** L'origine de la plateforme, déduite de l'URL de la porte (`…/mcp`). */
+/** The platform's origin, derived from the gate's URL (`.../mcp`). */
 export function origineDe(urlMcp: string): string {
   return urlMcp.replace(/\/mcp(\/.*)?$/, "");
 }
@@ -124,15 +125,15 @@ export function formatMiB(bytes: number): string {
 }
 
 export interface Extrait {
-  /** Où le coller : un fichier, un terminal. */
+  /** Where to paste it: a file, a terminal. */
   where: string;
   language: "bash" | "json" | "text";
   code: string;
 }
 
 /**
- * L'extrait d'un client, ou `null` quand il n'y en a pas (claude.ai et ChatGPT : il faut une adresse
- * publique et OAuth). Avec `oauth`, le client que l'IdP a enregistré remplace le jeton.
+ * A client's snippet, or `null` when there is none (claude.ai and ChatGPT need a public address and
+ * OAuth). With `oauth`, the client the IdP registered replaces the token.
  */
 export function extrait(
   client: ClientId,
@@ -222,7 +223,7 @@ export function extrait(
         code: `curl -H "Authorization: Bearer <full-access token>" ${origineDe(url)}/api/v1/me`,
       };
     case "claude-ai":
-      // claude.ai appelle depuis le réseau d'Anthropic : sans adresse publique en HTTPS, rien à coller.
+      // claude.ai calls from Anthropic's network: without a public HTTPS address, there is nothing to paste.
       if (enregistre && !http) {
         return {
           where: "claude.ai — Settings, Connectors, Add custom connector, then Advanced settings",

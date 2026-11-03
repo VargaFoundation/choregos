@@ -1,17 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * Le diff de deux textes, ligne à ligne — de quoi relire deux versions d'un workflow.
+ * The diff of two texts, line by line: enough to review two versions of a workflow.
  *
- * Une plus longue sous-suite commune, en programmation dynamique : un workflow compte quelques
- * centaines de lignes, la table tient en mémoire, et aucune dépendance n'entre dans le bundle.
+ * A longest common subsequence, by dynamic programming: a workflow has a few hundred lines, the
+ * table fits in memory, and no dependency enters the bundle.
  */
-export type LigneDeDiff = { kind: "same" | "add" | "del"; text: string; before?: number; after?: number };
+export type DiffLine = { kind: "same" | "add" | "del"; text: string; before?: number; after?: number };
+export type LigneDeDiff = DiffLine; // lang: fr-ok alias:internal
 
-export function diffLines(avant: string, apres: string): LigneDeDiff[] {
+export function diffLines(avant: string, apres: string): DiffLine[] {
   const a = avant.split("\n");
   const b = apres.split("\n");
   const largeur = b.length + 1;
-  // table[i * largeur + j] : la plus longue sous-suite commune de a[i:] et b[j:]
+  // table[i * largeur + j]: the longest common subsequence of a[i:] and b[j:]
   const table = new Int32Array((a.length + 1) * largeur);
   const lcs = (i: number, j: number) => table[i * largeur + j] ?? 0;
   for (let i = a.length - 1; i >= 0; i -= 1) {
@@ -19,34 +20,34 @@ export function diffLines(avant: string, apres: string): LigneDeDiff[] {
       table[i * largeur + j] = a[i] === b[j] ? lcs(i + 1, j + 1) + 1 : Math.max(lcs(i + 1, j), lcs(i, j + 1));
     }
   }
-  const lignes: LigneDeDiff[] = [];
+  const lines: DiffLine[] = [];
   let i = 0;
   let j = 0;
   while (i < a.length && j < b.length) {
     if (a[i] === b[j]) {
-      lignes.push({ kind: "same", text: a[i] ?? "", before: i + 1, after: j + 1 });
+      lines.push({ kind: "same", text: a[i] ?? "", before: i + 1, after: j + 1 });
       i += 1;
       j += 1;
     } else if (lcs(i + 1, j) >= lcs(i, j + 1)) {
-      lignes.push({ kind: "del", text: a[i] ?? "", before: i + 1 });
+      lines.push({ kind: "del", text: a[i] ?? "", before: i + 1 });
       i += 1;
     } else {
-      lignes.push({ kind: "add", text: b[j] ?? "", after: j + 1 });
+      lines.push({ kind: "add", text: b[j] ?? "", after: j + 1 });
       j += 1;
     }
   }
-  for (; i < a.length; i += 1) lignes.push({ kind: "del", text: a[i] ?? "", before: i + 1 });
-  for (; j < b.length; j += 1) lignes.push({ kind: "add", text: b[j] ?? "", after: j + 1 });
-  return lignes;
+  for (; i < a.length; i += 1) lines.push({ kind: "del", text: a[i] ?? "", before: i + 1 });
+  for (; j < b.length; j += 1) lines.push({ kind: "add", text: b[j] ?? "", after: j + 1 });
+  return lines;
 }
 
-/** Les seules lignes qui changent, avec `contexte` lignes inchangées autour — comme `diff -u`. */
-export function hunks(lignes: LigneDeDiff[], contexte = 2): LigneDeDiff[][] {
+/** Only the lines that change, with `contexte` unchanged lines around them, like `diff -u`. */
+export function hunks(lignes: DiffLine[], contexte = 2): DiffLine[][] {
   const garder = lignes.map((ligne, index) =>
     lignes.slice(Math.max(0, index - contexte), index + contexte + 1).some((voisine) => voisine.kind !== "same"),
   );
-  const morceaux: LigneDeDiff[][] = [];
-  let courant: LigneDeDiff[] = [];
+  const morceaux: DiffLine[][] = [];
+  let courant: DiffLine[] = [];
   lignes.forEach((ligne, index) => {
     if (garder[index]) {
       courant.push(ligne);

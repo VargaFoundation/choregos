@@ -1,69 +1,74 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * Les préférences d'affichage d'une personne, gardées dans son navigateur (ADR 0043).
+ * A person's display preferences, kept in their browser (ADR 0043).
  *
- * Le thème se choisit — sombre, clair, ou celui du système — et s'applique AVANT la première
- * peinture : un script en tête de page (`SCRIPT_DES_PREFERENCES`, posé avec le nonce de la CSP par
- * `app/layout.tsx`) lit la préférence et pose `data-theme` sur <html>. Sans ce script, la page
- * s'afficherait d'abord en sombre puis basculerait en clair : un éclair à chaque navigation.
+ * The theme is chosen (dark, light, or the system's) and applies BEFORE the first paint: a script
+ * at the top of the page (`SCRIPT_DES_PREFERENCES`, set with the CSP nonce by `app/layout.tsx`)
+ * reads the preference and sets `data-theme` on <html>. Without this script, the page would first
+ * show dark then switch to light: a flash on every navigation.
  *
- * React ne rend jamais `data-theme` : seul ce script et `appliquerLeTheme` l'écrivent, sinon
- * l'hydratation remettrait la valeur du serveur, qui ne connaît pas la préférence.
+ * React never renders `data-theme`: only this script and `appliquerLeTheme` write it, otherwise
+ * hydration would put back the server's value, which does not know the preference.
  *
- * La barre latérale se replie en rail (S24-03) : même stockage, même script, même règle —
- * `data-sidebar="rail"` sur <html>, posé avant la peinture, jamais rendu par React.
+ * The sidebar folds into a rail (S24-03): same storage, same script, same rule:
+ * `data-sidebar="rail"` on <html>, set before the paint, never rendered by React.
  */
 
-/** La clé, sur le modèle de `choregos.org` (lib/session.tsx). */
-export const CLE_DU_THEME = "choregos.theme";
+/** The key, modelled on `choregos.org` (lib/session.tsx). */
+export const THEME_KEY = "choregos.theme";
+export const CLE_DU_THEME = THEME_KEY; // lang: fr-ok alias:internal
 
 export type Theme = "dark" | "light";
 export type PreferenceDeTheme = Theme | "system";
 
 export const PREFERENCES_DE_THEME: readonly PreferenceDeTheme[] = ["dark", "light", "system"];
 
-/** Sans préférence, le sombre : celui d'une console d'opérations, et celui qui vaut sans JavaScript. */
-export const THEME_PAR_DEFAUT: Theme = "dark";
+/** Without a preference, dark: an operations console's, and the one that holds without JavaScript. */
+export const DEFAULT_THEME: Theme = "dark";
+export const THEME_PAR_DEFAUT = DEFAULT_THEME; // lang: fr-ok alias:internal
 
-export function estUnePreference(valeur: unknown): valeur is PreferenceDeTheme {
-  return valeur === "dark" || valeur === "light" || valeur === "system";
+export function isPreference(value: unknown): value is PreferenceDeTheme {
+  return value === "dark" || value === "light" || value === "system";
 }
+export const estUnePreference = isPreference; // lang: fr-ok alias:internal
 
 /**
  * The mode a person without a preference gets: the served theme's `default_mode`, which the layout
  * writes on <html> as `data-default-theme` (ADR 0064); dark without it.
  */
-export function themeParDefaut(): Theme {
+export function defaultTheme(): Theme {
   return typeof document !== "undefined" && document.documentElement.dataset.defaultTheme === "light"
     ? "light"
-    : THEME_PAR_DEFAUT;
+    : DEFAULT_THEME;
 }
+export const themeParDefaut = defaultTheme; // lang: fr-ok alias:internal
 
-/** Le thème qui s'affiche, pour une préférence lue (ou absente) et ce que demande le système. */
+/** The theme that shows, for a preference read (or absent) and what the system asks for. */
 export function themeResolu(
   preference: string | null | undefined,
   systemeEnClair: boolean,
-  parDefaut: Theme = THEME_PAR_DEFAUT,
+  parDefaut: Theme = DEFAULT_THEME,
 ): Theme {
   if (preference === "light" || preference === "dark") return preference;
   if (preference === "system") return systemeEnClair ? "light" : "dark";
   return parDefaut;
 }
 
-/** La clé de la barre latérale : « rail » la replie ; toute autre valeur, ou aucune, la laisse pleine. */
-export const CLE_DE_LA_BARRE = "choregos.sidebar";
+/** The sidebar's key: "rail" folds it; any other value, or none, leaves it full. */
+export const SIDEBAR_KEY = "choregos.sidebar";
+export const CLE_DE_LA_BARRE = SIDEBAR_KEY; // lang: fr-ok alias:internal
 
 export type Barre = "full" | "rail";
 
 /**
- * Le script d'en-tête : la MÊME règle que `themeResolu` et `lireLaBarre`, écrite pour tourner seule,
- * sans module, avant React. Un stockage refusé (navigation privée stricte) donne les défauts, sans
- * erreur. `tests/preferences.test.tsx` l'exécute pour chaque valeur stockée et le compare aux deux.
+ * The head script: the SAME rule as `themeResolu` and `readSidebar`, written to run alone, without
+ * a module, before React. A refused storage (strict private browsing) gives the defaults, without an
+ * error. `tests/preferences.test.tsx` runs it for every stored value and compares it to both.
  */
 export const SCRIPT_DES_PREFERENCES = `(function(){var d=document.documentElement;var f=d.dataset.defaultTheme==="light"?"light":"dark";try{var p=localStorage.getItem(${JSON.stringify(
-  CLE_DU_THEME,
+  THEME_KEY,
 )});var t=p==="light"||p==="dark"?p:p==="system"?window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark":f;d.dataset.theme=t;if(localStorage.getItem(${JSON.stringify(
-  CLE_DE_LA_BARRE,
+  SIDEBAR_KEY,
 )})==="rail")d.dataset.sidebar="rail";}catch(e){d.dataset.theme=f;}})();`;
 
 function systemeEnClair(): boolean {
@@ -72,54 +77,58 @@ function systemeEnClair(): boolean {
     : false;
 }
 
-/** La préférence gardée, ou rien (stockage vide, refusé, ou valeur inconnue). */
-export function lirePreference(): PreferenceDeTheme | null {
+/** The preference kept, or nothing (empty or refused storage, or an unknown value). */
+export function readPreference(): PreferenceDeTheme | null {
   try {
-    const valeur = window.localStorage.getItem(CLE_DU_THEME);
-    return estUnePreference(valeur) ? valeur : null;
+    const value = window.localStorage.getItem(THEME_KEY);
+    return isPreference(value) ? value : null;
   } catch {
     return null;
   }
 }
+export const lirePreference = readPreference; // lang: fr-ok alias:internal
 
-/** Pose sur <html> le thème que donne une préférence, et le rend. */
+/** Sets on <html> the theme a preference gives, and returns it. */
 export function appliquerLeTheme(preference: PreferenceDeTheme | null): Theme {
-  const theme = themeResolu(preference, systemeEnClair(), themeParDefaut());
+  const theme = themeResolu(preference, systemeEnClair(), defaultTheme());
   document.documentElement.dataset.theme = theme;
   return theme;
 }
 
-/** Garde la préférence et l'applique tout de suite. */
-export function choisirLeTheme(preference: PreferenceDeTheme): Theme {
+/** Keeps the preference and applies it right away. */
+export function chooseTheme(preference: PreferenceDeTheme): Theme {
   try {
-    window.localStorage.setItem(CLE_DU_THEME, preference);
+    window.localStorage.setItem(THEME_KEY, preference);
   } catch {
-    // Un stockage refusé n'empêche pas d'appliquer le choix pour la page courante.
+    // A refused storage does not prevent applying the choice for the current page.
   }
   return appliquerLeTheme(preference);
 }
+export const choisirLeTheme = chooseTheme; // lang: fr-ok alias:internal
 
-/** La barre gardée : repliée seulement si on l'a repliée. */
-export function lireLaBarre(): Barre {
+/** The sidebar kept: folded only if it was folded. */
+export function readSidebar(): Barre {
   try {
-    return window.localStorage.getItem(CLE_DE_LA_BARRE) === "rail" ? "rail" : "full";
+    return window.localStorage.getItem(SIDEBAR_KEY) === "rail" ? "rail" : "full";
   } catch {
     return "full";
   }
 }
+export const lireLaBarre = readSidebar; // lang: fr-ok alias:internal
 
-/** Pose la barre sur <html> : l'attribut n'existe que replié, la barre pleine est le défaut sans lui. */
+/** Sets the sidebar on <html>: the attribute exists only when folded, the full sidebar is the default without it. */
 export function appliquerLaBarre(barre: Barre): void {
   if (barre === "rail") document.documentElement.dataset.sidebar = "rail";
   else delete document.documentElement.dataset.sidebar;
 }
 
-/** Garde le choix et l'applique tout de suite. */
-export function choisirLaBarre(barre: Barre): void {
+/** Keeps the choice and applies it right away. */
+export function chooseSidebar(barre: Barre): void {
   try {
-    window.localStorage.setItem(CLE_DE_LA_BARRE, barre);
+    window.localStorage.setItem(SIDEBAR_KEY, barre);
   } catch {
-    // Un stockage refusé n'empêche pas de replier la barre pour la page courante.
+    // A refused storage does not prevent folding the sidebar for the current page.
   }
   appliquerLaBarre(barre);
 }
+export const choisirLaBarre = chooseSidebar; // lang: fr-ok alias:internal

@@ -2,16 +2,16 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 /**
- * Une CSP sans `'unsafe-inline'` pour les scripts : un nonce par requête, que Next pose
- * lui-même sur ses scripts (il le lit dans l'en-tête `Content-Security-Policy`). Le prix :
- * chaque page est rendue dynamiquement — c'est déjà le cas d'un tableau de bord qui lit
- * l'API à chaque affichage. Les styles gardent `'unsafe-inline'` : CodeMirror et React Flow
- * injectent des `<style>`, et un style n'exécute rien. Aucune origine tierce : l'éditeur YAML
- * (Monaco) se téléchargeait depuis un CDN, dont cette politique bloquait la feuille et la police —
- * il s'affichait sans style (revue du 07/10). Tout ce que la console charge vient d'elle.
+ * A CSP without `'unsafe-inline'` for scripts: one nonce per request, which Next sets itself on
+ * its scripts (it reads it from the `Content-Security-Policy` header). The price: every page is
+ * rendered dynamically, which is already the case of a dashboard that reads the API on every
+ * display. Styles keep `'unsafe-inline'`: CodeMirror and React Flow inject `<style>` elements, and
+ * a style runs nothing. No third-party origin: the YAML editor (Monaco) was downloaded from a CDN,
+ * whose stylesheet and font this policy blocked, so it showed unstyled (review of 07/10).
+ * Everything the console loads comes from itself.
  *
- * Avant le 2026-09-25 : `script-src 'self' 'unsafe-inline'` dans `next.config.mjs` — une
- * CSP qui laissait passer exactement ce contre quoi une CSP existe.
+ * Before 2026-09-25: `script-src 'self' 'unsafe-inline'` in `next.config.mjs`, a CSP that let
+ * through exactly what a CSP exists to stop.
  */
 export function proxy(request: NextRequest) {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
@@ -45,7 +45,7 @@ export function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     {
-      // Tout sauf les ressources statiques et les préchargements de `next/link`.
+      // Everything except static resources and `next/link` prefetches.
       source: "/((?!api|mcp|\\.well-known|_next/static|_next/image|favicon.ico).*)",
       missing: [
         { type: "header", key: "next-router-prefetch" },

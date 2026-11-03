@@ -18,10 +18,10 @@ type Session = {
 };
 
 const SessionContext = createContext<Session | null>(null);
-const CLE = "choregos.org";
+const ORG_KEY = "choregos.org";
 
 /**
- * La session et l'organisation courante, pour tout le front.
+ * The session and the current organisation, for the whole front end.
  *
  * Before: no page knew who was signed in (`/me` was only called on the administration), a 401
  * rendered as a raw error message, and the organisation was hard-coded. Here: `/me` once, the
@@ -33,15 +33,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const me = useQuery({ queryKey: ["me"], queryFn: () => api.me(), retry: false });
   const orgs = useQuery({ queryKey: ["orgs"], queryFn: () => api.orgs(), enabled: !!me.data, retry: false });
   const [org, setOrg] = useState<string>(DEFAULT_ORG);
-  // L'organisation retenue se choisit quand la liste arrive — ajustée pendant le rendu,
-  // pas dans un effet (le motif que React documente pour « un état qui dépend d'une
-  // prop ») : un effet poserait l'état après coup et ferait un rendu en cascade.
+  // The chosen organisation is picked when the list arrives, adjusted during the render and not in
+  // an effect (the pattern React documents for "state that depends on a prop"): an effect would set
+  // the state after the fact and cause a cascading render.
   const [vues, setVues] = useState<Org[] | null>(null);
   if (orgs.data && orgs.data !== vues) {
     setVues(orgs.data);
     let voulue: string | null = null;
     try {
-      voulue = window.localStorage.getItem(CLE);
+      voulue = window.localStorage.getItem(ORG_KEY);
     } catch {
       voulue = null;
     }
@@ -51,14 +51,14 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     rememberOrgCookie(choisie);
   }
 
-  function choisirOrg(slug: string) {
+  function chooseOrg(slug: string) {
     setOrg(slug);
     setCurrentOrg(slug);
     rememberOrgCookie(slug);
     try {
-      window.localStorage.setItem(CLE, slug);
+      window.localStorage.setItem(ORG_KEY, slug);
     } catch {
-      /* navigation privée : le choix ne survit pas, et c'est tout */
+      /* private browsing: the choice does not survive, and that is all */
     }
     void queryClient.invalidateQueries();
   }
@@ -69,8 +69,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     window.location.assign(new URL("/login", window.location.origin).toString());
   }
 
-  // Sans session, `request()` a déjà envoyé vers /login ; on ne rend rien d'autre en
-  // attendant. La page de connexion elle-même, bien sûr, se rend.
+  // Without a session, `request()` has already redirected to /login; nothing else is rendered
+  // meanwhile. The sign-in page itself, of course, does render.
   const nonConnecte = me.error instanceof ApiError && me.error.status === 401 && !pathname.startsWith("/login");
   return (
     <SessionContext.Provider
@@ -78,7 +78,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         me: me.data ?? null,
         orgs: orgs.data ?? [],
         org,
-        choisirOrg,
+        choisirOrg: chooseOrg,
         chargement: me.isLoading || (!!me.data && orgs.isLoading),
         deconnecter,
       }}

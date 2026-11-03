@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-/** Formatage FR : argent, tokens, durées, dates relatives. Utilisé partout, testé. */
+/** Formatting: money, tokens, durations, relative dates. Used everywhere, tested. */
 
 export function eur(value: number | null | undefined): string {
   if (value === null || value === undefined) return "—";
@@ -55,8 +55,8 @@ export function shortDate(timestamp: string | null | undefined): string {
 }
 
 /**
- * Un code d'état lu par une personne (S23-11) : `rolled_back` → « rolled back », `FAILED` →
- * « failed ». La console affichait les codes de l'API tels quels quand l'état n'avait pas de libellé.
+ * A status code read by a person (S23-11): `rolled_back` becomes "rolled back", `FAILED` becomes
+ * "failed". The console showed the API's codes as they were when the status had no label.
  */
 export function libelleDeCode(code: string): string {
   return code.replace(/_/g, " ").toLowerCase();
@@ -64,14 +64,14 @@ export function libelleDeCode(code: string): string {
 
 /**
  * Sentence case for a label built from a code or a lowercase phrase (ADR 0048): the first letter
- * only, the rest as it is — `release train` → « Release train », `ci_green` stays `ci_green` where
- * it is shown as code.
+ * only, the rest as it is: `release train` becomes "Release train", `ci_green` stays `ci_green`
+ * where it is shown as code.
  */
 export function toSentenceCase(texte: string): string {
   return texte.charAt(0).toUpperCase() + texte.slice(1);
 }
 
-/** Les segments entre backticks d'une phrase du moteur (`refiner`, `spec_markdown`) : du code. */
+/** The segments between backticks in an engine sentence (`refiner`, `spec_markdown`): code. */
 export function segmentsDeCode(texte: string): { code: boolean; texte: string }[] {
   return texte
     .split("`")
@@ -79,7 +79,7 @@ export function segmentsDeCode(texte: string): { code: boolean; texte: string }[
     .filter((segment) => segment.texte !== "");
 }
 
-/** Ratio affiché en pourcentage, sans fausse précision. */
+/** A ratio shown as a percentage, without false precision. */
 export function percent(value: number | null | undefined): string {
   if (value === null || value === undefined) return "—";
   return `${Math.round(value * 100)} %`;
