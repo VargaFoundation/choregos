@@ -14,6 +14,7 @@ from typing import Any
 
 from choregos_contracts import (
     AgentActor,
+    DecisionActor,
     HumanActor,
     JobActor,
     StageResult,
@@ -141,6 +142,8 @@ class WorkflowEngine:
             return "agent"
         if isinstance(actor, JobActor):
             return "job"
+        if isinstance(actor, DecisionActor):
+            return "decision"
         if isinstance(actor, HumanActor):
             return "human"
         if isinstance(actor, SystemActor):
@@ -154,6 +157,11 @@ class WorkflowEngine:
     def job_of(self, transition: Transition) -> JobActor | None:
         actor = self.wf.actor_of(transition)
         return actor if isinstance(actor, JobActor) else None
+
+    def decision_of(self, transition: Transition) -> DecisionActor | None:
+        """The decision a step asks (ADR 0121), or None for any other actor."""
+        actor = self.wf.actor_of(transition)
+        return actor if isinstance(actor, DecisionActor) else None
 
     def run_request(self, transition: Transition) -> dict[str, Any]:
         """What `prepare_stage` needs from the actor of a step a runner executes: an agent's role,

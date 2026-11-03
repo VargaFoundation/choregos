@@ -21,6 +21,19 @@ async def test_les_trois_templates_sont_acceptes_par_l_api(platform: Platform, n
     assert validation["valid"], validation["errors"]
     assert validation["graph"]["nodes"], "the graph is rendered for the front"
 
+    if name == "decision-triage":
+        # ADR 0121: a decision step is refused until the organisation's catalogue enables a decision
+        # model for it, and accepted once it does.
+        refused = await platform.client.put(
+            f"/api/v1/projects/{platform.project_id}/workflow", json={"yaml": template_yaml(name)}
+        )
+        assert refused.status_code == 422, refused.text
+        assert {e["code"] for e in refused.json()["errors"]} == {"decision.model_usage"}
+        added = await platform.client.post(
+            "/api/v1/orgs/varga/models", json={"model_name": "platform/decide", "usages": ["decide"]}
+        )
+        assert added.status_code in (200, 201), added.text
+
     saved = await platform.client.put(
         f"/api/v1/projects/{platform.project_id}/workflow", json={"yaml": template_yaml(name)}
     )

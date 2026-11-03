@@ -95,6 +95,7 @@ class TemporalGateway(Protocol):
     async def start_trial(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def start_knowledge_sync(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def start_reconciliation(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
+    async def start_memory_ingestion(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def start_hosted_build(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def start_session_pod(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
     async def start_knowledge_distill(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
@@ -181,6 +182,13 @@ class FakeTemporal:
 
     async def start_reconciliation(self, workflow_id: str, payload: dict[str, Any]) -> str:
         self.started.setdefault(workflow_id, payload)  # one catch-up loop per project
+        return workflow_id
+
+    async def start_memory_ingestion(self, workflow_id: str, payload: dict[str, Any]) -> str:
+        self.started.setdefault(workflow_id, payload)  # one memory loop per project
+        state = self.described.get(workflow_id)
+        if state is None or state.status != "COMPLETED":  # ALLOW_DUPLICATE_FAILED_ONLY, as the real one
+            self.gone.discard(workflow_id)
         return workflow_id
 
     async def start_knowledge_distill(self, workflow_id: str, payload: dict[str, Any]) -> str:
@@ -288,6 +296,10 @@ class RealTemporal:
 
     async def start_knowledge_distill(self, workflow_id: str, payload: dict[str, Any]) -> str:
         return await self._start("KnowledgeDistill", workflow_id, payload)
+
+    async def start_memory_ingestion(self, workflow_id: str, payload: dict[str, Any]) -> str:
+        """A project's memory loop (S51-02): `MemoryIngestion` in the orchestrator."""
+        return await self._start("MemoryIngestion", workflow_id, payload)
 
     async def start_hosted_build(self, workflow_id: str, payload: dict[str, Any]) -> str:
         """A zip version's image (S41-08): `HostedImageBuild` in the orchestrator."""
@@ -431,6 +443,75 @@ async def stop_tracker_reconciliation(project_slug: str) -> None:
             logger.warning("tracker catch-up not stopped", project=project_slug, reason=str(exc))
     except Exception as exc:  # the archive is saved; a pass skips an archived project
         logger.warning("tracker catch-up not stopped", project=project_slug, reason=str(exc))
+
+
+def memory_loop_id(project_slug: str) -> str:
+    """The id of a project's memory loop (`MemoryIngestion`), the one the orchestrator's worker starts."""
+    return f"mem-{project_slug}"
+
+
+async def start_memory_ingestion(project_slug: str) -> None:
+    """Start the memory loop of a project that just became active (S51-02).
+
+    Nothing started `MemoryIngestion` before: the memory was never fed, and every signal to `mem-<slug>`
+    went to a workflow that did not exist. Idempotent (deterministic id) and best effort, like the
+    tracker catch-up: the activation stands if Temporal does not answer, the worker start catches up.
+    The caller skips a project whose policy disables memory.
+    """
+    try:
+        await get_temporal().start_memory_ingestion(
+            memory_loop_id(project_slug), {"project_slug": project_slug}
+        )
+    except Exception as exc:  # the activation is saved; the worker start catches up
+        logger.warning("memory loop not started", project=project_slug, reason=str(exc))
+
+
+async def stop_memory_ingestion(project_slug: str) -> None:
+    """Stop an archived project's memory loop. A loop that does not run is fine."""
+    from temporalio.service import RPCError, RPCStatusCode
+
+    try:
+        await get_temporal().signal(memory_loop_id(project_slug), "stop", {})
+    except RPCError as exc:
+        if exc.status != RPCStatusCode.NOT_FOUND:
+            logger.warning("memory loop not stopped", project=project_slug, reason=str(exc))
+    except Exception as exc:  # the archive is saved; the loop only ingests
+        logger.warning("memory loop not stopped", project=project_slug, reason=str(exc))
+
+
+class MemoryLoopNotRunningError(Exception):
+    """A project's memory loop does not run and could not be started: it was stopped (its project was
+    archived) or Temporal refused the start. Nothing received the signal; the caller says so."""
+
+    def __init__(self, workflow_id: str, cause: str) -> None:
+        super().__init__(f"{workflow_id}: {cause}")
+        self.workflow_id = workflow_id
+        self.cause = cause
+
+
+async def signal_memory_loop(project_slug: str, name: str, payload: Any) -> None:
+    """Signal a project's memory loop, starting it first when it does not run (S51-02).
+
+    A signal to a missing workflow is NOT_FOUND, which answered 500 on `reimport` and on the Alertmanager
+    webhook. The loop is started (idempotent) and signalled once more; if it still cannot be reached,
+    `MemoryLoopNotRunningError`. The caller checks the project's policy first.
+    """
+    from temporalio.service import RPCError, RPCStatusCode
+
+    workflow_id = memory_loop_id(project_slug)
+    try:
+        await get_temporal().signal(workflow_id, name, payload)
+        return
+    except RPCError as exc:
+        if exc.status != RPCStatusCode.NOT_FOUND:
+            raise
+    await get_temporal().start_memory_ingestion(workflow_id, {"project_slug": project_slug})
+    try:
+        await get_temporal().signal(workflow_id, name, payload)
+    except RPCError as exc:
+        if exc.status != RPCStatusCode.NOT_FOUND:
+            raise
+        raise MemoryLoopNotRunningError(workflow_id, str(exc)) from exc
 
 
 class InterpreterNotRunningError(Exception):

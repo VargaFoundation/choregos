@@ -8,6 +8,7 @@ par `delivery_id`, et on signale Temporal. Tout le reste est asynchrone.
 from __future__ import annotations
 
 import json
+from collections.abc import Awaitable, Callable
 from typing import Annotated, Any
 
 from choregos_adapters.errors import AdapterError, UpstreamError
@@ -36,7 +37,16 @@ from ..services import (
     workflow_model,
 )
 from ..services.initiator import initiator
-from ..temporal import InterpreterNotRunningError, deliver_inbound, get_temporal, interpreter_id, train_id
+from ..services.routage import with_tracker
+from ..temporal import (
+    InterpreterNotRunningError,
+    MemoryLoopNotRunningError,
+    deliver_inbound,
+    get_temporal,
+    interpreter_id,
+    signal_memory_loop,
+    train_id,
+)
 
 router = APIRouter(tags=["webhooks"], prefix="/webhooks")
 logger = get_logger("choregos.webhooks")
@@ -201,11 +211,24 @@ async def _answer_tracker_command(
     )
 
 
-async def _dispatch(session: Any, events: list[InboundEvent], project_of: Project | None = None) -> int:
+#: Reads what the tracker says about a ticket (`fields.tracker`, S51-04) from the tracker itself.
+TrackerOf = Callable[[Project, str], Awaitable[dict[str, Any] | None]]
+
+
+async def _dispatch(
+    session: Any,
+    events: list[InboundEvent],
+    project_of: Project | None = None,
+    tracker_of: TrackerOf | None = None,
+) -> int:
     """Route each event: a signal to its work item's workflow, or a start on `agent-ready`.
 
     `project_of`: the project, already known from the organisation that verified the delivery (a plugin
-    server's webhook, S43-07): never looked up by slug across organisations."""
+    server's webhook, S43-07): never looked up by slug across organisations.
+
+    `tracker_of`: what the tracker says about the ticket, re-read from the tracker (never from the
+    payload): a work item born of the event carries it as `fields.tracker`, and an existing one has it
+    replaced, so a requester or an answer changed in the tracker reaches the next stage (S51-04)."""
     delivered = 0
     for event in events:
         project = project_of or await _project_for(session, event.project_slug)
@@ -226,7 +249,12 @@ async def _dispatch(session: Any, events: list[InboundEvent], project_of: Projec
             AGENT_READY_LABEL in event.payload.get("labels", [])
             or event.payload.get("label") == AGENT_READY_LABEL
         )
+        if item is None and not should_start and _starts_by_rule(project, event):
+            should_start = True  # a project rule, not the label (S56-03)
         created = False
+        tracker: dict[str, Any] | None = None
+        if tracker_of is not None and (item is not None or should_start):
+            tracker = await tracker_of(project, key)
         if item is None and should_start:
             created = True
             # Né dans le workflow que désignent ses étiquettes ou son type (ADR 0031) — plus en
@@ -243,11 +271,14 @@ async def _dispatch(session: Any, events: list[InboundEvent], project_of: Projec
                     item_type=event.payload.get("item_type"),
                     reporter=event.payload.get("reporter"),
                     initiated_by=initiator("tracker", event.source),
+                    tracker=tracker,
                 ),
             )
         if item is None:
             received_events.record(session, project, event, "ignored_not_agent_ready")
             continue
+        if tracker is not None and not created:
+            item.fields = with_tracker(dict(item.fields or {}), tracker)
         etiquettes = event.payload.get("labels")
         if event.type in ETIQUETTES_A_JOUR and isinstance(etiquettes, list):
             # L'état courant des étiquettes, posé ou retiré : la voie express les lit (#279).
@@ -284,6 +315,40 @@ async def _dispatch(session: Any, events: list[InboundEvent], project_of: Projec
         )
         delivered += 1
     return delivered
+
+
+#: The events that may start an item the project does not hold yet, by a start rule (S56-03).
+STARTS_BY_RULE = frozenset(
+    {
+        InboundEventType.ITEM_CREATED,
+        InboundEventType.ITEM_UPDATED,
+        InboundEventType.ITEM_LABELED,
+        InboundEventType.ITEM_MOVED,
+    }
+)
+
+
+def _starts_by_rule(project: Project, event: InboundEvent) -> bool:
+    """Whether one of the project's `start_rules` holds for the item the event describes (S56-03,
+    ADR 0113): a ServiceNow incident in the desk's queue starts without an `agent-ready` label. Every
+    condition of a rule must hold; a value the event does not carry never matches."""
+    if event.type not in STARTS_BY_RULE:
+        return False
+    from ..services.definitions import project_config
+
+    rules = project_config(project).start_rules
+    if not rules:
+        return False
+    payload = event.payload or {}
+    labels = {str(label) for label in payload.get("labels") or [] if label}
+    if isinstance(payload.get("label"), str) and not payload.get("removed"):
+        labels.add(payload["label"])
+    item_type = payload.get("item_type")
+    state = payload.get("to_status") or payload.get("state")
+    return any(
+        rule.matches(labels, str(item_type) if item_type else None, str(state) if state else None)
+        for rule in rules
+    )
 
 
 def _outcome(event: InboundEvent, created: bool, started: bool, labels: Any) -> str:
@@ -528,11 +593,29 @@ async def alertmanager_webhook(
             },
         )
         project = await _project_for(session, event.project_slug)
-        if project is not None:
-            await get_temporal().signal(f"mem-{project.slug}", "alert", event.model_dump(mode="json"))
+        if project is not None and await _alert_reaches_memory(session, project, event):
             received_events.record(session, project, event, "signalled")
         count += 1
     return WebhookAck(accepted=True, events=count)
+
+
+async def _alert_reaches_memory(session: Any, project: Project, event: InboundEvent) -> bool:
+    """Hand an alert to the project's memory loop, started if it does not run (S51-02).
+
+    `False`, and a log line, when the project's policy disables memory or the loop cannot be reached:
+    Alertmanager would retry a 500 forever, and nothing it can resend changes either answer.
+    """
+    from ..services import policy_engine
+
+    if not (await policy_engine(session, project.id)).memory_enabled():
+        logger.info("alert not kept: memory disabled", project=project.slug, delivery=event.delivery_id)
+        return False
+    try:
+        await signal_memory_loop(project.slug, "alert", event.model_dump(mode="json"))
+    except MemoryLoopNotRunningError as exc:
+        logger.warning("alert not kept: memory loop not running", project=project.slug, reason=exc.cause)
+        return False
+    return True
 
 
 # ───────────────────────────── Jira / GitLab (S13-04) ─────────────────────────────
@@ -562,8 +645,30 @@ async def jira_webhook(
     project, decided = await _jira_project_for(session, payload)
     if decided and project is None:
         return WebhookAck(accepted=True, events=0)
-    delivered = await _dispatch(session, events, project_of=project)
+    delivered = await _dispatch(session, events, project_of=project, tracker_of=_jira_tracker_of(session))
     return WebhookAck(accepted=True, events=delivered)
+
+
+def _jira_tracker_of(session: Any) -> TrackerOf:
+    """Re-reads the issue through the project's Jira connector: a webhook payload has no field names
+    (`expand=names`) and is only as trustworthy as a shared secret. Best effort: a project without a
+    Jira connector, or an issue that cannot be read, leaves `fields.tracker` as it was."""
+    from choregos_core.domain import TRACKER_FIELD
+
+    from ..services.tickets import tracker_du_projet
+
+    async def read(project: Project, key: str) -> dict[str, Any] | None:
+        try:
+            row, adapter = await tracker_du_projet(session, project)
+            if row is None or row.type != "jira" or adapter is None:
+                return None
+            found = (await adapter.fetch_item(key)).fields.get(TRACKER_FIELD)
+        except Exception as failed:  # the delivery is still routed; the block waits for the next one
+            logger.warning("jira.webhook.tracker_unread", key=key, error=str(failed)[:300])
+            return None
+        return dict(found) if isinstance(found, dict) else None
+
+    return read
 
 
 @router.post(
@@ -677,6 +782,7 @@ async def plugin_webhook(
     name; 401: the server does not recognise the delivery."""
     from choregos_adapters import build
     from choregos_adapters.errors import AdapterError
+    from choregos_core.domain import TRACKER_FIELD
 
     from ..services.plugin_tracker import pin_plugin_tracker
 
@@ -709,6 +815,7 @@ async def plugin_webhook(
                 logger.info("plugin.webhook.unrouted", plugin=plugin, server=server, key=found["item_key"])
                 continue
             item = await adapter.fetch_item(found["item_key"])
+            block = item.fields.get(TRACKER_FIELD)
             event = InboundEvent(
                 type=InboundEventType(found["kind"]),
                 source=f"plugin:{plugin}/{server}",
@@ -724,8 +831,22 @@ async def plugin_webhook(
                     "state": item.state,
                 },
             )
-            delivered += await _dispatch(session, [event], project_of=project)
+            delivered += await _dispatch(
+                session,
+                [event],
+                project_of=project,
+                tracker_of=_known(block if isinstance(block, dict) else None),
+            )
         return WebhookAck(
             accepted=True, events=delivered, duplicate=bool(events) and duplicates == len(events)
         )
     raise unauthorized("no server recognised the delivery")
+
+
+def _known(block: dict[str, Any] | None) -> TrackerOf:
+    """What the tracker says, already re-read (a plugin server's `tracker_fetch_item`)."""
+
+    async def read(project: Project, key: str) -> dict[str, Any] | None:
+        return block
+
+    return read

@@ -5,10 +5,12 @@ The effective network is agent ∩ project ∩ organisation, plus the *implied* 
 lists of the instance, the organisation and the project (`choregos_core.network`). The API computes
 the same thing for the egress proxy (`services/network.py`); both read the same module.
 
-Implied hosts are the repository's host and the hosts the organisation OPENED for its runners in
-its egress allowlist (`org_egress_rules` with `used_by: runners`, S39-22d, ADR 0066): an opening is
-the organisation's own grant to every run, so it joins the run like the repository does, and every
-deny list (instance, organisation ceiling, project) still wins over it (ADR 0070, amended).
+Implied hosts are the repository's host, for a run that clones it (an agent that declares
+`workspace: none`, ADR 0119, gets no repository and no repository host), and the hosts the
+organisation OPENED for its runners in its egress allowlist (`org_egress_rules` with
+`used_by: runners`, S39-22d, ADR 0066): an opening is the organisation's own grant to every run, so
+it joins the run like the repository does, and every deny list (instance, organisation ceiling,
+project) still wins over it (ADR 0070, amended).
 """
 
 from __future__ import annotations
@@ -29,30 +31,46 @@ def instance_deny(settings: Any) -> list[str]:
     ]
 
 
-def _implied_hosts(bundle: ProjectBundle, org_hosts: Iterable[str] = ()) -> list[str]:
-    host = repo_host(bundle.config.repo.url if bundle.config.repo else None)
+def _implied_hosts(
+    bundle: ProjectBundle, org_hosts: Iterable[str] = (), *, with_repo: bool = True
+) -> list[str]:
+    host = repo_host(bundle.config.repo.url if bundle.config.repo and with_repo else None)
     return list(dict.fromkeys([*([host] if host else []), *org_hosts]))
 
 
 def run_network(
-    bundle: ProjectBundle, agent_net: Any, settings: Any, org_hosts: Iterable[str] = ()
+    bundle: ProjectBundle,
+    agent_net: Any,
+    settings: Any,
+    org_hosts: Iterable[str] = (),
+    *,
+    with_repo: bool = True,
 ) -> EffectiveNetwork:
     """The network of a run of this project, with the agent's narrowing when the stage has an agent.
-    `org_hosts`: what the organisation opened for its runners (`org_egress.org_runner_hosts`)."""
+    `org_hosts`: what the organisation opened for its runners (`org_egress.org_runner_hosts`).
+    `with_repo`: whether the run clones the repository; a run that does not gets no repository host."""
     ceiling = bundle.ceiling.network if bundle.ceiling else None
     return effective_network(
         bundle.policy.sandbox.network,
         agent_net,
         ceiling,
-        implied_hosts=_implied_hosts(bundle, org_hosts),
+        implied_hosts=_implied_hosts(bundle, org_hosts, with_repo=with_repo),
         instance_deny=instance_deny(settings),
     )
 
 
-def admit_network(bundle: ProjectBundle, agent: Any, settings: Any, org_hosts: Iterable[str] = ()) -> None:
+def admit_network(
+    bundle: ProjectBundle,
+    agent: Any,
+    settings: Any,
+    org_hosts: Iterable[str] = (),
+    *,
+    with_repo: bool = True,
+) -> None:
     """Refuse, before any key is minted and without a retry, an agent that needs a host its project
     or the organisation does not allow: retrying would not change the policy. A host the
-    organisation opened for its runners counts as allowed."""
+    organisation opened for its runners counts as allowed; the repository's host only when the run
+    clones it (`with_repo`, ADR 0119)."""
     if agent is None or not agent.spec.network.domains:
         return
     ceiling = bundle.ceiling.network if bundle.ceiling else None
@@ -60,7 +78,7 @@ def admit_network(bundle: ProjectBundle, agent: Any, settings: Any, org_hosts: I
         agent.spec.network,
         bundle.policy.sandbox.network,
         ceiling,
-        implied_hosts=_implied_hosts(bundle, org_hosts),
+        implied_hosts=_implied_hosts(bundle, org_hosts, with_repo=with_repo),
         instance_deny=instance_deny(settings),
     )
     if missing:

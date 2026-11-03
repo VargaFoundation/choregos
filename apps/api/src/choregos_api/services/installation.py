@@ -50,6 +50,13 @@ async def installer_ce_que_livre_le_gabarit(
     )
     installes |= {"extensions": [], "sans_greffon": []}
     await _installer_les_extensions(session, projet, livree, auteur, installes)
+    if livree.knowledge:
+        # The bases its agents read (S51-06, ADR 0117): created for the project, or reused.
+        from .template_knowledge import install_template_knowledge
+
+        done = await install_template_knowledge(session, projet, livree.knowledge, livree.inputs, auteur)
+        installes["knowledge"] = done["created"] + done["completed"] + done["reused"] + done["served"]
+        installes["knowledge_skipped"] = done["skipped"]
     return installes
 
 

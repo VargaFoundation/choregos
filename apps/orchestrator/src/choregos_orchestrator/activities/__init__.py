@@ -11,6 +11,7 @@ from . import (
     agent_session,
     bilan,
     children,
+    decision,
     evals,
     execution,
     findings,
@@ -64,6 +65,8 @@ ALL_ACTIVITIES = [
     suspension.resume_run,
     bilan.collect_spend,
     bilan.record_run_outcome,
+    # A decision step (ADR 0121): no run, a call to the gateway's decision route.
+    decision.decide,
     tracker.mirror_state,
     tracker.update_status_comment,
     tracker.create_human_request,
@@ -117,6 +120,7 @@ ALL_ACTIVITIES = [
 __all__ = [
     "ALL_ACTIVITIES",
     "bilan",
+    "decision",
     "evals",
     "execution",
     "findings",

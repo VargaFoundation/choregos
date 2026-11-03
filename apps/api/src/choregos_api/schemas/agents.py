@@ -3,12 +3,14 @@
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from choregos_core.memory_bindings import Binding, binding_problems, effective_bindings
 from choregos_core.network import validate_pattern
+from choregos_core.workspace import AgentWorkspace
 from pydantic import (
     Field,
     SerializerFunctionWrapHandler,
@@ -91,11 +93,25 @@ class AgentMemoryBinding(Dto):
         return Binding(self.scope, self.slug, self.mode)
 
 
+#: A sample's fields, as JSON: enough for a tracker block and a few answers (S51-04).
+MAX_SAMPLE_FIELDS_BYTES = 64 * 1024
+
+
 class AgentSampleInput(Dto):
     """A sample work item an agent is tried or evaluated on (S32-03)."""
 
     title: str = Field(default="", max_length=500)
     body: str = Field(default="", max_length=20_000)
+    #: The work item's fields, as `ticket.fields` (S51-04): a case may play a ticket filed from a
+    #: tracker, `{"tracker": {"reporter": …, "answers": …}}`. Absent, `{}`, as for a console request.
+    fields: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("fields")
+    @classmethod
+    def _small_fields(cls, value: dict[str, Any]) -> dict[str, Any]:
+        if len(json.dumps(value, default=str)) > MAX_SAMPLE_FIELDS_BYTES:
+            raise ValueError(f"a sample's fields hold at most {MAX_SAMPLE_FIELDS_BYTES // 1024} KiB of JSON")
+        return value
 
 
 class AgentEvalCase(Dto):
@@ -319,7 +335,7 @@ class HostedRuntime(Dto):
     port: int = Field(default=8088, ge=1024, le=65535)
     readiness_timeout_s: int = Field(default=120, ge=1, le=900)
     termination_grace_s: int = Field(default=30, ge=1, le=300)
-    workspace: Literal["none", "read", "write"] = "none"
+    workspace: AgentWorkspace = "none"
     env: dict[str, str] = Field(default_factory=dict, max_length=64)
     #: Filled by the platform for a zip source.
     build: HostedBuild | None = None
@@ -421,6 +437,11 @@ class AgentSpec(Dto):
     #: `write`. Absent, the legacy `memory` field decides (`project` -> the project's shared memory).
     memories: list[AgentMemoryBinding] | None = Field(default=None, max_length=8)
 
+    #: The workspace a run gets (S51-03, ADR 0119): `none` (nothing cloned, no repository host on
+    #: the run's network), `read` (a clone it cannot change) or `write`. Absent: `write`, or what a
+    #: hosted runtime's `workspace` says. The repository itself is the project's, never the agent's.
+    workspace: AgentWorkspace | None = None
+
     @model_validator(mode="after")
     def _memories_are_coherent(self) -> AgentSpec:
         if self.memories is None:
@@ -432,13 +453,23 @@ class AgentSpec(Dto):
         return self
 
     @model_serializer(mode="wrap")
-    def _leave_out_absent_memories(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
-        """`memories` is left out while it is unset: a version published before the field existed keeps
-        its stored spec, its digest and its response byte for byte."""
+    def _leave_out_absent_fields(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        """`memories` and `workspace` are left out while unset: a version published before the fields
+        existed keeps its stored spec, its digest and its response byte for byte."""
         data: dict[str, object] = handler(self)
-        if data.get("memories") is None:
-            data.pop("memories", None)
+        for name in ("memories", "workspace"):
+            if data.get(name) is None:
+                data.pop(name, None)
         return data
+
+    def effective_workspace(self) -> AgentWorkspace:
+        """What a run of this version gets (ADR 0119): a remote agent edits nothing of ours, a hosted
+        one says it in its runtime, any other agent says it in `workspace` (`write` when absent)."""
+        if isinstance(self.runtime, A2aRuntime):
+            return "none"
+        if isinstance(self.runtime, HostedRuntime):
+            return self.runtime.workspace
+        return self.workspace or "write"
 
     def effective_memories(self) -> list[AgentMemoryBinding]:
         """What a run binds: `memories`, or what the legacy `memory` means."""
@@ -463,6 +494,17 @@ class AgentSpec(Dto):
                     "an `a2a` runtime runs elsewhere: it uses none of the platform's skills, knowledge "
                     "bases or MCP servers"
                 )
+            if self.workspace is not None:
+                raise ValueError("an `a2a` runtime runs elsewhere: it gets no workspace, drop `workspace`")
+        if (
+            isinstance(self.runtime, HostedRuntime)
+            and self.workspace is not None
+            and self.workspace != self.runtime.workspace
+        ):
+            raise ValueError(
+                f"`workspace` ({self.workspace}) and `runtime.workspace` ({self.runtime.workspace}) "
+                "disagree: set only one"
+            )
         if isinstance(self.runtime, PromptRuntime | VoiceRuntime | HostedRuntime) and self.backend:
             raise ValueError(f"a `{self.runtime.kind}` runtime runs no coding agent: `backend` must be empty")
         if isinstance(self.runtime, VoiceRuntime | HostedRuntime) and self.skills:

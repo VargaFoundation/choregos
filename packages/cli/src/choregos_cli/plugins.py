@@ -35,6 +35,9 @@ def validate(
                 highlight=False,
                 soft_wrap=True,
             )
+            for warning in plugin.warnings:
+                console.print("[yellow]![/yellow] ", end="")
+                console.print(warning, markup=False, highlight=False, soft_wrap=True)
     except PluginError as exc:
         _refuse(exc)
 

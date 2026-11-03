@@ -14,6 +14,7 @@ some of its pages could not be read this time: then nothing is deleted, a 500 is
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Awaitable, Callable
 from pathlib import PurePosixPath
 from typing import Any
 
@@ -126,6 +127,16 @@ async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
                 session, source.org_id, named.kind, named.type, named.config, named.secret_refs
             )
             return GitDocumentsConnector(resolved).source(dict(config), key=source.id, user_agent=agent)
+        if config.get("github_app"):
+            # The project's own repository, from its template (S51-06, ADR 0117): through the App.
+            return GitSource(
+                url=str(config["url"]),
+                ref=str(config.get("ref", "main")),
+                paths=config.get("paths"),
+                credential=await github_app_credential(session, source.org_id, str(config["url"])),
+                host="github.com",
+                user_agent=agent,
+            )
         return GitSource(
             url=str(config["url"]),
             ref=str(config.get("ref", "main")),
@@ -133,6 +144,49 @@ async def open_source(session: Any, source: KnowledgeSource) -> DocumentSource:
             user_agent=agent,
         )
     raise SourceUnavailableError(f"unknown source kind `{source.kind}`")
+
+
+async def github_app_credential(session: Any, org_id: str, url: str) -> Callable[[], Awaitable[str]]:
+    """A one-hour installation token of the deployment's GitHub App for the repository at `url`, scoped
+    to it with `contents: read`, minted when the source is read (S51-06, ADR 0117).
+
+    Only through the installation THIS organisation claimed on the repository's owner (ADR 0073); a
+    single-organisation instance still discovers it from the repository. The installation is looked up
+    now, while the session is open; the token is minted by the fetch."""
+    import httpx
+    from choregos_adapters.github import GitHubAppAuth
+
+    from ..services.github_app import claimed_installation_for, implicit_claim_enabled
+    from ..services.template_knowledge import github_repository
+
+    repository = github_repository(url)
+    if repository is None:
+        raise SourceUnavailableError(f"`{url}` is not a GitHub repository: the GitHub App cannot read it")
+    settings = get_settings()
+    if not (settings.github_app_id and settings.github_app_private_key):
+        raise SourceUnavailableError(
+            "the deployment has no GitHub App (CHOREGOS_GITHUB_APP_ID): name a `documents/git` connector"
+        )
+    owner = repository.split("/", 1)[0]
+    claimed = await claimed_installation_for(session, org_id, owner)
+    if claimed is None and not await implicit_claim_enabled(session):
+        raise SourceUnavailableError(
+            f"The Choregos GitHub App is not installed on `{owner}` for this organisation: "
+            "install it from Settings, Connections, then sync again."
+        )
+    auth = GitHubAppAuth(
+        app_id=settings.github_app_id,
+        private_key=settings.github_app_private_key,
+        pinned_installation=claimed.id if claimed else None,
+        pinned_account=owner if claimed else None,
+    )
+
+    async def mint() -> str:
+        async with httpx.AsyncClient(timeout=20.0) as http:
+            issued = await auth.token_for(http, repository, permissions={"contents": "read"})
+        return str(issued.token)
+
+    return mint
 
 
 async def _source_connector(session: Any, source: KnowledgeSource) -> OrgConnector:

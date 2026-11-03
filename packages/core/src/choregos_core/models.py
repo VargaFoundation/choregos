@@ -91,7 +91,12 @@ def backend_enabled(name: str, stored: bool | None) -> bool:
 RUNTIME_BACKENDS: tuple[str, ...] = ("code", "prompt", "hosted")
 
 
-USAGES: tuple[str, ...] = ("agent", "embed", "distill", "eval", "route")
+#: What a catalogue entry may serve (ADR 0060): `route` picks a work item's workflow (ADR 0116),
+#: `decide` answers a decision step's typed questions (ADR 0121).
+USAGES: tuple[str, ...] = ("agent", "embed", "distill", "eval", "route", "decide")
+#: The `mode` LiteLLM gives a decision model in `/model/info` (`typesafe/*`, `laya/*`): it answers
+#: typed questions on `/v1/systemone` and never chats or calls a tool (ADR 0121).
+DECISION_MODE = "evaluation"
 TIERS: tuple[str, ...] = ("cheap", "standard", "strong", "aux", "embed", "local")
 
 
@@ -117,6 +122,21 @@ class ModelPolicy:
     mode: str = "open"
     entries: dict[str, CatalogueEntry] = field(default_factory=dict)
     tiers: dict[str, str | None] = field(default_factory=dict)
+
+    def check_decision(self, name: str) -> str | None:
+        """The refusal for a decision step's model (ADR 0121 §3), or `None` when it may serve one.
+
+        Stricter than `check`: even in `open` mode the model needs an entry that enables `decide`. A
+        decision model answers typed questions with probabilities and a chat model does not, so a
+        decision step is never sent to a model nobody declared able to answer one.
+        """
+        entry = self.entries.get(name)
+        if entry is None:
+            return (
+                f"the model `{name}` has no entry in the organisation's model catalogue: a decision step "
+                "needs one with the `decide` usage (/admin/models)"
+            )
+        return self.check(name, usage="decide")
 
     def check(
         self, name: str, provider_model: str | None = None, *, role: str | None = None, usage: str = "agent"

@@ -18,6 +18,7 @@ from choregos_contracts import ConnectorKind
 from .base import (
     CdAdapter,
     CiAdapter,
+    DecisionClient,
     Executor,
     GatewayAdapter,
     MemoryAdapter,
@@ -357,6 +358,20 @@ def build(kind: ConnectorKind | str, type_name: str, config: dict[str, Any] | No
     return factory(config)
 
 
+def default_decision_client() -> DecisionClient:
+    """What asks a decision model (ADR 0121): the gateway's `/v1/systemone` over HTTP, or the fake.
+
+    Not a connector: it carries no configuration of its own. The gateway it calls and the key it
+    sends are the project's, given per call."""
+    if fakes_enabled():
+        from .fakes.decisions import FakeDecisionClient
+
+        return FakeDecisionClient()
+    from .gateway.systemone import SystemOneClient
+
+    return SystemOneClient()
+
+
 @dataclass(slots=True)
 class AdapterSet:
     """L'ensemble des adaptateurs d'un projet, résolu une fois puis passé aux activités."""
@@ -370,6 +385,8 @@ class AdapterSet:
     gateway: GatewayAdapter
     notify: Notifier
     extra: dict[str, Any] = field(default_factory=dict)
+    #: Asks a decision step's model through `gateway` (ADR 0121 §2).
+    decisions: DecisionClient = field(default_factory=default_decision_client)
 
     @classmethod
     def fakes(cls) -> AdapterSet:
@@ -384,7 +401,9 @@ class AdapterSet:
             FakeScm,
             FakeTracker,
         )
+        from .fakes.decisions import FakeDecisionClient
 
+        gateway = FakeGateway()
         return cls(
             tracker=FakeTracker(),
             scm=FakeScm(),
@@ -392,8 +411,10 @@ class AdapterSet:
             cd=FakeCd(),
             executor=FakeExecutor(),
             memory=FakeMemory(),
-            gateway=FakeGateway(),
+            gateway=gateway,
             notify=FakeNotifier(),
+            # Behind the same fake gateway: a decision is asked with a key that gateway minted.
+            decisions=FakeDecisionClient(gateway),
         )
 
     @classmethod

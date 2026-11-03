@@ -237,6 +237,21 @@ global:
     resources:
       requests: { cpu: 50m, memory: 64Mi }
       limits: { cpu: 500m, memory: 256Mi }
+  # An MCP gateway the organisation already runs (ADR 0105: another product, never part of this
+  # chart). Nothing is rendered while `namespace` and `cidrs` are both empty.
+  mcpGateway:
+    # Exact host names the platform treats as the gateway (CHOREGOS_MCP_GATEWAY_INTERNAL_HOSTS):
+    # the API refuses them as a run's destination and lets the platform itself call them.
+    internalHosts: []
+    # Host names appended to the `api` and `workers` families of `egress.ceiling`, when those
+    # families are declared. Never added to `runners`, never to `egress.denyDomains`.
+    hosts: []
+    # In-cluster gateway: its namespace, and optionally the labels of its pods.
+    namespace: ''
+    podLabels: {}
+    # External gateway: the CIDRs the API and the workers may reach.
+    cidrs: []
+    ports: [443]
   logLevel: INFO
   # Anti-affinity between the replicas of a same component: `soft` (preferred), `hard`
   # (one replica per node, otherwise no pod) or `none`.
@@ -289,6 +304,18 @@ global:
     # Gateway secret (key `master-key`). Empty with `embedded: true`: the chart
     # generates one, stable from one update to the next.
     secretRef: choregos-gateway-secrets
+  decisions:
+    # ADR 0121: `true` deploys Laya (a CPU decision model, `charts/laya`) and the embedded LiteLLM
+    # serves it as `platform/decide`, the catalogue entry a workflow's `decision` step names. Only
+    # with `gateway.embedded: true`: an external gateway serves its own decision models.
+    embedded: false
+    # Secret (key `api-key`) of the bearer Laya requires and LiteLLM sends. Empty: the chart
+    # generates one, stable from one update to the next.
+    apiKeySecret: ""
+    # The internal price of a decision (ADR 0004: a local model is accounted with a configured
+    # internal price), per token of the state read, in USD. Laya counts the tokens it read as
+    # `input_tokens` and answers none. Zero would hide its spend from the cost ledger.
+    inputCostPerToken: 0.00000002
   memory:
     embedded: false
     url: http://ecphoria.choregos-memory.svc:8432

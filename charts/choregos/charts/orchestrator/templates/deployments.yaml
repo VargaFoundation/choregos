@@ -108,6 +108,11 @@ spec:
             # 0 = no ceiling, the previous behavior.
             - name: CHOREGOS_RUNNER_MAX_ACTIVE
               value: {{ $root.Values.runner.maxActive | default 0 | quote }}
+            # The pull secrets of a runner pod the executor creates (S51-09): the `k8s_job` pod of a
+            # step that names its own image runs in the runners' namespace, from a private registry
+            # as often as not. Names only; each secret must exist in that namespace.
+            - name: CHOREGOS_RUNNER_IMAGE_PULL_SECRETS
+              value: {{ join "," ($root.Values.global.imagePullSecrets | default list) | quote }}
             # The proxy through which an agent pod gets out: the one the provisioning deploys
             # in the runners namespace, with the allowlist of the project's policy.
             # Empty on a bench whose namespace has neither NetworkPolicy nor proxy.
@@ -221,11 +226,14 @@ metadata:
 # The `k8s_job` executor launches runners in THIS namespace under this account: without it,
 # pod creation fails. No rights, no token mounted — an agent has nothing to
 # ask of the Kubernetes API. (With Tekton, the provisioning creates it per project.)
+# The pull secrets too (S51-09): a job step's named image (`global.images.jobs`) or a hosted
+# agent's may sit in a private registry project, and a pod of this account pulls it.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: choregos-runner
   labels: {{- include "choregos.labels" . | nindent 4 }}
 automountServiceAccountToken: false
+{{- include "choregos.imagePullSecrets" . }}
 {{- end }}
 {{- end }}

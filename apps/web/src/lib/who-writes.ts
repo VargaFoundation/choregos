@@ -86,3 +86,23 @@ export function initiatorInWords(initiatedBy: string | null | undefined): string
       return initiatedBy;
   }
 }
+
+/** A person as `fields.tracker` holds it (S51-04): their name, and their email when the tracker gave it. */
+function personInWords(person: unknown): string | null {
+  if (!person || typeof person !== "object") return null;
+  const found = person as Record<string, unknown>;
+  const name = typeof found.display_name === "string" && found.display_name ? found.display_name : null;
+  const email = typeof found.email === "string" && found.email ? found.email : null;
+  if (name && email) return `${name} (${email})`;
+  return name ?? email ?? (typeof found.account_id === "string" && found.account_id ? found.account_id : null);
+}
+
+/** Who filed the ticket and who created it, as the tracker said (`fields.tracker`, S51-04); `null` when absent. */
+export function filedBy(fields?: Record<string, unknown> | null): { reporter: string | null; creator: string | null } | null {
+  const tracker = fields?.tracker;
+  if (!tracker || typeof tracker !== "object") return null;
+  const block = tracker as Record<string, unknown>;
+  const reporter = personInWords(block.reporter);
+  const creator = personInWords(block.creator);
+  return reporter || creator ? { reporter, creator } : null;
+}
