@@ -42,7 +42,7 @@ from ..secret_store import get_secret_store
 from ..services import mcp_gateway as service
 from ..services import mcp_gateway_identity as identity
 from ..services.connector_secrets import put_values, require_store
-from ..services.egress import egress_scope, ensure_or_409
+from ..services.egress import egress_scope, ensure_or_409, revoke_rules_of_origin
 from ..services.organisations import organisation_by_slug
 from ..services.platform_network import check_platform_host
 
@@ -125,6 +125,9 @@ async def put_mcp_gateway(org: str, body: McpGatewayPut, session: Db, principal:
     }
     organisation.settings = settings
     await session.flush()
+    await revoke_rules_of_origin(
+        session, principal, organisation, service.ORIGIN, keep=service.hosts_in_use(setting)
+    )
     service.clear_token_cache()  # (i)
     direct = await _direct_connectors(session, organisation.id) if body.mode == "required" else []
     await record(  # (j)
@@ -178,6 +181,7 @@ async def delete_mcp_gateway(org: str, session: Db, principal: Me) -> Response:
     organisation.settings = settings
     await get_secret_store().delete(session, organisation.id, service.SECRET_NAME)
     await session.flush()
+    await revoke_rules_of_origin(session, principal, organisation, service.ORIGIN, keep=set())
     service.clear_token_cache()
     await record(
         session,

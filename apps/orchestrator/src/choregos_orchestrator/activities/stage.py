@@ -15,8 +15,8 @@ from dataclasses import dataclass
 from hashlib import sha256
 from typing import Any
 
+import structlog
 from choregos_api.db.models import BackendRegistryRow, Run
-from choregos_api.logging import bind, get_logger
 from choregos_api.services import persist_event
 from choregos_api.services.artifacts import producing_runs
 from choregos_api.services.hosted_builds import builds_for
@@ -56,6 +56,7 @@ from choregos_core import (
 from choregos_core.cross_review import reviewer_candidates
 from choregos_core.memory_bindings import Binding, legacy_scope, merge_context_packs
 from choregos_core.redaction import REDACTED
+from choregos_core.workspace import write_paths_for
 from sqlalchemy import select
 from temporalio import activity
 
@@ -93,7 +94,7 @@ __all__ = [
     "start_run",
 ]
 
-logger = get_logger("choregos.stage")
+logger = structlog.get_logger("choregos.stage")
 
 
 def _serveurs_mcp(settings: Any, memory_scope: str = "project") -> dict[str, McpServerRef]:
@@ -144,7 +145,9 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
     async with db() as session:
         bundle = await project_bundle(session, plan.project_id)
         item = await load_work_item(session, plan.work_item_id)
-        bind(project=bundle.slug, work_item=item.tracker_key, stage=plan.role)
+        structlog.contextvars.bind_contextvars(
+            project=bundle.slug, work_item=item.tracker_key, stage=plan.role
+        )
         run_id = _run_id(plan)
 
         existing = await session.get(Run, run_id)
@@ -173,8 +176,15 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         # ADR 0070: an agent that needs a host its project or the organisation does not allow does
         # not start — before any key is reserved or minted. What the organisation opened for its
         # runners (S39-22d) joins the run as implied hosts; every deny list still wins.
+        # The workspace the agent declares (ADR 0119): `none` clones nothing and opens no repository
+        # host, `read` clones what it cannot change, `write` (the default) is today's run.
         admit_network(
-            bundle, agent, settings, org_hosts := await org_runner_hosts(session, bundle.project.org_id)
+            bundle,
+            agent,
+            settings,
+            org_hosts := await org_runner_hosts(session, bundle.project.org_id),
+            with_repo=(workspace := agent.spec.effective_workspace() if agent is not None else "write")
+            != "none",
         )
         if agent is not None:
             plan = _plan_de_l_agent(plan, agent.spec)
@@ -271,9 +281,10 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         await garde_contre_l_injection(session, bundle, item, run_id, plan, context_pack)
         playbook_prompt = _render_playbook(plan, bundle, item, context_pack, agent)
         playbook_ref = _playbook_ref(plan, agent, playbook_prompt)
-        allowed_paths = list(item.allowed_paths or []) or ["**"]
-        documents = item.documents or {}
+        # A `read` agent writes no repository file: its scope matches only its deliverables (ADR 0119).
+        allowed_paths = write_paths_for(workspace, list(item.allowed_paths or []))
         depot = bundle.config.repo
+        repo = _repo_ref(bundle, item, plan, workspace, remote=remote_runtime is not None, hosted=hosted)
         stage_input = StageInput(
             run_id=run_id,
             # The stage span's context, derived from the run id (ADR 0018): the runner's span hangs off it.
@@ -299,8 +310,8 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
                 size=item.size,
                 risk=item.risk,
                 links=WorkItemLinks(
-                    spec_comment=documents.get("spec_comment"),
-                    plan_comment=documents.get("plan_comment"),
+                    spec_comment=(item.documents or {}).get("spec_comment"),
+                    plan_comment=(item.documents or {}).get("plan_comment"),
                     pr=item.pr_url,
                 ),
             ),
@@ -313,21 +324,7 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
                 inputs=plan.inputs or [],
                 output_types=plan.output_types or {},
             ),
-            # Pas de dépôt, pas de `repo` : le runner prépare un répertoire vide au lieu de
-            # cloner. Un dépôt factice, comme on le faisait, faisait croire à un workspace
-            # qui n'existait pas et promettait une branche que personne ne relirait.
-            repo=RepoRef(
-                url=depot.url,
-                base_branch=depot.default_branch
-                if plan.eval_cell is None
-                else str(plan.eval_cell["base_branch"]),
-                work_branch=bundle.config.branch_for(item.tracker_key),
-                clone_depth=depot.clone_depth,
-            )
-            # A remote agent edits no repository: nothing to clone, nothing to push (ADR 0062); nor
-            # does a hosted one published with `workspace: none` (S41-18).
-            if depot and remote_runtime is None and (hosted is None or hosted.workspace != "none")
-            else None,
+            repo=repo,
             agent=AgentRef(
                 backend=backend,
                 launch=LaunchSpec(command=list(code_runtime.command)) if code_runtime else LaunchSpec(),
@@ -356,7 +353,14 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             if remote_runtime is not None
             else await _knowledge_of_agent(session, bundle, agent, item),
             permissions=network_permissions(
-                run_network(bundle, agent.spec.network if agent is not None else None, settings, org_hosts),
+                run_network(
+                    bundle,
+                    agent.spec.network if agent is not None else None,
+                    settings,
+                    org_hosts,
+                    # A run that clones nothing reaches no repository host (ADR 0119).
+                    with_repo=repo is not None,
+                ),
                 write_paths=allowed_paths,
                 deny_commands=engine.deny_commands(),
                 dod_iterations=engine.dod_iterations(),
@@ -428,6 +432,26 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             "stage_input": without_secrets(payload, keep_gateway_key=False),
             "reused": False,
         }
+
+
+def _repo_ref(
+    bundle: Any, item: Any, plan: StagePlan, workspace: str, *, remote: bool, hosted: HostedCall | None
+) -> RepoRef | None:
+    """What the runner clones, or `None`: it then prepares an empty directory. A dummy repository, as
+    we used to send, faked a workspace that did not exist and promised a branch nobody would read.
+
+    A remote agent edits no repository: nothing to clone, nothing to push (ADR 0062); nor does a
+    hosted one published with `workspace: none` (S41-18), nor any agent that declares
+    `workspace: none` (ADR 0119)."""
+    depot = bundle.config.repo
+    if not depot or workspace == "none" or remote or (hosted is not None and hosted.workspace == "none"):
+        return None
+    return RepoRef(
+        url=depot.url,
+        base_branch=depot.default_branch if plan.eval_cell is None else str(plan.eval_cell["base_branch"]),
+        work_branch=bundle.config.branch_for(item.tracker_key),
+        clone_depth=depot.clone_depth,
+    )
 
 
 def _stage_budget(engine: Any, plan: StagePlan, item: Any, resolved: Any) -> Budget:
@@ -704,6 +728,10 @@ def _run_id(plan: StagePlan) -> str:
     return f"{plan.work_item_id}-{plan.transition_id}-{plan.attempt}"
 
 
+#: Why every binding of a run is skipped when the project's policy turns memory off (S51-01).
+MEMORY_DISABLED = "the project's policy disables memory (memory.enabled: false)"
+
+
 @dataclass(slots=True)
 class ResolvedMemories:
     """The memories a run reads and writes, resolved for its project (S40-11, ADR 0075)."""
@@ -736,6 +764,11 @@ async def _memory_bindings(session: Any, bundle: Any, agent: Any) -> ResolvedMem
         if spec is None
         else [Binding(b.scope, b.slug, b.mode) for b in spec.effective_memories()]
     )
+    if not bundle.engine.memory_enabled():
+        # The project's policy is authoritative (S51-01): a run of a project whose policy says
+        # `memory.enabled: false` binds nothing, whatever its agent asks for, so it gets neither a
+        # memory to write nor the memory server. Each binding is journaled as skipped, never fatal.
+        return ResolvedMemories([], [{"memory": b.label, "reason": MEMORY_DISABLED} for b in bindings])
     agent_slug = agent.agent.slug if agent is not None else None
     stores = {
         (store.scope, store.owner_key, store.slug): store

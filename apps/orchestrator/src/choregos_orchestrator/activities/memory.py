@@ -82,6 +82,54 @@ async def _marked_items(session: Any, ids: set[str | None]) -> set[str]:
     return {item.id for item in rows.scalars() if is_marked(item)}
 
 
+def _failed_run_lesson(project: str, run: Any) -> dict[str, Any]:
+    """The lesson of a failed run, as an ingestion event: one per run (`run:<id>`), wherever it is
+    written from — the run's own outcome (S51-02) or the `run_lessons` source — so it is kept once."""
+    reason = (run.result or {}).get("reason") or "failed"
+    namespace, propose = _write_target(project, run)
+    return {
+        "_namespace": namespace,
+        "_propose": propose,
+        "_run_id": run.id,
+        "external_id": f"run:{run.id}",
+        "kind": "run_lesson",
+        "subject": f"run_lesson:{project}:{run.stage_role}",
+        "content": f"The {run.stage_role} step failed ({reason}) — attempt {run.attempt}.",
+        "source": "orchestrator",
+    }
+
+
+async def keep_the_lesson_of_a_failed_run(run_id: str) -> dict[str, Any]:
+    """Write a failed run's lesson as soon as its outcome is recorded (S51-02), not only when the
+    memory loop next ingests `run_lessons`: same fact, same `run:<id>`, so neither path doubles it.
+
+    Respects what the ingestion respects: the project's policy (`memory.enabled`), the run's write
+    target (none, a project memory, or a global one as a proposal), and a work item marked by a
+    restricted knowledge base (ADR 0114 §3). Called after the outcome is committed.
+    """
+    async with db() as session:
+        run = await session.get(Run, run_id)
+        if run is None or run.status != "failed":
+            return {"written": False}
+        bundle = await project_bundle(session, run.project_id)
+        if not bundle.engine.memory_enabled():
+            return {"written": False, "skipped": "memory disabled"}
+        if await _marked_items(session, {run.work_item_id}):
+            return {"written": False, "skipped": "restricted"}
+        event = _failed_run_lesson(bundle.slug, run)
+        namespace, propose = event.pop("_namespace"), bool(event.pop("_propose"))
+        if namespace is None:
+            return {"written": False, "skipped": "the agent keeps no memory"}
+        org_adapter = await org_memory(session, bundle) if propose else None
+        adapter = _adapter_for(bundle, org_adapter, namespace)
+        if propose:
+            await _propose_events(adapter, namespace, [event])
+            return {"written": False, "proposed": True}
+        event.pop("_run_id", None)
+        await adapter.ingest_events(namespace, [event])
+        return {"written": True}
+
+
 @activity.defn(name="ingest_sources")
 async def ingest_sources(payload: dict[str, Any]) -> dict[str, Any]:
     """Construit des faits depuis l'état de la plateforme et les pousse en upsert idempotent."""
@@ -131,21 +179,7 @@ async def ingest_sources(payload: dict[str, Any]) -> dict[str, Any]:
                 .all()
             )
             marked = await _marked_items(session, {run.work_item_id for run in runs})
-            for run in [r for r in runs if r.work_item_id not in marked]:
-                reason = (run.result or {}).get("reason") or "failed"
-                namespace, propose = _write_target(bundle.slug, run)
-                events.append(
-                    {
-                        "_namespace": namespace,
-                        "_propose": propose,
-                        "_run_id": run.id,
-                        "external_id": f"run:{run.id}",
-                        "kind": "run_lesson",
-                        "subject": f"run_lesson:{bundle.slug}:{run.stage_role}",
-                        "content": f"The {run.stage_role} step failed ({reason}) — attempt {run.attempt}.",
-                        "source": "orchestrator",
-                    }
-                )
+            events += [_failed_run_lesson(bundle.slug, r) for r in runs if r.work_item_id not in marked]
 
         if "deployments" in sources:
             releases = (
@@ -228,6 +262,8 @@ async def ingest_sources(payload: dict[str, Any]) -> dict[str, Any]:
 async def ingest_alert(payload: dict[str, Any]) -> dict[str, Any]:
     async with db() as session:
         bundle = await project_bundle(session, payload["project_slug"])
+        if not bundle.engine.memory_enabled():  # the policy is authoritative (S51-01, S51-02)
+            return {"ingested": False, "skipped": "memory disabled"}
         event = payload.get("event", {})
         labels = event.get("payload", {}).get("labels", {})
         await bundle.adapters.memory.write_fact(

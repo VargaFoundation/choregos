@@ -94,6 +94,10 @@ proj-{slug}-runners
 {{- if (.Values.global.tracing | default dict).otlpEndpoint }}
 {{- $poses = append $poses "OTEL_EXPORTER_OTLP_ENDPOINT" }}
 {{- end }}
+{{- $gw := .Values.global.mcpGateway | default dict }}
+{{- if $gw.internalHosts }}
+{{- $poses = append $poses "CHOREGOS_MCP_GATEWAY_INTERNAL_HOSTS" }}
+{{- end }}
 {{- range (.Values.global.extraEnv | default list) }}
 {{- if has .name $poses }}
 {{- fail (printf "global.extraEnv: %s is already set by the chart; two values for the same name, Kubernetes would keep the last one without saying anything" .name) }}
@@ -115,9 +119,20 @@ proj-{slug}-runners
 {{- $egress := .Values.global.egress | default dict }}
 - name: CHOREGOS_EGRESS_MODE
   value: {{ $egress.mode | default "enforce" | quote }}
-{{- with $egress.ceiling }}
+{{- /* ADR 0105: the gateway hosts join the families the organisation declared, never `runners`. */}}
+{{- $ceiling := deepCopy ($egress.ceiling | default dict) }}
+{{- range $family := list "api" "workers" }}
+{{- if hasKey $ceiling $family }}
+{{- $_ := set $ceiling $family (uniq (concat (get $ceiling $family) ($gw.hosts | default list))) }}
+{{- end }}
+{{- end }}
+{{- if $ceiling }}
 - name: CHOREGOS_EGRESS_CEILING
-  value: {{ toJson . | quote }}
+  value: {{ toJson $ceiling | quote }}
+{{- end }}
+{{- if $gw.internalHosts }}
+- name: CHOREGOS_MCP_GATEWAY_INTERNAL_HOSTS
+  value: {{ toJson $gw.internalHosts | quote }}
 {{- end }}
 {{- with $egress.platformChange }}
 - name: CHOREGOS_EGRESS_PLATFORM_CHANGE
@@ -288,6 +303,15 @@ http://{{ .Release.Name }}-ecphoria:8432
 {{ .Values.global.gateway.secretRef }}
 {{- else -}}
 {{ .Release.Name }}-gateway
+{{- end -}}
+{{- end -}}
+
+{{/* The secret (key `api-key`) of the decision model's bearer (ADR 0121): Laya asks for it, LiteLLM sends it. */}}
+{{- define "choregos.decisionsKeySecret" -}}
+{{- if .Values.global.decisions.apiKeySecret -}}
+{{ .Values.global.decisions.apiKeySecret }}
+{{- else -}}
+{{ .Release.Name }}-laya
 {{- end -}}
 {{- end -}}
 

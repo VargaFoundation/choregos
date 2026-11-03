@@ -22,11 +22,7 @@ async def garde_contre_l_injection(
     un humain relit. `ignore` : rien. C'est lexical (`choregos_core.injection`), et dit
     comme tel : un filet contre les cas grossiers, pas une compréhension.
     """
-    from choregos_core.injection import analyser
-    from temporalio.exceptions import ApplicationError
-
-    mode = getattr(bundle.policy.sandbox, "prompt_injection", "warn")
-    if mode == "ignore":
+    if getattr(bundle.policy.sandbox, "prompt_injection", "warn") == "ignore":
         return
     documents = item.documents or {}
     sources: dict[str, str] = {
@@ -36,11 +32,26 @@ async def garde_contre_l_injection(
     }
     sources.update({f"document.{nom}": texte for nom, texte in documents.items() if isinstance(texte, str)})
     sources.update({f"memory.{m.id or i}": m.content for i, m in enumerate(context_pack.memories)})
-    alertes = analyser(sources)
-    if not alertes:
+    await guard_sources(bundle, item, run_id, plan.role, sources)
+
+
+async def guard_sources(bundle: Any, item: Any, run_id: str, stage: str, sources: dict[str, str]) -> None:
+    """The injection guard on named texts about to leave for a model: an agent's context, or the
+    state a decision step sends (ADR 0121 §2), under the policy's `sandbox.prompt_injection`.
+
+    `warn` records a security event on the work item; `block` raises a non-retryable
+    `injection_suspected` and the step does not start; `ignore` does nothing."""
+    from choregos_core.injection import analyser
+    from temporalio.exceptions import ApplicationError
+
+    mode = getattr(bundle.policy.sandbox, "prompt_injection", "warn")
+    if mode == "ignore":
         return
-    # Dans SA transaction : en `block`, l'activité lève juste après, et la session de
-    # l'étape est annulée avec elle — l'événement doit survivre, c'est lui que le ticket montre.
+    suspected = analyser(sources)
+    if not suspected:
+        return
+    # In its own transaction: in `block` the activity raises right after and the step's session is
+    # rolled back with it; the event must survive, it is what the work item shows.
     async with db() as journal:
         await persist_event(
             journal,
@@ -50,12 +61,12 @@ async def garde_contre_l_injection(
             project_slug=bundle.slug,
             subject=item.tracker_key,
             run_id=run_id,
-            stage=plan.role,
+            stage=stage,
             mode=mode,
-            suspicions=[a.to_dict() for a in alertes[:10]],
+            suspicions=[a.to_dict() for a in suspected[:10]],
         )
     if mode == "block":
-        resume = "; ".join(f"{a.source}: {a.motif}" for a in alertes[:3])
+        resume = "; ".join(f"{a.source}: {a.motif}" for a in suspected[:3])
         raise ApplicationError(
             f"suspected prompt injection, step stopped before any run ({resume}) — "
             "policy sandbox.prompt_injection: block; read the work item, then retry",

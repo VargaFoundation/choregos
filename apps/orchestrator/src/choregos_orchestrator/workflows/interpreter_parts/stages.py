@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The stage of an agent or a job: prepare, start, await, decide.
+"""The stage of an agent, a job or a decision: prepare, start, await, decide.
 
 Methods moved as they were from `workflows/interpreter.py`; the handlers stay on the class."""
 
@@ -18,6 +18,7 @@ with workflow.unsafe.imports_passed_through():
     from choregos_core import WorkflowEngine
     from choregos_core.gates import unchanged_run
 
+    from ...activities import decision as decision_activities
     from ...activities import scm as scm_activities
     from ...activities import stage as stage_activities
     from ...activities.interpretation import (
@@ -251,6 +252,73 @@ class StagesMixin(InterpreterBase):
                 },
             )
         return decided
+
+    # ───────────────────────── a decision step (ADR 0121) ─────────────────────────
+
+    async def _run_decision(
+        self, params: InterpreterInput, engine: WorkflowEngine, transition: Any, context: dict[str, Any]
+    ) -> Any:
+        """A decision model answers the step's questions through the project's gateway: one activity,
+        no run to start or await. Its answers are the step's outputs, which `when` reads on the next
+        transitions as it reads an agent's (ADR 0106); its gates and its `on_fail` apply as after a run.
+
+        A failed decision keeps the outputs the step read: its next attempt is asked about the same
+        state. A refusal of the configuration escalates the work item, as `prepare_stage`'s does."""
+        actor = engine.decision_of(transition)
+        assert actor is not None, "a decision step without its decision actor"
+        key = transition.key
+        attempt = self.attempts[key]
+        self.attempts[key] = attempt + 1
+        try:
+            decided = await execute_on_its_queue(
+                decision_activities.decide,
+                decision_activities.decision_request(
+                    project_id=params.project_id,
+                    work_item_id=params.work_item_id,
+                    transition=transition,
+                    decision=actor,
+                    attempt=attempt + 1,
+                    last_outputs=self.last_outputs,
+                ),
+                start_to_close_timeout=timedelta(
+                    seconds=actor.timeout_seconds + decision_activities.DECISION_MARGIN_S
+                ),
+                retry_policy=DEFAULT_RETRY,
+            )
+        except ActivityError as error:
+            escalated = await self._configuration_refused(params, engine, transition, error)
+            if escalated is None:
+                raise
+            return escalated
+        run_id = str(decided["run_id"])
+        result = StageResult.model_validate(decided["result"])
+        self.cost_usd = float(decided["ticket_cost_usd"])  # the ledger, as after a run
+        self.last_run = run_id
+        if result.status is StageStatus.DONE:
+            self.last_outputs = result.outputs.model_dump(mode="json", exclude_none=True) or None
+        outcomes = await self._gates(params, transition, run_id)
+        decision = engine.after_stage(
+            transition,
+            result,
+            self._counted_attempts(key),
+            outcomes,
+            ceiling=_attempts_ceiling(context, actor),
+        )
+        decision = self._identical_failure(engine, transition, result, decision)
+        if decision.escalated and decision.next_state == engine.question_state():
+            await self._create_request(
+                params,
+                transition,
+                kind="approval",
+                payload={
+                    "question": f"The decision `{key}` did not decide: {result.summary}",
+                    "options": [],
+                    "summary": result.summary,
+                    "run_id": run_id,
+                    "reason": result.reason or "decision",
+                },
+            )
+        return decision
 
     def _identical_failure(self, engine: WorkflowEngine, transition: Any, result: Any, decision: Any) -> Any:
         """A retry of a stage that failed exactly like its previous attempt escalates (S27-07)."""

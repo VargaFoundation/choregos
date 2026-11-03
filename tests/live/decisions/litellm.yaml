@@ -1,0 +1,26 @@
+# The embedded gateway's configuration with `global.decisions.embedded: true`
+# (`charts/choregos/charts/litellm`), the Service name aside: `laya` here, `<release>-laya` in the
+# chart. `tests/charts/test_laya_decisions.py` holds the two together.
+model_list:
+  - model_name: platform/decide
+    litellm_params:
+      model: typesafe/multilingual
+      api_base: http://laya:8000
+      api_key: os.environ/LAYA_API_KEY
+    model_info:
+      mode: evaluation
+      input_cost_per_token: 0.000000020000
+      output_cost_per_token: 0.000000000000
+litellm_settings:
+  drop_params: true
+  callbacks: ["choregos_llm_spans.handler"]
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+  store_model_in_db: false
+guardrails:
+  - guardrail_name: choregos-secrets
+    litellm_params:
+      guardrail: choregos_guardrail.ChoregosGuardrail
+      mode: [pre_call, post_call]
+      default_on: true

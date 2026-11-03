@@ -414,9 +414,10 @@ async def delete_project(ctx: ProjectCtx, session: Db) -> None:
         target_id=ctx.id,
         previous_status=previous,
     )
-    from ..temporal import stop_tracker_reconciliation
+    from ..temporal import stop_memory_ingestion, stop_tracker_reconciliation
 
     await stop_tracker_reconciliation(ctx.slug)
+    await stop_memory_ingestion(ctx.slug)
 
 
 @router.post("/projects/{id}/suspend", response_model=ProjectDto, operation_id="suspendProject")
@@ -484,9 +485,13 @@ async def _activate_without_steps(ctx: ProjectCtx, session: Db, *, dry_run: bool
         target_id=ctx.id,
         steps=0,
     )
-    from ..temporal import start_tracker_reconciliation
+    from ..services import policy_engine
+    from ..temporal import start_memory_ingestion, start_tracker_reconciliation
 
     await start_tracker_reconciliation(ctx.slug)
+    # The memory is fed from activation on (S51-02), unless the project's policy disables it.
+    if (await policy_engine(session, ctx.id)).memory_enabled():
+        await start_memory_ingestion(ctx.slug)
     return _provision_status(ctx.project)
 
 

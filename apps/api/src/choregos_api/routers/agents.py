@@ -1693,6 +1693,7 @@ async def start_agent_trial(org: str, body: AgentTrialCreate, session: Db, princ
         title=body.input.title or "Trial",
         body=body.input.body,
         created_by=principal.email,
+        fields=body.input.fields,
     )
     await get_temporal().start_trial(
         trial_workflow_id(item.id),

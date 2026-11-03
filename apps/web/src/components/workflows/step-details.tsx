@@ -5,6 +5,14 @@ import { canarySentence, sourceLabel } from "@/components/agents/registre";
 import { enClair } from "@/components/parcours/modele";
 import { cn } from "@/lib/cn";
 import type { AgentResolution, ArtifactFlow, ProcessStep } from "@/lib/types";
+import { answerWords, DecisionChip, exampleWhen, questionKind } from "@/components/workflows/decision";
+import {
+  CONFIDENCE_SUFFIX,
+  DEFAULT_DECISION_MODEL,
+  DEFAULT_DECISION_TIMEOUT_SECONDS,
+  decisionOutputs,
+  type WorkflowDecisionActor,
+} from "@/components/workflows/document";
 
 /** The actor kinds the process view returns, as `ActorIcon` names them. */
 export const GENRE_DE_L_ACTEUR: Record<string, string> = {
@@ -12,6 +20,7 @@ export const GENRE_DE_L_ACTEUR: Record<string, string> = {
   human: "human",
   system: "system",
   job: "job",
+  decision: "decision",
   release_train: "train",
 };
 
@@ -87,9 +96,12 @@ export function StepDetails({
   resolution,
   flow,
   stepsById,
+  decision,
   className,
 }: {
   step: ProcessStep;
+  /** The decision actor the step names (ADR 0121), read from the workflow: its questions, state and model. */
+  decision?: WorkflowDecisionActor;
   /** The answer for `step.agent`; absent while it loads or against an API without the endpoint. */
   resolution?: AgentResolution;
   flow?: ArtifactFlow[];
@@ -98,7 +110,16 @@ export function StepDetails({
 }) {
   const parNom = new Map((flow ?? []).map((a) => [a.name, a]));
   const lecture = step.inputs ?? [];
-  const sorties = step.outputs ?? [];
+  // A decision writes each answer and its probability; an older API listed none for it.
+  const sorties = step.outputs?.length ? step.outputs : decision ? decisionOutputs(decision) : [];
+  const questions = decision?.questions ?? {};
+  // What a `when` reads in a decision's output: the answer and what it may be, or its probability.
+  const noteOnAnOutput = (nom: string): string | null => {
+    const question = questions[nom];
+    if (question) return `the answer, ${answerWords(question)}`;
+    if (nom.endsWith(CONFIDENCE_SUFFIX) && questions[nom.slice(0, -CONFIDENCE_SUFFIX.length)]) return "its probability, from 0 to 1";
+    return null;
+  };
   const types = step.output_types ?? {};
   const lecteurs = (nom: string) => (parNom.get(nom)?.read_by ?? []).filter((id) => id !== step.id);
   const slug = step.agent?.split("@")[0];
@@ -123,6 +144,12 @@ export function StepDetails({
             <ActorIcon kind="human" name={step.group ?? enClair(step.actor)} />
             {step.sla_hours ? <Badge tone="neutral" variant="soft" dot={false}>{step.sla_hours} h</Badge> : null}
           </>
+        ) : step.actor_type === "decision" ? (
+          <>
+            <DecisionChip />
+            <span className="font-medium text-ink">{enClair(step.actor)}</span>
+            {step.role ? <span className="text-ink-muted">role {step.role}</span> : null}
+          </>
         ) : step.actor_type === "job" ? (
           <>
             <ActorIcon kind="job" name={enClair(step.actor)} />
@@ -143,6 +170,45 @@ export function StepDetails({
           </span>
         )}
       </dd>
+      {step.actor_type === "decision" && (
+        <>
+          <dt className={LEGENDE}>Model</dt>
+          <dd>
+            <code className="text-ink">{decision?.model ?? step.model ?? DEFAULT_DECISION_MODEL}</code>
+            <span className="text-ink-muted">
+              {" "}
+              — answers within {decision?.timeout_seconds ?? DEFAULT_DECISION_TIMEOUT_SECONDS} s, through the project&apos;s gateway
+            </span>
+          </dd>
+        </>
+      )}
+      {decision && (
+        <>
+          <dt className={LEGENDE}>Sends</dt>
+          <dd data-testid={`decision-state-${step.id}`}>
+            <span className="flex flex-wrap gap-1">
+              {decision.state.map((source) => (
+                <code key={source} className="rounded border border-line px-1 text-ink">
+                  {source}
+                </code>
+              ))}
+            </span>
+            <span className="text-ink-muted">nothing else reaches the model: not the repository, not the memory</span>
+          </dd>
+          <dt className={LEGENDE}>Asks</dt>
+          <dd>
+            <ul className="space-y-0.5" data-testid={`decision-questions-${step.id}`}>
+              {Object.entries(decision.questions).map(([name, question]) => (
+                <li key={name}>
+                  <code className="text-ink">{name}</code> <span className="text-ink-muted">({questionKind(question)}: {answerWords(question)})</span>
+                  {" — "}
+                  {question.instructions}
+                </li>
+              ))}
+            </ul>
+          </dd>
+        </>
+      )}
       {lecture.length > 0 && (
         <>
           <dt className={LEGENDE}>Reads</dt>
@@ -178,6 +244,7 @@ export function StepDetails({
                       {types[nom]}
                     </Badge>
                   ) : null}
+                  {noteOnAnOutput(nom) ? <span className="text-ink-muted"> — {noteOnAnOutput(nom)}</span> : null}
                   {lecteurs(nom).length > 0 && (
                     <span className="text-ink-muted"> — read by {lecteurs(nom).join(", ")}</span>
                   )}
@@ -185,6 +252,12 @@ export function StepDetails({
               ))}
               {step.writes_branch && <li>changes on the work item&apos;s branch</li>}
             </ul>
+            {decision && exampleWhen(decision) && (
+              <p className="mt-1 text-ink-muted" data-testid={`decision-when-${step.id}`}>
+                A transition from the next state compares them: <code className="text-ink">{exampleWhen(decision)}</code>. The
+                probability is the model&apos;s own until the platform has measured this step: a threshold on it is a guess.
+              </p>
+            )}
           </dd>
         </>
       )}

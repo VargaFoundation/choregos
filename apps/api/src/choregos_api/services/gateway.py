@@ -11,7 +11,7 @@ from choregos_adapters.registry import default_gateway_type
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db.models import OrgConnector
+from ..db.models import Connector, OrgConnector, Project
 
 
 async def _org_connector(session: AsyncSession, org_id: str) -> OrgConnector | None:
@@ -42,6 +42,38 @@ async def org_gateway_url(session: AsyncSession, org_id: str) -> str | None:
 async def org_gateway(session: AsyncSession, org_id: str) -> GatewayAdapter:
     """The organisation's gateway adapter (see `org_gateway_and_type`)."""
     return (await org_gateway_and_type(session, org_id))[1]
+
+
+async def project_gateway(session: AsyncSession, project: Project) -> GatewayAdapter:
+    """The gateway a run of `project` mints its key on, and calls its models through (ADR 0109): the
+    project's own `gateway` connector, else its organisation's, else the deployment's — the order
+    the orchestrator's `load_project` builds it in."""
+    connector = (
+        (
+            await session.execute(
+                select(Connector)
+                .where(Connector.project_id == project.id, Connector.kind == "gateway")
+                .limit(1)
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if connector is None:
+        return await org_gateway(session, project.org_id)
+    from ..secret_store import resolved_configuration
+
+    config = await resolved_configuration(
+        session,
+        project.org_id,
+        connector.kind,
+        connector.type,
+        connector.config,
+        connector.secret_refs,
+        connector.secret_ref,
+    )
+    gateway: GatewayAdapter = build("gateway", connector.type, config)
+    return gateway
 
 
 async def org_gateway_and_type(session: AsyncSession, org_id: str) -> tuple[str, GatewayAdapter]:

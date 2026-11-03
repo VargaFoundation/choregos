@@ -37,6 +37,9 @@ ACTIVITIES_BY_QUEUE: dict[str, tuple[str, ...]] = {
         "resume_run",
         "collect_spend",
         "record_run_outcome",
+        # A decision step mints a key, calls the gateway and reads its spend, as a run's
+        # preparation and its bill do (ADR 0121): the queue whose pods reach the gateway.
+        "decide",
         # A build pushes to the build repository: the executor holds that credential (S41-08).
         "build_hosted_image",
         # A hosted session's pod (S41-11): started and stopped by the executor, as a run's.

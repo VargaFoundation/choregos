@@ -1333,9 +1333,14 @@ async def update_knowledge_source(
         )
     if body.config is not None:
         organisation = await organisation_by_slug(session, org)
+        previous = dict(source.config or {})
         source.config = await _checked_source_config(
             session, organisation, source.kind, source.connector, body.config
         )
+        if previous.get("github_app") and previous.get("url") == source.config.get("url"):
+            # A project's own repository a template attached (S51-06): read through the App while
+            # the URL stays; no request can grant that flag.
+            source.config = {**source.config, "github_app": True}
         await _egress_gate(
             session,
             principal,

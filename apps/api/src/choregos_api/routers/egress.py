@@ -172,6 +172,7 @@ async def create_org_egress_rule(org: str, body: EgressRuleCreate, session: Db, 
     _decide(principal, org)
     organisation = await organisation_by_slug(session, org)
     host = _host(body.host)
+    service.refuse_runners_for_the_gateway(organisation, host, body.used_by)
     if await _live(session, organisation.id, host) is not None:
         raise conflict(f"`{host}` already has a live rule in {org}: revoke or approve it")
     service.check_opening(organisation, [host])
@@ -247,6 +248,7 @@ async def request_org_egress(org: str, body: EgressRequestCreate, session: Db, p
     _read(principal, org)
     organisation = await organisation_by_slug(session, org)
     host = _host(body.host)
+    service.refuse_runners_for_the_gateway(organisation, host, body.used_by)
     live = await _live(session, organisation.id, host)
     if (
         live is not None
@@ -311,6 +313,7 @@ async def _decision(
     if row.status != "requested":
         raise conflict(f"the request is already {row.status}")
     if approve:
+        service.refuse_runners_for_the_gateway(organisation, row.host, row.used_by)
         service.check_opening(organisation, [row.host])
     row.status = "allowed" if approve else "refused"
     row.decided_by = principal.email

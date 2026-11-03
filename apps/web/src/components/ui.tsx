@@ -467,6 +467,8 @@ const ACTORS: Record<string, { tone: Tone; label: string }> = {
   // A job is deterministic code the platform runs (ADR 0056): it reads as the platform, not as a model.
   job: { tone: "neutral", label: "Job" },
   train: { tone: "succeeded", label: "Release train" },
+  // A decision model answering typed questions (ADR 0121): neither a person nor the platform's code.
+  decision: { tone: "neutral", label: "Decision" },
 };
 
 /** Le ton d'un acteur : celui de son point, dans la chronologie d'un ticket comme à côté de son nom. */

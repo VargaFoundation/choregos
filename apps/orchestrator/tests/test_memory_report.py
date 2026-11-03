@@ -72,6 +72,10 @@ async def _skip_to(temporal_env: Any, weekday: int, at: timedelta) -> None:
 
 
 async def _ingest_three_cycles(setup: Fixture, temporal_env: Any, worker_factory: Any) -> list[str]:
+    """Three cycles: the first run of the loop, which then continues as new (S51-02) instead of
+    returning. The reports are counted when that run ends, and the next run is terminated."""
+    from temporalio.client import WorkflowContinuedAsNewError
+
     async with worker_factory("test"):
         handle = await temporal_env.client.start_workflow(
             "MemoryIngestion",
@@ -84,10 +88,11 @@ async def _ingest_three_cycles(setup: Fixture, temporal_env: Any, worker_factory
             id=f"mem-{setup.project_slug}",
             task_queue="test",
         )
-        outcome = await handle.result()
-
-    assert outcome["cycles"] == 3
-    return [m.title for _, m in setup.adapters.notify.sent if "A/B report" in m.title]
+        with pytest.raises(WorkflowContinuedAsNewError):
+            await handle.result(follow_runs=False)
+        reports = [m.title for _, m in setup.adapters.notify.sent if "A/B report" in m.title]
+        await temporal_env.client.get_workflow_handle(f"mem-{setup.project_slug}").terminate("test over")
+    return reports
 
 
 async def test_le_rapport_ne_part_qu_une_fois_par_semaine(  # lang: fr-ok (test id kept)

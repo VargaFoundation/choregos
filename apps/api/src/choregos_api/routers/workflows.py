@@ -52,8 +52,13 @@ from ..services import (
     signaler_ce_que_la_politique_n_applique_pas,
     workflow_actif,
 )
-from ..services.definitions import CEILING_KEY, ceiling_of, policy_model
+from ..services.definitions import CEILING_KEY, ceiling_of, policy_engine, policy_model
 from ..services.llm_routing import book
+from ..services.memory_policy import (
+    active_workflows_of,
+    log_memory_disabled_warnings,
+    memory_disabled_warnings,
+)
 from ..services.network import project_effective_network
 from ..services.organisations import organisation_by_slug
 from ..services.routage import Naissance, route
@@ -125,6 +130,14 @@ async def validate_for_project(
     workflow, _ = parse_workflow(source, strict=False)
     known = await groups_known_in(session, ctx.project.org_id)
     validation.warnings += [WorkflowIssue(**issue) for issue in unknown_group_warnings(workflow, known)]
+    # An agent that asks for memory the project's policy disables gets none: said, not refused (S51-01).
+    engine = await policy_engine(session, ctx.id)
+    for issue in await memory_disabled_warnings(
+        session, ctx.project.org_id, [workflow], memory_enabled=engine.memory_enabled()
+    ):
+        validation.warnings.append(
+            WorkflowIssue(code=issue["code"], message=issue["message"], path=issue["path"])
+        )
     return validation
 
 
@@ -590,6 +603,16 @@ async def put_policy(ctx: ProjectCtx, body: PolicyPut, session: Db) -> PolicyDto
         )
     # The network warnings stay logged: they are not refused.
     signaler_ce_que_la_politique_n_applique_pas(policy, ctx.project.slug)
+    # Turning memory off under workflows whose agents ask for it: said, never refused (S51-01).
+    log_memory_disabled_warnings(
+        await memory_disabled_warnings(
+            session,
+            ctx.project.org_id,
+            await active_workflows_of(session, ctx.id),
+            memory_enabled=policy.memory.enabled,
+        ),
+        ctx.project.slug,
+    )
     current = await active_policy(session, ctx.id)
     version = policy.metadata.version
     if current is not None and current.version >= version:

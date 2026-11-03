@@ -18,6 +18,7 @@ from typing import Any
 from choregos_contracts import StageResult, StageStatus, Workflow
 from choregos_core import GateOutcome, WorkflowEngine
 
+from .activities import decision as decision_activities
 from .activities import findings as finding_activities
 from .activities import gates as gate_activities
 from .activities import scm as scm_activities
@@ -109,6 +110,17 @@ async def run_local(
         if kind in ("agent", "job"):
             decision, cost, run_id, outputs = await _run_stage(
                 project_id, work_item_id, engine, transition, attempt
+            )
+            attempts[key] = attempt + 1
+            last_run = run_id
+            last_outputs = outputs
+            trace.cost_usd += cost
+            trace.steps.append(
+                Step(state, key, kind, decision.reason, decision.next_state, cost_usd=cost, run_id=run_id)
+            )
+        elif kind == "decision":
+            decision, cost, run_id, outputs = await _run_decision(
+                project_id, work_item_id, engine, transition, attempt, last_outputs
             )
             attempts[key] = attempt + 1
             last_run = run_id
@@ -231,6 +243,41 @@ async def _run_stage(
         float(spend.get("cost_usd", 0.0)),
         run_id,
         result.outputs.model_dump(mode="json", exclude_none=True) or None,
+    )
+
+
+async def _run_decision(
+    project_id: str,
+    work_item_id: str,
+    engine: WorkflowEngine,
+    transition: Any,
+    attempt: int,
+    last_outputs: dict[str, Any] | None,
+) -> tuple[Any, float, str, dict[str, Any] | None]:
+    """A decision step (ADR 0121), as the interpreter plays it: one activity, its gates, `on_fail`.
+
+    A failed decision keeps the outputs the step read, so that its next attempt is asked the same."""
+    actor = engine.decision_of(transition)
+    assert actor is not None, "a decision step without its decision actor"
+    decided = await decision_activities.decide(
+        decision_activities.decision_request(
+            project_id=project_id,
+            work_item_id=work_item_id,
+            transition=transition,
+            decision=actor,
+            attempt=attempt + 1,
+            last_outputs=last_outputs,
+        )
+    )
+    result = StageResult.model_validate(decided["result"])
+    outcomes = await _gates(project_id, work_item_id, transition, decided["run_id"])
+    decision = engine.after_stage(transition, result, attempt + 1, outcomes)
+    outputs = result.outputs.model_dump(mode="json", exclude_none=True) or None
+    return (
+        decision,
+        float(decided.get("cost_usd", 0.0)),
+        str(decided["run_id"]),
+        outputs if result.status is StageStatus.DONE else last_outputs,
     )
 
 

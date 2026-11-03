@@ -238,6 +238,7 @@ class GatewayModelDto(Dto):
     max_input_tokens: int | None = None
     supports_tool_calling: bool = True
     supports_vision: bool = False
+    mode: str = "chat"
     internal_price: bool = False
     source: Literal["gateway", "manual"] = "gateway"
     owned_by: str = ""
@@ -280,7 +281,7 @@ class ModelMatrix(Dto):
 
 # ───────────── the organisation's model catalogue (S39-07b, ADR 0060) ─────────────
 
-Usage = Literal["agent", "embed", "distill", "eval", "route"]
+Usage = Literal["agent", "embed", "distill", "eval", "route", "decide"]
 
 
 def _agent_usage() -> list[Usage]:
@@ -303,6 +304,7 @@ class ModelGatewayFacts(Dto):
     max_input_tokens: int | None = None
     supports_tool_calling: bool = True
     supports_vision: bool = False
+    mode: str = "chat"
 
 
 class ModelCatalogueEntry(Dto):

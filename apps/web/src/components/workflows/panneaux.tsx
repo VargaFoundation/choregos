@@ -175,6 +175,7 @@ export function actorLabel(id: string, definition?: { type?: string; group?: str
     return `${id} — ${definition.agent ? `agent ${definition.agent}` : "built-in agent"}${definition.role ? ` · ${definition.role}` : ""}`;
   if (definition.type === "job") return `${id} — job${definition.role ? ` · ${definition.role}` : ""}`;
   if (definition.type === "system") return `${id} — the platform`;
+  if (definition.type === "decision") return `${id} — decision${definition.role ? ` · ${definition.role}` : ""}`;
   return `${id} — ${definition.type}`;
 }
 
