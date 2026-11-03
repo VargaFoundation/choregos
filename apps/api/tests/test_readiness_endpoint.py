@@ -352,3 +352,47 @@ async def test_a_workflow_published_by_hand_or_a_project_with_no_template_is_not
     assert bare.status_code == 201, bare.text
     await _activate(bare.json()["id"])
     assert _template_item(await _readiness(client, bare.json()["id"])) is None
+
+
+async def test_a_plugin_server_is_not_a_direct_connector(client: AsyncClient, admin: str) -> None:
+    from choregos_api.db.models import Organization, OrgConnector
+    from choregos_api.db.session import session_scope
+    from choregos_api.secret_store import FakeSecretStore, set_secret_store
+    from sqlalchemy import select
+
+    set_secret_store(FakeSecretStore())
+    try:
+        project = await _project(client)
+        put = await client.put(
+            "/api/v1/orgs/varga/mcp-gateway",
+            json={
+                "mode": "required",
+                "endpoint": "https://gw.example.test/{server}/mcp",
+                "routing": "path",
+                "auth": {"type": "jwt_assertion"},
+                "audience": "gw",
+            },
+        )
+        assert put.status_code == 200, put.text
+        async with session_scope(orgs="*") as session:
+            org = (
+                await session.execute(select(Organization).where(Organization.slug == "varga"))
+            ).scalar_one()
+            session.add(OrgConnector(org_id=org.id, name="crm", kind="mcp", type="mcp", config={}))
+            session.add(
+                OrgConnector(
+                    org_id=org.id,
+                    name="desk",
+                    kind="mcp",
+                    type="mcp",
+                    config={},
+                    plugin_server={"plugin": "desk", "server": "desk"},
+                )
+            )
+        body = await _readiness(client, project["id"])
+    finally:
+        set_secret_store(None)
+    [item] = [i for i in body["items"] if i["id"] == "mcp_gateway"]
+    assert item["state"] == "todo"
+    assert "crm" in item["detail"]
+    assert "desk" not in item["detail"]
