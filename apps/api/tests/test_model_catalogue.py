@@ -78,7 +78,7 @@ async def test_sync_enables_new_models_in_open_mode_and_disables_them_in_curated
 async def test_a_decision_model_arrives_for_decision_steps_only(
     client: AsyncClient, admin: str, gateway: Scripted
 ) -> None:
-    """ADR 0120: a model the gateway lists as `evaluation` (Laya, Jev) is not an agent model by default."""
+    """ADR 0121: a model the gateway lists as `evaluation` (Laya, Jev) is not an agent model by default."""
     gateway.models.append(
         GatewayModel(
             model_name="platform/decide",

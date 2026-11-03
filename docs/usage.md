@@ -1497,11 +1497,7 @@ a section opens this page.
   usages and price), or says that the gateway lists nothing or could not be reached. **Sync from
 the gateway** reads the models it lists; **Add a model manually** covers one it routes but does not
 list. Per model an administrator sets: enabled or not, the stage roles allowed (none checked = all),
-<<<<<<< HEAD
-the usages (`agent`, `embed`, `distill`, `eval`, `route` — the workflow router of ADR 0116, `decide` — a decision step's model, ADR 0121: unlike the others it needs an entry even in `open` mode, and only a gateway that serves `/v1/systemone` can carry it), a display name, and a price per 1k tokens that
-=======
-the usages (`agent`, `embed`, `distill`, `eval`, `route` — the workflow router of ADR 0116, `decide` — a decision step's model, ADR 0120: unlike the others it needs an entry even in `open` mode, and only a gateway that serves `/v1/systemone` can carry it; a model the gateway lists as `evaluation`, as LiteLLM lists Laya and Jev, arrives with `decide` alone and no tool calling), a display name, and a price per 1k tokens that
->>>>>>> 85519ec0 (feat(api,adapters): the catalogue knows a decision model, decide only and no tools (S52-08))
+the usages (`agent`, `embed`, `distill`, `eval`, `route` — the workflow router of ADR 0116, `decide` — a decision step's model, ADR 0121: unlike the others it needs an entry even in `open` mode, and only a gateway that serves `/v1/systemone` can carry it; a model the gateway lists as `evaluation`, as LiteLLM lists Laya and Jev, arrives with `decide` alone and no tool calling), a display name, and a price per 1k tokens that
 replaces the gateway's in the ledger (only when the gateway reports tokens; a gateway that cannot read
 a spend back leaves the line `unmeasured`).
 

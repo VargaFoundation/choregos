@@ -7329,7 +7329,7 @@ components:
         max_input_tokens: { type: [integer, "null"] }
         supports_tool_calling: { type: boolean, default: true }
         supports_vision: { type: boolean, default: false }
-        mode: { type: string, default: chat, description: "What the gateway says the model does; `evaluation` is a decision model (ADR 0120)." }
+        mode: { type: string, default: chat, description: "What the gateway says the model does; `evaluation` is a decision model (ADR 0121)." }
         internal_price: { type: boolean, default: false }
         source: { type: string, enum: [gateway, manual], default: gateway }
         owned_by: { type: string, default: "" }

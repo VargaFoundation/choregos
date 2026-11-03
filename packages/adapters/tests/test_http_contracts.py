@@ -363,7 +363,7 @@ async def test_argocd_an_aborted_rollout_reads_from_its_conditions() -> None:
 
 @respx.mock
 async def test_litellm_a_decision_model_is_listed_as_one_and_calls_no_tool() -> None:
-    """ADR 0120: LiteLLM lists Jev and Laya as `mode: evaluation`, with no tool-calling metadata."""
+    """ADR 0121: LiteLLM lists Jev and Laya as `mode: evaluation`, with no tool-calling metadata."""
     respx.get(f"{LITELLM}/model/info").mock(
         return_value=Response(
             200,

@@ -382,7 +382,7 @@ class GatewayModel(Model):
     supports_tool_calling: bool = True
     supports_vision: bool = False
     #: What the gateway says the model does (`chat`, `embedding`, ...); LiteLLM lists a decision model
-    #: (Jev, Laya) as `evaluation` (ADR 0120).
+    #: (Jev, Laya) as `evaluation` (ADR 0121).
     mode: str = "chat"
     internal_price: bool = False
     #: Where the entry comes from: what the gateway lists, or what an admin added by hand.

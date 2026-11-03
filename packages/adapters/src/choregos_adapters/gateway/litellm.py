@@ -171,7 +171,7 @@ class LiteLlmGateway:
                     output_audio_cost_per_1k=_per_1k(info.get("output_cost_per_audio_token")),
                     cached_input_cost_per_1k=_per_1k(info.get("cache_read_input_token_cost")),
                     max_input_tokens=info.get("max_input_tokens"),
-                    # A decision model answers typed questions; it never calls a tool (ADR 0120).
+                    # A decision model answers typed questions; it never calls a tool (ADR 0121).
                     supports_tool_calling=mode != DECISION_MODE
                     and _unless_denied(info.get("supports_function_calling")),
                     supports_vision=bool(info.get("supports_vision", False)),

@@ -75,7 +75,7 @@ def facts_of(model: GatewayModel) -> dict[str, Any]:
 
 def usages_of(model: GatewayModel) -> tuple[str, ...]:
     """What a model the gateway just listed may serve until an administrator says otherwise: an
-    agent, except a decision model (ADR 0120), which only answers decision steps — given to an agent
+    agent, except a decision model (ADR 0121), which only answers decision steps — given to an agent
     it would be asked to chat and call tools it does not have."""
     return ("decide",) if model.mode == DECISION_MODE else ("agent",)
 

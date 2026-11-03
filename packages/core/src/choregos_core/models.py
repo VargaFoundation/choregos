@@ -95,7 +95,7 @@ RUNTIME_BACKENDS: tuple[str, ...] = ("code", "prompt", "hosted")
 #: `decide` answers a decision step's typed questions (ADR 0121).
 USAGES: tuple[str, ...] = ("agent", "embed", "distill", "eval", "route", "decide")
 #: The `mode` LiteLLM gives a decision model in `/model/info` (`typesafe/*`, `laya/*`): it answers
-#: typed questions on `/v1/systemone` and never chats or calls a tool (ADR 0120).
+#: typed questions on `/v1/systemone` and never chats or calls a tool (ADR 0121).
 DECISION_MODE = "evaluation"
 TIERS: tuple[str, ...] = ("cheap", "standard", "strong", "aux", "embed", "local")
 

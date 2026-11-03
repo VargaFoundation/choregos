@@ -4076,10 +4076,7 @@ stories:
     priority: 2
     size: S
     depends_on: [S52-04]
-<<<<<<< HEAD
     notes: "ADR 0121; ADR 0111 catalogue"
-=======
-    notes: "ADR 0120; ADR 0111 catalogue"
   - id: S52-08
     title: "feat(api,adapters): the catalogue knows a decision model — `decide` only, no tools, from the gateway's mode"
     stream: S52
@@ -4087,5 +4084,4 @@ stories:
     priority: 1
     size: S
     depends_on: [S52-03]
-    notes: "ADR 0120 §3: LiteLLM lists Jev and Laya as mode `evaluation`; a synced decision model is never an agent's by default"
->>>>>>> 85519ec0 (feat(api,adapters): the catalogue knows a decision model, decide only and no tools (S52-08))
+    notes: "ADR 0121 §3: LiteLLM lists Jev and Laya as mode `evaluation`; a synced decision model is never an agent's by default"
