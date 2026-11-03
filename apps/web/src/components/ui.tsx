@@ -28,6 +28,8 @@ import {
   type ThHTMLAttributes,
 } from "react";
 import { cn } from "@/lib/cn";
+import type { LucideIcon } from "lucide-react";
+import { HUE_CLASSES, type Hue } from "@/lib/workflow-hue";
 import { useServedTheme } from "@/components/served-theme";
 import { toSentenceCase, libelleDeCode, segmentsDeCode, tokens, usd } from "@/lib/format";
 
@@ -228,21 +230,52 @@ export function Label({ className, ...props }: HTMLAttributes<HTMLSpanElement>) 
 }
 
 /** A number put forward: in Geist Mono (a number is compared), aligned; its label below. */
+/**
+ * An icon on a tint of its hue (ADR 0120): what a card, a figure or an empty state is about, seen
+ * before it is read. Decorative: the words beside it say the same.
+ */
+export function IconTile({ icon: Icon, hue, size = "sm" }: { icon: LucideIcon; hue?: Hue; size?: "sm" | "md" | "lg" }) {
+  const classes = hue ? HUE_CLASSES[hue] : undefined;
+  return (
+    <span
+      aria-hidden
+      data-icon-tile
+      className={cn(
+        "inline-flex shrink-0 items-center justify-center rounded-md border",
+        { sm: "size-6", md: "size-8", lg: "size-11 rounded-full" }[size],
+        classes ? cn(classes.soft, classes.line, classes.ink) : "border-line bg-surface-muted text-ink-muted",
+      )}
+    >
+      <Icon className={{ sm: "size-3.5", md: "size-4", lg: "size-5" }[size]} strokeWidth={1.75} />
+    </span>
+  );
+}
+
 export function Stat({
   value,
   label,
   hint,
   tone = "ink",
+  icon,
+  hue,
   className,
 }: {
   value: ReactNode;
   label: ReactNode;
   hint?: ReactNode;
   tone?: "ink" | "accent" | "ok" | "warn" | "danger";
+  /** What the figure measures, as an icon on its hue (S55-08). */
+  icon?: LucideIcon;
+  hue?: Hue;
   className?: string;
 }) {
   return (
     <div className={cn("space-y-1", className)}>
+      {icon && (
+        <div className="mb-2">
+          <IconTile icon={icon} hue={hue} size="md" />
+        </div>
+      )}
       <div className={cn("font-mono text-2xl leading-none font-light tabular-nums", tone === "ink" ? "text-ink" : TEXTE[tone])}>
         {value}
       </div>
@@ -510,6 +543,9 @@ export interface CardProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   /** A card that is a link: its border strengthens on hover. */
   interactive?: boolean;
   padding?: "none" | "sm" | "md" | "lg";
+  /** What the card is about, as an icon on its hue before its title (S55-08, ADR 0120). */
+  icon?: LucideIcon;
+  hue?: Hue;
 }
 
 const CARD_PADDINGS = { none: "", sm: "p-4", md: "p-5", lg: "p-8" } as const;
@@ -527,6 +563,8 @@ export function Card({
   action,
   interactive,
   padding = "md",
+  icon,
+  hue,
   className,
   children,
   ...props
@@ -544,15 +582,18 @@ export function Card({
     >
       {hasHeader && (
         <header className={cn("mb-4 flex items-start justify-between gap-4", padding === "none" && "px-5 pt-5")}>
-          <div className="min-w-0 space-y-1">
-            {eyebrow != null && <Label>{eyebrow}</Label>}
-            {typeof title === "string" ? (
-              <h2 className="text-sm font-semibold text-ink" data-donnee={titreDonnee || undefined}>
-                {title}
-              </h2>
-            ) : (
-              title
-            )}
+          <div className={cn("min-w-0", icon ? "flex items-start gap-2.5" : "space-y-1")}>
+            {icon && <IconTile icon={icon} hue={hue} />}
+            <div className="min-w-0 space-y-1">
+              {eyebrow != null && <Label>{eyebrow}</Label>}
+              {typeof title === "string" ? (
+                <h2 className="text-sm font-semibold text-ink" data-donnee={titreDonnee || undefined}>
+                  {title}
+                </h2>
+              ) : (
+                title
+              )}
+            </div>
           </div>
           {action}
         </header>
@@ -894,9 +935,27 @@ export function Drawer({
 }
 
 /** Une zone vide qui dit quoi faire : un filet pointillé discret, un titre, une phrase, une action. */
-export function Empty({ children, title, action }: { children: ReactNode; title?: ReactNode; action?: ReactNode }) {
+export function Empty({
+  children,
+  title,
+  action,
+  icon,
+  hue,
+}: {
+  children: ReactNode;
+  title?: ReactNode;
+  action?: ReactNode;
+  /** What is absent, as an icon on its hue above the words (S55-08). */
+  icon?: LucideIcon;
+  hue?: Hue;
+}) {
   return (
     <div className="rounded-md border border-dashed border-line px-6 py-10 text-center">
+      {icon && (
+        <div className="mb-3 flex justify-center">
+          <IconTile icon={icon} hue={hue} size="lg" />
+        </div>
+      )}
       {title && <p className="text-sm font-medium text-ink">{title}</p>}
       {children && <p className="mx-auto mt-1 max-w-md text-sm text-ink-muted">{children}</p>}
       {action && <div className="mt-4 flex justify-center">{action}</div>}
