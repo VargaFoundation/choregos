@@ -226,7 +226,7 @@ async def test_creating_a_web_source_checks_its_start_url_inside_the_organisatio
     policy in context" although its host was allowed: the start URL check ran outside the
     organisation's policy (S39-28). Fakes skip that check, so it is switched on here."""
     from choregos_adapters.documents import web
-    from choregos_api.routers import knowledge as router
+    from choregos_api.routers.knowledge import source_config as router
 
     monkeypatch.setattr(router, "fakes_enabled", lambda: False)
     sent: list[httpx.Request] = []

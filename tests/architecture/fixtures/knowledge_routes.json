@@ -1,0 +1,170 @@
+[
+  {
+    "path": "/orgs/{org}/knowledge",
+    "methods": [
+      "GET"
+    ],
+    "operation_id": "listKnowledgeBases"
+  },
+  {
+    "path": "/orgs/{org}/knowledge",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "createKnowledgeBase"
+  },
+  {
+    "path": "/projects/{id}/knowledge",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "createProjectKnowledgeBase"
+  },
+  {
+    "path": "/orgs/{org}/knowledge/{slug}",
+    "methods": [
+      "GET"
+    ],
+    "operation_id": "getKnowledgeBase"
+  },
+  {
+    "path": "/orgs/{org}/knowledge/{slug}",
+    "methods": [
+      "PATCH"
+    ],
+    "operation_id": "updateKnowledgeBase"
+  },
+  {
+    "path": "/orgs/{org}/knowledge/{slug}/grants",
+    "methods": [
+      "GET"
+    ],
+    "operation_id": "listKnowledgeGrants"
+  },
+  {
+    "path": "/orgs/{org}/knowledge/{slug}/grants",
+    "methods": [
+      "PUT"
+    ],
+    "operation_id": "putKnowledgeGrants"
+  },
+  {
+    "path": "/orgs/{org}/knowledge/{slug}/documents",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "uploadKnowledgeDocument"
+  },
+  {
+    "path": "/orgs/{org}/knowledge/{slug}/documents/{document_id}",
+    "methods": [
+      "GET"
+    ],
+    "operation_id": "getKnowledgeDocument"
+  },
+  {
+    "path": "/orgs/{org}/knowledge/{slug}/documents/{document_id}",
+    "methods": [
+      "DELETE"
+    ],
+    "operation_id": "deleteKnowledgeDocument"
+  },
+  {
+    "path": "/orgs/{org}/knowledge/{slug}/documents/{document_id}/convert",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "convertKnowledgeDocument"
+  },
+  {
+    "path": "/orgs/{org}/knowledge/{slug}/search",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "searchKnowledgeBase"
+  },
+  {
+    "path": "/orgs/{org}/knowledge/{slug}/reindex",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "reindexKnowledgeBase"
+  },
+  {
+    "path": "/orgs/{org}/knowledge/{slug}/eval",
+    "methods": [
+      "PUT"
+    ],
+    "operation_id": "putKnowledgeEvalSet"
+  },
+  {
+    "path": "/orgs/{org}/knowledge/{slug}/eval/run",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "runKnowledgeEval"
+  },
+  {
+    "path": "/orgs/{org}/knowledge/{slug}/sources",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "createKnowledgeSource"
+  },
+  {
+    "path": "/orgs/{org}/knowledge/{slug}/sources/{source_id}",
+    "methods": [
+      "PATCH"
+    ],
+    "operation_id": "updateKnowledgeSource"
+  },
+  {
+    "path": "/orgs/{org}/knowledge/{slug}/sources/{source_id}",
+    "methods": [
+      "DELETE"
+    ],
+    "operation_id": "deleteKnowledgeSource"
+  },
+  {
+    "path": "/orgs/{org}/knowledge/{slug}/sources/{source_id}/sync",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "syncKnowledgeSource"
+  },
+  {
+    "path": "/orgs/{org}/knowledge/{slug}/sync",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "syncKnowledgeBase"
+  },
+  {
+    "path": "/orgs/{org}/knowledge/{slug}/distill/estimate",
+    "methods": [
+      "GET"
+    ],
+    "operation_id": "estimateKnowledgeDistillation"
+  },
+  {
+    "path": "/orgs/{org}/knowledge/{slug}/distill",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "distillKnowledgeBase"
+  },
+  {
+    "path": "/orgs/{org}/knowledge/{slug}/distill/relaunch",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "relaunchKnowledgeDistillation"
+  },
+  {
+    "path": "/orgs/{org}/knowledge/{slug}/distill/stop",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "stopKnowledgeDistillation"
+  }
+]
