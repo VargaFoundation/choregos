@@ -237,6 +237,21 @@ global:
     resources:
       requests: { cpu: 50m, memory: 64Mi }
       limits: { cpu: 500m, memory: 256Mi }
+  # An MCP gateway the organisation already runs (ADR 0105: another product, never part of this
+  # chart). Nothing is rendered while `namespace` and `cidrs` are both empty.
+  mcpGateway:
+    # Exact host names the platform treats as the gateway (CHOREGOS_MCP_GATEWAY_INTERNAL_HOSTS):
+    # the API refuses them as a run's destination and lets the platform itself call them.
+    internalHosts: []
+    # Host names appended to the `api` and `workers` families of `egress.ceiling`, when those
+    # families are declared. Never added to `runners`, never to `egress.denyDomains`.
+    hosts: []
+    # In-cluster gateway: its namespace, and optionally the labels of its pods.
+    namespace: ''
+    podLabels: {}
+    # External gateway: the CIDRs the API and the workers may reach.
+    cidrs: []
+    ports: [443]
   logLevel: INFO
   # Anti-affinity between the replicas of a same component: `soft` (preferred), `hard`
   # (one replica per node, otherwise no pod) or `none`.

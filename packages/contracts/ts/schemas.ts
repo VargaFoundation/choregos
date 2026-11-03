@@ -73,6 +73,38 @@ export type ContextPack = {
   generated_at?: string;
 };
 
+/** What was observed after the decision; each field is filled in when it becomes known. */
+export type DecisionRecordOutcome = {
+  /** A later human step on the work item contradicted the decision. */
+  overridden?: boolean | null;
+  /** The work item's terminal outcome. */
+  terminal?: "success" | "declined" | "cancelled" | null;
+  /** The work item came back after it ended. */
+  reopened?: boolean;
+  observed_at?: string | null;
+};
+
+/** One answered question of a decision (ADR 0121): what was decided, with which probability, by which model, which transition followed, and what was observed afterwards. Calibration is measured from these records, never declared. */
+export type DecisionRecord = {
+  run_id: string;
+  work_item: string;
+  project: string;
+  workflow: string;
+  /** The state the step ran from. */
+  step: string;
+  question: string;
+  /** `decision_model`: a decision step's answer; `agent`: the `confidence` an agent declared (ADR 0106), recorded to be measured on the same footing. */
+  source: "decision_model" | "agent";
+  model: string;
+  model_version?: string | null;
+  answer: string | number | boolean;
+  probability: number;
+  /** The state the workflow went to after the step, once known. */
+  transition?: string | null;
+  decided_at: string;
+  outcome?: null | DecisionRecordOutcome;
+};
+
 /** An internal event, CloudEvents 1.0 (docs/plan/01 §1.7). */
 export type Event = {
   specversion: "1.0";
@@ -1179,7 +1211,7 @@ export type WorkflowSlug = string;
 
 export type WorkflowIdentifier = string;
 
-export type WorkflowActor = WorkflowAgentActor | WorkflowHumanActor | WorkflowSystemActor | WorkflowJobActor;
+export type WorkflowActor = WorkflowAgentActor | WorkflowHumanActor | WorkflowSystemActor | WorkflowJobActor | WorkflowDecisionActor;
 
 export type WorkflowAgentActor = {
   type: "agent";
@@ -1354,6 +1386,38 @@ export type WorkflowOutputCondition = string | number | boolean | Array<string |
   lte?: number;
 };
 
+/** A decision step (ADR 0121): a decision model answers typed questions about the state the step names, through the project's gateway, in the orchestrator — no pod, no agent loop. Each question writes two outputs, `<name>` (the answer) and `<name>_confidence` (its probability, 0 to 1), that `when` reads. */
+export type WorkflowDecisionActor = {
+  type: "decision";
+  role: string;
+  /** A model catalogue entry with the `decide` usage (ADR 0060), routed by the project's gateway. */
+  model?: string;
+  /** What is sent to the model, and nothing else: the work item's title, description, labels and type, its fields (`fields.<name>`) and the last stage's outputs (`outputs.<name>`). */
+  state: Array<string>;
+  /** Output name → question. The name is the output that carries the answer; `<name>_confidence` carries its probability. */
+  questions: {
+    [key: string]: WorkflowDecisionQuestion;
+  };
+  timeout_seconds?: number;
+};
+
+export type WorkflowDecisionQuestion = {
+  type: "yes_no";
+  /** What is asked, in plain words; the model reads it with the state. */
+  instructions: string;
+} | {
+  type: "choice";
+  /** What is asked, in plain words; the model reads it with the state. */
+  instructions: string;
+  options: Array<string>;
+} | {
+  type: "score";
+  /** What is asked, in plain words; the model reads it with the state. */
+  instructions: string;
+  /** The ordered levels of the score, lowest first; the answer is one of them. At most 10: the gateway's decision route (LiteLLM 1.105.5) refuses more. */
+  levels: Array<string>;
+};
+
 /** Choregos workflow DSL: a declarative state machine per project (docs/plan/01 §1.4). */
 export type Workflow = {
   apiVersion: "choregos/v1";
@@ -1391,6 +1455,7 @@ export type Workflow = {
 export type ChoregosContract =
   | Artifact
   | ContextPack
+  | DecisionRecord
   | Event
   | Finding
   | HumanDecision
