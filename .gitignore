@@ -17,6 +17,8 @@ node_modules
 out/
 *.tsbuildinfo
 .turbo/
+# Vitest coverage reports (`pnpm test` runs with --coverage since S47-25).
+apps/web/coverage/
 # Divers
 .env
 .env.local
