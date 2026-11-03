@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Le schéma d'entrée d'une opération, gardé (ADR 0034) : le courtier l'annonce à l'agent et
-refuse un appel qui ne le tient pas, avant de joindre le serveur.
+"""An operation's input schema, kept (ADR 0034): the broker announces it to the agent and
+refuses a call that does not satisfy it, before reaching the server.
 
 Revision ID: e7f9a1b3c5d8
 Revises: d6e8f0a2b4c7

@@ -1,16 +1,16 @@
 # SPDX-License-Identifier: Apache-2.0
-"""La RLS ne laisse plus passer l'oubli : fail-closed, et une portée par session
+"""RLS no longer lets an omission through: fail-closed, and one scope per session
 
-La politique initiale était `choregos_current_org() IS NULL OR …` : une session qui ne
-posait pas `app.current_org` voyait tout. Aucun chemin de production ne le posait — ni
-`get_db()`, ni l'orchestrateur, ni les seeds — donc la RLS n'a jamais rien isolé (état des
-lieux du 2026-09-24). Désormais :
+The initial policy was `choregos_current_org() IS NULL OR ...`: a session that did not
+set `app.current_org` saw everything. No production path set it (neither
+`get_db()`, nor the orchestrator, nor the seeds), so RLS never isolated anything (state of
+play of 2026-09-24). From now on:
 
-- `app.current_orgs` porte une liste d'organisations (`a,b`) ou `*` ;
-- absent ou vide ⇒ AUCUNE ligne des tables sous RLS ;
-- `projects` est jugé sur `org_id` directement, parce qu'à l'INSERT la ligne n'est pas
-  encore visible du sous-select qui joignait `projects` : la création d'un projet aurait
-  été refusée à l'organisation même qui la demandait.
+- `app.current_orgs` carries a list of organisations (`a,b`) or `*`;
+- absent or empty means NO row of the tables under RLS;
+- `projects` is judged on `org_id` directly, because at INSERT the row is not
+  yet visible to the sub-select that joined `projects`: creating a project would have
+  been refused to the very organisation that asked for it.
 
 Revision ID: b2d4f6a8c0e1
 Revises: a1c3e5f7b9d2

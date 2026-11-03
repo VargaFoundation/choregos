@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Rattrapage du schéma : ce que les modèles avaient et les migrations pas.
+"""Schema catch-up: what the models had and the migrations did not.
 
-`runs.spend_collected` a été ajoutée au modèle sans migration. Personne ne l'a vu parce que
-l'API posait elle-même le schéma au démarrage (`create_all`) en environnement `dev`, et que
-le banc sur cluster lançait alembic avec `|| true`. Sur une vraie base migrée, la première
-écriture d'un commentaire d'état échouait : « column runs.spend_collected does not exist ».
+`runs.spend_collected` was added to the model without a migration. Nobody saw it because the
+API laid the schema itself at start-up (`create_all`) in the `dev` environment, and the cluster
+bench ran alembic with `|| true`. On a really migrated database, the first write of a state
+comment failed: "column runs.spend_collected does not exist".
 
 Revision ID: 7bdeea6732b0
 Revises: a6de8f2759b3
@@ -25,8 +25,8 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    # `server_default` : la table peut déjà contenir des lignes, et une colonne NOT NULL
-    # sans valeur par défaut ferait échouer la migration sur toute base non vide.
+    # `server_default`: the table may already hold rows, and a NOT NULL column
+    # without a default would make the migration fail on any non-empty database.
     op.add_column(
         'runs',
         sa.Column('spend_collected', sa.Boolean(), nullable=False, server_default=sa.false()),

@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Les reçus de passage entre étapes (S25-04) : `hand_off_receipts`
+"""Hand-off receipts between steps (S25-04): `hand_off_receipts`
 
-Une ligne par sortie produite ou lue, sous son empreinte ; jamais modifiée. Sous la RLS forcée,
-comme le reste.
+One row per output produced or read, under its digest; never modified. Under forced RLS,
+like the rest.
 
 Revision ID: a3c5e7f9b1d2
 Revises: f8a0b2c4d6e9

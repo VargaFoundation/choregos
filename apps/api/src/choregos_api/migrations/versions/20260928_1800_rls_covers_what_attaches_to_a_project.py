@@ -1,23 +1,23 @@
 # SPDX-License-Identifier: Apache-2.0
-"""La RLS couvre ce qui se rattache à un projet : événements de run, déploiements, clés de passerelle
+"""RLS covers what attaches to a project: run events, deployments, gateway keys
 
-Treize tables étaient sous RLS ; trois autres portent des données d'une organisation sans
-l'être. Un membre de `a` ne pouvait pas les lire par l'API — les routes filtrent — mais une
-session bornée à `a` les voyait toutes en base, et c'est la base qui doit tenir quand une route
-oublie un filtre :
+Thirteen tables were under RLS; three others carry an organisation's data without
+being so. A member of `a` could not read them through the API (the routes filter), but a
+session bounded to `a` saw them all in the database, and the database must hold when a route
+forgets a filter:
 
-- `run_events` : le journal d'un agent — commandes, sorties, extraits de code d'un client ;
-- `deployments` : quand, où et quoi une organisation met en production ;
-- `gateway_keys` : les plafonds de dépense de chaque run.
+- `run_events`: an agent's journal: commands, outputs, a client's code excerpts;
+- `deployments`: when, where and what an organisation puts into production;
+- `gateway_keys`: the spend ceilings of each run.
 
-Chacune se rattache à un projet (par son run, sa release, ou directement), donc à une
-organisation : la politique réutilise `choregos_project_org`, comme les tables d'origine. Une clé
-de passerelle SANS projet n'est visible que de la plateforme (`*`) : aucun chemin n'en écrit
-aujourd'hui, et le jour où il y en aura, fail-closed est le bon défaut.
+Each attaches to a project (through its run, its release, or directly), hence to an
+organisation: the policy reuses `choregos_project_org`, like the original tables. A gateway
+key WITHOUT a project is visible only to the platform (`*`): no path writes one
+today, and the day there is one, fail-closed is the right default.
 
-Ce qui reste hors RLS, et pourquoi, est écrit dans `tests/test_rls_postgres.py`
-(`EXEMPTEES`) : un test y refuse toute table nouvelle qui n'est ni sous RLS ni exemptée avec sa
-raison.
+What stays outside RLS, and why, is written in `tests/test_rls_postgres.py`
+(`EXEMPTED`): a test there refuses any new table that is neither under RLS nor exempted with its
+reason.
 
 Revision ID: d4f6b8a0c2e3
 Revises: c3e5a7f9b1d4
@@ -35,8 +35,8 @@ down_revision: str | None = "c3e5a7f9b1d4"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-#: table → expression qui rend le slug de l'organisation propriétaire de la ligne.
-RATTACHEES = {
+#: table -> expression that returns the slug of the organisation owning the row.
+ATTACHED = {
     "run_events": "choregos_run_org(run_id)",
     "deployments": "choregos_release_org(release_id)",
     "gateway_keys": "choregos_project_org(project_id)",
@@ -50,8 +50,8 @@ def _postgres() -> bool:
 def upgrade() -> None:
     if not _postgres():
         return
-    # Droits de l'APPELANT (pas SECURITY DEFINER) : le run ou la release doivent eux-mêmes être
-    # visibles de la session — la RLS de `runs` et `releases` s'applique au sous-select.
+    # Rights of the CALLER (not SECURITY DEFINER): the run or the release must themselves be
+    # visible to the session: the RLS of `runs` and `releases` applies to the sub-select.
     op.execute(
         """
         CREATE OR REPLACE FUNCTION choregos_run_org(rid text) RETURNS text AS $$
@@ -66,7 +66,7 @@ def upgrade() -> None:
         $$ LANGUAGE sql STABLE;
         """
     )
-    for table, organisation in RATTACHEES.items():
+    for table, organisation in ATTACHED.items():
         op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
         op.execute(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY")
         op.execute(f"DROP POLICY IF EXISTS {table}_org_isolation ON {table}")
@@ -84,7 +84,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     if not _postgres():
         return
-    for table in RATTACHEES:
+    for table in ATTACHED:
         op.execute(f"DROP POLICY IF EXISTS {table}_org_isolation ON {table}")
         op.execute(f"ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY")
         op.execute(f"ALTER TABLE {table} DISABLE ROW LEVEL SECURITY")

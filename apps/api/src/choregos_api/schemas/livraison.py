@@ -1,102 +1,38 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Releases, trains, findings."""
+# lang: fr-ok-file alias:internal; former `schemas.delivery`, ADR 0098
+"""The former name of `choregos_api.schemas.delivery`: every name still resolves."""
 
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any, Literal
+from choregos_core.compat import replace_module
 
-from pydantic import Field
+from . import delivery as _current
+from .delivery import (
+    AbortRequest,
+    ApproveRequest,
+    FindingAck,
+    FindingAction,
+    FindingDto,
+    FindingPage,
+    FreezeRequest,
+    ReleaseDto,
+    ReleaseItemDto,
+    ReleasePage,
+    TrainStatusDto,
+)
 
-from .base import Dto, PageMeta
+__all__ = [
+    "AbortRequest",
+    "ApproveRequest",
+    "FindingAck",
+    "FindingAction",
+    "FindingDto",
+    "FindingPage",
+    "FreezeRequest",
+    "ReleaseDto",
+    "ReleaseItemDto",
+    "ReleasePage",
+    "TrainStatusDto",
+]
 
-
-class ReleaseItemDto(Dto):
-    work_item_key: str
-    title: str | None = None
-    sha: str
-    pr_url: str | None = None
-    risk: str | None = None
-    labels: list[str] = Field(default_factory=list)
-
-
-class ReleaseDto(Dto):
-    id: str
-    project_slug: str
-    env: str
-    batch_no: int
-    status: str
-    items: list[ReleaseItemDto] = Field(default_factory=list)
-    started_at: datetime | None = None
-    ended_at: datetime | None = None
-    approved_by: str | None = None
-    verdict: dict[str, Any] = Field(default_factory=dict)
-    notes: str | None = None
-    promotion_url: str | None = None
-
-
-class ReleasePage(Dto):
-    items: list[ReleaseDto]
-    meta: PageMeta
-
-
-class TrainStatusDto(Dto):
-    env: str
-    status: str
-    batch_size: int = 0
-    pending_items: list[str] = Field(default_factory=list)
-    next_departure: datetime | None = None
-    frozen: bool = False
-    freeze_reason: str | None = None
-    current_release: ReleaseDto | None = None
-    window_open: bool = True
-
-
-class FreezeRequest(Dto):
-    reason: str = Field(min_length=3)
-
-
-class ApproveRequest(Dto):
-    note: str | None = None
-
-
-class AbortRequest(Dto):
-    reason: str | None = None
-
-
-class FindingDto(Dto):
-    id: str
-    project_slug: str
-    origin_work_item_key: str | None = None
-    origin_run_id: str | None = None
-    title: str
-    type: str
-    severity: str
-    evidence: str
-    suggested_fix: str | None = None
-    estimate: str | None = None
-    status: str
-    created_work_item_key: str | None = None
-    duplicate_of: str | None = None
-    occurrences: int = 1
-    relevant: bool | None = None
-    created_at: datetime
-
-
-class FindingPage(Dto):
-    items: list[FindingDto]
-    meta: PageMeta
-
-
-class FindingAction(Dto):
-    action: Literal[
-        "create_ticket", "mark_duplicate", "dismiss", "agent_ready", "mark_relevant", "mark_false_positive"
-    ]
-    duplicate_of: str | None = None
-    reason: str | None = None
-
-
-class FindingAck(Dto):
-    accepted: bool
-    finding_id: str | None = None
-    remaining: int = 0
+replace_module(__name__, _current)

@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
-"""La bibliothèque de skills : des skills de l'organisation et leurs versions immuables (ADR 0033)
+"""The skill library: the organisation's skills and their immutable versions (ADR 0033)
 
-Sous la RLS forcée, comme le registre d'agents : une skill de `b` n'existe pas pour `a`.
+Under forced RLS, like the agent registry: a skill of `b` does not exist for `a`.
 
 Revision ID: f2a4b6c8d0e3
 Revises: e1f3a5b7c9d2

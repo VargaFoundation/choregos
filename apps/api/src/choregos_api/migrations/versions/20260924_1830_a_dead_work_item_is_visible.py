@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Un ticket mort se voit : la marque que l'interpréteur pose en mourant
+"""A dead work item is visible: the mark the interpreter leaves when dying
 
-Deux tickets RH du banc du 2026-09-24 sont restés « en attente » alors que leur workflow
-Temporal était FAILED — l'un sur une activité en échec, l'autre sur un heartbeat manqué
-pendant un `helm upgrade`. Rien en base ne le disait, donc rien à l'écran. Le workflow
-écrit désormais ici pourquoi il meurt (`{message, activity, state, at}`), et `load_context`
-efface la marque quand il redémarre.
+Two HR tickets of the 2026-09-24 bench stayed "waiting" while their Temporal workflow
+was FAILED: one on a failed activity, the other on a missed heartbeat
+during a `helm upgrade`. Nothing in the database said so, hence nothing on screen. The workflow
+now writes here why it dies (`{message, activity, state, at}`), and `load_context`
+clears the mark when it restarts.
 
 Revision ID: a1c3e5f7b9d2
 Revises: 668d35b9d531

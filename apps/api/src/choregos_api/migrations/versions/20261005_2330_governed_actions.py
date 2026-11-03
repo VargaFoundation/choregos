@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Les actions gouvernées dans le cœur (ADR 0035) : `actions` et le journal de leurs effets
+"""Governed actions in the core (ADR 0035): `actions` and the journal of their effects
 
-Sous la RLS forcée, comme le reste. Un effet est consigné sous sa clé (`<action>:<n>`, unique)
-avant d'être tenté : c'est ce qui empêche une reprise de le refaire.
+Under forced RLS, like the rest. An effect is recorded under its key (`<action>:<n>`, unique)
+before being attempted: this is what prevents a replay from doing it again.
 
 Revision ID: f8a0b2c4d6e9
 Revises: e7f9a1b3c5d8

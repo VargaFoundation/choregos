@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Les connecteurs de l'organisation et la politique de chaque opération (ADR 0034)
+"""The organisation's connectors and the policy of each operation (ADR 0034)
 
-Trois tables sous la RLS forcée, comme le reste du registre :
-- `org_connectors` : une instance déclarée par l'administrateur de l'organisation ;
-- `connector_operations` : ses opérations, et pour chacune la politique (`allowed`, `approval`,
-  `forbidden`), les groupes de projets qui y ont droit, le prix, l'empreinte du schéma ;
-- `project_operation_policies` : ce qu'un projet resserre — jamais ce qu'il élargit.
+Three tables under forced RLS, like the rest of the registry:
+- `org_connectors`: an instance declared by the organisation's administrator;
+- `connector_operations`: its operations, and for each the policy (`allowed`, `approval`,
+  `forbidden`), the project groups entitled to it, the price, the schema fingerprint;
+- `project_operation_policies`: what a project tightens, never what it widens.
 
 Revision ID: d6e8f0a2b4c7
 Revises: c5d7e9f1a3b6

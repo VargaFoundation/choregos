@@ -1,14 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Le registre de coûts distingue un appel de modèle d'un appel d'outil
+"""The cost ledger tells a model call from a tool call
 
-Un outil du catalogue coûte à chaque appel, comme un modèle. Sans cette colonne, il
-faudrait le ranger dans `model`, et tous les agrégats par modèle compteraient les outils
-comme des modèles.
+A catalogue tool costs on every call, like a model. Without this column, it would have to
+be filed under `model`, and every per-model aggregate would count the tools as models.
 
-`server_default` n'est pas décoratif : l'autogénération produisait une colonne `NOT NULL`
-sans défaut, ce que PostgreSQL refuse sur une table qui a déjà des lignes — « column
-"kind" contains null values ». SQLite, lui, ne dit rien : le défaut aurait encore été
-invisible partout sauf en vrai. Les lignes existantes sont toutes des appels de modèle.
+`server_default` is not decorative: autogenerate produced a `NOT NULL` column without a
+default, which PostgreSQL refuses on a table that already has rows: "column
+"kind" contains null values". SQLite says nothing: the default would again have been
+invisible everywhere except in real life. The existing rows are all model calls.
 
 Revision ID: 668d35b9d531
 Revises: 0df3d8ee7496
