@@ -905,7 +905,9 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
         raise conflict("result already posted for this run")
     from ..services.courtier import outils_du_courtier
 
-    du_catalogue = outils_du_projet(_outils_autorises(project), _groupes_du_projet(project))
+    du_catalogue = outils_du_projet(
+        _outils_autorises(project), _groupes_du_projet(project), include_writers=True
+    )
     outil = next((o for o in du_catalogue if o.name == name), None)
     des_greffons = await _outils_des_greffons(session, run, project, {o.name for o in du_catalogue})
     du_courtier = await outils_du_courtier(session, run, project)
@@ -951,6 +953,19 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
             session, run, project, SimpleNamespace(nom=name), code, corps
         )
     elif outil is not None:
+        if outil.may_write:
+            detail = (
+                f"catalogue tool `{name}` may write (an http POST or a remote MCP tool) and catalogue "
+                "calls are not governed actions: the deployment marks it `read_only: true` if it only "
+                "reads, or the organisation declares the server as an MCP connector, whose writes are "
+                "governed (ADR 0034)"
+            )
+            raise ApiError(
+                status.HTTP_409_CONFLICT,
+                "Catalogue write refused",
+                detail,
+                errors=[{"code": "catalogue_write_refused", "msg": detail}],
+            )
         from ..services.courtier import bounded_payload
 
         code, corps = await appeler_outil(outil, body or {})

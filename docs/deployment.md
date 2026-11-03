@@ -529,6 +529,21 @@ Two things have to be true for an agent to actually get a tool, and both are eas
    project's list comes back `allowed: false`, and the agent correctly reports that it has no such
    tool — which is exactly what happened on the dev tenant on 2026-09-27, and cost an hour.
 
+### A catalogue tool that may write is not offered
+
+Writes reach a third party only as governed actions (ADR 0034 §7), and a catalogue call is not one.
+A catalogue tool **may write** when it is an http tool whose method is not `GET`, or a remote `mcp:`
+tool. Unless the deployment declares `read_only: true` on the entry, such a tool is not listed in the
+run's tool list, is shown `allowed: false` on the project's tools page, is left out of the observability
+sources, and a direct call answers 409 `catalogue_write_refused` before any provider call or cost line.
+`read_only: false` says the same as leaving it unset on a writer. The catalogue still loads: an old
+catalogue does not stop the API from starting.
+
+- A POST or MCP tool that only reads (a search, a lookup): add `read_only: true` to its entry.
+- A tool that writes: declare the server as an organisation MCP connector. The broker serves its
+  operations, each with its own policy, and its writes are governed. The tools of a plugin's server
+  (ADR 0096) are such connectors, not catalogue entries, and are not affected by this rule.
+
 ### The rules that make an external MCP server safe to add
 
 - **The run token never leaves the platform.** It authenticates the agent *to us*; handing it
