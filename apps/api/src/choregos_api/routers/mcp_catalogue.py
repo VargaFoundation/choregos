@@ -41,6 +41,7 @@ from ..services.catalogue_rights import (
 )
 from ..services.catalogues import egress_of
 from ..services.connector_catalogue import enablement_by_connector
+from ..services.mcp_gateway import GATEWAY_TYPE, stored
 from .org_connectors import _administrer, _organisation, declare_org_connector
 
 router = APIRouter(tags=["connectors"])
@@ -64,7 +65,17 @@ def _version_of(connector_entry: str) -> tuple[str, str]:
     return entry_id, version
 
 
-def _dto(
+def install_routes(entry: catalogue.McpEntry, gateway_mode: str | None) -> list[str]:
+    """How this organisation can install the entry, `direct` first."""
+    routes: list[str] = []
+    if entry.install == "installable" and gateway_mode != "required":
+        routes.append("direct")
+    if gateway_mode in ("available", "required"):
+        routes.append("gateway")
+    return routes
+
+
+def _dto(  # noqa: PLR0913
     entry: catalogue.McpEntry,
     version: str,
     installed: dict[str, list[tuple[str, str]]],
@@ -72,6 +83,7 @@ def _dto(
     *,
     can_install: bool,
     install_reason: str | None,
+    routes: list[str],
     enable_in: list[str],
     enablement: dict[str, ConnectorEnablement],
 ) -> McpCatalogueEntryDto:
@@ -86,17 +98,19 @@ def _dto(
         state=state,
         installed_as=[name for name, _ in here],
         egress=egress_of(entry.egress_hosts, declared),
-        procedure=procedure_of_mcp_entry(load_procedures(get_settings().procedures_extra), entry.id),
+        install_routes=routes,
+        procedure="connector.mcp.mcp-gateway"
+        if routes == ["gateway"]
+        else procedure_of_mcp_entry(load_procedures(get_settings().procedures_extra), entry.id),
     )
-    refusal = _refusal_for(entry)
     here_enablement = [enablement[name] for name, _ in here if name in enablement]
     selected = any(e.availability == SELECTED_PROJECTS for e in here_enablement)
     body["can"] = CataloguePermissions(
-        install=can_install and entry.install == "installable",
+        install=can_install and bool(routes),
         configure_projects=[],
         enable_projects=enable_in if selected else [],
     ).model_dump()
-    body["cannot_reason"] = install_reason or refusal
+    body["cannot_reason"] = install_reason or (None if "gateway" in routes else _refusal_for(entry))
     body["enablement"] = [e.model_dump() for e in here_enablement]
     return McpCatalogueEntryDto.model_validate(body)
 
@@ -146,6 +160,7 @@ async def list_mcp_catalogue(
     visible = await visible_projects(session, principal, organisation.id, org)
     enable_in = projects_where(principal, org, CatalogueAction.ENABLE, visible)
     enablement = await enablement_by_connector(session, principal, organisation)
+    mode = setting.mode if (setting := stored(organisation)) else None
     entries = [
         _dto(
             e,
@@ -154,6 +169,7 @@ async def list_mcp_catalogue(
             declared,
             can_install=installing.allowed,
             install_reason=installing.reason,
+            routes=install_routes(e, mode),
             enable_in=enable_in,
             enablement=enablement,
         )
@@ -197,6 +213,33 @@ async def install_mcp_catalogue_entry(
     entry = loaded.by_id(entry_id)
     if entry is None:
         raise not_found("MCP catalogue entry", entry_id)
+    setting = stored(organisation)
+    mode = setting.mode if setting else None
+    route = body.route
+    if route is None:
+        gateway_first = mode == "required" or (entry.install != "installable" and mode == "available")
+        route = "gateway" if gateway_first else "direct"
+    if route == "gateway":
+        if body.secret_refs or body.secret_values or body.auth_header:
+            raise unprocessable(
+                "through the gateway the server's credential is the gateway's: Choregos stores none"
+            )
+        return await declare_org_connector(
+            session,
+            principal,
+            organisation,
+            OrgConnectorCreate(
+                name=body.name or entry.id,
+                type=GATEWAY_TYPE,
+                kind="mcp",
+                config={"server": body.gateway_server or entry.id},
+                secret_refs={},
+                secret_values={},
+                availability=body.availability,
+                allow_egress=body.allow_egress,
+            ),
+            catalogue_entry=f"{entry.id}@{loaded.meta.catalogue_version}",
+        )
     if refusal := _refusal_for(entry):
         raise unprocessable(refusal)
     assert entry.remote is not None  # `installable` means a hosted remote
