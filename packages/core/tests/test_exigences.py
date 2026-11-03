@@ -119,8 +119,8 @@ def test_a_documentation_step_works_in_the_repository() -> None:
 
 def test_a_decision_step_needs_the_gateway_and_no_runtime_of_its_own() -> None:
     """ADR 0121: a decision runs in the orchestrator and asks its model through the gateway."""
-    capacites = _capacites(template_yaml("decision-triage"))
-    assert capacites == ["tracker", "runtime", "gateway"], "the `deliver` agent still runs somewhere"
+    needs = _capacites(template_yaml("decision-triage"))
+    assert needs == ["tracker", "runtime", "gateway"], "the `deliver` agent still runs somewhere"
     reasons = {
         e.capacite: e.raisons for e in exigences([parse_workflow(template_yaml("decision-triage"))[0]])
     }
