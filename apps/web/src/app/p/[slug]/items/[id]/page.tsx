@@ -5,8 +5,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState } from "react";
 import { DecisionBar } from "@/components/decision-bar";
-import { CarteDuParcours } from "@/components/parcours/carte-du-parcours";
-import { gare } from "@/components/parcours/modele";
+import { JourneyMap } from "@/components/journey/journey-map";
+import { parked } from "@/components/journey/model";
 import {
   ActorIcon,
   Breadcrumbs,
@@ -125,7 +125,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
             <a href="#decision" className={buttonClasses("accent", "sm")}>
               {next.action.label}
             </a>
-          ) : next.action?.kind === "replay" || gare(journey.data) ? (
+          ) : next.action?.kind === "replay" || parked(journey.data) ? (
             <ConfirmedGesture
               ton="accent"
               question="Replay the stage that escalated? An agent runs it again from the start — a new run, billed."
@@ -222,7 +222,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
 
       <Card title="Journey">
         {journey.data ? (
-          <CarteDuParcours
+          <JourneyMap
             journey={journey.data}
             slug={slug}
             itemId={id}

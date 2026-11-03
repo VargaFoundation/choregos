@@ -177,7 +177,7 @@ describe("the single draft of the three views (S21-06)", () => {
     await validAtTheEnd();
     version.courante = 4;
     await act(() => client.invalidateQueries({ queryKey: ["workflow", "rh", "onboarding"] }));
-    expect(await screen.findByTestId("conflit")).toHaveTextContent("you started from v3, the workflow is now v4");
+    expect(await screen.findByTestId("conflict")).toHaveTextContent("you started from v3, the workflow is now v4");
     expect((screen.getByLabelText("texte") as HTMLTextAreaElement).value).toBe(`${LU}# mine\n`);
     expect(screen.getByRole("button", { name: "Publish v5" })).toBeDisabled();
   });
@@ -191,7 +191,7 @@ describe("the single draft of the three views (S21-06)", () => {
     await validAtTheEnd();
     version.courante = 4;
     fireEvent.click(screen.getByRole("button", { name: "Publish v4" }));
-    expect(await screen.findByTestId("conflit")).toBeInTheDocument();
+    expect(await screen.findByTestId("conflict")).toBeInTheDocument();
     expect((screen.getByLabelText("texte") as HTMLTextAreaElement).value).toBe(`${LU}# mine\n`);
     fireEvent.click(screen.getByRole("button", { name: "Publish over v4" }));
     await waitFor(() => expect(api.putWorkflowNamed).toHaveBeenLastCalledWith("rh", "onboarding", `${LU}# mine\n`, 4));

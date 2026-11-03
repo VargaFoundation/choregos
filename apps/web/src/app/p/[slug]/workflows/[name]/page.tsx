@@ -9,16 +9,16 @@ import {
   useSearchParams,
 } from "next/navigation";
 import { useState } from "react";
-import { CarteEnSerpentin } from "@/components/parcours/carte-du-parcours";
+import { SnakeMap } from "@/components/journey/journey-map";
 import { Button, Card, Drawer, Empty, ErrorNote } from "@/components/ui";
 import { Cog, Plus, Users } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useBrouillon } from "@/components/workflows/brouillon";
-import { CarteDuWorkflow } from "@/components/workflows/carte/carte-du-workflow";
+import { WorkflowMap } from "@/components/workflows/map/workflow-map";
 import {
-  areteDeLaCarte,
-  type NoeudDuGraphe as GraphNode, // lang: fr-ok
-} from "@/components/workflows/carte/disposition";
+  mapEdge,
+  type GraphNode,
+} from "@/components/workflows/map/layout";
 import { timingOfStep } from "@/components/workflows/timing";
 import {
   GroupMembersLine,
@@ -111,7 +111,7 @@ export default function MapPage() {
   const graphNode =
     choix?.kind === "node" ? noeuds.find((n) => n.id === choix.id) : undefined;
   const arete =
-    choix?.kind === "edge" ? areteDeLaCarte(graph, choix.id) : undefined;
+    choix?.kind === "edge" ? mapEdge(graph, choix.id) : undefined;
   const steps = draft.process ?? [];
   const chosenStep = arete
     ? steps.find((e) => e.id === arete.id)
@@ -224,21 +224,21 @@ export default function MapPage() {
             >
               {draft.grapheObsolete && <TexteIllisible />}
               {vue === "diagram" ? (
-                <CarteEnSerpentin
+                <SnakeMap
                   graph={graph}
                   process={draft.process ?? []}
                   initial={definition.initial}
-                  choix={choix?.kind === "edge" ? choix.id : null}
-                  onChoisir={(id) => setChoix({ kind: "edge", id })}
+                  selected={choix?.kind === "edge" ? choix.id : null}
+                  onSelect={(id) => setChoix({ kind: "edge", id })}
                   highlight={flux}
                   openItems={openItemsByState(activity.data)}
                 />
               ) : (
-                <CarteDuWorkflow
+                <WorkflowMap
                   graph={graph}
                   process={draft.process}
                   initial={definition.initial}
-                  acteurs={definition.actors}
+                  actors={definition.actors}
                   onSelect={(kind, id) => setChoix({ kind, id })}
                   onDraw={(from, to) => {
                     setChoix(null);

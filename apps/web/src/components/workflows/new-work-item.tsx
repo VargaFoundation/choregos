@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { Button, ErrorNote, Input, Select, Textarea } from "@/components/ui";
-import { champsDepuisSchema, valeursPourLApi, type Champ } from "@/components/workflows/champs";
+import { fieldsFromSchema, valuesForApi, type Field } from "@/components/workflows/fields";
 import { useWorkflow } from "@/components/workflows/use-workflow";
 import { api } from "@/lib/api";
 import type { TrackerInfo } from "@/lib/tracker";
@@ -37,7 +37,7 @@ export function NewWorkItemForm({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const { definition } = useWorkflow(slug, workflow);
-  const fields = champsDepuisSchema(definition.data?.json?.metadata?.inputs as Record<string, unknown> | undefined);
+  const fields = fieldsFromSchema(definition.data?.json?.metadata?.inputs as Record<string, unknown> | undefined);
 
   async function file() {
     setBusy(true);
@@ -49,7 +49,7 @@ export function NewWorkItemForm({
         size: size || null,
         start,
         workflow: workflow || null,
-        fields: valeursPourLApi(fields, entered),
+        fields: valuesForApi(fields, entered),
         budget_usd: budget ? Number(budget) : null,
       });
       onDone(created);
@@ -97,7 +97,7 @@ export function NewWorkItemForm({
           {fields.map((field) => (
             <InputField
               key={field.name}
-              champ={field}
+              field={field}
               valeur={entered[field.name]}
               onChange={(value) => setEntered((before) => ({ ...before, [field.name]: value }))}
             />
@@ -159,45 +159,45 @@ export function NewWorkItemForm({
 
 /** One input of the work item, as the control its type calls for. */
 function InputField({
-  champ,
+  field,
   valeur,
   onChange,
 }: {
-  champ: Champ;
+  field: Field;
   valeur: string | boolean | undefined;
   onChange: (valeur: string | boolean) => void;
 }) {
-  const libelle = `${champ.label}${champ.required ? " (required)" : ""}`;
-  if (champ.control === "boolean") {
+  const label = `${field.label}${field.required ? " (required)" : ""}`;
+  if (field.control === "boolean") {
     return (
       <label className="flex items-center gap-2">
         <input type="checkbox" checked={Boolean(valeur)} onChange={(event) => onChange(event.target.checked)} />
-        {libelle}
+        {label}
       </label>
     );
   }
-  if (champ.control === "choice") {
+  if (field.control === "choice") {
     return (
-      <Select aria-label={libelle} value={String(valeur ?? "")} onChange={(event) => onChange(event.target.value)}>
-        <option value="">{libelle}</option>
-        {champ.choices?.map((choix) => (
-          <option key={choix} value={choix}>
-            {choix}
+      <Select aria-label={label} value={String(valeur ?? "")} onChange={(event) => onChange(event.target.value)}>
+        <option value="">{label}</option>
+        {field.choices?.map((choice) => (
+          <option key={choice} value={choice}>
+            {choice}
           </option>
         ))}
       </Select>
     );
   }
   const type =
-    champ.control === "date" ? "date" : champ.control === "number" || champ.control === "integer" ? "number" : "text";
+    field.control === "date" ? "date" : field.control === "number" || field.control === "integer" ? "number" : "text";
   return (
     <Input
-      aria-label={libelle}
-      title={champ.hint}
+      aria-label={label}
+      title={field.hint}
       type={type}
-      required={champ.required}
+      required={field.required}
       value={String(valeur ?? "")}
-      placeholder={champ.control === "list" ? `${champ.label}, comma separated` : champ.label}
+      placeholder={field.control === "list" ? `${field.label}, comma separated` : field.label}
       onChange={(event) => onChange(event.target.value)}
     />
   );

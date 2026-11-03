@@ -5,8 +5,8 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 
 /**
- * Un workflow du projet, par son nom, et ce que l'API en dit : la carte et la vue processus.
- * La validation est celle de l'orchestrateur — ce que la console montre est ce qui s'appliquera.
+ * A project's workflow, by its name, and what the API says about it: the map and the process view.
+ * The validation is the orchestrator's: what the console shows is what will apply.
  */
 export function useWorkflow(slug: string, name: string) {
   const definition = useQuery({
