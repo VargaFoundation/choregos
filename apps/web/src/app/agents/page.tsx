@@ -13,7 +13,7 @@ import { resumeDeLaVersion, scopeLabel, type AgentScope } from "@/components/age
 import { TagFilter, TagList, withTags } from "@/components/agents/tags";
 import { Glossaire } from "@/components/glossaire";
 import { Badge, Button, Card, Drawer, Empty, ErrorNote, Table, TBody, TD, TH, THead, TR, buttonClasses } from "@/components/ui";
-import { OrgPageHeader } from "@/components/coquille/org-page-header";
+import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
 import { percent, usd } from "@/lib/format";
 import { useSession } from "@/lib/session";

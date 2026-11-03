@@ -46,7 +46,7 @@ import {
   tabClasses,
 } from "@/components/ui";
 import { canEdit, currentVersion, parseCompare, versionOf } from "@/lib/agent-versions";
-import { OrgPageHeader } from "@/components/coquille/org-page-header";
+import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
 import { percent, relative, shortDate, usd } from "@/lib/format";
 import { toolsLabel } from "@/lib/mcp-tools";

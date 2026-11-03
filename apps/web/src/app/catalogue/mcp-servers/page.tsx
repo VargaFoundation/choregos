@@ -15,7 +15,7 @@ import { egressFlag, useEgressGuard } from "@/components/egress/egress-provider"
 import { ProcedurePanel } from "@/components/procedures/procedure-panel";
 import { bodyOfDrafts, EMPTY_DRAFT, problemOfDraft, SecretField, type SecretDraft } from "@/components/secret-field";
 import { Alert, Badge, Button, EtatDeLecture, ErrorNote, Input } from "@/components/ui";
-import { OrgPageHeader } from "@/components/coquille/org-page-header";
+import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
 import { categoriesOf, NO_FILTERS, stars, type CatalogueFilters } from "@/lib/catalogue";
 import { authLabel, filterMcpEntries, hostOf, routesOf, whyNotInstallable } from "@/lib/mcp-catalogue";

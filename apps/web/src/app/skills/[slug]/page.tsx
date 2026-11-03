@@ -6,7 +6,7 @@ import Link from "next/link";
 import { use, useState } from "react";
 import { UpdateCheck, VersionGate } from "@/components/skills/gate";
 import { Breadcrumbs, Card, Empty, ErrorNote, Select } from "@/components/ui";
-import { OrgPageHeader } from "@/components/coquille/org-page-header";
+import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
 import { skillFileLabel } from "@/lib/skill-files";
