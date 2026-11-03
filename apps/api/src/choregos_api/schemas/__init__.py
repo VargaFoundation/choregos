@@ -330,6 +330,7 @@ from .tickets import (
     WorkItemPage,
     WorkItemUpdate,
 )
+from .tracker_identities import TrackerIdentityDto, TrackerIdentityPut
 
 __all__ = [
     "A2aDeclaredCost",
@@ -603,6 +604,8 @@ __all__ = [
     "TimelineEntry",
     "ToolConnector",
     "Totals",
+    "TrackerIdentityDto",
+    "TrackerIdentityPut",
     "TrackerWrite",
     "TrainStatusDto",
     "TriggerAck",

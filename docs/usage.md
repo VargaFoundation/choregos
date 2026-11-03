@@ -2778,10 +2778,20 @@ item under the issue's key, with its creation inputs, workflow and budget (ADR 0
 credentials need the right to create issues (GitHub App: *Issues: read and write*; Jira: create
 issue on the project; GitLab: `api` scope). If the tracker refuses, you get a 502 and nothing is created.
 
-A `/choregos approve`, `reject`, `answer`, `scope`, `pause`, `resume` or `stop` comment on a routed
-ticket does nothing to the workflow. Choregos replies on the ticket with a link to the console (the
-inbox for a decision, the work item page for pause, resume and stop) and records a
-`tracker.command.redirected` audit entry, because a tracker login is not a Choregos principal (ADR 0102).
+A `/choregos approve`, `reject`, `answer` or `scope` comment on a routed ticket does nothing to the
+workflow: a decision stays in the console, after a fresh sign-in. Choregos replies on the ticket with a
+link to the inbox and records a `tracker.command.redirected` audit entry (ADR 0102).
+
+`/choregos pause`, `resume` and `stop` are honoured in one case only: a GitHub comment, in a delivery
+verified by its HMAC (`CHOREGOS_GITHUB_WEBHOOK_SECRET` is set), by a GitHub account that an
+organisation administrator linked to a member (`PUT /orgs/{org}/members/{user_id}/tracker-identities/github`
+with the account's numeric user id). The command runs with that member's own rights (a developer or
+above), is audited as `workitem.pause`, `workitem.resume` or `workitem.stop` on the channel `tracker`,
+and Choregos confirms on the ticket. A login is never matched, so a renamed account inherits nothing.
+Find a user id at `https://api.github.com/users/<login>` (the `id` field). Nothing proves that the member
+owns the account: the administrator asserts the link. Jira and GitLab comments, and any delivery that
+carries only the shared secret, are never honoured: a display name or a username is not a stable
+identity. Anyone else gets the console link, with a note that an administrator can link their account.
 A reply that cannot be posted never fails the webhook.
 
 ```bash

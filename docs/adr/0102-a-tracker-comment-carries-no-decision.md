@@ -20,11 +20,15 @@ behind a TLS ingress.
    not an identity Choregos authenticated.
 2. **Decisions never come from comments.** Step-up, group verdicts and gesture controls live in the
    console, after a fresh sign-in.
-3. `pause`, `resume` and `stop` may be honoured only for tracker identities an organisation administrator
-   linked by their stable provider id, on authenticated deliveries (S47-14).
-4. Until then every command is answered with a console link (the inbox for `approve`, `reject`, `answer`,
+3. `pause`, `resume` and `stop` are honoured (implemented in S47-14) only for a GitHub account that an
+   organisation administrator linked to a member by its stable numeric user id, in a delivery verified
+   by its HMAC. They run with that member's own rights (ITEM_CONTROL), are audited on the channel
+   `tracker` and confirmed on the ticket. Jira and GitLab are not honoured: a display name or a username
+   is not a stable id, and their deliveries carry only the shared secret (also accepted in the Tekton
+   sink URL). The link is asserted by the administrator, not proven by the member.
+4. Every other command is answered with a console link (the inbox for `approve`, `reject`, `answer`,
    `scope`; the work item page for `pause`, `resume`, `stop`), audited as `tracker.command.redirected`,
-   and no command reaches the interpreter. The reply never starts with the command, so it is not read as
+   and no decision reaches the interpreter. The reply never starts with the command, so it is not read as
    one.
 5. A reply that cannot be posted (a connector that cannot be built, a tracker that refuses) never fails
    the delivery. A webhook event for a work item whose interpreter has ended is logged and kept: its
@@ -35,4 +39,4 @@ behind a TLS ingress.
 
 - No workflow signal carries a tracker command, so a forged comment cannot approve, reject or stop.
 - A person who types a command gets an answer that tells them where to act.
-- Honouring `pause`, `resume` and `stop` needs the identity link and authenticated deliveries first.
+- Honouring `pause`, `resume` and `stop` needs the identity link and an HMAC-verified GitHub delivery.
