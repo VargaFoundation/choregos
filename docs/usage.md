@@ -2778,6 +2778,12 @@ item under the issue's key, with its creation inputs, workflow and budget (ADR 0
 credentials need the right to create issues (GitHub App: *Issues: read and write*; Jira: create
 issue on the project; GitLab: `api` scope). If the tracker refuses, you get a 502 and nothing is created.
 
+A `/choregos approve`, `reject`, `answer`, `scope`, `pause`, `resume` or `stop` comment on a routed
+ticket does nothing to the workflow. Choregos replies on the ticket with a link to the console (the
+inbox for a decision, the work item page for pause, resume and stop) and records a
+`tracker.command.redirected` audit entry, because a tracker login is not a Choregos principal (ADR 0102).
+A reply that cannot be posted never fails the webhook.
+
 ```bash
 choregos items list billing-api
 choregos runs tail <run-id>        # live ACP log over SSE

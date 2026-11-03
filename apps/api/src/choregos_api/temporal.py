@@ -544,9 +544,7 @@ async def deliver_decision(project_slug: str, tracker_key: str, decision: HumanD
 
 
 async def deliver_inbound(project_slug: str, tracker_key: str, event: InboundEvent) -> None:
-    await get_temporal().signal(
-        interpreter_id(project_slug, tracker_key), "inbound", event.model_dump(mode="json")
-    )
+    await _signal_interpreter(project_slug, tracker_key, "inbound", event.model_dump(mode="json"))
 
 
 async def deliver_control(project_slug: str, tracker_key: str, control: Control) -> None:

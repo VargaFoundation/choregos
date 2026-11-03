@@ -11,6 +11,7 @@ import json
 from collections.abc import Awaitable, Callable
 from typing import Annotated, Any
 
+from choregos_adapters.errors import AdapterError, UpstreamError
 from choregos_contracts import InboundEvent, InboundEventType
 from choregos_core import utcnow
 from choregos_core.dsl.trains import approbation_du_train, env_du_train, train_apres_fusion
@@ -18,10 +19,11 @@ from fastapi import APIRouter, Header, Path, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from ..audit import record
 from ..config import get_settings
 from ..db.models import Connector, OrgConnector, Project, WebhookDelivery, WorkItem
 from ..deps import DbPlateforme
-from ..errors import not_found, unauthorized
+from ..errors import ApiError, not_found, unauthorized
 from ..logging import get_logger
 from ..schemas import WebhookAck
 from ..security import body_digest, verify_github_signature, verify_shared_secret
@@ -30,6 +32,7 @@ from ..services import (
     noter_les_etiquettes,
     nouveau_ticket,
     received_events,
+    tickets,
     workflow_du_ticket,
     workflow_model,
 )
@@ -37,6 +40,7 @@ from ..services.decision_ledger import observe_reopening
 from ..services.initiator import initiator
 from ..services.routage import with_tracker
 from ..temporal import (
+    InterpreterNotRunningError,
     MemoryLoopNotRunningError,
     deliver_inbound,
     get_temporal,
@@ -159,6 +163,55 @@ async def _jira_project_for(session: Any, payload: dict[str, Any]) -> tuple[Proj
     return None, False
 
 
+#: Verbs a tracker comment can carry. None is honoured (ADR 0102): a tracker login is not a principal.
+DECISION_VERBS = frozenset({"approve", "reject", "answer", "scope"})
+CONTROL_VERBS = frozenset({"pause", "resume", "stop"})
+COMMAND_MARKER = "<!-- choregos:command -->"
+
+
+async def _answer_tracker_command(
+    session: Any, project: Project, item: WorkItem, event: InboundEvent
+) -> None:
+    """Answer a `/choregos ...` comment on the tracker with a console link, and audit it.
+
+    Nothing reaches the interpreter. The reply never starts with the command, so it is not read as one,
+    and a tracker that cannot be reached or built never fails the delivery."""
+    verb = str(event.payload.get("verb") or "")
+    by = event.payload.get("by")
+    base = get_settings().public_url.rstrip("/")
+    if verb in DECISION_VERBS:
+        link = f"{base}/inbox"
+        text = (
+            f"`/choregos {verb}` is not taken from a comment: a decision is made in the console, "
+            f"after a fresh sign-in: {link}"
+        )
+    else:
+        link = f"{base}/p/{project.slug}/items/{item.id}"
+        text = (
+            f"`/choregos {verb}` is not taken from a comment: pause, resume and stop are done from "
+            f"the work item in the console: {link}"
+        )
+    try:
+        _, tracker = await tickets.tracker_du_projet(session, project)
+        if tracker is not None:
+            await tracker.comment(item.tracker_key, f"{COMMAND_MARKER}\n{text}")
+    except (ApiError, AdapterError, UpstreamError) as failure:
+        logger.warning(
+            "tracker command not answered", project=project.slug, work_item=item.id, reason=str(failure)
+        )
+    await record(
+        session,
+        None,
+        "tracker.command.redirected",
+        org_id=project.org_id,
+        target_type="work_item",
+        target_id=item.id,
+        verb=verb,
+        by=by,
+        source=event.source,
+    )
+
+
 #: Reads what the tracker says about a ticket (`fields.tracker`, S51-04) from the tracker itself.
 TrackerOf = Callable[[Project, str], Awaitable[dict[str, Any] | None]]
 
@@ -245,7 +298,19 @@ async def _dispatch(
                 },
             )
             item.temporal_wf_id = workflow_id
-        await deliver_inbound(project.slug, key, event)
+        if event.type == InboundEventType.HUMAN_DECISION:
+            await _answer_tracker_command(session, project, item, event)
+            delivered += 1
+            continue
+        try:
+            await deliver_inbound(project.slug, key, event)
+        except InterpreterNotRunningError:
+            logger.info(
+                "event for a work item whose interpreter has ended",
+                project=project.slug,
+                work_item=item.id,
+                event_type=str(event.type),
+            )
         if event.type == InboundEventType.PR_MERGED:
             await _embarquer(session, project, item, event)
         received_events.record(
@@ -348,7 +413,7 @@ async def github_webhook(
     if not settings.github_webhook_secret:
         # Sans secret, la signature n'était pas vérifiée du tout : n'importe qui pouvait
         # injecter des événements de tracker. Toléré seulement là où il n'y a pas de GitHub.
-        if settings.env in {"staging", "prod"}:
+        if settings.deployed:
             raise unauthorized("GitHub webhook not configured: CHOREGOS_GITHUB_WEBHOOK_SECRET is missing")
     elif not verify_github_signature(settings.github_webhook_secret, body, x_hub_signature_256):
         raise unauthorized("invalid HMAC signature")
@@ -398,7 +463,7 @@ async def tekton_webhook(
         or request.query_params.get("jeton", "")  # lang: fr-ok alias:external
     )
     if not settings.generic_webhook_secret:
-        if settings.env in {"staging", "prod"}:
+        if settings.deployed:
             raise unauthorized("Tekton webhook not configured: CHOREGOS_GENERIC_WEBHOOK_SECRET is missing")
     elif not verify_shared_secret(settings.generic_webhook_secret, fourni):
         raise unauthorized("invalid shared secret")
