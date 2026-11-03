@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from functools import lru_cache
 from typing import Any
 
 import structlog
@@ -77,15 +78,31 @@ def parse_origin(origin: str) -> tuple[str, str, int] | None:
 
 
 def _parse(source: str, text: str) -> Workflow | None:
+    workflow = _parsed(text)
+    if workflow is None:
+        # A broken entry is left out rather than offered: adopting it would be refused anyway.
+        logger.warning("workflow_catalogue.invalid_entry", source=source)
+    return workflow
+
+
+@lru_cache(maxsize=512)
+def _parsed(text: str) -> Workflow | None:
+    """The engine's reading of a YAML, once per text (S55-04): the library re-parsed every core, template,
+    plugin and shared workflow on every listing. The text is the key, so an edited file is read again."""
     try:
         workflow, report = parse_workflow(text, strict=False)
     except (WorkflowInvalid, yaml.YAMLError):
-        workflow, report = None, None
+        return None
     if workflow is None or report is None or not report.valid:
-        # A broken entry is left out rather than offered: adopting it would be refused anyway.
-        logger.warning("workflow_catalogue.invalid_entry", source=source)
         return None
     return workflow
+
+
+@lru_cache(maxsize=512)
+def _requirements(text: str) -> tuple[Any, ...]:
+    """What a workflow requires (`exigences`), once per text, like its parse."""
+    workflow = _parsed(text)
+    return tuple(exigences([workflow])) if workflow is not None else ()
 
 
 def _offered(source: str, text: str, **shared: Any) -> Offered | None:
@@ -260,7 +277,7 @@ async def resolutions(session: AsyncSession, org_id: str, slugs: set[str]) -> di
 def entry_dto(o: Offered, resolved: dict[str, Resolution]) -> WorkflowCatalogueEntryDto:
     meta = o.workflow.metadata
     info = meta.catalogue
-    requires = exigences([o.workflow])
+    requires = _requirements(o.yaml)
     agents = []
     for actor, slug, version in named_agents(o.workflow):
         r = resolved.get(slug, Resolution("unresolved"))
