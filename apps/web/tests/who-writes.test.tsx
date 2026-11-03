@@ -63,7 +63,7 @@ describe("who writes, and with which account (S42-06g, ADR 0107)", () => {
     expect(card).toHaveTextContent("Choregos writes to Jira as bot@acme.example");
     expect(within(card).getByRole("link", { name: "tracker connector" })).toHaveAttribute(
       "href",
-      "/p/yyy/settings#connections",
+      "/p/yyy/settings/connections",
     );
   });
 

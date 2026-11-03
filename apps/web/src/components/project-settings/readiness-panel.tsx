@@ -2,6 +2,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { settingsHref } from "@/components/project-settings/groups";
 import { Circle, CircleCheck, CircleDot } from "lucide-react";
 import Link from "next/link";
 import { Badge, Card, ErrorNote } from "@/components/ui";
@@ -36,15 +37,14 @@ export function askWho(by: ReadinessItem["fix"]["by"], viewer: { orgAdmin: boole
 }
 
 /**
- * A fix link, made local to the settings page: the API names a console path with the anchor of the
- * section (`/p/dev/settings#agents`), and on this page that is a plain `#anchor` (the agents section is
- * `agents-models` in the DOM). Links to other pages (Members, Workflows) stay as they are.
+ * A fix link, made to the settings group that holds it: the API names a console path with the anchor of
+ * the section (`/p/dev/settings#agents`), which lives on a group's page since S55-07
+ * (`/p/dev/settings/agents`). Links to other pages (Members, Workflows) stay as they are.
  */
 export function localHref(href: string, slug: string): string {
   const settings = `/p/${slug}/settings`;
   if (href !== settings && !href.startsWith(`${settings}#`)) return href;
-  const anchor = href.slice(settings.length + 1) || "general";
-  return `#${anchor === "agents" ? "agents-models" : anchor}`;
+  return settingsHref(slug, href.slice(settings.length + 1) || "general");
 }
 
 /** The items to show (the ones the project's workflows do not need are left out), grouped by section. */

@@ -71,8 +71,8 @@ describe("the readiness panel (S40-06c)", () => {
     renderPanel();
     expect((await screen.findByTestId("readiness-summary")).textContent).toBe("1 of 4 ready, 1 to check");
     expect(screen.getByText("2 to do")).toBeTruthy();
-    expect(screen.getByTestId("fix-notifications").getAttribute("href")).toBe("#notifications");
-    expect(screen.getByTestId("fix-connector-cd").getAttribute("href")).toBe("#connections");
+    expect(screen.getByTestId("fix-notifications").getAttribute("href")).toBe("/p/dev/settings/connections#notifications");
+    expect(screen.getByTestId("fix-connector-cd").getAttribute("href")).toBe("/p/dev/settings/connections#connections");
     expect(screen.getByTestId("fix-people-release-captain").getAttribute("href")).toBe("/p/dev/members");
     // A done item has no fix link, and the state is said in words for a screen reader.
     expect(within(screen.getByTestId("readiness-item-provisioned")).queryByText("Fix")).toBeNull();
@@ -109,9 +109,11 @@ describe("the readiness panel (S40-06c)", () => {
     expect(askWho("org_admin", { orgAdmin: false, projectOwner: true })).toBe("Ask your organisation admin");
   });
 
-  it("localHref keeps other pages and maps the agents anchor to its section", () => {
-    expect(localHref("/p/dev/settings#agents", "dev")).toBe("#agents-models");
-    expect(localHref("/p/dev/settings", "dev")).toBe("#general");
+  it("localHref keeps other pages and sends an anchor to the settings group that holds it (S55-07)", () => {
+    expect(localHref("/p/dev/settings#agents", "dev")).toBe("/p/dev/settings/agents#agents-models");
+    expect(localHref("/p/dev/settings#notifications", "dev")).toBe("/p/dev/settings/connections#notifications");
+    expect(localHref("/p/dev/settings#people", "dev")).toBe("/p/dev/settings/people");
+    expect(localHref("/p/dev/settings", "dev")).toBe("/p/dev/settings/general");
     expect(localHref("/p/dev/workflows", "dev")).toBe("/p/dev/workflows");
   });
 });
