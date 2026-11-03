@@ -6,7 +6,7 @@ tests/charts/test_dashboards.py	8
 tests/charts/test_default_organisation.py	1
 tests/charts/test_defauts_d_agents.py	5
 tests/charts/test_edition_annoncee.py	10
-tests/charts/test_faux_de_demo.py	10
+tests/charts/test_faux_de_demo.py	9
 tests/charts/test_hook_de_migration.py	8
 tests/charts/test_image_par_composant.py	8
 tests/charts/test_images_privees.py	11
@@ -28,6 +28,6 @@ tests/docs/test_liste_des_garanties.py	11
 tests/integrations/test_plugin_claude_code.py	16
 tests/langue/test_anglais.py	41
 tests/langue/test_la_porte_mcp.py	12
-tests/langue/test_orchestrateur_en_anglais.py	42
+tests/langue/test_orchestrateur_en_anglais.py	35
 tests/licences/test_entetes_spdx.py	10
 tests/licences/test_frontiere_des_editions.py	14

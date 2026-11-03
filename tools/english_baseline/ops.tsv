@@ -1,10 +1,4 @@
 # ops: French findings per file (ADR 0098). Counts only go down: tools/check_english.py --update-baseline
-charts/choregos/dashboards/couts.json	1
-charts/choregos/dashboards/memoire.json	1
-charts/choregos/dashboards/plateforme.json	1
-charts/choregos/templates/garde.yaml	1
-charts/choregos/tests/locataire_test.yaml	1
-charts/choregos/tests/operabilite_test.yaml	1
 docker/README.md	25
 docker/api.Dockerfile	29
 docker/base.Dockerfile	5
@@ -30,7 +24,6 @@ infra/bootstrap/tempo.yaml	1
 infra/platform/base/application.yaml	1
 infra/platform/overlays/prod/application.yaml	2
 infra/policies/images.yaml	7
-infra/policies/pod-security.yaml	9
-infra/policies/quotas-runtime.yaml	1
+infra/policies/pod-security.yaml	7
 infra/projects/README.md	6
 infra/projects/applicationset.yaml	2
