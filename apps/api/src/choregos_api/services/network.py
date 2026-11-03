@@ -35,6 +35,16 @@ def instance_deny() -> list[str]:
     return [p.strip() for p in get_settings().network_instance_deny.split(",") if p.strip()]
 
 
+async def _gateway_deny(session: AsyncSession, org_id: str) -> list[str]:
+    """The organisation's MCP gateway host, denied to its runs only (ADR 0105). Not an instance deny:
+    that one also bounds the platform's own calls, which reach the gateway."""
+    from .mcp_gateway import gateway_host
+
+    organisation = await session.get(Organization, org_id)
+    host = gateway_host(organisation) if organisation is not None else None
+    return [host] if host else []
+
+
 async def check_agent_network(session: AsyncSession, org_id: str, spec: AgentSpec) -> None:
     """Refuse (422) a version that asks for a host the organisation does not allow.
 
@@ -45,7 +55,10 @@ async def check_agent_network(session: AsyncSession, org_id: str, spec: AgentSpe
         return
     ceiling = ceiling_of(await session.get(Organization, org_id))
     problems = unsatisfied(
-        spec.network, None, ceiling.network if ceiling else None, instance_deny=instance_deny()
+        spec.network,
+        None,
+        ceiling.network if ceiling else None,
+        instance_deny=[*instance_deny(), *await _gateway_deny(session, org_id)],
     )
     if problems:
         raise unprocessable(
@@ -75,7 +88,7 @@ async def project_effective_network(
         agent_net,
         ceiling.network if ceiling else None,
         implied_hosts=implied,
-        instance_deny=instance_deny(),
+        instance_deny=[*instance_deny(), *await _gateway_deny(session, project.org_id)],
     )
     return effective, ceiling
 
