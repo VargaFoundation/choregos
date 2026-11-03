@@ -8,6 +8,11 @@ import { couleur, jetonsDuMode, type Mode } from "./jetons.ts";
 
 /** Custom properties of `theme.css` that are not a themable colour. */
 const NOT_A_ROLE = new Set(["scroll-hint"]);
+/**
+ * The roles of ADR 0120 (categorical hues, info) are not in the served-theme contract yet: a brand
+ * theme keeps their defaults until `ThemeTokens` lists them (S55-01b, contract-change).
+ */
+const NOT_YET_THEMABLE = /^(cat-\d+-(solid|soft|line|ink)|info|info-soft|info-line)$/;
 const PREFIX = "--choregos-";
 
 function hex(value: number): string {
@@ -23,7 +28,7 @@ export function rolesOf(mode: Mode): Record<string, string> {
   for (const [name, value] of [...tokens].sort(([a], [b]) => a.localeCompare(b))) {
     if (!name.startsWith(PREFIX)) continue;
     const role = name.slice(PREFIX.length);
-    if (NOT_A_ROLE.has(role)) continue;
+    if (NOT_A_ROLE.has(role) || NOT_YET_THEMABLE.test(role)) continue;
     let rgba;
     try {
       rgba = couleur(value, tokens);
