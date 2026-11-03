@@ -20,7 +20,8 @@ export const DEFAULT_SERVED_THEME: ServedTheme = {
 };
 
 /** The colour roles a theme may override: those of the contract (`--choregos-<role>`). */
-const ROLE = /^[a-z][a-z-]{1,30}$/;
+// Digits since ADR 0120: the categorical hues are `cat-1-ink` … `cat-8-solid`.
+const ROLE = /^[a-z][a-z0-9-]{1,30}$/;
 const HEX = /^#[0-9a-fA-F]{6}$/;
 const FAMILY = /^[A-Za-z0-9 _-]{1,40}$/;
 const ASSET = /^\/api\/v1\/[A-Za-z0-9/_.-]{1,200}$/;

@@ -30,8 +30,8 @@ def _with(mode: str, **tokens: str) -> dict[str, Any]:
     return theme
 
 
-def test_the_defaults_have_52_roles_and_pass_their_own_budget() -> None:
-    assert len(themable_roles()) == 52
+def test_the_defaults_have_87_roles_and_pass_their_own_budget() -> None:
+    assert len(themable_roles()) == 87
     for mode in MODES:
         assert budget_violations(effective_tokens(DEFAULT_THEME, mode), mode) == []
     assert validate_theme(DEFAULT_THEME) == []
@@ -63,6 +63,13 @@ def test_text_on_an_accent_fill_needs_aa() -> None:
 
 def test_a_status_ink_must_read_on_its_own_soft_fill() -> None:
     assert "status text" in _messages(_with("dark", **{"failed-ink": "#222222"}))
+
+
+def test_a_categorical_hue_and_the_info_tone_must_read_too() -> None:
+    """ADR 0120: a brand theme may recolour the hues that orient, under the same budget (S55-01b)."""
+    assert "categorical text" in _messages(_with("light", **{"cat-3-ink": "#ffe9a0"}))
+    assert "info text" in _messages(_with("dark", info="#0d2847"))
+    assert validate_theme(_with("dark", **{"cat-1-ink": "#9eb1ff"})) == []
 
 
 def test_a_control_border_that_vanishes_is_refused() -> None:
