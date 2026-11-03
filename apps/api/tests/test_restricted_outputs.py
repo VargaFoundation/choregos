@@ -148,26 +148,26 @@ async def test_the_bases_are_read_as_they_are_now(
 async def test_the_mcp_door_serves_nothing_of_it_to_a_member_who_does_not_read_the_base(
     client: AsyncClient, admin: str, project: dict[str, Any]
 ) -> None:
-    from .test_mcp_porte import _jeton, _outil
+    from .test_mcp_door import _token, _tool
 
     item = await _marked(client, project)
     async with _as(client, STRANGER, **MEMBER) as stranger:
-        token = await _jeton(stranger, "mcp:read")
+        token = await _token(stranger, "mcp:read")
         stranger.cookies.clear()
-        got = await _outil(stranger, token, "get_work_item", work_item="BILLING-1")
+        got = await _tool(stranger, token, "get_work_item", work_item="BILLING-1")
         assert got["result"]["isError"] is True
-        run = await _outil(stranger, token, "summarize_run", run=item["run"])
+        run = await _tool(stranger, token, "summarize_run", run=item["run"])
         assert run["result"]["isError"] is True
-        pending = (await _outil(stranger, token, "list_pending_decisions"))["result"]["structuredContent"]
+        pending = (await _tool(stranger, token, "list_pending_decisions"))["result"]["structuredContent"]
         assert pending["pending"] == [], "the question is the run's content"
-        found = await _outil(stranger, token, "search_work_items", project="billing-api")
+        found = await _tool(stranger, token, "search_work_items", project="billing-api")
         assert [(w["key"], w["restricted"]) for w in found["result"]["structuredContent"]["work_items"]] == [
             ("BILLING-1", True)
         ]
     async with _as(client, READER, **MEMBER) as reader:
-        token = await _jeton(reader, "mcp:read")
+        token = await _token(reader, "mcp:read")
         reader.cookies.clear()
-        got = await _outil(reader, token, "get_work_item", work_item="BILLING-1")
+        got = await _tool(reader, token, "get_work_item", work_item="BILLING-1")
         assert not got["result"].get("isError"), got
 
 
