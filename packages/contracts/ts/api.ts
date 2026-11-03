@@ -3269,6 +3269,10 @@ export type ModelCatalogue = {
   gateway: {
     type: string;
     capabilities?: Array<string>;
+    /** Where the gateway is set: the organisation's own `gateway` connector, or the deployment's environment (`CHOREGOS_GATEWAY_TYPE`, `CHOREGOS_GATEWAY_URL`), which no screen changes. */
+    source?: "organisation" | "deployment";
+    /** The address the platform calls. The organisation's own is shown to its members; the deployment's only to a platform administrator, null otherwise. */
+    base_url?: string | null;
   };
   tiers: ModelTiers;
   entries: Array<ModelCatalogueEntry>;
