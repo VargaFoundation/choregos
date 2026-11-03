@@ -1,0 +1,21 @@
+{
+  "run_id": "T-42-route-1",
+  "work_item": "T-42",
+  "project": "fon",
+  "workflow": "requests",
+  "step": "triage",
+  "question": "route",
+  "source": "decision_model",
+  "model": "platform/decide",
+  "model_version": "laya-multilingual@0.4.21",
+  "answer": "billing",
+  "probability": 0.91,
+  "transition": "billing_queue",
+  "decided_at": "2026-11-03T09:12:44Z",
+  "outcome": {
+    "overridden": false,
+    "terminal": "success",
+    "reopened": false,
+    "observed_at": "2026-11-04T16:02:10Z"
+  }
+}

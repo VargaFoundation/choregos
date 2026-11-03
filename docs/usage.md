@@ -930,6 +930,27 @@ the `*agent` wildcard treat a job like an agent step. A job reaches the outside 
 connector operations its actor names, `tools: [{connector: marketdata, tools: [get_bars]}]`, called
 through the internal API with that token; a job that names none sees no tool.
 
+A **decision** step ([ADR 0121](adr/0121-a-decision-is-a-step-recorded-and-measured.md)) asks a
+decision model typed questions about what the step names, and nothing else:
+
+```yaml
+actors:
+  router:
+    type: decision
+    role: route_ticket
+    model: platform/decide            # a catalogue entry with the `decide` usage
+    state: [title, description, fields.department]
+    questions:
+      route:  { type: choice, instructions: "Which team handles it?", options: [billing, tech, other] }
+      urgent: { type: yes_no, instructions: "Must it be handled today?" }
+```
+
+Each question writes two outputs, `route` and `route_confidence` (the model's probability, 0 to 1),
+which `when` reads like an agent's. `state` names the work item's `title`, `description`, `labels`,
+`type`, its fields (`fields.<name>`) and the last stage's outputs (`outputs.<name>`). The contract
+and the validator know this actor today; the engine does not run it yet, so a workflow whose
+transition is taken `by` a decision is refused with `decision.not_runnable` until it does (S52-04).
+
 The `joiners-leavers` template goes further, with no agent writing anything itself: an agent
 prepares the access plan with its skills, a person from HR validates it, and every write is a
 **governed action** at a date — the account at D-10, the sensitive group on a re-authenticated
