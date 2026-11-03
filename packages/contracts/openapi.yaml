@@ -980,7 +980,7 @@ paths:
       description: The models an agent may be given for a stage role and a usage; every member may read it.
       parameters:
         - { name: role, in: query, required: false, schema: { type: string } }
-        - { name: usage, in: query, required: false, schema: { type: string, enum: [agent, embed, distill, eval, route], default: agent } }
+        - { name: usage, in: query, required: false, schema: { type: string, enum: [agent, embed, distill, eval, route, decide], default: agent } }
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/UsableModel" } } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -7361,7 +7361,7 @@ components:
         source: { type: string, enum: [gateway, manual] }
         enabled: { type: boolean }
         allowed_roles: { type: array, items: { type: string } }
-        usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval, route] } }
+        usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval, route, decide] } }
         price_override: { oneOf: [{ $ref: "#/components/schemas/PriceOverride" }, { type: "null" }] }
         max_usd_per_minute: { type: [number, "null"], exclusiveMinimum: 0 }
         gateway: { oneOf: [{ $ref: "#/components/schemas/ModelGatewayFacts" }, { type: "null" }] }
@@ -7378,7 +7378,7 @@ components:
         display_name: { type: [string, "null"], maxLength: 200 }
         enabled: { type: boolean, default: true }
         allowed_roles: { type: array, items: { type: string } }
-        usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval, route] }, default: [agent] }
+        usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval, route, decide] }, default: [agent] }
         price_override: { oneOf: [{ $ref: "#/components/schemas/PriceOverride" }, { type: "null" }] }
         max_usd_per_minute: { type: [number, "null"], exclusiveMinimum: 0 }
         notes: { type: string, default: "" }
@@ -7388,7 +7388,7 @@ components:
         display_name: { type: [string, "null"], maxLength: 200 }
         enabled: { type: [boolean, "null"] }
         allowed_roles: { type: [array, "null"], items: { type: string } }
-        usages: { type: [array, "null"], items: { type: string, enum: [agent, embed, distill, eval, route] } }
+        usages: { type: [array, "null"], items: { type: string, enum: [agent, embed, distill, eval, route, decide] } }
         price_override: { oneOf: [{ $ref: "#/components/schemas/PriceOverride" }, { type: "null" }] }
         clear_price_override: { type: boolean, default: false }
         max_usd_per_minute: { type: [number, "null"], exclusiveMinimum: 0 }

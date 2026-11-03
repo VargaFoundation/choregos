@@ -205,7 +205,10 @@ class MemoryAdapter(Protocol):
 #: - `realtime`: relays the realtime WebSocket API (`/realtime?model=`) under a virtual key, which a
 #:   voice agent needs (ADR 0080): one is refused at publication on a gateway that does not;
 #: - `llm_guard`: masks secrets in what a marked key sends the provider and in the answer
-#:   (ADR 0084): a policy with `sandbox.llm_security_analyzer` is refused on a gateway without it.
+#:   (ADR 0084): a policy with `sandbox.llm_security_analyzer` is refused on a gateway without it;
+#: - `systemone`: serves decision models on `POST /v1/systemone` under a virtual key, with the same
+#:   budgets and spend logs as chat models (LiteLLM >= 1.104.2), which a decision step needs
+#:   (ADR 0120): one is refused for a project whose gateway does not.
 GATEWAY_CAPABILITIES: frozenset[str] = frozenset(
     {
         "list_models",
@@ -216,6 +219,7 @@ GATEWAY_CAPABILITIES: frozenset[str] = frozenset(
         "pricing",
         "realtime",
         "llm_guard",
+        "systemone",
     }
 )
 
@@ -233,6 +237,20 @@ def llm_guard_refusal(gateway: Any) -> str | None:
         "the policy masks secrets on the LLM path (`sandbox.llm_security_analyzer`) and the "
         f"`{type(gateway).__name__}` gateway declares no `llm_guard`: use the LiteLLM gateway, "
         "or turn the analyzer off"
+    )
+
+
+def decision_route_refusal(gateway: Any) -> str | None:
+    """Why `gateway` cannot serve a decision step (ADR 0120), or None when it can.
+
+    A decision step calls its model through the gateway, never directly, so that its cost is counted
+    and capped at the source: a gateway without the decision route has nowhere to send it.
+    """
+    if "systemone" in getattr(gateway, "capabilities", frozenset()):
+        return None
+    return (
+        "a decision step calls its model on the gateway's `/v1/systemone` route and the "
+        f"`{type(gateway).__name__}` gateway declares no `systemone`: use the LiteLLM gateway"
     )
 
 
