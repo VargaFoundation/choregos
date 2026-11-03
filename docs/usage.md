@@ -2805,6 +2805,9 @@ carries only the shared secret, are never honoured: a display name or a username
 identity. Anyone else gets the console link, with a note that an administrator can link their account.
 A reply that cannot be posted never fails the webhook.
 
+Moving a card on the tracker board (GitHub Projects, Jira) does not move the work item: the board
+follows Choregos, not the reverse (ADR 0102). Move a work item from the console.
+
 ```bash
 choregos items list billing-api
 choregos runs tail <run-id>        # live ACP log over SSE

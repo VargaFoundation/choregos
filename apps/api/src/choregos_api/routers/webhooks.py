@@ -353,6 +353,15 @@ async def _dispatch(
                 },
             )
             item.temporal_wf_id = workflow_id
+        if event.type == InboundEventType.ITEM_MOVED:
+            # Not counted, not audited, no comment: Choregos's own mirror comes back as moves too.
+            logger.info(
+                "tracker move not applied: a card move is not a decision (ADR 0102)",
+                project=project.slug,
+                work_item=key,
+                to_status=event.payload.get("to_status"),
+            )
+            continue
         if event.type == InboundEventType.HUMAN_DECISION:
             await _answer_tracker_command(session, project, item, event)
             delivered += 1

@@ -35,6 +35,14 @@ behind a TLS ingress.
    dedupe row stands and a merge still boards the train.
 6. Unsigned GitHub and Tekton webhooks are accepted only where `Settings.deployed` is false.
 
+## Card moves
+
+A status change on a tracker board (GitHub Projects v2, Jira) is not a decision either. It is logged and
+never delivered to the workflow: the webhook skips every `tracker.item.moved` event, before any audit row
+or comment. Choregos's own moves (the mirror of a work item's state onto its card) come back as the same
+event and are ignored the same way. A person moves a work item from the console. The interpreter branch
+that matches `tracker.status` stays, only for histories recorded before this change.
+
 ## Consequences
 
 - No workflow signal carries a tracker command, so a forged comment cannot approve, reject or stop.
