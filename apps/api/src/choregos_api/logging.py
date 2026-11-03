@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Journalisation JSON structurée (clés `project`, `work_item`, `run_id`, `stage`)."""
+"""Structured JSON logging (keys `project`, `work_item`, `run_id`, `stage`)."""
 
 from __future__ import annotations
 
@@ -53,7 +53,7 @@ def get_logger(name: str = "choregos") -> Any:
 
 
 def bind(**kwargs: Any) -> None:
-    """Attache des clés au contexte de journalisation de la requête en cours."""
+    """Attaches keys to the logging context of the current request."""
     structlog.contextvars.bind_contextvars(**kwargs)
 
 

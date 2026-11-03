@@ -958,11 +958,11 @@ def production_indicator_sources(config: Any, agent: Any = None) -> list[str]:
     call and that the deployment files under `observability`; the agent version's MCP servers named
     after an observability tool. Empty = none.
     """
-    from choregos_api.catalogue import outils_du_projet
+    from choregos_api.catalogue import project_tools
 
     sources = {
         tool.name
-        for tool in outils_du_projet(list(config.tools or []), list(config.groups or []))
+        for tool in project_tools(list(config.tools or []), list(config.groups or []))
         if "observability" in tool.categories
     }
     servers = getattr(getattr(agent, "spec", None), "mcp_servers", None) or []

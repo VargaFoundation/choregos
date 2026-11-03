@@ -1,39 +1,18 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Une décision exige une authentification RÉCENTE (ADR 0030, ADR 0035).
-
-Approuver une écriture dans l'annuaire, la commande d'un poste, la coupure d'un badge : la session
-doit être fraîche, sinon un poste resté ouvert approuverait à la place de son propriétaire. Le 401
-porte `step_up_required` et le chemin de ré-authentification : la console y renvoie, puis revient.
-Le même format que la décision d'une action d'ontologie, que la console sait déjà suivre.
-"""
+# lang: fr-ok-file alias:internal — former module of the authentication freshness (ADR 0098)
+"""The former name of `choregos_api.freshness`: tests patch `fraicheur.time`, the same `time` module."""
 
 from __future__ import annotations
 
-import time
-from typing import Any
+import sys
 
-from .errors import ApiError
+from choregos_core.compat import replace_module
 
-REAUTH = "GET /api/v1/auth/login?reauth=1"
+from .freshness import REAUTH, authentication_age, require_fresh_authentication
 
+__all__ = ["REAUTH"]
 
-def age_de_l_authentification(principal: Any, maintenant: float | None = None) -> int | None:
-    """En secondes ; `None` pour un jeton d'API ou une session sans date d'authentification."""
-    authentifie_le = getattr(principal, "authentifie_le", None)
-    if authentifie_le is None:
-        return None
-    return int(maintenant if maintenant is not None else time.time()) - int(authentifie_le)
+age_de_l_authentification = authentication_age  # lang: fr-ok alias:internal
+exiger_une_authentification_fraiche = require_fresh_authentication  # lang: fr-ok alias:internal
 
-
-def exiger_une_authentification_fraiche(principal: Any, minutes: int, maintenant: float | None = None) -> int:
-    """Rend l'âge de l'authentification ; 401 `step_up_required` au-delà de `minutes`."""
-    age = age_de_l_authentification(principal, maintenant)
-    if age is None or age > minutes * 60:
-        depuis = "an unknown time" if age is None else f"{age // 60} min"
-        raise ApiError(
-            401,
-            "Authentication too old",
-            f"this decision needs an authentication less than {minutes} min old; yours is {depuis} old",
-            errors=[{"error": "step_up_required", "reauth": REAUTH}],
-        )
-    return age
+replace_module(__name__, sys.modules["choregos_api.freshness"])
