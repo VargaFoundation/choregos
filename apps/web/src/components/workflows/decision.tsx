@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { Diamond } from "lucide-react";
-import { DECISION_HUE } from "@/components/workflows/carte/disposition";
+import { DECISION_HUE } from "@/components/workflows/map/layout";
 import { CONFIDENCE_SUFFIX, type WorkflowDecisionActor, type WorkflowDecisionQuestion } from "@/components/workflows/document";
 import { cn } from "@/lib/cn";
 import { HUE_CLASSES } from "@/lib/workflow-hue";

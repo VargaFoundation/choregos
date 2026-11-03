@@ -76,8 +76,8 @@ async def test_an_adr_number_taken_during_the_ci_is_refused_when_the_ci_turns_gr
     from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
 
-    projet_id = await create_dev_project(setup)
-    item_id, cle = await create_ticket(setup, projet_id, 14, "study")
+    project_id = await create_dev_project(setup)
+    item_id, tracker_key = await create_ticket(setup, project_id, 14, "study")
     scm = setup.adapters.scm
     accepted = PROPOSED_ADR.replace('status: "proposed"', 'status: "accepted"\n+date: 2026-10-14')
     scm.set_diff(REPOSITORY, "main", "choregos/14", [("docs/adr/0001-queue.md", 17, 0, PROPOSED_ADR)])
@@ -93,7 +93,7 @@ async def test_an_adr_number_taken_during_the_ci_is_refused_when_the_ci_turns_gr
     setup.adapters.executor.handler = scripted_agents({**study_results(PROPOSED_ADR), "t-accept": accept})
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
-            ticket = await start_interpreter(temporal_env, setup, projet_id, item_id, cle)
+            ticket = await start_interpreter(temporal_env, setup, project_id, item_id, tracker_key)
             await wait_for_state(ticket, "awaiting_decision")
             await decide(ticket)
             await wait_for_state(ticket, "in_pr")

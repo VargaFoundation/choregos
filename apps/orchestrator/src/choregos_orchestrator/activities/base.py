@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from choregos_adapters import AdapterSet, account_of, load_extensions
-from choregos_api.adaptateurs import brancher_memoire_lexicale
+from choregos_api.adapter_wiring import attach_lexical_memory
 from choregos_api.db.models import Connector, Organization, OrgConnector, PolicyDef, Project, WorkItem
 from choregos_api.db.session import TOUT, session_scope
 from choregos_api.services import default_workflow, policy_model, workflow_model
@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from temporalio import activity
 
 # The orchestrator owns the same tables as the API: it plugs in the same lexical fallback.
-brancher_memoire_lexicale()
+attach_lexical_memory()
 # ... and the extensions declared outside the tree, as the API does.
 load_extensions()
 
@@ -348,6 +348,14 @@ async def send_courtesy(notify: Any, channel: str, message: Message) -> bool:
         activity.logger.warning("notification NOT sent on %s (%s): %s", channel, message.title, exc)
         return False
     return True
+
+
+def notification_target(bundle: Any) -> str:
+    """Where notifications go: the e-mail addresses for an e-mail notifier, else the Slack channel."""
+    emails = list(bundle.config.notify.emails)
+    if emails and getattr(bundle.adapters.notify, "channel_kind", "") == "email":
+        return ",".join(emails)
+    return str(bundle.config.notify.slack_channel or "#choregos")
 
 
 def without_secrets(stage_input: dict[str, Any] | None, *, keep_gateway_key: bool) -> dict[str, Any]:

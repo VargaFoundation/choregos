@@ -385,7 +385,18 @@ that against the ticket and the day and books it as a ledger line of kind `exter
 shows it apart). With nothing declared the line says `unmeasured`: Choregos does not know what Rovo
 costs.
 
-### Limits, said plainly
+### E-mail notifications
+
+A project can send its notifications by e-mail: add a `notify` connector of type **E-mail (SMTP)**
+(host, port, TLS mode, sending address, and the password as a write-only secret). Every notification
+the orchestrator sends, the release train's included, then goes to the project's e-mail addresses
+(Project settings, Notifications). When the project sets none, the connector's `to` list is used. A
+failed send is logged and never fails the work that notifies.
+
+SMTP does not go through the HTTP egress guard: the connector declares its host and port, and the
+operator's network policy must open them. The setup procedure is `docs/procedures/connector.notify.email.md`.
+
+## Limits, said plainly
 
 Not built: Choregos **as** a Rovo agent inside Jira (it needs a Forge app and an A2A server); an agent
 answering `input-required` from the console and resuming; push notifications; verification of signed

@@ -1,20 +1,19 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Bus d'événements interne : persistance + diffusion SSE au front.
+"""Internal event bus: persistence + SSE broadcast to the front end.
 
-Un seul chemin pour tout ce qui bouge : `diffuser()` publie un événement — dans le
-processus sur SQLite, par `NOTIFY` PostgreSQL partout ailleurs — et chaque réplique de
-l'API, qui `LISTEN`, réveille ses abonnés SSE. Les abonnés sont par projet, par sujet ou
-par run, avec reprise par `Last-Event-ID`.
+One path for everything that moves: `broadcast()` publishes an event, in the process on SQLite, by
+PostgreSQL `NOTIFY` everywhere else, and every API replica, which `LISTEN`s, wakes its SSE
+subscribers. Subscribers are per project, per subject or per run, with resumption by
+`Last-Event-ID`.
 
-POURQUOI POSTGRES
------------------
-Le bus était en mémoire d'un processus, et une docstring promettait « en multi-réplica,
-Postgres LISTEN/NOTIFY prend le relais » sans qu'une ligne ne le fasse (état des lieux du
-2026-09-24). Or presque tous les événements naissent dans l'ORCHESTRATEUR — un autre
-processus — et l'API tourne à deux ou trois répliques : les deux flux en direct du produit
-(provisioning, journal d'un run) étaient structurellement muets. `NOTIFY` est transactionnel :
-un événement ne part qu'au commit, jamais avant — ce qui corrige aussi la publication avant
-commit qu'on faisait.
+WHY POSTGRES
+------------
+The bus lived in the memory of one process, and a docstring promised "in multi-replica, Postgres
+LISTEN/NOTIFY takes over" without a single line doing it (inventory of 2026-09-24). Yet almost all
+events are born in the ORCHESTRATOR, another process, and the API runs at two or three replicas:
+the product's two live streams (provisioning, a run's log) were structurally mute. `NOTIFY` is
+transactional: an event leaves only at commit, never before, which also fixes the publication
+before commit that used to happen.
 """
 
 from __future__ import annotations
@@ -26,21 +25,22 @@ from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
 from choregos_contracts import ChoregosEvent, EventType
+from choregos_core.compat import alias_names
 
 from .logging import get_logger
 
 MAX_BUFFER = 500
-CANAL = "choregos_events"
+CHANNEL = "choregos_events"
 #: How the relay's `LISTEN` connection is named in `pg_stat_activity`, and how often it is checked.
 APPLICATION_NAME = "choregos-events-relay"
 KEEPALIVE_S = 30.0
-#: Au-delà, PostgreSQL refuse la notification (8000 octets) : on allège `data`.
-TAILLE_MAX = 7500
+#: Beyond it, PostgreSQL refuses the notification (8000 bytes): `data` is lightened.
+MAX_PAYLOAD_BYTES = 7500
 logger = get_logger("choregos.events")
 
 
 class EventBus:
-    """Diffusion en mémoire d'un processus. En multi-réplica, Postgres LISTEN/NOTIFY prend le relais."""
+    """Broadcast in the memory of one process. In multi-replica, Postgres LISTEN/NOTIFY takes over."""
 
     def __init__(self, buffer_size: int = MAX_BUFFER) -> None:
         self._subscribers: dict[str, set[asyncio.Queue[ChoregosEvent]]] = defaultdict(set)
@@ -68,7 +68,7 @@ class EventBus:
         return topics
 
     def replay(self, topic: str, after_id: str | None = None) -> list[ChoregosEvent]:
-        """Événements bufferisés après `after_id` (reprise SSE)."""
+        """Buffered events after `after_id` (SSE resumption)."""
         events = list(self._buffer.get(topic, ()))
         if after_id is None:
             return events
@@ -78,7 +78,7 @@ class EventBus:
         return events
 
     async def subscribe(self, topic: str, after_id: str | None = None) -> AsyncIterator[ChoregosEvent]:
-        """Abonnement SSE : rejoue le buffer puis suit le flux."""
+        """SSE subscription: replays the buffer, then follows the stream."""
         queue: asyncio.Queue[ChoregosEvent] = asyncio.Queue(maxsize=1000)
         self._subscribers[topic].add(queue)
         try:
@@ -118,30 +118,30 @@ def emit(
     project_slug: str | None = None,
     **data: Any,
 ) -> ChoregosEvent:
-    """Raccourci : construit l'événement CloudEvents et le publie."""
+    """Shortcut: builds the CloudEvents event and publishes it."""
     event = ChoregosEvent.emit(type_, source=source, subject=subject, project_slug=project_slug, **data)
     _bus.publish(event)
     return event
 
 
-def _charge_utile(event: ChoregosEvent) -> str:
-    """L'événement en JSON, allégé s'il dépasse ce qu'une notification peut porter."""
-    charge = event.model_dump_json()
-    if len(charge.encode()) <= TAILLE_MAX:
-        return charge
-    allege = event.model_copy(
+def _payload_of(event: ChoregosEvent) -> str:
+    """The event as JSON, lightened if it exceeds what a notification can carry."""
+    payload = event.model_dump_json()
+    if len(payload.encode()) <= MAX_PAYLOAD_BYTES:
+        return payload
+    lightened = event.model_copy(
         update={
             "data": {"truncated": True, **{k: v for k, v in event.data.items() if k in {"run_id", "state"}}}
         }
     )
-    return allege.model_dump_json()
+    return lightened.model_dump_json()
 
 
-async def diffuser(session: Any, event: ChoregosEvent) -> None:
-    """Publie l'événement : `NOTIFY` dans la transaction de `session` sur PostgreSQL, sinon en mémoire.
+async def broadcast(session: Any, event: ChoregosEvent) -> None:
+    """Publishes the event: `NOTIFY` in the transaction of `session` on PostgreSQL, otherwise in memory.
 
-    Sur PostgreSQL, la notification part AU COMMIT : les répliques (et ce processus) la
-    reçoivent par le relais. Sur SQLite (dev, tests), le bus du processus suffit.
+    On PostgreSQL, the notification leaves AT COMMIT: the replicas (and this process) receive it
+    through the relay. On SQLite (dev, tests), the process's bus is enough.
     """
     from sqlalchemy import text
 
@@ -151,40 +151,49 @@ async def diffuser(session: Any, event: ChoregosEvent) -> None:
         _bus.publish(event)
         return
     await session.execute(
-        text("SELECT pg_notify(:canal, :charge)"), {"canal": CANAL, "charge": _charge_utile(event)}
+        text("SELECT pg_notify(:channel, :payload)"), {"channel": CHANNEL, "payload": _payload_of(event)}
     )
 
 
-class RelaisPostgres:
-    """Une connexion `LISTEN` par réplique, qui republie dans le bus local. Se reconnecte seule."""
+class PostgresRelay:
+    """One `LISTEN` connection per replica, which republishes into the local bus. Reconnects on its own."""
 
     def __init__(self, dsn: str) -> None:
         self.dsn = dsn.replace("postgresql+asyncpg://", "postgresql://")
-        self._tache: asyncio.Task[None] | None = None
-        self.recus = 0
+        self._task: asyncio.Task[None] | None = None
+        self.received = 0
 
-    def demarrer(self) -> None:
-        self._tache = asyncio.create_task(self._boucle())
+    @property
+    def recus(self) -> int:  # lang: fr-ok alias:internal
+        """The former name of `received`."""
+        return self.received
 
-    async def arreter(self) -> None:
-        if self._tache is not None:
-            self._tache.cancel()
+    def start(self) -> None:
+        self._task = asyncio.create_task(self._loop())
+
+    demarrer = start  # lang: fr-ok alias:internal
+
+    async def stop(self) -> None:
+        if self._task is not None:
+            self._task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
-                await self._tache
+                await self._task
 
-    def _recevoir(self, _conn: Any, _pid: int, _canal: str, charge: str) -> None:
+    arreter = stop  # lang: fr-ok alias:internal
+
+    def _receive(self, _conn: Any, _pid: int, _channel: str, payload: str) -> None:
         try:
-            event = ChoregosEvent.model_validate_json(charge)
+            event = ChoregosEvent.model_validate_json(payload)
         except Exception as exc:
-            logger.warning("notification illisible", error=str(exc)[:120])
+            logger.warning("unreadable notification", error=str(exc)[:120])
             return
-        self.recus += 1
+        self.received += 1
         _bus.publish(event)
 
-    async def _boucle(self) -> None:
+    async def _loop(self) -> None:
         import asyncpg
 
-        attente = 1.0
+        wait = 1.0
         while True:
             try:
                 conn = await asyncpg.connect(self.dsn, server_settings={"application_name": APPLICATION_NAME})
@@ -193,9 +202,9 @@ class RelaisPostgres:
                 lost = asyncio.Event()
                 conn.add_termination_listener(lambda _conn, lost=lost: lost.set())
                 try:
-                    await conn.add_listener(CANAL, self._recevoir)
-                    logger.info("relais d'événements PostgreSQL branché", canal=CANAL)
-                    attente = 1.0
+                    await conn.add_listener(CHANNEL, self._receive)
+                    logger.info("PostgreSQL event relay attached", channel=CHANNEL)
+                    wait = 1.0
                     while not lost.is_set():
                         with contextlib.suppress(TimeoutError):
                             await asyncio.wait_for(lost.wait(), timeout=KEEPALIVE_S)
@@ -209,16 +218,34 @@ class RelaisPostgres:
                 raise
             except Exception as exc:
                 logger.warning(
-                    "relais d'événements PostgreSQL perdu, reconnexion", error=str(exc)[:120], dans_s=attente
+                    "PostgreSQL event relay lost, reconnecting", error=str(exc)[:120], retry_in_s=wait
                 )
-                await asyncio.sleep(attente)
-                attente = min(attente * 2, 30.0)
+                await asyncio.sleep(wait)
+                wait = min(wait * 2, 30.0)
 
 
 def sse_format(event: ChoregosEvent) -> dict[str, str]:
-    """Rend un événement au format attendu par `sse_starlette.EventSourceResponse`."""
+    """Returns an event in the format `sse_starlette.EventSourceResponse` expects."""
     return {
         "id": event.id,
         "event": str(event.type),
         "data": event.model_dump_json(),
     }
+
+
+CANAL = CHANNEL  # lang: fr-ok alias:internal
+TAILLE_MAX = MAX_PAYLOAD_BYTES  # lang: fr-ok alias:internal
+diffuser = broadcast  # lang: fr-ok alias:internal
+_charge_utile = _payload_of  # lang: fr-ok alias:internal
+RelaisPostgres = PostgresRelay  # lang: fr-ok alias:internal
+
+alias_names(
+    __name__,
+    {
+        "CANAL": "CHANNEL",  # lang: fr-ok alias:internal
+        "TAILLE_MAX": "MAX_PAYLOAD_BYTES",  # lang: fr-ok alias:internal
+        "diffuser": "broadcast",  # lang: fr-ok alias:internal
+        "_charge_utile": "_payload_of",  # lang: fr-ok alias:internal
+        "RelaisPostgres": "PostgresRelay",  # lang: fr-ok alias:internal
+    },
+)

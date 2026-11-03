@@ -20,8 +20,9 @@ PREFIXES = (
     "apps/web/src/types/",
     "apps/web/src/proxy.ts",
 )
-#: Owned by another story (the journey fixtures).
-EXCLUDED = ("apps/web/src/mocks/parcours.ts",)
+#: Nothing is excluded since S45-27 renamed the journey fixtures (`mocks/journey.ts`); the former
+#: path is a shim, which declares itself with `lang: fr-ok-file`.
+EXCLUDED: tuple[str, ...] = ()
 
 
 def _load_checker() -> ModuleType:

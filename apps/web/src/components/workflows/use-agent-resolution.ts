@@ -17,11 +17,11 @@ export function useAgentResolution(slug: string, process: ProcessStep[] | undefi
     () => [...new Set((process ?? []).map((step) => step.agent).filter((ref): ref is string => Boolean(ref)))].sort(),
     [process],
   );
-  const reponse = useQuery({
+  const response = useQuery({
     queryKey: ["agent-resolution", slug, refs],
     queryFn: () => api.resolveProjectAgents(slug, refs),
     enabled: refs.length > 0,
     retry: false,
   });
-  return useMemo(() => new Map((reponse.data ?? []).map((r) => [r.ref, r])), [reponse.data]);
+  return useMemo(() => new Map((response.data ?? []).map((r) => [r.ref, r])), [response.data]);
 }

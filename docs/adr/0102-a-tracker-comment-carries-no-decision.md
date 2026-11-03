@@ -43,6 +43,10 @@ or comment. Choregos's own moves (the mirror of a work item's state onto its car
 event and are ignored the same way. A person moves a work item from the console. The interpreter branch
 that matches `tracker.status` stays, only for histories recorded before this change.
 
+One move still counts, and not as a decision: a move into a project start rule's state (S56-03) that
+births an item the project did not hold. The item is created and its workflow started, the event is kept
+as `created_work_item`, and the move itself is still delivered to no workflow.
+
 ## Consequences
 
 - No workflow signal carries a tracker command, so a forged comment cannot approve, reject or stop.

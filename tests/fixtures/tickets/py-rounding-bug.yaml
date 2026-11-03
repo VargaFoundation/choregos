@@ -1,0 +1,89 @@
+# Reference ticket: fix a rounding bug reported by a failing test.
+id: py-rounding-bug
+title: "The total with tax rounds 0.5 cent down"
+repo: python-toy
+role: implement
+prompt: |
+  `total_with_tax` must round to the nearest cent, half up. Add a regression test
+  for a cart whose total with tax falls exactly on half a cent, and fix
+  `total_with_tax` if needed.
+allowed_paths:
+  - "src/cart/**"
+  - "tests/**"
+expected_duration_s: 140
+# Scripted, not measured: what a fake gateway is billed per context reduction (S37-09),
+# so the matrix's tokens come from the ledger in CI. The real numbers are S37-10's.
+scripted_usage:
+  "none": { tokens_in: 144000, tokens_cached: 96000, tokens_out: 4800, turns: 14 }
+  "rtk": { tokens_in: 121600, tokens_cached: 81600, tokens_out: 4800, turns: 14 }
+  "headroom": { tokens_in: 112800, tokens_cached: 76000, tokens_out: 5000, turns: 15 }
+  "rtk+headroom": { tokens_in: 94400, tokens_cached: 63200, tokens_out: 5000, turns: 15 }
+assertions:
+  - { kind: file_exists, path: tests/test_rounding.py }
+  - { kind: file_matches, path: src/cart/cart.py, pattern: "ROUND_HALF_UP", absent: false }
+  - { kind: command, run: "make test" }
+scripted:
+  with_memory:
+    files:
+      src/cart/cart.py: |
+        """Cart model: lines, a total in cents."""
+
+        from __future__ import annotations
+
+        from dataclasses import dataclass, field
+        from decimal import ROUND_HALF_UP, Decimal
+
+        TAX_RATE = Decimal("0.20")
+
+
+        @dataclass(frozen=True)
+        class Line:
+            """A cart line. Prices are in cents: no floats."""
+
+            label: str
+            unit_price_cents: int
+            quantity: int = 1
+
+            def total_cents(self) -> int:
+                return self.unit_price_cents * self.quantity
+
+
+        @dataclass
+        class Cart:
+            lines: list[Line] = field(default_factory=list)
+
+            def add(self, line: Line) -> None:
+                self.lines.append(line)
+
+            def subtotal_cents(self) -> int:
+                return sum(line.total_cents() for line in self.lines)
+
+
+        def total_with_tax(cart: Cart) -> int:
+            """Total with tax, in cents, rounded to the nearest cent (half up)."""
+            net = Decimal(cart.subtotal_cents())
+            gross = net * (Decimal(1) + TAX_RATE)
+            return int(gross.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+      tests/test_rounding.py: |
+        """Regression: a half cent rounds up."""
+
+        from __future__ import annotations
+
+        import sys
+        from pathlib import Path
+
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+        from cart import Cart, Line, total_with_tax  # noqa: E402
+
+
+        def test_fraction_rounded_up() -> None:
+            cart = Cart()
+            cart.add(Line("candy", 3))  # 3 × 1.20 = 3.6 → 4, not 3
+            assert total_with_tax(cart) == 4
+
+
+        def test_fraction_rounded_down() -> None:
+            cart = Cart()
+            cart.add(Line("candy", 2))  # 2 × 1.20 = 2.4 → 2
+            assert total_with_tax(cart) == 2

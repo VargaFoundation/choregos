@@ -2,19 +2,19 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { CarteEnSerpentin } from "@/components/parcours/carte-du-parcours";
+import { SnakeMap } from "@/components/journey/journey-map";
 import { ActorsPanel } from "@/components/workflows/actors-panel";
-import { BrouillonProvider, useBrouillon } from "@/components/workflows/brouillon";
-import { CarteDuWorkflow } from "@/components/workflows/carte/carte-du-workflow";
-import { COULEUR_DU_GENRE, DECISION_HUE, genreDActeur, LIBELLE_DU_GENRE } from "@/components/workflows/carte/disposition";
+import { DraftProvider, useDraft } from "@/components/workflows/draft";
+import { WorkflowMap } from "@/components/workflows/map/workflow-map";
+import { KIND_COLOURS, DECISION_HUE, actorKind, KIND_LABEL } from "@/components/workflows/map/layout";
 import { decisionEdits, decisionProblems, draftOf, type DecisionDraft } from "@/components/workflows/decision-actor-form";
 import { decisionActorOf, decisionOutputs, describeActor, type WorkflowDecisionActor, type WorkflowDocument } from "@/components/workflows/document";
-import { actorLabel } from "@/components/workflows/panneaux";
+import { actorLabel } from "@/components/workflows/panels";
 import { StepDetails } from "@/components/workflows/step-details";
 import { workflowThresholds } from "@/components/workflows/decision-calibration";
 import { api } from "@/lib/api";
 import type { Agent, AgentCatalogueEntry, ProcessStep, QuestionCalibration, StepCalibration, WorkflowEditResult, WorkflowGraph } from "@/lib/types";
-import { parcoursEnCours } from "@/mocks/parcours";
+import { journeyInProgress } from "@/mocks/journey";
 
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
@@ -99,16 +99,16 @@ const STEP: ProcessStep = {
 };
 
 function YamlProbe() {
-  return <p data-testid="yaml">{useBrouillon().yaml}</p>;
+  return <p data-testid="yaml">{useDraft().yaml}</p>;
 }
 
 async function underDraft(content: ReactNode) {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <BrouillonProvider slug="support" name="support">
+      <DraftProvider slug="support" name="support">
         <YamlProbe />
         {content}
-      </BrouillonProvider>
+      </DraftProvider>
     </QueryClientProvider>,
   );
   await waitFor(() => expect(screen.getByTestId("yaml")).toHaveTextContent("apiVersion"));
@@ -141,14 +141,14 @@ describe("a decision step is told apart from the platform (ADR 0121)", () => {
   });
 
   it("has its own lane on the map: its word, its icon and the categorical teal", () => {
-    expect(genreDActeur("decision")).toBe("decision");
-    expect(LIBELLE_DU_GENRE.decision).toBe("decision");
-    expect(COULEUR_DU_GENRE.decision).toEqual({
+    expect(actorKind("decision")).toBe("decision");
+    expect(KIND_LABEL.decision).toBe("decision");
+    expect(KIND_COLOURS.decision).toEqual({
       bord: `var(--choregos-cat-${DECISION_HUE}-ink)`,
       fond: `var(--choregos-cat-${DECISION_HUE}-soft)`,
-      texte: `var(--choregos-cat-${DECISION_HUE}-ink)`,
+      text: `var(--choregos-cat-${DECISION_HUE}-ink)`,
     });
-    render(<CarteDuWorkflow graph={GRAPH} initial="inbox" acteurs={{ router: { type: "decision", role: "route_ticket" }, owner: { type: "human", group: "support" } }} />);
+    render(<WorkflowMap graph={GRAPH} initial="inbox" actors={{ router: { type: "decision", role: "route_ticket" }, owner: { type: "human", group: "support" } }} />);
     const box = screen.getByTestId("etat-inbox");
     expect(box.closest("[data-genre]")).toHaveAttribute("data-genre", "decision");
     expect(box).toHaveTextContent("Decision · router");
@@ -159,17 +159,17 @@ describe("a decision step is told apart from the platform (ADR 0121)", () => {
   });
 
   it("is a teal diamond on the diagram, named in the legend only where the workflow has one", () => {
-    const { unmount } = render(<CarteEnSerpentin graph={GRAPH} process={[STEP]} initial="inbox" />);
+    const { unmount } = render(<SnakeMap graph={GRAPH} process={[STEP]} initial="inbox" />);
     const diagram = screen.getByTestId("carte-en-serpentin");
     const shape = diagram.querySelector('[data-etape="t-route"] .parcours-forme')!;
     expect(shape.tagName.toLowerCase()).toBe("polygon");
-    expect(shape.getAttribute("stroke")).toBe(COULEUR_DU_GENRE.decision.bord);
+    expect(shape.getAttribute("stroke")).toBe(KIND_COLOURS.decision.border);
     expect(screen.getByTestId("etape-t-route")).toHaveAccessibleName(/^Router\s*decides: route ticket/);
     expect(screen.getByTestId("etape-t-route")).toHaveAccessibleDescription("decision — 0 attempts");
     expect(screen.getByRole("list", { name: "Who carries each step" })).toHaveTextContent("Decision");
     unmount();
-    const { graph, process, initial } = parcoursEnCours(Date.parse("2026-10-08T12:00:00Z"));
-    render(<CarteEnSerpentin graph={graph} process={process} initial={initial} />);
+    const { graph, process, initial } = journeyInProgress(Date.parse("2026-10-08T12:00:00Z"));
+    render(<SnakeMap graph={graph} process={process} initial={initial} />);
     expect(screen.getByRole("list", { name: "Who carries each step" })).not.toHaveTextContent("Decision");
   });
 });

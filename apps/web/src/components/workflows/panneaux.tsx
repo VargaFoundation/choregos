@@ -1,314 +1,33 @@
 // SPDX-License-Identifier: Apache-2.0
+// lang: fr-ok-file alias:internal — former path of ./panels, removed by S45-29
 "use client";
 
-import { useState } from "react";
-import { Button, Card, Input, Select } from "@/components/ui";
-import { useBrouillon } from "@/components/workflows/brouillon";
-import { GARANTIES_COURANTES, operations } from "@/components/workflows/operations";
-import { TransitionFields } from "@/components/workflows/transition-fields";
+import type { ComponentProps } from "react";
+import { StatePanel, StepForm, TransitionPanel } from "@/components/workflows/panels";
 
-type Noeud = { id: string; display: string; terminal?: boolean; kind?: string };
-type Arete = {
-  id?: string;
-  from: string;
-  to: string;
-  kind?: string;
-  actor?: string | null;
-  gates?: string[];
-  timeout_hours?: number | null;
-};
+export { actorLabel, type GateWords } from "@/components/workflows/panels";
 
-/**
- * La cible « un nouvel état » : l'état et la transition qui y mène partent ensemble, et s'annulent
- * ensemble. Les parenthèses n'entrent dans aucun nom d'état : la valeur ne peut pas en masquer un.
- */
-const NOUVEL_ETAT = "(new)";
+type StateProps = ComponentProps<typeof StatePanel>;
+type FormProps = ComponentProps<typeof StepForm>;
+type TransitionProps = ComponentProps<typeof TransitionPanel>;
 
-/** Un état de la carte : son libellé, son nom, son genre ; le retirer ; partir de lui vers un autre. */
-export function PanneauDEtat({ noeud, etats, acteurs }: { noeud: Noeud; etats: Noeud[]; acteurs: string[] }) {
-  const brouillon = useBrouillon();
-  const [libelle, setLibelle] = useState(noeud.display);
-  const [nom, setNom] = useState(noeud.id);
-  return (
-    <Card title={`State ${noeud.id}`}>
-      <div className="space-y-3 text-sm" data-testid="panneau-etat">
-        <form
-          className="flex items-end gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void brouillon.appliquer(operations.libelle(noeud.id, libelle));
-          }}
-        >
-          <label className="flex-1 space-y-1">
-            <span className="text-xs text-ink-muted">Label</span>
-            <Input value={libelle} onChange={(event) => setLibelle(event.target.value)} />
-          </label>
-          <Button size="sm" type="submit" disabled={!libelle || libelle === noeud.display}>
-            Set label
-          </Button>
-        </form>
-        <form
-          className="flex items-end gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void brouillon.appliquer(operations.renommer(noeud.id, nom));
-          }}
-        >
-          <label className="flex-1 space-y-1">
-            <span className="text-xs text-ink-muted">Name (every reference follows)</span>
-            <Input value={nom} onChange={(event) => setNom(event.target.value)} />
-          </label>
-          <Button size="sm" type="submit" disabled={!nom || nom === noeud.id}>
-            Rename
-          </Button>
-        </form>
-        {!noeud.terminal && <FormulaireDEtape depart={noeud.id} etats={etats} acteurs={acteurs} />}
-        <Button size="sm" tone="danger" onClick={() => void brouillon.appliquer(operations.retirerLEtat(noeud.id))}>
-          Remove this state
-        </Button>
-      </div>
-    </Card>
-  );
+export function PanneauDEtat({ noeud, etats, acteurs }: { noeud: StateProps["node"]; etats: StateProps["states"]; acteurs: StateProps["actors"] }) {
+  return <StatePanel node={noeud} states={etats} actors={acteurs} />;
 }
 
-/**
- * Une étape de plus : d'un état, vers un état existant ou nouveau, portée par un acteur. L'état et la
- * transition partent ensemble et s'annulent ensemble. Sans `depart`, on choisit d'où l'on part.
- */
 export function FormulaireDEtape({
   depart,
   etats,
   acteurs,
-  initialTarget,
-  onDone,
-}: {
-  depart?: string;
-  etats: Noeud[];
-  acteurs: string[];
-  /** The state a drawn arrow points at (ADR 0112 §4). */
-  initialTarget?: string;
-  onDone?: () => void;
-}) {
-  const brouillon = useBrouillon();
-  const [de, setDe] = useState(depart ?? "");
-  const [vers, setVers] = useState(initialTarget ?? "");
-  const [nouveau, setNouveau] = useState("");
-  const [par, setPar] = useState(acteurs[0] ?? "");
-  const origine = depart ?? de;
-  const cible = vers === NOUVEL_ETAT ? nouveau.trim() : vers;
-  return (
-    <form
-      className="flex flex-wrap items-end gap-2"
-      aria-label={depart ? `New transition from ${depart}` : "New step"}
-      onSubmit={(event) => {
-        event.preventDefault();
-        const transition = operations.ajouterUneTransition(origine, cible, par);
-        const gestes = vers === NOUVEL_ETAT ? [operations.ajouterUnEtat(cible, cible), transition] : [transition];
-        void brouillon.appliquer(...gestes).then((ok) => {
-          if (!ok) return;
-          setVers("");
-          setNouveau("");
-          onDone?.();
-        });
-      }}
-    >
-      {!depart && (
-        <label className="flex-1 space-y-1">
-          <span className="text-xs text-ink-muted">From</span>
-          <Select value={de} onChange={(event) => setDe(event.target.value)}>
-            <option value="">—</option>
-            {etats
-              .filter((etat) => !etat.terminal)
-              .map((etat) => (
-                <option key={etat.id} value={etat.id}>
-                  {etat.display}
-                </option>
-              ))}
-          </Select>
-        </label>
-      )}
-      <label className="flex-1 space-y-1">
-        <span className="text-xs text-ink-muted">{depart ? "New transition to" : "To"}</span>
-        <Select value={vers} onChange={(event) => setVers(event.target.value)}>
-          <option value="">—</option>
-          {etats
-            .filter((etat) => etat.id !== origine)
-            .map((etat) => (
-              <option key={etat.id} value={etat.id}>
-                {etat.display}
-              </option>
-            ))}
-          <option value={NOUVEL_ETAT}>A new state…</option>
-        </Select>
-      </label>
-      {vers === NOUVEL_ETAT && (
-        <label className="flex-1 space-y-1">
-          <span className="text-xs text-ink-muted">Name of the new state</span>
-          <Input value={nouveau} onChange={(event) => setNouveau(event.target.value)} />
-        </label>
-      )}
-      <label className="flex-1 space-y-1">
-        <span className="text-xs text-ink-muted">By</span>
-        <Select value={par} onChange={(event) => setPar(event.target.value)}>
-          {acteurs.map((acteur) => (
-            <option key={acteur} value={acteur}>
-              {acteur}
-            </option>
-          ))}
-        </Select>
-      </label>
-      <Button size="sm" type="submit" disabled={!origine || !cible || !par || brouillon.occupe}>
-        Add
-      </Button>
-    </form>
-  );
+  ...rest
+}: Omit<FormProps, "from" | "states" | "actors"> & { depart?: string; etats: FormProps["states"]; acteurs: FormProps["actors"] }) {
+  return <StepForm {...rest} from={depart} states={etats} actors={acteurs} />;
 }
 
-/** What a guarantee holds the step to, from the process view: its sentence and its thresholds. */
-export type GateWords = { name?: string; summary?: string; detail?: string | null };
-
-/** An actor in the "who moves it" list: its id, and what it is ("person · product-owners"). */
-export function actorLabel(id: string, definition?: { type?: string; group?: string; role?: string; agent?: string }): string {
-  if (!definition?.type) return id;
-  if (definition.type === "human") return `${id} — person${definition.group ? ` · ${definition.group}` : ""}`;
-  if (definition.type === "agent")
-    return `${id} — ${definition.agent ? `agent ${definition.agent}` : "built-in agent"}${definition.role ? ` · ${definition.role}` : ""}`;
-  if (definition.type === "job") return `${id} — job${definition.role ? ` · ${definition.role}` : ""}`;
-  if (definition.type === "system") return `${id} — the platform`;
-  if (definition.type === "decision") return `${id} — decision${definition.role ? ` · ${definition.role}` : ""}`;
-  return `${id} — ${definition.type}`;
-}
-
-/** A transition: who moves it, its guarantees, its time limit, every other field (ADR 0112); removing it. */
 export function PanneauDeTransition({
   arete,
   acteurs,
-  definitions,
-  gates,
-  timing,
-  states = [],
-  workflows = [],
-}: {
-  arete: Arete;
-  acteurs: string[];
-  /** The actors as the definition writes them, so the list says what each one is. */
-  definitions?: Record<string, { type?: string; group?: string; role?: string; agent?: string }>;
-  /** The guarantees in words, by name (the process view's), when the step is known. */
-  gates?: GateWords[];
-  /** How long the step waits and what happens then (`timingSentence`). */
-  timing?: string | null;
-  /** The workflow's states and the project's workflows, for the transition's other fields (ADR 0112). */
-  states?: string[];
-  workflows?: string[];
-}) {
-  const gatesByName = new Map((gates ?? []).map((g) => [g.name, g]));
-  const brouillon = useBrouillon();
-  const [par, setPar] = useState(arete.actor ?? "");
-  const [garantie, setGarantie] = useState("");
-  const [heures, setHeures] = useState(arete.timeout_hours ? String(arete.timeout_hours) : "");
-  if (!arete.id || (arete.kind && arete.kind !== "nominal")) {
-    return (
-      <Card title="Transition">
-        <p className="text-sm text-ink-muted">This arrow is not a transition with an id: edit it in the YAML.</p>
-      </Card>
-    );
-  }
-  const id = arete.id;
-  return (
-    <Card title={`Transition ${id}`}>
-      <div className="space-y-3 text-sm" data-testid="panneau-transition">
-        <form
-          className="flex items-end gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void brouillon.appliquer(operations.acteur(id, par));
-          }}
-        >
-          <label className="flex-1 space-y-1">
-            <span className="text-xs text-ink-muted">Who moves it</span>
-            <Select value={par} onChange={(event) => setPar(event.target.value)}>
-              {acteurs.map((acteur) => (
-                <option key={acteur} value={acteur}>
-                  {actorLabel(acteur, definitions?.[acteur])}
-                </option>
-              ))}
-            </Select>
-          </label>
-          <Button size="sm" type="submit" disabled={!par || par === arete.actor}>
-            Set
-          </Button>
-        </form>
-        <div className="space-y-1">
-          <p className="text-xs text-ink-muted">Only if</p>
-          <ul className="space-y-1.5" data-testid="garanties-de-la-transition">
-            {(arete.gates ?? []).map((nom) => (
-              <li key={nom} className="flex items-start gap-2 rounded border border-line px-2 py-1 text-xs">
-                <span className="min-w-0 flex-1">
-                  <code>{nom}</code>
-                  {gatesByName.get(nom)?.summary && gatesByName.get(nom)?.summary !== nom && (
-                    <span className="text-ink"> — {gatesByName.get(nom)?.summary}</span>
-                  )}
-                  {gatesByName.get(nom)?.detail && <span className="block text-ink-muted">{gatesByName.get(nom)?.detail}</span>}
-                </span>
-                <button
-                  type="button"
-                  aria-label={`Remove the guarantee ${nom}`}
-                  className="text-ink-muted hover:text-danger"
-                  onClick={() => void brouillon.appliquer(operations.retirerUneGarantie(id, nom))}
-                >
-                  ×
-                </button>
-              </li>
-            ))}
-          </ul>
-          <form
-            className="flex items-end gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void brouillon.appliquer(operations.ajouterUneGarantie(id, garantie)).then((ok) => ok && setGarantie(""));
-            }}
-          >
-            <Input
-              aria-label="Guarantee to add"
-              list="garanties-courantes"
-              value={garantie}
-              onChange={(event) => setGarantie(event.target.value)}
-            />
-            <datalist id="garanties-courantes">
-              {GARANTIES_COURANTES.map((nom) => (
-                <option key={nom} value={nom} />
-              ))}
-            </datalist>
-            <Button size="sm" type="submit" disabled={!garantie}>
-              Add
-            </Button>
-          </form>
-        </div>
-        <form
-          className="flex items-end gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void brouillon.appliquer(operations.delai(id, heures === "" ? null : Number(heures)));
-          }}
-        >
-          <label className="flex-1 space-y-1">
-            <span className="text-xs text-ink-muted">At most (hours, empty: the default)</span>
-            <Input type="number" min={1} value={heures} onChange={(event) => setHeures(event.target.value)} />
-          </label>
-          <Button size="sm" type="submit">
-            Set
-          </Button>
-        </form>
-        {timing && (
-          <p className="text-xs text-ink-muted" data-testid="delai-en-clair">
-            {timing}
-          </p>
-        )}
-        <TransitionFields id={id} states={states} actors={acteurs} workflows={workflows} />
-        <Button size="sm" tone="danger" onClick={() => void brouillon.appliquer(operations.retirerLaTransition(id))}>
-          Remove this transition
-        </Button>
-      </div>
-    </Card>
-  );
+  ...rest
+}: Omit<TransitionProps, "edge" | "actors"> & { arete: TransitionProps["edge"]; acteurs: TransitionProps["actors"] }) {
+  return <TransitionPanel {...rest} edge={arete} actors={acteurs} />;
 }

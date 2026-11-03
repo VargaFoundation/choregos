@@ -1,37 +1,45 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Quelle édition tourne ici, et ce qu'elle s'autorise.
+"""Which edition runs here, and what it allows itself.
 
-Choregos existe en deux éditions ([ADR 0024](../../../docs/adr/0024-deux-editions.md)) :
+Choregos exists in two editions ([ADR 0024](../../../docs/adr/0024-two-editions.md)):
 
-* **communautaire** — ce dépôt, Apache-2.0, **une seule organisation** ;
-* **entreprise** — propriétaire, dans un dépôt séparé, qui déverrouille le multi-organisation
-  *et le finit* (les treize tables encore hors RLS, le cycle de vie d'une organisation, les
-  plafonds par organisation).
+* **community**: this repository, Apache-2.0, **a single organisation**;
+* **enterprise**: proprietary, in a separate repository, which unlocks multi-organisation
+  *and finishes it* (the thirteen tables still outside RLS, the life cycle of an organisation, the
+  per-organisation ceilings).
 
-Le cœur ne connaît pas l'édition entreprise : c'est elle qui se déclare, au démarrage, en
-appelant `declarer(ENTREPRISE)`. Tant que personne ne le fait, on est communautaire — et c'est
-le bon défaut, parce qu'il est le plus restrictif.
+The core does not know the enterprise edition: it declares itself, at startup, by calling
+`declare(ENTERPRISE)`. As long as nobody does, the edition is community, and that is the right
+default, because it is the most restrictive.
 
-Volontairement **sans clé de licence** : l'édition entreprise est tirée d'un registre privé, et
-le contrôle d'accès est l'`imagePullSecret`. Une clé signée hors ligne sera la question du jour
-où un client l'hébergera lui-même (ADR 0024, décision 5).
+Deliberately **without a licence key**: the enterprise edition is pulled from a private registry,
+and the access control is the `imagePullSecret`. A key signed offline will be the question the day a
+customer hosts it themselves (ADR 0024, decision 5).
+
+This module is the extension API of the edition (an entry-point package of the `choregos.plugins`
+group is an *extension*). Its French names of before 0.21 keep working until 0.22.0 and warn
+(ADR 0098 §3 (f)).
 """
 
 from __future__ import annotations
 
 import re
+import warnings
+from collections.abc import Iterable
 from typing import Any, Final
+
+from choregos_core.compat import EXTERNAL_ALIAS_REMOVAL, alias_names
 
 from . import tenant_sign_in
 
-COMMUNAUTAIRE: Final = "community"
-ENTREPRISE: Final = "enterprise"
+COMMUNITY: Final = "community"
+ENTERPRISE: Final = "enterprise"
 
-#: Un dictionnaire plutôt qu'une variable de module : muter un état partagé par `global` est
-#: exactement ce que `ruff` refuse, et un conteneur nommé dit mieux qu'il y a UN état.
-_etat: dict[str, object] = {
-    "edition": COMMUNAUTAIRE,
-    "fonctions": frozenset[str](),
+#: A dictionary rather than a module variable: mutating a shared state through `global` is exactly
+#: what `ruff` refuses, and a named container says better that there is ONE state.
+_state: dict[str, object] = {
+    "edition": COMMUNITY,
+    "features": frozenset[str](),
     "publisher": None,
     "edition_version": None,
     "edition_licence": None,
@@ -45,24 +53,36 @@ _MAX_VERSION = 40
 _VERSION_FORMAT = re.compile(r"^[0-9A-Za-z.+-]+$")
 
 
-def declarer(
-    nom: str,
+def declare(
+    name: str,
     *,
-    fonctions: frozenset[str] | None = None,
+    features: Iterable[str] | None = None,
     publisher: str | None = None,
     version: str | None = None,
     licence: str | None = None,
+    fonctions: Iterable[str] | None = None,  # lang: fr-ok alias:external
 ) -> None:
     """Called by the enterprise edition when it loads. The core never calls it.
 
-    `publisher` (who publishes the running edition) and `version` (the edition plugin's own version)
-    are announced by the plugin and only rendered by the core: the core never names an edition's
-    publisher itself. Both are optional, and refused for the community edition, which has neither.
-    `licence` is the licence the edition plugin is distributed under, announced the same way (a
-    free label such as an SPDX identifier, 1 to 80 characters), shown in the console's About panel.
+    `publisher` (who publishes the running edition) and `version` (the edition extension's own
+    version) are announced by the extension and only rendered by the core: the core never names an
+    edition's publisher itself. Both are optional, and refused for the community edition, which has
+    neither. `licence` is the licence the edition extension is distributed under, announced the same
+    way (a free label such as an SPDX identifier, 1 to 80 characters), shown in the console's About
+    panel. `fonctions=` is the former name of `features=`: it still works and warns.
     """
-    if nom not in (COMMUNAUTAIRE, ENTREPRISE):
-        raise ValueError(f"édition inconnue : {nom!r}")
+    if fonctions is not None:
+        warnings.warn(
+            "declare(fonctions=...) is deprecated: use features= "
+            f"(removed in {EXTERNAL_ALIAS_REMOVAL}, ADR 0098)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        if features is not None:
+            raise TypeError("declare: fonctions and features are the same argument, pass one")
+        features = fonctions
+    if name not in (COMMUNITY, ENTERPRISE):
+        raise ValueError(f"unknown edition: {name!r}")
     if publisher is not None:
         publisher = publisher.strip()
         if not 1 <= len(publisher) <= _MAX_PUBLISHER or any(ord(c) < 32 or ord(c) == 127 for c in publisher):
@@ -77,134 +97,172 @@ def declarer(
         raise ValueError(
             f"edition version must match {_VERSION_FORMAT.pattern} (at most {_MAX_VERSION} characters)"
         )
-    if nom == COMMUNAUTAIRE and (publisher is not None or version is not None or licence is not None):
+    if name == COMMUNITY and (publisher is not None or version is not None or licence is not None):
         raise ValueError("the community edition has no publisher, no edition version and no licence")
-    _etat["edition"] = nom
-    _etat["fonctions"] = fonctions or frozenset[str]()
-    _etat["publisher"] = publisher
-    _etat["edition_version"] = version
-    _etat["edition_licence"] = licence
+    _state["edition"] = name
+    _state["features"] = frozenset(features) if features else frozenset[str]()
+    _state["publisher"] = publisher
+    _state["edition_version"] = version
+    _state["edition_licence"] = licence
 
 
-#: Ce que le CŒUR sait faire d'une liste de groupes d'IdP : `choregos:<org>:<role>`, et un groupe
-#: nu pour l'organisation par défaut. Une organisation, un préfixe.
+#: What the CORE knows how to do with a list of IdP groups: `choregos:<org>:<role>`, and a bare
+#: group for the default organisation. One organisation, one prefix.
 #:
-#: L'édition entreprise en veut un autre — un préfixe PAR organisation, des groupes venus de SAML
-#: ou de SCIM, une table de correspondance éditable en interface (§2.2 du plan). Elle le déclare
-#: ici, au chargement de son greffon, au lieu de forker `routers/auth.py`.
+#: The enterprise edition wants another one: a prefix PER organisation, groups coming from SAML or
+#: SCIM, a mapping table editable in the interface (§2.2 of the plan). It declares it here, when
+#: its extension loads, instead of forking `routers/auth.py`.
 #:
-#: Pourquoi un point d'injection et pas un `Protocol` : il y a UNE décision substituable, avec une
-#: signature stable et un appelant. Un protocole `IdentityProvider` complet aurait autant
-#: d'implémentations que de spéculations sur ce que l'entreprise voudra — et le reste de son
-#: identité (SAML, SCIM, révocation de session) sont des routes NOUVELLES, pas des substitutions.
-_MAPPEUR: dict[str, Any] = {}
+#: Why an injection point and not a `Protocol`: there is ONE substitutable decision, with a stable
+#: signature and a caller. A complete `IdentityProvider` protocol would have as many
+#: implementations as there are speculations about what the enterprise will want, and the rest of
+#: its identity (SAML, SCIM, session revocation) are NEW routes, not substitutions.
+_MAPPER: dict[str, Any] = {}
 
 
-def declarer_le_mappeur_de_groupes(fonction: Any) -> None:
-    """Remplace la traduction groupes d'IdP → rôles par organisation. Le cœur ne l'appelle jamais.
+def declare_group_mapper(function: Any) -> None:
+    """Replaces the translation of IdP groups into roles per organisation. The core never calls it.
 
-    Signature attendue : `(groups: list[str], default_org: str) -> dict[str, Role]` — la même que
-    `routers.auth.roles_des_groupes`, qui reste le défaut.
+    Expected signature: `(groups: list[str], default_org: str) -> dict[str, Role]`, the same as
+    `routers.auth.roles_des_groupes`, which stays the default.
 
-    ⚠️ **Un mappeur de remplacement doit DÉLÉGUER au mappeur du cœur pour ce qu'il ne comprend
-    pas**, au lieu de rendre un dictionnaire vide. Il remplace la traduction ENTIÈRE : un mappeur
-    qui ne lit que `<org>/<role>` fait perdre au déploiement ses connexions en
-    `choregos:<org>:<role>` — y compris celle de l'amorçage et celle du développement. Constaté en
-    éprouvant cette couture avec un greffon installé pour de vrai : `403 … il manque ['varga']` sur
-    la création d'une organisation, et la cause n'était pas là où le message pointait.
+    WARNING: **a replacement mapper must DELEGATE to the core's mapper for what it does not
+    understand**, instead of returning an empty dictionary. It replaces the WHOLE translation: a
+    mapper that reads only `<org>/<role>` makes the deployment lose its `choregos:<org>:<role>`
+    sign-ins, including the bootstrap one and the development one. Found while proving this seam
+    with an extension installed for real: `403 ... missing ['varga']` on the creation of an
+    organisation, and the cause was not where the message pointed.
 
-        def le_mien(groups, default_org):
-            roles = dict(roles_des_groupes(groups, default_org))   # d'abord le cœur
-            ...                                                    # puis les formes maison
+        def mine(groups, default_org):
+            roles = dict(roles_des_groupes(groups, default_org))   # the core first
+            ...                                                    # then the house forms
             return roles
     """
-    _MAPPEUR["fonction"] = fonction
+    _MAPPER["function"] = function
 
 
-def mappeur_de_groupes(defaut: Any) -> Any:
-    """Le mappeur en service : celui qu'un greffon a déclaré, sinon celui du cœur."""
-    return _MAPPEUR.get("fonction") or defaut
+def group_mapper(default: Any) -> Any:
+    """The mapper in service: the one an extension declared, otherwise the core's."""
+    return _MAPPER.get("function") or default
 
 
-def courante() -> str:
-    return str(_etat["edition"])
+def current() -> str:
+    return str(_state["edition"])
 
 
-def fonctions() -> frozenset[str]:
-    valeur = _etat["fonctions"]
-    assert isinstance(valeur, frozenset)
-    return valeur
+def features() -> frozenset[str]:
+    value = _state["features"]
+    assert isinstance(value, frozenset)
+    return value
 
 
 def publisher() -> str | None:
-    """Who publishes the running edition, as announced by its plugin; `None` in the community edition."""
-    valeur = _etat["publisher"]
-    return valeur if isinstance(valeur, str) else None
+    """Who publishes the running edition, as announced by its extension; `None` in the community edition."""
+    value = _state["publisher"]
+    return value if isinstance(value, str) else None
 
 
 def edition_version() -> str | None:
-    """The edition plugin's own version, as announced by it; `None` in the community edition."""
-    valeur = _etat["edition_version"]
-    return valeur if isinstance(valeur, str) else None
+    """The edition extension's own version, as announced by it; `None` in the community edition."""
+    value = _state["edition_version"]
+    return value if isinstance(value, str) else None
 
 
 def edition_licence() -> str | None:
-    """The licence of the edition plugin, as announced by it; `None` in the community edition."""
-    valeur = _etat["edition_licence"]
-    return valeur if isinstance(valeur, str) else None
+    """The licence of the edition extension, as announced by it; `None` in the community edition."""
+    value = _state["edition_licence"]
+    return value if isinstance(value, str) else None
 
 
-def est_entreprise() -> bool:
-    return courante() == ENTREPRISE
+def is_enterprise() -> bool:
+    return current() == ENTERPRISE
 
 
-class SessionRefusee(Exception):  # noqa: N818 - une décision, pas une erreur
-    """Une validation de session refuse : `str()` est la raison, rendue en 401."""
+class SessionRefused(Exception):  # noqa: N818 - a decision, not an error
+    """A session validation refuses: `str()` is the reason, rendered as a 401."""
 
 
-#: Les validations de session déclarées par les greffons, et les autorités qui désignent un
-#: administrateur de la plateforme. Deux coutures d'IDENTITÉ, comme le mappeur de groupes.
-_VALIDATIONS_DE_SESSION: list[Any] = []
-_ADMINISTRATEURS_DE_PLATEFORME: list[Any] = []
+#: The session validations declared by the extensions, and the authorities that designate a
+#: platform administrator. Two IDENTITY seams, like the group mapper.
+_SESSION_VALIDATIONS: list[Any] = []
+_PLATFORM_ADMINISTRATORS: list[Any] = []
 
 
-def declarer_une_validation_de_session(fonction: Any) -> None:
-    """Une session signée est valable jusqu'à `exp` : le cœur ne sait pas la révoquer avant.
+def declare_session_validation(function: Any) -> None:
+    """A signed session is valid until `exp`: the core cannot revoke it before.
 
-    Un greffon qui le veut — révocation côté serveur, déprovisionnement SCIM — déclare ici
-    `fonction(session_db, user, payload)`, synchrone ou asynchrone, jouée à CHAQUE requête
-    authentifiée par cookie. Elle lève `SessionRefusee(raison)` pour refuser (401 avec la raison).
-    Toute autre exception remonte telle quelle : une validation en panne ne vaut pas acceptation.
+    An extension that wants to (server-side revocation, SCIM deprovisioning) declares here
+    `function(session_db, user, payload)`, synchronous or asynchronous, played at EVERY request
+    authenticated by cookie. It raises `SessionRefused(reason)` to refuse (401 with the reason).
+    Any other exception comes up as it is: a validation that is down is not an acceptance.
     """
-    if fonction not in _VALIDATIONS_DE_SESSION:
-        _VALIDATIONS_DE_SESSION.append(fonction)
+    if function not in _SESSION_VALIDATIONS:
+        _SESSION_VALIDATIONS.append(function)
 
 
-def validations_de_session() -> tuple[Any, ...]:
-    return tuple(_VALIDATIONS_DE_SESSION)
+def session_validations() -> tuple[Any, ...]:
+    return tuple(_SESSION_VALIDATIONS)
 
 
-def declarer_un_administrateur_de_plateforme(fonction: Any) -> None:
-    """Le cœur tient pour administrateur de la plateforme l'`org_admin` de TOUTES les
-    organisations (`deps.exiger_admin_de_plateforme`). En multi-organisation, un vrai rôle de
-    plateforme est plus juste : un greffon déclare ici `fonction(session_db, principal) -> bool`,
-    synchrone ou asynchrone.
+def declare_platform_administrator(function: Any) -> None:
+    """The core holds as platform administrator the `org_admin` of ALL the organisations
+    (`deps.require_platform_admin`). In multi-organisation, a real platform role is fairer: an
+    extension declares here `function(session_db, principal) -> bool`, synchronous or asynchronous.
 
-    ADDITIVE : elle peut ACCORDER le droit à qui la règle du cœur le refuse, jamais le retirer à qui
-    elle l'accorde — une installation qui charge un greffon garde au moins ses administrateurs.
+    ADDITIVE: it can GRANT the right to whoever the core's rule refuses, never take it from whoever
+    the rule grants it to, so an installation that loads an extension keeps at least its
+    administrators.
     """
-    if fonction not in _ADMINISTRATEURS_DE_PLATEFORME:
-        _ADMINISTRATEURS_DE_PLATEFORME.append(fonction)
+    if function not in _PLATFORM_ADMINISTRATORS:
+        _PLATFORM_ADMINISTRATORS.append(function)
 
 
-def administrateurs_de_plateforme() -> tuple[Any, ...]:
-    return tuple(_ADMINISTRATEURS_DE_PLATEFORME)
+def platform_administrators() -> tuple[Any, ...]:
+    return tuple(_PLATFORM_ADMINISTRATORS)
 
 
-def reinitialiser() -> None:
-    """Pour les tests : revient au défaut le plus restrictif, et aux règles du cœur."""
-    declarer(COMMUNAUTAIRE)
-    _MAPPEUR.pop("fonction", None)
-    _VALIDATIONS_DE_SESSION.clear()
-    _ADMINISTRATEURS_DE_PLATEFORME.clear()
+def reset() -> None:
+    """For tests: back to the most restrictive default, and to the core's rules."""
+    declare(COMMUNITY)
+    _MAPPER.pop("function", None)
+    _SESSION_VALIDATIONS.clear()
+    _PLATFORM_ADMINISTRATORS.clear()
     tenant_sign_in.reset()
+
+
+# ───────────────────────────── the former names (removed in 0.22.0) ─────────────────────────────
+
+_FORMER = {
+    "COMMUNAUTAIRE": "COMMUNITY",  # lang: fr-ok alias:external
+    "ENTREPRISE": "ENTERPRISE",  # lang: fr-ok alias:external
+    "declarer": "declare",  # lang: fr-ok alias:external
+    "declarer_le_mappeur_de_groupes": "declare_group_mapper",  # lang: fr-ok alias:external
+    "mappeur_de_groupes": "group_mapper",  # lang: fr-ok alias:external
+    "courante": "current",  # lang: fr-ok alias:external
+    "fonctions": "features",  # lang: fr-ok alias:external
+    "est_entreprise": "is_enterprise",  # lang: fr-ok alias:external
+    "SessionRefusee": "SessionRefused",  # lang: fr-ok alias:external
+    "declarer_une_validation_de_session": "declare_session_validation",  # lang: fr-ok alias:external
+    "validations_de_session": "session_validations",  # lang: fr-ok alias:external
+    "declarer_un_administrateur_de_plateforme": (  # lang: fr-ok alias:external
+        "declare_platform_administrator"
+    ),
+    "administrateurs_de_plateforme": "platform_administrators",  # lang: fr-ok alias:external
+    "reinitialiser": "reset",  # lang: fr-ok alias:external
+}
+COMMUNAUTAIRE = COMMUNITY  # lang: fr-ok alias:external
+ENTREPRISE = ENTERPRISE  # lang: fr-ok alias:external
+declarer = declare  # lang: fr-ok alias:external
+declarer_le_mappeur_de_groupes = declare_group_mapper  # lang: fr-ok alias:external
+mappeur_de_groupes = group_mapper  # lang: fr-ok alias:external
+courante = current  # lang: fr-ok alias:external
+fonctions = features  # lang: fr-ok alias:external
+est_entreprise = is_enterprise  # lang: fr-ok alias:external
+SessionRefusee = SessionRefused  # lang: fr-ok alias:external
+declarer_une_validation_de_session = declare_session_validation  # lang: fr-ok alias:external
+validations_de_session = session_validations  # lang: fr-ok alias:external
+declarer_un_administrateur_de_plateforme = declare_platform_administrator  # lang: fr-ok alias:external
+administrateurs_de_plateforme = platform_administrators  # lang: fr-ok alias:external
+reinitialiser = reset  # lang: fr-ok alias:external
+
+alias_names(__name__, _FORMER, removed_in=EXTERNAL_ALIAS_REMOVAL)

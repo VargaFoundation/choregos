@@ -27,7 +27,7 @@ from temporalio import activity
 
 from ..config import get_settings
 from ..train_client import signal_findings
-from .base import db, load_work_item, project_bundle, workflow_du_ticket
+from .base import db, load_work_item, notification_target, project_bundle, workflow_du_ticket
 from .job import JOB_BACKEND
 from .remote import declared_cost_usd
 from .run_key import release_run_key
@@ -45,7 +45,7 @@ async def _tell_slack_of_agent_alerts(session: Any, bundle: Any) -> None:
         full = alert.threshold >= 100
         try:
             await bundle.adapters.notify.send(
-                bundle.config.notify.slack_channel or "#choregos",
+                notification_target(bundle),
                 Message(
                     title=(
                         f"Agent {alert.subject}: monthly budget {alert.threshold} % "

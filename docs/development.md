@@ -492,15 +492,15 @@ with an extension installed for real.
 
 Three hooks in `choregos_api.edition`, next to the group mapper:
 
-- **`declarer_une_validation_de_session(fn)`** — `fn(session_db, user, payload)`, sync or async,
-  runs on every cookie-authenticated request; raise `SessionRefusee(reason)` to answer 401 with
+- **`declare_session_validation(fn)`** — `fn(session_db, user, payload)`, sync or async,
+  runs on every cookie-authenticated request; raise `SessionRefused(reason)` to answer 401 with
   that reason. A signed session is otherwise valid until `exp`: this is how server-side revocation
   and SCIM deprovisioning cut access at the next request. Any other exception propagates — a
   validation that is down is not an acceptance.
-- **`declarer_un_administrateur_de_plateforme(fn)`** — `fn(session_db, principal) -> bool`. The
+- **`declare_platform_administrator(fn)`** — `fn(session_db, principal) -> bool`. The
   core's rule (org admin of *every* organisation) still applies; an extension can only **grant** on top
   of it, never take away.
-- The session now carries **`iat`**, surfaced as `Principal.authentifie_le`, and
+- The session now carries **`iat`**, surfaced as `Principal.authenticated_at`, and
   `/api/v1/auth/login?reauth=1` asks the IdP to authenticate again (`prompt=login`, `max_age=0`) —
   the path for a gate that requires a fresh authentication. Sessions issued before 0.10.0 have no
   `iat` and read as too old.
@@ -516,7 +516,7 @@ Three routes consult extension checks **after** the core's rights and **before**
 from choregos_api.extensions import GestureRefused, declare_gesture_check
 
 def freshness(session, request):           # GestureRequest: gesture, org, principal, target
-    when = request.principal.authentifie_le
+    when = request.principal.authenticated_at
     if when is None or time.time() - when > 300:
         raise GestureRefused("approving needs a login less than 5 minutes old", "reauth")
 
@@ -599,8 +599,21 @@ objects as `choregos_api.extensions` and `choregos_api.effects`.
 A `GestureRequest` also reads `geste` and `cible`, a `GestureRefused` reads `raison`, and a `Quota`
 reads `memoire`, under the same warning. Not renamed here: the DSL value `verifier` of an action
 (a workflow written with it keeps running), the persisted `greffon:` prefixes and the entry-point
-group `choregos.plugins`. `edition.py` and the `Principal` follow in S45-12, `load_extensions` in
-S45-10; until then their examples above keep their French names.
+group `choregos.plugins`. `load_extensions` follows in S45-10.
+
+The edition API (`choregos_api.edition`) and the `Principal` followed in 0.21 (S45-12):
+
+| Former | New |
+| :-- | :-- |
+| `COMMUNAUTAIRE`, `ENTREPRISE` | `COMMUNITY`, `ENTERPRISE` <!-- lang: fr-ok --> |
+| `declarer(nom, fonctions=, ...)` | `declare(name, features=, ...)` (`publisher=`, `version=`, `licence=` unchanged) <!-- lang: fr-ok --> |
+| `declarer_le_mappeur_de_groupes`, `mappeur_de_groupes` | `declare_group_mapper`, `group_mapper` <!-- lang: fr-ok --> |
+| `courante`, `fonctions`, `est_entreprise` | `current`, `features`, `is_enterprise` <!-- lang: fr-ok --> |
+| `SessionRefusee`, `declarer_une_validation_de_session`, `validations_de_session` | `SessionRefused`, `declare_session_validation`, `session_validations` <!-- lang: fr-ok --> |
+| `declarer_un_administrateur_de_plateforme`, `administrateurs_de_plateforme` | `declare_platform_administrator`, `platform_administrators` <!-- lang: fr-ok --> |
+| `reinitialiser` | `reset` <!-- lang: fr-ok --> |
+| `Principal.authentifie_le` (read and write) | `Principal.authenticated_at` <!-- lang: fr-ok --> |
+
 ## The English ratchet
 
 Everything new is English ([ADR 0046](adr/0046-english-everywhere.md)), and what is still French

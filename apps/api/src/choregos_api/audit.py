@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Journal d'audit : toute mutation laisse une trace, et cette trace appartient à une organisation.
+"""Audit log: every mutation leaves a trace, and that trace belongs to an organisation.
 
-`org_id` est un argument **obligatoire**. C'est voulu : jusqu'au 2026-09-26, `audit_log` n'avait
-aucune colonne d'organisation, n'était pas sous RLS, et `GET /audit` ne filtrait rien — un
-`project_owner` d'une organisation lisait l'audit de toutes les autres. Rendre l'argument
-obligatoire fait de `mypy --strict` la garde : un nouvel appel qui oublie l'organisation ne compile
-pas. `None` reste licite, mais il faut l'écrire, et il signifie « événement de plateforme, visible
-d'une session de portée `*` seulement ».
+`org_id` is a **mandatory** argument. That is deliberate: until 2026-09-26, `audit_log` had no
+organisation column, was not under RLS, and `GET /audit` filtered nothing, so a `project_owner` of
+one organisation read the audit of all the others. Making the argument mandatory turns
+`mypy --strict` into the guard: a new call that forgets the organisation does not compile. `None`
+remains lawful, but it has to be written, and it means "platform event, visible only to a session
+of scope `*`".
 """
 
 from __future__ import annotations

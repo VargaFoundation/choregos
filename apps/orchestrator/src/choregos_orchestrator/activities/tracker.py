@@ -29,6 +29,7 @@ from ..markdown import STATUS_MARKER, StageLine, StatusComment, render_human_req
 from .base import (
     db,
     load_work_item,
+    notification_target,
     project_bundle,
     send_courtesy,
     tracker_owns_items,
@@ -272,7 +273,7 @@ async def create_human_request(payload: dict[str, Any]) -> dict[str, Any]:
         )
         markdown = render_human_request(payload["kind"], outward, settings.public_url, item.tracker_key)
         await bundle.adapters.tracker.comment(item.tracker_key, markdown)
-        channel = bundle.config.notify.slack_channel or "#choregos"
+        channel = notification_target(bundle)
         # The notification is a COURTESY, not the request. The request exists (in the database)
         # and can be read (comment on the work item, front-end screen, API) without it.
         #
@@ -395,7 +396,7 @@ async def notify(payload: dict[str, Any]) -> dict[str, Any]:
     a courtesy; the request it reminds of lives on without it."""
     async with db() as session:
         bundle = await project_bundle(session, payload["project_id"])
-        channel = payload.get("channel") or bundle.config.notify.slack_channel or "#choregos"
+        channel = payload.get("channel") or notification_target(bundle)
         sent = await send_courtesy(
             bundle.adapters.notify, channel, Message.model_validate(payload["message"])
         )

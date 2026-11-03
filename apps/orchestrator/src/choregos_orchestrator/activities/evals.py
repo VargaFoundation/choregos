@@ -62,6 +62,16 @@ LIVE_CONTEXTS: dict[str, dict[str, str]] = {
     "rtk+headroom": {"shell_filter": "rtk", "compression": "headroom", "on_unavailable": "fail"},
 }
 EVAL_BRANCH_PREFIX = "choregos-evals"
+#: The fixtures' French names (before S45-24) and the English name each one answers to: a stored
+#: matrix or a schedule that names one still plays the same ticket (ADR 0098 §4, removed in 0.22.0).
+FORMER_FIXTURE_NAMES: dict[str, str] = {  # lang: fr-ok alias:external
+    "node-slug-longueur": "node-slug-length",  # lang: fr-ok
+    "py-bug-arrondi": "py-rounding-bug",  # lang: fr-ok
+    "py-hors-perimetre": "py-out-of-scope",  # lang: fr-ok
+    "py-refactor-sans-regression": "py-refactor-without-regression",  # lang: fr-ok
+    "py-remise-volume": "py-volume-discount",  # lang: fr-ok
+    "py-test-manquant": "py-missing-test",  # lang: fr-ok
+}
 _NOT_TOY = {"__pycache__", ".pytest_cache", "node_modules", ".venv"}
 
 
@@ -108,7 +118,7 @@ async def run_eval_cell(payload: dict[str, Any]) -> dict[str, Any]:
         spec = _load_spec(name)
         if spec is None:
             continue
-        outcomes.append({**await _play(spec, payload), "fixture": name})
+        outcomes.append({**await _play(spec, payload), "fixture": _current_fixture_name(name)})
         with contextlib.suppress(RuntimeError):
             activity.heartbeat({"fixture": name})
     return _cell(payload, context, outcomes)
@@ -174,10 +184,15 @@ def _median(usages: list[dict[str, Any]], key: str) -> float | None:
     return round(statistics.median(values), 1) if values else None
 
 
+def _current_fixture_name(name: str) -> str:
+    """The fixture's English name: a former French one resolves to the ticket that replaced it."""
+    return FORMER_FIXTURE_NAMES.get(name, name)
+
+
 def _load_spec(name: str) -> dict[str, Any] | None:
     import yaml
 
-    path = TICKETS / f"{name}.yaml"
+    path = TICKETS / f"{_current_fixture_name(name)}.yaml"
     if not path.exists():
         return None
     spec = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -386,7 +401,7 @@ async def seed_eval_ticket(payload: dict[str, Any]) -> dict[str, Any]:
     the one it filed. A case the eval project cannot measure faithfully is skipped, with its cause.
     """
     context = _context(payload)
-    fixture = str(payload["fixture"])
+    fixture = _current_fixture_name(str(payload["fixture"]))
     spec = _load_spec(fixture)
     if spec is None:
         return _skip(f"no reference ticket {fixture}")
@@ -515,7 +530,7 @@ async def judge_eval_run(payload: dict[str, Any]) -> dict[str, Any]:
     """A live case's verdict, from its run: the status it ended with, the facts the runner measured,
     the tokens the ledger counted. A run that did not get the cell's reduction is skipped: counting
     it would credit the reduction with a run made without it."""
-    fixture = str(payload["fixture"])
+    fixture = _current_fixture_name(str(payload["fixture"]))
     spec = _load_spec(fixture) or {}
     async with db() as session:
         run = await session.get(Run, payload["run_id"])

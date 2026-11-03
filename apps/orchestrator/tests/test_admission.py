@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Un greffon INSTALLÉ peut-il refuser qu'un run démarre — avant toute clé, et jamais après coup ?
+"""Can an INSTALLED extension refuse a run's start — before any key, and never afterwards?
 
-Le greffon est un vrai module avec son `.dist-info` : c'est `charger_les_greffons()` qui le trouve
-et qui appelle son `brancher()`, comme au démarrage d'un worker.
+The extension is a real module with its `.dist-info`: `load_extensions()` finds it and calls its
+`plug_in()`, as at a worker's startup.
 """
 
 from __future__ import annotations
@@ -17,56 +17,56 @@ from sqlalchemy import func, select
 
 from .conftest import Fixture
 
-GREFFON = """
-from choregos_core.admission import AdmissionRefusee, declarer_une_admission
+EXTENSION = """
+from choregos_core.admission import AdmissionRefused, declare_admission
 
-#: Ce que le test règle : l'organisation « suspendue », et ce que le contrôle a vu.
-ETAT = {"suspendues": set(), "vues": [], "panne": False}
-
-
-async def organisation_active(demande):
-    ETAT["vues"].append(demande)
-    if ETAT["panne"]:
-        raise ConnectionError("base des organisations injoignable")
-    if demande.org in ETAT["suspendues"]:
-        raise AdmissionRefusee(f"l'organisation {demande.org} est suspendue — la réactiver, puis relancer")
+#: What the test sets: the "suspended" organisation, and what the check saw.
+STATE = {"suspended": set(), "seen": [], "outage": False}
 
 
-def brancher():
-    declarer_une_admission("suspension", organisation_active)
+async def organisation_is_active(request):
+    STATE["seen"].append(request)
+    if STATE["outage"]:
+        raise ConnectionError("organisations database unreachable")
+    if request.org in STATE["suspended"]:
+        raise AdmissionRefused(f"organisation {request.org} is suspended — reactivate it, then relaunch")
+
+
+def plug_in():
+    declare_admission("suspension", organisation_is_active)
 """
 
 
 @pytest.fixture
-def greffon(tmp_path: pathlib.Path) -> Iterator[Any]:
-    from choregos_adapters import charger_les_greffons
-    from choregos_core.admission import reinitialiser
+def extension(tmp_path: pathlib.Path) -> Iterator[Any]:
+    from choregos_adapters import load_extensions
+    from choregos_core.admission import reset
 
-    racine = tmp_path / "site"
-    racine.mkdir()
-    (racine / "greffon_admission.py").write_text(GREFFON, encoding="utf-8")
-    info = racine / "greffon_admission-0.1.0.dist-info"
+    root = tmp_path / "site"
+    root.mkdir()
+    (root / "extension_admission.py").write_text(EXTENSION, encoding="utf-8")
+    info = root / "extension_admission-0.1.0.dist-info"
     info.mkdir()
     (info / "METADATA").write_text(
-        "Metadata-Version: 2.1\nName: greffon_admission\nVersion: 0.1.0\n", encoding="utf-8"
+        "Metadata-Version: 2.1\nName: extension_admission\nVersion: 0.1.0\n", encoding="utf-8"
     )
     (info / "entry_points.txt").write_text(
-        "[choregos.plugins]\ngreffon_admission = greffon_admission:brancher\n", encoding="utf-8"
+        "[choregos.plugins]\nextension_admission = extension_admission:plug_in\n", encoding="utf-8"
     )
-    sys.path.insert(0, str(racine))
+    sys.path.insert(0, str(root))
     try:
-        assert "greffon_admission" in charger_les_greffons()
-        yield sys.modules["greffon_admission"].ETAT
+        assert "extension_admission" in load_extensions()
+        yield sys.modules["extension_admission"].STATE
     finally:
-        sys.path.remove(str(racine))
-        sys.modules.pop("greffon_admission", None)
-        reinitialiser()
+        sys.path.remove(str(root))
+        sys.modules.pop("extension_admission", None)
+        reset()
 
 
-async def _preparer(setup: Fixture, attempt: int = 1) -> dict[str, Any]:
-    from choregos_orchestrator.activities import stage as activites
+async def _prepare(setup: Fixture, attempt: int = 1) -> dict[str, Any]:
+    from choregos_orchestrator.activities import stage as activities
 
-    return await activites.prepare_stage(
+    return await activities.prepare_stage(
         {
             "project_id": setup.project_id,
             "work_item_id": setup.work_item_id,
@@ -80,65 +80,67 @@ async def _preparer(setup: Fixture, attempt: int = 1) -> dict[str, Any]:
     )
 
 
-async def _compter(modele: Any) -> int:
+async def _count(model: Any) -> int:
     from choregos_api.db.session import session_scope
 
     async with session_scope() as session:
-        return int((await session.execute(select(func.count()).select_from(modele))).scalar_one())
+        return int((await session.execute(select(func.count()).select_from(model))).scalar_one())
 
 
-async def test_le_controle_recoit_ce_qu_il_faut_pour_decider(setup: Fixture, greffon: Any) -> None:
-    prepared = await _preparer(setup)
+async def test_the_check_receives_what_it_needs_to_decide(setup: Fixture, extension: Any) -> None:
+    prepared = await _prepare(setup)
     assert prepared["run_id"]
-    (demande,) = greffon["vues"]
-    assert (demande.org, demande.project, demande.work_item) == (
+    (request,) = extension["seen"]
+    assert (request.org, request.project, request.work_item) == (
         "varga",
         setup.project_slug,
         setup.tracker_key,
     )
-    assert demande.run_id == prepared["run_id"] and demande.role == "implement"
-    assert demande.budget_usd > 0
+    assert request.run_id == prepared["run_id"] and request.role == "implement"
+    assert request.budget_usd > 0
 
 
-async def test_un_refus_arrete_l_etape_sans_reprise_et_sans_cle(setup: Fixture, greffon: Any) -> None:
+async def test_a_refusal_stops_the_stage_without_retry_and_without_a_key(
+    setup: Fixture, extension: Any
+) -> None:
     from choregos_api.db.models import GatewayKeyRow, Run
     from temporalio.exceptions import ApplicationError
 
-    greffon["suspendues"].add("varga")
-    with pytest.raises(ApplicationError) as refus:
-        await _preparer(setup)
-    assert refus.value.type == "admission_refused" and refus.value.non_retryable
-    # La raison nomme le contrôle ET dit quoi faire : c'est ce que le ticket affiche.
-    assert "suspension : l'organisation varga est suspendue — la réactiver" in str(refus.value)
-    assert await _compter(GatewayKeyRow) == 0, "une clé a été émise pour un run refusé"
-    assert await _compter(Run) == 0, "un run a été créé alors qu'il était refusé"
+    extension["suspended"].add("varga")
+    with pytest.raises(ApplicationError) as refusal:
+        await _prepare(setup)
+    assert refusal.value.type == "admission_refused" and refusal.value.non_retryable
+    # The reason names the check AND says what to do: it is what the work item displays.
+    assert "suspension : organisation varga is suspended — reactivate it" in str(refusal.value)
+    assert await _count(GatewayKeyRow) == 0, "a key was issued for a refused run"
+    assert await _count(Run) == 0, "a run was created although it was refused"
 
 
-async def test_un_run_deja_prepare_n_est_jamais_refuse_apres_coup(setup: Fixture, greffon: Any) -> None:
-    """Rejouer `prepare_stage` (reprise Temporal) après une suspension ne tue pas ce qui tourne."""
-    premier = await _preparer(setup)
-    greffon["suspendues"].add("varga")
-    rejoue = await _preparer(setup)
-    assert rejoue["reused"] and rejoue["run_id"] == premier["run_id"]
+async def test_an_already_prepared_run_is_never_refused_afterwards(setup: Fixture, extension: Any) -> None:
+    """Replaying `prepare_stage` (Temporal resume) after a suspension does not kill what is running."""
+    first = await _prepare(setup)
+    extension["suspended"].add("varga")
+    replayed = await _prepare(setup)
+    assert replayed["reused"] and replayed["run_id"] == first["run_id"]
 
 
-async def test_une_panne_du_controle_n_est_pas_un_refus(setup: Fixture, greffon: Any) -> None:
-    """Elle remonte telle quelle, et Temporal retente : une base injoignable ne décide rien."""
+async def test_a_check_outage_is_not_a_refusal(setup: Fixture, extension: Any) -> None:
+    """It comes up as it is, and Temporal retries: an unreachable database decides nothing."""
     from temporalio.exceptions import ApplicationError
 
-    greffon["panne"] = True
+    extension["outage"] = True
     with pytest.raises(ConnectionError):
-        await _preparer(setup)
+        await _prepare(setup)
     try:
-        await _preparer(setup)
-    except ApplicationError:  # pragma: no cover - ce serait le défaut
-        pytest.fail("une panne du contrôle a été transformée en refus définitif")
+        await _prepare(setup)
+    except ApplicationError:  # pragma: no cover - this would be the default
+        pytest.fail("a check outage was turned into a final refusal")
     except ConnectionError:
         pass
 
 
-async def test_sans_greffon_tout_run_est_admis(setup: Fixture) -> None:
-    from choregos_core.admission import admissions_declarees
+async def test_without_an_extension_every_run_is_admitted(setup: Fixture) -> None:
+    from choregos_core.admission import declared_admissions
 
-    assert admissions_declarees() == ()
-    assert (await _preparer(setup))["run_id"]
+    assert declared_admissions() == ()
+    assert (await _prepare(setup))["run_id"]

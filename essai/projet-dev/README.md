@@ -4,7 +4,7 @@
 ([DiametralGroup/choregos-sandbox-dev](https://github.com/DiametralGroup/choregos-sandbox-dev) : une
 petite bibliothèque de facturation, ses tests, GitHub Actions), de vrais agents du catalogue et de
 vraies décisions. Le même parcours, sur des faux et en temps accéléré, est
-`apps/orchestrator/tests/test_gabarit_livraison_logicielle.py`.
+`apps/orchestrator/tests/test_software_delivery_template.py`. <!-- lang: fr-ok -->
 
 ## Ce qu'il faut au dev
 

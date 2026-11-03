@@ -1,8 +1,8 @@
-"""`adr_number_free` lit la branche par défaut À TRAVERS LE DÉPÔT, au moment de juger (#287, S22-20).
+"""`adr_number_free` reads the default branch THROUGH THE REPOSITORY, at the time of judging (#287, S22-20).
 
-Deux études qui tournent ensemble numérotent leur ADR « le plus grand existant plus un » : la
-seconde à fusionner porterait un doublon. L'activité liste les ADR déjà sur `main` et la garantie
-refuse le numéro pris.
+Two studies running together number their ADR "the largest existing plus one": the second one to
+merge would carry a duplicate. The activity lists the ADRs already on `main` and the guard refuses
+the taken number.
 """
 
 from __future__ import annotations
@@ -13,35 +13,35 @@ import pytest
 
 pytestmark = pytest.mark.asyncio
 
-DEPOT = "varga/billing-api"
-REGLE = {"name": "adr_number_free"}
+REPOSITORY = "varga/billing-api"
+RULE = {"name": "adr_number_free"}
 
 
-async def test_un_numero_pris_sur_la_branche_par_defaut_est_refuse(setup: Any) -> None:
+async def test_a_number_taken_on_the_default_branch_is_refused(setup: Any) -> None:
     from choregos_orchestrator.activities.gates import evaluate_gates
 
-    charge = {"project_id": setup.project_id, "work_item_id": setup.work_item_id, "gates": [REGLE]}
+    payload = {"project_id": setup.project_id, "work_item_id": setup.work_item_id, "gates": [RULE]}
     scm = setup.adapters.scm
-    scm.set_diff(DEPOT, "main", "choregos/123", [("docs/adr/0042-rls.md", 16, 0)])
-    [libre] = await evaluate_gates(charge)
-    assert libre["passed"] is True, libre["detail"]
+    scm.set_diff(REPOSITORY, "main", "choregos/123", [("docs/adr/0042-rls.md", 16, 0)])
+    [free] = await evaluate_gates(payload)
+    assert free["passed"] is True, free["detail"]
 
-    # Une autre étude a fusionné son 0042 entre-temps.
-    await scm.commit_files(DEPOT, "main", {"docs/adr/0042-cache.md": "# Cache\n"}, "autre étude")
-    [pris] = await evaluate_gates(charge)
-    assert pris["passed"] is False
-    assert pris["annotations"] == ["docs/adr/0042-rls.md"]
-    assert "already taken on the default branch by docs/adr/0042-cache.md" in pris["detail"]
+    # Another study merged its 0042 in the meantime.
+    await scm.commit_files(REPOSITORY, "main", {"docs/adr/0042-cache.md": "# Cache\n"}, "other study")
+    [taken] = await evaluate_gates(payload)
+    assert taken["passed"] is False
+    assert taken["annotations"] == ["docs/adr/0042-rls.md"]
+    assert "already taken on the default branch by docs/adr/0042-cache.md" in taken["detail"]
 
 
-async def test_sans_listage_du_depot_la_garantie_refuse(setup: Any, monkeypatch: Any) -> None:
+async def test_without_the_repository_listing_the_guard_refuses(setup: Any, monkeypatch: Any) -> None:
     from choregos_orchestrator.activities.gates import evaluate_gates
 
-    async def en_panne(*_: Any) -> list[str]:
-        raise RuntimeError("GitHub injoignable")
+    async def down(*_: Any) -> list[str]:
+        raise RuntimeError("GitHub unreachable")
 
-    monkeypatch.setattr(setup.adapters.scm, "list_files", en_panne)
-    setup.adapters.scm.set_diff(DEPOT, "main", "choregos/123", [("docs/adr/0042-rls.md", 16, 0)])
-    charge = {"project_id": setup.project_id, "work_item_id": setup.work_item_id, "gates": [REGLE]}
-    [aveugle] = await evaluate_gates(charge)
-    assert aveugle["passed"] is False and "default branch unavailable" in aveugle["detail"]
+    monkeypatch.setattr(setup.adapters.scm, "list_files", down)
+    setup.adapters.scm.set_diff(REPOSITORY, "main", "choregos/123", [("docs/adr/0042-rls.md", 16, 0)])
+    payload = {"project_id": setup.project_id, "work_item_id": setup.work_item_id, "gates": [RULE]}
+    [blind] = await evaluate_gates(payload)
+    assert blind["passed"] is False and "default branch unavailable" in blind["detail"]

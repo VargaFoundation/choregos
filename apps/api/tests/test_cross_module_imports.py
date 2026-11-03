@@ -38,22 +38,22 @@ ALLOWED_SOURCES = frozenset(
         "test_knowledge_index",
         "test_knowledge_project_owned",
         "test_knowledge_rights",
+        "test_mcp_door",
         "test_migrations",
         "test_network_policy_api",
         "test_org_slug_aliases",
         "test_outbound_proxy",
         "test_plugin_installer",
+        "test_plugin_servers",
         "test_plugin_tracker",
         "test_remote_agents",
         "test_skill_catalogue",
         "test_skills_from_git",
         "test_web_fetch_tool",
         "test_web_search_tool",
-        # Not English yet: test_courtier is S46-01's (it renames it test_broker) and test_mcp_porte is
-        # renamed by the MCP door story (test_mcp_door). Each of those stories moves its own name out of
-        # this list when it renames the module and its importers.
+        # Not English yet: test_courtier is S46-01's (it renames it test_broker). That story moves its
+        # own name out of this list when it renames the module and its importers.
         "test_courtier",
-        "test_mcp_porte",
     }
 )
 

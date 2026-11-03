@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Client Temporal côté API : démarrage de workflows et routage des signaux.
+"""Temporal client on the API side: starting workflows and routing signals.
 
-L'API ne connaît de Temporal que quatre gestes : démarrer un `WorkflowInterpreter`,
-lui envoyer un signal, l'interroger, et signaler un train. En mode fakes, un client
-en mémoire enregistre les appels pour que les tests et la démo fonctionnent sans serveur.
+The API knows only four gestures of Temporal: start a `WorkflowInterpreter`, send it a signal,
+query it, and signal a train. In fakes mode, an in-memory client records the calls so that the
+tests and the demo work without a server.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from choregos_contracts import Control, HumanDecision, InboundEvent
+from choregos_core.compat import alias_names
 
 from .config import get_settings
 from .logging import get_logger
@@ -23,7 +24,7 @@ logger = get_logger("choregos.temporal")
 
 
 def interpreter_id(project_slug: str, tracker_key: str) -> str:
-    """ID déterministe : un même ticket ne peut pas avoir deux workflows (S1-10)."""
+    """Deterministic ID: one ticket cannot have two workflows (S1-10)."""
     safe = tracker_key.replace("/", "_").replace("#", "-")
     return f"wi-{project_slug}-{safe}"
 
@@ -37,7 +38,7 @@ def findings_id(project_slug: str) -> str:
 
 
 def action_id(action: str) -> str:
-    """L'identifiant Temporal d'une action gouvernée : un seul workflow par action (ADR 0035)."""
+    """The Temporal identifier of a governed action: a single workflow per action (ADR 0035)."""
     return f"action-{action}"
 
 
@@ -105,7 +106,7 @@ class TemporalGateway(Protocol):
 
 @dataclass
 class WorkflowState:
-    """Ce que Temporal sait d'un workflow : son statut, et pourquoi s'il est mort."""
+    """What Temporal knows of a workflow: its status, and why if it is dead."""
 
     status: str  # RUNNING, COMPLETED, FAILED, CANCELED, TERMINATED, TIMED_OUT, CONTINUED_AS_NEW
     failure: str | None = None
@@ -117,7 +118,7 @@ class WorkflowState:
 
 @dataclass
 class FakeTemporal:
-    """Client en mémoire : enregistre démarrages et signaux, sans serveur Temporal."""
+    """In-memory client: records starts and signals, without a Temporal server."""
 
     started: dict[str, dict[str, Any]] = field(default_factory=dict)
     signals: list[tuple[str, str, Any]] = field(default_factory=list)
@@ -130,7 +131,7 @@ class FakeTemporal:
     start_calls: list[str] = field(default_factory=list)
 
     async def start_interpreter(self, workflow_id: str, payload: dict[str, Any]) -> str:
-        self.started.setdefault(workflow_id, payload)  # ID déterministe ⇒ démarrage idempotent
+        self.started.setdefault(workflow_id, payload)  # deterministic ID => idempotent start
         state = self.described.get(workflow_id)
         if state is None or state.status != "COMPLETED":  # ALLOW_DUPLICATE_FAILED_ONLY, as the real one
             self.gone.discard(workflow_id)
@@ -169,7 +170,7 @@ class FakeTemporal:
         return workflow_id
 
     async def start_action(self, workflow_id: str, payload: dict[str, Any]) -> str:
-        self.started.setdefault(workflow_id, payload)  # `action-<id>` : un seul démarrage
+        self.started.setdefault(workflow_id, payload)  # `action-<id>`: a single start
         return workflow_id
 
     async def start_trial(self, workflow_id: str, payload: dict[str, Any]) -> str:
@@ -227,7 +228,7 @@ class FakeTemporal:
 
 
 class RealTemporal:
-    """Client Temporal réel, connecté paresseusement."""
+    """Real Temporal client, connected lazily."""
 
     def __init__(self, address: str, namespace: str, task_queue: str) -> None:
         self.address = address
@@ -256,7 +257,7 @@ class RealTemporal:
                 payload,
                 id=workflow_id,
                 task_queue=self.task_queue,
-                id_reuse_policy=2,  # ALLOW_DUPLICATE_FAILED_ONLY : pas de doublon sur un même ticket
+                id_reuse_policy=2,  # ALLOW_DUPLICATE_FAILED_ONLY: no duplicate on one ticket
             )
             return str(handle.id)
         except WorkflowAlreadyStartedError:
@@ -265,9 +266,9 @@ class RealTemporal:
             # on a knowledge source answered 500 on the dev tenant.
             logger.info("workflow already started", workflow_id=workflow_id)
             return workflow_id
-        except RPCError as exc:  # déjà démarré : c'est le comportement voulu
+        except RPCError as exc:  # already started: the intended behaviour
             if "already" in str(exc).lower():
-                logger.info("workflow déjà démarré", workflow_id=workflow_id)
+                logger.info("workflow already started", workflow_id=workflow_id)
                 return workflow_id
             raise
 
@@ -326,11 +327,10 @@ class RealTemporal:
         await client.get_workflow_handle(workflow_id).cancel()
 
     async def describe(self, workflow_id: str) -> WorkflowState | None:
-        """L'état du workflow vu de Temporal, ou rien si Temporal ne le connaît pas (ou plus).
+        """The state of the workflow as Temporal sees it, or nothing if Temporal no longer knows it.
 
-        Une lecture de ticket ne doit pas tomber parce que Temporal est lent ou absent :
-        deux secondes, puis on répond « inconnu », et la marque persistée sur le ticket
-        (`failure`) prend le relais.
+        Reading a ticket must not fail because Temporal is slow or absent: two seconds, then we
+        answer "unknown", and the mark persisted on the ticket (`failure`) takes over.
         """
         from temporalio.service import RPCError
 
@@ -344,8 +344,8 @@ class RealTemporal:
         if status in {"FAILED", "TIMED_OUT", "TERMINATED"}:
             try:
                 await client.get_workflow_handle(workflow_id).result()
-            except Exception as exc:  # c'est le message qu'on veut, pas l'exception
-                failure = _cause_lisible(exc)
+            except Exception as exc:  # the message is what we want, not the exception
+                failure = _readable_cause(exc)
         return WorkflowState(status=status, failure=failure)
 
 
@@ -374,10 +374,10 @@ async def answer_or_none(workflow_id: str, name: str, call: Awaitable[Any]) -> A
         return None
 
 
-def _cause_lisible(exc: BaseException) -> str:
-    """Le message de la cause la plus profonde.
+def _readable_cause(exc: BaseException) -> str:
+    """The message of the deepest cause.
 
-    « le projet n'a pas de dépôt », pas « Activity task failed ».
+    "the project has no repository", not "Activity task failed".
     """
     cause: BaseException = exc
     while cause.__cause__ is not None:
@@ -403,7 +403,7 @@ def get_temporal() -> TemporalGateway:
 
 
 def set_temporal(gateway: TemporalGateway | None) -> None:
-    """Point d'injection pour les tests."""
+    """Injection point for the tests."""
     global _gateway
     _gateway = gateway
 
@@ -549,3 +549,8 @@ async def deliver_inbound(project_slug: str, tracker_key: str, event: InboundEve
 
 async def deliver_control(project_slug: str, tracker_key: str, control: Control) -> None:
     await _signal_interpreter(project_slug, tracker_key, "control", control.model_dump(mode="json"))
+
+
+_cause_lisible = _readable_cause  # lang: fr-ok alias:internal
+
+alias_names(__name__, {"_cause_lisible": "_readable_cause"})  # lang: fr-ok alias:internal

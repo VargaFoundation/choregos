@@ -3,7 +3,7 @@
 
 import { useState, type ReactNode } from "react";
 import { Button, Input, Select, Textarea } from "@/components/ui";
-import { useBrouillon } from "@/components/workflows/brouillon";
+import { useDraft } from "@/components/workflows/draft";
 import { transition as transitionOf, type ReadTransition } from "@/components/workflows/document";
 import { FieldsEditor } from "@/components/workflows/fields-editor";
 import { rowsToSchema, schemaToRows, withFields } from "@/components/workflows/fields-schema";
@@ -39,7 +39,7 @@ function Labelled({ label, children }: { label: string; children: ReactNode }) {
  * diff a reviewer reads is one field per line. The validator still decides: a refusal shows in the draft bar.
  */
 export function TransitionFields({ id, states, actors, workflows }: { id: string; states: string[]; actors: string[]; workflows: string[] }) {
-  const draft = useBrouillon();
+  const draft = useDraft();
   const read = transitionOf(draft.document, id);
   if (!read) return null;
   // Re-seeded when the draft changes underneath (an undo, another gesture).
@@ -59,14 +59,14 @@ function TransitionFieldsForm({
   actors: string[];
   workflows: string[];
 }) {
-  const draft = useBrouillon();
+  const draft = useDraft();
   /** One operation per field — none to clear a field the transition does not have (the engine refuses it). */
   const field = (name: string, value: unknown): WorkflowOperation[] => {
     const empty = value === null || value === undefined || value === "" || (Array.isArray(value) && value.length === 0);
     return empty && (read as Record<string, unknown>)[name] === undefined ? [] : [operations.transitionField(id, name, value)];
   };
   const apply = (...ops: WorkflowOperation[]) => {
-    if (ops.length > 0) void draft.appliquer(...ops);
+    if (ops.length > 0) void draft.apply(...ops);
   };
   const set = (name: string, value: unknown) => apply(...field(name, value));
 

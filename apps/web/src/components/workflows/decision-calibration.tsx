@@ -3,7 +3,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { EtatDeLecture } from "@/components/ui";
-import { DECISION_HUE } from "@/components/workflows/carte/disposition";
+import { DECISION_HUE } from "@/components/workflows/map/layout";
 import { CONFIDENCE_SUFFIX, transitions, type WorkflowDocument } from "@/components/workflows/document";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";

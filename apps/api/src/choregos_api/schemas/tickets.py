@@ -13,19 +13,19 @@ from .base import Dto, PageMeta
 
 
 class WorkItemCreate(Dto):
-    """Une demande posée DANS Choregos, quand le tracker est interne (`tracker: internal`)."""
+    """A request made INSIDE Choregos, when the tracker is internal (`tracker: internal`)."""
 
     title: str = Field(min_length=1, max_length=500)
     body: str = ""
     size: Literal["S", "M", "L", "XL"] | None = None
     risk: Literal["low", "medium", "high"] | None = None
-    #: Démarrer l'interpréteur tout de suite (l'équivalent de `mark_agent_ready`).
+    #: Start the interpreter right away (the equivalent of `mark_agent_ready`).
     start: bool = True
-    #: Le workflow où le ticket naît (ADR 0031) ; sinon le routage du projet, sinon son défaut.
+    #: The workflow where the ticket is born (ADR 0031); otherwise the project's routing, else its default.
     workflow: str | None = None
-    #: Les étiquettes du ticket, que les règles de routage lisent.
+    #: The ticket's labels, which the routing rules read.
     labels: list[str] = Field(default_factory=list)
-    #: Les champs du ticket, validés par `metadata.inputs` de son workflow.
+    #: The ticket's fields, validated by `metadata.inputs` of its workflow.
     fields: dict[str, Any] = Field(default_factory=dict)
     #: The most this work item may spend, in USD (S27-06, ADR 0047). It may only tighten the
     #: workflow's `budget.ticket_usd` and the policy's ticket budget: wider is refused (422).
@@ -33,7 +33,7 @@ class WorkItemCreate(Dto):
 
 
 class WorkItemUpdate(Dto):
-    """Les champs qui changent (S20-05) : ils remplacent les siens, `null` en retire un."""
+    """The fields that change (S20-05): they replace its own, `null` removes one."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -87,7 +87,7 @@ class HumanRequestDto(Dto):
 
 
 class WorkflowFailure(Dto):
-    """Pourquoi l'interpréteur d'un ticket est mort. Le ticket ne bougera plus sans redémarrage."""
+    """Why a ticket's interpreter died. The ticket will not move again without a restart."""
 
     message: str
     activity: str | None = None
@@ -113,11 +113,11 @@ class WorkItemDto(Dto):
     workflow_name: str | None = None
     workflow_version: int | None = None
     temporal_wf_id: str | None = None
-    #: Statut Temporal du workflow (RUNNING, COMPLETED, FAILED…) quand on l'a demandé et que
-    #: Temporal a répondu ; sinon rien. Un ticket dans un état d'attente avec un workflow
-    #: FAILED n'attend pas : il est mort.
+    #: Temporal status of the workflow (RUNNING, COMPLETED, FAILED...) when it was asked for and
+    #: Temporal answered; otherwise nothing. A ticket in a waiting state with a FAILED
+    #: workflow is not waiting: it is dead.
     workflow_status: str | None = None
-    #: La marque posée par le workflow en mourant. Reste après que Temporal a oublié.
+    #: The mark the workflow left when dying. It stays after Temporal has forgotten.
     failure: WorkflowFailure | None = None
     paused: bool = False
     current_run: RunSummary | None = None
@@ -222,7 +222,7 @@ class TimelineEntry(Dto):
 
 
 class HandOffEvent(Dto):
-    """Un reçu de passage (S25-04) : un run a produit ou lu une sortie, sous cette empreinte."""
+    """A hand-over receipt (S25-04): a run produced or read an output, under this digest."""
 
     kind: Literal["produced", "read"]
     digest: str
@@ -233,8 +233,8 @@ class HandOffEvent(Dto):
 
 
 class HandOff(Dto):
-    """Une sortie d'étape et ses reçus, dans l'ordre ; `current_digest` est l'empreinte de ce qu'elle
-    vaut aujourd'hui — celle du dernier reçu « produite », sauf si on l'a modifiée après coup."""
+    """A step output and its receipts, in order; `current_digest` is the digest of what it is
+    worth today: the one of the last "produced" receipt, unless it was modified afterwards."""
 
     output: str
     current_digest: str | None = None
@@ -256,7 +256,7 @@ JourneyMoveKind = Literal[
 
 
 class JourneyMove(Dto):
-    """Le ticket a quitté `from` pour `to`, et l'arête du graphe qui l'y a mené (S22-01)."""
+    """The ticket left `from` for `to`, and the graph edge that led it there (S22-01)."""
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -269,7 +269,7 @@ class JourneyMove(Dto):
 
 
 class JourneyStep(Dto):
-    """Ce qu'un acteur a fait pour le ticket, sur une transition : un run, une demande, une action."""
+    """What an actor did for the ticket, on a transition: a run, a request, an action."""
 
     id: str
     kind: Literal["agent", "human", "action"]
@@ -290,8 +290,8 @@ class JourneyStep(Dto):
 
 
 class WorkItemJourney(Dto):
-    """Le parcours d'un ticket dans SON workflow, en une lecture : la carte de la version où il est
-    épinglé, ses déplacements d'état en état, et chaque pas de chaque acteur (S22-01)."""
+    """A ticket's journey through ITS workflow, in one read: the map of the version it is
+    pinned to, its moves from state to state, and each step of each actor (S22-01)."""
 
     work_item_id: str
     tracker_key: str | None = None
@@ -312,7 +312,7 @@ class DecisionRequest(Dto):
     answer: str | None = None
     reason: str | None = None
     granted_paths: list[str] = Field(default_factory=list)
-    #: `complete` : les valeurs du formulaire de la tâche, et l'attestation (S20-06).
+    #: `complete`: the values of the task's form, and the attestation (S20-06).
     values: dict[str, Any] = Field(default_factory=dict)
     attested: bool = False
 
@@ -456,7 +456,7 @@ class RunTicket(Dto):
     key: str
     title: str
     body: str = ""
-    #: Les champs du ticket (ADR 0031) : la date d'arrivée, le poste — ce que l'agent doit savoir.
+    #: The ticket's fields (ADR 0031): the arrival date, the position, what the agent must know.
     fields: dict[str, Any] = Field(default_factory=dict)
     url: str | None = None
     spec_markdown: str | None = None
@@ -465,7 +465,7 @@ class RunTicket(Dto):
 
 
 class GitToken(Dto):
-    """Un jeton git pour UN run : celui de l'App, limité à son dépôt, une heure (S22-07)."""
+    """A git token for ONE run: the App's, limited to its repository, one hour (S22-07)."""
 
     token: str | None = None
     expires_at: datetime | None = None

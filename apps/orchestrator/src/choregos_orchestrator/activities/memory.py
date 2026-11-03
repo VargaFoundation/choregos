@@ -13,7 +13,7 @@ from choregos_core.restricted import is_marked
 from sqlalchemy import select
 from temporalio import activity
 
-from .base import db, org_memory, project_bundle, send_courtesy
+from .base import db, notification_target, org_memory, project_bundle, send_courtesy
 
 
 def _write_target(project: str, run: Any) -> tuple[str | None, bool]:
@@ -381,7 +381,7 @@ async def memory_ab_report(payload: dict[str, Any]) -> dict[str, Any]:
             bundle = await project_bundle(session, projects[0])
             report["notified"] = await send_courtesy(
                 bundle.adapters.notify,
-                bundle.config.notify.slack_channel or "#choregos",
+                notification_target(bundle),
                 Message(
                     title=f"Memory: A/B report over {report['weeks']} weeks — {report['verdict']}",
                     body=str(report["detail"]),

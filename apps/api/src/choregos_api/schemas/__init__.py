@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
-"""DTO de l'API : les corps de requête et de réponse décrits par `openapi.yaml`.
+"""API DTOs: the request and response bodies described by `openapi.yaml`.
 
-Huit modules, un par domaine, réexportés : `choregos_api.schemas.X` reste l'adresse de tout.
+One module per domain, re-exported: `choregos_api.schemas.X` stays the address of everything.
 """
 
 from __future__ import annotations
@@ -156,6 +156,19 @@ from .definitions import (
     WorkflowValidateRequest,
     WorkflowValidation,
 )
+from .delivery import (
+    AbortRequest,
+    ApproveRequest,
+    FindingAck,
+    FindingAction,
+    FindingDto,
+    FindingPage,
+    FreezeRequest,
+    ReleaseDto,
+    ReleaseItemDto,
+    ReleasePage,
+    TrainStatusDto,
+)
 from .github_app import (
     GitHubAppStatus,
     GitHubInstallationDto,
@@ -164,7 +177,7 @@ from .github_app import (
     GitHubRepository,
     GitHubRepositoryPage,
 )
-from .identite import (
+from .identity import (
     ApiTokenCreate,
     ApiTokenCreated,
     ApiTokenDto,
@@ -178,19 +191,6 @@ from .identite import (
     OrgDto,
     OrgUpdate,
 )
-from .livraison import (
-    AbortRequest,
-    ApproveRequest,
-    FindingAck,
-    FindingAction,
-    FindingDto,
-    FindingPage,
-    FreezeRequest,
-    ReleaseDto,
-    ReleaseItemDto,
-    ReleasePage,
-    TrainStatusDto,
-)
 from .mcp_gateway import (
     McpGateway,
     McpGatewayAssertion,
@@ -201,16 +201,7 @@ from .mcp_gateway import (
     McpGatewayTest,
     McpGatewayTestRequest,
 )
-from .memory import (
-    MemoryStoreCreate,
-    MemoryStoreDto,
-    MemoryStorePatch,
-    MemoryStoreUser,
-    ProjectMemoryCreate,
-    RunMemoryHit,
-    RunMemorySearch,
-)
-from .mesures import (
+from .measures import (
     BudgetAlertDto,
     CostReport,
     CostRow,
@@ -225,6 +216,15 @@ from .mesures import (
     MemoryDto,
     MemoryReimport,
 )
+from .memory import (
+    MemoryStoreCreate,
+    MemoryStoreDto,
+    MemoryStorePatch,
+    MemoryStoreUser,
+    ProjectMemoryCreate,
+    RunMemoryHit,
+    RunMemorySearch,
+)
 from .outbound_proxy import (
     OutboundProxy,
     OutboundProxyPut,
@@ -233,7 +233,7 @@ from .outbound_proxy import (
     RelayOutboundProxy,
     RelayProxyCredentials,
 )
-from .plateforme import (
+from .platform import (
     AgentBackendInfo,
     AgentBackendUpdate,
     AuditEntry,
@@ -246,7 +246,7 @@ from .plateforme import (
     WebhookAck,
 )
 from .procedures import ProcedureDto, ProcedureSection, ProcedureSummary, VendorDocDto
-from .projets import (
+from .projects import (
     ConnectorCheck,
     ConnectorDiscovery,
     ConnectorDto,

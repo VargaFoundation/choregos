@@ -17,7 +17,14 @@ from sqlalchemy import select
 from temporalio import activity
 
 from ..config import get_settings
-from .base import db, internal_ticket_key, project_bundle, send_courtesy, tracker_owns_items
+from .base import (
+    db,
+    internal_ticket_key,
+    notification_target,
+    project_bundle,
+    send_courtesy,
+    tracker_owns_items,
+)
 
 TOKEN_RE = re.compile(r"[a-zà-ÿ0-9_]+")
 
@@ -178,7 +185,7 @@ async def triage_finding(payload: dict[str, Any]) -> dict[str, Any]:
             # A courtesy: raising here rolled back the finding after its ticket was created.
             notified = await send_courtesy(
                 bundle.adapters.notify,
-                bundle.config.notify.slack_channel or "#choregos",
+                notification_target(bundle),
                 Message(
                     title=f"Finding {row.severity} — {row.title}",
                     body=row.evidence[:500],
@@ -292,7 +299,7 @@ async def finding_quality_ratio(payload: dict[str, Any]) -> dict[str, Any]:
         if ratio > threshold:
             notified = await send_courtesy(
                 bundle.adapters.notify,
-                bundle.config.notify.slack_channel or "#choregos",
+                notification_target(bundle),
                 Message(
                     title=f"Findings: {ratio:.0%} false positives over 30 days",
                     body=f"Threshold {threshold:.0%} exceeded — review the rule "

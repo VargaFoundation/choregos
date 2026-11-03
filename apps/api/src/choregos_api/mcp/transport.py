@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Le transport de la porte : Streamable HTTP, sans état, en réponses JSON seulement (ADR 0030).
+"""The door's transport: Streamable HTTP, stateless, JSON responses only (ADR 0030).
 
-`POST /mcp` et `POST /mcp/projects/{org}:{slug}`. Un `GET` (le flux SSE du serveur) et un `DELETE`
-(la fin d'une session) répondent 405 : la porte n'a ni flux ni session, ce que le protocole permet.
-Avant tout échange MCP, la porte refuse en HTTP — taille, origine, version, jeton, débit — pour qu'un
-client mal configuré lise une raison, et non un silence.
+`POST /mcp` and `POST /mcp/projects/{org}:{slug}`. A `GET` (the server's SSE stream) and a `DELETE`
+(the end of a session) answer 405: the door has neither stream nor session, which the protocol allows.
+Before any MCP exchange, the door refuses in HTTP — size, origin, version, token, rate — so that a
+badly configured client reads a reason, and not a silence.
 """
 
 from __future__ import annotations
@@ -13,19 +13,17 @@ import json
 from typing import Any
 from urllib.parse import urlsplit
 
-from choregos_core.mcp import ERREUR_DE_SYNTAXE as SYNTAXE
-from choregos_core.mcp import (
-    METHODE_INCONNUE,
-    PARAMETRES_INVALIDES,
-    REQUETE_INVALIDE,
-    defaut_du_message,
-    erreur,
-    est_notification,
-    negocier,
-    ok,
-    resultat_texte,
-    version_acceptable,
-)
+from choregos_core.mcp import ERREUR_DE_SYNTAXE as PARSE_ERROR  # lang: fr-ok alias:internal
+from choregos_core.mcp import METHODE_INCONNUE as METHOD_NOT_FOUND  # lang: fr-ok alias:internal
+from choregos_core.mcp import PARAMETRES_INVALIDES as INVALID_PARAMS  # lang: fr-ok alias:internal
+from choregos_core.mcp import REQUETE_INVALIDE as INVALID_REQUEST  # lang: fr-ok alias:internal
+from choregos_core.mcp import defaut_du_message as message_defect  # lang: fr-ok alias:internal
+from choregos_core.mcp import erreur as error_response  # lang: fr-ok alias:internal
+from choregos_core.mcp import est_notification as is_notification  # lang: fr-ok alias:internal
+from choregos_core.mcp import negocier as negotiate  # lang: fr-ok alias:internal
+from choregos_core.mcp import ok
+from choregos_core.mcp import resultat_texte as text_result  # lang: fr-ok alias:internal
+from choregos_core.mcp import version_acceptable as acceptable_version  # lang: fr-ok alias:internal
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 
@@ -36,204 +34,209 @@ from ..deps import Config, Db, resolve_project
 from ..errors import ApiError
 from ..logging import get_logger
 from ..rbac import Permission
-from .appelant import Appelant, Refus, identifier
-from .garde_fous import ECRITURES_PAR_JOUR, LIMITEUR, ecritures_du_jour, tronquer
-from .oauth import metadonnees
-from .outils import INSTRUCTIONS, Contexte, OutilRefuse, annonces
+from .caller import Caller, Refusal, identify
+from .limits import RATE_LIMITER, WRITES_PER_DAY, truncate, writes_today
+from .oauth import metadata
+from .tools import INSTRUCTIONS, Context, ToolRefused, announced_tools
 
 router = APIRouter(include_in_schema=False)
 log = get_logger(__name__)
 
-TAILLE_MAX_DU_CORPS = 1024 * 1024
+MAX_BODY_SIZE = 1024 * 1024
 
 
-def _origines_admises(settings: Settings) -> set[str]:
-    def origine(url: str) -> str:
-        morceaux = urlsplit(url)
-        return f"{morceaux.scheme}://{morceaux.netloc}"
+def _allowed_origins(settings: Settings) -> set[str]:
+    def origin(url: str) -> str:
+        parts = urlsplit(url)
+        return f"{parts.scheme}://{parts.netloc}"
 
-    return {origine(settings.public_url), origine(settings.api_url)}
+    return {origin(settings.public_url), origin(settings.api_url)}
 
 
-def _refus_http(
-    statut: int,
+def _http_refusal(
+    status: int,
     message: str,
     *,
-    erreur_oauth: str | None = None,
+    oauth_error: str | None = None,
     settings: Settings | None = None,
-    chemin: str = "/mcp",
+    path: str | None = None,
+    erreur_oauth: str | None = None,  # lang: fr-ok alias:internal
+    chemin: str | None = None,  # lang: fr-ok alias:internal
 ) -> JSONResponse:
-    entetes = {}
-    if statut in {401, 403}:
-        valeur = 'Bearer realm="choregos"'
+    oauth_error = oauth_error if oauth_error is not None else erreur_oauth
+    path = path or chemin or "/mcp"
+    headers = {}
+    if status in {401, 403}:
+        value = 'Bearer realm="choregos"'
         if settings is not None and settings.mcp_oauth_enabled:
-            # Claude lit ce pointeur sur un 401 pour trouver l'IdP (RFC 9728). Le document est celui
-            # de la porte appelée : sa `resource` doit être l'URL que le client a saisie.
-            document = f"{settings.public_url.rstrip('/')}/.well-known/oauth-protected-resource{chemin}"
-            valeur += f', resource_metadata="{document}"'
-        if erreur_oauth:
-            valeur += f', error="{erreur_oauth}"'
-        entetes["WWW-Authenticate"] = valeur
-    return JSONResponse({"error": message}, status_code=statut, headers=entetes)
+            # Claude reads this pointer on a 401 to find the identity provider (RFC 9728). The document
+            # is that of the door called: its `resource` must be the URL the client typed.
+            document = f"{settings.public_url.rstrip('/')}/.well-known/oauth-protected-resource{path}"
+            value += f', resource_metadata="{document}"'
+        if oauth_error:
+            value += f', error="{oauth_error}"'
+        headers["WWW-Authenticate"] = value
+    return JSONResponse({"error": message}, status_code=status, headers=headers)
 
 
 @router.get("/.well-known/oauth-protected-resource")
-@router.get("/.well-known/oauth-protected-resource/{chemin:path}")
-async def metadonnees_de_la_ressource(settings: Config, chemin: str = "mcp") -> Response:
-    """Les métadonnées RFC 9728 de la porte ; 404 tant qu'OAuth n'est pas allumé."""
+@router.get("/.well-known/oauth-protected-resource/{path:path}")
+async def resource_metadata_of_the_door(settings: Config, path: str = "mcp") -> Response:
+    """The door's RFC 9728 metadata; 404 until OAuth is switched on."""
     if not settings.mcp_oauth_enabled:
         return Response(status_code=404)
-    return JSONResponse(metadonnees(settings, "/" + chemin.strip("/")))
+    return JSONResponse(metadata(settings, "/" + path.strip("/")))
 
 
-def _faute(identifiant: Any, code: int, message: str, statut: int = 200) -> JSONResponse:
-    return JSONResponse(erreur(identifiant, code, message), status_code=statut)
+def _fault(request_id: Any, code: int, message: str, status: int = 200) -> JSONResponse:
+    return JSONResponse(error_response(request_id, code, message), status_code=status)
 
 
 @router.api_route("/mcp", methods=["GET", "DELETE"])
-@router.api_route("/mcp/projects/{projet}", methods=["GET", "DELETE"])
-async def sans_flux_ni_session() -> Response:
-    """La porte est sans état : ni flux SSE à ouvrir, ni session à fermer."""
+@router.api_route("/mcp/projects/{project}", methods=["GET", "DELETE"])
+async def no_stream_or_session() -> Response:
+    """The door is stateless: no SSE stream to open, no session to close."""
     return Response(status_code=405, headers={"Allow": "POST"})
 
 
 @router.post("/mcp")
-async def porte(request: Request, session: Db, settings: Config) -> Response:
-    return await _servir(request, session, settings, None)
+async def door(request: Request, session: Db, settings: Config) -> Response:
+    return await _serve(request, session, settings, None)
 
 
-@router.post("/mcp/projects/{projet}")
-async def porte_du_projet(projet: str, request: Request, session: Db, settings: Config) -> Response:
-    return await _servir(request, session, settings, projet)
+@router.post("/mcp/projects/{project}")
+async def project_door(project: str, request: Request, session: Db, settings: Config) -> Response:
+    return await _serve(request, session, settings, project)
 
 
-async def _servir(request: Request, session: Any, settings: Settings, projet_demande: str | None) -> Response:
-    origine = request.headers.get("origin")
-    if origine and origine not in _origines_admises(settings):
-        # Une page web ouverte dans le navigateur de l'humain ne parle pas à sa place (DNS rebinding).
-        return _refus_http(403, f"origin refused: {origine}")
-    longueur = request.headers.get("content-length")
-    if longueur and longueur.isdigit() and int(longueur) > TAILLE_MAX_DU_CORPS:
-        return _refus_http(413, "message too large (1 MiB at most)")
-    if not version_acceptable(request.headers.get("mcp-protocol-version")):
-        return _refus_http(400, f"unsupported protocol version: {request.headers['mcp-protocol-version']}")
+async def _serve(
+    request: Request, session: Any, settings: Settings, requested_project: str | None
+) -> Response:
+    origin = request.headers.get("origin")
+    if origin and origin not in _allowed_origins(settings):
+        # A web page open in the person's browser does not speak in their place (DNS rebinding).
+        return _http_refusal(403, f"origin refused: {origin}")
+    length = request.headers.get("content-length")
+    if length and length.isdigit() and int(length) > MAX_BODY_SIZE:
+        return _http_refusal(413, "message too large (1 MiB at most)")
+    if not acceptable_version(request.headers.get("mcp-protocol-version")):
+        return _http_refusal(400, f"unsupported protocol version: {request.headers['mcp-protocol-version']}")
     try:
-        appelant = await identifier(session, request, settings)
-    except Refus as refus:
-        return _refus_http(
-            refus.statut, str(refus), erreur_oauth=refus.erreur, settings=settings, chemin=request.url.path
+        caller = await identify(session, request, settings)
+    except Refusal as refusal:
+        return _http_refusal(
+            refusal.status, str(refusal), oauth_error=refusal.error, settings=settings, path=request.url.path
         )
-    admis, attente = LIMITEUR.admet(appelant.cle)
-    if not admis:
-        return JSONResponse({"error": "rate_limited"}, status_code=429, headers={"Retry-After": str(attente)})
+    admitted, wait = RATE_LIMITER.admits(caller.key)
+    if not admitted:
+        return JSONResponse({"error": "rate_limited"}, status_code=429, headers={"Retry-After": str(wait)})
 
-    projet, org = appelant.projet_lie, appelant.org_du_projet_lie
-    if projet_demande is not None:
+    project, org = caller.bound_project, caller.bound_project_org
+    if requested_project is not None:
         try:
-            cible, org_cible = await resolve_project(session, projet_demande)
+            target, target_org = await resolve_project(session, requested_project)
         except ApiError:
-            return _refus_http(404, f"project `{projet_demande}` not found")
-        if not appelant.principal.can(Permission.PROJECT_READ, org_cible, cible.slug):
-            return _refus_http(404, f"project `{projet_demande}` not found")
-        if projet is not None and projet.id != cible.id:
-            return _refus_http(403, f"this token is bound to project {org}:{projet.slug}")
-        projet, org = cible, org_cible
+            return _http_refusal(404, f"project `{requested_project}` not found")
+        if not caller.principal.can(Permission.PROJECT_READ, target_org, target.slug):
+            return _http_refusal(404, f"project `{requested_project}` not found")
+        if project is not None and project.id != target.id:
+            return _http_refusal(403, f"this token is bound to project {org}:{project.slug}")
+        project, org = target, target_org
 
-    corps = await request.body()
-    if len(corps) > TAILLE_MAX_DU_CORPS:
-        return _refus_http(413, "message too large (1 MiB at most)")
+    raw = await request.body()
+    if len(raw) > MAX_BODY_SIZE:
+        return _http_refusal(413, "message too large (1 MiB at most)")
     try:
-        message = json.loads(corps)
+        message = json.loads(raw)
     except (json.JSONDecodeError, UnicodeDecodeError):
-        return _faute(None, SYNTAXE, "unreadable body: JSON is expected", statut=400)
-    defaut = defaut_du_message(message)
-    if defaut is not None:
-        identifiant = message.get("id") if isinstance(message, dict) else None
-        return _faute(identifiant, REQUETE_INVALIDE, defaut, statut=400)
-    if est_notification(message):
+        return _fault(None, PARSE_ERROR, "unreadable body: JSON is expected", status=400)
+    defect = message_defect(message)
+    if defect is not None:
+        request_id = message.get("id") if isinstance(message, dict) else None
+        return _fault(request_id, INVALID_REQUEST, defect, status=400)
+    if is_notification(message):
         return Response(status_code=202)
 
-    ctx = Contexte(
+    ctx = Context(
         session=session,
-        appelant=appelant,
-        projet=projet,
+        caller=caller,
+        project=project,
         org=org,
         console=settings.public_url.rstrip("/"),
     )
-    reponse = await _repondre(ctx, message, request)
-    return JSONResponse(reponse)
+    response = await _answer(ctx, message, request)
+    return JSONResponse(response)
 
 
-async def _repondre(ctx: Contexte, message: dict[str, Any], request: Request) -> dict[str, Any]:
-    identifiant = message.get("id")
-    methode = message["method"]
+async def _answer(ctx: Context, message: dict[str, Any], request: Request) -> dict[str, Any]:
+    request_id = message.get("id")
+    method = message["method"]
     params = message.get("params") or {}
-    if methode == "initialize":
+    if method == "initialize":
         return ok(
-            identifiant,
+            request_id,
             {
-                "protocolVersion": negocier(params.get("protocolVersion")),
+                "protocolVersion": negotiate(params.get("protocolVersion")),
                 "capabilities": {"tools": {"listChanged": False}},
                 "serverInfo": {"name": "choregos", "title": "Choregos", "version": __version__},
                 "instructions": INSTRUCTIONS,
             },
         )
-    if methode == "ping":
-        return ok(identifiant, {})
-    if methode == "tools/list":
-        return ok(identifiant, {"tools": [outil.annonce() for outil in await annonces(ctx)]})
-    if methode == "tools/call":
-        return await _appeler(ctx, identifiant, params, request)
-    return erreur(identifiant, METHODE_INCONNUE, f"unknown method: {methode}")
+    if method == "ping":
+        return ok(request_id, {})
+    if method == "tools/list":
+        return ok(request_id, {"tools": [tool.announcement() for tool in await announced_tools(ctx)]})
+    if method == "tools/call":
+        return await _call(ctx, request_id, params, request)
+    return error_response(request_id, METHOD_NOT_FOUND, f"unknown method: {method}")
 
 
-async def _appeler(
-    ctx: Contexte, identifiant: Any, params: dict[str, Any], request: Request
-) -> dict[str, Any]:
-    nom = params.get("name")
+async def _call(ctx: Context, request_id: Any, params: dict[str, Any], request: Request) -> dict[str, Any]:
+    name = params.get("name")
     arguments = params.get("arguments") or {}
-    outil = next((o for o in await annonces(ctx) if o.nom == nom), None)
-    if outil is None or not isinstance(arguments, dict):
-        # Un outil hors des droits n'existe pas pour cet humain : même réponse qu'un outil inconnu.
-        return erreur(identifiant, PARAMETRES_INVALIDES, f"Unknown tool: {nom}")
+    tool = next((o for o in await announced_tools(ctx) if o.name == name), None)
+    if tool is None or not isinstance(arguments, dict):
+        # A tool outside the person's rights does not exist for them: the same answer as an unknown tool.
+        return error_response(request_id, INVALID_PARAMS, f"Unknown tool: {name}")
     issue = "ok"
     try:
-        if (
-            outil.ecriture
-            and await ecritures_du_jour(ctx.session, ctx.appelant.principal.user_id) >= ECRITURES_PAR_JOUR
-        ):
-            # Toute écriture compte : un ticket ouvert, une action proposée (ADR 0030).
-            raise OutilRefuse(f"budget_exhausted: {ECRITURES_PAR_JOUR} writes a day through MCP")
-        texte, structure = await outil.executer(ctx, arguments)
-        resultat = resultat_texte(tronquer(texte), structure=structure)
-    except OutilRefuse as refus:
-        issue = "refus"
-        resultat = resultat_texte(str(refus), en_erreur=True)
-    await _auditer(ctx, outil.nom, outil.ecriture and issue == "ok", issue, request)
-    return ok(identifiant, resultat)
+        if tool.write and await writes_today(ctx.session, ctx.caller.principal.user_id) >= WRITES_PER_DAY:
+            # Every write counts: a work item opened, an action proposed (ADR 0030).
+            raise ToolRefused(f"budget_exhausted: {WRITES_PER_DAY} writes a day through MCP")
+        text, structure = await tool.execute(ctx, arguments)
+        result = text_result(truncate(text), structure=structure)
+    except ToolRefused as refusal:
+        issue = "refus"  # lang: fr-ok — persisted audit value, S45-39 (ADR 0098 §4)
+        result = text_result(str(refusal), en_erreur=True)
+    await _audit(ctx, tool.name, tool.write and issue == "ok", issue, request)
+    return ok(request_id, result)
 
 
-async def _auditer(ctx: Contexte, outil: str, ecriture: bool, issue: str, request: Request) -> None:
-    """Chaque appel laisse une ligne (R-SOC-MCP-06) — et les écritures du jour s'y comptent."""
+async def _audit(ctx: Context, tool: str, write: bool, issue: str, request: Request) -> None:
+    """Every call leaves a row (R-SOC-MCP-06) — and the day's writes are counted from them."""
     await record(
         ctx.session,
-        ctx.appelant.principal,
+        ctx.caller.principal,
         "mcp.call",
-        # Un appel qui ne vise ni organisation ni projet (`list_projects`) s'inscrit dans celle de
-        # l'agent qu'incarne le client : sans organisation, sous RLS, la ligne n'était lisible par
-        # personne — l'audit d'un agent externe disparaissait sur PostgreSQL.
-        org_id=ctx.org_id_vise
-        or (ctx.projet.org_id if ctx.projet is not None else None)
-        or ctx.appelant.agent_org_id,
+        # A call that targets neither an organisation nor a project (`list_projects`) is filed under
+        # that of the agent the client embodies: without an organisation, under RLS, the row was
+        # readable by nobody — an external agent's audit vanished on PostgreSQL.
+        org_id=ctx.target_org_id
+        or (ctx.project.org_id if ctx.project is not None else None)
+        or ctx.caller.agent_org_id,
         target_type="mcp_tool",
-        target_id=outil,
-        ecriture=ecriture,
+        target_id=tool,
+        ecriture=write,  # lang: fr-ok — persisted audit key, S45-39
         issue=issue,
-        jeton=ctx.appelant.cle,
-        agent=ctx.appelant.agent,
+        jeton=ctx.caller.key,  # lang: fr-ok — persisted audit key, S45-39
+        agent=ctx.caller.agent,
         client=(request.headers.get("user-agent") or "")[:100] or None,
     )
-    log.info("mcp.call", outil=outil, issue=issue, appelant=ctx.appelant.cle)
+    log.info("mcp.call", tool=tool, issue=issue, caller=ctx.caller.key)
 
 
-__all__ = ["Appelant", "router"]
+__all__ = ["Caller", "router"]
+
+TAILLE_MAX_DU_CORPS = MAX_BODY_SIZE  # lang: fr-ok alias:internal
+_origines_admises = _allowed_origins  # lang: fr-ok alias:internal
+_refus_http = _http_refusal  # lang: fr-ok alias:internal
