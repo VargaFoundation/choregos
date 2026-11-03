@@ -117,7 +117,7 @@ export interface NavEntry {
 
 export interface NavGroup {
   title: string;
-  /** The family's hue (ADR 0120); the administration's plugin sections have none. */
+  /** The family's hue (ADR 0120). */
   hue?: Hue;
   entries: NavEntry[];
 }
@@ -260,6 +260,8 @@ export function adminGroups(
   return [
     {
       title: "Administration",
+      // What one configures (S55-11): the administration wears the hue of Admin in the sidebar.
+      hue: GROUP_HUES.configure,
       entries: [
         page("/admin", "Overview", LayoutDashboard),
         page("/admin/members", "Members", Users),
@@ -321,6 +323,19 @@ const PAGES_OF_A_SECTION: Record<string, string> = {
   "/settings/people": "People",
   "/settings/danger": "Danger zone",
 };
+
+/**
+ * The organisation's page a path is in, with its family's hue (S55-11): the header of an organisation
+ * page wears the icon and the colour of its entry in the sidebar, as a project's pages do.
+ */
+export function orgSection(pathname: string): { entry: NavEntry; hue?: Hue } | undefined {
+  if (scopeOf(pathname).kind === "project") return undefined;
+  for (const group of orgGroups()) {
+    const entry = group.entries.find((e) => e.active(pathname));
+    if (entry) return { entry, hue: group.hue };
+  }
+  return undefined;
+}
 
 /** The section a project path is in, with its family's hue: what a page's header shows (S55-02). */
 export function projectSection(slug: string, pathname: string): { entry: NavEntry; hue?: Hue } | undefined {

@@ -15,6 +15,7 @@ import { egressFlag, useEgressGuard } from "@/components/egress/egress-provider"
 import { ProcedurePanel } from "@/components/procedures/procedure-panel";
 import { bodyOfDrafts, EMPTY_DRAFT, problemOfDraft, SecretField, type SecretDraft } from "@/components/secret-field";
 import { Alert, Badge, Button, EtatDeLecture, ErrorNote, Input } from "@/components/ui";
+import { OrgPageHeader } from "@/components/coquille/org-page-header";
 import { api } from "@/lib/api";
 import { categoriesOf, NO_FILTERS, stars, type CatalogueFilters } from "@/lib/catalogue";
 import { authLabel, filterMcpEntries, hostOf, routesOf, whyNotInstallable } from "@/lib/mcp-catalogue";
@@ -43,7 +44,7 @@ export default function McpCataloguePage() {
   const shown = filterMcpEntries(entries, filters);
   return (
     <div className="space-y-5">
-      <h1 className="text-xl font-semibold">MCP servers</h1>
+      <OrgPageHeader title="MCP servers" />
       <p className="max-w-3xl text-sm text-ink-muted">
         Well-known MCP servers, ready to declare. Installing one creates an MCP connector of the organisation: its
         tools are discovered after the install and each one is born closed, so nothing runs until you open it. The

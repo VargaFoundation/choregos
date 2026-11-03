@@ -12,6 +12,7 @@ import type { Agent } from "@/lib/types";
 const query = vi.hoisted(() => ({ current: new URLSearchParams() }));
 const replace = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({
+  usePathname: () => "/agents",
   useSearchParams: () => query.current,
   useRouter: () => ({ push: vi.fn(), replace }),
 }));

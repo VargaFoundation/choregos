@@ -12,7 +12,7 @@ import type { Agent, ApiToken } from "@/lib/types";
  */
 vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme", me: null }) }));
 const query = vi.hoisted(() => ({ current: new URLSearchParams() }));
-vi.mock("next/navigation", () => ({ useSearchParams: () => query.current, useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ usePathname: () => "/agents", useSearchParams: () => query.current, useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
   return {

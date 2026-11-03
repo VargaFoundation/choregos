@@ -7,7 +7,8 @@ import { useRef, useState } from "react";
 import { Glossaire } from "@/components/glossaire";
 import { GitImport, RiskBadge } from "@/components/skills/gate";
 import { SkillTabs } from "@/components/skills/onglets";
-import { Card, Empty, ErrorNote, Eyebrow, Heading } from "@/components/ui";
+import { Card, Empty, ErrorNote } from "@/components/ui";
+import { OrgPageHeader } from "@/components/coquille/org-page-header";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
@@ -41,15 +42,16 @@ export default function SkillsPage() {
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <Eyebrow>What agents know how to do</Eyebrow>
-        <Heading as="h1" size="xl">
-          Skills
-        </Heading>
-        <p className="max-w-3xl text-sm text-ink-muted">
-          A skill is a folder: a <code>SKILL.md</code> that says when to use it, and the files it brings. An
-          agent&apos;s version names the skills it carries; the runner lays them where its backend reads them, and
-          checks each one against its digest. A skill grants nothing — <code>allowed-tools</code> is refused.
-        </p>
+        <OrgPageHeader title="Skills"
+          eyebrow="What agents know how to do"
+          description={
+            <>
+              A skill is a folder: a <code>SKILL.md</code> that says when to use it, and the files it brings. An
+              agent&apos;s version names the skills it carries; the runner lays them where its backend reads them, and
+              checks each one against its digest. A skill grants nothing — <code>allowed-tools</code> is refused.
+            </>
+          }
+        />
         <Glossaire ici="skills" />
         <SkillTabs active="library" />
       </div>

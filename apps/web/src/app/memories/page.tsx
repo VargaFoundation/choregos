@@ -4,7 +4,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
-import { Button, Card, Drawer, Empty, ErrorNote, Eyebrow, Heading, Input, Select } from "@/components/ui";
+import { Button, Card, Drawer, Empty, ErrorNote, Input, Select } from "@/components/ui";
+import { OrgPageHeader } from "@/components/coquille/org-page-header";
 import { MemoryAbReportCard } from "@/components/memory-ab-report";
 import { OrganisationMemoryStore } from "@/components/memory-store";
 import { api } from "@/lib/api";
@@ -55,14 +56,10 @@ export default function MemoriesPage() {
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <Eyebrow>What agents learn</Eyebrow>
-        <Heading as="h1" size="xl">
-          Memories
-        </Heading>
-        <p className="max-w-3xl text-sm text-ink-muted">
-          Facts learned from work, shared across projects. An agent binds the ones it reads, in order, and at most one it writes
-          to; what it writes here is a proposal an administrator accepts. A project&apos;s own memories are in the project.
-        </p>
+        <OrgPageHeader title="Memories"
+          eyebrow="What agents learn"
+          description="Facts learned from work, shared across projects. An agent binds the ones it reads, in order, and at most one it writes to; what it writes here is a proposal an administrator accepts. A project's own memories are in the project."
+        />
         <OrganisationMemoryStore org={org} />
       </div>
       <Card

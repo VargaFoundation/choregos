@@ -3,8 +3,10 @@
 
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { useNavGroups, sectionOf } from "@/components/coquille/navigation";
-import { BreadcrumbBase, Breadcrumbs, Heading, type BreadcrumbStep } from "@/components/ui";
+import { Settings } from "lucide-react";
+import { GROUP_HUES, useNavGroups, sectionOf } from "@/components/coquille/navigation";
+import { PageHeader } from "@/components/page-header";
+import { BreadcrumbBase, Breadcrumbs, type BreadcrumbStep } from "@/components/ui";
 
 const BASE: BreadcrumbStep[] = [{ href: "/admin", label: "Administration" }];
 
@@ -22,9 +24,11 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     <BreadcrumbBase.Provider value={BASE}>
       <div className="space-y-4">
         <Breadcrumbs steps={steps} />
-        <Heading as="h1" size="xl">
-          {steps.length > 0 ? section!.label : "Administration"}
-        </Heading>
+        <PageHeader
+          icon={section?.icon ?? Settings}
+          hue={GROUP_HUES.configure}
+          title={steps.length > 0 ? section!.label : "Administration"}
+        />
         {children}
       </div>
     </BreadcrumbBase.Provider>

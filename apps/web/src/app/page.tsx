@@ -7,7 +7,8 @@ import { api } from "@/lib/api";
 import { hasReleaseTrain } from "@/lib/release-train";
 import { useSession } from "@/lib/session";
 import { eur, percent, relative } from "@/lib/format";
-import { buttonClasses, Card, Empty, ErrorNote, Eyebrow, Heading, Lead, Stat, StateBadge } from "@/components/ui";
+import { buttonClasses, Card, Empty, ErrorNote, Stat, StateBadge } from "@/components/ui";
+import { OrgPageHeader } from "@/components/coquille/org-page-header";
 import { Activity, FolderKanban, Wallet } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { HUE_CLASSES, hueOf } from "@/lib/workflow-hue";
@@ -21,18 +22,15 @@ export default function ProjectsPage() {
 
   return (
     <div className="space-y-12">
-      <header className="flex flex-wrap items-end justify-between gap-6">
-        <div className="space-y-5">
-          <Eyebrow>Organisation {org}</Eyebrow>
-          <Heading as="h1" size="xl">
-            Projects
-          </Heading>
-          <Lead>Each project runs its own workflows: a request comes in, agents and people move it on under the rules you set, and every step leaves its evidence.</Lead>
-        </div>
-        <Link href="/projects/new" className={buttonClasses("primary", "md")}>
-          New project
-        </Link>
-      </header>
+      <OrgPageHeader title="Projects"
+        eyebrow={<>Organisation {org}</>}
+        description="Each project runs its own workflows: a request comes in, agents and people move it on under the rules you set, and every step leaves its evidence."
+        actions={
+          <Link href="/projects/new" className={buttonClasses("primary", "md")}>
+            New project
+          </Link>
+        }
+      />
 
       {error && <ErrorNote>{(error as Error).message}</ErrorNote>}
       {isLoading && <Empty>Loading…</Empty>}
