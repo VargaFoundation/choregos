@@ -14,8 +14,10 @@ rather than the first:
 - each agent file in the catalogue entry shape (`catalogue:` + `agent:`, ADR 0040). Only its structure
   is checked here: the full `AgentCreate` model lives in the API, which the installer (S43-04) applies;
 - each skill directory holds a `SKILL.md`;
-- each template's `manifest.yaml` against `template.schema.json`;
-- each eval suite against `plugin-evals.schema.json`, naming an agent of the plugin;
+- each template's `manifest.yaml` against `template.schema.json`, and each source of a knowledge base it
+  ships (`defaults.knowledge`, S51-06) that reads a template input names an input the template declares;
+- each eval suite against `plugin-evals.schema.json`, naming an agent of the plugin, a case's
+  `input.fields` within the API's 64 KiB of JSON;
 - each procedure through the ADR 0067 parser (`choregos_core.procedures.parse`), and each
   `{{plugin_webhook_url:<plugin>/<server>}}` it holds names this plugin and a server of it with a webhook;
 - each template that takes its tracker from a plugin (`requires.connectors.tracker:
@@ -24,6 +26,10 @@ rather than the first:
   operation names, a compensation that names an operation of the same server, egress fields that the
   configuration schema declares, and — for a server that `implements: [tracker]` — every tool of the
   tracker profile declared with its access, `TRACKER_PROFILE`).
+
+Loading also WARNS, without refusing (`Plugin.warnings`): an agent that reads a knowledge base
+(`spec.knowledge`) no template of the plugin ships (`defaults.knowledge`) runs only in an organisation
+that has that base and serves it to the project — the run stops otherwise (ADR 0117).
 
 The plugin's identity is its **content digest**: the sha256 of its canonical tar (its declared files
 only, entries sorted by path, mode 0644, modification time 0, owner and group 0). `pack` writes that tar
@@ -35,6 +41,7 @@ from __future__ import annotations
 import gzip
 import hashlib
 import io
+import json
 import re
 import tarfile
 import tempfile
@@ -74,6 +81,8 @@ TRACKER_PROFILE: dict[str, str] = {
 MAX_FILES = 2000
 MAX_BYTES = 50 * 1024 * 1024
 AGENT_SLUG = r"^[a-z][a-z0-9-]{1,62}$"
+#: An eval case's `input.fields`, as JSON: the API's `AgentSampleInput` cap (S51-04, S51-10).
+MAX_CASE_FIELDS_BYTES = 64 * 1024
 
 
 class PluginError(ChoregosError):
@@ -96,6 +105,8 @@ class Plugin:
     procedures: tuple[str, ...] = ()
     #: the declared files, relative POSIX paths, sorted: what the digest covers and `pack` writes
     files: tuple[str, ...] = ()
+    #: what loads but may not run as shipped (ADR 0117): said, never refused
+    warnings: tuple[str, ...] = ()
 
     @property
     def name(self) -> str:
@@ -222,6 +233,12 @@ def _check_eval(path: Path, ref: str, agents: set[str], problems: list[str]) -> 
     if doc["agent"] not in agents:
         problems.append(f"{ref}: evaluates `{doc['agent']}`, which the plugin does not ship")
     names = [str(case["name"]) for case in doc.get("cases") or []]
+    for index, case in enumerate(doc.get("cases") or []):
+        fields = (case.get("input") or {}).get("fields")
+        if fields and len(json.dumps(fields, default=str)) > MAX_CASE_FIELDS_BYTES:
+            problems.append(
+                f"{ref}:cases/{index}/input/fields: at most {MAX_CASE_FIELDS_BYTES // 1024} KiB of JSON"
+            )
     for duplicate in sorted({n for n in names if names.count(n) > 1}):
         problems.append(f"{ref}: case `{duplicate}` is declared twice")
 
@@ -368,13 +385,32 @@ def _plugin_tracker(manifest: Any) -> str | None:
     return tracker if isinstance(tracker, str) and tracker.startswith(PLUGIN_TRACKER) else None
 
 
+def _template_knowledge(manifest: dict[str, Any], where: str, problems: list[str]) -> set[str]:
+    """The slugs of the knowledge bases a (schema-valid) template ships; a source reading an input the
+    template does not declare is a problem (S51-06)."""
+    declared = {str(i.get("name")) for i in manifest.get("inputs") or []}
+    shipped: set[str] = set()
+    for index, base in enumerate((manifest.get("defaults") or {}).get("knowledge") or []):
+        shipped.add(str(base["slug"]))
+        for source in base.get("sources") or []:
+            name = (source.get("config") or {}).get("url_from_input")
+            if name is not None and name not in declared:
+                problems.append(
+                    f"{where}:defaults/knowledge/{index}: the source `{source.get('name')}` reads the input "
+                    f"`{name}`, which the template does not declare"
+                )
+    return shipped
+
+
 def _skills_and_templates(
     root: Path,
     contents: dict[str, list[str]],
     plugin: str,
     servers: dict[str, dict[str, Any]],
     problems: list[str],
-) -> None:
+) -> set[str]:
+    """Checks the skills and templates; returns the knowledge bases the templates ship, by slug."""
+    knowledge: set[str] = set()
     for ref in contents.get("skills", []):
         path = _target(root, ref, problems)
         if path is not None and not (path / "SKILL.md").is_file():
@@ -390,6 +426,8 @@ def _skills_and_templates(
         manifest = _yaml(path / "manifest.yaml", where, problems)
         found = _schema_problems(where, "template.schema.json", manifest)
         problems.extend(found)
+        if not found:
+            knowledge |= _template_knowledge(manifest, where, problems)
         tracker = None if found else _plugin_tracker(manifest)
         if tracker is not None:
             owner, _, server = tracker.removeprefix(PLUGIN_TRACKER).partition("/")
@@ -402,6 +440,24 @@ def _skills_and_templates(
                     f"{where}: the tracker `{tracker}` is a server that does not declare "
                     "`implements: [tracker]`"
                 )
+    return knowledge
+
+
+def _knowledge_warnings(agents: dict[str, dict[str, Any]], shipped: set[str]) -> list[str]:
+    """An agent reading a base no template of the plugin ships: it runs only where the organisation
+    has that base, served to the project (ADR 0117)."""
+    warnings = []
+    for slug, doc in sorted(agents.items()):
+        spec = (doc.get("agent") or {}).get("spec") or {}
+        for ref in spec.get("knowledge") or []:
+            base = str((ref or {}).get("slug") if isinstance(ref, dict) else ref)
+            if base not in shipped:
+                warnings.append(
+                    f"agent `{slug}` reads the knowledge base `{base}`, which no template of this plugin "
+                    "ships (`defaults.knowledge`): its runs stop unless the organisation has that base "
+                    "and serves it to the project"
+                )
+    return warnings
 
 
 def _procedures(
@@ -444,7 +500,7 @@ def load_directory(root: Path) -> Plugin:
 
     agents = _agents(root, contents.get("agents", []), problems)
     servers = _servers(root, contents.get("servers", []), problems)
-    _skills_and_templates(root, contents, name, servers, problems)
+    shipped = _skills_and_templates(root, contents, name, servers, problems)
     for ref in contents.get("evals", []):
         path = _target(root, ref, problems)
         if path is not None:
@@ -453,7 +509,16 @@ def load_directory(root: Path) -> Plugin:
 
     if problems:
         raise PluginError(problems)
-    return Plugin(root, manifest, _digest(files), agents, servers, tuple(procedures), tuple(files))
+    return Plugin(
+        root,
+        manifest,
+        _digest(files),
+        agents,
+        servers,
+        tuple(procedures),
+        tuple(files),
+        tuple(_knowledge_warnings(agents, shipped)),
+    )
 
 
 # -- canonical tar, digest, pack ------------------------------------------------------------------------

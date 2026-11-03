@@ -774,6 +774,27 @@ paths:
       responses:
         "200": { description: The workflow's activity, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowActivity" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{id}/workflows/{name}/steps/{step}/calibration:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: name, in: path, required: true, schema: { type: string } }
+      - { name: step, in: path, required: true, description: The state the step runs from., schema: { type: string } }
+    get:
+      tags: [workflows]
+      operationId: getStepCalibration
+      description: >-
+        How well a step's probabilities predicted what followed, measured from the decision ledger
+        (ADR 0121 §7): for each question, source, model and model version, the reliability bins, the
+        expected calibration error, the coverage and accuracy at each threshold from 0.50 to 0.95, and
+        the lowest threshold whose accuracy reaches `target` (none, with the reason, under
+        `min_observed` observed decisions). A decision is right when nobody contradicted it, its work
+        item ended in success and did not come back. Every version of the workflow counts. Read only
+        (S52-05).
+      parameters:
+        - { name: target, in: query, description: The accuracy a suggested threshold must reach., schema: { type: number, exclusiveMinimum: 0, maximum: 1, default: 0.9 } }
+      responses:
+        "200": { description: The step's calibration, content: { application/json: { schema: { $ref: "#/components/schemas/StepCalibration" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /projects/{id}/workflows/{name}/versions:
     parameters:
       - { $ref: "#/components/parameters/Id" }
@@ -980,7 +1001,7 @@ paths:
       description: The models an agent may be given for a stage role and a usage; every member may read it.
       parameters:
         - { name: role, in: query, required: false, schema: { type: string } }
-        - { name: usage, in: query, required: false, schema: { type: string, enum: [agent, embed, distill, eval, route], default: agent } }
+        - { name: usage, in: query, required: false, schema: { type: string, enum: [agent, embed, distill, eval, route, decide], default: agent } }
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/UsableModel" } } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -1081,6 +1102,53 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ReceivedEventPage" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{id}/triggers:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [work-items]
+      operationId: listTriggers
+      summary: The project's HTTP triggers, their URL, and whether each has a token
+      description: >-
+        The triggers declared under `triggers:` in the project's configuration (S56-01, ADR 0113). Any member reads
+        them; a token is never listed, only whether one exists and when it was minted.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Trigger" } } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{id}/triggers/{name}/token:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: name, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    post:
+      tags: [work-items]
+      operationId: rotateTriggerToken
+      summary: Mint the trigger's token, shown once; the previous one stops working
+      description: >-
+        Needs `connector:write` on the project: a token is how another system writes into it. Only the token's
+        SHA-256 is kept. Audited as `trigger.token.rotate`.
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/TriggerToken" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{id}/triggers/{name}/fire:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: name, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+      - { name: Idempotency-Key, in: header, required: false, schema: { type: string } }
+    post:
+      tags: [work-items]
+      operationId: fireTrigger
+      summary: Fire the trigger by hand with a payload
+      description: >-
+        The same mapping, workflow and routing as a call from another system, initiated by the person (needs
+        `item:control`). Recorded among the project's received events as `trigger.manual`.
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TriggerAck" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: The project's tracker is external, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "422": { description: The payload lacks the declared key, or the workflow refuses the work item, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
   /work-items/{id}:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -3545,6 +3613,37 @@ paths:
         "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /webhooks/triggers/{org}/{project}/{name}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: project, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,63}$" } }
+      - { name: name, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+      - { name: Idempotency-Key, in: header, required: false, schema: { type: string } }
+      - { name: X-Choregos-Token, in: header, required: false, schema: { type: string } }
+      - { name: X-Choregos-Signature, in: header, required: false, schema: { type: string }, description: "`sha256=<hex or base64>` of the body, for a trigger with `auth: signature` (S56-04)." }
+      - { name: token, in: query, required: false, schema: { type: string }, description: "For a sender that can only set a URL." }
+    post:
+      tags: [webhooks]
+      security: []
+      operationId: triggerWebhook
+      summary: Another system opens a work item through the project's trigger
+      description: >-
+        An HTTP trigger declared in the project's configuration (S56-01, ADR 0113), called with its token
+        (`Authorization: Bearer`, `X-Choregos-Token` or `?token=`). The JSON object is mapped onto a work item (title,
+        description, labels with `trigger:<name>`, fields by JSON pointer) that starts in the trigger's workflow or the
+        one the project's routing picks. A replayed delivery (`Idempotency-Key`, else the body's digest) answers
+        `duplicate`; a trigger with a `key` opens one work item per value and answers `already_open` after. Every call
+        past the token leaves a received event, refused ones included; a payload its `when` does not match is
+        acknowledged as `ignored` (S56-05). A trigger with `auth: signature` takes `X-Choregos-Signature` instead of the
+        token (S56-04). 404 when the trigger does not exist or has no token, 401 on a wrong token or signature.
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+      responses:
+        "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/TriggerAck" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: The project's tracker is external, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "413": { description: The body is over 256 KiB }
+        "422": { description: Not a JSON object, the declared key is missing, or the workflow refuses the work item, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
   /internal/runs/{id}/input:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -5170,9 +5269,9 @@ components:
         to: { type: string }
         to_display: { type: string }
         actor: { type: string }
-        actor_type: { type: string, enum: [agent, human, system, job, release_train] }
+        actor_type: { type: string, enum: [agent, human, system, job, decision, release_train] }
         who: { type: string }
-        outputs: { type: array, items: { type: string } }
+        outputs: { type: array, items: { type: string }, description: "What the step writes; for a decision step (ADR 0121), each question's `<name>` and `<name>_confidence`, which a `when` compares." }
         gates:
           type: array
           items:
@@ -5189,8 +5288,8 @@ components:
         task: { type: [string, "null"], description: The task a person does, in plain words. }
         sentence: { type: string }
         agent: { type: [string, "null"], description: "The registry agent the actor names, `slug` or `slug@N` (ADR 0033); null for an implicit playbook actor and for any actor that is not an agent." }
-        role: { type: [string, "null"], description: The role of an agent or job actor. }
-        model: { type: [string, "null"], description: "The model or profile of an agent actor, as written (`profile:standard`)." }
+        role: { type: [string, "null"], description: "The role of an agent, job or decision actor." }
+        model: { type: [string, "null"], description: "The model or profile of an agent actor, as written (`profile:standard`); the catalogue entry of a decision actor (`platform/decide`)." }
         group: { type: [string, "null"], description: The group of a human actor. }
         sla_hours: { type: [integer, "null"], description: The SLA of a human actor. }
         command: { type: [array, "null"], items: { type: string }, description: The argv of a job actor. }
@@ -5275,6 +5374,11 @@ components:
             - { type: "null" }
           description: "The memories a run reads and writes (S40-11, ADR 0075), in precedence order (earlier wins). At most 8, no duplicates, at most one `write` (the target of the run's lessons, findings and proposals; a global target only ever receives proposals). Absent means: derive from `memory`. Sent together with a non-default `memory` it is a 422."
         network: { $ref: "#/components/schemas/AgentNetwork" }
+        workspace:
+          oneOf:
+            - { type: string, enum: [none, read, write] }
+            - { type: "null" }
+          description: "The workspace a run gets (S51-03, ADR 0119); the repository is the project's. `none`: nothing is cloned and the repository's host is not on the run's network. `read`: the repository is cloned and no file of it may be written (only the step's deliverables in `.choregos/outputs/`). `write`: today's run. Absent (left out of the stored spec, so no digest moves): `write`, or the `hosted` runtime's `workspace`. Refused with an `a2a` runtime, and with a `hosted` one when it differs from `runtime.workspace`."
     AcpRuntime:
       type: object
       description: A coding agent that speaks ACP (ADR 0002), one of the backends the runner ships.
@@ -5815,6 +5919,7 @@ components:
       properties:
         title: { type: string, maxLength: 500 }
         body: { type: string, maxLength: 20000 }
+        fields: { type: object, additionalProperties: true, description: "the work item's fields, rendered as `ticket.fields` (S51-04): `{tracker: {reporter, creator, labels, answers}}` plays a ticket filed from a tracker; absent, `{}`" }
     AgentEvalResult:
       type: object
       required: [name, passed]
@@ -6310,6 +6415,52 @@ components:
         failed: { type: integer }
         cost_usd: { type: number }
         median_minutes: { type: [number, "null"] }
+    ReliabilityBin:
+      type: object
+      description: One bin of probability, `[lower, upper)` (the last one closed), over the observed decisions.
+      required: [lower, upper, count]
+      properties:
+        lower: { type: number }
+        upper: { type: number }
+        count: { type: integer }
+        mean_probability: { type: [number, "null"], description: The mean probability of the bin's decisions; null for an empty bin. }
+        accuracy: { type: [number, "null"], description: The share of them that were right; null for an empty bin. }
+    ThresholdPoint:
+      type: object
+      description: What a threshold keeps of the observed decisions — how many, which share, how many right.
+      required: [threshold, count]
+      properties:
+        threshold: { type: number }
+        count: { type: integer }
+        coverage: { type: [number, "null"] }
+        accuracy: { type: [number, "null"] }
+    QuestionCalibration:
+      type: object
+      description: One question's calibration, for one source, model and model version (ADR 0121 §7).
+      required: [question, source, model, count, observed]
+      properties:
+        question: { type: string }
+        source: { type: string, enum: [decision_model, agent] }
+        model: { type: string }
+        model_version: { type: [string, "null"] }
+        count: { type: integer, description: Every recorded decision. }
+        observed: { type: integer, description: The decisions whose outcome is observed. }
+        accuracy: { type: [number, "null"], description: "The share of observed decisions that were right: nobody contradicted them, the work item ended in success, and it did not come back." }
+        ece: { type: [number, "null"], description: The expected calibration error over the ten bins. }
+        bins: { type: array, items: { $ref: "#/components/schemas/ReliabilityBin" } }
+        thresholds: { type: array, items: { $ref: "#/components/schemas/ThresholdPoint" } }
+        suggested_threshold: { type: [number, "null"], description: The lowest threshold whose accuracy reaches the target. }
+        suggestion_reason: { type: [string, "null"], description: Why no threshold is suggested. }
+    StepCalibration:
+      type: object
+      description: A step's decisions measured from the ledger, per question and model version (ADR 0121 §7).
+      required: [workflow, step, target_accuracy, min_observed]
+      properties:
+        workflow: { type: string }
+        step: { type: string, description: The state the step runs from. }
+        target_accuracy: { type: number }
+        min_observed: { type: integer, description: The observed decisions below which no threshold is suggested. }
+        questions: { type: array, items: { $ref: "#/components/schemas/QuestionCalibration" } }
     WorkflowActivity:
       type: object
       required: [workflow, days]
@@ -7329,6 +7480,7 @@ components:
         max_input_tokens: { type: [integer, "null"] }
         supports_tool_calling: { type: boolean, default: true }
         supports_vision: { type: boolean, default: false }
+        mode: { type: string, default: chat, description: "What the gateway says the model does; `evaluation` is a decision model (ADR 0121)." }
         internal_price: { type: boolean, default: false }
         source: { type: string, enum: [gateway, manual], default: gateway }
         owned_by: { type: string, default: "" }
@@ -7351,6 +7503,7 @@ components:
         max_input_tokens: { type: [integer, "null"] }
         supports_tool_calling: { type: boolean, default: true }
         supports_vision: { type: boolean, default: false }
+        mode: { type: string, default: chat }
     ModelCatalogueEntry:
       type: object
       required: [id, model_name, display_name, source, enabled, allowed_roles, usages]
@@ -7361,7 +7514,7 @@ components:
         source: { type: string, enum: [gateway, manual] }
         enabled: { type: boolean }
         allowed_roles: { type: array, items: { type: string } }
-        usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval, route] } }
+        usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval, route, decide] } }
         price_override: { oneOf: [{ $ref: "#/components/schemas/PriceOverride" }, { type: "null" }] }
         max_usd_per_minute: { type: [number, "null"], exclusiveMinimum: 0 }
         gateway: { oneOf: [{ $ref: "#/components/schemas/ModelGatewayFacts" }, { type: "null" }] }
@@ -7378,7 +7531,7 @@ components:
         display_name: { type: [string, "null"], maxLength: 200 }
         enabled: { type: boolean, default: true }
         allowed_roles: { type: array, items: { type: string } }
-        usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval, route] }, default: [agent] }
+        usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval, route, decide] }, default: [agent] }
         price_override: { oneOf: [{ $ref: "#/components/schemas/PriceOverride" }, { type: "null" }] }
         max_usd_per_minute: { type: [number, "null"], exclusiveMinimum: 0 }
         notes: { type: string, default: "" }
@@ -7388,7 +7541,7 @@ components:
         display_name: { type: [string, "null"], maxLength: 200 }
         enabled: { type: [boolean, "null"] }
         allowed_roles: { type: [array, "null"], items: { type: string } }
-        usages: { type: [array, "null"], items: { type: string, enum: [agent, embed, distill, eval, route] } }
+        usages: { type: [array, "null"], items: { type: string, enum: [agent, embed, distill, eval, route, decide] } }
         price_override: { oneOf: [{ $ref: "#/components/schemas/PriceOverride" }, { type: "null" }] }
         clear_price_override: { type: boolean, default: false }
         max_usd_per_minute: { type: [number, "null"], exclusiveMinimum: 0 }
@@ -7414,6 +7567,18 @@ components:
           properties:
             type: { type: string }
             capabilities: { type: array, items: { type: string } }
+            source:
+              type: string
+              enum: [organisation, deployment]
+              description: >-
+                Where the gateway is set: the organisation's own `gateway` connector, or the
+                deployment's environment (`CHOREGOS_GATEWAY_TYPE`, `CHOREGOS_GATEWAY_URL`), which no
+                screen changes.
+            base_url:
+              type: [string, "null"]
+              description: >-
+                The address the platform calls. The organisation's own is shown to its members; the
+                deployment's only to a platform administrator, null otherwise.
         tiers: { $ref: "#/components/schemas/ModelTiers" }
         entries: { type: array, items: { $ref: "#/components/schemas/ModelCatalogueEntry" } }
     ModelCatalogueSettings:
@@ -7749,15 +7914,51 @@ components:
       properties:
         id: { type: string }
         received_at: { type: string, format: date-time }
-        source: { type: string, description: "jira, github, gitlab, tekton, argocd, alertmanager, plugin:<plugin>/<server>" }
+        source: { type: string, description: "jira, github, gitlab, tekton, argocd, alertmanager, plugin:<plugin>/<server>, trigger:<name>, schedule:<name>" }
         event_type: { type: string }
         delivery_id: { type: [string, "null"] }
         outcome:
           type: string
-          enum: [created_work_item, started, signalled, boarded, labels_updated, ignored_no_item_key, ignored_not_agent_ready]
+          enum: [created_work_item, started, signalled, boarded, labels_updated, ignored_no_item_key, ignored_not_agent_ready, already_open, refused, ignored]
         work_item_key: { type: [string, "null"] }
         work_item_id: { type: [string, "null"] }
         summary: { type: string, description: "Built from typed fields only: key, label, from → to, PR number, conclusion." }
+    Trigger:
+      type: object
+      description: A project's HTTP trigger (S56-01, ADR 0113); its token is never listed.
+      required: [name, url, title, has_token]
+      properties:
+        name: { type: string }
+        url: { type: string }
+        workflow: { type: [string, "null"] }
+        title: { type: string }
+        key: { type: [string, "null"] }
+        labels: { type: array, items: { type: string }, default: [] }
+        fields: { type: object, additionalProperties: { type: string }, default: {} }
+        when: { type: object, additionalProperties: true, default: {}, description: "A JSON pointer to the text, or texts, a payload must hold (S56-05)." }
+        auth: { type: string, enum: [token, signature], default: token }
+        has_token: { type: boolean, default: false }
+        token_created_at: { type: [string, "null"], format: date-time }
+    TriggerToken:
+      type: object
+      description: A trigger's new token and the signing secret derived from it (S56-04), shown once.
+      required: [name, url, token, signing_secret]
+      properties:
+        name: { type: string }
+        url: { type: string }
+        token: { type: string }
+        signing_secret: { type: string, description: "The HMAC-SHA256 key of `X-Choregos-Signature`; it changes with the token." }
+    TriggerAck:
+      type: object
+      description: What a trigger call did; `outcome` is the received event's, absent on a replayed delivery.
+      required: [accepted]
+      properties:
+        accepted: { type: boolean }
+        duplicate: { type: boolean, default: false }
+        outcome: { type: [string, "null"], enum: [created_work_item, already_open, ignored, null] }
+        work_item_id: { type: [string, "null"] }
+        work_item_key: { type: [string, "null"] }
+        workflow: { type: [string, "null"] }
     ReceivedEventPage:
       type: object
       required: [items, meta]

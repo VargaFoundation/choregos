@@ -23,6 +23,7 @@ ALLOWED_SOURCES = {
     "test_backend_toggle_enforced",
     "test_budget_reservation",
     "test_code_agent_step",
+    "test_decision_branch",
     "test_fan_out",
     "test_gateway_key_through_the_secret",
     "test_interpreter",

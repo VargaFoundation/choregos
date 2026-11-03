@@ -61,6 +61,7 @@ import type {
   BuiltinAgent,
   GroupMembers,
   WorkflowActivity,
+  StepCalibration,
   HostedSource,
   ImplicitAgent,
   WorkflowAgent,
@@ -196,6 +197,9 @@ import type {
   WorkItemJourney,
   WorkItemPage,
   ReceivedEventPage,
+  Trigger,
+  TriggerAck,
+  TriggerToken,
 } from "./types";
 
 export const API_BASE = "/api/v1";
@@ -529,6 +533,11 @@ export const api = {
   /** Where a workflow's open work items wait, and what each step's runs did over `days` days. */
   workflowActivity: (id: string, name: string, days = 30) =>
     request<WorkflowActivity>(`/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}/activity?days=${days}`),
+  /** A step's decisions measured from the ledger, per question and model version (ADR 0121, S52-05). */
+  stepCalibration: (id: string, name: string, step: string, target = 0.9) =>
+    request<StepCalibration>(
+      `/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}/steps/${encodeURIComponent(step)}/calibration?target=${target}`,
+    ),
   /** What an `agent` actor that names no registry agent runs: its prompt, model, backend, limits and tools. */
   describeBuiltinAgent: (id: string, actor: BuiltinAgentQuery) =>
     request<BuiltinAgent>(
@@ -961,6 +970,17 @@ export const api = {
   /** The webhook events a project received and what the platform did with each (S42-06f), newest first. */
   receivedEvents: (id: string, params?: Record<string, string>) =>
     request<ReceivedEventPage>(`/projects/${qualify(id)}/received-events${query(params)}`),
+  /** The project's HTTP triggers (S56-01, ADR 0113): URL, workflow, whether a token exists. */
+  triggers: (id: string) => request<Trigger[]>(`/projects/${qualify(id)}/triggers`),
+  /** Mints a trigger's token and signing secret, shown once; the previous ones stop working. */
+  rotateTriggerToken: (id: string, name: string) =>
+    request<TriggerToken>(`/projects/${qualify(id)}/triggers/${encodeURIComponent(name)}/token`, { method: "POST" }),
+  /** Fires a trigger by hand with a payload, as the person (S56-02). */
+  fireTrigger: (id: string, name: string, payload: Record<string, unknown>) =>
+    request<TriggerAck>(`/projects/${qualify(id)}/triggers/${encodeURIComponent(name)}/fire`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   timeline: (id: string) => request<TimelineEntry[]>(`/work-items/${id}/timeline`),
   /** Les reçus de passage d'un ticket (S25-04) : qui a produit, qui a lu, sous quelle empreinte. */
   handOffs: (id: string) => request<HandOff[]>(`/work-items/${id}/hand-offs`),

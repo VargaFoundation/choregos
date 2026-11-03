@@ -10,10 +10,10 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import urlsplit
 
+import structlog
 from choregos_api.db.models import Finding as FindingRow
 from choregos_api.db.models import Project, Run
-from choregos_api.logging import get_logger
-from choregos_api.services import persist_event, ranger_les_sorties, record_cost
+from choregos_api.services import DecidedBy, persist_event, ranger_les_sorties, record_cost, record_decisions
 from choregos_api.services.artifacts import record_inline_outputs
 from choregos_api.services.budget_alerts import unsent_month_alerts
 from choregos_api.services.budgets import ticket_budget, ticket_spent
@@ -21,16 +21,20 @@ from choregos_api.services.model_catalogue import priced_spend
 from choregos_api.services.tickets import sorties_a_ranger
 from choregos_contracts import EventType, StageInput, StageResult, StageStatus
 from choregos_core import Message, Spend, elapsed_seconds, utcnow
+from choregos_core.decision_ledger import declared_confidences
 from sqlalchemy import select
 from temporalio import activity
 
 from ..config import get_settings
 from ..train_client import signal_findings
-from .base import db, load_work_item, project_bundle
+from .base import db, load_work_item, project_bundle, workflow_du_ticket
+from .job import JOB_BACKEND
 from .remote import declared_cost_usd
 from .run_key import release_run_key
 
-logger = get_logger("choregos.bilan")
+logger = structlog.get_logger("choregos.bilan")
+#: An agent's declared confidence in the decision ledger (ADR 0121 §6).
+AGENT_SOURCE = "agent"
 
 
 async def _tell_slack_of_agent_alerts(session: Any, bundle: Any) -> None:
@@ -71,88 +75,94 @@ async def collect_spend(payload: dict[str, Any]) -> dict[str, Any]:
         run = await session.get(Run, payload["run_id"])
         if run is None:
             return Spend().model_dump(mode="json")
-        if run.spend_collected:
-            return {**run.tokens, **await _ticket_view(session, bundle, run.work_item_id)}
-        spend = Spend()
-        if run.gateway_key_id:
-            spend = await bundle.adapters.gateway.spend(run.gateway_key_id)
-        # The organisation's price override (ADR 0060) replaces the gateway's figure when tokens are
-        # known; a gateway that cannot read a spend back leaves the line `unmeasured`.
-        spend, pricing = await priced_spend(
-            session,
-            bundle.project.org_id,
-            [run.model or "", *spend.models_used],
-            spend,
-            measured="spend_readback" in getattr(bundle.adapters.gateway, "capabilities", {"spend_readback"}),
-        )
-        # A remote agent reports no cost (ADR 0062): what its registry entry DECLARES is booked,
-        # as `external`, apart from the model spend.
-        remote = StageInput.model_validate(run.stage_input).remote if run.stage_input else None
-        if remote is not None:
-            wall = elapsed_seconds(run.started_at, run.ended_at or utcnow())
-            spend = Spend(cost_usd=declared_cost_usd(StageInput.model_validate(run.stage_input), wall))
-        item = await load_work_item(session, run.work_item_id)
-        segment = {
-            "tokens_in": spend.tokens_in,
-            "tokens_out": spend.tokens_out,
-            "tokens_cached": spend.tokens_cached,
-            "cost_usd": spend.cost_usd,
-            "cost_eur": round(spend.cost_usd * settings.fx_usd_eur, 6),
-        }
-        # A run resumed after a person's answer (S35-03) is ONE run in two segments: what it
-        # spent before the question stays on it, the continuation is added, and the work item
-        # does not count a second run.
-        resumed = dict(run.tokens or {}) if (run.tokens or {}).get("resumed") else {}
-        of_the_run: dict[str, Any] = dict(resumed)
-        for name in ("tokens_in", "tokens_out", "tokens_cached"):
-            of_the_run[name] = int(resumed.get(name, 0)) + int(segment[name])
-        for name in ("cost_usd", "cost_eur"):
-            of_the_run[name] = round(float(resumed.get(name, 0.0)) + float(segment[name]), 6)
-        of_the_run["runs"] = 1
-        of_the_run.update(pricing)
-        run.tokens = of_the_run
-        run.cost_usd = float(of_the_run["cost_usd"])
-        run.spend_collected = True
-        run.ended_at = run.ended_at or utcnow()
-        await record_cost(
-            session,
-            project_id=bundle.project.id,
-            work_item_id=item.id,
-            run_id=run.id,
-            provider=(
-                (urlsplit(remote.endpoint).hostname or "")
-                if remote is not None
-                else (spend.models_used[0].split("/")[0] if spend.models_used else "")
-            ),
-            model=(run.model or "") + (" (unmeasured)" if remote is not None and spend.cost_usd == 0 else ""),
-            kind="external" if remote is not None else "model",
-            backend=run.backend,
-            stage_role=run.stage_role,
-            size=item.size,
-            tokens_in=spend.tokens_in,
-            tokens_out=spend.tokens_out,
-            tokens_cached=spend.tokens_cached,
-            cost_usd=spend.cost_usd,
-            fx_rate=settings.fx_usd_eur,
-        )
-        totals = dict(item.totals or {})
-        for field in ("tokens_in", "tokens_out", "tokens_cached"):
-            totals[field] = int(totals.get(field, 0)) + int(segment[field])
-        totals["cost_usd"] = round(float(totals.get("cost_usd", 0.0)) + spend.cost_usd, 6)
-        totals["cost_eur"] = round(float(totals.get("cost_eur", 0.0)) + segment["cost_eur"], 6)
-        totals["runs"] = int(totals.get("runs", 0)) + (0 if resumed else 1)
-        totals["duration_s"] = float(totals.get("duration_s", 0.0)) + elapsed_seconds(
-            run.started_at, run.ended_at
-        )
-        item.totals = totals
+        return await book_spend(session, bundle, run, settings)
 
-        # The run is over: its key is revoked and no copy of it stays on the row (#519, #523).
-        await release_run_key(session, bundle, run, spend_usd=spend.cost_usd)
-        await session.flush()
-        await _tell_slack_of_agent_alerts(session, bundle)
-        # What the ticket has cost, read from the ledger — this run's line included, tool calls
-        # too (S27-03): the interpreter's counter is this, not a sum it keeps in memory.
-        return {**run.tokens, **await _ticket_view(session, bundle, item.id)}
+
+async def book_spend(session: Any, bundle: Any, run: Run, settings: Any) -> dict[str, Any]:
+    """`collect_spend` in an open session: a decision step (ADR 0121) books its spend before its
+    key is revoked, in the activity that minted it. Counted once (`spend_collected`)."""
+    if run.spend_collected:
+        return {**run.tokens, **await ticket_view(session, bundle, run.work_item_id)}
+    spend = Spend()
+    if run.gateway_key_id:
+        spend = await bundle.adapters.gateway.spend(run.gateway_key_id)
+    # The organisation's price override (ADR 0060) replaces the gateway's figure when tokens are
+    # known; a gateway that cannot read a spend back leaves the line `unmeasured`.
+    spend, pricing = await priced_spend(
+        session,
+        bundle.project.org_id,
+        [run.model or "", *spend.models_used],
+        spend,
+        measured="spend_readback" in getattr(bundle.adapters.gateway, "capabilities", {"spend_readback"}),
+    )
+    # A remote agent reports no cost (ADR 0062): what its registry entry DECLARES is booked,
+    # as `external`, apart from the model spend.
+    remote = StageInput.model_validate(run.stage_input).remote if run.stage_input else None
+    if remote is not None:
+        wall = elapsed_seconds(run.started_at, run.ended_at or utcnow())
+        spend = Spend(cost_usd=declared_cost_usd(StageInput.model_validate(run.stage_input), wall))
+    item = await load_work_item(session, run.work_item_id)
+    segment = {
+        "tokens_in": spend.tokens_in,
+        "tokens_out": spend.tokens_out,
+        "tokens_cached": spend.tokens_cached,
+        "cost_usd": spend.cost_usd,
+        "cost_eur": round(spend.cost_usd * settings.fx_usd_eur, 6),
+    }
+    # A run resumed after a person's answer (S35-03) is ONE run in two segments: what it
+    # spent before the question stays on it, the continuation is added, and the work item
+    # does not count a second run.
+    resumed = dict(run.tokens or {}) if (run.tokens or {}).get("resumed") else {}
+    of_the_run: dict[str, Any] = dict(resumed)
+    for name in ("tokens_in", "tokens_out", "tokens_cached"):
+        of_the_run[name] = int(resumed.get(name, 0)) + int(segment[name])
+    for name in ("cost_usd", "cost_eur"):
+        of_the_run[name] = round(float(resumed.get(name, 0.0)) + float(segment[name]), 6)
+    of_the_run["runs"] = 1
+    of_the_run.update(pricing)
+    run.tokens = of_the_run
+    run.cost_usd = float(of_the_run["cost_usd"])
+    run.spend_collected = True
+    run.ended_at = run.ended_at or utcnow()
+    await record_cost(
+        session,
+        project_id=bundle.project.id,
+        work_item_id=item.id,
+        run_id=run.id,
+        provider=(
+            (urlsplit(remote.endpoint).hostname or "")
+            if remote is not None
+            else (spend.models_used[0].split("/")[0] if spend.models_used else "")
+        ),
+        model=(run.model or "") + (" (unmeasured)" if remote is not None and spend.cost_usd == 0 else ""),
+        kind="external" if remote is not None else "model",
+        backend=run.backend,
+        stage_role=run.stage_role,
+        size=item.size,
+        tokens_in=spend.tokens_in,
+        tokens_out=spend.tokens_out,
+        tokens_cached=spend.tokens_cached,
+        cost_usd=spend.cost_usd,
+        fx_rate=settings.fx_usd_eur,
+    )
+    totals = dict(item.totals or {})
+    for field in ("tokens_in", "tokens_out", "tokens_cached"):
+        totals[field] = int(totals.get(field, 0)) + int(segment[field])
+    totals["cost_usd"] = round(float(totals.get("cost_usd", 0.0)) + spend.cost_usd, 6)
+    totals["cost_eur"] = round(float(totals.get("cost_eur", 0.0)) + segment["cost_eur"], 6)
+    totals["runs"] = int(totals.get("runs", 0)) + (0 if resumed else 1)
+    totals["duration_s"] = float(totals.get("duration_s", 0.0)) + elapsed_seconds(
+        run.started_at, run.ended_at
+    )
+    item.totals = totals
+
+    # The run is over: its key is revoked and no copy of it stays on the row (#519, #523).
+    await release_run_key(session, bundle, run, spend_usd=spend.cost_usd)
+    await session.flush()
+    await _tell_slack_of_agent_alerts(session, bundle)
+    # What the ticket has cost, read from the ledger — this run's line included, tool calls
+    # too (S27-03): the interpreter's counter is this, not a sum it keeps in memory.
+    return {**run.tokens, **await ticket_view(session, bundle, item.id)}
 
 
 async def close_run_spend(project_id: str, run_id: str) -> None:
@@ -177,7 +187,7 @@ async def close_run_spend(project_id: str, run_id: str) -> None:
         logger.warning("key of an abandoned run not released", run_id=run_id, error=str(error)[:300])
 
 
-async def _ticket_view(session: Any, bundle: Any, work_item_id: str) -> dict[str, float]:
+async def ticket_view(session: Any, bundle: Any, work_item_id: str) -> dict[str, float]:
     """What the ticket has cost, read from the ledger (models and tools), and its budget as it
     stands now — its size may have changed since the interpreter started (S27-03)."""
     item = await load_work_item(session, work_item_id)
@@ -233,8 +243,56 @@ async def record_run_outcome(payload: dict[str, Any]) -> dict[str, Any]:
             )
         if result.artifacts.pr_url:
             item.pr_url = result.artifacts.pr_url
+        if result.status == StageStatus.DONE and project is not None and run.backend != JOB_BACKEND:
+            await _record_declared_confidences(session, project, item, run, result, declarees)
         recorded = await _persist_findings(session, run, item, result)
-        return {"recorded": True, "status": run.status, "findings": recorded}
+        outcome = {"recorded": True, "status": run.status, "findings": recorded}
+    if outcome["status"] == "failed":
+        await _keep_the_lesson(payload["run_id"])
+    return outcome
+
+
+async def _keep_the_lesson(run_id: str) -> None:
+    """A failed run's lesson goes to memory now (S51-02), once (`run:<id>`). Best effort: memory never
+    blocks a stage (ADR 0007); the memory loop's `run_lessons` source catches a missed one up."""
+    from .memory import keep_the_lesson_of_a_failed_run
+
+    try:
+        await keep_the_lesson_of_a_failed_run(run_id)
+    except Exception as error:
+        logger.warning("lesson of a failed run not kept", run_id=run_id, error=str(error)[:300])
+
+
+async def _record_declared_confidences(
+    session: Any, project: Project, item: Any, run: Run, result: StageResult, declared: list[str]
+) -> None:
+    """The confidence an agent declared (ADR 0106) goes to the decision ledger beside a decision
+    model's answers (ADR 0121 §6), to be measured on the same footing. What it is the probability of
+    is `choregos_core.decision_ledger`'s rule; a job's figures are measured, not declared, and are
+    left out. Recorded once per run and question: a retried activity adds nothing."""
+    answers = declared_confidences(result.outputs.model_dump(mode="json", exclude_none=True), declared)
+    if not answers:
+        return
+    transition = (run.stage_input or {}).get("transition") or {}
+    workflow = await workflow_du_ticket(session, item)
+    decided = DecidedBy(
+        org_id=project.org_id,
+        project_id=project.id,
+        project_slug=project.slug,
+        work_item_id=item.id,
+        work_item_key=item.tracker_key,
+        run_id=run.id,
+        workflow=workflow.metadata.name,
+        workflow_version=workflow.metadata.version,
+        step=str(transition.get("from") or transition.get("from_") or run.transition_id or ""),
+        transition_id=run.transition_id,
+        source=AGENT_SOURCE,
+        model=run.model or run.backend or AGENT_SOURCE,
+        # The registry agent and its version: its instructions are what its confidence is measured on.
+        model_version=f"{run.agent_slug}@{run.agent_version}" if run.agent_slug else None,
+        decided_at=run.ended_at or utcnow(),
+    )
+    await record_decisions(session, decided, answers)
 
 
 async def _persist_findings(session: Any, run: Run, item: Any, result: StageResult) -> list[str]:

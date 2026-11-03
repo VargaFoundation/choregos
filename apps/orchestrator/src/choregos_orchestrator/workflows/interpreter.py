@@ -125,6 +125,10 @@ START_REFUSAL_ESCALATES = "start-refusal-escalates"
 #: work item ends there when the exit's guarantees prove the fix is already on the default branch, and
 #: escalates at once otherwise. Before this marker it went on to test, review, and the pull request.
 ALREADY_FIXED_ON_EVIDENCE = "already-fixed-on-evidence"
+#: The transition selected after a step that recorded decisions — a decision step's answers, an
+#: agent's declared confidence — is written on its ledger records (ADR 0121 §6, S52-05): one more
+#: activity, `note_transition_taken`. Before this marker no ledger existed.
+DECISION_LEDGER = "decision-ledger"
 
 
 def _attempts_ceiling(context: dict[str, Any], actor: Any) -> int | None:
@@ -250,6 +254,8 @@ class WorkflowInterpreter(
         self.work_item_id: str = ""
         #: How many `child_settled` signals arrived: a join re-reads its children when it moves.
         self.children_settled: int = 0
+        #: The run whose ledger records wait for the transition selected next (ADR 0121 §6).
+        self.ledger_run: str | None = None
 
     # ───────────────────────── signals and queries ─────────────────────────
 
@@ -384,6 +390,7 @@ class WorkflowInterpreter(
 
             transition = engine.select_transition(self.state, self.last_outcome, self.last_outputs)
             self.last_outcome = None
+            await self._note_transition_taken(params, transition)
             if transition is None:
                 moved = await self._wait_external(engine, context)
                 if moved == _MIGRATION:
@@ -398,6 +405,9 @@ class WorkflowInterpreter(
             # A job (ADR 0056) runs in a run like an agent; no history holds one before it existed.
             if kind in ("agent", "job"):
                 decision = await self._run_stage(params, engine, transition, context)
+            elif kind == "decision":
+                # ADR 0121: no history holds one, the validator refused it until it ran (S52-01).
+                decision = await self._run_decision(params, engine, transition, context)
             elif kind == "human":
                 decision = await self._wait_human(params, engine, transition)
             elif kind == "train":
@@ -408,6 +418,7 @@ class WorkflowInterpreter(
             if decision is None:
                 continue
             self._note_the_resume_point(engine, transition, kind, decision)
+            self.ledger_run = self._recorded_run(kind, transition, decision)
             self.state = decision.next_state
             await self._mirror(params, decision.reason)
 

@@ -30,6 +30,11 @@ export const operations = {
   // ADR 0112: actors, every transition field, the workflow's own fields.
   addActor: (name: string, spec: Record<string, unknown>): WorkflowOperation => ({ op: "add_actor", name, spec }),
   removeActor: (name: string): WorkflowOperation => ({ op: "remove_actor", name }),
+  /** An actor's field (a decision's questions, its state, its timeout, ADR 0121); a nested value is written as lines. */
+  actorField: (name: string, field: string, value: unknown): WorkflowOperation =>
+    value === null || value === undefined || value === "" || (Array.isArray(value) && value.length === 0)
+      ? { op: "set_actor", name, field, unset: true }
+      : { op: "set_actor", name, field, value, style: nested(value) ? "block" : "flow" },
   /** A transition field; a nested value (a task, an action, a fan-out) is written as indented lines. */
   transitionField: (id: string, field: string, value: unknown): WorkflowOperation =>
     value === null || value === undefined || value === "" || (Array.isArray(value) && value.length === 0)

@@ -38,7 +38,9 @@ def _capabilities(*texts: str) -> list[str]:
 
 #: The core workflows that deliver code; `default-request` (ADR 0110) and the `blank` skeleton (ADR 0112)
 #: do not.
-SOFTWARE_TEMPLATES = [name for name in TEMPLATE_NAMES if name not in {"default-request", "blank"}]
+SOFTWARE_TEMPLATES = [
+    name for name in TEMPLATE_NAMES if name not in {"default-request", "blank", "decision-triage"}
+]
 
 
 @pytest.mark.parametrize("name", SOFTWARE_TEMPLATES)
@@ -113,3 +115,14 @@ def test_a_documentation_step_works_in_the_repository() -> None:
     """The `document` role reads a diff and pushes a branch: it requires `scm` (S39-15)."""
     text = ARRIVAL.replace("role: plan", "role: document")
     assert "scm" in _capabilities(text)
+
+
+def test_a_decision_step_needs_the_gateway_and_no_runtime_of_its_own() -> None:
+    """ADR 0121: a decision runs in the orchestrator and asks its model through the gateway."""
+    needs = _capabilities(template_yaml("decision-triage"))
+    assert needs == ["tracker", "runtime", "gateway"], "the `deliver` agent still runs somewhere"
+    reasons = {
+        e.capability: e.reasons for e in requirements([parse_workflow(template_yaml("decision-triage"))[0]])
+    }
+    assert any("decision classifier" in r for r in reasons["gateway"])
+    assert not any("classifier" in r for r in reasons["runtime"])

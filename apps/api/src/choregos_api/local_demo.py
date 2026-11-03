@@ -23,6 +23,9 @@ Model mode (`ANTHROPIC_API_KEY` or `OPENAI_API_KEY` in `.env`): LiteLLM routes t
 aliases to that provider (`litellm_config`), the agent runs in the runner image started by the
 local Docker executor, and the platform mints a LiteLLM key per run, as in a cluster.
 `LITELLM_REAL=0` keeps fakes even with a key; `LITELLM_REAL=1` refuses to start without one.
+
+Decision model (`COMPOSE_PROFILES=decisions`, ADR 0121): compose starts Laya and LiteLLM serves it as
+`platform/decide`, in either mode: Laya runs on the machine and needs no model key.
 """
 
 from __future__ import annotations
@@ -130,6 +133,17 @@ LOCAL_NETWORK = "choregos"
 MOCK_RESPONSE = "simulated answer: the local install has no model key"
 #: The module name LiteLLM loads the LLM guard from, next to its config (ADR 0084).
 GUARDRAIL_MODULE = "choregos_guardrail"
+#: `platform/decide` (ADR 0121): Laya's multilingual checkpoint, through LiteLLM's `typesafe` provider
+#: (Laya speaks TypeSafe Jev's wire; LiteLLM 1.105.5 has no `laya` provider in code), at the `laya`
+#: service of `compose.yaml`, with the bearer LiteLLM reads from its own environment.
+DECIDE_MODEL = {
+    "model": "typesafe/multilingual",
+    "api_base": "http://laya:8000",
+    "api_key": "os.environ/LAYA_API_KEY",
+}
+#: Its internal price per token read, in USD, as the chart's `global.decisions.inputCostPerToken`
+#: (ADR 0004: a local model is accounted with a configured internal price).
+DECIDE_INPUT_COST_PER_TOKEN = 0.00000002
 #: The connectors that follow the mode; every other one is created once and left alone.
 MODE_KINDS = ("runtime", "gateway")
 
@@ -152,12 +166,23 @@ def model_provider(env: Mapping[str, str]) -> Provider | None:
     return None
 
 
-def litellm_config(provider: Provider | None, *, embed: bool = False) -> dict[str, Any]:
+def decisions_enabled(env: Mapping[str, str]) -> bool:
+    """Whether the install runs the decision model (ADR 0121), from `LITELLM_DECISIONS`.
+
+    Compose passes it `COMPOSE_PROFILES` unless `.env` sets it: the profile that starts Laya is then
+    the one switch that also routes `platform/decide` to it. `1`, `true` or `yes` force it on.
+    """
+    value = env.get("LITELLM_DECISIONS", "").strip().lower()
+    return value in {"1", "true", "yes"} or "decisions" in {p.strip() for p in value.split(",")}
+
+
+def litellm_config(provider: Provider | None, *, embed: bool = False, decide: bool = False) -> dict[str, Any]:
     """LiteLLM's configuration: the aliases, mocked in fakes mode, routed to `provider` otherwise.
 
     `embed` also serves `platform/embed`, the alias Ecphoria embeds with (`--profile memory`),
-    routed to OpenAI as the chart does (#438). The key itself is never written: LiteLLM reads it
-    from its own environment (`os.environ/…`).
+    routed to OpenAI as the chart does (#438). `decide` also serves `platform/decide`, the decision
+    model of the `decisions` profile, in either mode. The key itself is never written: LiteLLM reads
+    it from its own environment (`os.environ/…`).
     """
     models: list[dict[str, Any]] = []
     for alias in ("platform/standard", "platform/strong", "platform/cheap"):
@@ -182,6 +207,18 @@ def litellm_config(provider: Provider | None, *, embed: bool = False) -> dict[st
                 "model_name": "platform/embed",
                 "litellm_params": {"model": EMBED_MODEL, "api_key": "os.environ/OPENAI_API_KEY"},
                 "model_info": {"mode": "embedding"},
+            }
+        )
+    if decide:
+        models.append(
+            {
+                "model_name": "platform/decide",
+                "litellm_params": dict(DECIDE_MODEL),
+                "model_info": {
+                    "mode": "evaluation",
+                    "input_cost_per_token": DECIDE_INPUT_COST_PER_TOKEN,
+                    "output_cost_per_token": 0.0,
+                },
             }
         )
     return {
@@ -371,7 +408,8 @@ def write_litellm_config(directory: pathlib.Path, env: Mapping[str, str]) -> Pro
     embed = provider is not None and bool(env.get("OPENAI_API_KEY"))
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "config.yaml").write_text(
-        yaml.safe_dump(litellm_config(provider, embed=embed), sort_keys=False), encoding="utf-8"
+        yaml.safe_dump(litellm_config(provider, embed=embed, decide=decisions_enabled(env)), sort_keys=False),
+        encoding="utf-8",
     )
     (directory / "provider").write_text(provider or "fakes", encoding="utf-8")
     # LiteLLM's image has no Choregos package: the guard travels as a file, stdlib only.
@@ -395,7 +433,7 @@ def main() -> None:
     configure_logging(settings.log_level, settings.log_json)
     if sys.argv[1:2] == ["litellm-config"]:
         provider = write_litellm_config(pathlib.Path(sys.argv[2]), os.environ)
-        logger.info("litellm configured", mode=provider or "fakes")
+        logger.info("litellm configured", mode=provider or "fakes", decisions=decisions_enabled(os.environ))
         return
     provider_file = pathlib.Path(os.environ.get("CHOREGOS_LOCAL_PROVIDER_FILE", "/litellm/provider"))
     asyncio.run(seed_local_demo(settings, read_provider(provider_file)))

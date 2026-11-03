@@ -56,8 +56,52 @@ async def test_the_catalogue_names_the_gateway_and_what_it_can_do(
 ) -> None:
     body = (await client.get(BASE)).json()
     assert body["mode"] == "open"
-    assert body["gateway"] == {"type": "scripted", "capabilities": ["list_models"]}
+    assert body["gateway"] == {
+        "type": "scripted",
+        "capabilities": ["list_models"],
+        "source": "deployment",
+        "base_url": None,
+    }
     assert body["entries"] == []
+
+
+async def test_the_deployment_gateway_is_an_environment_setting_whose_address_only_the_platform_reads(
+    client: AsyncClient, admin: str, gateway: Scripted
+) -> None:
+    """Owner review of 2026-11-03: the page did not show the gateway, set by the deployment's
+    environment. Its address is an operator's internal one: a platform administrator reads it, a member
+    of one organisation does not."""
+    gateway.base_url = "http://litellm.choregos-gateway:4000"  # type: ignore[attr-defined]
+    seen = (await client.get(BASE)).json()["gateway"]
+    assert seen["source"] == "deployment"
+    assert seen["base_url"] == "http://litellm.choregos-gateway:4000", (
+        "one organisation: its admin is the platform's"
+    )
+
+    await client.post("/api/v1/orgs/varga/members", json={"email": "po@varga.dev", "role": "project_owner"})
+    await login(client, "po@varga.dev")
+    seen = (await client.get(BASE)).json()["gateway"]
+    assert seen["source"] == "deployment"
+    assert seen["base_url"] is None
+
+
+async def test_the_organisations_own_gateway_shows_its_address_to_its_members(
+    client: AsyncClient, admin: str, gateway: Scripted, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def brings(session: Any, org_id: str) -> bool:
+        return True
+
+    monkeypatch.setattr("choregos_api.routers.model_catalogue.org_brings_its_gateway", brings)
+    gateway.base_url = "https://llm.acme.example/v1"  # type: ignore[attr-defined]
+    await client.post("/api/v1/orgs/varga/members", json={"email": "po@varga.dev", "role": "project_owner"})
+    await login(client, "po@varga.dev")
+    seen = (await client.get(BASE)).json()["gateway"]
+    assert seen == {
+        "type": "scripted",
+        "capabilities": ["list_models"],
+        "source": "organisation",
+        "base_url": "https://llm.acme.example/v1",
+    }
 
 
 async def test_sync_enables_new_models_in_open_mode_and_disables_them_in_curated(
@@ -73,6 +117,26 @@ async def test_sync_enables_new_models_in_open_mode_and_disables_them_in_curated
     entries = await _entries(client)
     assert entries["acme/new"]["enabled"] is False, "a model discovered under curated mode arrives disabled"
     assert entries["platform/standard"]["enabled"] is True, "what was decided is kept"
+
+
+async def test_a_decision_model_arrives_for_decision_steps_only(
+    client: AsyncClient, admin: str, gateway: Scripted
+) -> None:
+    """ADR 0121: a model the gateway lists as `evaluation` (Laya, Jev) is not an agent model by default."""
+    gateway.models.append(
+        GatewayModel(
+            model_name="platform/decide",
+            litellm_model="typesafe/multilingual",
+            mode="evaluation",
+            supports_tool_calling=False,
+        )
+    )
+    await client.post(f"{BASE}/sync")
+    entries = await _entries(client)
+    assert entries["platform/decide"]["usages"] == ["decide"]
+    assert entries["platform/decide"]["gateway"]["mode"] == "evaluation"
+    assert entries["platform/decide"]["gateway"]["supports_tool_calling"] is False
+    assert all(e["usages"] == ["agent"] for name, e in entries.items() if name != "platform/decide")
 
 
 async def test_the_catalogue_exposes_the_upstream_model_and_context_window_of_each_entry(

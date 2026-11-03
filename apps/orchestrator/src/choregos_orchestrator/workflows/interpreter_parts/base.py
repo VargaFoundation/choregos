@@ -57,6 +57,7 @@ class InterpreterBase:
     project_id: str
     work_item_id: str
     children_settled: int
+    ledger_run: str | None
 
     if TYPE_CHECKING:
 

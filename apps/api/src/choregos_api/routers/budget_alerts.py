@@ -11,22 +11,14 @@ from fastapi import APIRouter, Query
 from sqlalchemy import select
 
 from ..audit import record
-from ..db.models import BudgetAlert, Organization
+from ..db.models import BudgetAlert
 from ..deps import Db, Me
 from ..errors import conflict, forbidden, not_found
 from ..rbac import Permission, Principal
 from ..schemas import BudgetAlertDto
+from ..services.organisations import organisation_by_slug
 
 router = APIRouter(tags=["costs"])
-
-
-async def _organisation(session: Db, slug: str) -> Organization:
-    organisation = (
-        await session.execute(select(Organization).where(Organization.slug == slug))
-    ).scalar_one_or_none()
-    if organisation is None:
-        raise not_found("Organisation", slug)
-    return organisation
 
 
 def _may_acknowledge(principal: Principal, org: str, alert: BudgetAlert) -> bool:
@@ -51,7 +43,7 @@ async def list_budget_alerts(
     """The budgets that crossed a threshold, newest first; `open` (the default) are the inbox's."""
     if not principal.can(Permission.PROJECT_READ, org):
         raise forbidden(f"reading the budget alerts of {org} requires being a member of it")
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     query = select(BudgetAlert).where(BudgetAlert.org_id == organisation.id)
     if status != "all":
         query = query.where(BudgetAlert.status == status)
@@ -74,7 +66,7 @@ async def acknowledge_budget_alert(org: str, alert_id: str, session: Db, princip
     """
     if not principal.can(Permission.PROJECT_READ, org):
         raise forbidden(f"acknowledging a budget alert of {org} requires being a member of it")
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     alert = await session.get(BudgetAlert, alert_id)
     if alert is None or alert.org_id != organisation.id:
         raise not_found("Budget alert", alert_id)

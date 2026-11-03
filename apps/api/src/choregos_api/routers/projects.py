@@ -36,6 +36,7 @@ from ..schemas import (
     ProvisionStep,
 )
 from ..services import ensure_defaults, persist_event, project_dto
+from ..services.organisations import organisation_by_slug
 from ..services.plugin_tracker import wire_template_tracker
 from ..services.projets import config_revision
 from ..temporal import get_temporal, provisioning_id
@@ -143,7 +144,7 @@ async def update_org(org: str, body: OrgUpdate, session: Db, principal: Me) -> O
         # lookup bounded to the caller's organisations would not see the row (404).
         await exiger_admin_de_plateforme(session, principal)
         await limiter_aux_organisations(session, TOUT)
-    organisation = await _org(session, org)
+    organisation = await organisation_by_slug(session, org)
     avant = {"slug": organisation.slug, "name": organisation.name, "currency": moneta(organisation)}
     if body.slug is not None and body.slug != organisation.slug:
         await exiger_admin_de_plateforme(session, principal)
@@ -206,7 +207,7 @@ async def release_org_alias(org: str, alias: str, session: Db, principal: Me) ->
     """
     await exiger_admin_de_plateforme(session, principal)
     await limiter_aux_organisations(session, TOUT)
-    organisation = await _org(session, org)
+    organisation = await organisation_by_slug(session, org)
     if not await release(session, organisation.id, alias):
         raise not_found("Alias", alias)
     await record(
@@ -215,16 +216,9 @@ async def release_org_alias(org: str, alias: str, session: Db, principal: Me) ->
     )  # fmt: skip
 
 
-async def _org(session: Any, slug: str) -> Organization:
-    row = (await session.execute(select(Organization).where(Organization.slug == slug))).scalar_one_or_none()
-    if not isinstance(row, Organization):
-        raise not_found("Organisation", slug)
-    return row
-
-
 @router.get("/orgs/{org}/projects", response_model=ProjectPage, operation_id="listProjects")
 async def list_projects(org: str, session: Db, principal: Me, page: Pagination) -> ProjectPage:
-    organization = await _org(session, org)
+    organization = await organisation_by_slug(session, org)
     rows = (
         (
             await session.execute(
@@ -264,7 +258,7 @@ def _avec_les_defauts_du_deploiement(config: ProjectConfig) -> dict[str, Any]:
     operation_id="createProject",
 )
 async def create_project(org: str, body: ProjectCreate, session: Db, principal: Me) -> ProjectDto:
-    organization = await _org(session, org)
+    organization = await organisation_by_slug(session, org)
     if not principal.can(Permission.PROJECT_CREATE, org):
         raise forbidden("creating a project needs the org_admin role")
     existing = (
@@ -420,9 +414,10 @@ async def delete_project(ctx: ProjectCtx, session: Db) -> None:
         target_id=ctx.id,
         previous_status=previous,
     )
-    from ..temporal import stop_tracker_reconciliation
+    from ..temporal import stop_memory_ingestion, stop_tracker_reconciliation
 
     await stop_tracker_reconciliation(ctx.slug)
+    await stop_memory_ingestion(ctx.slug)
 
 
 @router.post("/projects/{id}/suspend", response_model=ProjectDto, operation_id="suspendProject")
@@ -490,9 +485,13 @@ async def _activate_without_steps(ctx: ProjectCtx, session: Db, *, dry_run: bool
         target_id=ctx.id,
         steps=0,
     )
-    from ..temporal import start_tracker_reconciliation
+    from ..services import policy_engine
+    from ..temporal import start_memory_ingestion, start_tracker_reconciliation
 
     await start_tracker_reconciliation(ctx.slug)
+    # The memory is fed from activation on (S51-02), unless the project's policy disables it.
+    if (await policy_engine(session, ctx.id)).memory_enabled():
+        await start_memory_ingestion(ctx.slug)
     return _provision_status(ctx.project)
 
 

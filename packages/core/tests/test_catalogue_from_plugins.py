@@ -30,12 +30,14 @@ PLUGINS = {
 PLUGIN_VERSIONS = {"requests": "1.0.1"}
 
 #: The fingerprints the core's own YAML had at 3156d12e (choregos-agents' MIGRATION-FROM-CORE.md): the
-#: plugins carry the same documents, so an installed agent's checksum does not move.
+#: plugins carry the same documents, so an installed agent's checksum does not move. They include the
+#: core's `_contexte.md`: S51-04 added its `fields.tracker` section, so every agent that prepends it
+#: moved once (an installed one is offered the update); `claude-ai`, a client, prepends none.
 FINGERPRINTS = {
-    "architect": "sha256:8785fc6b47bc90e51470f6b6db015c0f0c82bb9dee5db7a16f3bc85675db2164",
-    "developer": "sha256:54745b0d6494f24a871f13fc5ac09fcc94b6ab8ef7e1dd5bfeb533d3e28d7abc",
-    "netops": "sha256:28254e29b5058e76551d13abc29ba2ce4e51966cc00aae22b734a95d77048daf",
-    "agent-drafter": "sha256:e61d813ff1b29126450cb96eca86e243a2b17f909356735d1f0fdb453c77c7dc",
+    "architect": "sha256:687e23ee5cfc454162ac4790c01fa5aa12c3302caa0c8359eaf5c7a12d9549a5",
+    "developer": "sha256:c6969085476d0412ba8274d6286e6658183dbeccc93e3b4fd97b187e708409af",
+    "netops": "sha256:3e731940ccf5867561695e4fc392db9cbf81c46e211b2be80aaa2aa05a876ca6",
+    "agent-drafter": "sha256:ce17d429cab0d7b56ab229c33c8922d1a906849e370fdf6a612a9099902d44d8",
     "claude-ai": "sha256:56cbd162bc57f803e6e162baf922669d6a50a3d205a521a88b69efc2b3113496",
 }
 

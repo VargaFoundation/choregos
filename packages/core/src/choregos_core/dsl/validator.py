@@ -15,13 +15,16 @@ from choregos_contracts import (
     ARTIFACT_TYPES,
     RUN_ACTORS,
     AgentActor,
+    DecisionActor,
     HumanActor,
     SystemActor,
     Workflow,
 )
 from choregos_contracts.workflow import (
     AGENT_WILDCARD,
+    CONFIDENCE_SUFFIX,
     PRODUCTION_PREFIX,
+    Transition,
     implicit_effect,
     is_production_state,
     transition_effect,
@@ -29,6 +32,7 @@ from choregos_contracts.workflow import (
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
 
+from ..domain import TRACKER_FIELD
 from ..errors import Issue
 from ..gates import ALREADY_FIXED_GATE, known_gates
 from .dates import field_of
@@ -80,6 +84,8 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_actions(wf, report, source)
     _check_already_fixed_exits(wf, report, source)
     _check_conditions(wf, report, source)
+    _check_decisions(wf, report, source)
+    _check_confidence_thresholds(wf, report, source)
     _check_tasks(wf, report, source)
     _check_spawns(wf, report, source)
     _check_effects(wf, report, source)
@@ -155,6 +161,14 @@ def _check_inputs(wf: Workflow, report: ValidationReport, source: Any) -> None:
             ["metadata", "inputs"],
             source,
         )
+    if TRACKER_FIELD in (schema.get("properties") or {}) or TRACKER_FIELD in (schema.get("required") or []):
+        report.error(
+            "inputs.reserved",
+            f"`{TRACKER_FIELD}` is reserved: the platform puts there what the tracker says about the "
+            "ticket (`ticket.fields.tracker`); name the field otherwise",
+            ["metadata", "inputs", "properties", TRACKER_FIELD],
+            source,
+        )
 
 
 def _check_conditions(wf: Workflow, report: ValidationReport, source: Any) -> None:
@@ -167,6 +181,13 @@ def _check_conditions(wf: Workflow, report: ValidationReport, source: Any) -> No
       waiting forever.
     """
     declared = {name for t in wf.transitions for name in t.outputs}
+    # A decision step writes its questions' answers and probabilities (ADR 0121): declared by its actor.
+    declared |= {
+        name
+        for t in wf.transitions
+        if isinstance(actor := wf.actor_of(t), DecisionActor)
+        for name in actor.outputs
+    }
     for index, t in enumerate(wf.transitions):
         for name in t.when or {}:
             if name not in declared:
@@ -188,6 +209,67 @@ def _check_conditions(wf: Workflow, report: ValidationReport, source: Any) -> No
                 ["transitions", index, "when"],
                 source,
             )
+
+
+def _check_decisions(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """A decision step (ADR 0121).
+
+    - Its questions write `<name>` and `<name>_confidence`: a question named like another's
+      probability would write the same output twice.
+
+    What depends on the project — a gateway that serves `/v1/systemone`, a catalogue entry with the
+    `decide` usage — is checked where the project is known: when the API saves the workflow
+    (`decision.gateway_unsupported`, `decision.model_usage`) and again when the step runs.
+    """
+    for name, actor in wf.actors.items():
+        if not isinstance(actor, DecisionActor):
+            continue
+        outputs = actor.outputs
+        for twice in sorted({o for o in outputs if outputs.count(o) > 1}):
+            report.error(
+                "decision.output_collision",
+                f"the decision `{name}` writes the output `{twice}` twice: a question is named like another "
+                "question's probability",
+                ["actors", name, "questions"],
+                source,
+            )
+
+
+def _check_confidence_thresholds(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """A branch on a probability keeps a person below the threshold (ADR 0121 §7) — a warning.
+
+    A state whose exits read a `*_confidence` output in their `when` lets a probability choose the
+    branch. Its default exit — the one without `when`, taken when the probability is below the
+    threshold — hands the work item to a person when it is itself a human step, or when the state it
+    leads to is left by a human step. Otherwise the work items the model was least sure of move on
+    unchecked, and no person's verdict tells the ledger whether the decision was right:
+    `decision.threshold_without_human`. A warning, not an error: a workflow may choose to let an
+    unsure answer through. A state with no default exit is `when.no_default`'s, not this rule's.
+    """
+    for state in wf.states:
+        exits = wf.transitions_from(state)
+        reading = next(
+            ((t, name) for t in exits for name in t.when or {} if name.endswith(CONFIDENCE_SUFFIX)), None
+        )
+        default = next((t for t in exits if not t.when), None)
+        if reading is None or default is None or _hands_to_a_person(wf, default):
+            continue
+        transition, name = reading
+        report.warn(
+            "decision.threshold_without_human",
+            f"`{state}` branches on `{name}`, and its default exit `{default.key}` goes to `{default.to}` "
+            "with no person: a work item the model was unsure of moves on unchecked, and no human verdict "
+            "measures the decision (ADR 0121) — make the default exit a human step, or lead it to one",
+            ["transitions", wf.transitions.index(transition), "when", name],
+            source,
+        )
+
+
+def _hands_to_a_person(wf: Workflow, transition: Transition) -> bool:
+    """The transition is a human step, or the state it leads to is left by one."""
+    if isinstance(wf.actor_of(transition), HumanActor):
+        return True
+    return any(isinstance(wf.actor_of(t), HumanActor) for t in wf.transitions_from(transition.to))
 
 
 def _check_already_fixed_exits(wf: Workflow, report: ValidationReport, source: Any) -> None:
@@ -569,6 +651,17 @@ def _check_effects(wf: Workflow, report: ValidationReport, source: Any) -> None:
                 f"write `does: {implicit}`, so that a rename no longer changes it"
             )
             report.warn("workflow.implicit_effect", message, ["transitions", index, "to"], source)
+        if t.pull_request is not None and (not is_system or transition_effect(t) != "open_pr"):
+            message = (
+                "`pull_request:` says how the platform opens the pull request: only a `system` transition "
+                "that opens it (`does: open_pr`) carries it"
+            )
+            report.error(
+                "transition.pull_request_without_open_pr",
+                message,
+                ["transitions", index, "pull_request"],
+                source,
+            )
     for state_name, state in wf.states.items():
         if state_name.startswith(PRODUCTION_PREFIX) and not state.production:
             message = (

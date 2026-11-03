@@ -75,7 +75,13 @@ def test_configuration_refusals_accept_both_names() -> None:
 
     english = {"AgentUnavailable", "InvalidInstructions", "SkillMissing"}
     former = {"AgentIndisponible", "InstructionsInvalides", "SkillAbsente"}  # lang: fr-ok
-    others = {"ModelResolutionError", "SkillPendingReview", "KnowledgeRefused", "BackendDisabled"}
+    others = {
+        "ModelResolutionError",
+        "SkillPendingReview",
+        "KnowledgeRefused",
+        "BackendDisabled",
+        "DecisionRefused",
+    }
     assert english | former | others == CONFIGURATION_REFUSALS
 
 

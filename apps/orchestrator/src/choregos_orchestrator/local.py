@@ -17,7 +17,9 @@ from typing import Any
 
 from choregos_contracts import StageResult, StageStatus, Workflow
 from choregos_core import GateOutcome, WorkflowEngine
+from choregos_core.decision_ledger import declares_a_confidence
 
+from .activities import decision as decision_activities
 from .activities import findings as finding_activities
 from .activities import gates as gate_activities
 from .activities import scm as scm_activities
@@ -82,6 +84,7 @@ async def run_local(
     last_outcome: str | None = None
     last_run: str | None = None  # `system` transitions evaluate their gates on this run
     last_outputs: dict[str, Any] | None = None  # what a transition's `when` reads (S48-01)
+    ledger_run: str | None = None  # whose ledger records wait for the next transition (ADR 0121)
     approve = approve or (lambda _transition, _state: True)
 
     await tracker_activities.mirror_state(
@@ -95,6 +98,8 @@ async def run_local(
             break
         transition = engine.select_transition(state, last_outcome, last_outputs)
         last_outcome = None
+        await _note_transition_taken(project_id, ledger_run, transition)
+        ledger_run = None
         if transition is None:
             trace.stopped_reason = f"no transition from `{state}` (waiting for an external event)"
             break
@@ -109,6 +114,17 @@ async def run_local(
         if kind in ("agent", "job"):
             decision, cost, run_id, outputs = await _run_stage(
                 project_id, work_item_id, engine, transition, attempt
+            )
+            attempts[key] = attempt + 1
+            last_run = run_id
+            last_outputs = outputs
+            trace.cost_usd += cost
+            trace.steps.append(
+                Step(state, key, kind, decision.reason, decision.next_state, cost_usd=cost, run_id=run_id)
+            )
+        elif kind == "decision":
+            decision, cost, run_id, outputs = await _run_decision(
+                project_id, work_item_id, engine, transition, attempt, last_outputs
             )
             attempts[key] = attempt + 1
             last_run = run_id
@@ -153,6 +169,7 @@ async def run_local(
             attempts[key] = attempt + 1
             trace.steps.append(Step(state, key, kind, decision.reason, decision.next_state))
 
+        ledger_run = _recorded_run(kind, transition, decision, last_outputs, last_run)
         if decision.next_state == state and not decision.retried:
             trace.stopped_reason = f"blocked on `{state}`: {decision.reason}"
             break
@@ -176,6 +193,23 @@ async def run_local(
     if engine.is_terminal(state):
         await tracker_activities.close_out({"project_id": project_id, "work_item_id": work_item_id})
     return trace
+
+
+def _recorded_run(
+    kind: str, transition: Any, decision: Any, outputs: dict[str, Any] | None, run_id: str | None
+) -> str | None:
+    """The run whose ledger records wait for the next transition, as the interpreter's (ADR 0121)."""
+    if kind not in ("agent", "decision") or decision.escalated or decision.next_state != transition.to:
+        return None
+    return run_id if declares_a_confidence(outputs) else None
+
+
+async def _note_transition_taken(project_id: str, run_id: str | None, transition: Any) -> None:
+    """The state the transition selected after a recorded step leads to, on the step's records."""
+    if run_id is not None and transition is not None:
+        await decision_activities.note_transition_taken(
+            {"project_id": project_id, "run_id": run_id, "transition": transition.to}
+        )
 
 
 async def _run_stage(
@@ -231,6 +265,41 @@ async def _run_stage(
         float(spend.get("cost_usd", 0.0)),
         run_id,
         result.outputs.model_dump(mode="json", exclude_none=True) or None,
+    )
+
+
+async def _run_decision(
+    project_id: str,
+    work_item_id: str,
+    engine: WorkflowEngine,
+    transition: Any,
+    attempt: int,
+    last_outputs: dict[str, Any] | None,
+) -> tuple[Any, float, str, dict[str, Any] | None]:
+    """A decision step (ADR 0121), as the interpreter plays it: one activity, its gates, `on_fail`.
+
+    A failed decision keeps the outputs the step read, so that its next attempt is asked the same."""
+    actor = engine.decision_of(transition)
+    assert actor is not None, "a decision step without its decision actor"
+    decided = await decision_activities.decide(
+        decision_activities.decision_request(
+            project_id=project_id,
+            work_item_id=work_item_id,
+            transition=transition,
+            decision=actor,
+            attempt=attempt + 1,
+            last_outputs=last_outputs,
+        )
+    )
+    result = StageResult.model_validate(decided["result"])
+    outcomes = await _gates(project_id, work_item_id, transition, decided["run_id"])
+    decision = engine.after_stage(transition, result, attempt + 1, outcomes)
+    outputs = result.outputs.model_dump(mode="json", exclude_none=True) or None
+    return (
+        decision,
+        float(decided.get("cost_usd", 0.0)),
+        str(decided["run_id"]),
+        outputs if result.status is StageStatus.DONE else last_outputs,
     )
 
 

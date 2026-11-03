@@ -186,6 +186,62 @@ def test_a_template_manifest_is_validated(plugin: Path) -> None:
     assert "templates/hello-flow/manifest.yaml: 'steps' is a required property" in _problems(plugin)
 
 
+DOCS_BASE = {
+    "slug": "greeting-docs",
+    "name": "Greeting docs",
+    "sources": [
+        {"name": "repo", "kind": "git", "config": {"url_from_input": "repo", "paths": ["docs/*.md"]}}
+    ],
+}
+
+
+def _reads_greeting_docs(plugin: Path) -> None:
+    _edit(
+        plugin / "agents" / "greeter.yaml",
+        lambda d: d["agent"]["spec"].update(knowledge=[{"slug": "greeting-docs"}]),
+    )
+
+
+def _ships_greeting_docs(doc: dict[str, Any]) -> None:
+    doc["defaults"]["knowledge"] = [DOCS_BASE]
+    doc["inputs"] = [{"name": "repo", "type": "github-repo"}]
+
+
+def test_a_template_ships_the_knowledge_its_agent_reads_without_a_warning(plugin: Path) -> None:
+    """S51-06, ADR 0117: `defaults.knowledge` validates, and the agent reading it is not warned about."""
+    _reads_greeting_docs(plugin)
+    _edit(plugin / "templates" / "hello-flow" / "manifest.yaml", _ships_greeting_docs)
+    assert load_directory(plugin).warnings == ()
+
+
+def test_an_agent_reading_a_base_no_template_ships_is_warned_about_not_refused(plugin: Path) -> None:
+    _reads_greeting_docs(plugin)
+    (warning,) = load_directory(plugin).warnings
+    assert "agent `greeter` reads the knowledge base `greeting-docs`, which no template" in warning
+    assert load_directory(HELLO).warnings == ()
+
+
+def test_a_template_knowledge_source_names_a_declared_input(plugin: Path) -> None:
+    def undeclared(doc: dict[str, Any]) -> None:
+        _ships_greeting_docs(doc)
+        doc["inputs"] = []
+
+    _edit(plugin / "templates" / "hello-flow" / "manifest.yaml", undeclared)
+    assert (
+        "templates/hello-flow/manifest.yaml:defaults/knowledge/0: the source `repo` reads the input `repo`, "
+        "which the template does not declare"
+    ) in _problems(plugin)
+
+
+def test_a_template_knowledge_base_is_checked_against_the_schema(plugin: Path) -> None:
+    def scoped(doc: dict[str, Any]) -> None:
+        _ships_greeting_docs(doc)
+        doc["defaults"]["knowledge"][0]["scope"] = "org"
+
+    _edit(plugin / "templates" / "hello-flow" / "manifest.yaml", scoped)
+    assert "templates/hello-flow/manifest.yaml:defaults/knowledge/0" in _problems(plugin)
+
+
 def test_an_eval_names_an_agent_of_the_plugin(plugin: Path) -> None:
     _edit(plugin / "evals" / "greeter.yaml", lambda d: d.update(agent="architect"))
     assert "evaluates `architect`" in _problems(plugin)
@@ -215,6 +271,24 @@ def test_an_eval_suite_with_level_one_and_cases_loads(plugin: Path) -> None:
     assert load_directory(plugin).agents
 
 
+def test_an_eval_case_may_carry_the_work_item_s_fields(plugin: Path) -> None:
+    """S51-10: a case plays a ticket filed from a tracker, as the API's `AgentSampleInput.fields`."""
+    tracker = {"kind": "jira", "key": "FON-270", "reporter": {"display_name": "Ada Lovelace"}}
+
+    def cases(doc: dict[str, Any]) -> None:
+        doc["cases"] = [{"name": "filed", "input": {"title": "Hi", "fields": {"tracker": tracker}}}]
+
+    _edit(plugin / "evals" / "greeter.yaml", cases)
+    assert load_directory(plugin).agents
+
+
+def test_an_eval_case_s_fields_hold_at_most_the_api_s_cap(plugin: Path) -> None:
+    big = {"answers": {"notes": "x" * (64 * 1024)}}
+    case = {"name": "x", "input": {"fields": big}}
+    _edit(plugin / "evals" / "greeter.yaml", lambda d: d.update(cases=[case]))
+    assert "evals/greeter.yaml:cases/0/input/fields: at most 64 KiB of JSON" in _problems(plugin)
+
+
 @pytest.mark.parametrize(
     ("change", "needle"),
     [
@@ -226,6 +300,7 @@ def test_an_eval_suite_with_level_one_and_cases_loads(plugin: Path) -> None:
             "evals/greeter.yaml:cases/0/max_cost_usd",
         ),
         (lambda d: d.update(cases=[{"name": "x", "inputs": {}}]), "Additional properties are not allowed"),
+        (lambda d: d.update(cases=[{"name": "x", "input": {"fields": "x"}}]), "cases/0/input/fields"),
         (lambda d: d.update(cases=[{"name": "x"}, {"name": "x"}]), "case `x` is declared twice"),
         (lambda d: d.pop("must_contain"), "is not valid under any of the given schemas"),
     ],

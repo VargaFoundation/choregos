@@ -38,6 +38,7 @@ from ..schemas.outbound_proxy import (
 from ..security import verify_relay_token
 from ..services import outbound_proxy as service
 from ..services.connector_secrets import put_values, require_store
+from ..services.organisations import organisation_by_slug
 
 router = APIRouter(tags=["admin"])
 log = get_logger(__name__)
@@ -48,12 +49,7 @@ _SECRET_PREFIX, _, _SECRET_FIELD = service.SECRET_NAME.rpartition("/")
 async def _admin_organisation(session: AsyncSession, principal: Principal, org: str) -> Organization:
     if principal.org_roles.get(org) != Role.ORG_ADMIN:
         raise forbidden(f"the outbound proxy of {org} is managed by its org_admin")
-    organisation = (
-        await session.execute(select(Organization).where(Organization.slug == org))
-    ).scalar_one_or_none()
-    if organisation is None:
-        raise not_found("Organisation", org)
-    return organisation
+    return await organisation_by_slug(session, org)
 
 
 @router.get("/orgs/{org}/outbound-proxy", response_model=OutboundProxyState, operation_id="getOutboundProxy")

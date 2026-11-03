@@ -59,3 +59,20 @@ def test_only_a_gateway_that_holds_the_llm_guard_can_carry_a_marked_key() -> Non
         refusal = llm_guard_refusal(gateway)
         assert refusal is not None and type(gateway).__name__ in refusal
     assert llm_guard_refusal(object()) is not None, "a gateway that declares nothing has no guard"
+
+
+def test_only_a_gateway_with_the_decision_route_can_serve_a_decision_step() -> None:
+    """ADR 0121 §4: LiteLLM serves `/v1/systemone` (>= 1.104.2); the other gateways have no such route."""
+    from choregos_adapters.base import decision_route_refusal
+
+    client = httpx.AsyncClient()
+    assert "systemone" in GATEWAY_CAPABILITIES
+    assert decision_route_refusal(LiteLlmGateway("http://x", "k", client=client)) is None
+    assert decision_route_refusal(FakeGateway()) is None
+    for gateway in (
+        DirectGateway(),
+        OpenAiCompatibleGateway("http://x/v1", client=client),
+        FakeGateway(capabilities=frozenset({"list_models"})),
+    ):
+        refusal = decision_route_refusal(gateway)
+        assert refusal is not None and type(gateway).__name__ in refusal

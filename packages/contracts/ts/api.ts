@@ -991,8 +991,9 @@ export type ProcessStep = {
   to: string;
   to_display?: string;
   actor: string;
-  actor_type: "agent" | "human" | "system" | "job" | "release_train";
+  actor_type: "agent" | "human" | "system" | "job" | "decision" | "release_train";
   who: string;
+  /** What the step writes; for a decision step (ADR 0121), each question's `<name>` and `<name>_confidence`, which a `when` compares. */
   outputs?: Array<string>;
   gates?: Array<{
     name?: string;
@@ -1012,9 +1013,9 @@ export type ProcessStep = {
   sentence: string;
   /** The registry agent the actor names, `slug` or `slug@N` (ADR 0033); null for an implicit playbook actor and for any actor that is not an agent. */
   agent?: string | null;
-  /** The role of an agent or job actor. */
+  /** The role of an agent, job or decision actor. */
   role?: string | null;
-  /** The model or profile of an agent actor, as written (`profile:standard`). */
+  /** The model or profile of an agent actor, as written (`profile:standard`); the catalogue entry of a decision actor (`platform/decide`). */
   model?: string | null;
   /** The group of a human actor. */
   group?: string | null;
@@ -1096,6 +1097,8 @@ export type AgentSpec = {
   /** The memories a run reads and writes (S40-11, ADR 0075), in precedence order (earlier wins). At most 8, no duplicates, at most one `write` (the target of the run's lessons, findings and proposals; a global target only ever receives proposals). Absent means: derive from `memory`. Sent together with a non-default `memory` it is a 422. */
   memories?: Array<AgentMemoryBinding> | null;
   network?: AgentNetwork;
+  /** The workspace a run gets (S51-03, ADR 0119); the repository is the project's. `none`: nothing is cloned and the repository's host is not on the run's network. `read`: the repository is cloned and no file of it may be written (only the step's deliverables in `.choregos/outputs/`). `write`: today's run. Absent (left out of the stored spec, so no digest moves): `write`, or the `hosted` runtime's `workspace`. Refused with an `a2a` runtime, and with a `hosted` one when it differs from `runtime.workspace`. */
+  workspace?: "none" | "read" | "write" | null;
 };
 
 /** A coding agent that speaks ACP (ADR 0002), one of the backends the runner ships. */
@@ -1639,6 +1642,10 @@ export type AgentEvalCase = {
 export type AgentSampleInput = {
   title?: string;
   body?: string;
+  /** the work item's fields, rendered as `ticket.fields` (S51-04): `{tracker: {reporter, creator, labels, answers}}` plays a ticket filed from a tracker; absent, `{}` */
+  fields?: {
+    [key: string]: unknown;
+  };
 };
 
 export type AgentEvalResult = {
@@ -2177,6 +2184,58 @@ export type StepActivity = {
   failed: number;
   cost_usd: number;
   median_minutes?: number | null;
+};
+
+/** One bin of probability, `[lower, upper)` (the last one closed), over the observed decisions. */
+export type ReliabilityBin = {
+  lower: number;
+  upper: number;
+  count: number;
+  /** The mean probability of the bin's decisions; null for an empty bin. */
+  mean_probability?: number | null;
+  /** The share of them that were right; null for an empty bin. */
+  accuracy?: number | null;
+};
+
+/** What a threshold keeps of the observed decisions — how many, which share, how many right. */
+export type ThresholdPoint = {
+  threshold: number;
+  count: number;
+  coverage?: number | null;
+  accuracy?: number | null;
+};
+
+/** One question's calibration, for one source, model and model version (ADR 0121 §7). */
+export type QuestionCalibration = {
+  question: string;
+  source: "decision_model" | "agent";
+  model: string;
+  model_version?: string | null;
+  /** Every recorded decision. */
+  count: number;
+  /** The decisions whose outcome is observed. */
+  observed: number;
+  /** The share of observed decisions that were right: nobody contradicted them, the work item ended in success, and it did not come back. */
+  accuracy?: number | null;
+  /** The expected calibration error over the ten bins. */
+  ece?: number | null;
+  bins?: Array<ReliabilityBin>;
+  thresholds?: Array<ThresholdPoint>;
+  /** The lowest threshold whose accuracy reaches the target. */
+  suggested_threshold?: number | null;
+  /** Why no threshold is suggested. */
+  suggestion_reason?: string | null;
+};
+
+/** A step's decisions measured from the ledger, per question and model version (ADR 0121 §7). */
+export type StepCalibration = {
+  workflow: string;
+  /** The state the step runs from. */
+  step: string;
+  target_accuracy: number;
+  /** The observed decisions below which no threshold is suggested. */
+  min_observed: number;
+  questions?: Array<QuestionCalibration>;
 };
 
 export type WorkflowActivity = {
@@ -3181,6 +3240,8 @@ export type GatewayModel = {
   max_input_tokens?: number | null;
   supports_tool_calling?: boolean;
   supports_vision?: boolean;
+  /** What the gateway says the model does; `evaluation` is a decision model (ADR 0121). */
+  mode?: string;
   internal_price?: boolean;
   source?: "gateway" | "manual";
   owned_by?: string;
@@ -3202,6 +3263,7 @@ export type ModelGatewayFacts = {
   max_input_tokens?: number | null;
   supports_tool_calling?: boolean;
   supports_vision?: boolean;
+  mode?: string;
 };
 
 export type ModelCatalogueEntry = {
@@ -3211,7 +3273,7 @@ export type ModelCatalogueEntry = {
   source: "gateway" | "manual";
   enabled: boolean;
   allowed_roles: Array<string>;
-  usages: Array<"agent" | "embed" | "distill" | "eval" | "route">;
+  usages: Array<"agent" | "embed" | "distill" | "eval" | "route" | "decide">;
   price_override?: PriceOverride | null;
   max_usd_per_minute?: number | null;
   gateway?: ModelGatewayFacts | null;
@@ -3227,7 +3289,7 @@ export type ModelCatalogueEntryCreate = {
   display_name?: string | null;
   enabled?: boolean;
   allowed_roles?: Array<string>;
-  usages?: Array<"agent" | "embed" | "distill" | "eval" | "route">;
+  usages?: Array<"agent" | "embed" | "distill" | "eval" | "route" | "decide">;
   price_override?: PriceOverride | null;
   max_usd_per_minute?: number | null;
   notes?: string;
@@ -3237,7 +3299,7 @@ export type ModelCataloguePatch = {
   display_name?: string | null;
   enabled?: boolean | null;
   allowed_roles?: Array<string> | null;
-  usages?: Array<"agent" | "embed" | "distill" | "eval" | "route"> | null;
+  usages?: Array<"agent" | "embed" | "distill" | "eval" | "route" | "decide"> | null;
   price_override?: PriceOverride | null;
   clear_price_override?: boolean;
   max_usd_per_minute?: number | null;
@@ -3259,6 +3321,10 @@ export type ModelCatalogue = {
   gateway: {
     type: string;
     capabilities?: Array<string>;
+    /** Where the gateway is set: the organisation's own `gateway` connector, or the deployment's environment (`CHOREGOS_GATEWAY_TYPE`, `CHOREGOS_GATEWAY_URL`), which no screen changes. */
+    source?: "organisation" | "deployment";
+    /** The address the platform calls. The organisation's own is shown to its members; the deployment's only to a platform administrator, null otherwise. */
+    base_url?: string | null;
   };
   tiers: ModelTiers;
   entries: Array<ModelCatalogueEntry>;
@@ -3549,15 +3615,54 @@ export type CostEstimate = {
 export type ReceivedEvent = {
   id: string;
   received_at: string;
-  /** jira, github, gitlab, tekton, argocd, alertmanager, plugin:<plugin>/<server> */
+  /** jira, github, gitlab, tekton, argocd, alertmanager, plugin:<plugin>/<server>, trigger:<name>, schedule:<name> */
   source: string;
   event_type: string;
   delivery_id?: string | null;
-  outcome: "created_work_item" | "started" | "signalled" | "boarded" | "labels_updated" | "ignored_no_item_key" | "ignored_not_agent_ready";
+  outcome: "created_work_item" | "started" | "signalled" | "boarded" | "labels_updated" | "ignored_no_item_key" | "ignored_not_agent_ready" | "already_open" | "refused" | "ignored";
   work_item_key?: string | null;
   work_item_id?: string | null;
   /** Built from typed fields only: key, label, from → to, PR number, conclusion. */
   summary: string;
+};
+
+/** A project's HTTP trigger (S56-01, ADR 0113); its token is never listed. */
+export type Trigger = {
+  name: string;
+  url: string;
+  workflow?: string | null;
+  title: string;
+  key?: string | null;
+  labels?: Array<string>;
+  fields?: {
+    [key: string]: string;
+  };
+  /** A JSON pointer to the text, or texts, a payload must hold (S56-05). */
+  when?: {
+    [key: string]: unknown;
+  };
+  auth?: "token" | "signature";
+  has_token: boolean;
+  token_created_at?: string | null;
+};
+
+/** A trigger's new token and the signing secret derived from it (S56-04), shown once. */
+export type TriggerToken = {
+  name: string;
+  url: string;
+  token: string;
+  /** The HMAC-SHA256 key of `X-Choregos-Signature`; it changes with the token. */
+  signing_secret: string;
+};
+
+/** What a trigger call did; `outcome` is the received event's, absent on a replayed delivery. */
+export type TriggerAck = {
+  accepted: boolean;
+  duplicate?: boolean;
+  outcome?: "created_work_item" | "already_open" | "ignored" | null;
+  work_item_id?: string | null;
+  work_item_key?: string | null;
+  workflow?: string | null;
 };
 
 export type ReceivedEventPage = {
@@ -4400,6 +4505,9 @@ export interface Operations {
   estimateKnowledgeDistillation: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/distill/estimate"; body: never; response: KnowledgeDistillEstimate };
   exportOrgCostsCsv: { method: "GET"; path: "/orgs/{org}/costs.csv"; body: never; response: void };
   exportProjectCostsCsv: { method: "GET"; path: "/projects/{id}/costs.csv"; body: never; response: void };
+  fireTrigger: { method: "POST"; path: "/projects/{id}/triggers/{name}/fire"; body: {
+  [key: string]: unknown;
+}; response: TriggerAck };
   forkAgent: { method: "POST"; path: "/orgs/{org}/agents/{slug}/fork"; body: AgentFork; response: Agent };
   freezeTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/freeze"; body: {
   reason: string;
@@ -4553,6 +4661,7 @@ export interface Operations {
   getSkill: { method: "GET"; path: "/orgs/{org}/skills/{slug}"; body: never; response: Skill };
   getSkillSources: { method: "GET"; path: "/orgs/{org}/skill-sources"; body: never; response: SkillSources };
   getSkillVersion: { method: "GET"; path: "/orgs/{org}/skills/{slug}/versions/{version}"; body: never; response: SkillVersion };
+  getStepCalibration: { method: "GET"; path: "/projects/{id}/workflows/{name}/steps/{step}/calibration"; body: never; response: StepCalibration };
   getTemplate: { method: "GET"; path: "/templates/{name}"; body: never; response: TemplateDetail };
   getTrainStatus: { method: "GET"; path: "/projects/{id}/trains/{env}"; body: never; response: TrainStatus };
   getWorkItem: { method: "GET"; path: "/work-items/{id}"; body: never; response: WorkItem };
@@ -4635,6 +4744,7 @@ export interface Operations {
   listSkillCatalogue: { method: "GET"; path: "/orgs/{org}/skill-catalogue"; body: never; response: SkillCatalogue };
   listSkills: { method: "GET"; path: "/orgs/{org}/skills"; body: never; response: Array<Skill> };
   listTemplates: { method: "GET"; path: "/templates"; body: never; response: Array<TemplateSummary> };
+  listTriggers: { method: "GET"; path: "/projects/{id}/triggers"; body: never; response: Array<Trigger> };
   listUsableModels: { method: "GET"; path: "/orgs/{org}/models/usable"; body: never; response: Array<UsableModel> };
   listWorkItemArtifacts: { method: "GET"; path: "/work-items/{id}/artifacts"; body: never; response: Array<Artifact> };
   listWorkItems: { method: "GET"; path: "/projects/{id}/work-items"; body: never; response: WorkItemPage };
@@ -4720,6 +4830,7 @@ export interface Operations {
   revokeRemoteCredential: { method: "DELETE"; path: "/orgs/{org}/remote-credentials/{name}"; body: never; response: void };
   rewrapSecrets: { method: "POST"; path: "/platform/secrets/rewrap"; body: never; response: SecretsRewrap };
   rotateMcpGatewayAssertionKey: { method: "POST"; path: "/orgs/{org}/mcp-gateway/assertion-key"; body: never; response: McpGatewayAssertion };
+  rotateTriggerToken: { method: "POST"; path: "/projects/{id}/triggers/{name}/token"; body: never; response: TriggerToken };
   runKnowledgeEval: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/eval/run"; body: never; response: KnowledgeBase };
   searchGlobalMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}/search"; body: never; response: Array<Memory> };
   searchKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
@@ -4747,6 +4858,9 @@ export interface Operations {
   theme: { method: "GET"; path: "/theme"; body: never; response: Theme };
   tightenProjectOperation: { method: "PUT"; path: "/projects/{id}/operations/{connector}/{operation}"; body: ProjectOperationPut; response: ProjectOperation };
   transferAgentOwnership: { method: "POST"; path: "/orgs/{org}/agents/{slug}/owner"; body: AgentOwnerChange; response: Agent };
+  triggerWebhook: { method: "POST"; path: "/webhooks/triggers/{org}/{project}/{name}"; body: {
+  [key: string]: unknown;
+}; response: TriggerAck };
   unfreezeTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/unfreeze"; body: never; response: void };
   uninstallPlugin: { method: "DELETE"; path: "/orgs/{org}/plugins/{name}"; body: never; response: PluginUninstallResult };
   unpinProjectAgent: { method: "DELETE"; path: "/projects/{id}/agents/{slug}"; body: never; response: void };

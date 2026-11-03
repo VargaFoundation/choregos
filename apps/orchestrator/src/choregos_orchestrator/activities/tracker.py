@@ -8,10 +8,17 @@ from typing import Any
 
 from choregos_api.db.models import Deployment, Finding, HumanRequest, Release, Run, WorkItem
 from choregos_api.logging import get_logger
-from choregos_api.services import Naissance, nouveau_ticket, persist_event
+from choregos_api.services import (
+    Naissance,
+    nouveau_ticket,
+    persist_event,
+    record_human_verdict,
+    record_terminal_outcome,
+)
 from choregos_api.services.initiator import initiator
-from choregos_contracts import EventType, StageResult
+from choregos_contracts import EventType, HumanActor, HumanRequestKind, StageResult
 from choregos_core import Message, MessageAction, TrackerStateMapping, elapsed_seconds, utcnow
+from choregos_core.domain import TRACKER_FIELD
 from choregos_core.gates import ALREADY_FIXED_GATE
 from choregos_core.restricted import WITHHELD, is_marked
 from sqlalchemy import select, update
@@ -40,6 +47,8 @@ ALREADY_FIXED_MARKER = "<!-- choregos:already-fixed -->"
 
 #: The reason the interpreter mirrors the state it (re)starts from: no decision is applied then.
 STARTED_REASON = "started"
+#: How a work item stopped outside a terminal state ended, for its decisions: dropped.
+CANCELLED_OUTCOME = "cancelled"
 
 
 def _via(bundle: Any) -> dict[str, Any]:
@@ -330,7 +339,30 @@ async def close_human_request(payload: dict[str, Any]) -> dict[str, Any]:
         # Même close par l'API avant que l'activité ne passe — c'est le cas d'une réponse —, la
         # demande dépose sa raison ou sa réponse là où l'agent suivant la lit.
         await _garder_la_raison(session, row, dict(payload.get("decision") or {}))
+        await _judge_the_decisions(session, row, dict(payload.get("decision") or row.decision or {}))
         return {"closed": True}
+
+
+#: The requests whose verdict judges the decisions before them: a person approves or does the step.
+JUDGING_REQUESTS = frozenset({HumanRequestKind.APPROVAL.value, HumanRequestKind.TASK.value})
+
+
+async def _judge_the_decisions(session: Any, request: HumanRequest, decision: dict[str, Any]) -> None:
+    """A human step's verdict on the decisions recorded before it was asked (ADR 0121 §6): sent back
+    or rejected, they are overridden; approved or completed, they are not. Only a human step counts —
+    an approval or a task on a transition a `human` actor carries. An escalation's approval, an answer
+    to a question, a request closed because the work item resumed judge nothing. The first verdict
+    after a decision is its verdict: a later one changes nothing (`record_human_verdict`)."""
+    if decision.get("superseded") or request.kind not in JUDGING_REQUESTS or not request.transition_id:
+        return
+    item = await session.get(WorkItem, request.work_item_id)
+    if item is None:
+        return
+    workflow = await workflow_du_ticket(session, item)
+    step = next((t for t in workflow.transitions if t.key == request.transition_id), None)
+    if step is None or not isinstance(workflow.actor_of(step), HumanActor):
+        return
+    await record_human_verdict(session, item.id, request.requested_at, bool(decision.get("approved")))
 
 
 async def _garder_la_raison(session: Any, demande: HumanRequest, decision: dict[str, Any]) -> None:
@@ -382,6 +414,7 @@ async def close_out(payload: dict[str, Any]) -> dict[str, Any]:
         item = await load_work_item(session, payload["work_item_id"])
         if item.closed_at is None:
             item.closed_at = utcnow()
+        await record_terminal_outcome(session, item.id, await _terminal_outcome(session, item))
         # A child work item (S38-12) tells its parent once it is closed, after the commit below.
         settled = parent_of(item)
         await persist_event(
@@ -422,6 +455,15 @@ async def close_out(payload: dict[str, Any]) -> dict[str, Any]:
     if settled is not None:
         await notify_parent(settled)
     return {"closed": True, "state": state, "tracker_closed": tracker_closed}
+
+
+async def _terminal_outcome(session: Any, item: WorkItem) -> str:
+    """How the work item ended, for its decisions (ADR 0121 §6): its terminal state's outcome, or
+    `cancelled` when it was stopped outside a terminal state."""
+    state = (await workflow_du_ticket(session, item)).states.get(item.state)
+    if state is not None and state.terminal:
+        return str(state.outcome)
+    return CANCELLED_OUTCOME
 
 
 async def _close_delivered_item(session: Any, bundle: Any, item: WorkItem) -> bool:
@@ -591,6 +633,8 @@ async def reconcile_tracker(payload: dict[str, Any]) -> dict[str, Any]:
                         item_type=data.item_type,
                         reporter=data.author,
                         initiated_by=initiator("tracker", "sync"),
+                        # Who filed it, its labels, its form's answers (S51-04): `fields.tracker`.
+                        tracker=data.fields.get(TRACKER_FIELD),
                     ),
                 )
                 created.append(key)
