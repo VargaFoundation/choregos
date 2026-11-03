@@ -42,6 +42,7 @@ from .definitions import (
 from .evenements import (
     persist_event,
 )
+from .human_requests import new_human_request
 from .memoire import (
     MIN_TICKETS_PAR_GROUPE,
     _ab_verdict,
@@ -103,6 +104,7 @@ __all__ = [
     "human_request_dto",
     "le_tracker_est_interne",
     "memory_ab_comparison",
+    "new_human_request",
     "noter_les_etiquettes",
     "nouveau_ticket",
     "parcours",
