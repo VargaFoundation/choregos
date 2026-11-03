@@ -12,6 +12,7 @@ import { GrapheDesCouts } from "@/components/graphe-des-couts";
 import type { DoraMetric } from "@/lib/types";
 import { MiseEnRoute } from "@/components/mise-en-route";
 import { Card, CostChip, Empty, ErrorNote, EtatDeLecture, Label, Stat, StateBadge } from "@/components/ui";
+import { Activity, GitMerge, Timer, TrainFront, Wallet } from "lucide-react";
 
 export default function ProjectOverview({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
@@ -70,10 +71,10 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
         className={`grid grid-cols-2 border border-line ${hasReleaseTrain(project.data) ? "md:grid-cols-4" : "md:grid-cols-3"}`}
       >
         <div className="p-6">
-          <Stat value={actifs} label="Active tickets" tone={actifs > 0 ? "accent" : "ink"} />
+          <Stat value={actifs} label="Active tickets" tone={actifs > 0 ? "accent" : "ink"} icon={Activity} hue={1} />
         </div>
         <div className="border-l border-line p-6">
-          <Stat value={percent(stats?.first_pass_merge_rate)} label="PRs merged on first pass" />
+          <Stat value={percent(stats?.first_pass_merge_rate)} label="PRs merged on first pass" icon={GitMerge} hue={6} />
         </div>
         <div className="border-t border-line p-6 md:border-t-0 md:border-l">
           <Stat
@@ -83,11 +84,13 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
                 : "—"
             }
             label="Median cycle time"
+            icon={Timer}
+            hue={5}
           />
         </div>
         {hasReleaseTrain(project.data) && (
           <div className="border-t border-l border-line p-6 md:border-t-0">
-            <Stat value={stats?.trains_pending ?? 0} label="Trains in flight" />
+            <Stat value={stats?.trains_pending ?? 0} label="Trains in flight" icon={TrainFront} hue={3} />
           </div>
         )}
       </div>
@@ -95,6 +98,8 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
       <Card
         eyebrow="Cost"
         title="The last 14 days"
+        icon={Wallet}
+        hue={7}
         action={
           <span className="flex gap-3 text-xs">
             <Link href={`/costs?project=${slug}`} className="text-ink-muted hover:text-ink">
@@ -109,7 +114,7 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
         {!costs.data ? (
           <EtatDeLecture lecture={costs} quoi="the costs" />
         ) : rows.length === 0 ? (
-          <Empty>No spend recorded.</Empty>
+          <Empty icon={Wallet} hue={7}>No spend recorded.</Empty>
         ) : (
           <>
             <GrapheDesCouts rows={rows} />
