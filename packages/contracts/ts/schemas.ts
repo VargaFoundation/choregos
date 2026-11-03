@@ -1380,7 +1380,7 @@ export type WorkflowDecisionQuestion = {
   type: "score";
   /** What is asked, in plain words; the model reads it with the state. */
   instructions: string;
-  /** The ordered levels of the score, lowest first; the answer is one of them. */
+  /** The ordered levels of the score, lowest first; the answer is one of them. At most 10: the gateway's decision route (LiteLLM 1.105.5) refuses more. */
   levels: Array<string>;
 };
 
