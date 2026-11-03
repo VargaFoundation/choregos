@@ -55,6 +55,7 @@ from ..schemas import (
 from ..secret_store import SecretStoreUnavailable, get_secret_store
 from ..security import read_session, sign_session
 from ..services.egress import egress_scope, ensure_or_409, remote_agent_targets
+from ..services.organisations import organisation_by_slug
 from ..services.remote_agents import a2a_transport, credential_named, read_card
 from ..services.remote_tokens import secret_name, store_refresh_token
 
@@ -89,15 +90,6 @@ ATLASSIAN_ME = "https://api.atlassian.com/me"
 def _manage(principal: Me, org: str) -> None:
     if not principal.can(Permission.AGENT_MANAGE, org):
         raise forbidden("remote agents and their credentials are managed by the org_admin role")
-
-
-async def _organisation(session: AsyncSession, slug: str) -> Organization:
-    found = (
-        await session.execute(select(Organization).where(Organization.slug == slug))
-    ).scalar_one_or_none()
-    if found is None:
-        raise not_found("Organisation", slug)
-    return found
 
 
 async def _credential(session: AsyncSession, organisation: Organization, name: str) -> RemoteCredential:
@@ -145,7 +137,7 @@ def _https(url: str, what: str) -> str:
 )
 async def list_remote_credentials(org: str, session: Db, principal: Me) -> list[RemoteCredentialDto]:
     _manage(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     rows = (
         await session.execute(
             select(RemoteCredential)
@@ -166,7 +158,7 @@ async def create_remote_credential(
     org: str, body: RemoteCredentialCreate, session: Db, principal: Me, settings: Config
 ) -> RemoteCredentialDto:
     _manage(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     if await credential_named(session, organisation.id, body.name) is not None:
         raise conflict(f"remote credential `{body.name}` already exists in {org}")
     row = RemoteCredential(
@@ -293,7 +285,7 @@ async def authorize_remote_credential(
 ) -> RemoteCredentialAuthorization:
     """Where to send the browser; the PKCE verifier waits in a signed, httpOnly cookie."""
     _manage(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     row = await _credential(session, organisation, name)
     if row.type != AUTH_OAUTH:
         raise unprocessable("only an OAuth credential is authorised in a browser")
@@ -368,7 +360,7 @@ async def remote_credential_callback(
     org, name = str(expected.get("o") or ""), str(expected.get("c") or "")
     org = await current_slug(session, org)  # the handshake may span a rename (ADR 0090)
     _manage(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     row = await _credential(session, organisation, name)
     config = row.config or {}
     form = {
@@ -460,7 +452,7 @@ async def _who(
 async def revoke_remote_credential(org: str, name: Name, session: Db, principal: Me) -> Response:
     """Revokes the credential: its sealed values are deleted, no run can obtain a token with it."""
     _manage(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     row = await _credential(session, organisation, name)
     store = get_secret_store()
     for what in ("refresh_token", "token", "client_secret"):
@@ -513,7 +505,7 @@ async def discover_remote_agent(
     """Reads a card and suggests the registry entry; creates nothing. The card's host must be open
     in the organisation's egress allowlist first (S39-22): 409 `egress_required`, or `allow_egress`."""
     _manage(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     await ensure_or_409(
         session,
         principal,

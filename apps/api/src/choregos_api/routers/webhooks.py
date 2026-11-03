@@ -36,6 +36,7 @@ from ..services import (
     workflow_du_ticket,
     workflow_model,
 )
+from ..services.decision_ledger import observe_reopening
 from ..services.initiator import initiator
 from ..services.routage import with_tracker
 from ..temporal import (
@@ -279,6 +280,8 @@ async def _dispatch(
             continue
         if tracker is not None and not created:
             item.fields = with_tracker(dict(item.fields or {}), tracker)
+        # An ended work item whose issue is open again: its decisions were not right (ADR 0121 §6).
+        await observe_reopening(session, item, str(event.type), event.payload)
         etiquettes = event.payload.get("labels")
         if event.type in ETIQUETTES_A_JOUR and isinstance(etiquettes, list):
             # L'état courant des étiquettes, posé ou retiré : la voie express les lit (#279).

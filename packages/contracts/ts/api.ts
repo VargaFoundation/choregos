@@ -2186,6 +2186,58 @@ export type StepActivity = {
   median_minutes?: number | null;
 };
 
+/** One bin of probability, `[lower, upper)` (the last one closed), over the observed decisions. */
+export type ReliabilityBin = {
+  lower: number;
+  upper: number;
+  count: number;
+  /** The mean probability of the bin's decisions; null for an empty bin. */
+  mean_probability?: number | null;
+  /** The share of them that were right; null for an empty bin. */
+  accuracy?: number | null;
+};
+
+/** What a threshold keeps of the observed decisions — how many, which share, how many right. */
+export type ThresholdPoint = {
+  threshold: number;
+  count: number;
+  coverage?: number | null;
+  accuracy?: number | null;
+};
+
+/** One question's calibration, for one source, model and model version (ADR 0121 §7). */
+export type QuestionCalibration = {
+  question: string;
+  source: "decision_model" | "agent";
+  model: string;
+  model_version?: string | null;
+  /** Every recorded decision. */
+  count: number;
+  /** The decisions whose outcome is observed. */
+  observed: number;
+  /** The share of observed decisions that were right: nobody contradicted them, the work item ended in success, and it did not come back. */
+  accuracy?: number | null;
+  /** The expected calibration error over the ten bins. */
+  ece?: number | null;
+  bins?: Array<ReliabilityBin>;
+  thresholds?: Array<ThresholdPoint>;
+  /** The lowest threshold whose accuracy reaches the target. */
+  suggested_threshold?: number | null;
+  /** Why no threshold is suggested. */
+  suggestion_reason?: string | null;
+};
+
+/** A step's decisions measured from the ledger, per question and model version (ADR 0121 §7). */
+export type StepCalibration = {
+  workflow: string;
+  /** The state the step runs from. */
+  step: string;
+  target_accuracy: number;
+  /** The observed decisions below which no threshold is suggested. */
+  min_observed: number;
+  questions?: Array<QuestionCalibration>;
+};
+
 export type WorkflowActivity = {
   workflow: string;
   days: number;
@@ -3269,6 +3321,10 @@ export type ModelCatalogue = {
   gateway: {
     type: string;
     capabilities?: Array<string>;
+    /** Where the gateway is set: the organisation's own `gateway` connector, or the deployment's environment (`CHOREGOS_GATEWAY_TYPE`, `CHOREGOS_GATEWAY_URL`), which no screen changes. */
+    source?: "organisation" | "deployment";
+    /** The address the platform calls. The organisation's own is shown to its members; the deployment's only to a platform administrator, null otherwise. */
+    base_url?: string | null;
   };
   tiers: ModelTiers;
   entries: Array<ModelCatalogueEntry>;
@@ -4605,6 +4661,7 @@ export interface Operations {
   getSkill: { method: "GET"; path: "/orgs/{org}/skills/{slug}"; body: never; response: Skill };
   getSkillSources: { method: "GET"; path: "/orgs/{org}/skill-sources"; body: never; response: SkillSources };
   getSkillVersion: { method: "GET"; path: "/orgs/{org}/skills/{slug}/versions/{version}"; body: never; response: SkillVersion };
+  getStepCalibration: { method: "GET"; path: "/projects/{id}/workflows/{name}/steps/{step}/calibration"; body: never; response: StepCalibration };
   getTemplate: { method: "GET"; path: "/templates/{name}"; body: never; response: TemplateDetail };
   getTrainStatus: { method: "GET"; path: "/projects/{id}/trains/{env}"; body: never; response: TrainStatus };
   getWorkItem: { method: "GET"; path: "/work-items/{id}"; body: never; response: WorkItem };

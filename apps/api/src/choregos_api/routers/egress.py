@@ -32,17 +32,11 @@ from ..schemas.egress import (
 )
 from ..services import egress as service
 from ..services.egress import Target
+from ..services.organisations import organisation_by_slug
 
 router = APIRouter(tags=["egress"])
 
 RuleId = Annotated[str, Path(min_length=1, max_length=64)]
-
-
-async def _organisation(session: AsyncSession, slug: str) -> Organization:
-    row = (await session.execute(select(Organization).where(Organization.slug == slug))).scalar_one_or_none()
-    if row is None:
-        raise not_found("Organisation", slug)
-    return row
 
 
 def _read(principal: Me, org: str) -> None:
@@ -85,7 +79,7 @@ async def _rule(session: AsyncSession, organisation: Organization, rule_id: str)
 async def get_org_egress(org: str, session: Db, principal: Me, settings: Config) -> EgressOverview:
     """The rules (live and decided), the pending requests, the deployment's ceiling and its mode."""
     _read(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     rows = (
         await session.execute(
             select(OrgEgressRule)
@@ -151,7 +145,7 @@ async def check_org_egress(
     The hosts come from the targets, or are DERIVED by the server from an `origin`: the console
     never asks a person for one."""
     _read(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     origin_text = body.origin.kind if body.origin else "manual"
     items = await service.verdicts(
         session,
@@ -176,7 +170,7 @@ async def check_org_egress(
 async def create_org_egress_rule(org: str, body: EgressRuleCreate, session: Db, principal: Me) -> EgressRule:
     """Open a host: the administrator alone. A host that already has a live rule is a 409."""
     _decide(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     host = _host(body.host)
     service.refuse_runners_for_the_gateway(organisation, host, body.used_by)
     if await _live(session, organisation.id, host) is not None:
@@ -220,7 +214,7 @@ async def create_org_egress_rule(org: str, body: EgressRuleCreate, session: Db, 
 async def revoke_org_egress_rule(org: str, rule_id: RuleId, session: Db, principal: Me) -> EgressRule:
     """Close a host. The platform's clients refuse it from the next call."""
     _decide(principal, org)
-    row = await _rule(session, await _organisation(session, org), rule_id)
+    row = await _rule(session, await organisation_by_slug(session, org), rule_id)
     if row.status != "allowed":
         raise conflict(f"the rule is {row.status}: only an allowed rule is revoked")
     row.status = "revoked"
@@ -252,7 +246,7 @@ async def request_org_egress(org: str, body: EgressRequestCreate, session: Db, p
     """A member asks an administrator to open a host. It shows in the inbox of those who decide;
     asking twice for the same host answers with the request already waiting."""
     _read(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     host = _host(body.host)
     service.refuse_runners_for_the_gateway(organisation, host, body.used_by)
     live = await _live(session, organisation.id, host)
@@ -314,7 +308,7 @@ async def _decision(
     org: str, rule_id: str, body: EgressDecision, session: AsyncSession, principal: Me, *, approve: bool
 ) -> EgressRule:
     _decide(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     row = await _rule(session, organisation, rule_id)
     if row.status != "requested":
         raise conflict(f"the request is already {row.status}")

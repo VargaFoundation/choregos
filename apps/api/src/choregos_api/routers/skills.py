@@ -37,6 +37,7 @@ from ..schemas import (
     SkillVersionDto,
 )
 from ..services.egress import egress_scope, ensure_or_409, skill_import_targets
+from ..services.organisations import organisation_by_slug
 from ..services.platform_network import check_platform_host, user_agent
 from ..services.skill_gate import assess
 from ..services.skill_sources import (
@@ -63,15 +64,6 @@ router = APIRouter(tags=["agents"])
 Slug = Annotated[str, Path(pattern=r"^[a-z][a-z0-9-]{1,62}$")]
 #: Une archive plus grosse que ça n'a pas besoin d'être ouverte pour être refusée.
 ARCHIVE_MAX = 8 * 1024 * 1024
-
-
-async def _organisation(session: AsyncSession, slug: str) -> Organization:
-    organisation = (
-        await session.execute(select(Organization).where(Organization.slug == slug))
-    ).scalar_one_or_none()
-    if organisation is None:
-        raise not_found("Organisation", slug)
-    return organisation
 
 
 async def _skill(session: AsyncSession, organisation: Organization, slug: str) -> Skill:
@@ -151,7 +143,7 @@ async def _dto(
 @router.get("/orgs/{org}/skills", response_model=list[SkillDto], operation_id="listSkills")
 async def list_skills(org: str, session: Db, principal: Me) -> list[SkillDto]:
     _lire(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     skills = (
         await session.execute(select(Skill).where(Skill.org_id == organisation.id).order_by(Skill.slug))
     ).scalars()
@@ -167,7 +159,7 @@ async def list_skills(org: str, session: Db, principal: Me) -> list[SkillDto]:
 async def create_skill(org: str, body: SkillFiles, session: Db, principal: Me) -> SkillDto:
     """Une skill neuve, version 1 ; son nom est celui de son SKILL.md."""
     _gerer(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     try:
         nom = valider(body.files).name
     except SkillRefusee as refus:
@@ -189,7 +181,7 @@ async def create_skill(org: str, body: SkillFiles, session: Db, principal: Me) -
 async def import_skill(org: str, request: Request, session: Db, principal: Me) -> SkillDto:
     """Une archive zip : la skill naît, ou sa version suivante est publiée."""
     _gerer(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     contenu = await request.body()
     if len(contenu) > ARCHIVE_MAX:
         raise unprocessable(f"archive larger than {ARCHIVE_MAX // (1024 * 1024)} MiB")
@@ -206,7 +198,7 @@ async def import_skill(org: str, request: Request, session: Db, principal: Me) -
 @router.get("/orgs/{org}/skills/{slug}", response_model=SkillDto, operation_id="getSkill")
 async def get_skill(org: str, slug: Slug, session: Db, principal: Me) -> SkillDto:
     _lire(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     return await _dto(session, organisation, await _skill(session, organisation, slug), avec_versions=True)
 
 
@@ -220,7 +212,7 @@ async def publish_skill_version(
     org: str, slug: Slug, body: SkillFiles, session: Db, principal: Me
 ) -> SkillVersionDto:
     _gerer(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     await _skill(session, organisation, slug)
     _, version = await publish_version(session, principal, organisation, body.files, slug)
     return _version_dto(version)
@@ -235,7 +227,7 @@ async def get_skill_version(
     org: str, slug: Slug, version: int, session: Db, principal: Me
 ) -> SkillVersionDto:
     _lire(principal, org)
-    skill = await _skill(session, await _organisation(session, org), slug)
+    skill = await _skill(session, await organisation_by_slug(session, org), slug)
     ligne = (
         await session.execute(
             select(SkillVersion).where(SkillVersion.skill_id == skill.id, SkillVersion.version == version)
@@ -374,7 +366,7 @@ def _licence(skill: FoundSkill, snapshot: Snapshot) -> str | None:
 @router.get("/orgs/{org}/skill-sources", response_model=SkillSources, operation_id="getSkillSources")
 async def get_skill_sources(org: str, session: Db, principal: Me) -> SkillSources:
     _lire(principal, org)
-    sources, defaut = await _skill_sources(session, await _organisation(session, org))
+    sources, defaut = await _skill_sources(session, await organisation_by_slug(session, org))
     return SkillSources(sources=sources, default=defaut)
 
 
@@ -383,7 +375,7 @@ async def put_skill_sources(org: str, body: SkillSources, session: Db, principal
     """The allowlist, written by the administrator; it replaces the default one."""
     if not principal.can(Permission.AGENT_MANAGE, org):
         raise forbidden("the skill sources of an organisation are decided by its administrator")
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     mauvaises = [source for source in body.sources if not SOURCE.match(source)]
     if mauvaises:
         raise unprocessable(
@@ -406,7 +398,7 @@ async def preview_skills_from_git(
 ) -> SkillGitPreview:
     """The skills a repository holds at a reference, resolved to its commit SHA. Nothing is written:
     the import then names that SHA and the skills a person picked."""
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     source, base = _source(body.repo_url, body.path)
     sources, _ = await _skill_sources(session, organisation)
     permis = allowed(source, sources)
@@ -466,7 +458,7 @@ async def import_skills_from_git(
             f"`{body.sha}` is not a commit SHA: a branch or a tag can move under an import — pin the "
             "40-character SHA the preview resolved"
         )
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     source, base = _source(body.repo_url, body.path)
     sources, _ = await _skill_sources(session, organisation)
     noms = list(dict.fromkeys(body.skills))
@@ -522,7 +514,7 @@ async def check_skill_update(
     latest version. A proposal, never applied: importing the SHA it gives publishes it."""
     if not (principal.can(Permission.SKILL_IMPORT, org) or principal.can(Permission.AGENT_MANAGE, org)):
         raise forbidden("checking a skill's repository needs the project_owner or org_admin role")
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     skill = await _skill(session, organisation, slug)
     derniere = (
         await session.execute(
@@ -581,7 +573,7 @@ async def approve_skill_version(
     """A high-risk version becomes usable: an administrator who is NOT its importer read it."""
     if not principal.can(Permission.AGENT_MANAGE, org):
         raise forbidden("approving a skill version needs the org_admin role")
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     skill = await _skill(session, organisation, slug)
     ligne = (
         await session.execute(

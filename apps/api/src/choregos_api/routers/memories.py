@@ -40,20 +40,12 @@ from ..services.memory_access import (
     stores_of,
     visible_to,
 )
+from ..services.organisations import organisation_by_slug
 from .memory import to_dto as memory_dto
 
 router = APIRouter(tags=["memory"])
 
 Slug = Annotated[str, Path(pattern=r"^[a-z][a-z0-9-]{1,62}$")]
-
-
-async def _organisation(session: AsyncSession, slug: str) -> Organization:
-    organisation = (
-        await session.execute(select(Organization).where(Organization.slug == slug))
-    ).scalar_one_or_none()
-    if organisation is None:
-        raise not_found("Organisation", slug)
-    return organisation
 
 
 def _member(principal: Me, org: str) -> None:
@@ -138,7 +130,7 @@ async def _global(
     session: AsyncSession, principal: Me, org: str, slug: str
 ) -> tuple[Organization, MemoryStore]:
     """The global memory, if the caller may see it; one it may not see does not exist for it."""
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     store = (
         await session.execute(
             select(MemoryStore).where(
@@ -163,7 +155,7 @@ async def list_memories(
 ) -> list[MemoryStoreDto]:
     """The memories the caller sees: global ones with their reach, project ones of their projects."""
     _member(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     used = await _used_by(session, principal, organisation)
     return [
         _dto(store, used)
@@ -185,7 +177,7 @@ async def create_global_memory(
 ) -> MemoryStoreDto:
     _manage(principal, org)
     _not_reserved(body.slug)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     if (
         await session.execute(
             select(MemoryStore.id).where(
@@ -338,7 +330,7 @@ _IMPLICIT: dict[str, tuple[str, str]] = {
 async def list_project_memories(ctx: ProjectCtx, session: Db) -> list[MemoryStoreDto]:
     """What a run of this project may bind: the implicit `shared` and `own`, the project's named
     memories, and the global ones that reach it."""
-    organisation = await _organisation(session, ctx.org_slug)
+    organisation = await organisation_by_slug(session, ctx.org_slug)
     used = await _used_by(session, ctx.principal, organisation)
     implicit = [
         MemoryStoreDto(
@@ -450,5 +442,7 @@ async def update_project_memory(
         target_id=store.id,
         changes=sorted(changes),
     )
-    used: dict[Any, Any] = await _used_by(session, ctx.principal, await _organisation(session, ctx.org_slug))
+    used: dict[Any, Any] = await _used_by(
+        session, ctx.principal, await organisation_by_slug(session, ctx.org_slug)
+    )
     return _dto(store, used)

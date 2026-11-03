@@ -774,6 +774,27 @@ paths:
       responses:
         "200": { description: The workflow's activity, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowActivity" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{id}/workflows/{name}/steps/{step}/calibration:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: name, in: path, required: true, schema: { type: string } }
+      - { name: step, in: path, required: true, description: The state the step runs from., schema: { type: string } }
+    get:
+      tags: [workflows]
+      operationId: getStepCalibration
+      description: >-
+        How well a step's probabilities predicted what followed, measured from the decision ledger
+        (ADR 0121 §7): for each question, source, model and model version, the reliability bins, the
+        expected calibration error, the coverage and accuracy at each threshold from 0.50 to 0.95, and
+        the lowest threshold whose accuracy reaches `target` (none, with the reason, under
+        `min_observed` observed decisions). A decision is right when nobody contradicted it, its work
+        item ended in success and did not come back. Every version of the workflow counts. Read only
+        (S52-05).
+      parameters:
+        - { name: target, in: query, description: The accuracy a suggested threshold must reach., schema: { type: number, exclusiveMinimum: 0, maximum: 1, default: 0.9 } }
+      responses:
+        "200": { description: The step's calibration, content: { application/json: { schema: { $ref: "#/components/schemas/StepCalibration" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /projects/{id}/workflows/{name}/versions:
     parameters:
       - { $ref: "#/components/parameters/Id" }
@@ -6394,6 +6415,52 @@ components:
         failed: { type: integer }
         cost_usd: { type: number }
         median_minutes: { type: [number, "null"] }
+    ReliabilityBin:
+      type: object
+      description: One bin of probability, `[lower, upper)` (the last one closed), over the observed decisions.
+      required: [lower, upper, count]
+      properties:
+        lower: { type: number }
+        upper: { type: number }
+        count: { type: integer }
+        mean_probability: { type: [number, "null"], description: The mean probability of the bin's decisions; null for an empty bin. }
+        accuracy: { type: [number, "null"], description: The share of them that were right; null for an empty bin. }
+    ThresholdPoint:
+      type: object
+      description: What a threshold keeps of the observed decisions — how many, which share, how many right.
+      required: [threshold, count]
+      properties:
+        threshold: { type: number }
+        count: { type: integer }
+        coverage: { type: [number, "null"] }
+        accuracy: { type: [number, "null"] }
+    QuestionCalibration:
+      type: object
+      description: One question's calibration, for one source, model and model version (ADR 0121 §7).
+      required: [question, source, model, count, observed]
+      properties:
+        question: { type: string }
+        source: { type: string, enum: [decision_model, agent] }
+        model: { type: string }
+        model_version: { type: [string, "null"] }
+        count: { type: integer, description: Every recorded decision. }
+        observed: { type: integer, description: The decisions whose outcome is observed. }
+        accuracy: { type: [number, "null"], description: "The share of observed decisions that were right: nobody contradicted them, the work item ended in success, and it did not come back." }
+        ece: { type: [number, "null"], description: The expected calibration error over the ten bins. }
+        bins: { type: array, items: { $ref: "#/components/schemas/ReliabilityBin" } }
+        thresholds: { type: array, items: { $ref: "#/components/schemas/ThresholdPoint" } }
+        suggested_threshold: { type: [number, "null"], description: The lowest threshold whose accuracy reaches the target. }
+        suggestion_reason: { type: [string, "null"], description: Why no threshold is suggested. }
+    StepCalibration:
+      type: object
+      description: A step's decisions measured from the ledger, per question and model version (ADR 0121 §7).
+      required: [workflow, step, target_accuracy, min_observed]
+      properties:
+        workflow: { type: string }
+        step: { type: string, description: The state the step runs from. }
+        target_accuracy: { type: number }
+        min_observed: { type: integer, description: The observed decisions below which no threshold is suggested. }
+        questions: { type: array, items: { $ref: "#/components/schemas/QuestionCalibration" } }
     WorkflowActivity:
       type: object
       required: [workflow, days]
@@ -7500,6 +7567,18 @@ components:
           properties:
             type: { type: string }
             capabilities: { type: array, items: { type: string } }
+            source:
+              type: string
+              enum: [organisation, deployment]
+              description: >-
+                Where the gateway is set: the organisation's own `gateway` connector, or the
+                deployment's environment (`CHOREGOS_GATEWAY_TYPE`, `CHOREGOS_GATEWAY_URL`), which no
+                screen changes.
+            base_url:
+              type: [string, "null"]
+              description: >-
+                The address the platform calls. The organisation's own is shown to its members; the
+                deployment's only to a platform administrator, null otherwise.
         tiers: { $ref: "#/components/schemas/ModelTiers" }
         entries: { type: array, items: { $ref: "#/components/schemas/ModelCatalogueEntry" } }
     ModelCatalogueSettings:

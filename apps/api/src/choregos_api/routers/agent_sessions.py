@@ -26,7 +26,8 @@ from ..errors import not_found, unprocessable
 from ..schemas.agent_sessions import AgentDelta, AgentResponse, AgentResponseCreate, AgentSession
 from ..services.agent_governance import Action, decide
 from ..services.agent_sessions import close_session, open_session, respond, session_dto
-from .agents import _charger, _exiger, _lire, _organisation, _projet
+from ..services.organisations import organisation_by_slug
+from .agents import _charger, _exiger, _lire, _projet
 
 router = APIRouter(tags=["agents"])
 
@@ -88,7 +89,7 @@ async def _events(answer: AgentResponse) -> AsyncIterator[dict[str, str]]:
 )
 async def get_agent_session(org: str, session_id: str, session: Db, principal: Me) -> AgentSession:
     _lire(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     record = await _own_session(session, principal, organisation, session_id)
     project = await session.get(Project, record.project_id)
     return await session_dto(session, record, project.slug if project else "")
@@ -101,7 +102,7 @@ async def get_agent_session(org: str, session_id: str, session: Db, principal: M
 )
 async def close_agent_session(org: str, session_id: str, session: Db, principal: Me) -> Response:
     _lire(principal, org)
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     record = await _own_session(session, principal, organisation, session_id)
     await close_session(session, record, reason="closed")
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -16,6 +16,7 @@ from ..scheduling import execute_on_its_queue
 with workflow.unsafe.imports_passed_through():
     from choregos_contracts import StageResult, StageStatus
     from choregos_core import WorkflowEngine
+    from choregos_core.decision_ledger import declares_a_confidence
     from choregos_core.gates import unchanged_run
 
     from ...activities import decision as decision_activities
@@ -29,6 +30,7 @@ from ..interpreter import (
     ALREADY_FIXED_ON_EVIDENCE,
     BUDGET_NEVER_RETRIES,
     BUDGET_RESERVATION,
+    DECISION_LEDGER,
     DECLARED_OUTPUTS_REQUIRED,
     IDENTICAL_FAILURE_ESCALATES,
     SUSPEND_AROUND_HUMAN,
@@ -252,6 +254,34 @@ class StagesMixin(InterpreterBase):
                 },
             )
         return decided
+
+    # ───────────────────────── the decision ledger (ADR 0121 §6) ─────────────────────────
+
+    def _recorded_run(self, kind: str, transition: Any, decision: Any) -> str | None:
+        """The run whose ledger records wait for the next transition: a decision step, or an agent
+        that declared a confidence, whose outcome moved the work item where the step leads."""
+        if (
+            kind not in ("agent", "decision")
+            or decision.escalated
+            or decision.next_state != transition.to
+            or not declares_a_confidence(self.last_outputs)
+        ):
+            return None
+        return self.last_run
+
+    async def _note_transition_taken(self, params: InterpreterInput, transition: Any) -> None:
+        """The state the transition selected after a recorded step leads to, on the step's records.
+        Nothing selected (the work item waits for a move from outside): nothing is written."""
+        run_id, self.ledger_run = self.ledger_run, None
+        # The condition first, `patched` next: a history without a recorded step never asks.
+        if run_id is None or transition is None or not workflow.patched(DECISION_LEDGER):
+            return
+        await execute_on_its_queue(
+            decision_activities.note_transition_taken,
+            {"project_id": params.project_id, "run_id": run_id, "transition": transition.to},
+            start_to_close_timeout=timedelta(seconds=30),
+            retry_policy=DEFAULT_RETRY,
+        )
 
     # ───────────────────────── a decision step (ADR 0121) ─────────────────────────
 

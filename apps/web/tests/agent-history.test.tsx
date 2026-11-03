@@ -182,6 +182,33 @@ describe("the Definition tab", () => {
     expect(within(groups).queryByText("Other fields")).toBeNull();
   });
 
+  it("links what the version leaves to its project to where the project sets it (owner review of 2026-11-03)", async () => {
+    const bare = { instructions: "Write the ADR." };
+    vi.mocked(api.agent).mockResolvedValue(
+      architect({ scope: "project", project: "billing-api", versions: [{ version: 3, spec: bare, checksum: "sha256:3", pinned_by: [] }] }),
+    );
+    await open(page());
+    const groups = await screen.findByTestId("definition-groups");
+    const href = (name: RegExp) => within(groups).getByRole("link", { name }).getAttribute("href");
+    expect(href(/The project's profile/)).toBe("/p/billing-api/settings#agents-models");
+    expect(href(/^The project's$/)).toBe("/p/billing-api/settings#agents-models");
+    expect(href(/Those of the platform/)).toBe("/p/billing-api/settings#tools");
+    expect(href(/the project's hosts/)).toBe("/p/billing-api/settings#network");
+    expect(href(/Organisation tiers/)).toBe("/admin/models");
+    expect(href(/MCP servers/)).toBe("/catalogue/mcp-servers");
+  });
+
+  it("an organisation agent runs in any project: it says the value is set in each project's settings", async () => {
+    vi.mocked(api.agent).mockResolvedValue(
+      architect({ versions: [{ version: 3, spec: { instructions: "Write the ADR." }, checksum: "sha256:3", pinned_by: [] }] }),
+    );
+    await open(page());
+    const groups = await screen.findByTestId("definition-groups");
+    const model = within(groups).getAllByTestId("inherited-agents-models")[0]!;
+    expect(model.textContent).toContain("The project's profile — set in each project's settings");
+    expect(within(model).getByRole("link", { name: "each project's settings" })).toHaveAttribute("href", "/");
+  });
+
   it("folds long instructions behind Show all", async () => {
     await open(page());
     const text = (await screen.findByLabelText("Instructions")).textContent ?? "";

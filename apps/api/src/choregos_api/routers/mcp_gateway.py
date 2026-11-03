@@ -43,6 +43,7 @@ from ..services import mcp_gateway as service
 from ..services import mcp_gateway_identity as identity
 from ..services.connector_secrets import put_values, require_store
 from ..services.egress import egress_scope, ensure_or_409, revoke_rules_of_origin
+from ..services.organisations import organisation_by_slug
 from ..services.platform_network import check_platform_host
 
 router = APIRouter(tags=["admin"])
@@ -54,12 +55,7 @@ _PURPOSE = "the organisation's MCP gateway"
 async def _admin_organisation(session: AsyncSession, principal: Principal, org: str) -> Organization:
     if principal.org_roles.get(org) != Role.ORG_ADMIN:
         raise forbidden(f"the MCP gateway of {org} is managed by its org_admin")
-    organisation = (
-        await session.execute(select(Organization).where(Organization.slug == org))
-    ).scalar_one_or_none()
-    if organisation is None:
-        raise not_found("Organisation", org)
-    return organisation
+    return await organisation_by_slug(session, org)
 
 
 @router.get("/orgs/{org}/mcp-gateway", response_model=McpGatewayState, operation_id="getMcpGateway")
