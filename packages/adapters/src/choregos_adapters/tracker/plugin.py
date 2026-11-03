@@ -34,6 +34,7 @@ from choregos_core.plugins import TRACKER_PROFILE
 from jsonschema import Draft202012Validator
 
 from ..errors import UpstreamError
+from .ticket_fields import TRACKER_FIELD, answers, named_person, tracker_block
 
 log = structlog.get_logger(__name__)
 
@@ -131,6 +132,7 @@ class PluginTracker:
             )
             for c in found.get("comments") or []
         ]
+        raw_fields = {str(k): v for k, v in dict(found.get("fields") or {}).items() if k != TRACKER_FIELD}
         return WorkItemData(
             key=key,
             title=found["title"],
@@ -144,7 +146,19 @@ class PluginTracker:
             created_at=found.get("created_at"),
             updated_at=found.get("updated_at"),
             closed_at=found.get("closed_at"),
-            fields=dict(found.get("fields") or {}),
+            # The server's `author` and `fields`, carried as a Jira ticket's are (S51-04): the work
+            # item keeps them under `fields.tracker`, the server's name as their `kind`.
+            fields={
+                **raw_fields,
+                TRACKER_FIELD: tracker_block(
+                    kind=self.server,
+                    key=key,
+                    reporter=named_person(found.get("author")),
+                    creator=named_person(None),
+                    labels=found.get("labels") or [],
+                    answers=answers(sorted(raw_fields.items(), key=lambda pair: str(pair[0]).casefold())),
+                ),
+            },
             comments=comments,
         )
 

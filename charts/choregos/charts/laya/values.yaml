@@ -1,0 +1,14 @@
+# `docker/laya.Dockerfile`: `laya-serve` with the multilingual checkpoint baked in, offline at run time.
+image:
+  # Empty: `global.imageRegistry`, as the platform's own images.
+  registry: ""
+  repository: choregos-laya
+  # Empty: `global.imageTag`.
+  tag: ""
+  digest: ""
+# torch intra-op threads (`LAYA_THREADS`): at or under the CPU limit, never above it (Laya's own
+# advice: oversubscribing is a large regression).
+threads: 2
+resources:
+  requests: { cpu: 500m, memory: 2Gi }
+  limits: { cpu: "2", memory: 3Gi }

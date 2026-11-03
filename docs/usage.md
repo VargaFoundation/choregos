@@ -487,6 +487,21 @@ lifted the production lock. Those names are still read, so a published workflow 
 behaviour, but the validator warns (`workflow.implicit_effect`), and a rename from the console
 first writes the effect down.
 
+**A pull request can be opened as a draft.** By default `does: open_pr` opens the pull request ready
+for review. `pull_request: { draft: true }` on the same transition opens it as a draft:
+
+```yaml
+  - { id: t-open, from: verifying, to: review, by: ci, does: open_pr, pull_request: { draft: true } }
+```
+
+It only says how the pull request is *born*. A pull request already open on the work item's branch
+(the transition taken again after changes were requested) keeps its state: a person who marked it
+ready for review is not overruled, and nothing marks a draft ready for you. Without the key, the
+platform marks the pull request ready each time, as before. Only a `system` transition that opens
+the pull request may carry `pull_request:` (`transition.pull_request_without_open_pr`). The `github`
+SCM opens a GitHub draft pull request, and the `fake` SCM records `draft`. There is no GitLab SCM
+adapter yet (`scm` is `github` or `fake`), so there are no draft merge requests.
+
 **How a terminal state ends the work item is written too.** A terminal state is a success unless it
 says otherwise: `outcome: declined` for a request turned down, `outcome: cancelled` for one dropped.
 The console shows only a success green; a declined state is shown in red, a cancelled one in grey, on
@@ -631,6 +646,8 @@ curl         $API/projects/acme:hr/workflows                                    
     policy: preset:team
   ```
 
+  It may also ship the knowledge bases its agents read (`defaults.knowledge`, see
+  [Knowledge bases from a template](#knowledge-bases-from-a-template)).
   A path is read from the template's folder and may not leave it; a template published through
   `POST /templates` has no folder, so it ships core workflows only (`template:<name>@<v>`). A
   template that names a workflow it does not ship, or ships an invalid one, creates no project
@@ -662,7 +679,7 @@ curl         $API/projects/acme:hr/workflows                                    
 
 A project can adopt a workflow instead of writing one ([ADR 0111](adr/0111-a-workflow-catalogue.md)).
 The catalogue lists, for an organisation, the platform's workflows (`core`, including
-`default-request`, which needs no repository — [ADR 0110](adr/0110-a-project-without-a-repository-gets-a-workflow-that-delivers-no-code.md)),
+`default-request`, which needs no repository — [ADR 0110](adr/0110-a-project-without-a-repository-gets-a-workflow-that-delivers-no-code.md) — and `decision-triage`, where a decision model classifies each request, the platform routes what it is sure of (`deliver` or `clarify` at 0.85 or more) and a person decides the rest; declining is never automatic, and the organisation's catalogue must enable a model for `decide` before a project can adopt it — [ADR 0121](adr/0121-a-decision-is-a-step-recorded-and-measured.md)),
 every workflow of the deployment's templates (`template:<name>`), those of the templates its installed
 plugins brought (`plugin:<name>`, the external catalogues) and the ones it shared from its projects
 (`org`).
@@ -982,6 +999,12 @@ The step runs in the orchestrator, in one activity (`decide`), with no pod and n
   `decide` (even in `open` mode). The step checks both again when it runs, and escalates the work item
   like a configuration `prepare_stage` refuses.
 
+On the map a decision step has its own lane — a teal diamond on the diagram, the word "decision" on
+its box — and its card lists the questions with what each may answer, what it sends, its model and
+time limit, and the `<name>` and `<name>_confidence` outputs a `when` compares. The **Actors** panel
+creates one ("A decision") and edits it: the sources are chips checked against the patterns above,
+questions are added and removed with their options or levels, and only the fields that changed are
+written back, as one gesture you can undo (ADR 0112).
 **Every decision is recorded, and measured** ([ADR 0121](adr/0121-a-decision-is-a-step-recorded-and-measured.md)
 §6–7). The `decision_records` ledger keeps one row per run and question: the work item, the run, the
 workflow and its version, the step (the state it ran from) and its transition, the model and its
@@ -1402,6 +1425,40 @@ expired agent does not start, and neither does one that has spent its `daily_usd
 (UTC) — models **and** tool calls. `GET /orgs/{org}/agents/{slug}/metrics?days=30` gives its runs,
 their success rate, their cost by kind and by project, and what it spent today.
 
+**What the tracker says about the ticket.** `ticket.fields` holds the work item's fields; a work item
+taken on from Jira (or from a plugin's tracker server) also carries `ticket.fields.tracker`, written
+by the platform from the tracker and nothing else (S51-04):
+
+```json
+{"kind": "jira", "key": "FON-270",
+ "reporter": {"account_id": "712020:…", "display_name": "Camille Martin", "email": null},
+ "creator":  {"account_id": "557058:…", "display_name": "Portal automation", "email": "portal@…"},
+ "labels": ["agent-ready", "project-request"],
+ "answers": {"Project name": "peredur", "Environment": "dev", "Members": "Camille Martin, Noah Petit"}}
+```
+
+`kind` is `jira`, or the plugin server's name (whose `author` becomes the reporter's `display_name`,
+the creator then empty, its `fields` the answers). `email` is `null` when the tracker hides it — it is
+never guessed. `answers` keys every non-empty custom field by its display name, as text, each at most
+2000 characters (20 000 in all). A work item filed in the console has no `tracker`: read it behind a
+guard, or the template fails on such an item (and at publication, on an eval case without it):
+
+```jinja
+{% if ticket.fields.tracker is defined %}
+The request was filed by {{ ticket.fields.tracker.reporter.display_name }}
+({{ ticket.fields.tracker.reporter.account_id }}); check that this account leads the project
+{{ ticket.fields.tracker.answers.get("Project name", "(not given)") }} before granting anything.
+{% endif %}
+```
+
+It is the requester's text: print it as data, never into a command, a path or a query an agent runs.
+The catalogue's agents show it as one line of JSON in a section that says so. A person cannot write
+`fields.tracker` (`422` on creation and on `PATCH /work-items/{id}`), and no workflow may declare an
+input named `tracker` (`inputs.reserved`); a workflow whose `metadata.inputs` forbids other
+properties still accepts it. A job reads the same object in `.choregos/fields.json`. An eval case or
+a trial gives its sample `fields` (`"input": {"title": …, "fields": {"tracker": {…}}}`); without
+them it renders with `ticket.fields` `{}`.
+
 A version also says **which memories** its runs read and write — `"memories"`, an ordered list of at
 most eight bindings, each `{"scope": "global" | "project", "slug": …, "mode": "read" | "write"}` (see
 [Memories](#memories)). The older `"memory"` field (`"project"` by default, `"agent"`, `"none"`) is
@@ -1410,6 +1467,24 @@ memory, `agent` the agent's own within the project, `none` nothing), and sending
 run's `StageInput` carries the resolved list (`memories`) and the legacy equivalent when there is one
 (`memory_scope`); the memory MCP server — which serves the project's shared memory only — is handed to a
 run whose bindings are exactly that.
+
+A version also says **which workspace** its runs need ([ADR 0119](adr/0119-an-agent-declares-the-workspace-it-needs.md)),
+in `"workspace"`. The repository itself is never the agent's: it is the project's (`config.repo`),
+and a project without one gives no repository whatever the agent says.
+
+| `workspace` | what a run gets |
+| :-- | :-- |
+| `none` | nothing cloned: an empty directory with a local git, nothing pushed; the repository's host is **not** on the run's network (an agent naming it in `network.domains` must find it in the project's allowlist, or the run is refused before it starts) |
+| `read` | the repository cloned, and a write scope of `.choregos/outputs/**` only: a write to any repository file is refused and reverted, nothing is committed or pushed, and `request_scope_change` is always denied |
+| `write` | today's run: the repository cloned, the work item's scope (`**` when it has none) |
+| absent | `write`; the field is left out of the stored spec, so a version published before it keeps its digest |
+
+An analysis agent that only reads the ticket declares `none`; a reviewer that reads the code,
+`read`. A remote (`a2a`) agent gets no workspace and refuses the field (`422`); a hosted agent says it
+in `runtime.workspace` (see [Hosted agents](hosted-agents.md)), and a top-level `workspace` that
+differs is a `422`. On a run that never cloned, the diff guarantees read an empty diff when the work
+branch does not exist (`diff_size_max files: 0` passes). The console shows the workspace on the
+agent's definition (Capabilities) and edits it in the builder's Workspace section.
 
 A project **pins** a version and may only **tighten** it — a lower budget or limit, fewer tools;
 an override that widens is refused (`422`). A revocation is final.
@@ -1595,7 +1670,7 @@ a section opens this page.
   usages and price), or says that the gateway lists nothing or could not be reached. **Sync from
 the gateway** reads the models it lists; **Add a model manually** covers one it routes but does not
 list. Per model an administrator sets: enabled or not, the stage roles allowed (none checked = all),
-the usages (`agent`, `embed`, `distill`, `eval`, `route` — the workflow router of ADR 0116, `decide` — a decision step's model, ADR 0121: unlike the others it needs an entry even in `open` mode, and only a gateway that serves `/v1/systemone` can carry it), a display name, and a price per 1k tokens that
+the usages (`agent`, `embed`, `distill`, `eval`, `route` — the workflow router of ADR 0116, `decide` — a decision step's model, ADR 0121: unlike the others it needs an entry even in `open` mode, and only a gateway that serves `/v1/systemone` can carry it; a model the gateway lists as `evaluation`, as LiteLLM lists Laya and Jev, arrives with `decide` alone and no tool calling), a display name, and a price per 1k tokens that
 replaces the gateway's in the ledger (only when the gateway reports tokens; a gateway that cannot read
 a spend back leaves the line `unmeasured`).
 
@@ -1686,6 +1761,15 @@ for a project, `GET /projects/{id}/memory/search?q=…&memory=decisions` and `�
 (`memory` defaults to `shared`). Global memories are stored by the organisation's `memory` connector when
 it declares one (`/orgs/{org}/connectors`), else by the deployment default.
 
+**The project's policy decides first.** A project whose policy says `memory: {enabled: false}` binds
+**no** memory, whatever its agents ask for: the run's `memories` is empty, its `memory_scope` is `none`,
+the memory MCP server is not handed to it, and each binding the agent asked for is listed on the run
+page as a `memory.skipped` event, reason "the project's policy disables memory (memory.enabled: false)".
+Nothing is refused (ADR 0007): the project validation the workflow editor calls
+(`POST /projects/{id}/workflows/validate`) warns on each actor whose agent binds memory under such a
+policy (`agent.memory_disabled_by_policy`, path `/actors/<id>/agent`), and publishing such a workflow, or
+a policy that turns memory off under one, logs a `policy.memory_disabled` warning per agent.
+
 **At run time.** When a stage is prepared, each binding is resolved for the run's project, in order. A
 global memory must exist, be active and reach the project; a named project memory must exist and be
 active in it; a binding that does not resolve is **skipped, never fatal**, and the run page lists it
@@ -1716,7 +1800,23 @@ it (an organisation administrator, the project's owner: `memory:write`). After a
 project's memory ingestion to read its sources again now rather than at its next cycle
 (`POST /projects/{id}/memory/reimport`, with optional `sources`; without them the API's defaults). The API
 answers 202: the import is scheduled, not done, so the console says when it was scheduled and no counts;
-the facts it finds reach the memory as the ingestion runs.
+the facts it finds reach the memory as the ingestion runs. It answers **409** with the reason when the
+project's policy disables memory, or when the project's loop does not run and cannot be started (its
+project was archived): never a 500.
+
+**The ingestion loop.** Each active project whose policy keeps memory has one loop, `MemoryIngestion`
+under the id `mem-<slug>`: every 15 minutes it ingests what the platform holds of the project — tickets
+closed in the last year, deployments, failed runs' lessons, and (when a re-import asks for them) findings
+— as an upsert by external id, so a fact is kept once; the `merged_prs`, `adr`, `docs` and `readme`
+sources are accepted and read nothing yet. It takes an Alertmanager alert at once (an incident). The orchestrator's worker starts the loop of every
+such project when it starts, and an activation (provisioning, or `POST /projects/{id}/provision` on a
+project without steps) starts the project's; archiving stops it. After 96 cycles it continues as a new run
+of the same id rather than ending. A signal to a loop that does not run starts it first: a re-import or an
+alert never meets a missing workflow. A failed run also leaves its lesson as soon as its outcome is
+recorded (`run:<id>`, the same fact the loop would ingest), in its write binding — as a proposal for a
+global memory — unless the policy disables memory or the work item read a restricted base. The weekly
+A/B report is not sent by these loops: it is the organisation's, and one loop per project would post
+it once per project.
 
 ### Release an agent: eval, testing, production
 
@@ -2117,6 +2217,48 @@ run in progress (phase, parts, spend, who started it) and the five runs before i
 booked in the cost ledger with kind `distill`, on the base's owning project, or on the organisation when
 the base has none: **Spend** shows it under "Knowledge distillations", and `kind=distill` filters the
 reports. The merge is streamed, so a long answer is no read timeout.
+
+#### Knowledge bases from a template
+
+A template (and so a plugin) ships the bases its agents read under `defaults.knowledge`, in the shape of
+the [`kind: KnowledgeBase` manifest](#a-knowledge-base-as-code) less what the project decides — no `scope`, `projects`, `groups`, `uploads` or `eval`
+([ADR 0117](adr/0117-a-template-ships-the-knowledge-bases-its-agents-read.md)):
+
+```yaml
+defaults:
+  knowledge:
+    - slug: product-docs
+      name: Product documentation
+      serving_mode: index
+      sources:
+        - name: Repository docs
+          kind: git
+          config: { url_from_input: repo, ref: main, paths: ["docs/**/*.md"] }
+          interval_minutes: 60
+inputs:
+  - { name: repo, type: github-repo, required: true }
+```
+
+- Sources are **git** only. `config.url` names the repository (https), or `config.url_from_input` names a
+  template input: `owner/name` reads `https://github.com/owner/name`, an https URL is kept, and a
+  `github-repo` input that was not given is the project's repository (`config.repo.url`).
+- **The project's own GitHub repository** is read without a connector, through the deployment's GitHub
+  App: the source is stored with `github_app: true` and each sync mints a one-hour token for that
+  repository only, `contents: read`, through the installation the organisation claimed (ADR 0073). No
+  request sets that flag; editing the source keeps it while the URL stays. Another private repository
+  names an organisation `documents/git` connector (`connector:`).
+- When a project is born of the template, each base is **created** for it when the organisation has none
+  of that slug (`scope: projects`, owned by the project, `created_by: template:<name>`), its sources
+  attached and their sync loops started once the project is committed — the first pass syncs. The
+  template applied again adds only the sources the base lacks, by name. A base of that slug already served
+  to the project is **reused untouched**; one another project of the same template created is **served**
+  to this one when none of its sources reads a project's repository; any other is **left alone**, the
+  project born without it and the audit log saying why (`template.knowledge.skip`) — a template never
+  shows one project's repository to another, nor widens a base an administrator scoped.
+- A source whose repository cannot be resolved is skipped the same way. A wrong `defaults.knowledge` (a
+  source reading an undeclared input, a base twice, a cron under five minutes) creates no project (`422`).
+  A network refusal or a missing connector shows on the source at its first sync; it does not refuse the
+  project.
 
 ## 4. Write the policy
 
@@ -2660,6 +2802,79 @@ open nothing more. `{window}` in a text field becomes the window's date. A windo
 late. With an external tracker, or with the reconciliation loop off
 (`reconcile_interval_seconds: 0`), nothing fires. Fields the workflow refuses are logged and the
 pass reports the schedule under `refused`; the other schedules still fire.
+
+### Work items opened by another system (HTTP triggers)
+
+With `tracker: internal`, any system that can send JSON — a monitoring tool, a form, a CRM, a
+ServiceNow Business Rule or Flow — can open and start a work item through a trigger (S56-01,
+[ADR 0113](adr/0113-a-workflow-starts-from-a-trigger.md)):
+
+```yaml
+triggers:
+  - name: incident
+    title: "{/number} — {/short_description}"   # {/pointer}: what the payload holds there
+    body: "Caller: {/caller/name}"
+    key: /sys_id                 # optional: one work item per value
+    labels: ["{/category}"]      # with `trigger:incident`, read by the routing
+    fields: { number: /number, ci: /cmdb_ci }   # JSON pointers; validated by the workflow's inputs
+    workflow: incident-triage    # optional; the project's routing otherwise
+```
+
+Mint the trigger's token (shown once; minting again revokes the old one; needs `connector:write`),
+then give the URL and the token to the other system:
+
+```bash
+curl -X POST "$API/api/v1/projects/acme:desk/triggers/incident/token" -H "Authorization: Bearer $ME"
+```
+
+```bash
+curl -X POST "$API/api/v1/webhooks/triggers/acme/desk/incident" \
+  -H "Authorization: Bearer chtrg_…" -H "Content-Type: application/json" \
+  -d '{"sys_id": "9d38…", "number": "INC0010042", "short_description": "Payroll export fails"}'
+```
+
+The work item starts in `workflow`, or in the workflow the project's routing picks from its labels
+(`trigger:<name>` and the rendered ones), or in the default. A sender that can only set a URL passes
+`?token=`; `X-Choregos-Token` works too. A replayed delivery (same `Idempotency-Key`, else the same
+body) answers `duplicate`; with `key`, a second call for the same value answers `already_open` and
+starts nothing. A payload without the key, or fields the workflow refuses, answers 422 with the
+reason. `POST /projects/{id}/triggers/{name}/fire` runs the same trigger with a payload you type, to
+try it before handing the URL out. With an external tracker, a trigger answers 409: use the
+tracker's own webhook.
+
+A trigger can filter and sign (S56-04, S56-05):
+
+```yaml
+    when: { /priority: ["1", "2"], /active: "true" }   # other payloads: 202, recorded `ignored`
+    auth: signature     # X-Choregos-Signature: sha256=<HMAC-SHA256 of the body>, hex or base64
+```
+
+With `auth: signature` the bearer token is refused; the HMAC key is the signing secret shown with the
+token, and it changes when the token is minted again. The project's settings list its triggers beside
+the received events: their URL, their workflow, whether a token exists, a button to mint it (shown
+once) and a box to fire it with a payload.
+
+### Tracker items that start without `agent-ready`
+
+A project can start tracker items on its own rules (S56-03): a ServiceNow incident in the desk's
+queue, a Jira bug of a given type.
+
+```yaml
+start_rules:
+  - item_type: Incident
+    states: [New, "1"]
+  - labels_all: [payroll, urgent]
+```
+
+When a tracker event (created, updated, labelled, moved) names an item the project does not hold
+yet, the first rule whose every condition holds opens and starts it, as `agent-ready` does; the type
+and state compare without case. The backup poll that catches lost webhooks asks for them too: Jira
+by JQL, GitHub and GitLab by the labels a rule names (a rule on a type or a state is caught by the
+webhook only). Both lists can be edited as JSON in the project's *Triggers* card.
+
+**Received events.** The project's *Received events* card lists every webhook event, trigger call
+and schedule firing that reached it, and what the platform did: `created_work_item`, `already_open`,
+`ignored`, `refused` (with the platform's reason, never the payload), and the tracker outcomes.
 
 ### One child work item per element, then a join
 

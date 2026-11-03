@@ -72,6 +72,7 @@ from .routers import (
     templates,
     theme,
     trains,
+    triggers,
     ui,
     webhooks,
     workflow_catalogue,
@@ -382,6 +383,7 @@ def create_app() -> FastAPI:
         knowledge.router,
         webhooks.router,
         received_events.router,
+        triggers.router,
         internal.router,
     )
     for router in routeurs_du_coeur:

@@ -1,0 +1,71 @@
+# A decision through the gateway, for real and on one machine (S52-02, ADR 0121): LiteLLM at the
+# chart's version with the chart's guard and span callback, and Laya from `docker/laya.Dockerfile`.
+# Laya has no network at all: it proves that the image needs none. Every port is bound to 127.0.0.1.
+#
+#   docker compose -p s5202 -f tests/live/decisions/compose.yaml up -d --build --wait
+#   CHOREGOS_LIVE_DECISIONS=1 uv run pytest tests/live/test_decisions_live.py -m live
+#   docker compose -p s5202 -f tests/live/decisions/compose.yaml down -v
+name: s5202
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: litellm
+      POSTGRES_PASSWORD: local-dev-only
+      POSTGRES_DB: litellm
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "litellm"]
+      interval: 2s
+      retries: 30
+
+  laya:
+    image: choregos-laya:dev
+    build:
+      context: ../../..
+      dockerfile: docker/laya.Dockerfile
+    user: "1000:1000"
+    # As the chart runs it: read-only root, a writable /tmp, and no way out (the NetworkPolicy's
+    # `egress: []`). Only LiteLLM reaches it, on the internal network.
+    read_only: true
+    tmpfs: [/tmp]
+    environment:
+      LAYA_API_KEY: local-decisions-only-laya
+      LAYA_THREADS: "2"
+    networks: [decisions]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 3s
+      retries: 60
+      start_period: 30s
+
+  litellm:
+    # The chart's image (`charts/choregos/charts/litellm/values.yaml`).
+    image: ghcr.io/berriai/litellm-database:v1.105.5
+    command: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]
+    user: "1000:1000"
+    environment:
+      LITELLM_MASTER_KEY: sk-local-decisions-only
+      DATABASE_URL: postgresql://litellm:local-dev-only@postgres:5432/litellm
+      LAYA_API_KEY: local-decisions-only-laya
+      # Reads the price list in its own package rather than from GitHub at start-up.
+      LITELLM_LOCAL_MODEL_COST_MAP: "True"
+    volumes:
+      - ./litellm.yaml:/etc/litellm/config.yaml:ro
+      # The chart's copies, the files the embedded gateway loads.
+      - ../../../charts/choregos/charts/litellm/files/choregos_guardrail.py:/etc/litellm/choregos_guardrail.py:ro
+      - ../../../charts/choregos/charts/litellm/files/choregos_llm_spans.py:/etc/litellm/choregos_llm_spans.py:ro
+    networks: [default, decisions]
+    depends_on:
+      postgres: { condition: service_healthy }
+      laya: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/readiness')"]
+      interval: 5s
+      retries: 40
+    ports:
+      - "127.0.0.1:14410:4000"
+
+networks:
+  # No route out: Laya's only network.
+  decisions:
+    internal: true

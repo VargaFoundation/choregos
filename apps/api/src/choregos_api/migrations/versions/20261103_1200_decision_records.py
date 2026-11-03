@@ -7,7 +7,7 @@ its probability, the transition that followed and the outcome observed afterward
 downgrade drops the table, its indexes and its policy.
 
 Revision ID: d5b7c9e1f3a4
-Revises: d2f4a6c8e0b3
+Revises: f3b5d7e9a1c2
 Create Date: 2026-11-03 12:00:00+00:00
 """
 
@@ -21,7 +21,7 @@ from alembic import op
 from choregos_api.db.base import Json
 
 revision: str = "d5b7c9e1f3a4"
-down_revision: str | None = "d2f4a6c8e0b3"
+down_revision: str | None = "f3b5d7e9a1c2"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

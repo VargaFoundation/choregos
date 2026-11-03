@@ -48,9 +48,16 @@ class SystemMixin(InterpreterBase):
         effect = effet_de_la_transition(transition)
         if effect == "open_pr":
             try:
+                # `draft` only when the transition asks for one (S51-11): every other transition
+                # schedules the same input as before, so a recorded history replays unchanged.
+                draft = transition.pull_request is not None and transition.pull_request.draft
                 await execute_on_its_queue(
                     scm_activities.open_pull_request,
-                    {"project_id": params.project_id, "work_item_id": params.work_item_id},
+                    {
+                        "project_id": params.project_id,
+                        "work_item_id": params.work_item_id,
+                        **({"draft": True} if draft else {}),
+                    },
                     start_to_close_timeout=timedelta(minutes=3),
                     retry_policy=DEFAULT_RETRY,
                 )

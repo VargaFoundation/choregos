@@ -70,6 +70,7 @@ class KubernetesJobExecutor:
         memory_limit: str = "6Gi",
         env_from_secrets: list[str] | None = None,
         max_active: int = 0,
+        image_pull_secrets: list[str] | None = None,
     ) -> None:
         self.client = client or KubernetesClient()
         self.service_account = service_account
@@ -86,6 +87,9 @@ class KubernetesJobExecutor:
         # plafond, le comportement d'avant : un déploiement qui ne dit rien ne change pas
         # de régime du jour au lendemain.
         self.max_active = max(0, int(max_active))
+        #: The pull secrets of the runner's pod (S51-09), by name: a job step's named image, or a
+        #: hosted agent's, may sit in a private registry project the runner image is not in.
+        self.image_pull_secrets = [name for name in (image_pull_secrets or []) if name]
         #: The API server's `/version`, read once: a cluster is not upgraded under a running worker
         #: often enough to read it at every start (S41-16).
         self._server_version: dict[str, Any] | None = None
@@ -320,6 +324,8 @@ class KubernetesJobExecutor:
         }
         if spec.runtime_class:
             pod_spec["runtimeClassName"] = spec.runtime_class
+        if self.image_pull_secrets:
+            pod_spec["imagePullSecrets"] = [{"name": name} for name in self.image_pull_secrets]
         if spec.agent_container is not None:
             self._add_agent_container(pod_spec, spec.agent_container)
         return {

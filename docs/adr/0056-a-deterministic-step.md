@@ -68,6 +68,9 @@ anything?") rests on metrics that must be computed by code, the same way every t
   interpreter needs no `patched` branch.
 - A job image must contain the runner (it is the runner that runs the command): job images are built
   **from** the runner image, the way S37-06 locked headroom into it.
+  A job image in a private registry pulls with the chart's `global.imagePullSecrets`, which the
+  `k8s_job` executor names in the runner pod and the chart puts on the `choregos-runner`
+  ServiceAccount (amended by S51-09).
 - Reproducibility is the command's responsibility: the platform pins the image, the argv and the
   inputs; a command that reads the clock or the network without a snapshot is still not
   reproducible. The investment template reads its data through a snapshot (S38-03/S38-04) for this

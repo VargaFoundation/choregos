@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from choregos_core import CatalogueEntry, GatewayModel, ModelPolicy, Spend, utcnow
-from choregos_core.models import PLATFORM_PROFILES, TIERS, USAGES
+from choregos_core.models import DECISION_MODE, PLATFORM_PROFILES, TIERS, USAGES
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -69,7 +69,15 @@ def facts_of(model: GatewayModel) -> dict[str, Any]:
         "max_input_tokens": model.max_input_tokens,
         "supports_tool_calling": model.supports_tool_calling,
         "supports_vision": model.supports_vision,
+        "mode": model.mode,
     }
+
+
+def usages_of(model: GatewayModel) -> tuple[str, ...]:
+    """What a model the gateway just listed may serve until an administrator says otherwise: an
+    agent, except a decision model (ADR 0121), which only answers decision steps — given to an agent
+    it would be asked to chat and call tools it does not have."""
+    return ("decide",) if model.mode == DECISION_MODE else ("agent",)
 
 
 async def sync(
@@ -102,7 +110,7 @@ async def sync(
                     source="gateway",
                     enabled=mode == "open",
                     allowed_roles=[],
-                    usages=["agent"],
+                    usages=list(usages_of(model)),
                     gateway_facts=facts_of(model),
                     last_seen_at=now,
                     notes="",

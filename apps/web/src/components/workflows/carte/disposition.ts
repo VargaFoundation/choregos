@@ -8,6 +8,8 @@
  * Fonctions pures : la mise en page ne dépend que du graphe que rend l'API (`dsl/graph.py`).
  */
 
+import type { Hue } from "@/lib/workflow-hue";
+
 export type NoeudDuGraphe = {
   id: string;
   display: string;
@@ -36,13 +38,14 @@ export type AreteDuGraphe = {
 export type Graphe = { nodes: unknown[]; edges: unknown[] };
 
 /** Qui fait avancer le ticket depuis un état — la couleur de sa case, et ce qu'elle dit en toutes lettres. */
-export type GenreDActeur = "agent" | "human" | "platform" | "train" | "waiting" | "end";
+export type GenreDActeur = "agent" | "human" | "platform" | "train" | "decision" | "waiting" | "end";
 
 const GENRES: Record<string, GenreDActeur> = {
   agent: "agent",
   human: "human",
   system: "platform",
   train: "train",
+  decision: "decision",
   wait: "waiting",
   terminal: "end",
 };
@@ -57,9 +60,13 @@ export const LIBELLE_DU_GENRE: Record<GenreDActeur, string> = {
   human: "human",
   platform: "platform",
   train: "release train",
+  decision: "decision",
   waiting: "waiting",
   end: "end",
 };
+
+/** The categorical hue of a decision step (ADR 0120): teal, which no other kind of actor wears. */
+export const DECISION_HUE: Hue = 2;
 
 /**
  * Les couleurs des genres, dans les jetons de la console (ADR 0043) : prune l'agent, bleu la
@@ -73,6 +80,8 @@ export const COULEUR_DU_GENRE: Record<GenreDActeur, { bord: string; fond: string
   human: { bord: "var(--choregos-running-ink)", fond: "var(--choregos-running-soft)", texte: "var(--choregos-running-ink)" },
   platform: { bord: "var(--choregos-neutral-ink)", fond: "var(--choregos-neutral-soft)", texte: "var(--choregos-neutral-ink)" },
   train: { bord: "var(--choregos-succeeded-ink)", fond: "var(--choregos-succeeded-soft)", texte: "var(--choregos-succeeded-ink)" },
+  // A decision step (ADR 0121) wears the categorical teal (ADR 0120, `DECISION_HUE`): a kind of actor is an identity.
+  decision: { bord: "var(--choregos-cat-2-ink)", fond: "var(--choregos-cat-2-soft)", texte: "var(--choregos-cat-2-ink)" },
   waiting: { bord: "var(--choregos-waiting-ink)", fond: "var(--choregos-waiting-soft)", texte: "var(--choregos-waiting-ink)" },
   end: { bord: "var(--choregos-neutral-solid)", fond: "var(--choregos-surface-sunken)", texte: "var(--choregos-neutral-ink)" },
 };

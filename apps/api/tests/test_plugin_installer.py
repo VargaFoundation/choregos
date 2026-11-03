@@ -268,6 +268,38 @@ async def test_a_deterministic_eval_case_is_played_and_a_live_one_is_not(
     assert installed.status_code == 201, installed.text
 
 
+async def test_an_eval_case_s_fields_are_the_rendered_ticket_fields(
+    client: AsyncClient, admin: str, offline: Path
+) -> None:
+    """S51-10: a plugin's case carries `input.fields`, and the installer renders it as `ticket.fields`
+    — as the API's publish gate does (S51-04): a case naming another reporter fails, the right one
+    installs, and a case without fields renders `{}`."""
+    from choregos_api.schemas.agents import MAX_SAMPLE_FIELDS_BYTES
+    from choregos_core.plugins import MAX_CASE_FIELDS_BYTES
+
+    assert MAX_CASE_FIELDS_BYTES == MAX_SAMPLE_FIELDS_BYTES, "`plugin validate` refuses what the API refuses"
+    version = offline / "hello" / "1.1.0"
+    instructions = (
+        "Greet the author of the work item by name, in one sentence. {% if ticket.fields.tracker is "
+        "defined %}Filed by {{ ticket.fields.tracker.reporter.display_name }}.{% else %}Filed in the "
+        "console.{% endif %}"
+    )
+    _edit(version / "agents" / "greeter.yaml", lambda d: d["agent"]["spec"].update(instructions=instructions))
+    tracker = {"kind": "jira", "key": "FON-270", "reporter": {"display_name": "Ada Lovelace"}}
+    console = {"name": "console", "input": {"title": "Hi"}, "must_contain": ["Filed in the console."]}
+    filed = {"name": "filed", "input": {"title": "Hi", "fields": {"tracker": tracker}}}
+    suite = version / "evals" / "greeter.yaml"
+
+    _edit(suite, lambda d: d.update(cases=[console, {**filed, "must_contain": ["Filed by Grace Hopper."]}]))
+    refused = await client.post(f"{ORG}/plugins/install", json=ALONE)
+    assert refused.status_code == 422, refused.text
+    assert [e["loc"] for e in refused.json()["errors"]] == [["evals/greeter.yaml", "cases", "filed"]]
+
+    _edit(suite, lambda d: d.update(cases=[console, {**filed, "must_contain": ["Filed by Ada Lovelace."]}]))
+    installed = await client.post(f"{ORG}/plugins/install", json=ALONE)
+    assert installed.status_code == 201, installed.text
+
+
 async def test_a_high_risk_skill_makes_a_plugin_wait_for_a_second_administrator(
     client: AsyncClient, admin: str, offline: Path
 ) -> None:

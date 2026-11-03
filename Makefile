@@ -97,6 +97,12 @@ headroom-lock:  ## Recompile docker/headroom/requirements.txt (hashes, releases 
 	  --generate-hashes --exclude-newer P14D --exclude-newer-package certifi=false \
 	  -o docker/headroom/requirements.txt
 
+.PHONY: laya-lock
+laya-lock:  ## Recompile docker/laya/requirements.txt (hashes, CPU-only torch, releases at least 14 days old)
+	$(UV) pip compile docker/laya/requirements.in --universal --python-version 3.12 --torch-backend cpu \
+	  --generate-hashes --exclude-newer P14D --exclude-newer-package certifi=false \
+	  -o docker/laya/requirements.txt
+
 .PHONY: procedures
 procedures:  ## Regenerates docs/procedures/ from the setup procedures (to commit)
 	$(UV) run python tools/procedures/export_docs.py

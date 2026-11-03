@@ -11,12 +11,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
 from ..deps import Db, Me, ProjectContext, ProjectCtx
-from ..errors import forbidden
+from ..errors import conflict, forbidden
 from ..rbac import Permission
 from ..schemas import MemoryAbGroup, MemoryAbReport, MemoryDecision, MemoryDto, MemoryReimport
-from ..services import effective_policy
+from ..services import effective_policy, policy_engine
 from ..services.memory_access import project_adapter, project_namespace
-from ..temporal import get_temporal
+from ..temporal import MemoryLoopNotRunningError, signal_memory_loop
 
 router = APIRouter(tags=["memory"])
 
@@ -119,9 +119,21 @@ async def decide(
 )
 async def reimport(ctx: ProjectCtx, body: MemoryReimport, session: Db) -> dict[str, str]:
     ctx.require(Permission.MEMORY_WRITE)
-    await get_temporal().signal(
-        f"mem-{ctx.slug}", "reimport", {"sources": body.sources or ["readme", "docs", "adr", "closed_issues"]}
-    )
+    if not (await policy_engine(session, ctx.id)).memory_enabled():
+        raise conflict(
+            f"project {ctx.slug}'s policy disables memory (memory.enabled: false): "
+            "there is nothing to reimport"
+        )
+    # The loop is started when it does not run: a signal to a missing workflow answered 500 (S51-02).
+    try:
+        await signal_memory_loop(
+            ctx.slug, "reimport", {"sources": body.sources or ["readme", "docs", "adr", "closed_issues"]}
+        )
+    except MemoryLoopNotRunningError as exc:
+        raise conflict(
+            f"the memory loop of project {ctx.slug} does not run and could not be started ({exc.cause}); "
+            "an orchestrator restart starts the loop of every active project"
+        ) from exc
     await record(
         session,
         ctx.principal,

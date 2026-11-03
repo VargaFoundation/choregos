@@ -26,6 +26,7 @@ from choregos_contracts import (
     artifact_digest,
 )
 from choregos_core import PolicyEngine, matches_any, telemetry, utcnow
+from choregos_core.workspace import is_read_only_scope
 from fastapi import APIRouter, Query, Request, Response, status
 from sqlalchemy import func, select
 
@@ -328,6 +329,15 @@ async def post_scope_change(
     if not new_paths:
         return ScopeChangeDecision(
             decision="granted", allowed_paths=current, reason="already within the scope"
+        )
+    if is_read_only_scope(run.allowed_paths):
+        # An agent that declares `workspace: read` (ADR 0119) never widens its scope: neither the
+        # policy's automatic grant nor a human turns a read into a write.
+        return ScopeChangeDecision(
+            decision="denied",
+            allowed_paths=current,
+            reason="the agent declares a read-only workspace (`workspace: read`): it writes no file "
+            "of the repository; publish a version with `workspace: write` to change code",
         )
     if any(engine.path_denied(p) for p in new_paths):
         return ScopeChangeDecision(

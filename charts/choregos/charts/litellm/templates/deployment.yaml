@@ -2,6 +2,21 @@
 {{- $guard := .Files.Get "files/choregos_guardrail.py" }}
 {{- $spans := .Files.Get "files/choregos_llm_spans.py" }}
 {{- $otlp := (.Values.global.tracing | default dict).otlpEndpoint | default "" }}
+{{- $decisions := .Values.global.decisions | default dict }}
+{{- $models := .Values.models }}
+{{- if $decisions.embedded }}
+{{- /* ADR 0121: Laya speaks TypeSafe Jev's wire exactly, and LiteLLM 1.105.5 has no `laya` provider in
+       code (only price entries): `typesafe/` with Laya's Service as `api_base` posts to
+       `<api_base>/v1/systemone` with `model: multilingual` and Laya's bearer. */}}
+{{- $models = append $models (dict
+      "alias" "platform/decide"
+      "model" "typesafe/multilingual"
+      "mode" "evaluation"
+      "apiBase" (printf "http://%s-laya:8000" .Release.Name)
+      "apiKeyEnv" "LAYA_API_KEY"
+      "inputCostPerToken" ($decisions.inputCostPerToken | default 0)
+      "outputCostPerToken" 0) }}
+{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -10,18 +25,36 @@ metadata:
 data:
   config.yaml: |
     model_list:
-    {{- range .Values.models }}
+    {{- range $models }}
       - model_name: {{ .alias }}
         litellm_params:
           model: {{ .model }}
-          {{- with $.Values.upstream.apiBase }}
+          {{- /* A model may name its own endpoint and key (a self-hosted one); the others share the upstream's. */}}
+          {{- with (.apiBase | default $.Values.upstream.apiBase) }}
           api_base: {{ . }}
           {{- end }}
-          {{- if $.Values.upstream.apiKeySecret }}
+          {{- if .apiKeyEnv }}
+          api_key: os.environ/{{ .apiKeyEnv }}
+          {{- else if $.Values.upstream.apiKeySecret }}
           api_key: os.environ/UPSTREAM_API_KEY
           {{- end }}
+        {{- if or (hasKey . "inputCostPerToken") (hasKey . "outputCostPerToken") }}
+        {{- /* ADR 0004: a local model is accounted with a configured internal price. The catalogue
+               sync reads it back from `/model/info` (`model_info.input_cost_per_token`). */}}
+        model_info:
+          {{- with .mode }}
+          mode: {{ . }}
+          {{- end }}
+          {{- if hasKey . "inputCostPerToken" }}
+          input_cost_per_token: {{ printf "%.12f" (float64 .inputCostPerToken) }}
+          {{- end }}
+          {{- if hasKey . "outputCostPerToken" }}
+          output_cost_per_token: {{ printf "%.12f" (float64 .outputCostPerToken) }}
+          {{- end }}
+        {{- else }}
         {{- with .mode }}
         model_info: { mode: {{ . }} }
+        {{- end }}
         {{- end }}
     {{- end }}
     litellm_settings:
@@ -67,7 +100,7 @@ spec:
         app.kubernetes.io/instance: {{ .Release.Name }}
         app.kubernetes.io/component: gateway
       annotations:
-        checksum/config: {{ print (toJson .Values.models) (toJson .Values.upstream) $guard $spans $otlp | sha256sum }}
+        checksum/config: {{ print (toJson $models) (toJson .Values.upstream) $guard $spans $otlp | sha256sum }}
     spec:
       {{- include "choregos.imagePullSecrets" $ | nindent 6 }}
       # The Kyverno `non-root` rule has been strict since 2026-09-25: the pod context is
@@ -90,6 +123,11 @@ spec:
             {{- with .Values.upstream.apiKeySecret }}
             - name: UPSTREAM_API_KEY
               valueFrom: { secretKeyRef: { name: {{ . }}, key: api-key } }
+            {{- end }}
+            {{- if $decisions.embedded }}
+            # The bearer Laya asks for (ADR 0121); `platform/decide` sends it as its `api_key`.
+            - name: LAYA_API_KEY
+              valueFrom: { secretKeyRef: { name: {{ include "choregos.decisionsKeySecret" . }}, key: api-key } }
             {{- end }}
             - name: DATABASE_PASSWORD
               valueFrom:

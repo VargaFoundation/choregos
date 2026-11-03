@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_contracts import AgentActor, HumanActor, JobActor, StateKind, Workflow
+from choregos_contracts import AgentActor, DecisionActor, HumanActor, JobActor, StateKind, Workflow
 from choregos_contracts.workflow import AGENT_WILDCARD
 
 from .flow import artifact_flow
@@ -25,6 +25,9 @@ def _lane(wf: Workflow, state: str) -> str:
             return "job"
         if isinstance(actor, HumanActor):
             return "human"
+        if isinstance(actor, DecisionActor):
+            # Its own lane (ADR 0121): a decision model answers, neither a person nor the platform's code.
+            return "decision"
         return "system"
     return "terminal" if wf.states[state].terminal else "wait"
 
@@ -77,7 +80,7 @@ def to_graph(wf: Workflow) -> dict[str, Any]:
         base = {
             "actor": t.by,
             "actor_type": str(actor.type) if actor is not None else ("train" if t.via else None),
-            "role": str(actor.role) if isinstance(actor, AgentActor | JobActor) else None,
+            "role": str(actor.role) if isinstance(actor, AgentActor | JobActor | DecisionActor) else None,
             "gates": t.gate_names(),
             "via": t.via,
             "timeout_hours": t.timeout_hours,
@@ -133,7 +136,7 @@ def to_mermaid(wf: Workflow) -> str:
     for t in wf.transitions:
         actor = wf.actors.get(t.by) if t.by else None
         label = t.by or t.via or ""
-        if isinstance(actor, AgentActor | JobActor):
+        if isinstance(actor, AgentActor | JobActor | DecisionActor):
             label = f"{t.by} ({actor.role})"
         gates = ",".join(t.gate_names())
         if gates:
