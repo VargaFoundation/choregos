@@ -4013,6 +4013,71 @@ stories:
     size: M
     depends_on: [S55-01]
     notes: "Acceptance: no colour outside the theme's tokens (couleurs-utilitaires)."
+  # ───────────── S52 — A decision is a step, recorded and measured (ADR 0121) ─────────────
+  - id: S52-00
+    title: "docs(adr): a decision is a step, answered by a decision model through the gateway, recorded and measured (ADR 0121)"
+    stream: S52
+    sprint: 1
+    priority: 1
+    size: S
+    depends_on: []
+    notes: "ADR 0121, backlog and STATUS rows of the epic"
+  - id: S52-01
+    title: "contract(schemas): a decision actor and a decision record"
+    stream: S52
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: [S52-00]
+    notes: "ADR 0121 §1 and §6; contract-change, merged before the other stories"
+  - id: S52-02
+    title: "feat(charts): Laya, a self-hosted decision model, behind LiteLLM as platform/decide"
+    stream: S52
+    sprint: 2
+    priority: 1
+    size: L
+    depends_on: [S52-00]
+    notes: "ADR 0121 §5: laya image, optional subchart reachable only from LiteLLM, per-model api_base and price in the LiteLLM chart, compose profile `decisions`"
+  - id: S52-03
+    title: "feat(core,api,adapters): the decide usage in the model catalogue and the systemone gateway capability"
+    stream: S52
+    sprint: 2
+    priority: 1
+    size: S
+    depends_on: [S52-00]
+    notes: "ADR 0121 §3 and §4"
+  - id: S52-04
+    title: "feat(orchestrator): a decision step runs in the orchestrator, through the gateway's /v1/systemone"
+    stream: S52
+    sprint: 3
+    priority: 1
+    size: L
+    depends_on: [S52-01, S52-03]
+    notes: "ADR 0121 §2 and §4: DecisionClient and its fake, the decide activity, interpreter and local engine, validator rules, a replayed history"
+  - id: S52-05
+    title: "feat(api): the decision ledger, outcomes observed after the fact, and calibration measured from it"
+    stream: S52
+    sprint: 4
+    priority: 1
+    size: L
+    depends_on: [S52-04]
+    notes: "ADR 0121 §6 and §7"
+  - id: S52-06
+    title: "feat(web): the decision step on the map and the calibration card"
+    stream: S52
+    sprint: 5
+    priority: 2
+    size: M
+    depends_on: [S52-05]
+    notes: "ADR 0121 §7"
+  - id: S52-07
+    title: "feat(templates): classify, route, escalate below a threshold — a workflow in the catalogue"
+    stream: S52
+    sprint: 5
+    priority: 2
+    size: S
+    depends_on: [S52-04]
+    notes: "ADR 0121; ADR 0111 catalogue"
 
   # ───────────── S56 — A workflow starts from a trigger (ADR 0113) ─────────────
   - id: S56-01
