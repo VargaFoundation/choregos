@@ -1,12 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CarteDuParcours } from "@/components/parcours/carte-du-parcours";
-import { reduire, DEPART } from "@/components/parcours/lecteur";
+import { JourneyMap } from "@/components/journey/journey-map";
+import { reduce, INITIAL } from "@/components/journey/reader";
 import { api } from "@/lib/api";
 import type { WorkItemJourney } from "@/lib/types";
 import { runAccess, runDiff, runEvents } from "@/mocks/data";
-import { parcoursEnAttente, parcoursEnCours, parcoursTermine } from "@/mocks/parcours";
+import { journeyWaiting, journeyInProgress, journeyFinished } from "@/mocks/journey";
 
 vi.mock("@/lib/api", async (importOriginal) => {
   const reel = await importOriginal<typeof import("@/lib/api")>();
@@ -15,36 +15,36 @@ vi.mock("@/lib/api", async (importOriginal) => {
     api: { ...reel.api, runEvents: vi.fn(), runAccess: vi.fn(), runDiff: vi.fn(), decide: vi.fn() },
   };
 });
-// Le flux SSE d'un run qui tourne : rien en direct ici, le journal stocké suffit.
+// The SSE stream of a running run: nothing live here, the stored log is enough.
 vi.mock("@/lib/sse", () => ({ useEventStream: () => ({ events: [], connected: false, error: null }) }));
 
-const MAINTENANT = Date.parse("2026-10-08T12:00:00Z");
+const NOW = Date.parse("2026-10-08T12:00:00Z");
 
-function rendre(journey: WorkItemJourney = parcoursEnCours(MAINTENANT), decisionAnchor?: string) {
+function renderMap(journey: WorkItemJourney = journeyInProgress(NOW), decisionAnchor?: string) {
   vi.mocked(api.runEvents).mockResolvedValue(runEvents);
   vi.mocked(api.runAccess).mockResolvedValue(runAccess);
   vi.mocked(api.runDiff).mockResolvedValue(runDiff as never);
   vi.mocked(api.decide).mockResolvedValue({});
   return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <CarteDuParcours journey={journey} slug="billing-api" itemId={journey.work_item_id} decisionAnchor={decisionAnchor} />
+      <JourneyMap journey={journey} slug="billing-api" itemId={journey.work_item_id} decisionAnchor={decisionAnchor} />
     </QueryClientProvider>,
   );
 }
 
-const statut = (id: string) => screen.getByTestId(`etape-${id}`).getAttribute("data-statut");
+const status = (id: string) => screen.getByTestId(`etape-${id}`).getAttribute("data-statut");
 
 afterEach(() => vi.useRealTimers());
 
-describe("la carte animée du parcours (S22-02)", () => {
+describe("the journey's animated map (S22-02)", () => {
   it("a ticket's journey keeps its layout budget: no outputs line under the boxes (S39-13)", () => {
-    rendre();
+    renderMap();
     expect(screen.getByTestId("etape-t-implement")).toBeInTheDocument();
     expect(document.querySelector("[data-testid^='sorties-']")).toBeNull();
   });
 
-  it("la barre de relecture n'a plus d'aplat d'encre : l'action en iris, le direct en bleu (S24-04)", () => {
-    rendre();
+  it("the replay bar has no ink fill any more: the action in iris, the live view in blue (S24-04)", () => {
+    renderMap();
     const relire = screen.getByRole("button", { name: "Replay the journey" });
     expect(relire).toHaveClass("bg-inverse");
     expect(relire).not.toHaveClass("bg-ink");
@@ -54,21 +54,21 @@ describe("la carte animée du parcours (S22-02)", () => {
     expect(direct).toHaveClass("bg-running-soft", "text-running-ink");
   });
 
-  it("en direct : chaque case dit qui agit, où il en est, et combien de tours il a pris", () => {
-    rendre();
+  it("live: every box says who acts, where it stands, and how many rounds it took", () => {
+    renderMap();
     expect(screen.getByTestId("parcours-maintenant")).toHaveTextContent("Now in Reviewed by an agent");
     expect(screen.getByTestId("parcours-maintenant")).toHaveTextContent("Security reviewer working");
-    expect(statut("t-security-review")).toBe("en_cours");
-    expect(statut("t-review")).toBe("fait");
-    expect(statut("t-release")).toBe("a_venir");
-    expect(statut("t-address-review")).toBe("fait");
+    expect(status("t-security-review")).toBe("en_cours");
+    expect(status("t-review")).toBe("fait");
+    expect(status("t-release")).toBe("a_venir");
+    expect(status("t-address-review")).toBe("fait");
     const testeur = screen.getByTestId("etape-t-test");
     expect(testeur).toHaveAccessibleName(/^Tester\s*runs the checks\s*Passed in round 3\s*✓ 420 tests pass$/);
     expect(testeur).toHaveAccessibleDescription("agent — done — 3 attempts");
     expect(screen.getByTestId("tour-t-review")).toHaveTextContent("Approved in round 2");
     expect(screen.getByTestId("etape-t-approve-spec")).toHaveAccessibleName(/^Product owners/);
     expect(screen.getByTestId("etape-t-approve-spec")).toHaveAccessibleDescription(/^person —/);
-    // Les arcs pris le disent : une fois, sans plus.
+    // The arcs taken say it: once, no more.
     const svg = screen.getByTestId("parcours").querySelector("svg")!;
     expect(svg.querySelector('[data-arc="implemented->planned"]')).toHaveAttribute("data-fois", "1");
     expect(svg.querySelector('[data-arc="pr_approved->fixing_ci"]')).toHaveAttribute("data-fois", "0");
@@ -76,83 +76,83 @@ describe("la carte animée du parcours (S22-02)", () => {
     expect(svg.querySelector('[data-etape="t-security-review"] .parcours-pouls')).not.toBeNull();
   });
 
-  it("Replay rejoue la vie événement par événement, à la vitesse choisie, et le raconte", () => {
+  it("Replay plays the life back event by event, at the chosen speed, and tells it", () => {
     vi.useFakeTimers();
-    rendre();
+    renderMap();
     fireEvent.click(screen.getByRole("button", { name: "Replay the journey" }));
     expect(screen.getByTestId("parcours-moment")).toHaveTextContent("1 / 34");
-    expect(statut("t-triage")).toBe("en_cours");
-    expect(statut("t-security-review")).toBe("a_venir");
+    expect(status("t-triage")).toBe("en_cours");
+    expect(status("t-security-review")).toBe("a_venir");
     expect(screen.getByTestId("parcours-recit")).toHaveTextContent("The work item arrives in To triage.");
     fireEvent.click(screen.getByRole("button", { name: "2×" }));
     act(() => {
       vi.advanceTimersByTime(550 * 4);
     });
     expect(screen.getByTestId("parcours-moment")).toHaveTextContent("5 / 34");
-    expect(statut("t-triage")).toBe("fait");
+    expect(status("t-triage")).toBe("fait");
     fireEvent.click(screen.getByRole("button", { name: "Pause the replay" }));
     act(() => {
       vi.advanceTimersByTime(5000);
     });
     expect(screen.getByTestId("parcours-moment")).toHaveTextContent("5 / 34");
-    // Le direct revient où en est le ticket.
+    // Live brings back where the work item stands.
     fireEvent.click(screen.getByRole("button", { name: /^Live/ }));
-    expect(statut("t-security-review")).toBe("en_cours");
+    expect(status("t-security-review")).toBe("en_cours");
   });
 
-  it("une phase cliquée saute au moment où elle commence ; une phase jamais atteinte ne se clique pas", () => {
-    rendre();
+  it("a clicked phase jumps to the moment it starts; a phase never reached cannot be clicked", () => {
+    renderMap();
     const phases = screen.getByRole("navigation", { name: "Stages of the journey" });
     fireEvent.click(within(phases).getByRole("button", { name: /In progress/ }));
-    expect(statut("t-implement")).toBe("en_cours");
-    expect(statut("t-test")).toBe("a_venir");
+    expect(status("t-implement")).toBe("en_cours");
+    expect(status("t-test")).toBe("a_venir");
     expect(screen.getByTestId("parcours-recit")).toHaveTextContent("Planner moved it to Planned.");
     expect(within(phases).getByRole("button", { name: /Deployed/ })).toBeDisabled();
   });
 
-  it("cliquer un agent ouvre ses tentatives, ce qu'il a fait et son journal", async () => {
-    rendre();
+  it("clicking an agent opens its attempts, what it did and its log", async () => {
+    renderMap();
     fireEvent.click(screen.getByTestId("etape-t-test"));
-    const panneau = screen.getByTestId("panneau-parcours");
-    expect(within(panneau).getAllByRole("tab", { name: /·/ })).toHaveLength(3);
-    expect(within(panneau).getByText("420 tests pass.")).toBeInTheDocument();
-    fireEvent.click(within(panneau).getByTestId("tentative-r-test-1"));
-    expect(within(panneau).getByText("2 tests fail: rounding of partial credit notes.")).toBeInTheDocument();
-    expect(within(panneau).getByRole("list", { name: "Evidence" })).toHaveTextContent("✗ 412 run, 2 failed");
-    const fait = await within(panneau).findByTestId("ce-qu-il-a-fait");
-    await waitFor(() => expect(fait).toHaveTextContent("src/billing/rates.py"));
-    expect(fait).toHaveTextContent("Refused: outside the allowed paths");
-    expect(fait).toHaveTextContent("tests/billing/test_totals.py");
-    expect(fait).toHaveTextContent("evidence_present");
+    const panel = screen.getByTestId("panneau-parcours");
+    expect(within(panel).getAllByRole("tab", { name: /·/ })).toHaveLength(3);
+    expect(within(panel).getByText("420 tests pass.")).toBeInTheDocument();
+    fireEvent.click(within(panel).getByTestId("tentative-r-test-1"));
+    expect(within(panel).getByText("2 tests fail: rounding of partial credit notes.")).toBeInTheDocument();
+    expect(within(panel).getByRole("list", { name: "Evidence" })).toHaveTextContent("✗ 412 run, 2 failed");
+    const didLog = await within(panel).findByTestId("ce-qu-il-a-fait");
+    await waitFor(() => expect(didLog).toHaveTextContent("src/billing/rates.py"));
+    expect(didLog).toHaveTextContent("Refused: outside the allowed paths");
+    expect(didLog).toHaveTextContent("tests/billing/test_totals.py");
+    expect(didLog).toHaveTextContent("evidence_present");
     expect(api.runAccess).toHaveBeenCalledWith("r-test-1");
-    fireEvent.click(within(panneau).getByRole("tab", { name: "Log" }));
-    await waitFor(() => expect(within(panneau).getByTestId("live-log")).toHaveTextContent("session/request_permission"));
-    expect(within(panneau).getByRole("link", { name: "Open the full run →" })).toHaveAttribute("href", "/p/billing-api/runs/r-test-1");
-    fireEvent.click(within(panneau).getByRole("button", { name: "Close the panel" }));
+    fireEvent.click(within(panel).getByRole("tab", { name: "Log" }));
+    await waitFor(() => expect(within(panel).getByTestId("live-log")).toHaveTextContent("session/request_permission"));
+    expect(within(panel).getByRole("link", { name: "Open the full run →" })).toHaveAttribute("href", "/p/billing-api/runs/r-test-1");
+    fireEvent.click(within(panel).getByRole("button", { name: "Close the panel" }));
     expect(screen.queryByTestId("panneau-parcours")).not.toBeInTheDocument();
   });
 
-  it("une personne attendue se décide depuis sa case", async () => {
-    rendre(parcoursEnAttente(MAINTENANT));
-    expect(statut("t-approve-spec")).toBe("attend");
+  it("a person who is awaited decides from their box", async () => {
+    renderMap(journeyWaiting(NOW));
+    expect(status("t-approve-spec")).toBe("attend");
     fireEvent.click(screen.getByTestId("etape-t-approve-spec"));
-    const panneau = screen.getByTestId("panneau-parcours");
-    expect(panneau).toHaveTextContent("Decide here");
-    fireEvent.click(within(panneau).getByRole("button", { name: "Approve" }));
+    const panel = screen.getByTestId("panneau-parcours");
+    expect(panel).toHaveTextContent("Decide here");
+    fireEvent.click(within(panel).getByRole("button", { name: "Approve" }));
     await waitFor(() => expect(api.decide).toHaveBeenCalledWith("w2", { kind: "approve" }));
   });
 
   it("leads to the page's decision instead of offering a second one when the page shows it (S55-05)", () => {
-    rendre(parcoursEnAttente(MAINTENANT), "decision");
+    renderMap(journeyWaiting(NOW), "decision");
     fireEvent.click(screen.getByTestId("etape-t-approve-spec"));
-    const panneau = screen.getByTestId("panneau-parcours");
-    expect(within(panneau).getByTestId("decision-elsewhere")).toBeInTheDocument();
-    expect(within(panneau).getByRole("link", { name: "Go to the decision" })).toHaveAttribute("href", "#decision");
-    expect(within(panneau).queryByRole("button", { name: "Approve" })).toBeNull();
+    const panel = screen.getByTestId("panneau-parcours");
+    expect(within(panel).getByTestId("decision-elsewhere")).toBeInTheDocument();
+    expect(within(panel).getByRole("link", { name: "Go to the decision" })).toHaveAttribute("href", "#decision");
+    expect(within(panel).queryByRole("button", { name: "Approve" })).toBeNull();
   });
 
-  it("un ticket fini : tout est fait, la fin est atteinte, la CI rouge et sa réparation se voient", () => {
-    rendre(parcoursTermine(MAINTENANT));
+  it("a finished work item: everything is done, the end is reached, the red CI and its repair show", () => {
+    renderMap(journeyFinished(NOW));
     expect(screen.getByTestId("parcours-maintenant")).toHaveTextContent("Now in Verified in production");
     const svg = screen.getByTestId("parcours").querySelector("svg")!;
     expect([...svg.querySelectorAll("[data-etape]")].every((g) => g.getAttribute("data-statut") === "fait")).toBe(true);
@@ -161,16 +161,16 @@ describe("la carte animée du parcours (S22-02)", () => {
   });
 });
 
-describe("le lecteur (S22-02)", () => {
-  it("joue jusqu'au bout puis s'arrête, et repart du début", () => {
-    let etat = reduire(DEPART, { type: "lire", nombre: 3 });
-    expect(etat).toMatchObject({ mode: "relecture", index: 0, enLecture: true });
-    etat = reduire(reduire(etat, { type: "tic", nombre: 3 }), { type: "tic", nombre: 3 });
-    expect(etat).toMatchObject({ index: 2, enLecture: true });
-    etat = reduire(etat, { type: "tic", nombre: 3 });
-    expect(etat).toMatchObject({ index: 2, enLecture: false });
-    expect(reduire(etat, { type: "lire", nombre: 3 })).toMatchObject({ index: 0, enLecture: true });
-    expect(reduire(etat, { type: "aller", index: 99, nombre: 3 })).toMatchObject({ index: 2, enLecture: false });
-    expect(reduire(DEPART, { type: "lire", nombre: 0 })).toBe(DEPART);
+describe("the reader (S22-02)", () => {
+  it("plays to the end then stops, and starts again from the beginning", () => {
+    let state = reduce(INITIAL, { type: "play", count: 3 });
+    expect(state).toMatchObject({ mode: "replay", index: 0, playing: true });
+    state = reduce(reduce(state, { type: "tick", count: 3 }), { type: "tick", count: 3 });
+    expect(state).toMatchObject({ index: 2, playing: true });
+    state = reduce(state, { type: "tick", count: 3 });
+    expect(state).toMatchObject({ index: 2, playing: false });
+    expect(reduce(state, { type: "play", count: 3 })).toMatchObject({ index: 0, playing: true });
+    expect(reduce(state, { type: "goto", index: 99, count: 3 })).toMatchObject({ index: 2, playing: false });
+    expect(reduce(INITIAL, { type: "play", count: 0 })).toBe(INITIAL);
   });
 });

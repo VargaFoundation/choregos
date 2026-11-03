@@ -5,20 +5,20 @@ import type { WorkflowGraph, WorkItemDto } from "@/lib/types";
 export interface Column {
   state: string;
   display: string;
-  /** Le genre que le workflow déclare ; absent, le badge le déduit du nom de l'état. */
+  /** The kind the workflow declares; absent, the badge deduces it from the state's name. */
   kind?: string;
   /** A terminal state, whatever its outcome: a declined column folds like a successful one. */
   terminal?: boolean;
   items: WorkItemDto[];
-  /** L'état n'est pas dans ce workflow (ticket migré, ancien) : la colonne le dit (S23-04). */
+  /** The state is not in this workflow (migrated, old work item): the column says so (S23-04). */
   horsWorkflow?: boolean;
 }
 
 /**
- * Les colonnes d'un board : les états du workflow, dans son ordre, tels que le VALIDATEUR les lit
- * — le code de l'orchestrateur. Un regex sur le YAML les lisait avant : un YAML indenté de quatre
- * espaces, ou écrit en bloc, donnait zéro colonne (ADR 0031, S16-10). Un ticket dans un état que le
- * workflow ne connaît pas (migré, ancien) reste visible, dans une colonne à part.
+ * A board's columns: the workflow's states, in its order, as the VALIDATOR reads them (the
+ * orchestrator's code). A regex on the YAML used to read them: a YAML indented by four spaces, or
+ * written as a block, gave zero columns (ADR 0031, S16-10). A work item in a state the workflow
+ * does not know (migrated, old) stays visible, in a column of its own.
  */
 export function columnsFromGraph(graph: WorkflowGraph | undefined, items: WorkItemDto[]): Column[] {
   const declared = (graph?.nodes ?? []).map((node) => ({
@@ -77,7 +77,7 @@ export function boardWorkflows<T extends { name: string; is_default: boolean }>(
   return [...workflows].sort((a, b) => Number(b.is_default) - Number(a.is_default));
 }
 
-/** Les tickets d'un workflow : ceux qui y sont épinglés ; un ticket d'avant l'épingle va au défaut. */
+/** A workflow's work items: those pinned to it; a work item from before pinning goes to the default. */
 export function itemsOf(items: WorkItemDto[], workflow: string, isDefault: boolean): WorkItemDto[] {
   return items.filter((item) => (item.workflow_name ? item.workflow_name === workflow : isDefault));
 }

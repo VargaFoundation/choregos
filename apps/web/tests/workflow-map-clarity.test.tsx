@@ -8,7 +8,7 @@ import {
   waitInWords,
   waitingSentence,
 } from "@/components/workflows/step-activity";
-import { actorLabel } from "@/components/workflows/panneaux";
+import { actorLabel } from "@/components/workflows/panels";
 import { timingSentence } from "@/components/workflows/timing";
 import { api } from "@/lib/api";
 import type { WorkflowActivity } from "@/lib/types";

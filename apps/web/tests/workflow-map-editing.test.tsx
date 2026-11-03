@@ -3,8 +3,8 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ActorsPanel, offeredAgents } from "@/components/workflows/actors-panel";
-import { BrouillonProvider, useBrouillon } from "@/components/workflows/brouillon";
-import { CarteDuWorkflow } from "@/components/workflows/carte/carte-du-workflow";
+import { DraftProvider, useDraft } from "@/components/workflows/draft";
+import { WorkflowMap } from "@/components/workflows/map/workflow-map";
 import { rowsToSchema, schemaToRows, withFields } from "@/components/workflows/fields-schema";
 import { names, TransitionFields } from "@/components/workflows/transition-fields";
 import { WorkflowSettingsPanel } from "@/components/workflows/workflow-settings";
@@ -52,16 +52,16 @@ const edited = (yaml = "after"): WorkflowEditResult => ({
 });
 
 function YamlProbe() {
-  return <p data-testid="yaml">{useBrouillon().yaml}</p>;
+  return <p data-testid="yaml">{useDraft().yaml}</p>;
 }
 
 async function underDraft(content: ReactNode) {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <BrouillonProvider slug="hr" name="requests">
+      <DraftProvider slug="hr" name="requests">
         <YamlProbe />
         {content}
-      </BrouillonProvider>
+      </DraftProvider>
     </QueryClientProvider>,
   );
   await waitFor(() => expect(screen.getByTestId("yaml")).toHaveTextContent("apiVersion"));
@@ -214,7 +214,7 @@ describe("drawing a transition (ADR 0112 §4)", () => {
         { id: "t-2", from: "review", to: "done", kind: "nominal", actor: "owner", gates: [] },
       ],
     };
-    render(<CarteDuWorkflow graph={g} initial="inbox" onDraw={onDraw} />);
+    render(<WorkflowMap graph={g} initial="inbox" onDraw={onDraw} />);
     const data = new Map<string, string>();
     const dataTransfer = {
       setData: (k: string, v: string) => data.set(k, v),

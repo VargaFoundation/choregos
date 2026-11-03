@@ -27,8 +27,8 @@ vi.mock("@/lib/api", async (importOriginal) => {
   };
 });
 
-describe("créer un workflow (#336)", () => {
-  it("crée sans jamais republier, et un nom pris entre-temps se dit sous le champ", async () => {
+describe("creating a workflow (#336)", () => {
+  it("creates without ever republishing, and a name taken meanwhile is said under the field", async () => {
     vi.mocked(api.createWorkflow).mockRejectedValue(new ApiError(409, { detail: "`offboarding` already exists" }));
     await act(async () => {
       render(
@@ -40,9 +40,9 @@ describe("créer un workflow (#336)", () => {
       );
     });
     fireEvent.change(await screen.findByLabelText("Name"), { target: { value: "offboarding" } });
-    const publier = await screen.findByRole("button", { name: "Publish offboarding" });
-    await waitFor(() => expect(publier).toBeEnabled());
-    fireEvent.click(publier);
+    const publishButton = await screen.findByRole("button", { name: "Publish offboarding" });
+    await waitFor(() => expect(publishButton).toBeEnabled());
+    fireEvent.click(publishButton);
     await waitFor(() => expect(api.createWorkflow).toHaveBeenCalledWith("rh", "offboarding", expect.any(String)));
     expect(api.putWorkflowNamed).not.toHaveBeenCalled();
     expect(await screen.findByText(/A workflow named offboarding already exists/)).toBeInTheDocument();

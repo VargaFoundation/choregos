@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { BrouillonProvider, useBrouillon } from "@/components/workflows/brouillon";
+import { DraftProvider, useDraft } from "@/components/workflows/draft";
 import { operations } from "@/components/workflows/operations";
 import { api } from "@/lib/api";
 import type { WorkflowEditResult, WorkflowOperation } from "@/lib/types";
@@ -23,15 +23,15 @@ function result(yaml: string, inverse: WorkflowOperation[]): WorkflowEditResult 
 
 /** Two gestures in a row, the second started before React has rendered the first. */
 function TwoGestures({ gesture }: { gesture: WorkflowOperation }) {
-  const draft = useBrouillon();
+  const draft = useDraft();
   return (
     <div>
       <p data-testid="yaml">{draft.yaml}</p>
       <button
         type="button"
         onClick={async () => {
-          await draft.appliquer(gesture);
-          await draft.appliquer(gesture);
+          await draft.apply(gesture);
+          await draft.apply(gesture);
         }}
       >
         twice
@@ -50,9 +50,9 @@ describe("a workflow draft under quick gestures (#678)", () => {
       .mockResolvedValueOnce(result("after-B", []));
     render(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-        <BrouillonProvider slug="rh" name="onboarding">
+        <DraftProvider slug="rh" name="onboarding">
           <TwoGestures gesture={gesture} />
-        </BrouillonProvider>
+        </DraftProvider>
       </QueryClientProvider>,
     );
     await waitFor(() => expect(screen.getByTestId("yaml")).toHaveTextContent("apiVersion"));
