@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://choregos.dev/schemas/decision-record.schema.json",
+  "title": "DecisionRecord",
+  "description": "One answered question of a decision (ADR 0120): what was decided, with which probability, by which model, which transition followed, and what was observed afterwards. Calibration is measured from these records, never declared.",
+  "type": "object",
+  "required": [
+    "run_id",
+    "work_item",
+    "project",
+    "workflow",
+    "step",
+    "question",
+    "source",
+    "model",
+    "answer",
+    "probability",
+    "decided_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "work_item": {
+      "type": "string",
+      "minLength": 1
+    },
+    "project": {
+      "type": "string",
+      "minLength": 1
+    },
+    "workflow": {
+      "type": "string",
+      "minLength": 1
+    },
+    "step": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The state the step ran from."
+    },
+    "question": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,40}$"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "decision_model",
+        "agent"
+      ],
+      "description": "`decision_model`: a decision step's answer; `agent`: the `confidence` an agent declared (ADR 0106), recorded to be measured on the same footing."
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "answer": {
+      "type": [
+        "string",
+        "number",
+        "boolean"
+      ]
+    },
+    "probability": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "transition": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "The state the workflow went to after the step, once known."
+    },
+    "decided_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "outcome": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/outcome"
+        }
+      ],
+      "default": null
+    }
+  },
+  "$defs": {
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "What was observed after the decision; each field is filled in when it becomes known.",
+      "properties": {
+        "overridden": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null,
+          "description": "A later human step on the work item contradicted the decision."
+        },
+        "terminal": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "success",
+            "declined",
+            "cancelled",
+            null
+          ],
+          "default": null,
+          "description": "The work item's terminal outcome."
+        },
+        "reopened": {
+          "type": "boolean",
+          "default": false,
+          "description": "The work item came back after it ended."
+        },
+        "observed_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "default": null
+        }
+      }
+    }
+  }
+}

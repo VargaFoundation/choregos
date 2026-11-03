@@ -15,6 +15,7 @@ from choregos_contracts import (
     ARTIFACT_TYPES,
     RUN_ACTORS,
     AgentActor,
+    DecisionActor,
     HumanActor,
     SystemActor,
     Workflow,
@@ -80,6 +81,7 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_actions(wf, report, source)
     _check_already_fixed_exits(wf, report, source)
     _check_conditions(wf, report, source)
+    _check_decisions(wf, report, source)
     _check_tasks(wf, report, source)
     _check_spawns(wf, report, source)
     _check_effets(wf, report, source)
@@ -185,6 +187,36 @@ def _check_conditions(wf: Workflow, report: ValidationReport, source: Any) -> No
                 f"every transition from `{state}` has a `when`: add one without it, taken when no condition "
                 "holds, or a work item whose outputs match none would wait forever",
                 ["transitions", index, "when"],
+                source,
+            )
+
+
+def _check_decisions(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """A decision step (ADR 0120).
+
+    - Its questions write `<name>` and `<name>_confidence`: a question named like another's
+      probability would write the same output twice.
+    - The contract declares it before the engine runs it (S52-04): until then a workflow that uses
+      one is refused, so that a decision step is never taken as a transition that does nothing.
+    """
+    for name, actor in wf.actors.items():
+        if not isinstance(actor, DecisionActor):
+            continue
+        outputs = actor.outputs
+        for twice in sorted({o for o in outputs if outputs.count(o) > 1}):
+            report.error(
+                "decision.output_collision",
+                f"the decision `{name}` writes the output `{twice}` twice: a question is named like another "
+                "question's probability",
+                ["actors", name, "questions"],
+                source,
+            )
+        if any(t.by == name for t in wf.transitions):
+            report.error(
+                "decision.not_runnable",
+                f"the decision `{name}` is declared, but this platform does not run decision steps yet "
+                "(ADR 0120, S52-04)",
+                ["actors", name],
                 source,
             )
 

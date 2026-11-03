@@ -119,7 +119,95 @@ class JobActor(Strict):
     tools: list[JobTools] = Field(default_factory=list, max_length=16)
 
 
-Actor = Annotated[AgentActor | HumanActor | SystemActor | JobActor, Field(discriminator="type")]
+#: A decision's output name: the answer is written under it, its probability under `<name>_confidence`.
+DecisionName = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{0,40}$")]
+#: What a decision step may send: the work item's title, description, labels and type, its fields
+#: (`fields.<name>`) and the last stage's outputs (`outputs.<name>`) — nothing else reaches the model.
+DecisionState = Annotated[
+    str,
+    Field(
+        pattern=r"^(title|description|labels|type|fields\.[a-z][a-z0-9_]{0,63}|outputs\.[a-z][a-z0-9_]{0,63})$"
+    ),
+]
+DecisionInstructions = Annotated[str, Field(min_length=1, max_length=2000)]
+DecisionLabel = Annotated[str, Field(min_length=1, max_length=200)]
+#: The suffix of the output that carries a question's probability.
+CONFIDENCE_SUFFIX = "_confidence"
+
+
+class YesNoQuestion(Strict):
+    """Answered `true` or `false`."""
+
+    type: Literal["yes_no"] = "yes_no"
+    instructions: DecisionInstructions
+
+
+class ChoiceQuestion(Strict):
+    """Answered by one of `options`, never by anything else."""
+
+    type: Literal["choice"] = "choice"
+    instructions: DecisionInstructions
+    options: list[DecisionLabel] = Field(min_length=2, max_length=100)
+
+    @field_validator("options")
+    @classmethod
+    def _distinct(cls, options: list[str]) -> list[str]:
+        if len(set(options)) != len(options):
+            raise ValueError("a choice's options must be distinct")
+        return options
+
+
+class ScoreQuestion(Strict):
+    """Answered by one of `levels`, ordered lowest first."""
+
+    type: Literal["score"] = "score"
+    instructions: DecisionInstructions
+    levels: list[DecisionLabel] = Field(min_length=2, max_length=11)
+
+    @field_validator("levels")
+    @classmethod
+    def _distinct(cls, levels: list[str]) -> list[str]:
+        if len(set(levels)) != len(levels):
+            raise ValueError("a score's levels must be distinct")
+        return levels
+
+
+DecisionQuestion = Annotated[YesNoQuestion | ChoiceQuestion | ScoreQuestion, Field(discriminator="type")]
+
+
+class DecisionActor(Strict):
+    """A decision step (ADR 0120): a decision model answers typed questions about the state the
+    step names, through the project's gateway (`/v1/systemone`), in the orchestrator.
+
+    A verdict of one word — finished? which team? risky? — does not need a pod, a sandbox and a model
+    loop. Each question writes `<name>` and `<name>_confidence`, which `when` (ADR 0106) reads like an
+    agent's outputs; the probability is the model's, and the decision ledger measures it.
+    """
+
+    type: Literal[ActorType.DECISION] = ActorType.DECISION
+    role: Role
+    #: A catalogue entry with the `decide` usage (ADR 0060), routed by the project's gateway.
+    model: str = Field(default="platform/decide", min_length=1, max_length=200)
+    state: list[DecisionState] = Field(min_length=1, max_length=32)
+    questions: dict[DecisionName, DecisionQuestion] = Field(min_length=1, max_length=16)
+    timeout_seconds: int = Field(default=15, ge=1, le=120)
+
+    @field_validator("state")
+    @classmethod
+    def _state_distinct(cls, state: list[str]) -> list[str]:
+        if len(set(state)) != len(state):
+            raise ValueError("a decision's state names each source once")
+        return state
+
+    @property
+    def outputs(self) -> list[str]:
+        """The outputs the step writes: each question's answer, then its probability."""
+        return [name for question in self.questions for name in (question, question + CONFIDENCE_SUFFIX)]
+
+
+Actor = Annotated[
+    AgentActor | HumanActor | SystemActor | JobActor | DecisionActor, Field(discriminator="type")
+]
 #: The actors whose step a runner executes: they share the run's lifecycle (start, await, result).
 RUN_ACTORS = (AgentActor, JobActor)
 
