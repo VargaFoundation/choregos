@@ -39,6 +39,9 @@ class ActorType(StrEnum):
     SYSTEM = "system"
     #: A deterministic step: a command run in the runner's sandbox, no model (ADR 0056).
     JOB = "job"
+    #: A decision model answers typed questions about a named state, through the gateway, in the
+    #: orchestrator: no pod, no agent loop (ADR 0120).
+    DECISION = "decision"
 
 
 class StateKind(StrEnum):
