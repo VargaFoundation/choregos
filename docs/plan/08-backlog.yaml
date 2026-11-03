@@ -3981,6 +3981,14 @@ stories:
     size: L
     depends_on: [S55-02]
     notes: "Acceptance: /workflows/catalogue redirects to /workflows/library; ?vue becomes ?view; the list no longer re-parses every workflow nor reads the plugin sources on each call; yaml out of the list entry (contract-change)."
+  - id: S55-04b
+    title: "contract(api): a workflow library entry no longer carries its YAML; GET one entry for it"
+    stream: S55
+    sprint: 2
+    priority: 3
+    size: S
+    depends_on: [S55-04]
+    notes: "The list sends every entry's full YAML and the page never reads it."
   - id: S55-05
     title: "feat(web): a ticket reads in five seconds — the next step, the request itself, one decision surface"
     stream: S55

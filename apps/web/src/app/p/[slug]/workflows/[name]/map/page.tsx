@@ -36,19 +36,20 @@ type Definition = {
 };
 
 /**
- * La carte, et ce qu'on y modifie (S16-12) : un état ou une transition choisis ouvrent leur panneau ;
- * chaque geste est une opération typée, greffée dans le YAML par l'API, et la carte se redessine
- * depuis le brouillon. Rien n'est publié avant « publish ». Depuis S21-07, la carte est à plat : une
- * colonne pour le chemin nominal, une à côté pour ce qui en sort ; le panneau reste à portée quand on
- * la descend. Depuis S22-05, elle s'ouvre en serpentin, comme le parcours d'un ticket (les captures
- * du 08/10) ; la liste à plat reste à un onglet (`?vue=list`), pour éditer les états.
+ * The map, and what is changed on it (S16-12): a chosen state or transition opens its panel; each
+ * gesture is a typed operation the API grafts into the YAML, and the map redraws from the draft. Nothing
+ * is published before "publish". Since S21-07 the map is flat: one column for the nominal path, one beside
+ * it for what leaves it; the panel stays within reach as one scrolls. Since S22-05 it opens as a
+ * serpentine, like a ticket's journey (captures of 08/10); the flat list is one tab away (`?view=list`),
+ * to edit the states.
  */
 export default function MapPage() {
   const brouillon = useBrouillon();
   const params = useSearchParams();
   const router = useRouter();
   const chemin = usePathname();
-  const vue = params.get("vue") === "list" ? "list" : "diagram";
+  // `vue` was the French name of `view` (S55-04): an old link still opens the list.
+  const vue = (params.get("view") ?? params.get("vue")) === "list" ? "list" : "diagram";
   const [choix, setChoix] = useState<{ kind: "node" | "edge"; id: string } | null>(null);
   const [flux, setFlux] = useState<Highlight | null>(null);
   const [drawn, setDrawn] = useState<{ from: string; to: string } | null>(null);
@@ -89,7 +90,7 @@ export default function MapPage() {
                 type="button"
                 aria-pressed={vue === v}
                 className={cn("px-2.5 py-1", vue === v ? "bg-surface-sunken text-ink" : "text-ink-muted hover:text-ink")}
-                onClick={() => router.replace(v === "list" ? `${chemin}?vue=list` : chemin)}
+                onClick={() => router.replace(v === "list" ? `${chemin}?view=list` : chemin)}
               >
                 {v === "list" ? "List" : "Diagram"}
               </button>

@@ -8,7 +8,7 @@ test("une carte de dix-huit états se lit sans zoom : une colonne, aucun débord
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto("/p/billing-api/workflows/release-full/map?vue=list");
+  await page.goto("/p/billing-api/workflows/release-full/map?view=list");
   const carte = page.getByTestId("workflow-graph");
   await expect(carte.locator("[data-etat]")).toHaveCount(18);
   await page.evaluate(() => document.fonts.ready);
@@ -39,7 +39,7 @@ test("une carte de dix-huit états se lit sans zoom : une colonne, aucun débord
 
 test("le panneau reste à portée quand on descend la carte", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto("/p/billing-api/workflows/release-full/map?vue=list");
+  await page.goto("/p/billing-api/workflows/release-full/map?view=list");
   await page.getByTestId("etat-verified_prod").click();
   await expect(page.getByTestId("panneau-etat")).toBeInViewport();
   await page.mouse.wheel(0, 3000);
@@ -47,7 +47,7 @@ test("le panneau reste à portée quand on descend la carte", async ({ page }) =
 });
 
 test("Tab atteint une flèche, Entrée ouvre le panneau de sa transition", async ({ page }) => {
-  await page.goto("/p/billing-api/workflows/release-full/map?vue=list");
+  await page.goto("/p/billing-api/workflows/release-full/map?view=list");
   await page.getByTestId("etat-ready").focus();
   await page.keyboard.press("Tab");
   await expect(page.getByTestId("transition-t-implement")).toBeFocused();
@@ -66,6 +66,6 @@ test("la carte s'ouvre en serpentin, sans déborder, et une étape cliquée ouvr
   await carte.getByTestId("etape-t-implement").click();
   await expect(page.getByTestId("panneau-transition")).toBeVisible();
   await page.getByRole("button", { name: "List" }).click();
-  await expect(page).toHaveURL(/vue=list/);
+  await expect(page).toHaveURL(/view=list/);
   await expect(page.getByTestId("workflow-graph")).toBeVisible();
 });
