@@ -9,7 +9,7 @@ from choregos_api.services.organisations import organisation_by_slug
 
 
 async def test_an_unknown_organisation_is_the_same_404(org: str) -> None:
-    async with session_scope() as session:
+    async with session_scope(orgs="*") as session:  # the platform reads every organisation
         found = await organisation_by_slug(session, org)
         assert found.slug == "varga"
         with pytest.raises(ApiError) as caught:
