@@ -64,6 +64,9 @@ export function useStepCalibration(project: string, workflow: string, step: stri
   });
 }
 
+/** The read of a step's calibration, as `useStepCalibration` returns it. */
+export type CalibrationRead = ReturnType<typeof useStepCalibration>;
+
 /** Whether the ledger observed the outcome of at least one of the step's decisions. */
 export function isMeasured(calibration: StepCalibration | undefined): boolean {
   return (calibration?.questions ?? []).some((question) => question.observed > 0);
@@ -75,14 +78,8 @@ export const MEASURED_SENTENCE =
   "The probability is measured against what happened next: how often the answers were right at each threshold is under Calibration.";
 
 /** What a threshold on the probability is worth: a guess, until the ledger has observed an outcome. */
-export function ProbabilityNote({ source, step }: { source?: CalibrationSource; step: string }) {
-  if (!source) return <>{GUESS_SENTENCE}</>;
-  return <MeasuredOrGuess source={source} step={step} />;
-}
-
-function MeasuredOrGuess({ source, step }: { source: CalibrationSource; step: string }) {
-  const calibration = useStepCalibration(source.project, source.workflow, step);
-  return <>{isMeasured(calibration.data) ? MEASURED_SENTENCE : GUESS_SENTENCE}</>;
+export function ProbabilityNote({ calibration }: { calibration: StepCalibration | undefined }) {
+  return <>{isMeasured(calibration) ? MEASURED_SENTENCE : GUESS_SENTENCE}</>;
 }
 
 /** The point the API measured at a threshold, or the nearest one below it when the workflow's lies between two. */
@@ -239,10 +236,9 @@ function QuestionCard({ question, target, minObserved, workflowThreshold }: {
  * reliability bins, what the workflow's own threshold keeps, and the threshold the ledger suggests
  * for the target accuracy — or why it suggests none. Measured, never declared.
  */
-export function DecisionCalibration({ source, step }: { source: CalibrationSource; step: string }) {
-  const calibration = useStepCalibration(source.project, source.workflow, step);
-  if (!calibration.data) return <EtatDeLecture lecture={calibration} quoi="the calibration" />;
-  const { questions = [], target_accuracy: target, min_observed: minObserved } = calibration.data;
+export function DecisionCalibration({ read, thresholds }: { read: CalibrationRead; thresholds?: Record<string, number> }) {
+  if (!read.data) return <EtatDeLecture lecture={read} quoi="the calibration" />;
+  const { questions = [], target_accuracy: target, min_observed: minObserved } = read.data;
   if (questions.length === 0)
     return (
       <p className="text-ink-muted" data-testid="calibration-empty">
@@ -258,7 +254,7 @@ export function DecisionCalibration({ source, step }: { source: CalibrationSourc
           question={question}
           target={target}
           minObserved={minObserved}
-          workflowThreshold={source.thresholds?.[question.question]}
+          workflowThreshold={thresholds?.[question.question]}
         />
       ))}
     </div>

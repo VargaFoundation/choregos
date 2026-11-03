@@ -488,11 +488,18 @@ describe("the calibration of a decision step (ADR 0121 §7, S52-06b)", () => {
     expect(screen.getByTestId("decision-when-t-route")).toHaveTextContent("a threshold on it is a guess");
   });
 
-  it("says while it reads, then that the calibration could not be read, and the probability stays a guess", async () => {
-    vi.mocked(api.stepCalibration).mockRejectedValue(new Error("the ledger is unavailable"));
+  it("says while it reads", () => {
+    vi.mocked(api.stepCalibration).mockReturnValue(new Promise<StepCalibration>(() => {}));
     withQueries(<StepDetails step={STEP} stepsById={new Map()} decision={ROUTER} calibration={SOURCE} />);
     expect(screen.getByRole("status")).toHaveTextContent("Reading the calibration…");
-    expect(await screen.findByRole("alert")).toHaveTextContent("Could not read the calibration: the ledger is unavailable.");
+    expect(screen.getByTestId("decision-when-t-route")).toHaveTextContent("a threshold on it is a guess");
+  });
+
+  it("says the calibration could not be read, and the probability stays a guess", async () => {
+    vi.mocked(api.stepCalibration).mockImplementation(() => Promise.reject(new Error("the ledger is unavailable")));
+    withQueries(<StepDetails step={STEP} stepsById={new Map()} decision={ROUTER} calibration={SOURCE} />);
+    expect(await screen.findByText(/Could not read the calibration: the ledger is unavailable/)).toBeInTheDocument();
+    expect(api.stepCalibration).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
     expect(screen.getByTestId("decision-when-t-route")).toHaveTextContent("a threshold on it is a guess");
     expect(screen.queryByTestId("decision-calibration")).toBeNull();
