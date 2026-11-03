@@ -271,6 +271,24 @@ def test_an_eval_suite_with_level_one_and_cases_loads(plugin: Path) -> None:
     assert load_directory(plugin).agents
 
 
+def test_an_eval_case_may_carry_the_work_item_s_fields(plugin: Path) -> None:
+    """S51-10: a case plays a ticket filed from a tracker, as the API's `AgentSampleInput.fields`."""
+    tracker = {"kind": "jira", "key": "FON-270", "reporter": {"display_name": "Ada Lovelace"}}
+
+    def cases(doc: dict[str, Any]) -> None:
+        doc["cases"] = [{"name": "filed", "input": {"title": "Hi", "fields": {"tracker": tracker}}}]
+
+    _edit(plugin / "evals" / "greeter.yaml", cases)
+    assert load_directory(plugin).agents
+
+
+def test_an_eval_case_s_fields_hold_at_most_the_api_s_cap(plugin: Path) -> None:
+    big = {"answers": {"notes": "x" * (64 * 1024)}}
+    case = {"name": "x", "input": {"fields": big}}
+    _edit(plugin / "evals" / "greeter.yaml", lambda d: d.update(cases=[case]))
+    assert "evals/greeter.yaml:cases/0/input/fields: at most 64 KiB of JSON" in _problems(plugin)
+
+
 @pytest.mark.parametrize(
     ("change", "needle"),
     [
@@ -282,6 +300,7 @@ def test_an_eval_suite_with_level_one_and_cases_loads(plugin: Path) -> None:
             "evals/greeter.yaml:cases/0/max_cost_usd",
         ),
         (lambda d: d.update(cases=[{"name": "x", "inputs": {}}]), "Additional properties are not allowed"),
+        (lambda d: d.update(cases=[{"name": "x", "input": {"fields": "x"}}]), "cases/0/input/fields"),
         (lambda d: d.update(cases=[{"name": "x"}, {"name": "x"}]), "case `x` is declared twice"),
         (lambda d: d.pop("must_contain"), "is not valid under any of the given schemas"),
     ],
