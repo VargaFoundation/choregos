@@ -64,13 +64,13 @@ def test_a_copyleft_skill_is_never_bundled_and_the_bundled_tree_holds_exactly_th
 
 
 def test_every_bundled_skill_matches_its_provenance_and_its_catalogue_line() -> None:
-    from choregos_contracts import empreinte_de_skill as empreinte
+    from choregos_contracts import skill_digest
 
     for e in skill_catalogue.load().entries:
         if e.delivery != "bundled":
             continue
         bundle = read_bundled(e.id)
-        assert empreinte(bundle.files) == e.digest, e.id
+        assert skill_digest(bundle.files) == e.digest, e.id
         assert len(bundle.files) == e.files, e.id
         assert bundle.provenance["sha"] == e.sha and bundle.provenance["repo"] == e.repo, e.id
         assert bundle.provenance["licence"] == e.licence, e.id
