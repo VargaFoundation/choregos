@@ -116,6 +116,50 @@ async def _verifier_les_agents_nommes(session: AsyncSession, project: Project, w
         )
 
 
+async def _check_decision_steps(session: AsyncSession, project: Project, workflow: Workflow) -> None:
+    """A decision step this project cannot run is refused when the workflow is saved (ADR 0121 §4), not
+    at its first work item: `decision.gateway_unsupported` when the project's gateway serves no
+    `/v1/systemone`, `decision.model_usage` when the organisation's catalogue does not enable the
+    step's model for `decide`. The step checks both again when it runs: a catalogue changes."""
+    from choregos_adapters.base import decision_route_refusal
+    from choregos_contracts import DecisionActor
+
+    from .gateway import project_gateway
+    from .model_catalogue import load_policy
+
+    asked = {t.by for t in workflow.transitions if t.by}
+    decisions = {
+        name: actor
+        for name, actor in workflow.actors.items()
+        if isinstance(actor, DecisionActor) and name in asked
+    }
+    if not decisions:
+        return
+    errors: list[dict[str, Any]] = []
+    try:
+        gateway: Any = await project_gateway(session, project)
+    except Exception as error:  # a gateway the API cannot build is refused by the step, when it runs
+        get_logger("choregos.definitions").warning(
+            "gateway not built to check a decision", error=str(error)[:300]
+        )
+        gateway = None
+    refusal = decision_route_refusal(gateway) if gateway is not None else None
+    catalogue = await load_policy(session, project.org_id)
+    for name, actor in decisions.items():
+        if refusal is not None:
+            errors.append(
+                {"loc": [f"/actors/{name}"], "msg": refusal, "code": "decision.gateway_unsupported"}
+            )
+        if (unusable := catalogue.check_decision(actor.model)) is not None:
+            errors.append({"loc": [f"/actors/{name}/model"], "msg": unusable, "code": "decision.model_usage"})
+    if errors:
+        raise unprocessable(
+            "the workflow has a decision step this project cannot run: "
+            + "; ".join(e["msg"] for e in errors),
+            errors,
+        )
+
+
 async def derniere_version(session: AsyncSession, project_id: Any, nom: str) -> int | None:
     """La plus haute version d'un workflow de ce nom, active ou non ; `None` s'il n'a jamais existé."""
     return (
@@ -190,6 +234,7 @@ async def publier_workflow(  # noqa: PLR0913 - le seul chemin d'écriture : ses 
     _verifier_les_effets(workflow)
     await _verifier_les_agents_nommes(session, project, workflow)
     await _verifier_le_budget(session, project, workflow)
+    await _check_decision_steps(session, project, workflow)
     actuelle = await workflow_actif(session, project.id, nom)
     if base_version is not None and (actuelle is None or actuelle.version != base_version):
         lue = actuelle.version if actuelle is not None else "none"

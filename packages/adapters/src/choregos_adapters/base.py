@@ -39,6 +39,7 @@ from choregos_core.domain import (
     WorkItemData,
 )
 
+from .decisions import DecisionCall, DecisionReply
 from .oci.builder import BuildRequest, BuildResult
 from .oci.signatures import SignatureVerdict
 
@@ -280,6 +281,18 @@ class GatewayAdapter(Protocol):
 LlmGateway = GatewayAdapter
 
 
+@runtime_checkable
+class DecisionClient(Protocol):
+    """Asks a decision model typed questions through the gateway's `/v1/systemone` (ADR 0121 §2).
+
+    Never a model directly: `call.base_url` is the project's gateway and `call.key` the virtual key
+    minted for the step, so the gateway counts and caps the cost. Raises `InvalidDecisionError` for an
+    answer that cannot be used as it is and `DecisionUnreachableError` when there is no answer
+    (`choregos_adapters.decisions`, which also holds the wire format and its sources)."""
+
+    async def decide(self, call: DecisionCall) -> DecisionReply: ...
+
+
 class RealtimeClosed(Exception):  # noqa: N818 - the end of a realtime link, not a failure
     """The other end closed the realtime link."""
 
@@ -315,6 +328,7 @@ __all__ = [
     "AgentBackend",
     "CdAdapter",
     "CiAdapter",
+    "DecisionClient",
     "Executor",
     "GatewayAdapter",
     "LlmGateway",
@@ -325,5 +339,6 @@ __all__ = [
     "RealtimeLink",
     "ScmAdapter",
     "TrackerAdapter",
+    "decision_route_refusal",
     "llm_guard_refusal",
 ]

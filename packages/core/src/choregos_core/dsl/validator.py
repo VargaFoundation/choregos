@@ -168,6 +168,13 @@ def _check_conditions(wf: Workflow, report: ValidationReport, source: Any) -> No
       waiting forever.
     """
     declared = {name for t in wf.transitions for name in t.outputs}
+    # A decision step writes its questions' answers and probabilities (ADR 0121): declared by its actor.
+    declared |= {
+        name
+        for t in wf.transitions
+        if isinstance(actor := wf.actor_of(t), DecisionActor)
+        for name in actor.outputs
+    }
     for index, t in enumerate(wf.transitions):
         for name in t.when or {}:
             if name not in declared:
@@ -196,8 +203,10 @@ def _check_decisions(wf: Workflow, report: ValidationReport, source: Any) -> Non
 
     - Its questions write `<name>` and `<name>_confidence`: a question named like another's
       probability would write the same output twice.
-    - The contract declares it before the engine runs it (S52-04): until then a workflow that uses
-      one is refused, so that a decision step is never taken as a transition that does nothing.
+
+    What depends on the project — a gateway that serves `/v1/systemone`, a catalogue entry with the
+    `decide` usage — is checked where the project is known: when the API saves the workflow
+    (`decision.gateway_unsupported`, `decision.model_usage`) and again when the step runs.
     """
     for name, actor in wf.actors.items():
         if not isinstance(actor, DecisionActor):
@@ -209,14 +218,6 @@ def _check_decisions(wf: Workflow, report: ValidationReport, source: Any) -> Non
                 f"the decision `{name}` writes the output `{twice}` twice: a question is named like another "
                 "question's probability",
                 ["actors", name, "questions"],
-                source,
-            )
-        if any(t.by == name for t in wf.transitions):
-            report.error(
-                "decision.not_runnable",
-                f"the decision `{name}` is declared, but this platform does not run decision steps yet "
-                "(ADR 0121, S52-04)",
-                ["actors", name],
                 source,
             )
 
