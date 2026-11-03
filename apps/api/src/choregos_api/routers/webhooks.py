@@ -354,13 +354,7 @@ async def _dispatch(
             )
             item.temporal_wf_id = workflow_id
         if event.type == InboundEventType.ITEM_MOVED:
-            # Not counted, not audited, no comment: Choregos's own mirror comes back as moves too.
-            logger.info(
-                "tracker move not applied: a card move is not a decision (ADR 0102)",
-                project=project.slug,
-                work_item=key,
-                to_status=event.payload.get("to_status"),
-            )
+            delivered += _card_move(session, project, event, item, created=created, key=key)
             continue
         if event.type == InboundEventType.HUMAN_DECISION:
             await _answer_tracker_command(session, project, item, event)
@@ -393,6 +387,24 @@ STARTS_BY_RULE = frozenset(
         InboundEventType.ITEM_MOVED,
     }
 )
+
+
+def _card_move(
+    session: Any, project: Project, event: InboundEvent, item: WorkItem, *, created: bool, key: str
+) -> int:
+    """A tracker card move (ADR 0102): never a decision, so never delivered. A move into a start rule's
+    state is how the item was born (S56-03): that birth is kept as a received event and counted."""
+    if created:
+        received_events.record(session, project, event, "created_work_item", item)
+        return 1
+    # Not counted, not audited, no comment: Choregos's own mirror comes back as moves too.
+    logger.info(
+        "tracker move not applied: a card move is not a decision (ADR 0102)",
+        project=project.slug,
+        work_item=key,
+        to_status=event.payload.get("to_status"),
+    )
+    return 0
 
 
 def _starts_by_rule(project: Project, event: InboundEvent) -> bool:

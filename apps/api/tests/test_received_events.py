@@ -76,14 +76,14 @@ async def test_each_event_says_what_the_platform_did_with_it(client: AsyncClient
     outcomes = [(e["work_item_key"], e["event_type"], e["outcome"]) for e in reversed(items)]
     assert outcomes == [
         ("ABC-1", "tracker.item.labeled", "created_work_item"),
-        ("ABC-1", "tracker.item.moved", "signalled"),
         ("ABC-1", "tracker.item.labeled", "labels_updated"),
         ("ABC-2", "tracker.item.labeled", "ignored_not_agent_ready"),
     ]
     first = items[-1]
     assert first["source"] == "jira" and first["delivery_id"] == "d-1" and first["work_item_id"]
     assert first["summary"] == "tracker.item.labeled · ABC-1 · label added: agent-ready"
-    assert "To Do → In Progress" in items[-2]["summary"]
+    # The card move (d-2) leaves no row: a card move is not a decision (ADR 0102).
+    assert all(e["event_type"] != "tracker.item.moved" for e in items)
 
 
 async def test_nothing_a_person_wrote_is_kept(client: AsyncClient, admin: str) -> None:
