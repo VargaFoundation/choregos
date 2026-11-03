@@ -5,7 +5,7 @@ import { expect, test } from "@playwright/test";
  * `PUT` answers as the real API now does: tested by the save itself.
  */
 test("the settings never print the raw word Unknown, and a save reads Connected", async ({ page }) => {
-  await page.goto("/p/billing-api/settings");
+  await page.goto("/p/billing-api/settings/connections");
   const scm = page.getByTestId("connecteur-scm");
   // Required, nothing behind it, nothing provided by the platform.
   await expect(scm.getByTestId("etat-scm")).toHaveText("Not connected");
@@ -21,7 +21,7 @@ test("the settings never print the raw word Unknown, and a save reads Connected"
 });
 
 test("a demo stand-in is named as one", async ({ page }) => {
-  await page.goto("/p/billing-api/settings");
+  await page.goto("/p/billing-api/settings/connections");
   await page.getByText("Add a connector").locator("..").getByRole("combobox").selectOption("cd");
   await page.getByRole("button", { name: "Add", exact: true }).click();
   const cd = page.getByTestId("connecteur-cd");
@@ -34,7 +34,7 @@ test("a demo stand-in is named as one", async ({ page }) => {
 });
 
 test("a failing connector says why", async ({ page }) => {
-  await page.goto("/p/checkout-web/settings");
+  await page.goto("/p/checkout-web/settings/connections");
   await expect(page.getByTestId("etat-cd")).toHaveText("Failing");
   await expect(page.getByTestId("connecteur-cd")).toContainText("401 from Argo CD");
   expect(await page.content()).not.toContain("Unknown");

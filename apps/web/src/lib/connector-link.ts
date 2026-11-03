@@ -11,5 +11,5 @@ export function orgConnectorHref(name: string): string {
 }
 
 export function projectConnectionsHref(slug: string): string {
-  return `/p/${encodeURIComponent(slug)}/settings#connections`;
+  return `/p/${encodeURIComponent(slug)}/settings/connections`;
 }

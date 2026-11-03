@@ -48,6 +48,12 @@ const PAGES = [
   "/agents/onboarding-coordinator?tab=definition&edit=1",
   "/agents/onboarding-coordinator?tab=history",
   "/p/billing-api/settings",
+  "/p/billing-api/settings/general",
+  "/p/billing-api/settings/connections",
+  "/p/billing-api/settings/agents",
+  "/p/billing-api/settings/security",
+  "/p/billing-api/settings/people",
+  "/p/billing-api/settings/danger",
   "/agents/architect?tab=history&compare=1..3",
   "/agents/onboarding-coordinator?tab=lifecycle",
   "/agents/onboarding-coordinator?tab=runs",
@@ -107,7 +113,7 @@ test("carte en cours d'édition sans violation sérieuse", async ({ page }) => {
 
 /** Les connecteurs d'un projet (S19-01) : la section seule — le reste des réglages a ses propres pages. */
 test("réglages : la section des connecteurs sans violation sérieuse", async ({ page }) => {
-  await page.goto("/p/billing-api/settings");
+  await page.goto("/p/billing-api/settings/connections");
   await page.getByTestId("connecteur-tracker").getByRole("button", { name: "Edit" }).click();
   const results = await new AxeBuilder({ page })
     .include('[data-testid="connecteurs"]')

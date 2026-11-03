@@ -1,74 +1,68 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { use } from "react";
-import { A2aSection } from "@/components/project-settings/a2a-section";
-import { AgentsModelsSection } from "@/components/project-settings/agents-models-section";
-import { ConnectionsSection } from "@/components/project-settings/connections-section";
-import { DangerZoneSection } from "@/components/project-settings/danger-zone-section";
-import { GeneralSection } from "@/components/project-settings/general-section";
-import { ProjectNetworkCard } from "@/components/project/network-card";
-import { SettingsSection } from "@/components/project-settings/section";
-import { GuardrailsSection } from "@/components/project-settings/guardrails-section";
-import { KnowledgeMemorySection } from "@/components/project-settings/knowledge-memory-section";
-import { NotificationsSection } from "@/components/project-settings/notifications-section";
-import { PeopleSection } from "@/components/project-settings/people-section";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { use, useEffect } from "react";
+import { groupOfAnchor, settingsHref, SETTINGS_GROUPS } from "@/components/project-settings/groups";
 import { ReadinessPanel } from "@/components/project-settings/readiness-panel";
-import { SettingsNav } from "@/components/project-settings/settings-nav";
-import { ToolsSection } from "@/components/project-settings/tools-section";
-
-/** The sections of the page, in reading order: what the project is connected to first. */
-const SECTIONS = [
-  { id: "readiness", label: "Readiness" },
-  { id: "general", label: "General" },
-  { id: "connections", label: "Connections" },
-  { id: "agents-models", label: "Agents & models" },
-  { id: "guardrails", label: "Guardrails" },
-  { id: "network", label: "Network" },
-  { id: "notifications", label: "Notifications" },
-  { id: "tools", label: "Tools" },
-  { id: "a2a", label: "A2A" },
-  { id: "people", label: "People" },
-  { id: "knowledge-memory", label: "Knowledge & memory" },
-  { id: "danger-zone", label: "Danger zone" },
-];
+import { cn } from "@/lib/cn";
+import { HUE_CLASSES } from "@/lib/workflow-hue";
 
 /**
- * A project's settings, and they are edited here (S40-03b). The page only COMPOSES sections, one file
- * each under `components/project-settings/`, so a later section is added without touching the others:
- * the readiness panel (S40-06c) sits on top and every field of the project's configuration has a section.
- *
- * Before: one two-column grid of unrelated cards with no heading, no way to tell what is required from
- * what is optional, a raw 380 px YAML editor, and a connector row printing the raw kind, the raw state
- * and no icon.
+ * A project's settings, their first page (S55-07): what the project still lacks to run, then its groups
+ * of settings as cards — each with its icon, its hue, what it is for and what it holds. A link to an
+ * old anchor (`/settings#tools`, the API's `#agents`) lands on the group that holds it.
  */
-export default function SettingsPage({ params }: { params: Promise<{ slug: string }> }) {
+export default function SettingsOverviewPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
+  const router = useRouter();
+  useEffect(() => {
+    const anchor = window.location.hash.slice(1);
+    if (anchor && groupOfAnchor(anchor)) router.replace(settingsHref(slug, anchor));
+  }, [router, slug]);
   return (
-    <div className="gap-8 space-y-4 lg:grid lg:grid-cols-[11rem_minmax(0,1fr)] lg:space-y-0">
-      <SettingsNav sections={SECTIONS} />
-      <div className="min-w-0 space-y-10">
-        <section id="readiness" aria-label="Readiness" className="scroll-mt-4 empty:hidden">
-          <ReadinessPanel slug={slug} />
-        </section>
-        <GeneralSection slug={slug} />
-        <ConnectionsSection slug={slug} />
-        <AgentsModelsSection slug={slug} />
-        <GuardrailsSection slug={slug} />
-        <SettingsSection
-          id="network"
-          title="Network"
-          lead="The hosts this project's runs may reach, within what the organisation allows."
-        >
-          <ProjectNetworkCard slug={slug} />
-        </SettingsSection>
-        <NotificationsSection slug={slug} />
-        <ToolsSection slug={slug} />
-        <A2aSection slug={slug} />
-        <PeopleSection slug={slug} />
-        <KnowledgeMemorySection slug={slug} />
-        <DangerZoneSection slug={slug} />
-      </div>
-    </div>
+    <>
+      <section id="readiness" aria-label="Readiness" className="scroll-mt-4 empty:hidden">
+        <ReadinessPanel slug={slug} />
+      </section>
+      <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label="Settings groups overview">
+        {SETTINGS_GROUPS.map((group) => {
+          const Icon = group.icon;
+          const hue = group.hue ? HUE_CLASSES[group.hue] : undefined;
+          return (
+            <li key={group.id}>
+              <Link
+                href={`/p/${encodeURIComponent(slug)}/settings/${group.id}`}
+                data-testid={`settings-group-${group.id}`}
+                className={cn(
+                  "raised flex h-full gap-3 rounded-md border border-line border-t-4 p-4 no-underline transition-colors hover:border-line-strong",
+                  hue ? hue.stripe : "border-t-failed",
+                )}
+              >
+                <span
+                  aria-hidden
+                  className={cn(
+                    "flex size-9 shrink-0 items-center justify-center rounded-md border",
+                    hue ? cn(hue.soft, hue.line, hue.ink) : "border-failed-line bg-failed-soft text-failed-ink",
+                  )}
+                >
+                  <Icon className="size-5" strokeWidth={1.75} />
+                </span>
+                <span className="min-w-0 space-y-1">
+                  <span className="block font-medium text-ink">{group.label}</span>
+                  <span className="block text-sm text-ink-muted">{group.lead}</span>
+                  {group.sections.length > 1 && (
+                    <span className="block text-xs text-ink-muted">
+                      {group.sections.map((section) => section.label).join(" · ")}
+                    </span>
+                  )}
+                </span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </>
   );
 }

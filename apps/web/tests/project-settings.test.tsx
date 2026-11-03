@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { Suspense } from "react";
 import { describe, expect, it, vi } from "vitest";
+import SettingsGroupPage from "@/app/p/[slug]/settings/[group]/page";
 import SettingsPage from "@/app/p/[slug]/settings/page";
 import { manquantEnPremier } from "@/components/connecteurs";
 import { configurationEnClair, workflowsQuiExigent } from "@/components/project-settings/connector-card";
@@ -108,13 +109,20 @@ vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme", me: null }) 
 vi.mock("@/components/operations-du-projet", () => ({ OperationsDuProjet: () => null }));
 vi.mock("next/dynamic", () => ({ default: () => () => null }));
 
-async function renderPage() {
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: vi.fn() }), usePathname: () => "/p/dev/settings", notFound: vi.fn() }));
+
+/** The settings' overview, or one of its groups (S55-07): the sections are no longer on one page. */
+async function renderPage(group?: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   await act(async () => {
     render(
       <QueryClientProvider client={client}>
         <Suspense fallback={null}>
-          <SettingsPage params={Promise.resolve({ slug: "dev" })} />
+          {group ? (
+            <SettingsGroupPage params={Promise.resolve({ slug: "dev", group })} />
+          ) : (
+            <SettingsPage params={Promise.resolve({ slug: "dev" })} />
+          )}
         </Suspense>
       </QueryClientProvider>,
     );
@@ -124,7 +132,7 @@ async function renderPage() {
 describe("the project settings page (S40-03b)", () => {
   it("a draft project can be activated from General, and an active one shows no button", async () => {
     vi.mocked(api.project).mockResolvedValueOnce({ ...structuredClone(projectDto), status: "draft", template_ref: null, config: { slug: "dev", org: "acme" } } as never);
-    await renderPage();
+    await renderPage("general");
     expect(await screen.findByTestId("project-status")).toHaveTextContent("draft");
     fireEvent.click(screen.getByRole("button", { name: "Activate" }));
     await vi.waitFor(() => expect(api.provision).toHaveBeenCalledWith("dev"));
@@ -138,26 +146,26 @@ describe("the project settings page (S40-03b)", () => {
     expect(activationGesture({ status: "suspended", template_ref: null, config })).toBe("Resume");
   });
 
-  it("renders its sections in order, each with a heading", async () => {
-    await renderPage();
-    await screen.findByTestId("connecteur-tracker");
-    const titles = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
-    expect(titles.filter((t) => ["Connections", "Agents & models", "Guardrails", "Tools"].includes(t ?? ""))).toEqual([
-      "Connections",
-      "Agents & models",
-      "Guardrails",
-      "Tools",
+  it("renders each group's sections in order, each with a heading (S55-07)", async () => {
+    await renderPage("agents");
+    await screen.findByTestId("section-a2a");
+    expect(screen.getAllByTestId(/^section-/).map((section) => section.getAttribute("data-testid"))).toEqual([
+      "section-agents-models",
+      "section-tools",
+      "section-a2a",
+      "section-knowledge-memory",
     ]);
+    expect(screen.queryByTestId("section-connections")).toBeNull();
   });
 
   it("puts a required connector nothing provides before the others", async () => {
-    await renderPage();
+    await renderPage("connections");
     const cards = (await screen.findAllByTestId(/^connecteur-/)).map((card) => card.getAttribute("data-testid"));
     expect(cards.slice(0, 1)).toEqual(["connecteur-scm"]);
   });
 
   it("shows the demo badge on a demo CD, and says the runtime is provided by the platform", async () => {
-    await renderPage();
+    await renderPage("connections");
     const cd = await screen.findByTestId("connecteur-cd");
     expect(within(cd).getByText("Demo stand-in")).toBeTruthy();
     expect(within(cd).getByText("Not tested yet")).toBeTruthy();
@@ -166,24 +174,35 @@ describe("the project settings page (S40-03b)", () => {
   });
 
   it("a GitHub card says which account's installation it goes through (no installation id)", async () => {
-    await renderPage();
+    await renderPage("connections");
     const card = await screen.findByTestId("connecteur-tracker");
     expect(await within(card).findByText("via the Choregos App on acme")).toBeTruthy();
     expect(card.textContent).not.toMatch(/installation id/i);
   });
 
-  it("renders the new sections, each with a heading, and the readiness panel on top", async () => {
+  it("opens on what the project lacks and its groups of settings, each a link (S55-07)", async () => {
     await renderPage();
     await screen.findByTestId("readiness-panel");
-    const titles = screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
-    for (const title of ["General", "Notifications", "People", "Knowledge & memory", "Danger zone"]) expect(titles).toContain(title);
-    expect(titles.indexOf("General")).toBeLessThan(titles.indexOf("Connections"));
     expect((await screen.findByTestId("readiness-item-notifications")).getAttribute("data-state")).toBe("todo");
+    const groups = within(screen.getByRole("list", { name: "Settings groups overview" })).getAllByRole("link");
+    expect(groups.map((link) => link.getAttribute("href"))).toEqual([
+      "/p/dev/settings/general",
+      "/p/dev/settings/connections",
+      "/p/dev/settings/agents",
+      "/p/dev/settings/security",
+      "/p/dev/settings/people",
+      "/p/dev/settings/danger",
+    ]);
+    expect(screen.queryByTestId("section-general")).toBeNull();
+  });
+
+  it("shows the people of the project on their own page", async () => {
+    await renderPage("people");
     expect((await screen.findByTestId("people-count")).textContent).toContain("2 on this project: 1 project owner, 1 developer");
   });
 
   it("the general form saves repo.test_command and keeps the rest of the configuration", async () => {
-    await renderPage();
+    await renderPage("general");
     const section = await screen.findByTestId("section-general");
     fireEvent.change(await within(section).findByLabelText("Test command"), { target: { value: "pytest -q" } });
     fireEvent.click(within(section).getByRole("button", { name: "Save general settings" }));
@@ -199,7 +218,7 @@ describe("the project settings page (S40-03b)", () => {
   });
 
   it("the notifications form saves the Slack channel and the addresses", async () => {
-    await renderPage();
+    await renderPage("connections");
     const section = await screen.findByTestId("section-notifications");
     fireEvent.change(await within(section).findByLabelText("Slack channel"), { target: { value: "#choregos-dev" } });
     fireEvent.change(within(section).getByLabelText("E-mail addresses"), { target: { value: "po@acme.dev, lead@acme.dev" } });
@@ -210,7 +229,7 @@ describe("the project settings page (S40-03b)", () => {
   });
 
   it("the A2A section saves the file limit in bytes, and the default is not written down", async () => {
-    await renderPage();
+    await renderPage("agents");
     const section = await screen.findByTestId("section-a2a");
     const field = await within(section).findByLabelText("Largest file a message may carry (MiB)");
     expect((field as HTMLInputElement).value).toBe("10");
@@ -231,14 +250,14 @@ describe("the project settings page (S40-03b)", () => {
   });
 
   it("opens a drawer to configure a connector", async () => {
-    await renderPage();
+    await renderPage("connections");
     const scm = await screen.findByTestId("connecteur-scm");
     fireEvent.click(within(scm).getByRole("button", { name: "Configure" }));
     expect(screen.getAllByRole("dialog", { hidden: true }).some((d) => d.hasAttribute("open"))).toBe(true);
   });
 
   it("the runtime form lists only the executors the deployment runs", async () => {
-    await renderPage();
+    await renderPage("connections");
     const runtime = await screen.findByTestId("connecteur-runtime");
     fireEvent.click(within(runtime).getByRole("button", { name: "Configure" }));
     const options = within(runtime).getAllByRole("option", { hidden: true }).map((o) => o.textContent);

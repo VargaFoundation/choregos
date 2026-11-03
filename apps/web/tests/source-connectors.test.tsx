@@ -25,7 +25,7 @@ const source = (id: string, kind: string, connector: string | null): KnowledgeSo
 describe("where a connector is read", () => {
   it("an organisation connector is a card of Installed connectors, a project's is in its Connections", () => {
     expect(orgConnectorHref("sp docs")).toBe("/admin/connectors?connector=sp%20docs");
-    expect(projectConnectionsHref("billing-api")).toBe("/p/billing-api/settings#connections");
+    expect(projectConnectionsHref("billing-api")).toBe("/p/billing-api/settings/connections");
   });
 });
 
@@ -69,7 +69,7 @@ describe("a memory says which store holds it", () => {
     const { unmount } = wrap(<ProjectMemoryStore slug="billing-api" />);
     const store = await screen.findByTestId("memory-store");
     expect(store).toHaveTextContent("Stored in the project's memory connector (lexical).");
-    expect(within(store).getByRole("link")).toHaveAttribute("href", "/p/billing-api/settings#connections");
+    expect(within(store).getByRole("link")).toHaveAttribute("href", "/p/billing-api/settings/connections");
     unmount();
 
     vi.mocked(api.connectors).mockResolvedValue([project("tracker", "jira")]);

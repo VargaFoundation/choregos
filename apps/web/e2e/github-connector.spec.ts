@@ -9,7 +9,7 @@ import { expect, test } from "@playwright/test";
 const SHOTS = process.env.GITHUB_SHOTS;
 
 test("configure the scm GitHub connector without ever seeing an installation id", async ({ page }) => {
-  await page.goto("/p/dev/settings");
+  await page.goto("/p/dev/settings/connections");
   const scm = page.getByTestId("connecteur-scm");
   await expect(scm.getByTestId("github-via")).toHaveText("via the Choregos App on DiametralGroup");
   await scm.getByRole("button", { name: "Edit" }).click();
@@ -29,7 +29,7 @@ test("configure the scm GitHub connector without ever seeing an installation id"
 
 test("a repository of an account without the App is refused, with the way to install it", async ({ page }) => {
   await page.route("https://github.com/**", (route) => route.fulfill({ status: 200, contentType: "text/html", body: "<title>GitHub</title>" }));
-  await page.goto("/p/dev/settings");
+  await page.goto("/p/dev/settings/connections");
   await page.getByTestId("connecteur-scm").getByRole("button", { name: "Edit" }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("button", { name: "Type it instead" }).click();
@@ -44,7 +44,7 @@ test("a repository of an account without the App is refused, with the way to ins
 });
 
 test("the picker has no serious accessibility violation", async ({ page }) => {
-  await page.goto("/p/dev/settings");
+  await page.goto("/p/dev/settings/connections");
   await page.getByTestId("connecteur-scm").getByRole("button", { name: "Edit" }).click();
   await expect(page.getByTestId("github-repo-field")).toBeVisible();
   const result = await new AxeBuilder({ page }).analyze();

@@ -51,7 +51,7 @@ export function A2aAgent({ org }: { org: string }) {
               {projects.data!.items.map((project) => (
                 <li key={project.id}>
                   {project.name}: up to {formatMiB(a2aFileLimit(project.config))}{" "}
-                  <Link href={`/p/${project.slug}/settings#a2a`} className="text-xs">
+                  <Link href={`/p/${project.slug}/settings/agents#a2a`} className="text-xs">
                     change it in its settings
                   </Link>
                 </li>

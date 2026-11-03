@@ -313,6 +313,13 @@ const PAGES_OF_A_SECTION: Record<string, string> = {
   "/workflows/catalogue": "Library",
   "/workflows/library": "Library",
   "/workflows/new": "New workflow",
+  // The settings' groups (S55-07, `components/project-settings/groups.tsx`).
+  "/settings/general": "General",
+  "/settings/connections": "Connections",
+  "/settings/agents": "Agents",
+  "/settings/security": "Guardrails",
+  "/settings/people": "People",
+  "/settings/danger": "Danger zone",
 };
 
 /** The section a project path is in, with its family's hue: what a page's header shows (S55-02). */
