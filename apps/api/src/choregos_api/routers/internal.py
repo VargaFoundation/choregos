@@ -36,7 +36,6 @@ from ..config import get_settings
 from ..db.models import (
     AgentSessionRecord,
     CostLedger,
-    HumanRequest,
     Organization,
     Project,
     Run,
@@ -62,7 +61,14 @@ from ..schemas import (
 from ..schemas.knowledge import KnowledgeSearchRequest, KnowledgeSearchResult
 from ..schemas.memory import RunMemoryHit, RunMemorySearch
 from ..schemas.network import EgressToken, NetworkDecisionBatch, RunNetwork
-from ..services import effective_policy, persist_event, ranger_les_sorties, web_fetch, web_search
+from ..services import (
+    effective_policy,
+    new_human_request,
+    persist_event,
+    ranger_les_sorties,
+    web_fetch,
+    web_search,
+)
 from ..services.agent_hosted_sessions import session_network
 from ..services.artifacts import (
     ArtifactCorruptedError,
@@ -351,13 +357,12 @@ async def post_scope_change(
         item.allowed_paths = granted
         return ScopeChangeDecision(decision="granted", allowed_paths=granted, reason="granted automatically")
 
-    request_row = HumanRequest(
+    request_row = new_human_request(
         work_item_id=item.id,
         project_id=project.id,
         transition_id=run.transition_id,
         kind="scope_change",
         payload={"paths": new_paths, "justification": body.justification, "run_id": run.id},
-        requested_at=utcnow(),
     )
     session.add(request_row)
     await session.flush()
@@ -378,13 +383,12 @@ async def post_scope_change(
 async def post_question(id: str, body: QuestionIn, session: Db, claims: RunAuth) -> dict[str, str]:
     """L'agent demande un arbitrage : le run devra se terminer en `needs_human`."""
     run, item, project = await _run_and_item(session, id)
-    request_row = HumanRequest(
+    request_row = new_human_request(
         work_item_id=item.id,
         project_id=project.id,
         transition_id=run.transition_id,
         kind="question",
         payload={"question": body.text, "options": body.options, "run_id": run.id},
-        requested_at=utcnow(),
     )
     session.add(request_row)
     await session.flush()
