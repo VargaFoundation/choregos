@@ -47,6 +47,17 @@ def _base(delivery_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def person_of(user: dict[str, Any] | None) -> str | None:
+    """A Jira user in words: `Display Name <e-mail>`, or the name alone when the site hides the
+    e-mail (Jira Cloud does, per the user's profile visibility)."""
+    user = user or {}
+    name = str(user.get("displayName") or "").strip()
+    email = str(user.get("emailAddress") or "").strip()
+    if name and email:
+        return f"{name} <{email}>"
+    return name or email or None
+
+
 def _body(payload: dict[str, Any]) -> dict[str, Any]:
     fields = _fields(payload)
     issue = _issue(payload)
@@ -57,6 +68,8 @@ def _body(payload: dict[str, Any]) -> dict[str, Any]:
         "labels": list(fields.get("labels") or []),
         "item_type": ((fields.get("issuetype") or {}).get("name")),
         "state": ((fields.get("status") or {}).get("name")),
+        # Who filed the issue: an agent whose rules depend on the requester reads it (#1179).
+        "reporter": person_of(fields.get("reporter")),
     }
 
 

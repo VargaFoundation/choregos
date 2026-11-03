@@ -46,6 +46,16 @@ function wrap(node: React.ReactNode) {
 }
 
 describe("the agents' page", () => {
+  it("hides retired agents until asked for", async () => {
+    vi.mocked(api.agents).mockResolvedValue([agent("redacteur"), { ...agent("l-k-jn"), lifecycle: "retired" } as Agent]);
+    vi.mocked(api.agentMetricsList).mockResolvedValue([]);
+    wrap(<AgentsPage />);
+    await screen.findByTestId("agent-redacteur");
+    expect(screen.queryByTestId("agent-l-k-jn")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show retired (1)" }));
+    expect(await screen.findByTestId("agent-l-k-jn")).toBeInTheDocument();
+  });
+
   it("shows the registry with its 30-day columns, from two requests whatever the number of agents", async () => {
     vi.mocked(api.agents).mockResolvedValue([agent("redacteur"), agent("relecteur"), agent("claude-de-lea", "external")]);
     vi.mocked(api.agentMetricsList).mockResolvedValue([

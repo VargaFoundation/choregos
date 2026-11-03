@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import pathlib
 from datetime import timedelta
 from typing import Any
@@ -20,9 +19,9 @@ from typing import Any
 import pytest
 from choregos_contracts import StageResult, StageStatus
 
-from .conftest import Fixture, refine_result
+from .conftest import Fixture, recording_history, refine_result
+from .kits.escalation import requests_of
 from .test_interpreter import _runs, _wait_state, _wait_until, scripted, start
-from .test_reprise_apres_escalade import _demandes
 
 pytestmark = pytest.mark.asyncio
 
@@ -43,7 +42,7 @@ def _can_suspend(setup: Fixture) -> Any:
 
 
 async def _answer(handle: Any, setup: Fixture) -> None:
-    asked = next(d for d in await _demandes(setup) if d.kind == "question")
+    asked = next(d for d in await requests_of(setup) if d.kind == "question")
     await handle.signal(
         "human_decision",
         {
@@ -145,7 +144,7 @@ async def test_an_answered_question_costs_one_run_not_two(
     item_runs = (await _work_item_totals(setup)).get("runs")
     assert item_runs == 1, "the work item counts one run"
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
-    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+    if recording_history():
         target = HISTORIES / "wi-suspend-around-human-S35-03.json"
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 

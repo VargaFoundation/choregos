@@ -6,12 +6,28 @@ import { DEFAULT_WORKFLOW_HINT } from "@/components/workflows/timing";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { use, useState } from "react";
 import { GesteConfirme } from "@/components/geste-confirme";
-import { Badge, Button, buttonClasses, Card, Empty, ErrorNote, EtatDeLecture, Input, PhraseDuMoteur, Select } from "@/components/ui";
+import { Badge, Button, buttonClasses, Card, Empty, ErrorNote, EtatDeLecture, Input, PhraseDuMoteur, Select, Textarea } from "@/components/ui";
 import { api } from "@/lib/api";
 import { shortDate } from "@/lib/format";
-import type { WorkflowRouting, WorkflowSummary } from "@/lib/types";
+import type { RoutingPreview, WorkflowRouting, WorkflowSummary } from "@/lib/types";
 
 type Regle = WorkflowRouting["rules"][number];
+type Strategy = NonNullable<WorkflowRouting["strategy"]>;
+
+/** The three strategies of ADR 0116, each in one sentence. */
+const STRATEGIES: Array<{ value: Strategy; label: string; says: string }> = [
+  { value: "labels", label: "Labels and types", says: "The rules alone; a request that matches none goes to the default." },
+  {
+    value: "rules_then_llm",
+    label: "Rules, then a small model",
+    says: "The rules first; when none matches, a small model reads the request and picks a workflow, else the default.",
+  },
+  {
+    value: "llm",
+    label: "A small model",
+    says: "A small model reads every request and picks a workflow, else the default; the rules are kept but not read.",
+  },
+];
 
 /** Les conditions d'une règle de routage, en clair : « étiqueté incident », « type Bug ». */
 function condition(rule: Regle): string {
@@ -99,11 +115,16 @@ export default function WorkflowsPage({ params }: { params: Promise<{ slug: stri
           <Routage
             slug={slug}
             routing={routing.data}
-            noms={workflows.data.map((w) => w.name)}
+            workflows={workflows.data}
             onChange={relire}
           />
         )}
       </Card>
+      {routing.data && workflows.data && workflows.data.length > 0 && (
+        <Card title="Try the routing">
+          <TryRouting slug={slug} />
+        </Card>
+      )}
     </div>
   );
 }
@@ -146,11 +167,10 @@ function CarteDeWorkflow({
         <dd>{workflow.open_items}</dd>
         <dt className="text-ink-muted">Routed here</dt>
         <dd>
-          {routed.length > 0
-            ? routed.map(condition).join("; ")
-            : workflow.is_default
-              ? "Whatever no rule claims"
-              : "Only when a request names it"}
+          {[
+            ...routed.map(condition),
+            ...((routing?.strategy ?? "labels") !== "labels" ? ["when the model chooses it"] : []),
+          ].join("; ") || (workflow.is_default ? "Whatever no rule claims" : "Only when a request names it")}
         </dd>
         {workflow.created_by && (
           <>
@@ -216,32 +236,47 @@ function CarteDeWorkflow({
 /**
  * Les règles de routage, dans leur ordre : la première qui correspond l'emporte. On les change en
  * brouillon, et on enregistre d'un geste — une règle retirée par erreur ne part pas seule.
+ *
+ * A rule is edited in place: "Edit" loads it into the form, which then updates it instead of adding
+ * one. The default is part of the same draft, so a project with none can choose it here.
  */
 function Routage({
   slug,
   routing,
-  noms,
+  workflows,
   onChange,
 }: {
   slug: string;
   routing: WorkflowRouting;
-  noms: string[];
+  workflows: WorkflowSummary[];
   onChange: () => Promise<void>;
 }) {
+  const names = workflows.map((w) => w.name);
   const [regles, setRegles] = useState<Regle[] | null>(null);
   const courantes = regles ?? routing.rules;
+  const [defaultDraft, setDefaultDraft] = useState<string | null>(null);
+  const currentDefault = defaultDraft ?? routing.default;
+  const [strategyDraft, setStrategyDraft] = useState<Strategy | null>(null);
+  const currentStrategy: Strategy = strategyDraft ?? routing.strategy ?? "labels";
+  const [hintsDraft, setHintsDraft] = useState<Record<string, string> | null>(null);
+  const currentHints = hintsDraft ?? routing.hints ?? {};
   const [labels, setLabels] = useState("");
+  const [labelsAll, setLabelsAll] = useState("");
   const [type, setType] = useState("");
   const [cible, setCible] = useState("");
+  const [editing, setEditing] = useState<number | null>(null);
   const [occupe, setOccupe] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const cibleChoisie = cible || noms.find((n) => n !== routing.default) || noms[0] || "";
+  const cibleChoisie = cible || names.find((n) => n !== currentDefault) || names[0] || "";
   const nouvelle: Regle = {
-    when: { labels_any: etiquettes(labels), labels_all: [], item_type: type.trim() || null },
+    when: { labels_any: etiquettes(labels), labels_all: etiquettes(labelsAll), item_type: type.trim() || null },
     workflow: cibleChoisie,
   };
-  const ajoutable = Boolean(cibleChoisie) && (nouvelle.when.labels_any!.length > 0 || Boolean(nouvelle.when.item_type));
+  const ajoutable =
+    Boolean(cibleChoisie) &&
+    (nouvelle.when.labels_any!.length > 0 || nouvelle.when.labels_all!.length > 0 || Boolean(nouvelle.when.item_type));
+  const dirty = regles !== null || defaultDraft !== null || strategyDraft !== null || hintsDraft !== null;
 
   function changer(suivantes: Regle[]) {
     setMessage(null);
@@ -253,14 +288,44 @@ function Routage({
     suivantes.splice(index + sens, 0, regle!);
     changer(suivantes);
   }
+  function resetForm() {
+    setEditing(null);
+    setLabels("");
+    setLabelsAll("");
+    setType("");
+    setCible("");
+  }
+  function edit(index: number) {
+    const rule = courantes[index]!;
+    setEditing(index);
+    setLabels((rule.when.labels_any ?? []).join(", "));
+    setLabelsAll((rule.when.labels_all ?? []).join(", "));
+    setType(rule.when.item_type ?? "");
+    setCible(rule.workflow);
+  }
+  function discard() {
+    setRegles(null);
+    setDefaultDraft(null);
+    setStrategyDraft(null);
+    setHintsDraft(null);
+    resetForm();
+  }
 
   async function enregistrer() {
-    if (!regles) return;
+    if (!dirty || !currentDefault) return;
     setOccupe(true);
     setErreur(null);
     try {
-      await api.putWorkflowRouting(slug, { default: routing.default, rules: regles });
+      await api.putWorkflowRouting(slug, {
+        default: currentDefault,
+        rules: courantes,
+        strategy: currentStrategy,
+        hints: currentHints,
+      });
       setRegles(null);
+      setDefaultDraft(null);
+      setStrategyDraft(null);
+      setHintsDraft(null);
       setMessage("Routing saved — it applies to the next request that comes in");
       await onChange();
     } catch (cause) {
@@ -272,28 +337,94 @@ function Routage({
 
   return (
     <div className="space-y-4 text-sm">
-      <p className="text-ink-muted">
-        A request from a tracker goes to the first rule it matches, from the top; one that matches none goes to the
-        default, <strong className="text-ink">{routing.default || "—"}</strong>.
+      <label className="flex flex-wrap items-center gap-2">
+        <span className="text-ink-muted">Strategy</span>
+        <Select
+          value={currentStrategy}
+          onChange={(event) => {
+            setMessage(null);
+            const next = event.target.value as Strategy;
+            setStrategyDraft(next === (routing.strategy ?? "labels") ? null : next);
+          }}
+          className="w-auto"
+        >
+          {STRATEGIES.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
+          ))}
+        </Select>
+      </label>
+      <p className="text-ink-muted" data-testid="strategy-says">
+        {STRATEGIES.find((s) => s.value === currentStrategy)!.says} A request that names its workflow always goes there.
       </p>
+      <label className="flex flex-wrap items-center gap-2">
+        <span className="text-ink-muted">Default workflow</span>
+        <Select
+          value={currentDefault}
+          onChange={(event) => {
+            setMessage(null);
+            setDefaultDraft(event.target.value === routing.default ? null : event.target.value);
+          }}
+          className="w-auto"
+        >
+          {!currentDefault && (
+            <option value="" disabled>
+              Choose the default
+            </option>
+          )}
+          {names.map((nom) => (
+            <option key={nom} value={nom}>
+              {nom}
+            </option>
+          ))}
+        </Select>
+      </label>
       {courantes.length === 0 ? (
         <p className="text-ink-muted">No rule — every request that names no workflow goes to the default.</p>
       ) : (
         <ol className="divide-y divide-line border-y border-line" aria-label="Routing rules" data-testid="regles">
           {courantes.map((regle, index) => (
-            <li key={`${index}-${regle.workflow}`} className="flex flex-wrap items-center gap-2 py-2">
+            <li
+              key={`${index}-${regle.workflow}`}
+              className={`flex flex-wrap items-center gap-2 py-2 ${editing === index ? "bg-surface-muted" : ""}`}
+              aria-current={editing === index ? "true" : undefined}
+            >
               <span className="w-5 text-ink-muted">{index + 1}.</span>
               <span className="min-w-0 flex-1">
                 {condition(regle)} → <strong>{regle.workflow}</strong>
               </span>
-              <Button size="sm" onClick={() => deplacer(index, -1)} disabled={index === 0}>
-                Up<span className="sr-only"> rule {index + 1}</span>
+              <Button
+                size="sm"
+                aria-label={`Edit rule ${index + 1}`}
+                onClick={() => edit(index)}
+                disabled={editing !== null}
+              >
+                Edit
               </Button>
-              <Button size="sm" onClick={() => deplacer(index, 1)} disabled={index === courantes.length - 1}>
-                Down<span className="sr-only"> rule {index + 1}</span>
+              <Button
+                size="sm"
+                aria-label={`Up rule ${index + 1}`}
+                onClick={() => deplacer(index, -1)}
+                disabled={index === 0 || editing !== null}
+              >
+                Up
               </Button>
-              <Button size="sm" onClick={() => changer(courantes.filter((_, i) => i !== index))}>
-                Remove<span className="sr-only"> rule {index + 1}</span>
+              <Button
+                size="sm"
+                aria-label={`Down rule ${index + 1}`}
+                onClick={() => deplacer(index, 1)}
+                disabled={index === courantes.length - 1 || editing !== null}
+              >
+                Down
+              </Button>
+              <Button
+                size="sm"
+                aria-label={`Remove rule ${index + 1}`}
+                onClick={() => changer(courantes.filter((_, i) => i !== index))}
+                disabled={editing !== null}
+              >
+                Remove
               </Button>
             </li>
           ))}
@@ -302,13 +433,14 @@ function Routage({
 
       <form
         className="flex flex-wrap items-end gap-2"
-        aria-label="New routing rule"
+        aria-label={editing === null ? "New routing rule" : `Edit routing rule ${editing + 1}`}
         onSubmit={(event) => {
           event.preventDefault();
           if (!ajoutable) return;
-          changer([...courantes, nouvelle]);
-          setLabels("");
-          setType("");
+          changer(
+            editing === null ? [...courantes, nouvelle] : courantes.map((r, i) => (i === editing ? nouvelle : r)),
+          );
+          resetForm();
         }}
       >
         <label className="flex min-w-0 flex-col gap-1">
@@ -317,6 +449,15 @@ function Routage({
             value={labels}
             onChange={(event) => setLabels(event.target.value)}
             placeholder="incident, sev1"
+            className="w-auto"
+          />
+        </label>
+        <label className="flex min-w-0 flex-col gap-1">
+          <span className="text-xs text-ink-muted">Labelled (all of)</span>
+          <Input
+            value={labelsAll}
+            onChange={(event) => setLabelsAll(event.target.value)}
+            placeholder="customer, urgent"
             className="w-auto"
           />
         </label>
@@ -336,7 +477,7 @@ function Routage({
             onChange={(event) => setCible(event.target.value)}
             className="w-auto"
           >
-            {noms.map((nom) => (
+            {names.map((nom) => (
               <option key={nom} value={nom}>
                 {nom}
               </option>
@@ -344,8 +485,13 @@ function Routage({
           </Select>
         </label>
         <Button size="sm" type="submit" disabled={!ajoutable} aria-describedby="regle-incomplete">
-          Add the rule
+          {editing === null ? "Add the rule" : `Update rule ${editing + 1}`}
         </Button>
+        {editing !== null && (
+          <Button size="sm" onClick={resetForm}>
+            Cancel
+          </Button>
+        )}
         {!ajoutable && (
           <span id="regle-incomplete" className="self-center text-xs text-ink-muted">
             A rule needs a label or a type
@@ -353,13 +499,47 @@ function Routage({
         )}
       </form>
 
-      {regles && (
+      {currentStrategy !== "labels" && (
+        <fieldset className="space-y-3 border-t border-line pt-3" aria-label="What the model reads">
+          <legend className="text-xs text-ink-muted">
+            What the model reads about each workflow: its description, and a hint you write here — the requests it
+            takes, in the words people use.
+          </legend>
+          {workflows.map((w) => (
+            <label key={w.name} className="block space-y-1">
+              <span className="font-medium">{w.name}</span>
+              <span className="block text-xs text-ink-muted">{w.description || "No description in its YAML."}</span>
+              <Textarea
+                rows={2}
+                maxLength={500}
+                aria-label={`Routing hint for ${w.name}`}
+                value={currentHints[w.name] ?? ""}
+                placeholder="new hires, arrivals, first day"
+                onChange={(event) => {
+                  setMessage(null);
+                  setHintsDraft({ ...currentHints, [w.name]: event.target.value });
+                }}
+                className="w-full"
+              />
+            </label>
+          ))}
+        </fieldset>
+      )}
+
+      {dirty && (
         <div className="flex flex-wrap items-center gap-2 border border-line border-l-2 border-l-accent p-2">
-          <span className="flex-1">The routing has unsaved changes</span>
-          <Button size="sm" onClick={() => setRegles(null)} disabled={occupe}>
+          <span className="flex-1">
+            {currentDefault ? "The routing has unsaved changes" : "Choose a default workflow before saving"}
+          </span>
+          <Button size="sm" onClick={discard} disabled={occupe}>
             Discard
           </Button>
-          <Button size="sm" tone="primary" onClick={() => void enregistrer()} disabled={occupe}>
+          <Button
+            size="sm"
+            tone="primary"
+            onClick={() => void enregistrer()}
+            disabled={occupe || !currentDefault || editing !== null}
+          >
             Save the routing
           </Button>
         </div>
@@ -371,5 +551,77 @@ function Routage({
       )}
       {message && <p role="status">{message}</p>}
     </div>
+  );
+}
+
+/** Where a request would be born, with the saved routing (ADR 0116): nothing is created. */
+function TryRouting({ slug }: { slug: string }) {
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [labels, setLabels] = useState("");
+  const [occupe, setOccupe] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [answer, setAnswer] = useState<RoutingPreview | null>(null);
+
+  async function essayer() {
+    setOccupe(true);
+    setErreur(null);
+    try {
+      setAnswer(
+        await api.previewWorkflowRouting(slug, { title: title.trim(), body: body.trim() || null, labels: etiquettes(labels) }),
+      );
+    } catch (cause) {
+      setErreur(cause instanceof Error ? cause.message : "refused");
+    } finally {
+      setOccupe(false);
+    }
+  }
+
+  const BY: Record<RoutingPreview["by"], string> = {
+    explicit: "named in the request",
+    rule: "by a rule",
+    llm: "chosen by the model",
+    default: "the default",
+  };
+  return (
+    <form
+      className="space-y-2 text-sm"
+      aria-label="Try the routing"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (title.trim()) void essayer();
+      }}
+    >
+      <p className="text-ink-muted">
+        A request as it would arrive, against the saved routing. Nothing is created; when the model is asked, its call is
+        booked in the costs.
+      </p>
+      <label className="block space-y-1">
+        <span className="text-xs text-ink-muted">Title</span>
+        <Input value={title} onChange={(event) => setTitle(event.target.value)} className="w-full" />
+      </label>
+      <label className="block space-y-1">
+        <span className="text-xs text-ink-muted">Description</span>
+        <Textarea rows={3} value={body} onChange={(event) => setBody(event.target.value)} className="w-full" />
+      </label>
+      <label className="block space-y-1">
+        <span className="text-xs text-ink-muted">Labels</span>
+        <Input value={labels} onChange={(event) => setLabels(event.target.value)} placeholder="incident, sev1" className="w-full" />
+      </label>
+      <Button size="sm" type="submit" disabled={occupe || !title.trim()}>
+        Try
+      </Button>
+      {answer && (
+        <p role="status" data-testid="routing-preview">
+          → <strong>{answer.workflow ?? "no workflow"}</strong> ({BY[answer.by]})
+          {answer.reason ? `: ${answer.reason}` : ""}
+        </p>
+      )}
+      {erreur && (
+        <ErrorNote>
+          <PhraseDuMoteur texte={erreur} />
+        </ErrorNote>
+      )}
+    </form>
   );
 }

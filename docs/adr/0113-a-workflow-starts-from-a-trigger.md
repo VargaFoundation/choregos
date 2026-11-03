@@ -1,7 +1,7 @@
 # 0113 — A workflow starts from a trigger: tracker, HTTP, schedule or a person
 
-- **Status**: proposed, 2026-10-29 — S51-01 implements the HTTP trigger and the common audit; S51-02 to
-  S51-05 the console, start rules, signed deliveries and the `when` filter (§8-11)
+- **Status**: proposed, 2026-10-29 — S56-01 implements the HTTP trigger and the common audit; S56-02 to
+  S56-05 the console, start rules, signed deliveries and the `when` filter (§8-11)
 - **Concerns**: `ProjectConfig.triggers` (contract), `routers/triggers.py`, `services/triggers.py`,
   `services/received_events.py`, `activities/schedules.py`, the `trigger_tokens` table; follows
   [ADR 0031](0031-several-workflows-per-project.md) (a project's workflows and their routing) and S42-06f
@@ -74,19 +74,19 @@ system that is not a tracker — a monitoring tool, a form, a CRM, a ServiceNow 
    (409, recorded): creating the issue in Jira or GitHub inside a webhook request cannot be undone if the
    transaction then fails, and that tracker already has its own door.
 
-8. **A trigger can filter** (S51-05): `when` maps a JSON pointer to the text, or texts, the payload must
+8. **A trigger can filter** (S56-05): `when` maps a JSON pointer to the text, or texts, the payload must
    hold. A payload that does not match is acknowledged (202) and recorded `ignored` — it is not an error
    of the sender, so it is not `refused`, and its dedup row is kept.
-9. **A trigger can take a signature instead of the token** (S51-04): with `auth: signature`, the caller
+9. **A trigger can take a signature instead of the token** (S56-04): with `auth: signature`, the caller
    sends `X-Choregos-Signature: sha256=<HMAC-SHA256 of the body>`, hex or base64, and the bearer token is
    refused. The key is the signing secret shown with the token: an HMAC of the token's digest under the
    deployment's session secret, so nothing more is stored and it changes with the token (and with the
    session secret).
-10. **A tracker item can start on a project rule** (S51-03): `start_rules:` lists conditions on the item's
+10. **A tracker item can start on a project rule** (S56-03): `start_rules:` lists conditions on the item's
     labels (`labels_any`, `labels_all`), type and state; when a tracker event (created, updated, labelled
     or moved) names an item the project does not hold yet, the first rule whose every condition holds
     starts it as `agent-ready` does. A rule without a condition is refused. Without rules, nothing changes.
-11. **The console shows the triggers** (S51-02), beside the received events: the URL, the workflow or the
+11. **The console shows the triggers** (S56-02), beside the received events: the URL, the workflow or the
     routing, whether a token exists, minting it (shown once, with the signing secret of a signed
     trigger), and firing it with a payload typed by hand.
 

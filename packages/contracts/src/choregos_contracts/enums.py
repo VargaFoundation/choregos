@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Énumérations partagées par tous les contrats Choregos."""
+"""Enumerations shared by all the Choregos contracts."""
 
 from __future__ import annotations
 
@@ -45,6 +45,19 @@ class StateKind(StrEnum):
     WORK = "work"
     WAIT = "wait"
     TERMINAL = "terminal"
+
+
+class StateOutcome(StrEnum):
+    """How a TERMINAL state ends a work item: a success, a request turned down, or one dropped.
+
+    Only a terminal state declares it; absent means `success`, the meaning every terminal state had
+    before. The console shows a success green, and neither of the others: a declined access request
+    is finished, not granted.
+    """
+
+    SUCCESS = "success"
+    DECLINED = "declined"
+    CANCELLED = "cancelled"
 
 
 class StageStatus(StrEnum):
@@ -130,8 +143,8 @@ class HumanRequestKind(StrEnum):
     APPROVAL = "approval"
     QUESTION = "question"
     SCOPE_CHANGE = "scope_change"
-    #: Un geste qu'une personne FAIT — remettre un badge, déballer un poste —, avec ses valeurs et
-    #: ce qu'elle atteste (S20-06).
+    #: A gesture a person DOES (handing over a badge, unpacking a workstation), with its values and
+    #: what they attest (S20-06).
     TASK = "task"
 
 
@@ -169,14 +182,14 @@ class EventType(StrEnum):
     WORKITEM_CLOSED = "choregos.workitem.closed"
     WORKITEM_HUMAN_REQUESTED = "choregos.workitem.human_requested"
     WORKITEM_HUMAN_DECIDED = "choregos.workitem.human_decided"
-    #: L'interpréteur du ticket est mort (activité en échec définitif, délai) : le ticket ne
-    #: bougera plus tant qu'on ne le redémarre pas. Vu sur le banc du 2026-09-24, où deux
-    #: tickets RH sont restés « en attente » sans qu'aucun écran ne dise qu'ils étaient morts.
+    #: The ticket's interpreter is dead (activity failed for good, timeout): the ticket will not
+    #: move again until it is restarted. Seen on the 2026-09-24 bench, where two HR tickets stayed
+    #: "pending" with no screen saying they were dead.
     WORKITEM_WORKFLOW_FAILED = "choregos.workitem.workflow_failed"
-    #: Le ticket a changé de définition (`migrate`) : l'épingle suit, l'état est remappé.
+    #: The ticket changed definition (`migrate`): the pin follows, the state is remapped.
     WORKITEM_MIGRATED = "choregos.workitem.migrated"
-    #: Une migration impossible (état absent de la cible, sans mapping) : le ticket reste en vie,
-    #: sur sa définition — c'est l'événement qui le dit.
+    #: An impossible migration (state missing from the target, no mapping): the ticket stays alive,
+    #: on its own definition. This event is what says so.
     WORKITEM_MIGRATION_REFUSED = "choregos.workitem.migration_refused"
     RUN_QUEUED = "choregos.run.queued"
     RUN_STARTED = "choregos.run.started"
@@ -196,16 +209,16 @@ class EventType(StrEnum):
     RELEASE_FROZEN = "choregos.release.frozen"
     TOOL_CALLED = "choregos.tool.called"
     NETWORK_DENIED = "choregos.network.denied"
-    #: Des motifs d'injection de prompt dans ce que l'agent allait lire (ticket, documents,
-    #: mémoire) : journalisé toujours, bloquant selon `sandbox.prompt_injection`.
+    #: Prompt-injection patterns in what the agent was about to read (ticket, documents,
+    #: memory): always logged, blocking according to `sandbox.prompt_injection`.
     SECURITY_INJECTION_SUSPECTED = "choregos.security.injection_suspected"
     COST_RECORDED = "choregos.cost.recorded"
     COST_ALERT = "choregos.cost.alert"
     PROVISIONING_STEP = "choregos.project.provisioning.step"
     PROVISIONING_COMPLETED = "choregos.project.provisioning.completed"
     PROVISIONING_FAILED = "choregos.project.provisioning.failed"
-    #: Les actions gouvernées (ADR 0035) : proposée, décidée, chaque effet fait ou compensé,
-    #: et sa fin — le dossier de preuves d'une arrivée ou d'un départ se lit dans ces événements.
+    #: Governed actions (ADR 0035): proposed, decided, each effect done or compensated,
+    #: and its end. The evidence file of an arrival or a departure is read from these events.
     ACTION_PROPOSED = "choregos.action.proposed"
     ACTION_DECIDED = "choregos.action.decided"
     ACTION_EFFECT_DONE = "choregos.action.effect_done"
@@ -215,22 +228,22 @@ class EventType(StrEnum):
 
 
 class ActionStatus(StrEnum):
-    """Le cycle d'une action gouvernée (ADR 0035)."""
+    """The lifecycle of a governed action (ADR 0035)."""
 
     PENDING_APPROVAL = "pending_approval"
     REJECTED = "rejected"
     APPROVED = "approved"
     RUNNING = "running"
-    #: Ses effets sont faits ; elle attend la PREUVE qu'ils ont servi — un rapport à venir, un
-    #: événement extérieur —, jusqu'à une échéance (S20-08).
+    #: Its effects are done; it waits for the PROOF that they served: a report to come, an
+    #: outside event, until a deadline (S20-08).
     AWAITING_EVIDENCE = "awaiting_evidence"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
 
 
 class ActionOrigin(StrEnum):
-    """D'où vient une action : une opération d'ontologie, un outil sous validation (ADR 0034), un
-    effet d'étape de workflow."""
+    """Where an action comes from: an ontology operation, a tool under validation (ADR 0034), a
+    workflow stage effect."""
 
     ONTOLOGY = "ontology"
     TOOL = "tool"

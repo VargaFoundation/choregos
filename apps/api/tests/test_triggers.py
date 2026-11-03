@@ -1,4 +1,4 @@
-"""HTTP triggers (S51-01, ADR 0113): another system opens a work item in a given workflow, or in the one
+"""HTTP triggers (S56-01, ADR 0113): another system opens a work item in a given workflow, or in the one
 the project's routing picks, with its own token; a person can fire the same trigger by hand.
 
 Every call that reaches the project leaves a `received_events` row, refused ones included, whose
@@ -338,7 +338,7 @@ async def test_a_viewer_mints_no_token_and_fires_nothing(client: AsyncClient, ad
 async def test_a_payload_its_when_does_not_match_is_acknowledged_and_ignored(
     client: AsyncClient, admin: str
 ) -> None:
-    """S51-05: a filter is not a refusal: 202, nothing opened, a row that says so."""
+    """S56-05: a filter is not a refusal: 202, nothing opened, a row that says so."""
     project = await _project(client)
     token = (await _token(client, project, "urgent"))["token"]
 
@@ -357,7 +357,7 @@ async def test_a_payload_its_when_does_not_match_is_acknowledged_and_ignored(
 async def test_a_signed_trigger_takes_the_signature_and_not_the_token(
     client: AsyncClient, admin: str
 ) -> None:
-    """S51-04: `X-Choregos-Signature: sha256=<HMAC of the body>`, hex or base64; a token is refused."""
+    """S56-04: `X-Choregos-Signature: sha256=<HMAC of the body>`, hex or base64; a token is refused."""
     import base64
     import hashlib
     import hmac

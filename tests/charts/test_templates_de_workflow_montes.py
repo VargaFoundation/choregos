@@ -64,7 +64,7 @@ def test_les_playbooks_aussi_sont_vus_des_deux_cotes() -> None:
     """The same defect existed for the playbooks, and I wrote it right after describing it.
 
     They were only mounted on the orchestrator. Yet the API **validates** a workflow: without the
-    playbooks it warns `role.playbook_introuvable` about roles the deployment does
+    playbooks it warns `role.playbook_not_found` about roles the deployment does
     provide, and a false warning teaches people to ignore warnings.
     """
     docs = _rendu("global.playbooks.configMap=mes-roles")

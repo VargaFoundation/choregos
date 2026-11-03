@@ -14,7 +14,7 @@ from datetime import timedelta
 import pytest
 
 from .conftest import Fixture
-from .test_agent_du_registre import _plan as _agent_plan
+from .kits.registry_agent import agent_stage_plan as _agent_plan
 from .test_agent_monthly_cap import _spend_as_agent, _with_cap
 from .test_budget_reservation import _plan, leave_on_ticket, spend
 

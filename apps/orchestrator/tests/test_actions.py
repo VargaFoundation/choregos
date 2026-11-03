@@ -6,14 +6,13 @@ arrête la suite et ce qui était fait est compensé, à rebours.
 from __future__ import annotations
 
 import json
-import os
 import pathlib
 from collections.abc import Iterator
 from typing import Any
 
 import pytest
 
-from .conftest import Fixture
+from .conftest import Fixture, recording_history
 
 HISTORIQUES = pathlib.Path(__file__).resolve().parents[3] / "tests" / "replay" / "histories"
 
@@ -150,7 +149,7 @@ async def test_une_panne_passagere_ne_refait_pas_l_effet_deja_fait(
     )
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(historique)
-    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+    if recording_history():
         cible = HISTORIQUES / "action-S20-01.json"
         cible.write_text(json.dumps(json.loads(historique.to_json()), indent=1) + "\n", encoding="utf-8")
 

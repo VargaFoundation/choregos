@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The webhook events a project received, and what the platform did with each (S42-06f).
 
-Since S51-01 (ADR 0113) every door that starts work without a person in front of it leaves its row
+Since S56-01 (ADR 0113) every door that starts work without a person in front of it leaves its row
 here too: an HTTP trigger (`trigger:<name>`) and a schedule (`schedule:<name>`), including the calls
 the platform refused, so that "why did nothing start?" has an answer on the project's page.
 
@@ -99,7 +99,7 @@ def record_firing(  # noqa: PLR0913 - one row, field by field, keyword-only
     item_id: str | None = None,
     item_key: str | None = None,
 ) -> None:
-    """The row itself, for a door that has no `InboundEvent` (a trigger, a schedule, S51-01). The
+    """The row itself, for a door that has no `InboundEvent` (a trigger, a schedule, S56-01). The
     caller builds `summary` from what it decided — never from the payload's free text."""
     if outcome not in OUTCOMES:
         raise ValueError(f"unknown outcome `{outcome}`")

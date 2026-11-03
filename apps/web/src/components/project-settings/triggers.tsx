@@ -16,7 +16,7 @@ const OUTCOME: Record<string, string> = {
 };
 
 /**
- * A project's HTTP triggers (S51-02, ADR 0113): the URL another system calls, the workflow it opens,
+ * A project's HTTP triggers (S56-02, ADR 0113): the URL another system calls, the workflow it opens,
  * a token minted once, and a firing by hand with a sample payload. The triggers themselves are
  * declared in the project's configuration (`triggers:`); this card never shows a token twice.
  */
@@ -69,7 +69,7 @@ export function parseList(text: string): { list: unknown[] } | { error: string }
 const pretty = (value: unknown) => JSON.stringify(value ?? [], null, 2);
 
 /**
- * `triggers` and `start_rules` of the project's configuration, as JSON (S51-02, ADR 0113). The API
+ * `triggers` and `start_rules` of the project's configuration, as JSON (S56-02, ADR 0113). The API
  * validates them (a pointer, a filter, a rule without a condition) and says what it refuses; the
  * write merges into the latest configuration, so another section's change is kept.
  */

@@ -80,6 +80,7 @@ def _issues(delivery_id: str, payload: dict[str, Any]) -> list[InboundEvent]:
         "url": issue.get("html_url"),
         "labels": labels,
         "state": issue.get("state"),
+        "reporter": (issue.get("user") or {}).get("login"),
     }
     if action == "opened":
         return [InboundEvent(type=InboundEventType.ITEM_CREATED, payload=body, **common)]

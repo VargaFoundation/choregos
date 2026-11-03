@@ -57,5 +57,30 @@ def test_une_nature_inconnue_reste_visible() -> None:
     """Un accès qu'on ne sait pas classer ne doit pas disparaître : c'est justement
     celui-là qu'on voudra regarder."""
     rapport = rapport_d_acces([_permission("telepathie", "quelque part")])
-    assert rapport.acces[0].nature == "autre"
+    assert rapport.acces[0].nature == "other"
     assert rapport.acces[0].cible == "quelque part"
+
+
+def test_the_report_serves_english_keys_and_the_former_ones_for_one_release() -> None:
+    rapport = rapport_d_acces(
+        [
+            _permission("write", "/workspace/.env", allowed=False, reason="sensitive file"),
+            _permission("telepathie", "quelque part"),
+        ]
+    )
+    served = rapport.to_dict()
+    assert served["events"] == served["evenements"] == 2  # lang: fr-ok
+    assert served["inferred"] == served["deduites"] == 0  # lang: fr-ok
+    assert served["refusals"] == 1
+    assert "refus" not in served and "cout_outils_eur" not in served  # lang: fr-ok
+    assert served["access"][0] == {
+        "nature": "write",
+        "target": "/workspace/.env",
+        "requests": 1,
+        "refusals": 1,
+        "reasons": ["sensitive file"],
+    }
+    assert served["access"][1]["nature"] == "other"
+    assert served["acces"][1]["nature"] == "autre"  # lang: fr-ok
+    assert served["acces"][0]["motifs"] == ["sensitive file"]  # lang: fr-ok
+    assert "cible" not in served["acces"][0]  # lang: fr-ok

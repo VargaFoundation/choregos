@@ -198,3 +198,117 @@ async def test_ownership_moves_and_the_credentials_stay(client: AsyncClient, adm
     assert stranger.status_code == 422
     audit = (await client.get("/api/v1/audit", params={"target_type": "agent"})).json()["items"]
     assert any(e["action"] == "agent.transfer" for e in audit)
+
+
+# ───────────────────────── deleting an agent that never served ─────────────────────────
+
+
+async def test_an_agent_that_never_served_is_deleted_with_its_versions_and_credentials(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    from choregos_api.db.models import Agent, AgentCredential, AgentVersion
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import func, select
+
+    await _create(client, kind="external", lifecycle="draft")
+    token = await client.post("/api/v1/me/tokens", json={"name": "claude-code", "scopes": ["mcp:read"]})
+    await client.post(
+        f"{AGENTS}/onboarding-coordinator/credentials", json={"kind": "token", "token_id": token.json()["id"]}
+    )
+    deleted = await client.delete(f"{AGENTS}/onboarding-coordinator")
+    assert deleted.status_code == 204, deleted.text
+    assert (await client.get(f"{AGENTS}/onboarding-coordinator")).status_code == 404
+    async with session_scope() as session:
+        for model in (Agent, AgentVersion, AgentCredential):
+            assert (await session.execute(select(func.count()).select_from(model))).scalar_one() == 0, model
+    audit = (await client.get("/api/v1/audit", params={"target_type": "agent"})).json()["items"]
+    (entry,) = [e for e in audit if e["action"] == "agent.delete"]
+    assert (entry["payload"]["slug"], entry["payload"]["lifecycle"]) == ("onboarding-coordinator", "draft")
+    # The slug is free again.
+    await _create(client)
+
+
+async def test_a_trial_run_does_not_count_as_having_served(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    from choregos_api.db.models import Run, WorkItem
+    from choregos_api.db.session import session_scope
+
+    await _create(client)
+    async with session_scope() as session:
+        item = WorkItem(project_id=project["id"], tracker_key="TRIAL-1", title="T", state="trial")
+        session.add(item)
+        await session.flush()
+        session.add(
+            Run(
+                id="TRIAL-1-trial-1",
+                work_item_id=item.id,
+                project_id=project["id"],
+                stage_role="trial",
+                status="succeeded",
+                agent_slug="onboarding-coordinator",
+                agent_version=1,
+            )
+        )
+    assert (await client.delete(f"{AGENTS}/onboarding-coordinator")).status_code == 204
+
+
+async def test_an_agent_that_ran_is_retired_not_deleted(client: AsyncClient, project: dict[str, Any]) -> None:
+    await _create(client)
+    await _run(project["id"], "succeeded")
+    refused = await client.delete(f"{AGENTS}/onboarding-coordinator")
+    assert refused.status_code == 409
+    assert "it has run 1 time" in refused.text and "Retire it instead" in refused.text
+    assert (await client.get(f"{AGENTS}/onboarding-coordinator")).status_code == 200
+    # Even once retired: its runs keep naming it.
+    assert (await _move(client, "retired")).status_code == 200
+    assert (await client.delete(f"{AGENTS}/onboarding-coordinator")).status_code == 409
+
+
+async def test_a_pinned_agent_is_not_deleted(client: AsyncClient, project: dict[str, Any]) -> None:
+    await _create(client)
+    pin = await client.put(
+        f"/api/v1/projects/{project['id']}/agents/onboarding-coordinator", json={"version": 1}
+    )
+    assert pin.status_code == 200, pin.text
+    refused = await client.delete(f"{AGENTS}/onboarding-coordinator")
+    assert refused.status_code == 409 and "pinned by billing-api" in refused.text
+
+
+async def test_an_agent_an_active_workflow_names_is_not_deleted(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    await _create(client)
+    yaml_text = """apiVersion: choregos/v1
+kind: Workflow
+metadata: {name: intake, version: 1}
+actors:
+  coordinator: {type: agent, role: intake, agent: onboarding-coordinator}
+states:
+  request: {display: Request}
+  done: {display: Done, terminal: true}
+transitions:
+  - {id: t-done, from: request, to: done, by: coordinator}
+"""
+    published = await client.put(
+        f"/api/v1/projects/{project['id']}/workflows/intake", json={"yaml": yaml_text}
+    )
+    assert published.status_code == 200, published.text
+    refused = await client.delete(f"{AGENTS}/onboarding-coordinator")
+    assert refused.status_code == 409 and "billing-api/intake names it" in refused.text
+
+
+async def test_deleting_needs_the_right_to_manage_the_agent(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    from choregos_api.db.models import Membership
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    await _create(client)
+    async with session_scope() as session:
+        for membership in (await session.execute(select(Membership))).scalars():
+            membership.role = "developer"
+    refused = await client.delete(f"{AGENTS}/onboarding-coordinator")
+    assert refused.status_code in {403, 404}, refused.text
+    assert refused.status_code != 204

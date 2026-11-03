@@ -17,7 +17,7 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ActivityError
 
-from .planification import executer_activite
+from .scheduling import execute_on_its_queue
 
 with workflow.unsafe.imports_passed_through():
     from ..activities import hosted_build as build_activities
@@ -47,7 +47,7 @@ class HostedImageBuild:
     @workflow.run
     async def run(self, payload: dict[str, Any]) -> dict[str, Any]:
         build = {"org": payload["org"], "key": payload["key"], "attempt": int(payload["attempt"])}
-        claim = await executer_activite(
+        claim = await execute_on_its_queue(
             build_activities.claim_hosted_build,
             build,
             start_to_close_timeout=timedelta(minutes=1),
@@ -56,7 +56,7 @@ class HostedImageBuild:
         if claim["status"] != "building":
             return dict(claim)
         try:
-            built = await executer_activite(
+            built = await execute_on_its_queue(
                 build_activities.build_hosted_image,
                 build,
                 start_to_close_timeout=timedelta(minutes=45),
@@ -65,7 +65,7 @@ class HostedImageBuild:
             outcome = {**build, "status": "ready", "image": built["image"], "builder": built["builder"]}
         except ActivityError as error:
             outcome = {**build, "status": "failed", "error": _reason(error)}
-        recorded = await executer_activite(
+        recorded = await execute_on_its_queue(
             build_activities.record_hosted_build,
             outcome,
             start_to_close_timeout=timedelta(minutes=2),

@@ -12,7 +12,7 @@ import type { ModelCatalogue, ModelCatalogueEntry, ModelCuratePreview, ModelTier
 
 /** The stage roles a model can be limited to (empty: every role). */
 export const STAGE_ROLES = ["triage", "refine", "plan", "implement", "verify", "review", "fix_ci", "address_review", "release_notes", "verify_prod", "custom"] as const;
-export const USAGES = ["agent", "embed", "distill", "eval"] as const;
+export const USAGES = ["agent", "embed", "distill", "eval", "route"] as const;
 export const TIERS = ["cheap", "standard", "strong", "aux", "embed", "local"] as const;
 
 /** What a gateway that cannot cap a key means for the budget, said where the gateway is named. */

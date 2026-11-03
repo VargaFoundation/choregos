@@ -16,7 +16,9 @@ If the ticket **exists** in Choregos but stays in `inbox`, this is not the runbo
 
 The webhook is the nominal path; the catch-up is the net. A `TrackerReconciliation` loop
 per project re-reads the tracker's candidates every `CHOREGOS_RECONCILE_INTERVAL_SECONDS`
-seconds (60 by default) and creates what is missing. **Waiting one minute before acting**
+seconds (60 by default) and creates what is missing. The loop starts when the orchestrator's worker
+starts (for every active project) and when a project becomes active; archiving the project stops it,
+and a pass on an archived or suspended project takes nothing on. **Waiting one minute before acting**
 settles most cases.
 
 ```bash

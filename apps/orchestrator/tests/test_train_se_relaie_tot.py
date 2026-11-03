@@ -13,11 +13,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import pathlib
 from typing import Any
 
 import pytest
+
+from .conftest import recording_history
 
 pytestmark = pytest.mark.asyncio
 
@@ -189,7 +190,7 @@ async def test_un_train_se_relaie_juste_apres_son_depart(temporal_env: Any, work
 
     # L'historique du relais rejoue contre le code courant — et s'archive pour les suivants.
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(historique)
-    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+    if recording_history():
         cible = HISTORIQUES / "train-se-relaie-tot-S22-27.json"
         cible.write_text(json.dumps(json.loads(historique.to_json()), indent=1) + "\n", encoding="utf-8")
 
@@ -238,8 +239,8 @@ async def test_un_run_d_avant_rejoue_contre_le_seuil_abaisse(
     from choregos_orchestrator.workflows import train as module
     from temporalio.worker import Replayer
 
-    monkeypatch.setattr(module, "SEUIL_DE_RELAIS", 10**9)
-    monkeypatch.setattr(module, "SEUIL_DE_RELAIS_D_AVANT", 300)
+    monkeypatch.setattr(module, "RELAY_THRESHOLD", 10**9)
+    monkeypatch.setattr(module, "FORMER_RELAY_THRESHOLD", 300)
     async with worker_factory(remplacements=_au_repos()):
         train = await temporal_env.client.start_workflow(
             "ReleaseTrain",
@@ -259,11 +260,11 @@ async def test_un_run_d_avant_rejoue_contre_le_seuil_abaisse(
 
     # Le code d'aujourd'hui, à l'échelle : le nouveau marqueur est interrogé dès 100, rend `False`, et
     # le run garde son relais d'avant.
-    monkeypatch.setattr(module, "SEUIL_DE_RELAIS", 100)
+    monkeypatch.setattr(module, "RELAY_THRESHOLD", 100)
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(historique)
 
     # Le seuil seulement abaissé (l'ancien marqueur interrogé dès 100) : écart de déterminisme.
-    monkeypatch.setattr(module, "SEUIL_DE_RELAIS_D_AVANT", 100)
+    monkeypatch.setattr(module, "FORMER_RELAY_THRESHOLD", 100)
     rejeu = await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(historique, raise_on_replay_failure=False)
     assert rejeu.replay_failure is not None
     assert "TMPRL1100" in str(rejeu.replay_failure)

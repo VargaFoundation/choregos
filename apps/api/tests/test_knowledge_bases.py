@@ -110,6 +110,27 @@ async def test_html_markdown_text_and_pdf_are_converted(
     assert document["title"] == title
 
 
+@pytest.mark.parametrize(
+    ("name", "data", "fence", "language"),
+    [
+        ("values.yaml", b"# replicas of the api\nreplicas: 3\n\nimage:\n  tag: 1.2.0\n", "```", "yaml"),
+        ("compose.yml", b"services:\n  api: {}\n", "```", "yaml"),
+        ("schema.json", b'{"type": "object", "note": "```"}\n', "````", "json"),
+        ("pyproject.toml", b"[project]\nname = 'x'\n", "```", "toml"),
+    ],
+)  # fmt: skip
+async def test_structured_text_is_kept_verbatim_in_a_fence_under_its_name(
+    client: AsyncClient, admin: str, name: str, data: bytes, fence: str, language: str
+) -> None:
+    """S51-05: YAML, JSON, TOML are accepted and stored as code, never parsed into prose."""
+    await _base(client)
+    document = await _converted(client, name, data)
+    assert document["status"] == "ready", document["error"]
+    text = data.decode().strip()
+    assert document["markdown"] == f"# {name}\n\n{fence}{language}\n{text}\n{fence}\n"
+    assert document["title"] == name, "a YAML comment is not the title: the path is"
+
+
 async def test_the_upload_answers_pending_and_converts_outside_the_request(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -154,6 +175,7 @@ async def test_the_same_bytes_twice_are_one_document(client: AsyncClient, admin:
         ("notes.md", b"\x00\x01\x02binary", "binary, not text"),
         ("empty.txt", b"", "is empty"),
         ("archive.docx", fx.broken_office()[:30], "damaged archive"),
+        ("values.yaml", b"name: \xe9t\xe9\n", "not UTF-8 text"),
     ],
 )
 async def test_a_file_that_is_not_what_it_claims_is_refused(

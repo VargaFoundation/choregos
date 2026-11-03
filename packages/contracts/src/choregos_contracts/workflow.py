@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Modèles du DSL de workflow (schemas/workflow.schema.json)."""
+"""Models of the workflow DSL (schemas/workflow.schema.json)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from .enums import ActorType, StateKind
+from .enums import ActorType, StateKind, StateOutcome
 
 Identifier = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9_-]{0,62}$")]
 Slug = Annotated[str, Field(pattern=r"^[a-z0-9][a-z0-9-]{0,62}$")]
@@ -17,7 +17,7 @@ AGENT_WILDCARD = "*agent"
 
 
 class Strict(BaseModel):
-    """Base : refus des champs inconnus, comme les schémas JSON."""
+    """Base: unknown fields are refused, like the JSON Schemas."""
 
     model_config = ConfigDict(extra="forbid", frozen=False, use_enum_values=False)
 
@@ -38,20 +38,20 @@ class WorkflowMetadata(Strict):
     version: int = Field(ge=1)
     description: str | None = None
     extends: str | None = Field(default=None, pattern=r"^template:[a-z0-9-]+@[0-9]+$")
-    #: Le JSON Schema des CHAMPS d'un ticket de ce workflow (ADR 0031) : la date d'arrivée et le poste
-    #: d'un onboarding, par exemple. Validés à la naissance du ticket, transmis aux agents.
+    #: The JSON Schema of the FIELDS of a ticket of this workflow (ADR 0031): the arrival date and the
+    #: position of an onboarding, for example. Validated at the ticket's birth, passed to the agents.
     inputs: dict[str, Any] | None = None
     catalogue: WorkflowCatalogueInfo | None = None
 
 
-#: Un rôle d'agent. Les rôles du paquet (`StageRole`) gardent leur sens — la plateforme
-#: s'appuie sur `implement`, `review` et `verify` pour ses mesures et pour la revue croisée
-#: — mais **un métier nomme les siens** : `sourcing`, `qualification`, `instruction_dossier`.
+#: An agent role. The package roles (`StageRole`) keep their meaning: the platform relies on
+#: `implement`, `review` and `verify` for its measurements and for the cross review, but **a trade
+#: names its own**: `sourcing`, `qualification`, `case_processing`.
 #:
-#: Avant le 2026-09-24 il fallait écrire `role: custom` + `playbook: sourcing` : cela
-#: fonctionnait, mais le board affichait « custom » pour toutes les étapes d'un métier, et
-#: les évals ne savaient pas de quoi il s'agissait (ADR 0012, limite n°4). Le playbook se
-#: résolvant déjà par nom de rôle, ouvrir l'énumération suffisait.
+#: Before 2026-09-24 one had to write `role: custom` + `playbook: sourcing`: it worked, but the
+#: board showed "custom" for every stage of a trade, and the evals did not know what it was about
+#: (ADR 0012, limit no. 4). The playbook being already resolved by role name, opening the
+#: enumeration was enough.
 Role = Annotated[str, Field(pattern=r"^[a-z][a-z0-9_]{1,31}$")]
 
 
@@ -64,8 +64,8 @@ class AgentActor(Strict):
     max_turns: int | None = Field(default=None, ge=1, le=1000)
     max_minutes: int | None = Field(default=None, ge=1, le=480)
     playbook: str | None = None
-    #: Un agent du registre (ADR 0033) : `slug` ou `slug@version` ; ses instructions priment sur
-    #: le playbook.
+    #: A registry agent (ADR 0033): `slug` or `slug@version`; its instructions take precedence over
+    #: the playbook.
     agent: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{1,62}(@[1-9][0-9]*)?$")
 
     @property
@@ -134,14 +134,22 @@ class State(Strict):
     tracker: TrackerMapping | None = None
     terminal: bool = False
     kind: StateKind = StateKind.WORK
-    #: Un état de PRODUCTION : il ne s'atteint que par un train de release (`via: release_train`).
-    #: Avant, c'était le préfixe de son nom (`deployed_prod`) : un renommage levait le verrou (#175).
+    #: How a terminal state ends the work item: `success` (the default), `declined` or `cancelled`.
+    #: Only a terminal state may declare another outcome than the default.
+    outcome: StateOutcome = StateOutcome.SUCCESS
+    #: A PRODUCTION state: it is only reached through a release train (`via: release_train`).
+    #: It used to be the prefix of its name (`deployed_prod`): a rename lifted the lock (#175).
     production: bool = False
 
     @model_validator(mode="after")
     def _coherent_kind(self) -> State:
         if self.terminal and self.kind is not StateKind.TERMINAL:
             object.__setattr__(self, "kind", StateKind.TERMINAL)
+        if self.outcome is not StateOutcome.SUCCESS and self.kind is not StateKind.TERMINAL:
+            raise ValueError(
+                f"outcome `{self.outcome}` is only for a terminal state: a work item is not "
+                "declined or cancelled while it can still move"
+            )
         return self
 
 
@@ -173,8 +181,8 @@ class ReviewSpec(Strict):
 
 
 class ActionEffectSpec(Strict):
-    """Un effet d'une action (ADR 0035) : son nom déclaré (`connector.call`…), ses paramètres —
-    rendus en Jinja isolé avec `params` et `effects` —, et ce qui le défait si la suite échoue."""
+    """An effect of an action (ADR 0035): its declared name (`connector.call`...), its parameters,
+    rendered in isolated Jinja with `params` and `effects`, and what undoes it if the rest fails."""
 
     effect: str = Field(min_length=1, max_length=128)
     with_: dict[str, Any] = Field(default_factory=dict, alias="with")
@@ -197,20 +205,20 @@ class ActionApprovalSpec(Strict):
     separation_of_duties: bool = True
 
 
-#: `fields.<champ>`, décalé ou non : `fields.date_arrivee - 10d`, `fields.date_depart + 2h`.
+#: `fields.<field>`, shifted or not: `fields.arrival_date - 10d`, `fields.departure_date + 2h`.
 NOT_BEFORE = r"^fields\.[a-z_][a-z0-9_]{0,62}(\s*[+-]\s*[0-9]{1,4}\s*[dhm])?$"
 
 
 class TransitionAction(Strict):
-    """L'action gouvernée qu'une transition SYSTÈME propose (ADR 0035, S20-05).
+    """The governed action a SYSTEM transition proposes (ADR 0035, S20-05).
 
-    `title`, `justification` et `params` sont rendus en Jinja isolé avec les champs du ticket
-    (`fields`) et le ticket (`work_item`) ; les effets, plus tard, avec `params`. La transition
-    attend `not_before` — une date tirée d'un champ, réarmée quand le champ change —, propose
-    l'action, et passe quand elle a RÉUSSI (`action_succeeded`).
+    `title`, `justification` and `params` are rendered in isolated Jinja with the ticket fields
+    (`fields`) and the ticket (`work_item`); the effects, later, with `params`. The transition
+    waits for `not_before` (a date taken from a field, re-armed when the field changes), proposes
+    the action, and passes when it SUCCEEDED (`action_succeeded`).
 
-    Une validation humaine est exigée quand une opération appelée l'exige pour ce projet, ou
-    quand `approval` est déclaré : le workflow peut en AJOUTER une, jamais en retirer.
+    A human approval is required when a called operation requires it for this project, or when
+    `approval` is declared: the workflow may ADD one, never remove one.
     """
 
     kind: str = Field(pattern=r"^[a-z][a-z0-9_.-]{0,127}$")
@@ -223,10 +231,10 @@ class TransitionAction(Strict):
 
 
 class TaskSpec(Strict):
-    """Une TÂCHE qu'une personne fait pour que le ticket passe (S20-06) : remettre un badge, déballer
-    un poste. Elle remplit un formulaire — un JSON Schema d'objet dont les propriétés sont des champs
-    du ticket : les valeurs y sont versées, et l'action suivante les lit — et atteste ce qu'elle a
-    fait, mot pour mot. La décision garde l'une et l'autre : c'est la preuve."""
+    """A TASK a person does so that the ticket moves on (S20-06): handing over a badge, unpacking
+    a workstation. It fills in a form, an object JSON Schema whose properties are ticket fields:
+    the values are poured into them, and the next action reads them, and attests what it did,
+    word for word. The decision keeps both: this is the proof."""
 
     title: str | None = Field(default=None, max_length=200)
     instructions: str | None = Field(default=None, max_length=4000)
@@ -311,13 +319,13 @@ class Transition(Strict):
     on_changes_requested: Retry | None = None
     review: ReviewSpec | None = None
     timeout_hours: int | None = Field(default=None, ge=1)
-    #: Une transition système peut proposer une action gouvernée, à date (S20-05).
+    #: A system transition can propose a governed action, dated (S20-05).
     action: TransitionAction | None = None
-    #: Une transition humaine peut être une tâche : un formulaire, une attestation (S20-06).
+    #: A human transition can be a task: a form, an attestation (S20-06).
     task: TaskSpec | None = None
-    #: Ce que la PLATEFORME fait en franchissant une transition système : ouvrir la PR du ticket, ou
-    #: la fusionner. Avant, c'était le préfixe du nom de l'état visé (`pr_`, `merged`) : un renommage
-    #: depuis la console changeait le comportement sans le dire (#175).
+    #: What the PLATFORM does when crossing a system transition: open the ticket's PR, or merge
+    #: it. It used to be the prefix of the target state's name (`pr_`, `merged`): a rename from
+    #: the console changed the behaviour without saying so (#175).
     does: Literal["open_pr", "merge_pr"] | None = None
     #: A system transition can open one child work item per element of a list and wait for them
     #: all (S38-12, ADR 0057).
@@ -356,7 +364,7 @@ class Transition(Strict):
 
     @property
     def key(self) -> str:
-        """Identifiant stable d'une transition (pour les compteurs de tentatives)."""
+        """Stable identifier of a transition (for the attempt counters)."""
         return self.id or f"{self.from_}->{self.to}"
 
     def gate_names(self) -> list[str]:
@@ -402,7 +410,7 @@ class WorkflowA2a(Strict):
 
 
 class Workflow(Strict):
-    """Définition complète d'un workflow. La validation statique vit dans `choregos_core.dsl`."""
+    """Complete definition of a workflow. Static validation lives in `choregos_core.dsl`."""
 
     apiVersion: Literal["choregos/v1"] = "choregos/v1"  # noqa: N815
     kind: Literal["Workflow"] = "Workflow"
@@ -414,26 +422,26 @@ class Workflow(Strict):
     budget: WorkflowBudget | None = None
     #: Served as an A2A skill (ADR 0078); absent: not exposed.
     a2a: WorkflowA2a | None = None
-    #: Où commence le workflow. **Facultatif dans le YAML** : le parseur le remplit avec le premier
-    #: état déclaré, qui reste la règle (§1.4). Mais il faut que ce soit ÉCRIT dans le document, et
-    #: non déduit de l'ordre des clés — parce que cet ordre ne survit pas au stockage.
+    #: Where the workflow starts. **Optional in the YAML**: the parser fills it with the first
+    #: declared state, which remains the rule (§1.4). But it must be WRITTEN in the document, not
+    #: deduced from the key order, because that order does not survive storage.
     #:
-    #: PostgreSQL `jsonb` range les clés d'un objet par longueur puis par octets. Un workflow rangé
-    #: dans la colonne `json` de `workflow_defs` en ressortait donc dans un autre ordre, et « le
-    #: premier état déclaré » devenait « le nom d'état le plus court ». Constaté le 2026-09-27 sur
-    #: un locataire réel : un ticket est né dans son état TERMINAL, l'interpréteur a fermé le
-    #: ticket en 1,5 seconde, aucune étape n'a tourné, et rien nulle part n'a signalé d'anomalie.
-    #: Les trois templates livrés y échappaient par chance — `inbox` y est le plus court.
+    #: PostgreSQL `jsonb` orders an object's keys by length, then by bytes. A workflow stored in
+    #: the `json` column of `workflow_defs` therefore came out in another order, and "the first
+    #: declared state" became "the shortest state name". Seen on 2026-09-27 on a real tenant: a
+    #: ticket was born in its TERMINAL state, the interpreter closed the ticket in 1.5 seconds,
+    #: no stage ran, and nothing anywhere reported an anomaly. The three shipped templates
+    #: escaped by luck: `inbox` is the shortest there.
     initial: str | None = None
 
     @property
     def initial_state(self) -> str:
-        """Où commence le workflow : ce que le document déclare, sinon le premier état.
+        """Where the workflow starts: what the document declares, otherwise the first state.
 
-        Le repli sur l'ordre des clés reste, pour les documents écrits avant que le champ existe —
-        mais il n'est fiable que si le document n'a pas traversé un `jsonb`. C'est pourquoi le
-        parseur écrit toujours le champ, et pourquoi `workflow_model` préfère relire le YAML quand
-        il manque.
+        The fallback on key order remains, for documents written before the field existed, but it
+        is only reliable if the document has not been through a `jsonb`. That is why the parser
+        always writes the field, and why `workflow_model` prefers to re-read the YAML when it
+        is missing.
         """
         return self.initial or next(iter(self.states))
 
@@ -441,7 +449,7 @@ class Workflow(Strict):
         return [name for name, state in self.states.items() if state.terminal]
 
     def transitions_from(self, state: str) -> list[Transition]:
-        """Transitions applicables depuis un état, `*agent` inclus."""
+        """Transitions applicable from a state, `*agent` included."""
         agent_states = self.agent_driven_states()
         out: list[Transition] = []
         for t in self.transitions:
@@ -465,32 +473,38 @@ class Workflow(Strict):
         return self.actors.get(transition.by) if transition.by else None
 
 
-# ───────────────────────────── effets : écrits, ou déduits des noms (#175) ─────────────────────────────
+# ───────────────────────────── effects: written, or deduced from names (#175) ─────────────────────────────
 #
-# Un workflow écrit avant #175 portait ses effets dans des NOMS d'états : `pr_*` ouvrait la PR,
-# `merged*` la fusionnait, `deployed_prod*` était la production. Ils se lisent encore — un workflow
-# publié ne change pas de comportement, une histoire Temporal se rejoue —, mais le validateur avertit,
-# et un renommage par la console les écrit d'abord (`does`, `production`).
+# A workflow written before #175 carried its effects in state NAMES: `pr_*` opened the PR,
+# `merged*` merged it, `deployed_prod*` was production. They are still read (a published
+# workflow does not change behaviour, a Temporal history replays), but the validator warns,
+# and a rename through the console writes them first (`does`, `production`).
 
-PREFIXE_OUVERTURE_DE_PR = "pr_"
-PREFIXE_FUSION = "merged"
-PREFIXE_PRODUCTION = "deployed_prod"
+PR_OPEN_PREFIX = "pr_"
+MERGE_PREFIX = "merged"
+PRODUCTION_PREFIX = "deployed_prod"
 
 
-def effet_implicite(etat: str) -> Literal["open_pr", "merge_pr"] | None:
-    """L'effet qu'un NOM d'état portait avant #175 ; `None` s'il n'en porte pas."""
-    if etat.startswith(PREFIXE_OUVERTURE_DE_PR):
+def implicit_effect(state: str) -> Literal["open_pr", "merge_pr"] | None:
+    """The effect a state NAME carried before #175; `None` if it carries none."""
+    if state.startswith(PR_OPEN_PREFIX):
         return "open_pr"
-    if etat.startswith(PREFIXE_FUSION):
+    if state.startswith(MERGE_PREFIX):
         return "merge_pr"
     return None
 
 
-def effet_de_la_transition(transition: Transition) -> Literal["open_pr", "merge_pr"] | None:
-    """Ce que la plateforme fait en franchissant une transition système : écrit, sinon déduit."""
-    return transition.does or effet_implicite(transition.to)
+def transition_effect(transition: Transition) -> Literal["open_pr", "merge_pr"] | None:
+    """What the platform does when crossing a system transition: written, otherwise deduced."""
+    return transition.does or implicit_effect(transition.to)
 
 
-def est_un_etat_de_production(nom: str, etat: State | None) -> bool:
-    """Un état de production : écrit (`production: true`), sinon déduit du préfixe de son nom."""
-    return bool(etat is not None and etat.production) or nom.startswith(PREFIXE_PRODUCTION)
+def is_production_state(name: str, state: State | None) -> bool:
+    """A production state: written (`production: true`), otherwise deduced from its name prefix."""
+    return bool(state is not None and state.production) or name.startswith(PRODUCTION_PREFIX)
+
+
+PREFIXE_PRODUCTION = PRODUCTION_PREFIX  # lang: fr-ok alias:internal
+effet_implicite = implicit_effect  # lang: fr-ok alias:internal
+effet_de_la_transition = transition_effect  # lang: fr-ok alias:internal
+est_un_etat_de_production = is_production_state  # lang: fr-ok alias:internal

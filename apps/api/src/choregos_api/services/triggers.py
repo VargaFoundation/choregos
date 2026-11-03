@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""HTTP triggers: another system opens a work item in a project (S51-01, ADR 0113).
+"""HTTP triggers: another system opens a work item in a project (S56-01, ADR 0113).
 
 A project declares `triggers:` in its configuration. Each one is a door at
 `POST /webhooks/triggers/{org}/{project}/{name}`, opened by its own token (only its SHA-256 is kept),
@@ -71,7 +71,7 @@ SIGNATURE_PREFIX = "sha256="
 
 
 def signing_secret(token_sha256: str) -> str:
-    """The HMAC key of a trigger with `auth: signature` (S51-04): derived from the token's digest
+    """The HMAC key of a trigger with `auth: signature` (S56-04): derived from the token's digest
     under the deployment's session secret, so nothing more is stored and it changes with the token.
     Rotating `CHOREGOS_SESSION_SECRET` changes it too: the senders take the new one from a new token."""
     from ..config import get_settings
@@ -184,7 +184,7 @@ class Mapped:
 
 def matches(trigger: TriggerConfig, payload: Any) -> bool:
     """Whether the payload holds, at every pointer of `when`, the text or one of the texts listed
-    (S51-05). A pointer the payload lacks never matches."""
+    (S56-05). A pointer the payload lacks never matches."""
     for pointer, expected in trigger.when.items():
         found, value = resolve(pointer, payload)
         allowed = [expected] if isinstance(expected, str) else expected

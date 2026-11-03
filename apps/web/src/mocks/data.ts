@@ -76,6 +76,7 @@ import type {
   WorkflowEditResult,
   WorkflowOperation,
   WorkflowRouting,
+  RoutingPreviewRequest,
   WorkflowSummary,
   WorkflowValidation,
   WorkItemCreate,
@@ -84,7 +85,7 @@ import type {
 } from "@/lib/types";
 import { normalizeSpec } from "@/lib/agent-diff";
 import { ApiError } from "@/lib/api";
-import type { OutboundProxyPut, OutboundProxyState, WorkflowAdopt, WorkflowCatalogueEntry } from "@/lib/types";
+import type { McpGatewayPut, McpGatewayState, OutboundProxyPut, OutboundProxyState, WorkflowAdopt, WorkflowCatalogueEntry } from "@/lib/types";
 import { readSandboxNetwork } from "@/lib/policy-network";
 import { parcoursDe, parcoursEnCours, parcoursTermine } from "./parcours";
 import { egressApi } from "./egress";
@@ -564,9 +565,9 @@ export const runLogsOom: RunLogs = {
 
 /** Ce à quoi l'agent a touché, replié depuis son journal (`/runs/{id}/access`). */
 export const runAccess = {
-  evenements: 64,
+  events: 64,
   refusals: 1,
-  acces: [
+  access: [
     { nature: "read", target: "src/billing/totals.py", requests: 6, refusals: 0 },
     { nature: "write", target: "src/billing/totals.py", requests: 3, refusals: 0 },
     { nature: "write", target: "tests/billing/test_totals.py", requests: 2, refusals: 0 },
@@ -576,7 +577,7 @@ export const runAccess = {
       target: "src/billing/rates.py",
       requests: 1,
       refusals: 1,
-      motifs: ["outside the allowed paths: use report_finding or request_scope_change"],
+      reasons: ["outside the allowed paths: use report_finding or request_scope_change"],
     },
   ],
 };
@@ -1200,6 +1201,8 @@ export const workflowSummaries: WorkflowSummary[] = [
 export const workflowRouting: WorkflowRouting = {
   default: "default-simple",
   rules: [{ when: { labels_any: ["incident"], labels_all: [], item_type: null }, workflow: "hotfix" }],
+  strategy: "labels",
+  hints: {},
 };
 
 const requirement = (capability: string, reason: string) => ({ capability, reasons: [reason] });
@@ -2684,6 +2687,75 @@ function outboundProxyApi(method: string, bare: string, body: unknown): unknown 
   return structuredClone(mockOutboundProxy);
 }
 
+/** The organisation's MCP gateway (ADR 0105), kept for the time of the page; the secret is never stored here, as in the API. */
+let mockMcpGateway: McpGatewayState = {
+  gateway: null,
+  updated_by: null,
+  updated_at: null,
+  assertion: {
+    issuer: "https://choregos.example.com/orgs/acme",
+    jwks_url: "https://choregos.example.com/api/v1/orgs/acme/mcp-gateway/jwks.json",
+    keys: [],
+  },
+};
+let mockGatewaySecret = false;
+
+function mockAssertionKey(): void {
+  const keys = mockMcpGateway.assertion.keys.map((k) => ({ ...k, current: false }));
+  keys.push({ kid: `key-${keys.length + 1}`, created_at: new Date().toISOString(), current: true });
+  mockMcpGateway = { ...mockMcpGateway, assertion: { ...mockMcpGateway.assertion, keys } };
+}
+
+/** The five MCP-gateway routes, as the API answers them. */
+function mcpGatewayApi(method: string, bare: string, body: unknown): unknown {
+  if (!/^\/orgs\/[^/]+\/mcp-gateway(\/test|\/assertion-key)?$/.test(bare)) return undefined;
+  if (bare.endsWith("/assertion-key")) {
+    mockAssertionKey();
+    return structuredClone(mockMcpGateway.assertion);
+  }
+  if (bare.endsWith("/test")) {
+    if (!mockMcpGateway.gateway) throw new ApiError(404, { title: "Not Found", detail: "no MCP gateway is set" });
+    const { server } = body as { server: string };
+    if (server.includes("fail"))
+      return { ok: false, server, protocol_version: null, server_info: null, tools: null, elapsed_ms: 212, error: "the gateway answered 502 Bad Gateway" };
+    return { ok: true, server, protocol_version: "2025-06-18", server_info: { name: server, version: "1.0.0" }, tools: 3, elapsed_ms: 320, error: null };
+  }
+  if (method === "PUT") {
+    const put = body as McpGatewayPut;
+    if (put.auth.type !== "jwt_assertion" && put.secret === undefined && !mockGatewaySecret)
+      throw new ApiError(422, { title: "Unprocessable Entity", detail: "a secret is required the first time" });
+    if (put.auth.type === "jwt_assertion" && !put.audience)
+      throw new ApiError(422, { title: "Unprocessable Entity", detail: "an audience is required for a signed assertion" });
+    if (put.secret !== undefined) mockGatewaySecret = true;
+    mockMcpGateway = {
+      ...mockMcpGateway,
+      gateway: {
+        mode: put.mode,
+        endpoint: put.endpoint,
+        routing: put.routing,
+        server_header: put.server_header ?? null,
+        auth: put.auth,
+        audience: put.audience ?? null,
+        identity_header: put.identity_header ?? null,
+        timeout_s: put.timeout_s ?? 30,
+        secret_set: mockGatewaySecret,
+      },
+      updated_by: me.email,
+      updated_at: new Date().toISOString(),
+    };
+    if (put.auth.type === "jwt_assertion" && mockMcpGateway.assertion.keys.length === 0) mockAssertionKey();
+  }
+  if (method === "DELETE") {
+    const using = orgConnectors.filter((c) => c.type === "mcp-gateway").map((c) => c.name);
+    if (using.length > 0)
+      throw new ApiError(409, { title: "Conflict", detail: "connectors still go through the gateway", code: "gateway_in_use", connectors: using });
+    mockMcpGateway = { ...mockMcpGateway, gateway: null, updated_by: null, updated_at: null };
+    mockGatewaySecret = false;
+    return undefined;
+  }
+  return structuredClone(mockMcpGateway);
+}
+
 /** The demo organisation, kept for the time of the page: the Organisation card on /admin renames it (S40-24). */
 const mockOrg: { slug: string; name: string; role: string; currency: string } = {
   slug: "acme",
@@ -2814,6 +2886,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     return structuredClone(mockOrg) as T;
   }
   if (/^\/orgs\/[^/]+\/outbound-proxy/.test(bare)) return outboundProxyApi(method, bare, body) as T;
+  if (/^\/orgs\/[^/]+\/mcp-gateway/.test(bare)) return mcpGatewayApi(method, bare, body) as T;
   if (method === "GET" && /^\/orgs\/[^/]+\/memory\/ab-report$/.test(bare)) {
     const weeks = Number(new URLSearchParams(path.split("?")[1] ?? "").get("weeks") ?? "4");
     return {
@@ -3008,8 +3081,37 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     if (inconnus.length) throw new ApiError(422, { detail: `unknown or inactive workflow(s): ${inconnus.join(", ")}` });
     workflowRouting.default = corps.default;
     workflowRouting.rules = corps.rules;
+    if (corps.strategy) workflowRouting.strategy = corps.strategy;
+    if (corps.hints) workflowRouting.hints = Object.fromEntries(Object.entries(corps.hints).filter(([, h]) => h.trim()));
     for (const w of workflowSummaries) w.is_default = w.name === corps.default;
     return workflowRouting as T;
+  }
+  if (method === "POST" && /^\/projects\/[^/]+\/workflow-routing\/preview$/.test(chemin ?? "")) {
+    // The demo plays the API's order (ADR 0116): the rules, then a "model" that matches the hints'
+    // words, then the default.
+    const corps = JSON.parse(String(init.body ?? "{}")) as RoutingPreviewRequest;
+    const labels = new Set(corps.labels ?? []);
+    const strategy = workflowRouting.strategy ?? "labels";
+    if (strategy !== "llm") {
+      const index = workflowRouting.rules.findIndex(
+        (r) =>
+          (!r.when.labels_any?.length || r.when.labels_any.some((l) => labels.has(l))) &&
+          (r.when.labels_all ?? []).every((l) => labels.has(l)) &&
+          (!r.when.item_type || r.when.item_type === corps.item_type) &&
+          Boolean(r.when.labels_any?.length || r.when.labels_all?.length || r.when.item_type),
+      );
+      if (index >= 0) return { workflow: workflowRouting.rules[index]!.workflow, by: "rule", reason: `routing rule ${index + 1}`, model: null } as T;
+    }
+    if (strategy === "labels") return { workflow: workflowRouting.default, by: "default", reason: null, model: null } as T;
+    const text = `${corps.title} ${corps.body ?? ""}`.toLowerCase();
+    const chosen = Object.entries(workflowRouting.hints ?? {}).find(([, hint]) =>
+      hint.toLowerCase().split(/[^a-z0-9]+/).some((w) => w.length >= 4 && text.includes(w)),
+    );
+    return (
+      chosen
+        ? { workflow: chosen[0], by: "llm", reason: `the request speaks of ${chosen[1]}`, model: "mock/router" }
+        : { workflow: workflowRouting.default, by: "default", reason: "no workflow clearly fits", model: "mock/router" }
+    ) as T;
   }
   if (method === "POST" && /^\/projects\/[^/]+\/workflow-adoptions$/.test(chemin ?? "")) {
     const corps = JSON.parse(String(init.body ?? "{}")) as WorkflowAdopt;
@@ -3081,6 +3183,17 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       notes: ["dropped skill `ghost`: not in the organisation, or not usable yet"],
       model: "mock/drafter",
     } as T;
+  }
+  if (method === "DELETE" && agentEcrit && !agentEcrit[2]) {
+    // The demo has no runs or pins to count: it deletes a draft and refuses the rest, as the API
+    // refuses an agent that served (retire it instead).
+    const index = agents.findIndex((a) => a.slug === agentEcrit[1]);
+    if (index < 0) throw new ApiError(404, { detail: `agent \`${agentEcrit[1]}\` not found` });
+    if (agents[index]!.lifecycle !== "draft") {
+      throw new ApiError(409, { detail: `agent \`${agentEcrit[1]}\` cannot be deleted: it has run. Retire it instead` });
+    }
+    agents.splice(index, 1);
+    return undefined as T;
   }
   if (method === "POST" && agentEcrit?.[2] === "/fork") {
     const corps = JSON.parse(String(init.body ?? "{}")) as AgentFork;
@@ -3663,7 +3776,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/workflows\/dev-complex$/, devComplexDef],
     [/^\/projects\/[^/]+\/workflows\/[^/]+$/, workflow],
     [/^\/projects\/[^/]+\/workflow-routing$/, workflowRouting],
-    // HTTP triggers (S51-02): one declared trigger, its token minted once, a manual firing.
+    // HTTP triggers (S56-02): one declared trigger, its token minted once, a manual firing.
     [/^\/projects\/[^/]+\/triggers\/[^/]+\/token$/, mockTriggerToken],
     [/^\/projects\/[^/]+\/triggers\/[^/]+\/fire$/, mockTriggerAck],
     [/^\/projects\/[^/]+\/triggers$/, mockTriggers],

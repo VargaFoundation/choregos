@@ -129,7 +129,9 @@ async def _jira_project_for(session: Any, payload: dict[str, Any]) -> tuple[Proj
         await session.execute(
             select(Connector, Project)
             .join(Project, Project.id == Connector.project_id)
-            .where(Connector.kind == "tracker", Connector.type == "jira")
+            # An archived project keeps its connector, but no longer takes deliveries: holding the
+            # same key as its successor, it made the routing ambiguous and nothing was routed.
+            .where(Connector.kind == "tracker", Connector.type == "jira", Project.status != "archived")
         )
     ).all()
     matches = [
@@ -173,7 +175,7 @@ async def _dispatch(session: Any, events: list[InboundEvent], project_of: Projec
             or event.payload.get("label") == AGENT_READY_LABEL
         )
         if item is None and not should_start and _starts_by_rule(project, event):
-            should_start = True  # a project rule, not the label (S51-03)
+            should_start = True  # a project rule, not the label (S56-03)
         created = False
         if item is None and should_start:
             created = True
@@ -189,6 +191,7 @@ async def _dispatch(session: Any, events: list[InboundEvent], project_of: Projec
                     url=event.payload.get("url"),
                     labels=tuple(event.payload.get("labels") or []),
                     item_type=event.payload.get("item_type"),
+                    reporter=event.payload.get("reporter"),
                     initiated_by=initiator("tracker", event.source),
                 ),
             )
@@ -221,7 +224,7 @@ async def _dispatch(session: Any, events: list[InboundEvent], project_of: Projec
     return delivered
 
 
-#: The events that may start an item the project does not hold yet, by a start rule (S51-03).
+#: The events that may start an item the project does not hold yet, by a start rule (S56-03).
 STARTS_BY_RULE = frozenset(
     {
         InboundEventType.ITEM_CREATED,
@@ -233,7 +236,7 @@ STARTS_BY_RULE = frozenset(
 
 
 def _starts_by_rule(project: Project, event: InboundEvent) -> bool:
-    """Whether one of the project's `start_rules` holds for the item the event describes (S51-03,
+    """Whether one of the project's `start_rules` holds for the item the event describes (S56-03,
     ADR 0113): a ServiceNow incident in the desk's queue starts without an `agent-ready` label. Every
     condition of a rule must hold; a value the event does not carry never matches."""
     if event.type not in STARTS_BY_RULE:
@@ -351,14 +354,18 @@ async def tekton_webhook(
 ) -> WebhookAck:
     """CloudEvents `dev.tekton.event.pipelinerun.{successful,failed}.v1`.
 
-    Authentifié par le secret partagé, en en-tête `X-Choregos-Secret` OU dans l'URL du puits
-    (`?jeton=`) : le puits CloudEvents de Tekton se règle par une URL et n'ajoute pas d'en-tête. Il
-    n'y avait AUCUNE vérification — sans conséquence tant que la RLS cachait tout à cette route sur
-    PostgreSQL, un chemin d'écriture anonyme dès qu'elle voit les projets (« CI réussie » sur
-    n'importe quel ticket).
+    Authenticated by the shared secret, in the `X-Choregos-Secret` header OR in the sink URL
+    (`?token=`): Tekton's CloudEvents sink is configured with a URL and adds no header. `?jeton=`,
+    the former spelling, is still accepted (S45-02). There used to be NO check: harmless while
+    row-level security hid everything from this route on PostgreSQL, an anonymous write path as
+    soon as it sees the projects ("CI passed" on any work item).
     """
     settings = get_settings()
-    fourni = x_choregos_secret or request.query_params.get("jeton", "")
+    fourni = (
+        x_choregos_secret
+        or request.query_params.get("token")
+        or request.query_params.get("jeton", "")  # lang: fr-ok alias:external
+    )
     if not settings.generic_webhook_secret:
         if settings.env in {"staging", "prod"}:
             raise unauthorized("Tekton webhook not configured: CHOREGOS_GENERIC_WEBHOOK_SECRET is missing")

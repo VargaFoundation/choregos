@@ -25,6 +25,8 @@ from ..schemas import (
     PolicyCeilingPut,
     PolicyDto,
     PolicyPut,
+    RoutingPreviewDto,
+    RoutingPreviewRequest,
     StateActivity,
     StepActivity,
     WorkflowActivity,
@@ -50,7 +52,9 @@ from ..services import (
     workflow_actif,
 )
 from ..services.definitions import CEILING_KEY, ceiling_of, policy_model
+from ..services.llm_routing import book
 from ..services.network import project_effective_network
+from ..services.routage import Naissance, route
 
 router = APIRouter(tags=["workflows"])
 
@@ -436,7 +440,12 @@ async def get_routing(ctx: ProjectCtx, session: Db) -> WorkflowRoutingDto:
     if not defaut:
         row = await default_workflow(session, ctx.id)
         defaut = row.name if row is not None else ""
-    return WorkflowRoutingDto(default=defaut, rules=list(ctx.project.workflow_routing or []))
+    return WorkflowRoutingDto(
+        default=defaut,
+        rules=list(ctx.project.workflow_routing or []),
+        strategy=ctx.project.routing_strategy or "labels",
+        hints=dict(ctx.project.routing_hints or {}),
+    )
 
 
 @router.put(
@@ -454,11 +463,15 @@ async def put_routing(ctx: ProjectCtx, body: WorkflowRoutingDto, session: Db) ->
             )
         ).scalars()
     )
-    inconnus = sorted({body.default, *(r.workflow for r in body.rules)} - actifs)
+    inconnus = sorted({body.default, *(r.workflow for r in body.rules), *(body.hints or {})} - actifs)
     if inconnus:
         raise unprocessable(f"unknown or inactive workflow(s): {', '.join(inconnus)}")
     ctx.project.default_workflow = body.default
     ctx.project.workflow_routing = [r.model_dump(mode="json") for r in body.rules]
+    if body.strategy is not None:
+        ctx.project.routing_strategy = body.strategy
+    if body.hints is not None:
+        ctx.project.routing_hints = {name: hint.strip() for name, hint in body.hints.items() if hint.strip()}
     await record(
         session,
         ctx.principal,
@@ -468,8 +481,45 @@ async def put_routing(ctx: ProjectCtx, body: WorkflowRoutingDto, session: Db) ->
         target_id=ctx.id,
         default=body.default,
         rules=len(body.rules),
+        strategy=ctx.project.routing_strategy,
+        hints=sorted(ctx.project.routing_hints or {}),
     )
-    return body
+    return body.model_copy(
+        update={
+            "strategy": ctx.project.routing_strategy or "labels",
+            "hints": dict(ctx.project.routing_hints or {}),
+        }
+    )
+
+
+@router.post(
+    "/projects/{id}/workflow-routing/preview",
+    response_model=RoutingPreviewDto,
+    operation_id="previewWorkflowRouting",
+)
+async def preview_routing(ctx: ProjectCtx, body: RoutingPreviewRequest, session: Db) -> RoutingPreviewDto:
+    """Where a work item would be born, and why (ADR 0116). Nothing is created; a call to the model
+    is real spend, booked on the project."""
+    ctx.require(Permission.WORKFLOW_WRITE)
+    routed = await route(
+        session,
+        ctx.project,
+        Naissance(
+            tracker_key="preview",
+            title=body.title,
+            body=body.body,
+            labels=tuple(body.labels),
+            item_type=body.item_type,
+        ),
+    )
+    if routed.decision is not None:
+        await book(session, ctx.project, routed.decision, None)
+    return RoutingPreviewDto(
+        workflow=routed.row.name if routed.row is not None else None,
+        by=routed.by,
+        reason=routed.reason,
+        model=routed.decision.model if routed.decision is not None else None,
+    )
 
 
 @router.get("/projects/{id}/policy", response_model=PolicyDto, operation_id="getPolicy")

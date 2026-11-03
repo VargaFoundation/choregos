@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Événements : entrants normalisés (InboundEvent), internes (CloudEvents), décisions humaines."""
+"""Events: normalised inbound (InboundEvent), internal (CloudEvents), human decisions."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ def _now() -> datetime:
 
 
 class InboundEvent(Strict):
-    """Événement externe normalisé par un adaptateur (docs/plan/01 §1.7)."""
+    """External event normalised by an adapter (docs/plan/01 §1.7)."""
 
     type: InboundEventType
     source: str
@@ -35,7 +35,7 @@ class InboundEvent(Strict):
 
 
 class ChoregosEvent(Strict):
-    """Événement interne au format CloudEvents 1.0."""
+    """Internal event in the CloudEvents 1.0 format."""
 
     specversion: Literal["1.0"] = "1.0"
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -61,7 +61,7 @@ class ChoregosEvent(Strict):
 
 
 class HumanDecision(Strict):
-    """Décision humaine acheminée vers un WorkflowInterpreter."""
+    """Human decision routed to a WorkflowInterpreter."""
 
     request_id: str | None = None
     kind: HumanRequestKind
@@ -69,8 +69,8 @@ class HumanDecision(Strict):
     answer: str | None = None
     granted_paths: list[str] = Field(default_factory=list)
     reason: str | None = None
-    #: Une tâche : les valeurs saisies — elles deviennent des champs du ticket — et la phrase que la
-    #: personne a attestée, telle qu'on la lui a montrée (S20-06).
+    #: A task: the values entered (they become ticket fields) and the sentence the person
+    #: attested, as it was shown to them (S20-06).
     values: dict[str, Any] = Field(default_factory=dict)
     attestation: str | None = None
     decided_by: str
@@ -79,12 +79,12 @@ class HumanDecision(Strict):
 
 
 class Control(Strict):
-    """Signal de contrôle d'un workflow (pause, reprise, arrêt, migration)."""
+    """Control signal for a workflow (pause, resume, stop, migrate)."""
 
     action: Literal["pause", "resume", "stop", "migrate", "rerun_stage"]
     workflow_def_id: str | None = None
-    #: `migrate` : la définition cible, lue et vérifiée par l'API. L'interpréteur ne fait aucune
-    #: entrée/sortie : un identifiant seul ne lui disait rien, et il mourait en le validant (ADR 0031).
+    #: `migrate`: the target definition, read and checked by the API. The interpreter does no
+    #: I/O: an identifier alone told it nothing, and it died while validating it (ADR 0031).
     workflow: dict[str, Any] | None = None
     state_mapping: dict[str, str] = Field(default_factory=dict)
     run_id: str | None = None
@@ -93,7 +93,7 @@ class Control(Strict):
 
 
 class DeployResult(Strict):
-    """Résultat d'un passage dans le release train, renvoyé à l'interpréteur."""
+    """Result of a pass through the release train, returned to the interpreter."""
 
     ok: bool
     env: str

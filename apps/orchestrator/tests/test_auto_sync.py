@@ -9,13 +9,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import pathlib
 from typing import Any
 
 import pytest
 
-from .conftest import Fixture
+from .conftest import Fixture, recording_history
 
 pytestmark = pytest.mark.asyncio
 
@@ -103,8 +102,8 @@ async def test_un_environnement_auto_sync_sain_livre_le_ticket(
     from temporalio.worker import Replayer
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(historique)
-    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
-        english = os.environ["CHOREGOS_ARCHIVER_HISTORIQUE"] == "english"  # S34-02
+    if recording_history():
+        english = recording_history() == "english"  # S34-02
         cible = HISTORIQUES / (
             "train-auto-sync-english-S34-02.json" if english else "train-auto-sync-S21-27.json"
         )

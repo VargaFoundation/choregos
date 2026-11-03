@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`TrackerReconciliation` : le polling de secours du tracker (docs/plan/03, S3-06).
+"""`TrackerReconciliation`: the tracker's fallback polling (docs/plan/03, S3-06).
 
-Les webhooks sont le chemin nominal. Ils se perdent : livraison en échec, plateforme
-injoignable, secret tourné pendant une maintenance. Ce workflow relit périodiquement les
-candidats du tracker et rattrape ce qui manque — c'est un filet, pas un ordonnanceur :
-il ne décide rien, il redonne la main à `WorkflowInterpreter`.
+Webhooks are the nominal path. They get lost: failed delivery, unreachable platform, secret
+rotated during maintenance. This workflow periodically rereads the tracker's candidates and
+catches up on what is missing. It is a net, not a scheduler: it decides nothing, it hands control
+back to `WorkflowInterpreter`.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ActivityError
 
-from .planification import executer_activite
+from .scheduling import execute_on_its_queue
 
 with workflow.unsafe.imports_passed_through():
     from ..activities import schedules as schedule_activities
@@ -25,7 +25,7 @@ with workflow.unsafe.imports_passed_through():
 
 RETRY = RetryPolicy(maximum_attempts=3, initial_interval=timedelta(seconds=5))
 
-# Au-delà, l'historique s'allonge pour rien : on repart propre avec `continue_as_new`.
+# Beyond this, the history grows for nothing: we restart clean with `continue_as_new`.
 PASSES_BEFORE_CONTINUE = 200
 
 
@@ -52,12 +52,12 @@ class TrackerReconciliation:
 
     @workflow.signal
     def stop(self, payload: dict[str, Any] | None = None) -> None:
-        """Arrêt propre : un projet archivé n'a plus à interroger son tracker."""
+        """Clean stop: an archived project no longer has to poll its tracker."""
         self.stopped = True
 
     @workflow.signal
     def reconcile_now(self, payload: dict[str, Any] | None = None) -> None:
-        """Rattrapage immédiat, sans attendre la fin de l'intervalle."""
+        """Immediate catch-up, without waiting for the interval to end."""
         self.wake = True
 
     @workflow.run
@@ -65,15 +65,15 @@ class TrackerReconciliation:
         params = ReconciliationInput(**payload)
         done = 0
         while not self.stopped and done < params.max_passes:
-            # Une passe qui échoue — tracker injoignable, App GitHub pas encore posée — ne tue pas la
-            # boucle : elle le dit dans son statut et repasse à l'intervalle suivant. Sur le locataire
-            # dev, le 08/10, trois échecs sans App avaient laissé `reconcile-dev` mort pour de bon,
-            # et les issues `agent-ready` n'étaient plus jamais lues (S22-06).
+            # A pass that fails (tracker unreachable, GitHub App not yet installed) does not kill the
+            # loop: it says so in its status and runs again at the next interval. On the dev tenant,
+            # on 8 October, three failures without the App had left `reconcile-dev` dead for good, and
+            # the `agent-ready` issues were never read again (S22-06).
             # The project's schedules open their work items first, so that this same pass starts
             # them (S38-11). Patched: a history recorded before it replays without the call.
             if workflow.patched("fire-schedules"):
                 try:
-                    self.fired = await executer_activite(
+                    self.fired = await execute_on_its_queue(
                         schedule_activities.fire_schedules,
                         {"project_slug": params.project_slug},
                         start_to_close_timeout=timedelta(minutes=2),
@@ -82,7 +82,7 @@ class TrackerReconciliation:
                 except ActivityError as erreur:
                     self.fired = {"error": str(erreur.cause or erreur)}
             try:
-                self.last = await executer_activite(
+                self.last = await execute_on_its_queue(
                     tracker_activities.reconcile_tracker,
                     {"project_slug": params.project_slug},
                     start_to_close_timeout=timedelta(minutes=5),
@@ -108,7 +108,7 @@ class TrackerReconciliation:
 
 
 async def _wait(condition: Any, timeout: timedelta) -> bool:  # noqa: ASYNC109
-    """`wait_condition` qui rend `False` sur expiration plutôt que de lever."""
+    """A `wait_condition` that returns `False` on expiry rather than raising."""
     try:
         await workflow.wait_condition(condition, timeout=timeout)
     except TimeoutError:

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""What a tracker's backup poll searches for (S51-03, ADR 0113): `agent-ready`, and the project's
+"""What a tracker's backup poll searches for (S56-03, ADR 0113): `agent-ready`, and the project's
 start rules a search by labels can express."""
 
 from __future__ import annotations

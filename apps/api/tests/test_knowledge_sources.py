@@ -339,6 +339,31 @@ async def test_web_and_git_sources_sync_through_their_fakes(client: AsyncClient,
     assert titles == {"Restart", "ADR"}
 
 
+async def test_a_git_source_syncs_yaml_and_json_under_their_path(client: AsyncClient, admin: str) -> None:
+    """S51-05: a `.yaml` from git is no longer skipped as an unsupported format; its path heads it."""
+    from choregos_adapters.fakes.documents import fake_source
+
+    await client.post(BASE, json={"slug": "framework", "name": "Framework"})
+    created = await client.post(
+        f"{BASE}/framework/sources",
+        json={"kind": "git", "name": "Platform", "config": {
+            "url": "https://git.example.com/p.git", "paths": ["**/*.yaml", "**/*.json", "*.md"]}},
+    )  # fmt: skip
+    assert created.status_code == 201, created.text
+    source = fake_source(created.json()["id"])
+    source.put("deploy/values.yaml", "deploy-values.yaml", b"# replicas\nreplicas: 3\n")
+    source.put("schemas/project.json", "schemas-project.json", b'{"type": "object"}\n')
+    source.put("bin/tool.exe", "bin-tool.exe", b"MZ")
+    summary = await _sync(created.json()["id"])
+    assert summary["added"] == 2, summary
+    assert summary["skipped_reasons"] == ["bin-tool.exe: format not converted"], summary
+    documents = {d["filename"]: d for d in (await client.get(f"{BASE}/framework")).json()["documents"]}
+    assert set(documents) == {"deploy-values.yaml", "schemas-project.json"}
+    assert documents["deploy-values.yaml"]["title"] == "deploy/values.yaml"
+    read = await client.get(f"{BASE}/framework/documents/{documents['deploy-values.yaml']['id']}")
+    assert read.json()["markdown"] == "# deploy/values.yaml\n\n```yaml\n# replicas\nreplicas: 3\n```\n"
+
+
 async def test_the_activity_skips_a_pass_that_is_not_due(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:

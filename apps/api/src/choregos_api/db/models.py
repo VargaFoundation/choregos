@@ -103,6 +103,11 @@ class Project(Base, PkMixin, TimestampMixin):
     #: ordonnée de `{when: {labels_any, labels_all, item_type}, workflow}`. Hors de `config`, que
     #: `PATCH /projects/{id}` remplace en entier.
     workflow_routing: Mapped[list[dict[str, Any]]] = mapped_column(Json, default=list)
+    #: How a work item that names no workflow finds one (ADR 0116): `labels` (the rules alone),
+    #: `rules_then_llm` (the rules, then a small model when none matched) or `llm` (the model alone).
+    routing_strategy: Mapped[str] = mapped_column(String(16), default="labels", server_default="labels")
+    #: What the model reads about each workflow beside its description: workflow name → hint.
+    routing_hints: Mapped[dict[str, str]] = mapped_column(Json, default=dict)
     #: Which channel of the agents this project runs when it pins nothing (S40-02, ADR 0071):
     #: `stable` (production, the default) or `candidate` (testing).
     agent_channel: Mapped[str] = mapped_column(String(16), default="stable", server_default="stable")
@@ -219,6 +224,10 @@ class WorkItem(Base, PkMixin, TimestampMixin):
     )
     temporal_wf_id: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    #: Who filed the work item, as its tracker names them (Jira: the reporter, `Name <e-mail>`; GitHub,
+    #: GitLab: the author's login; the console: the person's e-mail). Written once at birth (#1179):
+    #: an agent whose rules depend on the requester reads it. Personal data, never in a redacted entry.
+    reporter: Mapped[str | None] = mapped_column(String(320), nullable=True)
     #: Who started the work item, as `<kind>:<subject>` (`services/initiator.py`, ADR 0077 §2):
     #: written once at birth by the door it came through; `None` for a work item born before S40-22.
     initiated_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -624,19 +633,19 @@ class ReceivedEvent(Base, PkMixin):
     )
     work_item_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
     #: `jira`, `github`, `gitlab`, `tekton`, `argocd`, `alertmanager`, `plugin:<plugin>/<server>`,
-    #: `trigger:<name>` (S51-01), `schedule:<name>`
+    #: `trigger:<name>` (S56-01), `schedule:<name>`
     source: Mapped[str] = mapped_column(String(160))
     event_type: Mapped[str] = mapped_column(String(80))
     delivery_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     #: `created_work_item`, `started`, `signalled`, `boarded`, `labels_updated`,
-    #: `ignored_no_item_key`, `ignored_not_agent_ready`, `already_open` or `refused` (S51-01)
+    #: `ignored_no_item_key`, `ignored_not_agent_ready`, `already_open` or `refused` (S56-01)
     outcome: Mapped[str] = mapped_column(String(32))
     summary: Mapped[str] = mapped_column(String(300), default="")
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class TriggerToken(Base, PkMixin):
-    """The token of a project's HTTP trigger (S51-01, ADR 0113): its SHA-256, never the token.
+    """The token of a project's HTTP trigger (S56-01, ADR 0113): its SHA-256, never the token.
 
     The trigger itself is declared in the project's configuration (`triggers:`); this row is what a
     caller must prove. Minting a new one replaces the old: one token per trigger, shown once."""

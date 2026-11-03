@@ -5,15 +5,15 @@ A code is a key a client may match on, so a rename is a contract change. For one
 platform emits the English code in `code` and the former French one in `deprecated_code`, and
 `canonical_issue_code` accepts either spelling wherever a code is read.
 
-Remove `RENAMED_ISSUE_CODES` and `deprecated_code` in the release after the one that ships them.
+S34-03 renamed `gate.sans_matiere` and `workflow.effet_implicite`; that window ended in S45-02.
+`role.playbook_introuvable` is the last one (S45-02; remove in 0.22.0).
 """
 
 from __future__ import annotations
 
 #: Former code -> English code. The keys stay French on purpose: they are the aliases.
 RENAMED_ISSUE_CODES: dict[str, str] = {
-    "gate.sans_matiere": "gate.nothing_to_check",  # lang: fr-ok
-    "workflow.effet_implicite": "workflow.implicit_effect",  # lang: fr-ok
+    "role.playbook_introuvable": "role.playbook_not_found",  # lang: fr-ok
 }
 
 #: English code -> former code, to emit both for one release.

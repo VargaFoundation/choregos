@@ -137,6 +137,10 @@ when the API cannot be asked, it is a 502 and nothing is sent. The client's toke
   `user-<name>-session-<id>`; use the endpoint and port of the gateway chosen in the provider's dashboard.
 - A self-hosted Firecrawl is not routed through the proxy (it is usually in-cluster).
 
+**An MCP gateway** ([ADR 0105](adr/0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md)). An `org_admin`
+sets the one gateway the organisation's MCP traffic can go through, from **Administration → MCP gateway**
+(see *MCP gateway* in the console section below).
+
 **Secrets of a connector are typed once.** Each secret field of a connector (`client_secret` of
 SharePoint, `api_token` of Jira…) is a password input: the value is sealed in the database
 ([ADR 0058](adr/0058-connector-secrets-are-write-only-values.md)) and **never shown again** — the
@@ -237,7 +241,8 @@ and the connector shows the error.
 
 **Runs reach these servers through the platform.** An agent's version names the servers it uses
 and the tools it takes from each — `mcp_servers: [{"connector": "supplier", "tools": ["track_*"]}]`
-(`["*"]` for all; a server named without patterns opens nothing). A run of that agent sees, as
+(`["*"]` for all; a server named without patterns opens nothing, and the console says so —
+"no tool — name tools, or * for all" — on the agent, in its diff and in the builder). A run of that agent sees, as
 `supplier__track_order`, the tools that are **in its selection, `allowed`** for its project
 (after the project's tightening) and open to its groups — an `approval` operation is a governed
 action, not a tool. The agent calls it through `choregos-tools`; the platform checks the
@@ -482,6 +487,18 @@ lifted the production lock. Those names are still read, so a published workflow 
 behaviour, but the validator warns (`workflow.implicit_effect`), and a rename from the console
 first writes the effect down.
 
+**How a terminal state ends the work item is written too.** A terminal state is a success unless it
+says otherwise: `outcome: declined` for a request turned down, `outcome: cancelled` for one dropped.
+The console shows only a success green; a declined state is shown in red, a cancelled one in grey, on
+the board, the ticket and the project page. Only a terminal state may declare an outcome:
+
+```yaml
+states:
+  applied:  { display: Applied, terminal: true }                        # outcome: success, implied
+  declined: { display: Declined, terminal: true, outcome: declined }
+  dropped:  { display: Handed back, terminal: true, outcome: cancelled }
+```
+
 **The next step can depend on what the agent answered** ([ADR 0106](adr/0106-a-workflow-chooses-its-next-step-from-the-agent-s-answer.md)).
 Ask the agent for the answers you route on, as outputs, and put a `when` on the transitions that
 leave the state it lands in. The first transition whose `when` holds is taken; one without `when` is
@@ -507,10 +524,10 @@ did not write never matches, so an agent that says nothing takes the default. Th
 `when` that names an output no transition declares (`when.unknown_output`) and a state whose exits all
 have a `when` (`when.no_default`).
 
-Two validation codes were renamed to English (ADR 0046): `workflow.implicit_effect` (formerly
-`workflow.effet_implicite`) and `gate.nothing_to_check` (formerly `gate.sans_matiere`). For one
-release, an issue that carries one of them also carries its former spelling in `deprecated_code`;
-match on `code`.
+Validation codes are English (ADR 0046). The window in which `workflow.implicit_effect` and
+`gate.nothing_to_check` also carried their former spellings ended in S45-02. The last renamed code,
+`role.playbook_not_found`, carries its former spelling (`role.playbook_introuvable`) in
+`deprecated_code` until 0.22.0; match on `code`.
 
 The console's **workflows** tab (`/p/<slug>/workflows/<name>`) shows each workflow four ways:
 the process (each transition in plain words), the map (one lane per kind of actor), the YAML
@@ -586,6 +603,22 @@ curl         $API/projects/acme:hr/workflows                                    
 - A work item is bound at birth — an explicit `workflow`, else the first routing rule that
   matches its labels or its tracker type, else the default — and **pinned to that version**:
   publishing a new version never moves a running item.
+- **A small model may choose** ([ADR 0116](adr/0116-a-small-model-may-route-a-work-item.md)). The
+  routing's `strategy` is `labels` (the rules alone, the default), `rules_then_llm` (the rules,
+  then the model when none matched) or `llm` (the model alone). The model reads the item's title,
+  body, labels and type and, for each active workflow, its `metadata.description` and a `hints`
+  entry (at most 500 characters); it may only name an active workflow, and an unknown name, no
+  answer, an error or a refused model leaves the item to the default. It is the organisation's
+  `cheap` tier, which the model catalogue must enable for the `route` usage; each call is one
+  `route` line in the costs, and the work item keeps `documents.routing` (`by`, `reason`, `model`).
+  `POST /projects/{id}/workflow-routing/preview {"title": …, "body": …, "labels": […]}` says where an
+  item would be born and why, without creating it. A `PUT` that leaves out `strategy` or `hints`
+  keeps them.
+
+  ```bash
+  curl -X PUT $API/projects/acme:hr/workflow-routing -d '{"default": "onboarding", "rules": [],
+    "strategy": "rules_then_llm", "hints": {"offboarding": "leavers, departures, last day"}}'
+  ```
 - `PUT /projects/{id}/workflow` remains, as the alias of the default workflow.
 - A stack template ships them to every project born from it, in its `manifest.yaml`:
 
@@ -607,7 +640,9 @@ curl         $API/projects/acme:hr/workflows                                    
 - In the console, the project's **workflows** page does the same: **make default** and
   **deactivate** on each workflow (both confirmed; deactivate is offered only when the workflow is
   neither the default nor a routing target, and says why otherwise), and a **routing** card that
-  adds, orders and removes rules as a draft, saved in one gesture. A new workflow cannot take the
+  chooses the default and the strategy, adds, edits in place, orders and removes rules (any of
+  these labels, all of these labels, a type), writes each workflow's hint for the model, as a draft
+  saved in one gesture; **Try the routing** shows where a request would land. A new workflow cannot take the
   name of an existing one: publishing it would replace that workflow's active version.
 - **Moving a running item to another version** is explicit:
 
@@ -888,7 +923,8 @@ gateway key. The runner writes the work item's fields in `.choregos/fields.json`
 with `CHOREGOS_WORKSPACE`, `CHOREGOS_RUN_ID`, `CHOREGOS_API_URL` and the run's own token
 `CHOREGOS_RUN_TOKEN` (to call a connector through the internal API), and reads back
 `.choregos/job.json` = `{"summary": …, "facts": {…}, "outputs": {…}}` and the files in
-`.choregos/outputs/`. A non-zero exit fails the step; the facts are **measured**, so
+`.choregos/outputs/`. None of these files is committed: the branch, and the pull request, carry only
+what the command changed in the repository (S51-08). A non-zero exit fails the step; the facts are **measured**, so
 `evidence_facts` gates on what the code computed, not on what an agent said. Retries, `on_fail` and
 the `*agent` wildcard treat a job like an agent step. A job reaches the outside only through the
 connector operations its actor names, `tools: [{connector: marketdata, tools: [get_bars]}]`, called
@@ -1369,6 +1405,12 @@ warning) → `retired`, which is final.
 `POST /orgs/{org}/agents/{slug}/lifecycle {"to": "retired"}` executes the retirement checklist —
 its credentials are revoked, its project pins removed, new runs refused — and is refused (`409`)
 while one of its runs is in flight, unless `"force": true`; the audit log records each step.
+`DELETE /orgs/{org}/agents/{slug}` deletes an agent that never served — no project pin, no run
+outside its trials, named by no active workflow — with its versions, credentials, evaluations and
+releases, and frees its slug; anything else is refused (`409`) with its reasons: retire it instead,
+which keeps its name in the history. It needs the right to manage the agent and is audited
+(`agent.delete`). In the console, **Delete…** sits on the agent's overview and under *Agent status*;
+the registry hides retired agents behind **Show retired**.
 An agent with no run for 60 days says so (`unused`, `last_run_at`), and
 `POST …/agents/{slug}/owner {"email": …}` hands it to another member, credentials included.
 Agents are under the same
@@ -1412,9 +1454,11 @@ How people sign in to the instance is on **Administration → Identity** (below)
   would run on it is refused when it starts ("the agent backend `x` is disabled by the platform
   administrator"), before any budget, key or runner pod, and the work item escalates to a person
   like any configuration refusal; a stage already running is not stopped. With no setting stored
-  (fresh install) only `claude-code` is enabled, as the page shows. Which backends a project may use is still set by the
-  deployment (`CHOREGOS_ALLOWED_AGENT_BACKENDS`, chart `global.agents.defaultBackend` and
-  `allowedBackends`) and by the project's policy. A runtime that fixes its own backend (`code`,
+  (fresh install) only `claude-code` is enabled, as the page shows. The project's allowed backends (`agent.allowed_backends` in its
+  settings) are enforced at stage start too, with the same refusal ("the agent backend `x` is not one
+  this project allows"), checked before the platform switch; an empty list restricts nothing. The
+  deployment's list (`CHOREGOS_ALLOWED_AGENT_BACKENDS`, chart `global.agents.defaultBackend` and
+  `allowedBackends`) only seeds new projects and the readiness check: it does not restrict existing ones. A runtime that fixes its own backend (`code`,
   `prompt`, `hosted`, remote `a2a`) is not concerned. The runner image installs `claude-code`, `gemini-cli` and `opencode`.
 - **Executors (where agent stages run).** Read-only. The card opens with the executor(s) this
   deployment runs ("Agent stages run on `k8s_job` in this deployment"), listed first as *In use*; the
@@ -1453,7 +1497,7 @@ a section opens this page.
   usages and price), or says that the gateway lists nothing or could not be reached. **Sync from
 the gateway** reads the models it lists; **Add a model manually** covers one it routes but does not
 list. Per model an administrator sets: enabled or not, the stage roles allowed (none checked = all),
-the usages (`agent`, `embed`, `distill`, `eval`), a display name, and a price per 1k tokens that
+the usages (`agent`, `embed`, `distill`, `eval`, `route` — the workflow router of ADR 0116), a display name, and a price per 1k tokens that
 replaces the gateway's in the ledger (only when the gateway reports tokens; a gateway that cannot read
 a spend back leaves the line `unmeasured`).
 
@@ -1733,7 +1777,8 @@ curl -X POST $API/orgs/acme/knowledge -H 'Content-Type: application/json' \
 curl -X POST $API/orgs/acme/knowledge/architecture/documents -F file=@zoning-principles.pptx
 ```
 
-An upload (Word, PowerPoint, Excel, PDF, HTML, markdown, text; 20 MiB by default,
+An upload (Word, PowerPoint, Excel, PDF, HTML, markdown, text, and structured text: YAML (`.yaml`,
+`.yml`), JSON, TOML; 20 MiB by default,
 `CHOREGOS_KNOWLEDGE_MAX_UPLOAD_MIB`) is answered `202 pending` and converted to markdown **in the
 background**, in a child process that sees none of the API's secrets and is stopped after
 `CHOREGOS_KNOWLEDGE_CONVERSION_TIMEOUT_S` (120 s). Headings, slide titles and tables are kept; a PDF
@@ -1743,7 +1788,11 @@ table per sheet (hidden sheets marked), with empty cells empty, numbers as the s
 `CHOREGOS_KNOWLEDGE_XLSX_ROWS_PER_SHEET` rows per sheet (2000), the rest counted (`… N more rows not
 shown`) and a document cut that way carries `warnings` (one sentence per cut sheet), shown in
 the console's document list and page, and counted in a source's last sync (`truncated`,
-`truncated_reasons`); a deck keeps its speaker notes and the text of its tables and charts. Documents converted
+`truncated_reasons`); a deck keeps its speaker notes and the text of its tables and charts. Structured
+text is never parsed: it must be UTF-8, and is stored verbatim as one fenced code block (` ```yaml `,
+` ```json `, ` ```toml `) under a `# <path>` heading — the file's path in its repository for a git
+source, its name for an upload — which is also its title; in an `index` base, a `# comment` inside it
+is not a heading, and a long file is cut by lines into chunks that are each fenced again. Documents converted
 before this reading keep their old text until converted again: `POST …/documents/{id}/convert`
 (which also shrinks the corpus). Each document then reads
 `ready` or `failed` with its reason, and `POST …/documents/{id}/convert` tries again. The same file
@@ -1832,7 +1881,10 @@ for the whole base with `POST …/knowledge/{slug}/sync`, **sync all now** on th
   content type or their extension, kept under their real extension); links are never read out of a
   document, and a document on another host is not followed.
 - **A git repository**: an https `url`, a `ref` (branch followed, or commit pinned), `paths` globs
-  (`*.md` by default). A document is named by its whole path (`docs-adr-0001.md`), so two
+  (`*.md` by default, so an existing source does not start reading every configuration file of its
+  repository; name `*.yaml`, `*.yml`, `*.json` or `*.toml` to add them — a glob's `*` crosses
+  folders, so `*.yaml` matches `deploy/prod/values.yaml` too). A document is named by its whole path
+  (`docs-adr-0001.md`, `deploy-prod-values.yaml`), so two
   `README.md` do not collide; a repository where no file matches `paths` is reported unreadable and
   deletes nothing. A **private** repository is read through a `documents` connector of type `git`
   (`host`, default `github.com`, and `auth`): `auth: token` with a fine-grained access token
@@ -2116,6 +2168,23 @@ one is stored, an empty field keeps it, and it is required the first time) and *
 the endpoint is not `host:port` or no kind is chosen. **Test the proxy** fetches a fixed echo page through the
 *stored* proxy and shows the exit IP, the country and the time, or the error; **Remove** asks first and deletes
 the sealed password. The API's refusals (409 without a secrets key, 422) are shown as returned.
+
+**MCP gateway.** [ADR 0105](adr/0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md): **Administration →
+MCP gateway** (`org_admin` only) sets, tests and removes the organisation's MCP gateway: Choregos calls a
+gateway that fronts MCP servers, it never is one. The **Mode** is `off` (kept, unused), `available` (a connector
+may go through it) or `required` (new direct `mcp` connectors are refused and existing ones are not called; the
+card lists the ones it stops, and a plugin's server is never stopped). The **Endpoint** is an http(s) URL without
+credentials, query or fragment; with **Routing** *in the path* it holds exactly one `{server}`, with *in a
+header* it holds none and **Server header** names the header. The **Auth type** is `bearer`, `header` (with the
+**Header name**), `oauth_client_credentials` (**Token URL**, **Client ID**, **Scope**, **Resource**, **Token
+audience**) or `jwt_assertion` (no secret; the **Audience** is required). The **Secret** is write-only: it is
+never shown, **set** says one is stored, an empty field keeps it, and it is required the first time unless the
+auth is a signed assertion. **Audience** and **Identity header** configure the signed assertion of the caller's
+identity. **Save** opens the gateway's host in the egress allowlist through the usual confirmation when it is
+not open yet. **Test the gateway** lists one server's tools through the stored gateway and shows the server,
+its version and the tool count, or the error. The *Signed assertion* block gives what the gateway needs: the
+**Issuer** and the **JWKS URL**, each with a copy button, the keys, and **Rotate key** (it creates the first key
+too). **Remove** asks first; it is refused while connectors go through the gateway, and the refusal names them.
 
 **Network activity.** What the egress proxy and the runner let through or refused is journaled per run;
 `GET /orgs/{org}/network-activity` (`audit:read`: the organisation's administrators and owners) groups
@@ -2491,7 +2560,7 @@ pass reports the schedule under `refused`; the other schedules still fire.
 ### Work items opened by another system (HTTP triggers)
 
 With `tracker: internal`, any system that can send JSON — a monitoring tool, a form, a CRM, a
-ServiceNow Business Rule or Flow — can open and start a work item through a trigger (S51-01,
+ServiceNow Business Rule or Flow — can open and start a work item through a trigger (S56-01,
 [ADR 0113](adr/0113-a-workflow-starts-from-a-trigger.md)):
 
 ```yaml
@@ -2527,7 +2596,7 @@ reason. `POST /projects/{id}/triggers/{name}/fire` runs the same trigger with a 
 try it before handing the URL out. With an external tracker, a trigger answers 409: use the
 tracker's own webhook.
 
-A trigger can filter and sign (S51-04, S51-05):
+A trigger can filter and sign (S56-04, S56-05):
 
 ```yaml
     when: { /priority: ["1", "2"], /active: "true" }   # other payloads: 202, recorded `ignored`
@@ -2541,7 +2610,7 @@ once) and a box to fire it with a payload.
 
 ### Tracker items that start without `agent-ready`
 
-A project can start tracker items on its own rules (S51-03): a ServiceNow incident in the desk's
+A project can start tracker items on its own rules (S56-03): a ServiceNow incident in the desk's
 queue, a Jira bug of a given type.
 
 ```yaml

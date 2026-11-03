@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""`make demo` — la chaîne complète sur un poste, sans cluster ni serveur.
+"""`make demo`: the full chain on a workstation, with no cluster and no server.
 
-Un ticket entre, un agent simulé travaille, les gates vérifient, un humain valide,
-le train déploie : c'est le scénario M1 du plan, joué en mémoire avec les fakes.
+A ticket comes in, a simulated agent works, the gates check, a human approves, the train
+deploys: this is the plan's M1 scenario, played in memory with the fakes.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-if TYPE_CHECKING:  # les fakes exposent des méthodes de mise en scène (seed, set_diff…)
+if TYPE_CHECKING:  # the fakes expose staging methods (seed, set_diff...)
     from choregos_adapters.fakes import FakeCd, FakeExecutor, FakeGateway, FakeScm, FakeTracker
 
 BANNER = """
@@ -25,7 +25,7 @@ BANNER = """
 
 
 async def seed() -> tuple[str, str, Any]:
-    """Crée l'organisation, le projet, le ticket et les adaptateurs simulés."""
+    """Create the organization, the project, the ticket and the simulated adapters."""
     from choregos_adapters import AdapterSet
     from choregos_api.db.models import Organization, Project
     from choregos_api.db.session import create_all, session_scope
@@ -44,7 +44,7 @@ async def seed() -> tuple[str, str, Any]:
     gateway: FakeGateway = adapters.gateway  # type: ignore[assignment]
     cd: FakeCd = adapters.cd  # type: ignore[assignment]
     tracker.project_slug = "varga/billing-api"
-    gateway.auto_usage = True  # la démo montre des coûts crédibles
+    gateway.auto_usage = True  # the demo shows believable costs
     set_adapters_override(adapters)
 
     async with session_scope(orgs="*") as session:
@@ -154,7 +154,7 @@ async def main_async() -> int:
     seen: dict[str, Any] = {}
 
     async def world(state: str) -> None:
-        """Le monde extérieur réagit : la CI tourne, un mainteneur relit, Argo déploie."""
+        """The outside world reacts: CI runs, a maintainer reviews, Argo deploys."""
         if state == "pr_open" and adapters.scm.prs and "pr" not in seen:
             ref = next(iter(adapters.scm.prs.values())).ref
             adapters.scm.set_checks(ref, "success")

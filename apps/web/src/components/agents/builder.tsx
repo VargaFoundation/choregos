@@ -33,6 +33,7 @@ import { describe, effectiveBindings, writesTo, labelOf, type Binding } from "@/
 import { EvalSuiteEditor, TrialBench } from "./trial";
 import { usableModels } from "@/lib/usable-models";
 import { usd } from "@/lib/format";
+import { NO_TOOL_LABEL } from "@/lib/mcp-tools";
 import type {
   Agent,
   AgentNetwork,
@@ -990,6 +991,11 @@ function McpSection({
                 className="font-mono"
               />
             </label>
+            {(server.tools ?? []).length === 0 && (
+              <p className="text-xs text-warn" data-testid={`no-tool-${server.connector}`}>
+                Opens {NO_TOOL_LABEL}.
+              </p>
+            )}
           </li>
         ))}
       </ul>

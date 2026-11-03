@@ -7,7 +7,7 @@ every value here is built from what the API or the orchestrator already holds.
 
 The kinds: `person:<email>` (console, REST, API token), `mcp:<email>` (the MCP door),
 `a2a:<client>` (the inbound A2A door, S40-23), `schedule:<name>`, `trigger:<name>` (an HTTP trigger
-called by another system, S51-01), `work_item:<key>` (a fan-out child), `tracker:<kind>` (a tracker
+called by another system, S56-01), `work_item:<key>` (a fan-out child), `tracker:<kind>` (a tracker
 event or sync), `finding:<id>`, `eval`, `demo`, `trial:<email>`, and `system` for a system principal
 on a door that names nothing better.
 """

@@ -40,6 +40,7 @@ class FakeTracker:
         labels: list[str] | None = None,
         size: Size | None = None,
         risk: Risk | None = None,
+        author: str | None = None,
     ) -> str:
         key = f"{self.project_slug}#{self._next_number}"
         self._next_number += 1
@@ -52,6 +53,7 @@ class FakeTracker:
             size=size,
             risk=risk,
             state="Todo",
+            author=author,
             created_at=utcnow(),
         )
         return key
@@ -156,7 +158,7 @@ class FakeTracker:
         return summary
 
     async def list_candidates(self, project: ProjectConfig) -> list[str]:
-        """`agent-ready` items, and those a start rule matches (S51-03), as a real tracker's search."""
+        """`agent-ready` items, and those a start rule matches (S56-03), as a real tracker's search."""
         return [
             key
             for key, item in self.items.items()

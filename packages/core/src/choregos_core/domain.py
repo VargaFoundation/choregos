@@ -63,6 +63,7 @@ class WorkItemData(Model):
     size: Size | None = None
     risk: Risk | None = None
     assignees: list[str] = Field(default_factory=list)
+    #: Who filed the item in its tracker (Jira: the reporter, `Name <e-mail>` when the site shows it).
     author: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None

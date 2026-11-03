@@ -1,4 +1,4 @@
-"""A tracker item starts on a project rule, not only on the `agent-ready` label (S51-03, ADR 0113).
+"""A tracker item starts on a project rule, not only on the `agent-ready` label (S56-03, ADR 0113).
 
 A ServiceNow incident in the desk's queue, a Jira bug of a given type: the project declares
 `start_rules`, and the first rule whose every condition holds opens and starts the work item of an

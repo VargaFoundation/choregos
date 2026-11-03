@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from choregos_core import WorkflowEngine
@@ -21,6 +21,7 @@ from ..db.models import Project, WorkflowDef, WorkItem
 from ..errors import unprocessable
 from .definitions import default_workflow, policy_engine, workflow_actif, workflow_model
 from .initiator import initiator
+from .llm_routing import Decision, Item, ask_the_model, book, routing_record
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +35,8 @@ class Naissance:
     size: str | None = None
     risk: str | None = None
     created_by: str | None = None
+    #: Who filed it, as its tracker names them (#1179); a person in the console is their e-mail.
+    reporter: str | None = None
     #: Who started it, `<kind>:<subject>` (`services/initiator.py`, ADR 0077 §2).
     initiated_by: str | None = None
     #: Le workflow demandé explicitement ; sinon le routage, sinon le défaut.
@@ -60,22 +63,52 @@ def _correspond(condition: dict[str, Any], etiquettes: set[str], type_: str | No
     return (not une or bool(une & etiquettes)) and toutes <= etiquettes and (not attendu or attendu == type_)
 
 
+@dataclass(frozen=True, slots=True)
+class Routed:
+    """The workflow a birth goes to, and why: `explicit`, `rule`, `llm` or `default` (ADR 0116)."""
+
+    row: WorkflowDef | None
+    by: Literal["explicit", "rule", "llm", "default"]
+    reason: str | None = None
+    #: The model's decision, when the project's strategy asked it.
+    decision: Decision | None = None
+
+
+async def route(session: AsyncSession, project: Project, naissance: Naissance) -> Routed:
+    """Explicit, then the rules (unless the strategy is `llm`), then the model (unless it is
+    `labels`), then the default."""
+    if naissance.workflow:
+        explicit = await workflow_actif(session, project.id, naissance.workflow)
+        if explicit is None:
+            raise unprocessable(f"workflow `{naissance.workflow}` is unknown or inactive in this project")
+        return Routed(explicit, "explicit")
+    strategy = project.routing_strategy or "labels"
+    labels = set(naissance.labels)
+    if strategy != "llm":
+        for index, rule in enumerate(project.workflow_routing or []):
+            if _correspond(dict(rule.get("when") or {}), labels, naissance.item_type):
+                target = await workflow_actif(session, project.id, str(rule.get("workflow")))
+                if target is not None:
+                    return Routed(target, "rule", f"routing rule {index + 1}")
+    if strategy == "labels":
+        return Routed(await default_workflow(session, project.id), "default")
+    decision = await ask_the_model(
+        session,
+        project,
+        Item(naissance.title, naissance.body, tuple(naissance.labels), naissance.item_type),
+    )
+    if decision.workflow is not None:
+        target = await workflow_actif(session, project.id, decision.workflow)
+        if target is not None:
+            return Routed(target, "llm", decision.reason, decision)
+    return Routed(await default_workflow(session, project.id), "default", decision.reason, decision)
+
+
 async def choisir_workflow(
     session: AsyncSession, project: Project, naissance: Naissance
 ) -> WorkflowDef | None:
     """Explicite, puis la première règle de routage qui correspond, puis le défaut."""
-    if naissance.workflow:
-        explicite = await workflow_actif(session, project.id, naissance.workflow)
-        if explicite is None:
-            raise unprocessable(f"workflow `{naissance.workflow}` is unknown or inactive in this project")
-        return explicite
-    etiquettes = set(naissance.labels)
-    for regle in project.workflow_routing or []:
-        if _correspond(dict(regle.get("when") or {}), etiquettes, naissance.item_type):
-            cible = await workflow_actif(session, project.id, str(regle.get("workflow")))
-            if cible is not None:
-                return cible
-    return await default_workflow(session, project.id)
+    return (await route(session, project, naissance)).row
 
 
 def valider_les_champs(schema: dict[str, Any] | None, champs: dict[str, Any], workflow: str) -> None:
@@ -141,7 +174,8 @@ async def verifier_la_naissance(session: AsyncSession, project: Project, naissan
 
 async def nouveau_ticket(session: AsyncSession, project: Project, naissance: Naissance) -> WorkItem:
     """Le seul constructeur : l'état initial DU workflow choisi, et l'épingle de sa version."""
-    ligne = await choisir_workflow(session, project, naissance)
+    routed = await route(session, project, naissance)
+    ligne = routed.row
     workflow = workflow_model(ligne)
     valider_les_champs(workflow.metadata.inputs, naissance.fields, workflow.metadata.name)
     item = WorkItem(  # le seul `WorkItem(` du code produit (test_un_seul_constructeur_de_ticket)
@@ -155,6 +189,7 @@ async def nouveau_ticket(session: AsyncSession, project: Project, naissance: Nai
         state=WorkflowEngine(workflow).initial_state,
         workflow_def_id=ligne.id if ligne is not None else None,
         created_by=naissance.created_by,
+        reporter=naissance.reporter,
         initiated_by=naissance.initiated_by,
         allowed_paths=list(naissance.allowed_paths),
         fields=dict(naissance.fields),
@@ -164,8 +199,17 @@ async def nouveau_ticket(session: AsyncSession, project: Project, naissance: Nai
         item.id = naissance.item_id
     if naissance.labels:
         noter_les_etiquettes(item, naissance.labels)
+    if routed.decision is not None:
+        # How the model routed it stays on the work item (ADR 0116 §7); rules and explicit births
+        # are told by the routing rules and the request themselves.
+        item.documents = {
+            **(item.documents or {}),
+            "routing": routing_record(routed.by, routed.reason, routed.decision),
+        }
     session.add(item)
     await session.flush()
+    if routed.decision is not None:
+        await book(session, project, routed.decision, item.id)
     return item
 
 

@@ -186,7 +186,7 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
                         </Link>
                       </td>
                       <td>
-                        <StateBadge state={item.state} display={item.state_display} />
+                        <StateBadge state={item.state} display={item.state_display} outcome={item.state_outcome} />
                       </td>
                       <td className="text-ink-muted">{item.size ?? "—"}</td>
                       <td className="text-right">

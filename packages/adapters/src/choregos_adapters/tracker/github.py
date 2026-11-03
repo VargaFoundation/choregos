@@ -181,7 +181,7 @@ class GitHubTracker:
 
     async def list_candidates(self, project: ProjectConfig) -> list[str]:
         """Backup polling: the open `agent-ready` issues (S3-06), and those a start rule
-        made of labels names (S51-03): one search per set of labels, GitHub ANDs them. A rule on a
+        made of labels names (S56-03): one search per set of labels, GitHub ANDs them. A rule on a
         type or a state is read by the webhook only: the issue search does not express it."""
         found: dict[str, None] = {}
         for labels in label_searches(project):

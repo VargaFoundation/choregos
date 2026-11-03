@@ -13,7 +13,7 @@ created without starting its interpreter: `reconcile_tracker`, on the same pass,
 deterministic identifier, the one path every internal work item takes.
 
 Each firing that opens a work item, and each one the workflow refuses, leaves a `received_events`
-row (`schedule:<name>`, S51-01): the project's page answers "did the cron fire?" as it does for a
+row (`schedule:<name>`, S56-01): the project's page answers "did the cron fire?" as it does for a
 webhook. A window already served writes nothing more.
 """
 
@@ -157,7 +157,7 @@ def _audit(
     refusal: str | None,
     item: Any = None,
 ) -> None:
-    """The firing's `received_events` row, in the pass's session (S51-01). The refusal's detail is
+    """The firing's `received_events` row, in the pass's session (S56-01). The refusal's detail is
     the platform's own sentence (the workflow, the field paths), never a field's value."""
     received_events.record_firing(
         session,

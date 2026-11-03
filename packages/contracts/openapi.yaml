@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Choregos API
-  version: 0.21.1
+  version: 0.21.5
   description: |
     The Choregos platform API. The console and the CLI use this API and nothing else.
     Auth: an OIDC session (cookie) or `Authorization: Bearer <api_token>`.
@@ -811,6 +811,20 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowRouting" } } } }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /projects/{id}/workflow-routing/preview:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    post:
+      tags: [workflows]
+      operationId: previewWorkflowRouting
+      description: >-
+        Where a work item would be born, and why (ADR 0116): explicit, a rule, the model, or the default.
+        Nothing is created; a call to the model is booked in the cost ledger on the project.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/RoutingPreviewRequest" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/RoutingPreview" } } } }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /workflows/validate:
     post:
       tags: [workflows]
@@ -966,7 +980,7 @@ paths:
       description: The models an agent may be given for a stage role and a usage; every member may read it.
       parameters:
         - { name: role, in: query, required: false, schema: { type: string } }
-        - { name: usage, in: query, required: false, schema: { type: string, enum: [agent, embed, distill, eval], default: agent } }
+        - { name: usage, in: query, required: false, schema: { type: string, enum: [agent, embed, distill, eval, route], default: agent } }
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/UsableModel" } } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -1074,7 +1088,7 @@ paths:
       operationId: listTriggers
       summary: The project's HTTP triggers, their URL, and whether each has a token
       description: >-
-        The triggers declared under `triggers:` in the project's configuration (S51-01, ADR 0113). Any member reads
+        The triggers declared under `triggers:` in the project's configuration (S56-01, ADR 0113). Any member reads
         them; a token is never listed, only whether one exists and when it was minted.
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Trigger" } } } } }
@@ -1286,24 +1300,23 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [evenements, refusals, acces]
+                required: [events, refusals, access]
                 properties:
-                  evenements: { type: integer, description: Log events scanned }
-                  deduites:
+                  events: { type: integer, description: Log events scanned }
+                  evenements:
+                    type: integer
+                    deprecated: true
+                    description: Former name of `events`, emitted for one release (ADR 0046, S45-02)
+                  inferred:
                     type: integer
                     description: >-
                       Permission decisions whose kind was inferred because the agent did not state it
-                      (emitted since #27, declared by S34-03)
-                  refusals: { type: integer, description: Total number of denied requests }
-                  refus:
+                  deduites:
                     type: integer
                     deprecated: true
-                    description: Former name of `refusals`, still emitted for one release (ADR 0046)
+                    description: Former name of `inferred`, emitted for one release (ADR 0046, S45-02)
+                  refusals: { type: integer, description: Total number of denied requests }
                   tool_cost_eur: { type: number, description: "What the catalogue tools called by the run cost, in euros" }
-                  cout_outils_eur:
-                    type: number
-                    deprecated: true
-                    description: Former name of `tool_cost_eur`, still emitted for one release (ADR 0046)
                   chain:
                     type: object
                     description: >-
@@ -1333,28 +1346,29 @@ paths:
                               type: array
                               items: { type: string }
                               description: The run ids whose outputs this run read as declared inputs
-                  acces:
+                  access:
                     type: array
                     items:
                       type: object
                       required: [nature, target, requests, refusals]
                       properties:
-                        nature: { type: string, enum: [read, write, execute, network, tool, autre] }
+                        nature: { type: string, enum: [read, write, execute, network, tool, other] }
                         target: { type: string, description: "The file, command, address or tool asked for" }
-                        cible:
-                          type: string
-                          deprecated: true
-                          description: Former name of `target`, still emitted for one release (ADR 0046)
                         requests: { type: integer, description: How many times the agent asked for it }
-                        demandes:
-                          type: integer
-                          deprecated: true
-                          description: Former name of `requests`, still emitted for one release (ADR 0046)
                         refusals: { type: integer, description: How many of those requests were denied }
-                        refus:
-                          type: integer
-                          deprecated: true
-                          description: Former name of `refusals`, still emitted for one release (ADR 0046)
+                        reasons: { type: array, items: { type: string } }
+                  acces:
+                    type: array
+                    deprecated: true
+                    description: Former name of `access`, emitted for one release (ADR 0046, S45-02)
+                    items:
+                      type: object
+                      required: [nature, target, requests, refusals]
+                      properties:
+                        nature: { type: string, enum: [read, write, execute, network, tool, autre] }  # lang: fr-ok alias:external
+                        target: { type: string }
+                        requests: { type: integer }
+                        refusals: { type: integer }
                         motifs: { type: array, items: { type: string } }
   /runs/{id}/transcript:
     parameters: [{ $ref: "#/components/parameters/Id" }]
@@ -2269,6 +2283,18 @@ paths:
         content: { application/json: { schema: { $ref: "#/components/schemas/AgentPatch" } } }
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Agent" } } } }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [agents]
+      operationId: deleteAgent
+      description: >-
+        Deletes an agent that never served: no project pin, no run outside its trials, named by no
+        active workflow; its versions, credentials, evaluations and releases go with it. Otherwise 409
+        with the reasons: retire it instead (`changeAgentLifecycle`), which keeps its name in the history.
+      responses:
+        "204": { description: Deleted }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
   /orgs/{org}/agents/{slug}/responses:
     parameters:
@@ -3523,6 +3549,9 @@ paths:
       parameters:
         - { name: ce-type, in: header, required: true, schema: { type: string } }
         - { name: ce-id, in: header, required: true, schema: { type: string } }
+        - { name: X-Choregos-Secret, in: header, required: false, schema: { type: string }, description: "The shared webhook secret; `token` may carry it instead" }
+        - { name: token, in: query, required: false, schema: { type: string }, description: "The shared webhook secret, for a sink that is set by a URL and adds no header" }
+        - { name: jeton, in: query, required: false, deprecated: true, schema: { type: string }, description: "Former name of `token`; still accepted" }  # lang: fr-ok alias:external
       requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
       responses: { "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
   /webhooks/argocd:
@@ -3570,7 +3599,7 @@ paths:
       - { name: name, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
       - { name: Idempotency-Key, in: header, required: false, schema: { type: string } }
       - { name: X-Choregos-Token, in: header, required: false, schema: { type: string } }
-      - { name: X-Choregos-Signature, in: header, required: false, schema: { type: string }, description: "`sha256=<hex or base64>` of the body, for a trigger with `auth: signature` (S51-04)." }
+      - { name: X-Choregos-Signature, in: header, required: false, schema: { type: string }, description: "`sha256=<hex or base64>` of the body, for a trigger with `auth: signature` (S56-04)." }
       - { name: token, in: query, required: false, schema: { type: string }, description: "For a sender that can only set a URL." }
     post:
       tags: [webhooks]
@@ -3578,14 +3607,14 @@ paths:
       operationId: triggerWebhook
       summary: Another system opens a work item through the project's trigger
       description: >-
-        An HTTP trigger declared in the project's configuration (S51-01, ADR 0113), called with its token
+        An HTTP trigger declared in the project's configuration (S56-01, ADR 0113), called with its token
         (`Authorization: Bearer`, `X-Choregos-Token` or `?token=`). The JSON object is mapped onto a work item (title,
         description, labels with `trigger:<name>`, fields by JSON pointer) that starts in the trigger's workflow or the
         one the project's routing picks. A replayed delivery (`Idempotency-Key`, else the body's digest) answers
         `duplicate`; a trigger with a `key` opens one work item per value and answers `already_open` after. Every call
         past the token leaves a received event, refused ones included; a payload its `when` does not match is
-        acknowledged as `ignored` (S51-05). A trigger with `auth: signature` takes `X-Choregos-Signature` instead of the
-        token (S51-04). 404 when the trigger does not exist or has no token, 401 on a wrong token or signature.
+        acknowledged as `ignored` (S56-05). A trigger with `auth: signature` takes `X-Choregos-Signature` instead of the
+        token (S56-04). 404 when the trigger does not exist or has no token, 401 on a wrong token or signature.
       requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
       responses:
         "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/TriggerAck" } } } }
@@ -5164,6 +5193,35 @@ components:
                   labels_any: { type: array, items: { type: string } }
                   labels_all: { type: array, items: { type: string } }
                   item_type: { type: [string, "null"] }
+        strategy:
+          type: string
+          enum: [labels, rules_then_llm, llm]
+          description: >-
+            ADR 0116: `labels` reads the rules alone; `rules_then_llm` asks a small model when no rule
+            matched; `llm` asks the model alone. The default is always the last resort. Always in a
+            response (`labels` when never set); absent from a PUT, unchanged.
+        hints:
+          type: object
+          additionalProperties: { type: string, maxLength: 500 }
+          description: >-
+            What the model reads about each workflow beside its description, by workflow name. Absent
+            from a PUT, unchanged; an empty hint is dropped.
+    RoutingPreviewRequest:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 500 }
+        body: { type: [string, "null"], maxLength: 20000 }
+        labels: { type: array, items: { type: string } }
+        item_type: { type: [string, "null"] }
+    RoutingPreview:
+      type: object
+      required: [workflow, by]
+      properties:
+        workflow: { type: [string, "null"] }
+        by: { type: string, enum: [explicit, rule, llm, default] }
+        reason: { type: [string, "null"] }
+        model: { type: [string, "null"] }
     WorkflowValidateRequest:
       type: object
       properties:
@@ -6859,9 +6917,8 @@ components:
           type: [string, "null"]
           deprecated: true
           description: >-
-            Former spelling of a code renamed to English (`gate.sans_matiere` is now
-            `gate.nothing_to_check`, `workflow.effet_implicite` is now `workflow.implicit_effect`),
-            emitted for one release (ADR 0046)
+            Former spelling of a code renamed to English (`role.playbook_introuvable` is now
+            `role.playbook_not_found`), emitted for one release (ADR 0046, S45-02)
     WorkflowGraph:
       type: object
       required: [nodes, edges]
@@ -6876,6 +6933,10 @@ components:
               display: { type: string }
               kind: { type: string }
               terminal: { type: boolean }
+              outcome:
+                type: [string, "null"]
+                enum: [success, declined, cancelled, null]
+                description: "How a terminal state ends the work item (`success`, `declined`, `cancelled`); null on a state that is not terminal."
               lane: { type: string }
               tracker_status: { type: [string, "null"], description: "The tracker column the state maps to; the console groups the path into stages by it." }
         edges:
@@ -7378,7 +7439,7 @@ components:
         source: { type: string, enum: [gateway, manual] }
         enabled: { type: boolean }
         allowed_roles: { type: array, items: { type: string } }
-        usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval] } }
+        usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval, route] } }
         price_override: { oneOf: [{ $ref: "#/components/schemas/PriceOverride" }, { type: "null" }] }
         max_usd_per_minute: { type: [number, "null"], exclusiveMinimum: 0 }
         gateway: { oneOf: [{ $ref: "#/components/schemas/ModelGatewayFacts" }, { type: "null" }] }
@@ -7395,7 +7456,7 @@ components:
         display_name: { type: [string, "null"], maxLength: 200 }
         enabled: { type: boolean, default: true }
         allowed_roles: { type: array, items: { type: string } }
-        usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval] }, default: [agent] }
+        usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval, route] }, default: [agent] }
         price_override: { oneOf: [{ $ref: "#/components/schemas/PriceOverride" }, { type: "null" }] }
         max_usd_per_minute: { type: [number, "null"], exclusiveMinimum: 0 }
         notes: { type: string, default: "" }
@@ -7405,7 +7466,7 @@ components:
         display_name: { type: [string, "null"], maxLength: 200 }
         enabled: { type: [boolean, "null"] }
         allowed_roles: { type: [array, "null"], items: { type: string } }
-        usages: { type: [array, "null"], items: { type: string, enum: [agent, embed, distill, eval] } }
+        usages: { type: [array, "null"], items: { type: string, enum: [agent, embed, distill, eval, route] } }
         price_override: { oneOf: [{ $ref: "#/components/schemas/PriceOverride" }, { type: "null" }] }
         clear_price_override: { type: boolean, default: false }
         max_usd_per_minute: { type: [number, "null"], exclusiveMinimum: 0 }
@@ -7689,6 +7750,12 @@ components:
         risk: { oneOf: [{ $ref: "#/components/schemas/Risk" }, { type: "null" }] }
         state: { type: string }
         state_display: { type: [string, "null"] }
+        state_outcome:
+          type: [string, "null"]
+          enum: [success, declined, cancelled, null]
+          description: >-
+            How the current state ends the work item when it is terminal: `success`, `declined` (a request
+            turned down) or `cancelled` (dropped); null while it can still move.
         workflow_name: { type: [string, "null"] }
         workflow_version: { type: [integer, "null"] }
         temporal_wf_id: { type: [string, "null"] }
@@ -7709,6 +7776,13 @@ components:
           description: >-
             Who started the work item (ADR 0077): `person:<email>`, `mcp:<email>`, `tracker:<source>`
             for a webhook, `schedule:<name>`… Null for a work item from before S40-22.
+        reporter:
+          type: [string, "null"]
+          description: >-
+            Who filed the work item, as its tracker names them: Jira's reporter (`Name <e-mail>`, the name
+            alone when the site hides the e-mail), the author's login on GitHub or GitLab, the person's
+            e-mail in the console. Personal data: empty in a redacted entry. Null for a work item from
+            before it was recorded.
         restricted_knowledge:
           type: array
           items: { type: string }
@@ -7722,7 +7796,7 @@ components:
           default: false
           description: >-
             True in a list when the caller does not read every base in `restricted_knowledge` (ADR 0114):
-            only `id`, `project_slug`, `tracker_key`, `title`, `state`, `state_display`, `workflow_name`,
+            only `id`, `project_slug`, `tracker_key`, `title`, `state`, `state_display`, `state_outcome`, `workflow_name`,
             `workflow_version`, `url`, dates and `restricted_knowledge` are filled; everything else is empty.
         created_at: { type: string, format: date-time }
         closed_at: { type: [string, "null"], format: date-time }
@@ -7764,7 +7838,7 @@ components:
         summary: { type: string, description: "Built from typed fields only: key, label, from → to, PR number, conclusion." }
     Trigger:
       type: object
-      description: A project's HTTP trigger (S51-01, ADR 0113); its token is never listed.
+      description: A project's HTTP trigger (S56-01, ADR 0113); its token is never listed.
       required: [name, url, title, has_token]
       properties:
         name: { type: string }
@@ -7774,13 +7848,13 @@ components:
         key: { type: [string, "null"] }
         labels: { type: array, items: { type: string }, default: [] }
         fields: { type: object, additionalProperties: { type: string }, default: {} }
-        when: { type: object, additionalProperties: true, default: {}, description: "A JSON pointer to the text, or texts, a payload must hold (S51-05)." }
+        when: { type: object, additionalProperties: true, default: {}, description: "A JSON pointer to the text, or texts, a payload must hold (S56-05)." }
         auth: { type: string, enum: [token, signature], default: token }
         has_token: { type: boolean, default: false }
         token_created_at: { type: [string, "null"], format: date-time }
     TriggerToken:
       type: object
-      description: A trigger's new token and the signing secret derived from it (S51-04), shown once.
+      description: A trigger's new token and the signing secret derived from it (S56-04), shown once.
       required: [name, url, token, signing_secret]
       properties:
         name: { type: string }

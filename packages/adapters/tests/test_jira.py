@@ -399,7 +399,7 @@ def test_un_evenement_inconnu_ne_produit_rien() -> None:
 
 
 async def test_the_poll_also_asks_for_the_project_s_start_rules() -> None:
-    """S51-03: each start rule is a JQL clause ORed with `agent-ready`; a quote cannot end it."""
+    """S56-03: each start rule is a JQL clause ORed with `agent-ready`; a quote cannot end it."""
     vu: dict[str, Any] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -425,3 +425,185 @@ async def test_the_poll_also_asks_for_the_project_s_start_rules() -> None:
         'OR (labels in ("payroll", "x\\" OR project = \\"OTHER"))) '
         "AND statusCategory != Done ORDER BY updated DESC"
     )
+
+
+# ───────── a scoped token, and the connector's Test (service accounts) ─────────
+
+
+def _scoped(handler: Any, cloud_id: str | None = None) -> JiraTracker:
+    from choregos_adapters.tracker.jira import JiraGatewayClient
+
+    client = JiraGatewayClient(
+        BASE,
+        cloud_id=cloud_id,
+        auth=("svc@serviceaccount.atlassian.com", "jeton"),
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        service="jira",
+    )
+    return JiraTracker(client, "BILL")
+
+
+async def test_a_scoped_token_goes_through_the_gateway_and_finds_the_cloud_id() -> None:
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        if request.url.path == "/_edge/tenant_info":
+            assert "authorization" not in request.headers  # a public endpoint: no token sent
+            return httpx.Response(200, json={"cloudId": "c-123"})
+        return httpx.Response(200, json=issue_payload())
+
+    jira = _scoped(handler)
+    item = await jira.fetch_item("BILL-42")
+    await jira.fetch_item("BILL-42")
+    assert calls[0] == f"{BASE}/_edge/tenant_info"
+    assert calls[1].startswith("https://api.atlassian.com/ex/jira/c-123/rest/api/3/issue/BILL-42")
+    assert len(calls) == 3  # the cloud id is read once
+    assert item.url == f"{BASE}/browse/BILL-42"  # a person opens the site, not the gateway
+
+
+async def test_a_given_cloud_id_is_not_looked_up() -> None:
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(str(request.url))
+        return httpx.Response(200, json={"name": "Billing"})
+
+    result = await _scoped(handler, cloud_id="c-9").test()
+    assert result == {"ok": True, "project": "Billing", "cloud_id": "c-9"}
+    assert calls == ["https://api.atlassian.com/ex/jira/c-9/rest/api/3/project/BILL"]
+
+
+async def test_an_unreadable_site_names_the_cloud_id() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404)
+
+    with pytest.raises(ConfigurationError, match="cloud_id"):
+        await _scoped(handler).fetch_item("BILL-42")
+
+
+async def test_the_connector_test_reads_the_project() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/rest/api/3/project/BILL"
+        return httpx.Response(200, json={"name": "Billing"})
+
+    assert await tracker(handler).test() == {"ok": True, "project": "Billing"}
+
+
+@pytest.mark.parametrize(
+    ("status", "says"),
+    [(401, "auth: scoped"), (403, "read:jira-work"), (404, "add it to the project"), (400, "400")],
+)
+async def test_a_refused_test_says_what_to_fix(status: int, says: str) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status)
+
+    result = await tracker(handler).test()
+    assert result["ok"] is False
+    assert says in result["reason"]
+
+
+def test_the_registry_builds_a_scoped_jira_on_the_gateway() -> None:
+    from choregos_adapters import _jira_tracker  # the registered builder: the suite runs on fakes
+    from choregos_adapters.tracker.jira import JiraGatewayClient
+
+    config = {"base_url": BASE, "email": "svc@x", "api_token": "t", "project_key": "BILL"}
+    classic = _jira_tracker(config)
+    scoped = _jira_tracker({**config, "auth": "scoped", "cloud_id": "c-1"})
+    assert not isinstance(classic.client, JiraGatewayClient)
+    assert scoped.client.base_url == "https://api.atlassian.com/ex/jira/c-1"
+    assert scoped.site_url == BASE
+
+
+def test_a_scoped_jira_opens_the_gateway_in_its_egress() -> None:
+    from choregos_adapters.registry import egress_hosts
+
+    hosts = egress_hosts("tracker", "jira", {"base_url": BASE, "auth": "scoped"})
+    assert ("api.atlassian.com", 443) in hosts and ("varga.atlassian.net", 443) in hosts
+
+
+async def test_a_connector_jql_selects_the_candidates_without_the_agent_ready_label() -> None:
+    # The factory itself, not `build`: under CHOREGOS_FAKES=1 (the CI) `build` hands out the fake.
+    from choregos_adapters import _jira_tracker
+    from choregos_contracts import ProjectConfig
+
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url.params.get("jql")))
+        return httpx.Response(200, json={"issues": [{"key": "BILL-12"}]})
+
+    adapter = _jira_tracker(
+        {
+            "base_url": BASE,
+            "email": "bot@varga.dev",
+            "api_token": "token",
+            "project_key": "BILL",
+            "candidates_jql": " parent = BILL-1 AND labels in (form-a, form-b) ",
+        }
+    )
+    adapter.client._client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+    keys = await adapter.list_candidates(ProjectConfig(slug="bill", org="varga"))
+
+    assert keys == ["BILL-12"]
+    assert seen == [
+        'project = "BILL" AND (parent = BILL-1 AND labels in (form-a, form-b)) '
+        "AND statusCategory != Done ORDER BY updated DESC"
+    ]
+
+
+async def test_without_a_connector_jql_the_candidates_are_the_agent_ready_issues() -> None:
+    from choregos_contracts import ProjectConfig
+
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url.params.get("jql")))
+        return httpx.Response(200, json={"issues": []})
+
+    jira = tracker(handler)
+    jira.candidates_jql = None
+    await jira.list_candidates(ProjectConfig(slug="bill", org="varga"))
+
+    assert seen == [
+        'project = "BILL" AND labels = "agent-ready" AND statusCategory != Done ORDER BY updated DESC'
+    ]
+
+
+async def test_the_reporter_is_named_with_their_email_when_the_site_shows_it() -> None:
+    """Who filed the issue reaches the work item (#1179): an access request is checked against it."""
+    shown = {"displayName": "Jean Martin", "emailAddress": "jmartin@varga.dev", "accountId": "712020:abc"}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=issue_payload(reporter=shown))
+
+    item = await tracker(handler).fetch_item("BILL-42")
+    assert item.author == "Jean Martin <jmartin@varga.dev>"
+
+
+async def test_a_hidden_email_leaves_the_reporter_s_name() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=issue_payload())
+
+    assert (await tracker(handler).fetch_item("BILL-42")).author == "Augustin"
+
+
+def test_a_created_issue_carries_its_reporter() -> None:
+    events = parse_jira_event(
+        "d-9",
+        {
+            "webhookEvent": "jira:issue_created",
+            "issue": {
+                "key": "BILL-43",
+                "fields": {
+                    "summary": "titre",
+                    "labels": ["agent-ready"],
+                    "reporter": {"displayName": "Jean Martin", "emailAddress": "jmartin@varga.dev"},
+                },
+            },
+        },
+    )
+
+    assert events[0].type is InboundEventType.ITEM_CREATED
+    assert events[0].payload["reporter"] == "Jean Martin <jmartin@varga.dev>"

@@ -8,17 +8,16 @@ pod, with a typed `BackendDisabled` error the interpreter escalates like any con
 from __future__ import annotations
 
 import json
-import os
 import pathlib
 from typing import Any
 
 import pytest
 from temporalio.exceptions import ApplicationError
 
-from .conftest import Fixture, refine_result
+from .conftest import Fixture, recording_history, refine_result
+from .kits.escalation import requests_of
 from .test_budget_reservation import _plan
 from .test_interpreter import _runs, _wait_state, _wait_until, scripted, start
-from .test_reprise_apres_escalade import _demandes
 
 pytestmark = pytest.mark.asyncio
 
@@ -151,7 +150,7 @@ async def test_a_disabled_backend_escalates_then_runs_once_enabled(
         await _wait_until(handle, "the work item waits for a person", lambda s: s["pending_request"])
         assert await _runs(setup) == 0
         assert setup.adapters.executor.started == []
-        asked = [d for d in await _demandes(setup) if (d.payload or {}).get("reason") == "configuration"]
+        asked = [d for d in await requests_of(setup) if (d.payload or {}).get("reason") == "configuration"]
         assert asked and "disabled by the platform administrator" in asked[0].payload["question"], asked
 
         await _switch(backend, enabled=True)  # the administrator turns it back on
@@ -163,6 +162,6 @@ async def test_a_disabled_backend_escalates_then_runs_once_enabled(
         history = await handle.fetch_history()
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
-    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+    if recording_history():
         target = HISTORIES / "wi-backend-disabled-S42-07c.json"
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")

@@ -107,6 +107,9 @@ class WorkItemDto(Dto):
     risk: str | None = None
     state: str
     state_display: str | None = None
+    #: How the current state ends the work item when it is terminal (`success`, `declined`,
+    #: `cancelled`); `None` while it can still move.
+    state_outcome: str | None = None
     workflow_name: str | None = None
     workflow_version: int | None = None
     temporal_wf_id: str | None = None
@@ -126,6 +129,9 @@ class WorkItemDto(Dto):
     estimate: CostEstimate | None = None
     #: Who started the work item (ADR 0077): `person:<email>`, `tracker:<source>`…
     initiated_by: str | None = None
+    #: Who filed it, as its tracker names them (#1179): Jira's reporter (`Name <e-mail>`), the author's
+    #: login on GitHub or GitLab, the person's e-mail in the console; `None` before 0.21.5.
+    reporter: str | None = None
     #: The restricted knowledge bases its runs were served (ADR 0114).
     restricted_knowledge: list[str] = Field(default_factory=list)
     #: A list entry the caller may not read (ADR 0114, point B): only the listed fields are filled.
@@ -154,7 +160,7 @@ class ReceivedEventDto(Dto):
 
 
 class TriggerDto(Dto):
-    """A project's HTTP trigger (S51-01, ADR 0113): what it opens, where it is called, whether it has
+    """A project's HTTP trigger (S56-01, ADR 0113): what it opens, where it is called, whether it has
     a token. The token itself is shown once, when it is minted."""
 
     name: str
@@ -176,7 +182,7 @@ class TriggerTokenDto(Dto):
     name: str
     url: str
     token: str
-    #: The HMAC key of `X-Choregos-Signature` (S51-04); it changes with the token.
+    #: The HMAC key of `X-Choregos-Signature` (S56-04); it changes with the token.
     signing_secret: str
 
 

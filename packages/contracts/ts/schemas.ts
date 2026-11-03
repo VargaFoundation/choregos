@@ -695,7 +695,7 @@ export type Project = {
     /** The workflow of the work item; the project's routing when absent. */
     workflow?: string | null;
   }>;
-  /** HTTP doors that open a work item when another system calls them (S51-01, ADR 0113): `POST /webhooks/triggers/{org}/{project}/{name}` with the trigger's token. Needs the internal tracker. */
+  /** HTTP doors that open a work item when another system calls them (S56-01, ADR 0113): `POST /webhooks/triggers/{org}/{project}/{name}` with the trigger's token. Needs the internal tracker. */
   triggers?: Array<{
     name: string;
     /** The work item's title; `{/pointer}` becomes what the payload holds there. */
@@ -712,14 +712,14 @@ export type Project = {
     };
     /** The workflow of the work item; the project's routing when absent. */
     workflow?: string | null;
-    /** A JSON pointer to the text, or one of the texts, the payload must hold there (S51-05); a payload that does not match is acknowledged and recorded `ignored`. */
+    /** A JSON pointer to the text, or one of the texts, the payload must hold there (S56-05); a payload that does not match is acknowledged and recorded `ignored`. */
     when?: {
       [key: string]: string | Array<string>;
     };
-    /** `token`: the bearer token; `signature`: `X-Choregos-Signature: sha256=<HMAC-SHA256 of the body>` keyed by the signing secret (S51-04). */
+    /** `token`: the bearer token; `signature`: `X-Choregos-Signature: sha256=<HMAC-SHA256 of the body>` keyed by the signing secret (S56-04). */
     auth?: "token" | "signature";
   }>;
-  /** Tracker items that start their work item without the `agent-ready` label (S51-03, ADR 0113): the first rule whose every condition holds starts an item the project does not hold yet. */
+  /** Tracker items that start their work item without the `agent-ready` label (S56-03, ADR 0113): the first rule whose every condition holds starts an item the project does not hold yet. */
   start_rules?: Array<{
     labels_any: unknown;
   } | {
@@ -1228,6 +1228,8 @@ export type WorkflowState = {
   };
   terminal?: boolean;
   kind?: "work" | "wait" | "terminal";
+  /** How a terminal state ends the work item: `success` (the default), `declined` (a request turned down) or `cancelled` (dropped). Only a terminal state may declare another value; the console shows only a success green. */
+  outcome?: "success" | "declined" | "cancelled";
   /** A production state: it can only be reached `via: release_train` (before #175: the name's `deployed_prod` prefix). */
   production?: boolean;
 };

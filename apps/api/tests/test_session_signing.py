@@ -200,7 +200,7 @@ def test_an_oidc_state_is_not_a_session() -> None:
     from choregos_api.routers import auth
     from choregos_api.security import read_session
 
-    state, cookie, _ = auth._handshake(get_settings(), "/x")
+    state, cookie, _, _ = auth._handshake(get_settings(), "/x")
     assert read_session(state) is None
     assert read_session(cookie) is None
     assert read_session(state, purpose="oidc-state") is not None

@@ -614,7 +614,8 @@ async def _stage_cap(
 async def _resolve_on_enabled_backend(
     session: Any, agent: Any, resolver: ModelResolver, plan: StagePlan, bundle: Any, item: Any, backend: str
 ) -> Any:
-    """The model of the stage, once its backend is known to be enabled (S42-07c)."""
+    """The model of the stage, once its backend is known to be allowed and enabled (S42-07c, S47-20)."""
+    _require_backend_allowed(agent, bundle, backend)
     await _require_backend_enabled(session, agent, backend)
     return _resolve_model(resolver, plan, bundle, item, backend)
 
@@ -623,6 +624,27 @@ async def _backend_row(session: Any, backend: str) -> Any:
     return (
         await session.execute(select(BackendRegistryRow).where(BackendRegistryRow.name == backend))
     ).scalar_one_or_none()
+
+
+def _require_backend_allowed(agent: Any, bundle: Any, backend: str) -> None:
+    """Refuse the stage when the project's `agent.allowed_backends` does not list its backend.
+
+    An empty list restricts nothing. A runtime that fixes its own backend is not concerned. The
+    refusal has the same typed, non retryable shape as a backend the platform disabled."""
+    from temporalio.exceptions import ApplicationError
+
+    if _fixed_backend(agent):
+        return
+    allowed = list(bundle.config.agent.allowed_backends)
+    if not allowed or backend in allowed:
+        return
+    logger.info("stage refused: backend not allowed", backend=backend, allowed=allowed)
+    raise ApplicationError(
+        f"the agent backend `{backend}` is not one this project allows ({', '.join(allowed)}): "
+        "add it to the project's agent settings, or choose another backend.",
+        type="BackendDisabled",
+        non_retryable=True,
+    )
 
 
 async def _require_backend_enabled(session: Any, agent: Any, backend: str) -> None:
@@ -925,8 +947,12 @@ def _rendre_le_playbook(
         "ticket": {
             "key": item.tracker_key,
             "title": item.title,
-            "body": item.body_snapshot or "",
+            # The body opens with who filed it (#1179): every agent reads it where it reads the
+            # request, an installed one included, without a new version of its instructions (whose
+            # checksum holds the context block they were installed with).
+            "body": _body_with_its_reporter(item),
             "fields": dict(item.fields or {}),
+            "reporter": getattr(item, "reporter", None) or "",
         },
         "spec": documents.get("spec_markdown", ""),
         "plan_markdown": documents.get("plan_markdown", ""),
@@ -970,6 +996,16 @@ def _agent_d_essai(plan: StagePlan) -> Any:
     return SimpleNamespace(
         agent=SimpleNamespace(slug="trial"), version=0, spec=AgentSpec.model_validate(plan.trial_spec)
     )
+
+
+def _body_with_its_reporter(item: Any) -> str:
+    """The work item's body as an agent reads it: `Filed by: <reporter>` first when it is known."""
+    body = item.body_snapshot or ""
+    # A stand-in work item (an eval's, a dry run's) may not carry the column.
+    reporter = getattr(item, "reporter", None)
+    if not reporter:
+        return body
+    return f"Filed by: {reporter}\n\n{body}" if body else f"Filed by: {reporter}"
 
 
 async def _agent_du_plan(session: Any, bundle: Any, plan: StagePlan) -> Any:

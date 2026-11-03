@@ -7,14 +7,13 @@ without `on_budget_exceeded` retried the stage — with a fresh key at the full 
 from __future__ import annotations
 
 import json
-import os
 import pathlib
 from typing import Any
 
 import pytest
 from choregos_contracts import StageInput, StageResult
 
-from .conftest import Fixture, stage_result
+from .conftest import Fixture, recording_history, stage_result
 from .test_interpreter import _runs, _wait_state, _wait_until, start
 
 pytestmark = pytest.mark.asyncio
@@ -116,7 +115,7 @@ async def test_a_refusing_gateway_parks_the_ticket_after_one_run(
     from choregos_orchestrator.workflows import ALL_WORKFLOWS
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
-    if os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE"):
+    if recording_history():
         target = HISTORIES / "wi-budget-refusal-S27-01.json"
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 

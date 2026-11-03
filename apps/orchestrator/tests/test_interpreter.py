@@ -8,6 +8,7 @@ import pytest
 from choregos_contracts import StageResult, StageStatus
 
 from .conftest import Fixture, refine_result, stage_result
+from .kits.workers import worker_with
 
 pytestmark = pytest.mark.asyncio
 
@@ -349,25 +350,6 @@ async def test_any_other_query_error_still_fails() -> None:
 # ───────────────────────── un ticket mort se voit (2026-09-24) ─────────────────────────
 
 
-def _worker_avec(temporal_env: Any, remplacements: dict[str, Any]) -> Any:
-    """Les workers répartis par file, où quelques activités sont remplacées par leur doublure.
-
-    Les clés sont des **noms Temporal** : c'est le nom déclaré par `@activity.defn(name=…)` qui
-    décide de la file, donc une doublure de `await_run` s'enregistre sur `executor`, là où le
-    workflow la planifie.
-    """
-    from choregos_orchestrator.activities import ALL_ACTIVITIES
-    from choregos_orchestrator.testing import workers_repartis
-    from choregos_orchestrator.workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
-
-    return workers_repartis(
-        temporal_env.client,
-        activites=[*ALL_ACTIVITIES, *WORKFLOW_ACTIVITIES],
-        workflows=ALL_WORKFLOWS,
-        remplacements=remplacements,
-    )
-
-
 async def _ticket(setup: Fixture) -> Any:
     from choregos_api.db.models import WorkItem
     from choregos_api.db.session import session_scope
@@ -393,7 +375,7 @@ async def test_un_interpreteur_qui_meurt_le_dit(setup: Fixture, temporal_env: An
     async def await_run_qui_meurt(payload: dict[str, Any]) -> dict[str, Any]:
         raise ApplicationError("le projet n'a plus de dépôt", non_retryable=True)
 
-    async with _worker_avec(temporal_env, {"await_run": await_run_qui_meurt}):
+    async with worker_with(temporal_env, {"await_run": await_run_qui_meurt}):
         handle = await start(temporal_env, setup)
         with pytest.raises(WorkflowFailureError):
             await handle.result()
@@ -434,7 +416,7 @@ async def test_une_erreur_sans_message_laisse_quand_meme_son_type(setup: Fixture
     async def start_run_injoignable(payload: dict[str, Any]) -> dict[str, Any]:
         raise httpx.ConnectTimeout("")  # tel qu'httpx le lève : aucun message
 
-    async with _worker_avec(temporal_env, {"start_run": start_run_injoignable}):
+    async with worker_with(temporal_env, {"start_run": start_run_injoignable}):
         handle = await start(temporal_env, setup)
         with pytest.raises(WorkflowFailureError):
             await handle.result()
@@ -463,7 +445,7 @@ async def test_un_interpreteur_qui_redemarre_efface_la_marque(setup: Fixture, te
     async def await_run_qui_bloque(payload: dict[str, Any]) -> dict[str, Any]:
         raise ApplicationError("on s'arrête ici", non_retryable=True)
 
-    async with _worker_avec(temporal_env, {"await_run": await_run_qui_bloque}):
+    async with worker_with(temporal_env, {"await_run": await_run_qui_bloque}):
         handle = await start(temporal_env, setup)
         with pytest.raises(Exception):  # noqa: B017 — la mort de ce workflow est voulue
             await handle.result()
@@ -487,7 +469,7 @@ async def test_le_diff_non_collecte_ne_tue_pas_l_etape(setup: Fixture, temporal_
     async def collect_qui_echoue(payload: dict[str, Any]) -> dict[str, Any]:
         raise ApplicationError("le projet n'a pas de dépôt", non_retryable=True)
 
-    async with _worker_avec(temporal_env, {"collect_run_artifacts": collect_qui_echoue}):
+    async with worker_with(temporal_env, {"collect_run_artifacts": collect_qui_echoue}):
         handle = await start(temporal_env, setup)
         await _wait_state(handle, "awaiting_spec_approval")
 
@@ -513,7 +495,7 @@ async def test_await_run_est_rejoue_apres_une_panne_passagere(setup: Fixture, te
             raise ApplicationError("heartbeat manqué : le worker a redémarré")  # rejouable
         return await stage_activities.await_run(payload)
 
-    async with _worker_avec(temporal_env, {"await_run": await_run_fragile}):
+    async with worker_with(temporal_env, {"await_run": await_run_fragile}):
         handle = await start(temporal_env, setup)
         await _wait_state(handle, "awaiting_spec_approval")
 

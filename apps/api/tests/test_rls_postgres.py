@@ -836,7 +836,7 @@ async def test_received_events_stay_in_their_organisation(deux_organisations: di
 
 
 async def test_trigger_tokens_stay_in_their_organisation(deux_organisations: dict[str, str]) -> None:
-    """HTTP trigger tokens (S51-01): org `a` reads none of `b`'s digests, writes none into it, and a
+    """HTTP trigger tokens (S56-01): org `a` reads none of `b`'s digests, writes none into it, and a
     session with no scope reads nothing."""
     from choregos_api.db.models import Organization, TriggerToken
     from choregos_api.db.session import session_scope

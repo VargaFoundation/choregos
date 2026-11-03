@@ -9,9 +9,9 @@ from choregos_contracts import (
     INERT_BINARY_EXTENSIONS,
     MAX_BINARY_BYTES,
     check_inert_binary,
-    empreinte_de_skill,
     encode_binary,
     is_inert_binary_path,
+    skill_digest,
     skill_file_bytes,
 )
 
@@ -57,7 +57,7 @@ def test_the_extension_alone_decides_text_or_base64() -> None:
 
 def test_the_digest_of_text_is_what_it_always_was_and_binaries_count_by_their_bytes() -> None:
     expected = hashlib.sha256(b"SKILL.md\0hi\0").hexdigest()
-    assert empreinte_de_skill({"SKILL.md": "hi"}) == f"sha256:{expected}"
+    assert skill_digest({"SKILL.md": "hi"}) == f"sha256:{expected}"
     blob = SAMPLES[".png"]
     expected = hashlib.sha256(b"a.png\0" + blob + b"\0").hexdigest()
-    assert empreinte_de_skill({"a.png": encode_binary(blob)}) == f"sha256:{expected}"
+    assert skill_digest({"a.png": encode_binary(blob)}) == f"sha256:{expected}"

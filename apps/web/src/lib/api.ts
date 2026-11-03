@@ -162,6 +162,11 @@ import type {
   ModelMatrix,
   PolicyDef,
   PolicyCeilingState,
+  McpGatewayAssertion,
+  McpGatewayPut,
+  McpGatewayState,
+  McpGatewayTest,
+  McpGatewayTestRequest,
   OutboundProxyPut,
   OutboundProxyState,
   OutboundProxyTest,
@@ -179,6 +184,8 @@ import type {
   WorkflowEditResult,
   WorkflowOperation,
   WorkflowRouting,
+  RoutingPreview,
+  RoutingPreviewRequest,
   WorkflowSummary,
   WorkflowTemplate,
   WorkflowValidation,
@@ -237,6 +244,8 @@ export type Problem = {
   latest_version?: number;
   latest_author?: string | null;
   verdicts?: EgressVerdict[];
+  /** `gateway_in_use` (ADR 0105): the connectors that still go through the MCP gateway. */
+  connectors?: string[];
 };
 
 export class ApiError extends Error {
@@ -434,6 +443,8 @@ export const api = {
     request<Agent>(`/orgs/${org}/agents/${slug}/scope`, { method: "POST", body: JSON.stringify(body) }),
   updateAgent: (org: string, slug: string, body: AgentPatch) =>
     request<Agent>(`/orgs/${org}/agents/${slug}`, { method: "PATCH", body: JSON.stringify(body) }),
+  /** Deletes an agent that never served; 409 with the reasons otherwise (retire it instead). */
+  deleteAgent: (org: string, slug: string) => request<void>(`/orgs/${org}/agents/${slug}`, { method: "DELETE" }),
   /** Its life (S32-04): activate a draft, deprecate, retire — retiring runs its checklist. */
   changeAgentLifecycle: (org: string, slug: string, body: AgentLifecycleChange) =>
     request<AgentLifecycleResult>(`/orgs/${org}/agents/${slug}/lifecycle`, { method: "POST", body: JSON.stringify(body) }),
@@ -714,10 +725,11 @@ export const api = {
   connectors: (id: string) => request<ConnectorDto[]>(`/projects/${qualify(id)}/connectors`),
   runAccess: (id: string) =>
     request<{
-      evenements: number;
+      events: number;
+      inferred?: number;
       refusals: number;
       tool_cost_eur?: number;
-      acces: { nature: string; target: string; requests: number; refusals: number; motifs?: string[] }[];
+      access: { nature: string; target: string; requests: number; refusals: number; reasons?: string[] }[];
       chain?: RunChain;
     }>(`/runs/${id}/access`),
   projectTools: (id: string) =>
@@ -880,6 +892,12 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(routing),
     }),
+  /** Where a work item would be born, and why (ADR 0116); nothing is created, a model call is booked. */
+  previewWorkflowRouting: (id: string, body: RoutingPreviewRequest) =>
+    request<RoutingPreview>(`/projects/${qualify(id)}/workflow-routing/preview`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   /** Plus de ticket neuf ; l'API refuse le défaut et la cible d'une règle (409). */
   deactivateWorkflow: (id: string, name: string) =>
     request<void>(`/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}/deactivate`, { method: "POST" }),
@@ -912,6 +930,19 @@ export const api = {
   /** Fetches the fixed echo endpoint through the stored proxy; a failing proxy is a 200 with `ok: false`. */
   testOutboundProxy: (org: string) => request<OutboundProxyTest>(`/orgs/${org}/outbound-proxy/test`, { method: "POST" }),
 
+  /** The organisation's MCP gateway (ADR 0105): the secret is write-only, only `secret_set` comes back; a PUT can answer 409 `egress_required`. */
+  mcpGateway: (org: string) => request<McpGatewayState>(`/orgs/${org}/mcp-gateway`),
+  putMcpGateway: (org: string, body: McpGatewayPut) =>
+    request<McpGatewayState>(`/orgs/${org}/mcp-gateway`, { method: "PUT", body: JSON.stringify(body) }),
+  /** A 409 `gateway_in_use` names the connectors that still go through it. */
+  deleteMcpGateway: (org: string) => request<void>(`/orgs/${org}/mcp-gateway`, { method: "DELETE" }),
+  /** Lists the tools of one server through the stored gateway; a failing gateway is a 200 with `ok: false`. */
+  testMcpGateway: (org: string, body: McpGatewayTestRequest) =>
+    request<McpGatewayTest>(`/orgs/${org}/mcp-gateway/test`, { method: "POST", body: JSON.stringify(body) }),
+  /** Creates the assertion key the first time, then rotates it; the old key stays published until retired. */
+  rotateMcpGatewayAssertionKey: (org: string) =>
+    request<McpGatewayAssertion>(`/orgs/${org}/mcp-gateway/assertion-key`, { method: "POST" }),
+
   /** What a project's runs really get (ADR 0070): its policy under the organisation's ceiling, and what was clamped. */
   projectNetwork: (id: string) => request<ProjectNetwork>(`/projects/${qualify(id)}/network`),
   /** Refusals and traffic per host, for the organisation's administrators. */
@@ -924,12 +955,12 @@ export const api = {
   /** The webhook events a project received and what the platform did with each (S42-06f), newest first. */
   receivedEvents: (id: string, params?: Record<string, string>) =>
     request<ReceivedEventPage>(`/projects/${qualify(id)}/received-events${query(params)}`),
-  /** The project's HTTP triggers (S51-01, ADR 0113): URL, workflow, whether a token exists. */
+  /** The project's HTTP triggers (S56-01, ADR 0113): URL, workflow, whether a token exists. */
   triggers: (id: string) => request<Trigger[]>(`/projects/${qualify(id)}/triggers`),
   /** Mints a trigger's token and signing secret, shown once; the previous ones stop working. */
   rotateTriggerToken: (id: string, name: string) =>
     request<TriggerToken>(`/projects/${qualify(id)}/triggers/${encodeURIComponent(name)}/token`, { method: "POST" }),
-  /** Fires a trigger by hand with a payload, as the person (S51-02). */
+  /** Fires a trigger by hand with a payload, as the person (S56-02). */
   fireTrigger: (id: string, name: string, payload: Record<string, unknown>) =>
     request<TriggerAck>(`/projects/${qualify(id)}/triggers/${encodeURIComponent(name)}/fire`, {
       method: "POST",

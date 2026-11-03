@@ -198,7 +198,7 @@ async def test_a_tenant_provider_without_discovery_fails_instead_of_being_guesse
     with respx.mock(assert_all_called=False) as mock:
         mock.get(f"{ACME}/.well-known/openid-configuration").mock(return_value=Response(404))
         response = await client.get("/api/v1/auth/login", params={"org": "acme"})
-    assert response.status_code == 502
+    assert response.status_code == 503
     assert "protocol/openid-connect" not in response.text
 
 
@@ -282,6 +282,39 @@ async def test_an_unverified_address_is_refused(client: AsyncClient, directory: 
     assert "not verified" in done.text
 
 
+async def test_a_tenant_provider_relinks_a_member_of_its_domain_and_audits_it(
+    client: AsyncClient, directory: Directory
+) -> None:
+    """An organisation that switches to its own provider must not lock out the members it already has."""
+    from choregos_api.db.models import AuditLog, User
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    async with session_scope(orgs="*") as session:
+        session.add(User(email="bob@acme.example", display_name="Bob", oidc_sub="instance-uuid-1"))
+    done, _ = await _acme_sign_in(client, {"sub": "u-1", "email": "bob@acme.example"})
+    assert done.status_code == 307, done.text
+    async with session_scope(orgs="*") as session:
+        user = (await session.execute(select(User).where(User.email == "bob@acme.example"))).scalar_one()
+        actions = [row.action for row in (await session.execute(select(AuditLog))).scalars()]
+    assert user.oidc_sub.startswith("tenant:") and user.oidc_sub.endswith(":u-1")
+    assert "user.relink" in actions
+
+
+async def test_a_tenant_provider_still_refuses_an_unverified_member_address(
+    client: AsyncClient, directory: Directory
+) -> None:
+    from choregos_api.db.models import User
+    from choregos_api.db.session import session_scope
+
+    async with session_scope(orgs="*") as session:
+        session.add(User(email="bob@acme.example", display_name="Bob", oidc_sub="instance-uuid-1"))
+    done, _ = await _acme_sign_in(
+        client, {"sub": "u-1", "email": "bob@acme.example", "email_verified": False}
+    )
+    assert done.status_code == 401
+
+
 async def test_a_tenant_that_lost_its_provider_mid_sign_in_is_refused(
     client: AsyncClient, directory: Directory
 ) -> None:
@@ -338,6 +371,22 @@ async def test_a_saml_sign_in_is_confined_like_an_oidc_one(client: AsyncClient, 
 
     assert await _finish("globex", "bob@acme.example", "saml-2", ["org-admins"]) == 401
     assert await _roles_of("bob@acme.example") == set()
+
+
+async def test_an_extension_sign_in_keeps_its_identity_handling(
+    client: AsyncClient, directory: Directory
+) -> None:
+    """`terminer_la_connexion(org=...)` is not an OIDC sign-in: it does not bind to a subject (ADR 0100)."""
+    from choregos_api.db.models import User
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    async with session_scope(orgs="*") as session:
+        session.add(User(email="ann@globex.example", display_name="Ann", oidc_sub="instance-uuid-2"))
+    assert await _finish("globex", "ann@globex.example", "saml-1", ["developers"]) == 307
+    async with session_scope(orgs="*") as session:
+        ann = (await session.execute(select(User).where(User.email == "ann@globex.example"))).scalar_one()
+    assert ann.oidc_sub == "instance-uuid-2", "the extension path must not re-bind the account"
 
 
 async def test_two_tenants_may_issue_the_same_subject(client: AsyncClient, directory: Directory) -> None:

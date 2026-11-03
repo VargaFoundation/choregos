@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { columnsFromGraph, itemsOf } from "@/components/workflows/board";
+import { kindOfOutcome, tonDEtat } from "@/components/ui";
+import { boardWorkflows, columnsFromGraph, foldedItems, itemsOf, TERMINAL_FOLD, visibleColumns } from "@/components/workflows/board";
 import { champsDepuisSchema, valeursPourLApi } from "@/components/workflows/champs";
 import type { WorkflowGraph, WorkItemDto } from "@/lib/types";
 
@@ -38,6 +39,57 @@ describe("les colonnes d'un board (ADR 0031, S16-10)", () => {
     const tickets = [ticket("a", "x", "onboarding"), ticket("b", "x", "offboarding"), ticket("c", "x")];
     expect(itemsOf(tickets, "onboarding", true).map((t) => t.id)).toEqual(["a", "c"]);
     expect(itemsOf(tickets, "offboarding", false).map((t) => t.id)).toEqual(["b"]);
+  });
+});
+
+describe("what a board shows of its columns (2026-11-02)", () => {
+  const graph = {
+    nodes: [
+      { id: "inbox", display: "To take", kind: "wait" },
+      { id: "diagnosed", display: "Diagnosed", kind: "work" },
+      { id: "answered", display: "Answered", kind: "terminal", terminal: true },
+    ],
+    edges: [],
+  } as unknown as WorkflowGraph;
+
+  it("hides the empty columns unless asked, and says how many it hid", () => {
+    const columns = columnsFromGraph(graph, [ticket("a", "diagnosed")]);
+    expect(visibleColumns(columns, false)).toEqual({ shown: [columns[1]], hidden: 2 });
+    expect(visibleColumns(columns, true)).toEqual({ shown: columns, hidden: 0 });
+  });
+
+  it("keeps every declared state, however long the workflow", () => {
+    const long = {
+      nodes: Array.from({ length: 14 }, (_, index) => ({ id: `s${index}`, display: `S${index}`, kind: "work" })),
+      edges: [],
+    } as unknown as WorkflowGraph;
+    // The toggle decides now; columnsFromGraph used to drop empty states past twelve.
+    expect(columnsFromGraph(long, [])).toHaveLength(14);
+  });
+
+  it("folds a long terminal column to its most recent tickets", () => {
+    const done = Array.from({ length: 5 }, (_, index) => ({
+      ...ticket(`d${index}`, "answered"),
+      created_at: `2026-11-0${index + 1}T10:00:00Z`,
+    })) as WorkItemDto[];
+    const column = columnsFromGraph(graph, done)[2]!;
+    const folded = foldedItems(column, false);
+    expect(folded.folded).toBe(5 - TERMINAL_FOLD);
+    expect(folded.items.map((item) => item.id)).toEqual(["d4", "d3", "d2"]);
+    expect(foldedItems(column, true)).toEqual({ items: column.items, folded: 0 });
+    // A live column is never folded.
+    const live = columnsFromGraph(graph, done.map((item) => ({ ...item, state: "diagnosed" })))[1]!;
+    expect(foldedItems(live, false).folded).toBe(0);
+  });
+
+  it("lists every workflow, the default first, or only the one asked for", () => {
+    const list = [
+      { name: "fon-access", is_default: false },
+      { name: "fon-support", is_default: true },
+    ];
+    expect(boardWorkflows(list, null).map((w) => w.name)).toEqual(["fon-support", "fon-access"]);
+    expect(boardWorkflows(list, "fon-access").map((w) => w.name)).toEqual(["fon-access"]);
+    expect(boardWorkflows(list, "missing")).toEqual([]);
   });
 });
 
@@ -82,5 +134,43 @@ describe("les champs d'une demande, depuis `metadata.inputs`", () => {
         manager: "",
       }),
     ).toEqual({ date_arrivee: "2026-11-02", poste: "dev", jours_d_essai: 90, teletravail: true, materiel: ["pc", "badge"] });
+  });
+});
+
+describe("a terminal state's declared outcome", () => {
+  const graph = {
+    nodes: [
+      { id: "to_apply", display: "To apply", kind: "wait" },
+      { id: "applied", display: "Applied", kind: "terminal", terminal: true, outcome: "success" },
+      { id: "declined", display: "Declined", kind: "terminal", terminal: true, outcome: "declined" },
+      { id: "handed_back", display: "Handed back", kind: "terminal", terminal: true, outcome: "cancelled" },
+      // A graph from an API before the field: a terminal state is a success.
+      { id: "done", display: "Done", kind: "terminal", terminal: true },
+    ],
+    edges: [],
+  } as unknown as WorkflowGraph;
+
+  it("gives its column its own kind: only a success is the green terminal", () => {
+    const kinds = Object.fromEntries(columnsFromGraph(graph, []).map((c) => [c.state, c.kind]));
+    expect(kinds).toEqual({
+      to_apply: "wait",
+      applied: "terminal",
+      declined: "declined",
+      handed_back: "cancelled",
+      done: "terminal",
+    });
+  });
+
+  it("folds a long declined column like a successful one: it is finished too", () => {
+    const tickets = Array.from({ length: TERMINAL_FOLD + 2 }, (_, i) => ticket(`d${i}`, "declined"));
+    const declined = columnsFromGraph(graph, tickets).find((c) => c.state === "declined");
+    expect(declined && foldedItems(declined, false).folded).toBe(2);
+  });
+
+  it("is never shown in the tone of a success when the request was declined or cancelled", () => {
+    expect(tonDEtat("applied", kindOfOutcome("success"))).toBe("succeeded");
+    expect(tonDEtat("declined", kindOfOutcome("declined"))).toBe("danger");
+    expect(tonDEtat("handed_back", kindOfOutcome("cancelled"))).toBe("neutral");
+    expect(kindOfOutcome(null)).toBe("terminal");
   });
 });

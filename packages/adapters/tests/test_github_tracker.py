@@ -475,7 +475,7 @@ def test_un_check_suite_termine_remonte_avec_ses_pr() -> None:
 
 
 async def test_the_poll_also_searches_the_labels_of_the_start_rules() -> None:
-    """S51-03: one search per set of labels; a rule on a type or a state is left to the webhook."""
+    """S56-03: one search per set of labels; a rule on a type or a state is left to the webhook."""
     fil = Fil(
         {("GET", f"/repos/{REPO}/issues"): [(200, [{"number": 1}]), (200, [{"number": 1}, {"number": 4}])]}
     )
@@ -491,3 +491,16 @@ async def test_the_poll_also_searches_the_labels_of_the_start_rules() -> None:
 
     assert keys == [f"{REPO}#1", f"{REPO}#4"]
     assert [r.url.params["labels"] for r in fil.requetes] == ["agent-ready", "bug,triage"]
+
+
+def test_an_opened_issue_carries_its_author_as_reporter() -> None:
+    """Who filed the issue reaches the work item (#1179), not only who sent the event."""
+    payload = {
+        "action": "opened",
+        "repository": {"full_name": REPO},
+        "issue": {"number": 13, "title": "Avoirs", "user": {"login": "ada"}, "labels": [], "state": "open"},
+        "sender": {"login": "ada"},
+    }
+    events = parse_github_event("issues", "d-7", payload)
+    assert events[0].type is InboundEventType.ITEM_CREATED
+    assert events[0].payload["reporter"] == "ada"

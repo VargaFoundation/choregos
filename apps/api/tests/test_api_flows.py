@@ -383,6 +383,35 @@ async def test_webhook_jira_cree_le_ticket_et_demarre_le_workflow(
     assert rejeu.json()["duplicate"] is True, "une livraison rejouée ne compte qu'une fois"
 
 
+async def test_a_tracker_birth_records_who_filed_the_issue(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    """The issue's author is the work item's reporter (#1179), not the webhook's sender."""
+    payload = {
+        "action": "labeled",
+        "repository": {"full_name": "varga/billing-api"},
+        "issue": {
+            "number": 11,
+            "title": "Access to billing",
+            "user": {"login": "jmartin"},
+            "labels": [{"name": "agent-ready"}],
+        },
+        "label": {"name": "agent-ready"},
+        "sender": {"login": "triage-bot"},
+    }
+    response = await client.post(
+        "/api/v1/webhooks/github",
+        content=json.dumps(payload).encode(),
+        headers={"X-GitHub-Event": "issues", "X-GitHub-Delivery": "d-11", "content-type": "application/json"},
+    )
+    assert response.status_code == 202, response.text
+
+    liste = (await client.get(f"/api/v1/projects/{project['id']}/work-items")).json()
+    born = next(i for i in liste["items"] if i["tracker_key"].endswith("#11"))
+    assert born["reporter"] == "jmartin"
+    assert (await client.get(f"/api/v1/work-items/{born['id']}")).json()["reporter"] == "jmartin"
+
+
 async def test_webhook_gitlab_refuse_un_jeton_invalide(
     client: AsyncClient, project: dict[str, Any], monkeypatch: Any
 ) -> None:
@@ -467,12 +496,12 @@ async def test_la_fiche_d_acces_replie_le_journal(
     reponse = await client.get("/api/v1/runs/run-acces-1/access")
     assert reponse.status_code == 200, reponse.text
     fiche = reponse.json()
-    assert fiche["evenements"] == 4 and fiche["refus"] == 1
-    assert fiche["acces"][0]["cible"] == "/workspace/.env", "le refus d'abord"
-    assert fiche["acces"][0]["motifs"] == ["fichier sensible"]
-    assert fiche["acces"][1]["demandes"] == 2, "deux lectures du même fichier, regroupées"
+    assert fiche["events"] == 4 and fiche["refusals"] == 1
+    assert fiche["access"][0]["target"] == "/workspace/.env", "the refusal first"
+    assert fiche["access"][0]["reasons"] == ["fichier sensible"]
+    assert fiche["access"][1]["requests"] == 2, "two reads of the same file, grouped"
     # La prose de l'agent n'y entre pas : la fiche redeviendrait illisible.
-    assert all("je lis le ticket" not in a["cible"] for a in fiche["acces"])
+    assert all("je lis le ticket" not in a["target"] for a in fiche["access"])
 
 
 async def test_un_ticket_dont_le_workflow_est_mort_le_dit(
@@ -513,3 +542,47 @@ async def test_un_ticket_dont_le_workflow_est_mort_le_dit(
     mort = next(i for i in liste["items"] if i["id"] == item_id)
     assert mort["workflow_status"] is None
     assert mort["failure"]["message"] == "le projet n'a pas de dépôt"
+
+
+async def test_a_declined_ticket_says_so_and_is_not_a_success(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    """A terminal state's declared outcome reaches the ticket and the board: a declined access
+    request in green read as granted (the Fondation access workflow, 2026-11-02)."""
+    from choregos_api.db.models import WorkItem
+    from choregos_api.db.session import session_scope
+
+    yaml_text = """
+apiVersion: choregos/v1
+kind: Workflow
+metadata: { name: access, version: 1 }
+actors:
+  analyst: { type: agent, role: analyse }
+  fondation: { type: human, group: fondation }
+states:
+  inbox: { display: To take, kind: wait }
+  to_apply: { display: To apply, kind: wait }
+  applied: { display: Applied, terminal: true }
+  declined: { display: Declined by Fondation, terminal: true, outcome: declined }
+transitions:
+  - { id: t-analyse, from: inbox, to: to_apply, by: analyst }
+  - { id: t-apply, from: to_apply, to: applied, by: fondation, on_reject: declined }
+"""
+    response = await client.put(f"/api/v1/projects/{project['id']}/workflow", json={"yaml": yaml_text})
+    assert response.status_code == 200, response.text
+
+    async with session_scope() as session:
+        ids = {}
+        for state in ("declined", "applied", "to_apply"):
+            item = WorkItem(
+                project_id=project["id"], tracker_key=f"varga/billing-api#{state}", title="T", state=state
+            )
+            session.add(item)
+            await session.flush()
+            ids[state] = item.id
+
+    outcomes = {
+        state: (await client.get(f"/api/v1/work-items/{item_id}")).json()["state_outcome"]
+        for state, item_id in ids.items()
+    }
+    assert outcomes == {"declined": "declined", "applied": "success", "to_apply": None}

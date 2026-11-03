@@ -93,7 +93,7 @@ class GitLabTracker:
 
     async def list_candidates(self, project: ProjectConfig) -> list[str]:
         """Backup polling (S3-06): the open issues labelled `agent-ready`, and those a
-        start rule made of labels names (S51-03), one search per set of labels (GitLab ANDs them)."""
+        start rule made of labels names (S56-03), one search per set of labels (GitLab ANDs them)."""
         found: dict[str, None] = {}
         for labels in label_searches(project):
             issues = await self.client.paginate(

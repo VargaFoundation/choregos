@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The tokens of projects' HTTP triggers: `trigger_tokens` (S51-01, ADR 0113)
+"""The tokens of projects' HTTP triggers: `trigger_tokens` (S56-01, ADR 0113)
 
 One row per trigger that has a token: its SHA-256 only, under forced RLS like `received_events`.
 
 Revision ID: f3b5d7e9a1c2
-Revises: b4d6f8a0c2e7
-Create Date: 2026-10-30 11:00:00+00:00
+Revises: c6e8a0b2d4f1
+Create Date: 2026-11-03 11:00:00+00:00
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "f3b5d7e9a1c2"
-down_revision: str | None = "b4d6f8a0c2e7"
+down_revision: str | None = "c6e8a0b2d4f1"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

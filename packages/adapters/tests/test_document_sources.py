@@ -239,6 +239,35 @@ async def test_a_git_source_lists_its_markdown_and_follows_its_branch(tmp_path: 
     source.close()
 
 
+async def test_a_git_source_lists_structured_text_named_by_its_whole_path(tmp_path: Path) -> None:
+    """S51-05: `paths` picks YAML, JSON and TOML at the root and below; the name keeps the folders."""
+    repo = tmp_path / "repo"
+    (repo / "deploy" / "prod").mkdir(parents=True)
+    _git(repo, "init", "-q", "-b", "main")
+    (repo / "values.yaml").write_text("a: 1\n")
+    (repo / "deploy" / "prod" / "values.yml").write_text("a: 2\n")
+    (repo / "deploy" / "schema.json").write_text("{}\n")
+    (repo / "pyproject.toml").write_text("[x]\n")
+    (repo / "README.md").write_text("# Readme\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "one")
+
+    default = GitSource(url=f"file://{repo}", ref="main", allow_file=True)
+    assert [i.ref for i in (await default.changes(None)).items] == ["README.md"], "markdown by default"
+    default.close()
+    source = GitSource(
+        url=f"file://{repo}", ref="main", paths=["*.yaml", "*.yml", "*.json", "*.toml"], allow_file=True
+    )
+    listed = {i.ref: i.name for i in (await source.changes(None)).items}
+    assert listed == {
+        "values.yaml": "values.yaml",
+        "deploy/prod/values.yml": "deploy-prod-values.yml",
+        "deploy/schema.json": "deploy-schema.json",
+        "pyproject.toml": "pyproject.toml",
+    }
+    source.close()
+
+
 @pytest.mark.parametrize(
     ("url", "ref"), [("http://git.test/r.git", "main"), ("https://git.test/r.git", "--upload-pack=x")]
 )

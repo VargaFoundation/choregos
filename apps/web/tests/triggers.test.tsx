@@ -50,7 +50,7 @@ const view = () =>
     </QueryClientProvider>,
   );
 
-describe("a project's HTTP triggers (S51-02)", () => {
+describe("a project's HTTP triggers (S56-02)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(api.project).mockResolvedValue(project as never);
@@ -127,7 +127,7 @@ describe("a project's HTTP triggers (S51-02)", () => {
   });
 });
 
-describe("editing the triggers and the start rules (S51-02)", () => {
+describe("editing the triggers and the start rules (S56-02)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(api.triggers).mockResolvedValue([]);

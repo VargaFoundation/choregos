@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""HTTP triggers (S51-01, ADR 0113): the door another system calls, its token, and firing it by hand.
+"""HTTP triggers (S56-01, ADR 0113): the door another system calls, its token, and firing it by hand.
 
 `POST /webhooks/triggers/{org}/{project}/{name}` takes the caller's JSON with the trigger's token
 (`Authorization: Bearer`, `X-Choregos-Token`, or `?token=` for a sender that can only set a URL), maps
@@ -195,7 +195,7 @@ async def trigger_webhook(
 ) -> TriggerAck | JSONResponse:
     """Another system opens a work item. 404: no such trigger, or none with a token; 401: a wrong
     token, or a wrong or missing `X-Choregos-Signature` for a trigger with `auth: signature`
-    (S51-04); 413: a body over 256 KiB; 422: not a JSON object, or a work item the workflow refuses;
+    (S56-04); 413: a body over 256 KiB; 422: not a JSON object, or a work item the workflow refuses;
     409: the project's tracker is external. A replayed delivery (`Idempotency-Key`, else the body's
     digest) answers `duplicate` and starts nothing."""
     target = await _project(session, org, project)

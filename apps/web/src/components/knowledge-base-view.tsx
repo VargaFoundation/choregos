@@ -219,7 +219,7 @@ export function KnowledgeBaseView({
             multiple
             aria-label="Documents to upload"
             className="min-w-0 max-w-full"
-            accept=".docx,.pptx,.xlsx,.pdf,.md,.markdown,.html,.htm,.txt"
+            accept=".docx,.pptx,.xlsx,.pdf,.md,.markdown,.html,.htm,.txt,.yaml,.yml,.json,.toml"
             onChange={(event) => {
               if (event.target.files?.length) void upload(event.target.files);
             }}

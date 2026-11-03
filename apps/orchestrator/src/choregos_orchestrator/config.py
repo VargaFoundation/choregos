@@ -23,26 +23,25 @@ class OrchestratorSettings(BaseSettings):
     temporal_namespace: str = "default"
     fakes: bool = Field(default=False, validation_alias="CHOREGOS_FAKES")
     api_url: str = "http://localhost:8000"
-    # L'URL que les AGENTS rappellent, depuis le cluster. Elle n'est pas l'URL publique :
-    # un pod ne résout pas le nom d'un ingress, et le runner mourait sur « Name or service
-    # not known » sans qu'aucun message ne désigne l'URL. Elle existait ici depuis le début
-    # et n'était lue nulle part — les rappels prenaient `api_url`.
+    # The URL the AGENTS call back, from inside the cluster. It is not the public URL: a pod does
+    # not resolve an ingress's name, and the runner died on "Name or service not known" with no
+    # message naming the URL. It had existed here from the start and was read nowhere: the
+    # callbacks took `api_url`.
     internal_api_url: str = "http://localhost:8000"
     gateway_url: str = "http://localhost:4000"
     gateway_type: str = "litellm"
-    #: La mémoire (Ecphoria). Le chart la passe depuis toujours (`CHOREGOS_MEMORY_URL` de
-    #: `commonEnv`) et ce réglage n'existait pas : `extra="ignore"` l'avalait en silence, et
-    #: l'URL MCP de la mémoire était fabriquée par `gateway_url.replace("4000", "8432")`.
-    #: Le remplacement ne tient que si la passerelle et la mémoire partagent un hôte. Sur le
-    #: locataire dev, la passerelle est `http://litellm:4000` : la mémoire devenait
-    #: `http://litellm:8432`, un port fermé sur le bon hôte pour le mauvais service. Mesuré le
-    #: 2026-09-27 — aucune réponse en huit secondes, là où `http://ecphoria:8432/mcp` répond
-    #: 401 en neuf millisecondes.
+    #: The memory (Ecphoria). The chart has always passed it (`CHOREGOS_MEMORY_URL` of
+    #: `commonEnv`) and this setting did not exist: `extra="ignore"` swallowed it in silence, and
+    #: the memory's MCP URL was built by `gateway_url.replace("4000", "8432")`. The replacement
+    #: only holds if the gateway and the memory share a host. On the dev tenant, the gateway is
+    #: `http://litellm:4000`: the memory became `http://litellm:8432`, a closed port on the right
+    #: host for the wrong service. Measured on 2026-09-27: no answer in eight seconds, where
+    #: `http://ecphoria:8432/mcp` answers 401 in nine milliseconds.
     memory_url: str = "http://localhost:8432"
-    #: L'adresse du serveur MCP du catalogue d'outils, telle que l'agent la voit. Elle est
-    #: LOCALE au pod d'agent, et quelqu'un la sert toujours : un `sidecar:` sous Tekton
-    #: (`templates/github-tekton-argo-k8s/tekton/agent-stage.yaml`), le runner lui-même partout
-    #: ailleurs (`runner/outils_locaux.py`, qui démarre le serveur si rien ne répond).
+    #: The address of the tool catalogue's MCP server, as the agent sees it. It is LOCAL to the
+    #: agent pod, and someone always serves it: a `sidecar:` under Tekton
+    #: (`templates/github-tekton-argo-k8s/tekton/agent-stage.yaml`), the runner itself everywhere
+    #: else (`runner/local_tools.py`, which starts the server if nothing answers).
     tools_mcp_url: str = "http://localhost:7777/mcp"
     runner_image: str = "ghcr.io/vargafoundation/choregos-runner:1.0.0"
     #: The images a job step may name (ADR 0056), as JSON in `CHOREGOS_JOB_IMAGES`: name → reference,
@@ -55,15 +54,14 @@ class OrchestratorSettings(BaseSettings):
     #: A reference without `@sha256:` stops the worker at start-up (`CHOREGOS_REQUIRE_IMAGE_DIGEST`).
     require_image_digest: bool = False
     executor_kind: str = "agent_sandbox"
-    # Variables passées à CHAQUE pod d'agent (JSON dans `CHOREGOS_RUNNER_ENV`). Ce qui est
-    # secret n'a rien à faire ici : `CHOREGOS_RUNNER_ENV_SECRETS` liste des secrets, que
-    # l'exécuteur monte par référence.
+    # Variables passed to EVERY agent pod (JSON in `CHOREGOS_RUNNER_ENV`). What is secret has no
+    # business here: `CHOREGOS_RUNNER_ENV_SECRETS` lists secrets, which the executor mounts by
+    # reference.
     runner_env: dict[str, str] = {}
     runner_namespace_pattern: str = "proj-{slug}-runners"
-    # Le proxy par lequel un pod d'agent sort (`HTTP_PROXY`/`HTTPS_PROXY`), avec
-    # `{namespace}` pour celui des runners : le provisioning y déploie un Squid dont
-    # l'allowlist est celle de la politique du projet. Vide : aucun proxy — le banc local,
-    # dont le namespace n'a ni NetworkPolicy ni proxy.
+    # The proxy an agent pod goes out through (`HTTP_PROXY`/`HTTPS_PROXY`), with `{namespace}` for
+    # the runners' one: provisioning deploys a Squid there whose allowlist is the project policy's.
+    # Empty: no proxy, as on the local bench, whose namespace has neither NetworkPolicy nor proxy.
     runner_egress_proxy: str = ""
     #: `run`: the runner presents its run id and run token to the egress proxy as proxy credentials
     #: (ADR 0070): the per-run `choregos-egress` proxy of the chart sets it. Empty: no credentials.
@@ -71,12 +69,12 @@ class OrchestratorSettings(BaseSettings):
     #: Hosts no run of this deployment may reach (comma-separated host patterns, ADR 0070): the same
     #: value as the API's `CHOREGOS_NETWORK_INSTANCE_DENY`.
     network_instance_deny: str = ""
-    # L'image de ce proxy ; vide : celle que `gitops.py` connaît. À épingler par digest là
-    # où Kyverno l'exige.
+    # This proxy's image; empty: the one `gitops.py` knows. To pin by digest where Kyverno
+    # requires it.
     egress_image: str = ""
-    # La `RuntimeClass` de CHAQUE pod d'agent quand la politique du projet n'en impose pas
-    # (`sandbox.runtime: gvisor` l'emporte). Vide : la runtime par défaut du cluster. Un
-    # cluster qui a gVisor ou Kata le dit ici une fois, plutôt que projet par projet.
+    # The `RuntimeClass` of EVERY agent pod when the project policy imposes none
+    # (`sandbox.runtime: gvisor` wins). Empty: the cluster's default runtime. A cluster that has
+    # gVisor or Kata says so here once, rather than project by project.
     runner_runtime_class: str = ""
     #: Below this reservation (USD), a stage does not start: its key would be refused at its first
     #: model call (ADR 0047, S27-02). `CHOREGOS_MIN_RUN_RESERVATION_USD`.
@@ -95,25 +93,30 @@ class OrchestratorSettings(BaseSettings):
 
     @property
     def callback_url(self) -> str:
-        """Ce que le runner reçoit dans `callbacks.api_url`, sans le suffixe d'API interne."""
+        """What the runner receives in `callbacks.api_url`, without the internal API suffix."""
         return (self.internal_api_url or self.api_url).rstrip("/").removesuffix("/api/v1/internal")
 
     @property
-    def url_du_sidecar_d_outils(self) -> str:
-        """L'URL du serveur MCP d'outils, annoncée à l'agent — toujours, et c'est correct.
+    def tools_sidecar_url(self) -> str:
+        """The URL of the tools MCP server, announced to the agent: always, and that is correct.
 
-        J'ai brièvement rendu cette annonce conditionnelle à un sidecar, en croyant qu'aucun
-        serveur n'existait sous l'exécuteur `k8s_job`. C'était faux : `runner/outils_locaux.py`
-        démarre ce serveur lui-même quand l'adresse annoncée est locale et que rien ne répond —
-        et son en-tête décrit précisément le défaut que je pensais trouver, réglé avant moi.
-        La condition retirait donc une annonce VRAIE, et privait l'agent de ses outils.
+        I briefly made this announcement conditional on a sidecar, believing no server existed
+        under the `k8s_job` executor. That was wrong: `runner/local_tools.py` starts this server
+        itself when the announced address is local and nothing answers, and its header describes
+        exactly the defect I thought I had found, fixed before me. The condition therefore removed
+        a TRUE announcement, and deprived the agent of its tools.
 
-        Le contrat est simple, et il tient pour tous les exécuteurs : la plateforme annonce une
-        adresse locale, et quelqu'un la sert — un sidecar sous Tekton, le runner partout ailleurs.
-        Une adresse NON locale n'est servie par personne automatiquement : c'est au déploiement de
-        fournir le serveur, et `demarrer_si_absent` s'abstient alors, exprès.
+        The contract is simple, and it holds for every executor: the platform announces a local
+        address, and someone serves it: a sidecar under Tekton, the runner everywhere else. A
+        NON-local address is served by no one automatically: it is up to the deployment to provide
+        the server, and `demarrer_si_absent` then abstains, on purpose.
         """
         return self.tools_mcp_url
+
+    @property
+    def url_du_sidecar_d_outils(self) -> str:  # lang: fr-ok alias:internal
+        """Former name of `tools_sidecar_url`."""
+        return self.tools_sidecar_url
 
     object_store_url: str = "s3://choregos"
     public_url: str = "http://localhost:3000"
@@ -122,7 +125,7 @@ class OrchestratorSettings(BaseSettings):
     fx_usd_eur: float = 0.92
     history_size_threshold: int = 20_000
     heartbeat_seconds: int = 60
-    # Polling de secours du tracker (S3-06) : 0 désactive le rattrapage.
+    # The tracker's fallback polling (S3-06): 0 disables the catch-up.
     reconcile_interval_seconds: int = 60
 
 

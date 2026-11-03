@@ -197,6 +197,8 @@ def test_une_issue_ouverte_devient_un_evenement() -> None:
     assert events[0].work_item_key == f"{PROJECT}#12"
     assert events[0].project_slug == "billing-api"
     assert events[0].actor == "marie"
+    # The user who opens an issue is its author (#1179).
+    assert events[0].payload["reporter"] == "marie"
 
 
 def test_un_label_ajoute_est_reconnu() -> None:
@@ -285,7 +287,7 @@ def test_un_evenement_inconnu_ne_produit_rien() -> None:
 
 
 async def test_the_poll_also_searches_the_labels_of_the_start_rules() -> None:
-    """S51-03: `labels_any` becomes one search per label, each with `labels_all`."""
+    """S56-03: `labels_any` becomes one search per label, each with `labels_all`."""
     seen: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:

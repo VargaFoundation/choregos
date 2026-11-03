@@ -134,6 +134,8 @@ from .definitions import (
     ProjectModelProfile,
     ProjectModels,
     RoutingCondition,
+    RoutingPreviewDto,
+    RoutingPreviewRequest,
     RoutingRule,
     StateActivity,
     StepActivity,
@@ -185,6 +187,7 @@ from .livraison import (
     ReleasePage,
     TrainStatusDto,
 )
+from .mcp_gateway import McpGatewayAssertion, McpGatewayAssertionKey
 from .memory import (
     MemoryStoreCreate,
     MemoryStoreDto,
@@ -445,6 +448,8 @@ __all__ = [
     "McpCatalogueEntryDto",
     "McpCatalogueInstall",
     "McpCatalogueRemoteDto",
+    "McpGatewayAssertion",
+    "McpGatewayAssertionKey",
     "MeDto",
     "MembershipDto",
     "MembershipUpsert",
@@ -535,6 +540,8 @@ __all__ = [
     "RemoteCredentialType",
     "RemoteSkillInfo",
     "RoutingCondition",
+    "RoutingPreviewDto",
+    "RoutingPreviewRequest",
     "RoutingRule",
     "RunDto",
     "RunEventDto",

@@ -633,14 +633,16 @@ test("board : ce qui attend une personne se dit en tête, et y mène même hors 
   const attentes = page.getByTestId("attentes-du-board");
   await expect(attentes).toContainText("1 ticket waits for a person");
   const carte = page.locator("#carte-w2");
-  // Sans le bandeau, la carte était dans une colonne hors champ, sans indice.
-  await expect(carte).not.toBeInViewport();
+  // The banner still leads to the card; since 2026-11-02 the board hides its empty columns and uses
+  // the whole width, so the card is no longer pushed out of sight to begin with.
   await attentes.getByRole("link").first().click();
   await expect(carte).toBeInViewport();
   await expect(carte.getByRole("button", { name: "Approve" })).toBeVisible();
-  // Le sommaire nomme chaque colonne, même hors champ, et dit où l'on attend.
-  const sommaire = page.getByRole("navigation", { name: "Columns of the board" });
-  await expect(sommaire.getByRole("link")).toHaveCount(await page.locator("section[id^=colonne-]").count());
+  // Each workflow's summary names each of its shown columns, and says where someone is waited for.
+  const sommaire = page.getByRole("navigation", { name: "Columns of default-simple" });
+  await expect(sommaire.getByRole("link")).toHaveCount(
+    await page.locator('section[id^="colonne-default-simple-"]').count(),
+  );
   await expect(sommaire).toContainText("1 waiting");
 });
 

@@ -413,4 +413,14 @@ async def finish_provisioning(payload: dict[str, Any]) -> dict[str, Any]:
             subject=bundle.slug,
             failed=[s["name"] for s in failed],
         )
-        return {"status": state["status"], "failed": [s["name"] for s in failed]}
+        slug = bundle.slug
+    if not failed:
+        # After the commit: the loop's first pass reads the project. Best effort, the worker's next
+        # start catches a missing loop up; the provisioning itself succeeded.
+        from ..train_client import start_reconciliation_loop
+
+        try:
+            await start_reconciliation_loop(slug)
+        except Exception as exc:  # the project is active; the worker start catches up
+            activity.logger.warning("tracker catch-up not started for %s: %s", slug, exc)
+    return {"status": state["status"], "failed": [s["name"] for s in failed]}

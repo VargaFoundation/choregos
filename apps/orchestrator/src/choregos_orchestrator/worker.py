@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Workers Temporal : un déploiement par task queue (docs/plan/02 §2.1)."""
+"""Temporal workers: one deployment per task queue (docs/plan/02 §2.1)."""
 
 from __future__ import annotations
 
@@ -13,24 +13,24 @@ from choregos_core import telemetry
 
 from .activities import ALL_ACTIVITIES
 from .config import ALL_QUEUES, get_settings
-from .repartition import ACTIVITES_PAR_FILE
+from .queues import ACTIVITIES_BY_QUEUE
 from .workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
 
 logger = get_logger("choregos.worker")
 
 
 def activities_for(queue: str) -> list[Any]:
-    """La queue `orchestrator` porte tout ; les autres portent leur spécialité.
+    """The `orchestrator` queue carries everything; the others carry their specialty.
 
-    Le filet est volontaire : les workflows planifient désormais chaque activité sur sa file
-    (`workflows.planification`), mais une tâche déjà en attente sur `orchestrator` au moment d'une
-    montée de version ne doit pas rester orpheline. La répartition est garantie par un test, pas
-    par une absence d'enregistrement.
+    The net is deliberate: the workflows now schedule each activity on its own queue
+    (`workflows.scheduling`), but a task already waiting on `orchestrator` at the time of a version
+    upgrade must not be left orphaned. The split is guaranteed by a test, not by an absence of
+    registration.
     """
     everything = [*ALL_ACTIVITIES, *WORKFLOW_ACTIVITIES]
     if queue == "orchestrator":
         return everything
-    names = ACTIVITES_PAR_FILE.get(queue, ())
+    names = ACTIVITIES_BY_QUEUE.get(queue, ())
     selected: list[Any] = []
     for candidate in everything:
         definition = getattr(candidate, "__temporal_activity_definition", None)
@@ -40,20 +40,20 @@ def activities_for(queue: str) -> list[Any]:
 
 
 async def start_reconciliation_loops() -> list[str]:
-    """Une boucle de rattrapage par projet actif (S3-06).
+    """One catch-up loop per active project (S3-06).
 
-    Le démarrage est idempotent : redémarrer un worker ne crée pas une seconde boucle,
-    et un projet ajouté après coup est pris au prochain redémarrage ou par l'API.
+    The start is idempotent: restarting a worker does not create a second loop, and a project added
+    afterwards is picked up at the next restart or by the API.
     """
     from choregos_api.db.models import Project
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
-    from .train_client import start_workflow_once
+    from .train_client import start_reconciliation_loop
 
     settings = get_settings()
     if settings.reconcile_interval_seconds <= 0:
-        logger.info("rattrapage tracker désactivé")
+        logger.info("tracker catch-up disabled")
         return []
     async with session_scope(orgs="*") as session:
         slugs = (
@@ -61,16 +61,10 @@ async def start_reconciliation_loops() -> list[str]:
         )
     started: list[str] = []
     for slug in slugs:
-        fresh = await start_workflow_once(
-            "TrackerReconciliation",
-            f"reconcile-{slug}",
-            {"project_slug": slug, "interval_seconds": settings.reconcile_interval_seconds},
-            # Une boucle morte en échec repart au démarrage du worker (S22-06).
-            relancer_si_echoue=True,
-        )
+        fresh = await start_reconciliation_loop(slug)
         if fresh:
             started.append(slug)
-    logger.info("rattrapage tracker", projets=len(slugs), demarres=len(started))
+    logger.info("tracker catch-up", projects=len(slugs), started=len(started))
     return started
 
 
@@ -99,7 +93,7 @@ async def start_knowledge_sync_loops() -> list[str]:
             "KnowledgeSync",
             knowledge_sync_id(source_id),
             {"org": org, "source_id": source_id, "interval_seconds": minutes * 60},
-            relancer_si_echoue=True,
+            relancer_si_echoue=True,  # lang: fr-ok (the keyword test_reconciliation pins)
         ):
             started.append(source_id)
     logger.info("knowledge sync loops", sources=len(sources), started=len(started))
@@ -111,10 +105,10 @@ async def run_worker(queues: list[str]) -> None:
     from temporalio.client import Client
     from temporalio.worker import Worker
 
-    # Les greffons déclarent aussi des EFFETS d'actions gouvernées (ADR 0035) : l'API les connaît
-    # pour proposer, le worker doit les connaître pour les JOUER. Il ne les chargeait pas — un effet
-    # de greffon était « inconnu » là même où il devait s'exécuter (S20-08).
-    charger_les_greffons()
+    # Extensions also declare EFFECTS of governed actions (ADR 0035): the API knows them in order
+    # to propose, and the worker must know them in order to PLAY them. It did not load them, so an
+    # extension's effect was "unknown" in the very place where it had to run (S20-08).
+    charger_les_greffons()  # lang: fr-ok (renamed by S45-10)
     settings = get_settings()
     client = await Client.connect(settings.temporal_address, namespace=settings.temporal_namespace)
     workers = [
@@ -127,7 +121,7 @@ async def run_worker(queues: list[str]) -> None:
         )
         for queue in queues
     ]
-    logger.info("workers démarrés", queues=queues, address=settings.temporal_address)
+    logger.info("workers started", queues=queues, address=settings.temporal_address)
     async with contextlib.AsyncExitStack() as stack:
         for worker in workers:
             await stack.enter_async_context(worker)

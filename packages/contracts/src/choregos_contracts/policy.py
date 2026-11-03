@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Modèles de politique (schemas/policy.schema.json)."""
+"""Policy models (schemas/policy.schema.json)."""
 
 from __future__ import annotations
 
@@ -19,8 +19,8 @@ class Budgets(Strict):
     stage_usd: dict[str, BySize] = Field(default_factory=dict)
     max_turns: dict[str, int] = Field(default_factory=dict)
     max_minutes: dict[str, int] = Field(default_factory=dict)
-    #: Appels d'outils du catalogue autorisés par run. `None` = aucun plafond ; un
-    #: catalogue payant sans plafond, c'est une facture sans plafond.
+    #: Catalogue tool calls allowed per run. `None` = no cap; a paid
+    #: catalogue without a cap is an invoice without a cap.
     tool_calls_per_run: int | None = Field(default=None, ge=0)
     daily_project_usd: float | None = None
     alert_at_ratio: float = Field(default=0.8, ge=0, le=1)
@@ -86,15 +86,15 @@ class SandboxPolicy(Strict):
     )
     network: NetworkPolicy = Field(default_factory=NetworkPolicy)
     llm_security_analyzer: bool = False
-    #: Ce que le runner fait d'une demande de permission dont il ne reconnaît PAS la nature
-    #: (ni `kind`, ni verbe connu, ni chemin, ni commande, ni URL) : `allow` la laisse passer
-    #: en la journalisant (le défaut — les garde-fous sont un filet), `reject` la refuse avec
-    #: le message qui nomme les outils légitimes (fermé par défaut, preset `regulated`).
+    #: What the runner does with a permission request whose nature it does NOT recognise
+    #: (no `kind`, no known verb, no path, no command, no URL): `allow` lets it through,
+    #: logging it (the default: the guardrails are a safety net), `reject` refuses it with
+    #: the message that names the legitimate tools (closed by default, preset `regulated`).
     unknown_requests: Literal["allow", "reject"] = "allow"
-    #: Ce que l'orchestrateur fait quand il repère une injection de prompt dans ce que
-    #: l'agent va lire (ticket, documents, mémoire) : `warn` journalise un événement de
-    #: sécurité (le défaut), `block` arrête l'étape avant tout run — le ticket est marqué
-    #: mort avec la raison, un humain relit —, `ignore` ne regarde pas.
+    #: What the orchestrator does when it spots a prompt injection in what the agent is about
+    #: to read (ticket, documents, memory): `warn` logs a security event (the default), `block`
+    #: stops the stage before any run (the ticket is marked dead with the reason, a human
+    #: reviews), `ignore` does not look.
     prompt_injection: Literal["ignore", "warn", "block"] = "warn"
     #: How long a sandbox may stay suspended while a person answers its agent's question, with an
     #: executor that announces `suspend` and `resume` (ADR 0016). Beyond it the sandbox is

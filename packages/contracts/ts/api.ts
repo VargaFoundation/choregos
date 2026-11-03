@@ -944,6 +944,26 @@ export type WorkflowRouting = {
       item_type?: string | null;
     };
   }>;
+  /** ADR 0116: `labels` reads the rules alone; `rules_then_llm` asks a small model when no rule matched; `llm` asks the model alone. The default is always the last resort. Always in a response (`labels` when never set); absent from a PUT, unchanged. */
+  strategy?: "labels" | "rules_then_llm" | "llm";
+  /** What the model reads about each workflow beside its description, by workflow name. Absent from a PUT, unchanged; an empty hint is dropped. */
+  hints?: {
+    [key: string]: string;
+  };
+};
+
+export type RoutingPreviewRequest = {
+  title: string;
+  body?: string | null;
+  labels?: Array<string>;
+  item_type?: string | null;
+};
+
+export type RoutingPreview = {
+  workflow: string | null;
+  by: "explicit" | "rule" | "llm" | "default";
+  reason?: string | null;
+  model?: string | null;
 };
 
 export type WorkflowValidateRequest = {
@@ -2720,7 +2740,7 @@ export type WorkflowIssue = {
   path?: string | null;
   line?: number | null;
   column?: number | null;
-  /** @deprecated Former spelling of a code renamed to English (`gate.sans_matiere` is now `gate.nothing_to_check`, `workflow.effet_implicite` is now `workflow.implicit_effect`), emitted for one release (ADR 0046) */
+  /** @deprecated Former spelling of a code renamed to English (`role.playbook_introuvable` is now `role.playbook_not_found`), emitted for one release (ADR 0046, S45-02) */
   deprecated_code?: string | null;
 };
 
@@ -2730,6 +2750,8 @@ export type WorkflowGraph = {
     display: string;
     kind: string;
     terminal?: boolean;
+    /** How a terminal state ends the work item (`success`, `declined`, `cancelled`); null on a state that is not terminal. */
+    outcome?: "success" | "declined" | "cancelled" | null;
     lane?: string;
     /** The tracker column the state maps to; the console groups the path into stages by it. */
     tracker_status?: string | null;
@@ -3189,7 +3211,7 @@ export type ModelCatalogueEntry = {
   source: "gateway" | "manual";
   enabled: boolean;
   allowed_roles: Array<string>;
-  usages: Array<"agent" | "embed" | "distill" | "eval">;
+  usages: Array<"agent" | "embed" | "distill" | "eval" | "route">;
   price_override?: PriceOverride | null;
   max_usd_per_minute?: number | null;
   gateway?: ModelGatewayFacts | null;
@@ -3205,7 +3227,7 @@ export type ModelCatalogueEntryCreate = {
   display_name?: string | null;
   enabled?: boolean;
   allowed_roles?: Array<string>;
-  usages?: Array<"agent" | "embed" | "distill" | "eval">;
+  usages?: Array<"agent" | "embed" | "distill" | "eval" | "route">;
   price_override?: PriceOverride | null;
   max_usd_per_minute?: number | null;
   notes?: string;
@@ -3215,7 +3237,7 @@ export type ModelCataloguePatch = {
   display_name?: string | null;
   enabled?: boolean | null;
   allowed_roles?: Array<string> | null;
-  usages?: Array<"agent" | "embed" | "distill" | "eval"> | null;
+  usages?: Array<"agent" | "embed" | "distill" | "eval" | "route"> | null;
   price_override?: PriceOverride | null;
   clear_price_override?: boolean;
   max_usd_per_minute?: number | null;
@@ -3473,6 +3495,8 @@ export type WorkItem = {
   risk?: Risk | null;
   state: string;
   state_display?: string | null;
+  /** How the current state ends the work item when it is terminal: `success`, `declined` (a request turned down) or `cancelled` (dropped); null while it can still move. */
+  state_outcome?: "success" | "declined" | "cancelled" | null;
   workflow_name?: string | null;
   workflow_version?: number | null;
   temporal_wf_id?: string | null;
@@ -3489,9 +3513,11 @@ export type WorkItem = {
   estimate?: CostEstimate | null;
   /** Who started the work item (ADR 0077): `person:<email>`, `mcp:<email>`, `tracker:<source>` for a webhook, `schedule:<name>`… Null for a work item from before S40-22. */
   initiated_by?: string | null;
+  /** Who filed the work item, as its tracker names them: Jira's reporter (`Name <e-mail>`, the name alone when the site hides the e-mail), the author's login on GitHub or GitLab, the person's e-mail in the console. Personal data: empty in a redacted entry. Null for a work item from before it was recorded. */
+  reporter?: string | null;
   /** The restricted knowledge bases its runs were served (ADR 0114), only ever added to. Reading the work item, its runs, artefacts and receipts needs reading every one of them; otherwise the detail answers 404 and a list shows it `redacted`. */
   restricted_knowledge?: Array<string>;
-  /** True in a list when the caller does not read every base in `restricted_knowledge` (ADR 0114): only `id`, `project_slug`, `tracker_key`, `title`, `state`, `state_display`, `workflow_name`, `workflow_version`, `url`, dates and `restricted_knowledge` are filled; everything else is empty. */
+  /** True in a list when the caller does not read every base in `restricted_knowledge` (ADR 0114): only `id`, `project_slug`, `tracker_key`, `title`, `state`, `state_display`, `state_outcome`, `workflow_name`, `workflow_version`, `url`, dates and `restricted_knowledge` are filled; everything else is empty. */
   redacted?: boolean;
   created_at?: string;
   closed_at?: string | null;
@@ -3534,7 +3560,7 @@ export type ReceivedEvent = {
   summary: string;
 };
 
-/** A project's HTTP trigger (S51-01, ADR 0113); its token is never listed. */
+/** A project's HTTP trigger (S56-01, ADR 0113); its token is never listed. */
 export type Trigger = {
   name: string;
   url: string;
@@ -3545,7 +3571,7 @@ export type Trigger = {
   fields?: {
     [key: string]: string;
   };
-  /** A JSON pointer to the text, or texts, a payload must hold (S51-05). */
+  /** A JSON pointer to the text, or texts, a payload must hold (S56-05). */
   when?: {
     [key: string]: unknown;
   };
@@ -3554,7 +3580,7 @@ export type Trigger = {
   token_created_at?: string | null;
 };
 
-/** A trigger's new token and the signing secret derived from it (S51-04), shown once. */
+/** A trigger's new token and the signing secret derived from it (S56-04), shown once. */
 export type TriggerToken = {
   name: string;
   url: string;
@@ -4373,6 +4399,7 @@ export interface Operations {
   decideAgentRelease: { method: "POST"; path: "/orgs/{org}/agents/{slug}/releases/{release_id}/decision"; body: AgentReleaseDecision; response: AgentRelease };
   decideGlobalPendingMemory: { method: "POST"; path: "/orgs/{org}/memories/{slug}/pending"; body: MemoryDecision; response: void };
   decidePendingMemory: { method: "POST"; path: "/projects/{id}/memory/pending"; body: MemoryDecision; response: void };
+  deleteAgent: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}"; body: never; response: void };
   deleteKnowledgeDocument: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}"; body: never; response: void };
   deleteKnowledgeSource: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}"; body: never; response: void };
   deleteMcpGateway: { method: "DELETE"; path: "/orgs/{org}/mcp-gateway"; body: never; response: void };
@@ -4477,17 +4504,17 @@ export interface Operations {
   getRun: { method: "GET"; path: "/runs/{id}"; body: never; response: Run };
   getRunAccess: { method: "GET"; path: "/runs/{id}/access"; body: never; response: {
   /** Log events scanned */
-  evenements: number;
-  /** Permission decisions whose kind was inferred because the agent did not state it (emitted since #27, declared by S34-03) */
+  events: number;
+  /** @deprecated Former name of `events`, emitted for one release (ADR 0046, S45-02) */
+  evenements?: number;
+  /** Permission decisions whose kind was inferred because the agent did not state it */
+  inferred?: number;
+  /** @deprecated Former name of `inferred`, emitted for one release (ADR 0046, S45-02) */
   deduites?: number;
   /** Total number of denied requests */
   refusals: number;
-  /** @deprecated Former name of `refusals`, still emitted for one release (ADR 0046) */
-  refus?: number;
   /** What the catalogue tools called by the run cost, in euros */
   tool_cost_eur?: number;
-  /** @deprecated Former name of `tool_cost_eur`, still emitted for one release (ADR 0046) */
-  cout_outils_eur?: number;
   /** Who started the work item and which earlier runs produced what this run read (ADR 0077 §2). Recorded at stage start by the orchestrator, never sent by the agent. Absent for a run started before it was recorded. */
   chain?: {
     /** `<kind>:<subject>` — `person:<email>`, `mcp:<email>`, `a2a:<client>`, `schedule:<name>`, `work_item:<key>`, `tracker:<kind>`, `finding:<id>`, `eval`, `demo`, `trial:<email>`; null when the work item predates the record */
@@ -4502,20 +4529,22 @@ export interface Operations {
       inputs_from: Array<string>;
     }>;
   };
-  acces: Array<{
-    nature: "read" | "write" | "execute" | "network" | "tool" | "autre";
+  access: Array<{
+    nature: "read" | "write" | "execute" | "network" | "tool" | "other";
     /** The file, command, address or tool asked for */
     target: string;
-    /** @deprecated Former name of `target`, still emitted for one release (ADR 0046) */
-    cible?: string;
     /** How many times the agent asked for it */
     requests: number;
-    /** @deprecated Former name of `requests`, still emitted for one release (ADR 0046) */
-    demandes?: number;
     /** How many of those requests were denied */
     refusals: number;
-    /** @deprecated Former name of `refusals`, still emitted for one release (ADR 0046) */
-    refus?: number;
+    reasons?: Array<string>;
+  }>;
+  /** @deprecated Former name of `access`, emitted for one release (ADR 0046, S45-02) */
+  acces?: Array<{
+    nature: "read" | "write" | "execute" | "network" | "tool" | "autre";
+    target: string;
+    requests: number;
+    refusals: number;
     motifs?: Array<string>;
   }>;
 } };
@@ -4691,6 +4720,7 @@ export interface Operations {
   postWorkItemAction: { method: "POST"; path: "/work-items/{id}/actions"; body: WorkItemAction; response: void };
   previewModelCuration: { method: "GET"; path: "/orgs/{org}/models/curate-preview"; body: never; response: ModelCuratePreview };
   previewSkillsFromGit: { method: "POST"; path: "/orgs/{org}/skills/import-git/preview"; body: SkillGitPreviewRequest; response: SkillGitPreview };
+  previewWorkflowRouting: { method: "POST"; path: "/projects/{id}/workflow-routing/preview"; body: RoutingPreviewRequest; response: RoutingPreview };
   proposeAction: { method: "POST"; path: "/projects/{id}/actions"; body: ActionCreate; response: Action };
   provisionProject: { method: "POST"; path: "/projects/{id}/provision"; body: ProvisionRequest; response: ProvisionStatus };
   publishAgentVersion: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions"; body: AgentSpec; response: AgentVersion };

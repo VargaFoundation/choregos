@@ -25,7 +25,16 @@ TEXT = {
     ".html": "text/html",
     ".htm": "text/html",
 }
-FORMATS: dict[str, str] = {**OOXML, ".pdf": "application/pdf", **TEXT}
+#: Structured text (S51-05): read as it is, stored as a fenced code block under its path.
+STRUCTURED = {
+    ".yaml": "application/yaml",
+    ".yml": "application/yaml",
+    ".json": "application/json",
+    ".toml": "application/toml",
+}
+#: The language a structured file's fence names, for the reader and for syntax highlighting.
+FENCE_LANGUAGE = {".yaml": "yaml", ".yml": "yaml", ".json": "json", ".toml": "toml"}
+FORMATS: dict[str, str] = {**OOXML, ".pdf": "application/pdf", **TEXT, **STRUCTURED}
 
 #: What an Office archive may inflate to, in all; past it, it is a bomb or not a document.
 MAX_INFLATED = 256 * 1024 * 1024
@@ -66,6 +75,11 @@ def accept(filename: str, data: bytes) -> Accepted:
             raise DocumentRefusedError(f"`{name}` does not start like a PDF")
     elif b"\0" in data[:8192]:
         raise DocumentRefusedError(f"`{name}` is binary, not text")
+    elif extension in STRUCTURED:
+        try:
+            data.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise DocumentRefusedError(f"`{name}` is not UTF-8 text") from exc
     return Accepted(extension=extension, mime=FORMATS[extension], filename=name)
 
 
