@@ -86,6 +86,7 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_spawns(wf, report, source)
     _check_effets(wf, report, source)
     _check_output_types(wf, report, source)
+    _check_unenforced_review(wf, report, source)
     _check_warnings(wf, report, source)
     return report
 
@@ -746,6 +747,35 @@ def _check_roles_connus(wf: Workflow, report: ValidationReport, source: Any) -> 
             )
 
 
+def _check_unenforced_review(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """A review the platform would never run is refused, not accepted silently (ADR 0101).
+
+    `review.humans` has no reader: nobody is asked. A `review.agents` entry other than the
+    transition's `by` actor never runs either: only `by` runs on a transition.
+    """
+    for index, t in enumerate(wf.transitions):
+        if t.review is None:
+            continue
+        if t.review.humans and t.review.humans.required != "never":
+            report.error(
+                "review.humans_not_enforced",
+                "`review.humans` is not enforced: Choregos asks no one for this review. "
+                "Declare a human actor and a transition it answers (ADR 0044).",
+                ["transitions", index, "review", "humans"],
+                source,
+            )
+        for agent in t.review.agents:
+            if agent == t.by:
+                continue
+            report.error(
+                "review.agent_not_run",
+                f"`{agent}` is named in `review.agents` of `{t.id}` but never runs: only the "
+                "transition's `by` actor runs. Give it its own transition.",
+                ["transitions", index, "review", "agents"],
+                source,
+            )
+
+
 def _check_warnings(wf: Workflow, report: ValidationReport, source: Any) -> None:
     if not any(name == "needs_human" or state.kind == "wait" for name, state in wf.states.items()):
         report.warn(
@@ -785,9 +815,7 @@ def _check_warnings(wf: Workflow, report: ValidationReport, source: Any) -> None
                 source,
             )
     for actor_id in wf.actors:
-        used = any(t.by == actor_id for t in wf.transitions) or any(
-            actor_id in (t.review.agents if t.review else []) for t in wf.transitions
-        )
+        used = any(t.by == actor_id for t in wf.transitions)
         used = used or any(t.train and t.train.approval == actor_id for t in wf.transitions)
         if not used:
             report.warn(

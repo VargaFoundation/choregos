@@ -1,14 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Policy engine : budgets, tentatives, périmètre, trains.
+"""Policy engine: budgets, attempts, scope, trains.
 
-Une politique répond à trois questions, et à elles seules : combien puis-je dépenser,
-combien de fois puis-je réessayer, et où l'agent a-t-il le droit d'écrire — plus les règles
-des trains de livraison (`release_train`).
+A policy answers three questions, and only those: how much may I spend, how many times may I
+retry, and where may the agent write; plus the rules of release trains (`release_train`).
 
-Elle ne dit PAS qui doit approuver un ticket : les humains se déclarent DANS le workflow (un
-acteur humain sur une transition, `train.approval` — ADR 0041, ADR 0044). `approvals.*` et
-`review.require_human_for_risk` restent acceptés par le schéma (une politique existante reste
-valide), mais personne ne les lit : `policy_warnings` le dit à qui les renseigne.
+It does NOT say who must approve a work item: people are declared IN the workflow (a human actor
+on a transition, `train.approval`; ADR 0041, ADR 0044). The keys `approvals.*`,
+`review.require_human_for_risk` and `attempts.default_max` stay accepted by the schema (a stored
+policy still loads), but nobody reads them: they are refused when a policy is written or a project
+is created from a template (`unenforced_governance`, ADR 0101).
 """
 
 from __future__ import annotations
@@ -258,6 +258,17 @@ def policy_warnings(policy: Policy) -> list[Issue]:
                     )
                 )
     return issues
+
+
+#: The warning codes that are refused when written: guards the platform accepts and never applies.
+UNENFORCED_GOVERNANCE_CODES = frozenset(
+    {"policy.approval_not_enforced", "policy.default_max_not_enforced", "policy.review_not_enforced"}
+)
+
+
+def unenforced_governance(policy: Policy) -> list[Issue]:
+    """The `policy_warnings` issues that promise a guard nobody applies (ADR 0101)."""
+    return [issue for issue in policy_warnings(policy) if issue.code in UNENFORCED_GOVERNANCE_CODES]
 
 
 @lru_cache(maxsize=8)

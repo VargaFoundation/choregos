@@ -2367,11 +2367,17 @@ transition `by` a human actor, or `train: {approval: <actor>}` on a release trai
 ([ADR 0041](adr/0041-approval-follows-what-the-batch-ships.md)). The policy's own human gate is
 the release train's: `release_train.<env>.approval` holds a departure until its group approves.
 
-`approvals.*` (`spec`, `merge`, `prod`, `scope_change`) and `review.require_human_for_risk` are
-still accepted, so an older policy stays valid, but **nothing enforces them**: no one is asked
-([ADR 0044](adr/0044-people-are-declared-in-the-workflow.md)). Saving a policy that sets
-them — a rule other than `required: never`, a non-empty list — logs a `policy.not_enforced`
-warning per key, and the presets no longer write them. `review.cross_backend` is enforced.
+`approvals.*` (`spec`, `merge`, `prod`, `scope_change`), `attempts.default_max` and
+`review.require_human_for_risk` are still part of the schema, but **nothing enforces them**: no one
+is asked ([ADR 0044](adr/0044-people-are-declared-in-the-workflow.md)). They are therefore refused
+when written ([ADR 0101](adr/0101-governance-the-platform-does-not-enforce-is-refused.md)): saving a
+policy that sets them (a rule other than `required: never`, a non-empty list) answers `422` with
+one `policy.*_not_enforced` code per key, and so does creating a project from a template whose
+policy carries them, a `plugin:` template included (the error names the template). The same goes
+for a workflow: `review.humans` (other than `required: never`) and a `review.agents` entry that is
+not the transition's `by` actor are errors, because nobody is asked and nothing runs. Documents
+stored earlier keep loading; editing them requires removing the keys. The `advanced` template is
+version 3 and no longer promises a maintainer review. `review.cross_backend` is enforced.
 
 ## 4 bis. Governed actions
 

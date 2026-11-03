@@ -25,7 +25,6 @@ budgets:
   stage_usd: {{ default: {{ S: 2, M: {stage_m}, L: 6, XL: 6 }} }}
   max_turns: {{ default: {turns} }}
   daily_project_usd: {daily}
-attempts: {{ default_max: 1 }}
 """
 
 

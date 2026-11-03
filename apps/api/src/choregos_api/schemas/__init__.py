@@ -187,7 +187,16 @@ from .livraison import (
     ReleasePage,
     TrainStatusDto,
 )
-from .mcp_gateway import McpGatewayAssertion, McpGatewayAssertionKey
+from .mcp_gateway import (
+    McpGateway,
+    McpGatewayAssertion,
+    McpGatewayAssertionKey,
+    McpGatewayAuth,
+    McpGatewayPut,
+    McpGatewayState,
+    McpGatewayTest,
+    McpGatewayTestRequest,
+)
 from .memory import (
     MemoryStoreCreate,
     MemoryStoreDto,
@@ -445,8 +454,14 @@ __all__ = [
     "McpCatalogueEntryDto",
     "McpCatalogueInstall",
     "McpCatalogueRemoteDto",
+    "McpGateway",
     "McpGatewayAssertion",
     "McpGatewayAssertionKey",
+    "McpGatewayAuth",
+    "McpGatewayPut",
+    "McpGatewayState",
+    "McpGatewayTest",
+    "McpGatewayTestRequest",
     "MeDto",
     "MembershipDto",
     "MembershipUpsert",
