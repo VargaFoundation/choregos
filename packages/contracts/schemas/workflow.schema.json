@@ -483,6 +483,18 @@
           ],
           "description": "What the platform does when it takes a system transition: open the work item's pull request, or merge it (before #175: the `pr_` or `merged` prefix of the target state)."
         },
+        "pull_request": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "How the pull request is opened, on a transition that opens it (`does: open_pr`, S51-11)",
+          "properties": {
+            "draft": {
+              "type": "boolean",
+              "default": false,
+              "description": "open the pull request as a draft (a GitLab draft merge request); a pull request already open on the branch keeps its state"
+            }
+          }
+        },
         "spawn": {
           "$ref": "#/$defs/spawn",
           "description": "a fan-out (ADR 0057): one child work item per element of a list, the transition passes once every child is settled"

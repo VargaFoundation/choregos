@@ -63,13 +63,18 @@ async def project_effective_network(
     session: AsyncSession,
     project: Project,
     agent_net: AgentNetwork | None = None,
+    *,
+    with_repo: bool = True,
 ) -> tuple[EffectiveNetwork, PolicyCeiling | None]:
-    """The network a run of this project gets (with the agent's narrowing, when it has one)."""
+    """The network a run of this project gets (with the agent's narrowing, when it has one).
+    `with_repo`: whether the run clones the repository; one that does not gets no repository host."""
     policy = await effective_policy(session, project.id)
     ceiling = ceiling_of(await session.get(Organization, project.org_id))
     # The repository's host, and what the organisation opened for its runners (S39-22d): the same
-    # implied hosts the orchestrator writes into the run's permissions (ADR 0070, amended).
-    implied = [h for h in [project_repo_host(project)] if h] + await org_runner_hosts(session, project.org_id)
+    # implied hosts the orchestrator writes into the run's permissions (ADR 0070, amended). A run
+    # that clones nothing (`workspace: none`, ADR 0119) gets no repository host.
+    repo = project_repo_host(project) if with_repo else None
+    implied = [h for h in [repo] if h] + await org_runner_hosts(session, project.org_id)
     effective = effective_network(
         policy.sandbox.network,
         agent_net,
@@ -102,11 +107,20 @@ async def _agent_network_of(session: AsyncSession, run: Run) -> AgentNetwork | N
     return None
 
 
+def run_clones_the_repository(run: Run) -> bool:
+    """Whether the run's `StageInput` carries a `repo` (ADR 0119). A run not prepared yet is assumed
+    to, as before the field existed: only a recorded `repo: null` takes the repository host away."""
+    stage_input = run.stage_input or {}
+    return "repo" not in stage_input or stage_input["repo"] is not None
+
+
 async def run_network(session: AsyncSession, run: Run) -> RunNetwork:
     project = await session.get(Project, run.project_id)
     assert project is not None
     organisation = await session.get(Organization, project.org_id)
-    effective, _ = await project_effective_network(session, project, await _agent_network_of(session, run))
+    effective, _ = await project_effective_network(
+        session, project, await _agent_network_of(session, run), with_repo=run_clones_the_repository(run)
+    )
     return RunNetwork(
         run_id=run.id,
         allow=effective.allow,

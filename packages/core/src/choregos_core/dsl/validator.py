@@ -30,6 +30,7 @@ from choregos_contracts.workflow import (
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
 
+from ..domain import TRACKER_FIELD
 from ..errors import Issue
 from ..gates import ALREADY_FIXED_GATE, known_gates
 from .dates import champ_de
@@ -157,6 +158,14 @@ def _check_inputs(wf: Workflow, report: ValidationReport, source: Any) -> None:
             ["metadata", "inputs"],
             source,
         )
+    if TRACKER_FIELD in (schema.get("properties") or {}) or TRACKER_FIELD in (schema.get("required") or []):
+        report.error(
+            "inputs.reserved",
+            f"`{TRACKER_FIELD}` is reserved: the platform puts there what the tracker says about the "
+            "ticket (`ticket.fields.tracker`); name the field otherwise",
+            ["metadata", "inputs", "properties", TRACKER_FIELD],
+            source,
+        )
 
 
 def _check_conditions(wf: Workflow, report: ValidationReport, source: Any) -> None:
@@ -169,6 +178,13 @@ def _check_conditions(wf: Workflow, report: ValidationReport, source: Any) -> No
       waiting forever.
     """
     declared = {name for t in wf.transitions for name in t.outputs}
+    # A decision step writes its questions' answers and probabilities (ADR 0121): declared by its actor.
+    declared |= {
+        name
+        for t in wf.transitions
+        if isinstance(actor := wf.actor_of(t), DecisionActor)
+        for name in actor.outputs
+    }
     for index, t in enumerate(wf.transitions):
         for name in t.when or {}:
             if name not in declared:
@@ -197,8 +213,10 @@ def _check_decisions(wf: Workflow, report: ValidationReport, source: Any) -> Non
 
     - Its questions write `<name>` and `<name>_confidence`: a question named like another's
       probability would write the same output twice.
-    - The contract declares it before the engine runs it (S52-04): until then a workflow that uses
-      one is refused, so that a decision step is never taken as a transition that does nothing.
+
+    What depends on the project — a gateway that serves `/v1/systemone`, a catalogue entry with the
+    `decide` usage — is checked where the project is known: when the API saves the workflow
+    (`decision.gateway_unsupported`, `decision.model_usage`) and again when the step runs.
     """
     for name, actor in wf.actors.items():
         if not isinstance(actor, DecisionActor):
@@ -210,14 +228,6 @@ def _check_decisions(wf: Workflow, report: ValidationReport, source: Any) -> Non
                 f"the decision `{name}` writes the output `{twice}` twice: a question is named like another "
                 "question's probability",
                 ["actors", name, "questions"],
-                source,
-            )
-        if any(t.by == name for t in wf.transitions):
-            report.error(
-                "decision.not_runnable",
-                f"the decision `{name}` is declared, but this platform does not run decision steps yet "
-                "(ADR 0121, S52-04)",
-                ["actors", name],
                 source,
             )
 
@@ -599,6 +609,17 @@ def _check_effets(wf: Workflow, report: ValidationReport, source: Any) -> None:
                 f"write `does: {implicite}`, so that a rename no longer changes it"
             )
             report.warn("workflow.implicit_effect", message, ["transitions", index, "to"], source)
+        if t.pull_request is not None and (not systeme or effet_de_la_transition(t) != "open_pr"):
+            message = (
+                "`pull_request:` says how the platform opens the pull request: only a `system` transition "
+                "that opens it (`does: open_pr`) carries it"
+            )
+            report.error(
+                "transition.pull_request_without_open_pr",
+                message,
+                ["transitions", index, "pull_request"],
+                source,
+            )
     for nom, etat in wf.states.items():
         if nom.startswith(PREFIXE_PRODUCTION) and not etat.production:
             message = (

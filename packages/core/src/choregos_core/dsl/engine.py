@@ -158,6 +158,11 @@ class WorkflowEngine:
         actor = self.wf.actor_of(transition)
         return actor if isinstance(actor, JobActor) else None
 
+    def decision_of(self, transition: Transition) -> DecisionActor | None:
+        """The decision a step asks (ADR 0121), or None for any other actor."""
+        actor = self.wf.actor_of(transition)
+        return actor if isinstance(actor, DecisionActor) else None
+
     def run_request(self, transition: Transition) -> dict[str, Any]:
         """What `prepare_stage` needs from the actor of a step a runner executes: an agent's role,
         model and limits, or a job's role and command (ADR 0056). Empty for any other actor."""

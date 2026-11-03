@@ -12,6 +12,7 @@ from .agent_sandbox import FakeSandboxCluster
 from .builder import FakeImageBuilder
 from .cd import FakeCd
 from .ci import FakeCi
+from .decisions import FakeDecisionClient
 from .executor import FakeExecutor
 from .gateway import BudgetExceeded, BudgetExceededError, FakeGateway
 from .github_app import FakeGitHubApp
@@ -30,6 +31,7 @@ __all__ = [
     "BudgetExceededError",
     "FakeCd",
     "FakeCi",
+    "FakeDecisionClient",
     "FakeExecutor",
     "FakeGateway",
     "FakeGitHubApp",

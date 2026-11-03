@@ -55,6 +55,11 @@
             "body": {
               "type": "string",
               "maxLength": 20000
+            },
+            "fields": {
+              "type": "object",
+              "additionalProperties": true,
+              "description": "the work item's fields, rendered as `ticket.fields` (the API's `AgentSampleInput.fields`, S51-04): `{tracker: {reporter, creator, labels, answers}}` plays a ticket filed from a tracker; absent, `{}`. At most 64 KiB of JSON, checked by the installer"
             }
           }
         },

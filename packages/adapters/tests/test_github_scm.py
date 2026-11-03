@@ -95,6 +95,16 @@ async def test_sortir_du_brouillon_passe_par_graphql() -> None:
     assert "markPullRequestReadyForReview" in fil.corps(-1)["query"]
 
 
+async def test_a_draft_left_as_it_is_is_not_marked_ready() -> None:
+    """S51-11: `open_pull_request` asked for a draft updates the body with `draft=None`: no GraphQL
+    `markPullRequestReadyForReview`, so the draft stays one."""
+    from choregos_core.domain import PrRef
+
+    fil = Fil({("PATCH", f"/repos/{REPO}/pulls/8"): (200, {})})
+    await scm(fil).update_pr(PrRef(repo=REPO, number=8), body="new body", draft=None)
+    assert fil.envoyees() == [("PATCH", f"/repos/{REPO}/pulls/8")]
+
+
 async def test_l_etat_d_une_pr_assemble_checks_relectures_et_fichiers() -> None:
     from choregos_core.domain import PrRef
 

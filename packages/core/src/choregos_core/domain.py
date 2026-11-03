@@ -49,6 +49,12 @@ class Model(BaseModel):
 # ───────────────────────────── tracker ─────────────────────────────
 
 
+#: The work item field the platform reserves for what the tracker knows about the ticket (S51-04): who
+#: filed it, its labels, its form's answers. Written from the tracker only; a workflow input may not
+#: take this name, and a person or an agent may not write it.
+TRACKER_FIELD = "tracker"
+
+
 class WorkItemData(Model):
     """Représentation canonique d'un ticket, quel que soit le tracker."""
 
@@ -381,6 +387,9 @@ class GatewayModel(Model):
     max_input_tokens: int | None = None
     supports_tool_calling: bool = True
     supports_vision: bool = False
+    #: What the gateway says the model does (`chat`, `embedding`, ...); LiteLLM lists a decision model
+    #: (Jev, Laya) as `evaluation` (ADR 0121).
+    mode: str = "chat"
     internal_price: bool = False
     #: Where the entry comes from: what the gateway lists, or what an admin added by hand.
     source: Literal["gateway", "manual"] = "gateway"

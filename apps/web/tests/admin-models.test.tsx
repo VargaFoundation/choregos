@@ -152,6 +152,14 @@ describe("the Models page", () => {
     );
   });
 
+  it("enables a model for decision steps (ADR 0121)", async () => {
+    show();
+    fireEvent.click(await screen.findByLabelText("decide usage of platform/standard"));
+    await waitFor(() =>
+      expect(api.updateModelCatalogueEntry).toHaveBeenCalledWith("acme", "e1", { usages: ["agent", "decide"] }),
+    );
+  });
+
   it("saves a price override and clears it", async () => {
     show();
     fireEvent.change(await screen.findByLabelText("Input price of platform/standard"), { target: { value: "0.5" } });
