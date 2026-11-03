@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Couche de persistance de Choregos."""
+"""The persistence layer of Choregos."""
 
 from __future__ import annotations
 

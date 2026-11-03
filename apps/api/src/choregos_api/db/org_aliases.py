@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
 from .models import Organization, OrgSlugAlias
-from .session import TOUT, limiter_aux_organisations
+from .session import ALL_ORGS, limit_to_organisations
 
 
 @asynccontextmanager
@@ -33,7 +33,7 @@ async def _platform_scope(session: AsyncSession) -> AsyncIterator[None]:
     previous = (
         await session.execute(text("SELECT coalesce(current_setting('app.current_orgs', true), '')"))
     ).scalar_one()
-    await limiter_aux_organisations(session, TOUT)
+    await limit_to_organisations(session, ALL_ORGS)
     try:
         yield
     finally:

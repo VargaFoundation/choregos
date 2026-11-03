@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Base SQLAlchemy : UUID v7, horodatage, JSON portable SQLite/PostgreSQL."""
+"""SQLAlchemy base: UUID v7, timestamps, JSON portable across SQLite and PostgreSQL."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ NAMING_CONVENTION = {
 
 
 def uuid7() -> str:
-    """UUID v7 (RFC 9562) : trié par le temps, donc des index qui ne se fragmentent pas."""
+    """UUID v7 (RFC 9562): sorted by time, so indexes do not fragment."""
     ms = int(time.time() * 1000)
     rand = os.urandom(10)
     value = (
