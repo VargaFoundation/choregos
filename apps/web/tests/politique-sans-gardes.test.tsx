@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen } from "@testing-library/react";
 import { Suspense } from "react";
 import { describe, expect, it, vi } from "vitest";
-import SettingsPage from "@/app/p/[slug]/settings/page";
+import SettingsGroupPage from "@/app/p/[slug]/settings/[group]/page";
 
 vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme" }) }));
 
@@ -39,7 +39,7 @@ describe("l'écran de la politique ne promet pas de garde fantôme", () => {
       render(
         <QueryClientProvider client={client}>
           <Suspense fallback={null}>
-            <SettingsPage params={Promise.resolve({ slug: "billing" })} />
+            <SettingsGroupPage params={Promise.resolve({ slug: "billing", group: "security" })} />
           </Suspense>
         </QueryClientProvider>,
       );

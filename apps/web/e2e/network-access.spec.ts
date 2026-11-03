@@ -45,6 +45,8 @@ test("the administrator's deny list is written to the ceiling and shows on a pro
   await page.getByRole("link", { name: "Billing API" }).first().click();
   await page.getByRole("link", { name: "Settings" }).first().click();
   await expect(page).toHaveURL(/\/p\/billing-api\/settings$/);
+  // The network is a section of the Guardrails group (S55-07): a click, so the demo keeps its state.
+  await page.getByRole("navigation", { name: "Settings groups" }).getByRole("link", { name: "Guardrails" }).click();
   const network = page.getByTestId("project-network");
   await expect(network).toBeVisible();
   await expect(network.getByText("news.ycombinator.com")).toBeVisible();
