@@ -1,8 +1,8 @@
-"""Un ticket garé — escaladé, ou arrêté par une question — REPREND (#313).
+"""A parked ticket (escalated, or stopped by a question) RESUMES (#313).
 
-Le contrat déclarait `needs_human.on_answer: resume` et rien ne le jouait : sur le locataire dev,
-trois tickets escaladés n'avaient d'autre sortie que l'abandon, et « Replay the stage » (le geste
-`rerun_stage`) était accepté par l'API puis ignoré par l'interpréteur.
+The contract declared `needs_human.on_answer: resume` and nothing played it: on the dev tenant,
+three escalated tickets had no way out but abandonment, and "Replay the stage" (the
+`rerun_stage` gesture) was accepted by the API and then ignored by the interpreter.
 """
 
 from __future__ import annotations
@@ -21,15 +21,15 @@ from .test_interpreter import _runs, _ticket, _wait_state, _wait_until, scripted
 pytestmark = pytest.mark.asyncio
 
 HISTORIES = pathlib.Path(__file__).resolve().parents[3] / "tests" / "replay" / "histories"
-ECHEC = StageResult(status=StageStatus.FAILED, summary="le clone a échoué", reason="agent_error")
+FAILURE = StageResult(status=StageStatus.FAILED, summary="the clone failed", reason="agent_error")
 
 
-async def test_replay_the_stage_reprend_un_ticket_escalade(
+async def test_replay_the_stage_resumes_an_escalated_ticket(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
     """Two failures exhaust `t-refine` and the work item escalates; "Replay the stage" brings it
     back for ONE more attempt (S27-13): it succeeds and the spec arrives."""
-    scripted(setup.adapters, ECHEC, ECHEC, refine_result("spec"))
+    scripted(setup.adapters, FAILURE, FAILURE, refine_result("spec"))
     async with worker_factory():
         handle = await start(temporal_env, setup)
         await _wait_state(handle, "needs_human")
@@ -40,14 +40,14 @@ async def test_replay_the_stage_reprend_un_ticket_escalade(
         await _wait_state(handle, "awaiting_spec_approval")
         status = await handle.query("status")
         assert await _runs(setup) == 3
-        # Les numéros de tentative ne repartent pas de 1 : ils font l'identifiant du run.
+        # Attempt numbers do not restart at 1: they make the run identifier.
         assert status["attempts"]["t-refine"] == 3, status["attempts"]
         await handle.signal("control", {"action": "stop"})
         await handle.result()
 
     abandons = [d for d in await requests_of(setup) if d.transition_id == "t-abandon"]
-    assert abandons, "l'escalade proposait l'abandon"
-    assert all(d.decided_at is not None for d in abandons), "l'abandon proposé est clos par la reprise"
+    assert abandons, "the escalation offered abandonment"
+    assert all(d.decided_at is not None for d in abandons), "the proposed abandonment is closed by the resume"
 
 
 async def test_a_rerun_buys_one_attempt_not_a_new_allowance(
@@ -59,7 +59,7 @@ async def test_a_rerun_buys_one_attempt_not_a_new_allowance(
     from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
 
-    scripted(setup.adapters, ECHEC, ECHEC, ECHEC, ECHEC, ECHEC, refine_result("spec"))
+    scripted(setup.adapters, FAILURE, FAILURE, FAILURE, FAILURE, FAILURE, refine_result("spec"))
     async with worker_factory():
         handle = await start(temporal_env, setup)
         await _wait_state(handle, "needs_human")
@@ -99,7 +99,7 @@ async def test_an_answer_buys_one_attempt_not_a_new_allowance(
         reason="question",
         questions=[{"text": "Which currency for credit notes?", "options": ["EUR", "order currency"]}],
     )
-    scripted(setup.adapters, ECHEC, question, ECHEC, ECHEC, refine_result("spec"))
+    scripted(setup.adapters, FAILURE, question, FAILURE, FAILURE, refine_result("spec"))
     async with worker_factory():
         handle = await start(temporal_env, setup)
         await _wait_state(handle, "needs_human")
@@ -129,13 +129,13 @@ async def test_an_answer_buys_one_attempt_not_a_new_allowance(
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 
 
-async def test_une_reponse_reprend_l_etape_qui_a_pose_la_question(
+async def test_an_answer_resumes_the_step_that_asked_the_question(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    """`on_answer: resume` : la réponse ramène le ticket à l'étape, et l'agent qui reprend la LIT."""
+    """`on_answer: resume`: the answer brings the ticket back to the step, and the resuming agent READS it."""
     question = StageResult(
         status=StageStatus.NEEDS_HUMAN,
-        summary="quelle devise ?",
+        summary="which currency?",
         reason="question",
         questions=[{"text": "Which currency for credit notes?", "options": ["EUR", "order currency"]}],
     )
@@ -144,12 +144,12 @@ async def test_une_reponse_reprend_l_etape_qui_a_pose_la_question(
         handle = await start(temporal_env, setup)
         await _wait_state(handle, "needs_human")
         await _wait_until(handle, "abandon is offered", lambda s: s["pending_request"])
-        posee = next(d for d in await requests_of(setup) if d.kind == "question")
+        asked = next(d for d in await requests_of(setup) if d.kind == "question")
 
         await handle.signal(
             "human_decision",
             {
-                "request_id": posee.id,
+                "request_id": asked.id,
                 "kind": "question",
                 "approved": False,
                 "answer": "the order currency",
@@ -160,30 +160,30 @@ async def test_une_reponse_reprend_l_etape_qui_a_pose_la_question(
         await handle.signal("control", {"action": "stop"})
         await handle.result()
 
-    reprise = setup.adapters.executor.started[-1].stage_input
-    assert reprise is not None and reprise.playbook.prompt is not None
-    assert "Which currency for credit notes?" in reprise.playbook.prompt
-    assert "the order currency" in reprise.playbook.prompt
-    # La réponse a servi : l'étape suivante ne la relira pas.
+    resumed = setup.adapters.executor.started[-1].stage_input
+    assert resumed is not None and resumed.playbook.prompt is not None
+    assert "Which currency for credit notes?" in resumed.playbook.prompt
+    assert "the order currency" in resumed.playbook.prompt
+    # The answer was used: the next step will not read it again.
     assert "human_answer" not in ((await _ticket(setup)).documents or {})
-    # La question et l'abandon proposé sont clos. L'approbation de la nouvelle spec peut attendre —
-    # ou pas encore exister : l'état se lit avant que sa demande soit créée (rouge en CI, #317).
-    ouvertes = {d.transition_id for d in await requests_of(setup) if d.decided_at is None}
-    assert ouvertes <= {"t-approve-spec"}, ouvertes
+    # The question and the proposed abandonment are closed. The approval of the new spec may be waiting,
+    # or not exist yet: the state is read before its request is created (red in CI, #317).
+    open_requests = {d.transition_id for d in await requests_of(setup) if d.decided_at is None}
+    assert open_requests <= {"t-approve-spec"}, open_requests
 
 
-async def test_replay_hors_d_un_ticket_gare_est_oublie(
+async def test_replay_outside_a_parked_ticket_is_forgotten(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    """Sur un ticket qui attend une approbation ordinaire, `rerun_stage` ne déplace rien — et ne
-    reste pas en réserve pour une escalade à venir."""
+    """On a ticket waiting for an ordinary approval, `rerun_stage` moves nothing, and does not
+    stay in reserve for an escalation to come."""
     scripted(setup.adapters, refine_result("spec"))
     async with worker_factory():
         handle = await start(temporal_env, setup)
         await _wait_state(handle, "awaiting_spec_approval")
         await handle.signal("control", {"action": "rerun_stage"})
         await handle.signal("control", {"action": "pause"})
-        await _wait_until(handle, "en pause", lambda s: s["paused"])
+        await _wait_until(handle, "paused", lambda s: s["paused"])
         status = await handle.query("status")
         assert status["state"] == "awaiting_spec_approval"
         assert await _runs(setup) == 1
@@ -191,21 +191,21 @@ async def test_replay_hors_d_un_ticket_gare_est_oublie(
         await handle.result()
 
 
-async def test_une_relance_qui_ne_peut_pas_jouer_ne_boucle_pas(
+async def test_a_rerun_that_cannot_play_does_not_loop(
     setup: Fixture, temporal_env: Any, worker_factory: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Un historique d'avant le marqueur — `patched` y a répondu non, et le SDK mémorise la
-    réponse : `rerun_stage` ne peut pas jouer. Il doit être oublié. Sur le locataire dev (09/10),
-    il restait en place, et le ticket recréait une demande d'abandon toutes les 4 s."""
+    """A history from before the marker: `patched` answered no there, and the SDK remembers the
+    answer: `rerun_stage` cannot play. It must be forgotten. On the dev tenant (10/09), it stayed
+    in place, and the ticket recreated an abandonment request every 4 s."""
     from choregos_orchestrator.workflows import interpreter
 
-    vrai = interpreter.workflow.patched
+    real_patched = interpreter.workflow.patched
     monkeypatch.setattr(
         interpreter.workflow,
         "patched",
-        lambda marqueur: False if marqueur == interpreter.REPRISE_APRES_ESCALADE else vrai(marqueur),
+        lambda marker: False if marker == interpreter.RESUME_AFTER_ESCALATION else real_patched(marker),
     )
-    scripted(setup.adapters, ECHEC, ECHEC)
+    scripted(setup.adapters, FAILURE, FAILURE)
     async with worker_factory():
         handle = await start(temporal_env, setup)
         await _wait_state(handle, "needs_human")
@@ -213,14 +213,14 @@ async def test_une_relance_qui_ne_peut_pas_jouer_ne_boucle_pas(
         await handle.signal("control", {"action": "rerun_stage"})
         import asyncio
 
-        # Pas de pause ici : elle arrêtait la boucle au premier tour, et masquait le défaut. Une
-        # attente qui boucle se voit à son historique, qui grossit à chaque demande recréée ; une
-        # attente qui attend ne bouge pas.
+        # No pause here: it stopped the loop on the first turn, and hid the defect. A wait that
+        # loops shows in its history, which grows with every request recreated; a wait that
+        # waits does not move.
         await asyncio.sleep(2)
-        avant = len((await handle.fetch_history()).events)
+        before = len((await handle.fetch_history()).events)
         await asyncio.sleep(3)
-        apres = len((await handle.fetch_history()).events)
-        assert apres == avant, f"la relance a fait boucler l'attente humaine ({avant} → {apres} événements)"
+        after = len((await handle.fetch_history()).events)
+        assert after == before, f"the rerun made the human wait loop ({before} -> {after} events)"
         assert (await handle.query("status"))["state"] == "needs_human"
         await handle.signal("control", {"action": "stop"})
         await handle.result()

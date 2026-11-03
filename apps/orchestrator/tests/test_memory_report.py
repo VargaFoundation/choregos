@@ -1,4 +1,4 @@
-"""Le rapport A/B part une fois par semaine, et il est posté là où les humains le lisent."""
+"""The A/B report goes out once a week, and it is posted where humans read it."""
 
 from __future__ import annotations
 
@@ -42,18 +42,18 @@ async def _closed_tickets(project_id: str, count: int, attempts: int, cost: floa
                 )
 
 
-async def test_le_rapport_est_poste_sur_le_canal_du_projet(setup: Fixture) -> None:
+async def test_the_report_is_posted_on_the_project_channel(setup: Fixture) -> None:
     await _closed_tickets(setup.project_id, count=3, attempts=1, cost=1.0)
 
     report = await memory_activities.memory_ab_report({"org": "varga", "weeks": 4, "notify": True})
 
     assert report["org"] == "varga"
-    assert report["verdict"] == "not enough data", "trois tickets ne prouvent rien"
-    titres = [message.title for _, message in setup.adapters.notify.sent]
-    assert any("A/B report" in titre for titre in titres), titres
+    assert report["verdict"] == "not enough data", "three tickets prove nothing"
+    titles = [message.title for _, message in setup.adapters.notify.sent]
+    assert any("A/B report" in title for title in titles), titles
 
 
-async def test_sans_projet_mesurable_rien_n_est_poste(setup: Fixture) -> None:
+async def test_without_a_measurable_project_nothing_is_posted(setup: Fixture) -> None:
     report = await memory_activities.memory_ab_report({"org": "varga", "weeks": 4, "notify": True})
     assert report["groups"]["with_memory"]["tickets"] == 0
     assert setup.adapters.notify.sent == []

@@ -1,4 +1,4 @@
-"""`tool_called` lit les appels que la plateforme a comptés — le registre, pas le résultat."""
+"""`tool_called` reads the calls the platform counted: the registry, not the result."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import pytest
 pytestmark = pytest.mark.asyncio
 
 
-async def test_la_garantie_voit_l_appel_au_registre(setup: Any) -> None:
+async def test_the_gate_sees_the_call_in_the_registry(setup: Any) -> None:
     from choregos_api.db.models import CostLedger, Run
     from choregos_api.db.session import session_scope
     from choregos_core import utcnow
@@ -42,9 +42,9 @@ async def test_la_garantie_voit_l_appel_au_registre(setup: Any) -> None:
         "run_id": run.id,
         "gates": [{"name": "tool_called", "params": {"tools": ["verifier_adresse"]}}],
     }
-    # l'agent RACONTE `lieu_verifie` ; le registre n'a rien
-    [refus] = await evaluate_gates(charge)
-    assert refus["passed"] is False and "verifier_adresse" in refus["detail"]
+    # the agent CLAIMS `lieu_verifie`; the registry has nothing
+    [refusal] = await evaluate_gates(charge)
+    assert refusal["passed"] is False and "verifier_adresse" in refusal["detail"]
 
     async with session_scope(orgs="*") as session:
         session.add(

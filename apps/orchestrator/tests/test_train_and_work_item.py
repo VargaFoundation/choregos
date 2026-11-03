@@ -1,9 +1,9 @@
-"""Le train et le ticket se parlent (ADR 0041, S21-21).
+"""The train and the ticket talk to each other (ADR 0041, S21-21).
 
-La revue du 2026-10-07 l'a mesuré : le train ne disait jamais au ticket qu'il avait livré — le
-ticket attendait un `cd.*` que rien n'envoyait, et les tests le lui portaient à la main —, et
-l'approbation qu'un workflow exige du départ (`train.approval`) n'arrivait jamais jusqu'au train.
-Ici, un VRAI `ReleaseTrain` fait partir le lot ; personne n'écrit d'événement de CD.
+The review of 2026-10-07 measured it: the train never told the ticket it had delivered; the
+ticket waited for a `cd.*` that nothing sent, and the tests carried it by hand; and the
+approval that a workflow requires of the departure (`train.approval`) never reached the train.
+Here, a REAL `ReleaseTrain` sends the batch off; nobody writes a CD event.
 """
 
 from __future__ import annotations
@@ -27,8 +27,8 @@ from .kits.train_and_work_item import (
 
 pytestmark = pytest.mark.asyncio
 
-CAPITAINES = {"required": True, "group": "release-captains"}
-HISTORIQUES = pathlib.Path(__file__).resolve().parents[3] / "tests" / "replay" / "histories"
+CAPTAINS = {"required": True, "group": "release-captains"}
+HISTORIES = pathlib.Path(__file__).resolve().parents[3] / "tests" / "replay" / "histories"
 
 
 async def _releases() -> list[Any]:
@@ -40,15 +40,15 @@ async def _releases() -> list[Any]:
         return list((await session.execute(select(Release))).scalars())
 
 
-# ───────────────────────── le ticket qui réveille le train (S22-22) ─────────────────────────
+# ───────────────────────── the ticket that wakes the train (S22-22) ─────────────────────────
 
 
-async def test_le_ticket_qui_reveille_le_train_reste_dans_le_lot(
+async def test_the_ticket_that_wakes_the_train_stays_in_the_batch(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    """L'interpréteur embarque par signal-with-start : quand aucun train ne tourne, c'est SON signal
-    qui le démarre. `run` écrasait alors le lot — #4 et #6 du locataire dev (09/10) ont réveillé leur
-    train et en ont été effacés."""
+    """The interpreter boards by signal-with-start: when no train is running, ITS signal starts it.
+    `run` then overwrote the batch: #4 and #6 of the dev tenant (10/09) woke their train and were
+    erased from it."""
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
             train = await temporal_env.client.start_workflow(
@@ -59,19 +59,19 @@ async def test_le_ticket_qui_reveille_le_train_reste_dans_le_lot(
                 start_signal="merged",
                 start_signal_args=[{"work_item_key": "varga/billing-api#4", "sha": "a4"}],
             )
-            etat = await wait_until_state(train, "status_query", lambda s: s["status"] == "collecting")
-            assert etat["pending_items"] == ["varga/billing-api#4"], etat
+            state = await wait_until_state(train, "status_query", lambda s: s["status"] == "collecting")
+            assert state["pending_items"] == ["varga/billing-api#4"], state
             await train.signal("merged", {"work_item_key": "varga/billing-api#4", "sha": "a4"})
-            etat = await wait_until_state(train, "status_query", lambda s: s["status"] == "collecting")
-            assert etat["batch_size"] == 1, "un second embarquement du même ticket ne le double pas"
+            state = await wait_until_state(train, "status_query", lambda s: s["status"] == "collecting")
+            assert state["batch_size"] == 1, "a second boarding of the same ticket does not double it"
             await train.signal("abort", {"by": "test"})
             await train.result()
 
 
-# ───────────────────────── le train : l'approbation suit ce que le lot emporte ─────────────────────────
+# ───────────────────────── the train: the approval follows what the batch carries ─────────────────────────
 
 
-async def test_un_lot_sans_exigence_part_sans_approbation_quand_la_politique_n_en_demande_pas(
+async def test_a_batch_without_requirement_leaves_without_approval_when_the_policy_asks_for_none(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
     await set_prod_approval_policy(setup, approval=False)
@@ -90,7 +90,7 @@ async def test_un_lot_sans_exigence_part_sans_approbation_quand_la_politique_n_e
     assert release.status == "done" and release.approved_by is None
 
 
-async def test_un_ticket_qui_exige_l_approbation_retient_tout_le_lot(
+async def test_a_ticket_that_requires_approval_holds_the_whole_batch(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
     await set_prod_approval_policy(setup, approval=False)
@@ -100,11 +100,11 @@ async def test_un_ticket_qui_exige_l_approbation_retient_tout_le_lot(
             train = await start_prod_train(temporal_env, setup)
             await train.signal("merged", {"work_item_key": "varga/billing-api#1", "sha": "a1"})
             await train.signal(
-                "merged", {"work_item_key": "varga/billing-api#2", "sha": "a2", "approval": CAPITAINES}
+                "merged", {"work_item_key": "varga/billing-api#2", "sha": "a2", "approval": CAPTAINS}
             )
             await train.signal("depart_now", {"by": "augustin"})
             await wait_until_state(train, "status_query", lambda s: s["status"] == "awaiting_approval")
-            assert not setup.adapters.cd.rollouts, "le lot est parti avant l'approbation que son ticket exige"
+            assert not setup.adapters.cd.rollouts, "the batch left before the approval its ticket requires"
             await train.signal("approve", {"by": "marie"})
             await wait_until_state(
                 train, "status_query", lambda s: s["status"] == "collecting" and s["batch_size"] == 0
@@ -113,14 +113,14 @@ async def test_un_ticket_qui_exige_l_approbation_retient_tout_le_lot(
             await train.result()
     (release,) = await _releases()
     assert release.status == "done" and release.approved_by == "marie"
-    assert len(release.items) == 2, "le correctif part avec la fonctionnalité, sous la même approbation"
+    assert len(release.items) == 2, "the fix leaves with the feature, under the same approval"
 
 
-async def test_l_exigence_apportee_par_un_second_embarquement_s_ajoute(
+async def test_the_requirement_brought_by_a_second_boarding_is_added(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    """Le webhook embarque d'abord le ticket sans exigence, l'interpréteur ensuite avec : le doublon
-    était ignoré en entier, et l'approbation avec lui."""
+    """The webhook boards the ticket without a requirement first, the interpreter then with one: the
+    duplicate was ignored entirely, and the approval with it."""
     await set_prod_approval_policy(setup, approval=False)
     setup.adapters.cd.set_health("billing-api", "Healthy")
     with temporal_env.auto_time_skipping_disabled():
@@ -128,7 +128,7 @@ async def test_l_exigence_apportee_par_un_second_embarquement_s_ajoute(
             train = await start_prod_train(temporal_env, setup)
             await train.signal("merged", {"work_item_key": "varga/billing-api#1", "sha": "a1"})
             await train.signal(
-                "merged", {"work_item_key": "varga/billing-api#1", "sha": "a1", "approval": CAPITAINES}
+                "merged", {"work_item_key": "varga/billing-api#1", "sha": "a1", "approval": CAPTAINS}
             )
             await wait_until_state(train, "status_query", lambda s: s["batch_size"] == 1)
             await train.signal("depart_now", {"by": "augustin"})
@@ -137,43 +137,43 @@ async def test_l_exigence_apportee_par_un_second_embarquement_s_ajoute(
             await train.result()
 
 
-# ───────────────────────── le ticket : il avance quand SON train a livré ─────────────────────────
+# ───────────────────────── the ticket: it advances when ITS train has delivered ─────────────────────────
 
 
-async def test_le_ticket_avance_quand_son_train_a_livre_sans_evenement_porte_a_la_main(
+async def test_the_ticket_advances_when_its_train_has_delivered_without_a_hand_carried_event(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
     await set_prod_approval_policy(setup, approval=False)
     setup.adapters.cd.set_health("billing-api", "Healthy")
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
-            ticket, embarquement = await run_work_item_to_train(setup, temporal_env)
-            assert embarquement["approval"] == CAPITAINES, "le capitaine que `default-simple` nomme"
+            ticket, boarding = await run_work_item_to_train(setup, temporal_env)
+            assert boarding["approval"] == CAPTAINS, "the captain that `default-simple` names"
 
             train = await start_prod_train(temporal_env, setup)
-            await train.signal("merged", embarquement)
+            await train.signal("merged", boarding)
             await train.signal("depart_now", {"by": "augustin"})
             await wait_until_state(train, "status_query", lambda s: s["status"] == "awaiting_approval")
             await train.signal("approve", {"by": "marie"})
             issue = await asyncio.wait_for(ticket.result(), timeout=60)
             await train.signal("abort", {"by": "test"})
             await train.result()
-            historiques = {"wi-train-S21-21": await ticket.fetch_history(),
-                           "train-approbation-S21-21": await train.fetch_history()}  # fmt: skip
+            histories = {"wi-train-S21-21": await ticket.fetch_history(),
+                           "train-approval-S21-21": await train.fetch_history()}  # fmt: skip
     assert issue["state"] == "deployed_prod"
 
-    # Les deux historiques rejouent contre le code courant — et s'archivent pour les suivants.
+    # The two histories replay against the current code, and are archived for those to come.
     from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
 
-    for nom, historique in historiques.items():
-        await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(historique)
+    for name, history in histories.items():
+        await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
         if recording_history():
-            cible = HISTORIQUES / f"{nom}.json"
-            cible.write_text(json.dumps(json.loads(historique.to_json()), indent=1) + "\n", encoding="utf-8")
+            target = HISTORIES / f"{name}.json"
+            target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 
 
-async def test_un_evenement_d_un_autre_environnement_ne_vaut_pas_livraison(
+async def test_an_event_from_another_environment_is_not_a_delivery(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
     setup.adapters.cd.set_health("billing-api", "Healthy")
@@ -186,7 +186,7 @@ async def test_un_evenement_d_un_autre_environnement_ne_vaut_pas_livraison(
                  "payload": {"env": "staging", "release_id": "r-staging"}},
             )  # fmt: skip
             await asyncio.sleep(1.5)
-            assert (await ticket.query("status"))["state"] == "merged", "le staging terminé n'est pas la prod"
+            assert (await ticket.query("status"))["state"] == "merged", "staging done is not prod"
             await ticket.signal(
                 "inbound",
                 {"type": "cd.rollout.completed", "source": "release-train", "delivery_id": "prod-1",
@@ -196,16 +196,16 @@ async def test_un_evenement_d_un_autre_environnement_ne_vaut_pas_livraison(
     assert issue["state"] == "deployed_prod"
 
 
-async def test_un_rollback_rend_le_ticket_a_un_humain_sans_attendre_le_delai(
+async def test_a_rollback_hands_the_ticket_to_a_human_without_waiting_for_the_delay(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
     setup.adapters.cd.set_health("billing-api", "Healthy")
     setup.adapters.cd.fail_next_analysis()
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
-            ticket, embarquement = await run_work_item_to_train(setup, temporal_env)
+            ticket, boarding = await run_work_item_to_train(setup, temporal_env)
             train = await start_prod_train(temporal_env, setup)
-            await train.signal("merged", embarquement)
+            await train.signal("merged", boarding)
             await train.signal("depart_now", {"by": "augustin"})
             await wait_until_state(train, "status_query", lambda s: s["status"] == "awaiting_approval")
             await train.signal("approve", {"by": "marie"})
@@ -216,68 +216,68 @@ async def test_un_rollback_rend_le_ticket_a_un_humain_sans_attendre_le_delai(
             await ticket.cancel()
 
 
-# ───────────────────── la voie express : depuis le ticket, sous SON approbation (#279) ─────────────────────
+# ───────────── the express lane: from the ticket, under ITS approval (#279) ─────────────
 
 HOTFIX_CAPTAINS = {"group": "hotfix-captains", "required": True}
-#: The case whose history is archived (`CHOREGOS_RECORD_HISTORY=1`). `train-express-ancien-code`
-#: a été enregistré sur `main` avant ce changement, cas `voie-dispense` : il rougit si la décision
-#: sort du marqueur `express-lane-approval`.
-ARCHIVES_EXPRESS = {"voie-exige": "train-express-S22-17"}
+#: The case whose history is archived (`CHOREGOS_RECORD_HISTORY=1`). `train-express-old-code`
+#: was recorded on `main` before this change, case `lane-waives`: it goes red if the decision
+#: leaves the `express-lane-approval` marker.
+EXPRESS_ARCHIVES = {"lane-requires": "train-express-S22-17"}
 
 
-async def _voie_express(setup: Fixture, *, approbation: bool, voie: dict[str, Any] | None) -> None:
-    """L'approbation ordinaire de la prod, et celle de sa voie express (`None` : la voie n'en dit rien)."""
+async def _express_lane(setup: Fixture, *, approval_required: bool, lane: dict[str, Any] | None) -> None:
+    """The ordinary approval of prod, and that of its express lane (`None`: the lane says nothing)."""
     from choregos_api.db.models import PolicyDef
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
     async with session_scope() as session:
-        ligne = (
+        row = (
             await session.execute(
                 select(PolicyDef).where(
                     PolicyDef.project_id == setup.project_id, PolicyDef.is_active.is_(True)
                 )
             )
         ).scalar_one()
-        document = copy.deepcopy(ligne.json_doc)
+        document = copy.deepcopy(row.json_doc)
         prod = document["release_train"]["prod"]
-        prod["approval"]["required"] = approbation
-        if voie is None:
+        prod["approval"]["required"] = approval_required
+        if lane is None:
             prod["express_lane"].pop("approval", None)
         else:
-            prod["express_lane"]["approval"] = voie
-        ligne.json_doc = document
+            prod["express_lane"]["approval"] = lane
+        row.json_doc = document
 
 
-def _departs_express(historique: Any) -> list[bool]:
-    """Chaque départ du train, express ou non, tel que l'historique l'a planifié (`create_release`)."""
-    departs: list[bool] = []
-    for evenement in historique.events:
-        attributs = evenement.activity_task_scheduled_event_attributes
-        if evenement.HasField("activity_task_scheduled_event_attributes") and (
-            attributs.activity_type.name == "create_release"
+def _express_departures(history: Any) -> list[bool]:
+    """Each departure of the train, express or not, as the history scheduled it (`create_release`)."""
+    departures: list[bool] = []
+    for event in history.events:
+        attributes = event.activity_task_scheduled_event_attributes
+        if event.HasField("activity_task_scheduled_event_attributes") and (
+            attributes.activity_type.name == "create_release"
         ):
-            departs.append(bool(json.loads(attributs.input.payloads[0].data).get("express")))
-    return departs
+            departures.append(bool(json.loads(attributes.input.payloads[0].data).get("express")))
+    return departures
 
 
-async def _groupes_sollicites() -> list[str | None]:
-    """Le groupe de chaque demande d'approbation de départ, dans l'ordre."""
+async def _requested_groups() -> list[str | None]:
+    """The group of each departure approval request, in order."""
     from choregos_api.db.models import Event
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
     async with session_scope() as session:
-        lignes = await session.execute(
+        rows = await session.execute(
             select(Event).where(Event.type == "choregos.release.approval_requested").order_by(Event.ts)
         )
-        return [(e.payload or {}).get("group") for e in lignes.scalars()]
+        return [(e.payload or {}).get("group") for e in rows.scalars()]
 
 
-async def test_un_ticket_etiquete_hotfix_embarque_par_l_interpreteur_prend_la_voie_express(
+async def test_a_hotfix_ticket_boarded_by_the_interpreter_takes_the_express_lane(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    """`signal_train` embarquait avec `labels: []` : un hotfix venu de l'interpréteur attendait le cron."""
+    """`signal_train` boarded with `labels: []`: a hotfix coming from the interpreter waited for the cron."""
     from choregos_api.db.models import WorkItem
     from choregos_api.db.session import session_scope
     from choregos_api.services import noter_les_etiquettes
@@ -289,78 +289,78 @@ async def test_un_ticket_etiquete_hotfix_embarque_par_l_interpreteur_prend_la_vo
     setup.adapters.cd.set_health("billing-api", "Healthy")
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
-            ticket, embarquement = await run_work_item_to_train(setup, temporal_env)
-            assert embarquement["labels"] == ["agent-ready", "hotfix"], "le ticket embarque ses étiquettes"
+            ticket, boarding = await run_work_item_to_train(setup, temporal_env)
+            assert boarding["labels"] == ["agent-ready", "hotfix"], "the ticket boards its labels"
 
             train = await start_prod_train(temporal_env, setup)
-            await train.signal("merged", embarquement)  # aucun `depart_now` : le hotfix part seul
+            await train.signal("merged", boarding)  # no `depart_now`: the hotfix leaves alone
             await wait_until_state(train, "status_query", lambda s: s["status"] == "awaiting_approval")
             await train.signal("abort", {"by": "test"})
             await train.result()
             await ticket.cancel()
-            historique = await train.fetch_history()
-    assert _departs_express(historique) == [True], "parti par la voie express, sans attendre le cron"
+            history = await train.fetch_history()
+    assert _express_departures(history) == [True], "left by the express lane, without waiting for the cron"
 
 
 @pytest.mark.parametrize(
-    ("approbation", "voie", "ticket", "attendu"),
+    ("approval_required", "lane", "ticket", "expected"),
     [
-        # La politique ne demande rien, la voie express si : le hotfix attend SES capitaines.
+        # The policy asks for nothing, the express lane does: the hotfix waits for ITS captains.
         (False, HOTFIX_CAPTAINS, None, ["hotfix-captains"]),
-        # La politique demande, la voie express non : le hotfix part sans attendre.
+        # The policy asks, the express lane does not: the hotfix leaves without waiting.
         (True, {"required": False}, None, []),
-        # … sauf si un ticket du lot l'exige (ADR 0041) : l'exigence des tickets tient toujours.
-        (True, {"required": False}, CAPITAINES, ["release-captains"]),
-        # Une voie express qui ne dit rien de l'approbation garde celle de la politique.
+        # ... unless a ticket of the batch requires it (ADR 0041): the tickets' requirement always holds.
+        (True, {"required": False}, CAPTAINS, ["release-captains"]),
+        # An express lane that says nothing about approval keeps the policy's.
         (True, None, None, ["release-captains"]),
     ],
-    ids=["voie-exige", "voie-dispense", "ticket-exige", "voie-muette"],
+    ids=["lane-requires", "lane-waives", "ticket-requires", "lane-silent"],
 )
-async def test_un_depart_express_prend_l_approbation_de_la_voie_express(
+async def test_an_express_departure_takes_the_approval_of_the_express_lane(
     setup: Fixture,
     temporal_env: Any,
     worker_factory: Any,
-    approbation: bool,
-    voie: dict[str, Any] | None,
+    approval_required: bool,
+    lane: dict[str, Any] | None,
     ticket: dict[str, Any] | None,
-    attendu: list[str],
+    expected: list[str],
     request: pytest.FixtureRequest,
 ) -> None:
-    await _voie_express(setup, approbation=approbation, voie=voie)
+    await _express_lane(setup, approval_required=approval_required, lane=lane)
     setup.adapters.cd.set_health("billing-api", "Healthy")
-    embarquement: dict[str, Any] = {"work_item_key": "varga/billing-api#9", "sha": "f1", "labels": ["hotfix"]}
+    boarding: dict[str, Any] = {"work_item_key": "varga/billing-api#9", "sha": "f1", "labels": ["hotfix"]}
     if ticket is not None:
-        embarquement["approval"] = ticket
+        boarding["approval"] = ticket
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
             train = await start_prod_train(temporal_env, setup)
-            await train.signal("merged", embarquement)
-            etat = await wait_until_state(
+            await train.signal("merged", boarding)
+            state = await wait_until_state(
                 train,
                 "status_query",
                 lambda s: (
                     s["status"] == "awaiting_approval" or (s["status"] == "collecting" and s["release_id"])
                 ),
             )
-            if etat["status"] == "awaiting_approval":
+            if state["status"] == "awaiting_approval":
                 await train.signal("approve", {"by": "marie"})
                 await wait_until_state(train, "status_query", lambda s: s["status"] == "collecting")
             await train.signal("abort", {"by": "test"})
             await train.result()
-            historique = await train.fetch_history()
-    # L'historique rejoue contre le code courant ; celui de la voie qui exige s'archive pour les suivants.
+            history = await train.fetch_history()
+    # The history replays against the current code; the one of the lane that requires is archived.
     from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
 
-    await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(historique)
-    nom = ARCHIVES_EXPRESS.get(request.node.callspec.id)
-    if nom and recording_history():
-        cible = HISTORIQUES / f"{nom}.json"
-        cible.write_text(json.dumps(json.loads(historique.to_json()), indent=1) + "\n", encoding="utf-8")
-    assert _departs_express(historique) == [True]
+    await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
+    name = EXPRESS_ARCHIVES.get(request.node.callspec.id)
+    if name and recording_history():
+        target = HISTORIES / f"{name}.json"
+        target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
+    assert _express_departures(history) == [True]
     (release,) = await _releases()
     assert release.status == "done"
-    assert await _groupes_sollicites() == attendu
+    assert await _requested_groups() == expected
 
 
 # ─────────────── the express lane reads ITS label, duplicates included (#351, S22-30) ───────────────
@@ -416,14 +416,14 @@ async def _replay_and_archive(name: str | None, history: Any) -> None:
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
     if name and recording_history():
-        target = HISTORIQUES / f"{name}.json"
+        target = HISTORIES / f"{name}.json"
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 
 
 async def test_the_express_lane_is_recognised_by_the_policy_label(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    """`express_lane.label: urgent`: an `urgent` ticket departs on its own, without `depart_now` or cron.
+    """`express_lane.label: urgent`: an `urgent` ticket departures on its own, without `depart_now` or cron.
 
     Before #351, `merged` compared against a hard-coded `hotfix`: the `urgent` ticket waited for cron."""
     await _express_label(setup, "urgent")
@@ -439,7 +439,7 @@ async def test_the_express_lane_is_recognised_by_the_policy_label(
             await train.result()
             history = await train.fetch_history()
     await _replay_and_archive(EXPRESS_LABEL_ARCHIVES["policy-label"], history)
-    assert _departs_express(history) == [True], "departed on the express lane the policy names"
+    assert _express_departures(history) == [True], "departed on the express lane the policy names"
 
 
 async def test_hotfix_does_not_take_an_express_lane_with_another_name(
@@ -462,14 +462,14 @@ async def test_hotfix_does_not_take_an_express_lane_with_another_name(
             history = await train.fetch_history()
     await _replay_and_archive(None, history)
     assert state["status"] == "collecting" and state["release_id"] is None, state
-    assert _departs_express(history) == [], "no departure: `hotfix` is not the lane's label"
+    assert _express_departures(history) == [], "no departure: `hotfix` is not the lane's label"
 
 
 async def test_a_labelled_duplicate_boarding_triggers_the_express_lane(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
     """The ticket boards first without a label, then comes back labelled `hotfix` (set between the two
-    boardings): it departs on the express lane. Before #351, the duplicate branch merged the approval
+    boardings): it departures on the express lane. Before #351, the duplicate branch merged the approval
     and returned without reading the labels."""
     setup.adapters.cd.set_health("billing-api", "Healthy")
     with temporal_env.auto_time_skipping_disabled():
@@ -486,7 +486,7 @@ async def test_a_labelled_duplicate_boarding_triggers_the_express_lane(
             await train.result()
             history = await train.fetch_history()
     await _replay_and_archive(EXPRESS_LABEL_ARCHIVES["labelled-duplicate"], history)
-    assert _departs_express(history) == [True], "a single express departure of a single ticket"
+    assert _express_departures(history) == [True], "a single express departure of a single ticket"
     (release,) = await _releases()
     assert len(release.items) == 1, "the duplicate counts once"
     assert release.items[0].get("labels") == ["hotfix"], "the release lists the label set in between"
@@ -517,13 +517,13 @@ async def test_an_express_lane_that_keeps_the_schedule_holds_the_departure(
             history = await train.fetch_history()
     await _replay_and_archive(EXPRESS_LABEL_ARCHIVES["held-by-schedule"], history)
     assert held["status"] == "collecting" and held["release_id"] is None, held
-    assert _departs_express(history) == [True], "the human departure keeps the express lane"
+    assert _express_departures(history) == [True], "the human departure keeps the express lane"
 
 
 async def test_an_express_lane_that_keeps_the_schedule_leaves_when_it_is_due(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    """`skip_schedule: false` and a cron due every minute, no window: the express departs on schedule."""
+    """`skip_schedule: false` and a cron due every minute, no window: the express departures on schedule."""
     await _prod_policy(setup, express_lane__skip_schedule=False, schedule="* * * * *", windows=None)
     setup.adapters.cd.set_health("billing-api", "Healthy")
     with temporal_env.auto_time_skipping_disabled():
@@ -537,25 +537,25 @@ async def test_an_express_lane_that_keeps_the_schedule_leaves_when_it_is_due(
             await train.result()
             history = await train.fetch_history()
     await _replay_and_archive(None, history)
-    assert _departs_express(history) == [True]
+    assert _express_departures(history) == [True]
 
 
-# ───────────────────────── un train qui livre sans Slack (S22-26) ─────────────────────────
+# ───────────────────────── a train that delivers without Slack (S22-26) ─────────────────────────
 
 
-async def test_le_train_livre_et_previent_le_ticket_sans_notificateur(
+async def test_the_train_delivers_and_notifies_the_ticket_without_a_notifier(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    """Sur le locataire dev, le 10/10, sans Slack : promotion et vérification faites, `finish_release`
-    levait sur la notification, et les deux trains mouraient sans prévenir leurs tickets."""
+    """On the dev tenant, on 10/10, without Slack: promotion and verification done, `finish_release`
+    raised on the notification, and both trains died without notifying their tickets."""
     await set_prod_approval_policy(setup, approval=False)
     setup.adapters.cd.set_health("billing-api", "Healthy")
-    setup.adapters.notify.panne = "[slack] ni `bot_token` ni `webhook_url` configurés"
+    setup.adapters.notify.failure = "[slack] neither `bot_token` nor `webhook_url` configured"
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
-            ticket, embarquement = await run_work_item_to_train(setup, temporal_env)
+            ticket, boarding = await run_work_item_to_train(setup, temporal_env)
             train = await start_prod_train(temporal_env, setup)
-            await train.signal("merged", embarquement)
+            await train.signal("merged", boarding)
             await train.signal("depart_now", {"by": "augustin"})
             await wait_until_state(train, "status_query", lambda s: s["status"] == "awaiting_approval")
             await train.signal("approve", {"by": "marie"})

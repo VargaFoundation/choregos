@@ -1,17 +1,18 @@
-"""La provenance se lit sur la PR (#283) : un check dont le nom contient `provenance`."""
+"""Provenance is read on the PR (#283): a check whose name contains `provenance`."""
 
 from __future__ import annotations
 
 from choregos_core.domain import CheckRun
 
 
-def test_la_provenance_se_lit_dans_les_checks_de_la_pr() -> None:
+def test_provenance_is_read_in_the_checks_of_the_pr() -> None:
     from choregos_orchestrator.activities.gates import _provenance
 
-    def check(nom: str, conclusion: str | None) -> CheckRun:
-        return CheckRun(name=nom, status="completed" if conclusion else "in_progress", conclusion=conclusion)
+    def check(check_name: str, conclusion: str | None) -> CheckRun:
+        status = "completed" if conclusion else "in_progress"
+        return CheckRun(name=check_name, status=status, conclusion=conclusion)
 
-    assert _provenance([check("ci", "success")]) is None, "pas de check de provenance : on ne sait pas"
-    assert _provenance([check("attest-build-provenance", None)]) is None, "pas encore terminé"
+    assert _provenance([check("ci", "success")]) is None, "no provenance check: unknown"
+    assert _provenance([check("attest-build-provenance", None)]) is None, "not finished yet"
     assert _provenance([check("attest-build-provenance", "success")]) is True
     assert _provenance([check("SLSA Provenance", "failure"), check("ci", "success")]) is False
