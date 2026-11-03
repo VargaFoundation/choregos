@@ -951,6 +951,13 @@ which `when` reads like an agent's. `state` names the work item's `title`, `desc
 and the validator know this actor today; the engine does not run it yet, so a workflow whose
 transition is taken `by` a decision is refused with `decision.not_runnable` until it does (S52-04).
 
+On the map a decision step has its own lane — a teal diamond on the diagram, the word "decision" on
+its box — and its card lists the questions with what each may answer, what it sends, its model and
+time limit, and the `<name>` and `<name>_confidence` outputs a `when` compares. The **Actors** panel
+creates one ("A decision") and edits it: the sources are chips checked against the patterns above,
+questions are added and removed with their options or levels, and only the fields that changed are
+written back, as one gesture you can undo (ADR 0112).
+
 The `joiners-leavers` template goes further, with no agent writing anything itself: an agent
 prepares the access plan with its skills, a person from HR validates it, and every write is a
 **governed action** at a date — the account at D-10, the sensitive group on a re-authenticated

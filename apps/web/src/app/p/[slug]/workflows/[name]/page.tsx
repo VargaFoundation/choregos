@@ -7,6 +7,7 @@ import { Button, Card, Empty, ErrorNote, PhraseDuMoteur, StateBadge } from "@/co
 import { useBrouillon } from "@/components/workflows/brouillon";
 import { FormulaireDEtape, PanneauDeTransition } from "@/components/workflows/panneaux";
 import { StepDetails } from "@/components/workflows/step-details";
+import { decisionActorOf } from "@/components/workflows/document";
 import { TexteIllisible } from "@/components/workflows/texte-illisible";
 import { useAgentResolution } from "@/components/workflows/use-agent-resolution";
 import { timingOfStep } from "@/components/workflows/timing";
@@ -68,6 +69,7 @@ export default function ProcessPage() {
                   resolution={etape.agent ? resolutions.get(etape.agent) : undefined}
                   flow={brouillon.graph?.artifacts}
                   stepsById={parId}
+                  decision={decisionActorOf(brouillon.document, etape.actor)}
                 />
                 <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
                   <dt className="text-ink-muted">From → to</dt>

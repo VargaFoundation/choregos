@@ -5,6 +5,14 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button, Card, Input, Select } from "@/components/ui";
 import { useBrouillon } from "@/components/workflows/brouillon";
+import {
+  DecisionActorFields,
+  DecisionProblems,
+  decisionProblems,
+  decisionSpec,
+  draftOf,
+  EditDecisionActor,
+} from "@/components/workflows/decision-actor-form";
 import { describeActor } from "@/components/workflows/document";
 import { operations } from "@/components/workflows/operations";
 import { api } from "@/lib/api";
@@ -34,27 +42,52 @@ export function offeredAgents(agents: Agent[], catalogue: AgentCatalogueEntry[])
   return [...ownAgents, ...fromCatalogue];
 }
 
-/** The workflow's actors (ADR 0112 §2): who acts in it, added and removed as typed operations. */
+/** The workflow's actors (ADR 0112 §2): who acts in it, added, edited (a decision, ADR 0121) and removed as typed operations. */
 export function ActorsPanel({ org }: { org: string }) {
   const draft = useBrouillon();
   const actors = Object.entries(draft.document?.actors ?? {});
+  const [editing, setEditing] = useState<string | null>(null);
   return (
     <Card title="Actors">
       <div className="space-y-3 text-sm" data-testid="actors-panel">
         <ul className="space-y-2" aria-label="Actors of the workflow">
           {actors.map(([name, actor]) => (
-            <li key={name} className="flex flex-wrap items-center justify-between gap-2">
-              <span className="min-w-0">
-                <code>{name}</code> — {describeActor(actor)}
-              </span>
-              <button
-                type="button"
-                className="text-xs text-ink-muted underline hover:text-danger"
-                aria-label={`Remove the actor ${name}`}
-                onClick={() => void draft.appliquer(operations.removeActor(name))}
-              >
-                Remove
-              </button>
+            <li key={name} className="space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="min-w-0">
+                  <code>{name}</code> — {describeActor(actor)}
+                </span>
+                <span className="flex gap-2">
+                  {actor.type === "decision" && (
+                    <button
+                      type="button"
+                      className="text-xs text-ink-muted underline hover:text-ink"
+                      aria-label={`Edit the actor ${name}`}
+                      aria-expanded={editing === name}
+                      onClick={() => setEditing(editing === name ? null : name)}
+                    >
+                      Edit
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="text-xs text-ink-muted underline hover:text-danger"
+                    aria-label={`Remove the actor ${name}`}
+                    onClick={() => void draft.appliquer(operations.removeActor(name))}
+                  >
+                    Remove
+                  </button>
+                </span>
+              </div>
+              {editing === name && actor.type === "decision" && (
+                <EditDecisionActor
+                  name={name}
+                  actor={actor}
+                  apply={draft.appliquer}
+                  busy={draft.occupe}
+                  onDone={() => setEditing(null)}
+                />
+              )}
             </li>
           ))}
         </ul>
@@ -69,16 +102,20 @@ function AddActorForm({ org, taken }: { org: string; taken: Set<string> }) {
   const agents = useQuery({ queryKey: ["agents", org], queryFn: () => api.agents(org), enabled: !!org });
   const catalogue = useQuery({ queryKey: ["agent-catalogue", org], queryFn: () => api.agentCatalogue(org), enabled: !!org });
   const offered = offeredAgents(agents.data ?? [], catalogue.data ?? []);
-  const [kind, setKind] = useState<"agent" | "human" | "job" | "system">("agent");
+  const [kind, setKind] = useState<"agent" | "human" | "job" | "decision" | "system">("agent");
   const [name, setName] = useState("");
   const [agent, setAgent] = useState("");
   const [role, setRole] = useState("");
   const [group, setGroup] = useState("");
   const [sla, setSla] = useState("24");
   const [command, setCommand] = useState("");
+  const [decision, setDecision] = useState(() => draftOf());
+  const problems = kind === "decision" ? decisionProblems(decision) : [];
   const chosen = offered.find((a) => a.slug === agent);
   const effectiveRole = role || chosen?.role || "";
-  const effectiveName = name || (kind === "agent" ? agent.replace(/-/g, "_") : kind === "human" ? group.replace(/-/g, "_") : "");
+  const effectiveName =
+    name ||
+    (kind === "agent" ? agent.replace(/-/g, "_") : kind === "human" ? group.replace(/-/g, "_") : kind === "decision" ? decision.role : "");
   const valid =
     NAME.test(effectiveName) &&
     !taken.has(effectiveName) &&
@@ -88,12 +125,15 @@ function AddActorForm({ org, taken }: { org: string; taken: Set<string> }) {
         ? !!group
         : kind === "job"
           ? ROLE.test(role) && command.trim() !== ""
-          : true);
+          : kind === "decision"
+            ? problems.length === 0
+            : true);
 
   function spec(): Record<string, unknown> {
     if (kind === "agent") return { type: "agent", role: effectiveRole, agent };
     if (kind === "human") return sla ? { type: "human", group: group, sla_hours: Number(sla) } : { type: "human", group: group };
     if (kind === "job") return { type: "job", role, command: command.trim().split(/\s+/) };
+    if (kind === "decision") return decisionSpec(decision);
     return { type: "system" };
   }
 
@@ -108,6 +148,7 @@ function AddActorForm({ org, taken }: { org: string; taken: Set<string> }) {
           setName("");
           setAgent("");
           setRole("");
+          setDecision(draftOf());
         });
       }}
     >
@@ -117,6 +158,7 @@ function AddActorForm({ org, taken }: { org: string; taken: Set<string> }) {
           <option value="agent">An agent</option>
           <option value="human">People of a group</option>
           <option value="job">A job (a command, no model)</option>
+          <option value="decision">A decision (a model answers typed questions)</option>
           <option value="system">The platform</option>
         </Select>
       </label>
@@ -161,6 +203,12 @@ function AddActorForm({ org, taken }: { org: string; taken: Set<string> }) {
             <span className="text-xs text-ink-muted">Command (words, no shell)</span>
             <Input value={command} onChange={(e) => setCommand(e.target.value)} />
           </label>
+        </>
+      )}
+      {kind === "decision" && (
+        <>
+          <DecisionActorFields draft={decision} onChange={setDecision} />
+          <DecisionProblems problems={problems} />
         </>
       )}
       <label className="block space-y-1">

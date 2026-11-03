@@ -5170,9 +5170,9 @@ components:
         to: { type: string }
         to_display: { type: string }
         actor: { type: string }
-        actor_type: { type: string, enum: [agent, human, system, job, release_train] }
+        actor_type: { type: string, enum: [agent, human, system, job, decision, release_train] }
         who: { type: string }
-        outputs: { type: array, items: { type: string } }
+        outputs: { type: array, items: { type: string }, description: "What the step writes; for a decision step (ADR 0121), each question's `<name>` and `<name>_confidence`, which a `when` compares." }
         gates:
           type: array
           items:
@@ -5189,8 +5189,8 @@ components:
         task: { type: [string, "null"], description: The task a person does, in plain words. }
         sentence: { type: string }
         agent: { type: [string, "null"], description: "The registry agent the actor names, `slug` or `slug@N` (ADR 0033); null for an implicit playbook actor and for any actor that is not an agent." }
-        role: { type: [string, "null"], description: The role of an agent or job actor. }
-        model: { type: [string, "null"], description: "The model or profile of an agent actor, as written (`profile:standard`)." }
+        role: { type: [string, "null"], description: "The role of an agent, job or decision actor." }
+        model: { type: [string, "null"], description: "The model or profile of an agent actor, as written (`profile:standard`); the catalogue entry of a decision actor (`platform/decide`)." }
         group: { type: [string, "null"], description: The group of a human actor. }
         sla_hours: { type: [integer, "null"], description: The SLA of a human actor. }
         command: { type: [array, "null"], items: { type: string }, description: The argv of a job actor. }

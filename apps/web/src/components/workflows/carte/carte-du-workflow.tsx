@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
+import { Diamond } from "lucide-react";
 import { useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { LEGENDE } from "@/components/ui";
 import { toSentenceCase } from "@/lib/format";
@@ -137,10 +138,12 @@ export function CarteDuWorkflow({
           }}
         >
           <span className="flex items-baseline justify-between gap-2 text-xs">
-            <span className={cn(LEGENDE, "font-medium")} style={{ color: couleur.texte }}>
+            <span className={cn(LEGENDE, "inline-flex items-center gap-1 font-medium")} style={{ color: couleur.texte }}>
+              {genre === "decision" && <Diamond aria-hidden className="size-3" strokeWidth={2} data-testid={`decision-${id}`} />}
               {toSentenceCase(LIBELLE_DU_GENRE[genre])}
               {principale?.actor ? ` · ${principale.actor}` : ""}
             </span>
+            {acteur?.type === "decision" && acteur.role && <span className="text-ink-muted">{acteur.role}</span>}
             {acteur?.group && (
               <span className="text-ink-muted">
                 {acteur.group}
