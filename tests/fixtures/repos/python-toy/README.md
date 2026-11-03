@@ -1,11 +1,11 @@
-# panier — dépôt jouet Python
+# cart — Python toy repository
 
-Dépôt minimal utilisé par les évals Choregos (`tests/fixtures/tickets/*.yaml`).
-Il tient en trois fichiers et ses tests s'exécutent sans réseau :
+A minimal repository used by the Choregos evals (`tests/fixtures/tickets/*.yaml`).
+It fits in three files and its tests run without a network:
 
 ```
 make test
 ```
 
-Les tickets de référence demandent des modifications **petites et vérifiables** :
-une fonction à écrire, un arrondi à corriger, un test à ajouter.
+The reference tickets ask for **small, verifiable** changes:
+a function to write, a rounding to fix, a test to add.

@@ -1,0 +1,69 @@
+# Reference ticket: a refactor with constant behaviour. The safety net is the existing tests.
+id: py-refactor-without-regression
+title: "Extract the tax rate into a parameterisable function"
+repo: python-toy
+role: implement
+prompt: |
+  Extract the total-with-tax computation into `apply_tax(amount_cents, rate)` to prepare
+  for reduced rates. The behaviour of `total_with_tax` does not change: the existing
+  tests must pass without being modified.
+allowed_paths:
+  - "src/cart/**"
+  - "tests/**"
+expected_duration_s: 150
+# Scripted, not measured: what a fake gateway is billed per context reduction (S37-09),
+# so the matrix's tokens come from the ledger in CI. The real numbers are S37-10's.
+scripted_usage:
+  "none": { tokens_in: 252000, tokens_cached: 168000, tokens_out: 8400, turns: 14 }
+  "rtk": { tokens_in: 212800, tokens_cached: 142800, tokens_out: 8400, turns: 14 }
+  "headroom": { tokens_in: 197400, tokens_cached: 133000, tokens_out: 8700, turns: 15 }
+  "rtk+headroom": { tokens_in: 165200, tokens_cached: 110600, tokens_out: 8700, turns: 15 }
+assertions:
+  - { kind: file_matches, path: src/cart/cart.py, pattern: "def apply_tax", absent: false }
+  - { kind: file_unchanged, path: tests/test_cart.py }
+  - { kind: command, run: "make test" }
+scripted:
+  with_memory:
+    files:
+      src/cart/cart.py: |
+        """Cart model: lines, a total in cents."""
+
+        from __future__ import annotations
+
+        from dataclasses import dataclass, field
+        from decimal import Decimal
+
+        TAX_RATE = Decimal("0.20")
+
+
+        @dataclass(frozen=True)
+        class Line:
+            """A cart line. Prices are in cents: no floats."""
+
+            label: str
+            unit_price_cents: int
+            quantity: int = 1
+
+            def total_cents(self) -> int:
+                return self.unit_price_cents * self.quantity
+
+
+        @dataclass
+        class Cart:
+            lines: list[Line] = field(default_factory=list)
+
+            def add(self, line: Line) -> None:
+                self.lines.append(line)
+
+            def subtotal_cents(self) -> int:
+                return sum(line.total_cents() for line in self.lines)
+
+
+        def apply_tax(amount_cents: int, rate: Decimal = TAX_RATE) -> int:
+            """Apply a tax rate to the given amount, in cents."""
+            return int(Decimal(amount_cents) * (Decimal(1) + rate))
+
+
+        def total_with_tax(cart: Cart) -> int:
+            """Total with tax, in cents."""
+            return apply_tax(cart.subtotal_cents())

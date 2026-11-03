@@ -1,6 +1,6 @@
-"""L'`ActionWorkflow` (ADR 0035, S20-01) : une action approuvée s'exécute effet par effet, chacun
-consigné sous sa clé ; une panne passagère est retentée sans refaire ce qui est fait ; un refus
-arrête la suite et ce qui était fait est compensé, à rebours.
+"""The `ActionWorkflow` (ADR 0035, S20-01): an approved action runs effect by effect, each one
+recorded under its key; a transient failure is retried without redoing what is done; a refusal
+stops the rest and what was done is compensated, in reverse.
 """
 
 from __future__ import annotations
@@ -14,84 +14,84 @@ import pytest
 
 from .conftest import Fixture, recording_history
 
-HISTORIQUES = pathlib.Path(__file__).resolve().parents[3] / "tests" / "replay" / "histories"
+HISTORIES = pathlib.Path(__file__).resolve().parents[3] / "tests" / "replay" / "histories"
 
 
 class Journal:
-    """Ce que les faux effets ont vraiment fait, dans l'ordre — la vérité du monde extérieur."""
+    """What the fake effects really did, in order — the truth of the outside world."""
 
     def __init__(self) -> None:
-        self.faits: list[tuple[str, dict[str, Any]]] = []
-        self.pannes: dict[str, int] = {}
+        self.done: list[tuple[str, dict[str, Any]]] = []
+        self.outages: dict[str, int] = {}
 
 
 @pytest.fixture
 def journal() -> Iterator[Journal]:
-    from choregos_api import effets
-    from choregos_api.effets import EffetRefuse
+    from choregos_api import effects
+    from choregos_api.effects import EffectRefused
 
-    vu = Journal()
+    seen = Journal()
 
-    async def creer(_ctx: Any, params: dict[str, Any]) -> dict[str, Any]:
-        vu.faits.append(("creer", params))
-        return {"id": f"compte-{params['upn']}"}
+    async def create(_ctx: Any, params: dict[str, Any]) -> dict[str, Any]:
+        seen.done.append(("create", params))
+        return {"id": f"account-{params['upn']}"}
 
-    async def ajouter(_ctx: Any, params: dict[str, Any]) -> dict[str, Any]:
-        reste = vu.pannes.get("ajouter", 0)
-        if reste:
-            vu.pannes["ajouter"] = reste - 1
-            raise RuntimeError("503 du fournisseur, passager")
-        vu.faits.append(("ajouter", params))
-        return {"ajoute": params["groupe"]}
+    async def add(_ctx: Any, params: dict[str, Any]) -> dict[str, Any]:
+        remaining = seen.outages.get("add", 0)
+        if remaining:
+            seen.outages["add"] = remaining - 1
+            raise RuntimeError("503 from the provider, transient")
+        seen.done.append(("add", params))
+        return {"added": params["group"]}
 
-    async def refuser(_ctx: Any, params: dict[str, Any]) -> dict[str, Any]:
-        vu.faits.append(("refuser", params))
-        raise EffetRefuse("le compte est hors de l'unité administrative")
+    async def refuse(_ctx: Any, params: dict[str, Any]) -> dict[str, Any]:
+        seen.done.append(("refuse", params))
+        raise EffectRefused("the account is outside the administrative unit")
 
-    async def defaire(_ctx: Any, params: dict[str, Any]) -> dict[str, Any]:
-        vu.faits.append(("defaire", params))
+    async def undo(_ctx: Any, params: dict[str, Any]) -> dict[str, Any]:
+        seen.done.append(("undo", params))
         return {}
 
-    for nom, fonction in (
-        ("test.creer", creer),
-        ("test.ajouter", ajouter),
-        ("test.refuser", refuser),
-        ("test.defaire", defaire),
+    for name, function in (
+        ("test.create", create),
+        ("test.add", add),
+        ("test.refuse", refuse),
+        ("test.undo", undo),
     ):
-        effets.declarer_un_effet(nom, fonction)
-    yield vu
-    effets.reinitialiser()
+        effects.declare_effect(name, function)
+    yield seen
+    effects.reset()
 
 
-CREER = {
-    "effect": "test.creer",
+CREATE = {
+    "effect": "test.create",
     "with": {"upn": "{{ params.upn }}"},
-    "compensate": {"effect": "test.defaire", "with": {"desactiver": "{{ result.id }}"}},
+    "compensate": {"effect": "test.undo", "with": {"deactivate": "{{ result.id }}"}},
 }
-AJOUTER = {
-    "effect": "test.ajouter",
-    "with": {"compte": "{{ effects[0].id }}", "groupe": "devs"},
-    "compensate": {"effect": "test.defaire", "with": {"retirer": "devs"}},
+ADD = {
+    "effect": "test.add",
+    "with": {"account": "{{ effects[0].id }}", "group": "devs"},
+    "compensate": {"effect": "test.undo", "with": {"remove": "devs"}},
 }
-SANS_COMPENSATION = {"effect": "test.ajouter", "with": {"compte": "{{ effects[0].id }}", "groupe": "vpn"}}
-REFUSER = {"effect": "test.refuser", "with": {}}  # fmt: skip
+WITHOUT_COMPENSATION = {"effect": "test.add", "with": {"account": "{{ effects[0].id }}", "group": "vpn"}}
+REFUSE = {"effect": "test.refuse", "with": {}}  # fmt: skip
 
 
-async def _action(setup: Fixture, effets: list[dict[str, Any]], status: str = "approved") -> str:
+async def _action(setup: Fixture, effect_list: list[dict[str, Any]], status: str = "approved") -> str:
     from choregos_api.db.models import Action, Project
     from choregos_api.db.session import session_scope
 
     async with session_scope() as session:
-        projet = await session.get(Project, setup.project_id)
-        assert projet is not None
+        project = await session.get(Project, setup.project_id)
+        assert project is not None
         action = Action(
-            org_id=projet.org_id,
-            project_id=projet.id,
+            org_id=project.org_id,
+            project_id=project.id,
             origin="transition",
-            kind="arrivee.comptes",
-            title="Les comptes de Léa",
+            kind="arrival.accounts",
+            title="The accounts of Lea",
             params={"upn": "lea@acme.test"},
-            effects=effets,
+            effects=effect_list,
             proposed_by={"kind": "system", "id": "system"},
             approval={},
             decisions=[],
@@ -102,7 +102,7 @@ async def _action(setup: Fixture, effets: list[dict[str, Any]], status: str = "a
         return str(action.id)
 
 
-async def _executer(temporal_env: Any, worker_factory: Any, action_id: str) -> tuple[dict[str, Any], Any]:
+async def _run(temporal_env: Any, worker_factory: Any, action_id: str) -> tuple[dict[str, Any], Any]:
     async with worker_factory():
         handle = await temporal_env.client.start_workflow(
             "ActionWorkflow", {"action_id": action_id}, id=f"action-{action_id}", task_queue="test"
@@ -110,7 +110,7 @@ async def _executer(temporal_env: Any, worker_factory: Any, action_id: str) -> t
         return await handle.result(), await handle.fetch_history()
 
 
-async def _etat(action_id: str) -> tuple[str, list[tuple[str, str, int]]]:
+async def _state(action_id: str) -> tuple[str, list[tuple[str, str, int]]]:
     from choregos_api.db.models import Action, ActionEffect
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
@@ -118,40 +118,40 @@ async def _etat(action_id: str) -> tuple[str, list[tuple[str, str, int]]]:
     async with session_scope() as session:
         action = await session.get(Action, action_id)
         assert action is not None
-        lignes = (
+        rows = (
             await session.execute(
                 select(ActionEffect)
                 .where(ActionEffect.action_id == action_id)
                 .order_by(ActionEffect.position)
             )
         ).scalars()
-        return action.status, [(e.key.split(":")[1], e.status, e.attempts) for e in lignes]
+        return action.status, [(e.key.split(":")[1], e.status, e.attempts) for e in rows]
 
 
-async def test_une_panne_passagere_ne_refait_pas_l_effet_deja_fait(
+async def test_a_transient_failure_does_not_redo_the_effect_already_done(
     setup: Fixture, temporal_env: Any, worker_factory: Any, journal: Journal
 ) -> None:
     from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
 
-    journal.pannes["ajouter"] = 1
-    action_id = await _action(setup, [CREER, AJOUTER])
-    resultat, historique = await _executer(temporal_env, worker_factory, action_id)
-    assert resultat == {"status": "succeeded", "effects": [0, 1]}
-    assert journal.faits == [
-        ("creer", {"upn": "lea@acme.test"}),
-        ("ajouter", {"compte": "compte-lea@acme.test", "groupe": "devs"}),
-    ], "le compte n'a été créé qu'une fois ; le second effet cite le premier"
-    statut, effets = await _etat(action_id)
-    assert statut == "succeeded"
-    assert effets == [("0", "done", 1), ("1", "done", 2)], (
-        "deux tentatives pour le second, une pour le premier"
+    journal.outages["add"] = 1
+    action_id = await _action(setup, [CREATE, ADD])
+    result, history = await _run(temporal_env, worker_factory, action_id)
+    assert result == {"status": "succeeded", "effects": [0, 1]}
+    assert journal.done == [
+        ("create", {"upn": "lea@acme.test"}),
+        ("add", {"account": "account-lea@acme.test", "group": "devs"}),
+    ], "the account was created only once; the second effect cites the first"
+    status, effect_rows = await _state(action_id)
+    assert status == "succeeded"
+    assert effect_rows == [("0", "done", 1), ("1", "done", 2)], (
+        "two attempts for the second, one for the first"
     )
 
-    await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(historique)
+    await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
     if recording_history():
-        cible = HISTORIQUES / "action-S20-01.json"
-        cible.write_text(json.dumps(json.loads(historique.to_json()), indent=1) + "\n", encoding="utf-8")
+        target = HISTORIES / "action-S20-01.json"
+        target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 
 
 @pytest.mark.parametrize("status", ["pending_approval", "rejected", "succeeded", "failed"])
@@ -163,50 +163,48 @@ async def test_a_workflow_started_without_a_committed_approval_runs_nothing(
     and leaves the row as it found it."""
     from temporalio.client import WorkflowFailureError
 
-    action_id = await _action(setup, [CREER, AJOUTER], status=status)
+    action_id = await _action(setup, [CREATE, ADD], status=status)
     with pytest.raises(WorkflowFailureError) as failure:
-        await _executer(temporal_env, worker_factory, action_id)
+        await _run(temporal_env, worker_factory, action_id)
     assert "not approved" in str(failure.value.cause.cause)
-    assert journal.faits == [], "no effect, no compensation"
-    assert await _etat(action_id) == (status, []), "the row is not closed, no effect is logged"
+    assert journal.done == [], "no effect, no compensation"
+    assert await _state(action_id) == (status, []), "the row is not closed, no effect is logged"
 
 
-async def test_un_refus_compense_ce_qui_etait_fait_a_rebours(
+async def test_a_refusal_compensates_what_was_done_in_reverse(
     setup: Fixture, temporal_env: Any, worker_factory: Any, journal: Journal
 ) -> None:
-    action_id = await _action(setup, [CREER, AJOUTER, SANS_COMPENSATION, REFUSER])
-    resultat, _ = await _executer(temporal_env, worker_factory, action_id)
-    assert resultat["status"] == "failed" and "hors de l'unité" in resultat["error"]
-    assert [nom for nom, _ in journal.faits] == [
-        "creer",
-        "ajouter",
-        "ajouter",
-        "refuser",
-        "defaire",
-        "defaire",
+    action_id = await _action(setup, [CREATE, ADD, WITHOUT_COMPENSATION, REFUSE])
+    result, _ = await _run(temporal_env, worker_factory, action_id)
+    assert result["status"] == "failed" and "outside the administrative unit" in result["error"]
+    assert [name for name, _ in journal.done] == [
+        "create",
+        "add",
+        "add",
+        "refuse",
+        "undo",
+        "undo",
     ]
-    assert journal.faits[-2:] == [
-        ("defaire", {"retirer": "devs"}),
-        ("defaire", {"desactiver": "compte-lea@acme.test"}),
+    assert journal.done[-2:] == [
+        ("undo", {"remove": "devs"}),
+        ("undo", {"deactivate": "account-lea@acme.test"}),
     ]
-    assert [c["undone"] for c in resultat["compensations"]] == [False, True, True], (
-        "à rebours ; ce qu'il n'a pu défaire, il le dit"
+    assert [c["undone"] for c in result["compensations"]] == [False, True, True], (
+        "in reverse; what it could not undo, it says so"
     )
-    statut, effets = await _etat(action_id)
-    assert statut == "failed"
-    assert [e[1] for e in effets] == ["compensated", "compensated", "compensation_failed", "started"]
+    status, effect_rows = await _state(action_id)
+    assert status == "failed"
+    assert [e[1] for e in effect_rows] == ["compensated", "compensated", "compensation_failed", "started"]
 
 
-async def test_une_cle_faite_ne_se_refait_pas_une_cle_commencee_se_reprend(
-    setup: Fixture, journal: Journal
-) -> None:
-    """Le worker tué : avant la confirmation, l'effet se reprend (il est idempotent) ; après, la
-    réponse consignée revient sans que rien ne reparte vers le système tiers."""
+async def test_a_done_key_is_not_redone_a_started_key_is_resumed(setup: Fixture, journal: Journal) -> None:
+    """The worker is killed: before the confirmation, the effect is resumed (it is idempotent);
+    after, the recorded answer comes back and nothing is sent again to the third-party system."""
     from choregos_api.db.models import ActionEffect
     from choregos_api.db.session import session_scope
-    from choregos_orchestrator.activities.actions import executer_l_effet
+    from choregos_orchestrator.activities.actions import execute_effect
 
-    action_id = await _action(setup, [CREER])
+    action_id = await _action(setup, [CREATE])
     async with session_scope() as session:
         from choregos_api.db.models import Action
 
@@ -218,110 +216,110 @@ async def test_une_cle_faite_ne_se_refait_pas_une_cle_commencee_se_reprend(
                 action_id=action_id,
                 position=0,
                 key=f"{action_id}:0",
-                effect="test.creer",
+                effect="test.create",
                 params={},
                 status="started",
                 attempts=1,
             )
         )
-    premiere = await executer_l_effet({"action_id": action_id, "position": 0})
-    seconde = await executer_l_effet({"action_id": action_id, "position": 0})
-    assert premiere["replayed"] is False and seconde["replayed"] is True
-    assert seconde["result"] == {"id": "compte-lea@acme.test"}
-    assert journal.faits == [("creer", {"upn": "lea@acme.test"})], "une seule création chez le tiers"
-    _, effets = await _etat(action_id)
-    assert effets == [("0", "done", 2)]
+    first = await execute_effect({"action_id": action_id, "position": 0})
+    second = await execute_effect({"action_id": action_id, "position": 0})
+    assert first["replayed"] is False and second["replayed"] is True
+    assert second["result"] == {"id": "account-lea@acme.test"}
+    assert journal.done == [("create", {"upn": "lea@acme.test"})], "a single creation at the third party"
+    _, effect_rows = await _state(action_id)
+    assert effect_rows == [("0", "done", 2)]
 
 
-async def test_une_action_approuvee_atteint_le_serveur_avec_la_cle_du_connecteur(
+async def test_an_approved_action_reaches_the_server_with_the_connector_key(
     setup: Fixture, temporal_env: Any, worker_factory: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """De bout en bout côté orchestrateur (S20-02) : l'outil sous validation est devenu une action,
-    elle a été approuvée ; l'`ActionWorkflow` l'exécute, et c'est LUI qui joint le serveur — avec
-    la clé du connecteur, résolue par la plateforme."""
+    """End to end on the orchestrator side (S20-02): the tool under approval became an action, it
+    was approved; the `ActionWorkflow` runs it, and it is IT that reaches the server — with the
+    connector key, resolved by the platform."""
     import choregos_adapters
     from choregos_adapters.fakes.mcp import FakeMcpServer
     from choregos_api.db.models import ConnectorOperation, OrgConnector, Project
     from choregos_api.db.session import session_scope
 
-    serveur = FakeMcpServer(
-        outils=[{"name": "commander_poste", "inputSchema": {"type": "object"}}], jeton="cle-fournisseur"
+    server = FakeMcpServer(
+        outils=[{"name": "order_workstation", "inputSchema": {"type": "object"}}], jeton="provider-key"
     )
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", serveur)
-    monkeypatch.setenv("CONNECTOR_TEST_CLE_FOURNISSEUR", "cle-fournisseur")
+    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
+    monkeypatch.setenv("CONNECTOR_TEST_PROVIDER_KEY", "provider-key")
     async with session_scope() as session:
-        projet = await session.get(Project, setup.project_id)
-        assert projet is not None
+        project = await session.get(Project, setup.project_id)
+        assert project is not None
         instance = OrgConnector(
-            org_id=projet.org_id,
-            name="fournisseur",
+            org_id=project.org_id,
+            name="provider",
             kind="mcp",
             type="mcp",
-            config={"url": "https://fournisseur.test/mcp"},
-            secret_refs={"token": "env:CONNECTOR_TEST_CLE_FOURNISSEUR"},
+            config={"url": "https://provider.test/mcp"},
+            secret_refs={"token": "env:CONNECTOR_TEST_PROVIDER_KEY"},
         )
         session.add(instance)
         await session.flush()
         session.add(
             ConnectorOperation(
-                org_id=projet.org_id,
+                org_id=project.org_id,
                 connector_id=instance.id,
-                name="commander_poste",
+                name="order_workstation",
                 access="write",
                 policy="approval",
                 groups=[],
             )
         )
-    effet = {
+    effect = {
         "effect": "connector.call",
         "with": {
-            "connector": "fournisseur",
-            "operation": "commander_poste",
-            "arguments": {"modele": "portable-14"},
+            "connector": "provider",
+            "operation": "order_workstation",
+            "arguments": {"model": "laptop-14"},
         },
     }
-    action_id = await _action(setup, [effet])
-    resultat, _ = await _executer(temporal_env, worker_factory, action_id)
-    assert resultat["status"] == "succeeded", resultat
-    assert serveur.appels == [("commander_poste", {"modele": "portable-14"})]
-    assert {entetes["authorization"] for _, entetes, _ in serveur.recues} == {"Bearer cle-fournisseur"}
+    action_id = await _action(setup, [effect])
+    result, _ = await _run(temporal_env, worker_factory, action_id)
+    assert result["status"] == "succeeded", result
+    assert server.appels == [("order_workstation", {"model": "laptop-14"})]
+    assert {headers["authorization"] for _, headers, _ in server.recues} == {"Bearer provider-key"}
 
 
-async def test_une_action_demarree_avant_que_sa_ligne_soit_visible_attend_qu_elle_le_soit(
+async def test_an_action_started_before_its_row_is_visible_waits_until_it_is(
     setup: Fixture, temporal_env: Any, worker_factory: Any, journal: Journal
 ) -> None:
-    """La requête qui décide démarre `action-<id>` AVANT de valider sa transaction (S20-08) : la ligne
-    peut ne pas être encore visible quand le workflow la lit. Il retente, au lieu de mourir."""
+    """The request that decides starts `action-<id>` BEFORE committing its transaction (S20-08): the
+    row may not be visible yet when the workflow reads it. It retries, instead of dying."""
     import asyncio
 
     from choregos_api.db.models import Action, Project
     from choregos_api.db.session import session_scope
 
-    identifiant = "00000000-0000-7000-8000-00000000a7a1"
+    action_id = "00000000-0000-7000-8000-00000000a7a1"
     async with worker_factory():
         handle = await temporal_env.client.start_workflow(
-            "ActionWorkflow", {"action_id": identifiant}, id=f"action-{identifiant}", task_queue="test"
+            "ActionWorkflow", {"action_id": action_id}, id=f"action-{action_id}", task_queue="test"
         )
         await asyncio.sleep(0.3)
         async with session_scope() as session:
-            projet = await session.get(Project, setup.project_id)
-            assert projet is not None
+            project = await session.get(Project, setup.project_id)
+            assert project is not None
             session.add(
                 Action(
-                    id=identifiant,
-                    org_id=projet.org_id,
-                    project_id=projet.id,
+                    id=action_id,
+                    org_id=project.org_id,
+                    project_id=project.id,
                     origin="transition",
-                    kind="arrivee.comptes",
-                    title="Les comptes de Léa",
+                    kind="arrival.accounts",
+                    title="The accounts of Lea",
                     params={"upn": "lea@acme.test"},
-                    effects=[CREER],
+                    effects=[CREATE],
                     proposed_by={"kind": "system", "id": "system"},
                     approval={},
                     decisions=[],
                     status="approved",
                 )
             )
-        resultat = await handle.result()
-    assert resultat["status"] == "succeeded"
-    assert journal.faits == [("creer", {"upn": "lea@acme.test"})]
+        result = await handle.result()
+    assert result["status"] == "succeeded"
+    assert journal.done == [("create", {"upn": "lea@acme.test"})]
