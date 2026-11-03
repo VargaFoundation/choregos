@@ -159,6 +159,8 @@ async def _check_decision_steps(session: AsyncSession, project: Project, workflo
             + "; ".join(e["msg"] for e in errors),
             errors,
         )
+
+
 async def _warn_about_memory_the_policy_disables(
     session: AsyncSession, project: Project, workflow: Workflow
 ) -> None:
