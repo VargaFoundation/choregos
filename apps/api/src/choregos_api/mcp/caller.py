@@ -1,0 +1,302 @@
+# SPDX-License-Identifier: Apache-2.0
+"""Who knocks at the door: a token with an MCP scope, the person who used it, and their project, if any."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from choregos_core import utcnow
+from fastapi import Request
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..config import Settings
+from ..db.models import ApiToken, Organization, Project, User
+from ..db.session import TOUT, limiter_aux_organisations
+from ..deps import _aware, _principal_from_user, record_usage
+from ..rbac import Principal
+from ..security import hash_api_token
+from .oauth import TokenRefused, issuer_of, validate
+
+MCP_SCOPES = frozenset({"mcp:read", "mcp:write"})
+#: The A2A door's scope (ADR 0078): one scope, since a task is opened or read, never decided.
+SCOPES_A2A = frozenset({"a2a"})
+
+
+class Refusal(Exception):  # noqa: N818 - a decision of the door, not a failure
+    """The door refuses before any MCP exchange: rendered as HTTP, with `WWW-Authenticate`."""
+
+    def __init__(
+        self,
+        status: int,
+        message: str,
+        *,
+        error: str | None = None,
+        erreur: str | None = None,  # lang: fr-ok alias:internal
+    ) -> None:
+        super().__init__(message)
+        self.status = status
+        self.error = error if error is not None else erreur
+
+    @property
+    def statut(self) -> int:  # lang: fr-ok alias:internal
+        return self.status
+
+    @property
+    def erreur(self) -> str | None:  # lang: fr-ok alias:internal
+        return self.error
+
+
+@dataclass(slots=True, init=False)
+class Caller:
+    principal: Principal
+    #: The `chg_` token, or `None` for an OAuth token from the identity provider.
+    token: ApiToken | None
+    scopes: frozenset[str]
+    #: What identifies the client for the rate and the audit: `jeton:<id>` or `oauth:<azp>:<sub>`.
+    key: str
+    bound_project: Project | None
+    bound_project_org: str | None
+    #: The external agent this client embodies (ADR 0033), if it is attached to one.
+    agent: str | None
+    #: Its organisation: a call that targets no project is recorded under it in the audit log.
+    agent_org_id: str | None
+    #: The door's tools the agent's version allows (patterns); `None`: those of the person.
+    reasons: tuple[str, ...] | None
+
+    def __init__(  # noqa: PLR0913 - one parameter per field, and the former keywords
+        self,
+        principal: Principal,
+        token: ApiToken | None = None,
+        scopes: frozenset[str] | None = None,
+        key: str = "",
+        bound_project: Project | None = None,
+        bound_project_org: str | None = None,
+        agent: str | None = None,
+        agent_org_id: str | None = None,
+        reasons: tuple[str, ...] | None = None,
+        *,
+        jeton: ApiToken | None = None,  # lang: fr-ok alias:internal
+        portees: frozenset[str] | None = None,  # lang: fr-ok alias:internal
+        cle: str | None = None,  # lang: fr-ok alias:internal
+        projet_lie: Project | None = None,  # lang: fr-ok alias:internal
+        org_du_projet_lie: str | None = None,  # lang: fr-ok alias:internal
+        motifs: tuple[str, ...] | None = None,  # lang: fr-ok alias:internal
+    ) -> None:
+        resolved = scopes if scopes is not None else portees
+        if resolved is None:
+            raise TypeError("Caller needs `scopes`")
+        self.principal = principal
+        self.token = token if token is not None else jeton
+        self.scopes = resolved
+        self.key = cle if cle is not None else key
+        self.bound_project = bound_project if bound_project is not None else projet_lie
+        self.bound_project_org = bound_project_org if bound_project_org is not None else org_du_projet_lie
+        self.agent = agent
+        self.agent_org_id = agent_org_id
+        self.reasons = reasons if reasons is not None else motifs
+
+    @property
+    def writes(self) -> bool:
+        return "mcp:write" in self.scopes
+
+    @property
+    def jeton(self) -> ApiToken | None:  # lang: fr-ok alias:internal
+        return self.token
+
+    @property
+    def portees(self) -> frozenset[str]:  # lang: fr-ok alias:internal
+        return self.scopes
+
+    @property
+    def cle(self) -> str:  # lang: fr-ok alias:internal
+        return self.key
+
+    @property
+    def projet_lie(self) -> Project | None:  # lang: fr-ok alias:internal
+        return self.bound_project
+
+    @property
+    def org_du_projet_lie(self) -> str | None:  # lang: fr-ok alias:internal
+        return self.bound_project_org
+
+    @property
+    def motifs(self) -> tuple[str, ...] | None:  # lang: fr-ok alias:internal
+        return self.reasons
+
+    @property
+    def ecrit(self) -> bool:  # lang: fr-ok alias:internal
+        return self.writes
+
+
+async def identify(
+    session: AsyncSession,
+    request: Request,
+    settings: Settings,
+    *,
+    scopes: frozenset[str] = MCP_SCOPES,
+    door: str = "MCP",
+) -> Caller:
+    """The bearer token, read at platform scope; the principal then bounds the RLS.
+
+    `scopes` are those of the door asking: the MCP door's, or the A2A door's (ADR 0078), which
+    shares everything else — OAuth, agents, revocation — and refuses `*` the same way."""
+    header = request.headers.get("authorization", "")
+    if not header.lower().startswith("bearer "):
+        wanted = " or ".join(sorted(scopes))
+        raise Refusal(401, f"missing token: Authorization: Bearer chg_… (scope {wanted})")
+    raw = header.split(" ", 1)[1].strip()
+    await limiter_aux_organisations(session, TOUT)
+    if not raw.startswith("chg_") and settings.mcp_oauth_enabled:
+        return await _by_oauth(session, raw, settings, scopes=scopes)
+    token = (
+        await session.execute(select(ApiToken).where(ApiToken.hash == hash_api_token(raw)))
+    ).scalar_one_or_none()
+    if token is None:
+        raise Refusal(401, "unknown or revoked token", error="invalid_token")
+    caller = await caller_of_token(session, token, scopes=scopes, door=door)
+    record_usage(token, request)
+    return caller
+
+
+async def caller_of_token(
+    session: AsyncSession, token: ApiToken, *, scopes: frozenset[str] = MCP_SCOPES, door: str = "MCP"
+) -> Caller:
+    """A `chg_` token read again without its request: expiry, scope, user, agent and project.
+
+    The A2A door replays it before each push notification (ADR 0078 §5): a token revoked, expired,
+    or whose agent was suspended since the registration stops the deliveries."""
+    if token.expires_at is not None and _aware(token.expires_at) <= utcnow():
+        raise Refusal(401, "expired token", error="invalid_token")
+    token_scopes = frozenset(token.scopes or ["*"])
+    if not token_scopes & scopes:
+        # A `*` token opens the REST API: it does not belong in a client's configuration.
+        raise Refusal(
+            403,
+            f"the {door} door refuses a token without its scope (`*` included): "
+            f"create a {' or '.join(sorted(scopes))} token for this client",
+            error="insufficient_scope",
+        )
+    user = await session.get(User, token.user_id)
+    if user is None:
+        raise Refusal(401, "orphaned token", error="invalid_token")
+    principal = await _principal_from_user(session, user)
+    caller = Caller(principal=principal, token=token, scopes=token_scopes, key=f"jeton:{token.id}")
+    await act_as_agent(session, caller, token_id=token.id)
+    if token.project_id:
+        project = await session.get(Project, token.project_id)
+        if project is None:
+            raise Refusal(401, "this token's project no longer exists", error="invalid_token")
+        org = await session.get(Organization, project.org_id)
+        caller.bound_project, caller.bound_project_org = project, org.slug if org else ""
+    return caller
+
+
+async def _by_oauth(
+    session: AsyncSession, raw: str, settings: Settings, *, scopes: frozenset[str] = MCP_SCOPES
+) -> Caller:
+    """A token issued by the identity provider for the door (RFC 9728): the person is found by their
+    `sub`, then by their verified e-mail. They must have signed in to the console once: the door
+    creates nobody.
+
+    A `sub` only means something at its issuer: it designates a console user only if the door and
+    the console share the same identity provider. Otherwise only the verified e-mail links the two."""
+    try:
+        claims = await validate(raw, settings)
+    except TokenRefused as refusal:
+        raise Refusal(401, str(refusal), error="invalid_token") from refusal
+    sub = str(claims["sub"])
+    user = None
+    if issuer_of(settings) == settings.oidc_issuer.rstrip("/"):
+        user = (await session.execute(select(User).where(User.oidc_sub == sub))).scalar_one_or_none()
+    if user is None and claims.get("email") and claims.get("email_verified"):
+        user = (
+            await session.execute(select(User).where(User.email == str(claims["email"])))
+        ).scalar_one_or_none()
+    if user is None:
+        raise Refusal(
+            403,
+            "user unknown to Choregos: sign in to the console once",
+            error="invalid_token",
+        )
+    requested = set(str(claims.get("scope") or "").split()) & scopes
+    if not requested and scopes != MCP_SCOPES:
+        # Only the MCP door reads by default: opening an A2A task is asked for, never implied.
+        raise Refusal(
+            403,
+            f"the identity provider did not grant the {' or '.join(sorted(scopes))} scope",
+            error="insufficient_scope",
+        )
+    principal = await _principal_from_user(session, user)
+    client = str(claims.get("azp") or claims.get("client_id") or "?")
+    caller = Caller(
+        principal=principal,
+        token=None,
+        # Without a requested MCP scope, reading: writing is asked for explicitly.
+        scopes=frozenset(requested or {"mcp:read"}),
+        key=f"oauth:{client}:{sub}",
+    )
+    await act_as_agent(session, caller, client_id=client)
+    return caller
+
+
+async def act_as_agent(
+    session: AsyncSession, caller: Caller, *, token_id: str | None = None, client_id: str | None = None
+) -> None:
+    """A client attached to an external agent (ADR 0033) carries its identity and its limits.
+
+    The revocation is read again HERE, on every call: a revoked, suspended or expired agent gets a
+    401 on the next one. Its rights are the person's — the principal does not change — intersected
+    with the door's tools that its version names (`mcp_servers` of a `choregos` connector).
+    """
+    from ..db.models import Agent, AgentCredential
+
+    condition = (
+        AgentCredential.api_token_id == token_id
+        if token_id is not None
+        else (AgentCredential.kind == "oauth_client") & (AgentCredential.client_id == client_id)
+    )
+    attachment = (
+        await session.execute(select(AgentCredential).where(condition, AgentCredential.revoked_at.is_(None)))
+    ).scalar_one_or_none()
+    if attachment is None:
+        return
+    agent = await session.get(Agent, attachment.agent_id)
+    if agent is None:
+        return
+    retired = agent.lifecycle == "retired"
+    if (
+        retired
+        or agent.status != "active"
+        or (agent.expires_at is not None and _aware(agent.expires_at) <= utcnow())
+    ):
+        state = "retired" if retired else agent.status if agent.status != "active" else "expired"
+        raise Refusal(
+            401,
+            f"agent `{agent.slug}` is {state}: this client is no longer allowed in",
+            error="invalid_token",
+        )
+    # The tool patterns of the revision in production (ADR 0071), not of the latest saved one.
+    from ..services.agent_releases import production_spec
+
+    spec = await production_spec(session, agent) or {}
+    patterns = [
+        tool
+        for server in spec.get("mcp_servers", [])
+        if server.get("connector") == "choregos"
+        for tool in server.get("tools", [])
+    ]
+    caller.agent = agent.slug
+    caller.agent_org_id = agent.org_id
+    caller.reasons = (
+        tuple(patterns)
+        if any(s.get("connector") == "choregos" for s in spec.get("mcp_servers", []))
+        else None
+    )
+
+
+Appelant = Caller  # lang: fr-ok alias:internal
+Refus = Refusal  # lang: fr-ok alias:internal
+PORTEES_MCP = MCP_SCOPES  # lang: fr-ok alias:internal
+identifier = identify  # lang: fr-ok alias:internal
+incarner_l_agent = act_as_agent  # lang: fr-ok alias:internal
