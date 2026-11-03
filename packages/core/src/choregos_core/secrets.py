@@ -5,7 +5,7 @@ A connector never carries a secret in clear: its configuration names a REFERENCE
 (`env:CONNECTOR_JIRA_TOKEN`), which the platform resolves when it builds the adapter, in the process
 that needs it, never in the database, never in an API response. The core reads the environment
 (`env:`); a plugin declares the other schemes (a vault: `vault:`, `infisical:`) with
-`declarer_un_resolveur`.
+`declare_resolver`.
 
 `connectors.secret_ref` existait depuis le schéma initial, stocké et jamais lu : un secret
 « configuré » n'atteignait aucun adaptateur, qui retombait en silence sur sa valeur par défaut.
@@ -17,12 +17,14 @@ import os
 import re
 from collections.abc import Callable
 
+from .compat import EXTERNAL_ALIAS_REMOVAL, alias_names
+
 #: `schéma:reste` — un schéma en minuscules, puis ce que son résolveur sait lire.
 _REFERENCE = re.compile(r"^([a-z][a-z0-9-]{1,31}):(.+)$")
 
 
-class SecretIntrouvable(LookupError):  # noqa: N818 - un manque nommé, rendu tel quel
-    """La référence est bien formée, mais rien ne la résout ici."""
+class SecretNotFound(LookupError):  # noqa: N818 - a named absence, answered as it is
+    """The reference is well formed, but nothing resolves it here."""
 
 
 class ReferenceInvalide(ValueError):  # noqa: N818 - un refus motivé, rendu en 422
@@ -64,7 +66,7 @@ def _environnement(nom: str) -> str:
     _verifier_le_nom(nom)
     valeur = os.environ.get(nom)
     if not valeur:
-        raise SecretIntrouvable(f"`env:{nom}`: the variable is not set in this process")
+        raise SecretNotFound(f"`env:{nom}`: the variable is not set in this process")
     return valeur
 
 
@@ -75,7 +77,7 @@ STORE_SCHEME = "store"
 def _store_is_resolved_by_the_platform(name: str) -> str:
     """The sync core cannot read the store: it needs the database and the organisation. A call site
     that forgot to go through `choregos_api.secret_store` fails loudly here, never silently."""
-    raise SecretIntrouvable(
+    raise SecretNotFound(
         f"`store:{name}`: store references are resolved by the platform with the organisation's "
         "context (resolved_configuration), not by the core"
     )
@@ -92,13 +94,13 @@ _RESOLVEURS: dict[str, Callable[[str], str]] = {
 }
 
 
-def declarer_un_resolveur(schema: str, resoudre_: Callable[[str], str]) -> None:
-    """Appelée par un greffon à son chargement : `schema` (`vault`, `infisical`…) et sa lecture."""
+def declare_resolver(schema: str, resolve_: Callable[[str], str]) -> None:
+    """Called by an extension when it loads: `schema` (`vault`, `infisical`...) and its reader."""
     if not re.fullmatch(r"[a-z][a-z0-9-]{1,31}", schema):
         raise ValueError(f"invalid secret scheme: {schema!r}")
-    if schema in _RESOLVEURS and _RESOLVEURS[schema] is not resoudre_:
+    if schema in _RESOLVEURS and _RESOLVEURS[schema] is not resolve_:
         raise ValueError(f"secret scheme already declared: {schema}")
-    _RESOLVEURS[schema] = resoudre_
+    _RESOLVEURS[schema] = resolve_
 
 
 def schemas() -> frozenset[str]:
@@ -127,7 +129,7 @@ def resoudre(reference: str) -> str:
     except VariableRefusee as refus:
         # A reference written before the allowlist (or by hand in the database) puts its connector
         # in error, like any reference nothing resolves: it never reads the variable.
-        raise SecretIntrouvable(str(refus)) from refus
+        raise SecretNotFound(str(refus)) from refus
     m = _REFERENCE.match(reference)
     assert m is not None
     return _RESOLVEURS[m.group(1)](m.group(2))
@@ -143,12 +145,24 @@ def reinitialiser() -> None:
 __all__ = [
     "STORE_SCHEME",
     "ReferenceInvalide",
-    "SecretIntrouvable",
+    "SecretNotFound",
     "VariableRefusee",
-    "declarer_un_resolveur",
+    "declare_resolver",
     "est_une_reference_du_magasin",
     "reinitialiser",
     "resoudre",
     "schemas",
     "verifier",
 ]
+
+SecretIntrouvable = SecretNotFound  # lang: fr-ok alias:external
+declarer_un_resolveur = declare_resolver  # lang: fr-ok alias:external
+
+alias_names(
+    __name__,
+    {
+        "SecretIntrouvable": "SecretNotFound",  # lang: fr-ok alias:external
+        "declarer_un_resolveur": "declare_resolver",  # lang: fr-ok alias:external
+    },
+    removed_in=EXTERNAL_ALIAS_REMOVAL,
+)

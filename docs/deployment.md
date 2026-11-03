@@ -420,10 +420,10 @@ digest, `60`: an input that does not match its digest, `80`: the context reducti
 
 The community edition serves one theme, its default (`GET /api/v1/theme`, public). Customising the
 look (colours per mode, radii, title font, logo, product name, footer, default mode) is an
-enterprise feature: a plugin calls `choregos_api.greffons.declare_theme_provider(fn)` with
+enterprise feature: an extension calls `choregos_api.extensions.declare_theme_provider(fn)` with
 `fn(session, org) -> dict | None` and the core validates what it returns (schema, then the
 console's contrast budget on the effective colours). An invalid theme is replaced by the default
-(`X-Choregos-Theme: fallback`, with the violations in the API log); a plugin can check a theme
+(`X-Choregos-Theme: fallback`, with the violations in the API log); an extension can check a theme
 itself with `choregos_api.theme.validate_theme`. A theme cannot change the mono font, the layout or
 the attribution line. Fonts and images are served by the API under `/api/v1/` so that the console's
 CSP stays unchanged; hand files to a plugin with `choregos-api.extraVolumes` (S39-03c).
@@ -528,6 +528,21 @@ Two things have to be true for an agent to actually get a tool, and both are eas
    what exists; the project says what it draws on. A tool that is in the catalogue and not in the
    project's list comes back `allowed: false`, and the agent correctly reports that it has no such
    tool — which is exactly what happened on the dev tenant on 2026-09-27, and cost an hour.
+
+### A catalogue tool that may write is not offered
+
+Writes reach a third party only as governed actions (ADR 0034 §7), and a catalogue call is not one.
+A catalogue tool **may write** when it is an http tool whose method is not `GET`, or a remote `mcp:`
+tool. Unless the deployment declares `read_only: true` on the entry, such a tool is not listed in the
+run's tool list, is shown `allowed: false` on the project's tools page, is left out of the observability
+sources, and a direct call answers 409 `catalogue_write_refused` before any provider call or cost line.
+`read_only: false` says the same as leaving it unset on a writer. The catalogue still loads: an old
+catalogue does not stop the API from starting.
+
+- A POST or MCP tool that only reads (a search, a lookup): add `read_only: true` to its entry.
+- A tool that writes: declare the server as an organisation MCP connector. The broker serves its
+  operations, each with its own policy, and its writes are governed. The tools of a plugin's server
+  (ADR 0096) are such connectors, not catalogue entries, and are not affected by this rule.
 
 ### The rules that make an external MCP server safe to add
 

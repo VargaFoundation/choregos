@@ -36,8 +36,14 @@ def vider_cache() -> None:
     catalogue.cache_clear()
 
 
-def outils_du_projet(autorises: list[str], groupes: list[str] | None = None) -> list[OutilCatalogue]:
+def outils_du_projet(
+    autorises: list[str], groupes: list[str] | None = None, *, include_writers: bool = False
+) -> list[OutilCatalogue]:
     """Ce qu'un projet a le droit d'appeler. Liste vide = rien, et c'est le défaut.
+
+    A tool that may write (`OutilCatalogue.may_write`) is dropped unless `include_writers` is set:
+    writes reach a third party only as governed actions (ADR 0034 §7). Only the direct call uses
+    `include_writers=True`, to answer the refusal with the way out.
 
     Un catalogue déployé ne s'ouvre pas à tous les projets par accident : un projet déclare
     ce dont il a besoin, comme il déclare ses connecteurs.
@@ -50,7 +56,7 @@ def outils_du_projet(autorises: list[str], groupes: list[str] | None = None) -> 
     # déclare un outil réservé à un groupe dont il ne fait pas partie ne l'obtient pas —
     # sinon la liste du projet deviendrait le seul contrôle, et elle est modifiable par
     # l'équipe du projet.
-    ouverts = [o for o in catalogue().outils if o.ouvert_a(groupes)]
+    ouverts = [o for o in catalogue().outils if o.ouvert_a(groupes) and (include_writers or not o.may_write)]
     if autorises == ["*"]:
         return ouverts
     permis = set(autorises)

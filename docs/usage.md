@@ -195,8 +195,8 @@ curl -X PUT $API/projects/acme:hr/connectors/tracker -d '{"type": "jira",
   "secret_refs": {"api_token": "env:CONNECTOR_JIRA_TOKEN"}}'
 ```
 
-The core reads `env:NAME`; a plugin declares other schemes (a vault) with
-`choregos_core.secrets.declarer_un_resolveur`. A reference the process cannot resolve fails the
+The core reads `env:NAME`; an extension declares other schemes (a vault) with
+`choregos_core.secrets.declare_resolver`. A reference the process cannot resolve fails the
 connector test with its name — never a silent fallback to a default value.
 
 `env:NAME` reads only the variables matching `CHOREGOS_SECRET_ENV_PATTERN` (default
@@ -2426,6 +2426,17 @@ its version and the tool count, or the error. The *Signed assertion* block gives
 **Issuer** and the **JWKS URL**, each with a copy button, the keys, and **Rotate key** (it creates the first key
 too). **Remove** asks first; it is refused while connectors go through the gateway, and the refusal names them.
 
+**Catalogue and connectors through the gateway.** Once a gateway is set and not `off`, **Catalogue → MCP
+servers** offers *Through your MCP gateway* for every entry whose install routes include it, including entries
+that run as a local process or need OAuth, which cannot be installed directly. An entry that only goes through the
+gateway carries that badge. When both routes exist the install drawer has a **Route** choice: *Directly*
+(Choregos holds the credential, the default) or *Through the organisation's MCP gateway* (the gateway holds it).
+The gateway route hides the secret field and asks for the **Server name at the gateway** (the entry id by
+default; letters, digits, dots, dashes and underscores); it sends the route and that name, never a secret. The
+result is a connector of type `mcp-gateway` with the config `{server}`. **Administration → Connectors** marks it
+*via gateway* with its server name, and declaring an `mcp-gateway` connector there is refused, with a link to
+**Administration**, while the organisation has no gateway or its mode is `off`.
+
 **Network activity.** What the egress proxy and the runner let through or refused is journaled per run;
 `GET /orgs/{org}/network-activity` (`audit:read`: the organisation's administrators and owners) groups
 it by host, layer, decision and reason (`allowed`, `denied`, `rate_limited`, `unreachable`) for the last
@@ -2713,8 +2724,8 @@ transitions:
 - **Who approves.** When every operation the action calls — its compensations included — is
   `allowed` for the project and the workflow asks for no `approval`, the policy decides: the action
   is born approved (`by: policy`) and runs. Otherwise a person decides it in **Approvals**, like any
-  other. A workflow can add an approval, never remove one. A plugin effect declares what it needs
-  (`declarer_un_effet(name, fn, politique="allowed")`; `approval` by default).
+  other. A workflow can add an approval, never remove one. An extension effect declares what it needs
+  (`declare_effect(name, fn, policy="allowed")`; `approval` by default).
 - **What follows.** The transition passes when its action **succeeded** (`action_succeeded`, an
   implicit guarantee). Rejected, it follows `on_reject` when there is one; failed — compensated —,
   rejected without `on_reject`, or impossible to propose (a missing field, a forbidden operation),
@@ -2778,11 +2789,24 @@ item under the issue's key, with its creation inputs, workflow and budget (ADR 0
 credentials need the right to create issues (GitHub App: *Issues: read and write*; Jira: create
 issue on the project; GitLab: `api` scope). If the tracker refuses, you get a 502 and nothing is created.
 
-A `/choregos approve`, `reject`, `answer`, `scope`, `pause`, `resume` or `stop` comment on a routed
-ticket does nothing to the workflow. Choregos replies on the ticket with a link to the console (the
-inbox for a decision, the work item page for pause, resume and stop) and records a
-`tracker.command.redirected` audit entry, because a tracker login is not a Choregos principal (ADR 0102).
+A `/choregos approve`, `reject`, `answer` or `scope` comment on a routed ticket does nothing to the
+workflow: a decision stays in the console, after a fresh sign-in. Choregos replies on the ticket with a
+link to the inbox and records a `tracker.command.redirected` audit entry (ADR 0102).
+
+`/choregos pause`, `resume` and `stop` are honoured in one case only: a GitHub comment, in a delivery
+verified by its HMAC (`CHOREGOS_GITHUB_WEBHOOK_SECRET` is set), by a GitHub account that an
+organisation administrator linked to a member (`PUT /orgs/{org}/members/{user_id}/tracker-identities/github`
+with the account's numeric user id). The command runs with that member's own rights (a developer or
+above), is audited as `workitem.pause`, `workitem.resume` or `workitem.stop` on the channel `tracker`,
+and Choregos confirms on the ticket. A login is never matched, so a renamed account inherits nothing.
+Find a user id at `https://api.github.com/users/<login>` (the `id` field). Nothing proves that the member
+owns the account: the administrator asserts the link. Jira and GitLab comments, and any delivery that
+carries only the shared secret, are never honoured: a display name or a username is not a stable
+identity. Anyone else gets the console link, with a note that an administrator can link their account.
 A reply that cannot be posted never fails the webhook.
+
+Moving a card on the tracker board (GitHub Projects, Jira) does not move the work item: the board
+follows Choregos, not the reverse (ADR 0102). Move a work item from the console.
 
 ```bash
 choregos items list billing-api

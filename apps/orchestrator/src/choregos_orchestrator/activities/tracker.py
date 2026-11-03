@@ -3,13 +3,13 @@
 
 from __future__ import annotations
 
-from datetime import timedelta
 from typing import Any
 
 from choregos_api.db.models import Deployment, Finding, HumanRequest, Release, Run, WorkItem
 from choregos_api.logging import get_logger
 from choregos_api.services import (
     Naissance,
+    new_human_request,
     nouveau_ticket,
     persist_event,
     record_human_verdict,
@@ -253,14 +253,13 @@ async def create_human_request(payload: dict[str, Any]) -> dict[str, Any]:
             return {"request_id": existing.id, "reused": True}
 
         sla_hours = int(payload.get("sla_hours") or 24)
-        row = HumanRequest(
+        row = new_human_request(
             work_item_id=item.id,
             project_id=bundle.project.id,
             transition_id=payload.get("transition_id"),
             kind=payload["kind"],
             payload=payload.get("payload", {}),
-            requested_at=utcnow(),
-            due_at=utcnow() + timedelta(hours=sla_hours),
+            sla_hours=sla_hours,
         )
         session.add(row)
         await session.flush()

@@ -222,62 +222,64 @@ knowing before designing around it.
 ## Shipping a connector from outside this tree
 
 A package installed next to Choregos can register its own connectors — no fork, no patch to the
-core. Declare an entry point in the `choregos.plugins` group:
+core. Declare an entry point in the `choregos.plugins` group. A package loaded that way is an
+**extension**; "plugin" means the package of [ADR 0093](adr/0093-an-agent-ships-as-a-plugin.md), see
+[plugins.md](plugins.md):
 
 ```toml
 # pyproject.toml of your package
 [project.entry-points."choregos.plugins"]
-mon-tracker = "mon_paquet:brancher"
+my-tracker = "my_package:register_extension"
 ```
 
 ```python
-# mon_paquet/__init__.py
+# my_package/__init__.py
 from choregos_adapters import register
 
-def brancher() -> None:
-    register("tracker", "maison")(lambda cfg: MonTracker(cfg))
+def register_extension() -> None:
+    register("tracker", "in_house")(lambda cfg: MyTracker(cfg))
 ```
 
-The API and the orchestrator load the group at start-up. A declared plugin that fails to load
+The API and the orchestrator load the group at start-up. A declared extension that fails to load
 **stops the process**, naming it: someone installed it so that it would serve, and a silently
-missing plugin leaves a platform that looks complete and is not. Same rule as `garde.yaml`.
+missing extension leaves a platform that looks complete and is not. Same rule as `garde.yaml`.
 
-A plugin can also **serve routes**. It builds an ordinary `APIRouter`, with the core's own
+An extension can also **serve routes**. It builds an ordinary `APIRouter`, with the core's own
 dependencies for authentication and rights (`Me`, `Db`…), and declares it:
 
 ```python
 from fastapi import APIRouter
-from choregos_api.greffons import declarer_un_routeur
+from choregos_api.extensions import declare_router
 
-routeur = APIRouter(tags=["mine"])
+router = APIRouter(tags=["mine"])
 
-@routeur.get("/mine/ping")
+@router.get("/mine/ping")
 async def ping() -> dict[str, str]:
     return {"pong": "mine"}
 
-def brancher() -> None:
-    declarer_un_routeur(routeur)   # served under /api/v1, after the core's routers
+def register_extension() -> None:
+    declare_router(router)   # served under /api/v1, after the core's routers
 ```
 
-A plugin **adds** routes; it never replaces one. A route that covers a core route (same method,
-same path) **stops start-up**, naming it: Starlette serves the first match, so the plugin would be
+An extension **adds** routes; it never replaces one. A route that covers a core route (same method,
+same path) **stops start-up**, naming it: Starlette serves the first match, so the extension would be
 silently ignored — or, if the order ever changed, would silently replace a core route, an
 authentication route included. Nested routers are refused for the same reason: FastAPI exposes them
 only through a private object, and a route nobody can see is a route nobody can check.
-`apps/api/tests/test_greffons_routes.py` proves both with a plugin installed for real.
+`apps/api/tests/test_greffons_routes.py` proves both with an extension installed for real.
 
-A plugin that serves administration routes gives them **screens without shipping code to the
+An extension that serves administration routes gives them **screens without shipping code to the
 console** ([ADR 0032](adr/0032-admin-sections-by-manifest.md)): it declares each
 section as data — `form` (a JSON Schema, a read path, a write path), `table` (a list path, columns,
 row actions), `action` (a confirmation, `danger`, `reauth`), `secret_once` (a secret shown once,
 never kept) — and the console renders it under `/admin/x/{section}`:
 
 ```python
-from choregos_api.greffons import declarer_une_section_d_administration
+from choregos_api.extensions import declare_admin_section
 
-def brancher() -> None:
-    declarer_un_routeur(routeur)
-    declarer_une_section_d_administration({
+def register_extension() -> None:
+    declare_router(router)
+    declare_admin_section({
         "id": "scim", "title": "SCIM provisioning", "scope": "organisation",
         "permission": "member:manage",
         "blocks": [{"kind": "table", "title": "tokens", "list": "/orgs/{org}/scim/tokens",
@@ -289,7 +291,7 @@ Paths are relative to `/api/v1`; `{org}` is the current organisation, any other 
 key. At start-up the core validates every manifest against `ui-manifest.schema.json`, checks the
 permission exists, and checks that **every path it names is served** by a route with that method —
 otherwise start-up stops, naming the section. Declaring the same manifest twice is harmless (the API
-loads plugins twice: through the orchestrator it imports, then in `create_app()`); another manifest
+loads extensions twice: through the orchestrator it imports, then in `create_app()`); another manifest
 under the same `id` stops start-up. `GET /api/v1/ui/admin-sections` returns the sections the caller
 holds the permission for; a section asking for `platform:admin` goes to platform administrators
 only, whatever its scope — an `org_admin` holds every permission in their own organisation.
@@ -299,8 +301,8 @@ One screen can mix levels (S42-02): every block may carry its own `permission`, 
 vocabulary (`"permission": "platform:admin"` on an instance-wide form next to organisation blocks). The
 section's permission still applies first; `GET /api/v1/ui/admin-sections` then leaves out the blocks the
 caller lacks, and lists the section only if at least one block remains. Start-up stops on an unknown
-block permission, as on a section's. Nested `row_actions` have no permission of their own. A plugin
-detects the feature without parsing versions: `choregos_api.greffons.SECTION_FEATURES` is a frozenset,
+block permission, as on a section's. Nested `row_actions` have no permission of their own. An extension
+detects the feature without parsing versions: `choregos_api.extensions.SECTION_FEATURES` is a frozenset,
 currently `{"block_permission", "asset_upload", "section_icon"}` (S42-13: a form property of `format: "asset"` uploads its file to its `x-upload` path; S42-15: a section names its navigation `icon` from the schema's closed vocabulary, see ADR 0032). Give a block a `description` ("this organisation", "the whole
 instance") to say which level it edits; every block kind renders it.
 
@@ -323,23 +325,23 @@ the second seam of this kind after playbooks (`CHOREGOS_PLAYBOOKS_DIR`), which w
 `packages/adapters/tests/test_greffons.py` proves it by writing a real `.dist-info` on disk
 rather than stubbing the discovery.
 
-A plugin also brings the **effects** a governed action can run
+An extension also brings the **effects** a governed action can run
 ([ADR 0035](adr/0035-governed-actions-in-the-core.md)):
 
 ```python
-from choregos_api.effets import EffetRefuse, declarer_un_effet
+from choregos_api.effects import EffectRefused, declare_effect
 
-async def activer_badge(ctx, params):          # ctx: session, action, project
-    badge = await lecteur.activer(params["uid"])   # idempotent: activating twice is one badge
-    if badge.refuse:
-        raise EffetRefuse("badge unknown to the reader")  # final: no retry, the action compensates
+async def activate_badge(ctx, params):          # ctx: session, action, project
+    badge = await reader.activate(params["uid"])    # idempotent: activating twice is one badge
+    if badge.refused:
+        raise EffectRefused("badge unknown to the reader")  # final: no retry, the action compensates
     return {"uid": badge.uid, "active": True}      # recorded under the effect's key
 
-def brancher() -> None:
-    declarer_un_effet("badge.activate", activer_badge, politique="approval")
+def register_extension() -> None:
+    declare_effect("badge.activate", activate_badge, policy="approval")
 ```
 
-`politique` is what a **workflow** action needs to run this effect: `approval` (a person decides,
+`policy` is what a **workflow** action needs to run this effect: `approval` (a person decides,
 the default), `allowed` (the transition is enough) or `forbidden`. `connector.call` has none of its
 own: the operation it calls carries the policy, in the organisation and in the project.
 
@@ -359,7 +361,7 @@ fail — and what it had done is compensated, in reverse, as for a refusal.
 
 An effect runs in an activity of `ActionWorkflow`, never in the request that approved the action.
 It **must be idempotent**: a worker may die after the call and before the confirmation, and the
-effect is then attempted again. Raise `EffetRefuse` for what no retry will change; any other
+effect is then attempted again. Raise `EffectRefused` for what no retry will change; any other
 exception is retried with backoff. Declaring the same function twice is harmless; another under
 the same name stops start-up.
 
@@ -378,9 +380,9 @@ for a deployment where the API and the orchestrator would otherwise each see the
 chart deploys it with `demoFakes.enabled` (refused in staging and prod), and `essai/rh/` plays the
 HR scenario against it.
 
-### Adding a plugin to a published image
+### Adding an extension to a published image
 
-A plugin that ships as an image is built **FROM** the community image, which already holds the
+An extension that ships as an image is built **FROM** the community image, which already holds the
 core. The wheel declares no dependency on the core (its wheels are GitHub release artefacts, not
 on PyPI) and goes in with `--no-deps`:
 
@@ -398,31 +400,31 @@ it, and only if `global.edition: enterprise` was set. On those images, write
 `pip --python /app/.venv/bin/python install …`. `tests/paquets/test_image_ee.py` builds a real
 image FROM a community one and checks the edition the platform reports
 (`CHOREGOS_IMAGES_CE=choregos-api:local,choregos-orchestrator:local`).
-## Shipping a schema from a plugin
+## Shipping a schema from an extension
 
 The migrations live **inside** the `choregos_api` package and are run by one command, the one the
 chart's migration Job runs:
 
 ```sh
-python -m choregos_api.migrer            # upgrade heads — the core, then every plugin branch
-python -m choregos_api.migrer downgrade <plugin_label>@base
+python -m choregos_api.migrer            # upgrade heads — the core, then every extension branch
+python -m choregos_api.migrer downgrade <extension_label>@base
 ```
 
-A plugin that needs tables declares a directory of Alembic revisions in the `choregos.migrations`
+An extension that needs tables declares a directory of Alembic revisions in the `choregos.migrations`
 entry-point group; the value it points to is a path:
 
 ```toml
 [project.entry-points."choregos.migrations"]
-mine = "mon_paquet:EMPLACEMENT_DES_MIGRATIONS"   # pathlib.Path to a versions directory
+mine = "my_package:MIGRATIONS_PATH"   # pathlib.Path to a versions directory
 ```
 
 Its revisions form a **branch** in the same `alembic_version` table: the first one has
-`down_revision = None`, a `branch_labels` of its own and `depends_on` a core revision. A plugin
+`down_revision = None`, a `branch_labels` of its own and `depends_on` a core revision. An extension
 creates **its** tables and may point foreign keys at the core's; it never alters a core table —
 two owners for one table is how the next core migration breaks. A declared directory that does not
-exist stops the command: a plugin whose schema silently did not run gives a platform that starts
+exist stops the command: an extension whose schema silently did not run gives a platform that starts
 and fails at the first request touching its tables. `apps/api/tests/test_migrer.py` proves all of
-it with a plugin installed for real.
+it with an extension installed for real.
 
 The Job connects as the API's own role, never the database's administrator, so a migration runs
 under the same forced row-level security as a request. A step that writes rows (`UPDATE`,
@@ -430,20 +432,20 @@ under the same forced row-level security as a request. A step that writes rows (
 `SELECT set_config('app.current_orgs', '*', true)` on PostgreSQL; without it, it sees zero rows and
 says nothing. `apps/api/tests/test_migration_data_steps.py` reads every core migration for that,
 and `test_migrations_postgres.py` runs data steps as that role over seeded rows.
-## Refusing a run from a plugin
+## Refusing a run from an extension
 
 The core caps spending per run and concurrency per executor. A rule that depends on something
-else — a suspended organisation, a monthly ceiling, a freeze window — is declared by a plugin:
+else — a suspended organisation, a monthly ceiling, a freeze window — is declared by an extension:
 
 ```python
-from choregos_core.admission import AdmissionRefusee, declarer_une_admission
+from choregos_core.admission import AdmissionRefused, declare_admission
 
-async def organisation_active(demande):          # a DemandeDeRun: org, project, work_item, budget_usd…
-    if await est_suspendue(demande.org):
-        raise AdmissionRefusee(f"{demande.org} is suspended — reactivate it, then relaunch")
+async def organisation_active(request):          # a RunRequest: org, project, work_item, budget_usd…
+    if await is_suspended(request.org):
+        raise AdmissionRefused(f"{request.org} is suspended — reactivate it, then relaunch")
 
-def brancher() -> None:
-    declarer_une_admission("suspension", organisation_active)
+def register_extension() -> None:
+    declare_admission("suspension", organisation_active)
 ```
 
 The orchestrator plays every declared check in `prepare_stage`, **before** reserving the gateway
@@ -453,7 +455,7 @@ path, so a run already prepared is never refused afterwards (what is running fin
 stops the stage without retry and marks the ticket dead with the reason, prefixed by the check's
 name: write it so it says what to do. A check that raises anything else is an outage, not a
 decision; it propagates and Temporal retries. `apps/orchestrator/tests/test_admission.py` proves it
-with a plugin installed for real.
+with an extension installed for real.
 
 ## Identity seams: revoking a session, granting platform administration
 
@@ -465,35 +467,35 @@ Three hooks in `choregos_api.edition`, next to the group mapper:
   and SCIM deprovisioning cut access at the next request. Any other exception propagates — a
   validation that is down is not an acceptance.
 - **`declarer_un_administrateur_de_plateforme(fn)`** — `fn(session_db, principal) -> bool`. The
-  core's rule (org admin of *every* organisation) still applies; a plugin can only **grant** on top
+  core's rule (org admin of *every* organisation) still applies; an extension can only **grant** on top
   of it, never take away.
 - The session now carries **`iat`**, surfaced as `Principal.authentifie_le`, and
   `/api/v1/auth/login?reauth=1` asks the IdP to authenticate again (`prompt=login`, `max_age=0`) —
   the path for a gate that requires a fresh authentication. Sessions issued before 0.10.0 have no
   `iat` and read as too old.
 
-`apps/api/tests/test_coutures_identite.py` proves each with a plugin installed for real.
+`apps/api/tests/test_coutures_identite.py` proves each with an extension installed for real.
 
-## Refusing a human gesture from a plugin
+## Refusing a human gesture from an extension
 
-Three routes consult plugin controls **after** the core's rights and **before** acting:
+Three routes consult extension checks **after** the core's rights and **before** acting:
 `project.create`, `workitem.decision` and `release.approve`.
 
 ```python
-from choregos_api.greffons import GesteRefuse, declarer_un_controle_de_geste
+from choregos_api.extensions import GestureRefused, declare_gesture_check
 
-def fraicheur(session, demande):           # DemandeDeGeste: geste, org, principal, cible
-    quand = demande.principal.authentifie_le
-    if quand is None or time.time() - quand > 300:
-        raise GesteRefuse("approving needs a login less than 5 minutes old", "reauth")
+def freshness(session, request):           # GestureRequest: gesture, org, principal, target
+    when = request.principal.authentifie_le
+    if when is None or time.time() - when > 300:
+        raise GestureRefused("approving needs a login less than 5 minutes old", "reauth")
 
-def brancher() -> None:
-    declarer_un_controle_de_geste("release.approve", "fraicheur", fraicheur)
+def register_extension() -> None:
+    declare_gesture_check("release.approve", "freshness", freshness)
 ```
 
-The nature picks the answer: `interdit` → 403, `conflit` → 409, `reauth` → 401 pointing at
-`/api/v1/auth/login?reauth=1`. A control can only refuse more than the core; an exception other
-than `GesteRefuse` propagates. `apps/api/tests/test_controle_des_gestes.py` proves the three routes.
+The nature picks the answer: `forbidden` → 403, `conflict` → 409, `reauth` → 401 pointing at
+`/api/v1/auth/login?reauth=1`. A check can only refuse more than the core; an exception other
+than `GestureRefused` propagates. `apps/api/tests/test_controle_des_gestes.py` proves the three routes.
 
 ## Running the API suite on PostgreSQL
 
@@ -513,25 +515,58 @@ Product code never opens an unscoped session, so this hides nothing; `test_rls_p
 real fail-closed behaviour. Three defects only showed there (webhooks routing nothing, `POST /orgs`
 answering 500, a project role becoming an organisation role).
 
-## Setting a project's namespace quota from a plugin
+## Setting a project's namespace quota from an extension
 
-Each project gets its namespaces and a `ResourceQuota`. The default is 32 CPU, 96 Gi, 40 pods; a
-plugin can set it per organisation:
+Each project gets its namespaces and a `ResourceQuota`. The default is 32 CPU, 96 Gi, 40 pods; an
+extension can set it per organisation:
 
 ```python
-from choregos_core.quotas import Quota, declarer_un_quota
+from choregos_core.quotas import Quota, declare_quota
 
-async def quota(org: str, projet: str) -> Quota | None:
-    return Quota(cpu="8", memoire="16Gi", pods=10) if org == "small" else None   # None: default
+async def quota(org: str, project: str) -> Quota | None:
+    return Quota(cpu="8", memory="16Gi", pods=10) if org == "small" else None   # None: default
 
-def brancher() -> None:
-    declarer_un_quota(quota)
+def register_extension() -> None:
+    declare_quota(quota)
 ```
 
 It is written to the GitOps repository at provisioning, so it takes effect the next time the project
 is provisioned. A malformed quantity is refused at construction, not by Argo CD later. Why there is no
 Temporal queue per organisation: [ADR 0027](adr/0027-noisy-neighbours-at-admission-and-quota.md).
 
+### Former names (removed in 0.22.0)
+
+Before 0.21 the extension API had French names. Every one of them still works and raises a
+`DeprecationWarning` that names its English replacement and the release that removes it
+([ADR 0098](adr/0098-english-everywhere-finished.md) §3 (f)); switch an extension at your pace, before 0.22.0.
+`choregos_api.greffons` and `choregos_api.effets` are the former modules: they are the same module
+objects as `choregos_api.extensions` and `choregos_api.effects`.
+
+| Former | New |
+| :-- | :-- |
+| `choregos_api.greffons` | `choregos_api.extensions` <!-- lang: fr-ok --> |
+| `choregos_api.effets` | `choregos_api.effects` <!-- lang: fr-ok --> |
+| `declarer_un_routeur`, `routeurs_declares` | `declare_router`, `declared_routers` <!-- lang: fr-ok --> |
+| `declarer_une_section_d_administration`, `sections_declarees`, `chemins_d_une_section` | `declare_admin_section`, `declared_sections`, `section_paths` <!-- lang: fr-ok --> |
+| `FournisseurDOutils(lister, appeler)`, `declarer_un_fournisseur_d_outils`, `fournisseurs_d_outils` | `ToolProvider(list_tools, call_tool)`, `declare_tool_provider`, `tool_providers` <!-- lang: fr-ok --> |
+| `FournisseurHumain(lister, appeler, en_attente)`, `declarer_des_outils_pour_les_humains`, `fournisseurs_humains` | `HumanToolProvider(list_tools, call_tool, pending)`, `declare_human_tools`, `human_tool_providers` <!-- lang: fr-ok --> |
+| the keywords `lister=`, `appeler=`, `en_attente=` | `list_tools=`, `call_tool=`, `pending=` |
+| `declarer_un_installateur_de_gabarit`, `installateurs_de_gabarit` | `declare_template_installer`, `template_installers` <!-- lang: fr-ok --> |
+| `GESTES`, `DemandeDeGeste(geste, org, principal, cible)` | `GESTURES`, `GestureRequest(gesture, org, principal, target)` <!-- lang: fr-ok --> |
+| `GesteRefuse(raison, nature)`, natures `interdit`, `conflit` | `GestureRefused(reason, nature)`, natures `forbidden`, `conflict` <!-- lang: fr-ok --> |
+| `declarer_un_controle_de_geste`, `controler`, `reinitialiser_les_controles` | `declare_gesture_check`, `check_gesture`, `reset_gesture_checks` <!-- lang: fr-ok --> |
+| `reinitialiser` | `reset` <!-- lang: fr-ok --> |
+| `EffetRefuse`, `ContexteEffet`, `Executer` | `EffectRefused`, `EffectContext`, `Execute` <!-- lang: fr-ok --> |
+| `declarer_un_effet(nom, executer, politique=)`, `politique_de_l_effet`, `effet`, `effets_declares`, `rendre` | `declare_effect(name, execute, policy=)`, `effect_policy`, `effect`, `declared_effects`, `render` <!-- lang: fr-ok --> |
+| `choregos_core.quotas`: `Quota(memoire=)`, `DEFAUT`, `Fournisseur`, `declarer_un_quota`, `quota_pour` | `Quota(memory=)`, `DEFAULT`, `QuotaProvider`, `declare_quota`, `quota_for` <!-- lang: fr-ok --> |
+| `choregos_core.admission`: `DemandeDeRun`, `AdmissionRefusee`, `Controle`, `declarer_une_admission`, `admissions_declarees`, `verifier` | `RunRequest`, `AdmissionRefused`, `AdmissionCheck`, `declare_admission`, `declared_admissions`, `check` <!-- lang: fr-ok --> |
+| `choregos_core.secrets`: `SecretIntrouvable`, `declarer_un_resolveur` | `SecretNotFound`, `declare_resolver` <!-- lang: fr-ok --> |
+
+A `GestureRequest` also reads `geste` and `cible`, a `GestureRefused` reads `raison`, and a `Quota`
+reads `memoire`, under the same warning. Not renamed here: the DSL value `verifier` of an action
+(a workflow written with it keeps running), the persisted `greffon:` prefixes and the entry-point
+group `choregos.plugins`. `edition.py` and the `Principal` follow in S45-12, `load_extensions` in
+S45-10; until then their examples above keep their French names.
 ## The English ratchet
 
 Everything new is English ([ADR 0046](adr/0046-english-everywhere.md)), and what is still French

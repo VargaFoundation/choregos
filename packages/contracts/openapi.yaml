@@ -2140,6 +2140,49 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/members/{user_id}/tracker-identities:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: user_id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [admin]
+      operationId: listTrackerIdentities
+      description: The tracker accounts an organisation administrator linked to this member (S47-14, ADR 0102). `org_admin` only.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/TrackerIdentity" } } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/members/{user_id}/tracker-identities/{tracker}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: user_id, in: path, required: true, schema: { type: string } }
+      - { name: tracker, in: path, required: true, schema: { type: string, enum: [github] } }
+    put:
+      tags: [admin]
+      operationId: setTrackerIdentity
+      description: >-
+        Link the member to their account on the tracker by the provider's numeric user id (S47-14, ADR 0102).
+        Asserted by an organisation administrator: nothing proves the member owns the account. A
+        `/choregos pause|resume|stop` comment is honoured only from a signed GitHub delivery by this id.
+        Replaces the member's previous link on that tracker. 409 when the id is linked to another member.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/TrackerIdentityPut" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TrackerIdentity" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [admin]
+      operationId: deleteTrackerIdentity
+      description: Remove the link; the member's comments on the tracker are no longer honoured.
+      responses:
+        "204": { description: Removed }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /orgs/{org}/agents:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -4509,6 +4552,25 @@ components:
         org: { type: string }
         project_slug: { type: [string, "null"] }
         role: { $ref: "#/components/schemas/Role" }
+    TrackerIdentity:
+      type: object
+      description: >-
+        A member's account on a tracker, by the provider's stable numeric user id. Only GitHub for now: the
+        other trackers come when their deliveries are signed per source.
+      required: [tracker, external_id, login, user_id, created_by, created_at]
+      properties:
+        tracker: { type: string, enum: [github] }
+        external_id: { type: string, description: "the provider's numeric user id" }
+        login: { type: string, description: "display only, never matched" }
+        user_id: { type: string }
+        created_by: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+    TrackerIdentityPut:
+      type: object
+      required: [external_id, login]
+      properties:
+        external_id: { type: string, pattern: "^[0-9]{1,20}$", description: "the provider's numeric user id" }
+        login: { type: string, minLength: 1, maxLength: 255, description: "display only" }
     MembershipUpsert:
       type: object
       required: [email, role]

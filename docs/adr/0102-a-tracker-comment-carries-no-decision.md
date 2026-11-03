@@ -20,19 +20,31 @@ behind a TLS ingress.
    not an identity Choregos authenticated.
 2. **Decisions never come from comments.** Step-up, group verdicts and gesture controls live in the
    console, after a fresh sign-in.
-3. `pause`, `resume` and `stop` may be honoured only for tracker identities an organisation administrator
-   linked by their stable provider id, on authenticated deliveries (S47-14).
-4. Until then every command is answered with a console link (the inbox for `approve`, `reject`, `answer`,
+3. `pause`, `resume` and `stop` are honoured (implemented in S47-14) only for a GitHub account that an
+   organisation administrator linked to a member by its stable numeric user id, in a delivery verified
+   by its HMAC. They run with that member's own rights (ITEM_CONTROL), are audited on the channel
+   `tracker` and confirmed on the ticket. Jira and GitLab are not honoured: a display name or a username
+   is not a stable id, and their deliveries carry only the shared secret (also accepted in the Tekton
+   sink URL). The link is asserted by the administrator, not proven by the member.
+4. Every other command is answered with a console link (the inbox for `approve`, `reject`, `answer`,
    `scope`; the work item page for `pause`, `resume`, `stop`), audited as `tracker.command.redirected`,
-   and no command reaches the interpreter. The reply never starts with the command, so it is not read as
+   and no decision reaches the interpreter. The reply never starts with the command, so it is not read as
    one.
 5. A reply that cannot be posted (a connector that cannot be built, a tracker that refuses) never fails
    the delivery. A webhook event for a work item whose interpreter has ended is logged and kept: its
    dedupe row stands and a merge still boards the train.
 6. Unsigned GitHub and Tekton webhooks are accepted only where `Settings.deployed` is false.
 
+## Card moves
+
+A status change on a tracker board (GitHub Projects v2, Jira) is not a decision either. It is logged and
+never delivered to the workflow: the webhook skips every `tracker.item.moved` event, before any audit row
+or comment. Choregos's own moves (the mirror of a work item's state onto its card) come back as the same
+event and are ignored the same way. A person moves a work item from the console. The interpreter branch
+that matches `tracker.status` stays, only for histories recorded before this change.
+
 ## Consequences
 
 - No workflow signal carries a tracker command, so a forged comment cannot approve, reject or stop.
 - A person who types a command gets an answer that tells them where to act.
-- Honouring `pause`, `resume` and `stop` needs the identity link and authenticated deliveries first.
+- Honouring `pause`, `resume` and `stop` needs the identity link and an HMAC-verified GitHub delivery.

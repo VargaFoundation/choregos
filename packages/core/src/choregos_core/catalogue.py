@@ -108,6 +108,9 @@ class OutilCatalogue(Model):
     #: The most one of its answers may weigh, as JSON bytes, when it reaches the agent; none: the
     #: platform's default. The platform's ceiling still applies (S40-17).
     result_max_bytes: int | None = Field(default=None, ge=1024)
+    #: The deployment's statement that the tool only reads. Unset, a GET http tool reads, while a
+    #: POST or a remote MCP tool may write (S47-12, ADR 0034 §7).
+    read_only: bool | None = None
 
     @model_validator(mode="after")
     def _une_seule_source(self) -> OutilCatalogue:
@@ -119,6 +122,13 @@ class OutilCatalogue(Model):
         if (self.http is None) == (self.mcp is None):
             raise ValueError(f"the tool {self.name} must declare `http:` or `mcp:`, and only one")
         return self
+
+    @property
+    def may_write(self) -> bool:
+        """May a call to this tool write to a third party? Catalogue calls are not governed actions."""
+        if self.read_only is not None:
+            return not self.read_only
+        return self.mcp is not None or (self.http is not None and self.http.method != "GET")
 
     def ouvert_a(self, groupes: list[str]) -> bool:
         """L'outil est-il ouvert à ces groupes ? Sans restriction déclarée, oui."""

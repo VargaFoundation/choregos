@@ -305,6 +305,7 @@ outils:
       tool: company_lookup
       headers: { Authorization: "Bearer {{ credential }}" }
     credential_env: FOURNISSEUR_MCP_KEY
+    read_only: true
     price_eur: 0.05
 """
 

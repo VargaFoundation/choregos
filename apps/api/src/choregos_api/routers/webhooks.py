@@ -21,8 +21,8 @@ from sqlalchemy.exc import IntegrityError
 
 from ..audit import record
 from ..config import get_settings
-from ..db.models import Connector, OrgConnector, Project, WebhookDelivery, WorkItem
-from ..deps import DbPlateforme
+from ..db.models import Connector, OrgConnector, Project, TrackerIdentity, User, WebhookDelivery, WorkItem
+from ..deps import DbPlateforme, principal_for_user, resolve_project
 from ..errors import ApiError, not_found, unauthorized
 from ..logging import get_logger
 from ..schemas import WebhookAck
@@ -39,6 +39,7 @@ from ..services import (
 from ..services.decision_ledger import observe_reopening
 from ..services.initiator import initiator
 from ..services.routage import with_tracker
+from ..services.work_item_controls import apply_control
 from ..temporal import (
     InterpreterNotRunningError,
     MemoryLoopNotRunningError,
@@ -169,6 +170,55 @@ CONTROL_VERBS = frozenset({"pause", "resume", "stop"})
 COMMAND_MARKER = "<!-- choregos:command -->"
 
 
+LINK_HINT = "an organisation administrator can link your GitHub account to your member"
+
+
+async def _control_from_a_signed_comment(
+    session: Any, project: Project, item: WorkItem, event: InboundEvent, verb: str
+) -> str | None:
+    """Apply pause, resume or stop with the rights of the member whose GitHub user id sent the comment.
+
+    Honoured only when the delivery is a GitHub one verified by its HMAC (a secret is configured, or the
+    delivery was refused) and the commenter's numeric id is linked to a member of the project's
+    organisation. A login, a username or a display name is never matched (ADR 0102). Returns the reply,
+    or None when the command is not honoured."""
+    by_id = str(event.payload.get("by_id") or "")
+    if event.source != "github" or not get_settings().github_webhook_secret or not by_id:
+        return None
+    identity = (
+        await session.execute(
+            select(TrackerIdentity).where(
+                TrackerIdentity.org_id == project.org_id,
+                TrackerIdentity.tracker == "github",
+                TrackerIdentity.external_id == by_id,
+            )
+        )
+    ).scalar_one_or_none()
+    user = await session.get(User, identity.user_id) if identity is not None else None
+    if user is None:
+        return None
+    # Not narrowed and not attributed: a delivery with several commands must not leave the session
+    # scoped to, or attributed to, the first member.
+    principal = await principal_for_user(session, user, narrow=False)
+    _, org_slug = await resolve_project(session, project.id)
+    try:
+        await apply_control(
+            session,
+            principal,
+            project,
+            item,
+            org_slug,
+            verb,  # type: ignore[arg-type]
+            f"/choregos {verb} on the tracker",
+            "tracker",
+        )
+    except ApiError as refused:
+        return f"`/choregos {verb}` was not applied: {refused.detail}"
+    except InterpreterNotRunningError:
+        return f"`/choregos {verb}` was not applied: the work item is not running"
+    return f"Done: {verb} by {user.email}"
+
+
 async def _answer_tracker_command(
     session: Any, project: Project, item: WorkItem, event: InboundEvent
 ) -> None:
@@ -179,6 +229,7 @@ async def _answer_tracker_command(
     verb = str(event.payload.get("verb") or "")
     by = event.payload.get("by")
     base = get_settings().public_url.rstrip("/")
+    answered_by_a_member = False
     if verb in DECISION_VERBS:
         link = f"{base}/inbox"
         text = (
@@ -186,10 +237,12 @@ async def _answer_tracker_command(
             f"after a fresh sign-in: {link}"
         )
     else:
+        done = await _control_from_a_signed_comment(session, project, item, event, verb)
+        answered_by_a_member = done is not None
         link = f"{base}/p/{project.slug}/items/{item.id}"
-        text = (
-            f"`/choregos {verb}` is not taken from a comment: pause, resume and stop are done from "
-            f"the work item in the console: {link}"
+        text = done or (
+            f"`/choregos {verb}` is not taken from this comment: pause, resume and stop are done from "
+            f"the work item in the console: {link}. {LINK_HINT[0].upper()}{LINK_HINT[1:]}."
         )
     try:
         _, tracker = await tickets.tracker_du_projet(session, project)
@@ -199,6 +252,8 @@ async def _answer_tracker_command(
         logger.warning(
             "tracker command not answered", project=project.slug, work_item=item.id, reason=str(failure)
         )
+    if answered_by_a_member:
+        return
     await record(
         session,
         None,
@@ -298,6 +353,15 @@ async def _dispatch(
                 },
             )
             item.temporal_wf_id = workflow_id
+        if event.type == InboundEventType.ITEM_MOVED:
+            # Not counted, not audited, no comment: Choregos's own mirror comes back as moves too.
+            logger.info(
+                "tracker move not applied: a card move is not a decision (ADR 0102)",
+                project=project.slug,
+                work_item=key,
+                to_status=event.payload.get("to_status"),
+            )
+            continue
         if event.type == InboundEventType.HUMAN_DECISION:
             await _answer_tracker_command(session, project, item, event)
             delivered += 1

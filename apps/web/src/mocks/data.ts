@@ -2269,6 +2269,14 @@ export const connectorTypes: ConnectorType[] = [
     secret_fields: ["client_secret"],
   },
   { kind: "mcp", type: "mcp", display: "MCP server (Streamable HTTP)", config_schema: objet({ url: { type: "string" } }, ["url"]), capabilities: ["mcp"], secret_fields: ["token"] },
+  {
+    kind: "mcp",
+    type: "mcp-gateway",
+    display: "MCP server through the organisation's MCP gateway",
+    config_schema: objet({ server: { type: "string" } }, ["server"]),
+    capabilities: ["mcp"],
+    secret_fields: [],
+  },
 ];
 
 /**
@@ -2334,6 +2342,14 @@ export function connectorCatalogue(): ConnectorCatalogue {
   return { entries };
 }
 
+/** How the organisation can install an entry, by the API's rule (ADR 0105): the gateway carries any entry once it is on. */
+function mockInstallRoutes(entry: McpCatalogueEntry): Array<"direct" | "gateway"> {
+  const mode = mockMcpGateway.gateway?.mode ?? "off";
+  const direct = entry.install === "installable" && mode !== "required";
+  const gateway = mode !== "off";
+  return [...(direct ? (["direct"] as const) : []), ...(gateway ? (["gateway"] as const) : [])];
+}
+
 export function mcpCatalogue(): McpCatalogue {
   const file = mcpCatalogueFile as unknown as McpCatalogue;
   return {
@@ -2345,12 +2361,13 @@ export function mcpCatalogue(): McpCatalogue {
         ...entry,
         // What the API adds: the setup procedure the install shows (Atlassian's has its own).
         procedure: entry.id === "atlassian" ? "connector.mcp.mcp.atlassian-rovo" : "connector.mcp.mcp",
+        install_routes: mockInstallRoutes(entry),
         can: {
-          install: entry.install === "installable",
+          install: mockInstallRoutes(entry).length > 0,
           configure_projects: [],
           enable_projects: selected ? mockProjectSlugs : [],
         },
-        cannot_reason: entry.install === "installable" ? null : (entry.cannot_reason ?? null),
+        cannot_reason: mockInstallRoutes(entry).length > 0 ? null : (entry.cannot_reason ?? null),
         enablement: installed.map((c) => ({
           connector: c.name,
           availability: c.availability ?? ("all_projects" as const),
@@ -3458,7 +3475,28 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     // As the API does: a connector declared with the entry's URL, no operation until a discovery.
     const entry = mcpCatalogue().entries.find((e) => e.id === catalogueInstall[1]);
     const corps = JSON.parse(String(init.body ?? "{}")) as McpCatalogueInstall;
-    if (!entry || entry.install !== "installable") throw new ApiError(422, { title: "Unprocessable", detail: "not installable" });
+    if (!entry || !entry.install_routes?.length) throw new ApiError(422, { title: "Unprocessable", detail: "not installable" });
+    if (corps.route === "gateway") {
+      if (!entry.install_routes.includes("gateway")) throw new ApiError(422, { title: "Unprocessable", detail: "no MCP gateway is available" });
+      if (Object.keys(corps.secret_refs ?? {}).length || Object.keys(corps.secret_values ?? {}).length || corps.auth_header)
+        throw new ApiError(422, { title: "Unprocessable", detail: "the gateway holds the credential: send no secret" });
+      const through: OrgConnector = {
+        name: corps.name || entry.id,
+        kind: "mcp",
+        type: "mcp-gateway",
+        config: { server: corps.gateway_server || entry.id },
+        secret_refs: {},
+        status: "unknown",
+        created_by: me.email,
+        catalogue_entry: `${entry.id}@${mcpCatalogueFile.meta.catalogue_version}`,
+        availability: corps.availability ?? "all_projects",
+        enabled_projects: [],
+        operations: [],
+      };
+      orgConnectors.push(through);
+      return through as T;
+    }
+    if (!entry.install_routes.includes("direct")) throw new ApiError(422, { title: "Unprocessable", detail: "not installable directly" });
     const connector: OrgConnector = {
       name: corps.name || entry.id,
       kind: "mcp",
