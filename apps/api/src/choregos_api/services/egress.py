@@ -336,6 +336,24 @@ def check_opening(organisation: Organization, hosts: Iterable[str]) -> None:
         )
 
 
+def refuse_runners_for_the_gateway(organisation: Organization, host: str, families: Iterable[str]) -> None:
+    """The organisation's MCP gateway is opened for the API and the workers only, never for runs
+    (ADR 0105): a rule naming `runners` for its host is a 422. A wildcard that merely covers the host
+    is not refused here: the effective network denies the host to every run (a deny always wins)."""
+    from ..errors import unprocessable
+    from .mcp_gateway import gateway_host
+
+    if "runners" not in set(families):
+        return
+    gateway = gateway_host(organisation)
+    if gateway is not None and normalize_host(host.removeprefix("*.")) == gateway:
+        raise unprocessable(
+            f"`{host}` is the MCP gateway of {organisation.slug}: it is opened for the API and the "
+            "workers only, never for runs (ADR 0105)",
+            [{"loc": ["body", "used_by"], "msg": "runners"}],
+        )
+
+
 def _merge(row: OrgEgressRule, ports: Iterable[int], used_by: Iterable[str]) -> None:
     row.ports = sorted({*(row.ports or []), *ports})
     row.used_by = [f for f in FAMILIES if f in {*(row.used_by or []), *used_by}]
@@ -358,6 +376,8 @@ async def allow_hosts(
         ports.add(target.port)
         families.add(target.family)
     check_opening(organisation, by_host)
+    for host, (_, families) in by_host.items():
+        refuse_runners_for_the_gateway(organisation, host, families)
     now = utcnow()
     rules: list[OrgEgressRule] = []
     for host, (ports, families) in by_host.items():
@@ -488,6 +508,8 @@ async def org_runner_hosts(session: AsyncSession, org_id: str) -> list[str]:
     every run of the organisation as implied hosts of its effective network (ADR 0070, amended):
     the orchestrator writes them into the run's permissions, the API serves them to the egress
     proxy, and every deny list still wins over them."""
+    from .mcp_gateway import gateway_host
+
     rows = (
         await session.execute(
             select(OrgEgressRule.host, OrgEgressRule.used_by).where(
@@ -495,8 +517,57 @@ async def org_runner_hosts(session: AsyncSession, org_id: str) -> list[str]:
             )
         )
     ).tuples()
+    organisation = await session.get(Organization, org_id)
+    gateway = gateway_host(organisation) if organisation is not None else None
     domains = (runner_domain(host) for host, used_by in rows if "runners" in (used_by or []))
-    return sorted({d for d in domains if d})
+    # The gateway's host is never a run's (ADR 0105), whatever rule was written before it was set.
+    return sorted({d for d in domains if d and d != gateway})
+
+
+async def revoke_rules_of_origin(
+    session: AsyncSession,
+    principal: Principal,
+    organisation: Organization,
+    origin: str,
+    keep: set[str],
+) -> list[str]:
+    """Revoke the organisation's `allowed` rules created by `origin` whose host is not in `keep` (the
+    MCP gateway moved or was deleted). Rules of another origin are never touched. Audited."""
+    rows = (
+        (
+            await session.execute(
+                select(OrgEgressRule).where(
+                    OrgEgressRule.org_id == organisation.id,
+                    OrgEgressRule.origin == origin,
+                    OrgEgressRule.status == "allowed",
+                    OrgEgressRule.host.not_in(keep),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    now = utcnow()
+    revoked: list[str] = []
+    for row in rows:
+        row.status = "revoked"
+        row.decided_by = principal.email
+        row.decided_at = now
+        await session.flush()
+        await record(
+            session,
+            principal,
+            "egress.rule.revoke",
+            org_id=organisation.id,
+            target_type="egress_rule",
+            target_id=row.id,
+            host=row.host,
+            ports=row.ports,
+            origin=row.origin,
+            reason="the MCP gateway no longer uses it",
+        )
+        revoked.append(row.host)
+    return revoked
 
 
 def rule_dto(row: OrgEgressRule) -> EgressRule:
