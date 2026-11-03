@@ -13,6 +13,8 @@ import { contraste, jeton, luminance, type Mode } from "./jetons";
 const MODES: Mode[] = ["dark", "light"];
 const FONDS = ["--choregos-surface", "--choregos-raised", "--choregos-sidebar", "--choregos-surface-muted"];
 const STATUTS = ["running", "waiting", "succeeded", "failed", "retrying", "neutral", "agent"];
+// The categorical hues that orient (ADR 0120): a workflow, a section, a group of settings.
+const HUES = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => `cat-${n}`);
 
 function rapport(premier: string, second: string, mode: Mode): number {
   return contraste(jeton(premier, mode), jeton(second, mode));
@@ -52,10 +54,22 @@ describe.each(MODES)("le contraste de la console, en %s", (mode) => {
         expect(rapport(texte, fond, mode), `${texte} sur ${fond}`).toBeGreaterThanOrEqual(4.5);
       }
     }
+    for (const fond of [...FONDS, "--choregos-info-soft"]) {
+      expect(rapport("--choregos-info", fond, mode), `--choregos-info sur ${fond}`).toBeGreaterThanOrEqual(4.5);
+    }
     for (const statut of STATUTS) {
       const encre = `--choregos-${statut}-ink`;
       for (const fond of [...FONDS, `--choregos-${statut}-soft`]) {
         expect(rapport(encre, fond, mode), `${encre} sur ${fond}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
+
+  it("each categorical hue reads on the page, a card, and its own tint (ADR 0120)", () => {
+    for (const hue of HUES) {
+      const ink = `--choregos-${hue}-ink`;
+      for (const fond of [...FONDS, `--choregos-${hue}-soft`]) {
+        expect(rapport(ink, fond, mode), `${ink} on ${fond}`).toBeGreaterThanOrEqual(4.5);
       }
     }
   });
