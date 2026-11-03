@@ -15,9 +15,9 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
-from .conftest import login, sans_postgres
+from .conftest import login, without_postgres
 
-pytestmark = sans_postgres
+pytestmark = without_postgres
 
 
 @pytest.fixture

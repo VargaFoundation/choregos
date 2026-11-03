@@ -9,7 +9,7 @@ from typing import Any
 
 from httpx import AsyncClient
 
-from .test_migration_de_ticket import _ticket
+from .kits.work_item_migration import make_work_item
 
 
 async def test_totals_add_the_tool_lines_of_the_ledger(client: AsyncClient, project: dict[str, Any]) -> None:
@@ -17,7 +17,7 @@ async def test_totals_add_the_tool_lines_of_the_ledger(client: AsyncClient, proj
     from choregos_api.db.session import session_scope
     from choregos_core import utcnow
 
-    ticket = await _ticket(client, project)
+    ticket = await make_work_item(client, project)
     before = await client.get(f"/api/v1/work-items/{ticket['id']}")
     assert before.json()["totals"]["cost_usd"] == 0
     async with session_scope() as session:

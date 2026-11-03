@@ -1,7 +1,7 @@
 """Every migration, down and up again, on a real PostgreSQL (S40-22c).
 
 `test_migrations.py` plays the round trip on SQLite only, and the PostgreSQL suite of the CI
-(`CHOREGOS_TEST_SUITE_SUR_POSTGRES`) only ever goes up. A `downgrade` that SQLite accepts can fail
+(`CHOREGOS_TEST_SUITE_ON_POSTGRES`) only ever goes up. A `downgrade` that SQLite accepts can fail
 on PostgreSQL (an enum type left behind, a policy that still names a dropped column, a batch
 operation that does not exist there): nothing ran one before this test. It runs whenever
 `CHOREGOS_TEST_DATABASE_URL` names a PostgreSQL, as the CI's `python` job does.
@@ -20,10 +20,10 @@ from alembic.migration import MigrationContext
 from choregos_api.db.models import Base, objet_du_coeur
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from .conftest import PG_URL, _administrer, _preparer_postgres, _url_app, sans_postgres
+from .conftest import PG_URL, _administer, _app_url, _prepare_postgres, without_postgres
 
 #: `embedding_vec` is a pgvector column the reflection does not know: said once, not a failure.
-pytestmark = [sans_postgres, pytest.mark.filterwarnings("ignore:Did not recognize type 'vector'")]
+pytestmark = [without_postgres, pytest.mark.filterwarnings("ignore:Did not recognize type 'vector'")]
 
 #: What the comparison reports that is a dialect detail, not a schema disagreement.
 DIALECT_NOISE = ("modify_type", "modify_default", "modify_nullable", "modify_comment")
@@ -80,7 +80,7 @@ async def _types() -> set[str]:
 
 
 async def _compare() -> list[Any]:
-    engine = create_async_engine(_url_app(PG_URL))
+    engine = create_async_engine(_app_url(PG_URL))
     try:
         async with engine.connect() as connection:
             return await connection.run_sync(_differences)
@@ -113,8 +113,8 @@ async def test_every_migration_goes_down_and_up_again_on_postgres(monkeypatch: p
     from choregos_api.db import session as db_session
     from choregos_api.migrer import configuration
 
-    await _preparer_postgres()
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", _url_app(PG_URL))
+    await _prepare_postgres()
+    monkeypatch.setenv("CHOREGOS_DATABASE_URL", _app_url(PG_URL))
     reset_settings_cache()
     await db_session.dispose_engine()
     config = configuration()
@@ -134,7 +134,7 @@ async def test_every_migration_goes_down_and_up_again_on_postgres(monkeypatch: p
         assert not await _postgres_only_missing(), "skipped by the comparison, not absent"
     finally:
         await db_session.dispose_engine()
-        await _administrer(PG_URL, "DROP SCHEMA public CASCADE", "CREATE SCHEMA public")
+        await _administer(PG_URL, "DROP SCHEMA public CASCADE", "CREATE SCHEMA public")
         reset_settings_cache()
 
 
@@ -309,8 +309,8 @@ async def test_the_latest_migrations_go_down_and_up_again_over_data(monkeypatch:
     from choregos_api.db import session as db_session
     from choregos_api.migrer import configuration
 
-    await _preparer_postgres()
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", _url_app(PG_URL))
+    await _prepare_postgres()
+    monkeypatch.setenv("CHOREGOS_DATABASE_URL", _app_url(PG_URL))
     reset_settings_cache()
     await db_session.dispose_engine()
     config = configuration()
@@ -320,7 +320,7 @@ async def test_the_latest_migrations_go_down_and_up_again_over_data(monkeypatch:
         await _seed()
         vector = "embedding_vec" in await _columns("knowledge_chunks")
         if vector:  # S40-22e: only where the image carries pgvector, as `_postgres_only_missing` says
-            await _administrer(
+            await _administer(
                 PG_URL, "UPDATE knowledge_chunks SET embedding_vec = '[0.25,0.5,1]' WHERE id = 'k1'"
             )
         queries = (*KEPT, EMBEDDING) if vector else KEPT
@@ -356,7 +356,7 @@ async def test_the_latest_migrations_go_down_and_up_again_over_data(monkeypatch:
         assert created == [(0,)], "what a downgrade dropped does not come back"
     finally:
         await db_session.dispose_engine()
-        await _administrer(PG_URL, "DROP SCHEMA public CASCADE", "CREATE SCHEMA public")
+        await _administer(PG_URL, "DROP SCHEMA public CASCADE", "CREATE SCHEMA public")
         reset_settings_cache()
 
 
@@ -372,8 +372,8 @@ async def _migrate_as_the_job(monkeypatch: pytest.MonkeyPatch) -> Any:
     from choregos_api.db import session as db_session
     from choregos_api.migrer import configuration
 
-    await _preparer_postgres()
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", _url_app(PG_URL))
+    await _prepare_postgres()
+    monkeypatch.setenv("CHOREGOS_DATABASE_URL", _app_url(PG_URL))
     reset_settings_cache()
     await db_session.dispose_engine()
     return configuration()
@@ -384,7 +384,7 @@ async def _clean() -> None:
     from choregos_api.db import session as db_session
 
     await db_session.dispose_engine()
-    await _administrer(PG_URL, "DROP SCHEMA public CASCADE", "CREATE SCHEMA public")
+    await _administer(PG_URL, "DROP SCHEMA public CASCADE", "CREATE SCHEMA public")
     reset_settings_cache()
 
 
@@ -397,7 +397,7 @@ async def test_the_migration_role_is_held_by_rls(monkeypatch: pytest.MonkeyPatch
     try:
         await asyncio.to_thread(command.upgrade, config, "heads")
         await _seed(SEED[:3])
-        connection = await asyncpg.connect(_url_app(PG_URL).replace("postgresql+asyncpg://", "postgresql://"))
+        connection = await asyncpg.connect(_app_url(PG_URL).replace("postgresql+asyncpg://", "postgresql://"))
         try:
             role = await connection.fetchrow(
                 "SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user"

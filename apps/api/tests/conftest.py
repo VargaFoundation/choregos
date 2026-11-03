@@ -1,4 +1,4 @@
-"""Fixtures de l'API : base éphémère, application, identités, projet de test."""
+"""API fixtures: ephemeral database, application, identities, test project."""
 
 from __future__ import annotations
 
@@ -13,6 +13,9 @@ import pytest
 from alembic import command
 from httpx import ASGITransport, AsyncClient
 
+# Shared fixtures of the kits: every test module of the directory can use them by name.
+from .kits.identity_seams import extended_client, identity_extension  # noqa: F401
+
 os.environ.setdefault("CHOREGOS_ENV", "test")
 os.environ.setdefault("CHOREGOS_FAKES", "1")
 # The egress allowlist (S39-22) only warns in the suites: the tests that prove it ask for `enforce`.
@@ -23,15 +26,19 @@ os.environ.setdefault("CHOREGOS_DEV_LOGIN_ENABLED", "true")
 os.environ.setdefault("CHOREGOS_DEV_ADMIN_EMAILS", "admin@varga.dev")
 # The suites build prod and https apps, which refuse a short or default session secret at start.
 os.environ.setdefault("CHOREGOS_SESSION_SECRET", "test-session-secret-" + "x" * 32)
-# Une écriture d'un run est une action gouvernée que joue Temporal (#241) ; ici `FakeTemporal` ne la
-# joue pas : le courtier n'attend pas trente secondes une issue qui ne viendra pas.
+# A run's write is a governed action that Temporal plays (#241); here `FakeTemporal` does not play
+# it: the broker does not wait thirty seconds for an outcome that will never come.
 os.environ.setdefault("CHOREGOS_COURTIER_ATTENTE_ECRITURE_S", "0.3")
 
 
-#: `CHOREGOS_TEST_SUITE_SUR_POSTGRES=1` (avec `CHOREGOS_TEST_DATABASE_URL`) : TOUTE la suite de l'API
-#: tourne sur PostgreSQL, schéma migré, rôle non superutilisateur — donc sous RLS. Sur SQLite la RLS
-#: n'existe pas : les webhooks n'acheminaient rien en production sans qu'un seul test le voie (#143).
-SUITE_SUR_POSTGRES = os.environ.get("CHOREGOS_TEST_SUITE_SUR_POSTGRES") == "1"
+#: `CHOREGOS_TEST_SUITE_ON_POSTGRES=1` (with `CHOREGOS_TEST_DATABASE_URL`): the WHOLE API suite runs on
+#: PostgreSQL, migrated schema, non-superuser role, so under RLS. On SQLite there is no RLS: webhooks
+#: delivered nothing in production without a single test seeing it (#143).
+#: The former variable name is still read until S45-47 removes it.
+SUITE_ON_POSTGRES = bool(
+    os.environ.get("CHOREGOS_TEST_SUITE_ON_POSTGRES")
+    or os.environ.get("CHOREGOS_TEST_SUITE_SUR_POSTGRES")  # lang: fr-ok alias:internal (S45-47 removes it)
+)
 
 
 @pytest.fixture
@@ -41,37 +48,37 @@ async def app(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[A
     from choregos_api.main import create_app
     from choregos_api.temporal import FakeTemporal, set_temporal
 
-    if SUITE_SUR_POSTGRES:
-        await _preparer_postgres()
-        # Dans les TESTS, `session_scope()` sans portée est un raccourci pour « en tant que la
-        # plateforme » (poser un décor). Le code produit ne l'appelle jamais ainsi — vérifié par
-        # `grep` — : le traduire ici ne masque aucun défaut du produit, et `test_rls_postgres.py`
-        # (fixture `pg_app`) garde le vrai comportement fail-closed.
-        origine = db_session.session_scope
+    if SUITE_ON_POSTGRES:
+        await _prepare_postgres()
+        # In the TESTS, `session_scope()` without a scope is a shortcut for "as the platform"
+        # (setting the scene). The product code never calls it that way (checked with `grep`), so
+        # translating it here hides no product defect, and `test_rls_postgres.py` (fixture
+        # `pg_app`) keeps the real fail-closed behaviour.
+        original = db_session.session_scope
 
-        def en_plateforme(org_slug: str | None = None, *, orgs: Any = None) -> Any:
+        def as_platform(org_slug: str | None = None, *, orgs: Any = None) -> Any:
             if org_slug is None and orgs is None:
-                return origine(orgs="*")
-            return origine(org_slug, orgs=orgs)
+                return original(orgs="*")
+            return original(org_slug, orgs=orgs)
 
-        monkeypatch.setattr(db_session, "session_scope", en_plateforme)
+        monkeypatch.setattr(db_session, "session_scope", as_platform)
     else:
         os.environ["CHOREGOS_DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_path}/test.db"
     reset_settings_cache()
     await db_session.dispose_engine()
-    if SUITE_SUR_POSTGRES:
-        await _migrer()
+    if SUITE_ON_POSTGRES:
+        await _migrate()
     set_temporal(FakeTemporal())
     application = create_app()
-    if not SUITE_SUR_POSTGRES:
+    if not SUITE_ON_POSTGRES:
         from choregos_api.db.session import create_all
 
         await create_all()
     yield application
     await db_session.dispose_engine()
     set_temporal(None)
-    if SUITE_SUR_POSTGRES:
-        await _administrer(PG_URL, "DROP SCHEMA public CASCADE", "CREATE SCHEMA public")
+    if SUITE_ON_POSTGRES:
+        await _administer(PG_URL, "DROP SCHEMA public CASCADE", "CREATE SCHEMA public")
     reset_settings_cache()
 
 
@@ -93,12 +100,12 @@ async def org(app: Any) -> str:
 
 
 async def login(client: AsyncClient, email: str) -> None:
-    """Connexion de développement : `?as=email` ouvre une session sans IdP."""
+    """Development sign-in: `?as=email` opens a session without an IdP."""
     start = await client.get("/api/v1/auth/login", params={"as": email})
     assert start.status_code == 307, start.text
     callback = await client.get(start.headers["location"])
     assert callback.status_code == 307, callback.text
-    assert client.cookies.get("choregos_session"), "aucun cookie de session posé"
+    assert client.cookies.get("choregos_session"), "no session cookie was set"
 
 
 @pytest.fixture
@@ -128,44 +135,43 @@ async def project(client: AsyncClient, admin: str) -> dict[str, Any]:
     return dict(response.json())
 
 
-# ───────────────────────── un vrai PostgreSQL, quand il y en a un ─────────────────────────
+# ───────────────────────── a real PostgreSQL, when there is one ─────────────────────────
 
 PG_URL = os.environ.get("CHOREGOS_TEST_DATABASE_URL", "")
-sans_postgres = pytest.mark.skipif(
-    not PG_URL.startswith("postgresql"), reason="CHOREGOS_TEST_DATABASE_URL absent : pas de PostgreSQL"
+without_postgres = pytest.mark.skipif(
+    not PG_URL.startswith("postgresql"), reason="CHOREGOS_TEST_DATABASE_URL absent: no PostgreSQL"
 )
 API = pathlib.Path(__file__).resolve().parents[1]
 APP_ROLE, APP_PASSWORD = "choregos_app", "app"
 
 
-def _url_app(url: str) -> str:
-    """La même base, vue par le rôle applicatif NON superutilisateur.
+def _app_url(url: str) -> str:
+    """The same database, seen by the NON-superuser application role.
 
-    Un superutilisateur ignore la RLS, quoi qu'on écrive dans les politiques. Le rôle du
-    conteneur de test (et du service de la CI) en est un : tester avec lui prouverait que
-    la RLS ne fait rien — et ce serait vrai. C'est aussi ce que le déploiement doit
-    garantir : l'API ne se connecte jamais avec un superutilisateur.
+    A superuser ignores RLS, whatever the policies say. The role of the test container (and of
+    the CI service) is one: testing with it would prove that RLS does nothing, and that would be
+    true. It is also what the deployment must guarantee: the API never connects as a superuser.
     """
     scheme, rest = url.split("://", 1)
-    _, hote = rest.rsplit("@", 1)
-    return f"{scheme}://{APP_ROLE}:{APP_PASSWORD}@{hote}"
+    _, host = rest.rsplit("@", 1)
+    return f"{scheme}://{APP_ROLE}:{APP_PASSWORD}@{host}"
 
 
-async def _administrer(url: str, *ordres: str) -> None:
-    """Exécute des ordres en superutilisateur, hors de tout moteur SQLAlchemy."""
+async def _administer(url: str, *statements: str) -> None:
+    """Run statements as a superuser, outside any SQLAlchemy engine."""
     import asyncpg
 
-    connexion = await asyncpg.connect(url.replace("postgresql+asyncpg://", "postgresql://"))
+    connection = await asyncpg.connect(url.replace("postgresql+asyncpg://", "postgresql://"))
     try:
-        for ordre in ordres:
-            await connexion.execute(ordre)
+        for statement in statements:
+            await connection.execute(statement)
     finally:
-        await connexion.close()
+        await connection.close()
 
 
-async def _preparer_postgres() -> None:
-    """Schéma vide, rôle applicatif NON superutilisateur, et l'URL qui le désigne."""
-    await _administrer(
+async def _prepare_postgres() -> None:
+    """Empty schema, NON-superuser application role, and the URL that names it."""
+    await _administer(
         PG_URL,
         "DROP SCHEMA public CASCADE",
         "CREATE SCHEMA public",
@@ -173,17 +179,17 @@ async def _preparer_postgres() -> None:
         f"CREATE ROLE {APP_ROLE} LOGIN PASSWORD '{APP_PASSWORD}' NOSUPERUSER; END IF; END $$",
         f"GRANT USAGE, CREATE ON SCHEMA public TO {APP_ROLE}",
     )
-    os.environ["CHOREGOS_DATABASE_URL"] = _url_app(PG_URL)
+    os.environ["CHOREGOS_DATABASE_URL"] = _app_url(PG_URL)
     # pgvector is not a trusted extension: the cluster's bootstrap creates it as a superuser
     # (`postInitApplicationSQL`, ADR 0051), never the application role. Done the same way here, when
     # the image carries it; on an image without it, the knowledge index serves full-text only.
     # `postgres:16-alpine` has no pgvector, and that is a case under test too.
     with contextlib.suppress(Exception):
-        await _administrer(PG_URL, "CREATE EXTENSION IF NOT EXISTS vector")
+        await _administer(PG_URL, "CREATE EXTENSION IF NOT EXISTS vector")
 
 
-async def _migrer() -> None:
-    """Le schéma par `python -m choregos_api.migrer`, la commande du Job du chart."""
+async def _migrate() -> None:
+    """The schema through `python -m choregos_api.migrer`, the command of the chart's Job."""
     from choregos_api.migrer import configuration
 
     await asyncio.to_thread(command.upgrade, configuration(), "heads")
@@ -191,34 +197,34 @@ async def _migrer() -> None:
 
 @pytest.fixture
 async def pg_app(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Any]:
-    """L'application sur un PostgreSQL migré par Alembic (et non `create_all`), en rôle
-    applicatif non superutilisateur, vidé à la fin."""
+    """The application on a PostgreSQL migrated by Alembic (not `create_all`), as the
+    non-superuser application role, emptied at the end."""
     from choregos_api.config import reset_settings_cache
     from choregos_api.db import session as db_session
     from choregos_api.main import create_app
     from choregos_api.temporal import FakeTemporal, set_temporal
 
-    await _preparer_postgres()
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", _url_app(PG_URL))
+    await _prepare_postgres()
+    monkeypatch.setenv("CHOREGOS_DATABASE_URL", _app_url(PG_URL))
     monkeypatch.setenv("CHOREGOS_OIDC_DEFAULT_ORG", "a")
     monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "admin@a.test")
     reset_settings_cache()
     await db_session.dispose_engine()
-    # La configuration de `python -m choregos_api.migrer`, celle du Job du chart : ce banc
-    # PostgreSQL éprouve donc la commande qu'on déploie, pas une variante de test.
+    # The configuration of `python -m choregos_api.migrer`, the chart Job's: this PostgreSQL bench
+    # therefore proves the command that is deployed, not a test variant.
     from choregos_api.migrer import configuration
 
     config = configuration()
-    # `migrations/env.py` fait `asyncio.run()` : interdit depuis une boucle déjà en cours,
-    # donc dans un fil à part. Les tables appartiennent au rôle applicatif : `FORCE ROW
-    # LEVEL SECURITY` s'applique donc à lui aussi.
+    # `migrations/env.py` calls `asyncio.run()`: forbidden from a running loop, hence a separate
+    # thread. The tables belong to the application role: `FORCE ROW LEVEL SECURITY` therefore
+    # applies to it too.
     await asyncio.to_thread(command.upgrade, config, "heads")
     set_temporal(FakeTemporal())
     try:
         yield create_app()
     finally:
         await db_session.dispose_engine()
-        await _administrer(PG_URL, "DROP SCHEMA public CASCADE", "CREATE SCHEMA public")
+        await _administer(PG_URL, "DROP SCHEMA public CASCADE", "CREATE SCHEMA public")
         set_temporal(None)
         reset_settings_cache()
 

@@ -12,6 +12,8 @@ from typing import Any
 
 from httpx import AsyncClient
 
+from .kits.work_item_migration import make_work_item, signals_of
+
 ARRIVEE = """apiVersion: choregos/v1
 kind: Workflow
 metadata: {name: onboarding, version: 1}
@@ -23,18 +25,6 @@ states:
 transitions:
   - {id: t-faire, from: demande, to: fait, by: rh}
 """
-
-
-async def _ticket(client: AsyncClient, project: dict[str, Any]) -> dict[str, Any]:
-    tracker = await client.put(
-        f"/api/v1/projects/{project['id']}/connectors/tracker", json={"type": "internal", "config": {}}
-    )
-    assert tracker.status_code == 200, tracker.text
-    cree = await client.post(
-        f"/api/v1/projects/{project['id']}/work-items", json={"title": "Arrivée de Camille", "start": False}
-    )
-    assert cree.status_code == 201, cree.text
-    return dict(cree.json())
 
 
 async def _cible(client: AsyncClient, project: dict[str, Any]) -> str:
@@ -51,17 +41,11 @@ async def _migrer(client: AsyncClient, ticket: dict[str, Any], **corps: Any) -> 
     )
 
 
-def _signaux() -> list[tuple[str, str, Any]]:
-    from choregos_api.temporal import get_temporal
-
-    return list(get_temporal().signals)  # type: ignore[attr-defined]
-
-
 async def test_la_definition_part_avec_le_signal(client: AsyncClient, project: dict[str, Any]) -> None:
-    ticket, cible = await _ticket(client, project), await _cible(client, project)
+    ticket, cible = await make_work_item(client, project), await _cible(client, project)
     reponse = await _migrer(client, ticket, workflow_def_id=cible, state_mapping={ticket["state"]: "demande"})
     assert reponse.status_code == 202, reponse.text
-    (_, nom, controle), *_ = [s for s in _signaux() if s[1] == "control"]
+    (_, nom, controle), *_ = [s for s in signals_of() if s[1] == "control"]
     assert nom == "control"
     assert controle["workflow"]["metadata"] == {"name": "onboarding", "version": 1}
     assert controle["workflow_def_id"] == cible
@@ -69,7 +53,7 @@ async def test_la_definition_part_avec_le_signal(client: AsyncClient, project: d
 
 
 async def test_une_migration_impossible_ne_part_pas(client: AsyncClient, project: dict[str, Any]) -> None:
-    ticket, cible = await _ticket(client, project), await _cible(client, project)
+    ticket, cible = await make_work_item(client, project), await _cible(client, project)
     sans_mapping = await _migrer(client, ticket, workflow_def_id=cible)
     assert sans_mapping.status_code == 422, sans_mapping.text
     assert ticket["state"] in sans_mapping.text, "le refus nomme l'état qui manque"
@@ -77,7 +61,7 @@ async def test_une_migration_impossible_ne_part_pas(client: AsyncClient, project
     assert sans_cible.status_code == 422, sans_cible.text
     inconnue = await _migrer(client, ticket, workflow_def_id="pas-une-definition")
     assert inconnue.status_code == 404, inconnue.text
-    assert not [s for s in _signaux() if s[1] == "control"], "rien n'est transmis"
+    assert not [s for s in signals_of() if s[1] == "control"], "nothing is passed on"
 
 
 async def test_la_definition_d_un_autre_projet_est_introuvable(
@@ -89,7 +73,7 @@ async def test_la_definition_d_un_autre_projet_est_introuvable(
     )
     assert autre.status_code == 201, autre.text
     etrangere = await _cible(client, autre.json())
-    ticket = await _ticket(client, project)
+    ticket = await make_work_item(client, project)
     reponse = await _migrer(
         client, ticket, workflow_def_id=etrangere, state_mapping={ticket["state"]: "demande"}
     )
@@ -104,7 +88,7 @@ async def test_un_ticket_occupe_ne_migre_pas(client: AsyncClient, project: dict[
     from choregos_core import utcnow
     from sqlalchemy import select
 
-    ticket, cible = await _ticket(client, project), await _cible(client, project)
+    ticket, cible = await make_work_item(client, project), await _cible(client, project)
     mapping = {ticket["state"]: "demande"}
     async with session_scope() as session:
         demande = HumanRequest(

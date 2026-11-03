@@ -19,6 +19,8 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
+from .kits.extension_tools import run_extension_tool
+
 pytestmark = pytest.mark.asyncio
 
 GREFFON = """
@@ -76,34 +78,10 @@ def greffon_outils(tmp_path: pathlib.Path) -> Iterator[None]:
         reinitialiser()
 
 
-async def _run(project_id: str) -> tuple[str, dict[str, str]]:
-    from choregos_api.db.models import Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
-
-    async with session_scope() as session:
-        item = WorkItem(project_id=project_id, tracker_key="varga/x#11", title="T", state="ready")
-        session.add(item)
-        await session.flush()
-        session.add(
-            Run(
-                id="run-greffon-1",
-                work_item_id=item.id,
-                project_id=project_id,
-                stage_role="custom",
-                status="running",
-            )
-        )
-    jeton = mint_run_token(
-        "run-greffon-1", project_slug="billing-api", work_item_key="varga/x#11", ttl_minutes=30
-    )
-    return "run-greffon-1", {"Authorization": f"Bearer {jeton}"}
-
-
 async def test_l_outil_du_greffon_est_annonce_au_run(
     greffon_outils: None, client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    run_id, entetes = await _run(project["id"])
+    run_id, entetes = await run_extension_tool(project["id"])
     reponse = await client.get(f"/api/v1/internal/runs/{run_id}/tools", headers=entetes)
     assert reponse.status_code == 200, reponse.text
     assert [t["name"] for t in reponse.json()["tools"] if t["name"] != "web_fetch"] == ["annuaire_interne"]
@@ -117,7 +95,7 @@ async def test_l_appel_passe_par_le_greffon_et_se_compte(
     from choregos_contracts import EventType
     from sqlalchemy import select
 
-    run_id, entetes = await _run(project["id"])
+    run_id, entetes = await run_extension_tool(project["id"])
     reponse = await client.post(
         f"/api/v1/internal/runs/{run_id}/tools/annuaire_interne", headers=entetes, json={"nom": "Ada"}
     )
@@ -143,7 +121,7 @@ async def test_l_appel_passe_par_le_greffon_et_se_compte(
 async def test_sans_jeton_de_run_l_outil_du_greffon_est_refuse(
     greffon_outils: None, client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    run_id, _ = await _run(project["id"])
+    run_id, _ = await run_extension_tool(project["id"])
     refus = await client.post(f"/api/v1/internal/runs/{run_id}/tools/annuaire_interne", json={})
     assert refus.status_code == 401, refus.text
 
@@ -168,7 +146,7 @@ async def test_un_nom_deja_pris_par_le_catalogue_est_refuse_et_non_masque(
         assert projet is not None
         projet.config = {**(projet.config or {}), "tools": ["annuaire_interne"]}
     try:
-        run_id, entetes = await _run(project["id"])
+        run_id, entetes = await run_extension_tool(project["id"])
         liste = await client.get(f"/api/v1/internal/runs/{run_id}/tools", headers=entetes)
         appel = await client.post(
             f"/api/v1/internal/runs/{run_id}/tools/annuaire_interne", headers=entetes, json={}

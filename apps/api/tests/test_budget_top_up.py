@@ -9,7 +9,7 @@ from typing import Any
 
 from httpx import AsyncClient
 
-from .test_migration_de_ticket import _signaux, _ticket
+from .kits.work_item_migration import make_work_item, signals_of
 
 
 async def _spend_it_all(project: dict[str, Any], ticket: dict[str, Any]) -> float:
@@ -42,12 +42,12 @@ async def _replay(client: AsyncClient, ticket: dict[str, Any], **body: Any) -> A
 async def test_replaying_an_exhausted_ticket_without_a_top_up_is_refused(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    ticket = await _ticket(client, project)
+    ticket = await make_work_item(client, project)
     await _spend_it_all(project, ticket)
     refused = await _replay(client, ticket)
     assert refused.status_code == 409, refused.text
     assert "top_up_usd" in refused.text
-    assert not [s for s in _signaux() if s[1] == "control"], "nothing is passed on"
+    assert not [s for s in signals_of() if s[1] == "control"], "nothing is passed on"
 
 
 async def test_a_top_up_is_granted_recorded_and_passed_on(
@@ -57,11 +57,11 @@ async def test_a_top_up_is_granted_recorded_and_passed_on(
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
-    ticket = await _ticket(client, project)
+    ticket = await make_work_item(client, project)
     await _spend_it_all(project, ticket)
     granted = await _replay(client, ticket, top_up_usd=5, reason="one more try on the totals")
     assert granted.status_code == 202, granted.text
-    assert [s for s in _signaux() if s[1] == "control"], "the replay is passed on"
+    assert [s for s in signals_of() if s[1] == "control"], "the replay is passed on"
     again = await _replay(client, ticket, top_up_usd=2.5)
     assert again.status_code == 202, again.text
 
@@ -80,7 +80,7 @@ async def test_a_top_up_is_granted_recorded_and_passed_on(
 async def test_a_ticket_with_money_left_replays_without_a_top_up(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    ticket = await _ticket(client, project)
+    ticket = await make_work_item(client, project)
     assert (await _replay(client, ticket)).status_code == 202
 
 
@@ -90,7 +90,7 @@ async def test_a_top_up_counts_in_what_is_left(client: AsyncClient, project: dic
     from choregos_api.services import policy_engine
     from choregos_api.services.budgets import ticket_left
 
-    ticket = await _ticket(client, project)
+    ticket = await make_work_item(client, project)
     await _spend_it_all(project, ticket)
     await _replay(client, ticket, top_up_usd=3)
     async with session_scope() as session:

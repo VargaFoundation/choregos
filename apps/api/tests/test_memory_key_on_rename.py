@@ -18,7 +18,7 @@ from choregos_core.memory_scope import memory_key
 from httpx import AsyncClient
 
 from .agent_scopes_kit import ORG
-from .test_renommer_une_organisation import _declarer_administrateur
+from .kits.organisation import declare_administrator
 
 ORGS = "/api/v1/orgs"
 
@@ -35,7 +35,7 @@ def memory(monkeypatch: pytest.MonkeyPatch) -> FakeMemory:
 async def platform_admin(admin: str) -> Any:
     from choregos_api.edition import reinitialiser
 
-    await _declarer_administrateur({"admin@varga.dev"})
+    await declare_administrator({"admin@varga.dev"})
     yield
     reinitialiser()
 

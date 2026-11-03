@@ -17,8 +17,8 @@ import httpx
 import pytest
 from httpx import AsyncClient
 
-from . import test_catalogue_outils
-from .test_catalogue_outils import _intercepter, _run_avec_catalogue
+from .kits import tool_catalogue
+from .kits.tool_catalogue import intercept, run_with_catalogue
 from .test_courtier import OUTILS, _preparer
 
 pytestmark = pytest.mark.asyncio
@@ -126,12 +126,12 @@ async def test_a_catalogue_tool_is_held_to_the_cap_its_entry_declares(
     client: AsyncClient, project: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        test_catalogue_outils, "CATALOGUE", test_catalogue_outils.CATALOGUE + "    result_max_bytes: 2048\n"
+        tool_catalogue, "CATALOGUE", tool_catalogue.CATALOGUE + "    result_max_bytes: 2048\n"
     )
-    run_id, headers = await _run_avec_catalogue(project, tmp_path, monkeypatch)
+    run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch)
     request = httpx.Request("GET", "https://api.annuaire.example/v1/search")
     answer = {"profils": [{"nom": "a profile"}] * 200}  # ~4 KB: under the 64 KiB default
-    _intercepter(monkeypatch, httpx.Response(200, json=answer, request=request), [])
+    intercept(monkeypatch, httpx.Response(200, json=answer, request=request), [])
 
     called = await client.post(
         f"/api/v1/internal/runs/{run_id}/tools/recherche_profils", headers=headers, json={"metier": "x"}

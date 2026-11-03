@@ -11,7 +11,7 @@ from typing import Any
 
 from httpx import ASGITransport, AsyncClient
 
-from .conftest import login, sans_postgres
+from .conftest import login, without_postgres
 
 _KEYS = itertools.count(1)
 
@@ -84,7 +84,7 @@ async def test_a_run_without_capture_says_so(client: AsyncClient, project: dict[
 # ───────────────────────── another organisation's run, under real RLS ─────────────────────────
 
 
-@sans_postgres
+@without_postgres
 async def test_another_organisations_run_logs_answer_404(pg_app: Any) -> None:
     from choregos_api.db.models import Organization, Project
     from choregos_api.db.session import session_scope
