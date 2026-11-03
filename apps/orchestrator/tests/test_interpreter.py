@@ -1,4 +1,4 @@
-"""`WorkflowInterpreter` : traversée complète, attente humaine, reprises, contrôle."""
+"""`WorkflowInterpreter`: full traversal, human wait, resumes, control."""
 
 from __future__ import annotations
 
@@ -33,25 +33,27 @@ async def start(env: Any, setup: Fixture, task_queue: str = "test") -> Any:
 
 
 async def test_default_simple_full_traversal(setup: Fixture, temporal_env: Any, worker_factory: Any) -> None:
-    """Un ticket traverse `default-simple` de bout en bout : agents, humain, système, train."""
+    """A ticket goes through `default-simple` from end to end: agents, human, system, train."""
     scripted(
         setup.adapters,
-        stage_result("spec rédigée", outputs={"size": "M", "risk": "low", "spec_markdown": "## Spec"}),
-        stage_result("implémenté", artifacts={"branch": "choregos/123", "commits": ["fix(orders): avoirs"]}),
-        stage_result("vérifié"),
+        stage_result("spec written", outputs={"size": "M", "risk": "low", "spec_markdown": "## Spec"}),
+        stage_result(
+            "implemented", artifacts={"branch": "choregos/123", "commits": ["fix(orders): credit notes"]}
+        ),
+        stage_result("verified"),
     )
     setup.adapters.cd.set_health("billing-api", "Healthy")
 
     async with worker_factory():
         handle = await start(temporal_env, setup)
 
-        # 1. l'agent `refine` a tourné, la validation humaine est demandée
+        # 1. the `refine` agent ran, the human validation is requested
         await _wait_state(handle, "awaiting_spec_approval")
         await handle.signal(
             "human_decision", {"approved": True, "decided_by": "augustin", "kind": "approval"}
         )
 
-        # 2. implémentation, vérification, PR : la CI et la review arrivent par événements
+        # 2. implementation, verification, PR: CI and review arrive by events
         await _wait_state(handle, "pr_open")
         await handle.signal(
             "inbound",
@@ -74,7 +76,7 @@ async def test_default_simple_full_traversal(setup: Fixture, temporal_env: Any, 
             },
         )
 
-        # 3. le train annonce le déploiement réussi
+        # 3. the train announces the successful deployment
         await _wait_state(handle, "merged")
         await handle.signal(
             "inbound",
@@ -95,7 +97,7 @@ async def test_default_simple_full_traversal(setup: Fixture, temporal_env: Any, 
 
 
 async def _runs(setup: Fixture) -> int:
-    """Combien d'étapes d'agent ont tourné pour ce ticket."""
+    """How many agent steps ran for this ticket."""
     from choregos_api.db.models import Run
     from choregos_api.db.session import session_scope
     from sqlalchemy import func, select
@@ -113,24 +115,24 @@ async def _runs(setup: Fixture) -> int:
 async def test_human_rejection_returns_to_refining(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    """Un refus renvoie le ticket se faire une SECONDE spec, et il repasse par la porte humaine.
+    """A refusal sends the ticket back to make a SECOND spec, and it goes through the human gate again.
 
-    Ce test s'appelle `returns_to_refining` et n'observait jamais `refining` : il attendait
-    `awaiting_spec_approval`, puis RE-INTERROGEAIT l'état et l'affirmait. Deux appels, et l'état
-    peut bouger entre les deux — il a rougi en groupe le 2026-09-28 sur
-    `assert 'refining' == 'awaiting_spec_approval'`, parce que l'attente avait reconnu le PREMIER
-    passage par la porte, avant que le refus soit traité.
+    This test is called `returns_to_refining` and never observed `refining`: it waited for
+    `awaiting_spec_approval`, then RE-QUERIED the state and asserted it. Two calls, and the state
+    can move between the two: it went red in a group run on 2026-09-28 on
+    `assert 'refining' == 'awaiting_spec_approval'`, because the wait had recognised the FIRST
+    pass through the gate, before the refusal was handled.
 
-    `refining` est un état de PASSAGE : le scruter est la même illusion que celle déjà corrigée
-    dans `_wait_until` et dans `test_pause_and_resume`. Ce qui se constate sans course, c'est son
-    effet — une seconde étape d'agent a tourné.
+    `refining` is a PASSING state: polling it is the same illusion as the one already fixed
+    in `_wait_until` and in `test_pause_and_resume`. What can be observed without a race is its
+    effect: a second agent step ran.
     """
     scripted(setup.adapters, refine_result("spec v1"), refine_result("spec v2"))
     async with worker_factory():
         handle = await start(temporal_env, setup)
         await _wait_state(handle, "awaiting_spec_approval")
-        apres_la_premiere = await _runs(setup)
-        assert apres_la_premiere == 1, apres_la_premiere
+        after_the_first = await _runs(setup)
+        assert after_the_first == 1, after_the_first
 
         await handle.signal(
             "human_decision",
@@ -138,19 +140,19 @@ async def test_human_rejection_returns_to_refining(
                 "approved": False,
                 "decided_by": "augustin",
                 "kind": "approval",
-                "reason": "périmètre trop large",
+                "reason": "scope too wide",
             },
         )
-        # L'effet du refus, pas l'état à un instant : une SECONDE étape d'agent tourne.
+        # The effect of the refusal, not the state at one instant: a SECOND agent step runs.
         import asyncio
 
         for _ in range(600):
-            if await _runs(setup) > apres_la_premiere:
+            if await _runs(setup) > after_the_first:
                 break
             await asyncio.sleep(0.1)
-        assert await _runs(setup) == 2, "le refus n'a pas renvoyé le ticket se faire une seconde spec"
+        assert await _runs(setup) == 2, "the refusal did not send the ticket back to make a second spec"
 
-        # Et il revient bien attendre un humain, avec la seconde spec.
+        # And it does come back to wait for a human, with the second spec.
         await _wait_state(handle, "awaiting_spec_approval")
         await handle.signal("control", {"action": "stop"})
         await handle.result()
@@ -159,8 +161,8 @@ async def test_human_rejection_returns_to_refining(
 async def test_failures_are_bounded_then_escalate(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    """Deux tentatives, puis escalade vers `needs_human` : jamais de boucle infinie."""
-    failure = StageResult(status=StageStatus.FAILED, summary="l'agent a planté", reason="agent_error")
+    """Two attempts, then escalation to `needs_human`: never an infinite loop."""
+    failure = StageResult(status=StageStatus.FAILED, summary="the agent crashed", reason="agent_error")
     scripted(setup.adapters, failure, failure, failure)
     async with worker_factory():
         handle = await start(temporal_env, setup)
@@ -178,9 +180,9 @@ async def test_agent_question_creates_human_request(
         setup.adapters,
         StageResult(
             status=StageStatus.NEEDS_HUMAN,
-            summary="quelle devise pour les avoirs ?",
+            summary="which currency for the credit notes?",
             reason="question",
-            questions=[{"text": "Quelle devise ?", "options": ["EUR", "devise de la commande"]}],
+            questions=[{"text": "Which currency?", "options": ["EUR", "order currency"]}],
         ),
     )
     async with worker_factory():
@@ -201,7 +203,7 @@ async def test_agent_question_creates_human_request(
 
 
 async def test_pause_and_resume(setup: Fixture, temporal_env: Any, worker_factory: Any) -> None:
-    scripted(setup.adapters, refine_result("spec"), stage_result("implémenté"), stage_result("vérifié"))
+    scripted(setup.adapters, refine_result("spec"), stage_result("implemented"), stage_result("verified"))
     async with worker_factory():
         handle = await start(temporal_env, setup)
         await _wait_state(handle, "awaiting_spec_approval")
@@ -210,12 +212,12 @@ async def test_pause_and_resume(setup: Fixture, temporal_env: Any, worker_factor
         status = await handle.query("status")
         assert status["paused"] is True
         await handle.signal("control", {"action": "resume"})
-        # Ce qu'on veut prouver, c'est que la reprise DÉBLOQUE : plus en pause, et le workflow
-        # a quitté l'attente humaine. Attendre `in_progress` par égalité attendait un état de
-        # passage, que le scrutin rate dès que la machine va vite.
+        # What we want to prove is that the resume UNBLOCKS: no longer paused, and the workflow
+        # has left the human wait. Waiting for `in_progress` by equality waited for a passing
+        # state, which the polling misses as soon as the machine is fast.
         await _wait_until(
             handle,
-            "le workflow a repris",
+            "the workflow resumed",
             lambda s: not s["paused"] and s["state"] != "awaiting_spec_approval",
             timeout=40,
         )
@@ -224,7 +226,7 @@ async def test_pause_and_resume(setup: Fixture, temporal_env: Any, worker_factor
 
 
 async def test_cost_is_counted_once_per_run(setup: Fixture, temporal_env: Any, worker_factory: Any) -> None:
-    """Le coût vient du gateway, une seule fois par run — pas de double comptage."""
+    """The cost comes from the gateway, once per run: no double counting."""
     scripted(setup.adapters, refine_result("spec"))
     gateway = setup.adapters.gateway
     async with worker_factory():
@@ -243,7 +245,7 @@ async def test_cost_is_counted_once_per_run(setup: Fixture, temporal_env: Any, w
         runs = (await session.execute(select(Run))).scalars().all()
         ledger = (await session.execute(select(CostLedger))).scalars().all()
     assert len(runs) == 1
-    assert len(ledger) == 1, "une seule ligne de coût par run"
+    assert len(ledger) == 1, "a single cost line per run"
 
 
 def _spend() -> Any:
@@ -261,14 +263,14 @@ def _pr_ref(setup: Fixture) -> Any:
     return PrRef(repo="varga/billing-api", number=1)
 
 
-async def _wait_until(handle: Any, description: str, predicat: Any, *, timeout: int = 60) -> None:
-    """Attend qu'une CONDITION soit vraie sur le `status` du workflow.
+async def _wait_until(handle: Any, description: str, predicate: Any, *, timeout: int = 60) -> None:
+    """Waits for a CONDITION to be true on the workflow `status`.
 
-    Attendre un état par égalité ne marche que pour un état **stable** — un état où le workflow
-    s'arrête (une attente humaine, une fin). Pour un état de passage, le scrutin à 100 ms le rate
-    une fois sur deux : `test_pause_and_resume` attendait `in_progress` après une reprise et a
-    rougi en CI sur `pr_open`, parce que les étapes suivantes étaient déjà passées. Un test qui
-    échoue selon la charge de la machine ne dit rien sur le code.
+    Waiting for a state by equality only works for a **stable** state: one where the workflow
+    stops (a human wait, an end). For a passing state, 100 ms polling misses it
+    one time in two: `test_pause_and_resume` waited for `in_progress` after a resume and went
+    red in CI on `pr_open`, because the following steps had already passed. A test that
+    fails depending on the machine load says nothing about the code.
     """
     import asyncio
     import time
@@ -277,7 +279,7 @@ async def _wait_until(handle: Any, description: str, predicat: Any, *, timeout: 
     status: Any = None
     while time.monotonic() < deadline:
         status = await _query_status(handle)
-        if status is not None and predicat(status):
+        if status is not None and predicate(status):
             return
         await asyncio.sleep(0.1)
     raise AssertionError(f"{description}: never true (last status: {status})")
@@ -305,13 +307,13 @@ async def _query_status(handle: Any) -> Any:
 
 
 async def _wait_state(handle: Any, state: str, *, timeout: int = 60) -> None:
-    """Attend un état **stable**, via la requête `status`.
+    """Waits for a **stable** state, via the `status` query.
 
-    Le paramètre `after=` a existé ici et n'était **jamais lu** : `test_refus_de_spec` croyait
-    vérifier un passage par `refining` et ne vérifiait rien. Il n'est pas remplacé — reconstruire
-    un historique à coups de scrutin serait précisément la même illusion.
+    The `after=` parameter used to exist here and was **never read**: `test_spec_refusal` believed
+    it checked a pass through `refining` and checked nothing. It is not replaced: rebuilding
+    a history by polling would be precisely the same illusion.
     """
-    await _wait_until(handle, f"état `{state}`", lambda s: s["state"] == state, timeout=timeout)
+    await _wait_until(handle, f"state `{state}`", lambda s: s["state"] == state, timeout=timeout)
 
 
 async def test_a_query_past_its_deadline_is_asked_again() -> None:
@@ -347,7 +349,7 @@ async def test_any_other_query_error_still_fails() -> None:
         await _wait_state(Gone(), "awaiting_spec_approval", timeout=5)
 
 
-# ───────────────────────── un ticket mort se voit (2026-09-24) ─────────────────────────
+# ──────────────────────────────── a dead ticket shows (2026-09-24) ────────────────────────────────
 
 
 async def _ticket(setup: Fixture) -> Any:
@@ -361,30 +363,30 @@ async def _ticket(setup: Fixture) -> Any:
         return item
 
 
-async def test_un_interpreteur_qui_meurt_le_dit(setup: Fixture, temporal_env: Any) -> None:
-    """Une activité en échec définitif tue le workflow — et le ticket porte la cause.
+async def test_an_interpreter_that_dies_says_so(setup: Fixture, temporal_env: Any) -> None:
+    """A final activity failure kills the workflow, and the ticket carries the cause.
 
-    Banc du 2026-09-24 : deux tickets RH morts, l'un sur une activité, l'autre sur un
-    heartbeat, et rien en base ne le disait. Le workflow écrit désormais pourquoi il meurt.
+    Bench of 2026-09-24: two dead HR tickets, one on an activity, the other on a
+    heartbeat, and nothing in the database said so. The workflow now writes why it dies.
     """
     from temporalio import activity
     from temporalio.client import WorkflowFailureError
     from temporalio.exceptions import ApplicationError
 
     @activity.defn(name="await_run")
-    async def await_run_qui_meurt(payload: dict[str, Any]) -> dict[str, Any]:
-        raise ApplicationError("le projet n'a plus de dépôt", non_retryable=True)
+    async def await_run_that_dies(payload: dict[str, Any]) -> dict[str, Any]:
+        raise ApplicationError("the project no longer has a repository", non_retryable=True)
 
-    async with worker_with(temporal_env, {"await_run": await_run_qui_meurt}):
+    async with worker_with(temporal_env, {"await_run": await_run_that_dies}):
         handle = await start(temporal_env, setup)
         with pytest.raises(WorkflowFailureError):
             await handle.result()
 
     item = await _ticket(setup)
-    assert item.failure is not None, "le ticket ne dit pas que son interpréteur est mort"
-    assert item.failure["message"] == "le projet n'a plus de dépôt"
+    assert item.failure is not None, "the ticket does not say its interpreter died"
+    assert item.failure["message"] == "the project no longer has a repository"
     assert item.failure["activity"] == "await_run"
-    assert item.failure["state"] == "inbox"  # l'état d'où l'étape partait
+    assert item.failure["state"] == "inbox"  # the state the step was leaving from
 
     from choregos_api.db.models import Event
     from choregos_api.db.session import session_scope
@@ -399,24 +401,24 @@ async def test_un_interpreteur_qui_meurt_le_dit(setup: Fixture, temporal_env: An
     assert "choregos.workitem.workflow_failed" in types
 
 
-async def test_une_erreur_sans_message_laisse_quand_meme_son_type(setup: Fixture, temporal_env: Any) -> None:
-    """Une erreur réseau se lève souvent SANS message : le ticket doit au moins nommer sa classe.
+async def test_an_error_without_a_message_still_leaves_its_type(setup: Fixture, temporal_env: Any) -> None:
+    """A network error is often raised WITHOUT a message: the ticket must at least name its class.
 
-    Rejoue l'incident du 2026-09-27 sur le locataire dev. `start_run` a levé un
-    `httpx.ConnectTimeout` — l'API Kubernetes était injoignable, la file `executor` étant la seule
-    à qui la politique Cilium ouvre le port. Le ticket a enregistré `"Application error"`, la
-    chaîne par défaut de Temporal : rien sur la cause, rien sur le réseau, et la vraie erreur ne
-    vivait que dans le journal de l'orchestrateur.
+    Replays the incident of 2026-09-27 on the dev tenant. `start_run` raised an
+    `httpx.ConnectTimeout`: the Kubernetes API was unreachable, the `executor` queue being the only one
+    to which the Cilium policy opens the port. The ticket recorded `"Application error"`, the
+    default string of Temporal: nothing on the cause, nothing on the network, and the real error
+    lived only in the orchestrator's log.
     """
     import httpx
     from temporalio import activity
     from temporalio.client import WorkflowFailureError
 
     @activity.defn(name="start_run")
-    async def start_run_injoignable(payload: dict[str, Any]) -> dict[str, Any]:
-        raise httpx.ConnectTimeout("")  # tel qu'httpx le lève : aucun message
+    async def start_run_unreachable(payload: dict[str, Any]) -> dict[str, Any]:
+        raise httpx.ConnectTimeout("")  # as httpx raises it: no message
 
-    async with worker_with(temporal_env, {"start_run": start_run_injoignable}):
+    async with worker_with(temporal_env, {"start_run": start_run_unreachable}):
         handle = await start(temporal_env, setup)
         with pytest.raises(WorkflowFailureError):
             await handle.result()
@@ -424,13 +426,13 @@ async def test_une_erreur_sans_message_laisse_quand_meme_son_type(setup: Fixture
     item = await _ticket(setup)
     assert item.failure is not None
     assert item.failure["message"] == "ConnectTimeout", (
-        f"le ticket doit nommer la classe de l'erreur à défaut de message (vu : {item.failure['message']!r})"
+        f"the ticket must name the error class without a message (seen: {item.failure['message']!r})"
     )
     assert item.failure["activity"] == "start_run"
 
 
-async def test_un_interpreteur_qui_redemarre_efface_la_marque(setup: Fixture, temporal_env: Any) -> None:
-    """La marque tombe au redémarrage : un ticket relancé n'est plus « mort »."""
+async def test_an_interpreter_that_restarts_clears_the_mark(setup: Fixture, temporal_env: Any) -> None:
+    """The mark falls on restart: a restarted ticket is no longer "dead"."""
     from choregos_api.db.models import WorkItem
     from choregos_api.db.session import session_scope
     from temporalio import activity
@@ -439,83 +441,85 @@ async def test_un_interpreteur_qui_redemarre_efface_la_marque(setup: Fixture, te
     async with session_scope() as session:
         item = await session.get(WorkItem, setup.work_item_id)
         assert item is not None
-        item.failure = {"message": "mort une première fois", "at": "2026-09-24T15:04:00+00:00"}
+        item.failure = {"message": "dead a first time", "at": "2026-09-24T15:04:00+00:00"}
 
     @activity.defn(name="await_run")
-    async def await_run_qui_bloque(payload: dict[str, Any]) -> dict[str, Any]:
-        raise ApplicationError("on s'arrête ici", non_retryable=True)
+    async def await_run_that_blocks(payload: dict[str, Any]) -> dict[str, Any]:
+        raise ApplicationError("we stop here", non_retryable=True)
 
-    async with worker_with(temporal_env, {"await_run": await_run_qui_bloque}):
+    async with worker_with(temporal_env, {"await_run": await_run_that_blocks}):
         handle = await start(temporal_env, setup)
-        with pytest.raises(Exception):  # noqa: B017 — la mort de ce workflow est voulue
+        with pytest.raises(Exception):  # noqa: B017 - the death of this workflow is intended
             await handle.result()
-    # `load_context` a effacé l'ancienne marque au démarrage ; la nouvelle mort a posé la sienne
+    # `load_context` cleared the old mark at the start; the new death set its own
     item = await _ticket(setup)
     assert item.failure is not None
-    assert item.failure["message"] == "on s'arrête ici"
+    assert item.failure["message"] == "we stop here"
 
 
-async def test_le_diff_non_collecte_ne_tue_pas_l_etape(setup: Fixture, temporal_env: Any) -> None:
-    """`collect_run_artifacts` sert l'affichage : son échec ne coûte pas le ticket (RH-1, 24/09)."""
+async def test_an_uncollected_diff_does_not_kill_the_step(setup: Fixture, temporal_env: Any) -> None:
+    """`collect_run_artifacts` serves the display: its failure does not cost the ticket (RH-1, 24/09)."""
     from temporalio import activity
     from temporalio.exceptions import ApplicationError
 
     scripted(
         setup.adapters,
-        stage_result("spec rédigée", outputs={"size": "M", "risk": "low", "spec_markdown": "## Spec"}),
+        stage_result("spec written", outputs={"size": "M", "risk": "low", "spec_markdown": "## Spec"}),
     )
 
     @activity.defn(name="collect_run_artifacts")
-    async def collect_qui_echoue(payload: dict[str, Any]) -> dict[str, Any]:
-        raise ApplicationError("le projet n'a pas de dépôt", non_retryable=True)
+    async def collect_that_fails(payload: dict[str, Any]) -> dict[str, Any]:
+        raise ApplicationError("the project has no repository", non_retryable=True)
 
-    async with worker_with(temporal_env, {"collect_run_artifacts": collect_qui_echoue}):
+    async with worker_with(temporal_env, {"collect_run_artifacts": collect_that_fails}):
         handle = await start(temporal_env, setup)
         await _wait_state(handle, "awaiting_spec_approval")
 
     assert (await _ticket(setup)).failure is None
 
 
-async def test_await_run_est_rejoue_apres_une_panne_passagere(setup: Fixture, temporal_env: Any) -> None:
-    """Un worker qui redémarre pendant un run (heartbeat manqué) ne tue plus le ticket."""
+async def test_await_run_is_replayed_after_a_transient_failure(setup: Fixture, temporal_env: Any) -> None:
+    """A worker that restarts during a run (missed heartbeat) no longer kills the ticket."""
     from choregos_orchestrator.activities import stage as stage_activities
     from temporalio import activity
     from temporalio.exceptions import ApplicationError
 
     scripted(
         setup.adapters,
-        stage_result("spec rédigée", outputs={"size": "M", "risk": "low", "spec_markdown": "## Spec"}),
+        stage_result("spec written", outputs={"size": "M", "risk": "low", "spec_markdown": "## Spec"}),
     )
-    appels: list[int] = []
+    calls: list[int] = []
 
     @activity.defn(name="await_run")
     async def await_run_fragile(payload: dict[str, Any]) -> dict[str, Any]:
-        appels.append(1)
-        if len(appels) == 1:
-            raise ApplicationError("heartbeat manqué : le worker a redémarré")  # rejouable
+        calls.append(1)
+        if len(calls) == 1:
+            raise ApplicationError("heartbeat missed: the worker restarted")  # replayable
         return await stage_activities.await_run(payload)
 
     async with worker_with(temporal_env, {"await_run": await_run_fragile}):
         handle = await start(temporal_env, setup)
         await _wait_state(handle, "awaiting_spec_approval")
 
-    assert len(appels) >= 2
+    assert len(calls) >= 2
     assert (await _ticket(setup)).failure is None
 
 
-async def test_les_verdicts_des_garanties_sont_dans_le_journal_du_run(
+async def test_the_gate_verdicts_are_in_the_run_journal(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    """Quelles garanties ont tourné, et ce qu'elles ont répondu : c'est dans le journal du run."""
+    """Which gates ran, and what they answered: it is in the run journal."""
     from choregos_api.db.models import Run, RunEvent
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
     scripted(
         setup.adapters,
-        stage_result("spec rédigée", outputs={"size": "M", "risk": "low", "spec_markdown": "## Spec"}),
-        stage_result("implémenté", artifacts={"branch": "choregos/123", "commits": ["fix(orders): avoirs"]}),
-        stage_result("vérifié"),
+        stage_result("spec written", outputs={"size": "M", "risk": "low", "spec_markdown": "## Spec"}),
+        stage_result(
+            "implemented", artifacts={"branch": "choregos/123", "commits": ["fix(orders): credit notes"]}
+        ),
+        stage_result("verified"),
     )
     async with worker_factory():
         handle = await start(temporal_env, setup)
@@ -523,7 +527,7 @@ async def test_les_verdicts_des_garanties_sont_dans_le_journal_du_run(
         await handle.signal(
             "human_decision", {"approved": True, "decided_by": "augustin", "kind": "approval"}
         )
-        # l'implémentation porte les garanties de périmètre et de preuves
+        # the implementation carries the perimeter and evidence gates
         await _wait_state(handle, "pr_open")
 
     async with session_scope(orgs="*") as session:
@@ -541,34 +545,34 @@ async def test_les_verdicts_des_garanties_sont_dans_le_journal_du_run(
             .scalars()
             .all()
         )
-    assert rows, "aucun verdict journalisé"
-    noms = {r.payload["name"] for r in rows}
-    assert "scope_respected" in noms or "evidence_present" in noms, noms
+    assert rows, "no verdict logged"
+    names = {r.payload["name"] for r in rows}
+    assert "scope_respected" in names or "evidence_present" in names, names
     assert all(isinstance(r.payload["passed"], bool) and "detail" in r.payload for r in rows)
 
 
-# ──────── une notification en panne ne tue pas un ticket (2026-09-27) ────────
+# ──────────────── a failing notification does not kill a ticket (2026-09-27) ────────────────
 
 
-async def test_un_notificateur_en_panne_ne_tue_pas_la_porte_humaine(
+async def test_a_failing_notifier_does_not_kill_the_human_gate(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    """La demande humaine doit exister même quand personne ne peut être prévenu.
+    """The human request must exist even when nobody can be notified.
 
-    Sur le locataire dev, sans Slack configuré, `notify.send` levait — et l'exception annulait la
-    TRANSACTION, donc la demande qu'on venait d'écrire. Les cinq tentatives échouaient au même
-    endroit et le ticket mourait sur « [slack] ni `bot_token` ni `webhook_url` configurés ». La
-    porte humaine était donc inatteignable sur toute installation sans notificateur, et le message
-    accusait Slack au lieu de dire « la demande est là, personne n'a été prévenu ».
+    On the dev tenant, without Slack configured, `notify.send` raised, and the exception cancelled the
+    TRANSACTION, hence the request that had just been written. The five attempts failed at the same
+    place and the ticket died on "[slack] neither `bot_token` nor `webhook_url` configured". The
+    human gate was therefore unreachable on any installation without a notifier, and the message
+    blamed Slack instead of saying "the request is there, nobody was notified".
     """
     from choregos_api.db.models import HumanRequest
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
-    setup.adapters.notify.panne = "[slack] ni `bot_token` ni `webhook_url` configurés"
-    scripted(setup.adapters, refine_result("spec rédigée"))
+    setup.adapters.notify.failure = "[slack] neither `bot_token` nor `webhook_url` configured"
+    scripted(setup.adapters, refine_result("spec written"))
 
-    async def demandes() -> list[Any]:
+    async def requests_of_the_item() -> list[Any]:
         async with session_scope() as session:
             return list(
                 (
@@ -582,31 +586,31 @@ async def test_un_notificateur_en_panne_ne_tue_pas_la_porte_humaine(
 
     async with worker_factory():
         handle = await start(temporal_env, setup)
-        # L'état d'attente humaine est atteint : la porte fonctionne sans notification.
+        # The human wait state is reached: the gate works without notification.
         await _wait_state(handle, "awaiting_spec_approval")
 
-        # ATTENDRE la demande, ne pas la lire tout de suite. L'interpréteur pose l'état AVANT
-        # d'appeler `create_human_request` : lire juste après `_wait_state` gagnait en local et
-        # perdait en CI — 0 demande, pas parce qu'elle avait été annulée mais parce qu'elle
-        # n'était pas encore écrite. Un test qui dépend de la vitesse de la machine ne dit rien
-        # sur le code (même leçon que `test_pause_and_resume`, 2026-09-24).
+        # WAIT for the request, do not read it right away. The interpreter sets the state BEFORE
+        # calling `create_human_request`: reading right after `_wait_state` won locally and
+        # lost in CI: 0 requests, not because it had been cancelled but because it
+        # was not written yet. A test that depends on the machine speed says nothing
+        # about the code (same lesson as `test_pause_and_resume`, 2026-09-24).
         import asyncio
 
         for _ in range(300):
-            if await demandes():
+            if await requests_of_the_item():
                 break
             await asyncio.sleep(0.1)
 
-    assert len(await demandes()) == 1, "la demande humaine a été annulée avec la notification"
+    assert len(await requests_of_the_item()) == 1, "the human request was cancelled with the notification"
 
     item = await _ticket(setup)
-    assert item.failure is None, f"le ticket est mort pour une notification : {item.failure}"
+    assert item.failure is None, f"the ticket died of a notification: {item.failure}"
 
-    # Et le silence se voit : l'événement dit que personne n'a été prévenu.
+    # And the silence shows: the event says that nobody was notified.
     from choregos_api.db.models import Event
 
     async with session_scope() as session:
-        evenements = (
+        events = (
             (
                 await session.execute(
                     select(Event).where(
@@ -618,9 +622,9 @@ async def test_un_notificateur_en_panne_ne_tue_pas_la_porte_humaine(
             .scalars()
             .all()
         )
-    assert evenements, "aucun événement de demande humaine"
-    assert any((e.payload or {}).get("notified") is False for e in evenements), (
-        "un silence non enregistré remplace une panne bruyante par une panne muette"
+    assert events, "no human request event"
+    assert any((e.payload or {}).get("notified") is False for e in events), (
+        "an unrecorded silence replaces a noisy failure with a mute one"
     )
 
 
@@ -637,9 +641,7 @@ async def test_the_reminder_without_a_notifier_keeps_the_interpreter_alive(
 
     from temporalio.client import WorkflowExecutionStatus
 
-    setup.adapters.notify.panne = (
-        "[slack] ni `bot_token` ni `webhook_url` configurés"  # lang: fr-ok (the verbatim upstream error)
-    )
+    setup.adapters.notify.failure = "[slack] neither `bot_token` nor `webhook_url` configured"
     scripted(setup.adapters, refine_result("spec written"))
 
     async with worker_factory():

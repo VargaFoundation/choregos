@@ -1,8 +1,8 @@
-"""L'orchestrateur regarde ce que l'agent va lire avant de le lui donner.
+"""The orchestrator looks at what the agent is about to read before handing it over.
 
-`sandbox.prompt_injection` : `warn` journalise un événement de sécurité sur le ticket ;
-`block` arrête l'étape avant tout run, sans reprise — le ticket est marqué mort avec la
-raison, un humain relit. Ce qu'OpenHands fait, à notre façon : mécanique et dit.
+`sandbox.prompt_injection`: `warn` logs a security event on the work item;
+`block` stops the step before any run, with no resume: the work item is marked dead with the
+reason, and a human reads it. What OpenHands does, in our own way: mechanical and stated.
 """
 
 from __future__ import annotations
@@ -19,10 +19,10 @@ INJECTION = (
 )
 
 
-async def _preparer(setup: Fixture) -> dict[str, Any]:
-    from choregos_orchestrator.activities import stage as activites
+async def _prepare(setup: Fixture) -> dict[str, Any]:
+    from choregos_orchestrator.activities import stage as activities
 
-    return await activites.prepare_stage(
+    return await activities.prepare_stage(
         {
             "project_id": setup.project_id,
             "work_item_id": setup.work_item_id,
@@ -36,30 +36,30 @@ async def _preparer(setup: Fixture) -> dict[str, Any]:
     )
 
 
-async def _corps_du_ticket(setup: Fixture, texte: str) -> None:
+async def _ticket_body(setup: Fixture, text: str) -> None:
     from choregos_api.db.models import WorkItem
     from choregos_api.db.session import session_scope
 
     async with session_scope() as session:
         item = await session.get(WorkItem, setup.work_item_id)
         assert item is not None
-        item.body_snapshot = texte
+        item.body_snapshot = text
 
 
-async def _politique(setup: Fixture, **sandbox: Any) -> None:
+async def _policy(setup: Fixture, **sandbox: Any) -> None:
     from choregos_api.db.session import session_scope
     from choregos_api.services import active_policy, policy_model
 
     async with session_scope() as session:
         row = await active_policy(session, setup.project_id)
         assert row is not None
-        modele = policy_model(row)
-        doc = modele.model_dump(mode="json")
+        model = policy_model(row)
+        doc = model.model_dump(mode="json")
         doc["sandbox"] = {**doc["sandbox"], **sandbox}
         row.json_doc = doc
 
 
-async def _evenements(setup: Fixture) -> list[Any]:
+async def _events(setup: Fixture) -> list[Any]:
     from choregos_api.db.models import Event
     from choregos_api.db.session import session_scope
 
@@ -75,36 +75,36 @@ async def _evenements(setup: Fixture) -> list[Any]:
         )
 
 
-async def test_un_ticket_ordinaire_ne_produit_aucun_evenement_de_securite(setup: Fixture) -> None:
-    await _preparer(setup)
-    assert await _evenements(setup) == []
+async def test_an_ordinary_ticket_produces_no_security_event(setup: Fixture) -> None:
+    await _prepare(setup)
+    assert await _events(setup) == []
 
 
-async def test_en_warn_l_injection_est_journalisee_et_l_etape_part_quand_meme(setup: Fixture) -> None:
-    await _corps_du_ticket(setup, INJECTION)
-    prepared = await _preparer(setup)
-    assert prepared["run_id"], "warn : l'étape démarre"
-    (event,) = await _evenements(setup)
+async def test_in_warn_the_injection_is_logged_and_the_step_still_starts(setup: Fixture) -> None:
+    await _ticket_body(setup, INJECTION)
+    prepared = await _prepare(setup)
+    assert prepared["run_id"], "warn: the step starts"
+    (event,) = await _events(setup)
     assert event.payload["mode"] == "warn"
     motifs = {s["motif"] for s in event.payload["suspicions"]}
     assert {"ignore the previous instructions", "sending to a URL"} <= motifs
     assert all(s["source"] == "ticket.body" for s in event.payload["suspicions"])
 
 
-async def test_en_block_l_etape_s_arrete_avant_tout_run_avec_la_raison(setup: Fixture) -> None:
+async def test_in_block_the_step_stops_before_any_run_with_the_reason(setup: Fixture) -> None:
     from temporalio.exceptions import ApplicationError
 
-    await _corps_du_ticket(setup, INJECTION)
-    await _politique(setup, prompt_injection="block")
+    await _ticket_body(setup, INJECTION)
+    await _policy(setup, prompt_injection="block")
     with pytest.raises(ApplicationError) as exc:
-        await _preparer(setup)
+        await _prepare(setup)
     assert exc.value.type == "injection_suspected" and exc.value.non_retryable
     assert "ticket.body" in str(exc.value) and "read the work item" in str(exc.value)
-    assert len(await _evenements(setup)) == 1, "journalisé aussi : la raison se relit sur le ticket"
+    assert len(await _events(setup)) == 1, "logged as well: the reason is read on the work item"
 
 
-async def test_en_ignore_rien_n_est_regarde(setup: Fixture) -> None:
-    await _corps_du_ticket(setup, INJECTION)
-    await _politique(setup, prompt_injection="ignore")
-    await _preparer(setup)
-    assert await _evenements(setup) == []
+async def test_in_ignore_nothing_is_looked_at(setup: Fixture) -> None:
+    await _ticket_body(setup, INJECTION)
+    await _policy(setup, prompt_injection="ignore")
+    await _prepare(setup)
+    assert await _events(setup) == []

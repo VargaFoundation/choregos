@@ -1,4 +1,4 @@
-"""`ReleaseTrain` : batch, fenêtres, gel, approbation, canary cassé → rollback + gel."""
+"""`ReleaseTrain`: batch, windows, freeze, approval, broken canary -> rollback + freeze."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ async def _wait(handle: Any, predicate: Any, timeout: float = 30.0) -> dict[str,
         if predicate(status):
             return status
         await asyncio.sleep(0.1)
-    raise AssertionError(f"condition jamais atteinte (dernier état : {await handle.query('status_query')})")
+    raise AssertionError(f"condition never reached (last state: {await handle.query('status_query')})")
 
 
 async def test_two_merges_make_one_batch(setup: Fixture, temporal_env: Any, worker_factory: Any) -> None:
@@ -36,13 +36,13 @@ async def test_two_merges_make_one_batch(setup: Fixture, temporal_env: Any, work
         async with worker_factory():
             handle = await start_train(temporal_env, setup)
             await handle.signal(
-                "merged", {"work_item_key": "varga/billing-api#1", "sha": "a1", "title": "un"}
+                "merged", {"work_item_key": "varga/billing-api#1", "sha": "a1", "title": "one"}
             )
             await handle.signal(
-                "merged", {"work_item_key": "varga/billing-api#2", "sha": "a2", "title": "deux"}
+                "merged", {"work_item_key": "varga/billing-api#2", "sha": "a2", "title": "two"}
             )
             await handle.signal(
-                "merged", {"work_item_key": "varga/billing-api#1", "sha": "a1", "title": "un"}
+                "merged", {"work_item_key": "varga/billing-api#1", "sha": "a1", "title": "one"}
             )
             status = await _wait(handle, lambda s: s["batch_size"] == 2)
             assert status["pending_items"] == ["varga/billing-api#1", "varga/billing-api#2"]
@@ -60,10 +60,10 @@ async def test_two_merges_make_one_batch(setup: Fixture, temporal_env: Any, work
 
     async with session_scope() as session:
         releases = (await session.execute(select(Release))).scalars().all()
-    assert len(releases) == 1, "un seul lot pour deux merges rapprochés"
+    assert len(releases) == 1, "a single batch for two merges close together"
     assert len(releases[0].items) == 2
     assert releases[0].status == "done"
-    assert setup.adapters.cd.promotions, "une promotion GitOps a bien eu lieu"
+    assert setup.adapters.cd.promotions, "a GitOps promotion did take place"
 
 
 async def test_freeze_blocks_departure(setup: Fixture, temporal_env: Any, worker_factory: Any) -> None:
@@ -71,13 +71,13 @@ async def test_freeze_blocks_departure(setup: Fixture, temporal_env: Any, worker
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
             handle = await start_train(temporal_env, setup)
-            await handle.signal("freeze", {"reason": "incident en cours", "by": "marie"})
+            await handle.signal("freeze", {"reason": "incident in progress", "by": "marie"})
             await handle.signal("merged", {"work_item_key": "varga/billing-api#3", "sha": "b1"})
             await handle.signal("depart_now", {"by": "augustin"})
             status = await _wait(handle, lambda s: s["frozen"] is True)
-            assert status["freeze_reason"] == "incident en cours"
+            assert status["freeze_reason"] == "incident in progress"
             await asyncio.sleep(0.5)
-            assert not setup.adapters.cd.promotions, "un train gelé ne promeut rien"
+            assert not setup.adapters.cd.promotions, "a frozen train promotes nothing"
             await handle.signal("unfreeze", {"by": "marie"})
             await _wait(handle, lambda s: s["frozen"] is False, 30)
             await handle.signal("abort", {"by": "test"})
@@ -87,7 +87,7 @@ async def test_freeze_blocks_departure(setup: Fixture, temporal_env: Any, worker
 async def test_broken_canary_rolls_back_and_freezes(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    """Canary cassé → abandon du rollout, release `rolled_back`, incident, train gelé."""
+    """Broken canary -> rollout abandoned, release `rolled_back`, incident, train frozen."""
     setup.adapters.cd.set_health("billing-api", "Healthy")
     setup.adapters.cd.fail_next_analysis()
     with temporal_env.auto_time_skipping_disabled():
@@ -111,7 +111,7 @@ async def test_broken_canary_rolls_back_and_freezes(
         findings = (await session.execute(select(Finding))).scalars().all()
     assert releases[0].status == "rolled_back"
     assert "billing-api" in setup.adapters.cd.aborted
-    assert any(f.severity == "critical" for f in findings), "un rollback laisse une trace critique"
+    assert any(f.severity == "critical" for f in findings), "a rollback leaves a critical trace"
     messages = [m.title for _, m in setup.adapters.notify.sent]
     assert any("Rollback" in title for title in messages)
 
@@ -128,13 +128,15 @@ async def test_rejected_approval_returns_batch(
             await _wait(handle, lambda s: s["status"] == "awaiting_approval", 60)
             await handle.signal("reject", {"by": "marie"})
             status = await _wait(handle, lambda s: s["status"] == "collecting" and s["batch_size"] == 1, 60)
-            assert status["pending_items"] == ["varga/billing-api#5"], "le lot repart au prochain tour"
+            assert status["pending_items"] == ["varga/billing-api#5"], (
+                "the batch leaves again on the next turn"
+            )
             await handle.signal("abort", {"by": "test"})
             await handle.result()
 
 
 async def test_hotfix_uses_express_lane(setup: Fixture, temporal_env: Any, worker_factory: Any) -> None:
-    """Un `hotfix` part hors horaire, avec un soak réduit."""
+    """A `hotfix` leaves outside hours, with a reduced soak."""
     setup.adapters.cd.set_health("billing-api", "Healthy")
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
@@ -143,20 +145,20 @@ async def test_hotfix_uses_express_lane(setup: Fixture, temporal_env: Any, worke
                 "merged", {"work_item_key": "varga/billing-api#6", "sha": "e1", "labels": ["hotfix"]}
             )
             await _wait(handle, lambda s: s["status"] == "awaiting_approval", 60)
-            # Le hotfix est parti hors horaire : la production est promue dès le départ.
+            # The hotfix left outside hours: production is promoted from the departure.
             assert [p for p in setup.adapters.cd.promotions if p[0] == "prod"]
-            assert not setup.adapters.cd.rollouts, "le canary a commencé avant l'approbation"
+            assert not setup.adapters.cd.rollouts, "the canary started before the approval"
             await handle.signal("approve", {"by": "marie"})
-            # L'EFFET de l'approbation — le canary suivi — et non un état intermédiaire : le train
-            # peut repasser par `collecting` entre deux sondages, et attendre un état était une
-            # course (#135).
+            # The EFFECT of the approval (the canary followed), not an intermediate state: the train
+            # can go back through `collecting` between two polls, and waiting for a state was a
+            # race (#135).
             for _ in range(600):
                 if setup.adapters.cd.rollouts:
                     break
                 await asyncio.sleep(0.1)
             await handle.signal("abort", {"by": "test"})
             await handle.result()
-    assert setup.adapters.cd.rollouts, "l'approbation n'a pas lancé le canary"
+    assert setup.adapters.cd.rollouts, "the approval did not start the canary"
 
 
 async def test_auto_sync_env_has_no_train(setup: Fixture, temporal_env: Any, worker_factory: Any) -> None:

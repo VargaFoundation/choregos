@@ -1,7 +1,7 @@
-"""`scope_respected` juge ce que le RUN a écrit, pas le ticket entier (S22-11).
+"""`scope_respected` judges what the RUN wrote, not the whole ticket (S22-11).
 
-Sur le locataire dev, le 09/10, l'ADR de l'étude #5 rougissait sur « 3 file(s) outside the allowed
-paths » : le Makefile et deux fichiers qu'avait poussés l'étape de CADRAGE, mesurés depuis `main`.
+On the dev tenant, on 10/09, the ADR of study #5 went red on "3 file(s) outside the allowed
+paths": the Makefile and two files pushed by the FRAMING step, measured from `main`.
 """
 
 from __future__ import annotations
@@ -12,20 +12,20 @@ import pytest
 
 pytestmark = pytest.mark.asyncio
 
-DEPOT = "varga/billing-api"
-BRANCHE = "choregos/123"
-REGLE = {"name": "scope_respected", "params": {"paths": ["docs/adr/**"]}}
+REPO = "varga/billing-api"
+BRANCH = "choregos/123"
+RULE = {"name": "scope_respected", "params": {"paths": ["docs/adr/**"]}}
 
 
-async def _run_qui_commence_a(setup: Any, depart: str | None) -> str:
+async def _run_starting_at(setup: Any, start: str | None) -> str:
     from choregos_api.db.models import Run
     from choregos_api.db.session import session_scope
     from choregos_contracts import StageResult, StageStatus
 
-    resultat = StageResult(status=StageStatus.DONE, summary="ADR rédigé")
-    resultat.artifacts.branch = BRANCHE
-    if depart:
-        resultat.artifacts.reports["start_commit"] = depart
+    result = StageResult(status=StageStatus.DONE, summary="ADR written")
+    result.artifacts.branch = BRANCH
+    if start:
+        result.artifacts.reports["start_commit"] = start
     async with session_scope() as session:
         run = Run(
             id=f"{setup.work_item_id}-t-draft-1",
@@ -35,60 +35,60 @@ async def _run_qui_commence_a(setup: Any, depart: str | None) -> str:
             stage_role="architect",
             attempt=1,
             status="succeeded",
-            result=resultat.model_dump(mode="json", by_alias=True),
+            result=result.model_dump(mode="json", by_alias=True),
         )
         session.add(run)
     return run.id
 
 
-async def test_le_travail_des_etapes_d_avant_ne_compte_pas(setup: Any) -> None:
+async def test_the_work_of_earlier_steps_does_not_count(setup: Any) -> None:
     from choregos_orchestrator.activities.gates import evaluate_gates
 
     setup.adapters.scm.set_diff(
-        DEPOT,
+        REPO,
         "main",
-        BRANCHE,
+        BRANCH,
         [("Makefile", 4, 0), ("sitecustomize.py", 3, 0), ("docs/adr/0001-x.md", 30, 0)],
     )
-    setup.adapters.scm.set_diff(DEPOT, "abc123", BRANCHE, [("docs/adr/0001-x.md", 30, 0)])
-    run_id = await _run_qui_commence_a(setup, "abc123")
+    setup.adapters.scm.set_diff(REPO, "abc123", BRANCH, [("docs/adr/0001-x.md", 30, 0)])
+    run_id = await _run_starting_at(setup, "abc123")
 
     charge = {
         "project_id": setup.project_id,
         "work_item_id": setup.work_item_id,
         "run_id": run_id,
-        "gates": [REGLE],
+        "gates": [RULE],
     }
     [verdict] = await evaluate_gates(charge)
     assert verdict["passed"] is True, verdict
 
 
-async def test_ce_que_le_run_ecrit_hors_perimetre_compte_toujours(setup: Any) -> None:
+async def test_what_the_run_writes_out_of_perimeter_still_counts(setup: Any) -> None:
     from choregos_orchestrator.activities.gates import evaluate_gates
 
-    setup.adapters.scm.set_diff(DEPOT, "abc123", BRANCHE, [("Makefile", 4, 0), ("docs/adr/0001-x.md", 30, 0)])
-    run_id = await _run_qui_commence_a(setup, "abc123")
+    setup.adapters.scm.set_diff(REPO, "abc123", BRANCH, [("Makefile", 4, 0), ("docs/adr/0001-x.md", 30, 0)])
+    run_id = await _run_starting_at(setup, "abc123")
     charge = {
         "project_id": setup.project_id,
         "work_item_id": setup.work_item_id,
         "run_id": run_id,
-        "gates": [REGLE],
+        "gates": [RULE],
     }
     [verdict] = await evaluate_gates(charge)
     assert verdict["passed"] is False and verdict["annotations"] == ["Makefile"], verdict
 
 
-async def test_un_run_qui_ne_dit_pas_d_ou_il_part_est_juge_sur_le_ticket(setup: Any) -> None:
-    """Un runner d'avant S22-11 : rien ne change, le diff du ticket vaut."""
+async def test_a_run_that_does_not_say_where_it_starts_is_judged_on_the_ticket(setup: Any) -> None:
+    """A runner from before S22-11: nothing changes, the ticket diff applies."""
     from choregos_orchestrator.activities.gates import evaluate_gates
 
-    setup.adapters.scm.set_diff(DEPOT, "main", BRANCHE, [("Makefile", 4, 0), ("docs/adr/0001-x.md", 30, 0)])
-    run_id = await _run_qui_commence_a(setup, None)
+    setup.adapters.scm.set_diff(REPO, "main", BRANCH, [("Makefile", 4, 0), ("docs/adr/0001-x.md", 30, 0)])
+    run_id = await _run_starting_at(setup, None)
     charge = {
         "project_id": setup.project_id,
         "work_item_id": setup.work_item_id,
         "run_id": run_id,
-        "gates": [REGLE],
+        "gates": [RULE],
     }
     [verdict] = await evaluate_gates(charge)
     assert verdict["passed"] is False, verdict

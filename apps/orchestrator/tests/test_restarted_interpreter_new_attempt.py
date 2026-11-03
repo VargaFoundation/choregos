@@ -72,10 +72,10 @@ async def _undecide(item_id: str) -> int:
 
 async def _live_ticket(setup: Fixture) -> tuple[str, str, str]:
     """A `dev-simple` work item already in production, waiting for `t-verify-prod`."""
-    projet_id = await create_dev_project(setup)
-    item_id, cle = await create_ticket(setup, projet_id, 4, "dev-simple")
+    project_id = await create_dev_project(setup)
+    item_id, key = await create_ticket(setup, project_id, 4, "dev-simple")
     await _set_state(item_id, "live")
-    return projet_id, item_id, cle
+    return project_id, item_id, key
 
 
 async def test_a_restart_after_a_failed_attempt_plays_the_next_one(
@@ -86,7 +86,7 @@ async def test_a_restart_after_a_failed_attempt_plays_the_next_one(
     from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
 
-    projet_id, item_id, cle = await _live_ticket(setup)
+    project_id, item_id, key = await _live_ticket(setup)
     played: list[str] = []
 
     def verifier(stage_input: Any) -> Any:
@@ -95,7 +95,7 @@ async def test_a_restart_after_a_failed_attempt_plays_the_next_one(
 
     setup.adapters.executor.handler = verifier
     async with worker_factory():
-        first = await start_interpreter(temporal_env, setup, projet_id, item_id, cle)
+        first = await start_interpreter(temporal_env, setup, project_id, item_id, key)
         await wait_for_state(first, "needs_human")
         # The abandon is proposed once the escalation is mirrored: no write of it is still in flight.
         await wait_until_state(first, "status", lambda s: bool(s["pending_request"]))
@@ -104,7 +104,7 @@ async def test_a_restart_after_a_failed_attempt_plays_the_next_one(
         await _set_state(item_id, "live")
         assert [status for _, status in await _runs(item_id)] == ["failed"]
 
-        handle = await start_interpreter(temporal_env, setup, projet_id, item_id, cle)
+        handle = await start_interpreter(temporal_env, setup, project_id, item_id, key)
         settled = await wait_until_state(
             handle, "status", lambda s: s["state"] in ("verified", "needs_human")
         )
@@ -132,7 +132,7 @@ async def test_a_restart_while_the_attempt_runs_awaits_it(
 
     monkeypatch.setenv("CHOREGOS_HEARTBEAT_SECONDS", "1")  # `await_run` polls every second
     reset_settings_cache()
-    projet_id, item_id, cle = await _live_ticket(setup)
+    project_id, item_id, key = await _live_ticket(setup)
     executor = setup.adapters.executor
     executor.handler = lambda _stage_input: prod_verifier_result()
     real_start = executor.start
@@ -144,7 +144,7 @@ async def test_a_restart_while_the_attempt_runs_awaits_it(
 
     executor.start = start_and_keep_running
     async with worker_factory():
-        first = await start_interpreter(temporal_env, setup, projet_id, item_id, cle)
+        first = await start_interpreter(temporal_env, setup, project_id, item_id, key)
         await wait_until_state(first, "status", lambda s: bool(s["current_run"]))
         for _ in range(100):
             if [status for _, status in await _runs(item_id)] == ["running"]:
@@ -152,7 +152,7 @@ async def test_a_restart_while_the_attempt_runs_awaits_it(
             await asyncio.sleep(0.1)
         await first.terminate(reason="the interpreter died (#497)")
 
-        handle = await start_interpreter(temporal_env, setup, projet_id, item_id, cle)
+        handle = await start_interpreter(temporal_env, setup, project_id, item_id, key)
         status = await wait_until_state(handle, "status", lambda s: bool(s["current_run"]))
         ((run_id, _),) = await _runs(item_id)
         assert status["current_run"] == run_id and run_id.endswith("-t-verify-prod-1"), status
@@ -172,11 +172,11 @@ async def test_a_restart_after_a_succeeded_run_reads_it_back(
     """`t-verify-prod-1` succeeded, but the interpreter died before its decision was recorded: the
     restarted one reads that run's result back and moves on — no second run, which would cost the
     stage again and could push its commits twice."""
-    projet_id, item_id, cle = await _live_ticket(setup)
+    project_id, item_id, key = await _live_ticket(setup)
     executor = setup.adapters.executor
     executor.handler = lambda _stage_input: prod_verifier_result()
     async with worker_factory():
-        first = await start_interpreter(temporal_env, setup, projet_id, item_id, cle)
+        first = await start_interpreter(temporal_env, setup, project_id, item_id, key)
         await asyncio.wait_for(first.result(), timeout=60)
         # Where the work item stands if the interpreter died between the run and its decision:
         # its state not moved, and the run not marked decided (#552).
@@ -184,7 +184,7 @@ async def test_a_restart_after_a_succeeded_run_reads_it_back(
         assert await _undecide(item_id) == 1, "the applied decision is recorded on the run"
         assert [status for _, status in await _runs(item_id)] == ["succeeded"]
 
-        handle = await start_interpreter(temporal_env, setup, projet_id, item_id, cle)
+        handle = await start_interpreter(temporal_env, setup, project_id, item_id, key)
         outcome = await asyncio.wait_for(handle.result(), timeout=60)
 
     assert outcome["state"] == "verified", outcome

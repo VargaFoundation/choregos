@@ -79,7 +79,7 @@ async def test_replay_history(path: Path) -> None:
 
 async def test_record_and_replay_roundtrip(tmp_path: Path) -> None:
     """Record a fresh history then replay it: the loop is verifiable in CI."""
-    from choregos_orchestrator.testing import workers_repartis
+    from choregos_orchestrator.testing import workers_by_queue
     from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from choregos_orchestrator.workflows.train import ReleaseTrain
     from temporalio.client import WorkflowHistory
@@ -91,11 +91,11 @@ async def test_record_and_replay_roundtrip(tmp_path: Path) -> None:
         # One worker per queue: `notify` and `enqueue_merge` are scheduled on `tracker`, not on
         # the workflow's queue. A single worker would hide the split the history must carry,
         # and the replayed history would be that of a deployment that does not exist.
-        async with workers_repartis(
+        async with workers_by_queue(
             environment.client,
-            activites=_stub_activities(),
+            activities=_stub_activities(),
             workflows=[ReleaseTrain],
-            file_du_workflow="replay",
+            workflow_queue="replay",
         ):
             handle = await environment.client.start_workflow(
                 "ReleaseTrain",

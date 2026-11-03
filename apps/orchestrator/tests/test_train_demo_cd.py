@@ -1,5 +1,5 @@
-"""Un vrai `ReleaseTrain` sur le `cd` de démonstration (S21-24) : le train d'un projet de démonstration
-promeut, vérifie et, quand la promotion est cassée exprès, revient en arrière et se gèle."""
+"""A real `ReleaseTrain` on the demo `cd` (S21-24): the train of a demo project
+promotes, verifies and, when the promotion is broken on purpose, rolls back and freezes."""
 
 from __future__ import annotations
 
@@ -13,25 +13,25 @@ from .conftest import Fixture
 pytestmark = pytest.mark.asyncio
 
 
-async def _jusqu_a(handle: Any, predicat: Any, timeout: float = 60.0) -> dict[str, Any]:
+async def _until(handle: Any, predicate: Any, timeout: float = 60.0) -> dict[str, Any]:
     for _ in range(int(timeout * 10)):
-        etat = await handle.query("status_query")
-        if predicat(etat):
-            return dict(etat)
+        state = await handle.query("status_query")
+        if predicate(state):
+            return dict(state)
         await asyncio.sleep(0.1)
-    raise AssertionError(f"jamais atteint : {await handle.query('status_query')}")
+    raise AssertionError(f"never reached: {await handle.query('status_query')}")
 
 
-def _cd_de_demo(setup: Fixture) -> Any:
-    from choregos_adapters.fakes.cd_de_demo import CdDeDemo, FakeCdDeDemo
-    from choregos_adapters.fakes.rh import Guichet
+def _demo_cd(setup: Fixture) -> Any:
+    from choregos_adapters.fakes.demo_cd import DemoCd, FakeDemoCd
+    from choregos_adapters.fakes.rh import Desk
 
-    faux = FakeCdDeDemo()
-    setup.adapters.cd = CdDeDemo(Guichet(faux))
-    return faux
+    fake = FakeDemoCd()
+    setup.adapters.cd = DemoCd(Desk(fake))
+    return fake
 
 
-async def _depart(temporal_env: Any, setup: Fixture) -> Any:
+async def _departure(temporal_env: Any, setup: Fixture) -> Any:
     train = await temporal_env.client.start_workflow(
         "ReleaseTrain",
         {"project_slug": setup.project_slug, "env": "prod"},
@@ -52,35 +52,35 @@ async def _releases() -> list[Any]:
         return list((await session.execute(select(Release))).scalars())
 
 
-async def test_le_train_livre_sur_le_cd_de_demonstration(
+async def test_the_train_delivers_on_the_demo_cd(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    faux = _cd_de_demo(setup)
+    fake = _demo_cd(setup)
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
-            train = await _depart(temporal_env, setup)
-            await _jusqu_a(train, lambda s: s["status"] == "awaiting_approval")
+            train = await _departure(temporal_env, setup)
+            await _until(train, lambda s: s["status"] == "awaiting_approval")
             await train.signal("approve", {"by": "marie"})
-            await _jusqu_a(train, lambda s: s["status"] == "collecting" and s["batch_size"] == 0)
+            await _until(train, lambda s: s["status"] == "collecting" and s["batch_size"] == 0)
             await train.signal("abort", {"by": "test"})
             await train.result()
     (release,) = await _releases()
     assert release.status == "done"
     assert release.promotion_url == "demo://prod/1"
-    assert faux.applications["billing-api"]["status"] == "Healthy"
+    assert fake.applications["billing-api"]["status"] == "Healthy"
 
 
-async def test_une_promotion_cassee_expres_ramene_le_train_en_arriere_et_le_gele(
+async def test_a_promotion_broken_on_purpose_rolls_the_train_back_and_freezes_it(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    faux = _cd_de_demo(setup)
-    faux.break_next_rollout()
+    fake = _demo_cd(setup)
+    fake.break_next_rollout()
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
-            train = await _depart(temporal_env, setup)
-            await _jusqu_a(train, lambda s: s["frozen"] is True)
+            train = await _departure(temporal_env, setup)
+            await _until(train, lambda s: s["frozen"] is True)
             await train.signal("abort", {"by": "test"})
             await train.result()
     (release,) = await _releases()
     assert release.status == "rolled_back"
-    assert faux.applications["billing-api"]["rollout"] == "Aborted"
+    assert fake.applications["billing-api"]["rollout"] == "Aborted"

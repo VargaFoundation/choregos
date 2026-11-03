@@ -42,10 +42,10 @@ async def _agent(setup: Fixture, network: dict[str, Any] | None = None, slug: st
     from choregos_api.db.session import session_scope
 
     async with session_scope() as session:
-        projet = await session.get(Project, setup.project_id)
-        assert projet is not None
+        project = await session.get(Project, setup.project_id)
+        assert project is not None
         agent = Agent(
-            org_id=projet.org_id, slug=slug, kind="internal", display_name=slug, status="active", scope="org"
+            org_id=project.org_id, slug=slug, kind="internal", display_name=slug, status="active", scope="org"
         )
         session.add(agent)
         await session.flush()
@@ -53,7 +53,7 @@ async def _agent(setup: Fixture, network: dict[str, Any] | None = None, slug: st
         if network is not None:
             spec["network"] = network
         session.add(
-            AgentVersion(agent_id=agent.id, org_id=projet.org_id, version=1, spec=spec, checksum="sha256:v1")
+            AgentVersion(agent_id=agent.id, org_id=project.org_id, version=1, spec=spec, checksum="sha256:v1")
         )
 
 

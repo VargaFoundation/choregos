@@ -24,9 +24,9 @@ REASON = (
 
 
 async def _prepare(setup: Fixture) -> dict[str, Any]:
-    from choregos_orchestrator.activities import stage as activites
+    from choregos_orchestrator.activities import stage as activities
 
-    return await activites.prepare_stage(
+    return await activities.prepare_stage(
         {
             "project_id": setup.project_id,
             "work_item_id": setup.work_item_id,
@@ -41,9 +41,9 @@ async def _prepare(setup: Fixture) -> dict[str, Any]:
 
 
 async def _start(setup: Fixture, plan: dict[str, Any]) -> dict[str, Any]:
-    from choregos_orchestrator.activities import stage as activites
+    from choregos_orchestrator.activities import stage as activities
 
-    return await activites.start_run(
+    return await activities.start_run(
         {
             "project_id": setup.project_id,
             "work_item_id": setup.work_item_id,
