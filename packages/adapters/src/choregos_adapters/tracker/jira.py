@@ -26,6 +26,7 @@ from ..http import RestClient
 from .adf import markdown_to_adf, text_of_adf
 from .champs import ANCIENS_NOMS, COUT, RISQUE, RUN, TAILLE, nom_actuel
 from .jira_events import parse_jira_event, person_of
+from .ticket_fields import TRACKER_FIELD, jira_answers, person, tracker_block
 
 STATUS_COMMENT_MARKER = "[choregos:status]"
 GATEWAY = "https://api.atlassian.com"
@@ -103,12 +104,21 @@ class JiraTracker:
     # ───────────────────────── lecture ─────────────────────────
 
     async def fetch_item(self, key: str) -> WorkItemData:
+        # `names`: the display name of each custom field, which keys the form's answers (S51-04).
         issue = await self.client.request(
-            "GET", f"/rest/api/3/issue/{key}", params={"fields": "*all", "expand": "renderedFields"}
+            "GET", f"/rest/api/3/issue/{key}", params={"fields": "*all", "expand": "renderedFields,names"}
         )
         fields = issue.get("fields", {}) or {}
         comments = ((fields.get("comment") or {}).get("comments")) or []
         labels = list(fields.get("labels") or [])
+        tracker = tracker_block(
+            kind="jira",
+            key=str(issue.get("key") or key),
+            reporter=person(fields.get("reporter")),
+            creator=person(fields.get("creator")),
+            labels=labels,
+            answers=jira_answers(fields, issue.get("names") or {}),
+        )
         return WorkItemData(
             key=key,
             title=fields.get("summary", ""),
@@ -121,6 +131,7 @@ class JiraTracker:
             risk=_parse_enum(Risk, fields, self._nom_present(RISQUE, fields)),
             assignees=[a for a in [((fields.get("assignee") or {}).get("displayName"))] if a],
             author=person_of(fields.get("reporter")),
+            fields={TRACKER_FIELD: tracker},
             comments=[
                 Comment(
                     id=str(comment.get("id")),

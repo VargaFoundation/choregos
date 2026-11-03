@@ -15,6 +15,7 @@ from typing import Any, Literal
 from uuid import uuid4
 
 from choregos_core import WorkflowEngine
+from choregos_core.domain import TRACKER_FIELD
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import Project, WorkflowDef, WorkItem
@@ -51,6 +52,9 @@ class Naissance:
     budget_usd: float | None = None
     #: An id derived by the caller (ADR 0008): an A2A message sent twice finds its work item (ADR 0078).
     item_id: str | None = None
+    #: What the tracker knows about the ticket (S51-04), read from the tracker itself, never from a
+    #: caller: stored as `fields["tracker"]`, beside the fields the workflow declares.
+    tracker: dict[str, Any] | None = None
 
 
 def _correspond(condition: dict[str, Any], etiquettes: set[str], type_: str | None) -> bool:
@@ -111,8 +115,30 @@ async def choisir_workflow(
     return (await route(session, project, naissance)).row
 
 
+def refuse_reserved_fields(fields: dict[str, Any]) -> None:
+    """A caller (a person, the MCP door, an agent's fan-out) may not write `fields.tracker` (S51-04):
+    only what the tracker returned goes there, or an agent could be shown a forged requester."""
+    if TRACKER_FIELD in fields:
+        raise unprocessable(
+            f"`fields.{TRACKER_FIELD}` is reserved: the platform writes what the tracker says about "
+            "the ticket there",
+            [{"loc": ["fields", TRACKER_FIELD], "msg": "reserved field"}],
+        )
+
+
+def with_tracker(fields: dict[str, Any], tracker: Any) -> dict[str, Any]:
+    """The work item's fields with what the tracker says about it, replaced whole (S51-04)."""
+    if not isinstance(tracker, dict):
+        return dict(fields)
+    return {**fields, TRACKER_FIELD: dict(tracker)}
+
+
 def valider_les_champs(schema: dict[str, Any] | None, champs: dict[str, Any], workflow: str) -> None:
-    """Un champ hors du schéma, ou un champ requis absent : 422, avec son chemin."""
+    """A field outside the schema, or a required field missing: 422, with its path.
+
+    `fields.tracker` is the platform's (S51-04), not the workflow's: it is left out of the check, so a
+    workflow whose inputs forbid extra properties still accepts a work item filed from Jira."""
+    champs = {k: v for k, v in champs.items() if k != TRACKER_FIELD}
     if schema is None:
         if champs:
             raise unprocessable(f"workflow `{workflow}` declares no field (`metadata.inputs`)")
@@ -166,6 +192,7 @@ async def verifier_la_naissance(session: AsyncSession, project: Project, naissan
     """Refuses (422) a birth that `nouveau_ticket` would refuse: unknown workflow, invalid fields,
     a budget wider than allowed. Nothing is written, so a caller can run it BEFORE a side effect
     it could not take back (the issue created in an external tracker, S39-16)."""
+    refuse_reserved_fields(naissance.fields)
     ligne = await choisir_workflow(session, project, naissance)
     workflow = workflow_model(ligne)
     valider_les_champs(workflow.metadata.inputs, naissance.fields, workflow.metadata.name)
@@ -174,6 +201,7 @@ async def verifier_la_naissance(session: AsyncSession, project: Project, naissan
 
 async def nouveau_ticket(session: AsyncSession, project: Project, naissance: Naissance) -> WorkItem:
     """Le seul constructeur : l'état initial DU workflow choisi, et l'épingle de sa version."""
+    refuse_reserved_fields(naissance.fields)
     routed = await route(session, project, naissance)
     ligne = routed.row
     workflow = workflow_model(ligne)
@@ -192,7 +220,7 @@ async def nouveau_ticket(session: AsyncSession, project: Project, naissance: Nai
         reporter=naissance.reporter,
         initiated_by=naissance.initiated_by,
         allowed_paths=list(naissance.allowed_paths),
-        fields=dict(naissance.fields),
+        fields=with_tracker(naissance.fields, naissance.tracker),
         budget_usd=await _budget_at_launch(session, project, workflow, naissance),
     )
     if naissance.item_id is not None:
@@ -214,13 +242,20 @@ async def nouveau_ticket(session: AsyncSession, project: Project, naissance: Nai
 
 
 async def nouveau_ticket_d_essai(
-    session: AsyncSession, project: Project, *, title: str, body: str | None, created_by: str | None
+    session: AsyncSession,
+    project: Project,
+    *,
+    title: str,
+    body: str | None,
+    created_by: str | None,
+    fields: dict[str, Any] | None = None,
 ) -> WorkItem:
     """The work item of an agent trial (S32-03): it never enters a workflow, so its state is `trial`.
 
     It lives here, with the only other `WorkItem(`, so that the single-constructor guard
     (test_un_seul_constructeur_de_ticket) still holds: a trial is not routed, it only needs a row
-    the run, its cost and its log hang from.
+    the run, its cost and its log hang from. Its `fields` are the sample's (S51-04): a trial may play
+    a ticket filed from a tracker, `fields.tracker` included, since it acts on nothing real.
     """
     item = WorkItem(
         project_id=project.id,
@@ -228,6 +263,7 @@ async def nouveau_ticket_d_essai(
         title=title,
         body_snapshot=body,
         state="trial",
+        fields=dict(fields or {}),
         created_by=created_by,
         initiated_by=initiator("trial", created_by),
     )

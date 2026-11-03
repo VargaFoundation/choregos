@@ -8,6 +8,7 @@ par `delivery_id`, et on signale Temporal. Tout le reste est asynchrone.
 from __future__ import annotations
 
 import json
+from collections.abc import Awaitable, Callable
 from typing import Annotated, Any
 
 from choregos_contracts import InboundEvent, InboundEventType
@@ -33,6 +34,7 @@ from ..services import (
     workflow_model,
 )
 from ..services.initiator import initiator
+from ..services.routage import with_tracker
 from ..temporal import deliver_inbound, get_temporal, interpreter_id, train_id
 
 router = APIRouter(tags=["webhooks"], prefix="/webhooks")
@@ -149,11 +151,24 @@ async def _jira_project_for(session: Any, payload: dict[str, Any]) -> tuple[Proj
     return None, False
 
 
-async def _dispatch(session: Any, events: list[InboundEvent], project_of: Project | None = None) -> int:
+#: Reads what the tracker says about a ticket (`fields.tracker`, S51-04) from the tracker itself.
+TrackerOf = Callable[[Project, str], Awaitable[dict[str, Any] | None]]
+
+
+async def _dispatch(
+    session: Any,
+    events: list[InboundEvent],
+    project_of: Project | None = None,
+    tracker_of: TrackerOf | None = None,
+) -> int:
     """Route each event: a signal to its work item's workflow, or a start on `agent-ready`.
 
     `project_of`: the project, already known from the organisation that verified the delivery (a plugin
-    server's webhook, S43-07): never looked up by slug across organisations."""
+    server's webhook, S43-07): never looked up by slug across organisations.
+
+    `tracker_of`: what the tracker says about the ticket, re-read from the tracker (never from the
+    payload): a work item born of the event carries it as `fields.tracker`, and an existing one has it
+    replaced, so a requester or an answer changed in the tracker reaches the next stage (S51-04)."""
     delivered = 0
     for event in events:
         project = project_of or await _project_for(session, event.project_slug)
@@ -177,6 +192,9 @@ async def _dispatch(session: Any, events: list[InboundEvent], project_of: Projec
         if item is None and not should_start and _starts_by_rule(project, event):
             should_start = True  # a project rule, not the label (S56-03)
         created = False
+        tracker: dict[str, Any] | None = None
+        if tracker_of is not None and (item is not None or should_start):
+            tracker = await tracker_of(project, key)
         if item is None and should_start:
             created = True
             # Né dans le workflow que désignent ses étiquettes ou son type (ADR 0031) — plus en
@@ -193,11 +211,14 @@ async def _dispatch(session: Any, events: list[InboundEvent], project_of: Projec
                     item_type=event.payload.get("item_type"),
                     reporter=event.payload.get("reporter"),
                     initiated_by=initiator("tracker", event.source),
+                    tracker=tracker,
                 ),
             )
         if item is None:
             received_events.record(session, project, event, "ignored_not_agent_ready")
             continue
+        if tracker is not None and not created:
+            item.fields = with_tracker(dict(item.fields or {}), tracker)
         etiquettes = event.payload.get("labels")
         if event.type in ETIQUETTES_A_JOUR and isinstance(etiquettes, list):
             # L'état courant des étiquettes, posé ou retiré : la voie express les lit (#279).
@@ -534,8 +555,30 @@ async def jira_webhook(
     project, decided = await _jira_project_for(session, payload)
     if decided and project is None:
         return WebhookAck(accepted=True, events=0)
-    delivered = await _dispatch(session, events, project_of=project)
+    delivered = await _dispatch(session, events, project_of=project, tracker_of=_jira_tracker_of(session))
     return WebhookAck(accepted=True, events=delivered)
+
+
+def _jira_tracker_of(session: Any) -> TrackerOf:
+    """Re-reads the issue through the project's Jira connector: a webhook payload has no field names
+    (`expand=names`) and is only as trustworthy as a shared secret. Best effort: a project without a
+    Jira connector, or an issue that cannot be read, leaves `fields.tracker` as it was."""
+    from choregos_core.domain import TRACKER_FIELD
+
+    from ..services.tickets import tracker_du_projet
+
+    async def read(project: Project, key: str) -> dict[str, Any] | None:
+        try:
+            row, adapter = await tracker_du_projet(session, project)
+            if row is None or row.type != "jira" or adapter is None:
+                return None
+            found = (await adapter.fetch_item(key)).fields.get(TRACKER_FIELD)
+        except Exception as failed:  # the delivery is still routed; the block waits for the next one
+            logger.warning("jira.webhook.tracker_unread", key=key, error=str(failed)[:300])
+            return None
+        return dict(found) if isinstance(found, dict) else None
+
+    return read
 
 
 @router.post(
@@ -649,6 +692,7 @@ async def plugin_webhook(
     name; 401: the server does not recognise the delivery."""
     from choregos_adapters import build
     from choregos_adapters.errors import AdapterError
+    from choregos_core.domain import TRACKER_FIELD
 
     from ..services.plugin_tracker import pin_plugin_tracker
 
@@ -681,6 +725,7 @@ async def plugin_webhook(
                 logger.info("plugin.webhook.unrouted", plugin=plugin, server=server, key=found["item_key"])
                 continue
             item = await adapter.fetch_item(found["item_key"])
+            block = item.fields.get(TRACKER_FIELD)
             event = InboundEvent(
                 type=InboundEventType(found["kind"]),
                 source=f"plugin:{plugin}/{server}",
@@ -696,8 +741,22 @@ async def plugin_webhook(
                     "state": item.state,
                 },
             )
-            delivered += await _dispatch(session, [event], project_of=project)
+            delivered += await _dispatch(
+                session,
+                [event],
+                project_of=project,
+                tracker_of=_known(block if isinstance(block, dict) else None),
+            )
         return WebhookAck(
             accepted=True, events=delivered, duplicate=bool(events) and duplicates == len(events)
         )
     raise unauthorized("no server recognised the delivery")
+
+
+def _known(block: dict[str, Any] | None) -> TrackerOf:
+    """What the tracker says, already re-read (a plugin server's `tracker_fetch_item`)."""
+
+    async def read(project: Project, key: str) -> dict[str, Any] | None:
+        return block
+
+    return read

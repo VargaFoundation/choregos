@@ -30,6 +30,7 @@ from choregos_contracts.workflow import (
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
 
+from ..domain import TRACKER_FIELD
 from ..errors import Issue
 from ..gates import ALREADY_FIXED_GATE, known_gates
 from .dates import champ_de
@@ -155,6 +156,14 @@ def _check_inputs(wf: Workflow, report: ValidationReport, source: Any) -> None:
             "inputs.not_object",
             "`metadata.inputs` describes an object: the work item's fields",
             ["metadata", "inputs"],
+            source,
+        )
+    if TRACKER_FIELD in (schema.get("properties") or {}) or TRACKER_FIELD in (schema.get("required") or []):
+        report.error(
+            "inputs.reserved",
+            f"`{TRACKER_FIELD}` is reserved: the platform puts there what the tracker says about the "
+            "ticket (`ticket.fields.tracker`); name the field otherwise",
+            ["metadata", "inputs", "properties", TRACKER_FIELD],
             source,
         )
 

@@ -89,3 +89,32 @@ async def test_a_trial_s_draft_must_render(client: AsyncClient, project: dict[st
         json={"project": "billing-api", "spec": _spec("{{ ''.__class__ }}"), "input": {"title": "x"}},
     )
     assert refuse.status_code == 422, refuse.text
+
+
+async def test_an_eval_case_plays_a_ticket_filed_from_a_tracker(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    """S51-04: a case renders `ticket.fields` — its own, or `{}` — so instructions reading the
+    requester behind a guard publish, and a case can check what they say about one."""
+    instructions = (
+        "{% if ticket.fields.tracker is defined %}Filed by "
+        "{{ ticket.fields.tracker.reporter.display_name }}.{% else %}Filed in the console.{% endif %}"
+    )
+    tracker = {"kind": "jira", "key": "FON-270", "reporter": {"display_name": "Camille Martin"}}
+    cases = [
+        {"name": "console", "input": {"title": "x"}, "must_contain": ["Filed in the console."]},
+        {"name": "jira", "input": {"title": "x", "fields": {"tracker": tracker}},
+         "must_contain": ["Filed by Camille Martin."]},
+    ]  # fmt: skip
+    created = await client.post(
+        AGENTS, json={"slug": "access", "display_name": "Access", "spec": _spec(instructions, cases)}
+    )
+    assert created.status_code == 201, created.text
+
+    trial = await client.post(
+        "/api/v1/orgs/varga/agent-trials",
+        json={"project": "billing-api", "spec": _spec(instructions), "input": cases[1]["input"]},
+    )
+    assert trial.status_code == 201, trial.text
+    read = await client.get(f"/api/v1/work-items/{trial.json()['work_item_id']}")
+    assert read.json()["fields"] == {"tracker": tracker}, "the trial plays the sample's fields"
