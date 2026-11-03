@@ -274,7 +274,9 @@ async def resolutions(session: AsyncSession, org_id: str, slugs: set[str]) -> di
     return out
 
 
-def entry_dto(o: Offered, resolved: dict[str, Resolution]) -> WorkflowCatalogueEntryDto:
+def entry_dto(
+    o: Offered, resolved: dict[str, Resolution], *, with_yaml: bool = True
+) -> WorkflowCatalogueEntryDto:
     meta = o.workflow.metadata
     info = meta.catalogue
     requires = _requirements(o.yaml)
@@ -305,7 +307,7 @@ def entry_dto(o: Offered, resolved: dict[str, Resolution]) -> WorkflowCatalogueE
         needs_repository=any(e.capacite == "scm" for e in requires),
         groups=groups,
         agents=agents,
-        yaml=o.yaml,
+        yaml=o.yaml if with_yaml else None,
         shared_by=o.shared_by,
         shared_from=o.shared_from,
         shared_at=o.shared_at,
@@ -316,7 +318,8 @@ async def entries(session: AsyncSession, org_id: str) -> list[WorkflowCatalogueE
     listed = await offered(session, org_id)
     slugs = {slug for o in listed for _, slug, _ in named_agents(o.workflow)}
     resolved = await resolutions(session, org_id, slugs)
-    return [entry_dto(o, resolved) for o in listed]
+    # The list carries no YAML (S55-04b): it weighed every entry's whole text and no page reads it.
+    return [entry_dto(o, resolved, with_yaml=False) for o in listed]
 
 
 def renamed(text: str, name: str) -> str:

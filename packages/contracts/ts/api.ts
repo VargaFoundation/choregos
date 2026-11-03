@@ -886,7 +886,8 @@ export type WorkflowCatalogueEntry = {
   /** the human groups its actors name (ADR 0044) */
   groups: Array<string>;
   agents: Array<WorkflowCatalogueAgent>;
-  yaml: string;
+  /** The workflow's YAML: in the answer to a share only. The list leaves it out (null): every entry's whole text made the library slow to load and no page reads it (S55-04b). */
+  yaml?: string | null;
   /** for an `org` entry */
   shared_by?: string | null;
   /** for an `org` entry: `<project>/<workflow>@<version>` */
