@@ -98,8 +98,7 @@ async def test_an_item_moved_into_a_rule_s_state_starts_once(client: AsyncClient
     assert await _outcomes(client, project) == [
         ("ABC-7", "ignored_not_agent_ready"),
         ("ABC-7", "created_work_item"),
-        ("ABC-7", "signalled"),
-    ]
+    ]  # the later move of an item already born leaves no row: a card move is not a decision (ADR 0102)
 
 
 async def test_without_rules_only_agent_ready_starts(client: AsyncClient, admin: str) -> None:
