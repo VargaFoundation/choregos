@@ -28,7 +28,7 @@ def former_code(code: str) -> dict[str, str]:
 
 
 class ApiError(Exception):
-    """Erreur applicative portant un statut HTTP et un type RFC 9457."""
+    """Application error carrying an HTTP status and an RFC 9457 type."""
 
     def __init__(
         self,
@@ -87,7 +87,7 @@ def unprocessable(detail: str, errors: list[dict[str, Any]] | None = None) -> Ap
 
 
 def upstream(service: str, detail: str, retry_after: int | None = None) -> ApiError:
-    """Erreur d'un service externe (GitHub, Argo, LiteLLM) encapsulée avec un `retry_after`."""
+    """Error from an external service (GitHub, Argo, LiteLLM) wrapped with a `retry_after`."""
     return ApiError(
         status.HTTP_502_BAD_GATEWAY,
         f"Error from the {service} service",

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Dépendances FastAPI : session, identité, RBAC, pagination."""
+"""FastAPI dependencies: session, identity, RBAC, pagination."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from typing import Annotated, Any
 import jwt
 from choregos_contracts import Role
 from choregos_core import utcnow
+from choregos_core.compat import alias_names
 from fastapi import Depends, Header, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,7 +35,7 @@ from .security import RunClaims, hash_api_token, read_session, verify_egress_tok
 
 
 async def get_db() -> AsyncIterator[AsyncSession]:
-    """Session transactionnelle par requête : commit à la sortie, rollback sur exception."""
+    """Transactional session per request: commit on exit, rollback on exception."""
     async with get_sessionmaker()() as session:
         try:
             yield session
@@ -45,23 +46,23 @@ async def get_db() -> AsyncIterator[AsyncSession]:
         await run_after_commit(session)
 
 
-#: `scope="function"` : la session se ferme — et la transaction se valide — AVANT l'envoi de la
-#: réponse. En portée « requête » (le défaut de FastAPI), le `commit` venait APRÈS : un client rapide
-#: lisait un état pas encore écrit (l'utilisateur que le callback de connexion venait de créer :
-#: « session périmée »), et un `commit` qui échouait laissait au client un 201 sur une écriture qui
-#: n'avait pas eu lieu. `ASGITransport` attend la fin de l'application : aucun test ne le voyait.
-#: Constaté sur la pile intégrée de l'essai du socle, servie par uvicorn.
+#: `scope="function"`: the session closes, and the transaction commits, BEFORE the response is sent.
+#: With "request" scope (FastAPI's default), the `commit` came AFTER: a fast client read a state not
+#: yet written (the user that the sign-in callback had just created: "expired session"), and a
+#: `commit` that failed left the client a 201 on a write that had not happened. `ASGITransport`
+#: waits for the application to finish, so no test saw it. Found on the integrated stack of the
+#: foundation trial, served by uvicorn.
 Db = Annotated[AsyncSession, Depends(get_db, scope="function")]
 
 
-async def get_db_plateforme() -> AsyncIterator[AsyncSession]:
-    """Session qui agit POUR la plateforme : elle voit toutes les organisations (`*`).
+async def get_platform_db() -> AsyncIterator[AsyncSession]:
+    """A session that acts FOR the platform: it sees every organisation (`*`).
 
-    Pour les routes sans principal, authentifiées par une signature ou un secret partagé — les
-    webhooks. Elles utilisaient `get_db`, sans portée : sur PostgreSQL la RLS fail-closed leur
-    cachait tous les projets, et chaque événement de CI, de CD ou de tracker était jeté comme « sans
-    projet connu ». Les tests d'API tournent sur SQLite, où la RLS n'existe pas : personne ne l'a vu.
-    Une route qui prend cette session doit avoir vérifié qui l'appelle AVANT de lire.
+    For the routes without a principal, authenticated by a signature or a shared secret: the
+    webhooks. They used `get_db`, without a scope: on PostgreSQL fail-closed RLS hid every project
+    from them, and every CI, CD or tracker event was dropped as "no known project". The API tests
+    run on SQLite, where RLS does not exist: nobody saw it. A route that takes this session must
+    have checked who is calling BEFORE reading.
     """
     async with get_sessionmaker()() as session:
         await limiter_aux_organisations(session, TOUT)
@@ -74,21 +75,21 @@ async def get_db_plateforme() -> AsyncIterator[AsyncSession]:
         await run_after_commit(session)
 
 
-DbPlateforme = Annotated[AsyncSession, Depends(get_db_plateforme, scope="function")]
+PlatformDb = Annotated[AsyncSession, Depends(get_platform_db, scope="function")]
 Config = Annotated[Settings, Depends(get_settings)]
 
 
 def _aware(moment: datetime) -> datetime:
-    """SQLite rend des datetimes naïfs ; PostgreSQL des datetimes en UTC. On compare en UTC."""
+    """SQLite returns naive datetimes; PostgreSQL returns UTC ones. We compare in UTC."""
     return moment if moment.tzinfo is not None else moment.replace(tzinfo=UTC)
 
 
 async def _principal_from_user(session: AsyncSession, user: User, *, narrow: bool = True) -> Principal:
-    # L'identité se résout en portée de PLATEFORME, puis la session est bornée plus bas. Sans cette
-    # ligne, la jointure sur `projects` (sous RLS) ne voyait aucun projet sur PostgreSQL : une
-    # appartenance DE PROJET arrivait avec `project_slug = None`, et devenait un rôle sur TOUTE
-    # l'organisation — un développeur invité sur un projet lisait tous les autres. Invisible sur
-    # SQLite, où la RLS n'existe pas ; trouvé en faisant tourner la suite entière sur PostgreSQL.
+    # The identity is resolved in PLATFORM scope, then the session is narrowed below. Without this
+    # line, the join on `projects` (under RLS) saw no project on PostgreSQL: a PROJECT membership
+    # arrived with `project_slug = None`, and became a role on the WHOLE organisation, so a developer
+    # invited to one project read all the others. Invisible on SQLite, where RLS does not exist;
+    # found by running the whole suite on PostgreSQL.
     await limiter_aux_organisations(session, TOUT)
     rows = (
         await session.execute(
@@ -115,8 +116,8 @@ async def _principal_from_user(session: AsyncSession, user: User, *, narrow: boo
         project_roles=project_roles,
         groups=[str(g) for g in (user.groups or [])],
     )
-    # La session de CETTE requête ne voit que les organisations du principal : c'est ici
-    # que la RLS s'arme, parce que c'est ici qu'on sait qui parle.
+    # THIS request's session sees only the principal's organisations: this is where RLS arms,
+    # because this is where we know who is speaking.
     orgs = set(org_roles) | {qualified.split("/", 1)[0] for qualified in project_roles}
     if narrow:
         await limiter_aux_organisations(session, sorted(orgs))
@@ -132,13 +133,13 @@ async def principal_for_user(session: AsyncSession, user: User, *, narrow: bool 
     return await _principal_from_user(session, user, narrow=narrow)
 
 
-def jeton_rest(token: ApiToken) -> bool:
-    """Ce jeton ouvre-t-il l'API REST ? Un jeton antérieur aux portées (liste vide) vaut `*`."""
+def is_rest_token(token: ApiToken) -> bool:
+    """Does this token open the REST API? A token older than scopes (empty list) counts as `*`."""
     return "*" in (token.scopes or ["*"])
 
 
-def noter_l_usage(token: ApiToken, request: HTTPConnection) -> None:
-    """Le dernier usage et le client qui l'a fait : la page Integrations dit « connecté »."""
+def record_usage(token: ApiToken, request: HTTPConnection) -> None:
+    """The last use and the client that made it: the Integrations page says "connected"."""
     token.last_used_at = utcnow()
     client = request.headers.get("user-agent", "").strip()
     token.last_client = client[:200] or None
@@ -151,10 +152,10 @@ async def current_principal(
     settings: Config,
     authorization: Annotated[str | None, Header()] = None,
 ) -> Principal:
-    """Identité de l'appelant : cookie de session OIDC, ou jeton d'API porteur.
+    """Identity of the caller: OIDC session cookie, or bearer API token.
 
-    Le jeton et l'utilisateur se lisent en portée de PLATEFORME : `api_tokens` et `users` sont sous
-    RLS depuis la 0.11, et on ne sait pas encore qui parle. `_principal_from_user` borne ensuite.
+    The token and the user are read in PLATFORM scope: `api_tokens` and `users` are under RLS since
+    0.11, and we do not yet know who is speaking. `_principal_from_user` narrows afterwards.
     """
     await limiter_aux_organisations(session, TOUT)
     if authorization and authorization.lower().startswith("bearer "):
@@ -164,14 +165,14 @@ async def current_principal(
         ).scalar_one_or_none()
         if token is None:
             raise unauthorized("unknown or revoked API token")
-        # `expires_at` existait en base sans que personne ne le lise : un jeton expiré
-        # restait valable à vie (état des lieux du 2026-09-24).
+        # `expires_at` existed in the database without anyone reading it: an expired token stayed
+        # valid for life (inventory of 2026-09-24).
         if token.expires_at is not None and _aware(token.expires_at) <= utcnow():
             raise unauthorized("expired API token")
-        if not jeton_rest(token):
-            # ADR 0030 : un jeton à portée MCP ne sert QU'À la porte MCP. Volé dans la
-            # configuration d'un client, il ne doit ni frapper un autre jeton, ni décider, ni
-            # lire quoi que ce soit hors de la porte.
+        if not is_rest_token(token):
+            # ADR 0030: a token with MCP scope serves ONLY the MCP door. Stolen from a client's
+            # configuration, it must neither mint another token, nor decide, nor read anything
+            # outside the door.
             raise forbidden(
                 "this token is reserved for the MCP door or the A2A door (scope mcp:* or a2a); "
                 "the REST API needs the `*` scope"
@@ -179,7 +180,7 @@ async def current_principal(
         user = await session.get(User, token.user_id)
         if user is None:
             raise unauthorized("orphaned API token: its user no longer exists")
-        noter_l_usage(token, request)
+        record_usage(token, request)
         principal = await _principal_from_user(session, user)
         principal.kind = "user"
         return principal
@@ -190,83 +191,82 @@ async def current_principal(
     user = await session.get(User, str(payload.get("sub", "")))
     if user is None:
         raise unauthorized("expired session")
-    await _valider_la_session(session, user, payload)
+    await _validate_session(session, user, payload)
     principal = await _principal_from_user(session, user)
-    # L'heure d'authentification chez l'IdP (`auth_time`) quand la session la porte ; sinon l'heure
-    # d'ouverture de la session (`iat`), qui la surestime après une reconnexion SSO silencieuse.
-    quand = payload.get("auth_time", payload.get("iat"))
-    principal.authentifie_le = int(quand) if isinstance(quand, int | float) else None
+    # The authentication time at the IdP (`auth_time`) when the session carries it; otherwise the
+    # time the session was opened (`iat`), which overestimates it after a silent SSO reconnection.
+    when = payload.get("auth_time", payload.get("iat"))
+    principal.authenticated_at = int(when) if isinstance(when, int | float) else None
     return principal
 
 
-async def _valider_la_session(session: AsyncSession, user: User, payload: dict[str, Any]) -> None:
-    """Les validations déclarées par les greffons (`edition.declarer_une_validation_de_session`)."""
+async def _validate_session(session: AsyncSession, user: User, payload: dict[str, Any]) -> None:
+    """The validations declared by the extensions (`edition.declare_session_validation`)."""
     import inspect
 
-    from .edition import SessionRefusee, validations_de_session
+    from .edition import SessionRefused, session_validations
 
-    for validation in validations_de_session():
+    for validation in session_validations():
         try:
-            resultat = validation(session, user, payload)
-            if inspect.isawaitable(resultat):
-                await resultat
-        except SessionRefusee as refus:
-            raise unauthorized(str(refus)) from refus
+            result = validation(session, user, payload)
+            if inspect.isawaitable(result):
+                await result
+        except SessionRefused as refusal:
+            raise unauthorized(str(refusal)) from refusal
 
 
 Me = Annotated[Principal, Depends(current_principal)]
 
 
-async def exiger_admin_de_plateforme(session: AsyncSession, principal: Principal) -> None:
-    """Administrer la PLATEFORME est un droit sur l'instance, pas sur une organisation.
+async def require_platform_admin(session: AsyncSession, principal: Principal) -> None:
+    """Administering the PLATFORM is a right on the instance, not on an organisation.
 
-    `Principal.is_platform_admin()` rend vrai dès qu'on est `org_admin` de N'IMPORTE QUELLE
-    organisation. Sur une installation à une seule organisation — l'édition communautaire
-    (ADR 0024) — c'est exact : l'administrateur de cette organisation EST l'administrateur de
-    l'instance. Dès qu'il y en a deux, ça ne l'est plus, et le prédicat accordait alors les
-    routes `/platform/*` — catalogue de backends, exécuteurs, profils de modèles, clés de
-    passerelle — à l'administrateur de n'importe quel locataire.
+    `Principal.is_platform_admin()` is true as soon as one is `org_admin` of ANY organisation. On an
+    installation with a single organisation, the community edition (ADR 0024), that is exact: the
+    administrator of that organisation IS the administrator of the instance. As soon as there are
+    two, it no longer is, and the predicate then granted the `/platform/*` routes (backend
+    catalogue, executors, model profiles, gateway keys) to the administrator of any tenant.
 
-    On exige donc d'être `org_admin` de TOUTES les organisations de l'instance. En mono-org, rien
-    ne change. En multi-org, ce n'est vrai de personne tant que l'édition entreprise n'a pas
-    défini un vrai rôle de plateforme : un refus, et c'est le bon défaut — mieux vaut une route
-    inaccessible qu'une route ouverte au mauvais locataire.
+    So we demand to be `org_admin` of ALL the organisations of the instance. In single-org, nothing
+    changes. In multi-org, it is true of nobody until the enterprise edition has defined a real
+    platform role: a refusal, and that is the right default: better a route nobody can reach than a
+    route open to the wrong tenant.
     """
     from .db.models import Organization
 
-    # Sur l'instance ENTIÈRE : sous la RLS de `organizations`, le compte fait depuis la portée d'un
-    # administrateur d'une seule organisation vaudrait 1, et il passerait pour administrateur de tout.
+    # On the WHOLE instance: under the RLS of `organizations`, the count made from the scope of the
+    # administrator of a single organisation would be 1, and they would pass for administrator of all.
     async with en_portee_de_plateforme(session):
         slugs = set((await session.execute(select(Organization.slug))).scalars().all())
-    administrees = {org for org, role in principal.org_roles.items() if role == Role.ORG_ADMIN}
-    if not slugs or not slugs <= administrees:
-        if await _accorde_par_un_greffon(session, principal):
+    administered = {org for org, role in principal.org_roles.items() if role == Role.ORG_ADMIN}
+    if not slugs or not slugs <= administered:
+        if await _granted_by_an_extension(session, principal):
             return
-        manquantes = sorted(slugs - administrees)
+        missing = sorted(slugs - administered)
         raise forbidden(
             "reserved for platform administrators: this right covers the whole instance, and you "
-            f"do not administer {manquantes or 'any organisation'}."
+            f"do not administer {missing or 'any organisation'}."
         )
 
 
 async def is_instance_admin(session: AsyncSession, principal: Principal) -> bool:
-    """`exiger_admin_de_plateforme` as a predicate, for a right that changes what a route accepts
+    """`require_platform_admin` as a predicate, for a right that changes what a route accepts
     rather than whether it opens."""
     try:
-        await exiger_admin_de_plateforme(session, principal)
+        await require_platform_admin(session, principal)
     except ApiError:
         return False
     return True
 
 
-async def _accorde_par_un_greffon(session: AsyncSession, principal: Principal) -> bool:
-    """`edition.declarer_un_administrateur_de_plateforme` : additive, elle ne retire rien."""
+async def _granted_by_an_extension(session: AsyncSession, principal: Principal) -> bool:
+    """`edition.declare_platform_administrator`: additive, it takes nothing away."""
     import inspect
 
-    from .edition import administrateurs_de_plateforme
+    from .edition import platform_administrators
 
-    for autorite in administrateurs_de_plateforme():
-        verdict = autorite(session, principal)
+    for authority in platform_administrators():
+        verdict = authority(session, principal)
         if inspect.isawaitable(verdict):
             verdict = await verdict
         if verdict is True:
@@ -276,7 +276,7 @@ async def _accorde_par_un_greffon(session: AsyncSession, principal: Principal) -
 
 @dataclass(slots=True)
 class ProjectContext:
-    """Un projet résolu, avec l'organisation et le rôle de l'appelant."""
+    """A resolved project, with the organisation and the caller's role."""
 
     project: Project
     org_slug: str
@@ -299,21 +299,21 @@ class ProjectContext:
 
 
 async def resolve_project(session: AsyncSession, identifier: str) -> tuple[Project, str]:
-    """Accepte un UUID, `org/slug` (ou `org:slug` dans un segment d'URL), ou un slug seul
-    s'il n'existe que dans UNE organisation.
+    """Accepts a UUID, `org/slug` (or `org:slug` in a URL segment), or a bare slug if it exists in
+    only ONE organisation.
 
-    Le slug seul jetait la partie `org/` et prenait le premier projet de ce nom, toutes
-    organisations confondues : un lecteur de `a/billing` pouvait tomber sur `b/billing`.
-    Un slug présent dans deux organisations est désormais ambigu, et le dit. La forme
-    `org:slug` existe parce qu'un `/` ne passe pas dans `/projects/{id}`.
+    The bare slug used to drop the `org/` part and take the first project of that name, across all
+    organisations: a reader of `a/billing` could land on `b/billing`. A slug present in two
+    organisations is now ambiguous, and says so. The `org:slug` form exists because a `/` does not
+    fit in `/projects/{id}`.
     """
     project = await session.get(Project, identifier)
     if project is not None:
         org = await session.get(Organization, project.org_id)
         return project, org.slug if org else ""
-    separateur = "/" if "/" in identifier else ":" if ":" in identifier else ""
-    if separateur:
-        org_slug, slug = identifier.split(separateur, 1)
+    separator = "/" if "/" in identifier else ":" if ":" in identifier else ""
+    if separator:
+        org_slug, slug = identifier.split(separator, 1)
         # A former slug of the organisation resolves to it: an MCP address or a qualified id copied
         # before a rename keeps working, and the caller gets the CURRENT slug (ADR 0090).
         org_slug = await current_slug(session, org_slug)
@@ -327,13 +327,13 @@ async def resolve_project(session: AsyncSession, identifier: str) -> tuple[Proje
         if project is None:
             raise not_found("Project", identifier)
         return project, org_slug
-    candidats = (await session.execute(select(Project).where(Project.slug == identifier))).scalars().all()
-    if not candidats:
+    candidates = (await session.execute(select(Project).where(Project.slug == identifier))).scalars().all()
+    if not candidates:
         raise not_found("Project", identifier)
-    if len(candidats) > 1:
+    if len(candidates) > 1:
         raise not_found("Project", f"{identifier} (ambiguous: specify `org/{identifier}`)")
-    org = await session.get(Organization, candidats[0].org_id)
-    return candidats[0], org.slug if org else ""
+    org = await session.get(Organization, candidates[0].org_id)
+    return candidates[0], org.slug if org else ""
 
 
 async def project_context(id: str, session: Db, principal: Me) -> ProjectContext:
@@ -352,7 +352,7 @@ async def run_claims(
     session: Db,
     authorization: Annotated[str | None, Header()] = None,
 ) -> RunClaims:
-    """Authentifie un runner : le JWT doit porter **ce** run et ne pas être expiré."""
+    """Authenticates a runner: the JWT must carry **this** run and not be expired."""
     if not authorization or not authorization.lower().startswith("bearer "):
         raise unauthorized("missing run token")
     try:
@@ -362,8 +362,8 @@ async def run_claims(
     if claims.run_id != id:
         raise forbidden("this token belongs to another run")
     bind(run_id=claims.run_id, project=claims.project_slug, work_item=claims.work_item_key)
-    # Un jeton de run est frappé par la plateforme pour UN run : la portée est déjà dans
-    # le jeton (`claims.run_id`, vérifié par chaque route), pas dans une organisation.
+    # A run token is minted by the platform for ONE run: the scope is already in the token
+    # (`claims.run_id`, checked by every route), not in an organisation.
     await limiter_aux_organisations(session, TOUT)
     return claims
 
@@ -404,7 +404,7 @@ class Page:
     limit: int = 50
 
     def slice(self, rows: list[Any]) -> tuple[list[Any], str | None, bool]:
-        """Pagination par curseur opaque : l'identifiant de la dernière ligne rendue."""
+        """Pagination by opaque cursor: the identifier of the last row returned."""
         start = 0
         if self.cursor:
             for index, row in enumerate(rows):
@@ -425,3 +425,23 @@ async def pagination(
 
 
 Pagination = Annotated[Page, Depends(pagination)]
+
+
+get_db_plateforme = get_platform_db  # lang: fr-ok alias:internal
+DbPlateforme = PlatformDb  # lang: fr-ok alias:internal
+jeton_rest = is_rest_token  # lang: fr-ok alias:internal
+noter_l_usage = record_usage  # lang: fr-ok alias:internal
+exiger_admin_de_plateforme = require_platform_admin  # lang: fr-ok alias:internal
+_valider_la_session = _validate_session  # lang: fr-ok alias:internal
+
+alias_names(
+    __name__,
+    {
+        "get_db_plateforme": "get_platform_db",  # lang: fr-ok alias:internal
+        "DbPlateforme": "PlatformDb",  # lang: fr-ok alias:internal
+        "jeton_rest": "is_rest_token",  # lang: fr-ok alias:internal
+        "noter_l_usage": "record_usage",  # lang: fr-ok alias:internal
+        "exiger_admin_de_plateforme": "require_platform_admin",  # lang: fr-ok alias:internal
+        "_valider_la_session": "_validate_session",  # lang: fr-ok alias:internal
+    },
+)
