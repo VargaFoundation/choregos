@@ -608,6 +608,17 @@ def _check_effets(wf: Workflow, report: ValidationReport, source: Any) -> None:
                 f"write `does: {implicite}`, so that a rename no longer changes it"
             )
             report.warn("workflow.implicit_effect", message, ["transitions", index, "to"], source)
+        if t.pull_request is not None and (not systeme or effet_de_la_transition(t) != "open_pr"):
+            message = (
+                "`pull_request:` says how the platform opens the pull request: only a `system` transition "
+                "that opens it (`does: open_pr`) carries it"
+            )
+            report.error(
+                "transition.pull_request_without_open_pr",
+                message,
+                ["transitions", index, "pull_request"],
+                source,
+            )
     for nom, etat in wf.states.items():
         if nom.startswith(PREFIXE_PRODUCTION) and not etat.production:
             message = (
