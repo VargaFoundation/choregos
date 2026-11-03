@@ -3,7 +3,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { use, useState } from "react";
-import { Button, Card, Empty, ErrorNote, EtatDeLecture, Heading, Input, StateBadge } from "@/components/ui";
+import { Button, Card, Empty, ErrorNote, EtatDeLecture, Input, StateBadge } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative, shortDate } from "@/lib/format";
 import type { PolicyDef } from "@/lib/types";
@@ -24,9 +24,6 @@ export default function TrainsPage({ params }: { params: Promise<{ slug: string 
   const envs = policy.data ? trainEnvironments(policy.data) : [];
   return (
     <div className="space-y-4">
-      <Heading as="h2" size="md">
-        Release trains
-      </Heading>
       {!policy.data ? (
         <EtatDeLecture lecture={policy} quoi="the policy's release trains" />
       ) : envs.length === 0 ? (

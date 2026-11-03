@@ -2,6 +2,7 @@
 "use client";
 
 import Link from "next/link";
+import { WorkflowChip } from "@/components/workflow-chip";
 import { DEFAULT_WORKFLOW_HINT } from "@/components/workflows/timing";
 import { usePathname } from "next/navigation";
 import { use, type ReactNode } from "react";
@@ -32,23 +33,16 @@ export default function WorkflowLayout({
   const base = `/p/${slug}/workflows/${encodeURIComponent(name)}`;
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-baseline gap-3">
-        <Link
-          href={`/p/${slug}/workflows`}
-          className="text-sm text-ink-muted hover:underline"
-        >
-          Workflows
-        </Link>
-        <span aria-hidden className="text-ink-muted">
-          /
-        </span>
-        <h2 className="text-lg font-medium">{name}</h2>
-        {definition.data && (
-          <span className="text-sm text-ink-muted">
-            v{definition.data.version}
-          </span>
+      {/* The trail above already says "Workflows / <name>" (S55-02): here the workflow wears its colour. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="flex min-w-0">
+          <WorkflowChip name={name} version={definition.data?.version} size="md" />
+        </h2>
+        {definition.data?.is_default && (
+          <Badge tone="neutral" title={DEFAULT_WORKFLOW_HINT}>
+            Default
+          </Badge>
         )}
-        {definition.data?.is_default && <Badge tone="neutral" title={DEFAULT_WORKFLOW_HINT}>Default</Badge>}
       </div>
       <Tabs aria-label={`Views of ${name}`}>
         {VUES.map((vue) => {

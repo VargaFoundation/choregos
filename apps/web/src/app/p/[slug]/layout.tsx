@@ -4,8 +4,9 @@
 import { usePathname } from "next/navigation";
 import { use, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { projectTrail } from "@/components/coquille/navigation";
-import { BreadcrumbBase, Breadcrumbs, Heading, type BreadcrumbStep } from "@/components/ui";
+import { projectSection, projectTrail } from "@/components/coquille/navigation";
+import { PageHeader } from "@/components/page-header";
+import { BreadcrumbBase, Breadcrumbs, type BreadcrumbStep } from "@/components/ui";
 import { api } from "@/lib/api";
 
 export default function ProjectLayout({
@@ -27,13 +28,20 @@ export default function ProjectLayout({
     { href: `/p/${slug}`, label: <span data-donnee>{nom}</span> },
   ];
   const trail = projectTrail(slug, pathname);
+  // The header names the section one is in, in its family's colour, under the project's name (S55-02):
+  // "FON · Board", not "FON" over every page. The overview is the project itself.
+  const section = projectSection(slug, pathname);
+  const overview = !section || section.entry.href === `/p/${encodeURIComponent(slug)}`;
   return (
     <BreadcrumbBase.Provider value={base}>
       <div className="space-y-6">
         {trail && <Breadcrumbs steps={trail} />}
-        <Heading as="h1" size="xl" data-donnee>
-          {nom}
-        </Heading>
+        <PageHeader
+          icon={section?.entry.icon}
+          hue={section?.hue}
+          eyebrow={overview ? undefined : <span data-donnee>{nom}</span>}
+          title={overview ? <span data-donnee>{nom}</span> : section.entry.label}
+        />
         {children}
       </div>
     </BreadcrumbBase.Provider>

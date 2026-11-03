@@ -5,7 +5,7 @@ import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { use, useState } from "react";
-import { Button, Drawer, Empty, ErrorNote, Heading, Select } from "@/components/ui";
+import { Button, Drawer, Empty, ErrorNote, Select } from "@/components/ui";
 import { boardWorkflows, columnsFromGraph, itemsOf, visibleColumns } from "@/components/workflows/board";
 import { BoardSection, type BoardSectionModel } from "@/components/workflows/board-section";
 import { NewWorkItemForm } from "@/components/workflows/new-work-item";
@@ -88,9 +88,6 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
     // `data-full-width`: the main container lets this page use the whole window (app/layout.tsx).
     <div className="space-y-4" data-full-width>
       <div className="flex flex-wrap items-center gap-3">
-        <Heading as="h2" size="md">
-          Board
-        </Heading>
         {(workflows.data?.length ?? 0) > 1 ? (
           <label className="flex items-center gap-2 text-sm text-ink-muted">
             Workflow
