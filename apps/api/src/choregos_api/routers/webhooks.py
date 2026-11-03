@@ -32,6 +32,7 @@ from ..services import (
     workflow_du_ticket,
     workflow_model,
 )
+from ..services.decision_ledger import observe_reopening
 from ..services.initiator import initiator
 from ..temporal import deliver_inbound, get_temporal, interpreter_id, train_id
 
@@ -196,6 +197,8 @@ async def _dispatch(session: Any, events: list[InboundEvent], project_of: Projec
         if item is None:
             received_events.record(session, project, event, "ignored_not_agent_ready")
             continue
+        # An ended work item whose issue is open again: its decisions were not right (ADR 0121 §6).
+        await observe_reopening(session, item, str(event.type), event.payload)
         etiquettes = event.payload.get("labels")
         if event.type in ETIQUETTES_A_JOUR and isinstance(etiquettes, list):
             # L'état courant des étiquettes, posé ou retiré : la voie express les lit (#279).

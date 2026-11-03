@@ -33,6 +33,7 @@ with workflow.unsafe.imports_passed_through():
     from choregos_contracts import StageResult, StageStatus, Workflow
     from choregos_contracts.workflow import effet_de_la_transition
     from choregos_core import Decision, WorkflowEngine
+    from choregos_core.decision_ledger import declares_a_confidence
     from choregos_core.dsl.dates import DateIllisible, echeance
     from choregos_core.dsl.trains import approbation_du_train, env_du_train
     from choregos_core.gates import ACTION_REGLEE, GateOutcome, unchanged_run
@@ -173,6 +174,10 @@ START_REFUSAL_ESCALATES = "start-refusal-escalates"
 #: work item ends there when the exit's guarantees prove the fix is already on the default branch, and
 #: escalates at once otherwise. Before this marker it went on to test, review, and the pull request.
 ALREADY_FIXED_ON_EVIDENCE = "already-fixed-on-evidence"
+#: The transition selected after a step that recorded decisions — a decision step's answers, an
+#: agent's declared confidence — is written on its ledger records (ADR 0121 §6, S52-05): one more
+#: activity, `note_transition_taken`. Before this marker no ledger existed.
+DECISION_LEDGER = "decision-ledger"
 #: The non-retryable error types `prepare_stage` raises for a configuration an operator can fix.
 #: Any other failure — a bug, an unreachable database once its retries are spent, an admission rule,
 #: a suspected prompt injection — still fails the interpreter, as before. Three of them were born
@@ -291,6 +296,8 @@ class WorkflowInterpreter:
         self.work_item_id: str = ""
         #: How many `child_settled` signals arrived: a join re-reads its children when it moves.
         self.children_settled: int = 0
+        #: The run whose ledger records wait for the transition selected next (ADR 0121 §6).
+        self.ledger_run: str | None = None
 
     # ───────────────────────── signals and queries ─────────────────────────
 
@@ -425,6 +432,7 @@ class WorkflowInterpreter:
 
             transition = engine.select_transition(self.state, self.last_outcome, self.last_outputs)
             self.last_outcome = None
+            await self._note_transition_taken(params, transition)
             if transition is None:
                 moved = await self._wait_external(engine, context)
                 if moved == _MIGRATION:
@@ -452,6 +460,7 @@ class WorkflowInterpreter:
             if decision is None:
                 continue
             self._note_the_resume_point(engine, transition, kind, decision)
+            self.ledger_run = self._recorded_run(kind, transition, decision)
             self.state = decision.next_state
             await self._mirror(params, decision.reason)
 
@@ -1675,6 +1684,34 @@ class WorkflowInterpreter:
                     if transitions:
                         return transitions[0].to
         return None
+
+    # ───────────────────────── the decision ledger (ADR 0121 §6) ─────────────────────────
+
+    def _recorded_run(self, kind: str, transition: Any, decision: Any) -> str | None:
+        """The run whose ledger records wait for the next transition: a decision step, or an agent
+        that declared a confidence, whose outcome moved the work item where the step leads."""
+        if (
+            kind not in ("agent", "decision")
+            or decision.escalated
+            or decision.next_state != transition.to
+            or not declares_a_confidence(self.last_outputs)
+        ):
+            return None
+        return self.last_run
+
+    async def _note_transition_taken(self, params: InterpreterInput, transition: Any) -> None:
+        """The state the transition selected after a recorded step leads to, on the step's records.
+        Nothing selected (the work item waits for a move from outside): nothing is written."""
+        run_id, self.ledger_run = self.ledger_run, None
+        # The condition first, `patched` next: a history without a recorded step never asks.
+        if run_id is None or transition is None or not workflow.patched(DECISION_LEDGER):
+            return
+        await execute_on_its_queue(
+            decision_activities.note_transition_taken,
+            {"project_id": params.project_id, "run_id": run_id, "transition": transition.to},
+            start_to_close_timeout=timedelta(seconds=30),
+            retry_policy=DEFAULT_RETRY,
+        )
 
     async def _mirror(self, params: InterpreterInput, reason: str) -> None:
         mirrored: dict[str, Any] = {

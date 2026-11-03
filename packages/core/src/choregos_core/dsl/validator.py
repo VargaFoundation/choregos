@@ -22,7 +22,9 @@ from choregos_contracts import (
 )
 from choregos_contracts.workflow import (
     AGENT_WILDCARD,
+    CONFIDENCE_SUFFIX,
     PREFIXE_PRODUCTION,
+    Transition,
     effet_de_la_transition,
     effet_implicite,
     est_un_etat_de_production,
@@ -82,6 +84,7 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_already_fixed_exits(wf, report, source)
     _check_conditions(wf, report, source)
     _check_decisions(wf, report, source)
+    _check_confidence_thresholds(wf, report, source)
     _check_tasks(wf, report, source)
     _check_spawns(wf, report, source)
     _check_effets(wf, report, source)
@@ -220,6 +223,43 @@ def _check_decisions(wf: Workflow, report: ValidationReport, source: Any) -> Non
                 ["actors", name, "questions"],
                 source,
             )
+
+
+def _check_confidence_thresholds(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """A branch on a probability keeps a person below the threshold (ADR 0121 §7) — a warning.
+
+    A state whose exits read a `*_confidence` output in their `when` lets a probability choose the
+    branch. Its default exit — the one without `when`, taken when the probability is below the
+    threshold — hands the work item to a person when it is itself a human step, or when the state it
+    leads to is left by a human step. Otherwise the work items the model was least sure of move on
+    unchecked, and no person's verdict tells the ledger whether the decision was right:
+    `decision.threshold_without_human`. A warning, not an error: a workflow may choose to let an
+    unsure answer through. A state with no default exit is `when.no_default`'s, not this rule's.
+    """
+    for state in wf.states:
+        exits = wf.transitions_from(state)
+        reading = next(
+            ((t, name) for t in exits for name in t.when or {} if name.endswith(CONFIDENCE_SUFFIX)), None
+        )
+        default = next((t for t in exits if not t.when), None)
+        if reading is None or default is None or _hands_to_a_person(wf, default):
+            continue
+        transition, name = reading
+        report.warn(
+            "decision.threshold_without_human",
+            f"`{state}` branches on `{name}`, and its default exit `{default.key}` goes to `{default.to}` "
+            "with no person: a work item the model was unsure of moves on unchecked, and no human verdict "
+            "measures the decision (ADR 0121) — make the default exit a human step, or lead it to one",
+            ["transitions", wf.transitions.index(transition), "when", name],
+            source,
+        )
+
+
+def _hands_to_a_person(wf: Workflow, transition: Transition) -> bool:
+    """The transition is a human step, or the state it leads to is left by one."""
+    if isinstance(wf.actor_of(transition), HumanActor):
+        return True
+    return any(isinstance(wf.actor_of(t), HumanActor) for t in wf.transitions_from(transition.to))
 
 
 def _check_already_fixed_exits(wf: Workflow, report: ValidationReport, source: Any) -> None:

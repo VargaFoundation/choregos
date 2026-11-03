@@ -17,6 +17,7 @@ from typing import Any
 
 from choregos_contracts import StageResult, StageStatus, Workflow
 from choregos_core import GateOutcome, WorkflowEngine
+from choregos_core.decision_ledger import declares_a_confidence
 
 from .activities import decision as decision_activities
 from .activities import findings as finding_activities
@@ -83,6 +84,7 @@ async def run_local(
     last_outcome: str | None = None
     last_run: str | None = None  # `system` transitions evaluate their gates on this run
     last_outputs: dict[str, Any] | None = None  # what a transition's `when` reads (S48-01)
+    ledger_run: str | None = None  # whose ledger records wait for the next transition (ADR 0121)
     approve = approve or (lambda _transition, _state: True)
 
     await tracker_activities.mirror_state(
@@ -96,6 +98,8 @@ async def run_local(
             break
         transition = engine.select_transition(state, last_outcome, last_outputs)
         last_outcome = None
+        await _note_transition_taken(project_id, ledger_run, transition)
+        ledger_run = None
         if transition is None:
             trace.stopped_reason = f"no transition from `{state}` (waiting for an external event)"
             break
@@ -165,6 +169,7 @@ async def run_local(
             attempts[key] = attempt + 1
             trace.steps.append(Step(state, key, kind, decision.reason, decision.next_state))
 
+        ledger_run = _recorded_run(kind, transition, decision, last_outputs, last_run)
         if decision.next_state == state and not decision.retried:
             trace.stopped_reason = f"blocked on `{state}`: {decision.reason}"
             break
@@ -188,6 +193,23 @@ async def run_local(
     if engine.is_terminal(state):
         await tracker_activities.close_out({"project_id": project_id, "work_item_id": work_item_id})
     return trace
+
+
+def _recorded_run(
+    kind: str, transition: Any, decision: Any, outputs: dict[str, Any] | None, run_id: str | None
+) -> str | None:
+    """The run whose ledger records wait for the next transition, as the interpreter's (ADR 0121)."""
+    if kind not in ("agent", "decision") or decision.escalated or decision.next_state != transition.to:
+        return None
+    return run_id if declares_a_confidence(outputs) else None
+
+
+async def _note_transition_taken(project_id: str, run_id: str | None, transition: Any) -> None:
+    """The state the transition selected after a recorded step leads to, on the step's records."""
+    if run_id is not None and transition is not None:
+        await decision_activities.note_transition_taken(
+            {"project_id": project_id, "run_id": run_id, "transition": transition.to}
+        )
 
 
 async def _run_stage(
