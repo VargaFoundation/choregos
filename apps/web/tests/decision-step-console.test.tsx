@@ -401,7 +401,10 @@ function withQueries(content: ReactNode) {
 const SOURCE = { project: "support", workflow: "support", thresholds: { route: 0.6 } };
 
 describe("the calibration of a decision step (ADR 0121 §7, S52-06b)", () => {
-  beforeEach(() => vi.mocked(api.stepCalibration).mockReset());
+  // A block, not an expression: a function returned by `beforeEach` is a teardown vitest calls after the test.
+  beforeEach(() => {
+    vi.mocked(api.stepCalibration).mockReset();
+  });
 
   it("reads the threshold the workflow's `when` sets on each probability, from the exits of the state the decision leads to", () => {
     const workflow = {
