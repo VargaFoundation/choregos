@@ -19,7 +19,7 @@ import { useEventStream } from "@/lib/sse";
 import type { JourneyStep, ProcessStep, RunEventDto } from "@/lib/types";
 import { type Etape, type EtatEtape, sortiesDe } from "./modele";
 
-const GENRE: Record<Etape["genre"], string> = { agent: "agent", human: "person", platform: "platform", train: "release train" };
+const GENRE: Record<Etape["genre"], string> = { agent: "agent", human: "person", platform: "platform", train: "release train", decision: "decision" };
 const EN_COURS = new Set(["queued", "running", "waiting", "pending_approval"]);
 
 /**

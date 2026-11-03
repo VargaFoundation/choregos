@@ -4063,12 +4063,20 @@ stories:
     depends_on: [S52-04]
     notes: "ADR 0121 §6 and §7"
   - id: S52-06
-    title: "feat(web): the decision step on the map and the calibration card"
+    title: "feat(web): the decision step on the map — shown, described, created and edited"
     stream: S52
     sprint: 5
     priority: 2
     size: M
-    depends_on: [S52-05]
+    depends_on: [S52-01]
+    notes: "ADR 0121 §1; ADR 0112 (typed operations on the YAML); the calibration card is S52-06b"
+  - id: S52-06b
+    title: "feat(web): the calibration card of a decision step"
+    stream: S52
+    sprint: 5
+    priority: 2
+    size: S
+    depends_on: [S52-05, S52-06]
     notes: "ADR 0121 §7"
   - id: S52-07
     title: "feat(templates): classify, route, escalate below a threshold — a workflow in the catalogue"

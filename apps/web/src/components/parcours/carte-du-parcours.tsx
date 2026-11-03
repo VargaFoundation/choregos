@@ -122,6 +122,9 @@ const LEGENDE_DES_GENRES: [Etape["genre"], string][] = [
   ["train", "Release train"],
 ];
 
+/** A decision step (ADR 0121) is named in the legend only where the workflow has one. */
+const DECISION_LEGEND: [Etape["genre"], string] = ["decision", "Decision"];
+
 /**
  * La carte d'un workflow, sans ticket (S22-05 ; « l'affichage est très linéaire, pas comme les
  * captures ») : le même serpentin que le parcours d'un ticket — boucles en arcs, détours sous leur
@@ -156,7 +159,10 @@ export function CarteEnSerpentin({
   return (
     <section className="space-y-3" data-testid="carte-en-serpentin" aria-label="Workflow diagram">
       <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted" aria-label="Who carries each step">
-        {LEGENDE_DES_GENRES.map(([genre, libelle]) => (
+        {[
+          ...LEGENDE_DES_GENRES,
+          ...([...modele.parId.values()].some((e) => e.genre === "decision") ? [DECISION_LEGEND] : []),
+        ].map(([genre, libelle]) => (
           <li key={genre} className="inline-flex items-center gap-1.5">
             <span
               aria-hidden
@@ -575,6 +581,7 @@ const COULEUR_DU_GENRE: Record<Etape["genre"], string> = {
   human: COULEURS_DES_GENRES.human.bord,
   platform: COULEURS_DES_GENRES.platform.bord,
   train: COULEURS_DES_GENRES.train.bord,
+  decision: COULEURS_DES_GENRES.decision.bord,
 };
 
 function Case({
@@ -619,6 +626,16 @@ function Case({
           fill={fond}
           stroke={couleur}
           strokeWidth={3}
+          className="parcours-forme"
+        />
+      ) : etape.genre === "decision" ? (
+        // A decision is a diamond, the shape a flowchart gives a question (ADR 0121).
+        <polygon
+          points={`${x},${y - RAYON - 2} ${x + RAYON + 2},${y} ${x},${y + RAYON + 2} ${x - RAYON - 2},${y}`}
+          fill={fond}
+          stroke={couleur}
+          strokeWidth={3}
+          strokeLinejoin="round"
           className="parcours-forme"
         />
       ) : etape.genre === "train" ? (
@@ -743,6 +760,7 @@ function BoutonDEtape({
     human: "person",
     platform: "platform",
     train: "release train",
+    decision: "decision",
   }[etape.genre];
   // The visible text names the button, so a voice user can say it (axe `label-content-name-mismatch`);
   // what the box only shows by its colour, or not at all, goes in a hidden description.

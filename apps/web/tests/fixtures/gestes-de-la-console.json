@@ -230,6 +230,149 @@
       }
     },
     {
+      "geste": "addActor",
+      "args": [
+        "router",
+        {
+          "type": "decision",
+          "role": "route_ticket",
+          "model": "platform/decide",
+          "state": [
+            "title",
+            "description"
+          ],
+          "questions": {
+            "route": {
+              "type": "choice",
+              "instructions": "Which team handles this request?",
+              "options": [
+                "billing",
+                "tech"
+              ]
+            },
+            "urgent": {
+              "type": "yes_no",
+              "instructions": "Must it be handled today?"
+            }
+          },
+          "timeout_seconds": 15
+        }
+      ],
+      "operation": {
+        "op": "add_actor",
+        "name": "router",
+        "spec": {
+          "type": "decision",
+          "role": "route_ticket",
+          "model": "platform/decide",
+          "state": [
+            "title",
+            "description"
+          ],
+          "questions": {
+            "route": {
+              "type": "choice",
+              "instructions": "Which team handles this request?",
+              "options": [
+                "billing",
+                "tech"
+              ]
+            },
+            "urgent": {
+              "type": "yes_no",
+              "instructions": "Must it be handled today?"
+            }
+          },
+          "timeout_seconds": 15
+        }
+      }
+    },
+    {
+      "geste": "actorField",
+      "args": [
+        "owner",
+        "sla_hours",
+        12
+      ],
+      "operation": {
+        "op": "set_actor",
+        "name": "owner",
+        "field": "sla_hours",
+        "value": 12,
+        "style": "flow"
+      }
+    },
+    {
+      "geste": "actorField",
+      "args": [
+        "owner",
+        "state",
+        [
+          "title",
+          "fields.customer"
+        ]
+      ],
+      "operation": {
+        "op": "set_actor",
+        "name": "owner",
+        "field": "state",
+        "value": [
+          "title",
+          "fields.customer"
+        ],
+        "style": "flow"
+      }
+    },
+    {
+      "geste": "actorField",
+      "args": [
+        "owner",
+        "questions",
+        {
+          "route": {
+            "type": "score",
+            "instructions": "How urgent is it?",
+            "levels": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        }
+      ],
+      "operation": {
+        "op": "set_actor",
+        "name": "owner",
+        "field": "questions",
+        "value": {
+          "route": {
+            "type": "score",
+            "instructions": "How urgent is it?",
+            "levels": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
+        "style": "block"
+      }
+    },
+    {
+      "geste": "actorField",
+      "args": [
+        "owner",
+        "sla_hours",
+        null
+      ],
+      "operation": {
+        "op": "set_actor",
+        "name": "owner",
+        "field": "sla_hours",
+        "unset": true
+      }
+    },
+    {
       "geste": "transitionField",
       "args": [
         "t-implement",

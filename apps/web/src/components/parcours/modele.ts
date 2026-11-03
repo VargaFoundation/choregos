@@ -21,7 +21,7 @@ import {
 } from "../workflows/carte/disposition";
 
 /** Qui porte une étape : la forme de sa case, et ce qu'elle dit en toutes lettres. */
-export type Genre = "agent" | "human" | "platform" | "train";
+export type Genre = "agent" | "human" | "platform" | "train" | "decision";
 
 export type Etape = {
   /** L'identifiant de la transition. */
@@ -113,12 +113,13 @@ export function enClair(nom: string): string {
 }
 
 /** Le couloir d'un état dit qui en sort (`dsl/graph.py`) : ce qu'on lit quand l'arête ne nomme pas son acteur. */
-const GENRE_DU_COULOIR: Record<string, Genre> = { agent: "agent", human: "human", train: "train", system: "platform" };
+const GENRE_DU_COULOIR: Record<string, Genre> = { agent: "agent", human: "human", train: "train", system: "platform", decision: "decision" };
 
 function genreDe(arete: AreteDuGraphe, couloir?: string): Genre {
   if (arete.via === "release_train" || arete.actor_type === "train") return "train";
   if (arete.actor_type === "agent") return "agent";
   if (arete.actor_type === "human") return "human";
+  if (arete.actor_type === "decision") return "decision";
   if (arete.actor_type) return "platform";
   return GENRE_DU_COULOIR[couloir ?? ""] ?? "platform";
 }
@@ -141,6 +142,8 @@ function actionDe(arete: AreteDuGraphe, genre: Genre, etape: ProcessStep | undef
     return env ? `deploys to ${env}` : "deploys";
   }
   if (genre === "human") return `approves → ${nom(arete.to)}`;
+  // A decision model answers its questions (ADR 0121): what it decides, from its role.
+  if (genre === "decision") return arete.role ? `decides: ${enClair(arete.role).toLowerCase()}` : "decides";
   if (/opens the pull request/.test(texte)) return "opens the pull request";
   if (/merges the pull request/.test(texte)) return "merges the pull request";
   if (arete.gates?.length) return `checks ${arete.gates.map((g) => g.replace(/_/g, " ")).join(", ")}`;
