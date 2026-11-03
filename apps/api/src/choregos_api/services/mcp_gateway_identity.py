@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from ..config import Settings, get_settings
-from ..db.models import Organization
+from ..db.models import Action, Organization, OrgConnector, Project, Run, WorkItem
 from ..schemas.mcp_gateway import McpGatewayAssertion, McpGatewayAssertionKey
 from ..secret_store import SecretStore, SecretStoreUnavailable, get_secret_store
 
@@ -246,3 +246,82 @@ def mint_assertion(
         **identity.claims(),
     }
     return jwt.encode(payload, pem, algorithm="ES256", headers={"kid": kid, "typ": "JWT"})
+
+
+async def _org_and_work_item(
+    session: AsyncSession, org_id: str, work_item_id: str | None
+) -> tuple[Organization, WorkItem | None]:
+    organisation = await session.get(Organization, org_id)
+    assert organisation is not None
+    item = await session.get(WorkItem, work_item_id) if work_item_id else None
+    return organisation, item
+
+
+async def identity_of_run(
+    session: AsyncSession, run: Run | None, project: Project | None, connector: OrgConnector, tool: str
+) -> CallIdentity:
+    """Who a tool call made by a run (or, with no run, by an agent session) is made for (ADR 0105)."""
+    organisation, item = await _org_and_work_item(
+        session, connector.org_id, run.work_item_id if run else None
+    )
+    common: dict[str, Any] = {
+        "org": organisation.slug,
+        "org_id": organisation.id,
+        "project": project.slug if project is not None else None,
+        "connector": connector.name,
+        "server": (connector.config or {}).get("server"),
+        "tool": tool,
+        "purpose": "tool_call",
+    }
+    if run is None:
+        subject = f"project:{project.slug}" if project is not None else f"org:{organisation.slug}"
+        return CallIdentity(subject=subject, **common)
+    return CallIdentity(
+        subject=f"run:{run.id}",
+        run=run.id,
+        work_item=item.tracker_key if item is not None else None,
+        agent=f"{run.agent_slug}@{run.agent_version}" if run.agent_slug else None,
+        initiator=run.initiated_by,
+        **common,
+    )
+
+
+async def identity_of_action(
+    session: AsyncSession, action: Action, project: Project, connector: OrgConnector, tool: str
+) -> CallIdentity:
+    """Who an approved governed write is made for: the action, and the people who approved it."""
+    organisation, item = await _org_and_work_item(session, connector.org_id, action.work_item_id)
+    run = await session.get(Run, action.run_id) if action.run_id else None
+    return CallIdentity(
+        org=organisation.slug,
+        org_id=organisation.id,
+        subject=f"action:{action.id}",
+        purpose="action",
+        project=project.slug,
+        run=action.run_id,
+        work_item=item.tracker_key if item is not None else None,
+        agent=f"{run.agent_slug}@{run.agent_version}" if run is not None and run.agent_slug else None,
+        initiator=(item.initiated_by if item is not None else None) or (run.initiated_by if run else None),
+        action=action.id,
+        connector=connector.name,
+        server=(connector.config or {}).get("server"),
+        tool=tool,
+        approved_by=tuple(
+            str(d["by"]) for d in action.decisions or [] if d.get("decision") == "approve" and d.get("by")
+        ),
+    )
+
+
+def identity_of_person(
+    organisation: Organization, email: str, connector: OrgConnector, purpose: str
+) -> CallIdentity:
+    """Who a call made by a person (a discovery, a test) is made for."""
+    return CallIdentity(
+        org=organisation.slug,
+        org_id=organisation.id,
+        subject=f"person:{email}",
+        purpose=purpose,
+        initiator=f"person:{email}",
+        connector=connector.name,
+        server=(connector.config or {}).get("server"),
+    )

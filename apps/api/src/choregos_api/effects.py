@@ -29,6 +29,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .db.models import Action, ConnectorOperation, OrgConnector, Project
+from .services.mcp_gateway import route_of
+from .services.mcp_gateway_identity import GatewayRefusal
 from .services.platform_network import PlatformNetworkRefused, enforce_connector_call
 
 
@@ -134,8 +136,15 @@ async def _connector_call(ctx: EffectContext, params: dict[str, Any]) -> dict[st
 async def _within_the_network_bounds(ctx: EffectContext, instance: OrgConnector, label: str) -> None:
     """The organisation's network bounds are read again at the moment of the call (ADR 0070): they
     may have been tightened since the action was approved. A refusal is final, the action compensates."""
+    # ADR 0105: the route first (mode `required`, `off`, no gateway: final), then the host it reaches.
     try:
-        await enforce_connector_call(ctx.session, instance, project=ctx.project, polite=False)
+        route = await route_of(ctx.session, instance)
+    except GatewayRefusal as refusal:
+        raise EffectRefused(f"{label} : {refusal}") from refusal
+    try:
+        await enforce_connector_call(
+            ctx.session, instance, project=ctx.project, polite=False, host=route.host
+        )
     except PlatformNetworkRefused as refusal:
         raise EffectRefused(f"{label} : {refusal.message()}") from refusal
 
@@ -174,7 +183,8 @@ async def _call_the_connector(ctx: EffectContext, params: dict[str, Any]) -> dic
         )
     ).scalar_one_or_none()
     from .services.connecteurs import politique_pour_le_projet
-    from .services.plugin_servers import connector_client
+    from .services.mcp_gateway import connector_client
+    from .services.mcp_gateway_identity import identity_of_action
 
     # The PROJECT's: the organisation's, tightened by the project, bounded by its groups. An approved
     # action plays an `approval` operation; an operation this project forbids itself, never.
@@ -193,8 +203,14 @@ async def _call_the_connector(ctx: EffectContext, params: dict[str, Any]) -> dic
     arguments.update(await _platform_arguments(ctx, instance, operation, arguments))
     await _within_the_network_bounds(ctx, instance, f"{name}/{operation}")
     try:
-        # A plugin's server (ADR 0096): its Service, its bearer token; any other: its type's adapter.
-        client: Any = await connector_client(ctx.session, instance)
+        # A gateway connector (ADR 0105) goes through the gateway, signed with the action's identity and
+        # its approvers; a plugin's server (ADR 0096), its Service; any other, its type's adapter. A
+        # `GatewayRefusal` is an `AdapterError`: the clause below makes it a final refusal, no retry.
+        client: Any = await connector_client(
+            ctx.session,
+            instance,
+            lambda: identity_of_action(ctx.session, ctx.action, ctx.project, instance, operation),
+        )
         if hasattr(client, "call_tool"):
             result = await client.call_tool(operation, arguments)
             if result.get("isError"):

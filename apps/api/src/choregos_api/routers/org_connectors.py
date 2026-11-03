@@ -69,6 +69,8 @@ from ..services.connector_secrets import (
     require_store,
 )
 from ..services.egress import egress_gate_for_connector, egress_scope
+from ..services.mcp_gateway import check_declaration, connector_client, route_of
+from ..services.mcp_gateway_identity import CallIdentity, GatewayRefusal, identity_of_person
 from ..services.platform_network import (
     PlatformNetworkRefused,
     check_connector_declaration,
@@ -237,6 +239,7 @@ async def declare_org_connector(
     config, secret_refs = body.config, body.secret_refs
     spec = spec_to_declare(kind, type_name)
     check_type_config(kind, type_name, config)
+    await check_declaration(session, organisation, kind, type_name)  # ADR 0105: mode `required`, no gateway
     prefix = f"connector/{name}"
     verifier_les_secrets(
         spec,
@@ -587,6 +590,12 @@ async def update_operation(
     return OperationDto.model_validate(ligne)
 
 
+async def _discovery_identity(
+    organisation: Organization, principal: Me, instance: OrgConnector
+) -> CallIdentity:
+    return identity_of_person(organisation, principal.email, instance, "discovery")
+
+
 @router.post(
     "/orgs/{org}/connectors/{name}/discover",
     response_model=ConnectorDiscovery,
@@ -600,7 +609,7 @@ async def discover_operations(org: str, name: Nom, session: Db, principal: Me) -
     qui accepte soudain une quantité n'est plus l'opération qu'on avait ouverte. Un outil que le
     serveur ne propose plus disparaît, avec ce que les projets en resserraient."""
     import httpx
-    from choregos_adapters.mcp import ErreurMcp, empreinte_du_schema
+    from choregos_adapters.mcp import McpError, schema_digest
     from choregos_core import utcnow
     from choregos_core.redaction import redact
     from choregos_core.secrets import SecretIntrouvable
@@ -608,18 +617,28 @@ async def discover_operations(org: str, name: Nom, session: Db, principal: Me) -
     _administrer(principal, org)
     organisation = await _organisation(session, org)
     instance = await _instance(session, organisation, name)
+    # ADR 0105: the route is judged before anything leaves; a refusal is a 409 and never marks the
+    # connector `error` (the connector is fine, its route is not).
     try:
-        await enforce_connector_call(session, instance, polite=False)
+        route = await route_of(session, instance)
+    except GatewayRefusal as refused:
+        raise conflict(str(refused), extra={"code": refused.code}) from refused
+    try:
+        await enforce_connector_call(session, instance, polite=False, host=route.host)
     except PlatformNetworkRefused as refused:
         raise refusal_error(refused) from refused
     try:
-        client: Any = await plugin_servers.connector_client(session, instance)
+        client: Any = await connector_client(
+            session, instance, lambda: _discovery_identity(organisation, principal, instance)
+        )
         lister = getattr(client, "list_tools", None)
         if lister is None:
             raise unprocessable(f"`{instance.type}` does not discover its operations: its type declares them")
         async with egress_scope(session, organisation, "api", f"org-connector:{name}"):
             outils = await lister()
-    except (ErreurMcp, SecretIntrouvable, httpx.HTTPError) as panne:
+    except GatewayRefusal as refused:  # a lost assertion key: refused, the connector is not `error`
+        raise conflict(str(refused), extra={"code": refused.code}) from refused
+    except (McpError, SecretIntrouvable, httpx.HTTPError) as panne:
         instance.status, instance.last_check_at = "error", utcnow()
         instance.last_error = redact(str(panne))[:1000]
         # La réponse est une erreur, et la requête serait annulée avec elle : l'état du connecteur,
@@ -638,7 +657,7 @@ async def discover_operations(org: str, name: Nom, session: Db, principal: Me) -
     declared = (instance.plugin_server or {}).get("operations")
     undeclared_tools: list[str] = []
     for outil in outils:
-        empreinte = empreinte_du_schema(outil.input_schema)
+        empreinte = schema_digest(outil.input_schema)
         acces = "read" if outil.read_only else "write"
         if declared is not None:
             # A plugin's server (ADR 0096): its `operations` are the floor. A tool it does not declare
