@@ -87,6 +87,11 @@ __all__ = [
 ]
 
 
+def _names(listed: str) -> list[str]:
+    """A comma-separated list of names, as the chart joins them: blanks and empties dropped."""
+    return [name.strip() for name in listed.split(",") if name.strip()]
+
+
 def _jira_tracker(cfg: dict[str, Any]) -> Any:
     """Jira Cloud: the email and the API token as Basic, the token from the vault, never from the
     repository. A scoped token goes through the Atlassian gateway, a classic one to the site."""
@@ -1376,6 +1381,9 @@ def _register_builtins() -> None:
             or [s for s in os.environ.get("CHOREGOS_RUNNER_ENV_SECRETS", "").split(",") if s],
             # Combien de runs tournent en même temps dans le namespace. 0 = sans plafond.
             max_active=int(cfg.get("max_active", os.environ.get("CHOREGOS_RUNNER_MAX_ACTIVE", "") or 0)),
+            # The chart's `global.imagePullSecrets` (S51-09): a step's own image may be private.
+            image_pull_secrets=cfg.get("image_pull_secrets")
+            or _names(os.environ.get("CHOREGOS_RUNNER_IMAGE_PULL_SECRETS", "")),
         )
     )
     register("runtime", "agent_sandbox", _SPECS_LIVREES[("runtime", "agent_sandbox")])(

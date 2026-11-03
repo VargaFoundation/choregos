@@ -257,6 +257,12 @@ Each image is built **from** the runner image: the runner is the entrypoint, the
 subprocess. `requireDigest: false` is for a bench only. The `agent_sandbox` executor claims from one
 warm pool built from the runner image: use `k8s_job` for steps that name their own image.
 
+An image in a private registry project pulls with the same `global.imagePullSecrets` as the chart's
+own pods (S51-09): the chart puts them on the `choregos-runner` ServiceAccount and hands their names
+to every worker (`CHOREGOS_RUNNER_IMAGE_PULL_SECRETS`), and the `k8s_job` executor names them in each
+runner pod it creates — a job step's image and a hosted agent's container alike. Each secret must
+exist in the namespace the runner pods run in (`runner.namespacePattern`).
+
 ### Registries for hosted agents
 
 A hosted agent ([ADR 0080](adr/0080-hosted-prompt-and-voice-agents.md),
@@ -1177,7 +1183,9 @@ global:
 
 Every pod the chart renders carries it — the four Choregos components **and** the embedded
 dependencies, because a platform that admits a single registry sends every image through it, not
-only ours. The secret must already exist in the namespace; on a shared platform it is usually the
+only ours. The runner pods the chart does not render carry it too: the `agent_sandbox` template, the
+`choregos-runner` ServiceAccount and every `k8s_job` runner pod, so a job step's own image pulls
+from the same registry (S51-09). The secret must already exist in the namespace; on a shared platform it is usually the
 tenant's base layer that creates it from a secret store, not this chart.
 
 Without the value, no pod declares one. A test renders the chart both ways and fails if a new
