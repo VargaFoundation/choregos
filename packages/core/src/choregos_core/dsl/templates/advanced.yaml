@@ -1,10 +1,10 @@
-# Le workflow complet : triage, cadrage validé, plan, implémentation, vérification,
-# review croisée agent + humaine, staging puis prod par deux trains successifs.
+# The full workflow: triage, approved scoping, plan, implementation, verification,
+# an agent review, then staging and production through two successive trains.
 apiVersion: choregos/v1
 kind: Workflow
 metadata:
   name: advanced
-  version: 2
+  version: 3
   description: "The full chain: plan, cross review, staging then production."
 actors:
   sorter: { type: agent, role: triage, model: "profile:cheap", max_turns: 10 }
@@ -91,7 +91,7 @@ transitions:
     to: agent_review
     by: reviewer
     inputs: [spec_markdown]
-    review: { agents: [reviewer], humans: { group: maintainers, required: by_policy } }
+    review: { agents: [reviewer] }
     on_changes_requested: { to: addressing_review, max_attempts: 3, escalate_to: needs_human }
     on_fail: { to: verifying, max_attempts: 2, escalate_to: needs_human }
   - id: t-address-review

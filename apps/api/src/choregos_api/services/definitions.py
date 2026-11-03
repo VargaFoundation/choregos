@@ -16,6 +16,7 @@ from choregos_core import (
     policy_warnings,
 )
 from choregos_core.dsl import dump_workflow
+from choregos_core.policy import unenforced_governance
 from choregos_core.policy_ceiling import PolicyCeiling, clamp
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -308,13 +309,19 @@ async def active_policy(session: AsyncSession, project_id: str) -> PolicyDef | N
     ).scalar_one_or_none()
 
 
-async def ensure_defaults(session: AsyncSession, project: Project) -> tuple[WorkflowDef, PolicyDef]:
+async def ensure_defaults(
+    session: AsyncSession, project: Project, *, refuse_unenforced: bool = False
+) -> tuple[WorkflowDef, PolicyDef]:
     """Un projet neuf reçoit ce que livre son gabarit (ADR 0031) : ses workflows, le défaut, le routage
     et la politique — sans gabarit, `default-simple` et le preset `solo` (D14) ; ses skills et ses
     agents entrent dans l'organisation quand ils n'y sont pas (S20-07) ; ses extensions vont aux
     greffons qui les installent (S20-09).
 
     Rien n'est réécrit chez un projet qui a déjà un workflow actif ou une politique.
+
+    `refuse_unenforced` (project creation only) refuses a template whose policy promises guards
+    Choregos does not enforce (ADR 0101). Lazy provisioning from read paths leaves it off, so a
+    GET never answers 422.
     """
     from .gabarits import livraison, manifeste_du_gabarit
 
@@ -346,6 +353,16 @@ async def ensure_defaults(session: AsyncSession, project: Project) -> tuple[Work
     if policy is None:
         assert livree is not None
         parsed_policy = parse_policy(livree.politique)
+        refused = unenforced_governance(parsed_policy) if refuse_unenforced else []
+        if refused:
+            raise unprocessable(
+                f"template `{project.template_ref}` ships a policy with guards Choregos does not "
+                "enforce (ADR 0101): " + "; ".join(i.message for i in refused),
+                [
+                    {"loc": ["policy", *(i.path or "").split(".")], "msg": i.message, "code": i.code}
+                    for i in refused
+                ],
+            )
         signaler_ce_que_la_politique_n_applique_pas(parsed_policy, project.slug)
         policy = PolicyDef(
             project_id=project.id,
@@ -412,7 +429,8 @@ def workflow_model(row: WorkflowDef | None) -> Workflow:
     # le champ existe portent `initial` et passent par le chemin rapide.
     if row.json_doc and row.json_doc.get("initial"):
         return Workflow.model_validate(row.json_doc)
-    parsed, _ = parse_workflow(row.yaml)
+    # A stored definition passed the rules of its day and must keep loading when a rule is added.
+    parsed, _ = parse_workflow(row.yaml, strict=False)
     return parsed
 
 

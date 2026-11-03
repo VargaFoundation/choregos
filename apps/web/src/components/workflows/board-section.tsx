@@ -7,6 +7,7 @@ import { DecisionBar } from "@/components/decision-bar";
 import { ActorIcon, Badge, Card, CostChip, Dot, Heading, LEGENDE, tonDEtat } from "@/components/ui";
 import { type Column, foldedItems } from "@/components/workflows/board";
 import { cn } from "@/lib/cn";
+import { workflowHueClasses } from "@/lib/workflow-hue";
 import { relative } from "@/lib/format";
 import type { WorkItemDto } from "@/lib/types";
 
@@ -42,14 +43,22 @@ export function BoardSection({
 }) {
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const headingId = `workflow-${section.name}`;
+  const hue = workflowHueClasses(section.name);
   return (
-    <section aria-labelledby={headingId} data-workflow={section.name} className="space-y-2">
-      <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <Heading as="h2" size="sm" id={headingId}>
+    // The workflow's colour on its section's edge (ADR 0120): the same as its pill above and its chip
+    // on a ticket, so a column is never read as another workflow's.
+    <section
+      aria-labelledby={headingId}
+      data-workflow={section.name}
+      className={cn("space-y-2 rounded-md border border-line border-t-4 p-3", hue.stripe)}
+    >
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span aria-hidden className={cn("size-2.5 shrink-0 rounded-full", hue.solid)} />
+        <Heading as="h2" size="md" id={headingId} className={hue.ink}>
           <span data-donnee>{section.name}</span>
         </Heading>
         <span className="font-mono text-xs text-ink-muted">v{section.version ?? "?"}</span>
-        {section.isDefault && <Badge tone="neutral">default</Badge>}
+        {section.isDefault && <Badge tone="neutral">Default</Badge>}
         <span className="text-xs text-ink-muted" data-testid={`board-count-${section.name}`}>
           {section.total} ticket{section.total === 1 ? "" : "s"}
           {section.waiting > 0 && <span className="font-medium text-waiting-ink"> · {section.waiting} waiting</span>}
