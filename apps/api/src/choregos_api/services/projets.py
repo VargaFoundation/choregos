@@ -26,7 +26,7 @@ from ..schemas import (
     ProjectDto,
     ProjectStats,
 )
-from .definitions import active_policy, active_workflow
+from .definitions import active_policy, active_workflow, policy_engine
 
 
 def config_revision(name: str, config: dict[str, Any] | None) -> str:
@@ -136,3 +136,22 @@ async def first_pass_merge_rate(session: AsyncSession, project_id: str) -> float
         if attempts is None or attempts <= 1:
             good += 1
     return round(good / len(items), 4)
+
+
+async def active_project_slugs(*, keeping_memory: bool = False) -> list[str]:
+    """The active projects' slugs, across organisations; with `keeping_memory`, only those whose
+    policy keeps memory (S51-02). The orchestrator worker starts one loop per slug: this is its one
+    entry into the API for both loops (ADR 0099 counts each import the orchestrator makes of it)."""
+    from ..db.session import session_scope
+
+    async with session_scope(orgs="*") as session:
+        rows = (
+            (await session.execute(select(Project.id, Project.slug).where(Project.status == "active")))
+            .tuples()
+            .all()
+        )
+        if not keeping_memory:
+            return [slug for _, slug in rows]
+        return [
+            slug for project_id, slug in rows if (await policy_engine(session, project_id)).memory_enabled()
+        ]

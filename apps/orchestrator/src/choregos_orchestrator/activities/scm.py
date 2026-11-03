@@ -61,8 +61,12 @@ async def open_pull_request(payload: dict[str, Any]) -> dict[str, Any]:
                 type=NO_BRANCH,
                 non_retryable=True,
             )
-        ref = await bundle.adapters.scm.open_pr(repo, branch, base, item.title, body, draft=False)
-        await bundle.adapters.scm.update_pr(ref, body=body, draft=False)
+        # `pull_request: {draft: true}` on the transition (S51-11): the pull request is born a draft,
+        # and one already open on the branch keeps its state (a person may have marked it ready).
+        # Without it, as before: ready for review, and marked so.
+        draft = bool(payload.get("draft", False))
+        ref = await bundle.adapters.scm.open_pr(repo, branch, base, item.title, body, draft=draft)
+        await bundle.adapters.scm.update_pr(ref, body=body, draft=None if draft else False)
         item.pr_url = ref.url or item.pr_url
         reviewers = payload.get("reviewers") or []
         if reviewers:

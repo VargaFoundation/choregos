@@ -104,3 +104,61 @@ async def test_with_the_catch_up_disabled_activation_starts_no_loop(
 
     assert await _status(client, project["id"]) == "active"
     assert "reconcile-quiet" not in get_temporal().started
+
+
+# ── the memory loop (S51-02) ──
+
+
+async def _disable_memory(project_id: str) -> None:
+    from choregos_api.db.models import PolicyDef
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    async with session_scope() as session:
+        row = (
+            await session.execute(
+                select(PolicyDef).where(PolicyDef.project_id == project_id, PolicyDef.is_active.is_(True))
+            )
+        ).scalar_one()
+        row.json_doc = {
+            **row.json_doc,
+            "memory": {**dict(row.json_doc.get("memory") or {}), "enabled": False},
+        }
+
+
+async def test_activation_starts_the_memory_loop_and_archiving_stops_it(
+    client: AsyncClient, admin: str
+) -> None:
+    """Nothing started `MemoryIngestion`: the memory was never fed, and `mem-<slug>` signals went nowhere."""
+    from choregos_api.temporal import get_temporal
+
+    project = await _project(client, "remembers")
+    assert (await client.post(f"/api/v1/projects/{project['id']}/provision", json={})).status_code == 202
+    assert get_temporal().started["mem-remembers"] == {"project_slug": "remembers"}
+
+    assert (await client.delete(f"/api/v1/projects/{project['id']}")).status_code == 204
+    assert ("mem-remembers", "stop", {}) in get_temporal().signals
+
+
+async def test_a_policy_without_memory_starts_no_memory_loop(client: AsyncClient, admin: str) -> None:
+    from choregos_api.temporal import get_temporal
+
+    project = await _project(client, "forgets")
+    await _disable_memory(project["id"])
+    assert (await client.post(f"/api/v1/projects/{project['id']}/provision", json={})).status_code == 202
+
+    assert await _status(client, project["id"]) == "active"
+    assert "reconcile-forgets" in get_temporal().started
+    assert "mem-forgets" not in get_temporal().started
+
+
+async def test_a_memory_loop_that_does_not_run_does_not_stop_the_archive(
+    client: AsyncClient, admin: str
+) -> None:
+    from choregos_api.temporal import get_temporal
+
+    project = await _project(client, "never-remembered")
+    get_temporal().gone.add("mem-never-remembered")  # Temporal answers NOT_FOUND to the signal
+
+    assert (await client.delete(f"/api/v1/projects/{project['id']}")).status_code == 204
+    assert await _status(client, project["id"]) == "archived"

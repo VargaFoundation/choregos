@@ -45,9 +45,7 @@ async def start_reconciliation_loops() -> list[str]:
     The start is idempotent: restarting a worker does not create a second loop, and a project added
     afterwards is picked up at the next restart or by the API.
     """
-    from choregos_api.db.models import Project
-    from choregos_api.db.session import session_scope
-    from sqlalchemy import select
+    from choregos_api.services.projets import active_project_slugs
 
     from .train_client import start_reconciliation_loop
 
@@ -55,16 +53,32 @@ async def start_reconciliation_loops() -> list[str]:
     if settings.reconcile_interval_seconds <= 0:
         logger.info("tracker catch-up disabled")
         return []
-    async with session_scope(orgs="*") as session:
-        slugs = (
-            (await session.execute(select(Project.slug).where(Project.status == "active"))).scalars().all()
-        )
+    slugs = await active_project_slugs()
     started: list[str] = []
     for slug in slugs:
         fresh = await start_reconciliation_loop(slug)
         if fresh:
             started.append(slug)
     logger.info("tracker catch-up", projects=len(slugs), started=len(started))
+    return started
+
+
+async def start_memory_loops() -> list[str]:
+    """One memory loop per active project whose policy keeps memory (S51-02).
+
+    Idempotent like the tracker loops: restarting a worker does not create a second loop, and a loop
+    that died in failure starts again. A project whose policy says `memory.enabled: false` gets none.
+    """
+    from choregos_api.services.projets import active_project_slugs
+
+    from .train_client import start_memory_loop
+
+    slugs = await active_project_slugs(keeping_memory=True)
+    started: list[str] = []
+    for slug in slugs:
+        if await start_memory_loop(slug):
+            started.append(slug)
+    logger.info("memory loops", projects=len(slugs), started=len(started))
     return started
 
 
@@ -127,6 +141,7 @@ async def run_worker(queues: list[str]) -> None:
             await stack.enter_async_context(worker)
         if "orchestrator" in queues:
             await start_reconciliation_loops()
+            await start_memory_loops()
             await start_knowledge_sync_loops()
         await asyncio.Future()
 

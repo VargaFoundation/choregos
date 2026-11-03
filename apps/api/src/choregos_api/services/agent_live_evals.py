@@ -110,6 +110,7 @@ async def start(
             title=case.input.title or case.name,
             body=case.input.body,
             created_by=principal.email,
+            fields=case.input.fields,
         )
         if can_run:
             await get_temporal().start_trial(

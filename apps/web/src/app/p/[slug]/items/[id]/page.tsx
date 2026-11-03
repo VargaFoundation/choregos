@@ -239,6 +239,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
         initiatedBy={data.initiated_by}
         reporter={data.reporter}
         url={data.url}
+        fields={data.fields}
       />
 
       <Card title="Artifacts" action={<Provenance de="observed" />}>

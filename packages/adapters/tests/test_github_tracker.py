@@ -474,6 +474,25 @@ def test_un_check_suite_termine_remonte_avec_ses_pr() -> None:
     assert parse_github_event("check_suite", "d", {**payload, "action": "requested"}) == []
 
 
+async def test_the_poll_also_searches_the_labels_of_the_start_rules() -> None:
+    """S56-03: one search per set of labels; a rule on a type or a state is left to the webhook."""
+    fil = Fil(
+        {("GET", f"/repos/{REPO}/issues"): [(200, [{"number": 1}]), (200, [{"number": 1}, {"number": 4}])]}
+    )
+    config = ProjectConfig.model_validate(
+        {
+            "slug": "billing",
+            "org": "varga",
+            "start_rules": [{"labels_all": ["bug", "triage"]}, {"item_type": "Incident"}],
+        }
+    )
+
+    keys = await tracker(fil).list_candidates(config)
+
+    assert keys == [f"{REPO}#1", f"{REPO}#4"]
+    assert [r.url.params["labels"] for r in fil.requetes] == ["agent-ready", "bug,triage"]
+
+
 def test_an_opened_issue_carries_its_author_as_reporter() -> None:
     """Who filed the issue reaches the work item (#1179), not only who sent the event."""
     payload = {

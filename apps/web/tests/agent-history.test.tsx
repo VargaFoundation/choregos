@@ -167,6 +167,21 @@ describe("the Definition tab", () => {
     expect(within(groups).queryByText("Other fields")).toBeNull();
   });
 
+  it("says the workspace a version needs, and that the repository is the project's (S51-03)", async () => {
+    await open(page());
+    let groups = await screen.findByTestId("definition-groups");
+    expect(within(groups).getByTestId("agent-workspace-line").textContent).toBe("write — edits the project's repository (default)");
+    expect(within(groups).getByTestId("agent-repository-source").textContent).toContain("comes from the project");
+    vi.mocked(api.agent).mockResolvedValue(
+      architect({ versions: architect().versions?.map((v) => (v.version === 3 ? { ...v, spec: { ...SPEC_3, workspace: "none" as const } } : v)) }),
+    );
+    await open(page());
+    groups = await screen.findByTestId("definition-groups");
+    expect(within(groups).getByTestId("agent-workspace-line").textContent).toBe("none — never sees the repository");
+    expect(within(groups).getByText(/workspace none · skills/)).toBeTruthy();
+    expect(within(groups).queryByText("Other fields")).toBeNull();
+  });
+
   it("folds long instructions behind Show all", async () => {
     await open(page());
     const text = (await screen.findByLabelText("Instructions")).textContent ?? "";
