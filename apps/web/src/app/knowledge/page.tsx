@@ -4,16 +4,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
-import {
-  Card,
-  Empty,
-  ErrorNote,
-  Eyebrow,
-  Heading,
-  Input,
-  Select,
-  buttonClasses,
-} from "@/components/ui";
+import { Card, Empty, ErrorNote, Input, Select, buttonClasses } from "@/components/ui";
+import { OrgPageHeader } from "@/components/coquille/org-page-header";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { statusSummary, usedByLabel } from "@/lib/knowledge";
@@ -112,15 +104,15 @@ export default function KnowledgePage() {
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <Eyebrow>What agents read</Eyebrow>
-        <Heading as="h1" size="xl">
-          Knowledge
-        </Heading>
-        <p className="max-w-3xl text-sm text-ink-muted">
-          Documents you choose, converted to markdown. Agents read them, never
-          write them: mounted as <em>files</em>, or searched in an{" "}
-          <em>index</em> with citations.
-        </p>
+        <OrgPageHeader title="Knowledge"
+          eyebrow="What agents read"
+          description={
+            <>
+              Documents you choose, converted to markdown. Agents read them, never write them: mounted as{" "}
+              <em>files</em>, or searched in an <em>index</em> with citations.
+            </>
+          }
+        />
       </div>
       <Card title="Knowledge bases">
         {bases.error ? (

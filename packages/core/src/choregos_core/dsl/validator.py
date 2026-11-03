@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Validation statique du DSL de workflow (règles de docs/plan/01 §1.4).
+"""Static validation of the workflow DSL (the rules of docs/plan/01 §1.4).
 
-Les erreurs sont **bloquantes** : un workflow invalide n'est jamais épinglé sur un ticket.
-Les avertissements n'empêchent pas l'enregistrement mais remontent au front et à la CLI.
+Errors are **blocking**: an invalid workflow is never pinned on a work item.
+Warnings do not prevent saving but are reported to the front end and the CLI.
 """
 
 from __future__ import annotations
@@ -23,11 +23,11 @@ from choregos_contracts import (
 from choregos_contracts.workflow import (
     AGENT_WILDCARD,
     CONFIDENCE_SUFFIX,
-    PREFIXE_PRODUCTION,
+    PRODUCTION_PREFIX,
     Transition,
-    effet_de_la_transition,
-    effet_implicite,
-    est_un_etat_de_production,
+    implicit_effect,
+    is_production_state,
+    transition_effect,
 )
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
@@ -35,12 +35,12 @@ from jsonschema.exceptions import SchemaError
 from ..domain import TRACKER_FIELD
 from ..errors import Issue
 from ..gates import ALREADY_FIXED_GATE, known_gates
-from .dates import champ_de
+from .dates import field_of
 from .legacy import legacy_outputs
 from .yamlsource import json_pointer, locate
 
-#: Lu encore pour les workflows écrits avant #175 ; un état de production s'écrit `production: true`.
-PROD_STATE_PREFIX = PREFIXE_PRODUCTION
+#: Still read for workflows written before #175; a production state is written `production: true`.
+PROD_STATE_PREFIX = PRODUCTION_PREFIX
 
 
 @dataclass(slots=True)
@@ -67,7 +67,7 @@ class ValidationReport:
 
 
 def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
-    """Applique les règles statiques du DSL à un workflow déjà désérialisé."""
+    """Apply the DSL's static rules to an already deserialised workflow."""
     report = ValidationReport()
     states = set(wf.states)
     gates = set(known_gates())
@@ -77,9 +77,9 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_reachability(wf, report, source)
     _check_prod_states(wf, report, source)
     _check_retries(wf, report, source)
-    _check_gates_ont_de_la_matiere(wf, report, source)
+    _check_gates_have_something_to_check(wf, report, source)
     _check_output_schemas(wf, report, source)
-    _check_roles_connus(wf, report, source)
+    _check_known_roles(wf, report, source)
     _check_inputs(wf, report, source)
     _check_actions(wf, report, source)
     _check_already_fixed_exits(wf, report, source)
@@ -88,7 +88,7 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_confidence_thresholds(wf, report, source)
     _check_tasks(wf, report, source)
     _check_spawns(wf, report, source)
-    _check_effets(wf, report, source)
+    _check_effects(wf, report, source)
     _check_output_types(wf, report, source)
     _check_unenforced_review(wf, report, source)
     _check_warnings(wf, report, source)
@@ -101,7 +101,7 @@ def _check_output_types(wf: Workflow, report: ValidationReport, source: Any) -> 
     would make a file output look like an inline one."""
     import re
 
-    nom_valide = re.compile(ARTIFACT_NAME_PATTERN)
+    valid_name = re.compile(ARTIFACT_NAME_PATTERN)
     for index, t in enumerate(wf.transitions):
         for name in legacy_outputs(t.id, list(t.outputs)):
             report.warn(
@@ -113,32 +113,32 @@ def _check_output_types(wf: Workflow, report: ValidationReport, source: Any) -> 
                 source,
             )
         for name, type_ in t.output_types.items():
-            chemin: list[str | int] = ["transitions", index, "output_types", name]
+            location: list[str | int] = ["transitions", index, "output_types", name]
             if name not in t.outputs:
                 report.error(
                     "output_types.undeclared",
                     f"`output_types` types `{name}`, which `outputs:` does not declare",
-                    chemin,
+                    location,
                     source,
                 )
             if type_ not in ARTIFACT_TYPES:
                 report.error(
                     "output_types.unknown",
                     f"unknown type `{type_}` for `{name}`: one of {', '.join(sorted(ARTIFACT_TYPES))}",
-                    chemin,
+                    location,
                     source,
                 )
-            if not nom_valide.fullmatch(name):
+            if not valid_name.fullmatch(name):
                 report.error(
                     "output_types.name",
                     f"`{name}` cannot name a file: letters, digits, `_`, `.`, `-`, not starting with a dot",
-                    chemin,
+                    location,
                     source,
                 )
 
 
 def _check_inputs(wf: Workflow, report: ValidationReport, source: Any) -> None:
-    """Les champs d'un ticket se décrivent par un JSON Schema d'OBJET valide (ADR 0031)."""
+    """A work item's fields are described by a valid OBJECT JSON Schema (ADR 0031)."""
     schema = wf.metadata.inputs
     if schema is None:
         return
@@ -146,10 +146,10 @@ def _check_inputs(wf: Workflow, report: ValidationReport, source: Any) -> None:
 
     try:
         jsonschema.Draft202012Validator.check_schema(schema)
-    except jsonschema.SchemaError as erreur:
+    except jsonschema.SchemaError as error:
         report.error(
             "inputs.invalid",
-            f"`metadata.inputs` is not a valid JSON Schema: {erreur.message}",
+            f"`metadata.inputs` is not a valid JSON Schema: {error.message}",
             ["metadata", "inputs"],
             source,
         )
@@ -296,19 +296,19 @@ def _check_already_fixed_exits(wf: Workflow, report: ValidationReport, source: A
 
 
 def _check_actions(wf: Workflow, report: ValidationReport, source: Any) -> None:
-    """Une action gouvernée (S20-05) se propose par une transition de la PLATEFORME, sa date se lit
-    dans un champ que le workflow déclare comme une date, et `action_succeeded` n'a de sens qu'avec
-    une action à juger."""
-    champs = dict((wf.metadata.inputs or {}).get("properties") or {})
+    """A governed action (S20-05) is proposed by a transition of the PLATFORM, its date is read
+    from a field the workflow declares as a date, and `action_succeeded` only makes sense with
+    an action to judge."""
+    declared_fields = dict((wf.metadata.inputs or {}).get("properties") or {})
     for index, t in enumerate(wf.transitions):
-        chemin: list[str | int] = ["transitions", index]
+        location: list[str | int] = ["transitions", index]
         if t.action is None:
             for g_index, g in enumerate(t.gates):
                 if g.name == "action_succeeded":
                     report.error(
                         "gate.nothing_to_check",
                         "guarantee `action_succeeded` without `action:`: there is no action to judge",
-                        [*chemin, "gates", g_index],
+                        [*location, "gates", g_index],
                         source,
                     )
             continue
@@ -317,34 +317,34 @@ def _check_actions(wf: Workflow, report: ValidationReport, source: Any) -> None:
                 "action.on_fail_missing",
                 "an action can fail or be rejected: `on_fail: {to, max_attempts, escalate_to}` says where "
                 "the work item goes — without it, it would propose the same action forever",
-                [*chemin, "action"],
+                [*location, "action"],
                 source,
             )
-        acteur = wf.actors.get(t.by) if t.by else None
-        if not isinstance(acteur, SystemActor):
+        actor = wf.actors.get(t.by) if t.by else None
+        if not isinstance(actor, SystemActor):
             report.error(
                 "action.not_system",
                 "only a platform transition (`by:` a `system` actor) proposes an action: "
                 "an agent calls tools, a person decides",
-                [*chemin, "action"],
+                [*location, "action"],
                 source,
             )
         if t.action.not_before is None:
             continue
-        nom = champ_de(t.action.not_before)
-        declare = champs.get(nom)
+        field_name = field_of(t.action.not_before)
+        declare = declared_fields.get(field_name)
         if not isinstance(declare, dict):
             report.error(
                 "action.date_field_unknown",
-                f"`not_before` reads `fields.{nom}`, which `metadata.inputs` does not declare",
-                [*chemin, "action", "not_before"],
+                f"`not_before` reads `fields.{field_name}`, which `metadata.inputs` does not declare",
+                [*location, "action", "not_before"],
                 source,
             )
         elif declare.get("format") not in {"date", "date-time"}:
             report.error(
                 "action.date_field_not_date",
-                f"`fields.{nom}` is not declared as a date (`format: date` or `date-time`)",
-                [*chemin, "action", "not_before"],
+                f"`fields.{field_name}` is not declared as a date (`format: date` or `date-time`)",
+                [*location, "action", "not_before"],
                 source,
             )
 
@@ -353,89 +353,89 @@ def _check_spawns(wf: Workflow, report: ValidationReport, source: Any) -> None:
     """A fan-out (S38-12, ADR 0057) is the platform's: a `system` transition that does nothing else.
     Its list is a declared field when it walks `fields.`, and a join that can fail says where the
     work item goes."""
-    champs = dict((wf.metadata.inputs or {}).get("properties") or {})
+    declared_fields = dict((wf.metadata.inputs or {}).get("properties") or {})
     for index, t in enumerate(wf.transitions):
         if t.spawn is None:
             continue
-        chemin: list[str | int] = ["transitions", index, "spawn"]
+        location: list[str | int] = ["transitions", index, "spawn"]
         if not isinstance(wf.actors.get(t.by) if t.by else None, SystemActor):
             report.error(
                 "spawn.not_system",
                 "only a platform transition (`by:` a `system` actor) opens child work items",
-                chemin,
+                location,
                 source,
             )
         if t.action is not None or t.does is not None:
             report.error(
                 "spawn.not_alone",
                 "a transition that opens children does nothing else: no `action:`, no `does:`",
-                chemin,
+                location,
                 source,
             )
         root, _, rest = t.spawn.for_each.partition(".")
-        nom = rest.split(".", 1)[0]
-        if root == "fields" and champs and nom not in champs:
+        field_name = rest.split(".", 1)[0]
+        if root == "fields" and declared_fields and field_name not in declared_fields:
             report.error(
                 "spawn.field_unknown",
-                f"`for_each` reads `fields.{nom}`, which `metadata.inputs` does not declare",
-                [*chemin, "for_each"],
+                f"`for_each` reads `fields.{field_name}`, which `metadata.inputs` does not declare",
+                [*location, "for_each"],
                 source,
             )
         if t.spawn.min_succeeded and not t.spawn.succeeded:
             report.error(
                 "spawn.succeeded_missing",
                 "`min_succeeded` counts the children ending in a `succeeded` state: list those states",
-                [*chemin, "min_succeeded"],
+                [*location, "min_succeeded"],
                 source,
             )
         if t.on_fail is None:  # a list refused, a child workflow absent, too few successes
             report.error(
                 "spawn.on_fail_missing",
                 "a fan-out can fail: `on_fail: {to, max_attempts, escalate_to}` says where the item goes",
-                chemin,
+                location,
                 source,
             )
 
 
 def _check_tasks(wf: Workflow, report: ValidationReport, source: Any) -> None:
-    """Une tâche (S20-06) est faite par une PERSONNE ; son formulaire est un JSON Schema d'objet, et
-    chacune de ses propriétés est un champ que le workflow déclare : les valeurs y sont versées, et
-    une action suivante les lit."""
-    champs = dict((wf.metadata.inputs or {}).get("properties") or {})
+    """A task (S20-06) is done by a PERSON; its form is an object JSON Schema, and
+    each of its properties is a field the workflow declares: the values are poured into it, and
+    a following action reads them."""
+    declared_fields = dict((wf.metadata.inputs or {}).get("properties") or {})
     for index, t in enumerate(wf.transitions):
         if t.task is None:
             continue
-        chemin: list[str | int] = ["transitions", index, "task"]
+        location: list[str | int] = ["transitions", index, "task"]
         if not isinstance(wf.actors.get(t.by) if t.by else None, HumanActor):
             report.error(
                 "task.not_human",
                 "a task is done by a person: `by:` a `human` actor",
-                chemin,
+                location,
                 source,
             )
         import jsonschema
 
         try:
             jsonschema.Draft202012Validator.check_schema(t.task.form)
-        except jsonschema.SchemaError as erreur:
-            report.error("task.form_invalid", f"the form is not a JSON Schema: {erreur.message}",
-                         [*chemin, "form"], source)  # fmt: skip
+        except jsonschema.SchemaError as error:
+            report.error("task.form_invalid", f"the form is not a JSON Schema: {error.message}",
+                         [*location, "form"], source)  # fmt: skip
             continue
-        proprietes = t.task.form.get("properties") or {}
-        if t.task.form.get("type", "object") != "object" or not proprietes:
+        properties = t.task.form.get("properties") or {}
+        if t.task.form.get("type", "object") != "object" or not properties:
             report.error(
                 "task.form_invalid",
                 "the form describes an object, with at least one field to fill",
-                [*chemin, "form"],
+                [*location, "form"],
                 source,
             )
             continue
-        for nom in proprietes:
-            if nom not in champs:
+        for field_name in properties:
+            if field_name not in declared_fields:
                 report.error(
                     "task.field_unknown",
-                    f"the form fills `fields.{nom}`, which `metadata.inputs` does not declare",
-                    [*chemin, "form", "properties", nom],
+                    f"the form fills `fields.{field_name}`, which `metadata.inputs` does not declare",
+                    [*location, "form", "properties", field_name],
                     source,
                 )
 
@@ -446,8 +446,8 @@ def _check_references(
     for index, t in enumerate(wf.transitions):
         _check_transition_references(wf, t, ["transitions", index], states, gates, report, source)
     for actor_id, actor in wf.actors.items():
-        # Avant le 2026-09-25, cette boucle relisait la variable `actor` de la boucle des
-        # transitions : l'escalade d'un acteur humain vers un inconnu n'était jamais vue.
+        # Before 2026-09-25, this loop re-read the `actor` variable of the transitions loop:
+        # the escalation of a human actor to an unknown one was never seen.
         if isinstance(actor, HumanActor) and actor.escalate_to and actor.escalate_to not in wf.actors:
             report.error(
                 "actor.unknown",
@@ -467,14 +467,14 @@ def _check_transition_references(
     report: ValidationReport,
     source: Any,
 ) -> None:
-    def etat(nom: str | None, chemin: list[str | int], libelle: str) -> None:
-        if nom is not None and nom not in states:
-            report.error("state.unknown", f"{libelle}: {nom}", chemin, source)
+    def check_state(target: str | None, location: list[str | int], label: str) -> None:
+        if target is not None and target not in states:
+            report.error("state.unknown", f"{label}: {target}", location, source)
 
     if t.from_ != AGENT_WILDCARD:
-        etat(t.from_, [*path, "from"], "unknown source state")
-    etat(t.to, [*path, "to"], "unknown target state")
-    etat(t.on_reject, [*path, "on_reject"], "unknown state")
+        check_state(t.from_, [*path, "from"], "unknown source state")
+    check_state(t.to, [*path, "to"], "unknown target state")
+    check_state(t.on_reject, [*path, "on_reject"], "unknown state")
     if t.by is not None and t.by not in wf.actors:
         report.error("actor.unknown", f"unknown actor: {t.by}", [*path, "by"], source)
     for g_index, g in enumerate(t.gates):
@@ -490,7 +490,9 @@ def _check_transition_references(
         if retry is None:
             continue
         for attr in ("to", "escalate_to"):
-            etat(getattr(retry, attr), [*path, field_name, attr], f"unknown state in {field_name}.{attr}")
+            check_state(
+                getattr(retry, attr), [*path, field_name, attr], f"unknown state in {field_name}.{attr}"
+            )
     for a_index, actor_id in enumerate(t.review.agents if t.review and t.review.agents else []):
         if actor_id not in wf.actors:
             report.error(
@@ -534,7 +536,7 @@ def _check_defaults_references(wf: Workflow, states: set[str], report: Validatio
 
 
 def _check_initial_and_terminal(wf: Workflow, report: ValidationReport, source: Any) -> None:
-    """L'état initial est celui que le document déclare (§1.4) ; il mène à un état terminal."""
+    """The initial state is the one the document declares (§1.4); it leads to a terminal state."""
     initial = wf.initial_state
     if initial not in wf.states:
         report.error(
@@ -554,8 +556,8 @@ def _check_initial_and_terminal(wf: Workflow, report: ValidationReport, source: 
     if not wf.terminal_states():
         report.error("workflow.no_terminal_state", "no terminal state declared", ["states"], source)
 
-    # Un état qui n'est atteignable que par un chemin d'échec est légitime (needs_human) ;
-    # un état qui n'est atteint par aucune transition, hors état initial, est une faute de frappe.
+    # A state reachable only through a failure path is legitimate (needs_human);
+    # a state no transition reaches, other than the initial state, is a typo.
     targets = set(_all_targets(wf))
     for name in wf.states:
         if name != initial and name not in targets:
@@ -568,7 +570,7 @@ def _check_initial_and_terminal(wf: Workflow, report: ValidationReport, source: 
 
 
 def _all_targets(wf: Workflow) -> list[str]:
-    """Tous les états cibles déclarés, y compris les retours, escalades et défauts."""
+    """All the declared target states, returns, escalations and defaults included."""
     targets: list[str] = []
     for t in wf.transitions:
         targets.append(t.to)
@@ -632,24 +634,24 @@ def _check_reachability(wf: Workflow, report: ValidationReport, source: Any) -> 
         )
 
 
-def _check_effets(wf: Workflow, report: ValidationReport, source: Any) -> None:
-    """Ce que la plateforme fait s'ÉCRIT (#175) : `does` sur une transition système, `production`
-    sur un état. Un effet encore déduit d'un nom se lit — un workflow publié ne change pas de
-    comportement —, mais il s'annonce : un renommage le perdrait."""
-    gestes = {"open_pr": "opens the PR", "merge_pr": "merges the PR"}
+def _check_effects(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """What the platform does is WRITTEN (#175): `does` on a system transition, `production`
+    on a state. An effect still deduced from a name is read (a published workflow does not change
+    behaviour), but it announces itself: a rename would lose it."""
+    gestures = {"open_pr": "opens the PR", "merge_pr": "merges the PR"}
     for index, t in enumerate(wf.transitions):
-        systeme = isinstance(wf.actors.get(t.by or ""), SystemActor)
-        if t.does is not None and not systeme:
+        is_system = isinstance(wf.actors.get(t.by or ""), SystemActor)
+        if t.does is not None and not is_system:
             message = f"`does: {t.does}` is a platform gesture: only a `system` actor carries it"
             report.error("transition.does_requires_system", message, ["transitions", index, "does"], source)
-        implicite = effet_implicite(t.to)
-        if systeme and t.does is None and implicite is not None:
+        implicit = implicit_effect(t.to)
+        if is_system and t.does is None and implicit is not None:
             message = (
-                f"the transition to `{t.to}` {gestes[implicite]} because of the state's NAME: "
-                f"write `does: {implicite}`, so that a rename no longer changes it"
+                f"the transition to `{t.to}` {gestures[implicit]} because of the state's NAME: "
+                f"write `does: {implicit}`, so that a rename no longer changes it"
             )
             report.warn("workflow.implicit_effect", message, ["transitions", index, "to"], source)
-        if t.pull_request is not None and (not systeme or effet_de_la_transition(t) != "open_pr"):
+        if t.pull_request is not None and (not is_system or transition_effect(t) != "open_pr"):
             message = (
                 "`pull_request:` says how the platform opens the pull request: only a `system` transition "
                 "that opens it (`does: open_pr`) carries it"
@@ -660,18 +662,18 @@ def _check_effets(wf: Workflow, report: ValidationReport, source: Any) -> None:
                 ["transitions", index, "pull_request"],
                 source,
             )
-    for nom, etat in wf.states.items():
-        if nom.startswith(PREFIXE_PRODUCTION) and not etat.production:
+    for state_name, state in wf.states.items():
+        if state_name.startswith(PRODUCTION_PREFIX) and not state.production:
             message = (
-                f"the state `{nom}` is production because of its NAME: write `production: true`, "
+                f"the state `{state_name}` is production because of its NAME: write `production: true`, "
                 "so that a rename no longer lifts the lock"
             )
-            report.warn("workflow.implicit_effect", message, ["states", nom], source)
+            report.warn("workflow.implicit_effect", message, ["states", state_name], source)
 
 
 def _check_prod_states(wf: Workflow, report: ValidationReport, source: Any) -> None:
     for index, t in enumerate(wf.transitions):
-        if est_un_etat_de_production(t.to, wf.states.get(t.to)) and t.via != "release_train":
+        if is_production_state(t.to, wf.states.get(t.to)) and t.via != "release_train":
             report.error(
                 "prod.requires_train",
                 f"the state {t.to} can only be reached `via: release_train` (production is locked)",
@@ -681,7 +683,7 @@ def _check_prod_states(wf: Workflow, report: ValidationReport, source: Any) -> N
 
 
 def _check_retries(wf: Workflow, report: ValidationReport, source: Any) -> None:
-    """Toute transition de retour porte un `max_attempts` : pas de boucle infinie."""
+    """Every return transition carries a `max_attempts`: no infinite loop."""
     order = list(wf.states)
     position = {name: i for i, name in enumerate(order)}
     for index, t in enumerate(wf.transitions):
@@ -699,9 +701,9 @@ def _check_retries(wf: Workflow, report: ValidationReport, source: Any) -> None:
                 )
 
 
-# Ce qu'une garantie a besoin de trouver sur la transition pour pouvoir se prononcer.
-# `outputs_present` sans `outputs:` ne regarde rien ; `evidence_facts` sans `keys:` non plus.
-GATES_A_MATIERE: dict[str, tuple[str, str]] = {
+# What a guarantee needs to find on the transition to be able to pronounce.
+# `outputs_present` without `outputs:` looks at nothing; neither does `evidence_facts` without `keys:`.
+GATES_NEEDING_PARAMS: dict[str, tuple[str, str]] = {
     "outputs_present": ("outputs", "`outputs:` on the transition"),
     "evidence_facts": ("keys", "`keys:` as a parameter of the guarantee"),
     "tool_called": ("tools", "`tools:` as a parameter of the guarantee"),
@@ -712,24 +714,24 @@ GATES_A_MATIERE: dict[str, tuple[str, str]] = {
 }
 
 
-def _check_gates_ont_de_la_matiere(wf: Workflow, report: ValidationReport, source: Any) -> None:
-    """Une garantie demandée sans rien à vérifier est refusée à l'écriture.
+def _check_gates_have_something_to_check(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """A guarantee that is asked for with nothing to check is refused when written.
 
-    Sinon elle se découvre en vol, et de la pire manière : le tableau de bord affiche une
-    garantie verte que personne n'a évaluée. Le moteur refuse aussi au moment de trancher,
-    mais un workflow faux doit échouer quand on l'écrit, pas quand un ticket le traverse.
+    Otherwise it is discovered in flight, and in the worst way: the dashboard shows a green
+    guarantee that nobody evaluated. The engine also refuses at the moment of ruling, but a
+    wrong workflow must fail when it is written, not when a work item goes through it.
     """
     for index, t in enumerate(wf.transitions):
         for g_index, g in enumerate(t.gates):
-            besoin = GATES_A_MATIERE.get(g.name)
-            if besoin is None:
+            need = GATES_NEEDING_PARAMS.get(g.name)
+            if need is None:
                 continue
-            champ, comment = besoin
-            if g.params.get("allow_empty") or g.params.get(champ) or (champ == "outputs" and t.outputs):
+            param, hint = need
+            if g.params.get("allow_empty") or g.params.get(param) or (param == "outputs" and t.outputs):
                 continue
             report.error(
                 "gate.nothing_to_check",
-                f"guarantee `{g.name}` without {comment}: it would have nothing to check",
+                f"guarantee `{g.name}` without {hint}: it would have nothing to check",
                 ["transitions", index, "gates", g_index],
                 source,
             )
@@ -773,30 +775,30 @@ def _check_output_schemas(wf: Workflow, report: ValidationReport, source: Any) -
                     )
 
 
-def _check_roles_connus(wf: Workflow, report: ValidationReport, source: Any) -> None:
-    """Un rôle que le paquet ne connaît pas exige un playbook apporté par le déploiement.
+def _check_known_roles(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """A role the package does not know requires a playbook brought by the deployment.
 
-    Ce n'est pas une erreur : c'est même le but — un métier nomme ses rôles. Mais le
-    playbook se résout PAR LE NOM DU RÔLE, et son absence ne se découvrirait qu'au premier
-    ticket, sur un `playbook inconnu` au milieu d'une étape. Un avertissement à l'écriture
-    coûte moins cher.
+    This is not an error: it is even the point, since a trade names its roles. But the
+    playbook is resolved BY THE ROLE'S NAME, and its absence would only be found at the first
+    work item, on an unknown-playbook error in the middle of a stage. A warning when writing
+    costs less.
     """
     try:
         from choregos_playbooks import playbook_path
-    except Exception:  # le validateur doit tourner sans le paquet de playbooks
+    except Exception:  # the validator must run without the playbooks package
         return
     for actor_id, actor in wf.actors.items():
         if not isinstance(actor, AgentActor):
             continue
         if actor.agent:
-            # Un agent du registre apporte ses instructions (ADR 0033) : le playbook n'est plus
-            # qu'un repli, et l'avertir serait un avertissement qu'on apprend à ignorer.
+            # A registry agent brings its instructions (ADR 0033): the playbook is only
+            # a fallback, and warning about it would be a warning people learn to ignore.
             continue
         role = str(actor.playbook or actor.role)
         try:
-            # On tente la RÉSOLUTION, pas une comparaison à la liste du paquet : un rôle
-            # métier a son playbook dans le déploiement (`CHOREGOS_PLAYBOOKS_DIR`), et
-            # avertir alors qu'il est là serait un avertissement qu'on apprend à ignorer.
+            # We try the RESOLUTION, not a comparison with the package's list: a trade
+            # role has its playbook in the deployment (`CHOREGOS_PLAYBOOKS_DIR`), and
+            # warning when it is there would be a warning people learn to ignore.
             playbook_path(role)
         except FileNotFoundError:
             report.warn(
@@ -852,11 +854,11 @@ def _check_warnings(wf: Workflow, report: ValidationReport, source: Any) -> None
         if isinstance(actor, AgentActor):
             used_roles.add(str(actor.role))
     has_verify = "verify" in (roles & used_roles)
-    # Sans agent qui écrit du code, rien à tester avant la PR : une étude qui fusionne un ADR était
-    # avertie de n'avoir pas de `verify` (S21-22).
+    # Without an agent that writes code, nothing to test before the PR: a study that merges an ADR was
+    # warned about having no `verify` (S21-22).
     writes_code = "implement" in (roles & used_roles)
     has_pr = any(
-        isinstance(wf.actors.get(t.by or ""), SystemActor) and effet_de_la_transition(t) == "open_pr"
+        isinstance(wf.actors.get(t.by or ""), SystemActor) and transition_effect(t) == "open_pr"
         for t in wf.transitions
     )
     if has_pr and writes_code and not has_verify:

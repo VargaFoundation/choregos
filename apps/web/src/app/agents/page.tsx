@@ -12,23 +12,8 @@ import { ScopeBadge, ScopeFilter } from "@/components/agents/governance";
 import { resumeDeLaVersion, scopeLabel, type AgentScope } from "@/components/agents/registre";
 import { TagFilter, TagList, withTags } from "@/components/agents/tags";
 import { Glossaire } from "@/components/glossaire";
-import {
-  Badge,
-  Button,
-  Card,
-  Drawer,
-  Empty,
-  ErrorNote,
-  Heading,
-  Lead,
-  Table,
-  TBody,
-  TD,
-  TH,
-  THead,
-  TR,
-  buttonClasses,
-} from "@/components/ui";
+import { Badge, Button, Card, Drawer, Empty, ErrorNote, Table, TBody, TD, TH, THead, TR, buttonClasses } from "@/components/ui";
+import { OrgPageHeader } from "@/components/coquille/org-page-header";
 import { api } from "@/lib/api";
 import { percent, usd } from "@/lib/format";
 import { useSession } from "@/lib/session";
@@ -88,23 +73,17 @@ function Agents() {
   const parAgent = new Map((metrics.data ?? []).map((m) => [m.agent, m]));
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-2">
-          <Heading as="h1" size="xl">
-            Agents
-          </Heading>
-          <Lead>
-            An agent is an object of the organisation: its instructions, model, skills and tools live in versions that
-            never change; a project pins one and may only tighten it.
-          </Lead>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={() => setDrawer("catalogue")}>Add from catalogue</Button>
-          <Link href="/agents/new" className={buttonClasses("primary")}>
-            New agent
-          </Link>
-        </div>
-      </div>
+      <OrgPageHeader title="Agents"
+        description="An agent is an object of the organisation: its instructions, model, skills and tools live in versions that never change; a project pins one and may only tighten it."
+        actions={
+          <>
+            <Button onClick={() => setDrawer("catalogue")}>Add from catalogue</Button>
+            <Link href="/agents/new" className={buttonClasses("primary")}>
+              New agent
+            </Link>
+          </>
+        }
+      />
       <Glossaire ici="agents" />
       {agents.data && agents.data.length > 0 && (
         <div className="flex flex-wrap items-center gap-3">

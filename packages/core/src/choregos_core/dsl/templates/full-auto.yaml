@@ -1,4 +1,4 @@
-# Aucun humain dans la boucle avant la prod : pour les dépôts internes à faible risque.
+# No human in the loop before prod: for low-risk internal repositories.
 apiVersion: choregos/v1
 kind: Workflow
 metadata:
@@ -68,7 +68,7 @@ transitions:
     gates: [evidence_present]
     on_fail: { to: reviewing, max_attempts: 2, escalate_to: needs_human }
     does: open_pr
-  # Le réparateur part de l'état où `t-merge` envoie une CI rouge (#284).
+  # The repairer starts from the state where `t-merge` sends a red CI (#284).
   - id: t-fix-ci
     from: fixing_ci
     to: pr_open

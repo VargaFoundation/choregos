@@ -6,7 +6,8 @@ import { AiClientCatalogue } from "@/components/agents/catalogue";
 import { ClientsMcp } from "@/components/agents/clients-mcp";
 import { estUnClientMcp } from "@/components/agents/registre";
 import { Glossaire } from "@/components/glossaire";
-import { Empty, Heading } from "@/components/ui";
+import { Empty } from "@/components/ui";
+import { OrgPageHeader } from "@/components/coquille/org-page-header";
 import { api } from "@/lib/api";
 import { estClient } from "@/lib/integrations";
 import { useSession } from "@/lib/session";
@@ -26,14 +27,7 @@ export function IntegrationsPage({ client, projet }: { client: string; projet?: 
     <div className="space-y-6">
       {!projet && (
         <div className="space-y-2">
-          <Heading as="h1" size="xl">
-            Integrations
-          </Heading>
-          <p className="max-w-3xl text-sm text-ink-muted">
-            Plug Claude, or any MCP client, into Choregos. Your agent lists your projects, opens and follows work
-            items, and tells you what waits for your decision — with your rights, never more. It never decides: you
-            do, in the console.
-          </p>
+          <OrgPageHeader title="Integrations" description="Plug Claude, or any MCP client, into Choregos. Your agent lists your projects, opens and follows work items, and tells you what waits for your decision — with your rights, never more. It never decides: you do, in the console." />
           <Glossaire ici="clients" />
         </div>
       )}

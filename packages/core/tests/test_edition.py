@@ -1,9 +1,9 @@
-"""Les éditions typées d'un workflow, greffées dans le texte (ADR 0031, S16-11).
+"""The typed edits of a workflow, grafted into the text (ADR 0031, S16-11).
 
-La propriété qui compte : une opération suivie de son inverse redonne les octets d'origine — sur
-un document qui mélange les styles (flow, bloc, guillemets, commentaires partout, sans fin de ligne
-finale) comme sur les gabarits livrés. Et une opération ne touche pas à ce qu'elle ne vise pas :
-les commentaires restent.
+The property that matters: an operation followed by its inverse gives the original bytes back, on
+a document that mixes styles (flow, block, quotes, comments everywhere, no final line break)
+as on the shipped templates. And an operation does not touch what it does not target:
+the comments stay.
 """
 
 from __future__ import annotations
@@ -17,54 +17,54 @@ import pytest
 import yaml
 from choregos_core import parse_workflow
 from choregos_core.dsl import TEMPLATE_NAMES, template_yaml
-from choregos_core.dsl.edition import EditionRefusee, editer
+from choregos_core.dsl.edition import EditRefused, edit
 
-MELANGE = """apiVersion: choregos/v1
+MIXED = """apiVersion: choregos/v1
 kind: Workflow
-metadata: {name: arrivee, version: 3}  # la version courante
-# Qui agit
+metadata: {name: arrival, version: 3}  # the current version
+# Who acts
 actors:
-  rh: {type: human, group: rh, sla_hours: 24}
-  # le coordinateur
-  coordinateur:
+  hr: {type: human, group: hr, sla_hours: 24}
+  # the coordinator
+  coordinator:
     type: agent
     role: refine
-  plateforme: {type: system}
-  ancien: {type: human, group: archives}
+  platform: {type: system}
+  former: {type: human, group: archives}
 states:
-  # la demande arrive ici
-  demande: {display: Demande, kind: wait}
+  # the request arrives here
+  request: {display: Request, kind: wait}
   "preparation":
-    display: "Préparation"   # en cours
+    display: "Preparation"   # in progress
     kind: work
-  attente_badge: {display: 'Badge à poser', kind: wait}
-  orpheline: {display: Inutilisée}
-  fait:
-    display: Fait
+  badge_wait: {display: 'Badge to place', kind: wait}
+  orphan: {display: Unused}
+  done:
+    display: Done
     terminal: true
 transitions:
-  - {id: t-preparer, from: demande, to: preparation, by: coordinateur, gates: [outputs_present]}
-  # la RH valide
-  - id: t-valider
+  - {id: t-prepare, from: request, to: preparation, by: coordinator, gates: [outputs_present]}
+  # HR validates
+  - id: t-validate
     from: "preparation"
-    to: attente_badge
-    by: rh
+    to: badge_wait
+    by: hr
     timeout_hours: 48
     gates:
       - review_approved
       - {name: evidence_present, params: {kind: photo}}
-  - {id: t-badge, from: attente_badge, to: fait, by: plateforme}
+  - {id: t-badge, from: badge_wait, to: done, by: platform}
 defaults:
-  from_any_agent_state: {on_question: demande, on_timeout: demande}"""
+  from_any_agent_state: {on_question: request, on_timeout: request}"""
 
-#: Les transitions en dernier, sans fin de ligne : retirer ou ajouter la dernière touche la fin du fichier.
-TRANSITIONS_EN_DERNIER = MELANGE[: MELANGE.index("defaults:")].rstrip("\n")
+#: The transitions last, with no final line break: removing or adding the last touches the end of the file.
+TRANSITIONS_LAST = MIXED[: MIXED.index("defaults:")].rstrip("\n")
 
 DOCUMENTS = {
-    "melange": MELANGE,
-    "melange-fin-de-ligne": MELANGE + "\n",
-    "transitions-en-dernier": TRANSITIONS_EN_DERNIER,
-    **{f"gabarit-{nom}": template_yaml(nom) for nom in TEMPLATE_NAMES},
+    "mixed": MIXED,
+    "mixed-final-line-break": MIXED + "\n",
+    "transitions-last": TRANSITIONS_LAST,
+    **{f"template-{name}": template_yaml(name) for name in TEMPLATE_NAMES},
 }
 
 
@@ -77,20 +77,20 @@ TASK = {
 }
 
 
-def _commentaires(texte: str) -> list[str]:
-    return [m.group(0) for m in re.finditer(r"#[^\n]*", texte)]
+def _comments(text: str) -> list[str]:
+    return [m.group(0) for m in re.finditer(r"#[^\n]*", text)]
 
 
-def _operations(texte: str) -> list[dict[str, Any]]:
-    """Toutes les opérations qu'on peut tenter sur un document."""
-    document = yaml.safe_load(texte)
-    etats = list(document["states"])
-    acteurs = list(document["actors"])
+def _operations(text: str) -> list[dict[str, Any]]:
+    """All the operations that can be tried on a document."""
+    document = yaml.safe_load(text)
+    states = list(document["states"])
+    actors = list(document["actors"])
     transitions = [t for t in document["transitions"] if t.get("id")]
     ops: list[dict[str, Any]] = []
     ops += [
         {"op": "set_workflow", "field": "description", "value": "A new description"},
-        {"op": "set_workflow", "field": "initial", "value": etats[0]},
+        {"op": "set_workflow", "field": "initial", "value": states[0]},
         {"op": "set_workflow", "field": "initial", "unset": True},
         {
             "op": "set_workflow",
@@ -100,34 +100,34 @@ def _operations(texte: str) -> list[dict[str, Any]]:
         },
     ]
     for place in (None, 0, 1):
-        ops.append({"op": "add_state", "name": "nouvel_etat", "spec": {"kind": "wait"}, "index": place})
-        ops.append({"op": "add_actor", "name": "nouvel_acteur", "spec": {"type": "system"}, "index": place})
+        ops.append({"op": "add_state", "name": "new_state", "spec": {"kind": "wait"}, "index": place})
+        ops.append({"op": "add_actor", "name": "new_actor", "spec": {"type": "system"}, "index": place})
         ops.append(
             {
                 "op": "add_transition",
-                "transition": {"from": etats[0], "to": etats[-1], "by": acteurs[0]},
+                "transition": {"from": states[0], "to": states[-1], "by": actors[0]},
                 "index": place,
             }
         )
-    for etat in etats:
+    for state in states:
         ops += [
-            {"op": "remove_state", "name": etat},
-            {"op": "rename_state", "from": etat, "to": "renomme"},
-            {"op": "set_state", "name": etat, "field": "display", "value": "Libellé neuf"},
-            {"op": "set_state", "name": etat, "field": "tracker", "value": {"status": "En cours"}},
-            {"op": "set_state", "name": etat, "field": "kind", "unset": True},
+            {"op": "remove_state", "name": state},
+            {"op": "rename_state", "from": state, "to": "renamed"},
+            {"op": "set_state", "name": state, "field": "display", "value": "New label"},
+            {"op": "set_state", "name": state, "field": "tracker", "value": {"status": "In progress"}},
+            {"op": "set_state", "name": state, "field": "kind", "unset": True},
         ]
-    for acteur in acteurs:
+    for actor in actors:
         ops += [
-            {"op": "remove_actor", "name": acteur},
-            {"op": "set_actor", "name": acteur, "field": "sla_hours", "value": 12},
+            {"op": "remove_actor", "name": actor},
+            {"op": "set_actor", "name": actor, "field": "sla_hours", "value": 12},
         ]
     for transition in transitions:
         ident = transition["id"]
         ops += [
             {"op": "remove_transition", "id": ident},
             {"op": "set_transition", "id": ident, "field": "timeout_hours", "value": 72},
-            {"op": "set_transition", "id": ident, "field": "by", "value": acteurs[-1]},
+            {"op": "set_transition", "id": ident, "field": "by", "value": actors[-1]},
             {"op": "set_transition", "id": ident, "field": "to", "unset": True},
             {"op": "add_gate", "transition": ident, "gate": "scope_respected"},
             {"op": "set_transition", "id": ident, "field": "gates", "value": ["outputs_present"]},
@@ -146,44 +146,44 @@ def _operations(texte: str) -> list[dict[str, Any]]:
                 "index": 0,
             },
         ]
-        for garantie in transition.get("gates") or []:
-            nom = garantie if isinstance(garantie, str) else garantie["name"]
-            ops.append({"op": "remove_gate", "transition": ident, "name": nom})
+        for guarantee in transition.get("gates") or []:
+            name = guarantee if isinstance(guarantee, str) else guarantee["name"]
+            ops.append({"op": "remove_gate", "transition": ident, "name": name})
     return ops
 
 
-def _cas() -> list[Any]:
-    cas = []
-    for nom, texte in DOCUMENTS.items():
-        for i, op in enumerate(_operations(texte)):
-            cas.append(pytest.param(texte, op, id=f"{nom}-{op['op']}-{i}"))
-    return cas
+def _cases() -> list[Any]:
+    cases = []
+    for name, text in DOCUMENTS.items():
+        for i, op in enumerate(_operations(text)):
+            cases.append(pytest.param(text, op, id=f"{name}-{op['op']}-{i}"))
+    return cases
 
 
-@pytest.mark.parametrize(("texte", "op"), _cas())
-def test_une_operation_puis_son_inverse_redonnent_les_octets(texte: str, op: dict[str, Any]) -> None:
+@pytest.mark.parametrize(("text", "op"), _cases())
+def test_an_operation_then_its_inverse_give_the_bytes_back(text: str, op: dict[str, Any]) -> None:
     try:
-        edition = editer(texte, [op])
-    except EditionRefusee:
-        return  # refusée : rien n'a changé, c'est un autre test qui dit quand refuser
-    yaml.safe_load(edition.yaml)  # le texte édité est du YAML
+        edition = edit(text, [op])
+    except EditRefused:
+        return  # refused: nothing changed, another test says when to refuse
+    yaml.safe_load(edition.yaml)  # the edited text is YAML
     inverse = [o.model_dump(by_alias=True, exclude_none=True) for o in edition.inverse]
-    assert editer(edition.yaml, inverse).yaml == texte
+    assert edit(edition.yaml, inverse).yaml == text
     if not op["op"].startswith("remove") and not op.get("unset"):
-        assert _commentaires(texte) == [c for c in _commentaires(edition.yaml) if c in _commentaires(texte)]
+        assert _comments(text) == [c for c in _comments(edition.yaml) if c in _comments(text)]
 
 
-def test_chaque_sorte_d_operation_s_applique_quelque_part() -> None:
-    """La propriété ci-dessus ne vaut rien si tout est refusé : chaque sorte doit passer une fois."""
-    vues: set[str] = set()
-    for texte in DOCUMENTS.values():
-        for op in _operations(texte):
+def test_each_kind_of_operation_applies_somewhere() -> None:
+    """The property above is worth nothing if everything is refused: each kind must pass once."""
+    seen: set[str] = set()
+    for text in DOCUMENTS.values():
+        for op in _operations(text):
             try:
-                editer(texte, [op])
-            except EditionRefusee:
+                edit(text, [op])
+            except EditRefused:
                 continue
-            vues.add(op["op"] + (":unset" if op.get("unset") else ""))
-    assert vues >= {
+            seen.add(op["op"] + (":unset" if op.get("unset") else ""))
+    assert seen >= {
         "add_state",
         "remove_state",
         "rename_state",
@@ -198,117 +198,119 @@ def test_chaque_sorte_d_operation_s_applique_quelque_part() -> None:
         "add_actor",
         "remove_actor",
         "set_actor",
-    }, vues
+    }, seen
 
 
-def _erreurs(texte: str) -> set[tuple[str, str | None]]:
-    """Les erreurs du validateur, par sorte et par chemin : une édition n'en ajoute aucune."""
-    return {(i.code, i.path) for i in parse_workflow(texte, strict=False)[1].errors}
+def _errors(text: str) -> set[tuple[str, str | None]]:
+    """The validator's errors, by kind and by path: an edit adds none."""
+    return {(i.code, i.path) for i in parse_workflow(text, strict=False)[1].errors}
 
 
-def test_renommer_un_etat_suit_chaque_reference() -> None:
-    edition = editer(MELANGE, [{"op": "rename_state", "from": "demande", "to": "accueil"}])
-    assert _erreurs(edition.yaml) == _erreurs(MELANGE)
+def test_renaming_a_state_follows_each_reference() -> None:
+    edition = edit(MIXED, [{"op": "rename_state", "from": "request", "to": "reception"}])
+    assert _errors(edition.yaml) == _errors(MIXED)
     workflow, _ = parse_workflow(edition.yaml, strict=False)
-    assert "demande" not in workflow.states and "accueil" in workflow.states
-    assert workflow.transitions[0].from_ == "accueil"
+    assert "request" not in workflow.states and "reception" in workflow.states
+    assert workflow.transitions[0].from_ == "reception"
     assert workflow.defaults is not None and workflow.defaults.from_any_agent_state is not None
-    assert workflow.defaults.from_any_agent_state.on_question == "accueil"
-    # Un nom écrit entre guillemets le reste.
-    renomme = editer(MELANGE, [{"op": "rename_state", "from": "preparation", "to": "instruction"}]).yaml
-    assert '"instruction":' in renomme and 'from: "instruction"' in renomme
+    assert workflow.defaults.from_any_agent_state.on_question == "reception"
+    # A name written between quotes stays quoted.
+    renamed = edit(MIXED, [{"op": "rename_state", "from": "preparation", "to": "instruction"}]).yaml
+    assert '"instruction":' in renamed and 'from: "instruction"' in renamed
 
 
-def test_une_garantie_ajoutee_garde_le_style_de_sa_liste() -> None:
-    flow = editer(MELANGE, [{"op": "add_gate", "transition": "t-preparer", "gate": "scope_respected"}]).yaml
+def test_an_added_guarantee_keeps_the_style_of_its_list() -> None:
+    flow = edit(MIXED, [{"op": "add_gate", "transition": "t-prepare", "gate": "scope_respected"}]).yaml
     assert "gates: [outputs_present, scope_respected]" in flow
-    bloc = editer(MELANGE, [{"op": "add_gate", "transition": "t-valider", "gate": "scope_respected"}]).yaml
-    assert "      - {name: evidence_present, params: {kind: photo}}\n      - scope_respected\n" in bloc
-    sans = editer(MELANGE, [{"op": "add_gate", "transition": "t-badge", "gate": "ci_green"}]).yaml
-    assert "{id: t-badge, from: attente_badge, to: fait, by: plateforme, gates: [ci_green]}" in sans
-    for texte in (flow, bloc, sans):
-        assert _erreurs(texte) == _erreurs(MELANGE)
+    block = edit(MIXED, [{"op": "add_gate", "transition": "t-validate", "gate": "scope_respected"}]).yaml
+    assert "      - {name: evidence_present, params: {kind: photo}}\n      - scope_respected\n" in block
+    bare = edit(MIXED, [{"op": "add_gate", "transition": "t-badge", "gate": "ci_green"}]).yaml
+    assert "{id: t-badge, from: badge_wait, to: done, by: platform, gates: [ci_green]}" in bare
+    for text in (flow, block, bare):
+        assert _errors(text) == _errors(MIXED)
 
 
 @pytest.mark.parametrize(
-    ("op", "motif"),
+    ("op", "reason"),
     [
-        pytest.param({"op": "remove_state", "name": "demande"}, "still named", id="etat-reference"),
-        pytest.param({"op": "remove_actor", "name": "rh"}, "still carries", id="acteur-reference"),
+        pytest.param({"op": "remove_state", "name": "request"}, "still named", id="state-reference"),
+        pytest.param({"op": "remove_actor", "name": "hr"}, "still carries", id="actor-reference"),
         pytest.param(
-            {"op": "rename_state", "from": "demande", "to": "fait"}, "already", id="renommer-vers-un-existant"
+            {"op": "rename_state", "from": "request", "to": "done"}, "already", id="rename-to-an-existing-one"
         ),
         pytest.param(
-            {"op": "rename_state", "from": "demande", "to": "Pas Un Nom"}, "state name", id="nom-invalide"
+            {"op": "rename_state", "from": "request", "to": "Not A Name"}, "state name", id="invalid-name"
         ),
-        pytest.param({"op": "add_state", "name": "demande"}, "already exists", id="etat-existant"),
+        pytest.param({"op": "add_state", "name": "request"}, "already exists", id="existing-state"),
         pytest.param(
-            {"op": "remove_transition", "id": "t-inconnue"}, "does not exist", id="transition-inconnue"
+            {"op": "remove_transition", "id": "t-unknown"}, "does not exist", id="unknown-transition"
         ),
         pytest.param(
-            {"op": "set_workflow", "field": "name", "value": "autre"},
+            {"op": "set_workflow", "field": "name", "value": "other"},
             "the name is the route's",
-            id="nom-du-workflow",
+            id="workflow-name",
         ),
-        pytest.param({"op": "set_transition", "id": "t-valider", "field": "id", "value": "x"}, "id", id="id"),
         pytest.param(
-            {"op": "add_gate", "transition": "t-valider", "gate": "review_approved"},
+            {"op": "set_transition", "id": "t-validate", "field": "id", "value": "x"}, "id", id="id"
+        ),
+        pytest.param(
+            {"op": "add_gate", "transition": "t-validate", "gate": "review_approved"},
             "already",
-            id="garantie-en-double",
+            id="duplicate-guarantee",
         ),
-        # `on_timeout` nomme `plus_tard`, qui n'est pas (encore) un état : le renommage inverse le
-        # renommerait aussi, et ne redonnerait pas les octets d'origine.
+        # `on_timeout` names `later`, which is not (yet) a state: the inverse rename would
+        # rename it too, and would not give the original bytes back.
         pytest.param(
-            {"op": "rename_state", "from": "attente_badge", "to": "plus_tard"},
+            {"op": "rename_state", "from": "badge_wait", "to": "later"},
             "already named",
-            id="renommer-vers-un-nom-deja-cite",
+            id="rename-to-an-already-cited-name",
         ),
         pytest.param(
             {
                 "op": "add_transition",
-                "transition": {"id": "t-preparer", "from": "demande", "to": "fait", "by": "rh"},
+                "transition": {"id": "t-prepare", "from": "request", "to": "done", "by": "hr"},
             },
             "already exists",
-            id="transition-existante",
+            id="existing-transition",
         ),
     ],
 )
-def test_ce_qui_est_refuse(op: dict[str, Any], motif: str) -> None:
-    texte = MELANGE.replace("on_timeout: demande}", "on_timeout: plus_tard}")
-    with pytest.raises(EditionRefusee, match=motif):
-        editer(texte, [op])
+def test_what_is_refused(op: dict[str, Any], reason: str) -> None:
+    text = MIXED.replace("on_timeout: request}", "on_timeout: later}")
+    with pytest.raises(EditRefused, match=reason):
+        edit(text, [op])
 
 
-def test_le_premier_champ_d_une_transition_en_bloc_ne_bouge_pas() -> None:
-    """Il partage la ligne du tiret : le retirer ou insérer devant casserait la séquence."""
-    texte = MELANGE.replace(
-        '  - id: t-valider\n    from: "preparation"', '  - from: "preparation"\n    id: t-valider'
+def test_the_first_field_of_a_block_transition_does_not_move() -> None:
+    """It shares the dash's line: removing it or inserting before it would break the sequence."""
+    text = MIXED.replace(
+        '  - id: t-validate\n    from: "preparation"', '  - from: "preparation"\n    id: t-validate'
     )
-    assert '  - from: "preparation"\n    id: t-valider' in texte
-    with pytest.raises(EditionRefusee, match="dash's line"):
-        editer(texte, [{"op": "set_transition", "id": "t-valider", "field": "from", "unset": True}])
-    # Le reste de la transition se modifie.
-    edition = editer(
-        texte, [{"op": "set_transition", "id": "t-valider", "field": "timeout_hours", "unset": True}]
+    assert '  - from: "preparation"\n    id: t-validate' in text
+    with pytest.raises(EditRefused, match="dash's line"):
+        edit(text, [{"op": "set_transition", "id": "t-validate", "field": "from", "unset": True}])
+    # The rest of the transition can be modified.
+    edition = edit(
+        text, [{"op": "set_transition", "id": "t-validate", "field": "timeout_hours", "unset": True}]
     )
     inverse = [o.model_dump(by_alias=True, exclude_none=True) for o in edition.inverse]
-    assert editer(edition.yaml, inverse).yaml == texte
+    assert edit(edition.yaml, inverse).yaml == text
 
 
-#: Un workflow écrit AVANT #175 : ses effets sont dans les noms (`pr_open`, `merged`, `deployed_prod`).
-ANCIEN = """apiVersion: choregos/v1
+#: A workflow written BEFORE #175: its effects are in the names (`pr_open`, `merged`, `deployed_prod`).
+FORMER = """apiVersion: choregos/v1
 kind: Workflow
-metadata: { name: ancien, version: 1 }
+metadata: { name: former, version: 1 }
 actors:
   ci: { type: system }
   captain: { type: human, group: release-captains, sla_hours: 4 }
   owner: { type: human, group: product-owners, sla_hours: 24 }
 states:
-  inbox: { display: À trier, kind: wait }
-  in_progress: { display: En cours }
-  pr_open: { display: PR ouverte, kind: wait }
-  merged: { display: Fusionné }
-  deployed_prod: { display: En production, terminal: true }
+  inbox: { display: To sort, kind: wait }
+  in_progress: { display: In progress }
+  pr_open: { display: PR open, kind: wait }
+  merged: { display: Merged }
+  deployed_prod: { display: In production, terminal: true }
 transitions:
   - { id: t-start, from: inbox, to: in_progress, by: owner }
   - { id: t-pr, from: in_progress, to: pr_open, by: ci }
@@ -321,162 +323,163 @@ transitions:
 """
 
 
-def test_renommer_un_etat_a_effet_ecrit_d_abord_son_effet() -> None:
-    """#175 : `pr_open` ouvrait la PR par son NOM. Renommé depuis la console, il l'aurait perdu sans
-    le dire. Le renommage écrit d'abord `does: open_pr` : le workflow fait la même chose après."""
-    from choregos_contracts.workflow import effet_de_la_transition
+def test_renaming_a_state_with_an_effect_writes_its_effect_first() -> None:
+    """#175: `pr_open` opened the PR by its NAME. Renamed from the console, it would have lost it without
+    saying so. The rename first writes `does: open_pr`: the workflow does the same thing after."""
+    from choregos_contracts.workflow import transition_effect
 
-    edition = editer(ANCIEN, [{"op": "rename_state", "from": "pr_open", "to": "revue"}])
-    apres, _ = parse_workflow(edition.yaml, strict=False)
-    (t_pr,) = [t for t in apres.transitions if t.id == "t-pr"]
-    assert (t_pr.to, t_pr.does, effet_de_la_transition(t_pr)) == ("revue", "open_pr", "open_pr")
-    assert any("is now written" in a for a in edition.avertissements)
-    assert editer(edition.yaml, edition.inverse).yaml == ANCIEN, "l'inverse défait le tout, à l'octet près"
+    edition = edit(FORMER, [{"op": "rename_state", "from": "pr_open", "to": "review"}])
+    after, _ = parse_workflow(edition.yaml, strict=False)
+    (t_pr,) = [t for t in after.transitions if t.id == "t-pr"]
+    assert (t_pr.to, t_pr.does, transition_effect(t_pr)) == ("review", "open_pr", "open_pr")
+    assert any("is now written" in a for a in edition.warnings)
+    assert edit(edition.yaml, edition.inverse).yaml == FORMER, "the inverse undoes the whole, to the byte"
 
 
-def test_renommer_la_production_ne_leve_pas_le_verrou() -> None:
-    edition = editer(ANCIEN, [{"op": "rename_state", "from": "deployed_prod", "to": "en_service"}])
-    apres, rapport = parse_workflow(edition.yaml, strict=False)
-    assert apres.states["en_service"].production is True
-    assert rapport.valid, [e.message for e in rapport.errors]
-    # Le verrou tient : une transition qui y mène sans train est refusée, quel que soit le nom.
-    sans_train = edition.yaml.replace(
+def test_renaming_production_does_not_lift_the_lock() -> None:
+    edition = edit(FORMER, [{"op": "rename_state", "from": "deployed_prod", "to": "in_service"}])
+    after, report = parse_workflow(edition.yaml, strict=False)
+    assert after.states["in_service"].production is True
+    assert report.valid, [e.message for e in report.errors]
+    # The lock holds: a transition that leads there without a train is refused, whatever the name.
+    without_train = edition.yaml.replace(
         "    via: release_train\n    train: { env: prod, approval: captain }\n", "    by: captain\n"
     )
-    _, refus = parse_workflow(sans_train, strict=False)
-    assert any(e.code == "prod.requires_train" for e in refus.errors)
+    _, refusal = parse_workflow(without_train, strict=False)
+    assert any(e.code == "prod.requires_train" for e in refusal.errors)
 
 
-def test_un_effet_ecrit_se_lit_et_un_effet_deduit_s_annonce() -> None:
-    _, ancien = parse_workflow(ANCIEN, strict=False)
-    assert len([w for w in ancien.warnings if w.code == "workflow.implicit_effect"]) == 3
-    nouveau = editer(
-        ANCIEN,
+def test_a_written_effect_is_read_and_a_deduced_effect_announces_itself() -> None:
+    _, former = parse_workflow(FORMER, strict=False)
+    assert len([w for w in former.warnings if w.code == "workflow.implicit_effect"]) == 3
+    new = edit(
+        FORMER,
         [
             {"op": "set_transition", "id": "t-pr", "field": "does", "value": "open_pr"},
             {"op": "set_transition", "id": "t-merge", "field": "does", "value": "merge_pr"},
             {"op": "set_state", "name": "deployed_prod", "field": "production", "value": True},
         ],
     ).yaml
-    _, ecrit = parse_workflow(nouveau, strict=False)
-    assert [w for w in ecrit.warnings if w.code == "workflow.implicit_effect"] == []
+    _, written = parse_workflow(new, strict=False)
+    assert [w for w in written.warnings if w.code == "workflow.implicit_effect"] == []
 
 
-def test_does_n_est_qu_un_geste_de_la_plateforme() -> None:
-    humain = editer(ANCIEN, [{"op": "set_transition", "id": "t-start", "field": "does", "value": "open_pr"}])
-    _, rapport = parse_workflow(humain.yaml, strict=False)
-    assert any(e.code == "transition.does_requires_system" for e in rapport.errors)
+def test_does_is_only_a_platform_gesture() -> None:
+    human = edit(FORMER, [{"op": "set_transition", "id": "t-start", "field": "does", "value": "open_pr"}])
+    _, report = parse_workflow(human.yaml, strict=False)
+    assert any(e.code == "transition.does_requires_system" for e in report.errors)
 
 
-def test_un_effet_sans_id_de_transition_ne_se_renomme_pas_en_silence() -> None:
-    sans_id = ANCIEN.replace(
+def test_an_effect_without_a_transition_id_is_not_renamed_in_silence() -> None:
+    without_id = FORMER.replace(
         "  - { id: t-pr, from: in_progress, to: pr_open, by: ci }",
         "  - { from: in_progress, to: pr_open, by: ci }",
     )
-    with pytest.raises(EditionRefusee, match="has no `id`"):
-        editer(sans_id, [{"op": "rename_state", "from": "pr_open", "to": "revue"}])
+    with pytest.raises(EditRefused, match="has no `id`"):
+        edit(without_id, [{"op": "rename_state", "from": "pr_open", "to": "review"}])
 
 
-def test_un_effet_ecrit_garde_ce_que_le_validateur_en_deduit() -> None:
-    """Après le renommage, la PR s'ouvre encore : le validateur le sait (`no_verify_before_pr`, qu'il
-    ne dit que d'un workflow où un agent écrit du code — S21-22)."""
-    avec_un_dev = ANCIEN.replace(
+def test_a_written_effect_keeps_what_the_validator_deduces_from_it() -> None:
+    """After the rename, the PR still opens: the validator knows it (`no_verify_before_pr`, which it
+    only says of a workflow where an agent writes code, S21-22)."""
+    with_a_dev = FORMER.replace(
         "  owner: { type: human, group: product-owners, sla_hours: 24 }\n",
         "  owner: { type: human, group: product-owners, sla_hours: 24 }\n"
         '  dev: { type: agent, role: implement, model: "profile:standard" }\n',
     ).replace("to: in_progress, by: owner }", "to: in_progress, by: dev }")
-    _, avant = parse_workflow(avec_un_dev, strict=False)
-    renomme = editer(avec_un_dev, [{"op": "rename_state", "from": "pr_open", "to": "revue"}]).yaml
-    _, apres = parse_workflow(renomme, strict=False)
-    for rapport in (avant, apres):
-        assert any(w.code == "workflow.no_verify_before_pr" for w in rapport.warnings)
+    _, before = parse_workflow(with_a_dev, strict=False)
+    renamed = edit(with_a_dev, [{"op": "rename_state", "from": "pr_open", "to": "review"}]).yaml
+    _, after = parse_workflow(renamed, strict=False)
+    for report in (before, after):
+        assert any(w.code == "workflow.no_verify_before_pr" for w in report.warnings)
 
 
-def test_renommer_vers_un_nom_a_effet_l_annonce() -> None:
-    """Un nom en `pr_`, `merged` ou `deployed_prod` se lit encore comme un effet : le donner le dit."""
-    edition = editer(ANCIEN, [{"op": "rename_state", "from": "in_progress", "to": "pr_brouillon"}])
-    assert any("carries an effect through its name" in a for a in edition.avertissements)
+def test_renaming_to_a_name_with_an_effect_announces_it() -> None:
+    """A name starting with `pr_`, `merged` or `deployed_prod` still reads as an effect: giving it says so."""
+    edition = edit(FORMER, [{"op": "rename_state", "from": "in_progress", "to": "pr_draft"}])
+    assert any("carries an effect through its name" in a for a in edition.warnings)
 
 
-def test_plusieurs_operations_s_annulent_dans_l_ordre_contraire() -> None:
+def test_several_operations_undo_in_the_opposite_order() -> None:
     operations = [
-        {"op": "add_state", "name": "verification", "spec": {"kind": "work"}},
+        {"op": "add_state", "name": "checking", "spec": {"kind": "work"}},
         {
             "op": "add_transition",
-            "transition": {"id": "t-verifier", "from": "attente_badge", "to": "verification", "by": "rh"},
+            "transition": {"id": "t-check", "from": "badge_wait", "to": "checking", "by": "hr"},
         },
-        {"op": "rename_state", "from": "verification", "to": "controle"},
-        {"op": "add_gate", "transition": "t-verifier", "gate": "evidence_present"},
-        {"op": "add_gate", "transition": "t-preparer", "gate": "no_secrets", "index": 0},
+        {"op": "rename_state", "from": "checking", "to": "control"},
+        {"op": "add_gate", "transition": "t-check", "gate": "evidence_present"},
+        {"op": "add_gate", "transition": "t-prepare", "gate": "no_secrets", "index": 0},
     ]
-    edition = editer(MELANGE, operations)
-    assert "controle" in yaml.safe_load(edition.yaml)["states"]
+    edition = edit(MIXED, operations)
+    assert "control" in yaml.safe_load(edition.yaml)["states"]
     inverse = [o.model_dump(by_alias=True, exclude_none=True) for o in edition.inverse]
-    assert editer(edition.yaml, inverse).yaml == MELANGE
+    assert edit(edition.yaml, inverse).yaml == MIXED
 
 
-# La console (S16-12) émet ces opérations : chacun de ses gestes doit passer la porte du cœur. Le même
-# fichier est lu par `apps/web/tests/workflow-edition.test.tsx`, qui vérifie que la console les émet.
-GESTES = json.loads(
+# The console (S16-12) emits these operations: each of its gestures must pass the core's door. The same
+# file is read by `apps/web/tests/workflow-edition.test.tsx`, which checks that the console emits them.
+# The web fixture owns these keys and its file name (S45-29).  # lang: fr-ok
+GESTURES = json.loads(
     (Path(__file__).parents[3] / "apps/web/tests/fixtures/gestes-de-la-console.json").read_text("utf-8")
 )
 
 
 @pytest.mark.parametrize(
-    "geste", GESTES["gestes"], ids=[f"{g['geste']}-{i}" for i, g in enumerate(GESTES["gestes"])]
+    "gesture", GESTURES["gestes"], ids=[f"{g['geste']}-{i}" for i, g in enumerate(GESTURES["gestes"])]
 )
-def test_chaque_geste_de_la_console_se_greffe_et_se_defait(geste: dict[str, Any]) -> None:
-    texte = GESTES["workflow"]
-    edition = editer(texte, [geste["operation"]])
-    # Greffé, pas forcément valide (retirer la seule transition vers un état le laisse orphelin) :
-    # la validité, l'API la dit à côté du texte, sans refuser le geste.
-    assert edition.yaml != texte
+def test_each_console_gesture_grafts_and_undoes(gesture: dict[str, Any]) -> None:
+    text = GESTURES["workflow"]
+    edition = edit(text, [gesture["operation"]])
+    # Grafted, not necessarily valid (removing the only transition to a state leaves it orphaned):
+    # the API reports validity next to the text, without refusing the gesture.
+    assert edition.yaml != text
     assert isinstance(yaml.safe_load(edition.yaml), dict)
     inverse = [o.model_dump(by_alias=True, exclude_none=True) for o in edition.inverse]
-    assert editer(edition.yaml, inverse).yaml == texte
+    assert edit(edition.yaml, inverse).yaml == text
 
 
 def test_a_block_value_is_written_one_field_per_line_under_the_transition() -> None:
     """ADR 0112 §3: a reviewer reads a human task as lines, not as one flow line."""
-    texte = template_yaml("default-request")
+    text = template_yaml("default-request")
     fields = {"type": "object", "properties": {"badge": {"type": "string"}}}
-    edition = editer(
-        texte,
+    edition = edit(
+        text,
         [
             {"op": "set_workflow", "field": "inputs", "value": fields, "style": "block"},
             {"op": "set_transition", "id": "t-accept", "field": "task", "value": TASK, "style": "block"},
         ],
     )
-    added = [line for line in edition.yaml.splitlines() if line not in texte.splitlines()]
+    added = [line for line in edition.yaml.splitlines() if line not in text.splitlines()]
     assert "    task:" in added and "  inputs:" in added, added
     assert "      title: Hand over the badge" in added
     assert all(len(line) < 110 for line in added)
     (accept,) = [t for t in yaml.safe_load(edition.yaml)["transitions"] if t["id"] == "t-accept"]
     assert accept["task"] == TASK
     assert parse_workflow(edition.yaml)[1].valid
-    assert editer(edition.yaml, edition.inverse).yaml == texte
+    assert edit(edition.yaml, edition.inverse).yaml == text
 
 
 def test_a_value_written_in_block_style_can_be_replaced() -> None:
     """It was refused before ADR 0112: the whole key's lines are replaced, and the inverse puts them back."""
-    texte = template_yaml("default-request")
-    with_task = editer(
-        texte, [{"op": "set_transition", "id": "t-accept", "field": "task", "value": TASK, "style": "block"}]
+    text = template_yaml("default-request")
+    with_task = edit(
+        text, [{"op": "set_transition", "id": "t-accept", "field": "task", "value": TASK, "style": "block"}]
     ).yaml
     other = {**TASK, "title": "Return the laptop"}
-    edition = editer(
+    edition = edit(
         with_task,
         [{"op": "set_transition", "id": "t-accept", "field": "task", "value": other, "style": "block"}],
     )
     (accept,) = [t for t in yaml.safe_load(edition.yaml)["transitions"] if t["id"] == "t-accept"]
     assert accept["task"]["title"] == "Return the laptop"
-    assert editer(edition.yaml, edition.inverse).yaml == with_task
+    assert edit(edition.yaml, edition.inverse).yaml == with_task
 
 
 def test_set_workflow_writes_initial_after_metadata_and_the_fields_in_metadata() -> None:
-    texte = template_yaml("default-request")
-    edition = editer(
-        texte,
+    text = template_yaml("default-request")
+    edition = edit(
+        text,
         [
             {"op": "set_workflow", "field": "initial", "value": "refining"},
             {"op": "set_workflow", "field": "description", "value": "Requests of the HR desk."},
@@ -486,5 +489,5 @@ def test_set_workflow_writes_initial_after_metadata_and_the_fields_in_metadata()
     assert lines[lines.index("actors:") - 1] == "initial: refining", "right after metadata"
     document = yaml.safe_load(edition.yaml)
     assert document["metadata"]["description"] == "Requests of the HR desk."
-    assert _commentaires(edition.yaml) == _commentaires(texte)
-    assert editer(edition.yaml, edition.inverse).yaml == texte
+    assert _comments(edition.yaml) == _comments(text)
+    assert edit(edition.yaml, edition.inverse).yaml == text

@@ -1,4 +1,4 @@
-"""Moteur du DSL : sélection déterministe et suites d'une étape."""
+"""DSL engine: deterministic selection and what follows a stage."""
 
 from __future__ import annotations
 
@@ -35,16 +35,16 @@ def test_select_transition_is_deterministic(simple: WorkflowEngine) -> None:
 def test_select_transition_prefers_explicit_outcome(auto: WorkflowEngine) -> None:
     assert auto.select_transition("pr_open").id == "t-merge"
     assert auto.select_transition("pr_open", "t-merge").id == "t-merge"
-    # Le réparateur part de `fixing_ci`, où `t-merge` envoie une CI rouge (#284) : il y est le seul
-    # candidat, choisi avec ou sans résultat — depuis `pr_open`, il ne l'était jamais.
+    # The repairer starts from `fixing_ci`, where `t-merge` sends a red CI (#284): there it is the only
+    # candidate, chosen with or without a result; from `pr_open`, it never was.
     assert auto.select_transition("fixing_ci").id == "t-fix-ci"
     assert auto.select_transition("fixing_ci", "ci_failed").id == "t-fix-ci"
 
 
 def test_select_transition_skips_repair_roles_by_default(auto: WorkflowEngine) -> None:
-    """`fix_ci` et `address_review` ne se déclenchent que sur un résultat explicite."""
+    """`fix_ci` and `address_review` only fire on an explicit result."""
     transition = auto.select_transition("pr_open")
-    assert auto.agent_of(transition) is None  # t-merge est porté par le système
+    assert auto.agent_of(transition) is None  # t-merge is carried by the system
 
 
 def test_select_transition_none_on_terminal(simple: WorkflowEngine) -> None:

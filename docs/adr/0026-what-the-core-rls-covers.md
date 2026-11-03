@@ -39,7 +39,7 @@ policy on those tables would weaken security, not strengthen it.
    `test_chaque_table_est_sous_rls_ou_exemptee` enforces it on PostgreSQL. A table added tomorrow
    without a policy turns the suite red.
 5. **Schema has one owner.** An edition or plugin that needs tables ships them as its own Alembic
-   branch (`choregos.migrations`, `python -m choregos_api.migrer`) and never alters a core table.
+   branch (`choregos.migrations`, `python -m choregos_api.migrate`, formerly `migrer`) and never alters a core table.
    Policies on core tables live in the core.
 
 ## Consequences

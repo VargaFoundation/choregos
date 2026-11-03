@@ -7,7 +7,7 @@
 > catalogue is a common (`platform`) agent, changed by an `org_admin` only; to extend it, fork it.
 
 - **Status**: accepted, 2026-10-07
-- **Concerns**: `packages/core` (`choregos_core.catalogue_d_agents`), the agent registry API, the
+- **Concerns**: `packages/core` (`choregos_core.agent_catalogue`, formerly `catalogue_d_agents`, which works until 0.22.0), the agent registry API, the
   console's `/agents`, the shipped templates; amends [ADR 0033](0033-agent-registry-and-skill-library.md)
 
 ## Context
@@ -21,7 +21,7 @@ and nothing listed the AI clients that can act through the MCP gate.
 
 ## Decision
 
-1. **The platform ships a catalogue of agents** (`choregos_core.catalogue_d_agents`): one entry per
+1. **The platform ships a catalogue of agents** (`choregos_core.agent_catalogue`): one entry per
    playbook role (triage, refine, plan, implement, verify, review, address_review, fix_ci,
    release_notes, verify_prod) plus what a study needs (researcher, architect) and a security
    reviewer; the MADR 4 skill the architect and the reviewer carry; and the external clients that

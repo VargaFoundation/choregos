@@ -1,4 +1,4 @@
-# Le workflow par défaut (D14) : un cadrage relu par un humain, puis l'agent déroule.
+# The default workflow (D14): a framing reviewed by a human, then the agent unrolls.
 apiVersion: choregos/v1
 kind: Workflow
 metadata:

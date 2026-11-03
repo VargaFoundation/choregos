@@ -164,7 +164,7 @@ services:
 
   migrate:
     <<: *platform-image
-    command: ["python", "-m", "choregos_api.migrer"]
+    command: ["python", "-m", "choregos_api.migrate"]
     environment: *platform-env
     depends_on:
       postgres: { condition: service_healthy }

@@ -1,4 +1,4 @@
-"""Policy engine : budgets, tentatives, périmètre, trains (couverture visée : 100 %)."""
+"""Policy engine: budgets, attempts, perimeter, trains (targeted coverage: 100%)."""
 
 from __future__ import annotations
 
@@ -18,8 +18,8 @@ from choregos_core import (
 )
 from choregos_core.policy import PRESET_NAMES
 
-RACINE = pathlib.Path(__file__).resolve().parents[3]
-POLITIQUES_DES_GABARITS = sorted((RACINE / "templates").glob("*/policy.yaml"))
+ROOT = pathlib.Path(__file__).resolve().parents[3]
+TEMPLATE_POLICIES = sorted((ROOT / "templates").glob("*/policy.yaml"))
 
 
 @pytest.mark.parametrize("name", PRESET_NAMES)
@@ -61,7 +61,7 @@ def test_policy_without_sections_falls_back_on_platform_defaults() -> None:
         {"apiVersion": "choregos/v1", "kind": "Policy", "metadata": {"name": "p", "version": 1}}
     )
     e = PolicyEngine(policy)
-    assert e.budget_ticket(Size.L) == 60  # défauts de la plateforme
+    assert e.budget_ticket(Size.L) == 60  # the platform's defaults
     assert e.stage_usd("implement", Size.S) == 3
 
 
@@ -108,13 +108,13 @@ def test_review_policy() -> None:
     assert not PolicyEngine(load_preset("solo")).cross_backend_review()
 
 
-# ───────────── approbations et relecture humaine : déclarées dans le workflow (ADR 0044) ─────────────
+# ───────────── approvals and human review: declared in the workflow (ADR 0044) ─────────────
 
-#: Une politique d'avant l'ADR 0044, telle que les presets l'écrivaient : elle reste valide.
-POLITIQUE_D_AVANT = """
+#: A policy from before ADR 0044, as the presets wrote it: it stays valid.
+POLICY_BEFORE_ADR_0044 = """
 apiVersion: choregos/v1
 kind: Policy
-metadata: { name: ancienne, version: 3 }
+metadata: { name: old, version: 3 }
 approvals:
   spec: { required: by_size, group: product-owners, sizes: [M, L, XL], timeout_hours: 72 }
   merge: { required: never }
@@ -125,33 +125,33 @@ review: { cross_backend: true, require_human_for_risk: [medium, high] }
 
 
 @pytest.mark.parametrize("name", PRESET_NAMES)
-def test_un_preset_ne_promet_ni_approbation_ni_relecture_humaine(name: str) -> None:
-    """Les presets écrivaient « approbation de la spec », « review humaine au merge », « prod :
-    always » : aucune de ces gardes n'existe. Ils ne les écrivent plus, et ne s'avertissent pas."""
-    brut = yaml.safe_load(preset_yaml(name))
-    assert "approvals" not in brut
-    assert "require_human_for_risk" not in (brut.get("review") or {})
+def test_a_preset_promises_neither_approval_nor_human_review(name: str) -> None:
+    """The presets used to write "spec approval", "human review at merge", "prod:
+    always": none of these guards exists. They no longer write them, and do not warn."""
+    raw = yaml.safe_load(preset_yaml(name))
+    assert "approvals" not in raw
+    assert "require_human_for_risk" not in (raw.get("review") or {})
     assert policy_warnings(load_preset(name)) == []
 
 
-@pytest.mark.parametrize("chemin", POLITIQUES_DES_GABARITS, ids=lambda c: c.parent.name)
-def test_la_politique_d_un_gabarit_ne_promet_rien_non_plus(chemin: pathlib.Path) -> None:
-    texte = chemin.read_text(encoding="utf-8")
-    brut = yaml.safe_load(texte)
-    assert "approvals" not in brut
-    assert "require_human_for_risk" not in (brut.get("review") or {})
-    assert policy_warnings(parse_policy(texte)) == []
+@pytest.mark.parametrize("path", TEMPLATE_POLICIES, ids=lambda c: c.parent.name)
+def test_a_template_policy_promises_nothing_either(path: pathlib.Path) -> None:
+    text = path.read_text(encoding="utf-8")
+    raw = yaml.safe_load(text)
+    assert "approvals" not in raw
+    assert "require_human_for_risk" not in (raw.get("review") or {})
+    assert policy_warnings(parse_policy(text)) == []
 
 
-def test_les_politiques_des_gabarits_sont_trouvees() -> None:
-    """Sans elle, le test paramétré ci-dessus ne jouerait aucun cas et passerait en silence."""
-    assert any(c.parent.name == "github-software-delivery" for c in POLITIQUES_DES_GABARITS)
+def test_the_template_policies_are_found() -> None:
+    """Without it, the parametrised test above would play no case and pass in silence."""
+    assert any(c.parent.name == "github-software-delivery" for c in TEMPLATE_POLICIES)
 
 
-def test_une_politique_qui_les_renseigne_reste_valide_et_s_avertit() -> None:
-    """Le contrat ne change pas (ADR 0001) : la politique se charge, et chaque clé qui promet une
-    garde est nommée, en anglais, avec ce qu'il faut faire à la place."""
-    policy = parse_policy(POLITIQUE_D_AVANT)
+def test_a_policy_that_fills_them_in_stays_valid_and_warns() -> None:
+    """The contract does not change (ADR 0001): the policy loads, and each key that promises a
+    guard is named, in English, with what to do instead."""
+    policy = parse_policy(POLICY_BEFORE_ADR_0044)
     issues = policy_warnings(policy)
     assert [i.path for i in issues] == [
         "approvals.spec",
@@ -163,26 +163,26 @@ def test_une_politique_qui_les_renseigne_reste_valide_et_s_avertit() -> None:
     for issue in issues:
         assert "is not enforced" in issue.message
         assert "Declare a human transition in the workflow" in issue.message
-    # `required: never` ne promet rien : pas d'avertissement pour `approvals.merge`.
+    # `required: never` promises nothing: no warning for `approvals.merge`.
     assert "approvals.merge" not in {i.path for i in issues}
 
 
-def test_le_defaut_du_contrat_ne_s_avertit_pas() -> None:
-    """`review.require_human_for_risk` vaut `[high]` par défaut dans le contrat : une politique qui
-    n'en dit rien ne doit pas recevoir d'avertissement pour une clé qu'elle n'a pas écrite."""
+def test_the_contract_default_does_not_warn() -> None:
+    """`review.require_human_for_risk` is `[high]` by default in the contract: a policy that
+    says nothing about it must not get a warning for a key it did not write."""
     policy = parse_policy("apiVersion: choregos/v1\nkind: Policy\nmetadata: {name: p, version: 1}\n")
-    assert policy.review.require_human_for_risk  # le défaut est là…
-    assert policy_warnings(policy) == []  # … et il ne s'avertit pas
-    vide = parse_policy(
+    assert policy.review.require_human_for_risk  # the default is there...
+    assert policy_warnings(policy) == []  # ... and it does not warn
+    empty = parse_policy(
         "apiVersion: choregos/v1\nkind: Policy\nmetadata: {name: p, version: 1}\n"
         "review: {require_human_for_risk: []}\n"
     )
-    assert policy_warnings(vide) == []
+    assert policy_warnings(empty) == []
 
 
-def test_le_moteur_ne_decide_d_aucune_approbation() -> None:
-    """`approval_for` et `human_review_required` n'étaient appelés par personne : un moteur qui
-    répond « approbation requise » sans que rien ne la demande est une garde fantôme."""
+def test_the_engine_decides_no_approval() -> None:
+    """`approval_for` and `human_review_required` were called by nobody: an engine that
+    answers "approval required" when nothing asks for it is a phantom guard."""
     assert not hasattr(PolicyEngine, "approval_for")
     assert not hasattr(PolicyEngine, "human_review_required")
 
@@ -193,7 +193,7 @@ def test_train_config() -> None:
     prod = e.train("prod")
     assert prod is not None and prod.batch_max == 8
     assert prod.approval is not None and prod.approval.required
-    assert e.train("inconnu") is None
+    assert e.train("unknown") is None
 
 
 def test_engine_for_accepts_preset_yaml_and_object() -> None:
@@ -204,13 +204,13 @@ def test_engine_for_accepts_preset_yaml_and_object() -> None:
 
 def test_parse_policy_rejects_garbage() -> None:
     with pytest.raises(ValidationError, match="policy"):
-        parse_policy("- juste une liste")
+        parse_policy("- just a list")
     with pytest.raises(ValidationError):
         parse_policy("apiVersion: choregos/v1\nkind: Policy\nmetadata: {name: X, version: 0}\n")
     with pytest.raises(ValidationError):
-        parse_policy("a: [oups\n")
+        parse_policy("a: [oops\n")
 
 
 def test_unknown_preset_raises() -> None:
-    with pytest.raises(FileNotFoundError, match="preset de politique inconnu"):
+    with pytest.raises(FileNotFoundError, match="unknown policy preset"):
         load_preset("licorne")

@@ -1,6 +1,6 @@
 [project]
 name = "choregos-api"
-version = "0.21.5"
+version = "0.22.0"
 description = "API Choregos (FastAPI)"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
@@ -30,7 +30,7 @@ dependencies = [
 
 [project.scripts]
 choregos-api = "choregos_api.main:main"
-choregos-admin = "choregos_api.outils:main"
+choregos-admin = "choregos_api.admin_cli:main"
 
 [build-system]
 requires = ["hatchling"]

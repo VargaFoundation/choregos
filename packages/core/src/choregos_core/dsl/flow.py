@@ -15,7 +15,7 @@ from choregos_contracts import Workflow
 from choregos_contracts.workflow import HumanActor
 
 #: The documents the platform hands every agent stage, whatever the transition declares
-#: (`activities/stage.py`, `catalogue_d_agents/_contexte.md`).
+#: (`activities/stage.py`, `agent_catalogue/_context.md`).
 CONTEXT_DOCUMENTS: tuple[str, ...] = ("spec_markdown", "plan_markdown", "allowed_paths")
 
 #: What the pull request body carries, in order: `(document name, section title)`. A `None` title is

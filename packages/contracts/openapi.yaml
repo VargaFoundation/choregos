@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Choregos API
-  version: 0.21.5
+  version: 0.22.0
   description: |
     The Choregos platform API. The console and the CLI use this API and nothing else.
     Auth: an OIDC session (cookie) or `Authorization: Bearer <api_token>`.
@@ -4394,12 +4394,47 @@ components:
         agent-line: { $ref: "#/components/schemas/ThemeColour" }
         agent-soft: { $ref: "#/components/schemas/ThemeColour" }
         agent-solid: { $ref: "#/components/schemas/ThemeColour" }
+        cat-1-ink: { $ref: "#/components/schemas/ThemeColour" }
+        cat-1-line: { $ref: "#/components/schemas/ThemeColour" }
+        cat-1-soft: { $ref: "#/components/schemas/ThemeColour" }
+        cat-1-solid: { $ref: "#/components/schemas/ThemeColour" }
+        cat-2-ink: { $ref: "#/components/schemas/ThemeColour" }
+        cat-2-line: { $ref: "#/components/schemas/ThemeColour" }
+        cat-2-soft: { $ref: "#/components/schemas/ThemeColour" }
+        cat-2-solid: { $ref: "#/components/schemas/ThemeColour" }
+        cat-3-ink: { $ref: "#/components/schemas/ThemeColour" }
+        cat-3-line: { $ref: "#/components/schemas/ThemeColour" }
+        cat-3-soft: { $ref: "#/components/schemas/ThemeColour" }
+        cat-3-solid: { $ref: "#/components/schemas/ThemeColour" }
+        cat-4-ink: { $ref: "#/components/schemas/ThemeColour" }
+        cat-4-line: { $ref: "#/components/schemas/ThemeColour" }
+        cat-4-soft: { $ref: "#/components/schemas/ThemeColour" }
+        cat-4-solid: { $ref: "#/components/schemas/ThemeColour" }
+        cat-5-ink: { $ref: "#/components/schemas/ThemeColour" }
+        cat-5-line: { $ref: "#/components/schemas/ThemeColour" }
+        cat-5-soft: { $ref: "#/components/schemas/ThemeColour" }
+        cat-5-solid: { $ref: "#/components/schemas/ThemeColour" }
+        cat-6-ink: { $ref: "#/components/schemas/ThemeColour" }
+        cat-6-line: { $ref: "#/components/schemas/ThemeColour" }
+        cat-6-soft: { $ref: "#/components/schemas/ThemeColour" }
+        cat-6-solid: { $ref: "#/components/schemas/ThemeColour" }
+        cat-7-ink: { $ref: "#/components/schemas/ThemeColour" }
+        cat-7-line: { $ref: "#/components/schemas/ThemeColour" }
+        cat-7-soft: { $ref: "#/components/schemas/ThemeColour" }
+        cat-7-solid: { $ref: "#/components/schemas/ThemeColour" }
+        cat-8-ink: { $ref: "#/components/schemas/ThemeColour" }
+        cat-8-line: { $ref: "#/components/schemas/ThemeColour" }
+        cat-8-soft: { $ref: "#/components/schemas/ThemeColour" }
+        cat-8-solid: { $ref: "#/components/schemas/ThemeColour" }
         danger: { $ref: "#/components/schemas/ThemeColour" }
         failed-ink: { $ref: "#/components/schemas/ThemeColour" }
         failed-line: { $ref: "#/components/schemas/ThemeColour" }
         failed-soft: { $ref: "#/components/schemas/ThemeColour" }
         failed-solid: { $ref: "#/components/schemas/ThemeColour" }
         focus: { $ref: "#/components/schemas/ThemeColour" }
+        info: { $ref: "#/components/schemas/ThemeColour" }
+        info-line: { $ref: "#/components/schemas/ThemeColour" }
+        info-soft: { $ref: "#/components/schemas/ThemeColour" }
         ink: { $ref: "#/components/schemas/ThemeColour" }
         ink-muted: { $ref: "#/components/schemas/ThemeColour" }
         ink-placeholder: { $ref: "#/components/schemas/ThemeColour" }

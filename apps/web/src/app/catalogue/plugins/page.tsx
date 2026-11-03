@@ -7,6 +7,7 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { Confirmation } from "@/components/geste-confirme";
 import { Alert, Badge, Button, Card, Code, Empty, ErrorNote, EtatDeLecture, Select } from "@/components/ui";
+import { OrgPageHeader } from "@/components/coquille/org-page-header";
 import { api } from "@/lib/api";
 import {
   admissibleVersions,
@@ -87,7 +88,7 @@ export default function PluginsPage() {
   const decided = (approvals.data?.items ?? []).filter((a) => a.status !== "pending");
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Plugins</h1>
+      <OrgPageHeader title="Plugins" />
       <p className="max-w-3xl text-sm text-ink-muted">
         A plugin packages agents and what they need: skills, templates, evals, setup procedures and MCP servers the
         platform runs. It comes from a source the deployment declares and trusts by its signature. A plugin that brings

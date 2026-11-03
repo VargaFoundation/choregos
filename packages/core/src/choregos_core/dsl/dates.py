@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Une date tirée d'un champ du ticket (S20-05) : `fields.date_arrivee - 10d`.
+"""A date drawn from a work item field (S20-05): `fields.arrival_date - 10d`.
 
-Fonction pure, sans horloge : l'interpréteur la recalcule chaque fois qu'un champ change, et la
-compare à SON heure (`workflow.now()`) — c'est ce qui la rend rejouable. Une date seule (`2026-11-02`)
-vaut minuit UTC ; une date-heure garde son fuseau, et sans fuseau elle est en UTC.
+A pure function, with no clock: the interpreter recomputes it each time a field changes, and
+compares it with ITS time (`workflow.now()`), which is what makes it replayable. A bare date
+(`2026-11-02`) means midnight UTC; a date-time keeps its zone, and without a zone it is UTC.
 """
 
 from __future__ import annotations
@@ -13,45 +13,51 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 _EXPRESSION = re.compile(r"^fields\.([a-z_][a-z0-9_]{0,62})(?:\s*([+-])\s*([0-9]{1,4})\s*([dhm]))?$")
-_UNITES = {"d": "days", "h": "hours", "m": "minutes"}
+_UNITS = {"d": "days", "h": "hours", "m": "minutes"}
 
 
-class DateIllisible(ValueError):  # noqa: N818 - un refus nommé
-    """Le champ existe mais ne dit pas une date."""
+class UnreadableDate(ValueError):  # noqa: N818 - a named refusal
+    """The field exists but does not say a date."""
 
 
-def champ_de(expression: str) -> str:
-    """Le champ qu'une expression lit : `date_arrivee` pour `fields.date_arrivee - 10d`."""
-    trouve = _EXPRESSION.fullmatch(expression.strip())
-    if trouve is None:
-        raise ValueError(f"expression de date illisible : {expression!r} (attendu : `fields.<champ> - 10d`)")
-    return trouve.group(1)
+def field_of(expression: str) -> str:
+    """The field an expression reads: `arrival_date` for `fields.arrival_date - 10d`."""
+    found = _EXPRESSION.fullmatch(expression.strip())
+    if found is None:
+        raise ValueError(f"unreadable date expression: {expression!r} (expected: `fields.<field> - 10d`)")
+    return found.group(1)
 
 
-def echeance(expression: str, champs: dict[str, Any]) -> datetime | None:
-    """La date que dit l'expression pour ces champs, ou rien quand le champ n'est pas (encore)
-    renseigné : on attend alors qu'il le soit, on ne part pas sans date."""
-    trouve = _EXPRESSION.fullmatch(expression.strip())
-    if trouve is None:
-        raise ValueError(f"expression de date illisible : {expression!r} (attendu : `fields.<champ> - 10d`)")
-    nom, signe, quantite, unite = trouve.groups()
-    valeur = champs.get(nom)
-    if valeur in (None, ""):
+def due_date(expression: str, fields: dict[str, Any]) -> datetime | None:
+    """The date the expression gives for these fields, or nothing when the field is not (yet)
+    filled in: we then wait for it to be, we do not leave without a date."""
+    found = _EXPRESSION.fullmatch(expression.strip())
+    if found is None:
+        raise ValueError(f"unreadable date expression: {expression!r} (expected: `fields.<field> - 10d`)")
+    name, sign, quantity, unit = found.groups()
+    value = fields.get(name)
+    if value in (None, ""):
         return None
-    base = _instant(nom, valeur)
-    if signe is None:
+    base = _instant(name, value)
+    if sign is None:
         return base
-    decalage = timedelta(**{_UNITES[unite]: int(quantite)})
-    return base - decalage if signe == "-" else base + decalage
+    offset = timedelta(**{_UNITS[unit]: int(quantity)})
+    return base - offset if sign == "-" else base + offset
 
 
-def _instant(nom: str, valeur: Any) -> datetime:
-    texte = str(valeur).strip()
+def _instant(name: str, value: Any) -> datetime:
+    text = str(value).strip()
     try:
-        if len(texte) == 10:
-            jour = date.fromisoformat(texte)
-            return datetime(jour.year, jour.month, jour.day, tzinfo=UTC)
-        instant = datetime.fromisoformat(texte.replace("Z", "+00:00"))
-    except ValueError as erreur:
-        raise DateIllisible(f"the field `{nom}` is not a date: {texte!r}") from erreur
+        if len(text) == 10:
+            day = date.fromisoformat(text)
+            return datetime(day.year, day.month, day.day, tzinfo=UTC)
+        instant = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise UnreadableDate(f"the field `{name}` is not a date: {text!r}") from error
     return instant if instant.tzinfo is not None else instant.replace(tzinfo=UTC)
+
+
+# Former names, still imported outside core until their own stories switch them (ADR 0098 §3 (b)).
+DateIllisible = UnreadableDate  # lang: fr-ok alias:internal
+champ_de = field_of  # lang: fr-ok alias:internal
+echeance = due_date  # lang: fr-ok alias:internal

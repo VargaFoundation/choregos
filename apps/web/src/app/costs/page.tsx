@@ -7,7 +7,8 @@ import { Suspense, useState } from "react";
 import { GrapheDesCouts } from "@/components/graphe-des-couts";
 import { BreakdownCard, csvUrl, fetchReport, reportKey, type Scope } from "@/components/spend/breakdown";
 import { MonthPanel } from "@/components/spend/month";
-import { Card, Empty, ErrorNote, EtatDeLecture, Eyebrow, Heading, Select } from "@/components/ui";
+import { Card, Empty, ErrorNote, EtatDeLecture, Select } from "@/components/ui";
+import { OrgPageHeader } from "@/components/coquille/org-page-header";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { type Currency, money, monthStart } from "@/lib/spend";
@@ -50,14 +51,15 @@ function Spend() {
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <Eyebrow>Where the money goes</Eyebrow>
-        <Heading as="h1" size="xl">
-          Spend
-        </Heading>
-        <p className="max-w-3xl text-sm text-ink-muted">
-          Read from the cost ledger, which the gateway&apos;s spend feeds. Shown in {currency}, the organisation&apos;s
-          currency; the CSV of each breakdown carries both.
-        </p>
+        <OrgPageHeader title="Spend"
+          eyebrow="Where the money goes"
+          description={
+            <>
+              Read from the cost ledger, which the gateway&apos;s spend feeds. Shown in {currency}, the
+              organisation&apos;s currency; the CSV of each breakdown carries both.
+            </>
+          }
+        />
       </div>
       <div className="flex flex-wrap items-end gap-4">
         <label className="space-y-1 text-xs text-ink-muted">

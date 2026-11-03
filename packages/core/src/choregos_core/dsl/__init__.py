@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""DSL de workflow : chargement, validation, moteur de décision, rendu graphique."""
+"""Workflow DSL: loading, validation, decision engine, graph rendering."""
 
 from __future__ import annotations
 
@@ -17,62 +17,62 @@ from .process import RESUMES, to_process
 from .validator import ValidationReport, validate_workflow
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
-#: Les templates LIVRÉS avec le paquet. Ce n'est plus la liste de ce qui est disponible :
-#: un déploiement peut en apporter d'autres (voir `extra_templates_dirs`).
+#: The templates SHIPPED with the package. This is no longer the list of what is available:
+#: a deployment can bring others (see `extra_templates_dirs`).
 TEMPLATE_NAMES = ("default-simple", "full-auto", "advanced", "default-request", "blank", "decision-triage")
 
 
 def extra_templates_dirs() -> list[Path]:
-    """Templates apportés par le DÉPLOIEMENT, séparés par `:` dans
+    """Templates brought by the DEPLOYMENT, separated by `:` in
     `CHOREGOS_WORKFLOW_TEMPLATES_DIR`.
 
-    Même couture que les playbooks, et pour la même raison : un métier a ses propres
-    enchaînements d'états, et ils n'ont rien à faire dans ce paquet. Jusqu'au 2026-09-26 la
-    liste était figée à trois noms et `template_path` refusait tout le reste — la seule issue
-    était de poster le YAML complet par `PUT /projects/{id}/workflow`, donc sans nom, sans
-    réutilisation, et sans que deux projets puissent partir du même modèle.
+    The same seam as the playbooks, for the same reason: a trade has its own chains of states,
+    and they have no place in this package. Until 2026-09-26 the list was frozen at three names
+    and `template_path` refused everything else; the only way out was to post the full YAML
+    through `PUT /projects/{id}/workflow`, so without a name, without reuse, and without two
+    projects being able to start from the same model.
 
-    Un template du déploiement l'emporte sur celui du paquet : c'est ainsi qu'une maison
-    adapte `default-simple` sans réécrire la plateforme.
+    A deployment template wins over the package one: this is how a house adapts
+    `default-simple` without rewriting the platform.
     """
-    brut = os.environ.get("CHOREGOS_WORKFLOW_TEMPLATES_DIR", "")
-    return [Path(p) for p in brut.split(":") if p.strip()]
+    raw = os.environ.get("CHOREGOS_WORKFLOW_TEMPLATES_DIR", "")
+    return [Path(p) for p in raw.split(":") if p.strip()]
 
 
-def _dossiers() -> list[Path]:
-    # Le déploiement D'ABORD : le premier trouvé gagne.
+def _directories() -> list[Path]:
+    # The deployment FIRST: the first one found wins.
     return [*extra_templates_dirs(), TEMPLATES_DIR]
 
 
 def template_names() -> tuple[str, ...]:
-    """Les templates réellement disponibles, déploiement compris, sans doublon."""
-    vus: dict[str, None] = {}
-    for dossier in _dossiers():
-        if not dossier.is_dir():
+    """The templates really available, deployment ones included, without duplicates."""
+    seen: dict[str, None] = {}
+    for directory in _directories():
+        if not directory.is_dir():
             continue
-        for chemin in sorted(dossier.glob("*.yaml")):
-            vus.setdefault(chemin.stem, None)
-    return tuple(vus)
+        for path in sorted(directory.glob("*.yaml")):
+            seen.setdefault(path.stem, None)
+    return tuple(seen)
 
 
 def template_path(name: str) -> Path:
-    for dossier in _dossiers():
-        chemin = dossier / f"{name}.yaml"
-        if chemin.exists():
-            return chemin
-    connus = ", ".join(template_names()) or "aucun"
-    raise FileNotFoundError(f"template de workflow inconnu : {name} (connus : {connus})")
+    for directory in _directories():
+        path = directory / f"{name}.yaml"
+        if path.exists():
+            return path
+    known = ", ".join(template_names()) or "none"
+    raise FileNotFoundError(f"unknown workflow template: {name} (known: {known})")
 
 
 @lru_cache(maxsize=8)
 def load_template(name: str) -> Workflow:
-    """Charge un template livré ou apporté par le déploiement."""
+    """Load a template shipped with the package or brought by the deployment."""
     workflow, _ = parse_workflow_file(template_path(name))
     return workflow
 
 
-def oublier_les_templates() -> None:
-    """Vide le cache : un répertoire ajouté après le premier chargement doit être vu."""
+def forget_templates() -> None:
+    """Empty the cache: a directory added after the first load must be seen."""
     load_template.cache_clear()
 
 
@@ -93,8 +93,8 @@ __all__ = [
     "checksum",
     "dump_workflow",
     "extra_templates_dirs",
+    "forget_templates",
     "load_template",
-    "oublier_les_templates",
     "parse_workflow",
     "parse_workflow_file",
     "template_names",

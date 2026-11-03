@@ -39,7 +39,7 @@ DEFAULT_MAX_MINUTES = 60
 
 
 class PolicyEngine:
-    """Applique une `Policy` ; toutes les méthodes sont pures et testables."""
+    """Apply a `Policy`; all the methods are pure and testable."""
 
     def __init__(self, policy: Policy) -> None:
         self.policy = policy
@@ -73,7 +73,7 @@ class PolicyEngine:
         return max(1, round(value * factor))
 
     def budget_for(self, role: str, size: Size | str | None, *, turns_factor: float = 1.0) -> Budget:
-        """Budget complet d'une étape : argent, tours, minutes."""
+        """The full budget of a stage: money, turns, minutes."""
         return Budget(
             usd=self.stage_usd(role, size),
             max_turns=self.max_turns(role, turns_factor),
@@ -90,7 +90,7 @@ class PolicyEngine:
     def daily_budget(self) -> float | None:
         return self.policy.budgets.daily_project_usd
 
-    # ───────────────────────── relecture ─────────────────────────
+    # ───────────────────────── review ─────────────────────────
 
     def cross_backend_review(self) -> bool:
         return self.policy.review.cross_backend
@@ -114,10 +114,10 @@ class PolicyEngine:
     def dod_iterations(self) -> int:
         return self.policy.attempts.dod_iterations
 
-    # ───────────────────────── périmètre ─────────────────────────
+    # ───────────────────────── perimeter ─────────────────────────
 
     def scope_auto_grant(self, paths: list[str]) -> bool:
-        """Un élargissement de périmètre peut-il être accordé sans humain ?"""
+        """Can a perimeter enlargement be granted without a human?"""
         limit = self.policy.scope.auto_grant_max_files
         if len(paths) > limit:
             return False
@@ -135,17 +135,17 @@ class PolicyEngine:
     def max_diff(self) -> tuple[int, int]:
         return self.policy.scope.max_diff_files, self.policy.scope.max_diff_lines
 
-    # ───────────────────────── findings & mémoire ─────────────────────────
+    # ───────────────────────── findings & memory ─────────────────────────
 
     def max_findings_per_run(self) -> int:
         return self.policy.findings.max_per_run
 
     def max_tool_calls_per_run(self) -> int:
-        """Appels d'outils du catalogue par run. 0 = aucun plafond.
+        """Catalogue tool calls per run. 0 = no ceiling.
 
-        Le plafond n'est pas là pour brider l'agent mais pour borner la facture : un
-        outil du catalogue coûte à chaque appel, et une boucle qui s'emballe coûte
-        autant qu'elle tourne.
+        The ceiling is not there to rein in the agent but to bound the bill: a
+        catalogue tool costs on every call, and a runaway loop costs
+        as much as it runs.
         """
         return self.policy.budgets.tool_calls_per_run or 0
 
@@ -175,7 +175,7 @@ class PolicyEngine:
 
 
 def parse_policy(text: str) -> Policy:
-    """Parse une politique YAML/JSON avec erreurs lisibles."""
+    """Parse a YAML/JSON policy with readable errors."""
     try:
         raw = yaml.safe_load(text)
     except yaml.YAMLError as exc:
@@ -191,29 +191,29 @@ def parse_policy(text: str) -> Policy:
         raise ValidationError(issues, subject="policy") from exc
 
 
-#: Les règles d'approbation que le schéma accepte encore, et que personne n'applique.
-CLES_D_APPROBATION = ("spec", "merge", "prod", "scope_change")
+#: The approval rules the schema still accepts, and that nobody applies.
+APPROVAL_KEYS = ("spec", "merge", "prod", "scope_change")
 
 
 def policy_warnings(policy: Policy) -> list[Issue]:
-    """Ce qu'une politique écrit et que la plateforme n'applique pas (ADR 0044).
+    """What a policy writes and the platform does not apply (ADR 0044).
 
-    `approvals.*` et `review.require_human_for_risk` ont l'air de gardes ; aucune n'existe : les
-    humains se déclarent dans le workflow. Une règle `required: never` ou une liste vide ne promet
-    rien et ne se signale pas. On lit ce que le TEXTE a écrit (`model_fields_set`), pas les défauts
-    du modèle : une politique qui ne dit rien de `review` ne reçoit pas d'avertissement pour le
-    `[high]` que le contrat met par défaut.
+    `approvals.*` and `review.require_human_for_risk` look like guards; none exists: humans
+    are declared in the workflow. A `required: never` rule or an empty list promises
+    nothing and is not reported. What the TEXT wrote is read (`model_fields_set`), not the model's
+    defaults: a policy that says nothing about `review` gets no warning for the
+    `[high]` the contract sets by default.
     """
     issues: list[Issue] = []
-    for cle in CLES_D_APPROBATION:
-        regle = getattr(policy.approvals, cle)
-        if regle is not None and regle.required != "never":
+    for key in APPROVAL_KEYS:
+        rule = getattr(policy.approvals, key)
+        if rule is not None and rule.required != "never":
             issues.append(
                 Issue(
                     "policy.approval_not_enforced",
-                    f"`approvals.{cle}` is not enforced: Choregos asks no one for this approval. "
+                    f"`approvals.{key}` is not enforced: Choregos asks no one for this approval. "
                     "Declare a human transition in the workflow (a human actor, or `train.approval`).",
-                    f"approvals.{cle}",
+                    f"approvals.{key}",
                 )
             )
     if "default_max" in policy.attempts.model_fields_set:
@@ -273,10 +273,10 @@ def unenforced_governance(policy: Policy) -> list[Issue]:
 
 @lru_cache(maxsize=8)
 def load_preset(name: str) -> Policy:
-    """Charge un preset livré (`solo`, `team`, `regulated`)."""
+    """Load a shipped preset (`solo`, `team`, `regulated`)."""
     path = PRESETS_DIR / f"{name}.yaml"
     if not path.exists():
-        raise FileNotFoundError(f"preset de politique inconnu : {name} (connus : {', '.join(PRESET_NAMES)})")
+        raise FileNotFoundError(f"unknown policy preset: {name} (known: {', '.join(PRESET_NAMES)})")
     return parse_policy(path.read_text(encoding="utf-8"))
 
 
@@ -285,7 +285,7 @@ def preset_yaml(name: str) -> str:
 
 
 def engine_for(policy: Policy | str) -> PolicyEngine:
-    """Construit un moteur depuis une politique, un YAML ou un nom de preset."""
+    """Build an engine from a policy, a YAML or a preset name."""
     if isinstance(policy, Policy):
         return PolicyEngine(policy)
     if policy.startswith("preset:"):

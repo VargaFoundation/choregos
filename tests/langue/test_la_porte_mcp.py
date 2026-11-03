@@ -17,7 +17,7 @@ LIEUX = [
     "apps/web/src",
     "packages/contracts/openapi.yaml",
     "packages/contracts/ts",
-    "packages/core/src/choregos_core/catalogue_d_agents",
+    "packages/core/src/choregos_core/agent_catalogue",
     "templates",
 ]
 SUFFIXES = {".py", ".ts", ".tsx", ".yaml", ".yml", ".md", ".json"}

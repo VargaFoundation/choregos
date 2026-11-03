@@ -46,8 +46,8 @@ it says which workflow, which part of the console, and what kind of message, bef
 
 - Pages get a header with a tinted icon, and the board, a ticket and the workflow pages show the
   workflow's chip (S55-02 to S55-08).
-- A served theme may override the new roles once they are listed in `ThemeTokens` (S55-01b,
-  contract-change); until then a brand theme keeps the default categorical palette.
+- A served theme may override the new roles: `ThemeTokens` lists them since S55-01b, under the same
+  budget, so a brand theme gives the console its own palette for workflows and sections.
 - `tests/theme-provenance.test.ts` keeps every new colour a Radix step.
 
 ## Alternatives discarded
