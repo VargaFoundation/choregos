@@ -14,6 +14,7 @@ from typing import Any
 
 from choregos_contracts import (
     AgentActor,
+    DecisionActor,
     HumanActor,
     JobActor,
     StageResult,
@@ -141,6 +142,8 @@ class WorkflowEngine:
             return "agent"
         if isinstance(actor, JobActor):
             return "job"
+        if isinstance(actor, DecisionActor):
+            return "decision"
         if isinstance(actor, HumanActor):
             return "human"
         if isinstance(actor, SystemActor):

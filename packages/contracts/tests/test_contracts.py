@@ -14,6 +14,7 @@ import pytest
 from choregos_contracts import (
     ContextPack,
     ContextPolicy,
+    DecisionRecord,
     Finding,
     HumanDecision,
     InboundEvent,
@@ -68,6 +69,7 @@ def test_all_declared_schemas_exist() -> None:
         ("finding.example.json", "finding.schema.json"),
         ("inbound-event.example.json", "inbound-event.schema.json"),
         ("human-decision.example.json", "human-decision.schema.json"),
+        ("decision-record.example.json", "decision-record.schema.json"),
         ("context-pack.example.json", "context-pack.schema.json"),
         ("event.example.json", "event.schema.json"),
         ("ui-manifest.example.json", "ui-manifest.schema.json"),
@@ -99,6 +101,7 @@ def test_example_matches_json_schema(example: str, schema_name: str) -> None:
         ("finding.example.json", Finding),
         ("inbound-event.example.json", InboundEvent),
         ("human-decision.example.json", HumanDecision),
+        ("decision-record.example.json", DecisionRecord),
         ("context-pack.example.json", ContextPack),
     ],
 )
