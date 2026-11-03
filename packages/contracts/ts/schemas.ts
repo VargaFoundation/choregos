@@ -1101,6 +1101,33 @@ export type Template = {
     agents?: Array<string>;
     /** the skills installed the same way: folders of the template, each with its SKILL.md, or `catalogue:<slug>` (S20-07) */
     skills?: Array<string>;
+    /** the knowledge bases the template's agents read (S51-06, ADR 0117), in the shape of the CLI's `kind: KnowledgeBase` manifest less what the project decides (scope, uploads, eval set): each is created for a project born of the template, served to it and owned by it, its sources attached and synced at once; a base of that slug already served to the project is reused, never rewritten */
+    knowledge?: Array<{
+      /** the slug the agents name in `spec.knowledge` */
+      slug: string;
+      name: string;
+      description?: string;
+      serving_mode?: "files" | "index";
+      sources?: Array<{
+        name: string;
+        /** a git repository; other kinds need an organisation connector a template cannot know */
+        kind: "git";
+        /** an organisation `documents/git` connector for a private repository; without it the project's own repository is read through the deployment's GitHub App, any other anonymously */
+        connector?: string;
+        config: {
+          url?: string;
+          /** the template input that holds the repository: `owner/name` (a `github-repo` input) or an https URL; a `github-repo` input left empty is the project's repository */
+          url_from_input?: string;
+          ref?: string;
+          /** glob patterns; markdown anywhere by default */
+          paths?: Array<string>;
+        };
+        interval_minutes?: number;
+        refresh_mode?: "interval" | "cron" | "manual";
+        refresh_cron?: string;
+        refresh_timezone?: string;
+      }>;
+    }>;
     /** what a PLUGIN installs in the project when it is born: an installer name → a folder of the template (`ontology: ./ontology`). Without a plugin to install it, the project is born without it, and the audit log says so (S20-09) */
     extensions?: {
       [key: string]: string;
