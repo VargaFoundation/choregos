@@ -62,10 +62,10 @@ from ..errors import ApiError
 from ..events import get_bus
 from ..knowledge.marked import readable
 from ..logging import get_logger
-from ..mcp.appelant import SCOPES_A2A, Appelant, Refus, identifier
-from ..mcp.garde_fous import ECRITURES_PAR_JOUR, LIMITEUR, ecritures_du_jour
-from ..mcp.oauth import emetteur
-from ..mcp.transport import TAILLE_MAX_DU_CORPS, _origines_admises, _refus_http
+from ..mcp.caller import SCOPES_A2A, Caller, Refusal, identify
+from ..mcp.limits import RATE_LIMITER, WRITES_PER_DAY, writes_today
+from ..mcp.oauth import issuer_of
+from ..mcp.transport import MAX_BODY_SIZE, _allowed_origins, _http_refusal
 from ..object_store import object_store
 from ..rbac import Permission
 from ..schemas import WorkItemCreate
@@ -130,7 +130,7 @@ def _encoded(size: int) -> int:
 
 #: The largest body the door reads before it knows the organisation: a message and, in base64,
 #: the most file bytes a project may take (ADR 0078 §6). The organisation's own cap comes next.
-MAX_BODY = TAILLE_MAX_DU_CORPS + _encoded(A2A_MAX_FILE_BYTES_CEILING)
+MAX_BODY = MAX_BODY_SIZE + _encoded(A2A_MAX_FILE_BYTES_CEILING)
 
 
 def file_limit(project: Project) -> int:
@@ -170,7 +170,7 @@ class Skill:
 @dataclass(slots=True)
 class Door:
     session: AsyncSession
-    caller: Appelant
+    caller: Caller
     org: Organization
     console: str
     #: `None` for a push notification, which reads the task without a request.
@@ -187,15 +187,15 @@ async def _open(
 ) -> Door | Response:
     """The door's HTTP refusals, before any A2A exchange: origin, token, rate, organisation."""
     origin = request.headers.get("origin")
-    if origin and origin not in _origines_admises(settings):
-        return _refus_http(403, f"origin refused: {origin}")
+    if origin and origin not in _allowed_origins(settings):
+        return _http_refusal(403, f"origin refused: {origin}")
     try:
-        caller = await identifier(session, request, settings, scopes=SCOPES_A2A, door="A2A")
-    except Refus as refus:
-        return _refus_http(
-            refus.statut, str(refus), erreur_oauth=refus.erreur, settings=settings, chemin=request.url.path
+        caller = await identify(session, request, settings, scopes=SCOPES_A2A, door="A2A")
+    except Refusal as refusal:
+        return _http_refusal(
+            refusal.status, str(refusal), oauth_error=refusal.error, settings=settings, path=request.url.path
         )
-    allowed, wait = LIMITEUR.admet("a2a:" + caller.cle)
+    allowed, wait = RATE_LIMITER.admits("a2a:" + caller.key)
     if not allowed:
         return JSONResponse({"error": "rate_limited"}, status_code=429, headers={"Retry-After": str(wait)})
     org = (
@@ -206,17 +206,17 @@ async def _open(
         org_slug in principal.org_roles or any(k.startswith(f"{org_slug}/") for k in principal.project_roles)
     )
     if org is None or not visible:
-        return _refus_http(404, f"organisation `{org_slug}` not found")
-    if caller.projet_lie is not None and caller.projet_lie.org_id != org.id:
-        return _refus_http(
-            403, f"this token is bound to project {caller.org_du_projet_lie}:{caller.projet_lie.slug}"
+        return _http_refusal(404, f"organisation `{org_slug}` not found")
+    if caller.bound_project is not None and caller.bound_project.org_id != org.id:
+        return _http_refusal(
+            403, f"this token is bound to project {caller.bound_project_org}:{caller.bound_project.slug}"
         )
     return Door(session, caller, org, settings.public_url.rstrip("/"), request)
 
 
 async def _projects(door: Door) -> list[Project]:
-    if door.caller.projet_lie is not None:
-        projects = [door.caller.projet_lie]
+    if door.caller.bound_project is not None:
+        projects = [door.caller.bound_project]
     else:
         projects = list(
             (
@@ -260,7 +260,7 @@ def _card(door: Door, settings: Settings, served: list[Skill]) -> dict[str, Any]
     if settings.mcp_oauth_enabled:
         schemes["oidc"] = {
             "type": "openIdConnect",
-            "openIdConnectUrl": f"{emetteur(settings)}/.well-known/openid-configuration",
+            "openIdConnectUrl": f"{issuer_of(settings)}/.well-known/openid-configuration",
         }
     return {
         "protocolVersion": PROTOCOL_VERSION,
@@ -308,16 +308,16 @@ async def agent_card(org: str, request: Request, session: Db, settings: Config) 
 async def endpoint(org: str, request: Request, session: Db, settings: Config) -> Response:
     length = request.headers.get("content-length")
     if length and length.isdigit() and int(length) > MAX_BODY:
-        return _refus_http(413, f"message too large ({MAX_BODY} bytes at most)")
+        return _http_refusal(413, f"message too large ({MAX_BODY} bytes at most)")
     door = await _open(request, session, settings, org)
     if isinstance(door, Response):
         return door
     cap = await _body_cap(door)
     if length and length.isdigit() and int(length) > cap:
-        return _refus_http(413, f"message too large ({cap} bytes at most for this organisation)")
+        return _http_refusal(413, f"message too large ({cap} bytes at most for this organisation)")
     body = await request.body()
     if len(body) > cap:
-        return _refus_http(413, f"message too large ({cap} bytes at most for this organisation)")
+        return _http_refusal(413, f"message too large ({cap} bytes at most for this organisation)")
     try:
         message = json.loads(body)
     except (json.JSONDecodeError, UnicodeDecodeError):
@@ -341,7 +341,7 @@ async def endpoint(org: str, request: Request, session: Db, settings: Config) ->
             return stream
         answer = ok(ident, await _dispatch(door, method, params))
     except Fault as refused:
-        outcome = "refus"
+        outcome = "refus"  # lang: fr-ok - persisted audit value, S45-39
         answer = erreur(ident, refused.code, str(refused), refused.data)
     await _audit(door, method, outcome)
     return JSONResponse(answer)
@@ -351,7 +351,7 @@ async def _body_cap(door: Door) -> int:
     """A message, and the file bytes the most generous project of the organisation takes, in base64."""
     configs = (await door.session.execute(select(Project).where(Project.org_id == door.org.id))).scalars()
     largest = max((file_limit(project) for project in configs), default=0)
-    return TAILLE_MAX_DU_CORPS + _encoded(largest)
+    return MAX_BODY_SIZE + _encoded(largest)
 
 
 async def _dispatch(door: Door, method: str, params: dict[str, Any]) -> Any:
@@ -378,13 +378,13 @@ async def _audit(door: Door, method: str, outcome: str) -> None:
         org_id=door.org.id,
         target_type="a2a_method",
         target_id=method[:100],
-        ecriture=door.wrote,
+        ecriture=door.wrote,  # lang: fr-ok - persisted audit key, S45-39
         issue=outcome,
-        jeton=door.caller.cle,
+        jeton=door.caller.key,  # lang: fr-ok - persisted audit key, S45-39
         agent=door.caller.agent,
         client=(door.request.headers.get("user-agent") or "")[:100] or None if door.request else None,
     )
-    log.info("a2a.call", method=method[:100], issue=outcome, appelant=door.caller.cle)
+    log.info("a2a.call", method=method[:100], issue=outcome, caller=door.caller.key)
 
 
 # ───────────────────────── message/send ─────────────────────────
@@ -516,7 +516,7 @@ async def _send(door: Door, params: dict[str, Any]) -> dict[str, Any]:
         )
     raw = message.get("metadata")
     metadata: dict[str, Any] = raw if isinstance(raw, dict) else {}
-    task_id = task_id_of(door.org.id, door.caller.cle, message_id)
+    task_id = task_id_of(door.org.id, door.caller.key, message_id)
     if await door.session.get(WorkItem, task_id) is not None:
         # Sent again: the work item it opened, nothing written.
         return await task_of(door, *await _task(door, task_id))
@@ -525,10 +525,8 @@ async def _send(door: Door, params: dict[str, Any]) -> dict[str, Any]:
     if not principal.can(Permission.ITEM_CONTROL, door.org.slug, project.slug):
         raise Fault(PARAMETRES_INVALIDES, f"you cannot open work items in {door.org.slug}:{project.slug}")
     text, fields, files = _read_parts(message.get("parts"), skill)
-    if await ecritures_du_jour(door.session, principal.user_id) >= ECRITURES_PAR_JOUR:
-        raise Fault(
-            BUDGET_EXHAUSTED, f"budget_exhausted: {ECRITURES_PAR_JOUR} writes a day through MCP and A2A"
-        )
+    if await writes_today(door.session, principal.user_id) >= WRITES_PER_DAY:
+        raise Fault(BUDGET_EXHAUSTED, f"budget_exhausted: {WRITES_PER_DAY} writes a day through MCP and A2A")
     title = metadata.get("title") if isinstance(metadata.get("title"), str) else ""
     title = (title or next((line for line in text.splitlines() if line.strip()), "") or skill.id).strip()[
         :200
@@ -536,14 +534,14 @@ async def _send(door: Door, params: dict[str, Any]) -> dict[str, Any]:
     body = text + _files_note(files) if text else _files_note(files).lstrip()
     try:
         # With files, the interpreter starts once they are recorded: the first step finds its inputs.
-        demande = WorkItemCreate(
+        draft = WorkItemCreate(
             title=title, body=body, workflow=skill.workflow, fields=fields, start=not files
         )
     except ValidationError as refused:
         raise Fault(PARAMETRES_INVALIDES, f"invalid message: {refused.errors()[0]['msg']}") from refused
     stored = await _put_files(door, task_id, files)
     try:
-        item = await creer_un_ticket(door.session, principal, project, demande, canal="a2a", item_id=task_id)
+        item = await creer_un_ticket(door.session, principal, project, draft, canal="a2a", item_id=task_id)
     except ApiError as refused:
         raise Fault(PARAMETRES_INVALIDES, refused.detail or refused.title) from refused
     for one in stored:
@@ -606,7 +604,7 @@ async def _task(door: Door, reference: Any) -> tuple[WorkItem, Project]:
     """A work item of this organisation the caller may read; any other is not found."""
     item = await door.session.get(WorkItem, reference) if isinstance(reference, str) and reference else None
     project = await door.session.get(Project, item.project_id) if item is not None else None
-    bound = door.caller.projet_lie
+    bound = door.caller.bound_project
     if (
         item is None
         or project is None
@@ -798,7 +796,7 @@ async def _open_stream(
     door: Door, settings: Settings, ident: Any, method: str, params: dict[str, Any]
 ) -> Response:
     """The refusals come as a plain JSON-RPC answer; past them, the task's events as SSE."""
-    if _STREAMS[door.caller.cle] >= MAX_STREAMS:
+    if _STREAMS[door.caller.key] >= MAX_STREAMS:
         raise Fault(TOO_MANY_STREAMS, f"too many streams: {MAX_STREAMS} open at most for one token")
     if method == "message/stream":
         first = await _send(door, params)
@@ -840,7 +838,7 @@ async def _follow(
     An input-required status is not final: the decision is taken in the console, not by this
     caller, and the task goes on. A token revoked or a right lost ends the stream at the next read.
     """
-    key = door.caller.cle
+    key = door.caller.key
     _STREAMS[key] += 1
     try:
         yield _frame(ident, first)
@@ -898,10 +896,10 @@ async def _reread(door: Door, settings: Settings, task_id: str) -> dict[str, Any
     assert door.request is not None, "a stream is always opened by a request"
     async with session_scope() as session:
         try:
-            caller = await identifier(session, door.request, settings, scopes=SCOPES_A2A, door="A2A")
-        except Refus as refus:
-            raise Fault(TASK_NOT_FOUND, f"the stream's credential no longer opens the door: {refus}") from (
-                refus
+            caller = await identify(session, door.request, settings, scopes=SCOPES_A2A, door="A2A")
+        except Refusal as refusal:
+            raise Fault(TASK_NOT_FOUND, f"the stream's credential no longer opens the door: {refusal}") from (
+                refusal
             )
         again = replace(door, session=session, caller=caller)
         return await task_of(again, *await _task(again, task_id))

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Session SQLAlchemy async, RLS par organisation, création du schéma en dev/test."""
+"""Async SQLAlchemy session, RLS per organisation, schema creation in dev and test."""
 
 from __future__ import annotations
 
@@ -101,71 +101,70 @@ async def dispose_engine() -> None:
     _sessionmaker = None
 
 
-TOUT = "*"
+ALL_ORGS = "*"
 
 
-async def limiter_aux_organisations(session: AsyncSession, orgs: list[str] | str | None) -> None:
-    """Pose `app.current_orgs` pour la RLS PostgreSQL, le temps de LA transaction en cours.
+async def limit_to_organisations(session: AsyncSession, orgs: list[str] | str | None) -> None:
+    """Set `app.current_orgs` for PostgreSQL RLS, for THE current transaction only.
 
-    - une liste d'organisations : la session ne voit que leurs projets et ce qui en dépend ;
-    - `"*"` : la session voit tout — réservé aux processus de la plateforme (orchestrateur,
-      seeds, requêtes authentifiées par un jeton de run) ;
-    - `None` ou `[]` : la session ne voit RIEN des tables sous RLS. C'est le défaut, et
-      c'est voulu : la politique était `current_org IS NULL OR …`, donc ouverte à toute
-      session qui oubliait de se nommer — et toutes oubliaient (état des lieux du
-      2026-09-24).
+    - a list of organisations: the session sees only their projects and what depends on them;
+    - `"*"`: the session sees everything, reserved for platform processes (the orchestrator,
+      seeds, requests authenticated by a run token);
+    - `None` or `[]`: the session sees NOTHING of the tables under RLS. This is the default and it
+      is deliberate: the policy used to be `current_org IS NULL OR ...`, open to every session that
+      forgot to name itself, and all of them forgot (audit of 2026-09-24).
 
-    Transaction-locale (`set_config(…, true)`) : rien ne survit au commit, un pool de
-    connexions ne peut pas faire hériter une organisation à la requête suivante.
+    Transaction-local (`set_config(..., true)`): nothing survives the commit, so a connection pool
+    cannot make the next request inherit an organisation.
     """
     if get_settings().is_sqlite:
         return
-    valeur = TOUT if orgs == TOUT else ",".join(sorted(set(orgs))) if orgs else ""
-    await session.execute(text("SELECT set_config('app.current_orgs', :orgs, true)"), {"orgs": valeur})
+    value = ALL_ORGS if orgs == ALL_ORGS else ",".join(sorted(set(orgs))) if orgs else ""
+    await session.execute(text("SELECT set_config('app.current_orgs', :orgs, true)"), {"orgs": value})
 
 
 async def limit_to_remembered_organisations(session: AsyncSession, orgs: list[str]) -> None:
-    """Like `limiter_aux_organisations`, for slugs that were written down EARLIER (a workflow's payload,
+    """Like `limit_to_organisations`, for slugs that were written down EARLIER (a workflow's payload,
     a signed state, a deployment value): a slug that has since been renamed is replaced by the
     organisation's current slug, because RLS compares current slugs (ADR 0090). The aliases are read under
     the platform scope and the narrow scope is set right after, in the same transaction."""
     from .org_aliases import current_slugs
 
     if get_settings().is_sqlite or not orgs:
-        await limiter_aux_organisations(session, orgs)
+        await limit_to_organisations(session, orgs)
         return
-    await limiter_aux_organisations(session, TOUT)
+    await limit_to_organisations(session, ALL_ORGS)
     resolved = await current_slugs(session, orgs)
-    await limiter_aux_organisations(session, sorted(set(resolved.values())))
+    await limit_to_organisations(session, sorted(set(resolved.values())))
 
 
-async def nommer_l_utilisateur(session: AsyncSession, user_id: str | None) -> None:
-    """Pose `app.current_user` pour la RLS de `users` et `api_tokens` : l'appelant se lit toujours,
-    même sans appartenance. Transaction-locale, comme la portée."""
+async def name_the_user(session: AsyncSession, user_id: str | None) -> None:
+    """Set `app.current_user` for the RLS of `users` and `api_tokens`: callers can always read
+    themselves, even without a membership. Transaction-local, like the scope."""
     if get_settings().is_sqlite:
         return
     await session.execute(text("SELECT set_config('app.current_user', :u, true)"), {"u": user_id or ""})
 
 
 @asynccontextmanager
-async def en_portee_de_plateforme(session: AsyncSession) -> AsyncIterator[None]:
-    """Le temps d'un bloc, la session voit toute l'instance ; la portée précédente est RESTAURÉE.
+async def in_platform_scope(session: AsyncSession) -> AsyncIterator[None]:
+    """For the length of a block, the session sees the whole instance; the previous scope is RESTORED.
 
-    Pour ce qui porte sur l'instance entière au milieu d'une requête bornée : compter les
-    organisations (qui administre la plateforme ?), retrouver un utilisateur par son e-mail, unique à
-    l'échelle de l'instance. Sous la RLS de l'identité, un compte fait depuis la portée d'un
-    administrateur d'une seule organisation vaudrait 1 — et il passerait pour administrateur de tout.
+    For what concerns the entire instance in the middle of a bounded request: counting the
+    organisations (who administers the platform?), finding a user by e-mail, unique across the
+    instance. Under the identity RLS, a count made from the scope of a single organisation's
+    administrator would be 1, and they would pass for the administrator of everything.
     """
     if get_settings().is_sqlite:
         yield
         return
-    avant = (await session.execute(text("SELECT current_setting('app.current_orgs', true)"))).scalar_one()
-    await session.execute(text("SELECT set_config('app.current_orgs', :orgs, true)"), {"orgs": TOUT})
+    before = (await session.execute(text("SELECT current_setting('app.current_orgs', true)"))).scalar_one()
+    await session.execute(text("SELECT set_config('app.current_orgs', :orgs, true)"), {"orgs": ALL_ORGS})
     try:
         yield
     finally:
         await session.execute(
-            text("SELECT set_config('app.current_orgs', :orgs, true)"), {"orgs": avant or ""}
+            text("SELECT set_config('app.current_orgs', :orgs, true)"), {"orgs": before or ""}
         )
 
 
@@ -173,20 +172,20 @@ async def en_portee_de_plateforme(session: AsyncSession) -> AsyncIterator[None]:
 async def session_scope(
     org_slug: str | None = None, *, orgs: list[str] | str | None = None
 ) -> AsyncIterator[AsyncSession]:
-    """Session transactionnelle, limitée aux organisations données (voir `limiter_aux_organisations`).
+    """A transactional session, limited to the given organisations (see `limit_to_organisations`).
 
-    Sans `orgs` ni `org_slug`, la session ne voit aucune table sous RLS sur PostgreSQL. Un
-    processus de la plateforme passe `orgs="*"` et le dit.
+    Without `orgs` or `org_slug`, the session sees no table under RLS on PostgreSQL. A platform
+    process passes `orgs="*"` and says so.
     """
     async with get_sessionmaker()() as session:
-        portee = orgs if orgs is not None else ([org_slug] if org_slug else None)
-        if portee is not None:
-            if isinstance(portee, list):
-                # `orgs=[…]` comes from a payload, a state or a deployment value as often as from a
+        scope = orgs if orgs is not None else ([org_slug] if org_slug else None)
+        if scope is not None:
+            if isinstance(scope, list):
+                # `orgs=[...]` comes from a payload, a state or a deployment value as often as from a
                 # request: an alias is replaced by the current slug (ADR 0090).
-                await limit_to_remembered_organisations(session, portee)
+                await limit_to_remembered_organisations(session, scope)
             else:
-                await limiter_aux_organisations(session, portee)
+                await limit_to_organisations(session, scope)
         try:
             yield session
             await session.commit()
@@ -197,7 +196,7 @@ async def session_scope(
 
 
 async def create_all() -> None:
-    """Crée le schéma (dev, tests). En staging et prod, c'est Alembic qui décide."""
+    """Create the schema (dev, tests). In staging and production, Alembic decides."""
     async with get_engine().begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
@@ -205,3 +204,9 @@ async def create_all() -> None:
 async def drop_all() -> None:
     async with get_engine().begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+
+
+TOUT = ALL_ORGS  # lang: fr-ok alias:internal
+limiter_aux_organisations = limit_to_organisations  # lang: fr-ok alias:internal
+nommer_l_utilisateur = name_the_user  # lang: fr-ok alias:internal
+en_portee_de_plateforme = in_platform_scope  # lang: fr-ok alias:internal

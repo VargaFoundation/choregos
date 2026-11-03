@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Modèle de données (docs/plan/01 §1.3).
+"""The data model (docs/plan/01 §1.3).
 
-Toutes les tables porteuses de données projet ont `project_id` et sont couvertes par
-la RLS PostgreSQL (`SET app.current_org`), posée par la migration initiale.
+Every table that holds project data has `project_id` and is covered by PostgreSQL RLS
+(`SET app.current_org`), set up by the initial migration.
 """
 
 from __future__ import annotations
@@ -99,12 +99,12 @@ class Project(Base, PkMixin, TimestampMixin):
     config: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
     status: Mapped[str] = mapped_column(String(32), default="draft", index=True)
     provision_state: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
-    #: Le nom du workflow par défaut (ADR 0031) : celui d'un ticket qui ne dit pas le sien et
-    #: qu'aucune règle de routage ne désigne. Le défaut appartient au projet, pas à une version.
+    #: The name of the default workflow (ADR 0031): the one for a ticket that names none and that no
+    #: routing rule selects. The default belongs to the project, not to a version.
     default_workflow: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    #: Les règles qui choisissent le workflow d'un ticket venu d'un tracker (ADR 0031) : une liste
-    #: ordonnée de `{when: {labels_any, labels_all, item_type}, workflow}`. Hors de `config`, que
-    #: `PATCH /projects/{id}` remplace en entier.
+    #: The rules that choose the workflow of a ticket coming from a tracker (ADR 0031): an ordered
+    #: list of `{when: {labels_any, labels_all, item_type}, workflow}`. Kept outside `config`, which
+    #: `PATCH /projects/{id}` replaces as a whole.
     workflow_routing: Mapped[list[dict[str, Any]]] = mapped_column(Json, default=list)
     #: How a work item that names no workflow finds one (ADR 0116): `labels` (the rules alone),
     #: `rules_then_llm` (the rules, then a small model when none matched) or `llm` (the model alone).
@@ -128,8 +128,8 @@ class Connector(Base, PkMixin, TimestampMixin):
     type: Mapped[str] = mapped_column(String(64))
     config: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
     secret_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    #: Les secrets du connecteur, champ par champ, en RÉFÉRENCES (`env:NOM`) : résolues quand
-    #: l'adaptateur est construit, jamais stockées en clair (ADR 0034).
+    #: The connector's secrets, field by field, as REFERENCES (`env:NAME`): resolved when the adapter
+    #: is built, never stored in clear (ADR 0034).
     secret_refs: Mapped[dict[str, str] | None] = mapped_column(Json, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="unknown")
     last_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -142,7 +142,7 @@ class WorkflowDef(Base, PkMixin, TimestampMixin):
     __tablename__ = "workflow_defs"
     __table_args__ = (
         UniqueConstraint("project_id", "name", "version", name="project_name_version"),
-        # ADR 0031 : un projet porte plusieurs workflows, mais une seule version active par nom.
+        # ADR 0031: a project carries several workflows, but a single active version per name.
         Index(
             "uq_workflow_defs_actif_par_nom",
             "project_id",
@@ -163,7 +163,7 @@ class WorkflowDef(Base, PkMixin, TimestampMixin):
     json_doc: Mapped[dict[str, Any]] = mapped_column("json", Json, default=dict)
     checksum: Mapped[str] = mapped_column(String(80), index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
-    #: Qui a publié cette version : l'historique des versions le montre (ADR 0031).
+    #: Who published this version: the version history shows it (ADR 0031).
     created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
@@ -217,8 +217,8 @@ class WorkItem(Base, PkMixin, TimestampMixin):
     size: Mapped[str | None] = mapped_column(String(4), nullable=True)
     risk: Mapped[str | None] = mapped_column(String(8), nullable=True)
     state: Mapped[str] = mapped_column(String(64), default="inbox", index=True)
-    #: La VERSION du workflow où le ticket est né (ADR 0031) : publier une version nouvelle ne le
-    #: déplace jamais ; seul `migrate` le fait, exprès.
+    #: The VERSION of the workflow the ticket was born in (ADR 0031): publishing a new version never
+    #: moves it; only `migrate` does, on purpose.
     workflow_def_id: Mapped[str | None] = mapped_column(
         ForeignKey("workflow_defs.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -238,11 +238,11 @@ class WorkItem(Base, PkMixin, TimestampMixin):
     #: work item and everything under it needs reading every one of them (`knowledge/marked.py`).
     restricted_knowledge: Mapped[list[str] | None] = mapped_column(Json, nullable=True)
     paused: Mapped[bool] = mapped_column(Boolean, default=False)
-    #: Pourquoi l'interpréteur du ticket est mort (`{message, activity, at}`), ou rien.
-    #: Posé par le workflow lui-même en mourant, effacé quand il redémarre.
+    #: Why the ticket's interpreter died (`{message, activity, at}`), or nothing.
+    #: Set by the workflow itself as it dies, cleared when it restarts.
     failure: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
     allowed_paths: Mapped[list[str]] = mapped_column(Json, default=list)
-    #: Les champs du ticket, validés à sa naissance par `metadata.inputs` de son workflow (ADR 0031).
+    #: The ticket's fields, validated at birth by `metadata.inputs` of its workflow (ADR 0031).
     fields: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
     pr_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -262,11 +262,11 @@ class Run(Base, PkMixin, TimestampMixin):
     __tablename__ = "runs"
     __table_args__ = (Index("ix_runs_project_status", "project_id", "status"),)
 
-    # L'identifiant d'un run N'EST PAS un UUID : il est déterministe et lisible,
-    # `<ticket>-<transition>-<tentative>` (activities/stage.py), et c'est lui qui rend
-    # l'étape rejouable sans créer un second run. Les 36 caractères hérités de `PkMixin`
-    # ne suffisent pas — PostgreSQL répond « value too long for type character
-    # varying(36) », là où SQLite, qui n'applique pas les longueurs, ne dit rien.
+    # A run's identifier is NOT a UUID: it is deterministic and readable,
+    # `<ticket>-<transition>-<attempt>` (activities/stage.py), and it is what makes
+    # the stage replayable without creating a second run. The 36 characters inherited from `PkMixin`
+    # are not enough: PostgreSQL answers "value too long for type character
+    # varying(36)", where SQLite, which does not enforce lengths, says nothing.
     id: Mapped[str] = mapped_column(String(128), primary_key=True, default=uuid7)
     work_item_id: Mapped[str] = mapped_column(ForeignKey("work_items.id", ondelete="CASCADE"), index=True)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
@@ -277,7 +277,7 @@ class Run(Base, PkMixin, TimestampMixin):
     backend: Mapped[str | None] = mapped_column(String(64), nullable=True)
     model: Mapped[str | None] = mapped_column(String(200), nullable=True)
     executor_kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    #: L'agent du registre qui a fait ce run, et sa version (ADR 0033) ; vide pour un playbook.
+    #: The registry agent that made this run, and its version (ADR 0033); empty for a playbook.
     agent_slug: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     agent_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     executor_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -290,7 +290,7 @@ class Run(Base, PkMixin, TimestampMixin):
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     tokens: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
     cost_usd: Mapped[float] = mapped_column(Float, default=0.0)
-    # La dépense d'un run n'est lue qu'une fois au gateway : ce drapeau interdit le double comptage.
+    # A run's spend is read from the gateway only once: this flag prevents double counting.
     spend_collected: Mapped[bool] = mapped_column(Boolean, default=False)
     gateway_key_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     result: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
@@ -461,10 +461,10 @@ class CostLedger(Base, PkMixin):
 
 
 class AuditLog(Base, PkMixin):
-    """Journal d'audit. `org_id` est NULL pour un événement de plateforme (une connexion, un
-    jeton) : ces lignes ne sont visibles que d'une session de portée `*`. Sans cette colonne,
-    la table était hors RLS et la route ne filtrait rien — un `project_owner` d'une
-    organisation lisait l'audit de toutes les autres."""
+    """The audit log. `org_id` is NULL for a platform event (a sign-in, a
+    token): those rows are visible only to a session with scope `*`. Without this column,
+    the table was outside RLS and the route filtered nothing: a `project_owner` of one
+    organisation read the audit of all the others."""
 
     __tablename__ = "audit_log"
 
@@ -489,11 +489,11 @@ class ApiToken(Base, PkMixin, TimestampMixin):
     scopes: Mapped[list[str]] = mapped_column(Json, default=list)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    #: Un jeton MCP peut être lié à un projet : il ne voit alors que lui (ADR 0030).
+    #: An MCP token can be bound to a project: it then sees only that one (ADR 0030).
     project_id: Mapped[str | None] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True
     )
-    #: Le client du dernier appel (`User-Agent`, tronqué) : la page Integrations dit « connecté ».
+    #: The client of the last call (`User-Agent`, truncated): the Integrations page says "connected".
     last_client: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
@@ -583,11 +583,11 @@ class MemoryStore(Base, PkMixin, TimestampMixin):
 
 
 class MemoryFact(Base, PkMixin, TimestampMixin):
-    """Repli lexical : mémoire stockée dans Choregos quand Ecphoria n'est pas déployé.
+    """Lexical fallback: memory stored in Choregos when Ecphoria is not deployed.
 
-    `embedding` est un `Json`, pas un vecteur : la similarité est un produit scalaire entre
-    sacs de mots, calculé en Python. Le connecteur s'appelait `pgvector`, ce qui promettait
-    autre chose."""
+    `embedding` is a `Json`, not a vector: the similarity is a dot product between
+    bags of words, computed in Python. The connector used to be called `pgvector`, which promised
+    something else."""
 
     __tablename__ = "memory_facts"
     __table_args__ = (
@@ -627,7 +627,7 @@ class MemoryFact(Base, PkMixin, TimestampMixin):
 
 
 class WebhookDelivery(Base, PkMixin):
-    """Déduplication des webhooks : une livraison traitée une seule fois."""
+    """Webhook deduplication: a delivery is processed only once."""
 
     __tablename__ = "webhook_deliveries"
     __table_args__ = (UniqueConstraint("source", "delivery_id", name="source_delivery"),)
@@ -730,7 +730,7 @@ class DecisionRecordRow(Base, PkMixin):
 
 
 class BackendRegistryRow(Base, PkMixin, TimestampMixin):
-    """État des backends ACP : activés, résultats de conformité (S2-11)."""
+    """State of the ACP backends: enabled, conformance results (S2-11)."""
 
     __tablename__ = "agent_backends"
 
@@ -746,8 +746,8 @@ class GatewayKeyRow(Base, PkMixin, TimestampMixin):
     __tablename__ = "gateway_keys"
 
     key_id: Mapped[str] = mapped_column(String(128), unique=True, index=True)
-    # Même longueur que `runs.id` : cette colonne le recopie sans clé étrangère (la clé
-    # survit au run qu'elle plafonnait).
+    # Same length as `runs.id`: this column copies it without a foreign key (the key
+    # outlives the run it capped).
     run_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     project_id: Mapped[str | None] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True
@@ -758,13 +758,13 @@ class GatewayKeyRow(Base, PkMixin, TimestampMixin):
     revoked: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
-# ───────────────────────────── le registre d'agents (ADR 0033) ─────────────────────────────
+# ───────────────────────────── the agent registry (ADR 0033) ─────────────────────────────
 
 
 class OrgConnector(Base, PkMixin, TimestampMixin):
-    """Une instance de connecteur de l'ORGANISATION (ADR 0034) : un annuaire Entra, un serveur MCP,
-    un gestionnaire de parc — déclarée une fois par l'administrateur, nommée, et dont chaque
-    opération porte sa politique. Les projets s'en servent ; ils n'en déclarent pas."""
+    """A connector instance of the ORGANISATION (ADR 0034): an Entra directory, an MCP server,
+    a device manager. Declared once by the administrator, named, and each of its
+    operations carries its policy. Projects use it; they do not declare it."""
 
     __tablename__ = "org_connectors"
     __table_args__ = (UniqueConstraint("org_id", "name", name="uq_org_connectors_org_name"),)
@@ -774,7 +774,7 @@ class OrgConnector(Base, PkMixin, TimestampMixin):
     kind: Mapped[str] = mapped_column(String(32))
     type: Mapped[str] = mapped_column(String(64))
     config: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
-    #: Des RÉFÉRENCES (`env:NOM`), jamais des valeurs.
+    #: REFERENCES (`env:NAME`), never values.
     secret_refs: Mapped[dict[str, str] | None] = mapped_column(Json, nullable=True)
     status: Mapped[str] = mapped_column(String(32), default="unknown")
     last_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -992,9 +992,9 @@ class OrgEgressRule(Base, PkMixin, TimestampMixin):
 
 
 class ConnectorOperation(Base, PkMixin, TimestampMixin):
-    """Une opération d'une instance, et sa politique dans l'organisation : `allowed`, `approval`
-    (une action gouvernée, ADR 0035) ou `forbidden` ; les groupes de projets qui y ont droit
-    (aucun : tous) ; son prix ; l'empreinte de son schéma (une dérive la referme, S19-03)."""
+    """An operation of an instance, and its policy in the organisation: `allowed`, `approval`
+    (a governed action, ADR 0035) or `forbidden`; the project groups entitled to it
+    (none: all); its price; the digest of its schema (a drift closes it again, S19-03)."""
 
     __tablename__ = "connector_operations"
     __table_args__ = (
@@ -1009,7 +1009,7 @@ class ConnectorOperation(Base, PkMixin, TimestampMixin):
     groups: Mapped[list[str]] = mapped_column(Json, default=list)
     price_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     schema_digest: Mapped[str | None] = mapped_column(String(80), nullable=True)
-    #: Ce que le courtier annonce à l'agent, et vérifie avant de joindre le serveur.
+    #: What the broker announces to the agent, and checks before reaching the server.
     input_schema: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
     #: The `outputSchema` the server declares: a successful result that does not match it is refused
     #: before the agent reads it (#755).
@@ -1023,7 +1023,7 @@ class ConnectorOperation(Base, PkMixin, TimestampMixin):
 
 
 class ProjectOperationPolicy(Base, PkMixin, TimestampMixin):
-    """Ce qu'un projet RESSERRE d'une opération de l'organisation — jamais ce qu'il élargit."""
+    """What a project NARROWS of an organisation operation, never what it widens."""
 
     __tablename__ = "project_operation_policies"
     __table_args__ = (UniqueConstraint("project_id", "operation_id", name="uq_project_operation_policies"),)
@@ -1037,9 +1037,9 @@ class ProjectOperationPolicy(Base, PkMixin, TimestampMixin):
 
 
 class Action(Base, PkMixin, TimestampMixin):
-    """Une action gouvernée (ADR 0035) : proposée, décidée par des humains ré-authentifiés,
-    exécutée par Temporal (`action-<id>`) — jamais dans la requête qui l'approuve. Ses effets
-    sont consignés un à un (`action_effects`) : une reprise ne refait pas ce qui est fait."""
+    """A governed action (ADR 0035): proposed, decided by re-authenticated humans,
+    executed by Temporal (`action-<id>`), never inside the request that approves it. Its effects
+    are recorded one by one (`action_effects`): a resumption does not redo what is done."""
 
     __tablename__ = "actions"
     __table_args__ = (Index("ix_actions_project_status", "project_id", "status"),)
@@ -1051,12 +1051,12 @@ class Action(Base, PkMixin, TimestampMixin):
     )
     run_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     origin: Mapped[str] = mapped_column(String(16))
-    #: ce qu'elle fait, en un nom (`entra.create_user`, `arrivee.comptes`)
+    #: what it does, as a name (`entra.create_user`, `arrivee.comptes`)  # lang: fr-ok - a recorded kind
     kind: Mapped[str] = mapped_column(String(128))
     title: Mapped[str] = mapped_column(String(300))
     justification: Mapped[str | None] = mapped_column(Text, nullable=True)
     params: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
-    #: [{effect, with, compensate?}] — joués dans l'ordre, compensés à rebours
+    #: [{effect, with, compensate?}]: played in order, compensated in reverse
     effects: Mapped[list[dict[str, Any]]] = mapped_column(Json, default=list)
     #: {kind: user|agent|system, id, via?}
     proposed_by: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
@@ -1071,9 +1071,9 @@ class Action(Base, PkMixin, TimestampMixin):
 
 
 class ActionEffect(Base, PkMixin, TimestampMixin):
-    """Un effet d'une action, sous sa CLÉ (`<action>:<n>`) : consigné AVANT d'être tenté,
-    confirmé après. Une activité rejouée voit la clé faite et ne refait rien ; un effet commencé
-    et non confirmé (un worker tué) est retenté — les effets sont idempotents par construction."""
+    """An effect of an action, under its KEY (`<action>:<n>`): recorded BEFORE it is attempted,
+    confirmed after. A replayed activity sees the key done and redoes nothing; an effect started
+    and not confirmed (a killed worker) is retried: effects are idempotent by construction."""
 
     __tablename__ = "action_effects"
     __table_args__ = (UniqueConstraint("action_id", "position", name="uq_action_effects_action_position"),)
@@ -1093,10 +1093,10 @@ class ActionEffect(Base, PkMixin, TimestampMixin):
 
 
 class HandOffReceipt(Base, PkMixin, TimestampMixin):
-    """Un reçu de passage entre étapes (S25-04) : une sortie d'étape, son empreinte, et le run qui
-    l'a PRODUITE ou LUE. Une ligne ne change jamais : une nouvelle révision fait un nouveau reçu,
-    une lecture aussi. C'est ce qui montre que l'étape suivante a lu la révision exacte produite —
-    et qu'une sortie modifiée après coup n'a plus l'empreinte de son reçu."""
+    """A receipt for a hand-off between stages (S25-04): a stage output, its digest, and the run that
+    PRODUCED or READ it. A row never changes: a new revision makes a new receipt, and so does
+    a read. This is what shows that the next stage read the exact revision produced,
+    and that an output modified afterwards no longer has the digest of its receipt."""
 
     __tablename__ = "hand_off_receipts"
     __table_args__ = (
@@ -1107,14 +1107,14 @@ class HandOffReceipt(Base, PkMixin, TimestampMixin):
 
     org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
     work_item_id: Mapped[str] = mapped_column(ForeignKey("work_items.id", ondelete="CASCADE"), index=True)
-    #: le nom de la sortie : `spec_markdown`, `plan_markdown`, ou celui qu'une transition déclare
+    #: the name of the output: `spec_markdown`, `plan_markdown`, or the one a transition declares
     output: Mapped[str] = mapped_column(String(128))
-    #: `sha256:<hex>` de la valeur, en JSON canonique (`services/recus.py`)
+    #: `sha256:<hex>` of the value, in canonical JSON (`services/recus.py`)
     digest: Mapped[str] = mapped_column(String(80))
     #: produced | read
     kind: Mapped[str] = mapped_column(String(16))
     run_id: Mapped[str] = mapped_column(String(64))
-    #: le rôle de l'étape du run, gardé pour l'affichage : un run supprimé laisse son reçu lisible
+    #: the role of the run's stage, kept for display: a deleted run leaves its receipt readable
     stage: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
@@ -1192,9 +1192,9 @@ class BudgetAlert(Base, PkMixin, TimestampMixin):
 
 
 class Agent(Base, PkMixin, TimestampMixin):
-    """Un agent de l'organisation : interne (la plateforme le fait tourner) ou externe (un client
-    de la porte MCP). Ce qu'il EST vit dans ses versions, immuables ; ici, son identité et son
-    état — actif, suspendu, révoqué, expiré."""
+    """An agent of the organisation: internal (the platform runs it) or external (a client
+    of the MCP door). What it IS lives in its versions, which are immutable; here, its identity and its
+    state: active, suspended, revoked, expired."""
 
     __tablename__ = "agents"
     __table_args__ = (
@@ -1245,8 +1245,8 @@ class Agent(Base, PkMixin, TimestampMixin):
 
 
 class AgentVersion(Base, PkMixin, TimestampMixin):
-    """Une version d'agent — instructions, modèle, limites, skills, serveurs MCP, budget. Elle ne se
-    modifie jamais : un changement publie la suivante."""
+    """An agent version: instructions, model, limits, skills, MCP servers, budget. It is never
+    modified: a change publishes the next one."""
 
     __tablename__ = "agent_versions"
     __table_args__ = (UniqueConstraint("agent_id", "version", name="uq_agent_versions_agent_version"),)
@@ -1333,7 +1333,7 @@ class AgentSessionEvent(Base, PkMixin):
 
 
 class ProjectAgent(Base, PkMixin, TimestampMixin):
-    """L'épingle d'un projet sur une version d'agent, et ses surcharges — qui ne font que resserrer."""
+    """A project's pin on an agent version, and its overrides, which can only narrow."""
 
     __tablename__ = "project_agents"
     __table_args__ = (
@@ -1400,12 +1400,12 @@ class AgentRelease(Base, PkMixin, TimestampMixin):
     done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-# ───────────────────────────── la bibliothèque de skills (ADR 0033) ─────────────────────────────
+# ───────────────────────────── the skill library (ADR 0033) ─────────────────────────────
 
 
 class Skill(Base, PkMixin, TimestampMixin):
-    """Une skill de l'organisation : un dossier (`SKILL.md` et ses fichiers) qu'un agent porte. Ce
-    qu'elle contient vit dans ses versions, immuables."""
+    """A skill of the organisation: a folder (`SKILL.md` and its files) that an agent carries. What
+    it contains lives in its versions, which are immutable."""
 
     __tablename__ = "skills"
     __table_args__ = (UniqueConstraint("org_id", "slug", name="uq_skills_org_slug"),)
@@ -1445,9 +1445,9 @@ class SkillVersion(Base, PkMixin, TimestampMixin):
 
 
 class AgentCredential(Base, PkMixin, TimestampMixin):
-    """Ce qui fait d'un client de la porte MCP un agent externe (ADR 0033) : un jeton `mcp:*` ou un
-    client OAuth (`azp`), rattaché à un agent `external`. Ses droits sont alors ceux de l'humain,
-    intersectés avec ceux de la version de l'agent ; sa révocation se relit à chaque appel."""
+    """What makes a client of the MCP door an external agent (ADR 0033): an `mcp:*` token or an
+    OAuth client (`azp`), attached to an `external` agent. Its rights are then those of the human,
+    intersected with those of the agent version; its revocation is re-read on every call."""
 
     __tablename__ = "agent_credentials"
     __table_args__ = (
@@ -1795,19 +1795,22 @@ ALL_TABLES = [
 ]
 
 
-def objet_du_coeur(objet: Any, nom: str | None, type_: str, reflete: bool, compare_a: Any) -> bool:
-    """Filtre `include_object` d'Alembic : les migrations du cœur ne décrivent que SES tables.
+def is_core_object(obj: Any, name: str | None, type_: str, reflected: bool, compare_to: Any) -> bool:
+    """Alembic's `include_object` filter: the core migrations describe only THEIR tables.
 
-    Un greffon inscrit ses modèles dans le même `Base` — c'est ce qui les met dans `create_all()` —
-    et crée ses tables par sa propre branche de migrations (`choregos.migrations`). Sans ce filtre,
-    une autogénération lancée avec un greffon installé ferait entrer ses tables dans une migration
-    du cœur, et la comparaison modèles/migrations du cœur les verrait comme manquantes. Une table
-    est au cœur si sa classe est définie dans `choregos_api` ; celles d'un greffon ne le sont pas.
+    An extension registers its models in the same `Base`, which is what puts them in `create_all()`,
+    and creates its tables through its own migration branch (`choregos.migrations`). Without this
+    filter, an autogeneration run with an extension installed would put its tables in a core
+    migration, and the models/migrations comparison of the core would see them as missing. A table
+    belongs to the core if its class is defined in `choregos_api`; an extension's tables do not.
     """
     if type_ != "table":
         return True
-    return nom in {
+    return name in {
         mapper.class_.__tablename__
         for mapper in Base.registry.mappers
         if mapper.class_.__module__.startswith("choregos_api.")
     }
+
+
+objet_du_coeur = is_core_object  # lang: fr-ok alias:internal
