@@ -109,6 +109,9 @@ export function workflowHue(name: string): Hue {
   return ((fnv1a(name.trim().toLowerCase()) % HUES.length) + 1) as Hue;
 }
 
+/** The hue of any name the console shows as an identity — a project as much as a workflow (S55-10). */
+export const hueOf = workflowHue;
+
 /** The classes of a workflow's hue. */
 export function workflowHueClasses(name: string): HueClasses {
   return HUE_CLASSES[workflowHue(name)];
