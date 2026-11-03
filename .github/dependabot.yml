@@ -56,3 +56,12 @@ updates:
     groups:
       base-images:
         patterns: ["*"]
+    # The bases follow the LTS lines (`docker/README.md`). `python` follows `requires-python`
+    # (3.12 only) and `uv.lock`: a newer interpreter in the image breaks `uv sync --frozen`, so the
+    # move is a workspace change, not a tag bump. `node` stays on 24: 25 is Current, never LTS, and
+    # dropped corepack, which `web.Dockerfile` uses for pnpm; 26 needs pnpm installed another way.
+    ignore:
+      - dependency-name: "python"
+        versions: [">=3.13"]
+      - dependency-name: "node"
+        versions: [">=25"]
