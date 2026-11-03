@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Findings : liste et triage (ticket, doublon, ignoré, agent-ready, faux positif)."""
+"""Findings: list and triage (ticket, duplicate, ignored, agent-ready, false positive)."""
 
 from __future__ import annotations
 
@@ -75,7 +75,7 @@ async def list_findings(
 
 @router.post("/findings/{id}/actions", response_model=FindingDto, operation_id="postFindingAction")
 async def act(id: str, body: FindingAction, session: Db, principal: Me) -> FindingDto:
-    """Le triage humain : créer le ticket, marquer doublon, ignorer, rendre agent-ready."""
+    """Human triage: create the ticket, mark as duplicate, ignore, make agent-ready."""
     row = await session.get(Finding, id)
     if row is None:
         raise not_found("Finding", id)

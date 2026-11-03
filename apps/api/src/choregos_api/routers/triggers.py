@@ -25,7 +25,7 @@ from ..audit import record
 from ..config import get_settings
 from ..db.models import Organization, Project
 from ..db.org_aliases import organisation_by_slug_or_alias
-from ..deps import Db, DbPlateforme, ProjectCtx
+from ..deps import Db, PlatformDb, ProjectCtx
 from ..errors import PROBLEM_JSON, not_found, unauthorized
 from ..rbac import SYSTEM, Permission
 from ..schemas import TriggerAck, TriggerDto, TriggerTokenDto
@@ -188,7 +188,7 @@ async def trigger_webhook(
     project: Slug,
     name: Name,
     request: Request,
-    session: DbPlateforme,
+    session: PlatformDb,
     authorization: Annotated[str, Header()] = "",
     x_choregos_token: Annotated[str, Header()] = "",
     idempotency_key: Annotated[str, Header()] = "",

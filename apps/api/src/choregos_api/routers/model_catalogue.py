@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
 from ..db.models import ModelCatalogueRow, Organization
-from ..deps import Db, Me, exiger_admin_de_plateforme
+from ..deps import Db, Me, require_platform_admin
 from ..errors import ApiError, conflict, forbidden, not_found, unprocessable
 from ..rbac import Permission
 from ..schemas.definitions import (
@@ -126,7 +126,7 @@ async def _gateway_info(
 
 async def _platform_admin(session: AsyncSession, principal: Me) -> bool:
     try:
-        await exiger_admin_de_plateforme(session, principal)
+        await require_platform_admin(session, principal)
     except ApiError:
         return False
     return True

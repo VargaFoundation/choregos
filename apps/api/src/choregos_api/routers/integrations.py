@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Où connecter un client MCP à cette plateforme (ADR 0030) : ce que la page Integrations affiche."""
+"""Where to connect an MCP client to this platform (ADR 0030): what the Integrations page shows."""
 
 from __future__ import annotations
 
@@ -16,18 +16,18 @@ router = APIRouter(tags=["session"])
 
 @router.get("/integrations", response_model=IntegrationsDto, operation_id="getIntegrations")
 async def integrations(settings: Config, principal: Me) -> IntegrationsDto:
-    """L'URL de la porte se déduit de l'URL publique : la console et `/mcp` partagent l'hôte.
+    """The door URL is derived from the public URL: the console and `/mcp` share the host.
 
-    Quand la porte accepte OAuth, la page dit où se connecter et avec quel client : avant, `oauth`
-    valait `enabled: false` quoi que dise le déploiement, et la page ne proposait que des jetons."""
+    When the door accepts OAuth, the page says where to sign in and with which client: before, `oauth`
+    was `enabled: false` whatever the deployment said, and the page only offered tokens."""
     oauth = OAuthDto(enabled=False)
     if settings.mcp_oauth_enabled:
         oauth = OAuthDto(
             enabled=True,
             authorization_server=emetteur(settings),
             clients={
-                nom: OAuthClientDto(client_id=client.client_id, callback_port=client.callback_port)
-                for nom, client in sorted(settings.mcp_oauth_clients.items())
+                name: OAuthClientDto(client_id=client.client_id, callback_port=client.callback_port)
+                for name, client in sorted(settings.mcp_oauth_clients.items())
             },
         )
     return IntegrationsDto(
