@@ -177,7 +177,7 @@ DecisionQuestion = Annotated[YesNoQuestion | ChoiceQuestion | ScoreQuestion, Fie
 
 
 class DecisionActor(Strict):
-    """A decision step (ADR 0120): a decision model answers typed questions about the state the
+    """A decision step (ADR 0121): a decision model answers typed questions about the state the
     step names, through the project's gateway (`/v1/systemone`), in the orchestrator.
 
     A verdict of one word — finished? which team? risky? — does not need a pod, a sandbox and a model

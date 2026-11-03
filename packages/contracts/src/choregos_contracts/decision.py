@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""A decision's record (schemas/decision-record.schema.json, ADR 0120).
+"""A decision's record (schemas/decision-record.schema.json, ADR 0121).
 
 A decision model returns a probability with each answer, and a vendor's word that it is calibrated is
 not a measure: calibration is a property of a population, and the population that matters is the

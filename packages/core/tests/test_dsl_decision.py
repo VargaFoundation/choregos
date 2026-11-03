@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""A decision step in the DSL (ADR 0120): recognised by the engine, refused until it runs (S52-04)."""
+"""A decision step in the DSL (ADR 0121): recognised by the engine, refused until it runs (S52-04)."""
 
 from __future__ import annotations
 

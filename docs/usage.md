@@ -930,7 +930,7 @@ the `*agent` wildcard treat a job like an agent step. A job reaches the outside 
 connector operations its actor names, `tools: [{connector: marketdata, tools: [get_bars]}]`, called
 through the internal API with that token; a job that names none sees no tool.
 
-A **decision** step ([ADR 0120](adr/0120-a-decision-is-a-step-recorded-and-measured.md)) asks a
+A **decision** step ([ADR 0121](adr/0121-a-decision-is-a-step-recorded-and-measured.md)) asks a
 decision model typed questions about what the step names, and nothing else:
 
 ```yaml

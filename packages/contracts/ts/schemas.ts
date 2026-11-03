@@ -84,7 +84,7 @@ export type DecisionRecordOutcome = {
   observed_at?: string | null;
 };
 
-/** One answered question of a decision (ADR 0120): what was decided, with which probability, by which model, which transition followed, and what was observed afterwards. Calibration is measured from these records, never declared. */
+/** One answered question of a decision (ADR 0121): what was decided, with which probability, by which model, which transition followed, and what was observed afterwards. Calibration is measured from these records, never declared. */
 export type DecisionRecord = {
   run_id: string;
   work_item: string;
@@ -1352,7 +1352,7 @@ export type WorkflowOutputCondition = string | number | boolean | Array<string |
   lte?: number;
 };
 
-/** A decision step (ADR 0120): a decision model answers typed questions about the state the step names, through the project's gateway, in the orchestrator — no pod, no agent loop. Each question writes two outputs, `<name>` (the answer) and `<name>_confidence` (its probability, 0 to 1), that `when` reads. */
+/** A decision step (ADR 0121): a decision model answers typed questions about the state the step names, through the project's gateway, in the orchestrator — no pod, no agent loop. Each question writes two outputs, `<name>` (the answer) and `<name>_confidence` (its probability, 0 to 1), that `when` reads. */
 export type WorkflowDecisionActor = {
   type: "decision";
   role: string;

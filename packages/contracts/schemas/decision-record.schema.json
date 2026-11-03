@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://choregos.dev/schemas/decision-record.schema.json",
   "title": "DecisionRecord",
-  "description": "One answered question of a decision (ADR 0120): what was decided, with which probability, by which model, which transition followed, and what was observed afterwards. Calibration is measured from these records, never declared.",
+  "description": "One answered question of a decision (ADR 0121): what was decided, with which probability, by which model, which transition followed, and what was observed afterwards. Calibration is measured from these records, never declared.",
   "type": "object",
   "required": [
     "run_id",
