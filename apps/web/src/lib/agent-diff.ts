@@ -2,6 +2,7 @@
 import { describe as describeBinding, effectiveBindings, labelOf, type Binding } from "@/lib/memories";
 import { toolsLabel } from "@/lib/mcp-tools";
 import type { AgentSpec } from "@/lib/types";
+import { WORKSPACE_LABELS, effectiveWorkspace, type Workspace } from "@/lib/workspace";
 
 /**
  * The difference between two specs, field by field (S40-12, ADR 0076). Pure: the console has both specs
@@ -40,7 +41,7 @@ export const GROUP_LABELS: Record<ChangeGroup, string> = {
 };
 export const GROUP_ORDER: ChangeGroup[] = ["instructions", "model", "capabilities", "limits", "evals", "other"];
 
-const KNOWN = new Set(["instructions", "model", "backend", "limits", "budget", "skills", "mcp_servers", "knowledge", "memory", "memories", "evals"]);
+const KNOWN = new Set(["instructions", "model", "backend", "limits", "budget", "skills", "mcp_servers", "knowledge", "memory", "memories", "evals", "workspace"]);
 
 /** A spec with absent, null and default values made the same, so none of them shows as a change. */
 export function normalizeSpec(spec: AgentSpec | null | undefined): Record<string, unknown> {
@@ -62,6 +63,8 @@ export function normalizeSpec(spec: AgentSpec | null | undefined): Record<string
   // `memories`, or what the legacy `memory` means: a version published either way reads the same (S40-11).
   out.memories = effectiveBindings(s);
   out.evals = (s.evals ?? []).filter((c) => c.name?.trim());
+  // What a run gets: an absent `workspace` and `write` read the same (S51-03).
+  out.workspace = effectiveWorkspace(s);
   return out;
 }
 
@@ -173,6 +176,7 @@ export function diffSpecs(before: AgentSpec | null | undefined, after: AgentSpec
   }
   scalar(out, "model", "model", "Model", a.model, b.model, "the project's profile");
   scalar(out, "model", "backend", "Backend", a.backend, b.backend, "the project's backend");
+  scalar(out, "capabilities", "workspace", "Workspace", a.workspace, b.workspace, "write", (v) => WORKSPACE_LABELS[v as Workspace]);
   scalar(out, "limits", "limits.max_turns", "Max turns", a.limits.max_turns, b.limits.max_turns, "the role's default");
   scalar(out, "limits", "limits.max_minutes", "Max minutes", a.limits.max_minutes, b.limits.max_minutes, "the role's default");
   const usd = (v: unknown) => `$${v}`;

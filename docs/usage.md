@@ -1370,6 +1370,24 @@ run's `StageInput` carries the resolved list (`memories`) and the legacy equival
 (`memory_scope`); the memory MCP server — which serves the project's shared memory only — is handed to a
 run whose bindings are exactly that.
 
+A version also says **which workspace** its runs need ([ADR 0119](adr/0119-an-agent-declares-the-workspace-it-needs.md)),
+in `"workspace"`. The repository itself is never the agent's: it is the project's (`config.repo`),
+and a project without one gives no repository whatever the agent says.
+
+| `workspace` | what a run gets |
+| :-- | :-- |
+| `none` | nothing cloned: an empty directory with a local git, nothing pushed; the repository's host is **not** on the run's network (an agent naming it in `network.domains` must find it in the project's allowlist, or the run is refused before it starts) |
+| `read` | the repository cloned, and a write scope of `.choregos/outputs/**` only: a write to any repository file is refused and reverted, nothing is committed or pushed, and `request_scope_change` is always denied |
+| `write` | today's run: the repository cloned, the work item's scope (`**` when it has none) |
+| absent | `write`; the field is left out of the stored spec, so a version published before it keeps its digest |
+
+An analysis agent that only reads the ticket declares `none`; a reviewer that reads the code,
+`read`. A remote (`a2a`) agent gets no workspace and refuses the field (`422`); a hosted agent says it
+in `runtime.workspace` (see [Hosted agents](hosted-agents.md)), and a top-level `workspace` that
+differs is a `422`. On a run that never cloned, the diff guarantees read an empty diff when the work
+branch does not exist (`diff_size_max files: 0` passes). The console shows the workspace on the
+agent's definition (Capabilities) and edits it in the builder's Workspace section.
+
 A project **pins** a version and may only **tighten** it — a lower budget or limit, fewer tools;
 an override that widens is refused (`422`). A revocation is final.
 

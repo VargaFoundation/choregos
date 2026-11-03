@@ -1096,6 +1096,8 @@ export type AgentSpec = {
   /** The memories a run reads and writes (S40-11, ADR 0075), in precedence order (earlier wins). At most 8, no duplicates, at most one `write` (the target of the run's lessons, findings and proposals; a global target only ever receives proposals). Absent means: derive from `memory`. Sent together with a non-default `memory` it is a 422. */
   memories?: Array<AgentMemoryBinding> | null;
   network?: AgentNetwork;
+  /** The workspace a run gets (S51-03, ADR 0119); the repository is the project's. `none`: nothing is cloned and the repository's host is not on the run's network. `read`: the repository is cloned and no file of it may be written (only the step's deliverables in `.choregos/outputs/`). `write`: today's run. Absent (left out of the stored spec, so no digest moves): `write`, or the `hosted` runtime's `workspace`. Refused with an `a2a` runtime, and with a `hosted` one when it differs from `runtime.workspace`. */
+  workspace?: "none" | "read" | "write" | null;
 };
 
 /** A coding agent that speaks ACP (ADR 0002), one of the backends the runner ships. */
