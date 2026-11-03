@@ -8,7 +8,7 @@ import { Glossaire } from "@/components/glossaire";
 import { GitImport, RiskBadge } from "@/components/skills/gate";
 import { SkillTabs } from "@/components/skills/onglets";
 import { Card, Empty, ErrorNote } from "@/components/ui";
-import { OrgPageHeader } from "@/components/coquille/org-page-header";
+import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ProcedurePanel } from "@/components/procedures/procedure-panel";
 import { RemoteAgentForm } from "@/components/remote/remote-agent-form";
 import { Breadcrumbs, Empty } from "@/components/ui";
-import { OrgPageHeader } from "@/components/coquille/org-page-header";
+import { OrgPageHeader } from "@/components/org-page-header";
 import { hostOf } from "@/lib/procedures";
 import { useSession } from "@/lib/session";
 

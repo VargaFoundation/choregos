@@ -7,7 +7,7 @@ import { ClientsMcp } from "@/components/agents/clients-mcp";
 import { estUnClientMcp } from "@/components/agents/registre";
 import { Glossaire } from "@/components/glossaire";
 import { Empty } from "@/components/ui";
-import { OrgPageHeader } from "@/components/coquille/org-page-header";
+import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
 import { estClient } from "@/lib/integrations";
 import { useSession } from "@/lib/session";

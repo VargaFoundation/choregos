@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { Confirmation } from "@/components/geste-confirme";
 import { Alert, Badge, Button, Card, Code, Empty, ErrorNote, EtatDeLecture, Select } from "@/components/ui";
-import { OrgPageHeader } from "@/components/coquille/org-page-header";
+import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
 import {
   admissibleVersions,

@@ -8,7 +8,7 @@ import { GrapheDesCouts } from "@/components/graphe-des-couts";
 import { BreakdownCard, csvUrl, fetchReport, reportKey, type Scope } from "@/components/spend/breakdown";
 import { MonthPanel } from "@/components/spend/month";
 import { Card, Empty, ErrorNote, EtatDeLecture, Select } from "@/components/ui";
-import { OrgPageHeader } from "@/components/coquille/org-page-header";
+import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { type Currency, money, monthStart } from "@/lib/spend";

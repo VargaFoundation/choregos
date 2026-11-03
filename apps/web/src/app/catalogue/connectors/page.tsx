@@ -10,7 +10,7 @@ import { EnablementDrawer } from "@/components/catalogue/enablement-drawer";
 import { CatalogueFacets } from "@/components/catalogue/facets";
 import { ConnectorIcon } from "@/components/connector-icon";
 import { Badge, Button, EtatDeLecture } from "@/components/ui";
-import { OrgPageHeader } from "@/components/coquille/org-page-header";
+import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
 import { NO_FILTERS, type CatalogueFilters } from "@/lib/catalogue";
 import { filterConnectorEntries } from "@/lib/connector-catalogue";

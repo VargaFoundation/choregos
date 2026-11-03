@@ -8,7 +8,7 @@ import { hasReleaseTrain } from "@/lib/release-train";
 import { useSession } from "@/lib/session";
 import { eur, percent, relative } from "@/lib/format";
 import { buttonClasses, Card, Empty, ErrorNote, Stat, StateBadge } from "@/components/ui";
-import { OrgPageHeader } from "@/components/coquille/org-page-header";
+import { OrgPageHeader } from "@/components/org-page-header";
 import { Activity, FolderKanban, Wallet } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { HUE_CLASSES, hueOf } from "@/lib/workflow-hue";

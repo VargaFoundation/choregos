@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 import { Button, Card, Drawer, Empty, ErrorNote, Input, Select } from "@/components/ui";
-import { OrgPageHeader } from "@/components/coquille/org-page-header";
+import { OrgPageHeader } from "@/components/org-page-header";
 import { MemoryAbReportCard } from "@/components/memory-ab-report";
 import { OrganisationMemoryStore } from "@/components/memory-store";
 import { api } from "@/lib/api";
