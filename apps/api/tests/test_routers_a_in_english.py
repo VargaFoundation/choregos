@@ -70,14 +70,17 @@ def _checker() -> ModuleType:
 def test_owned_routers_have_no_french() -> None:
     checker = _checker()
     try:
-        found = checker.scan_tree([f"{SRC}{name}.py" for name in OWNED])
+        # A router is a module or, once split (`knowledge`, #1271), a package: scan both forms.
+        found = checker.scan_tree([form for name in OWNED for form in (f"{SRC}{name}.py", f"{SRC}{name}/")])
     except RuntimeError:  # an exported tree without .git: nothing to scan
         pytest.skip("not a git checkout")
     assert [str(f) for f in found] == []
 
 
 def test_every_owned_router_exists() -> None:
-    present = {path.stem for path in (ROOT / SRC).glob("*.py")}
+    routers = ROOT / SRC
+    present = {path.stem for path in routers.glob("*.py")}
+    present |= {path.parent.name for path in routers.glob("*/__init__.py")}
     assert set(OWNED) <= present, sorted(set(OWNED) - present)
 
 
