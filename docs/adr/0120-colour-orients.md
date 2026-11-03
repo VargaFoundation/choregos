@@ -27,10 +27,11 @@ it says which workflow, which part of the console, and what kind of message, bef
 1. **The accent stays one, and stays for actions**: buttons, links, focus and selection are iris and
    nothing else. No categorical colour is used for something that can be clicked *because* of its
    colour.
-2. **A categorical palette of eight hues** — indigo, teal, amber, crimson, cyan, grass, orange,
+2. **A categorical palette of eight hues** — indigo, teal, amber, pink, cyan, grass, orange,
    violet, from Radix Colors — each with the four roles a state already has (`solid`, `soft`, `line`,
    `ink`): `--choregos-cat-{1..8}-*`. It colours **identity**, never status: a workflow, a section of
-   the navigation, a group of settings.
+   the navigation, a group of settings. No hue of the palette is red: red means a failure, and a
+   workflow should not look failed because of its name.
 3. **A workflow's hue is computed from its name** (`workflowHue(name)`, a stable hash), so the same
    workflow has the same colour on the board, a ticket, the workflow list and the map — with no field
    in the workflow contract and nothing to configure.
