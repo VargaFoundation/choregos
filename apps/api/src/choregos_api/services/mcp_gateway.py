@@ -32,10 +32,10 @@ from choregos_core.redaction import remember_secret
 from choregos_core.secrets import SecretIntrouvable
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db.models import Organization
-from ..errors import unprocessable
+from ..db.models import Organization, OrgConnector
+from ..errors import conflict, unprocessable
 from ..schemas.mcp_gateway import McpGateway, McpGatewayAuth, McpGatewayPut, McpGatewayState
-from ..secret_store import SecretStore, SecretStoreUnavailable, get_secret_store
+from ..secret_store import SecretStore, SecretStoreUnavailable, get_secret_store, resolved_configuration
 from .egress import Target, targets_of_urls
 from .mcp_gateway_identity import (
     CallIdentity,
@@ -45,7 +45,7 @@ from .mcp_gateway_identity import (
     mint_assertion,
     signing_key,
 )
-from .platform_network import host_of, with_identity
+from .platform_network import connector_host, host_of, with_identity
 
 SETTINGS_KEY = "mcp_gateway"
 #: Where the credential is sealed (ADR 0058). One per organisation, since there is one gateway.
@@ -72,6 +72,10 @@ class GatewayNotConfigured(GatewayRefusal):
 
 class GatewayCredentialMissing(GatewayRefusal):
     code: ClassVar[str] = "gateway_credential_missing"
+
+
+class GatewayRequired(GatewayRefusal):
+    code: ClassVar[str] = "gateway_required"
 
 
 @dataclass(frozen=True)
@@ -446,6 +450,97 @@ async def client_for_server(
     )
 
 
+@dataclass(frozen=True)
+class Route:
+    """Where a connector's calls go: the host the network bounds judge, and whether it is the gateway's."""
+
+    host: str | None
+    via_gateway: bool
+
+
+async def route_of(session: AsyncSession, instance: OrgConnector) -> Route:
+    """How an organisation connector is reached, decided BEFORE anything leaves (ADR 0105).
+
+    - an `mcp-gateway` connector needs a gateway that is set and not `off`: `GatewayNotConfigured`;
+    - in mode `required`, a direct `mcp` connector is not called: `GatewayRequired`. A plugin's server is
+      exempt in every mode (ADR 0096): the platform deployed it, the organisation did not declare it;
+    - any other connector is reached as it always was.
+    Every caller turns a `GatewayRefusal` into its own refusal; none creates an action or a cost line."""
+    organisation = await session.get(Organization, instance.org_id)
+    setting = stored(organisation)
+    org_name = organisation.slug if organisation is not None else instance.org_id
+    if instance.type == GATEWAY_TYPE:
+        if setting is None or setting.mode == "off" or organisation is None:
+            raise GatewayNotConfigured(
+                f"`{instance.name}` goes through the MCP gateway of {org_name}, which has none (or it is "
+                "off): an administrator sets it on the Administration page"
+            )
+        return Route(gateway_host(organisation), True)
+    if (
+        instance.kind == "mcp"
+        and instance.type == "mcp"
+        and instance.plugin_server is None
+        and setting is not None
+        and setting.mode == "required"
+    ):
+        raise GatewayRequired(
+            f"{org_name} reaches its MCP servers only through its MCP gateway: the direct connector "
+            f"`{instance.name}` is not called; declare it as an mcp-gateway connector"
+        )
+    return Route(connector_host(instance.config), False)
+
+
+async def connector_client(
+    session: AsyncSession,
+    instance: OrgConnector,
+    identity: Callable[[], Awaitable[CallIdentity]],
+) -> Any:
+    """The client every organisation connector is called with (broker, governed writes, discovery).
+
+    `route_of` decides first and raises `GatewayRefusal`. A gateway connector gets the gateway's address
+    and headers, signed with `identity` (computed only here, so a direct call never pays for it); the
+    connector's own `timeout_s` wins over the gateway's. Any other connector, a plugin's server included
+    (ADR 0096), is built by `plugin_servers.connector_client` exactly as before."""
+    from . import plugin_servers
+
+    route = await route_of(session, instance)
+    if not route.via_gateway:
+        return await plugin_servers.connector_client(session, instance)
+    organisation = await session.get(Organization, instance.org_id)
+    assert organisation is not None
+    config = await with_identity(
+        session,
+        instance.org_id,
+        await resolved_configuration(
+            session, instance.org_id, instance.kind, instance.type, instance.config, instance.secret_refs
+        ),
+    )
+    injected = await client_config(session, organisation, str(config["server"]), await identity())
+    own = (instance.config or {}).get("timeout_s")
+    config = {**config, **injected, "timeout_s": float(own) if own else injected["timeout_s"]}
+    return build(instance.kind, instance.type, config)
+
+
+async def check_declaration(
+    session: AsyncSession, organisation: Organization, kind: str, type_name: str
+) -> None:
+    """At declaration (the one door, the catalogue install included): mode `required` declares no direct
+    `mcp` connector, and an `mcp-gateway` one needs a gateway that is set and not `off` (ADR 0105)."""
+    setting = stored(organisation)
+    if kind == "mcp" and type_name == "mcp" and setting is not None and setting.mode == "required":
+        raise conflict(
+            f"{organisation.slug} reaches its MCP servers only through its MCP gateway: declare an "
+            "mcp-gateway connector, not a direct one",
+            extra={"code": GatewayRequired.code},
+        )
+    if type_name == GATEWAY_TYPE and (setting is None or setting.mode == "off"):
+        raise conflict(
+            f"{organisation.slug} has no MCP gateway (or it is off): an administrator sets it on the "
+            "Administration page before an mcp-gateway connector is declared",
+            extra={"code": GatewayNotConfigured.code},
+        )
+
+
 async def state_of(
     session: AsyncSession, organisation: Organization, store: SecretStore | None = None
 ) -> McpGatewayState:
@@ -480,15 +575,20 @@ __all__ = [
     "SETTINGS_KEY",
     "GatewayCredentialMissing",
     "GatewayNotConfigured",
+    "GatewayRequired",
     "GatewaySetting",
+    "Route",
+    "check_declaration",
     "check_endpoint",
     "check_token_url",
     "clear_token_cache",
     "client_config",
     "client_for_server",
+    "connector_client",
     "egress_targets",
     "gateway_host",
     "hosts_in_use",
+    "route_of",
     "server_url",
     "set_token_transport",
     "state_of",

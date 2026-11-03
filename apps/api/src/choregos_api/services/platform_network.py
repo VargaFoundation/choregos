@@ -195,11 +195,13 @@ async def enforce_connector_call(
     run_id: str | None = None,
     agent_slug: str | None = None,
     polite: bool = True,
+    host: str | None = None,
     now: datetime | None = None,
 ) -> None:
     """At call: raise `PlatformNetworkRefused` (403) or `PlatformRateLimited` (429) before the
-    connector's server is reached. A connector with no address is not checked."""
-    host = connector_host(instance.config)
+    connector's server is reached. A connector with no address is not checked. `host` is the address
+    the route decided (an `mcp-gateway` connector has none of its own: the gateway's, ADR 0105)."""
+    host = host or connector_host(instance.config)
     if host is None:
         return
     net = await ceiling_network(session, instance.org_id)
