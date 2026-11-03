@@ -726,6 +726,10 @@ def _run_id(plan: StagePlan) -> str:
     return f"{plan.work_item_id}-{plan.transition_id}-{plan.attempt}"
 
 
+#: Why every binding of a run is skipped when the project's policy turns memory off (S51-01).
+MEMORY_DISABLED = "the project's policy disables memory (memory.enabled: false)"
+
+
 @dataclass(slots=True)
 class ResolvedMemories:
     """The memories a run reads and writes, resolved for its project (S40-11, ADR 0075)."""
@@ -758,6 +762,11 @@ async def _memory_bindings(session: Any, bundle: Any, agent: Any) -> ResolvedMem
         if spec is None
         else [Binding(b.scope, b.slug, b.mode) for b in spec.effective_memories()]
     )
+    if not bundle.engine.memory_enabled():
+        # The project's policy is authoritative (S51-01): a run of a project whose policy says
+        # `memory.enabled: false` binds nothing, whatever its agent asks for, so it gets neither a
+        # memory to write nor the memory server. Each binding is journaled as skipped, never fatal.
+        return ResolvedMemories([], [{"memory": b.label, "reason": MEMORY_DISABLED} for b in bindings])
     agent_slug = agent.agent.slug if agent is not None else None
     stores = {
         (store.scope, store.owner_key, store.slug): store
