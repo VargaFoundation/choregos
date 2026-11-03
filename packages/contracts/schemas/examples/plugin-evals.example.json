@@ -10,6 +10,14 @@
       "must_contain": ["author"]
     },
     {
+      "name": "greets-the-reporter",
+      "input": {
+        "title": "Say hello",
+        "fields": {"tracker": {"kind": "jira", "key": "FON-270", "reporter": {"display_name": "Ada Lovelace"}}}
+      },
+      "must_contain": ["author"]
+    },
+    {
       "name": "live-greeting",
       "live": true,
       "expect_status": "done",

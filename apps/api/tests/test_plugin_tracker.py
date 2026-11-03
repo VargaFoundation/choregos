@@ -186,14 +186,24 @@ async def test_tracker_calls_carry_the_token_and_writes_are_audited(
 
 
 @pytest.fixture
-def dispatched(monkeypatch: pytest.MonkeyPatch) -> list[InboundEvent]:
+def trackers() -> list[Any]:
+    """What `_dispatch` was told the tracker says about each dispatched item (S51-04)."""
+    return []
+
+
+@pytest.fixture
+def dispatched(monkeypatch: pytest.MonkeyPatch, trackers: list[Any]) -> list[InboundEvent]:
     from choregos_api.routers import webhooks
 
     seen: list[InboundEvent] = []
 
-    async def capture(session: Any, events: list[InboundEvent], project_of: Any = None) -> int:
+    async def capture(
+        session: Any, events: list[InboundEvent], project_of: Any = None, tracker_of: Any = None
+    ) -> int:
         assert project_of is not None and project_of.slug == "desked"
         seen.extend(events)
+        for event in events:
+            trackers.append(await tracker_of(project_of, event.work_item_key) if tracker_of else None)
         return len(events)
 
     monkeypatch.setattr(webhooks, "_dispatch", capture)
@@ -268,3 +278,32 @@ async def test_the_payload_is_not_trusted_the_item_is_re_read(
     assert event.payload["title"] == "VPN drops" and event.payload["body"] == "The real description."
     assert event.payload["labels"] == [], "nothing of the delivery but the key reaches the workflow"
     assert ("tracker_fetch_item", {"key": "INC0000001"}) in fake.calls
+
+
+async def test_the_server_s_author_and_fields_reach_the_work_item_as_fields_tracker(
+    client: AsyncClient,
+    admin: str,
+    kube: FakeKubernetesApi,
+    dispatched: list[InboundEvent],
+    trackers: list[Any],
+) -> None:
+    """S51-04: the re-read item's `author` and `fields` are what `fields.tracker` is made of, under
+    the server's name; nothing of the delivery's payload is."""
+    fake = await _ready(client, kube)
+    fake.add("INC0000001", "VPN drops")
+    answer = fake._call("tracker_fetch_item", {"key": "INC0000001"})["structuredContent"]
+    answer |= {"author": "Noah Petit", "fields": {"site": {"name": "Lyon"}, "tracker": {"kind": "forged"}}}
+    fake.answers["tracker_fetch_item"] = {"structuredContent": answer}
+    sent = await client.post(HOOK, content=fake.delivery("INC0000001"), headers={"X-Choregos-Secret": SECRET})
+    assert sent.status_code == 202, sent.text
+    assert len(dispatched) == 1
+    assert trackers == [
+        {
+            "kind": "desk",
+            "key": "INC0000001",
+            "reporter": {"account_id": None, "display_name": "Noah Petit", "email": None},
+            "creator": {"account_id": None, "display_name": None, "email": None},
+            "labels": [],
+            "answers": {"site": "Lyon"},
+        }
+    ]

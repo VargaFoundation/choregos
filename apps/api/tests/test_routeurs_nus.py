@@ -705,8 +705,9 @@ async def test_a_project_without_template_or_repository_is_activated_without_a_w
     assert (await client.get(f"/api/v1/projects/{project['id']}")).json()["status"] == "draft"
     done = await client.post(f"/api/v1/projects/{project['id']}/provision", json={})
     assert done.status_code == 202 and done.json()["status"] == "succeeded"
-    assert list(get_temporal().started) == ["reconcile-hr-desk"], (
-        "no GitHub · Tekton · Argo steps for a project with no repository; only its tracker catch-up"
+    assert list(get_temporal().started) == ["reconcile-hr-desk", "mem-hr-desk"], (
+        "no GitHub · Tekton · Argo steps for a project with no repository; only its tracker catch-up "
+        "and its memory loop"
     )
     assert (await client.get(f"/api/v1/projects/{project['id']}")).json()["status"] == "active"
 

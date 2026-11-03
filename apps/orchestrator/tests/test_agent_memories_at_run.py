@@ -428,3 +428,77 @@ async def test_a_renamed_organisation_keeps_its_global_namespaces_at_run_time(se
     namespaces = {m["label"]: m["namespace"] for m in prepared["stage_input"]["memories"]}
     assert namespaces["global:security-lessons"] == SEC
     assert namespaces["global:architecture-decisions"] == ARCH
+
+
+async def _disable_memory(setup: Fixture) -> None:
+    """The project's active policy says `memory: {enabled: false}`."""
+    from choregos_api.db.models import PolicyDef
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    async with session_scope() as session:
+        row = (
+            await session.execute(
+                select(PolicyDef).where(
+                    PolicyDef.project_id == setup.project_id, PolicyDef.is_active.is_(True)
+                )
+            )
+        ).scalar_one()
+        doc = dict(row.json_doc)
+        doc["memory"] = {**dict(doc.get("memory") or {}), "enabled": False}
+        row.json_doc = doc
+
+
+async def test_a_policy_that_disables_memory_wins_over_the_agents_bindings(setup: Fixture) -> None:
+    """S51-01, seen on prod: a project whose policy says `memory: {enabled: false}` ran an agent whose spec
+    says `memory: "project"`, and the run received `memory_scope: "project"`, a shared memory to write and
+    the memory server. The policy is authoritative: no memory, no server, each binding journaled."""
+    from choregos_api.db.models import RunEvent
+    from choregos_api.db.session import session_scope
+    from choregos_orchestrator.activities.stage import MEMORY_DISABLED, prepare_stage
+    from sqlalchemy import select
+
+    await _seed(setup)
+    await _agent(setup, None, slug="fon-access-analyst", memory="project")
+    await _disable_memory(setup)
+    prepared = await prepare_stage(_plan(setup, agent="fon-access-analyst"))
+    stage_input = prepared["stage_input"]
+    assert stage_input["memories"] == [], "a policy without memory binds none"
+    assert stage_input["memory_scope"] == "none"
+    assert "memory" not in stage_input["tools"]["mcp"], "the memory server is not announced either"
+    async with session_scope() as session:
+        events = (
+            (
+                await session.execute(
+                    select(RunEvent.payload).where(
+                        RunEvent.run_id == prepared["run_id"], RunEvent.type == "memory.skipped"
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+    assert events == [{"memory": "project:shared", "reason": MEMORY_DISABLED}]
+
+
+async def test_the_same_agent_gets_its_memory_when_the_policy_enables_it(setup: Fixture) -> None:
+    """The control of the test above: only the policy differs."""
+    from choregos_orchestrator.activities.stage import prepare_stage
+
+    await _seed(setup)
+    await _agent(setup, None, slug="fon-access-analyst", memory="project")
+    prepared = await prepare_stage(_plan(setup, agent="fon-access-analyst"))
+    assert prepared["stage_input"]["memory_scope"] == "project"
+    assert "memory" in prepared["stage_input"]["tools"]["mcp"]
+
+
+async def test_a_policy_that_disables_memory_skips_every_binding_of_a_list(setup: Fixture) -> None:
+    from choregos_orchestrator.activities.stage import prepare_stage
+
+    await _stores(setup)
+    await _seed(setup)
+    await _agent(setup, FULL)
+    await _disable_memory(setup)
+    prepared = await prepare_stage(_plan(setup))
+    assert prepared["stage_input"]["memories"] == []
+    assert prepared["stage_input"]["memory_scope"] == "none"

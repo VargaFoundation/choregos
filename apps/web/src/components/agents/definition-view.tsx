@@ -15,6 +15,7 @@ import { canEdit, currentVersion, previousVersion, productionVersion, sortedVers
 import { relative, usd } from "@/lib/format";
 import { describe, effectiveBindings, writesTo } from "@/lib/memories";
 import type { Agent, AgentSpec, AgentVersion } from "@/lib/types";
+import { workspaceLine } from "@/lib/workspace";
 import { AgentDetailsCard } from "./details";
 import { RestoreDialog } from "./history";
 import { RuntimeRow } from "./runtime-row";
@@ -30,7 +31,7 @@ import { sectionSummaries } from "./spec-summary";
 /** Lines of instructions shown before "Show all". */
 export const INSTRUCTION_LINES = 12;
 
-const KNOWN_FIELDS = new Set(["instructions", "model", "backend", "runtime", "limits", "budget", "skills", "mcp_servers", "knowledge", "memory", "memories", "evals", "network"]);
+const KNOWN_FIELDS = new Set(["instructions", "model", "backend", "runtime", "limits", "budget", "skills", "mcp_servers", "knowledge", "memory", "memories", "evals", "network", "workspace"]);
 
 const here = (slug: string, query: string) => `/agents/${slug}?${query}`;
 
@@ -260,9 +261,15 @@ export function DefinitionView({ org, agent, version }: { org: string; agent: Ag
 
         <Disclosure
           title="Capabilities"
-          summary={`skills ${summaries.skills} · tools ${summaries.tools} · knowledge ${summaries.knowledge} · memory ${summaries.memory}`}
+          summary={`workspace ${summaries.workspace} · skills ${summaries.skills} · tools ${summaries.tools} · knowledge ${summaries.knowledge} · memory ${summaries.memory}`}
         >
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
+            <Row label="Workspace">
+              <span data-testid="agent-workspace-line">{workspaceLine(spec)}</span>
+              <span className="block text-xs text-ink-muted" data-testid="agent-repository-source">
+                The repository comes from the project that runs the agent, never from the agent.
+              </span>
+            </Row>
             <Row label="Skills">
               {(spec.skills ?? []).length === 0
                 ? "None"

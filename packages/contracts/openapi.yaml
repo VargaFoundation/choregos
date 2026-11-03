@@ -980,7 +980,7 @@ paths:
       description: The models an agent may be given for a stage role and a usage; every member may read it.
       parameters:
         - { name: role, in: query, required: false, schema: { type: string } }
-        - { name: usage, in: query, required: false, schema: { type: string, enum: [agent, embed, distill, eval, route], default: agent } }
+        - { name: usage, in: query, required: false, schema: { type: string, enum: [agent, embed, distill, eval, route, decide], default: agent } }
       responses:
         "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/UsableModel" } } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
@@ -1081,6 +1081,53 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ReceivedEventPage" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{id}/triggers:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [work-items]
+      operationId: listTriggers
+      summary: The project's HTTP triggers, their URL, and whether each has a token
+      description: >-
+        The triggers declared under `triggers:` in the project's configuration (S56-01, ADR 0113). Any member reads
+        them; a token is never listed, only whether one exists and when it was minted.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/Trigger" } } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{id}/triggers/{name}/token:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: name, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    post:
+      tags: [work-items]
+      operationId: rotateTriggerToken
+      summary: Mint the trigger's token, shown once; the previous one stops working
+      description: >-
+        Needs `connector:write` on the project: a token is how another system writes into it. Only the token's
+        SHA-256 is kept. Audited as `trigger.token.rotate`.
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/TriggerToken" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{id}/triggers/{name}/fire:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: name, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+      - { name: Idempotency-Key, in: header, required: false, schema: { type: string } }
+    post:
+      tags: [work-items]
+      operationId: fireTrigger
+      summary: Fire the trigger by hand with a payload
+      description: >-
+        The same mapping, workflow and routing as a call from another system, initiated by the person (needs
+        `item:control`). Recorded among the project's received events as `trigger.manual`.
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TriggerAck" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: The project's tracker is external, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "422": { description: The payload lacks the declared key, or the workflow refuses the work item, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
   /work-items/{id}:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -3545,6 +3592,37 @@ paths:
         "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /webhooks/triggers/{org}/{project}/{name}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: project, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,63}$" } }
+      - { name: name, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+      - { name: Idempotency-Key, in: header, required: false, schema: { type: string } }
+      - { name: X-Choregos-Token, in: header, required: false, schema: { type: string } }
+      - { name: X-Choregos-Signature, in: header, required: false, schema: { type: string }, description: "`sha256=<hex or base64>` of the body, for a trigger with `auth: signature` (S56-04)." }
+      - { name: token, in: query, required: false, schema: { type: string }, description: "For a sender that can only set a URL." }
+    post:
+      tags: [webhooks]
+      security: []
+      operationId: triggerWebhook
+      summary: Another system opens a work item through the project's trigger
+      description: >-
+        An HTTP trigger declared in the project's configuration (S56-01, ADR 0113), called with its token
+        (`Authorization: Bearer`, `X-Choregos-Token` or `?token=`). The JSON object is mapped onto a work item (title,
+        description, labels with `trigger:<name>`, fields by JSON pointer) that starts in the trigger's workflow or the
+        one the project's routing picks. A replayed delivery (`Idempotency-Key`, else the body's digest) answers
+        `duplicate`; a trigger with a `key` opens one work item per value and answers `already_open` after. Every call
+        past the token leaves a received event, refused ones included; a payload its `when` does not match is
+        acknowledged as `ignored` (S56-05). A trigger with `auth: signature` takes `X-Choregos-Signature` instead of the
+        token (S56-04). 404 when the trigger does not exist or has no token, 401 on a wrong token or signature.
+      requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+      responses:
+        "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/TriggerAck" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: The project's tracker is external, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "413": { description: The body is over 256 KiB }
+        "422": { description: Not a JSON object, the declared key is missing, or the workflow refuses the work item, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
   /internal/runs/{id}/input:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -5275,6 +5353,11 @@ components:
             - { type: "null" }
           description: "The memories a run reads and writes (S40-11, ADR 0075), in precedence order (earlier wins). At most 8, no duplicates, at most one `write` (the target of the run's lessons, findings and proposals; a global target only ever receives proposals). Absent means: derive from `memory`. Sent together with a non-default `memory` it is a 422."
         network: { $ref: "#/components/schemas/AgentNetwork" }
+        workspace:
+          oneOf:
+            - { type: string, enum: [none, read, write] }
+            - { type: "null" }
+          description: "The workspace a run gets (S51-03, ADR 0119); the repository is the project's. `none`: nothing is cloned and the repository's host is not on the run's network. `read`: the repository is cloned and no file of it may be written (only the step's deliverables in `.choregos/outputs/`). `write`: today's run. Absent (left out of the stored spec, so no digest moves): `write`, or the `hosted` runtime's `workspace`. Refused with an `a2a` runtime, and with a `hosted` one when it differs from `runtime.workspace`."
     AcpRuntime:
       type: object
       description: A coding agent that speaks ACP (ADR 0002), one of the backends the runner ships.
@@ -5815,6 +5898,7 @@ components:
       properties:
         title: { type: string, maxLength: 500 }
         body: { type: string, maxLength: 20000 }
+        fields: { type: object, additionalProperties: true, description: "the work item's fields, rendered as `ticket.fields` (S51-04): `{tracker: {reporter, creator, labels, answers}}` plays a ticket filed from a tracker; absent, `{}`" }
     AgentEvalResult:
       type: object
       required: [name, passed]
@@ -7361,7 +7445,7 @@ components:
         source: { type: string, enum: [gateway, manual] }
         enabled: { type: boolean }
         allowed_roles: { type: array, items: { type: string } }
-        usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval, route] } }
+        usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval, route, decide] } }
         price_override: { oneOf: [{ $ref: "#/components/schemas/PriceOverride" }, { type: "null" }] }
         max_usd_per_minute: { type: [number, "null"], exclusiveMinimum: 0 }
         gateway: { oneOf: [{ $ref: "#/components/schemas/ModelGatewayFacts" }, { type: "null" }] }
@@ -7378,7 +7462,7 @@ components:
         display_name: { type: [string, "null"], maxLength: 200 }
         enabled: { type: boolean, default: true }
         allowed_roles: { type: array, items: { type: string } }
-        usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval, route] }, default: [agent] }
+        usages: { type: array, items: { type: string, enum: [agent, embed, distill, eval, route, decide] }, default: [agent] }
         price_override: { oneOf: [{ $ref: "#/components/schemas/PriceOverride" }, { type: "null" }] }
         max_usd_per_minute: { type: [number, "null"], exclusiveMinimum: 0 }
         notes: { type: string, default: "" }
@@ -7388,7 +7472,7 @@ components:
         display_name: { type: [string, "null"], maxLength: 200 }
         enabled: { type: [boolean, "null"] }
         allowed_roles: { type: [array, "null"], items: { type: string } }
-        usages: { type: [array, "null"], items: { type: string, enum: [agent, embed, distill, eval, route] } }
+        usages: { type: [array, "null"], items: { type: string, enum: [agent, embed, distill, eval, route, decide] } }
         price_override: { oneOf: [{ $ref: "#/components/schemas/PriceOverride" }, { type: "null" }] }
         clear_price_override: { type: boolean, default: false }
         max_usd_per_minute: { type: [number, "null"], exclusiveMinimum: 0 }
@@ -7749,15 +7833,51 @@ components:
       properties:
         id: { type: string }
         received_at: { type: string, format: date-time }
-        source: { type: string, description: "jira, github, gitlab, tekton, argocd, alertmanager, plugin:<plugin>/<server>" }
+        source: { type: string, description: "jira, github, gitlab, tekton, argocd, alertmanager, plugin:<plugin>/<server>, trigger:<name>, schedule:<name>" }
         event_type: { type: string }
         delivery_id: { type: [string, "null"] }
         outcome:
           type: string
-          enum: [created_work_item, started, signalled, boarded, labels_updated, ignored_no_item_key, ignored_not_agent_ready]
+          enum: [created_work_item, started, signalled, boarded, labels_updated, ignored_no_item_key, ignored_not_agent_ready, already_open, refused, ignored]
         work_item_key: { type: [string, "null"] }
         work_item_id: { type: [string, "null"] }
         summary: { type: string, description: "Built from typed fields only: key, label, from → to, PR number, conclusion." }
+    Trigger:
+      type: object
+      description: A project's HTTP trigger (S56-01, ADR 0113); its token is never listed.
+      required: [name, url, title, has_token]
+      properties:
+        name: { type: string }
+        url: { type: string }
+        workflow: { type: [string, "null"] }
+        title: { type: string }
+        key: { type: [string, "null"] }
+        labels: { type: array, items: { type: string }, default: [] }
+        fields: { type: object, additionalProperties: { type: string }, default: {} }
+        when: { type: object, additionalProperties: true, default: {}, description: "A JSON pointer to the text, or texts, a payload must hold (S56-05)." }
+        auth: { type: string, enum: [token, signature], default: token }
+        has_token: { type: boolean, default: false }
+        token_created_at: { type: [string, "null"], format: date-time }
+    TriggerToken:
+      type: object
+      description: A trigger's new token and the signing secret derived from it (S56-04), shown once.
+      required: [name, url, token, signing_secret]
+      properties:
+        name: { type: string }
+        url: { type: string }
+        token: { type: string }
+        signing_secret: { type: string, description: "The HMAC-SHA256 key of `X-Choregos-Signature`; it changes with the token." }
+    TriggerAck:
+      type: object
+      description: What a trigger call did; `outcome` is the received event's, absent on a replayed delivery.
+      required: [accepted]
+      properties:
+        accepted: { type: boolean }
+        duplicate: { type: boolean, default: false }
+        outcome: { type: [string, "null"], enum: [created_work_item, already_open, ignored, null] }
+        work_item_id: { type: [string, "null"] }
+        work_item_key: { type: [string, "null"] }
+        workflow: { type: [string, "null"] }
     ReceivedEventPage:
       type: object
       required: [items, meta]

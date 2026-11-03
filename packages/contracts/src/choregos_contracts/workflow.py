@@ -386,6 +386,14 @@ OutputCondition = ConditionScalar | list[ConditionScalar] | OutputComparison
 OUTPUT_NAME = r"^[a-z][a-z0-9_]{0,62}$"
 
 
+class PullRequestSpec(Strict):
+    """How a transition that opens the work item's pull request opens it (S51-11)."""
+
+    #: Open it as a draft. A pull request already open on the branch keeps its state: a person who
+    #: marked it ready for review is not overruled when the transition is taken again.
+    draft: bool = False
+
+
 class Transition(Strict):
     id: Identifier | None = None
     from_: str = Field(alias="from")
@@ -416,6 +424,8 @@ class Transition(Strict):
     #: it. It used to be the prefix of the target state's name (`pr_`, `merged`): a rename from
     #: the console changed the behaviour without saying so (#175).
     does: Literal["open_pr", "merge_pr"] | None = None
+    #: How the pull request is opened, on a transition that opens it (S51-11): `{draft: true}`.
+    pull_request: PullRequestSpec | None = None
     #: A system transition can open one child work item per element of a list and wait for them
     #: all (S38-12, ADR 0057).
     spawn: SpawnSpec | None = None

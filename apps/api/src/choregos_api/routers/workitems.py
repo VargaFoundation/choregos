@@ -53,7 +53,7 @@ from ..services.artifacts import (
 )
 from ..services.human_groups import decider_group_verdict, group_of_the_step
 from ..services.recus import passages_du_ticket
-from ..services.routage import valider_les_champs
+from ..services.routage import refuse_reserved_fields, valider_les_champs
 from ..temporal import (
     InterpreterNotRunningError,
     deliver_control,
@@ -151,6 +151,8 @@ async def update_work_item(id: str, body: WorkItemUpdate, session: Db, principal
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.ITEM_CONTROL, org_slug, project.slug):
         raise forbidden("changing the fields of a work item needs at least the developer role")
+    # What the tracker says about the ticket stays the tracker's (S51-04): kept, never written here.
+    refuse_reserved_fields(body.fields)
     workflow = workflow_model(await workflow_du_ticket(session, item))
     champs = {k: v for k, v in {**(item.fields or {}), **body.fields}.items() if v is not None}
     valider_les_champs(workflow.metadata.inputs, champs, workflow.metadata.name)
@@ -290,6 +292,7 @@ async def _completer_la_tache(
     if attest and not body.attested:
         raise unprocessable(f"the task asks you to attest: “{attest}”")
     workflow = workflow_model(await workflow_du_ticket(session, item))
+    refuse_reserved_fields(body.values)
     champs = {**(item.fields or {}), **body.values}
     valider_les_champs(workflow.metadata.inputs, champs, workflow.metadata.name)
     item.fields = champs
