@@ -45,7 +45,7 @@ export function BoardSection({
   return (
     <section aria-labelledby={headingId} data-workflow={section.name} className="space-y-2">
       <header className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <Heading as="h3" size="sm" id={headingId}>
+        <Heading as="h2" size="sm" id={headingId}>
           <span data-donnee>{section.name}</span>
         </Heading>
         <span className="font-mono text-xs text-ink-muted">v{section.version ?? "?"}</span>
@@ -131,7 +131,7 @@ function BoardColumn({
     >
       <header className="flex h-8 items-center gap-2 border-b border-line" title={column.state}>
         <Dot tone={tonDEtat(column.state, column.kind)} />
-        <h4 className={cn(LEGENDE, "truncate")}>{column.display}</h4>
+        <h3 className={cn(LEGENDE, "truncate")}>{column.display}</h3>
         <span className="ml-auto rounded-full bg-surface-muted px-1.5 font-mono text-[11px] tabular-nums text-ink-muted">
           {column.items.length}
         </span>
