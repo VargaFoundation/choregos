@@ -11,8 +11,9 @@ import { decisionEdits, decisionProblems, draftOf, type DecisionDraft } from "@/
 import { decisionActorOf, decisionOutputs, describeActor, type WorkflowDecisionActor, type WorkflowDocument } from "@/components/workflows/document";
 import { actorLabel } from "@/components/workflows/panneaux";
 import { StepDetails } from "@/components/workflows/step-details";
+import { workflowThresholds } from "@/components/workflows/decision-calibration";
 import { api } from "@/lib/api";
-import type { Agent, AgentCatalogueEntry, ProcessStep, WorkflowEditResult, WorkflowGraph } from "@/lib/types";
+import type { Agent, AgentCatalogueEntry, ProcessStep, QuestionCalibration, StepCalibration, WorkflowEditResult, WorkflowGraph } from "@/lib/types";
 import { parcoursEnCours } from "@/mocks/parcours";
 
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -26,6 +27,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       editWorkflow: vi.fn(),
       agents: vi.fn(),
       agentCatalogue: vi.fn(),
+      stepCalibration: vi.fn(),
     },
   };
 });
@@ -339,5 +341,166 @@ describe("creating and editing a decision on the map (ADR 0112, ADR 0121)", () =
       ]),
     );
     await waitFor(() => expect(screen.queryByRole("form", { name: "Edit the decision router" })).toBeNull());
+  });
+});
+
+/** `route` measured on 42 observed decisions: 0.70 is the lowest threshold that keeps 90 % of them right. */
+const MEASURED: QuestionCalibration = {
+  question: "route",
+  source: "decision_model",
+  model: "platform/decide",
+  model_version: "laya-0.4.21",
+  count: 57,
+  observed: 42,
+  accuracy: 37 / 42,
+  ece: 0.04,
+  bins: Array.from({ length: 10 }, (_, index) => ({
+    lower: index / 10,
+    upper: (index + 1) / 10,
+    count: index >= 5 ? 8 : 0,
+    mean_probability: index >= 5 ? index / 10 + 0.05 : null,
+    accuracy: index >= 5 ? 0.75 : null,
+  })),
+  thresholds: [
+    { threshold: 0.6, count: 40, coverage: 40 / 42, accuracy: 35 / 40 },
+    { threshold: 0.65, count: 40, coverage: 40 / 42, accuracy: 35 / 40 },
+    { threshold: 0.7, count: 36, coverage: 36 / 42, accuracy: 34 / 36 },
+  ],
+  suggested_threshold: 0.7,
+  suggestion_reason: null,
+};
+/** `urgent` on 12: too few for a suggestion. */
+const TOO_FEW: QuestionCalibration = {
+  question: "urgent",
+  source: "decision_model",
+  model: "platform/decide",
+  model_version: "laya-0.4.21",
+  count: 15,
+  observed: 12,
+  accuracy: 10 / 12,
+  ece: 0.09,
+  bins: [],
+  thresholds: [],
+  suggested_threshold: null,
+  suggestion_reason: "12 observed decision(s): a threshold is suggested from 30 on",
+};
+const calibrationOf = (questions: QuestionCalibration[]): StepCalibration => ({
+  workflow: "support",
+  step: "inbox",
+  target_accuracy: 0.9,
+  min_observed: 30,
+  questions,
+});
+
+function withQueries(content: ReactNode) {
+  return render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{content}</QueryClientProvider>,
+  );
+}
+
+const SOURCE = { project: "support", workflow: "support", thresholds: { route: 0.6 } };
+
+describe("the calibration of a decision step (ADR 0121 §7, S52-06b)", () => {
+  beforeEach(() => vi.mocked(api.stepCalibration).mockReset());
+
+  it("reads the threshold the workflow's `when` sets on each probability, from the exits of the state the decision leads to", () => {
+    const workflow = {
+      ...DOCUMENT,
+      transitions: [
+        { id: "t-route", from: "inbox", to: "review", by: "router" },
+        { id: "t-billing", from: "review", to: "done", by: "owner", when: { route: "billing", route_confidence: { gte: 0.85 } } },
+        { id: "t-tech", from: "review", to: "done", by: "owner", when: { route: "tech", route_confidence: { gt: 0.6 } } },
+        { id: "t-calm", from: "review", to: "done", by: "owner", when: { urgent_confidence: { lte: 0.3 } } },
+        { id: "t-other", from: "inbox", to: "done", by: "owner", when: { urgent_confidence: { gte: 0.5 } } },
+        { id: "t-close", from: "review", to: "done", by: "owner" },
+      ],
+    } as unknown as WorkflowDocument;
+    expect(workflowThresholds(workflow, "review")).toEqual({ route: 0.6 });
+    expect(workflowThresholds(workflow, "inbox")).toEqual({ urgent: 0.5 });
+    expect(workflowThresholds(undefined, "review")).toEqual({});
+  });
+
+  it("shows what the ledger measured, what the workflow's threshold keeps, and says it is below the suggested one", async () => {
+    vi.mocked(api.stepCalibration).mockResolvedValue(calibrationOf([MEASURED, TOO_FEW]));
+    withQueries(<StepDetails step={STEP} stepsById={new Map([[STEP.id, STEP]])} decision={ROUTER} calibration={SOURCE} />);
+    await waitFor(() => expect(screen.getByTestId("decision-calibration")).toBeInTheDocument());
+    expect(api.stepCalibration).toHaveBeenCalledWith("support", "support", "inbox", 0.9);
+
+    const route = screen.getByRole("region", { name: "Calibration of route, answered by platform/decide (laya-0.4.21)" });
+    expect(within(route).getByTestId("calibration-numbers-route")).toHaveTextContent(
+      "42 of 57 decisions observed · 88 % of them right · expected calibration error 0.04",
+    );
+    expect(within(route).getByTestId("suggested-threshold-route")).toHaveTextContent("Suggested threshold for 90 % accuracy: 0.70");
+    expect(within(route).getByTestId("workflow-threshold-route")).toHaveTextContent(
+      "The workflow lets an answer through from route_confidence ≥ 0.60: 95 % of the observed decisions reach it (40), 88 % of them right.",
+    );
+    expect(within(route).getByTestId("threshold-below-route")).toHaveTextContent(
+      "The workflow's threshold, 0.60, is below the suggested 0.70",
+    );
+    const reliability = within(route).getByRole("table", { name: "Reliability of route" });
+    const rows = within(reliability).getAllByRole("row");
+    expect(rows).toHaveLength(11);
+    expect(within(rows[10]!).getAllByRole("cell").map((cell) => cell.textContent)).toEqual(["0.9–1.0", "8", "95 %", "75 %"]);
+    expect(within(rows[1]!).getAllByRole("cell").map((cell) => cell.textContent)).toEqual(["0.0–0.1", "0", "—", "—"]);
+
+    // The question with too few observed decisions: the reason, no suggestion, no comparison.
+    const urgent = screen.getByRole("region", { name: /^Calibration of urgent/ });
+    expect(within(urgent).getByTestId("no-suggestion-urgent")).toHaveTextContent(
+      "No threshold suggested: 12 observed decisions; 30 are needed.",
+    );
+    expect(within(urgent).queryByTestId("suggested-threshold-urgent")).toBeNull();
+    expect(within(urgent).queryByTestId("threshold-below-urgent")).toBeNull();
+    expect(urgent).toHaveTextContent("The workflow's when sets no threshold on urgent_confidence.");
+
+    // Measured: the probability is no longer called a guess.
+    expect(screen.getByTestId("decision-when-t-route")).toHaveTextContent("measured against what happened next");
+    expect(screen.getByTestId("decision-when-t-route")).not.toHaveTextContent("a threshold on it is a guess");
+  });
+
+  it("does not warn when the workflow's threshold is at or above the suggested one", async () => {
+    vi.mocked(api.stepCalibration).mockResolvedValue(calibrationOf([MEASURED]));
+    withQueries(
+      <StepDetails step={STEP} stepsById={new Map()} decision={ROUTER} calibration={{ ...SOURCE, thresholds: { route: 0.7 } }} />,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("workflow-threshold-route")).toHaveTextContent(
+        "≥ 0.70: 86 % of the observed decisions reach it (36), 94 % of them right.",
+      ),
+    );
+    expect(screen.queryByTestId("threshold-below-route")).toBeNull();
+  });
+
+  it("says why there is no suggestion, and keeps the probability a guess, while nothing is observed", async () => {
+    vi.mocked(api.stepCalibration).mockResolvedValue(
+      calibrationOf([{ ...TOO_FEW, count: 4, observed: 0, accuracy: null, ece: null, suggestion_reason: "0 observed decision(s)" }]),
+    );
+    withQueries(<StepDetails step={STEP} stepsById={new Map()} decision={ROUTER} calibration={SOURCE} />);
+    await waitFor(() => expect(screen.getByTestId("no-suggestion-urgent")).toHaveTextContent("0 observed decisions; 30 are needed"));
+    expect(screen.getByTestId("calibration-numbers-urgent")).toHaveTextContent(/^0 of 4 decisions observed$/);
+    expect(screen.queryByRole("table", { name: "Reliability of urgent" })).toBeNull();
+    expect(screen.getByTestId("decision-when-t-route")).toHaveTextContent("a threshold on it is a guess");
+  });
+
+  it("says when no decision is recorded yet", async () => {
+    vi.mocked(api.stepCalibration).mockResolvedValue(calibrationOf([]));
+    withQueries(<StepDetails step={STEP} stepsById={new Map()} decision={ROUTER} calibration={SOURCE} />);
+    await waitFor(() => expect(screen.getByTestId("calibration-empty")).toHaveTextContent("No decision recorded yet"));
+    expect(screen.getByTestId("decision-when-t-route")).toHaveTextContent("a threshold on it is a guess");
+  });
+
+  it("says while it reads, then that the calibration could not be read, and the probability stays a guess", async () => {
+    vi.mocked(api.stepCalibration).mockRejectedValue(new Error("the ledger is unavailable"));
+    withQueries(<StepDetails step={STEP} stepsById={new Map()} decision={ROUTER} calibration={SOURCE} />);
+    expect(screen.getByRole("status")).toHaveTextContent("Reading the calibration…");
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not read the calibration: the ledger is unavailable.");
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(screen.getByTestId("decision-when-t-route")).toHaveTextContent("a threshold on it is a guess");
+    expect(screen.queryByTestId("decision-calibration")).toBeNull();
+  });
+
+  it("shows no calibration for a step that is not a decision", () => {
+    withQueries(<StepDetails step={{ ...STEP, actor_type: "human", actor: "owner" }} stepsById={new Map()} calibration={SOURCE} />);
+    expect(screen.queryByText("Calibration")).toBeNull();
+    expect(api.stepCalibration).not.toHaveBeenCalled();
   });
 });

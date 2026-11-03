@@ -1034,6 +1034,13 @@ time limit, and the `<name>` and `<name>_confidence` outputs a `when` compares. 
 creates one ("A decision") and edits it: the sources are chips checked against the patterns above,
 questions are added and removed with their options or levels, and only the fields that changed are
 written back, as one gesture you can undo (ADR 0112).
+The same card's **Calibration** row reads that route for the step, with a target of 90 %: per
+question, the decisions observed out of those recorded, the accuracy and the expected calibration
+error, the ten reliability bins as a table (what the model said against how often it was right), what
+the threshold your `when` sets on `<name>_confidence` (in the exits of the state the decision leads
+to) keeps and how often those answers were right, and the suggested threshold or why there is none
+("12 observed decisions; 30 are needed"). When your threshold is below the suggested one, it says so.
+Until an outcome is observed the card still calls a threshold on the probability a guess.
 
 The `joiners-leavers` template goes further, with no agent writing anything itself: an agent
 prepares the access plan with its skills, a person from HR validates it, and every write is a

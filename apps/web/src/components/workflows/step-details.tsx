@@ -6,6 +6,7 @@ import { enClair } from "@/components/parcours/modele";
 import { cn } from "@/lib/cn";
 import type { AgentResolution, ArtifactFlow, ProcessStep } from "@/lib/types";
 import { answerWords, DecisionChip, exampleWhen, questionKind } from "@/components/workflows/decision";
+import { DecisionCalibration, ProbabilityNote, type CalibrationSource } from "@/components/workflows/decision-calibration";
 import {
   CONFIDENCE_SUFFIX,
   DEFAULT_DECISION_MODEL,
@@ -97,11 +98,14 @@ export function StepDetails({
   flow,
   stepsById,
   decision,
+  calibration,
   className,
 }: {
   step: ProcessStep;
   /** The decision actor the step names (ADR 0121), read from the workflow: its questions, state and model. */
   decision?: WorkflowDecisionActor;
+  /** Where a decision step's calibration is read (S52-06b); without it, the card says nothing is measured. */
+  calibration?: CalibrationSource;
   /** The answer for `step.agent`; absent while it loads or against an API without the endpoint. */
   resolution?: AgentResolution;
   flow?: ArtifactFlow[];
@@ -254,10 +258,18 @@ export function StepDetails({
             </ul>
             {decision && exampleWhen(decision) && (
               <p className="mt-1 text-ink-muted" data-testid={`decision-when-${step.id}`}>
-                A transition from the next state compares them: <code className="text-ink">{exampleWhen(decision)}</code>. The
-                probability is the model&apos;s own until the platform has measured this step: a threshold on it is a guess.
+                A transition from the next state compares them: <code className="text-ink">{exampleWhen(decision)}</code>.{" "}
+                <ProbabilityNote source={calibration} step={step.from} />
               </p>
             )}
+          </dd>
+        </>
+      )}
+      {decision && calibration && (
+        <>
+          <dt className={LEGENDE}>Calibration</dt>
+          <dd data-testid={`decision-calibration-${step.id}`}>
+            <DecisionCalibration source={calibration} step={step.from} />
           </dd>
         </>
       )}

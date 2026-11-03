@@ -8,6 +8,7 @@ import { useBrouillon } from "@/components/workflows/brouillon";
 import { FormulaireDEtape, PanneauDeTransition } from "@/components/workflows/panneaux";
 import { StepDetails } from "@/components/workflows/step-details";
 import { decisionActorOf } from "@/components/workflows/document";
+import { workflowThresholds } from "@/components/workflows/decision-calibration";
 import { TexteIllisible } from "@/components/workflows/texte-illisible";
 import { useAgentResolution } from "@/components/workflows/use-agent-resolution";
 import { timingOfStep } from "@/components/workflows/timing";
@@ -19,7 +20,7 @@ import { timingOfStep } from "@/components/workflows/timing";
  */
 export default function ProcessPage() {
   const brouillon = useBrouillon();
-  const { slug } = useParams<{ slug: string }>();
+  const { slug, name } = useParams<{ slug: string; name: string }>();
   const resolutions = useAgentResolution(slug, brouillon.process);
   const [ouverte, setOuverte] = useState<string | null>(null);
   if (brouillon.definition.error)
@@ -70,6 +71,7 @@ export default function ProcessPage() {
                   flow={brouillon.graph?.artifacts}
                   stepsById={parId}
                   decision={decisionActorOf(brouillon.document, etape.actor)}
+                  calibration={{ project: slug, workflow: name, thresholds: workflowThresholds(brouillon.document, etape.to) }}
                 />
                 <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs">
                   <dt className="text-ink-muted">From → to</dt>

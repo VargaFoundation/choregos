@@ -22,6 +22,7 @@ import { FormulaireDEtape, PanneauDEtat, PanneauDeTransition } from "@/component
 import { ArtifactFlowCard, type Highlight } from "@/components/workflows/artifact-flow";
 import { StepDetails } from "@/components/workflows/step-details";
 import { decisionActorOf } from "@/components/workflows/document";
+import { workflowThresholds } from "@/components/workflows/decision-calibration";
 import { TexteIllisible } from "@/components/workflows/texte-illisible";
 import { ActorsPanel } from "@/components/workflows/actors-panel";
 import { WorkflowSettingsPanel } from "@/components/workflows/workflow-settings";
@@ -151,6 +152,7 @@ export default function MapPage() {
               flow={graph.artifacts}
               stepsById={new Map(etapes.map((e) => [e.id, e]))}
               decision={decisionActorOf(brouillon.document, etapeChoisie.actor)}
+              calibration={{ project: slug, workflow: name, thresholds: workflowThresholds(brouillon.document, etapeChoisie.to) }}
             />
             {etapeChoisie.actor_type === "human" && etapeChoisie.group && (
               <GroupMembersLine projectSlug={slug} group={etapeChoisie.group} />
