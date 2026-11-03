@@ -49,6 +49,35 @@ names who becomes `org_admin`; everyone else is `developer`. The API refuses dev
 login in `staging` and `prod`. The front shows the development form when
 `NEXT_PUBLIC_DEV_LOGIN=true`.
 
+## An MCP gateway in the local install (ADR 0097)
+
+To try the organisation's MCP gateway (ADR 0105) without a real one, add the profile:
+
+```bash
+docker compose --profile mcp-gateway up
+```
+
+It starts the demo fakes server (`demo-fakes`) and a fake MCP gateway (`mcp-gateway`) in front of it.
+Neither publishes a port on the host; the API reaches the gateway by name (the compose lists
+`mcp-gateway` in `CHOREGOS_MCP_GATEWAY_INTERNAL_HOSTS`). Without the profile, `docker compose up` is
+unchanged.
+
+In the console, signed in as an administrator:
+
+1. Administration, MCP gateway: endpoint `http://mcp-gateway:8091/{server}/mcp`, bearer token
+   `local-gateway-only`, allow the host `mcp-gateway`.
+2. Connectors: add a connector of type "MCP server through the organisation's MCP gateway", server
+   `supplier` (also `mdm`, `shipping`, `access_control`), then Discover.
+
+The upstream token (`local-upstream-only`) lives only in the gateway container: it never enters
+Choregos, which holds the gateway credential alone.
+
+For `jwt_assertion`, set `CHOREGOS_FAKE_GATEWAY_AUTH=jwt_assertion`,
+`CHOREGOS_FAKE_GATEWAY_JWKS_URL=http://api:8000/api/v1/orgs/demo/mcp-gateway/jwks.json` and
+`CHOREGOS_FAKE_GATEWAY_ISSUER=http://localhost:3000/api/v1/orgs/demo/mcp-gateway` on `mcp-gateway`
+(the issuer stays the public URL, which the gateway container cannot fetch: hence the explicit JWKS
+URL on the internal network).
+
 ## Development cluster
 
 ```bash

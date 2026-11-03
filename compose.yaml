@@ -8,6 +8,7 @@
 # server (on the same PostgreSQL), the migrations, the API, the Temporal workers, the
 # console, LiteLLM, and a one-shot seed that creates the demo organisation and project.
 # `docker compose --profile memory up` adds Ecphoria (the memory service).
+# `docker compose --profile mcp-gateway up` adds a fake MCP gateway and the demo fakes behind it.
 # `COMPOSE_PROFILES=decisions docker compose up` (or the line in `.env`) adds Laya, the decision model
 # LiteLLM serves as `platform/decide` (ADR 0121): the profile is also what tells `litellm-config` to
 # route the alias, so set it this way rather than with `--profile`, which the config never sees.
@@ -35,6 +36,9 @@ x-platform-env: &platform-env
   CHOREGOS_LOG_JSON: ${CHOREGOS_LOG_JSON:-false}
   # The plugins the image ships (ADR 0093 §6): the built-in agents, offline.
   CHOREGOS_PLUGINS_OFFLINE: /opt/choregos/plugins
+  # The host of the optional fake MCP gateway (profile `mcp-gateway`, ADR 0105): the API accepts
+  # http and a dotless host only when it is listed here. Harmless without the profile.
+  CHOREGOS_MCP_GATEWAY_INTERNAL_HOSTS: '["mcp-gateway"]'
 
 # The run-token key is generated once per install (service `keys`) and read from a shared
 # volume: the workers sign run tokens, the API verifies them, so both need the same key.
@@ -270,6 +274,34 @@ services:
       ECPHORIA_MEMORY__STATE__DB_PATH: /data/state.db
       ECPHORIA_MEMORY__COGNITION__DB_PATH: /data/cognition.duckdb
     volumes: ["ecphoriadata:/data"]
+
+  demo-fakes:
+    # Optional: `docker compose --profile mcp-gateway up` (see `mcp-gateway`). The demo fakes
+    # server: the MCP servers the fake gateway fronts. No port on the host.
+    profiles: [mcp-gateway]
+    <<: *platform-image
+    command: ["python", "-m", "choregos_adapters.fakes.server"]
+    environment:
+      CHOREGOS_DEMO_PORT: "8090"
+      CONNECTOR_DEMO_TOKEN: local-upstream-only
+
+  mcp-gateway:
+    # Optional: `docker compose --profile mcp-gateway up`. A fake MCP gateway in front of the demo
+    # fakes: the endpoint to set in the console is http://mcp-gateway:8091/{server}/mcp. The
+    # upstream token stays here, it never enters Choregos. No port on the host.
+    profiles: [mcp-gateway]
+    <<: *platform-image
+    command: ["python", "-m", "choregos_adapters.fakes.mcp_gateway"]
+    depends_on: [demo-fakes]
+    environment:
+      CHOREGOS_FAKE_GATEWAY_PORT: "8091"
+      CHOREGOS_FAKE_GATEWAY_AUTH: bearer
+      CHOREGOS_FAKE_GATEWAY_TOKEN: local-gateway-only
+      CHOREGOS_FAKE_GATEWAY_UPSTREAMS: >-
+        {"supplier": {"url": "http://demo-fakes:8090/supplier/mcp", "token": "local-upstream-only"},
+        "mdm": {"url": "http://demo-fakes:8090/mdm/mcp", "token": "local-upstream-only"},
+        "shipping": {"url": "http://demo-fakes:8090/shipping/mcp", "token": "local-upstream-only"},
+        "access_control": {"url": "http://demo-fakes:8090/access_control/mcp", "token": "local-upstream-only"}}
 
   laya:
     # Optional: `COMPOSE_PROFILES=decisions docker compose up` (see the header). The first build
