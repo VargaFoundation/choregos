@@ -456,7 +456,7 @@ function AgentsThisProjectRuns({ projet }: { projet: string }) {
                 <TR key={`${a.workflow}/${a.actor}`}>
                   <TD className="font-medium">{a.actor}</TD>
                   <TD>
-                    <Link href={`/p/${projet}/workflows/${a.workflow}/map`} className="hover:underline">
+                    <Link href={`/p/${projet}/workflows/${a.workflow}`} className="hover:underline">
                       {a.workflow}
                     </Link>
                   </TD>

@@ -8,7 +8,7 @@ test("une carte de dix-huit états se lit sans zoom : une colonne, aucun débord
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto("/p/billing-api/workflows/release-full/map?view=list");
+  await page.goto("/p/billing-api/workflows/release-full?view=list");
   const carte = page.getByTestId("workflow-graph");
   await expect(carte.locator("[data-etat]")).toHaveCount(18);
   await page.evaluate(() => document.fonts.ready);
@@ -39,7 +39,7 @@ test("une carte de dix-huit états se lit sans zoom : une colonne, aucun débord
 
 test("le panneau reste à portée quand on descend la carte", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto("/p/billing-api/workflows/release-full/map?view=list");
+  await page.goto("/p/billing-api/workflows/release-full?view=list");
   await page.getByTestId("etat-verified_prod").click();
   await expect(page.getByTestId("panneau-etat")).toBeInViewport();
   await page.mouse.wheel(0, 3000);
@@ -47,7 +47,7 @@ test("le panneau reste à portée quand on descend la carte", async ({ page }) =
 });
 
 test("Tab atteint une flèche, Entrée ouvre le panneau de sa transition", async ({ page }) => {
-  await page.goto("/p/billing-api/workflows/release-full/map?view=list");
+  await page.goto("/p/billing-api/workflows/release-full?view=list");
   await page.getByTestId("etat-ready").focus();
   await page.keyboard.press("Tab");
   await expect(page.getByTestId("transition-t-implement")).toBeFocused();
@@ -58,7 +58,7 @@ test("Tab atteint une flèche, Entrée ouvre le panneau de sa transition", async
 
 test("la carte s'ouvre en serpentin, sans déborder, et une étape cliquée ouvre sa transition (S22-05)", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto("/p/billing-api/workflows/release-full/map");
+  await page.goto("/p/billing-api/workflows/release-full");
   const carte = page.getByTestId("carte-en-serpentin");
   await expect(carte).toBeVisible();
   const debord = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

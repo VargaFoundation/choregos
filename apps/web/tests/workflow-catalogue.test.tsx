@@ -100,7 +100,7 @@ describe("the workflow catalogue (S49-08, ADR 0111)", () => {
         make_default: true,
       }),
     );
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/p/f4f/workflows/requests/map?view=list"));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/p/f4f/workflows/requests?view=list"));
   });
 
   it("with a repository, lists every workflow", async () => {

@@ -58,6 +58,8 @@ const nextConfig = {
       { source: "/approvals", destination: "/inbox", permanent: true },
       // The workflow catalogue is the workflow library (S55-04): the word read as French.
       { source: "/p/:slug/workflows/catalogue", destination: "/p/:slug/workflows/library", permanent: true },
+      // A workflow opens on its graph (S55-06): the map is the workflow's page, its query (`?view=list`) kept.
+      { source: "/p/:slug/workflows/:name/map", destination: "/p/:slug/workflows/:name", permanent: true },
     ];
   },
   async headers() {
