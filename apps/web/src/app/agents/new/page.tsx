@@ -11,7 +11,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useSession } from "@/lib/session";
 import { api, ApiError } from "@/lib/api";
 import type { AgentDraft } from "@/lib/types";
-import { Alert, Breadcrumbs, Button, Card, Empty, ErrorNote, Heading, Input, Lead, Textarea, buttonClasses } from "@/components/ui";
+import { Alert, Breadcrumbs, Button, Card, Empty, ErrorNote, Input, Textarea, buttonClasses } from "@/components/ui";
+import { OrgPageHeader } from "@/components/coquille/org-page-header";
 
 // The builder is the heaviest form of the console: the first step does not need it (S32-01).
 const AgentBuilder = dynamic(() => import("@/components/agents/builder").then((m) => m.AgentBuilder), {
@@ -89,16 +90,14 @@ function NewAgent() {
   return (
     <div className="space-y-6">
       <Breadcrumbs steps={[{ href: "/agents", label: "Agents" }, { label: "New agent" }]} />
-      <div className="space-y-2">
-        <Heading as="h1" size="xl">
-          New agent
-        </Heading>
-        <Lead>
-          {step === "describe"
+      <OrgPageHeader
+        title="New agent"
+        description={
+          step === "describe"
             ? "Say what the agent is for. Everything else has a default and can wait."
-            : "Review the instructions, then create it. Sections you have not touched keep the project's defaults."}
-        </Lead>
-      </div>
+            : "Review the instructions, then create it. Sections you have not touched keep the project's defaults."
+        }
+      />
 
       {step === "describe" || !initial ? (
         <Card title="Describe" className="max-w-3xl" data-testid="step-describe">

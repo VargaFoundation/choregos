@@ -88,4 +88,18 @@ describe("the header of an organisation's page (S55-11)", () => {
     expect(group!.hue).toBe(GROUP_HUES.configure);
     expect(group!.entries.map((e) => e.label)).toContain("SCIM provisioning");
   });
+
+  it.each([
+    ["/agents/onboarding-coordinator", "Onboarding coordinator"],
+    ["/agents/new", "New agent"],
+    ["/agents/new/remote", "Remote agent (A2A)"],
+    ["/skills/sizing", "sizing"],
+    ["/memories/security-lessons", "Security lessons"],
+  ])("a detail page %s wears its section's icon and hue under its own title (S55-12)", (pathname, title) => {
+    renderAt(pathname, { title });
+    expect(screen.getByRole("heading", { level: 1, name: title })).toBeInTheDocument();
+    const define = HUE_CLASSES[GROUP_HUES.define];
+    expect(screen.getByTestId("page-header-icon")).toHaveClass(define.soft, define.ink);
+  });
 });
+

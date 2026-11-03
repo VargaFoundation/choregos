@@ -12,6 +12,7 @@ import { api } from "@/lib/api";
 vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme", me: null }) }));
 const nav = vi.hoisted(() => ({ query: new URLSearchParams(), push: vi.fn() }));
 vi.mock("next/navigation", () => ({
+  usePathname: () => "/agents/new",
   useSearchParams: () => nav.query,
   useRouter: () => ({
     push: (to: string) => {
