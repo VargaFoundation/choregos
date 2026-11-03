@@ -6,6 +6,9 @@ import { DEFAULT_WORKFLOW_HINT } from "@/components/workflows/timing";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { use, useState } from "react";
 import { GesteConfirme } from "@/components/geste-confirme";
+import { cn } from "@/lib/cn";
+import { workflowHueClasses } from "@/lib/workflow-hue";
+import { Workflow as WorkflowIcon } from "lucide-react";
 import { Badge, Button, buttonClasses, Card, Empty, ErrorNote, EtatDeLecture, Input, PhraseDuMoteur, Select, Textarea } from "@/components/ui";
 import { api } from "@/lib/api";
 import { shortDate } from "@/lib/format";
@@ -81,7 +84,7 @@ export default function WorkflowsPage({ params }: { params: Promise<{ slug: stri
         </p>
         <div className="flex flex-wrap gap-2">
           <Link href={`/p/${slug}/workflows/library`} className={buttonClasses("secondary", "sm")}>
-            Browse the catalogue
+            Browse the library
           </Link>
           <Link href={`/p/${slug}/workflows/new`} className={buttonClasses("secondary", "sm")}>
             New workflow
@@ -89,7 +92,7 @@ export default function WorkflowsPage({ params }: { params: Promise<{ slug: stri
         </div>
       </div>
 
-      {workflows.data?.length === 0 && <Empty title="No workflow">Publish one from a template.</Empty>}
+      {workflows.data?.length === 0 && <Empty title="No workflow" icon={WorkflowIcon} hue={2}>Publish one from a template.</Empty>}
       <ul className="grid gap-4 md:grid-cols-2" aria-label="Workflows">
         {workflows.data?.map((workflow) => (
           <li key={workflow.name}>
@@ -153,10 +156,15 @@ function CarteDeWorkflow({
       : null;
   return (
     <Card
+      // Its own colour on its edge and its dot (ADR 0120): the same as on the board and on its tickets.
+      className={cn("border-t-4", workflowHueClasses(nom).stripe)}
       title={
-        <Link href={`/p/${slug}/workflows/${encodeURIComponent(nom)}`} className="hover:underline">
-          {nom}
-        </Link>
+        <span className="inline-flex items-center gap-2">
+          <span aria-hidden className={cn("size-2.5 shrink-0 rounded-full", workflowHueClasses(nom).solid)} />
+          <Link href={`/p/${slug}/workflows/${encodeURIComponent(nom)}`} className="hover:underline">
+            {nom}
+          </Link>
+        </span>
       }
       action={workflow.is_default ? <Badge tone="neutral" title={DEFAULT_WORKFLOW_HINT}>Default</Badge> : undefined}
     >
