@@ -352,15 +352,17 @@ affinity:
 
 {{/*
 The alert rules, written once and served in both flavours (PrometheusRule and VMRule).
-The PromQL is the same; only the packaging changes.
+The PromQL is the same; only the packaging changes. Since 0.21 (ADR 0098) four alerts have English
+names; each carries its former name in `legacy_alertname` until 0.22.0, so a route or a silence can
+still match it.
 */}}
-{{- define "choregos.reglesDAlerte" -}}
-- alert: ChoregosApiErreurs5xx
+{{- define "choregos.alertRules" -}}
+- alert: ChoregosApi5xxErrors
   expr: |
     sum(rate(http_requests_total{job="choregos-api",status=~"5.."}[5m]))
     / clamp_min(sum(rate(http_requests_total{job="choregos-api"}[5m])), 0.001) > 0.01
   for: 10m
-  labels: { severity: critical }
+  labels: { severity: critical, legacy_alertname: ChoregosApiErreurs5xx }
   annotations:
     summary: "More than 1 % of 5xx on the Choregos API"
     runbook_url: "https://github.com/VargaFoundation/choregos/blob/main/docs/runbooks/api-5xx.md"
@@ -370,25 +372,25 @@ The PromQL is the same; only the packaging changes.
   labels: { severity: warning }
   annotations:
     summary: "Temporal queue saturated: stages are waiting"
-- alert: ChoregosRunEnAttente
+- alert: ChoregosRunPending
   expr: sum(kube_pod_status_phase{phase="Pending",namespace=~"proj-.*-runners"}) > 0
   for: 15m
-  labels: { severity: warning }
+  labels: { severity: warning, legacy_alertname: ChoregosRunEnAttente }
   annotations:
     summary: "A PipelineRun has been waiting for 15 min (autoscaling down?)"
-- alert: ChoregosBudgetJournalier
+- alert: ChoregosDailyBudgetHigh
   expr: choregos_project_daily_cost_usd / choregos_project_daily_budget_usd > 0.8
   for: 5m
-  labels: { severity: warning }
+  labels: { severity: warning, legacy_alertname: ChoregosBudgetJournalier }
   annotations:
     summary: "A project's daily budget is more than 80 % consumed"
-- alert: ChoregosTrainGele
+- alert: ChoregosTrainFrozen
   expr: choregos_train_frozen == 1
   for: 2h
-  labels: { severity: warning }
+  labels: { severity: warning, legacy_alertname: ChoregosTrainGele }
   annotations:
     summary: "A release train has been frozen for 2 hours"
-    runbook_url: "https://github.com/VargaFoundation/choregos/blob/main/docs/runbooks/train-gele.md"
+    runbook_url: "https://github.com/VargaFoundation/choregos/blob/main/docs/runbooks/train-frozen.md"
 {{- end }}
 
 {{/*

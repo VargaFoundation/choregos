@@ -48,13 +48,13 @@ global:
     allowedExecutors: []
   # Additional environment variables, given to the API, to each worker and to the migration Job
   # (through `choregos.commonEnv`). To enable a setting the chart does not know
-  # yet — for example a plugin shipped inactive (`CHOREGOS_ESSAI_ONTOLOGIE: "1"`) — without forking the
+  # yet — for example an extension shipped inactive (`CHOREGOS_ONTOLOGY_TRIAL: "1"`) — without forking the
   # chart. A variable already set by the chart is REFUSED at render time: two values for the same
   # name, Kubernetes keeps the last one without saying anything, and the chart's setting would be replaced
   # silently. Each entry has exactly one of `value` or `valueFrom` (refused otherwise); a secret is
   # mapped by `valueFrom.secretKeyRef`, never written as a plain `value` (S38-18).
   extraEnv: []
-  #   - name: CHOREGOS_ESSAI_ONTOLOGIE
+  #   - name: CHOREGOS_ONTOLOGY_TRIAL
   #     value: "1"
   # OpenTelemetry GenAI traces (ADR 0018). The collector's OTLP/HTTP endpoint, given as
   # `OTEL_EXPORTER_OTLP_ENDPOINT` to the API, each worker, the migration Job and the embedded
@@ -101,7 +101,7 @@ global:
     mountPath: /etc/choregos/workflow-templates
   toolCatalog:
     configMap: ""
-    mountPath: /etc/choregos/outils
+    mountPath: /etc/choregos/tools
     fileName: catalogue.yaml
     #: Secret whose ALL keys become environment variables of the API:
     #: this is where the providers' keys live, never in the catalog.
@@ -431,7 +431,7 @@ global:
   # that issues the tokens, the API only verifies them.
   apiSecretRef: choregos-api-secrets
   # Local bench only: the chart itself writes the application secrets (see
-  # templates/secrets-embarques.yaml). Never true in production.
+  # templates/embedded-secrets.yaml). Never true in production.
   devSecrets: false
   # Connector secrets typed in the console are sealed in the database under a key the DEPLOYMENT
   # holds (ADR 0058): `CHOREGOS_SECRETS_KEKS="k2:<base64 of 32 bytes>,k1:<...>"`, the first key

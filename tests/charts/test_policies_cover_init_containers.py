@@ -29,7 +29,7 @@ def _pattern(file: str, rule: str) -> dict[str, Any]:
 
 def _latest_rule() -> dict[str, Any]:
     policy = yaml.safe_load((POLICIES / "image-tags.yaml").read_text())
-    rule: dict[str, Any] = next(r for r in policy["spec"]["rules"] if r["name"] == "interdire-latest")
+    rule: dict[str, Any] = next(r for r in policy["spec"]["rules"] if r["name"] == "forbid-latest-tag")
     return rule
 
 

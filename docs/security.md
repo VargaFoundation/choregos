@@ -410,7 +410,7 @@ process (API, workers): nothing is shared.
   `state` is HMAC-signed, short-lived and bound to the signed-in person.
 - Webhook secrets: injected by the chart from the vault (or generated on a bench); an
   unconfigured GitHub webhook is refused in `staging`/`prod`.
-- Rotations: [`runbooks/rotation-secrets.md`](runbooks/rotation-secrets.md).
+- Rotations: [`runbooks/secret-rotation.md`](runbooks/secret-rotation.md).
 
 ## Supply chain
 

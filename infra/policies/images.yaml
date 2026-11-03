@@ -12,7 +12,7 @@ spec:
   background: false
   webhookTimeoutSeconds: 30
   rules:
-    - name: verifier-signature
+    - name: verify-signature
       match:
         any:
           - resources:
