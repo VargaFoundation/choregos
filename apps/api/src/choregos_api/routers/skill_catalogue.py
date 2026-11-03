@@ -28,8 +28,8 @@ from ..services.egress import egress_scope, ensure_or_409, skill_import_targets
 from ..services.organisations import organisation_by_slug
 from ..services.platform_network import check_platform_host
 from ..services.skill_sources import GitSource, SourceRefused, allowed, get_fetcher, parse_repo_url
+from ..services.skill_views import require_skill_reader, skill_dto, skill_snapshot, skill_sources
 from ..services.skills import empreinte, publish_version
-from .skills import _dto, _lire, _skill_sources, _snapshot
 
 router = APIRouter(tags=["agents"])
 
@@ -112,10 +112,10 @@ async def list_skill_catalogue(
     delivery: Annotated[Literal["bundled", "git"] | None, Query()] = None,
 ) -> SkillCatalogueDto:
     """The shipped catalogue and what each entry means in this organisation. Its members can read it."""
-    _lire(principal, org)
+    require_skill_reader(principal, org)
     organisation = await organisation_by_slug(session, org)
     loaded = catalogue.load()
-    sources, _ = await _skill_sources(session, organisation)
+    sources, _ = await skill_sources(session, organisation)
     latest = await _latest(session, organisation.id, [e.id for e in loaded.entries])
     declared = get_settings().api_egress_hosts
     needle = (q or "").lower().strip()
@@ -162,7 +162,7 @@ async def install_skill_catalogue_entry(
         raise not_found("Skill catalogue entry", entry_id)
     organisation = await organisation_by_slug(session, org)
     source = _entry_source(entry)
-    sources, _ = await _skill_sources(session, organisation)
+    sources, _ = await skill_sources(session, organisation)
     existing = (await _latest(session, organisation.id, [entry.id])).get(entry.id)
     if problem := _permission_problem(principal, org, source, sources, existing is not None):
         raise forbidden(problem)
@@ -230,7 +230,7 @@ async def install_skill_catalogue_entry(
         risk=version.risk,
         review_status=version.review_status,
     )
-    return await _dto(session, organisation, skill, avec_versions=True)
+    return await skill_dto(session, organisation, skill, with_versions=True)
 
 
 async def _files_of(
@@ -245,7 +245,7 @@ async def _files_of(
                 "image", f"a bundled skill does not match its provenance: {tampered}"
             ) from tampered
         return bundle.files, [], bundle.repo_licences
-    snapshot = await _snapshot(get_fetcher(fakes), source, entry.sha, entry.path)
+    snapshot = await skill_snapshot(get_fetcher(fakes), source, entry.sha, entry.path)
     found = next((s for s in snapshot.skills if s.path == entry.path), None)
     if found is None:
         raise unprocessable(f"there is no skill at `{entry.path or '/'}` in {entry.repo} at {entry.sha[:12]}")

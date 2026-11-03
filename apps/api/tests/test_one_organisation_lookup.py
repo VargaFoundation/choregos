@@ -7,9 +7,8 @@ from pathlib import Path
 
 from .layering_kit import API_PACKAGE
 
-# Measured on main at S47-09: only routers/org_connectors.py is left (S47-10 removes it).
-# Raise it only by amending ADR 0099.
-CEILING = 1
+# S47-10 removed the last copy (routers/org_connectors.py). Do not raise it (ADR 0099).
+CEILING = 0
 NAMES = ("_organisation", "_org")
 
 
@@ -29,8 +28,8 @@ def count_organisation_helpers(package_dir: Path) -> int:
 def test_one_organisation_lookup() -> None:
     count = count_organisation_helpers(API_PACKAGE)
     assert count <= CEILING, (
-        f"{count} organisation lookups in routers, the ceiling is {CEILING}: "
-        "share one lookup: S47-09 creates services.organisations.organisation_by_slug"
+        f"{count} organisation lookups in routers: a router never defines its own, it calls "
+        "services.organisations.organisation_by_slug (ADR 0099)"
     )
 
 

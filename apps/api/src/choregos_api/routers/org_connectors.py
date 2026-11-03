@@ -71,6 +71,8 @@ from ..services.connector_secrets import (
 from ..services.egress import egress_gate_for_connector, egress_scope
 from ..services.mcp_gateway import check_declaration, connector_client, route_of
 from ..services.mcp_gateway_identity import CallIdentity, GatewayRefusal, identity_of_person
+from ..services.org_connector_access import require_connector_admin
+from ..services.organisations import organisation_by_slug
 from ..services.platform_network import (
     PlatformNetworkRefused,
     check_connector_declaration,
@@ -81,22 +83,6 @@ from ..services.platform_network import (
 router = APIRouter(tags=["connectors"])
 
 Nom = Annotated[str, Path(pattern=r"^[a-z][a-z0-9-]{1,62}$")]
-
-
-async def _organisation(session: AsyncSession, org: str) -> Organization:
-    trouvee = (
-        await session.execute(select(Organization).where(Organization.slug == org))
-    ).scalar_one_or_none()
-    if trouvee is None:
-        raise not_found("Organisation", org)
-    return trouvee
-
-
-def _administrer(principal: Me, org: str) -> None:
-    """Déclarer un connecteur, ouvrir une opération, choisir ses groupes : décider de ce que
-    l'organisation ouvre à ses projets. L'administrateur de l'organisation seul."""
-    if not principal.can(Permission.TOOLS_GRANT, org):
-        raise forbidden(f"the connectors of {org} and their operations are decided by its administrator")
 
 
 async def _instance(session: AsyncSession, organisation: Organization, nom: str) -> OrgConnector:
@@ -158,7 +144,7 @@ async def _audit_secrets(
 async def list_org_connectors(org: str, session: Db, principal: Me) -> list[OrgConnectorDto]:
     if not principal.can(Permission.PROJECT_READ, org):
         raise forbidden(f"the connectors of {org} are readable by its members only")
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     instances = (
         await session.execute(
             select(OrgConnector).where(OrgConnector.org_id == organisation.id).order_by(OrgConnector.name)
@@ -180,8 +166,8 @@ async def create_org_connector(
     une lecture permise, une écriture soumise à validation."""
     from choregos_adapters import connector_types
 
-    _administrer(principal, org)
-    organisation = await _organisation(session, org)
+    require_connector_admin(principal, org)
+    organisation = await organisation_by_slug(session, org)
     kind = body.kind
     if kind is None:
         sortes = sorted({k for k, t, _ in connector_types() if t == body.type})
@@ -325,7 +311,9 @@ async def declare_org_connector(
 async def get_org_connector(org: str, name: Nom, session: Db, principal: Me) -> OrgConnectorDto:
     if not principal.can(Permission.PROJECT_READ, org):
         raise forbidden(f"the connectors of {org} are readable by its members only")
-    return await _dto(session, await _instance(session, await _organisation(session, org), name), principal)
+    return await _dto(
+        session, await _instance(session, await organisation_by_slug(session, org), name), principal
+    )
 
 
 @router.patch(
@@ -337,8 +325,8 @@ async def update_org_connector(
     """Edit what an administrator declared: the configuration, and the secrets. `secret_refs` and
     `secret_values` merge into the connector's; a field given as a reference after being a stored
     value drops the stored value. The operations are not touched (their own route)."""
-    _administrer(principal, org)
-    organisation = await _organisation(session, org)
+    require_connector_admin(principal, org)
+    organisation = await organisation_by_slug(session, org)
     instance = await _instance(session, organisation, name)
     server = plugin_servers.spec_of_connector(instance)
     spec = server or spec_du_type(instance.kind, instance.type)
@@ -392,7 +380,7 @@ async def update_org_connector(
     instance.status = "unknown"
     if body.availability is not None and body.availability != instance.availability:
         decision = decide(principal, org, CatalogueAction.SET_AVAILABILITY)
-        if not decision.allowed:  # pragma: no cover - `_administrer` already refused
+        if not decision.allowed:  # pragma: no cover - `require_connector_admin` already refused
             raise forbidden(decision.reason or "refused")
         previous, instance.availability = instance.availability, body.availability
         await record(
@@ -447,8 +435,8 @@ async def set_org_connector_secret(
     principal: Me,
 ) -> OrgConnectorDto:
     """Type a secret once (or replace it): sealed, never returned. The response says it is set."""
-    _administrer(principal, org)
-    organisation = await _organisation(session, org)
+    require_connector_admin(principal, org)
+    organisation = await organisation_by_slug(session, org)
     instance = await _instance(session, organisation, name)
     verifier_les_secrets(
         plugin_servers.spec_of_connector(instance) or spec_du_type(instance.kind, instance.type),
@@ -485,8 +473,8 @@ async def clear_org_connector_secret(
     principal: Me,
 ) -> OrgConnectorDto:
     """Remove a secret field's value or reference: the connector no longer holds it."""
-    _administrer(principal, org)
-    organisation = await _organisation(session, org)
+    require_connector_admin(principal, org)
+    organisation = await organisation_by_slug(session, org)
     instance = await _instance(session, organisation, name)
     before = dict(instance.secret_refs or {})
     if field not in before:
@@ -505,8 +493,8 @@ async def clear_org_connector_secret(
     "/orgs/{org}/connectors/{name}", status_code=status.HTTP_204_NO_CONTENT, operation_id="deleteOrgConnector"
 )
 async def delete_org_connector(org: str, name: Nom, session: Db, principal: Me) -> Response:
-    _administrer(principal, org)
-    organisation = await _organisation(session, org)
+    require_connector_admin(principal, org)
+    organisation = await organisation_by_slug(session, org)
     instance = await _instance(session, organisation, name)
     if instance.plugin_server is not None:
         raise conflict(
@@ -537,8 +525,8 @@ async def update_operation(
     org: str, name: Nom, operation: str, body: OperationPatch, session: Db, principal: Me
 ) -> OperationDto:
     """La politique, les groupes, le prix d'une opération : la décision de l'organisation."""
-    _administrer(principal, org)
-    organisation = await _organisation(session, org)
+    require_connector_admin(principal, org)
+    organisation = await organisation_by_slug(session, org)
     instance = await _instance(session, organisation, name)
     ligne = (
         await session.execute(
@@ -614,8 +602,8 @@ async def discover_operations(org: str, name: Nom, session: Db, principal: Me) -
     from choregos_core.redaction import redact
     from choregos_core.secrets import SecretIntrouvable
 
-    _administrer(principal, org)
-    organisation = await _organisation(session, org)
+    require_connector_admin(principal, org)
+    organisation = await organisation_by_slug(session, org)
     instance = await _instance(session, organisation, name)
     # ADR 0105: the route is judged before anything leaves; a refusal is a 409 and never marks the
     # connector `error` (the connector is fine, its route is not).

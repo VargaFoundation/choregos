@@ -24,10 +24,10 @@ from ..db.models import AgentSessionRecord, Organization, Project
 from ..deps import Db, Me
 from ..errors import not_found, unprocessable
 from ..schemas.agent_sessions import AgentDelta, AgentResponse, AgentResponseCreate, AgentSession
+from ..services.agent_access import enforce_decision, load_visible_agent, project_in_org, require_agent_reader
 from ..services.agent_governance import Action, decide
 from ..services.agent_sessions import close_session, open_session, respond, session_dto
 from ..services.organisations import organisation_by_slug
-from .agents import _charger, _exiger, _lire, _projet
 
 router = APIRouter(tags=["agents"])
 
@@ -50,9 +50,9 @@ async def _own_session(
 async def create_agent_response(
     org: str, slug: str, body: AgentResponseCreate, session: Db, principal: Me
 ) -> Any:
-    organisation, agent, subject = await _charger(session, principal, org, slug)
-    project = await _projet(session, organisation, body.project)
-    _exiger(decide(principal, org, subject, Action.CONVERSE, project_slug=project.slug))
+    organisation, agent, subject = await load_visible_agent(session, principal, org, slug)
+    project = await project_in_org(session, organisation, body.project)
+    enforce_decision(decide(principal, org, subject, Action.CONVERSE, project_slug=project.slug))
     if body.session_id is None:
         record = await open_session(
             session, principal, organisation, agent.slug, project, max_usd=body.max_usd
@@ -88,7 +88,7 @@ async def _events(answer: AgentResponse) -> AsyncIterator[dict[str, str]]:
     operation_id="getAgentSession",
 )
 async def get_agent_session(org: str, session_id: str, session: Db, principal: Me) -> AgentSession:
-    _lire(principal, org)
+    require_agent_reader(principal, org)
     organisation = await organisation_by_slug(session, org)
     record = await _own_session(session, principal, organisation, session_id)
     project = await session.get(Project, record.project_id)
@@ -101,7 +101,7 @@ async def get_agent_session(org: str, session_id: str, session: Db, principal: M
     operation_id="closeAgentSession",
 )
 async def close_agent_session(org: str, session_id: str, session: Db, principal: Me) -> Response:
-    _lire(principal, org)
+    require_agent_reader(principal, org)
     organisation = await organisation_by_slug(session, org)
     record = await _own_session(session, principal, organisation, session_id)
     await close_session(session, record, reason="closed")

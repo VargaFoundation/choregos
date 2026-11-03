@@ -42,7 +42,9 @@ from ..services.catalogue_rights import (
 from ..services.catalogues import egress_of
 from ..services.connector_catalogue import enablement_by_connector
 from ..services.mcp_gateway import GATEWAY_TYPE, stored
-from .org_connectors import _administrer, _organisation, declare_org_connector
+from ..services.org_connector_access import require_connector_admin
+from ..services.organisations import organisation_by_slug
+from .org_connectors import declare_org_connector
 
 router = APIRouter(tags=["connectors"])
 
@@ -151,7 +153,7 @@ async def list_mcp_catalogue(
     seeing = decide(principal, org, CatalogueAction.SEE)
     if not seeing.allowed:
         raise forbidden(seeing.reason or "refused")
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     loaded = _catalogue()
     declared = get_settings().api_egress_hosts
     installed = await _installed(session, organisation.id)
@@ -207,8 +209,8 @@ async def install_mcp_catalogue_entry(
     org: str, entry_id: EntryId, body: McpCatalogueInstall, session: Db, principal: Me
 ) -> OrgConnectorDto:
     """Declares an `mcp` connector from the entry. Its tools are born closed on the first discovery."""
-    _administrer(principal, org)
-    organisation = await _organisation(session, org)
+    require_connector_admin(principal, org)
+    organisation = await organisation_by_slug(session, org)
     loaded = _catalogue()
     entry = loaded.by_id(entry_id)
     if entry is None:

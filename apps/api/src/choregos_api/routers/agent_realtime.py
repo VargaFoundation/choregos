@@ -36,6 +36,7 @@ from ..logging import get_logger
 from ..origin_guard import origin_allowed
 from ..schemas.agent_sessions import SLUG
 from ..secret_store import get_secret_store
+from ..services.agent_access import enforce_decision, load_visible_agent, project_in_org
 from ..services.agent_governance import Action, decide
 from ..services.agent_realtime import (
     VoiceRelay,
@@ -49,7 +50,6 @@ from ..services.agent_realtime import (
 from ..services.agent_session_sockets import serve_socket
 from ..services.agent_sessions import budget_refusal, open_session, opened_terms, secret_name, session_tools
 from ..services.realtime_spend import RealtimePrices
-from .agents import _charger, _exiger, _projet
 
 router = APIRouter(tags=["agents"])
 log = get_logger(__name__)
@@ -81,9 +81,9 @@ async def agent_realtime(
         async with session_scope() as db:
             authorization = websocket.headers.get("authorization")
             principal = await current_principal(websocket, db, settings, authorization)
-            organisation, agent, subject = await _charger(db, principal, org, slug)
-            target = await _projet(db, organisation, project)
-            _exiger(decide(principal, org, subject, Action.CONVERSE, project_slug=target.slug))
+            organisation, agent, subject = await load_visible_agent(db, principal, org, slug)
+            target = await project_in_org(db, organisation, project)
+            enforce_decision(decide(principal, org, subject, Action.CONVERSE, project_slug=target.slug))
             from ..services.agents import resoudre_l_agent
 
             if await _served_kind(db, organisation.id, target.id, agent.slug) == "hosted":
@@ -158,9 +158,9 @@ async def _resume(
         async with session_scope() as db:
             authorization = websocket.headers.get("authorization")
             principal = await current_principal(websocket, db, settings, authorization)
-            organisation, agent, subject = await _charger(db, principal, org, slug)
-            target = await _projet(db, organisation, project)
-            _exiger(decide(principal, org, subject, Action.CONVERSE, project_slug=target.slug))
+            organisation, agent, subject = await load_visible_agent(db, principal, org, slug)
+            target = await project_in_org(db, organisation, project)
+            enforce_decision(decide(principal, org, subject, Action.CONVERSE, project_slug=target.slug))
             record = await db.get(AgentSessionRecord, session_id)
             if (
                 record is None

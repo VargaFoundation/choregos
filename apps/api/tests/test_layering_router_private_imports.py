@@ -7,9 +7,9 @@ from pathlib import Path
 
 from .layering_kit import API_PACKAGE, module_of, resolve, router_unit
 
-# Measured at 87ea1831d. Lower it in the PR that removes statements; raise it only for a mechanical
-# rename that splits a statement, saying so in the PR body, or by amending ADR 0099.
-CEILING = 7
+# S47-10 took it to zero: a router never imports another router's private name. Do not raise it;
+# share the helper through a service under a public name (ADR 0099).
+CEILING = 0
 
 
 def count_private_router_imports(package_dir: Path, package: str) -> int:
@@ -35,8 +35,8 @@ def count_private_router_imports(package_dir: Path, package: str) -> int:
 def test_routers_import_no_private_names_from_each_other() -> None:
     count = count_private_router_imports(API_PACKAGE, "choregos_api")
     assert count <= CEILING, (
-        f"routers import private names from each other {count} times, the ceiling is {CEILING}: "
-        "a new import is refused (ADR 0099: share helpers through services)"
+        f"routers import private names from each other {count} times: no router may import a "
+        "`_private` name from another router (ADR 0099): move the helper into a service under a public name"
     )
 
 
