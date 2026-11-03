@@ -142,7 +142,8 @@ class JiraTracker:
             f"({self.candidates_jql})" if self.candidates_jql else f"labels = {_jql(self.agent_ready_label)}"
         )
         if project.start_rules:
-            selection = "(" + " OR ".join([selection, *(f"({_rule_jql(r)})" for r in project.start_rules)]) + ")"
+            rules = [f"({_rule_jql(rule)})" for rule in project.start_rules]
+            selection = "(" + " OR ".join([selection, *rules]) + ")"
         jql = (
             f'project = "{self.project_key}" AND {selection} AND statusCategory != Done ORDER BY updated DESC'
         )

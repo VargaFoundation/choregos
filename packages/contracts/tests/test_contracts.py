@@ -632,7 +632,7 @@ def test_a_trigger_maps_a_payload_by_json_pointers() -> None:
 
     gaps: list[str] = []
     node = contracts.load_schema("project.schema.json")["properties"]["triggers"]["items"]
-    _comparer("project.triggers", node, TriggerConfig, gaps)
+    _compare("project.triggers", node, TriggerConfig, gaps)
     assert not gaps, "\n".join(gaps)
 
     validator = _validator("project.schema.json")
@@ -661,7 +661,7 @@ def test_a_trigger_filters_and_signs_and_a_start_rule_needs_a_condition() -> Non
     from choregos_contracts import StartRule
 
     gaps: list[str] = []
-    _comparer(
+    _compare(
         "project.start_rules",
         contracts.load_schema("project.schema.json")["properties"]["start_rules"]["items"],
         StartRule,
