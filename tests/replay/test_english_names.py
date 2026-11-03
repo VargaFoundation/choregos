@@ -44,7 +44,7 @@ FROZEN_PATCH_IDS = (
 
 
 def _source() -> str:
-    return "\n".join(path.read_text(encoding="utf-8") for path in sorted(WORKFLOWS.glob("*.py")))
+    return "\n".join(path.read_text(encoding="utf-8") for path in sorted(WORKFLOWS.rglob("*.py")))
 
 
 @pytest.mark.parametrize("patch_id", FROZEN_PATCH_IDS)

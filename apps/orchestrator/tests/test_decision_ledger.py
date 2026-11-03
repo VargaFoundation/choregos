@@ -79,8 +79,8 @@ async def _set_state(setup: Fixture, state: str) -> None:
 def _decide_payload(setup: Fixture, attempt: int = 1) -> dict[str, Any]:
     import yaml
     from choregos_contracts import Workflow
+    from choregos_core import WorkflowEngine
     from choregos_orchestrator.activities.decision import decision_request
-    from choregos_orchestrator.workflows.interpreter import WorkflowEngine
 
     engine = WorkflowEngine(Workflow.model_validate(yaml.safe_load(ROUTE)))
     transition = next(t for t in engine.wf.transitions if t.key == "t-route")

@@ -10,6 +10,7 @@ from choregos_contracts import Role
 from choregos_core import parse_policy, parse_workflow, to_graph, to_process, utcnow
 from choregos_core.calibration import DEFAULT_TARGET
 from choregos_core.dsl import TEMPLATE_NAMES, load_template, template_yaml
+from choregos_core.policy import unenforced_governance
 from choregos_core.policy_ceiling import PolicyCeiling, widenings
 from fastapi import APIRouter, Query, Response, status
 from pydantic import ValidationError as PydanticValidationError
@@ -592,6 +593,17 @@ async def get_project_network(ctx: ProjectCtx, session: Db) -> ProjectNetwork:
 async def put_policy(ctx: ProjectCtx, body: PolicyPut, session: Db) -> PolicyDto:
     ctx.require(Permission.POLICY_WRITE)
     policy = parse_policy(body.yaml)
+    # A guard nobody applies is refused when written, not warned about (ADR 0101).
+    refused = unenforced_governance(policy)
+    if refused:
+        raise unprocessable(
+            "the policy declares guards Choregos does not enforce (ADR 0101): "
+            + "; ".join(i.message for i in refused),
+            [
+                {"loc": ["policy", *(i.path or "").split(".")], "msg": i.message, "code": i.code}
+                for i in refused
+            ],
+        )
     # Below the organisation's ceiling a project chooses; above it, it does not (S27-05).
     widened = widenings(policy, ceiling_of(await session.get(Organization, ctx.project.org_id)))
     if widened:
@@ -599,7 +611,7 @@ async def put_policy(ctx: ProjectCtx, body: PolicyPut, session: Db) -> PolicyDto
             "the policy is wider than the organisation's ceiling: " + "; ".join(widened),
             [{"loc": ["policy", *w.split(":", 1)[0].split(".")], "msg": w} for w in widened],
         )
-    # Valide, mais `approvals.*` et `review.require_human_for_risk` n'y gardent rien (ADR 0044).
+    # The network warnings stay logged: they are not refused.
     signaler_ce_que_la_politique_n_applique_pas(policy, ctx.project.slug)
     current = await active_policy(session, ctx.id)
     version = policy.metadata.version

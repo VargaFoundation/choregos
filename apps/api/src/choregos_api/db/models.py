@@ -81,6 +81,9 @@ class Membership(Base, PkMixin, TimestampMixin):
         ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True
     )
     role: Mapped[str] = mapped_column(String(32))
+    #: `idp` when an IdP sign-in created the row from the provider's groups, `manual` otherwise
+    #: (administrator, bootstrap, project creator); a manual row is never revoked by a sign-in.
+    source: Mapped[str] = mapped_column(String(16), default="manual", server_default="manual")
 
     user: Mapped[User] = relationship(lazy="joined")
 

@@ -66,6 +66,28 @@ Findings on `origin/main` before this change:
   old code stored. Nothing is migrated: an instance whose provider issues the same subjects keeps working;
   one whose subjects changed needs the migration switch above (or its users are refused).
 
+## Memberships follow the provider
+
+`memberships.source` records where an organisation role came from: `idp` when an IdP sign-in created
+the row from the provider's groups, `manual` otherwise (administrator, bootstrap, project creator).
+
+- At each IdP sign-in (OIDC, or an extension's protocol through `terminer_la_connexion`), the `idp` rows
+  whose organisation the groups no longer map are removed and audited (`member.revoke`, channel `oidc`).
+  The comparison uses the alias-resolved slugs (ADR 0090), so a group naming a former slug keeps its role.
+- The sign-in is authoritative only where it could have granted. A tenant sign-in (ADR 0108) revokes in
+  that organisation only. An instance-provider sign-in revokes in the organisations that have no provider
+  of their own: a role in a tenant's organisation may have come from the tenant's provider.
+- A manual row is never revoked and never converted: when the IdP maps the organisation of a manual row,
+  the role still follows the provider (as before) but the row stays `manual`.
+- The last `org_admin` of an organisation is kept, with a warning (`idp revocation skipped: last org_admin`).
+- The development login revokes nothing, and project-level memberships are never touched.
+- Rows that existed before the migration are `manual`: a role withdrawn at the IdP earlier is not revoked.
+- Revocation happens at sign-in only. Bearer tokens and open sessions keep their roles until then.
+
+Rejected: deleting every unmapped membership (it would strip the bootstrap administrators of an IdP that
+emits no groups); converting a manual row to `idp` when the IdP maps the same organisation (a later group
+withdrawal would revoke an administrator's grant).
+
 ## Rejected
 
 - **Verifying the ID token's signature with the provider's JWKS for the console.** It adds a key fetch, a

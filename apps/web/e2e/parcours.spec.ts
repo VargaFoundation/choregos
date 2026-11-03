@@ -302,7 +302,8 @@ test("board par workflow : la demande choisit son workflow, et ses champs en vie
   await expect(champs.getByLabel("severity (required)")).toBeVisible();
   await expect(champs.getByLabel("detected on")).toHaveAttribute("type", "date");
   // Le board du flux d'incident : ses colonnes, pas celles du défaut.
-  await page.getByLabel("Board workflow").selectOption("hotfix");
+  await page.keyboard.press("Escape");
+  await page.getByRole("navigation", { name: "Board workflow" }).getByRole("link", { name: /hotfix/ }).click();
   await expect(page).toHaveURL(/workflow=hotfix/);
 });
 
