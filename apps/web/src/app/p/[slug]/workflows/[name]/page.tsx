@@ -354,11 +354,23 @@ export default function MapPage() {
               workflows={(workflows.data ?? []).map((w) => w.name)}
             />
           )}
+          {/* Building on the graph (S55-09): from the step one is looking at, the next one — its
+              arrival state prefilled, the target and the actor chosen in the form. */}
+          {arete && !noeuds.find((n) => n.id === arete.to)?.terminal && (
+            <Card title="Add a step after this one" data-testid="step-after-step">
+              <FormulaireDEtape
+                key={`after-${arete.id ?? arete.from}`}
+                depart={arete.to}
+                etats={noeuds}
+                acteurs={acteurs}
+              />
+            </Card>
+          )}
           {!noeud && !arete && !drawn && (
             <Empty title="Change a step">
-              Choose a step on the graph to see what it does and change it
-              (click, or Tab then Enter). In the list view, drag a state onto
-              another to draw a new transition.
+              Choose a step on the graph to see what it does, change it, or add
+              the step that follows it (click, or Tab then Enter). In the list
+              view, drag a state onto another to draw a new transition.
             </Empty>
           )}
         </div>
