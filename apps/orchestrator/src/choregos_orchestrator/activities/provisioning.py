@@ -19,7 +19,7 @@ from choregos_core import Fact, Message, Provenance, utcnow
 from temporalio import activity
 
 from ..config import get_settings
-from .base import db, project_bundle
+from .base import db, notification_target, project_bundle
 
 
 def templates_dir() -> Path:
@@ -272,7 +272,7 @@ async def _notify_test_message(params: dict[str, Any], bundle: Any, settings: An
     # exists to prove the notifier works, so a failure is its result. It fails the step, which
     # `run_provision_step` records as repairable with its remediation.
     await bundle.adapters.notify.send(
-        bundle.config.notify.slack_channel or "#choregos",
+        notification_target(bundle),
         Message(title=f"Choregos — project {bundle.slug} provisioned", severity="success"),
     )
     return "test message sent"

@@ -18,7 +18,7 @@ from temporalio import activity
 
 from ..config import get_settings
 from ..wire_names import read_key
-from .base import db, project_bundle, send_courtesy
+from .base import db, notification_target, project_bundle, send_courtesy
 
 logger = get_logger("choregos.train")
 
@@ -31,7 +31,7 @@ async def _courtesy(bundle: Any, message: Message) -> bool:
     `bot_token` nor `webhook_url` configured" AFTER the promotion and the verification: the
     transaction was rolled back (release never closed, work items never notified) and both trains
     died with their delivery done (S22-26). The silence is said in the log and in the return value."""
-    return await _send(bundle.adapters.notify, bundle.config.notify.slack_channel or "#choregos", message)
+    return await _send(bundle.adapters.notify, notification_target(bundle), message)
 
 
 async def _send(notify: Any, channel: str, message: Message) -> bool:
@@ -597,7 +597,7 @@ async def apply_terraform(payload: dict[str, Any]) -> dict[str, Any]:
         ]
         scm = bundle.adapters.scm
         slug = bundle.slug
-        channel = bundle.config.notify.slack_channel or "#choregos"
+        channel = notification_target(bundle)
         notify = bundle.adapters.notify
 
     if not prs:
