@@ -46,6 +46,7 @@ streams:
   S47: "Hardening and gaps from the 2026-10-27 audit (ADRs 0099-0104)"
   S49: "Workflows for every trade: a default without a repository, a catalogue, a map that edits everything (ADRs 0110-0112)"
   S50: "An agent acts under an identity: assigned, own, on behalf of a person; child agents (ADR 0107)"
+  S55: "A console that makes a complex product simple: colour that orients, readable pages (ADR 0120)"
   S56: "A workflow starts from a trigger: tracker, HTTP, schedule or a person, one audit (ADR 0113)"
 
 stories:
@@ -3938,6 +3939,80 @@ stories:
     size: L
     depends_on: [S50-01]
     notes: "ADR 0107 story 4, amends ADR 0077 point 1"
+
+  # ───────────── S55 — A console that makes a complex product simple (ADR 0120) ─────────────
+  - id: S55-01
+    title: "feat(web): colour that orients — eight categorical hues, an info tone, a workflow's hue from its name (ADR 0120)"
+    stream: S55
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: []
+    notes: "ADR 0120 §2-6. Acceptance: every new ink at 4.5:1 on every surface and its tint, both modes; workflowHue stable and spread; no new role in the served-theme contract yet."
+  - id: S55-01b
+    title: "contract(api): ThemeTokens lists the categorical hues and the info tone, under the contrast budget"
+    stream: S55
+    sprint: 1
+    priority: 2
+    size: S
+    depends_on: [S55-01]
+    notes: "ADR 0120 consequences. Lets a brand theme (the Diametral plugin) recolour them."
+  - id: S55-02
+    title: "feat(web): a page header with a tinted icon and the workflow's chip; human breadcrumb labels"
+    stream: S55
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: [S55-01]
+    notes: "Acceptance: every project page has one header; the workflow pages lose their second hand-made trail."
+  - id: S55-03
+    title: "fix(web): the board names its workflow and shows every ticket, not the first 50"
+    stream: S55
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: [S55-02]
+    notes: "Acceptance: a test red with the unpaged call; the workflow's colour on its section and columns; graphs fetched in parallel."
+  - id: S55-04
+    title: "feat(web,api): the workflow library — an English URL and a list that loads fast"
+    stream: S55
+    sprint: 2
+    priority: 1
+    size: L
+    depends_on: [S55-02]
+    notes: "Acceptance: /workflows/catalogue redirects to /workflows/library; ?vue becomes ?view; the list no longer re-parses every workflow nor reads the plugin sources on each call; yaml out of the list entry (contract-change)."
+  - id: S55-05
+    title: "feat(web): a ticket reads in five seconds — the next step, the request itself, one decision surface"
+    stream: S55
+    sprint: 2
+    priority: 1
+    size: L
+    depends_on: [S55-02]
+    notes: "Acceptance: body_snapshot and fields shown; a NextStepBanner derived by a tested pure function; one DecisionBar; technical details folded."
+  - id: S55-06
+    title: "feat(web): a workflow opens on its graph and is edited from it"
+    stream: S55
+    sprint: 2
+    priority: 1
+    size: L
+    depends_on: [S55-02]
+    notes: "Acceptance: /workflows/<name> renders the map; Steps, YAML and History are tabs; a toolbar and a drawer for the existing panels; 'Connect to…' from a node of the diagram."
+  - id: S55-07
+    title: "feat(web): settings in grouped sub-pages, each with an icon and a hue"
+    stream: S55
+    sprint: 3
+    priority: 2
+    size: M
+    depends_on: [S55-02]
+    notes: "Acceptance: /settings is an overview; old #anchors land on their sub-page."
+  - id: S55-08
+    title: "feat(web): cards, stats and empty states carry an icon and a tone"
+    stream: S55
+    sprint: 3
+    priority: 3
+    size: M
+    depends_on: [S55-01]
+    notes: "Acceptance: no colour outside the theme's tokens (couleurs-utilitaires)."
 
   # ───────────── S56 — A workflow starts from a trigger (ADR 0113) ─────────────
   - id: S56-01

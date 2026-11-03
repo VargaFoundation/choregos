@@ -49,7 +49,8 @@ export type Tone =
   | "succeeded"
   | "failed"
   | "retrying"
-  | "agent";
+  | "agent"
+  | "info";
 
 /** Une pastille : un fond teinté, un filet de sa teinte, son texte — 4,5:1 au moins (theme-contraste). */
 const PASTILLE: Record<Tone, string> = {
@@ -65,6 +66,7 @@ const PASTILLE: Record<Tone, string> = {
   running: "border-running-line bg-running-soft text-running-ink",
   retrying: "border-retrying-line bg-retrying-soft text-retrying-ink",
   agent: "border-agent-line bg-agent-soft text-agent-ink",
+  info: "border-info-line bg-info-soft text-info",
 };
 
 /** Le point d'un ton : rond, plein. */
@@ -81,6 +83,7 @@ const POINT: Record<Tone, string> = {
   running: "bg-running",
   retrying: "bg-retrying",
   agent: "bg-agent",
+  info: "bg-info",
 };
 
 /** Le texte d'un ton, sans fond. */
@@ -97,6 +100,7 @@ const TEXTE: Record<Tone, string> = {
   running: "text-running-ink",
   retrying: "text-retrying-ink",
   agent: "text-agent-ink",
+  info: "text-info",
 };
 
 // ───────────────────────────── points, pastilles, légendes ─────────────────────────────

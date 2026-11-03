@@ -98,6 +98,43 @@
   --color-agent-soft: var(--choregos-agent-soft);
   --color-agent-line: var(--choregos-agent-line);
   --color-agent-ink: var(--choregos-agent-ink);
+
+  /* Colour that orients (ADR 0120): the categorical hues and the info tone. */
+  --color-info: var(--choregos-info);
+  --color-info-soft: var(--choregos-info-soft);
+  --color-info-line: var(--choregos-info-line);
+  --color-cat-1: var(--choregos-cat-1-solid);
+  --color-cat-1-soft: var(--choregos-cat-1-soft);
+  --color-cat-1-line: var(--choregos-cat-1-line);
+  --color-cat-1-ink: var(--choregos-cat-1-ink);
+  --color-cat-2: var(--choregos-cat-2-solid);
+  --color-cat-2-soft: var(--choregos-cat-2-soft);
+  --color-cat-2-line: var(--choregos-cat-2-line);
+  --color-cat-2-ink: var(--choregos-cat-2-ink);
+  --color-cat-3: var(--choregos-cat-3-solid);
+  --color-cat-3-soft: var(--choregos-cat-3-soft);
+  --color-cat-3-line: var(--choregos-cat-3-line);
+  --color-cat-3-ink: var(--choregos-cat-3-ink);
+  --color-cat-4: var(--choregos-cat-4-solid);
+  --color-cat-4-soft: var(--choregos-cat-4-soft);
+  --color-cat-4-line: var(--choregos-cat-4-line);
+  --color-cat-4-ink: var(--choregos-cat-4-ink);
+  --color-cat-5: var(--choregos-cat-5-solid);
+  --color-cat-5-soft: var(--choregos-cat-5-soft);
+  --color-cat-5-line: var(--choregos-cat-5-line);
+  --color-cat-5-ink: var(--choregos-cat-5-ink);
+  --color-cat-6: var(--choregos-cat-6-solid);
+  --color-cat-6-soft: var(--choregos-cat-6-soft);
+  --color-cat-6-line: var(--choregos-cat-6-line);
+  --color-cat-6-ink: var(--choregos-cat-6-ink);
+  --color-cat-7: var(--choregos-cat-7-solid);
+  --color-cat-7-soft: var(--choregos-cat-7-soft);
+  --color-cat-7-line: var(--choregos-cat-7-line);
+  --color-cat-7-ink: var(--choregos-cat-7-ink);
+  --color-cat-8: var(--choregos-cat-8-solid);
+  --color-cat-8-soft: var(--choregos-cat-8-soft);
+  --color-cat-8-line: var(--choregos-cat-8-line);
+  --color-cat-8-ink: var(--choregos-cat-8-ink);
 }
 
 /*

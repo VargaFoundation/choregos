@@ -1,6 +1,7 @@
 /*
  * The look of the console: an operations console in the manner of Temporal's UI (ADR 0048, which
- * keeps the colours, the contrast budget and the theme choice of ADR 0043).
+ * keeps the colours, the contrast budget and the theme choice of ADR 0043). One accent for actions;
+ * colour that orients — eight categorical hues and an info tone — since ADR 0120.
  *
  * The console owns every token here (`--choregos-*`): it no longer depends on the Varga Foundation
  * design system, and no other stylesheet declares a colour role. `tests/theme-provenance.test.ts`
@@ -56,6 +57,30 @@
   --red-6: #72232d;
   --red-9: #e5484d;
   --red-11: #ff9592;
+  --indigo-3: #182449;
+  --indigo-6: #304384;
+  --indigo-9: #3e63dd;
+  --indigo-11: #9eb1ff;
+  --teal-3: #0d2d2a;
+  --teal-6: #145750;
+  --teal-9: #12a594;
+  --teal-11: #0bd8b6;
+  --pink-3: #37172f;
+  --pink-6: #692955;
+  --pink-9: #d6409f;
+  --pink-11: #ff8dcc;
+  --cyan-3: #082c36;
+  --cyan-6: #045468;
+  --cyan-9: #00a2c7;
+  --cyan-11: #4ccce6;
+  --grass-3: #1b2a1e;
+  --grass-6: #2d5736;
+  --grass-9: #46a758;
+  --grass-11: #71d083;
+  --violet-3: #291f43;
+  --violet-6: #473876;
+  --violet-9: #6e56cf;
+  --violet-11: #baa7ff;
 
   /* Surfaces : la page, ce qui s'élève dessus (cartes, menus, tiroir), la barre latérale plus sombre. */
   --choregos-surface: var(--slate-1);
@@ -121,6 +146,47 @@
   --choregos-agent-line: var(--plum-6);
   --choregos-agent-ink: var(--plum-11);
 
+  /*
+   * Colour that orients (ADR 0120): eight hues for identity — a workflow, a section, a group of
+   * settings —, never for a status and never for what can be clicked (that is the accent's).
+   */
+  --choregos-cat-1-solid: var(--indigo-9);
+  --choregos-cat-1-soft: var(--indigo-3);
+  --choregos-cat-1-line: var(--indigo-6);
+  --choregos-cat-1-ink: var(--indigo-11);
+  --choregos-cat-2-solid: var(--teal-9);
+  --choregos-cat-2-soft: var(--teal-3);
+  --choregos-cat-2-line: var(--teal-6);
+  --choregos-cat-2-ink: var(--teal-11);
+  --choregos-cat-3-solid: var(--amber-9);
+  --choregos-cat-3-soft: var(--amber-3);
+  --choregos-cat-3-line: var(--amber-6);
+  --choregos-cat-3-ink: var(--amber-11);
+  --choregos-cat-4-solid: var(--pink-9);
+  --choregos-cat-4-soft: var(--pink-3);
+  --choregos-cat-4-line: var(--pink-6);
+  --choregos-cat-4-ink: var(--pink-11);
+  --choregos-cat-5-solid: var(--cyan-9);
+  --choregos-cat-5-soft: var(--cyan-3);
+  --choregos-cat-5-line: var(--cyan-6);
+  --choregos-cat-5-ink: var(--cyan-11);
+  --choregos-cat-6-solid: var(--grass-9);
+  --choregos-cat-6-soft: var(--grass-3);
+  --choregos-cat-6-line: var(--grass-6);
+  --choregos-cat-6-ink: var(--grass-11);
+  --choregos-cat-7-solid: var(--orange-9);
+  --choregos-cat-7-soft: var(--orange-3);
+  --choregos-cat-7-line: var(--orange-6);
+  --choregos-cat-7-ink: var(--orange-11);
+  --choregos-cat-8-solid: var(--violet-9);
+  --choregos-cat-8-soft: var(--violet-3);
+  --choregos-cat-8-line: var(--violet-6);
+  --choregos-cat-8-ink: var(--violet-11);
+  /* A message that is neither good nor bad news: "the next step is yours", "an agent is working". */
+  --choregos-info: var(--blue-11);
+  --choregos-info-soft: var(--blue-3);
+  --choregos-info-line: var(--blue-6);
+
   /* Le défilement d'un tableau se signale par un voile, qu'une ombre noire ne montrait pas en sombre. */
   --choregos-scroll-hint: color-mix(in srgb, var(--slate-12) 14%, transparent);
   --choregos-shadow-raised: none;
@@ -181,6 +247,36 @@
   --red-9: #e5484d;
   --red-11: #ce2c31;
   --red-12: #641723;
+  --indigo-3: #edf2fe;
+  --indigo-6: #c1d0ff;
+  --indigo-9: #3e63dd;
+  --indigo-11: #3a5bc7;
+  --indigo-12: #1f2d5c;
+  --teal-3: #e0f8f3;
+  --teal-6: #a1ded2;
+  --teal-9: #12a594;
+  --teal-11: #008573;
+  --teal-12: #0d3d38;
+  --pink-3: #fee9f5;
+  --pink-6: #efbfdd;
+  --pink-9: #d6409f;
+  --pink-11: #c2298a;
+  --pink-12: #651249;
+  --cyan-3: #def7f9;
+  --cyan-6: #9ddde7;
+  --cyan-9: #00a2c7;
+  --cyan-11: #107d98;
+  --cyan-12: #0d3c48;
+  --grass-3: #e9f6e9;
+  --grass-6: #b2ddb5;
+  --grass-9: #46a758;
+  --grass-11: #2a7e3b;
+  --grass-12: #203c25;
+  --violet-3: #f4f0fe;
+  --violet-6: #d4cafe;
+  --violet-9: #6e56cf;
+  --violet-11: #6550b9;
+  --violet-12: #2f265f;
 
   --choregos-raised: #fff;
   --choregos-sidebar: var(--slate-2);
@@ -201,6 +297,15 @@
   --choregos-failed-ink: color-mix(in srgb, var(--red-11) 70%, var(--red-12));
   --choregos-retrying-ink: color-mix(in srgb, var(--orange-11) 70%, var(--orange-12));
   --choregos-agent-ink: color-mix(in srgb, var(--plum-11) 70%, var(--plum-12));
+  --choregos-info: color-mix(in srgb, var(--blue-11) 70%, var(--blue-12));
+  --choregos-cat-1-ink: color-mix(in srgb, var(--indigo-11) 70%, var(--indigo-12));
+  --choregos-cat-2-ink: color-mix(in srgb, var(--teal-11) 70%, var(--teal-12));
+  --choregos-cat-3-ink: color-mix(in srgb, var(--amber-11) 70%, var(--amber-12));
+  --choregos-cat-4-ink: color-mix(in srgb, var(--pink-11) 70%, var(--pink-12));
+  --choregos-cat-5-ink: color-mix(in srgb, var(--cyan-11) 70%, var(--cyan-12));
+  --choregos-cat-6-ink: color-mix(in srgb, var(--grass-11) 70%, var(--grass-12));
+  --choregos-cat-7-ink: color-mix(in srgb, var(--orange-11) 70%, var(--orange-12));
+  --choregos-cat-8-ink: color-mix(in srgb, var(--violet-11) 70%, var(--violet-12));
 
   --choregos-scroll-hint: color-mix(in srgb, var(--slate-12) 12%, transparent);
   --choregos-shadow-raised: 0 1px 2px color-mix(in srgb, var(--slate-12) 6%, transparent);
