@@ -106,6 +106,28 @@ export function ModelCataloguePanel() {
               </>
             )}
           </p>
+          {/* Owner review of 2026-11-03: which gateway, and where it is set, were not on the page. */}
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1" data-testid="gateway-facts">
+            <dt className="text-xs text-ink-muted">Address</dt>
+            <dd className="min-w-0 break-all font-mono" data-donnee>
+              {data.gateway.base_url ?? (
+                <span className="font-sans text-ink-muted">Known to the platform administrators</span>
+              )}
+            </dd>
+            <dt className="text-xs text-ink-muted">Set in</dt>
+            <dd data-testid="gateway-source">
+              {own || data.gateway.source === "organisation" ? (
+                <>
+                  Your organisation&apos;s connector, in <Link href="/admin/connectors">Installed connectors</Link>
+                </>
+              ) : (
+                <>
+                  The deployment&apos;s environment (<span className="font-mono">CHOREGOS_GATEWAY_TYPE</span>,{" "}
+                  <span className="font-mono">CHOREGOS_GATEWAY_URL</span>), by its operator: no screen changes it
+                </>
+              )}
+            </dd>
+          </dl>
           {!own && canEdit && (
             <p className="text-xs text-ink-muted">
               <Link href="/admin/connectors?type=gateway/litellm#declare">Connect your organisation&apos;s gateway</Link>{" "}

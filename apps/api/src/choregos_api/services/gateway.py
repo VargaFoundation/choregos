@@ -30,6 +30,11 @@ async def _org_connector(session: AsyncSession, org_id: str) -> OrgConnector | N
     )
 
 
+async def org_brings_its_gateway(session: AsyncSession, org_id: str) -> bool:
+    """Whether the organisation declares its own gateway connector, rather than using the deployment's."""
+    return await _org_connector(session, org_id) is not None
+
+
 async def org_gateway_url(session: AsyncSession, org_id: str) -> str | None:
     """Where the models of the organisation's own gateway are called (ADR 0109), or `None`: the
     deployment's `gateway_url`. A key minted on that gateway is only good there."""

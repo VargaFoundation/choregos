@@ -102,4 +102,36 @@ describe("l'assistant de création d'un projet (S23-06)", () => {
       }),
     );
   });
+
+  it("asks what the project delivers first, and asks a business process for no repository, language or Slack channel (owner review of 2026-11-03)", async () => {
+    ouvrir();
+    expect(screen.getByRole("button", { name: "Next" })).toHaveAccessibleDescription("say what the project delivers to go on");
+    expect(screen.queryByLabelText("Stack template")).toBeNull();
+    fireEvent.click(screen.getByLabelText(/^A business process/));
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.queryByLabelText("Repository")).toBeNull();
+    expect(screen.queryByLabelText("Main language")).toBeNull();
+    expect(screen.getByLabelText("Identifier (slug)")).toHaveAttribute("placeholder", "employee-onboarding");
+    fireEvent.change(screen.getByLabelText("Identifier (slug)"), { target: { value: "people-ops" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByLabelText(/Slack channel/)).toHaveValue("");
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    const recap = screen.getByTestId("recapitulatif");
+    expect(recap).not.toHaveTextContent("Slack");
+    expect(recap).not.toHaveTextContent("Main language");
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    await waitFor(() => expect(api.createProject).toHaveBeenCalled());
+    const body = vi.mocked(api.createProject).mock.calls.at(-1)![1] as { config: Record<string, unknown> };
+    expect(body.config).not.toHaveProperty("notify");
+    expect(body.config).not.toHaveProperty("repo");
+  });
+
+  it("a software project is asked for its repository and language", () => {
+    ouvrir();
+    fireEvent.click(screen.getByLabelText(/^Software, from a code repository/));
+    expect(screen.getByText("Stack template")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(screen.getByLabelText("Repository")).toBeInTheDocument();
+    expect(screen.getByText("Main language")).toBeInTheDocument();
+  });
 });
