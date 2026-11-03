@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { kindOfOutcome, tonDEtat } from "@/components/ui";
 import { boardWorkflows, columnsFromGraph, foldedItems, itemsOf, TERMINAL_FOLD, visibleColumns } from "@/components/workflows/board";
-import { champsDepuisSchema, valeursPourLApi } from "@/components/workflows/champs";
+import { fieldsFromSchema, valuesForApi } from "@/components/workflows/fields";
 import type { WorkflowGraph, WorkItemDto } from "@/lib/types";
 
 const ticket = (id: string, state: string, workflow_name?: string) =>
@@ -108,7 +108,7 @@ describe("les champs d'une demande, depuis `metadata.inputs`", () => {
   };
 
   it("se déduisent du schéma : contrôle, libellé, obligation, choix", () => {
-    const champs = champsDepuisSchema(schema);
+    const champs = fieldsFromSchema(schema);
     expect(champs.map((c) => [c.name, c.control, c.required])).toEqual([
       ["date_arrivee", "date", true],
       ["poste", "choice", true],
@@ -119,13 +119,13 @@ describe("les champs d'une demande, depuis `metadata.inputs`", () => {
     ]);
     expect(champs[0]?.label).toBe("arrival date");
     expect(champs[1]?.choices).toEqual(["dev", "rh", "commercial"]);
-    expect(champsDepuisSchema(undefined)).toEqual([]);
+    expect(fieldsFromSchema(undefined)).toEqual([]);
   });
 
   it("partent typés comme le schéma les attend ; un champ vide ne part pas", () => {
-    const champs = champsDepuisSchema(schema);
+    const champs = fieldsFromSchema(schema);
     expect(
-      valeursPourLApi(champs, {
+      valuesForApi(champs, {
         date_arrivee: "2026-11-02",
         poste: "dev",
         jours_d_essai: "90",

@@ -13,24 +13,24 @@ import { Empty, LEGENDE, PhraseDuMoteur } from "@/components/ui";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { duration, relative, shortDate, usd } from "@/lib/format";
-import { planDeLAgent } from "@/lib/plan-de-l-agent";
-import { provenanceDePreuve } from "@/lib/provenance";
+import { agentPlan } from "@/lib/agent-plan";
+import { evidenceProvenance } from "@/lib/provenance";
 import { useEventStream } from "@/lib/sse";
 import type { JourneyStep, ProcessStep, RunEventDto } from "@/lib/types";
-import { type Etape, type EtatEtape, sortiesDe } from "./modele";
+import { type Step, type StepState, outputsOf } from "./model";
 
-const GENRE: Record<Etape["genre"], string> = { agent: "agent", human: "person", platform: "platform", train: "release train", decision: "decision" };
-const EN_COURS = new Set(["queued", "running", "waiting", "pending_approval"]);
+const KIND_LABEL: Record<Step["kind"], string> = { agent: "agent", human: "person", platform: "platform", train: "release train", decision: "decision" };
+const RUNNING = new Set(["queued", "running", "waiting", "pending_approval"]);
 
 /**
- * Le panneau d'une étape du parcours (S22-02) : ce qu'elle fait, puis chacune de ses tentatives. Pour
- * un agent, ce qu'il a rendu, ses preuves, ses garanties, ce à quoi il a touché, son diff et son
- * journal — en direct quand il tourne. Pour une personne, la demande, qui a décidé et pourquoi ; et,
- * si on l'attend encore, de quoi décider ici même.
+ * The panel of a journey step (S22-02): what it does, then each of its attempts. For an agent,
+ * what it returned, its evidence, its gates, what it touched, its diff and its log, live while it
+ * runs. For a person, the request, who decided and why; and, if it is still awaited, what is
+ * needed to decide right here.
  */
-export function PanneauDEtape({
-  etape,
-  etat,
+export function StepPanel({
+  step,
+  state,
   process,
   slug,
   itemId,
@@ -38,8 +38,8 @@ export function PanneauDEtape({
   onDecided,
   decisionAnchor,
 }: {
-  etape: Etape;
-  etat: EtatEtape;
+  step: Step;
+  state: StepState;
   process?: ProcessStep;
   slug: string;
   itemId: string;
@@ -47,23 +47,23 @@ export function PanneauDEtape({
   onDecided?: () => void;
   decisionAnchor?: string;
 }) {
-  const tentatives = etat.tentatives;
-  const [choisie, setChoisie] = useState<string | null>(null);
-  const pas = tentatives.find((t) => t.id === choisie) ?? tentatives.at(-1);
+  const attempts = state.attempts;
+  const [chosen, setChosen] = useState<string | null>(null);
+  const attempt = attempts.find((t) => t.id === chosen) ?? attempts.at(-1);
   return (
     <aside
       className="raised min-w-0 self-start border border-line p-4 xl:sticky xl:top-16"
-      aria-label={`${etape.libelle}: attempts, actions and log`}
+      aria-label={`${step.label}: attempts, actions and log`}
       data-testid="panneau-parcours"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className={LEGENDE}>
-            {GENRE[etape.genre]}
-            {etape.acteur && etape.genre !== "platform" ? ` · ${etape.acteur}` : ""}
+            {KIND_LABEL[step.kind]}
+            {step.actor && step.kind !== "platform" ? ` · ${step.actor}` : ""}
           </p>
           <h3 className="text-lg font-semibold text-ink">
-            {etape.libelle} <span className="font-normal text-ink-muted">{etape.action}</span>
+            {step.label} <span className="font-normal text-ink-muted">{step.action}</span>
           </h3>
         </div>
         <button
@@ -81,16 +81,16 @@ export function PanneauDEtape({
         <details className="mt-3 text-sm">
           <summary className="cursor-pointer text-ink-muted">What this step does</summary>
           <p className="mt-1 text-xs text-ink-muted">
-            Transition <span className="font-mono">{etape.id}</span>
+            Transition <span className="font-mono">{step.id}</span>
           </p>
-          {etape.phrase && (
+          {step.sentence && (
             <p className="mt-1 text-ink-muted">
-              <PhraseDuMoteur texte={etape.phrase} />
+              <PhraseDuMoteur texte={step.sentence} />
             </p>
           )}
-          {sortiesDe(etape) && (
+          {outputsOf(step) && (
             <p className="mt-1 text-xs text-ink-muted" data-testid="sorties-de-l-etape">
-              Produces {sortiesDe(etape)!.slice(2)}
+              Produces {outputsOf(step)!.slice(2)}
             </p>
           )}
           {(process?.gates ?? []).length > 0 && (
@@ -105,28 +105,28 @@ export function PanneauDEtape({
         </details>
       }
 
-      {tentatives.length === 0 ? (
+      {attempts.length === 0 ? (
         <p className="mt-4 text-sm text-ink-muted">
-          {etat.statut === "en_cours"
+          {state.status === "en_cours"
             ? "The platform is on it: this step has no agent run of its own."
-            : etat.statut === "fait"
+            : state.status === "fait"
               ? "Done by the platform, without an agent run."
               : "Not reached yet."}
         </p>
       ) : (
         <>
           <div className="mt-4 flex flex-wrap gap-1.5" role="tablist" aria-label="Attempts">
-            {tentatives.map((t) => (
+            {attempts.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 role="tab"
-                aria-selected={t.id === pas?.id}
+                aria-selected={t.id === attempt?.id}
                 data-testid={`tentative-${t.id}`}
-                onClick={() => setChoisie(t.id)}
+                onClick={() => setChosen(t.id)}
                 className={cn(
                   "rounded-full border px-2.5 py-0.5 text-xs pointer-coarse:min-h-11",
-                  t.id === pas?.id
+                  t.id === attempt?.id
                     ? "border-accent-line bg-accent-soft text-accent-strong"
                     : "border-line text-ink-muted hover:text-ink",
                 )}
@@ -135,14 +135,14 @@ export function PanneauDEtape({
               </button>
             ))}
           </div>
-          {pas && (
+          {attempt && (
             <div className="mt-3" role="tabpanel">
-              {pas.kind === "agent" ? (
-                <PasDAgent pas={pas} slug={slug} />
-              ) : pas.kind === "human" ? (
-                <PasHumain pas={pas} itemId={itemId} onDecided={onDecided} decisionAnchor={decisionAnchor} />
+              {attempt.kind === "agent" ? (
+                <AgentAttempt attempt={attempt} slug={slug} />
+              ) : attempt.kind === "human" ? (
+                <HumanAttempt attempt={attempt} itemId={itemId} onDecided={onDecided} decisionAnchor={decisionAnchor} />
               ) : (
-                <PasDAction pas={pas} slug={slug} />
+                <ActionAttempt attempt={attempt} slug={slug} />
               )}
             </div>
           )}
@@ -152,55 +152,55 @@ export function PanneauDEtape({
   );
 }
 
-function Faits({ pas }: { pas: JourneyStep }) {
-  const duree = pas.started_at && pas.ended_at ? (Date.parse(pas.ended_at) - Date.parse(pas.started_at)) / 1000 : null;
+function Facts({ attempt }: { attempt: JourneyStep }) {
+  const seconds = attempt.started_at && attempt.ended_at ? (Date.parse(attempt.ended_at) - Date.parse(attempt.started_at)) / 1000 : null;
   return (
     <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs">
       <dt className="text-ink-muted">Status</dt>
-      <dd className={cn(pas.status === "failed" || pas.status === "rejected" ? "text-failed-ink" : "text-ink")}>
-        {pas.status.replace(/_/g, " ")}
+      <dd className={cn(attempt.status === "failed" || attempt.status === "rejected" ? "text-failed-ink" : "text-ink")}>
+        {attempt.status.replace(/_/g, " ")}
       </dd>
       <dt className="text-ink-muted">Started</dt>
-      <dd title={shortDate(pas.started_at)}>{relative(pas.started_at)}</dd>
-      {pas.ended_at && (
+      <dd title={shortDate(attempt.started_at)}>{relative(attempt.started_at)}</dd>
+      {attempt.ended_at && (
         <>
           <dt className="text-ink-muted">Took</dt>
-          <dd>{duration(duree)}</dd>
+          <dd>{duration(seconds)}</dd>
         </>
       )}
-      {pas.model && (
+      {attempt.model && (
         <>
           <dt className="text-ink-muted">Model</dt>
-          <dd className="font-mono">{pas.model}</dd>
+          <dd className="font-mono">{attempt.model}</dd>
         </>
       )}
-      {pas.kind === "agent" && (
+      {attempt.kind === "agent" && (
         <>
           <dt className="text-ink-muted">Cost</dt>
-          <dd>{usd(pas.cost_usd)}</dd>
+          <dd>{usd(attempt.cost_usd)}</dd>
         </>
       )}
-      {pas.decided_by && (
+      {attempt.decided_by && (
         <>
           <dt className="text-ink-muted">Decided by</dt>
-          <dd>{pas.decided_by}</dd>
+          <dd>{attempt.decided_by}</dd>
         </>
       )}
-      {pas.due_at && !pas.ended_at && (
+      {attempt.due_at && !attempt.ended_at && (
         <>
           <dt className="text-ink-muted">Due</dt>
-          <dd title={shortDate(pas.due_at)}>{relative(pas.due_at)}</dd>
+          <dd title={shortDate(attempt.due_at)}>{relative(attempt.due_at)}</dd>
         </>
       )}
     </dl>
   );
 }
 
-function Preuves({ evidence }: { evidence: Record<string, unknown> }) {
-  const faits = Object.entries((evidence.facts ?? {}) as Record<string, unknown>);
-  // [libellé, valeur, champ du contrat] : le champ dit, par `measured`, qui l'a établi (ADR 0045).
-  const lignes: [string, string, string][] = faits.length
-    ? faits.map(([k, v]) => [k.replace(/_/g, " "), typeof v === "boolean" ? (v ? "✓" : "✗") : String(v), `facts.${k}`])
+function EvidenceList({ evidence }: { evidence: Record<string, unknown> }) {
+  const factEntries = Object.entries((evidence.facts ?? {}) as Record<string, unknown>);
+  // [label, value, contract field]: the field says, through `measured`, who established it (ADR 0045).
+  const rows: [string, string, string][] = factEntries.length
+    ? factEntries.map(([k, v]) => [k.replace(/_/g, " "), typeof v === "boolean" ? (v ? "✓" : "✗") : String(v), `facts.${k}`])
     : [
         ...(typeof evidence.tests_run === "number"
           ? [
@@ -224,82 +224,82 @@ function Preuves({ evidence }: { evidence: Record<string, unknown> }) {
             ]
           : []),
       ];
-  if (lignes.length === 0) return null;
-  const mesures = Array.isArray(evidence.measured) ? { measured: evidence.measured.map(String) } : undefined;
+  if (rows.length === 0) return null;
+  const measured = Array.isArray(evidence.measured) ? { measured: evidence.measured.map(String) } : undefined;
   return (
     <ul className="flex flex-wrap gap-1.5 text-xs" aria-label="Evidence">
-      {lignes.map(([nom, valeur, cle]) => (
-        <li key={nom} className="flex items-baseline gap-1.5 border border-line px-1.5 py-0.5">
-          <span className="text-ink-muted">{nom}</span> {valeur}
-          <Provenance de={provenanceDePreuve(mesures, cle)} />
+      {rows.map(([name, value, key]) => (
+        <li key={name} className="flex items-baseline gap-1.5 border border-line px-1.5 py-0.5">
+          <span className="text-ink-muted">{name}</span> {value}
+          <Provenance de={evidenceProvenance(measured, key)} />
         </li>
       ))}
     </ul>
   );
 }
 
-function PasDAgent({ pas, slug }: { pas: JourneyStep; slug: string }) {
-  const [vue, setVue] = useState<"actions" | "journal">("actions");
-  const tourne = EN_COURS.has(pas.status) && !pas.ended_at;
-  const stockes = useQuery({ queryKey: ["run-events", pas.id], queryFn: () => api.runEvents(pas.id) });
-  const direct = useEventStream<RunEventDto>({
-    path: `/runs/${pas.id}/events`,
-    enabled: tourne,
+function AgentAttempt({ attempt, slug }: { attempt: JourneyStep; slug: string }) {
+  const [view, setView] = useState<"actions" | "log">("actions");
+  const running = RUNNING.has(attempt.status) && !attempt.ended_at;
+  const stored = useQuery({ queryKey: ["run-events", attempt.id], queryFn: () => api.runEvents(attempt.id) });
+  const live = useEventStream<RunEventDto>({
+    path: `/runs/${attempt.id}/events`,
+    enabled: running,
     mockEvents: () => import("@/mocks/data").then((fixtures) => fixtures.runEvents),
   });
-  const evenements = dedoublonner([...(stockes.data ?? []), ...direct.events]);
+  const events = dedupe([...(stored.data ?? []), ...live.events]);
   return (
     <div className="space-y-3">
-      <Faits pas={pas} />
-      {pas.summary && (
+      <Facts attempt={attempt} />
+      {attempt.summary && (
         <p className="text-sm text-ink">
-          {pas.summary} <Provenance de="declared" />
+          {attempt.summary} <Provenance de="declared" />
         </p>
       )}
-      {pas.verdict && (
-        <p className={cn("text-sm font-medium", pas.verdict === "approve" ? "text-succeeded-ink" : "text-retrying-ink")}>
-          Verdict: {pas.verdict.replace(/_/g, " ")} <Provenance de="declared" />
+      {attempt.verdict && (
+        <p className={cn("text-sm font-medium", attempt.verdict === "approve" ? "text-succeeded-ink" : "text-retrying-ink")}>
+          Verdict: {attempt.verdict.replace(/_/g, " ")} <Provenance de="declared" />
         </p>
       )}
-      <Preuves evidence={(pas.evidence ?? {}) as Record<string, unknown>} />
+      <EvidenceList evidence={(attempt.evidence ?? {}) as Record<string, unknown>} />
       <div className="flex gap-4 border-b border-line text-sm" role="tablist" aria-label="What the agent did">
         {(
           [
             ["actions", "What it did"],
-            ["journal", tourne ? "Log · live" : "Log"],
+            ["log", running ? "Log · live" : "Log"],
           ] as const
-        ).map(([cle, libelle]) => (
+        ).map(([key, label]) => (
           <button
-            key={cle}
+            key={key}
             type="button"
             role="tab"
-            aria-selected={vue === cle}
-            onClick={() => setVue(cle)}
+            aria-selected={view === key}
+            onClick={() => setView(key)}
             className={cn(
               "-mb-px border-b-2 py-1.5",
-              vue === cle ? "border-accent font-medium text-ink" : "border-transparent text-ink-muted hover:text-ink",
+              view === key ? "border-accent font-medium text-ink" : "border-transparent text-ink-muted hover:text-ink",
             )}
           >
-            {libelle}
+            {label}
           </button>
         ))}
       </div>
-      {vue === "actions" ? <CeQuIlAFait runId={pas.id} evenements={evenements} /> : <LiveLog events={evenements} height={320} />}
-      <Link href={`/p/${slug}/runs/${pas.id}`} className="inline-block text-sm">
+      {view === "actions" ? <WhatItDid runId={attempt.id} events={events} /> : <LiveLog events={events} height={320} />}
+      <Link href={`/p/${slug}/runs/${attempt.id}`} className="inline-block text-sm">
         Open the full run →
       </Link>
     </div>
   );
 }
 
-/** Ce que l'agent a fait : ses garanties, ce à quoi il a touché (les refus d'abord), les fichiers qu'il a changés. */
-function CeQuIlAFait({ runId, evenements }: { runId: string; evenements: RunEventDto[] }) {
-  const acces = useQuery({ queryKey: ["run-access", runId], queryFn: () => api.runAccess(runId) });
+/** What the agent did: its gates, what it touched (refusals first), the files it changed. */
+function WhatItDid({ runId, events }: { runId: string; events: RunEventDto[] }) {
+  const access = useQuery({ queryKey: ["run-access", runId], queryFn: () => api.runAccess(runId) });
   const diff = useQuery({ queryKey: ["run-diff", runId], queryFn: () => api.runDiff(runId) });
-  const garanties = verdictsDe(evenements);
-  const lignes = acces.data?.access ?? [];
-  const fichiers = diff.data?.files ?? [];
-  const plan = planDeLAgent(evenements);
+  const gates = verdictsDe(events);
+  const rows = access.data?.access ?? [];
+  const files = diff.data?.files ?? [];
+  const plan = agentPlan(events);
   return (
     <div className="space-y-3 text-sm" data-testid="ce-qu-il-a-fait">
       {plan && (
@@ -310,11 +310,11 @@ function CeQuIlAFait({ runId, evenements }: { runId: string; evenements: RunEven
       )}
       <section>
         <h4 className={LEGENDE}>Gates</h4>
-        {garanties.length === 0 ? (
+        {gates.length === 0 ? (
           <p className="text-xs text-ink-muted">No gate evaluated on this run.</p>
         ) : (
           <ul className="space-y-0.5">
-            {garanties.map((g, i) => (
+            {gates.map((g, i) => (
               <li key={`${g.name}-${i}`} className="flex gap-2 text-xs">
                 <span
                   className={g.pending ? "text-waiting-ink" : g.passed ? "text-succeeded-ink" : "text-failed-ink"}
@@ -333,13 +333,13 @@ function CeQuIlAFait({ runId, evenements }: { runId: string; evenements: RunEven
       </section>
       <section>
         <h4 className={LEGENDE}>
-          Access {acces.data ? `· ${acces.data.events} events, ${acces.data.refusals} refused` : ""}
+          Access {access.data ? `· ${access.data.events} events, ${access.data.refusals} refused` : ""}
         </h4>
-        {lignes.length === 0 ? (
+        {rows.length === 0 ? (
           <p className="text-xs text-ink-muted">No access recorded.</p>
         ) : (
           <ul className="space-y-0.5 text-xs">
-            {[...lignes]
+            {[...rows]
               .sort((a, b) => b.refusals - a.refusals)
               .map((l) => (
                 <li key={`${l.nature}:${l.target}`} className={cn("flex gap-2", l.refusals > 0 && "text-failed-ink")}>
@@ -357,11 +357,11 @@ function CeQuIlAFait({ runId, evenements }: { runId: string; evenements: RunEven
         <h4 className={LEGENDE}>
           Files changed {diff.data ? `· +${diff.data.additions} −${diff.data.deletions}` : ""}
         </h4>
-        {fichiers.length === 0 ? (
+        {files.length === 0 ? (
           <Empty>No file changed</Empty>
         ) : (
           <ul className="space-y-0.5 text-xs">
-            {fichiers.map((f) => (
+            {files.map((f) => (
               <li key={f.path} className="flex gap-2">
                 <span className="min-w-0 flex-1 break-all font-mono">{f.path}</span>
                 <span className="text-succeeded-ink">+{f.additions}</span>
@@ -376,59 +376,59 @@ function CeQuIlAFait({ runId, evenements }: { runId: string; evenements: RunEven
   );
 }
 
-function PasHumain({
-  pas,
+function HumanAttempt({
+  attempt,
   itemId,
   onDecided,
   decisionAnchor,
 }: {
-  pas: JourneyStep;
+  attempt: JourneyStep;
   itemId: string;
   onDecided?: () => void;
   decisionAnchor?: string;
 }) {
-  const attendu = pas.status === "waiting";
+  const awaited = attempt.status === "waiting";
   return (
     <div className="space-y-3">
-      <Faits pas={pas} />
-      {pas.summary && <p className="text-sm text-ink">{pas.summary}</p>}
-      {attendu && decisionAnchor ? (
+      <Facts attempt={attempt} />
+      {attempt.summary && <p className="text-sm text-ink">{attempt.summary}</p>}
+      {awaited && decisionAnchor ? (
         // One place to decide (S55-05): the page shows the decision with what the agent proposes.
         <p className="border border-line border-l-2 border-l-waiting p-3 text-sm" data-testid="decision-elsewhere">
           This decision is taken at the top of the page, with what the agent proposes.{" "}
           <a href={`#${decisionAnchor}`}>Go to the decision</a>
         </p>
-      ) : attendu ? (
+      ) : awaited ? (
         <div className="border border-line border-l-2 border-l-waiting p-3">
           <p className={cn(LEGENDE, "mb-2")}>Decide here</p>
-          <DecisionBar itemId={itemId} kind={pas.role ?? "approval"} onDone={onDecided} />
+          <DecisionBar itemId={itemId} kind={attempt.role ?? "approval"} onDone={onDecided} />
         </div>
       ) : (
-        <p className={cn("text-sm", pas.status === "rejected" ? "text-failed-ink" : "text-succeeded-ink")}>
-          {pas.status.replace(/_/g, " ")}
-          {pas.decided_by ? ` by ${pas.decided_by}` : ""}
-          {pas.ended_at ? `, ${relative(pas.ended_at)}` : ""}
+        <p className={cn("text-sm", attempt.status === "rejected" ? "text-failed-ink" : "text-succeeded-ink")}>
+          {attempt.status.replace(/_/g, " ")}
+          {attempt.decided_by ? ` by ${attempt.decided_by}` : ""}
+          {attempt.ended_at ? `, ${relative(attempt.ended_at)}` : ""}
         </p>
       )}
     </div>
   );
 }
 
-function PasDAction({ pas, slug }: { pas: JourneyStep; slug: string }) {
-  const train = pas.actor === "release_train";
+function ActionAttempt({ attempt, slug }: { attempt: JourneyStep; slug: string }) {
+  const train = attempt.actor === "release_train";
   return (
     <div className="space-y-3">
-      <Faits pas={pas} />
-      {pas.summary && <p className="text-sm text-ink">{pas.summary}</p>}
-      <Link href={train ? `/p/${slug}/trains` : `/p/${slug}/actions/${pas.id}`} className="inline-block text-sm">
+      <Facts attempt={attempt} />
+      {attempt.summary && <p className="text-sm text-ink">{attempt.summary}</p>}
+      <Link href={train ? `/p/${slug}/trains` : `/p/${slug}/actions/${attempt.id}`} className="inline-block text-sm">
         {train ? "Open the release trains →" : "Open the governed action →"}
       </Link>
     </div>
   );
 }
 
-function dedoublonner(evenements: RunEventDto[]): RunEventDto[] {
-  const vus = new Map<number, RunEventDto>();
-  for (const e of evenements) vus.set(e.seq, e);
-  return [...vus.values()].sort((a, b) => a.seq - b.seq);
+function dedupe(events: RunEventDto[]): RunEventDto[] {
+  const seen = new Map<number, RunEventDto>();
+  for (const e of events) seen.set(e.seq, e);
+  return [...seen.values()].sort((a, b) => a.seq - b.seq);
 }

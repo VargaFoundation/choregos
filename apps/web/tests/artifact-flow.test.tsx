@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { CarteEnSerpentin } from "@/components/parcours/carte-du-parcours";
+import { SnakeMap } from "@/components/journey/journey-map";
 import { ArtifactFlowCard, type Highlight } from "@/components/workflows/artifact-flow";
 import type { ArtifactFlow, ProcessStep } from "@/lib/types";
 import devComplex from "@/mocks/dev-complex.json";
@@ -13,9 +13,9 @@ describe("the artifacts table under the map (S39-13)", () => {
     render(<ArtifactFlowCard artifacts={artifacts} steps={steps} onHighlight={() => {}} />);
     const table = screen.getByRole("table", { name: "Artifacts" });
     expect(within(table).getAllByRole("row")).toHaveLength(artifacts.length + 1);
-    const ligne = screen.getByTestId("artefact-test_report");
-    expect(ligne).toHaveTextContent("t-test");
-    expect(ligne).toHaveTextContent("t-implement");
+    const row = screen.getByTestId("artefact-test_report");
+    expect(row).toHaveTextContent("t-test");
+    expect(row).toHaveTextContent("t-implement");
     expect(screen.getByTestId("artefact-spec_markdown")).toHaveTextContent("context of every agent step");
     expect(screen.getByTestId("artefact-spec_markdown")).toHaveTextContent("in the pull request");
     expect(screen.getByTestId("artefact-human_feedback")).toHaveTextContent("on rejection");
@@ -42,7 +42,7 @@ describe("the artifacts table under the map (S39-13)", () => {
   it("lights the boxes of the map the row names", () => {
     const highlight: Highlight = new Map([["t-test", "produces"], ["t-implement", "reads"]]);
     render(
-      <CarteEnSerpentin
+      <SnakeMap
         graph={devComplex.graph as never}
         process={steps}
         initial={devComplex.initial}

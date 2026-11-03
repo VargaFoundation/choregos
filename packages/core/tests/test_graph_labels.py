@@ -1,8 +1,8 @@
 """The map's secondary edges are labelled in English by the engine (ADR 0046, S34-03).
 
-The console still translates the former French labels, as a fallback for one release
-(`apps/web/src/components/workflows/carte/disposition.ts`). This test holds the engine side, so
-that the fallback can be removed without a map going back to French.
+The console passes the labels through as they come (`apps/web/src/components/workflows/map/layout.ts`):
+its fallback that translated the former French ones is gone. This test holds the engine side, so
+that a map does not go back to French.
 """
 
 from __future__ import annotations

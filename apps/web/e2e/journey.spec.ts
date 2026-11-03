@@ -1,12 +1,12 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-/** Les cinq parcours clés du plan (§3.4), joués sur les fixtures du mode démo. */
+/** The plan's five key journeys (§3.4), played on the demo-mode fixtures. */
 
-test("liste des projets et accès à un projet", async ({ page }) => {
+test("projects list and access to a project", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Projects" })).toBeVisible();
   await expect(page.getByText("Billing API")).toBeVisible();
-  // La console dit sur quelle édition elle tourne (ADR 0024).
+  // The console says which edition it runs on (ADR 0024).
   await expect(page.getByTestId("edition-badge")).toHaveText("Community edition");
   await page.getByRole("link", { name: "Billing API" }).click();
   await expect(page).toHaveURL(/\/p\/billing-api$/);
@@ -21,7 +21,7 @@ test("liste des projets et accès à un projet", async ({ page }) => {
 test("inside a project the sidebar lists its sections, and no tab row is left (S30-03)", async ({ page }) => {
   await page.goto("/p/billing-api/board");
   const barre = page.getByRole("complementary", { name: "Sidebar" });
-  for (const groupe of ["Work", "Define", "Configure"]) await expect(barre.getByRole("list", { name: groupe })).toBeVisible();
+  for (const group of ["Work", "Define", "Configure"]) await expect(barre.getByRole("list", { name: group })).toBeVisible();
   await expect(barre.getByRole("link", { name: "Board" })).toHaveAttribute("aria-current", "page");
   await expect(barre.getByRole("link", { name: "Skills" })).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Project sections" })).toHaveCount(0);
@@ -38,59 +38,59 @@ test("inside a project the sidebar lists its sections, and no tab row is left (S
   await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("Administration");
 });
 
-test("board : une colonne d'un état que le workflow ne connaît pas le dit (S23-04)", async ({ page }) => {
+test("board: a column for a state the workflow does not know says so (S23-04)", async ({ page }) => {
   await page.goto("/p/billing-api/board");
-  // Les tickets de démonstration sont dans des états qu'ignore la carte de default-simple.
+  // The demo work items are in states that default-simple's map ignores.
   await expect(page.getByText("Not a state of this workflow").first()).toBeVisible();
 });
 
-test("board : colonnes du workflow et décision humaine", async ({ page }) => {
+test("board: workflow columns and human decision", async ({ page }) => {
   await page.goto("/p/billing-api/board");
   await expect(page.getByRole("heading", { name: "Board" })).toBeVisible();
   await expect(page.getByText("Credit notes are not deducted from the total")).toBeVisible();
   await expect(page.getByRole("button", { name: "Approve" }).first()).toBeVisible();
 });
 
-test("ticket : coûts par étape et timeline", async ({ page }) => {
+test("work item: costs per step and timeline", async ({ page }) => {
   await page.goto("/p/billing-api/items/w1");
   await expect(page.getByText("Cost per stage")).toBeVisible();
   await expect(page.getByText("Timeline")).toBeVisible();
 });
 
-test("ticket : le parcours se suit en direct, se rejoue, et chaque agent montre ce qu'il a fait (S22-02)", async ({ page }) => {
+test("work item: the journey is followed live, replayed, and every agent shows what it did (S22-02)", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/p/billing-api/items/w1");
-  const parcours = page.getByTestId("parcours");
-  await expect(parcours.getByTestId("parcours-maintenant")).toContainText("Now in Reviewed by an agent");
-  await expect(parcours.getByTestId("etape-t-security-review")).toHaveAttribute("data-statut", "en_cours");
-  await expect(parcours.getByTestId("tour-t-test")).toHaveText("Passed in round 3");
-  // La carte tient dans la page : elle s'allonge, elle ne déborde pas.
+  const journey = page.getByTestId("parcours");
+  await expect(journey.getByTestId("parcours-maintenant")).toContainText("Now in Reviewed by an agent");
+  await expect(journey.getByTestId("etape-t-security-review")).toHaveAttribute("data-statut", "en_cours");
+  await expect(journey.getByTestId("tour-t-test")).toHaveText("Passed in round 3");
+  // The map fits in the page: it grows longer, it does not overflow.
   const debord = await page.evaluate(() => {
-    const carte = document.querySelector('[data-testid="parcours"]')!.getBoundingClientRect();
-    return { droite: carte.right, fenetre: document.documentElement.clientWidth };
+    const mapBox = document.querySelector('[data-testid="parcours"]')!.getBoundingClientRect();
+    return { droite: mapBox.right, fenetre: document.documentElement.clientWidth };
   });
   expect(debord.droite).toBeLessThanOrEqual(debord.fenetre);
 
-  await parcours.getByRole("button", { name: "2×" }).click();
-  await parcours.getByRole("button", { name: "Replay the journey" }).click();
-  await expect(parcours.getByTestId("parcours-moment")).toContainText("/ 34");
-  await expect(parcours.getByTestId("etape-t-triage")).toHaveAttribute("data-statut", "fait", { timeout: 5000 });
-  await parcours.getByRole("button", { name: "Pause the replay" }).click();
-  await parcours.getByRole("navigation", { name: "Stages of the journey" }).getByRole("button", { name: /In progress/ }).click();
-  await expect(parcours.getByTestId("etape-t-implement")).toHaveAttribute("data-statut", "en_cours");
-  await parcours.getByRole("button", { name: /^Live/ }).click();
+  await journey.getByRole("button", { name: "2×" }).click();
+  await journey.getByRole("button", { name: "Replay the journey" }).click();
+  await expect(journey.getByTestId("parcours-moment")).toContainText("/ 34");
+  await expect(journey.getByTestId("etape-t-triage")).toHaveAttribute("data-statut", "fait", { timeout: 5000 });
+  await journey.getByRole("button", { name: "Pause the replay" }).click();
+  await journey.getByRole("navigation", { name: "Stages of the journey" }).getByRole("button", { name: /In progress/ }).click();
+  await expect(journey.getByTestId("etape-t-implement")).toHaveAttribute("data-statut", "en_cours");
+  await journey.getByRole("button", { name: /^Live/ }).click();
 
-  await parcours.getByTestId("etape-t-test").click();
-  const panneau = page.getByTestId("panneau-parcours");
-  await expect(panneau).toBeVisible();
-  await panneau.getByTestId("tentative-r-test-1").click();
-  await expect(panneau).toContainText("2 tests fail: rounding of partial credit notes.");
-  await expect(panneau.getByTestId("ce-qu-il-a-fait")).toContainText("src/billing/rates.py");
-  await panneau.getByRole("tab", { name: "Log" }).click();
-  await expect(panneau.getByTestId("live-log")).toContainText("session/request_permission");
+  await journey.getByTestId("etape-t-test").click();
+  const panel = page.getByTestId("panneau-parcours");
+  await expect(panel).toBeVisible();
+  await panel.getByTestId("tentative-r-test-1").click();
+  await expect(panel).toContainText("2 tests fail: rounding of partial credit notes.");
+  await expect(panel.getByTestId("ce-qu-il-a-fait")).toContainText("src/billing/rates.py");
+  await panel.getByRole("tab", { name: "Log" }).click();
+  await expect(panel.getByTestId("live-log")).toContainText("session/request_permission");
 });
 
-test("run : journal ACP avec permissions refusées mises en évidence", async ({ page }) => {
+test("run: ACP log with refused permissions highlighted", async ({ page }) => {
   await page.goto("/p/billing-api/runs/r3");
   await expect(page.getByText("ACP journal")).toBeVisible();
   await expect(page.getByPlaceholder("Filter")).toBeVisible();
@@ -109,7 +109,7 @@ test("findings : triage disponible", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Create the ticket" })).toBeVisible();
 });
 
-test("wizard : validation du slug avant de continuer", async ({ page }) => {
+test("wizard: slug validation before continuing", async ({ page }) => {
   await page.goto("/projects/new");
   await page.getByLabel(/^Software, from a code repository/).check();
   await page.getByRole("button", { name: "Next" }).click();
@@ -117,14 +117,14 @@ test("wizard : validation du slug avant de continuer", async ({ page }) => {
   await expect(page.getByText("Lowercase letters, digits and dashes only")).toBeVisible();
 });
 
-test("connexion : la page existe et dit ce qu'elle attend", async ({ page }) => {
+test("sign-in: the page exists and says what it expects", async ({ page }) => {
   await page.goto("/login?next=%2Fadmin");
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
-  // en mode démo la session est simulée : la page le dit au lieu d'un bouton vers un IdP absent
+  // in demo mode the session is simulated: the page says so instead of a button towards an absent IdP
   await expect(page.getByText(/Demo mode: the session/)).toBeVisible();
 });
 
-test("administration : membres et jetons ont un écran", async ({ page }) => {
+test("administration: members and tokens have a screen", async ({ page }) => {
   await page.goto("/admin");
   await expect(page.getByRole("button", { name: /Create an API token/ })).toBeVisible();
   await page.getByRole("link", { name: "Members" }).click();
@@ -158,7 +158,7 @@ test("members: a person appears once; a project has its members; org_admin is no
   await expect(role.locator("option[value=org_admin]")).toHaveCount(0);
 });
 
-test("administration : une section déclarée par un greffon se rend, et son secret ne se montre qu'une fois", async ({
+test("administration: a section declared by an extension renders, and its secret shows only once", async ({
   page,
 }) => {
   await page.goto("/admin");
@@ -177,7 +177,7 @@ test("administration : une section déclarée par un greffon se rend, et son sec
   await expect(page.getByTestId("secret-once")).toHaveCount(0);
 });
 
-test("administration : en communautaire, ce que l'édition entreprise ajoute, sans faux écran", async ({ page }) => {
+test("administration: in community, what the enterprise edition adds, without a fake screen", async ({ page }) => {
   await page.goto("/admin/edition");
   await expect(page.getByText(/runs the community core/)).toBeVisible();
   await expect(page.getByRole("list", { name: "What the enterprise edition adds" })).toContainText(
@@ -185,7 +185,7 @@ test("administration : en communautaire, ce que l'édition entreprise ajoute, sa
   );
 });
 
-test("integrations : un jeton pour Claude Code, glissé dans l'extrait", async ({ page }) => {
+test("integrations: a token for Claude Code, slipped into the snippet", async ({ page }) => {
   await page.goto("/integrations");
   await expect(page.getByRole("heading", { name: "Integrations", level: 1 })).toBeVisible();
   await expect(page.getByTestId("mcp-url")).toHaveText("http://localhost:3000/mcp");
@@ -195,22 +195,22 @@ test("integrations : un jeton pour Claude Code, glissé dans l'extrait", async (
   await expect(page.getByTestId("connection-status")).toBeVisible();
 });
 
-test("integrations d'un projet : la porte du projet, et claude.ai dit pourquoi il ne la joint pas", async ({ page }) => {
+test("a project's integrations: the project's door, and claude.ai says why it does not reach it", async ({ page }) => {
   await page.goto("/p/billing-api/integrations/cursor");
   await expect(page.getByTestId("mcp-url")).toHaveText("http://localhost:3000/mcp/projects/acme:billing-api");
   await page.getByRole("link", { name: "claude.ai" }).click();
   await expect(page.getByText("Not reachable from here yet")).toBeVisible();
 });
 
-test("une proposition de l'ontologie est une action : un ancien lien y mène, qui dit ce qu'elle touche", async ({
+test("an ontology proposal is an action: a former link leads there, and says what it touches", async ({
   page,
 }) => {
-  // Un lien de décision émis avant S20-10 (porte MCP, courriel) : même identifiant, page des actions.
+  // A decision link issued before S20-10 (MCP door, email): same identifier, actions page.
   await page.goto("/p/billing-api/proposals/pr1");
   await expect(page).toHaveURL(/\/p\/billing-api\/actions\/pr1$/);
-  const ontologie = page.getByTestId("ontologie");
-  await expect(ontologie).toContainText("open_infra_pr");
-  await expect(ontologie).toContainText("os-reboot-required");
+  const ontology = page.getByTestId("ontologie");
+  await expect(ontology).toContainText("open_infra_pr");
+  await expect(ontology).toContainText("os-reboot-required");
   await expect(page.getByTestId("regles-de-decision")).toContainText("within 10 min");
   await expect(page.getByRole("button", { name: "Reject" })).toBeDisabled();
   await page.getByLabel("Reason to reject").fill("the maintenance window is frozen");
@@ -220,7 +220,7 @@ test("une proposition de l'ontologie est une action : un ancien lien y mène, qu
   await expect(page).toHaveURL(/\/p\/billing-api\/actions$/);
 });
 
-test("workflows : un projet en porte plusieurs, chacun se lit en processus et en carte", async ({ page }) => {
+test("workflows: a project carries several, each reads as a process and as a map", async ({ page }) => {
   await page.goto("/p/billing-api/workflows");
   await expect(page.getByTestId("workflow-card-default-simple")).toContainText("Whatever no rule claims");
   await expect(page.getByTestId("workflow-card-hotfix")).toContainText("labelled incident");
@@ -231,87 +231,87 @@ test("workflows : un projet en porte plusieurs, chacun se lit en processus et en
   await page.getByRole("link", { name: "Steps" }).click();
   await expect(page.getByTestId("process-step-t-implement")).toContainText("the agent stayed within its allowed paths");
   await page.getByRole("link", { name: "Graph" }).click();
-  // La carte s'ouvre en serpentin (S22-05) ; la liste à plat est à un onglet.
+  // The map opens as a snake (S22-05); the flat list is one tab away.
   await expect(page.getByTestId("carte-en-serpentin")).toBeVisible();
   await page.getByRole("button", { name: "List" }).click();
-  // Les défauts partent de chaque état d'agent : la légende les dit une fois, la carte ne les dessine pas.
+  // The defaults leave every agent state: the legend says them once, the map does not draw them.
   await expect(page.getByTestId("workflow-defaults").getByRole("listitem")).toHaveCount(2);
-  // Le chemin nominal se lit seul : une escalade se montre autour de son état, ou toutes sur demande.
-  const carte = page.getByTestId("workflow-graph");
-  await expect(carte.getByRole("list", { name: "Nominal path" }).locator(":scope > li")).toHaveCount(3);
-  await expect(carte.getByTestId("secondaires-ready")).toHaveCount(0);
-  await carte.getByTestId("etat-ready").hover();
-  await expect(carte.getByTestId("secondaires-ready")).toContainText("When retries run out → Needs a human");
+  // The nominal path reads alone: an escalation shows around its state, or all of them on request.
+  const mapBox = page.getByTestId("workflow-graph");
+  await expect(mapBox.getByRole("list", { name: "Nominal path" }).locator(":scope > li")).toHaveCount(3);
+  await expect(mapBox.getByTestId("secondaires-ready")).toHaveCount(0);
+  await mapBox.getByTestId("etat-ready").hover();
+  await expect(mapBox.getByTestId("secondaires-ready")).toContainText("When retries run out → Needs a human");
   await page.mouse.move(0, 0);
-  await expect(carte.getByTestId("secondaires-ready")).toHaveCount(0);
+  await expect(mapBox.getByTestId("secondaires-ready")).toHaveCount(0);
   await page.getByLabel(/Show every retry, rejection and escalation/).check();
-  await expect(carte.getByTestId("secondaires-ready")).toBeVisible();
+  await expect(mapBox.getByTestId("secondaires-ready")).toBeVisible();
 });
 
-test("workflows : un libellé changé sur la carte se lit dans la vue processus, puis se publie", async ({ page }) => {
+test("workflows: a label changed on the map reads in the process view, then is published", async ({ page }) => {
   await page.goto("/p/billing-api/workflows/default-simple?view=list");
-  const carte = page.getByTestId("workflow-graph");
-  await carte.getByTestId("etat-inbox").click();
-  const panneau = page.getByTestId("panneau-etat");
-  await panneau.getByLabel("Label").fill("Nouvelles demandes");
-  await panneau.getByRole("button", { name: "Set label" }).click();
+  const mapBox = page.getByTestId("workflow-graph");
+  await mapBox.getByTestId("etat-inbox").click();
+  const panel = page.getByTestId("panneau-etat");
+  await panel.getByLabel("Label").fill("Nouvelles demandes");
+  await panel.getByRole("button", { name: "Set label" }).click();
 
-  // Rien n'est publié : le brouillon dit le geste, son diff, et la carte se redessine depuis lui.
-  const brouillon = page.getByTestId("brouillon");
-  await expect(brouillon).toContainText("1 change not published yet");
-  await brouillon.getByText("Last change").click();
+  // Nothing is published: the draft says the gesture, its diff, and the map is redrawn from it.
+  const draft = page.getByTestId("brouillon");
+  await expect(draft).toContainText("1 change not published yet");
+  await draft.getByText("Last change").click();
   await expect(page.getByTestId("dernier-diff")).toContainText("+  inbox: { display: Nouvelles demandes, kind: wait }");
-  await expect(carte.getByTestId("etat-inbox")).toContainText("Nouvelles demandes");
+  await expect(mapBox.getByTestId("etat-inbox")).toContainText("Nouvelles demandes");
 
-  // La vue processus lit le même brouillon ; publier crée la version suivante de celle qui a été lue.
+  // The process view reads the same draft; publishing creates the version following the one that was read.
   await page.getByRole("link", { name: "Steps" }).click();
   await expect(page.getByTestId("process-step-t-refine")).toContainText("Nouvelles demandes");
-  await brouillon.getByRole("button", { name: "Publish v2" }).click();
-  await expect(brouillon.getByRole("status")).toHaveText("default-simple v2 published — running items finish on their version");
+  await draft.getByRole("button", { name: "Publish v2" }).click();
+  await expect(draft.getByRole("status")).toHaveText("default-simple v2 published — running items finish on their version");
 });
 
-test("workflows : la vue processus ouvre le panneau d'une étape, son délai prérempli", async ({ page }) => {
+test("workflows: the process view opens a step's panel, its time limit prefilled", async ({ page }) => {
   await page.goto("/p/billing-api/workflows/default-simple/steps");
   await page.getByRole("button", { name: "Edit t-refine" }).click();
-  const panneau = page.getByTestId("panneau-transition");
-  await expect(panneau).toBeVisible();
-  // Le délai lu est prérempli : t-implement en a un, t-refine non.
-  await expect(panneau.getByLabel("At most (hours, empty: the default)")).toHaveValue("");
+  const panel = page.getByTestId("panneau-transition");
+  await expect(panel).toBeVisible();
+  // The time limit read is prefilled: t-implement has one, t-refine does not.
+  await expect(panel.getByLabel("At most (hours, empty: the default)")).toHaveValue("");
   await page.getByRole("button", { name: "Close" }).click();
   await page.getByRole("button", { name: "Edit t-implement" }).click();
   await expect(page.getByTestId("panneau-transition").getByLabel("At most (hours, empty: the default)")).toHaveValue("72");
 });
 
-test("l'ancienne page du workflow mène à la liste", async ({ page }) => {
+test("the former workflow page leads to the list", async ({ page }) => {
   await page.goto("/p/billing-api/workflow");
   await expect(page).toHaveURL(/\/p\/billing-api\/workflows$/);
 });
 
-test("historique d'un workflow : deux versions se comparent, une ancienne se republie", async ({ page }) => {
+test("a workflow's history: two versions compare, an old one is republished", async ({ page }) => {
   await page.goto("/p/billing-api/workflows/default-simple/history");
   await expect(page.getByRole("table", { name: "Versions of default-simple" }).getByRole("row")).toHaveCount(3);
-  // Par défaut, la version d'avant contre l'active : la garantie ajoutée en v2.
+  // By default, the previous version against the active one: the gate added in v2.
   await expect(page.getByTestId("workflow-diff")).toContainText("gates: [scope_respected, ci_green]");
   await page.getByRole("button", { name: "Restore v1" }).click();
   await expect(page.getByRole("button", { name: "Republish v1" })).toBeVisible();
 });
 
-test("board par workflow : la demande choisit son workflow, et ses champs en viennent", async ({ page }) => {
+test("board per workflow: the request picks its workflow, and its fields come from it", async ({ page }) => {
   await page.goto("/p/billing-api/board");
   await expect(page.getByText("Credit notes are not deducted from the total")).toBeVisible();
   await page.getByRole("button", { name: "New work item" }).click();
   await page.getByLabel("Workflow", { exact: true }).selectOption("hotfix");
-  const champs = page.getByTestId("request-fields");
-  await expect(champs.getByLabel("incident id (required)")).toBeVisible();
-  await expect(champs.getByLabel("severity (required)")).toBeVisible();
-  await expect(champs.getByLabel("detected on")).toHaveAttribute("type", "date");
-  // Le board du flux d'incident : ses colonnes, pas celles du défaut.
+  const fields = page.getByTestId("request-fields");
+  await expect(fields.getByLabel("incident id (required)")).toBeVisible();
+  await expect(fields.getByLabel("severity (required)")).toBeVisible();
+  await expect(fields.getByLabel("detected on")).toHaveAttribute("type", "date");
+  // The incident flow's board: its columns, not the default's.
   await page.keyboard.press("Escape");
   await page.getByRole("navigation", { name: "Board workflow" }).getByRole("link", { name: /hotfix/ }).click();
   await expect(page).toHaveURL(/workflow=hotfix/);
 });
 
-test("agents : le registre, et un Claude Code connecté qui agit comme agent externe", async ({ page }) => {
+test("agents: the registry, and a connected Claude Code that acts as an external agent", async ({ page }) => {
   await page.goto("/agents");
   await expect(page.getByRole("heading", { name: "Agents", exact: true })).toBeVisible();
   await expect(page.getByTestId("agent-onboarding-coordinator")).toContainText("Onboarding coordinator");
@@ -322,12 +322,12 @@ test("agents : le registre, et un Claude Code connecté qui agit comme agent ext
   await expect(page.getByTestId("client-tok-claude")).toHaveCount(0);
   await page.goto("/integrations");
   await expect(page.getByRole("heading", { name: "Integrations", level: 1 })).toBeVisible();
-  // Le jeton du Claude Code de Léa a appelé la porte : connecté, et rattaché à son agent externe.
+  // Lea's Claude Code token called the door: connected, and attached to its external agent.
   const claude = page.getByTestId("client-tok-claude");
   await expect(claude).toContainText("Connected");
   await expect(claude).toContainText("claude-code/2.1.0");
   await expect(claude.getByRole("link", { name: "Acts as Léa's Claude Code" })).toBeVisible();
-  // Un client jamais appelé ne se dit pas connecté, et s'enregistre.
+  // A client never called is not said to be connected, and registers.
   await expect(page.getByTestId("client-tok-cursor")).toContainText("Never called");
   await expect(page.getByTestId("client-tok-cursor").getByRole("button", { name: "Register as an external agent" })).toBeVisible();
 
@@ -447,11 +447,11 @@ test("an agent made from the form runs on a sample under a capped budget, and a 
   await banc.getByLabel("Sample title").fill("Checkout down for every customer");
   await banc.getByLabel("Trial budget (USD, 0.50 at most)").fill("2");
   await banc.getByRole("button", { name: "Try it" }).click();
-  const resultat = banc.getByTestId("resultat-d-essai");
-  await expect(resultat).toContainText("capped at US$0.50");
-  await expect(resultat).toContainText("succeeded");
-  await expect(resultat).toContainText("Sorted: urgent");
-  await expect(resultat.getByRole("list", { name: "Eval results" })).toContainText("Passed");
+  const result = banc.getByTestId("resultat-d-essai");
+  await expect(result).toContainText("capped at US$0.50");
+  await expect(result).toContainText("succeeded");
+  await expect(result).toContainText("Sorted: urgent");
+  await expect(result.getByRole("list", { name: "Eval results" })).toContainText("Passed");
   await builder.getByRole("button", { name: "Create and activate" }).click();
   await expect(page).toHaveURL(/\/agents\/escalation$/);
 
@@ -469,18 +469,18 @@ test("an agent made from the form runs on a sample under a capped budget, and a 
 
 test("an agent's page is in tabs: overview, definition, history, lifecycle, runs, access (S30-05, S40-12)", async ({ page }) => {
   await page.goto("/agents/onboarding-coordinator");
-  const onglets = page.getByRole("navigation", { name: "Sections of Onboarding coordinator" });
-  await expect(onglets.getByRole("link")).toHaveText(["Overview", "Definition", "History", "Lifecycle", "Runs", "Access"]);
-  await expect(onglets.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
+  const tabs = page.getByRole("navigation", { name: "Sections of Onboarding coordinator" });
+  await expect(tabs.getByRole("link")).toHaveText(["Overview", "Definition", "History", "Lifecycle", "Runs", "Access"]);
+  await expect(tabs.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
   await expect(page.getByTestId("mesures")).toBeVisible();
   await expect(page.getByTestId("version")).toHaveCount(0);
 
-  await onglets.getByRole("link", { name: "History" }).click();
+  await tabs.getByRole("link", { name: "History" }).click();
   await expect(page).toHaveURL(/tab=history/);
   await expect(page.getByTestId("history").getByRole("listitem")).not.toHaveCount(1);
   await expect(page.getByTestId("mesures")).toHaveCount(0);
 
-  await onglets.getByRole("link", { name: "Runs" }).click();
+  await tabs.getByRole("link", { name: "Runs" }).click();
   const runs = page.getByTestId("runs-de-l-agent");
   await expect(runs).toContainText("billing-api");
   await runs.getByRole("link").first().click();
@@ -490,7 +490,7 @@ test("an agent's page is in tabs: overview, definition, history, lifecycle, runs
   await expect(page.getByRole("heading", { name: "Tools and servers" })).toBeVisible();
 });
 
-test("agents : un agent externe montre son client, et un projet ses agents implicites", async ({ page }) => {
+test("agents: an external agent shows its client, and a project its implicit agents", async ({ page }) => {
   await page.goto("/agents/leas-claude-code?tab=access");
   await expect(page.getByTestId("clients-de-l-agent")).toContainText("claude-code/2.1.0");
   await page.goto("/p/billing-api/agents");
@@ -502,13 +502,13 @@ test("agents : un agent externe montre son client, et un projet ses agents impli
   await expect(page.getByTestId("implicites").getByRole("status")).toContainText("actors.refiner.agent: refiner");
 });
 
-test("réglages : les connecteurs que les workflows exigent, et pourquoi ; un secret en référence", async ({ page }) => {
+test("settings: the connectors the workflows require, and why; a secret by reference", async ({ page }) => {
   await page.goto("/p/billing-api/settings/connections");
-  const connecteurs = page.getByTestId("connecteurs");
-  // Billing API livre du logiciel : un dépôt et une CI, chacun avec sa raison.
+  const connectors = page.getByTestId("connecteurs");
+  // Billing API ships software: a repository and a CI, each with its reason.
   await expect(page.getByTestId("connecteur-scm")).toContainText("Not connected");
   await expect(page.getByTestId("connecteur-scm")).toContainText("the guarantee scope_respected on t-implement");
-  // Rien n'exige de notification : la ligne n'existe pas tant qu'on ne l'ajoute pas.
+  // Nothing requires a notification: the row does not exist until it is added.
   await expect(page.getByTestId("connecteur-notify")).toHaveCount(0);
   await page.getByLabel("Add a connector").selectOption("notify");
   await page.getByRole("button", { name: "Add", exact: true }).click();
@@ -523,10 +523,10 @@ test("réglages : les connecteurs que les workflows exigent, et pourquoi ; un se
   await expect(page.getByTestId("connecteur-tracker").getByRole("alert")).toContainText("A reference is expected");
   await page.getByLabel("api token reference").fill("env:CONNECTOR_JIRA_TOKEN");
   await expect(page.getByTestId("connecteur-tracker").getByRole("alert")).toHaveCount(0);
-  await expect(connecteurs).toBeVisible();
+  await expect(connectors).toBeVisible();
 });
 
-test("connecteurs de l'organisation : chaque opération porte sa politique ; un projet ne fait que resserrer", async ({ page }) => {
+test("organisation connectors: every operation carries its policy; a project can only tighten", async ({ page }) => {
   await page.goto("/admin/connectors");
   const operations = page.getByTestId("operations-entra-acme");
   await expect(operations).toContainText("create_account");
@@ -534,14 +534,14 @@ test("connecteurs de l'organisation : chaque opération porte sa politique ; un 
   await expect(page.getByLabel("Project groups of create_account")).toHaveValue("hr");
 
   await page.goto("/p/billing-api/settings/security");
-  const projet = page.getByTestId("operations-du-projet");
-  await expect(projet).toContainText("read_user");
-  // `create_account` est `approval` dans l'organisation : le choix ne propose pas `allowed`.
-  const choix = page.getByLabel("This project's policy for create_account");
-  await expect(choix.locator("option")).toHaveText(["As the organisation", "approval", "forbidden"]);
+  const projectBox = page.getByTestId("operations-du-projet");
+  await expect(projectBox).toContainText("read_user");
+  // `create_account` est `approval` dans l'organisation : le choice ne propose pas `allowed`.
+  const choice = page.getByLabel("This project's policy for create_account");
+  await expect(choice.locator("option")).toHaveText(["As the organisation", "approval", "forbidden"]);
 });
 
-test("connecteurs : systèmes métier, serveurs MCP et outils de livraison des projets, chacun dans sa section", async ({
+test("connectors: business systems, MCP servers and delivery tools of the projects, each in its section", async ({
   page,
 }) => {
   await page.goto("/admin/connectors");
@@ -556,7 +556,7 @@ test("connecteurs : systèmes métier, serveurs MCP et outils de livraison des p
   await expect(page).toHaveURL(/\/p\/checkout-web\/settings$/);
 });
 
-test("un serveur MCP de l'organisation : découvrir dit ce qui naît fermé", async ({ page }) => {
+test("an organisation MCP server: discovering says what is born closed", async ({ page }) => {
   await page.goto("/admin/connectors");
   await expect(page.getByLabel("Policy of order_laptop")).toHaveValue("forbidden");
   // The demo also runs a plugin's server (S43-08): discover the supplier's.
@@ -566,24 +566,24 @@ test("un serveur MCP de l'organisation : découvrir dit ce qui naît fermé", as
   );
 });
 
-test("la boîte des décisions : une action proposée par un agent attend une personne", async ({ page }) => {
-  // L'ancienne adresse mène à l'inbox (S23-02).
+test("the decision inbox: an action proposed by an agent waits for a person", async ({ page }) => {
+  // The former address leads to the inbox (S23-02).
   await page.goto("/approvals");
   await expect(page).toHaveURL(/\/inbox$/);
-  const boite = page.getByTestId("boite");
-  await expect(boite).toContainText("Order Léa's laptop");
-  await expect(boite).toContainText("proposed by the agent onboarding-coordinator");
-  await boite.getByRole("link", { name: /Order Léa's laptop/ }).click();
+  const inbox = page.getByTestId("boite");
+  await expect(inbox).toContainText("Order Léa's laptop");
+  await expect(inbox).toContainText("proposed by the agent onboarding-coordinator");
+  await inbox.getByRole("link", { name: /Order Léa's laptop/ }).click();
   await expect(page).toHaveURL(/\/p\/billing-api\/actions\/act-poste$/);
   await expect(page.getByRole("button", { name: "Reject" })).toBeDisabled();
   await page.getByRole("button", { name: "Approve" }).click();
-  // Une action déjà décidée montre ses décisions et le journal de ses effets, clé par clé.
+  // An already decided action shows its decisions and the log of its effects, key by key.
   await page.goto("/p/billing-api/actions/act-comptes");
   await expect(page.getByTestId("decisions")).toContainText("approve by lea@acme.dev");
   await expect(page.getByTestId("effet-1")).toContainText("Key act-comptes:1 · 2 attempt(s)");
 });
 
-test("agents : le catalogue s'installe, et Claude Code se connecte en un clic", async ({ page }) => {
+test("agents: the catalogue installs, and Claude Code connects in one click", async ({ page }) => {
   await page.goto("/agents");
   await page.getByRole("button", { name: "Add from catalogue" }).click();
   const catalogue = page.getByRole("dialog", { name: "Add from catalogue" }).getByTestId("catalogue");
@@ -598,7 +598,7 @@ test("agents : le catalogue s'installe, et Claude Code se connecte en un clic", 
   await expect(page.getByTestId("client-catalogue-chatgpt")).toContainText("Not available here");
 });
 
-test("inbox : un ticket arrêté sur une demande humaine s'y décide, et l'en-tête le compte (S23-02)", async ({ page }) => {
+test("inbox: a work item stopped on a human request is decided there, and the header counts it (S23-02)", async ({ page }) => {
   await page.goto("/");
   // Two tickets (Spec to approve; the HR badge task, S30-08), two actions and two crossed budgets (S29-04),
   // and a request for network access (S39-22: counted for an administrator, who decides it) wait for someone.
@@ -616,10 +616,10 @@ test("inbox : un ticket arrêté sur une demande humaine s'y décide, et l'en-t�
   await expect(page).toHaveURL(/\/p\/billing-api\/items\/w2$/);
 });
 
-test("mise en route : un projet neuf dit ce qui lui manque ; un projet qui tourne n'en dit rien (S23-03)", async ({ page }) => {
+test("getting started: a new project says what it lacks; a running project says nothing (S23-03)", async ({ page }) => {
   await page.goto("/p/checkout-web");
-  const liste = page.getByTestId("mise-en-route");
-  await expect(liste).toBeVisible();
+  const checklist = page.getByTestId("mise-en-route");
+  await expect(checklist).toBeVisible();
   await expect(page.getByTestId("etape-provisioned")).toContainText("Project provisioned");
   await expect(page.getByTestId("etape-connector-cd")).toContainText("demo is a stand-in");
   await expect(page.getByTestId("etape-people-release-captain")).toContainText("(to do)");
@@ -632,17 +632,17 @@ test("mise en route : un projet neuf dit ce qui lui manque ; un projet qui tourn
 });
 
 
-test("board : ce qui attend une personne se dit en tête, et y mène même hors champ (S23-09)", async ({ page }) => {
+test("board: what waits for a person is said at the top, and leads there even off-screen (S23-09)", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/p/billing-api/board");
   const attentes = page.getByTestId("attentes-du-board");
   await expect(attentes).toContainText("1 ticket waits for a person");
-  const carte = page.locator("#carte-w2");
+  const mapBox = page.locator("#carte-w2");
   // The banner still leads to the card; since 2026-11-02 the board hides its empty columns and uses
   // the whole width, so the card is no longer pushed out of sight to begin with.
   await attentes.getByRole("link").first().click();
-  await expect(carte).toBeInViewport();
-  await expect(carte.getByRole("button", { name: "Approve" })).toBeVisible();
+  await expect(mapBox).toBeInViewport();
+  await expect(mapBox.getByRole("button", { name: "Approve" })).toBeVisible();
   // Each workflow's summary names each of its shown columns, and says where someone is waited for.
   const sommaire = page.getByRole("navigation", { name: "Columns of default-simple" });
   await expect(sommaire.getByRole("link")).toHaveCount(
@@ -651,55 +651,55 @@ test("board : ce qui attend une personne se dit en tête, et y mène même hors 
   await expect(sommaire).toContainText("1 waiting");
 });
 
-test("coûts : un écran, une devise, et un graphe qui se lit (S23-10)", async ({ page }) => {
-  for (const chemin of ["/p/billing-api", "/p/billing-api/items/w1", "/p/billing-api/board"]) {
-    await page.goto(chemin);
+test("costs: a screen, a currency, and a graph that reads (S23-10)", async ({ page }) => {
+  for (const route of ["/p/billing-api", "/p/billing-api/items/w1", "/p/billing-api/board"]) {
+    await page.goto(route);
     await page.waitForLoadState("networkidle");
-    // L'écran d'un ticket mêlait le total en € et ses runs en US$ ; la vue d'ensemble convertissait à 0,92.
+    // A work item's screen mixed the total in € and its runs in US$; the overview converted at 0.92.
     await expect(page.locator("main")).not.toContainText("€");
   }
   await page.goto("/p/billing-api");
-  const graphe = page.getByTestId("graphe-des-couts");
-  await expect(graphe.getByRole("img")).toHaveAttribute("aria-label", /^Cost per day, 14 days: highest US\$/);
+  const graph = page.getByTestId("graphe-des-couts");
+  await expect(graph.getByRole("img")).toHaveAttribute("aria-label", /^Cost per day, 14 days: highest US\$/);
   await expect(page.getByText("Daily budget")).toBeVisible();
-  await graphe.getByText("As a table").click();
-  await expect(graphe.getByRole("table", { name: "Cost per day" }).getByRole("row")).toHaveCount(15);
+  await graph.getByText("As a table").click();
+  await expect(graph.getByRole("table", { name: "Cost per day" }).getByRole("row")).toHaveCount(15);
 });
 
 test("wayfinding: a ticket and a run have their breadcrumb, and the board entry stays active (S23-12, S30-03)", async ({ page }) => {
   await page.goto("/p/billing-api/items/w1");
-  const onglets = page.getByRole("complementary", { name: "Sidebar" });
-  await expect(onglets.getByRole("link", { name: "Board" })).toHaveAttribute("aria-current", "page");
+  const tabs = page.getByRole("complementary", { name: "Sidebar" });
+  await expect(tabs.getByRole("link", { name: "Board" })).toHaveAttribute("aria-current", "page");
   const fil = page.getByRole("navigation", { name: "Breadcrumb" });
   await expect(fil.getByRole("link", { name: "Board" })).toHaveAttribute("href", "/p/billing-api/board");
 
   await page.goto("/p/billing-api/runs/r3");
-  await expect(onglets.getByRole("link", { name: "Board" })).toHaveAttribute("aria-current", "page");
+  await expect(tabs.getByRole("link", { name: "Board" })).toHaveAttribute("aria-current", "page");
   // Projects › Billing API › Board › the ticket › the run.
   await expect(fil.getByRole("link")).toHaveCount(4);
   await expect(fil.locator("[aria-current=page]")).toContainText("attempt");
 
   await page.goto("/p/billing-api/actions/act-poste");
-  await expect(onglets.getByRole("link", { name: "Actions" })).toHaveAttribute("aria-current", "page");
+  await expect(tabs.getByRole("link", { name: "Actions" })).toHaveAttribute("aria-current", "page");
 });
 
-test("repérage : la légende du parcours distingue « in progress » et « done » autrement que par la couleur (S23-12)", async ({ page }) => {
+test("landmarks: the journey legend tells \"in progress\" and \"done\" apart other than by colour (S23-12)", async ({ page }) => {
   await page.goto("/p/billing-api/items/w1");
   const legende = page.getByRole("list", { name: "Legend" });
   const pastille = (libelle: string) =>
     legende.getByRole("listitem").filter({ hasText: libelle }).locator("span[aria-hidden]").first();
   const enCours = await pastille("in progress").evaluate((e) => getComputedStyle(e).borderTopColor);
-  const fait = await pastille("done").evaluate((e) => getComputedStyle(e).borderTopColor);
-  // Ce qui vit porte un anneau ; ce qui est fait n'en porte pas.
+  const doneColour = await pastille("done").evaluate((e) => getComputedStyle(e).borderTopColor);
+  // What lives wears a ring; what is done does not.
   expect(enCours).not.toBe("rgba(0, 0, 0, 0)");
-  expect(fait).toBe("rgba(0, 0, 0, 0)");
+  expect(doneColour).toBe("rgba(0, 0, 0, 0)");
 });
 
-test("un jeton, un nom, un endroit : les trois pages parlent d'« access token » et mènent à la liste (S23-14)", async ({ page }) => {
+test("a token, a name, a place: the three pages speak of \"access token\" and lead to the list (S23-14)", async ({ page }) => {
   await page.goto("/admin");
-  const liste = page.getByRole("heading", { name: "My access tokens" });
-  await expect(liste).toBeVisible();
-  // La liste dit ce que chaque jeton ouvre : l'API, ou la porte MCP d'un client.
+  const checklist = page.getByRole("heading", { name: "My access tokens" });
+  await expect(checklist).toBeVisible();
+  // The list says what each token opens: the API, or a client's MCP door.
   await expect(page.getByText(/· (API and CLI|AI client, (read-only|can open work items)) ·/).first()).toBeVisible();
 
   await page.goto("/integrations/claude-code");

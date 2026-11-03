@@ -1,9 +1,9 @@
 import { expect, type Page, test } from "@playwright/test";
 
 /**
- * L'éditeur YAML sur le build de production, sous la vraie CSP (S21-05). Monaco se téléchargeait
- * depuis un CDN : la CSP bloquait sa feuille et sa police, et l'éditeur du dev s'affichait sans
- * style. Ici, on écoute ce que la page refuse et ce qu'elle demande ailleurs : rien des deux.
+ * The YAML editor on the production build, under the real CSP (S21-05). Monaco was downloaded
+ * from a CDN: the CSP blocked its stylesheet and its font, and the dev editor showed up without
+ * style. Here, we listen to what the page refuses and what it requests elsewhere: neither.
  */
 async function surveiller(page: Page) {
   const violations: string[] = [];
@@ -27,46 +27,46 @@ async function surveiller(page: Page) {
   };
 }
 
-test("l'éditeur YAML se rend et accepte la frappe sous la CSP de production, sans violation ni requête vers un autre domaine", async ({
+test("the YAML editor renders and accepts typing under the production CSP, with no violation and no request to another domain", async ({
   page,
 }) => {
-  const bilan = await surveiller(page);
+  const report = await surveiller(page);
   await page.goto("/p/billing-api/workflows/default-simple/yaml");
-  const editeur = page.getByTestId("yaml-editor");
-  await expect(editeur.locator(".cm-editor")).toBeVisible();
-  await expect(editeur.locator(".cm-gutters")).toBeVisible();
-  expect(await editeur.locator(".cm-line").count()).toBeGreaterThan(5);
-  const contenu = page.getByLabel("YAML of default-simple");
-  await contenu.click();
+  const editor = page.getByTestId("yaml-editor");
+  await expect(editor.locator(".cm-editor")).toBeVisible();
+  await expect(editor.locator(".cm-gutters")).toBeVisible();
+  expect(await editor.locator(".cm-line").count()).toBeGreaterThan(5);
+  const content = page.getByLabel("YAML of default-simple");
+  await content.click();
   await page.keyboard.press("Control+End");
   await page.keyboard.type("# a note typed in the console");
-  await expect(editeur.locator(".cm-content")).toContainText("# a note typed in the console");
-  expect(await bilan()).toEqual({ violations: [], dehors: [] });
+  await expect(editor.locator(".cm-content")).toContainText("# a note typed in the console");
+  expect(await report()).toEqual({ violations: [], dehors: [] });
 });
 
-test("à largeur lg, la validation se tient à côté de l'éditeur, pas dessous", async ({ page }) => {
+test("at lg width, the validation sits beside the editor, not below it", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/p/billing-api/workflows/default-simple/yaml");
   await expect(page.getByTestId("yaml-editor").locator(".cm-editor")).toBeVisible();
-  const editeur = (await page.getByTestId("yaml-editor").boundingBox())!;
+  const editor = (await page.getByTestId("yaml-editor").boundingBox())!;
   const validation = (await page.getByTestId("validation-yaml").boundingBox())!;
-  expect(validation.x).toBeGreaterThan(editeur.x + editeur.width);
-  expect(validation.y).toBeLessThan(editeur.y + editeur.height);
+  expect(validation.x).toBeGreaterThan(editor.x + editor.width);
+  expect(validation.y).toBeLessThan(editor.y + editor.height);
 });
 
-test("l'éditeur de la politique d'un projet se rend aussi, sous la même CSP", async ({ page }) => {
-  const bilan = await surveiller(page);
+test("a project policy editor renders too, under the same CSP", async ({ page }) => {
+  const report = await surveiller(page);
   await page.goto("/p/billing-api/settings/security");
   await page.locator("#policy summary").click(); // the policy sits behind a disclosure (S40-03b)
   await expect(page.getByLabel("Policy YAML")).toBeVisible();
   await expect(page.getByLabel("Policy YAML")).toContainText("per_ticket_usd");
-  expect(await bilan()).toEqual({ violations: [], dehors: [] });
+  expect(await report()).toEqual({ violations: [], dehors: [] });
 });
 
-test("le texte tapé dans l'onglet YAML survit au passage par la carte, et se publie d'un seul bouton", async ({ page }) => {
+test("the text typed in the YAML tab survives going through the map, and is published with a single button", async ({ page }) => {
   await page.goto("/p/billing-api/workflows/default-simple/yaml");
-  const contenu = page.getByLabel("YAML of default-simple");
-  await contenu.click();
+  const content = page.getByLabel("YAML of default-simple");
+  await content.click();
   await page.keyboard.press("Control+End");
   await page.keyboard.type("# kept across tabs");
   await expect(page.getByTestId("brouillon")).toContainText("1 change not published yet");
@@ -74,44 +74,44 @@ test("le texte tapé dans l'onglet YAML survit au passage par la carte, et se pu
   await expect(page.getByTestId("brouillon")).toContainText("1 change not published yet");
   await page.getByRole("link", { name: "YAML", exact: true }).click();
   await expect(page.getByTestId("yaml-editor").locator(".cm-content")).toContainText("# kept across tabs");
-  // Un seul bouton de publication, celui de la barre du brouillon.
+  // A single publish button, the draft bar's.
   await expect(page.getByRole("button", { name: /^Publish/ })).toHaveCount(1);
   await expect(page.getByRole("button", { name: "Publish v2" })).toBeEnabled();
   await page.getByRole("button", { name: "Publish v2" }).click();
   await expect(page.getByText(/published — running items finish on their version/)).toBeVisible();
 });
 
-test("un texte invalide se souligne dans la marge et interdit de publier", async ({ page }) => {
+test("an invalid text is underlined in the margin and cannot be published", async ({ page }) => {
   await page.goto("/p/billing-api/workflows/default-simple/yaml");
-  const contenu = page.getByLabel("YAML of default-simple");
-  await contenu.click();
+  const content = page.getByLabel("YAML of default-simple");
+  await content.click();
   await page.keyboard.press("Control+A");
   await page.keyboard.type("kind: Workflow");
   await expect(page.getByTestId("validation-yaml")).toContainText("a workflow declares its states");
   await expect(page.getByTestId("yaml-editor").locator(".cm-lint-marker-error")).toHaveCount(1);
   await expect(page.getByRole("button", { name: "Publish v2" })).toBeDisabled();
-  // Cliquer la ligne d'une erreur ramène le curseur dans l'éditeur, à cette ligne.
+  // Clicking an error's line brings the cursor back into the editor, at that line.
   await page.getByTestId("validation-yaml").getByRole("button", { name: "Line 1" }).click();
   await expect(page.getByTestId("yaml-editor").locator(".cm-editor.cm-focused")).toHaveCount(1);
-  // La carte garde la dernière version valide, et le dit.
+  // The map keeps the last valid version, and says so.
   await page.getByRole("link", { name: "Graph", exact: true }).click();
   await expect(page.getByTestId("texte-illisible")).toBeVisible();
 });
 
-test("un brouillon survit à un détour par une autre page de la console (S23-06)", async ({ page }) => {
+test("a draft survives a detour through another console page (S23-06)", async ({ page }) => {
   await page.goto("/p/billing-api/workflows/default-simple/yaml");
   await page.getByLabel("YAML of default-simple").click();
   await page.keyboard.press("Control+End");
   await page.keyboard.type("# still here");
   await expect(page.getByTestId("brouillon")).toContainText("1 change not published yet");
-  // Une autre page du projet démonte le brouillon : avant, il partait sans un mot.
+  // Another project page unmounts the draft: before, it went away without a word.
   await page.getByRole("link", { name: "Board", exact: true }).click();
   await expect(page).toHaveURL(/\/board$/);
   await page.goBack();
   await expect(page.getByTestId("brouillon")).toContainText("1 change not published yet — kept from your last visit");
   await expect(page.getByTestId("yaml-editor").locator(".cm-content")).toContainText("# still here");
   await expect(page.getByRole("button", { name: "Publish v2" })).toBeEnabled();
-  // Abandonner l'efface pour de bon.
+  // Discarding it erases it for good.
   await page.getByRole("button", { name: "Discard" }).click();
   await page.getByRole("button", { name: "Discard my changes" }).click();
   await expect(page.getByTestId("brouillon")).toHaveCount(0);
@@ -119,16 +119,16 @@ test("un brouillon survit à un détour par une autre page de la console (S23-06
   await expect(page.getByTestId("yaml-editor").locator(".cm-content")).not.toContainText("# still here");
 });
 
-test("un nouveau workflow ne prend pas le nom d'un workflow qui existe (S23-06)", async ({ page }) => {
+test("a new workflow does not take the name of an existing workflow (S23-06)", async ({ page }) => {
   await page.goto("/p/billing-api/workflows/new");
-  const nom = page.getByLabel("Name");
-  await nom.fill("default-simple");
+  const nameField = page.getByLabel("Name");
+  await nameField.fill("default-simple");
   await expect(page.getByText("A workflow named default-simple already exists")).toBeVisible();
   await expect(page.getByRole("button", { name: "Publish default-simple" })).toBeDisabled();
   await expect(page.getByRole("link", { name: "Open default-simple" })).toHaveAttribute(
     "href",
     "/p/billing-api/workflows/default-simple",
   );
-  await nom.fill("offboarding");
+  await nameField.fill("offboarding");
   await expect(page.getByRole("button", { name: "Publish offboarding" })).toBeEnabled();
 });

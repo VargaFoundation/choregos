@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { ActorIcon, Badge, LEGENDE, PhraseDuMoteur } from "@/components/ui";
 import { canarySentence, sourceLabel } from "@/components/agents/registre";
-import { enClair } from "@/components/parcours/modele";
+import { humanise } from "@/components/journey/model";
 import { cn } from "@/lib/cn";
 import type { AgentResolution, ArtifactFlow, ProcessStep } from "@/lib/types";
 import { answerWords, DecisionChip, exampleWhen, questionKind } from "@/components/workflows/decision";
@@ -22,7 +22,7 @@ import {
 } from "@/components/workflows/document";
 
 /** The actor kinds the process view returns, as `ActorIcon` names them. */
-export const GENRE_DE_L_ACTEUR: Record<string, string> = {
+export const ACTOR_KIND_ICON: Record<string, string> = {
   agent: "agent",
   human: "human",
   system: "system",
@@ -32,7 +32,7 @@ export const GENRE_DE_L_ACTEUR: Record<string, string> = {
 };
 
 /** The status of the registry agent a step names, as one chip: what a run would load, or why not. */
-function Statut({ resolution }: { resolution: AgentResolution | undefined }) {
+function ResolutionStatus({ resolution }: { resolution: AgentResolution | undefined }) {
   if (!resolution) return null;
   if (resolution.status === "resolved")
     return (
@@ -63,21 +63,21 @@ function Statut({ resolution }: { resolution: AgentResolution | undefined }) {
  * an input is read empty, and a run with no allowed paths may write anywhere — the stage gives it `**`
  * unless the work item was filed with paths of its own.
  */
-export function consequenceOfAMissingInput(nom: string): string {
-  if (nom === "allowed_paths")
+export function consequenceOfAMissingInput(name: string): string {
+  if (name === "allowed_paths")
     return "unless the work item was filed with allowed paths, the agent may change any file of the repository (`**`), and `scope_respected` has nothing to hold it to";
   return "the step reads it empty";
 }
 
 /** Where a document an input reads comes from, in words. */
-function Source({ nom, flow, parId }: { nom: string; flow: ArtifactFlow | undefined; parId: Map<string, ProcessStep> }) {
+function Source({ name, flow, parId }: { name: string; flow: ArtifactFlow | undefined; parId: Map<string, ProcessStep> }) {
   if (!flow) return null;
   if (flow.origin === "feedback") return <span>a person&apos;s rejection reason</span>;
   if (flow.origin === "field") return <span>a work item field</span>;
   if (flow.origin === "missing")
     return (
-      <span className="text-retrying-ink" data-testid={`manque-${nom}`}>
-        nothing produces it — {consequenceOfAMissingInput(nom)}
+      <span className="text-retrying-ink" data-testid={`manque-${name}`}>
+        nothing produces it — {consequenceOfAMissingInput(name)}
       </span>
     );
   return (
@@ -132,20 +132,20 @@ function StepDetailsCard({
   read,
   className,
 }: StepDetailsProps & { read?: CalibrationRead }) {
-  const parNom = new Map((flow ?? []).map((a) => [a.name, a]));
-  const lecture = step.inputs ?? [];
+  const byName = new Map((flow ?? []).map((a) => [a.name, a]));
+  const reads = step.inputs ?? [];
   // A decision writes each answer and its probability; an older API listed none for it.
-  const sorties = step.outputs?.length ? step.outputs : decision ? decisionOutputs(decision) : [];
+  const outputs = step.outputs?.length ? step.outputs : decision ? decisionOutputs(decision) : [];
   const questions = decision?.questions ?? {};
   // What a `when` reads in a decision's output: the answer and what it may be, or its probability.
-  const noteOnAnOutput = (nom: string): string | null => {
-    const question = questions[nom];
+  const noteOnAnOutput = (name: string): string | null => {
+    const question = questions[name];
     if (question) return `the answer, ${answerWords(question)}`;
-    if (nom.endsWith(CONFIDENCE_SUFFIX) && questions[nom.slice(0, -CONFIDENCE_SUFFIX.length)]) return "its probability, from 0 to 1";
+    if (name.endsWith(CONFIDENCE_SUFFIX) && questions[name.slice(0, -CONFIDENCE_SUFFIX.length)]) return "its probability, from 0 to 1";
     return null;
   };
   const types = step.output_types ?? {};
-  const lecteurs = (nom: string) => (parNom.get(nom)?.read_by ?? []).filter((id) => id !== step.id);
+  const readers = (name: string) => (byName.get(name)?.read_by ?? []).filter((id) => id !== step.id);
   const slug = step.agent?.split("@")[0];
   return (
     <dl className={cn("grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-xs", className)} data-testid={`details-${step.id}`}>
@@ -154,35 +154,35 @@ function StepDetailsCard({
         {step.actor_type === "agent" && slug ? (
           <>
             <Link href={`/agents/${slug}`} className="font-medium text-ink underline-offset-2 hover:underline">
-              {resolution?.display_name ?? enClair(step.actor)}
+              {resolution?.display_name ?? humanise(step.actor)}
             </Link>
-            <Statut resolution={resolution} />
+            <ResolutionStatus resolution={resolution} />
           </>
         ) : step.actor_type === "agent" ? (
           <>
-            <ActorIcon kind="agent" name={enClair(step.actor)} />
+            <ActorIcon kind="agent" name={humanise(step.actor)} />
             <span className="text-ink-muted">built-in agent, not in the registry</span>
           </>
         ) : step.actor_type === "human" ? (
           <>
-            <ActorIcon kind="human" name={step.group ?? enClair(step.actor)} />
+            <ActorIcon kind="human" name={step.group ?? humanise(step.actor)} />
             {step.sla_hours ? <Badge tone="neutral" variant="soft" dot={false}>{step.sla_hours} h</Badge> : null}
           </>
         ) : step.actor_type === "decision" ? (
           <>
             <DecisionChip />
-            <span className="font-medium text-ink">{enClair(step.actor)}</span>
+            <span className="font-medium text-ink">{humanise(step.actor)}</span>
             {step.role ? <span className="text-ink-muted">role {step.role}</span> : null}
           </>
         ) : step.actor_type === "job" ? (
           <>
-            <ActorIcon kind="job" name={enClair(step.actor)} />
+            <ActorIcon kind="job" name={humanise(step.actor)} />
             <code className="font-mono">{(step.command ?? []).join(" ")}</code>
             {step.image ? <span className="text-ink-muted">in {step.image}</span> : null}
           </>
         ) : (
           <>
-            <ActorIcon kind={GENRE_DE_L_ACTEUR[step.actor_type] ?? "system"} />
+            <ActorIcon kind={ACTOR_KIND_ICON[step.actor_type] ?? "system"} />
             <span className="text-ink-muted">
               <PhraseDuMoteur texte={step.who} />
             </span>
@@ -233,19 +233,19 @@ function StepDetailsCard({
           </dd>
         </>
       )}
-      {lecture.length > 0 && (
+      {reads.length > 0 && (
         <>
           <dt className={LEGENDE}>Reads</dt>
           <dd>
             <ul className="space-y-0.5">
-              {lecture.map((nom) => (
-                <li key={nom}>
-                  <code className="text-ink">{nom}</code>
-                  {parNom.has(nom) ? (
+              {reads.map((name) => (
+                <li key={name}>
+                  <code className="text-ink">{name}</code>
+                  {byName.has(name) ? (
                     <>
                       {" — "}
                       <span className="text-ink-muted">
-                        <Source nom={nom} flow={parNom.get(nom)} parId={stepsById} />
+                        <Source name={name} flow={byName.get(name)} parId={stepsById} />
                       </span>
                     </>
                   ) : null}
@@ -255,22 +255,22 @@ function StepDetailsCard({
           </dd>
         </>
       )}
-      {(sorties.length > 0 || step.writes_branch) && (
+      {(outputs.length > 0 || step.writes_branch) && (
         <>
           <dt className={LEGENDE}>Produces</dt>
           <dd>
             <ul className="space-y-0.5">
-              {sorties.map((nom) => (
-                <li key={nom}>
-                  <code className="text-ink">{nom}</code>
-                  {types[nom] ? (
+              {outputs.map((name) => (
+                <li key={name}>
+                  <code className="text-ink">{name}</code>
+                  {types[name] ? (
                     <Badge tone="neutral" variant="soft" dot={false} className="ml-1.5">
-                      {types[nom]}
+                      {types[name]}
                     </Badge>
                   ) : null}
-                  {noteOnAnOutput(nom) ? <span className="text-ink-muted"> — {noteOnAnOutput(nom)}</span> : null}
-                  {lecteurs(nom).length > 0 && (
-                    <span className="text-ink-muted"> — read by {lecteurs(nom).join(", ")}</span>
+                  {noteOnAnOutput(name) ? <span className="text-ink-muted"> — {noteOnAnOutput(name)}</span> : null}
+                  {readers(name).length > 0 && (
+                    <span className="text-ink-muted"> — read by {readers(name).join(", ")}</span>
                   )}
                 </li>
               ))}
