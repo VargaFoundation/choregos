@@ -44,6 +44,7 @@ ALLOWED_SOURCES = frozenset(
         "test_org_slug_aliases",
         "test_outbound_proxy",
         "test_plugin_installer",
+        "test_plugin_servers",
         "test_plugin_tracker",
         "test_remote_agents",
         "test_skill_catalogue",
