@@ -196,7 +196,7 @@ function AdoptForm({
           client.invalidateQueries({ queryKey }),
         ),
       );
-      router.push(`/p/${slug}/workflows/${encodeURIComponent(name)}/map?view=list`);
+      router.push(`/p/${slug}/workflows/${encodeURIComponent(name)}?view=list`);
     } catch (cause) {
       setError(cause instanceof ApiError || cause instanceof Error ? cause.message : "adoption refused");
       setBusy(false);

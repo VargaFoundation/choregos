@@ -78,7 +78,7 @@ test("le défaut se choisit, et un workflow sans règle ni défaut se désactive
 });
 
 test("une étape s'ajoute depuis la vue processus, sans passer par la carte (S23-13)", async ({ page }) => {
-  await page.goto("/p/billing-api/workflows/default-simple");
+  await page.goto("/p/billing-api/workflows/default-simple/steps");
   const formulaire = page.getByRole("form", { name: "New step" });
   await formulaire.getByLabel("From").selectOption({ label: "Ready" });
   await formulaire.getByRole("combobox", { name: /^To/ }).selectOption("(new)");
