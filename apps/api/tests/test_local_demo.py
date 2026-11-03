@@ -10,6 +10,7 @@ import yaml
 from choregos_api.config import Settings
 from choregos_api.local_demo import (
     DEMO_WORKFLOW,
+    decisions_enabled,
     demo_connectors,
     litellm_config,
     model_provider,
@@ -235,3 +236,39 @@ def test_the_local_gateway_loads_the_llm_guard_next_to_its_config(tmp_path: path
     assert cls == "ChoregosGuardrail" and guard["litellm_params"]["mode"] == ["pre_call", "post_call"]
     source = pathlib.Path(choregos_core.llm_guardrail.__file__).read_text(encoding="utf-8")
     assert (tmp_path / f"{module}.py").read_text(encoding="utf-8") == source
+
+
+def _served(directory: pathlib.Path) -> dict[str, dict[str, Any]]:
+    written = yaml.safe_load((directory / "config.yaml").read_text(encoding="utf-8"))
+    return {m["model_name"]: m for m in written["model_list"]}
+
+
+@pytest.mark.parametrize("switch", ["decisions", "memory,decisions", "1", "true"])
+@pytest.mark.parametrize("keys", [{}, {"ANTHROPIC_API_KEY": "sk-a"}])
+def test_the_decisions_profile_serves_platform_decide_from_laya(
+    tmp_path: pathlib.Path, switch: str, keys: dict[str, str]
+) -> None:
+    """ADR 0120 (S52-02): with the profile, LiteLLM routes `platform/decide` to the `laya` service,
+    in fakes mode as with a key: Laya runs on the machine and needs no model key."""
+    write_litellm_config(tmp_path, {**keys, "LITELLM_DECISIONS": switch})
+    decide = _served(tmp_path)["platform/decide"]
+    assert decide["litellm_params"] == {
+        "model": "typesafe/multilingual",
+        "api_base": "http://laya:8000",
+        "api_key": "os.environ/LAYA_API_KEY",
+    }
+    assert "mock_response" not in decide["litellm_params"]
+    # ADR 0004: a local model is accounted with an internal price, never zero.
+    assert decide["model_info"]["mode"] == "evaluation"
+    assert decide["model_info"]["input_cost_per_token"] > 0
+
+
+@pytest.mark.parametrize("switch", [None, "", "memory", "0", "temporal-ui"])
+def test_without_the_decisions_profile_there_is_no_platform_decide(
+    tmp_path: pathlib.Path, switch: str | None
+) -> None:
+    env = {} if switch is None else {"LITELLM_DECISIONS": switch}
+    assert not decisions_enabled(env)
+    write_litellm_config(tmp_path, env)
+    assert "platform/decide" not in _served(tmp_path)
+    assert "platform/decide" not in {m["model_name"] for m in litellm_config(None)["model_list"]}

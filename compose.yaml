@@ -8,6 +8,9 @@
 # server (on the same PostgreSQL), the migrations, the API, the Temporal workers, the
 # console, LiteLLM, and a one-shot seed that creates the demo organisation and project.
 # `docker compose --profile memory up` adds Ecphoria (the memory service).
+# `COMPOSE_PROFILES=decisions docker compose up` (or the line in `.env`) adds Laya, the decision model
+# LiteLLM serves as `platform/decide` (ADR 0120): the profile is also what tells `litellm-config` to
+# route the alias, so set it this way rather than with `--profile`, which the config never sees.
 #
 # Everything here is for a laptop: development passwords, development sign-in (no identity
 # provider), ports bound to 127.0.0.1. The API refuses development sign-in outside `dev`/`test`.
@@ -114,6 +117,8 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       LITELLM_REAL: ${LITELLM_REAL:-auto}
+      # `platform/decide` only when Laya runs (`choregos_api.local_demo.decisions_enabled`).
+      LITELLM_DECISIONS: ${LITELLM_DECISIONS:-${COMPOSE_PROFILES:-}}
       CHOREGOS_LOG_JSON: "false"
     volumes: ["litellm-config:/litellm"]
     restart: "no"
@@ -127,6 +132,8 @@ services:
       # Only LiteLLM holds the provider key: agents get a virtual key per run, minted by the platform.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # The bearer Laya asks for; only LiteLLM holds it, as it holds the provider keys.
+      LAYA_API_KEY: local-install-only-laya
     volumes: ["litellm-config:/litellm:ro"]
     depends_on:
       postgres: { condition: service_healthy }
@@ -263,6 +270,24 @@ services:
       ECPHORIA_MEMORY__STATE__DB_PATH: /data/state.db
       ECPHORIA_MEMORY__COGNITION__DB_PATH: /data/cognition.duckdb
     volumes: ["ecphoriadata:/data"]
+
+  laya:
+    # Optional: `COMPOSE_PROFILES=decisions docker compose up` (see the header). The first build
+    # downloads torch (CPU) and the multilingual checkpoint, about 1.5 GB; the server then runs
+    # offline and loads the checkpoint before it opens its port. No port on the host: only LiteLLM
+    # calls it (ADR 0120: a decision goes through the gateway, where it is counted).
+    profiles: [decisions]
+    image: choregos-laya:local
+    build:
+      context: .
+      dockerfile: docker/laya.Dockerfile
+    environment:
+      LAYA_API_KEY: local-install-only-laya
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 5s
+      retries: 60
+      start_period: 60s
 
 # Named, not `<project>_default`: the local Docker executor attaches each run container to it
 # (`choregos_api.local_demo.LOCAL_NETWORK`), whatever the compose project is called.

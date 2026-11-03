@@ -7,6 +7,7 @@
 | `choregos-tools` | sidecar MCP | ne détient que le jeton du run |
 | `choregos-web` | front Next.js | build de production, CSP stricte |
 | `choregos-runner` | le workspace d'un agent | agents ACP épinglés, scanners, **shims de refus** |
+| `choregos-laya` | the decision model behind LiteLLM (`platform/decide`, ADR 0120) | CPU only, checkpoint baked in at a pinned commit, offline at run time (`HF_HUB_OFFLINE=1`) |
 
 ## Construire localement
 
@@ -14,6 +15,7 @@
 docker build -f docker/api.Dockerfile --target api    -t choregos-api:dev .
 docker build -f docker/api.Dockerfile --target worker -t choregos-orchestrator:dev .
 docker build -f docker/runner.Dockerfile              -t choregos-runner:dev .
+docker build -f docker/laya.Dockerfile                -t choregos-laya:dev .
 ```
 
 `--target` n'est pas optionnel sur `api.Dockerfile` : sans lui, Docker construit la dernière

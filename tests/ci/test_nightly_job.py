@@ -16,8 +16,9 @@ import yaml
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 NIGHTLY = ROOT / ".github" / "workflows" / "nightly.yml"
 LIVE_TESTS = ROOT / "tests" / "live"
-# Opt-in switches of the local stacks (a collector, an LLM Guard), run by their own jobs in ci.yml.
-NOT_SECRETS = {"CHOREGOS_LIVE_OTEL", "CHOREGOS_LIVE_LLM_GUARD"}
+# Opt-in switches of the local stacks (a collector, an LLM Guard, a decision model), run by their own
+# jobs in ci.yml.
+NOT_SECRETS = {"CHOREGOS_LIVE_OTEL", "CHOREGOS_LIVE_LLM_GUARD", "CHOREGOS_LIVE_DECISIONS"}
 
 
 def _jobs() -> dict[str, Any]:

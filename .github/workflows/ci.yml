@@ -39,6 +39,7 @@ jobs:
       hosted-cluster: ${{ steps.filter.outputs.hosted-cluster }}
       hosted-images: ${{ steps.filter.outputs.hosted-images }}
       llm-guard: ${{ steps.filter.outputs.llm-guard }}
+      decisions-live: ${{ steps.filter.outputs.decisions-live }}
       skill-scanner: ${{ steps.filter.outputs.skill-scanner }}
       web-live: ${{ steps.filter.outputs.web-live }}
     steps:
@@ -192,6 +193,14 @@ jobs:
               - 'charts/choregos/charts/litellm/**'
               - 'tests/live/test_llm_guard_live.py'
               - 'tests/live/llm_guard_upstream.py'
+              - '.github/workflows/ci.yml'
+            # A decision through the chart's LiteLLM to the Laya image (S52-02, ADR 0120).
+            decisions-live:
+              - 'docker/laya.Dockerfile'
+              - 'docker/laya/**'
+              - 'charts/choregos/charts/litellm/**'
+              - 'tests/live/decisions/**'
+              - 'tests/live/test_decisions_live.py'
               - '.github/workflows/ci.yml'
             web-live:
               - 'apps/web/**'
@@ -377,6 +386,9 @@ jobs:
             file: docker/web.Dockerfile
           - image: runner
             file: docker/runner.Dockerfile
+          # The decision model behind LiteLLM (ADR 0120, S52-02): its checkpoint is baked in.
+          - image: laya
+            file: docker/laya.Dockerfile
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
@@ -891,6 +903,33 @@ jobs:
       - name: containers that are still up
         if: failure()
         run: docker ps -a
+  decisions-live:
+    # A decision through the gateway, for real (S52-02, ADR 0120): the chart's LiteLLM image, guard and
+    # span callback, `platform/decide` as the chart renders it, and Laya built from this commit on a
+    # network with no way out. A virtual key's `POST /v1/systemone` must be answered, scoped, and
+    # written to the spend log at the internal price; only LiteLLM itself proves its `typesafe`
+    # provider carries Laya's wire.
+    needs: changes
+    if: needs.changes.outputs.decisions-live == 'true' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CHOREGOS_LIVE_DECISIONS: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with: { enable-cache: true }
+      - run: uv sync --frozen
+      - name: the stack (LiteLLM, PostgreSQL, Laya built from this commit)
+        run: docker compose -p s5202 -f tests/live/decisions/compose.yaml up -d --build --wait
+      - name: a decision through the chart's LiteLLM
+        run: |
+          uv run pytest tests/live/test_decisions_live.py -m live -rs 2>&1 | tee pytest.out
+          test "${PIPESTATUS[0]}" -eq 0
+          ! grep -qi skipped pytest.out
+      - name: what the containers said
+        if: failure()
+        run: docker compose -p s5202 -f tests/live/decisions/compose.yaml logs --no-color --tail 200
   web-live:
     # The console against the real API, not its mock (S40-17c, S40-17d): `tools/e2e_live_api.py` starts
     # the API on fakes with a throwaway SQLite database, the console runs in `next dev` with `/api/v1`
@@ -936,7 +975,7 @@ jobs:
     # 2026-10-05, the hosted runners stopped acquiring jobs, `python` came back
     # `abandoned`, and a PR's gate was green without a single Python test having run. Whatever
     # GitHub invents tomorrow will close the gate too: we enumerate what passes, not what breaks.
-    needs: [changes, python, contracts, web, charts, conformance-backends, images, local-install, hosted-build, hosted-cosign, hosted-admission, hosted-gvisor, hosted-cluster, hosted-foundry, hosted-images, hosted-docker, llm-guard, skill-scanner, web-live, secrets, dco, english]
+    needs: [changes, python, contracts, web, charts, conformance-backends, images, local-install, hosted-build, hosted-cosign, hosted-admission, hosted-gvisor, hosted-cluster, hosted-foundry, hosted-images, hosted-docker, llm-guard, decisions-live, skill-scanner, web-live, secrets, dco, english]
     if: always()
     runs-on: ubuntu-latest
     steps:

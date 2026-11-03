@@ -1420,3 +1420,61 @@ guardrails:
 Without it, a key the platform marked `choregos_llm_guard: redact` reaches the provider unmasked,
 and nothing fails to say so. `GET /guardrails/list` with the master key shows `choregos-secrets`
 when the guard is loaded. LiteLLM reads its config only at start: restart it after the change.
+
+## The decision model (Laya behind LiteLLM)
+
+A workflow's `decision` step (ADR 0120, decided in PR #1183)
+asks typed questions of a decision model through the gateway's `POST /v1/systemone` route. The chart
+ships the first one, **Laya** (`convaiinnovations/laya-multilingual`, mmBERT-base, 322M parameters,
+100+ languages, weights under Apache-2.0), on CPU, off by default:
+
+```yaml
+global:
+  gateway:
+    embedded: true                  # required: only the embedded LiteLLM serves it
+  decisions:
+    embedded: true                  # deploys `charts/laya` and adds `platform/decide` to LiteLLM
+    apiKeySecret: ""                # key `api-key`; empty: the chart generates one and keeps it
+    inputCostPerToken: 0.00000002   # USD per token read: the internal price (ADR 0004)
+```
+
+What it renders:
+
+- **`<release>-laya`**, a Deployment of `ghcr.io/vargafoundation/choregos-laya` (`docker/laya.Dockerfile`):
+  `laya-serve` with the checkpoint baked in at a pinned commit, `HF_HUB_OFFLINE=1`, nothing fetched at
+  run time. It asks for 2 GiB of memory (measured on 2026-11-03: 1.6 GiB resident with the checkpoint loaded, 1.95 GiB after a reload) and opens its port
+  only once the checkpoint is loaded; the probes read `GET /health`, which answers without a credential.
+- **A NetworkPolicy** that admits LiteLLM's pods only, on port 8000, and lets Laya reach nothing. The
+  platform never calls a decision model directly: the cost is counted and the cap enforced at the
+  gateway. With `networkPolicies.enabled`, `choregos-allow-platform` opens the platform's egress to it.
+- **`platform/decide`** in LiteLLM's `model_list`:
+
+  ```yaml
+  - model_name: platform/decide
+    litellm_params:
+      model: typesafe/multilingual          # Laya speaks TypeSafe Jev's wire
+      api_base: http://<release>-laya:8000  # LiteLLM posts to <api_base>/v1/systemone
+      api_key: os.environ/LAYA_API_KEY      # from the Secret above, sent as a bearer
+    model_info:
+      mode: evaluation
+      input_cost_per_token: 0.000000020000
+      output_cost_per_token: 0.000000000000
+  ```
+
+  LiteLLM 1.105.5 lists `laya/*` in its price map but has no `laya` provider in its code: its
+  documentation's `laya/` deployments need a later build. Laya serves the `/v1/systemone` wire
+  exactly, so the `typesafe` provider pointed at Laya's Service carries it; `tests/live/test_decisions_live.py`
+  proves it against LiteLLM 1.105.5 (answers, virtual key, model scope, the spend log at the internal price).
+
+Laya counts the tokens it read as `input_tokens` and answers none, so its spend is
+`input_tokens × inputCostPerToken`. Its probabilities are over-confident as shipped (Laya's own
+documentation): until the decision ledger has measured it on a workflow, a threshold on its confidence
+is a guess.
+
+Each model of `choregos-litellm.models` may also name its own `apiBase`, `apiKeyEnv` (the environment
+variable LiteLLM reads its key from) and `inputCostPerToken` / `outputCostPerToken`; an entry that sets
+none of them renders as before.
+
+On a laptop, `COMPOSE_PROFILES=decisions docker compose up` (or the line in `.env`) starts Laya and
+routes `platform/decide` to it, in fakes mode as with a model key. Set the profile this way rather than
+with `--profile decisions`: the variable is also what tells `litellm-config` to add the alias.
