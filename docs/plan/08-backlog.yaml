@@ -4077,7 +4077,7 @@ stories:
     size: S
     depends_on: [S52-04]
     notes: "ADR 0121; ADR 0111 catalogue"
-  - id: S52-08
+  - id: S52-09
     title: "feat(api,adapters): the catalogue knows a decision model — `decide` only, no tools, from the gateway's mode"
     stream: S52
     sprint: 2
