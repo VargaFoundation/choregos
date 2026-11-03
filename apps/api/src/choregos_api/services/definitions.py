@@ -292,7 +292,7 @@ async def ensure_defaults(
     if workflow is None:
         assert livree is not None
         workflow = await _publier_ce_que_livre_le_gabarit(session, project, livree)
-        if livree.agents or livree.skills or livree.extensions:
+        if livree.agents or livree.skills or livree.extensions or livree.knowledge:
             from .installation import installer_ce_que_livre_le_gabarit
 
             await installer_ce_que_livre_le_gabarit(session, project, livree, str(project.template_ref))

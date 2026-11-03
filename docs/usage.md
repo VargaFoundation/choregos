@@ -631,6 +631,8 @@ curl         $API/projects/acme:hr/workflows                                    
     policy: preset:team
   ```
 
+  It may also ship the knowledge bases its agents read (`defaults.knowledge`, see
+  [Knowledge bases from a template](#knowledge-bases-from-a-template)).
   A path is read from the template's folder and may not leave it; a template published through
   `POST /templates` has no folder, so it ships core workflows only (`template:<name>@<v>`). A
   template that names a workflow it does not ship, or ships an invalid one, creates no project
@@ -2074,6 +2076,48 @@ run in progress (phase, parts, spend, who started it) and the five runs before i
 booked in the cost ledger with kind `distill`, on the base's owning project, or on the organisation when
 the base has none: **Spend** shows it under "Knowledge distillations", and `kind=distill` filters the
 reports. The merge is streamed, so a long answer is no read timeout.
+
+#### Knowledge bases from a template
+
+A template (and so a plugin) ships the bases its agents read under `defaults.knowledge`, in the shape of
+the [`kind: KnowledgeBase` manifest](#a-knowledge-base-as-code) less what the project decides — no `scope`, `projects`, `groups`, `uploads` or `eval`
+([ADR 0117](adr/0117-a-template-ships-the-knowledge-bases-its-agents-read.md)):
+
+```yaml
+defaults:
+  knowledge:
+    - slug: product-docs
+      name: Product documentation
+      serving_mode: index
+      sources:
+        - name: Repository docs
+          kind: git
+          config: { url_from_input: repo, ref: main, paths: ["docs/**/*.md"] }
+          interval_minutes: 60
+inputs:
+  - { name: repo, type: github-repo, required: true }
+```
+
+- Sources are **git** only. `config.url` names the repository (https), or `config.url_from_input` names a
+  template input: `owner/name` reads `https://github.com/owner/name`, an https URL is kept, and a
+  `github-repo` input that was not given is the project's repository (`config.repo.url`).
+- **The project's own GitHub repository** is read without a connector, through the deployment's GitHub
+  App: the source is stored with `github_app: true` and each sync mints a one-hour token for that
+  repository only, `contents: read`, through the installation the organisation claimed (ADR 0073). No
+  request sets that flag; editing the source keeps it while the URL stays. Another private repository
+  names an organisation `documents/git` connector (`connector:`).
+- When a project is born of the template, each base is **created** for it when the organisation has none
+  of that slug (`scope: projects`, owned by the project, `created_by: template:<name>`), its sources
+  attached and their sync loops started once the project is committed — the first pass syncs. The
+  template applied again adds only the sources the base lacks, by name. A base of that slug already served
+  to the project is **reused untouched**; one another project of the same template created is **served**
+  to this one when none of its sources reads a project's repository; any other is **left alone**, the
+  project born without it and the audit log saying why (`template.knowledge.skip`) — a template never
+  shows one project's repository to another, nor widens a base an administrator scoped.
+- A source whose repository cannot be resolved is skipped the same way. A wrong `defaults.knowledge` (a
+  source reading an undeclared input, a base twice, a cron under five minutes) creates no project (`422`).
+  A network refusal or a missing connector shows on the source at its first sync; it does not refuse the
+  project.
 
 ## 4. Write the policy
 
