@@ -46,6 +46,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { hasReleaseTrain } from "@/lib/release-train";
 import { cn } from "@/lib/cn";
+import { HUE_CLASSES, type Hue } from "@/lib/workflow-hue";
 import type { BreadcrumbStep } from "@/components/ui";
 import { useSession } from "@/lib/session";
 import type { AdminSection } from "@/lib/types";
@@ -74,11 +75,18 @@ export function entreeActive(href: string, pathname: string): boolean {
   return href === "/" ? pathname === "/" || pathname.startsWith("/p/") : pathname.startsWith(href);
 }
 
+/**
+ * The hue of each family of sections (ADR 0120): what one works in, what one defines, what one
+ * configures. It tints the icons of the navigation and the header of every page in the family, so the
+ * colour says where one stands before the label does.
+ */
+export const GROUP_HUES = { work: 1, define: 2, configure: 7 } as const satisfies Record<string, Hue>;
+
 /** The entries, grouped: the work, what agents use, the organisation (S40-08). */
-export const GROUPES: { titre: string; entrees: string[] }[] = [
-  { titre: "Work", entrees: ["/", "/inbox"] },
-  { titre: "Catalogue", entrees: ["/agents", "/skills", "/knowledge", "/memories", "/catalogue/mcp-servers", "/catalogue/connectors", "/catalogue/plugins"] },
-  { titre: "Organisation", entrees: ["/integrations", "/costs", "/admin"] },
+export const GROUPES: { titre: string; hue: Hue; entrees: string[] }[] = [
+  { titre: "Work", hue: GROUP_HUES.work, entrees: ["/", "/inbox"] },
+  { titre: "Catalogue", hue: GROUP_HUES.define, entrees: ["/agents", "/skills", "/knowledge", "/memories", "/catalogue/mcp-servers", "/catalogue/connectors", "/catalogue/plugins"] },
+  { titre: "Organisation", hue: GROUP_HUES.configure, entrees: ["/integrations", "/costs", "/admin"] },
 ];
 
 // ───────────────────────────── scopes (S30-03) ─────────────────────────────
@@ -109,6 +117,8 @@ export interface NavEntry {
 
 export interface NavGroup {
   title: string;
+  /** The family's hue (ADR 0120); the administration's plugin sections have none. */
+  hue?: Hue;
   entries: NavEntry[];
 }
 
@@ -120,6 +130,7 @@ export interface ProjectFeatures {
 export function orgGroups(): NavGroup[] {
   return GROUPES.map((groupe) => ({
     title: groupe.titre,
+    hue: groupe.hue,
     entries: groupe.entrees.map((href) => {
       const entree = NAV.find((n) => n.href === href)!;
       return {
@@ -152,6 +163,7 @@ export function projectGroups(slug: string, features: ProjectFeatures = {}): Nav
   return [
     {
       title: "Work",
+      hue: GROUP_HUES.work,
       entries: [
         section("", "Overview", LayoutDashboard),
         // A ticket and its runs belong to the board (S23-12).
@@ -163,6 +175,7 @@ export function projectGroups(slug: string, features: ProjectFeatures = {}): Nav
     },
     {
       title: "Define",
+      hue: GROUP_HUES.define,
       entries: [
         section("/workflows", "Workflows", Workflow, ["/workflow"]),
         section("/agents", "Agents", Bot),
@@ -173,6 +186,7 @@ export function projectGroups(slug: string, features: ProjectFeatures = {}): Nav
     },
     {
       title: "Configure",
+      hue: GROUP_HUES.configure,
       entries: [
         section("/integrations", "Integrations", Plug),
         section("/members", "Members", Users),
@@ -271,10 +285,29 @@ export function projectTrail(slug: string, pathname: string): BreadcrumbStep[] |
   if (!section || section.href === base) return [];
   const reste = pathname.slice(section.href.length).split("/").filter(Boolean);
   if (reste.length === 0) return [{ label: section.label }];
+  const page = PAGES_OF_A_SECTION[`${section.href.slice(base.length)}/${reste[0]}`];
   return [
     { href: section.href, label: section.label },
-    { label: <span data-donnee>{decodeURIComponent(reste[0]!)}</span> },
+    // A page the console names ("Library") is written as a label; anything else is data — a
+    // workflow's name, an action's id — shown as written.
+    { label: page ?? <span data-donnee>{decodeURIComponent(reste[0]!)}</span> },
   ];
+}
+
+/** The fixed pages under a section, by their path below the project: named, never shown as a raw segment. */
+const PAGES_OF_A_SECTION: Record<string, string> = {
+  "/workflows/catalogue": "Library",
+  "/workflows/library": "Library",
+  "/workflows/new": "New workflow",
+};
+
+/** The section a project path is in, with its family's hue: what a page's header shows (S55-02). */
+export function projectSection(slug: string, pathname: string): { entry: NavEntry; hue?: Hue } | undefined {
+  for (const group of projectGroups(slug)) {
+    const entry = group.entries.find((e) => e.active(pathname));
+    if (entry) return { entry, hue: group.hue };
+  }
+  return undefined;
 }
 
 /** The groups of the current scope; the queries are those the pages read too (one request each). */
@@ -449,7 +482,11 @@ export function ListeDeNavigation({
                         active ? "bg-accent-soft font-medium text-ink" : "text-ink-muted hover:bg-surface-muted hover:text-ink",
                       )}
                     >
-                      <Icone aria-hidden className="size-4 shrink-0" strokeWidth={1.75} />
+                      <Icone
+                        aria-hidden
+                        className={cn("size-4 shrink-0", groupe.hue && HUE_CLASSES[groupe.hue].ink)}
+                        strokeWidth={1.75}
+                      />
                       <span className={cn(barre && "rail:sr-only")}>{entree.label}</span>
                       {entree.counts && aDecider > 0 && (
                         <Compte
