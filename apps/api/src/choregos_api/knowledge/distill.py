@@ -401,6 +401,7 @@ async def instructions_for(session: Any, org_id: str, base: KnowledgeBase) -> st
             "key": f"KB-{base.slug}",
             "title": f"Distil the knowledge base “{base.name}”",
             "body": base.description or "",
+            "fields": {},
         },
         spec="",
         plan_markdown="",

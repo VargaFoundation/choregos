@@ -97,6 +97,11 @@ Rovo). A version's **runtime** says how it runs: `acp` (a coding agent the runne
 agent written in code, ADR 0063) or `a2a` (a remote agent: the runner pod calls it, a declared cost
 is booked, the same gates read its outputs).
 
+A version also declares the **workspace** its runs need ([ADR 0119](adr/0119-an-agent-declares-the-workspace-it-needs.md)):
+`none` (nothing cloned, the repository's host not on its network), `read` (a clone it cannot change)
+or `write` (the default). The repository is never the agent's: it is the project's, and each project
+that runs the agent supplies its own, or none.
+
 ## Knowledge bases
 
 A knowledge base is a corpus a human curates and agents read. Its **reach** (`scope`) says which runs are
@@ -124,7 +129,8 @@ memories hold the same subject, the first is kept, and what fits the token budge
 memory in turn. At most one binding **writes**: the run's lessons and the agent's proposals go there; for
 a **global** memory they are only ever **proposals**, accepted by an administrator. A version that
 says nothing keeps its legacy `memory` field (`project`, `agent`, `none`), which means the same
-bindings as before; nothing already published changes.
+bindings as before; nothing already published changes. The project's **policy** has the last word:
+with `memory.enabled: false`, a run binds no memory at all, whatever its agent asks for.
 
 ## Knowledge bases
 

@@ -28,7 +28,9 @@ def evaluate(spec: AgentSpec, cases: Iterable[AgentEvalCase]) -> list[AgentEvalR
         if case.live:  # asserts on what a run produced: `agent_live_evals` scores it
             continue
         sample = case.input
-        ticket = {"key": "EVAL-1", "title": sample.title, "body": sample.body}
+        # `fields` as a run renders them (`activities/stage.py`), `{}` when the case gives none: an
+        # instruction reading `ticket.fields.tracker` behind a guard renders (S51-04).
+        ticket = {"key": "EVAL-1", "title": sample.title, "body": sample.body, "fields": dict(sample.fields)}
         try:
             text = rendre_les_instructions(spec.instructions, ticket=ticket)
         except TemplateError as error:
