@@ -487,6 +487,21 @@ lifted the production lock. Those names are still read, so a published workflow 
 behaviour, but the validator warns (`workflow.implicit_effect`), and a rename from the console
 first writes the effect down.
 
+**A pull request can be opened as a draft.** By default `does: open_pr` opens the pull request ready
+for review. `pull_request: { draft: true }` on the same transition opens it as a draft:
+
+```yaml
+  - { id: t-open, from: verifying, to: review, by: ci, does: open_pr, pull_request: { draft: true } }
+```
+
+It only says how the pull request is *born*. A pull request already open on the work item's branch
+(the transition taken again after changes were requested) keeps its state: a person who marked it
+ready for review is not overruled, and nothing marks a draft ready for you. Without the key, the
+platform marks the pull request ready each time, as before. Only a `system` transition that opens
+the pull request may carry `pull_request:` (`transition.pull_request_without_open_pr`). The `github`
+SCM opens a GitHub draft pull request, and the `fake` SCM records `draft`. There is no GitLab SCM
+adapter yet (`scm` is `github` or `fake`), so there are no draft merge requests.
+
 **How a terminal state ends the work item is written too.** A terminal state is a success unless it
 says otherwise: `outcome: declined` for a request turned down, `outcome: cancelled` for one dropped.
 The console shows only a success green; a declined state is shown in red, a cancelled one in grey, on
