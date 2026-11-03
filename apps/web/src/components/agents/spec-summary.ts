@@ -3,13 +3,14 @@ import { usd } from "@/lib/format";
 import { isDefaultNetwork, networkSummary } from "@/lib/network";
 import { effectiveBindings, isLegacyDefault, summaryOf } from "@/lib/memories";
 import type { AgentSpec } from "@/lib/types";
+import { declaresWorkspace, effectiveWorkspace } from "@/lib/workspace";
 
 /**
  * What a spec says in one line per section (S39-05), kept apart from the builder so the read view of a
  * version (S40-12) can say the same words without loading the whole form.
  */
 
-export type SectionId = "model" | "limits" | "skills" | "tools" | "network" | "knowledge" | "memory" | "evals";
+export type SectionId = "model" | "limits" | "skills" | "tools" | "network" | "knowledge" | "memory" | "evals" | "workspace";
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
@@ -35,6 +36,7 @@ export function sectionSummaries(spec: AgentSpec): Record<SectionId, string> {
     knowledge: bases ? plural(bases, "knowledge base", "knowledge bases") : "none",
     memory: summaryOf(effectiveBindings(spec)),
     evals: plural(cases, "case", "cases"),
+    workspace: `${effectiveWorkspace(spec)}${declaresWorkspace(spec) ? "" : " (default)"}`,
   };
 }
 
@@ -50,5 +52,6 @@ export function openByDefault(spec: AgentSpec): Record<SectionId, boolean> {
     knowledge: (spec.knowledge ?? []).length > 0,
     memory: !isLegacyDefault(effectiveBindings(spec)),
     evals: (spec.evals ?? []).length > 0,
+    workspace: spec.workspace != null,
   };
 }
