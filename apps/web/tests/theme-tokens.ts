@@ -4,7 +4,7 @@
  * Node only (reads the stylesheet through postcss): used by `scripts/export-theme-defaults.mts`
  * and by the drift test, never by the browser bundle. Reuses the resolver of the contrast tests.
  */
-import { couleur, jetonsDuMode, type Mode } from "./jetons.ts";
+import { couleur, jetonsDuMode, type Mode } from "./tokens.ts";
 
 /** Custom properties of `theme.css` that are not a themable colour. */
 const NOT_A_ROLE = new Set(["scroll-hint"]);

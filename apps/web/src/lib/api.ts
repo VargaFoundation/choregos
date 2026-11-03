@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * Client de l'API Choregos, typé par les contrats générés.
+ * The Choregos API client, typed by the generated contracts.
  *
- * Deux modes : `live` (l'API réelle, relayée par Next) et `mock` (fixtures locales,
- * pour que le front avance sans l'API — `NEXT_PUBLIC_API_MODE=mock`).
+ * Two modes: `live` (the real API, relayed by Next) and `mock` (local fixtures, so that the front
+ * end moves on without the API: `NEXT_PUBLIC_API_MODE=mock`).
  */
 import type {
   Action,
@@ -228,7 +228,7 @@ export function orgSlug(): string {
   return currentOrg;
 }
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-/** Un identifiant de projet tel que l'API l'attend : un UUID tel quel, sinon `org:slug`. */
+/** A project identifier as the API expects it: a UUID as it is, otherwise `org:slug`. */
 export function qualify(id: string): string {
   if (UUID.test(id) || id.includes(":") || id.includes("/")) return id;
   return `${currentOrg}:${id}`;
@@ -289,22 +289,22 @@ export async function problemOf(response: Response): Promise<Problem> {
   return problem;
 }
 
-/** Sur 401 hors de la page de connexion : on y va, en gardant d'où l'on vient. */
+/** On a 401 outside the sign-in page: go there, keeping where one comes from. */
 function versLaConnexion(): void {
   if (typeof window === "undefined" || window.location.pathname.startsWith("/login")) return;
   const next = encodeURIComponent(window.location.pathname + window.location.search);
-  // Une navigation complète, volontairement : la session est morte, l'état React aussi.
+  // A full navigation, on purpose: the session is dead, and so is the React state.
   window.location.assign(new URL(`/login?next=${next}`, window.location.origin).toString());
 }
 
 /**
- * Un 401 `step_up_required` n'est pas une session morte : le geste demande une authentification
- * RÉCENTE (une décision d'action, ADR 0030). On repasse par l'IdP avec `reauth=1`, et l'on revient
- * ici — envoyer vers `/login` faisait boucler, puisque la session, elle, est vivante.
+ * A 401 `step_up_required` is not a dead session: the gesture asks for a RECENT authentication (an
+ * action decision, ADR 0030). We go back through the IdP with `reauth=1`, and come back here;
+ * sending to `/login` looped, since the session is alive.
  */
-function demandeUneReauthentification(problem: { errors?: unknown[] }): boolean {
-  const premier = (problem.errors ?? [])[0] as { error?: string } | undefined;
-  return premier?.error === "step_up_required";
+function asksForReauthentication(problem: { errors?: unknown[] }): boolean {
+  const first = (problem.errors ?? [])[0] as { error?: string } | undefined;
+  return first?.error === "step_up_required";
 }
 
 function versLaReauthentification(): void {
@@ -315,8 +315,8 @@ function versLaReauthentification(): void {
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (IS_MOCK) {
-    // Les fixtures ne partent dans le bundle que si le mode démo est demandé : importées
-    // statiquement, 460 lignes de fausses données partaient chez chaque utilisateur.
+    // The fixtures go into the bundle only if demo mode is requested: imported statically, 460
+    // lines of fake data went to every user.
     const { mockApi } = await import("@/mocks/data");
     return mockApi<T>(path, init);
   }
@@ -334,7 +334,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!response.ok) {
     const problem = await problemOf(response);
     if (response.status === 401) {
-      if (demandeUneReauthentification(problem)) versLaReauthentification();
+      if (asksForReauthentication(problem)) versLaReauthentification();
       else versLaConnexion();
     }
     throw new ApiError(response.status, problem);
@@ -367,9 +367,9 @@ async function artifactContent(id: string, ref: string): Promise<Blob> {
 
 export const api = {
   me: () => request<MeDto>("/me"),
-  /** L'édition qui tourne (ADR 0024) : la console montre ce qu'elle s'autorise. */
+  /** The running edition (ADR 0024): the console shows what it allows itself. */
   edition: () => request<Edition>("/edition"),
-  /** Où brancher un client MCP (ADR 0030) : l'URL de la porte, pour la page Integrations. */
+  /** Where to plug an MCP client (ADR 0030): the gate's URL, for the Integrations page. */
   integrations: () => request<Integrations>("/integrations"),
   /** The setup procedures (ADR 0067); `for` answers the one best for a target, a preset before the generic one. */
   listProcedures: (query: { for?: string; card_host?: string; preset?: string } = {}) => {
@@ -379,7 +379,7 @@ export const api = {
     return request<ProcedureSummary[]>(`/procedures${q ? `?${q}` : ""}`);
   },
   getProcedure: (id: string) => request<Procedure>(`/procedures/${encodeURIComponent(id)}`),
-  /** L'URL qui ouvre la session : l'API redirige vers l'IdP (ou, en dev, ouvre directement). */
+  /** The URL that opens the session: the API redirects to the IdP (or, in dev, opens directly). */
   /** `tenant` picks the organisation's own identity provider, by sign-in link or by address (ADR 0108). */
   loginUrl: (next?: string, as?: string, reauth = false, tenant: { org?: string; loginHint?: string } = {}) => {
     const params = new URLSearchParams();
@@ -400,7 +400,7 @@ export const api = {
   /** The organisation's memberships; with `project`, that project's only (S30-06). */
   members: (org: string, project?: string) =>
     request<Membership[]>(`/orgs/${org}/members${project ? `?project=${encodeURIComponent(project)}` : ""}`),
-  /** Retire une appartenance — à l'organisation, ou au seul projet nommé. */
+  /** Removes a membership, of the organisation or of the one project named. */
   removeMember: (org: string, userId: string, project?: string | null) =>
     request<void>(`/orgs/${org}/members/${encodeURIComponent(userId)}${project ? `?project=${encodeURIComponent(project)}` : ""}`, {
       method: "DELETE",
@@ -415,12 +415,12 @@ export const api = {
     }),
   deleteTrackerIdentity: (org: string, userId: string, tracker: TrackerIdentity["tracker"]) =>
     request<void>(`/orgs/${org}/members/${encodeURIComponent(userId)}/tracker-identities/${tracker}`, { method: "DELETE" }),
-  /** Les sections d'administration que les greffons déclarent, filtrées par l'API (ADR 0032). */
+  /** The administration sections that extensions declare, filtered by the API (ADR 0032). */
   adminSections: (org: string) => request<AdminSection[]>(`/ui/admin-sections?org=${encodeURIComponent(org)}`),
   /**
-   * Un chemin qu'une section déclare (relatif à `/api/v1`, `{org}` et `{id}` déjà remplis). La
-   * console n'appelle que les chemins que l'API lui a rendus — et l'API a vérifié au démarrage
-   * qu'une route les sert.
+   * A path that a section declares (relative to `/api/v1`, `{org}` and `{id}` already filled in).
+   * The console only calls the paths the API gave it, and the API checked at startup that a route
+   * serves them.
    */
   sectionCall: <T>(method: string, path: string, body?: unknown) =>
     request<T>(path, { method, body: body === undefined ? undefined : JSON.stringify(body) }),
@@ -436,7 +436,7 @@ export const api = {
     }),
   addMember: (org: string, body: MembershipUpsert) =>
     request<Membership>(`/orgs/${org}/members`, { method: "POST", body: JSON.stringify(body) }),
-  /** Le registre d'agents de l'organisation (ADR 0033) : une version ne se modifie jamais. */
+  /** The organisation's agent registry (ADR 0033): a version is never modified. */
   agents: (org: string) => request<Agent[]>(`/orgs/${org}/agents`),
   agent: (org: string, slug: string) => request<Agent>(`/orgs/${org}/agents/${slug}`),
   createAgent: (org: string, body: AgentCreate, allowEgress = false) =>
@@ -517,14 +517,14 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ card_url: cardUrl }),
     }),
-  /** Le catalogue de la plateforme (ADR 0040) : ce qu'il propose, ce qui en est installé. */
+  /** The platform's catalogue (ADR 0040): what it offers, what is installed from it. */
   agentCatalogue: (org: string) => request<AgentCatalogueEntry[]>(`/orgs/${org}/agent-catalogue`),
   installCatalogueAgent: (org: string, slug: string, upgrade = false) =>
     request<Agent>(`/orgs/${org}/agent-catalogue/${slug}/install`, {
       method: "POST",
       body: JSON.stringify({ upgrade }),
     }),
-  /** Un client en un clic : son agent externe, un jeton `mcp:*` rendu une fois, ou son client OAuth. */
+  /** A client in one click: its external agent, an `mcp:*` token returned once, or its OAuth client. */
   connectCatalogueClient: (org: string, slug: string, readOnly = false) =>
     request<AgentCatalogueConnection>(`/orgs/${org}/agent-catalogue/${slug}/connect`, {
       method: "POST",
@@ -580,7 +580,7 @@ export const api = {
     request<ProjectAgent>(`/projects/${qualify(id)}/agents/${slug}`, { method: "PUT", body: JSON.stringify(body) }),
   unpinProjectAgent: (id: string, slug: string) =>
     request<void>(`/projects/${qualify(id)}/agents/${slug}`, { method: "DELETE" }),
-  /** La bibliothèque de skills : un dossier, importé en zip, versionné, jamais réécrit. */
+  /** The skill library: a folder, imported as a zip, versioned, never rewritten. */
   skills: (org: string) => request<Skill[]>(`/orgs/${org}/skills`),
   /** The catalogue of default skills and what each means in this organisation (ADR 0065). */
   skillCatalogue: (org: string) => request<SkillCatalogue>(`/orgs/${org}/skill-catalogue`),
@@ -764,18 +764,18 @@ export const api = {
         allowed: boolean;
       }[];
     }>(`/projects/${qualify(id)}/tools`),
-  /** Les actions gouvernées (ADR 0035) : la boîte des décisions, et chaque action avec son journal. */
+  /** The governed actions (ADR 0035): the decision inbox, and each action with its journal. */
   orgActions: (org: string, status?: string) =>
     request<Action[]>(`/orgs/${org}/actions${status ? `?status=${encodeURIComponent(status)}` : ""}`),
   projectActions: (id: string) => request<Action[]>(`/projects/${qualify(id)}/actions`),
   projectAction: (id: string, actionId: string) => request<Action>(`/projects/${qualify(id)}/actions/${actionId}`),
-  /** Une approbation exige une session récente : un 401 `step_up_required` repasse par l'IdP. */
+  /** An approval requires a recent session: a 401 `step_up_required` goes back through the IdP. */
   decideAction: (id: string, actionId: string, body: { decision: "approve" | "reject"; reason?: string }) =>
     request<Action>(`/projects/${qualify(id)}/actions/${actionId}/decision`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  /** Les connecteurs de l'organisation et la politique de chaque opération (ADR 0034). */
+  /** The organisation's connectors and the policy of each operation (ADR 0034). */
   orgConnectors: (org: string) => request<OrgConnector[]>(`/orgs/${org}/connectors`),
   createOrgConnector: (org: string, body: OrgConnectorCreate) =>
     request<OrgConnector>(`/orgs/${org}/connectors`, { method: "POST", body: JSON.stringify(body) }),
@@ -839,7 +839,7 @@ export const api = {
     request<ProjectOrgConnector>(`/projects/${qualify(id)}/org-connectors/${name}/enablement`, { method: "PUT" }),
   disableOrgConnector: (id: string, name: string) =>
     request<void>(`/projects/${qualify(id)}/org-connectors/${name}/enablement`, { method: "DELETE" }),
-  /** Un serveur MCP dit ses outils ; un nouveau naît fermé, un schéma qui dérive le referme. */
+  /** An MCP server lists its tools; a new one is born closed, a schema that drifts closes it again. */
   discoverConnectorOperations: (org: string, name: string) =>
     request<ConnectorDiscovery>(`/orgs/${org}/connectors/${name}/discover`, { method: "POST" }),
   projectOperations: (id: string) => request<ProjectOperation[]>(`/projects/${qualify(id)}/operations`),
@@ -852,7 +852,7 @@ export const api = {
     request<void>(`/projects/${qualify(id)}/operations/${connector}/${encodeURIComponent(operation)}`, {
       method: "DELETE",
     }),
-  /** Ce que les workflows du projet exigent de ses connecteurs, et pourquoi (ADR 0034). */
+  /** What the project's workflows require of its connectors, and why (ADR 0034). */
   projectRequirements: (id: string) => request<ProjectRequirement[]>(`/projects/${qualify(id)}/requirements`),
   putConnector: (id: string, kind: string, body: unknown) =>
     request<ConnectorDto>(`/projects/${qualify(id)}/connectors/${kind}`, { method: "PUT", body: JSON.stringify(body) }),
@@ -878,17 +878,17 @@ export const api = {
   workflow: (id: string) => request<WorkflowDef>(`/projects/${qualify(id)}/workflow`),
   putWorkflow: (id: string, yaml: string) =>
     request<WorkflowDef>(`/projects/${qualify(id)}/workflow`, { method: "PUT", body: JSON.stringify({ yaml }) }),
-  // Plusieurs workflows par projet, chacun par son nom (ADR 0031).
+  // Several workflows per project, each by its name (ADR 0031).
   workflows: (id: string) => request<WorkflowSummary[]>(`/projects/${qualify(id)}/workflows`),
   workflowNamed: (id: string, name: string) =>
     request<WorkflowDef>(`/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}`),
-  /** Publie la version suivante ; `baseVersion` est celle qu'on a lue — périmée, l'API répond 409. */
+  /** Publishes the next version; `baseVersion` is the one that was read, and if stale the API answers 409. */
   putWorkflowNamed: (id: string, name: string, yaml: string, baseVersion?: number) =>
     request<WorkflowDef>(`/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}`, {
       method: "PUT",
       body: JSON.stringify({ yaml, base_version: baseVersion ?? null }),
     }),
-  /** Crée un workflow : un nom déjà pris, actif ou non, répond 409 et rien n'est publié (#336). */
+  /** Creates a workflow: a name already taken, active or not, answers 409 and nothing is published (#336). */
   createWorkflow: (id: string, name: string, yaml: string) =>
     request<WorkflowDef>(`/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}`, {
       method: "PUT",
@@ -896,14 +896,14 @@ export const api = {
     }),
   workflowVersions: (id: string, name: string) =>
     request<WorkflowDef[]>(`/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}/versions`),
-  /** Republie une version passée comme la suivante : rien n'est réécrit, l'historique s'allonge. */
+  /** Republishes a past version as the next one: nothing is rewritten, the history grows. */
   restoreWorkflowVersion: (id: string, name: string, version: number) =>
     request<WorkflowDef>(
       `/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}/versions/${version}/restore`,
       { method: "POST" },
     ),
   workflowRouting: (id: string) => request<WorkflowRouting>(`/projects/${qualify(id)}/workflow-routing`),
-  /** Le défaut et les règles, d'un bloc : l'API refuse un workflow inconnu ou inactif (422). */
+  /** The default and the rules, as one block: the API refuses an unknown or inactive workflow (422). */
   putWorkflowRouting: (id: string, routing: WorkflowRouting) =>
     request<WorkflowRouting>(`/projects/${qualify(id)}/workflow-routing`, {
       method: "PUT",
@@ -915,7 +915,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
-  /** Plus de ticket neuf ; l'API refuse le défaut et la cible d'une règle (409). */
+  /** No new ticket; the API refuses the default and the target of a rule (409). */
   deactivateWorkflow: (id: string, name: string) =>
     request<void>(`/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}/deactivate`, { method: "POST" }),
   workflowTemplates: () => request<WorkflowTemplate[]>("/workflows/templates"),
@@ -927,10 +927,10 @@ export const api = {
   /** An organisation administrator shares a project's workflow version to the catalogue. */
   shareWorkflow: (org: string, body: WorkflowShare) =>
     request<WorkflowCatalogueEntry>(`/orgs/${org}/workflow-catalogue`, { method: "POST", body: JSON.stringify(body) }),
-  /** Des opérations typées, greffées dans le texte ; rien n'est enregistré (S16-11). */
+  /** Typed operations, grafted into the text; nothing is saved (S16-11). */
   editWorkflow: (yaml: string, operations: WorkflowOperation[]) =>
     request<WorkflowEditResult>("/workflows/edit", { method: "POST", body: JSON.stringify({ yaml, operations }) }),
-  /** `signal` : une validation que la frappe a dépassée s'annule plutôt que d'écrire un verdict périmé. */
+  /** `signal`: a validation that typing has overtaken is cancelled rather than writing a stale verdict. */
   validateWorkflow: (yaml: string, signal?: AbortSignal) =>
     request<WorkflowValidation>("/workflows/validate", { method: "POST", body: JSON.stringify({ yaml }), signal }),
   policy: (id: string) => request<PolicyDef>(`/projects/${qualify(id)}/policy`),
@@ -993,13 +993,13 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   timeline: (id: string) => request<TimelineEntry[]>(`/work-items/${id}/timeline`),
-  /** Les reçus de passage d'un ticket (S25-04) : qui a produit, qui a lu, sous quelle empreinte. */
+  /** A ticket's handover receipts (S25-04): who produced, who read, under which fingerprint. */
   handOffs: (id: string) => request<HandOff[]>(`/work-items/${id}/hand-offs`),
   /** Every revision of every artifact of a work item (ADR 0049). */
   artifacts: (id: string) => request<Artifact[]>(`/work-items/${id}/artifacts`),
   /** The bytes of one revision (`name@version`), digest checked by the API; a refusal is an `ApiError`. */
   artifactContent: (id: string, ref: string) => artifactContent(id, ref),
-  /** Le parcours du ticket dans SON workflow, en une lecture : ce que la carte animée dessine (S22-01). */
+  /** The ticket's journey in ITS workflow, in one read: what the animated map draws (S22-01). */
   journey: (id: string) => request<WorkItemJourney>(`/work-items/${id}/journey`),
   decide: (id: string, body: unknown) =>
     request<unknown>(`/work-items/${id}/decisions`, { method: "POST", body: JSON.stringify(body) }),
@@ -1105,8 +1105,8 @@ export const api = {
   /** Reviews by another backend than the implementer's versus by the same one; `since` is YYYY-MM-DD. */
   crossBackend: (id: string, since?: string) =>
     request<CrossBackendReport>(`/projects/${qualify(id)}/metrics/cross-backend${query(since ? { since } : undefined)}`),
-  /** Lien de téléchargement direct : le navigateur l'ouvre, le CSV arrive avec sa session. */
-  /** Qualifié comme toute route de projet : deux organisations peuvent avoir un projet de même nom. */
+  /** Direct download link: the browser opens it, the CSV arrives with its session. */
+  /** Qualified like every project route: two organisations can have a project of the same name. */
   costsCsvUrl: (id: string, groupBy = "day", filtre: CostFilter = {}) =>
     `${API_BASE}/projects/${qualify(id)}/costs.csv${query({ group_by: groupBy, ...compact(filtre) })}`,
   modelMatrix: (id: string) => request<ModelMatrix>(`/projects/${qualify(id)}/models/matrix`),

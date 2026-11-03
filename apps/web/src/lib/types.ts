@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * Types de l'API, réexportés depuis les contrats générés (`make contracts`).
- * Le front ne redéfinit jamais un type de l'API : il en dépend.
+ * The API's types, re-exported from the generated contracts (`make contracts`).
+ * The front end never redefines an API type: it depends on it.
  */
 export type {
   AgentBackendInfo,
@@ -154,7 +154,7 @@ export type {
   ProjectRequirement,
 } from "@choregos/contracts/api";
 
-/** Le registre d'agents et la bibliothèque de skills (ADR 0033). */
+/** The agent registry and the skill library (ADR 0033). */
 export type {
   Agent,
   AgentCatalogueConnection,
@@ -279,7 +279,7 @@ export type {
   ProjectMemoryCreate,
 } from "@choregos/contracts/api";
 
-/** Une section d'administration déclarée par un greffon, et ses blocs (ADR 0032). */
+/** An administration section declared by an extension, and its blocks (ADR 0032). */
 export type {
   UiManifest as AdminSection,
   UiManifestAction as AdminAction,
@@ -288,7 +288,7 @@ export type {
   UiManifestTable as AdminTable,
 } from "@choregos/contracts/schemas";
 
-/** L'édition qui tourne et ce qu'elle s'autorise (ADR 0024) : la réponse de `GET /edition`. */
+/** The running edition and what it allows itself (ADR 0024): the response of `GET /edition`. */
 export type Edition = Operations["edition"]["response"];
 
 /** Who started a run's work item and which earlier runs it read (ADR 0077 §2), from `GET /runs/{id}/access`. */

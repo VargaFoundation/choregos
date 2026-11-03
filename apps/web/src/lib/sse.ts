@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * Abonnement SSE avec reprise : le front reprend après `Last-Event-ID`, donc un
- * rechargement ne perd pas d'événement (§3.4).
+ * SSE subscription with resume: the front end resumes after `Last-Event-ID`, so a reload loses no
+ * event (§3.4).
  */
 "use client";
 
@@ -13,9 +13,9 @@ export interface StreamOptions<T> {
   enabled?: boolean;
   initial?: T[];
   parse?: (raw: string) => T;
-  /** En mode démo seulement : CHARGE les événements à rejouer. Une fonction, pour que les
-   * fixtures restent hors du bundle réel — importées statiquement, elles partaient chez chaque
-   * utilisateur avec la page qui les cite (#179). */
+  /** In demo mode only: LOADS the events to replay. A function, so that the fixtures stay out of
+   * the real bundle: imported statically, they went to every user with the page that cites them
+   * (#179). */
   mockEvents?: () => Promise<T[]>;
 }
 
@@ -27,9 +27,8 @@ export function useEventStream<T>({
   mockEvents,
 }: StreamOptions<T>): { events: T[]; connected: boolean; error: string | null } {
   const [events, setEvents] = useState<T[]>(initial);
-  // En mode démo il n'y a pas de connexion à ouvrir : l'état est dérivé, pas posé. Le poser
-  // dans l'effet déclenchait un rendu en cascade, ce que `react-hooks/set-state-in-effect`
-  // signale à juste titre.
+  // In demo mode there is no connection to open: the state is derived, not set. Setting it in the
+  // effect triggered a cascading render, which `react-hooks/set-state-in-effect` rightly flags.
   const [liveConnected, setConnected] = useState(false);
   const connected = IS_MOCK ? enabled : liveConnected;
   const [error, setError] = useState<string | null>(null);
@@ -38,14 +37,14 @@ export function useEventStream<T>({
   useEffect(() => {
     if (!enabled) return;
     if (IS_MOCK) {
-      // En mode démo, les événements arrivent au fil de l'eau pour montrer le direct.
+      // In demo mode, the events arrive as time goes by to show the live stream.
       let index = 0;
       let timer: ReturnType<typeof setInterval> | undefined;
-      let arrete = false;
-      void (mockEvents?.() ?? Promise.resolve([] as T[])).then((rejoues) => {
-        if (arrete) return;
+      let stopped = false;
+      void (mockEvents?.() ?? Promise.resolve([] as T[])).then((replayed) => {
+        if (stopped) return;
         timer = setInterval(() => {
-          const next = rejoues[index];
+          const next = replayed[index];
           if (next === undefined) {
             clearInterval(timer);
             return;
@@ -55,7 +54,7 @@ export function useEventStream<T>({
         }, 700);
       });
       return () => {
-        arrete = true;
+        stopped = true;
         clearInterval(timer);
       };
     }
@@ -70,7 +69,7 @@ export function useEventStream<T>({
       try {
         setEvents((current) => [...current, parse(message.data)]);
       } catch {
-        // une ligne illisible ne doit pas casser le flux
+        // an unreadable line must not break the stream
       }
     };
     source.onerror = () => {
@@ -78,8 +77,8 @@ export function useEventStream<T>({
       setError("connection lost — reconnecting");
     };
     return () => source.close();
-    // `parse` et `mockEvents` sont fournis par l'appelant et stables pour la durée du flux :
-    // les inclure relancerait la connexion à chaque rendu.
+    // `parse` and `mockEvents` are supplied by the caller and stable for the stream's lifetime:
+    // including them would restart the connection on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path, enabled]);
 

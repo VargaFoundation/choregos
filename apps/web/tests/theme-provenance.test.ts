@@ -13,7 +13,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import * as radix from "@radix-ui/colors";
 import { describe, expect, it } from "vitest";
-import { declarationsDe, FEUILLE_DU_THEME } from "./jetons";
+import { declarationsDe, FEUILLE_DU_THEME } from "./tokens";
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((nom) => {

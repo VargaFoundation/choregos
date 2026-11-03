@@ -4,89 +4,89 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useSyncExternalStore, type ReactNode } from "react";
 import {
   appliquerLeTheme,
-  choisirLeTheme,
-  CLE_DU_THEME,
-  lirePreference,
-  THEME_PAR_DEFAUT,
-  themeParDefaut,
+  chooseTheme,
+  DEFAULT_THEME,
+  defaultTheme,
+  readPreference,
   themeResolu,
+  THEME_KEY,
   type PreferenceDeTheme,
   type Theme,
 } from "./preferences";
 
-type EtatDuTheme = {
-  /** Ce que la personne a choisi ; le défaut tant qu'elle n'a rien choisi. */
+type ThemeState = {
+  /** What the person chose; the default as long as they chose nothing. */
   preference: PreferenceDeTheme;
-  /** Ce qui s'affiche. */
+  /** What is shown. */
   theme: Theme;
   choisir: (preference: PreferenceDeTheme) => void;
 };
 
-const ContexteDuTheme = createContext<EtatDuTheme | null>(null);
+const ThemeContext = createContext<ThemeState | null>(null);
 
-/** Un choix fait dans CET onglet : `storage` ne prévient que les autres. */
-const EVENEMENT_LOCAL = "choregos:theme";
-const REQUETE_CLAIR = "(prefers-color-scheme: light)";
+/** A choice made in THIS tab: `storage` only warns the others. */
+const LOCAL_EVENT = "choregos:theme";
+const LIGHT_QUERY = "(prefers-color-scheme: light)";
 
-function systeme(): MediaQueryList | null {
+function systemQuery(): MediaQueryList | null {
   return typeof window !== "undefined" && typeof window.matchMedia === "function"
-    ? window.matchMedia(REQUETE_CLAIR)
+    ? window.matchMedia(LIGHT_QUERY)
     : null;
 }
 
-function abonner(rappel: () => void): () => void {
-  const surStockage = (evenement: StorageEvent) => {
-    if (evenement.key === CLE_DU_THEME) rappel();
+function subscribe(callback: () => void): () => void {
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === THEME_KEY) callback();
   };
-  window.addEventListener("storage", surStockage);
-  window.addEventListener(EVENEMENT_LOCAL, rappel);
-  const requete = systeme();
-  requete?.addEventListener("change", rappel);
+  window.addEventListener("storage", onStorage);
+  window.addEventListener(LOCAL_EVENT, callback);
+  const query = systemQuery();
+  query?.addEventListener("change", callback);
   return () => {
-    window.removeEventListener("storage", surStockage);
-    window.removeEventListener(EVENEMENT_LOCAL, rappel);
-    requete?.removeEventListener("change", rappel);
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener(LOCAL_EVENT, callback);
+    query?.removeEventListener("change", callback);
   };
 }
 
-/** L'instantané : la préférence gardée et le mode du système — une chaîne, comparable par valeur. */
-function instantane(): string {
-  return `${lirePreference() ?? themeParDefaut()}|${systeme()?.matches ? "light" : "dark"}`;
+/** The snapshot: the preference kept and the system's mode, one string, comparable by value. */
+function snapshot(): string {
+  return `${readPreference() ?? defaultTheme()}|${systemQuery()?.matches ? "light" : "dark"}`;
 }
 
-/** Côté serveur : la préférence n'est pas connue, le script d'en-tête a déjà posé le bon thème. */
-function instantaneServeur(): string {
-  return `${THEME_PAR_DEFAUT}|dark`;
+/** Server side: the preference is not known, the head script has already set the right theme. */
+function serverSnapshot(): string {
+  return `${DEFAULT_THEME}|dark`;
 }
 
 /**
- * Le thème de la console (ADR 0043). Le script d'en-tête l'a posé avant la peinture ; ce fournisseur
- * le garde à jour : un choix dans un onglet vaut pour les autres (`storage`), et « system » suit le
- * système quand il change de mode. La préférence vit dans le navigateur, hors de React : elle se lit
- * par `useSyncExternalStore`, et le thème s'en déduit.
+ * The console's theme (ADR 0043). The head script set it before the paint; this provider keeps it
+ * up to date: a choice in one tab holds for the others (`storage`), and "system" follows the system
+ * when it changes mode. The preference lives in the browser, outside React: it is read through
+ * `useSyncExternalStore`, and the theme is deduced from it.
  */
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const etat = useSyncExternalStore(abonner, instantane, instantaneServeur);
-  const [lue, mode] = etat.split("|");
-  const preference = (lue ?? THEME_PAR_DEFAUT) as PreferenceDeTheme;
-  const theme = themeResolu(preference, mode === "light", themeParDefaut());
+  const state = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
+  const [stored, mode] = state.split("|");
+  const preference = (stored ?? DEFAULT_THEME) as PreferenceDeTheme;
+  const theme = themeResolu(preference, mode === "light", defaultTheme());
 
-  // Le DOM suit : React ne rend jamais `data-theme`, seuls le script d'en-tête et cet effet l'écrivent.
+  // The DOM follows: React never renders `data-theme`, only the head script and this effect write it.
   useEffect(() => {
     appliquerLeTheme(preference);
   }, [preference, theme]);
 
-  const choisir = useCallback((nouvelle: PreferenceDeTheme) => {
-    choisirLeTheme(nouvelle);
-    window.dispatchEvent(new Event(EVENEMENT_LOCAL));
+  const choose = useCallback((next: PreferenceDeTheme) => {
+    chooseTheme(next);
+    window.dispatchEvent(new Event(LOCAL_EVENT));
   }, []);
 
-  const valeur = useMemo(() => ({ preference, theme, choisir }), [preference, theme, choisir]);
-  return <ContexteDuTheme.Provider value={valeur}>{children}</ContexteDuTheme.Provider>;
+  const value = useMemo(() => ({ preference, theme, choisir: choose }), [preference, theme, choose]);
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
-export function useTheme(): EtatDuTheme {
-  const etat = useContext(ContexteDuTheme);
-  if (etat === null) throw new Error("useTheme outside ThemeProvider");
-  return etat;
+export function useTheme(): ThemeState {
+  const state = useContext(ThemeContext);
+  if (state === null) throw new Error("useTheme outside ThemeProvider");
+  return state;
 }

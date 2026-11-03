@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest";
 import { COULEUR_DU_RENVOI, COULEUR_DU_STATUT } from "@/components/parcours/couleurs";
 import { COULEUR_DU_GENRE } from "@/components/workflows/carte/disposition";
-import { contraste, jeton, type Mode } from "./jetons";
+import { contraste, jeton, type Mode } from "./tokens";
 
 const FONDS = ["--choregos-surface", "--choregos-raised"];
 
