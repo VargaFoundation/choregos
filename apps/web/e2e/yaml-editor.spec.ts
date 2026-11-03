@@ -69,9 +69,9 @@ test("the text typed in the YAML tab survives going through the map, and is publ
   await content.click();
   await page.keyboard.press("Control+End");
   await page.keyboard.type("# kept across tabs");
-  await expect(page.getByTestId("brouillon")).toContainText("1 change not published yet");
+  await expect(page.getByTestId("draft")).toContainText("1 change not published yet");
   await page.getByRole("link", { name: "Graph", exact: true }).click();
-  await expect(page.getByTestId("brouillon")).toContainText("1 change not published yet");
+  await expect(page.getByTestId("draft")).toContainText("1 change not published yet");
   await page.getByRole("link", { name: "YAML", exact: true }).click();
   await expect(page.getByTestId("yaml-editor").locator(".cm-content")).toContainText("# kept across tabs");
   // A single publish button, the draft bar's.
@@ -103,18 +103,18 @@ test("a draft survives a detour through another console page (S23-06)", async ({
   await page.getByLabel("YAML of default-simple").click();
   await page.keyboard.press("Control+End");
   await page.keyboard.type("# still here");
-  await expect(page.getByTestId("brouillon")).toContainText("1 change not published yet");
+  await expect(page.getByTestId("draft")).toContainText("1 change not published yet");
   // Another project page unmounts the draft: before, it went away without a word.
   await page.getByRole("link", { name: "Board", exact: true }).click();
   await expect(page).toHaveURL(/\/board$/);
   await page.goBack();
-  await expect(page.getByTestId("brouillon")).toContainText("1 change not published yet — kept from your last visit");
+  await expect(page.getByTestId("draft")).toContainText("1 change not published yet — kept from your last visit");
   await expect(page.getByTestId("yaml-editor").locator(".cm-content")).toContainText("# still here");
   await expect(page.getByRole("button", { name: "Publish v2" })).toBeEnabled();
   // Discarding it erases it for good.
   await page.getByRole("button", { name: "Discard" }).click();
   await page.getByRole("button", { name: "Discard my changes" }).click();
-  await expect(page.getByTestId("brouillon")).toHaveCount(0);
+  await expect(page.getByTestId("draft")).toHaveCount(0);
   await page.reload();
   await expect(page.getByTestId("yaml-editor").locator(".cm-content")).not.toContainText("# still here");
 });

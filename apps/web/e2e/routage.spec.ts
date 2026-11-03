@@ -86,7 +86,7 @@ test("une étape s'ajoute depuis la vue processus, sans passer par la carte (S23
   await formulaire.getByRole("button", { name: "Add" }).click();
   // Le geste part dans le brouillon commun ; ce qu'il écrit est prouvé en test unitaire (la démo ne
   // simule que les libellés).
-  await expect(page.getByTestId("brouillon")).toContainText("1 change not published yet");
+  await expect(page.getByTestId("draft")).toContainText("1 change not published yet");
 });
 
 test("une skill se rattache à un agent dans sa nouvelle version (S23-13)", async ({ page }) => {

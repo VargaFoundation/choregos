@@ -257,7 +257,7 @@ test("workflows: a label changed on the map reads in the process view, then is p
   await panel.getByRole("button", { name: "Set label" }).click();
 
   // Nothing is published: the draft says the gesture, its diff, and the map is redrawn from it.
-  const draft = page.getByTestId("brouillon");
+  const draft = page.getByTestId("draft");
   await expect(draft).toContainText("1 change not published yet");
   await draft.getByText("Last change").click();
   await expect(page.getByTestId("dernier-diff")).toContainText("+  inbox: { display: Nouvelles demandes, kind: wait }");

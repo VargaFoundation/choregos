@@ -485,6 +485,7 @@ async def get_routing(ctx: ProjectCtx, session: Db) -> WorkflowRoutingDto:
         rules=list(ctx.project.workflow_routing or []),
         strategy=ctx.project.routing_strategy or "labels",
         hints=dict(ctx.project.routing_hints or {}),
+        min_confidence=ctx.project.routing_min_confidence,
     )
 
 
@@ -512,6 +513,8 @@ async def put_routing(ctx: ProjectCtx, body: WorkflowRoutingDto, session: Db) ->
         ctx.project.routing_strategy = body.strategy
     if body.hints is not None:
         ctx.project.routing_hints = {name: hint.strip() for name, hint in body.hints.items() if hint.strip()}
+    if "min_confidence" in body.model_fields_set:
+        ctx.project.routing_min_confidence = body.min_confidence
     await record(
         session,
         ctx.principal,
@@ -523,11 +526,13 @@ async def put_routing(ctx: ProjectCtx, body: WorkflowRoutingDto, session: Db) ->
         rules=len(body.rules),
         strategy=ctx.project.routing_strategy,
         hints=sorted(ctx.project.routing_hints or {}),
+        min_confidence=ctx.project.routing_min_confidence,
     )
     return body.model_copy(
         update={
             "strategy": ctx.project.routing_strategy or "labels",
             "hints": dict(ctx.project.routing_hints or {}),
+            "min_confidence": ctx.project.routing_min_confidence,
         }
     )
 
@@ -559,6 +564,7 @@ async def preview_routing(ctx: ProjectCtx, body: RoutingPreviewRequest, session:
         by=routed.by,
         reason=routed.reason,
         model=routed.decision.model if routed.decision is not None else None,
+        confidence=routed.decision.confidence if routed.decision is not None else None,
     )
 
 

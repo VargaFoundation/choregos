@@ -111,6 +111,9 @@ class Project(Base, PkMixin, TimestampMixin):
     routing_strategy: Mapped[str] = mapped_column(String(16), default="labels", server_default="labels")
     #: What the model reads about each workflow beside its description: workflow name → hint.
     routing_hints: Mapped[dict[str, str]] = mapped_column(Json, default=dict)
+    #: Below this confidence a decision model's choice is not taken and the default takes the item
+    #: (ADR 0121); `None` keeps every answer. A chat model answers no confidence and is never held to it.
+    routing_min_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     #: Which channel of the agents this project runs when it pins nothing (S40-02, ADR 0071):
     #: `stable` (production, the default) or `candidate` (testing).
     agent_channel: Mapped[str] = mapped_column(String(16), default="stable", server_default="stable")

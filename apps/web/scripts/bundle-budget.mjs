@@ -27,7 +27,9 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // and the regenerated API types tip the total over it by a fraction of a kilobyte.
 // 2026-11-03 (S52-06b, on S52-05 and S52-06): 2075 -> 2100 kB. The decision step on the map (S52-06) and its
 // calibration card with the demo mode's calibration (S52-06b) measure 2076 kB, 1 kB over the line.
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2100);
+// 2026-11-03 (S52-08): 2100 -> 2150 kB. #1237 put S55-08's icon tiles back, which S52-06b had taken out to fit
+// under 2100: main measures 2125 kB, and the routing card's minimum confidence adds 1 kB.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2150);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* fichiers(dir) {
