@@ -2426,6 +2426,17 @@ its version and the tool count, or the error. The *Signed assertion* block gives
 **Issuer** and the **JWKS URL**, each with a copy button, the keys, and **Rotate key** (it creates the first key
 too). **Remove** asks first; it is refused while connectors go through the gateway, and the refusal names them.
 
+**Catalogue and connectors through the gateway.** Once a gateway is set and not `off`, **Catalogue → MCP
+servers** offers *Through your MCP gateway* for every entry whose install routes include it, including entries
+that run as a local process or need OAuth, which cannot be installed directly. An entry that only goes through the
+gateway carries that badge. When both routes exist the install drawer has a **Route** choice: *Directly*
+(Choregos holds the credential, the default) or *Through the organisation's MCP gateway* (the gateway holds it).
+The gateway route hides the secret field and asks for the **Server name at the gateway** (the entry id by
+default; letters, digits, dots, dashes and underscores); it sends the route and that name, never a secret. The
+result is a connector of type `mcp-gateway` with the config `{server}`. **Administration → Connectors** marks it
+*via gateway* with its server name, and declaring an `mcp-gateway` connector there is refused, with a link to
+**Administration**, while the organisation has no gateway or its mode is `off`.
+
 **Network activity.** What the egress proxy and the runner let through or refused is journaled per run;
 `GET /orgs/{org}/network-activity` (`audit:read`: the organisation's administrators and owners) groups
 it by host, layer, decision and reason (`allowed`, `denied`, `rate_limited`, `unreachable`) for the last

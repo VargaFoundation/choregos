@@ -13,8 +13,14 @@ export function filterMcpEntries(entries: McpCatalogueEntry[], filters: Catalogu
   );
 }
 
+/** How this organisation can install the entry: what the API says, else direct when the entry allows it (ADR 0105). */
+export function routesOf(entry: McpCatalogueEntry): Array<"direct" | "gateway"> {
+  return entry.install_routes ?? (entry.install === "installable" ? ["direct"] : []);
+}
+
 /** Why an entry cannot be installed from here; `null` when it can. */
 export function whyNotInstallable(entry: McpCatalogueEntry): string | null {
+  if (routesOf(entry).includes("gateway")) return null;
   if (entry.install === "needs_oauth") {
     return "Needs OAuth: each user authorises it, which an organisation connector cannot carry yet.";
   }
