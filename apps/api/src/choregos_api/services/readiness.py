@@ -33,6 +33,8 @@ from ..db.models import (
     Connector,
     Membership,
     ModelProfileRow,
+    Organization,
+    OrgConnector,
     Project,
     WorkflowDef,
     WorkItem,
@@ -41,9 +43,11 @@ from ..errors import ApiError
 from ..object_store import object_store
 from ..schemas.readiness import ProjectReadiness, ReadinessFix, ReadinessItem, ReadinessSummary
 from . import github_app
+from .catalogue_rights import SELECTED_PROJECTS, enabled_ids
 from .definitions import active_policy, policy_model, workflow_model
 from .gabarits import manifeste_du_gabarit, shipped_workflows
 from .human_groups import groups_known_in, unknown_group_warnings
+from .mcp_gateway import stored as stored_gateway
 from .projets import declares_a_release_train
 from .workflow_catalogue import parse_origin
 
@@ -166,6 +170,11 @@ class Facts:
     #: the active workflows adopted from the catalogue (ADR 0111): (name, origin, version it offers now,
     #: None when the entry is gone)
     adopted: tuple[tuple[str, str, int | None], ...] = ()
+    #: the mode of the organisation's MCP gateway (ADR 0105); None when none is configured
+    mcp_gateway_mode: str | None = None
+    #: sorted names of the organisation's direct `mcp` connectors this project can reach (not a
+    #: plugin's server, ADR 0096)
+    direct_mcp_connectors: tuple[str, ...] = ()
     now: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
@@ -292,6 +301,25 @@ def item_connector_secrets(f: Facts) -> list[ReadinessItem]:
         else:
             items.append(_item(id_, "connections", title, "done", "every secret field is set.", fix))
     return items
+
+
+def item_mcp_gateway(f: Facts) -> list[ReadinessItem]:
+    if f.mcp_gateway_mode is None:
+        return []
+    title = "MCP gateway"
+    fix = ReadinessFix(href="/admin/connectors", by="org_admin")
+    if f.mcp_gateway_mode == "required" and f.direct_mcp_connectors:
+        names = ", ".join(f.direct_mcp_connectors)
+        detail = (
+            "the organisation's MCP gateway is required; these direct MCP connectors are refused: "
+            f"{names} — declare them as `mcp-gateway` connectors."
+        )
+        return [_item("mcp_gateway", "connections", title, "todo", detail, fix)]
+    if f.mcp_gateway_mode == "off":
+        detail = "the organisation's MCP gateway is off: its servers are refused."
+        return [_item("mcp_gateway", "connections", title, "check", detail, fix)]
+    detail = "MCP servers go through the organisation's gateway."
+    return [_item("mcp_gateway", "connections", title, "done", detail, fix)]
 
 
 def item_github_app(f: Facts) -> list[ReadinessItem]:
@@ -741,6 +769,7 @@ ITEMS: tuple[Callable[[Facts], list[ReadinessItem]], ...] = (
     item_workflow,
     item_connectors,
     item_connector_secrets,
+    item_mcp_gateway,
     item_github_app,
     item_stale_tests,
     item_repository,
@@ -959,6 +988,32 @@ def _file_outputs(workflows: list[Any]) -> tuple[str, ...]:
     return tuple(sorted(names))
 
 
+async def _direct_mcp_connectors(session: AsyncSession, project: Project) -> tuple[str, ...]:
+    """The direct `mcp` connectors the broker would let this project call: availability as the broker
+    reads it (`all_projects`, or turned on for the project), a plugin's server left out (ADR 0096).
+    The plugin filter is in Python: the JSON column stores a JSON null, which `IS NULL` does not match."""
+    rows = (
+        (
+            await session.execute(
+                select(OrgConnector).where(
+                    OrgConnector.org_id == project.org_id,
+                    OrgConnector.type == "mcp",
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    enabled = await enabled_ids(session, project)
+    return tuple(
+        sorted(
+            r.name
+            for r in rows
+            if not r.plugin_server and (r.availability != SELECTED_PROJECTS or r.id in enabled)
+        )
+    )
+
+
 async def load_facts(session: AsyncSession, project: Project, org_slug: str) -> Facts:
     from choregos_core.dsl.exigences import exigences
 
@@ -1009,7 +1064,10 @@ async def load_facts(session: AsyncSession, project: Project, org_slug: str) -> 
     failed = next((s for s in state.get("steps", []) if s.get("status") == "failed"), None)
     file_outputs = _file_outputs(workflows)
     capabilities = {c for c, _ in requirements} | set(connectors)
+    gateway = stored_gateway(await session.get(Organization, project.org_id))
     return Facts(
+        mcp_gateway_mode=gateway.mode if gateway else None,
+        direct_mcp_connectors=await _direct_mcp_connectors(session, project),
         file_outputs=file_outputs,
         object_store=await probe_object_store() if file_outputs else None,
         runtime=runtime_fact(connectors, policy),
