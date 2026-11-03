@@ -160,6 +160,7 @@ DEFAULT_THEME: dict[str, Any] = {
 
 _SURFACES = ("surface", "raised", "sidebar", "surface-muted")
 _STATUSES = ("running", "waiting", "succeeded", "failed", "retrying", "neutral", "agent")
+_HUES = tuple(f"cat-{n}" for n in range(1, 9))
 
 
 def _rgb(value: str) -> tuple[float, float, float]:
@@ -203,6 +204,11 @@ def _rules() -> list[tuple[str, str, float, str]]:
         rules += [(text, surface, 4.5, "state text") for surface in _SURFACES]
     for status in _STATUSES:
         rules += [(f"{status}-ink", fill, 4.5, "status text") for fill in (*_SURFACES, f"{status}-soft")]
+    # Colour that orients (ADR 0120): the info tone and the eight categorical hues, on every surface
+    # and on their own tint.
+    rules += [("info", fill, 4.5, "info text") for fill in (*_SURFACES, "info-soft")]
+    for hue in _HUES:
+        rules += [(f"{hue}-ink", fill, 4.5, "categorical text") for fill in (*_SURFACES, f"{hue}-soft")]
     for surface in ("surface", "raised"):
         rules += [("line-strong", surface, 3, "control border"), ("line", surface, 1.3, "hairline")]
     rules += [("focus", surface, 3, "focus ring") for surface in _SURFACES]

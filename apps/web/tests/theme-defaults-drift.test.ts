@@ -16,9 +16,9 @@ it("theme_defaults.json is what theme.css resolves to (run `pnpm theme:defaults`
   expect(committed).toEqual(themeDefaults());
 });
 
-it("every themable role is a colour of both modes, 52 of them", () => {
+it("every themable role is a colour of both modes, 87 of them (52, then ADR 0120's 35)", () => {
   const { roles, dark, light } = themeDefaults();
-  expect(roles).toHaveLength(52);
+  expect(roles).toHaveLength(87);
   for (const role of roles) {
     expect(dark[role], role).toMatch(/^#[0-9a-f]{6}$/);
     expect(light[role], role).toMatch(/^#[0-9a-f]{6}$/);

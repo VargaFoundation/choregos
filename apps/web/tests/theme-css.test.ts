@@ -20,6 +20,11 @@ describe("the CSS of a served theme (S39-03b)", () => {
     expect(lightRule).not.toContain("#112233");
   });
 
+  it("emits a served categorical hue: role names may hold digits since ADR 0120 (S55-01b)", () => {
+    const css = themeCss(theme({ tokens: { dark: { "cat-1-ink": "#9eb1ff" }, light: {} } }));
+    expect(css).toContain("--choregos-cat-1-ink:#9eb1ff");
+  });
+
   it("drops values that are not #rrggbb and role names that are not names", () => {
     const css = themeCss(
       theme({
