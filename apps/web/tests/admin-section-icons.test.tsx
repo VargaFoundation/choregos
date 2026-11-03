@@ -28,9 +28,9 @@ vi.mock("@/lib/api", async (importOriginal) => {
     api: {
       ...real.api,
       adminSections: vi.fn().mockResolvedValue([
-        { id: "ee-organisations", title: "Organisations", icon: "building" },
-        { id: "ee-administrateurs", title: "Platform administrators", icon: "shield" },
-        { id: "ee-limites", title: "Limits", icon: "gauge" },
+        { id: "ee-organisations", title: "Organisations", icon: "building", scope: "platform" },
+        { id: "ee-administrateurs", title: "Platform administrators", icon: "shield", scope: "platform" },
+        { id: "ee-limites", title: "Limits", icon: "gauge", scope: "platform" },
         { id: "ee-identite", title: "Identity", icon: "fingerprint" },
         { id: "ee-identite-instance", title: "Instance sign-in", icon: "log-in" },
         { id: "ee-apparence", title: "Appearance", icon: "palette" },
@@ -71,6 +71,25 @@ describe("plugin section icons", () => {
       "/admin/identity",
     ]);
     expect(within(bar).queryByRole("link", { name: "Instance sign-in" })).toBeNull();
+  });
+
+  it("puts what spans the instance in its own group, apart from the organisation's administration (owner review of 2026-11-03)", async () => {
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <BarreLaterale />
+      </QueryClientProvider>,
+    );
+    const bar = screen.getByRole("complementary", { name: "Sidebar" });
+    const instance = within(bar).getByRole("list", { name: "Instance (all organisations)" });
+    await within(instance).findByRole("link", { name: "Organisations" });
+    for (const name of ["Platform administrators", "Limits", "Platform", "Edition"]) {
+      expect(within(instance).getByRole("link", { name })).toBeTruthy();
+    }
+    const organisation = within(bar).getByRole("list", { name: "Administration" });
+    expect(within(organisation).queryByRole("link", { name: "Organisations" })).toBeNull();
+    // A section with no scope, or of scope organisation, stays with the organisation's pages.
+    expect(within(organisation).getByRole("link", { name: "Appearance" })).toBeTruthy();
+    expect(within(organisation).getByRole("link", { name: "Older plugin" })).toBeTruthy();
   });
 
   it("knows every name of the contract's vocabulary, and falls back on an unknown one", () => {
