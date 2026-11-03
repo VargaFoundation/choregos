@@ -66,6 +66,10 @@ def _acteurs(workflow: Workflow, raisons: _Raisons) -> None:
         if spec.type == ActorType.JOB:
             raisons.exiger("runtime", f"{nom}: the job {acteur} runs somewhere")
             continue
+        if spec.type == ActorType.DECISION:
+            # It runs in the orchestrator, not in a pod: no runtime, only the gateway's decision route.
+            raisons.exiger("gateway", f"{nom}: the decision {acteur} asks a decision model (/v1/systemone)")
+            continue
         if spec.type != ActorType.AGENT:
             continue
         raisons.exiger("runtime", f"{nom}: the agent {acteur} runs somewhere")

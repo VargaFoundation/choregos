@@ -662,7 +662,7 @@ curl         $API/projects/acme:hr/workflows                                    
 
 A project can adopt a workflow instead of writing one ([ADR 0111](adr/0111-a-workflow-catalogue.md)).
 The catalogue lists, for an organisation, the platform's workflows (`core`, including
-`default-request`, which needs no repository — [ADR 0110](adr/0110-a-project-without-a-repository-gets-a-workflow-that-delivers-no-code.md)),
+`default-request`, which needs no repository — [ADR 0110](adr/0110-a-project-without-a-repository-gets-a-workflow-that-delivers-no-code.md) — and `decision-triage`, where a decision model classifies each request, the platform routes what it is sure of (`deliver` or `clarify` at 0.85 or more) and a person decides the rest; declining is never automatic, and the organisation's catalogue must enable a model for `decide` before a project can adopt it — [ADR 0121](adr/0121-a-decision-is-a-step-recorded-and-measured.md)),
 every workflow of the deployment's templates (`template:<name>`), those of the templates its installed
 plugins brought (`plugin:<name>`, the external catalogues) and the ones it shared from its projects
 (`org`).
