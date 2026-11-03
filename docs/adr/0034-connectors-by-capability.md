@@ -30,7 +30,9 @@ a device manager, a carrier, badge readers, a supplier's agent — would do with
    capabilities (`scm`, `tracker`, `identity`, `mdm` (device management), `shipping`, `access_control`,
    `mcp`…), the JSON Schema of its configuration, its secret fields, its operations and its fake.
    `GET /connectors/types` reads the registry; the console renders the configuration from the schema
-   (the `SchemaForm` of ADR 0032). A project may hold several connectors, named.
+   (the `SchemaForm` of ADR 0032). A project holds at most one connector per kind
+   (`UniqueConstraint('project_id', 'kind')` in `db/models.py`); several named connectors of one capability
+   are organisation connectors (`OrgConnector`, [ADR 0074](0074-catalogue-rights.md)).
 2. **A project shows what its workflows require.** `GET /projects/{id}/requirements` is derived
    from the workflows (a train needs `cd`, an `identity` action needs an identity connector): a
    project without a repository or a train shows neither `scm` nor `ci` nor `cd`.
