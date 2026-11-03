@@ -770,12 +770,11 @@ qui en découle. Règle depuis ce jour : rien n'est ✅ sans un test qui échoue
 | S52-05 | S52 | ⬜ | — | The decision ledger, outcomes observed after the fact (overridden, terminal outcome, reopened) and calibration measured from it ([ADR 0121](../adr/0121-a-decision-is-a-step-recorded-and-measured.md) §6, §7). Not started. |
 | S52-06 | S52 | ⬜ | — | The decision step on the map and the calibration card ([ADR 0121](../adr/0121-a-decision-is-a-step-recorded-and-measured.md) §7). Not started. |
 | S52-07 | S52 | ⬜ | — | A catalogue workflow: classify, route, escalate below a threshold ([ADR 0121](../adr/0121-a-decision-is-a-step-recorded-and-measured.md)). Not started. |
+| S51-09 | S51 | ✅ | — | A job step naming its own image from a private registry project now pulls: the `k8s_job` runner pod (the `customImageExecutor` path under `agent_sandbox`, or the executor itself) named no pull secret, and neither did the chart's `choregos-runner` ServiceAccount, so a `CHOREGOS_JOB_IMAGES` image sat in `ImagePullBackOff`. The chart renders `global.imagePullSecrets` on the `choregos-runner` ServiceAccount and hands the names to every orchestrator worker as `CHOREGOS_RUNNER_IMAGE_PULL_SECRETS`; `KubernetesJobExecutor` (`image_pull_secrets`, built from that variable) writes them in each runner pod's `imagePullSecrets`, by name, which covers a hosted agent's container in the same pod. The `agent_sandbox` template already carried them (`sandbox.yaml`); unchanged. Docs: `deployment.md` (job images, private registry), ADR 0056 amendment note. **Proves**: `tests/charts/test_images_privees.py::test_the_runner_account_carries_the_pull_secrets` (both executors, and none without the value) and `::test_every_worker_hands_the_pull_secrets_to_the_runner_pods_it_creates`, red with the chart change reverted; `packages/adapters/tests/test_k8s_job.py::test_the_runner_pod_names_the_pull_secrets_it_is_given`, `::test_without_pull_secrets_the_pod_names_none`, `::test_the_deployment_s_pull_secrets_reach_the_executor`, red without the executor change. **Does not prove**: a pull from a real private registry (no cluster in CI); the secret existing in a per-project runners namespace (`proj-{slug}-runners`), which the chart does not create; the Tekton path, whose per-project `choregos-runner` ServiceAccount (`gitops.py` provisioning) still carries no pull secret. |
 
 
 
-
-
-**Total** : 462 livrées, 275 partielles, 13 non commencées. <!-- lang: fr-ok: parsed by tests/docs/test_comptes_de_status.py -->
+**Total** : 463 livrées, 275 partielles, 13 non commencées. <!-- lang: fr-ok: parsed by tests/docs/test_comptes_de_status.py -->
 
 
 **2026-10-05 — ADR 0029 : Choregos devient une plateforme d'agents gouvernés, à usage général ; la 0028 est
