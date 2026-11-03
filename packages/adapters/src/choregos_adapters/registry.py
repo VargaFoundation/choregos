@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Fabrique d'adaptateurs : du `connector.type` à l'implémentation.
+"""The adapter factory: from the `connector.type` to the implementation.
 
-`CHOREGOS_FAKES=1` bascule toute la plateforme sur les fakes en mémoire — c'est le mode
-utilisé par les tests, le mode démo du front et `make demo`.
+`CHOREGOS_FAKES=1` switches the whole platform to the in-memory fakes: it is the mode used by
+the tests, the front end's demo mode and `make demo`.
 """
 
 from __future__ import annotations
@@ -31,22 +31,22 @@ from .errors import ConfigurationError
 Factory = Callable[[dict[str, Any]], Any]
 
 
-#: Du plus permissif au plus strict : un projet ne peut que monter dans cet ordre (ADR 0034).
-POLITIQUES = ("allowed", "approval", "forbidden")
+#: From the most permissive to the strictest: a project can only go up in this order (ADR 0034).
+POLICIES = ("allowed", "approval", "forbidden")
 
 
 @dataclass(frozen=True, slots=True)
 class OperationSpec:
-    """Une opération qu'un type de connecteur expose — ce qu'un agent peut appeler par lui.
+    """An operation that a connector type exposes: what an agent can call through it.
 
-    `access` dit si elle lit ou écrit. Sa politique par défaut en découle : une lecture est
-    permise, une écriture passe par une validation (ADR 0035), tant que l'administrateur de
-    l'organisation n'en décide pas autrement."""
+    `access` says whether it reads or writes. Its default policy follows from it: a read is
+    allowed, a write goes through an approval (ADR 0035), until the organisation's administrator
+    decides otherwise."""
 
     name: str
     access: str = "read"
     description: str = ""
-    #: ce que l'opération attend : le courtier l'annonce à l'agent et le vérifie avant l'appel
+    #: what the operation expects: the broker announces it to the agent and checks it before the call
     input_schema: dict[str, Any] | None = None
     #: A write that a PERSON approves, always (ADR 0052): its policy never goes below `approval`,
     #: neither by the organisation nor by any other path — a firewall rule is not approved by policy.
@@ -73,34 +73,34 @@ def operation_spec(kind: str, type_name: str, operation: str) -> OperationSpec |
     return next((o for o in spec.operations if o.name == operation), None) if spec else None
 
 
-def schema_d_entree(*requis: str, **autres: dict[str, Any]) -> dict[str, Any]:
-    """Le schéma d'entrée d'une opération : des chaînes requises, d'autres propriétés facultatives,
-    et RIEN d'autre (`additionalProperties: false`) — le courtier et l'effet `connector.call` le
-    vérifient avant l'appel, un argument inattendu n'atteint jamais le système tiers."""
-    proprietes: dict[str, Any] = {nom: {"type": "string"} for nom in requis}
-    proprietes.update(autres)
+def build_input_schema(*required: str, **others: dict[str, Any]) -> dict[str, Any]:
+    """An operation's input schema: required strings, other optional properties, and NOTHING else
+    (`additionalProperties: false`): the broker and the `connector.call` effect check it before the
+    call, so an unexpected argument never reaches the third-party system."""
+    properties: dict[str, Any] = {name: {"type": "string"} for name in required}
+    properties.update(others)
     return {
         "type": "object",
-        "properties": proprietes,
-        "required": list(requis),
+        "properties": properties,
+        "required": list(required),
         "additionalProperties": False,
     }
 
 
 @dataclass(frozen=True, slots=True)
 class ConnectorTypeSpec:
-    """Ce qu'un type de connecteur déclare de lui-même (ADR 0034) : la console en tire son
-    formulaire, la plateforme ses refus. `secret_fields` : les clefs de configuration qui sont des
-    secrets — elles ne s'écrivent jamais en clair, seulement en référence (`env:NOM`…), résolue
-    quand l'adaptateur est construit."""
+    """What a connector type declares about itself (ADR 0034): the console draws its form from it,
+    the platform its refusals. `secret_fields`: the configuration keys that are secrets; they are
+    never written in clear, only as a reference (`env:NAME`...), resolved when the adapter is
+    built."""
 
     display: str
     capabilities: tuple[str, ...] = ()
     config_schema: dict[str, Any] = field(default_factory=lambda: {"type": "object", "properties": {}})
     secret_fields: tuple[str, ...] = ()
-    #: Un ancien nom, gardé pour les projets qui le portent, jamais proposé à un nouveau.
+    #: A former name, kept for the projects that carry it, never offered to a new one.
     deprecated: bool = False
-    #: Ce qu'un agent peut appeler par ce type ; un serveur `mcp` découvre les siennes (S19-03).
+    #: What an agent can call through this type; an `mcp` server discovers its own (S19-03).
     operations: tuple[OperationSpec, ...] = ()
     #: The `(host, port)` pairs an instance configured so calls (S39-22, ADR 0066). `None`: the
     #: hosts of the URL-shaped configuration fields, falling back to the schema's defaults.
@@ -130,8 +130,8 @@ def slot_of(name: str) -> tuple[str, int]:
 _REGISTRY: dict[tuple[str, str], Factory] = {}
 _SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {}
 
-#: Le type qu'un projet obtient pour une sorte qu'il ne configure pas.
-TYPES_PAR_DEFAUT: dict[str, str] = {
+#: The type a project gets for a kind it does not configure.
+DEFAULT_TYPES: dict[str, str] = {
     # A project without a tracker connector files its requests in Choregos, as
     # `le_tracker_est_interne` says (#704): `github-issues` with no `repo` could only crash.
     "tracker": "internal",
@@ -147,16 +147,16 @@ TYPES_PAR_DEFAUT: dict[str, str] = {
 def register(
     kind: ConnectorKind | str, type_name: str, spec: ConnectorTypeSpec | None = None
 ) -> Callable[[Factory], Factory]:
-    """Enregistre une implémentation pour un couple (kind, type), et ce qu'elle déclare."""
+    """Registers an implementation for a (kind, type) pair, and what it declares."""
 
     def decorator(factory: Factory) -> Factory:
-        cle = (str(kind), type_name)
-        _REGISTRY[cle] = factory
-        # Remplacer l'implémentation ne retire pas la déclaration : l'API réenregistre la mémoire
-        # lexicale avec SA fabrique (adossée à ses tables), et l'alias `pgvector` redevenait
-        # proposable à la création.
-        _SPECS[cle] = (
-            spec or _SPECS.get(cle) or ConnectorTypeSpec(display=type_name, capabilities=(str(kind),))
+        pair = (str(kind), type_name)
+        _REGISTRY[pair] = factory
+        # Replacing the implementation does not remove the declaration: the API re-registers the
+        # lexical memory with ITS factory (backed by its tables), and the `pgvector` alias became
+        # offerable again at creation.
+        _SPECS[pair] = (
+            spec or _SPECS.get(pair) or ConnectorTypeSpec(display=type_name, capabilities=(str(kind),))
         )
         return factory
 
@@ -168,8 +168,8 @@ def spec_of(kind: ConnectorKind | str, type_name: str) -> ConnectorTypeSpec | No
 
 
 def connector_types() -> list[tuple[str, str, ConnectorTypeSpec]]:
-    """Les types enregistrés — ceux du cœur et ceux des greffons —, sans les faux des tests ni
-    les anciens noms : un nouveau projet ne choisit pas un nom qui ment (`pgvector`)."""
+    """The registered types, those of the core and those of the extensions, without the test fakes
+    or the former names: a new project does not pick a name that lies (`pgvector`)."""
     return sorted((k, t, spec) for (k, t), spec in _SPECS.items() if t != "fake" and not spec.deprecated)
 
 
@@ -200,11 +200,11 @@ def offered_connector_types(environment: str) -> list[tuple[str, str, ConnectorT
     return [(k, t, spec) for k, t, spec in connector_types() if not (demos_refused and spec.dev_only)]
 
 
-def references_de_secret(
+def secret_references(
     kind: str, type_name: str, secret_refs: dict[str, str] | None, secret_ref: str | None = None
 ) -> dict[str, str]:
-    """Les références d'un connecteur, champ par champ. `secret_ref` (une seule, d'avant l'ADR 0034)
-    vaut pour le PREMIER champ secret de son type."""
+    """A connector's references, field by field. `secret_ref` (a single one, from before ADR 0034)
+    stands for the FIRST secret field of its type."""
     references = dict(secret_refs or {})
     spec = spec_of(kind, type_name)
     if secret_ref and spec and spec.secret_fields:
@@ -212,7 +212,7 @@ def references_de_secret(
     return references
 
 
-def configuration_resolue(
+def resolved_configuration(
     kind: str,
     type_name: str,
     config: dict[str, Any] | None,
@@ -228,11 +228,11 @@ def configuration_resolue(
     context — the sealed `store:` values (ADR 0058). They are not resolved again."""
     from choregos_core.secrets import resoudre
 
-    resolue = dict(config or {})
-    deja = dict(preresolved or {})
-    for champ, reference in references_de_secret(kind, type_name, secret_refs, secret_ref).items():
-        resolue[champ] = deja[champ] if champ in deja else resoudre(reference)
-    return pooled(kind, type_name, resolue)
+    resolved = dict(config or {})
+    already = dict(preresolved or {})
+    for field_name, reference in secret_references(kind, type_name, secret_refs, secret_ref).items():
+        resolved[field_name] = already[field_name] if field_name in already else resoudre(reference)
+    return pooled(kind, type_name, resolved)
 
 
 def pooled(kind: str, type_name: str, resolved: dict[str, Any]) -> dict[str, Any]:
@@ -257,15 +257,15 @@ def pooled(kind: str, type_name: str, resolved: dict[str, Any]) -> dict[str, Any
 
 def default_gateway_type() -> str:
     """The gateway of a project that declares none: the deployment's (`CHOREGOS_GATEWAY_TYPE`)."""
-    return os.environ.get("CHOREGOS_GATEWAY_TYPE", "") or TYPES_PAR_DEFAUT["gateway"]
+    return os.environ.get("CHOREGOS_GATEWAY_TYPE", "") or DEFAULT_TYPES["gateway"]
 
 
-def type_par_defaut(kind: str) -> str | None:
+def default_type(kind: str) -> str | None:
     if kind == "runtime":
         return default_executor_kind()
     if kind == "gateway":
         return default_gateway_type()
-    return TYPES_PAR_DEFAUT.get(kind)
+    return DEFAULT_TYPES.get(kind)
 
 
 def deployment_default_type(kind: str) -> str | None:
@@ -273,7 +273,7 @@ def deployment_default_type(kind: str) -> str | None:
 
     Only `runtime` (the deployment's executor), `gateway` (`CHOREGOS_GATEWAY_TYPE`) and `memory`
     (`ecphoria` when `CHOREGOS_MEMORY_URL` is set, `lexical` otherwise) are provided by a
-    deployment. For every other kind, `type_par_defaut` names what the adapter factory would
+    deployment. For every other kind, `default_type` names what the adapter factory would
     build with an empty configuration, which is not something that works: `argocd` without a
     GitOps repository and a token provides no CD. The console claims a platform default only
     from this function."""
@@ -347,14 +347,14 @@ BUILT_UNDER_FAKES: frozenset[tuple[str, str]] = frozenset({("tracker", "plugin")
 
 
 def build(kind: ConnectorKind | str, type_name: str, config: dict[str, Any] | None = None) -> Any:
-    """Construit un adaptateur. En mode fakes, le type demandé est ignoré."""
+    """Builds an adapter. In fakes mode, the type asked for is ignored."""
     config = config or {}
     if fakes_enabled() and (str(kind), type_name) not in BUILT_UNDER_FAKES:
         type_name = "fake"
     factory = _REGISTRY.get((str(kind), type_name))
     if factory is None:
-        known = ", ".join(available(kind)) or "aucun"
-        raise KeyError(f"aucun adaptateur `{type_name}` pour `{kind}` (disponibles : {known})")
+        known = ", ".join(available(kind)) or "none"
+        raise KeyError(f"no adapter `{type_name}` for `{kind}` (available: {known})")
     return factory(config)
 
 
@@ -374,7 +374,7 @@ def default_decision_client() -> DecisionClient:
 
 @dataclass(slots=True)
 class AdapterSet:
-    """L'ensemble des adaptateurs d'un projet, résolu une fois puis passé aux activités."""
+    """A project's set of adapters, resolved once and then passed to the activities."""
 
     tracker: TrackerAdapter
     scm: ScmAdapter
@@ -390,7 +390,7 @@ class AdapterSet:
 
     @classmethod
     def fakes(cls) -> AdapterSet:
-        """Jeu complet de fakes, partageant les mêmes instances (utile en test)."""
+        """A complete set of fakes, sharing the same instances (useful in tests)."""
         from .fakes import (
             FakeCd,
             FakeCi,
@@ -419,15 +419,15 @@ class AdapterSet:
 
     @classmethod
     def from_connectors(cls, connectors: dict[str, dict[str, Any]]) -> AdapterSet:
-        """Construit depuis la configuration des connecteurs d'un projet."""
+        """Builds from a project's connector configuration."""
         if fakes_enabled():
             return cls.fakes()
 
         def get(kind: str, default_type: str) -> Any:
             spec = connectors.get(kind, {})
             type_name = spec.get("type", default_type)
-            # Les secrets résolus ICI, dans le processus qui construit l'adaptateur (ADR 0034).
-            config = configuration_resolue(
+            # The secrets are resolved HERE, in the process that builds the adapter (ADR 0034).
+            config = resolved_configuration(
                 kind,
                 type_name,
                 spec.get("config", {}),
@@ -438,14 +438,14 @@ class AdapterSet:
             return build(kind, type_name, config)
 
         return cls(
-            tracker=get("tracker", TYPES_PAR_DEFAUT["tracker"]),
-            scm=get("scm", TYPES_PAR_DEFAUT["scm"]),
-            ci=get("ci", TYPES_PAR_DEFAUT["ci"]),
-            cd=get("cd", TYPES_PAR_DEFAUT["cd"]),
+            tracker=get("tracker", DEFAULT_TYPES["tracker"]),
+            scm=get("scm", DEFAULT_TYPES["scm"]),
+            ci=get("ci", DEFAULT_TYPES["ci"]),
+            cd=get("cd", DEFAULT_TYPES["cd"]),
             executor=with_custom_image_executor(get("runtime", default_executor_kind())),
-            memory=get("memory", TYPES_PAR_DEFAUT["memory"]),
+            memory=get("memory", DEFAULT_TYPES["memory"]),
             gateway=get("gateway", default_gateway_type()),
-            notify=get("notify", TYPES_PAR_DEFAUT["notify"]),
+            notify=get("notify", DEFAULT_TYPES["notify"]),
         )
 
 
@@ -471,3 +471,12 @@ def egress_hosts(kind: str, type_name: str, config: dict[str, Any]) -> list[tupl
     properties = (spec.config_schema.get("properties") if spec else None) or {}
     defaults = {name: p.get("default") for name, p in properties.items() if isinstance(p, dict)}
     return hosts_of_config(config, defaults)
+
+
+# Former names (ADR 0098 §3 (b)): apps/api, apps/orchestrator and the fakes still import them.
+POLITIQUES = POLICIES  # lang: fr-ok alias:internal
+TYPES_PAR_DEFAUT = DEFAULT_TYPES  # lang: fr-ok alias:internal
+schema_d_entree = build_input_schema  # lang: fr-ok alias:internal
+references_de_secret = secret_references  # lang: fr-ok alias:internal
+configuration_resolue = resolved_configuration  # lang: fr-ok alias:internal
+type_par_defaut = default_type  # lang: fr-ok alias:internal

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""CiAdapter Tekton : état des PipelineRun, logs, déclenchement, CloudEvents entrants."""
+"""The Tekton CiAdapter: PipelineRun state, logs, triggering, incoming CloudEvents."""
 
 from __future__ import annotations
 

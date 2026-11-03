@@ -1,4 +1,4 @@
-"""Argo CD : lecture par son API, promotion par une PR GitOps — jamais un `kubectl apply`."""
+"""Argo CD: reading through its API, promotion by a GitOps PR, never a `kubectl apply`."""
 
 from __future__ import annotations
 
@@ -11,22 +11,22 @@ from choregos_adapters.errors import ConfigurationError
 from choregos_adapters.github.client import GitHubClient
 from choregos_core.domain import Change, Window
 
-from ._transport import Fil
+from ._transport import Wire
 
 ARGO = "https://argo.test"
 GH = "https://api.github.test"
 GITOPS = "varga/gitops"
 
 
-def argo(fil: Fil, github: Fil | None = None) -> ArgoCdAdapter:
+def argo(wire: Wire, github: Wire | None = None) -> ArgoCdAdapter:
     client = GitHubClient(token="t", base_url=GH, client=github.client()) if github else None
     return ArgoCdAdapter(
-        base_url=ARGO, token="argo-token", gitops_repo=GITOPS, github=client, client=fil.client()
+        base_url=ARGO, token="argo-token", gitops_repo=GITOPS, github=client, client=wire.client()
     )
 
 
-async def test_la_sante_et_la_revision_viennent_de_l_application() -> None:
-    fil = Fil(
+async def test_health_and_revision_come_from_the_application() -> None:
+    wire = Wire(
         {
             ("GET", "/api/v1/applications/billing-prod"): (
                 200,
@@ -39,16 +39,16 @@ async def test_la_sante_et_la_revision_viennent_de_l_application() -> None:
             )
         }
     )
-    a = argo(fil)
+    a = argo(wire)
     sante = await a.health("billing-prod")
     assert (sante.status, sante.message, sante.revision) == ("Degraded", "crash", "abc")
     assert await a.current_revision("billing-prod") == "abc"
-    assert fil.requetes[0].headers["Authorization"] == "Bearer argo-token"
-    inconnue = await argo(Fil()).health("nope")
-    assert inconnue.status == "Missing" and await argo(Fil()).current_revision("nope") == "unknown"
+    assert wire.requests[0].headers["Authorization"] == "Bearer argo-token"
+    inconnue = await argo(Wire()).health("nope")
+    assert inconnue.status == "Missing" and await argo(Wire()).current_revision("nope") == "unknown"
 
 
-async def test_l_etat_du_rollout_lit_le_manifeste_et_voit_un_abandon() -> None:
+async def test_the_rollout_state_reads_the_manifest_and_sees_an_abort() -> None:
     manifest = {
         "spec": {"strategy": {"canary": {"steps": [{}, {}, {}]}}},
         "status": {
@@ -59,39 +59,43 @@ async def test_l_etat_du_rollout_lit_le_manifeste_et_voit_un_abandon() -> None:
             "message": "analyse KO",
         },
     }
-    fil = Fil(
+    wire = Wire(
         {("GET", "/api/v1/applications/billing-prod/resource"): (200, {"manifest": json.dumps(manifest)})}
     )
-    etat = await argo(fil).rollout_status("billing-prod")
-    assert etat.phase == "Aborted" and (etat.current_step, etat.total_steps, etat.canary_weight) == (1, 3, 10)
-    assert fil.requetes[0].url.params["kind"] == "Rollout"
-    assert (await argo(Fil()).rollout_status("x")).phase == "Unknown"
+    state = await argo(wire).rollout_status("billing-prod")
+    assert state.phase == "Aborted" and (state.current_step, state.total_steps, state.canary_weight) == (
+        1,
+        3,
+        10,
+    )
+    assert wire.requests[0].url.params["kind"] == "Rollout"
+    assert (await argo(Wire()).rollout_status("x")).phase == "Unknown"
 
 
-async def test_les_fenetres_de_synchronisation_sont_declaratives() -> None:
-    fil = Fil({("PATCH", "/api/v1/applications/billing-prod"): (200, {})})
-    await argo(fil).set_sync_window(
+async def test_the_sync_windows_are_declarative() -> None:
+    wire = Wire({("PATCH", "/api/v1/applications/billing-prod"): (200, {})})
+    await argo(wire).set_sync_window(
         "billing-prod", [Window(kind="deny", schedule="0 18 * * 5", duration="60h")]
     )
-    (fenetre,) = fil.corps(-1)["spec"]["syncWindows"]
+    (fenetre,) = wire.body(-1)["spec"]["syncWindows"]
     assert (
         fenetre["kind"] == "deny"
         and fenetre["applications"] == ["billing-prod"]
         and fenetre["manualSync"] is True
     )
-    await argo(Fil({("POST", "/api/v1/applications/billing-prod/rollback"): (200, {})})).abort_rollout(
+    await argo(Wire({("POST", "/api/v1/applications/billing-prod/rollback"): (200, {})})).abort_rollout(
         "billing-prod"
     )
 
 
-async def test_sans_app_github_la_promotion_est_une_erreur_de_configuration() -> None:
+async def test_without_a_github_app_promotion_is_a_configuration_error() -> None:
     with pytest.raises(ConfigurationError, match="GitOps"):
-        await argo(Fil()).promote("prod", [Change(app="billing", tag="1.2.0")], "2026.09.25")
+        await argo(Wire()).promote("prod", [Change(app="billing", tag="1.2.0")], "2026.09.25")
 
 
-async def test_la_promotion_ecrit_le_tag_et_le_manifeste_puis_ouvre_une_pr() -> None:
+async def test_promotion_writes_the_tag_and_the_manifest_then_opens_a_pr() -> None:
     kustomization = "images:\n  - name: billing\n    newTag: 1.1.0\nresources:\n  - ../../base\n"
-    gh = Fil(
+    gh = Wire(
         {
             ("GET", f"/repos/{GITOPS}"): (200, {"default_branch": "main"}),
             ("GET", f"/repos/{GITOPS}/git/ref/heads/main"): (200, {"object": {"sha": "base-sha"}}),
@@ -105,22 +109,22 @@ async def test_la_promotion_ecrit_le_tag_et_le_manifeste_puis_ouvre_une_pr() -> 
             ("POST", f"/repos/{GITOPS}/pulls"): (201, {"html_url": "https://gh/pr/1"}),
         }
     )
-    ref = await argo(Fil(), gh).promote(
+    ref = await argo(Wire(), gh).promote(
         "prod", [Change(app="billing", tag="1.2.0", image="ghcr.io/v/billing")], "2026.09.25"
     )
     assert ref.kind == "pr" and ref.url == "https://gh/pr/1" and ref.merged is False
-    chemins = gh.envoyees()
-    assert ("POST", f"/repos/{GITOPS}/git/refs") in chemins, "la branche de release est créée depuis main"
-    ecriture = next(
-        json.loads(r.content) for r in gh.requetes if r.method == "PUT" and "kustomization" in r.url.path
+    paths = gh.sent()
+    assert ("POST", f"/repos/{GITOPS}/git/refs") in paths, "the release branch is created from main"
+    write = next(
+        json.loads(r.content) for r in gh.requests if r.method == "PUT" and "kustomization" in r.url.path
     )
-    assert "newTag: 1.2.0" in base64.b64decode(ecriture["content"]).decode() and ecriture["sha"] == "f-sha"
-    assert ecriture["branch"] == "choregos/release-2026.09.25"
-    manifeste = next(
-        json.loads(r.content) for r in gh.requetes if r.method == "PUT" and "manifest" in r.url.path
+    assert "newTag: 1.2.0" in base64.b64decode(write["content"]).decode() and write["sha"] == "f-sha"
+    assert write["branch"] == "choregos/release-2026.09.25"
+    manifest = next(
+        json.loads(r.content) for r in gh.requests if r.method == "PUT" and "manifest" in r.url.path
     )
-    assert "sha" not in manifeste, "le manifeste n'existait pas : pas de sha à fournir"
-    pr = gh.corps(-1)
+    assert "sha" not in manifest, "the manifest did not exist: no sha to provide"
+    pr = gh.body(-1)
     assert (
         pr["title"] == "release(prod): 2026.09.25"
         and pr["base"] == "main"
@@ -128,16 +132,16 @@ async def test_la_promotion_ecrit_le_tag_et_le_manifeste_puis_ouvre_une_pr() -> 
     )
 
 
-def test_seul_le_newtag_de_la_section_images_change() -> None:
-    contenu = "images:\n  - name: a\n    newTag: 1.0.0\npatches:\n  - path: x.yaml\n    newTag: garde-moi\n"
-    sortie = _replace_image_tag(contenu, Change(app="a", tag="2.0.0"))
-    assert "newTag: 2.0.0" in sortie and "newTag: garde-moi" in sortie
-    assert _replace_image_tag(contenu, Change(app="a")) == contenu
+def test_only_the_newtag_of_the_images_section_changes() -> None:
+    content = "images:\n  - name: a\n    newTag: 1.0.0\npatches:\n  - path: x.yaml\n    newTag: keep-me\n"
+    output = _replace_image_tag(content, Change(app="a", tag="2.0.0"))
+    assert "newTag: 2.0.0" in output and "newTag: keep-me" in output
+    assert _replace_image_tag(content, Change(app="a")) == content
 
 
-async def test_le_test_de_connexion_lit_la_version() -> None:
-    assert (await argo(Fil({("GET", "/api/version"): (200, {"Version": "v2.13"})})).test()) == {
+async def test_the_connection_test_reads_the_version() -> None:
+    assert (await argo(Wire({("GET", "/api/version"): (200, {"Version": "v2.13"})})).test()) == {
         "ok": True,
         "version": "v2.13",
     }
-    assert (await argo(Fil()).test())["ok"] is False
+    assert (await argo(Wire()).test())["ok"] is False

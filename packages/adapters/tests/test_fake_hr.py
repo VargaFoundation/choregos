@@ -129,8 +129,7 @@ def test_the_families_are_connector_types_and_demo_is_refused_in_production(
     }
     monkeypatch.setenv("CHOREGOS_FAKES", "0")
     monkeypatch.setenv("CHOREGOS_ENV", "prod")
-    # The message is the registry's (S45-10 translates it).
-    with pytest.raises(ConfigurationError, match="`mdm: demo` refusé en prod"):  # lang: fr-ok
+    with pytest.raises(ConfigurationError, match="`mdm: demo` refused in prod"):
         build("mdm", "demo", {})
     monkeypatch.setenv("CHOREGOS_ENV", "dev")
     assert type(build("mdm", "demo", {}).fake).__name__ == "FakeMdm"

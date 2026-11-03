@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Adaptateurs de déploiement continu."""
+"""Continuous deployment adapters."""
 
 from __future__ import annotations
 

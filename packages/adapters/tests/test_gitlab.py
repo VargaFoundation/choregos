@@ -1,6 +1,6 @@
-"""Tracker GitLab : labels scopés, notes, métadonnées en description, webhooks.
+"""The GitLab tracker: scoped labels, notes, metadata in the description, webhooks.
 
-Comme pour Jira, les tests parlent au protocole documenté via un transport simulé.
+As for Jira, the tests speak the documented protocol through a simulated transport.
 """
 
 from __future__ import annotations
@@ -24,38 +24,38 @@ ENCODED = "varga%2Fbilling-api"
 def tracker(handler: Any) -> GitLabTracker:
     client = RestClient(
         "https://gitlab.com",
-        headers={"PRIVATE-TOKEN": "jeton"},
+        headers={"PRIVATE-TOKEN": "token"},
         client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
         service="gitlab",
     )
     return GitLabTracker(client, PROJECT, webhook_secret="s3cret")
 
 
-def test_un_projet_vide_est_refuse_a_la_construction() -> None:
+def test_an_empty_project_is_refused_at_construction() -> None:
     with pytest.raises(ConfigurationError):
         GitLabTracker(RestClient("https://gitlab.com"), "")
 
 
 @pytest.mark.parametrize(
-    "bloc",
+    "block",
     ['{"Risk": "low", "Size": "M"}', '{"Risque": "low", "Taille": "M"}'],
-    ids=["noms-anglais", "bloc-d-avant-S22-21"],
+    ids=["english-names", "block-from-before-S22-21"],
 )
-async def test_lecture_d_un_ticket_avec_metadonnees(bloc: str) -> None:
-    description = f"Les avoirs ne sont pas déduits.\n\n<!-- choregos:fields {bloc} -->\n"
+async def test_reading_a_ticket_with_metadata(block: str) -> None:
+    description = f"Credit notes are not deducted.\n\n<!-- choregos:fields {block} -->\n"
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/notes"):
             return httpx.Response(
                 200,
                 json=[
-                    {"id": 1, "author": {"username": "marie"}, "body": "un avis", "system": False},
-                    {"id": 2, "author": {"username": "gitlab"}, "body": "a fermé", "system": True},
+                    {"id": 1, "author": {"username": "marie"}, "body": "an opinion", "system": False},
+                    {"id": 2, "author": {"username": "gitlab"}, "body": "closed it", "system": True},
                 ],
             )
-        # GitLab exige le chemin du projet encodé : c'est `raw_path` qui part sur le fil.
+        # GitLab requires the encoded project path: it is `raw_path` that goes out on the wire.
         assert request.url.raw_path.decode().startswith(f"/api/v4/projects/{ENCODED}/issues/12")
-        assert request.headers["private-token"] == "jeton"
+        assert request.headers["private-token"] == "token"
         return httpx.Response(
             200,
             json={
@@ -74,8 +74,8 @@ async def test_lecture_d_un_ticket_avec_metadonnees(bloc: str) -> None:
 
     assert item.title == "Avoirs"
     assert item.size is Size.M and item.risk is Risk.LOW
-    assert "choregos:fields" not in item.body, "les métadonnées ne polluent pas le corps"
-    assert [c.author for c in item.comments] == ["marie"], "les notes système sont écartées"
+    assert "choregos:fields" not in item.body, "the metadata does not pollute the body"
+    assert [c.author for c in item.comments] == ["marie"], "system notes are dropped"
 
 
 async def test_les_candidats_sont_les_issues_agent_ready() -> None:
@@ -92,11 +92,11 @@ async def test_les_candidats_sont_les_issues_agent_ready() -> None:
     assert vu["labels"] == "agent-ready" and vu["state"] == "opened"
 
 
-async def test_l_etat_passe_par_un_label_scope() -> None:
-    envoye: dict[str, Any] = {}
+async def test_the_state_goes_through_a_scoped_label() -> None:
+    sent_body: dict[str, Any] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
-        envoye.update(jsonlib.loads(request.content))
+        sent_body.update(jsonlib.loads(request.content))
         return httpx.Response(200, json={})
 
     await tracker(handler).set_state(
@@ -104,24 +104,24 @@ async def test_l_etat_passe_par_un_label_scope() -> None:
         TrackerStateMapping(label="choregos::verifying", remove_labels=["choregos::implement"]),
     )
 
-    assert envoye == {
+    assert sent_body == {
         "add_labels": "choregos::verifying",
         "remove_labels": "choregos::implement",
     }
 
 
-async def test_la_note_de_suivi_est_reecrite() -> None:
+async def test_the_status_note_is_rewritten() -> None:
     from choregos_adapters.tracker.gitlab import STATUS_COMMENT_MARKER
 
-    appels: list[tuple[str, str]] = []
+    calls: list[tuple[str, str]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        appels.append((request.method, request.url.raw_path.decode()))
+        calls.append((request.method, request.url.raw_path.decode()))
         if request.method == "GET":
             return httpx.Response(
                 200,
                 json=[
-                    {"id": 1, "body": "un avis"},
+                    {"id": 1, "body": "an opinion"},
                     {"id": 5, "body": f"{STATUS_COMMENT_MARKER}\nancien"},
                 ],
             )
@@ -129,12 +129,12 @@ async def test_la_note_de_suivi_est_reecrite() -> None:
 
     await tracker(handler).upsert_status_comment(f"{PROJECT}#12", "### Suivi\n\nnouveau")
 
-    assert ("PUT", f"/api/v4/projects/{ENCODED}/issues/12/notes/5") in appels
-    assert not any(method == "POST" for method, _ in appels)
+    assert ("PUT", f"/api/v4/projects/{ENCODED}/issues/12/notes/5") in calls
+    assert not any(method == "POST" for method, _ in calls)
 
 
-async def test_les_champs_vivent_dans_la_description() -> None:
-    envoye: dict[str, Any] = {}
+async def test_the_fields_live_in_the_description() -> None:
+    sent_body: dict[str, Any] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.method == "GET":
@@ -142,35 +142,35 @@ async def test_les_champs_vivent_dans_la_description() -> None:
                 200,
                 json={
                     "iid": 12,
-                    "description": 'Corps du ticket.\n\n<!-- choregos:fields {"Taille": "M"} -->',
+                    "description": 'Ticket body.\n\n<!-- choregos:fields {"Taille": "M"} -->',
                 },
             )
-        envoye.update(jsonlib.loads(request.content))
+        sent_body.update(jsonlib.loads(request.content))
         return httpx.Response(200, json={})
 
     await tracker(handler).set_fields(f"{PROJECT}#12", {"Cost (€)": "1,25", "Run": "https://x/1"})
 
-    description = envoye["description"]
-    assert description.startswith("Corps du ticket.")
-    assert description.count("choregos:fields") == 1, "un seul bloc de métadonnées"
+    description = sent_body["description"]
+    assert description.startswith("Ticket body.")
+    assert description.count("choregos:fields") == 1, "a single metadata block"
     payload = jsonlib.loads(description.split("choregos:fields", 1)[1].rsplit("-->", 1)[0].strip())
-    # Le bloc d'avant S22-21 (`Taille`) est réécrit sous le nom anglais, sans doublon.
+    # The block from before S22-21 (former French `Size`) is rewritten under the English name, no duplicate.
     assert payload == {"Cost (€)": "1,25", "Run": "https://x/1", "Size": "M"}
 
 
-async def test_creation_de_ticket() -> None:
+async def test_ticket_creation() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         body = jsonlib.loads(request.content)
         assert body["labels"] == "finding,agent-ready"
         return httpx.Response(201, json={"iid": 31})
 
     key = await tracker(handler).create_item(
-        NewItem(title="Requête N+1", body="vue en revue", labels=["finding", "agent-ready"])
+        NewItem(title="N+1 query", body="seen in review", labels=["finding", "agent-ready"])
     )
     assert key == f"{PROJECT}#31"
 
 
-def test_le_jeton_protege_le_webhook() -> None:
+def test_the_token_protects_the_webhook() -> None:
     gitlab = tracker(lambda request: httpx.Response(200, json={}))
     assert gitlab.verify_webhook({"X-Gitlab-Token": "s3cret"}, b"{}") is True
     assert gitlab.verify_webhook({"X-Gitlab-Token": "autre"}, b"{}") is False
@@ -191,7 +191,7 @@ def _payload(**overrides: Any) -> dict[str, Any]:
     return payload
 
 
-def test_une_issue_ouverte_devient_un_evenement() -> None:
+def test_an_opened_issue_becomes_an_event() -> None:
     events = parse_gitlab_event("Issue Hook", "u-1", _payload())
     assert [e.type for e in events] == [InboundEventType.ITEM_CREATED]
     assert events[0].work_item_key == f"{PROJECT}#12"
@@ -201,7 +201,7 @@ def test_une_issue_ouverte_devient_un_evenement() -> None:
     assert events[0].payload["reporter"] == "marie"
 
 
-def test_un_label_ajoute_est_reconnu() -> None:
+def test_an_added_label_is_recognised() -> None:
     events = parse_gitlab_event(
         "Issue Hook",
         "u-2",
@@ -214,7 +214,7 @@ def test_un_label_ajoute_est_reconnu() -> None:
     assert events[0].payload["label"] == "agent-ready"
 
 
-def test_une_merge_request_fusionnee_remonte() -> None:
+def test_a_merged_merge_request_comes_up() -> None:
     events = parse_gitlab_event(
         "Merge Request Hook",
         "u-3",
@@ -232,11 +232,11 @@ def test_une_merge_request_fusionnee_remonte() -> None:
         ),
     )
     assert events[0].type is InboundEventType.PR_MERGED
-    assert events[0].work_item_key == f"{PROJECT}#12", "la branche désigne le ticket"
+    assert events[0].work_item_key == f"{PROJECT}#12", "the branch designates the ticket"
     assert events[0].payload["sha"] == "abc123"
 
 
-def test_un_pipeline_en_echec_remonte_comme_ci() -> None:
+def test_a_failed_pipeline_comes_up_as_ci() -> None:
     events = parse_gitlab_event(
         "Pipeline Hook",
         "u-4",
@@ -254,14 +254,14 @@ def test_un_pipeline_en_echec_remonte_comme_ci() -> None:
     assert events[0].payload["pipeline_id"] == 77
 
 
-def test_une_commande_en_note_devient_une_decision() -> None:
+def test_a_command_in_a_note_becomes_a_decision() -> None:
     events = parse_gitlab_event(
         "Note Hook",
         "u-5",
         _payload(
             object_kind="note",
             issue={"iid": 12},
-            object_attributes={"note": "/choregos reject trop risqué", "url": "https://x#note_1"},
+            object_attributes={"note": "/choregos reject too risky", "url": "https://x#note_1"},
         ),
     )
     assert [e.type for e in events] == [
@@ -269,11 +269,11 @@ def test_une_commande_en_note_devient_une_decision() -> None:
         InboundEventType.HUMAN_DECISION,
     ]
     assert events[1].payload["verb"] == "reject"
-    assert events[1].payload["argument"] == "trop risqué"
+    assert events[1].payload["argument"] == "too risky"
 
 
-def test_une_note_hors_ticket_est_ignoree() -> None:
-    """Une note sur une MR ou un commit n'est pas une décision de ticket."""
+def test_a_note_outside_a_ticket_is_ignored() -> None:
+    """A note on an MR or a commit is not a ticket decision."""
     events = parse_gitlab_event(
         "Note Hook",
         "u-6",
@@ -282,7 +282,7 @@ def test_une_note_hors_ticket_est_ignoree() -> None:
     assert events == []
 
 
-def test_un_evenement_inconnu_ne_produit_rien() -> None:
+def test_an_unknown_event_produces_nothing() -> None:
     assert parse_gitlab_event("Wiki Page Hook", "u-7", {"object_kind": "wiki_page"}) == []
 
 

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Executor Docker local : pour développer sans Kubernetes (`dev/compose.yaml`)."""
+"""The local Docker executor: to develop without Kubernetes (`dev/compose.yaml`)."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ KEEP_FINISHED = 10
 
 
 class LocalDockerExecutor:
-    """Lance le runner dans un conteneur local, avec les mêmes variables qu'en cluster."""
+    """Launches the runner in a local container, with the same variables as in a cluster."""
 
     kind = ExecutorKind.LOCAL_DOCKER
     capabilities: frozenset[str] = frozenset()
@@ -116,7 +116,7 @@ class LocalDockerExecutor:
         # and a `docker run` cut short keeps pulling, then collides with the retry on the name.
         code, _stdout, stderr = await self._run(*args, timeout=PULL_TIMEOUT_S, env=secrets)
         if code != 0:
-            raise UpstreamError("docker", f"démarrage impossible : {stderr[:300]}")
+            raise UpstreamError("docker", f"cannot start: {stderr[:300]}")
         self.containers[spec.run_id] = name
         if spec.agent_container is not None:
             await self._start_agent(spec, name)

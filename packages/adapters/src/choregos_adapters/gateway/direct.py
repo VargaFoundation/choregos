@@ -1,15 +1,15 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Passerelle « directe » : il n'y en a pas.
+"""The "direct" gateway: there is none.
 
-Le modèle par défaut de Choregos est une passerelle qui frappe **une clé virtuelle par run**,
-plafonnée, et qui compte la dépense à la source. Deux situations n'entrent pas dans ce moule :
+Choregos' default model is a gateway that mints **one virtual key per run**, capped, and that
+counts the spend at the source. Two situations do not fit this mould:
 
-- l'agent apporte ses propres identifiants (un abonnement Claude Code, par exemple) — la
-  plateforme n'a alors aucune clé à émettre, et ne doit surtout pas en écrire une vide ;
-- un déploiement d'essai parle à un fournisseur avec une clé unique, posée dans le pod.
+- the agent brings its own credentials (a Claude Code subscription, for example): the platform
+  then has no key to issue, and above all must not write an empty one;
+- a trial deployment talks to a provider with a single key, set in the pod.
 
-Ce qu'on perd, et qu'il faut savoir : **aucun plafond de dépense, aucun coût mesuré**. Le budget
-d'une étape se limite alors à ce que l'orchestrateur sait encore tenir — tours et minutes.
+What is lost, and must be known: **no spend ceiling, no measured cost**. A step's budget is then
+limited to what the orchestrator can still hold: turns and minutes.
 """
 
 from __future__ import annotations
@@ -22,7 +22,7 @@ from choregos_core.domain import GatewayModel, Spend, VirtualKey
 
 
 class DirectGateway:
-    """Rend la clé qu'on lui a donnée, ou rien du tout."""
+    """Returns the key it was given, or nothing at all."""
 
     #: Nothing is discovered, capped or measured: the platform's own reservation is all there is.
     capabilities: frozenset[str] = frozenset()
@@ -43,10 +43,10 @@ class DirectGateway:
         models: list[str],
         team_id: str | None = None,
     ) -> VirtualKey:
-        # L'identifiant doit être UNIQUE par run : la plateforme range chaque clé dans une
-        # table où `key_id` porte un index unique. Un identifiant constant passait au premier
-        # run et faisait échouer le second sur une violation de contrainte — un message qui
-        # parle de base de données là où le fautif est le connecteur.
+        # The identifier must be UNIQUE per run: the platform stores each key in a table where
+        # `key_id` carries a unique index. A constant identifier passed on the first run and made
+        # the second fail on a constraint violation, a message that talks about the database where
+        # the culprit is the connector.
         run = str(metadata.get("run_id") or uuid4())
         return VirtualKey(
             key=self.key,
@@ -58,8 +58,8 @@ class DirectGateway:
         )
 
     async def spend(self, key_id: str) -> Spend:
-        # Zéro n'est pas « gratuit » : c'est « non mesuré ». Le tableau des coûts le montrera
-        # à zéro, et c'est la conséquence assumée de se passer de passerelle.
+        # Zero is not "free": it is "not measured". The cost table will show it at zero, which is
+        # the accepted consequence of doing without a gateway.
         return Spend()
 
     async def revoke(self, key_id: str) -> None:

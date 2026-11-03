@@ -322,7 +322,7 @@ an `array` of strings (comma separated) and an `object` of strings (one `key = v
 
 This is how the enterprise edition attaches ([ADR 0024](adr/0024-two-editions.md)), and it is
 the second seam of this kind after playbooks (`CHOREGOS_PLAYBOOKS_DIR`), which was the model.
-`packages/adapters/tests/test_greffons.py` proves it by writing a real `.dist-info` on disk
+`packages/adapters/tests/test_extensions.py` proves it by writing a real `.dist-info` on disk
 rather than stubbing the discovery.
 
 An extension also brings the **effects** a governed action can run

@@ -1,8 +1,8 @@
-"""Les types de connecteurs déclarent ce qu'ils sont (ADR 0034, S19-01).
+"""The connector types declare what they are (ADR 0034, S19-01).
 
-Le registre est la seule source : la liste que l'API servait vivait en double, et disait jira
-« indisponible » alors qu'il est enregistré. Un secret ne s'écrit qu'en référence, résolue quand
-l'adaptateur est construit.
+The registry is the only source: the list the API served lived in duplicate, and called jira
+"unavailable" while it is registered. A secret is only written as a reference, resolved when
+the adapter is built.
 """
 
 from __future__ import annotations
@@ -12,28 +12,28 @@ from typing import Any
 import pytest
 from choregos_adapters import (
     AdapterSet,
-    configuration_resolue,
     connector_types,
+    default_type,
     register,
+    resolved_configuration,
     spec_of,
-    type_par_defaut,
 )
 from choregos_adapters.registry import _REGISTRY, _SPECS
 from choregos_core.secrets import SecretIntrouvable
 
 
-def test_chaque_type_livre_se_declare_et_aucun_faux_ne_s_affiche() -> None:
+def test_every_shipped_type_declares_itself_and_no_fake_is_shown() -> None:
     types = {(k, t): spec for k, t, spec in connector_types()}
-    assert ("tracker", "jira") in types, "jira est enregistré : il est disponible"
+    assert ("tracker", "jira") in types, "jira is registered: it is available"
     assert not [t for (_, t) in types if t == "fake"]
     for (kind, type_name), spec in types.items():
-        assert kind in spec.capabilities, f"{kind}/{type_name} ne déclare pas sa capacité"
-        assert spec.config_schema.get("type") == "object", f"{kind}/{type_name} sans schéma"
+        assert kind in spec.capabilities, f"{kind}/{type_name} does not declare its capability"
+        assert spec.config_schema.get("type") == "object", f"{kind}/{type_name} has no schema"
 
 
-def test_les_secrets_connus_sont_declares_comme_tels() -> None:
-    """Ce que les fabriques lisent comme un secret (le jeton d'API de Jira, celui d'Argo CD,
-    la clef maîtresse de LiteLLM) doit être un champ secret — jamais une clef de `config`."""
+def test_the_known_secrets_are_declared_as_such() -> None:
+    """What the factories read as a secret (Jira's API token, Argo CD's,
+    LiteLLM's master key) must be a secret field, never a key of `config`."""
     assert "api_token" in spec_of("tracker", "jira").secret_fields  # type: ignore[union-attr]
     assert "token" in spec_of("cd", "argocd").secret_fields  # type: ignore[union-attr]
     assert "master_key" in spec_of("gateway", "litellm").secret_fields  # type: ignore[union-attr]
@@ -41,15 +41,15 @@ def test_les_secrets_connus_sont_declares_comme_tels() -> None:
         assert not set(spec.secret_fields) & set(spec.config_schema.get("properties", {})), spec.display
 
 
-def test_une_reference_est_resolue_champ_par_champ(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_reference_is_resolved_field_by_field(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CONNECTOR_JIRA_TOKEN", "s3cr3t")
-    config = configuration_resolue(
+    config = resolved_configuration(
         "tracker", "jira", {"project_key": "RH"}, {"api_token": "env:CONNECTOR_JIRA_TOKEN"}
     )
     assert config == {"project_key": "RH", "api_token": "s3cr3t"}
-    # `secret_ref`, d'avant l'ADR : il vaut pour le premier champ secret du type.
+    # `secret_ref`, from before the ADR: it stands for the type's first secret field.
     assert (
-        configuration_resolue("tracker", "jira", {}, None, "env:CONNECTOR_JIRA_TOKEN")["api_token"]
+        resolved_configuration("tracker", "jira", {}, None, "env:CONNECTOR_JIRA_TOKEN")["api_token"]
         == "s3cr3t"
     )
 
@@ -59,48 +59,48 @@ def test_a_preresolved_field_is_not_resolved_again(monkeypatch: pytest.MonkeyPat
     over; the sync resolver of the core, which cannot, is never asked for them."""
     monkeypatch.setenv("CONNECTOR_JIRA_EMAIL_TOKEN", "from-env")
     refs = {"api_token": "store:connector/jira/api_token", "webhook_secret": "env:CONNECTOR_JIRA_EMAIL_TOKEN"}
-    config = configuration_resolue("tracker", "jira", {}, refs, preresolved={"api_token": "sealed"})
+    config = resolved_configuration("tracker", "jira", {}, refs, preresolved={"api_token": "sealed"})
     assert config == {"api_token": "sealed", "webhook_secret": "from-env"}
     with pytest.raises(SecretIntrouvable, match="resolved by the platform"):
-        configuration_resolue("tracker", "jira", {}, refs)
+        resolved_configuration("tracker", "jira", {}, refs)
 
 
-def test_une_reference_irresoluble_arrete_la_construction(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Mieux qu'un adaptateur qui retombe en silence sur sa valeur par défaut."""
+def test_an_unresolvable_reference_stops_the_construction(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Better than an adapter that silently falls back to its default value."""
     monkeypatch.delenv("CONNECTOR_ARGO_TOKEN", raising=False)
     with pytest.raises(SecretIntrouvable, match="CONNECTOR_ARGO_TOKEN"):
-        configuration_resolue("cd", "argocd", {}, {"token": "env:CONNECTOR_ARGO_TOKEN"})
+        resolved_configuration("cd", "argocd", {}, {"token": "env:CONNECTOR_ARGO_TOKEN"})
 
 
-def test_les_adaptateurs_d_un_projet_recoivent_leurs_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Par le chemin de l'orchestrateur : `from_connectors` résout avant de construire."""
-    sortes = ("tracker", "scm", "ci", "cd", "runtime", "memory", "gateway", "notify")
-    recus: dict[str, dict[str, Any]] = {}
+def test_a_projects_adapters_receive_their_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Through the orchestrator's path: `from_connectors` resolves before building."""
+    kind_names = ("tracker", "scm", "ci", "cd", "runtime", "memory", "gateway", "notify")
+    received: dict[str, dict[str, Any]] = {}
     try:
-        for sorte in sortes:
-            register(sorte, "sonde")(lambda cfg, s=sorte: recus.__setitem__(s, cfg) or object())
+        for kind_name in kind_names:
+            register(kind_name, "probe")(lambda cfg, s=kind_name: received.__setitem__(s, cfg) or object())
         monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
-        monkeypatch.setenv("CONNECTOR_SONDE_TOKEN", "t0k")
-        connecteurs: dict[str, dict[str, Any]] = {s: {"type": "sonde"} for s in sortes}
-        connecteurs["notify"] = {
-            "type": "sonde",
+        monkeypatch.setenv("CONNECTOR_PROBE_TOKEN", "t0k")
+        connectors: dict[str, dict[str, Any]] = {s: {"type": "probe"} for s in kind_names}
+        connectors["notify"] = {
+            "type": "probe",
             "config": {"channel": "#rh"},
-            "secret_refs": {"bot_token": "env:CONNECTOR_SONDE_TOKEN"},
+            "secret_refs": {"bot_token": "env:CONNECTOR_PROBE_TOKEN"},
         }
-        AdapterSet.from_connectors(connecteurs)
+        AdapterSet.from_connectors(connectors)
     finally:
-        for sorte in sortes:
-            _REGISTRY.pop((sorte, "sonde"), None)
-            _SPECS.pop((sorte, "sonde"), None)
-    assert recus["notify"] == {"channel": "#rh", "bot_token": "t0k"}
-    assert recus["scm"] == {}
+        for kind_name in kind_names:
+            _REGISTRY.pop((kind_name, "probe"), None)
+            _SPECS.pop((kind_name, "probe"), None)
+    assert received["notify"] == {"channel": "#rh", "bot_token": "t0k"}
+    assert received["scm"] == {}
 
 
-def test_le_type_par_defaut_est_celui_que_prend_un_projet(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_default_type_is_the_one_a_project_takes(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CHOREGOS_EXECUTOR_KIND", "k8s_job")
-    assert type_par_defaut("runtime") == "k8s_job"
-    assert type_par_defaut("scm") == "github"
-    assert type_par_defaut("identity") is None
+    assert default_type("runtime") == "k8s_job"
+    assert default_type("scm") == "github"
+    assert default_type("identity") is None
 
 
 def test_github_types_never_ask_an_installation_id() -> None:
@@ -120,7 +120,7 @@ def test_a_project_without_a_tracker_connector_gets_the_internal_tracker(
 
     `le_tracker_est_interne` already reads "no tracker connector" as internal; the adapters agree.
     """
-    from choregos_adapters.tracker.interne import InternalTracker
+    from choregos_adapters.tracker.internal import InternalTracker
 
     kinds = ("scm", "ci", "cd", "runtime", "memory", "gateway", "notify")
     try:
@@ -133,4 +133,4 @@ def test_a_project_without_a_tracker_connector_gets_the_internal_tracker(
             _REGISTRY.pop((kind, "probe"), None)
             _SPECS.pop((kind, "probe"), None)
     assert isinstance(adapters.tracker, InternalTracker)
-    assert type_par_defaut("tracker") == "internal"
+    assert default_type("tracker") == "internal"

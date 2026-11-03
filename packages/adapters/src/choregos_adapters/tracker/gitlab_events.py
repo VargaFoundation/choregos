@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Normalisation des webhooks GitLab en `InboundEvent`.
+"""Normalization of GitLab webhooks into `InboundEvent`.
 
-GitLab annonce le type dans `object_kind` (`issue`, `note`, `merge_request`, `pipeline`) et
-décrit ce qui a changé dans `changes`. Les labels scopés `choregos::<état>` y arrivent comme
-des labels ordinaires : c'est le passage d'un label à l'autre qui signale le déplacement.
+GitLab announces the type in `object_kind` (`issue`, `note`, `merge_request`, `pipeline`) and
+describes what changed in `changes`. The scoped labels `choregos::<state>` arrive there as
+ordinary labels: it is the passage from one label to another that signals the move.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from .github_events import parse_command
 
 
 def parse_gitlab_event(event_name: str, delivery_id: str, payload: dict[str, Any]) -> list[InboundEvent]:
-    """Traduit un webhook GitLab en zéro, un ou plusieurs `InboundEvent`."""
+    """Translates a GitLab webhook into zero, one or several `InboundEvent`."""
     kind = str(payload.get("object_kind") or event_name).lower()
     handler = _HANDLERS.get(kind)
     if handler is None:
@@ -95,7 +95,7 @@ def _note(delivery_id: str, payload: dict[str, Any]) -> list[InboundEvent]:
     attributes = payload.get("object_attributes", {}) or {}
     issue = payload.get("issue", {}) or {}
     if not issue:
-        return []  # une note sur une MR ou un commit n'est pas une décision de ticket
+        return []  # a note on an MR or a commit is not a ticket decision
     key = f"{_project_path(payload)}#{issue.get('iid')}"
     common = _base(delivery_id, payload, key)
     text = attributes.get("note") or ""
@@ -178,7 +178,7 @@ def _pipeline(delivery_id: str, payload: dict[str, Any]) -> list[InboundEvent]:
 
 
 def _work_item_from_branch(branch: str, payload: dict[str, Any]) -> str | None:
-    """`choregos/123-slug` désigne le ticket #123 du projet."""
+    """`choregos/123-slug` designates ticket #123 of the project."""
     import re
 
     match = re.search(r"choregos/(?P<number>\d+)", branch or "")

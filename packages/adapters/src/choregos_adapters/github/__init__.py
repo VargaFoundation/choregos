@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Accès GitHub partagé par le tracker et le SCM : App, jetons d'installation, client REST/GraphQL."""
+"""GitHub access shared by the tracker and the SCM: App, installation tokens, REST/GraphQL client."""
 
 from __future__ import annotations
 

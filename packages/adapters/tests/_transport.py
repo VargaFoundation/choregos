@@ -1,4 +1,4 @@
-"""Un transport HTTP simulé qui se souvient de tout ce qui est parti sur le fil."""
+"""A simulated HTTP transport that remembers everything that went out on the wire."""
 
 from __future__ import annotations
 
@@ -9,58 +9,73 @@ from typing import Any
 
 import httpx
 
-Reponse = tuple[int, Any] | httpx.Response | Exception
+Reply = tuple[int, Any] | httpx.Response | Exception
+Reponse = Reply  # lang: fr-ok alias:internal
 
 
 @dataclass
-class Fil:
-    """`routes` : (méthode, chemin) → réponse, ou une liste de réponses consommées dans l'ordre.
+class Wire:
+    """`routes`: (method, path) -> reply, or a list of replies consumed in order.
 
-    Le chemin est comparé sans la base : `/repos/x/y`. Une route absente répond 404 — comme
-    un serveur qui ne connaît pas la ressource, et c'est souvent ce que le test veut.
+    The path is compared without the base: `/repos/x/y`. An absent route answers 404, like a
+    server that does not know the resource, and that is often what the test wants.
     """
 
-    routes: dict[tuple[str, str], Reponse | list[Reponse]] = field(default_factory=dict)
-    requetes: list[httpx.Request] = field(default_factory=list)
+    routes: dict[tuple[str, str], Reply | list[Reply]] = field(default_factory=dict)
+    requests: list[httpx.Request] = field(default_factory=list)
+
+    @property
+    def requetes(self) -> list[httpx.Request]:  # lang: fr-ok alias:internal
+        return self.requests
 
     def client(self) -> httpx.AsyncClient:
-        return httpx.AsyncClient(transport=httpx.MockTransport(self._repondre))
+        return httpx.AsyncClient(transport=httpx.MockTransport(self._reply))
 
-    def _repondre(self, request: httpx.Request) -> httpx.Response:
-        self.requetes.append(request)
-        cle = (request.method, request.url.path)
-        reponse = self.routes.get(cle)
-        if isinstance(reponse, list):
-            reponse = reponse.pop(0) if len(reponse) > 1 else reponse[0]
-        if reponse is None:
+    def _reply(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        key = (request.method, request.url.path)
+        reply = self.routes.get(key)
+        if isinstance(reply, list):
+            reply = reply.pop(0) if len(reply) > 1 else reply[0]
+        if reply is None:
             return httpx.Response(404, json={"message": "Not Found"})
-        if isinstance(reponse, Exception):
-            raise reponse
-        if isinstance(reponse, httpx.Response):
-            return reponse
-        statut, corps = reponse
-        if corps is None:
-            return httpx.Response(statut)
-        if isinstance(corps, str):
-            return httpx.Response(statut, text=corps)
-        return httpx.Response(statut, json=corps)
+        if isinstance(reply, Exception):
+            raise reply
+        if isinstance(reply, httpx.Response):
+            return reply
+        status, content = reply
+        if content is None:
+            return httpx.Response(status)
+        if isinstance(content, str):
+            return httpx.Response(status, text=content)
+        return httpx.Response(status, json=content)
 
-    def corps(self, index: int = -1) -> Any:
-        return json.loads(self.requetes[index].content)
+    def body(self, index: int = -1) -> Any:
+        return json.loads(self.requests[index].content)
 
-    def envoyees(self, methode: str | None = None) -> list[tuple[str, str]]:
-        return [(r.method, r.url.path) for r in self.requetes if methode is None or r.method == methode]
+    corps = body  # lang: fr-ok alias:internal
+
+    def sent(self, method: str | None = None) -> list[tuple[str, str]]:
+        return [(r.method, r.url.path) for r in self.requests if method is None or r.method == method]
+
+    envoyees = sent  # lang: fr-ok alias:internal
 
 
-def sans_attente(monkeypatch: Any, module: Any) -> list[float]:
-    """Remplace `asyncio.sleep` du module par un enregistreur : les backoffs se lisent, ne durent pas."""
-    attentes: list[float] = []
+Fil = Wire  # lang: fr-ok alias:internal
 
-    async def _sleep(delai: float) -> None:
-        attentes.append(delai)
+
+def no_wait(monkeypatch: Any, module: Any) -> list[float]:
+    """Replaces the module's `asyncio.sleep` with a recorder: backoffs can be read, they do not last."""
+    waits: list[float] = []
+
+    async def _sleep(delay: float) -> None:
+        waits.append(delay)
 
     monkeypatch.setattr(module.asyncio, "sleep", _sleep)
-    return attentes
+    return waits
+
+
+sans_attente = no_wait  # lang: fr-ok alias:internal
 
 
 def handler(fn: Callable[[httpx.Request], httpx.Response]) -> httpx.AsyncClient:

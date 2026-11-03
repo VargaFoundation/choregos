@@ -1,4 +1,4 @@
-"""Exécuteur `k8s_job` : ce que le Job porte, vérifié sans cluster."""
+"""The `k8s_job` executor: what the Job carries, checked without a cluster."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ class _RecordingClient:
 
     async def request(self, method: str, path: str, **kwargs: Any) -> Any:
         self.calls.append((method, path, kwargs.get("json")))
-        return None  # rien n'existe encore : le Job et son secret sont créés
+        return None  # nothing exists yet: the Job and its secret are created
 
 
 def _spec() -> StageJobSpec:
@@ -33,9 +33,9 @@ def _spec() -> StageJobSpec:
     )
 
 
-async def test_le_pod_runner_porte_un_label_stable_pour_les_politiques_reseau() -> None:
-    """Les politiques réseau sélectionnent les runners par famille : sans label stable,
-    un pod runner ne sort vers rien — ou il faut ouvrir tout le namespace."""
+async def test_the_runner_pod_carries_a_stable_label_for_the_network_policies() -> None:
+    """The network policies select runners by family: without a stable label,
+    a runner pod reaches nothing out, or the whole namespace must be opened."""
     client = _RecordingClient()
     await KubernetesJobExecutor(client=client).start(_spec())  # type: ignore[arg-type]
     job = next(body for method, path, body in client.calls if method == "POST" and path.endswith("/jobs"))
@@ -44,7 +44,7 @@ async def test_le_pod_runner_porte_un_label_stable_pour_les_politiques_reseau() 
     assert RUNNER_POD_LABELS.items() <= labels.items()
 
 
-async def test_le_pod_runner_ne_monte_aucun_jeton_kubernetes() -> None:
+async def test_the_runner_pod_mounts_no_kubernetes_token() -> None:
     client = _RecordingClient()
     await KubernetesJobExecutor(client=client).start(_spec())  # type: ignore[arg-type]
     job = next(body for method, path, body in client.calls if method == "POST" and path.endswith("/jobs"))
@@ -53,8 +53,8 @@ async def test_le_pod_runner_ne_monte_aucun_jeton_kubernetes() -> None:
     assert pod["serviceAccountName"] == "choregos-runner"
 
 
-async def test_les_limites_du_pod_runner_suivent_la_configuration() -> None:
-    """Sous un LimitRange à 4 Gi par conteneur, un plafond de 6 Gi fait refuser le pod."""
+async def test_the_runner_pods_limits_follow_the_configuration() -> None:
+    """Under a LimitRange of 4 Gi per container, a 6 Gi ceiling makes the pod refused."""
     client = _RecordingClient()
     executor = KubernetesJobExecutor(client=client, cpu_limit="1500m", memory_limit="4Gi")  # type: ignore[arg-type]
     await executor.start(_spec())
@@ -63,7 +63,7 @@ async def test_les_limites_du_pod_runner_suivent_la_configuration() -> None:
     assert limits == {"cpu": "1500m", "memory": "4Gi"}
 
 
-def test_un_projet_sans_runtime_prend_l_executeur_du_deploiement(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_project_without_a_runtime_takes_the_deployments_executor(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CHOREGOS_EXECUTOR_KIND", "k8s_job")
     assert default_executor_kind() == "k8s_job"
     monkeypatch.delenv("CHOREGOS_EXECUTOR_KIND")
@@ -86,12 +86,12 @@ def test_the_allowed_executors_default_to_the_deployment_s(monkeypatch: pytest.M
     assert allowed_executor_kinds()[-1] == "fake"
 
 
-def test_la_memoire_prend_l_url_et_le_jeton_du_deploiement(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`CHOREGOS_MEMORY_URL` était posé par le chart et ignoré : chaque projet visait
-    `ecphoria.choregos-memory`, un service qui n'existe que dans une installation."""
+def test_the_memory_takes_the_deployments_url_and_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`CHOREGOS_MEMORY_URL` was set by the chart and ignored: every project aimed at
+    `ecphoria.choregos-memory`, a service that exists only in one installation."""
     from choregos_adapters import build
 
-    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)  # la CI tourne en fakes
+    monkeypatch.delenv("CHOREGOS_FAKES", raising=False)  # CI runs on fakes
     monkeypatch.setenv("CHOREGOS_MEMORY_URL", "http://ecphoria:8432")
     monkeypatch.setenv("CHOREGOS_MEMORY_TOKEN", "cle")
     memory = build("memory", "ecphoria", {})
@@ -99,9 +99,9 @@ def test_la_memoire_prend_l_url_et_le_jeton_du_deploiement(monkeypatch: pytest.M
     assert memory.token == "cle"
 
 
-async def test_les_secrets_d_agent_sont_montes_par_reference() -> None:
-    """Par `envFrom`, jamais recopiés : une valeur dans la spec du Job serait lisible par
-    quiconque peut lire un pod, et resterait dans l'historique de l'API."""
+async def test_agent_secrets_are_mounted_by_reference() -> None:
+    """By `envFrom`, never copied: a value in the Job's spec would be readable by
+    whoever can read a pod, and would stay in the API's history."""
     client = _RecordingClient()
     executor = KubernetesJobExecutor(client=client, env_from_secrets=["agent-creds", "git-creds"])  # type: ignore[arg-type]
     await executor.start(_spec())
@@ -114,16 +114,16 @@ async def test_les_secrets_d_agent_sont_montes_par_reference() -> None:
     assert not any("agent-creds" in str(entry.get("value", "")) for entry in container["env"])
 
 
-async def test_sans_secret_declare_le_pod_n_a_pas_d_envfrom() -> None:
+async def test_without_a_declared_secret_the_pod_has_no_envfrom() -> None:
     client = _RecordingClient()
     await KubernetesJobExecutor(client=client).start(_spec())  # type: ignore[arg-type]
     job = next(body for method, path, body in client.calls if method == "POST" and path.endswith("/jobs"))
     assert "envFrom" not in job["spec"]["template"]["spec"]["containers"][0]
 
 
-async def test_la_passerelle_directe_rend_la_cle_fournie_et_ne_mesure_rien() -> None:
-    """Sans passerelle, il n'y a ni plafond ni coût : `spend()` rend zéro, qui veut dire
-    « non mesuré » — le tableau des coûts affichera 0, et c'est la contrepartie assumée."""
+async def test_the_direct_gateway_returns_the_given_key_and_measures_nothing() -> None:
+    """Without a gateway, there is neither ceiling nor cost: `spend()` returns zero, which means
+    "not measured": the cost table will show 0, which is the accepted counterpart."""
     from choregos_adapters.gateway.direct import DirectGateway
 
     gateway = DirectGateway(key="jeton-fourni", models=["anthropic/claude-sonnet-5"])
@@ -133,50 +133,50 @@ async def test_la_passerelle_directe_rend_la_cle_fournie_et_ne_mesure_rien() -> 
     assert [m.model_name for m in await gateway.list_models()] == ["anthropic/claude-sonnet-5"]
 
 
-def test_sans_cle_de_run_le_backend_ne_touche_pas_aux_variables_d_authentification() -> None:
-    """L'agent apporte alors ses propres identifiants (abonnement) : écrire une clé vide
-    les écraserait, et l'échec ressemblerait à un refus du fournisseur."""
+def test_without_a_run_key_the_backend_leaves_the_authentication_variables_alone() -> None:
+    """The agent then brings its own credentials (subscription): writing an empty key
+    would overwrite them, and the failure would look like a refusal by the provider."""
     from choregos_contracts import ModelRef
     from choregos_runner.backends.base import Backend
 
     model = ModelRef(litellm_model="anthropic/claude-sonnet-5", base_url="https://api.anthropic.com")
     assert Backend.anthropic_env(model, None) == {"ANTHROPIC_MODEL": "anthropic/claude-sonnet-5"}
     assert Backend.openai_env(model, None) == {"OPENAI_MODEL": "anthropic/claude-sonnet-5"}
-    avec = Backend.anthropic_env(model, "sk-run")
-    assert avec["ANTHROPIC_AUTH_TOKEN"] == "sk-run"
+    with_key = Backend.anthropic_env(model, "sk-run")
+    assert with_key["ANTHROPIC_AUTH_TOKEN"] == "sk-run"
 
 
-async def test_la_passerelle_directe_donne_un_identifiant_de_cle_par_run() -> None:
-    """`key_id` porte un index unique en base : un identifiant constant ferait échouer le
-    deuxième run sur une violation de contrainte."""
+async def test_the_direct_gateway_gives_a_key_identifier_per_run() -> None:
+    """`key_id` carries a unique index in the database: a constant identifier would make the
+    second run fail on a constraint violation."""
     from choregos_adapters.gateway.direct import DirectGateway
 
     gateway = DirectGateway(key="jeton")
-    une = await gateway.mint_key({"run_id": "r-1"}, budget_usd=1, ttl_s=60, models=[])
-    deux = await gateway.mint_key({"run_id": "r-2"}, budget_usd=1, ttl_s=60, models=[])
+    first_key = await gateway.mint_key({"run_id": "r-1"}, budget_usd=1, ttl_s=60, models=[])
+    second_key = await gateway.mint_key({"run_id": "r-2"}, budget_usd=1, ttl_s=60, models=[])
     sans = await gateway.mint_key({}, budget_usd=1, ttl_s=60, models=[])
-    assert une.key_id != deux.key_id
+    assert first_key.key_id != second_key.key_id
     assert sans.key_id.startswith("direct:")
 
 
-async def test_un_run_rejoue_reecrit_son_jeton() -> None:
-    """Le nom du secret est déterministe : rejouer un run retombe dessus. Le laisser tel
-    quel ferait tourner l'agent avec un jeton périmé, et l'API répondrait « Signature
-    verification failed » — un message qui accuse la signature, pas le secret."""
+async def test_a_replayed_run_rewrites_its_token() -> None:
+    """The secret's name is deterministic: replaying a run lands on it. Leaving it as it
+    was would make the agent run with a stale token, and the API would answer "Signature
+    verification failed", a message that blames the signature, not the secret."""
 
-    class _AvecSecret(_RecordingClient):
+    class _WithSecret(_RecordingClient):
         async def request(self, method: str, path: str, **kwargs: Any) -> Any:
             await super().request(method, path, **kwargs)
             return {"kind": "Secret"} if method == "GET" and "/secrets/" in path else None
 
-    client = _AvecSecret()
+    client = _WithSecret()
     await KubernetesJobExecutor(client=client).start(_spec())  # type: ignore[arg-type]
     ecritures = [(m, p) for m, p, _ in client.calls if m in {"PUT", "POST"} and "/secrets" in p]
     assert ecritures and ecritures[0][0] == "PUT"
 
 
 class _ClusterClient:
-    """Un cluster de poche : il garde les Jobs créés et répond aux listes et aux patchs."""
+    """A pocket cluster: it keeps the Jobs created and answers lists and patches."""
 
     def __init__(self) -> None:
         self.jobs: dict[str, dict[str, Any]] = {}
@@ -195,109 +195,109 @@ class _ClusterClient:
         if method == "GET" and path.endswith("/jobs"):
             return {"items": list(self.jobs.values())}
         if path.rsplit("/", 1)[-1] in self.jobs and "/jobs/" in path:
-            nom = path.rsplit("/", 1)[-1]
+            name = path.rsplit("/", 1)[-1]
             if method == "GET":
-                return self.jobs[nom]
+                return self.jobs[name]
             if method == "PATCH":
                 assert kwargs["headers"]["Content-Type"] == "application/merge-patch+json"
-                self.jobs[nom]["spec"].update(body["spec"])
-                return self.jobs[nom]
+                self.jobs[name]["spec"].update(body["spec"])
+                return self.jobs[name]
         return None
 
     def actifs(self) -> list[str]:
         return [n for n, j in self.jobs.items() if not j["spec"].get("suspend")]
 
 
-def _spec_pour(run_id: str) -> StageJobSpec:
+def _spec_for(run_id: str) -> StageJobSpec:
     spec = _spec()
     return spec.model_copy(update={"run_id": run_id})
 
 
-async def test_au_dela_du_plafond_le_job_attend_sans_pod() -> None:
-    """Dix tickets qui démarrent ensemble font dix pods qui tirent la même image en même
-    temps, et un quota de namespace qui refuse le onzième sans rien expliquer. Un Job
-    `suspend: true` n'a AUCUN pod : il attend, visible, sans rien consommer."""
+async def test_beyond_the_ceiling_the_job_waits_without_a_pod() -> None:
+    """Ten tickets that start together make ten pods pulling the same image at the same
+    time, and a namespace quota that refuses the eleventh with no explanation. A Job
+    `suspend: true` has NO pod: it waits, visible, consuming nothing."""
     client = _ClusterClient()
-    executeur = KubernetesJobExecutor(client=client, max_active=2)  # type: ignore[arg-type]
+    executor = KubernetesJobExecutor(client=client, max_active=2)  # type: ignore[arg-type]
     for i in range(4):
-        await executeur.start(_spec_pour(f"r-{i}"))
+        await executor.start(_spec_for(f"r-{i}"))
 
     assert client.actifs() == ["run-r-0", "run-r-1"], client.actifs()
     assert all(client.jobs[f"run-r-{i}"]["spec"]["suspend"] for i in (2, 3))
 
-    etat = await executeur.status(
+    state = await executor.status(
         ExecRef(kind=ExecutorKind.K8S_JOB, name="run-r-2", namespace="choregos", run_id="r-2")
     )
-    assert etat.state == "pending"
-    assert "en attente d'une place" in etat.message
+    assert state.state == "pending"
+    assert "waiting for a slot" in state.message
 
 
-async def test_la_file_avance_dans_l_ordre_d_arrivee() -> None:
-    """Sans ordre, le dernier posé passerait devant à chaque relevé et un run malchanceux
-    attendrait indéfiniment."""
+async def test_the_queue_advances_in_arrival_order() -> None:
+    """Without order, the last one laid down would go ahead at every poll and an unlucky run
+    would wait indefinitely."""
     client = _ClusterClient()
-    executeur = KubernetesJobExecutor(client=client, max_active=2)  # type: ignore[arg-type]
+    executor = KubernetesJobExecutor(client=client, max_active=2)  # type: ignore[arg-type]
     for i in range(4):
-        await executeur.start(_spec_pour(f"r-{i}"))
+        await executor.start(_spec_for(f"r-{i}"))
 
-    client.jobs["run-r-0"]["status"] = {"succeeded": 1}  # une place se libère
+    client.jobs["run-r-0"]["status"] = {"succeeded": 1}  # a place frees up
 
-    # Le dernier arrivé demande son état : il ne doit PAS passer devant le troisième.
-    dernier = ExecRef(kind=ExecutorKind.K8S_JOB, name="run-r-3", namespace="choregos", run_id="r-3")
-    assert "en attente" in (await executeur.status(dernier)).message
+    # The last to arrive asks for its state: it must NOT go ahead of the third.
+    last = ExecRef(kind=ExecutorKind.K8S_JOB, name="run-r-3", namespace="choregos", run_id="r-3")
+    assert "waiting for a slot" in (await executor.status(last)).message
     assert client.jobs["run-r-3"]["spec"]["suspend"]
 
     troisieme = ExecRef(kind=ExecutorKind.K8S_JOB, name="run-r-2", namespace="choregos", run_id="r-2")
-    await executeur.status(troisieme)
-    assert not client.jobs["run-r-2"]["spec"].get("suspend"), "le plus ancien en attente passe"
+    await executor.status(troisieme)
+    assert not client.jobs["run-r-2"]["spec"].get("suspend"), "the oldest waiting one goes through"
 
 
-async def test_sans_plafond_rien_ne_change() -> None:
-    """Un déploiement qui ne demande rien ne change pas de régime du jour au lendemain."""
+async def test_without_a_ceiling_nothing_changes() -> None:
+    """A deployment that asks for nothing does not change regime overnight."""
     client = _ClusterClient()
-    executeur = KubernetesJobExecutor(client=client)  # type: ignore[arg-type]
+    executor = KubernetesJobExecutor(client=client)  # type: ignore[arg-type]
     for i in range(5):
-        await executeur.start(_spec_pour(f"r-{i}"))
+        await executor.start(_spec_for(f"r-{i}"))
     assert len(client.actifs()) == 5
 
 
-async def test_une_admission_refusee_ne_tue_pas_le_run() -> None:
-    """Le droit `patch` manquait dans le Role : l'API répondait 403, l'activité échouait,
-    et le workflow du ticket mourait. Trois tickets perdus sur le banc du 2026-09-24, dont
-    un qui a expiré sans avoir tourné une seconde. Une admission ratée doit laisser le run
-    en file, pas le tuer — le relevé suivant réessaiera."""
+async def test_a_refused_admission_does_not_kill_the_run() -> None:
+    """The `patch` right was missing from the Role: the API answered 403, the activity failed,
+    and the ticket's workflow died. Three tickets lost on the bench of 2026-09-24, one of
+    which expired without having run for a second. A failed admission must leave the run
+    queued, not kill it: the next poll will try again."""
 
-    class _SansDroitDePatch(_ClusterClient):
+    class _WithoutPatchRight(_ClusterClient):
         async def request(self, method: str, path: str, **kwargs: Any) -> Any:
             if method == "PATCH":
                 raise RuntimeError('[kubernetes] PATCH … → 403 : cannot patch resource "jobs"')
             return await super().request(method, path, **kwargs)
 
-    client = _SansDroitDePatch()
-    executeur = KubernetesJobExecutor(client=client, max_active=1)  # type: ignore[arg-type]
+    client = _WithoutPatchRight()
+    executor = KubernetesJobExecutor(client=client, max_active=1)  # type: ignore[arg-type]
     for i in range(2):
-        await executeur.start(_spec_pour(f"r-{i}"))
-    client.jobs["run-r-0"]["status"] = {"succeeded": 1}  # une place se libère
+        await executor.start(_spec_for(f"r-{i}"))
+    client.jobs["run-r-0"]["status"] = {"succeeded": 1}  # a place frees up
 
-    etat = await executeur.status(
+    state = await executor.status(
         ExecRef(kind=ExecutorKind.K8S_JOB, name="run-r-1", namespace="choregos", run_id="r-1")
     )
-    assert etat.state == "pending", "le run reste en file"
-    assert "en attente d'une place" in etat.message
-    assert client.jobs["run-r-1"]["spec"]["suspend"], "toujours suspendu, mais vivant"
+    assert state.state == "pending", "the run stays queued"
+    assert "waiting for a slot" in state.message
+    assert client.jobs["run-r-1"]["spec"]["suspend"], "still suspended, but alive"
 
 
-async def test_le_jeton_d_un_run_en_file_se_remplace() -> None:
-    """Un jeton est minté à la préparation et vit `max_minutes + 15`. Avec une file, ce
-    compte à rebours court PENDANT l'attente : un run admis plus tard démarrait avec un
-    jeton périmé et recevait « Signature has expired » sur son premier appel — vu sur le
-    banc du 2026-09-24. Le secret porte le nom du Job : le remplacer suffit."""
+async def test_a_queued_runs_token_can_be_replaced() -> None:
+    """A token is minted at preparation and lives `max_minutes + 15`. With a queue, this
+    countdown runs DURING the wait: a run admitted later started with a stale
+    token and received "Signature has expired" on its first call, as seen on the
+    bench of 2026-09-24. The secret has the Job's name: replacing it is enough."""
     client = _ClusterClient()
-    executeur = KubernetesJobExecutor(client=client, max_active=1)  # type: ignore[arg-type]
-    await executeur.start(_spec_pour("r-0"))
+    executor = KubernetesJobExecutor(client=client, max_active=1)  # type: ignore[arg-type]
+    await executor.start(_spec_for("r-0"))
 
     ref = ExecRef(kind=ExecutorKind.K8S_JOB, name="run-r-0", namespace="choregos", run_id="r-0")
-    await executeur.renew(ref, "jeton-tout-neuf")
+    await executor.renew(ref, "jeton-tout-neuf")
 
     secret = next(
         body for method, path, body in client.calls if method == "PATCH" and path.endswith("/secrets/run-r-0")
@@ -306,9 +306,9 @@ async def test_le_jeton_d_un_run_en_file_se_remplace() -> None:
     assert "renew" in KubernetesJobExecutor.capabilities
 
 
-async def test_le_pod_runner_passe_la_regle_kyverno_stricte() -> None:
-    """`infra/policies/pod-security.yaml` exige le profil seccomp au niveau du POD, pas
-    seulement du conteneur : c'est ce que le Job doit porter pour être admis."""
+async def test_the_runner_pod_passes_the_strict_kyverno_rule() -> None:
+    """`infra/policies/pod-security.yaml` requires the seccomp profile at the POD level, not
+    only the container's: it is what the Job must carry to be admitted."""
     client = _RecordingClient()
     await KubernetesJobExecutor(client=client).start(_spec())  # type: ignore[arg-type]
     job = next(body for method, path, body in client.calls if method == "POST" and path.endswith("/jobs"))
@@ -320,7 +320,7 @@ async def test_le_pod_runner_passe_la_regle_kyverno_stricte() -> None:
 
 
 class _ClientQuiNomme(_RecordingClient):
-    """Un serveur d'API rend l'objet créé, avec son `uid` : c'est lui qui porte le lien."""
+    """An API server returns the created object, with its `uid`: it is what carries the link."""
 
     async def request(self, method: str, path: str, **kwargs: Any) -> Any:
         await super().request(method, path, **kwargs)
@@ -329,9 +329,9 @@ class _ClientQuiNomme(_RecordingClient):
         return None
 
 
-async def test_le_secret_du_run_appartient_a_son_job() -> None:
-    """Le jeton d'un run fini ne doit pas survivre au Job : soixante-quatre secrets orphelins
-    dans le namespace du banc, un par run, tant que rien ne les rattachait."""
+async def test_the_runs_secret_belongs_to_its_job() -> None:
+    """A finished run's token must not outlive the Job: sixty-four orphan secrets
+    in the bench namespace, one per run, as long as nothing attached them."""
     client = _ClientQuiNomme()
     await KubernetesJobExecutor(client=client).start(_spec())  # type: ignore[arg-type]
     patch = next(
@@ -340,45 +340,45 @@ async def test_le_secret_du_run_appartient_a_son_job() -> None:
     assert patch["metadata"]["ownerReferences"] == [
         {"apiVersion": "batch/v1", "kind": "Job", "name": "run-r-1", "uid": "uid-du-job"}
     ]
-    ordre = [method for method, path, _ in client.calls if "/jobs" in path or "/secrets" in path]
-    assert ordre.index("POST") < len(ordre) - 1, "le Job est créé avant que le secret lui soit rattaché"
+    order = [method for method, path, _ in client.calls if "/jobs" in path or "/secrets" in path]
+    assert order.index("POST") < len(order) - 1, "the Job is created before the secret is attached to it"
 
 
-async def test_sans_uid_le_secret_reste_comme_avant() -> None:
-    """Un client qui ne rend rien (les tests, un proxy avare) ne casse pas le démarrage."""
+async def test_without_a_uid_the_secret_stays_as_before() -> None:
+    """A client that returns nothing (the tests, a stingy proxy) does not break the start."""
     client = _RecordingClient()
     await KubernetesJobExecutor(client=client).start(_spec())  # type: ignore[arg-type]
     assert not [1 for method, path, _ in client.calls if method == "PATCH" and "/secrets/" in path]
 
 
-# ──────── qui sert le catalogue d'outils, et pourquoi pas ce Job (2026-09-27) ────────
+# ──────── who serves the tool catalogue, and why not this Job (2026-09-27) ────────
 
 
-async def test_le_pod_d_agent_n_a_qu_un_conteneur() -> None:
-    """Pas de sidecar d'outils ici, et c'est un CHOIX vérifié, pas un oubli.
+async def test_the_agent_pod_has_only_one_container() -> None:
+    """No tools sidecar here, and it is a verified CHOICE, not an oversight.
 
-    J'en ai ajouté un le 2026-09-27 en croyant que rien ne servait le catalogue sous cet
-    exécuteur. C'était faux : `runner/outils_locaux.py` démarre ce serveur lui-même quand
-    l'adresse annoncée est locale et que rien ne répond — son en-tête décrit exactement le défaut
-    que je pensais trouver. Le sidecar coûtait un conteneur, un tirage d'image et du quota par pod
-    d'agent pour refaire ce qui marchait, et il gagnait la course au port 7777, donc le serveur du
-    runner s'abstenait.
+    One was added on 2026-09-27 on the belief that nothing served the catalogue under this
+    executor. That was wrong: `runner/outils_locaux.py` starts this server itself when
+    the announced address is local and nothing answers; its header describes exactly the defect
+    that was thought to exist. The sidecar cost a container, an image pull and quota per agent pod
+    to redo what worked, and it won the race for port 7777, so the runner's own server
+    held back.
 
-    Ce test existe pour que personne ne le rajoute sans avoir lu `outils_locaux.py`.
+    This test exists so that nobody adds one without having read `outils_locaux.py`.
     """
     client = _RecordingClient()
     await KubernetesJobExecutor(client=client).start(_spec())  # type: ignore[arg-type]
     job = next(body for method, path, body in client.calls if method == "POST" and path.endswith("/jobs"))
     pod = job["spec"]["template"]["spec"]
     assert "initContainers" not in pod, (
-        "le catalogue est servi par le runner lui-même (`outils_locaux.py`) : un sidecar ici "
-        "refait ce qui marche, et il prend le port avant lui"
+        "the catalogue is served by the runner itself (`outils_locaux.py`): a sidecar here "
+        "redoes what works, and it takes the port before it"
     )
     assert [c["name"] for c in pod["containers"]] == ["runner"]
 
 
 class _ClusterScripte:
-    """Un Job échoué, et les pods de son run tels que les décrit le test."""
+    """A failed Job, and its run's pods as the test describes them."""
 
     def __init__(self, pods: list[dict[str, Any]]) -> None:
         self.pods = pods
@@ -392,47 +392,47 @@ class _ClusterScripte:
         return None
 
 
-def _pod(cree: str, etat: dict[str, Any]) -> dict[str, Any]:
+def _pod(cree: str, state: dict[str, Any]) -> dict[str, Any]:
     return {
         "metadata": {"creationTimestamp": cree},
-        "status": {"containerStatuses": [{"name": "runner", "state": etat}]},
+        "status": {"containerStatuses": [{"name": "runner", "state": state}]},
     }
 
 
-async def test_un_run_mort_dit_le_code_de_sortie_du_runner_et_ce_qu_il_signifie() -> None:
-    """Le 06/10, un run du scénario RH ne disait que « backoff limit » : le pod savait pourquoi."""
-    # La liste de l'API n'a pas d'ordre garanti : le plus récent vient ici en premier.
+async def test_a_dead_run_says_the_runners_exit_code_and_what_it_means() -> None:
+    """On 06/10, a run of the HR scenario only said "backoff limit": the pod knew why."""
+    # The API's list has no guaranteed order: the most recent one comes first here.
     client = _ClusterScripte(
         [
             _pod("2026-10-06T03:49:00Z", {"terminated": {"exitCode": 30, "reason": "Error"}}),
             _pod("2026-10-06T03:48:00Z", {"terminated": {"exitCode": 20, "reason": "Error"}}),
         ]
     )
-    statut = await KubernetesJobExecutor(client=client).status(  # type: ignore[arg-type]
+    result_status = await KubernetesJobExecutor(client=client).status(  # type: ignore[arg-type]
         ExecRef(kind=ExecutorKind.K8S_JOB, name="run-r-1", namespace="choregos", run_id="r-1")
     )
-    assert statut.state == "failed"
-    assert statut.exit_code == 30, "le dernier pod fait foi"
-    assert "runner sorti en 30 (Error : agent backend unreachable)" in statut.message
-    assert "backoff limit" in statut.message
+    assert result_status.state == "failed"
+    assert result_status.exit_code == 30, "le last pod fait foi"
+    assert "runner exited with 30 (Error: agent backend unreachable)" in result_status.message
+    assert "backoff limit" in result_status.message
 
 
-async def test_un_runner_jamais_demarre_dit_pourquoi() -> None:
+async def test_a_runner_that_never_started_says_why() -> None:
     client = _ClusterScripte(
-        [_pod("2026-10-06T03:48:00Z", {"waiting": {"reason": "ImagePullBackOff", "message": "pull refusé"}})]
+        [_pod("2026-10-06T03:48:00Z", {"waiting": {"reason": "ImagePullBackOff", "message": "pull refused"}})]
     )
-    statut = await KubernetesJobExecutor(client=client).status(  # type: ignore[arg-type]
+    result_status = await KubernetesJobExecutor(client=client).status(  # type: ignore[arg-type]
         ExecRef(kind=ExecutorKind.K8S_JOB, name="run-r-1", namespace="choregos", run_id="r-1")
     )
-    assert statut.exit_code is None
-    assert "runner jamais démarré : ImagePullBackOff — pull refusé" in statut.message
+    assert result_status.exit_code is None
+    assert "runner never started: ImagePullBackOff - pull refused" in result_status.message
 
 
-async def test_sans_pod_le_run_le_dit() -> None:
-    statut = await KubernetesJobExecutor(client=_ClusterScripte([])).status(  # type: ignore[arg-type]
+async def test_without_a_pod_the_run_says_so() -> None:
+    result_status = await KubernetesJobExecutor(client=_ClusterScripte([])).status(  # type: ignore[arg-type]
         ExecRef(kind=ExecutorKind.K8S_JOB, name="run-r-1", namespace="choregos", run_id="r-1")
     )
-    assert "aucun pod du run" in statut.message
+    assert "no pod for the run" in result_status.message
 
 
 async def test_an_oom_killed_runner_gives_its_termination_reason() -> None:
@@ -466,7 +466,7 @@ def _ref_of(run_id: str) -> ExecRef:
 
 async def test_the_token_of_a_run_that_ends_normally_goes_with_its_job() -> None:
     api = _ApiServer()
-    await KubernetesJobExecutor(client=api).start(_spec_pour("r-0"))  # type: ignore[arg-type]
+    await KubernetesJobExecutor(client=api).start(_spec_for("r-0"))  # type: ignore[arg-type]
     api.jobs["run-r-0"]["status"] = {"succeeded": 1}
     api.ttl_collects("run-r-0")
     assert api.secrets == {}
@@ -477,8 +477,8 @@ async def test_the_token_of_a_queued_run_survives_neither_its_renewal_nor_its_jo
     on 2026-10-08: the renewal rewrote the Secret with a PUT that dropped its owner reference."""
     api = _ApiServer()
     executor = KubernetesJobExecutor(client=api, max_active=1)  # type: ignore[arg-type]
-    await executor.start(_spec_pour("r-0"))
-    await executor.start(_spec_pour("r-1"))  # queued: suspended Job
+    await executor.start(_spec_for("r-0"))
+    await executor.start(_spec_for("r-1"))  # queued: suspended Job
     await executor.renew(_ref_of("r-1"), "fresh-token")
 
     assert base64.b64decode(api.secrets["run-r-1"]["data"]["token"]).decode() == "fresh-token"
@@ -494,10 +494,10 @@ async def test_a_start_replayed_after_a_refused_handover_still_gives_the_token_t
     executor = KubernetesJobExecutor(client=api)  # type: ignore[arg-type]
     api.refuse[("PATCH", "/secrets/run-r-0")] = 403
     with pytest.raises(Exception, match="403"):
-        await executor.start(_spec_pour("r-0"))
+        await executor.start(_spec_for("r-0"))
     assert "run-r-0" in api.secrets, "the Job exists and its pod needs the token"
 
-    await executor.start(_spec_pour("r-0"))  # the activity's retry
+    await executor.start(_spec_for("r-0"))  # the activity's retry
     api.ttl_collects("run-r-0")
     assert api.secrets == {}
 
@@ -508,7 +508,7 @@ async def test_a_job_that_cannot_be_created_leaves_no_token_behind() -> None:
     api = _ApiServer()
     api.refuse[("POST", "/jobs")] = 403
     with pytest.raises(Exception, match="403"):
-        await KubernetesJobExecutor(client=api).start(_spec_pour("r-0"))  # type: ignore[arg-type]
+        await KubernetesJobExecutor(client=api).start(_spec_for("r-0"))  # type: ignore[arg-type]
     assert api.jobs == {} and api.secrets == {}
 
 
@@ -525,7 +525,7 @@ async def test_a_job_created_despite_a_lost_answer_keeps_its_token() -> None:
 
     api = _LostAnswer()
     with pytest.raises(TimeoutError):
-        await KubernetesJobExecutor(client=api).start(_spec_pour("r-0"))  # type: ignore[arg-type]
+        await KubernetesJobExecutor(client=api).start(_spec_for("r-0"))  # type: ignore[arg-type]
     assert "run-r-0" in api.secrets
 
 

@@ -1,7 +1,7 @@
-"""Tracker Jira : ce que Choregos envoie sur le fil, et ce qu'il comprend en retour.
+"""The Jira tracker: what Choregos sends on the wire, and what it understands in return.
 
-Les tests parlent au protocole HTTP documenté par Atlassian via un transport simulé :
-ils prouvent la forme des requêtes, pas qu'une instance Jira réelle les accepte.
+The tests speak the HTTP protocol documented by Atlassian through a simulated transport:
+they prove the shape of the requests, not that a real Jira instance accepts them.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ BASE = "https://varga.atlassian.net"
 def tracker(handler: Any) -> JiraTracker:
     client = RestClient(
         BASE,
-        auth=("bot@varga.dev", "jeton"),
+        auth=("bot@varga.dev", "token"),
         client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
         service="jira",
     )
@@ -33,8 +33,8 @@ def tracker(handler: Any) -> JiraTracker:
 
 def issue_payload(**overrides: Any) -> dict[str, Any]:
     fields = {
-        "summary": "Les avoirs ne sont pas déduits",
-        "description": markdown_to_adf("Quand une commande a un avoir, le total l'ignore."),
+        "summary": "Credit notes are not deducted",
+        "description": markdown_to_adf("When an order has a credit note, the total ignores it."),
         "status": {"name": "In Progress"},
         "labels": ["agent-ready"],
         "assignee": {"displayName": "Marie"},
@@ -47,7 +47,7 @@ def issue_payload(**overrides: Any) -> dict[str, Any]:
     return {"key": "BILL-42", "fields": fields}
 
 
-async def test_lecture_d_un_ticket() -> None:
+async def test_reading_a_ticket() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/rest/api/3/issue/BILL-42"
         assert request.headers["authorization"].startswith("Basic ")
@@ -55,14 +55,14 @@ async def test_lecture_d_un_ticket() -> None:
 
     item = await tracker(handler).fetch_item("BILL-42")
 
-    assert item.title == "Les avoirs ne sont pas déduits"
-    assert "avoir" in item.body
+    assert item.title == "Credit notes are not deducted"
+    assert "credit note" in item.body
     assert item.state == "In Progress"
     assert item.size is Size.M and item.risk is Risk.LOW
     assert item.url == f"{BASE}/browse/BILL-42"
 
 
-async def test_les_candidats_passent_par_une_requete_jql() -> None:
+async def test_the_candidates_go_through_a_jql_query() -> None:
     vu: dict[str, Any] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -78,18 +78,18 @@ async def test_les_candidats_passent_par_une_requete_jql() -> None:
     assert "statusCategory != Done" in vu["jql"]
 
 
-async def test_un_etat_du_dsl_devient_une_transition() -> None:
-    appels: list[tuple[str, str, Any]] = []
+async def test_a_dsl_state_becomes_a_transition() -> None:
+    calls: list[tuple[str, str, Any]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        appels.append((request.method, request.url.path, request.content))
+        calls.append((request.method, request.url.path, request.content))
         if request.url.path.endswith("/transitions") and request.method == "GET":
             return httpx.Response(
                 200,
                 json={
                     "transitions": [
-                        {"id": "11", "name": "Démarrer", "to": {"name": "In Progress"}},
-                        {"id": "21", "name": "Terminer", "to": {"name": "Done"}},
+                        {"id": "11", "name": "Start", "to": {"name": "In Progress"}},
+                        {"id": "21", "name": "Finish", "to": {"name": "Done"}},
                     ]
                 },
             )
@@ -99,28 +99,28 @@ async def test_un_etat_du_dsl_devient_une_transition() -> None:
 
     import json as jsonlib
 
-    transition = next(c for c in appels if c[0] == "POST")
-    envoye = jsonlib.loads(transition[2])
-    assert envoye == {"transition": {"id": "21"}}, "la transition choisie est celle qui mène à Done"
+    transition = next(c for c in calls if c[0] == "POST")
+    sent_body = jsonlib.loads(transition[2])
+    assert sent_body == {"transition": {"id": "21"}}, "the chosen transition is the one that leads to Done"
 
 
-async def test_un_statut_inatteignable_est_une_erreur_lisible() -> None:
+async def test_an_unreachable_status_is_a_readable_error() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
-            200, json={"transitions": [{"id": "11", "name": "Démarrer", "to": {"name": "In Progress"}}]}
+            200, json={"transitions": [{"id": "11", "name": "Start", "to": {"name": "In Progress"}}]}
         )
 
     with pytest.raises(ConfigurationError) as error:
-        await tracker(handler).set_state("BILL-42", TrackerStateMapping(status="Déployé"))
-    assert "Déployé" in str(error.value)
-    assert "In Progress" in str(error.value), "l'erreur dit ce qui était possible"
+        await tracker(handler).set_state("BILL-42", TrackerStateMapping(status="Deployed"))
+    assert "Deployed" in str(error.value)
+    assert "In Progress" in str(error.value), "the error says what was possible"
 
 
-def _jira_francais(appels: list[tuple[str, str, Any]]) -> Any:
-    """Les transitions telles que les rend un site Jira en français (relevé sur un vrai site)."""
+def _french_jira(calls: list[tuple[str, str, Any]]) -> Any:
+    """The transitions as a French-language Jira site returns them (taken from a real site)."""
 
     def handler(request: httpx.Request) -> httpx.Response:
-        appels.append((request.method, request.url.path, request.content))
+        calls.append((request.method, request.url.path, request.content))
         if request.url.path.endswith("/transitions") and request.method == "GET":
             return httpx.Response(
                 200,
@@ -133,8 +133,11 @@ def _jira_francais(appels: list[tuple[str, str, Any]]) -> Any:
                         },
                         {
                             "id": "21",
-                            "name": "En cours",
-                            "to": {"name": "En cours", "statusCategory": {"key": "indeterminate"}},
+                            "name": "En cours",  # lang: fr-ok (a French-speaking Jira site)
+                            "to": {
+                                "name": "En cours",  # lang: fr-ok (a French-speaking Jira site)
+                                "statusCategory": {"key": "indeterminate"},
+                            },
                         },
                         {
                             "id": "31",
@@ -149,50 +152,58 @@ def _jira_francais(appels: list[tuple[str, str, Any]]) -> Any:
     return handler
 
 
-async def test_un_jira_en_francais_comprend_les_noms_anglais_des_templates() -> None:
-    """« In Progress » doit trouver « En cours » : Jira traduit les noms de statuts.
+async def test_a_french_jira_understands_the_templates_english_names() -> None:
+    """`In Progress` must find its French-site counterpart: Jira translates the status names.
 
-    Le test live contre un vrai site francophone a échoué exactement là, avec
-    « disponibles : Backlog, Selected for Development, En cours, Terminé(e) ».
+    The live test against a real French-speaking site failed exactly there, with the
+    available statuses (Backlog, Selected for Development, and the translated ones).
     """
     import json as jsonlib
 
-    appels: list[tuple[str, str, Any]] = []
-    await tracker(_jira_francais(appels)).set_state("BILL-42", TrackerStateMapping(status="In Progress"))
-    envoye = jsonlib.loads(next(c for c in appels if c[0] == "POST")[2])
-    assert envoye == {"transition": {"id": "21"}}, "« In Progress » mène à « En cours » par sa catégorie"
+    calls: list[tuple[str, str, Any]] = []
+    await tracker(_french_jira(calls)).set_state("BILL-42", TrackerStateMapping(status="In Progress"))
+    sent_body = jsonlib.loads(next(c for c in calls if c[0] == "POST")[2])
+    assert sent_body == {"transition": {"id": "21"}}, (
+        "`In Progress` leads to the in-progress status by category"
+    )
 
-    appels.clear()
-    await tracker(_jira_francais(appels)).set_state("BILL-42", TrackerStateMapping(status="Done"))
-    envoye = jsonlib.loads(next(c for c in appels if c[0] == "POST")[2])
-    assert envoye == {"transition": {"id": "31"}}
+    calls.clear()
+    await tracker(_french_jira(calls)).set_state("BILL-42", TrackerStateMapping(status="Done"))
+    sent_body = jsonlib.loads(next(c for c in calls if c[0] == "POST")[2])
+    assert sent_body == {"transition": {"id": "31"}}
 
 
-async def test_le_nom_exact_l_emporte_sur_la_categorie() -> None:
+async def test_the_exact_name_wins_over_the_category() -> None:
     import json as jsonlib
 
-    appels: list[tuple[str, str, Any]] = []
-    await tracker(_jira_francais(appels)).set_state("BILL-42", TrackerStateMapping(status="En cours"))
-    envoye = jsonlib.loads(next(c for c in appels if c[0] == "POST")[2])
-    assert envoye == {"transition": {"id": "21"}}
+    calls: list[tuple[str, str, Any]] = []
+    await tracker(_french_jira(calls)).set_state(
+        "BILL-42",
+        TrackerStateMapping(status="En cours"),  # lang: fr-ok (a French-speaking Jira site)
+    )
+    sent_body = jsonlib.loads(next(c for c in calls if c[0] == "POST")[2])
+    assert sent_body == {"transition": {"id": "21"}}
 
 
-async def test_une_categorie_explicite_est_comprise() -> None:
+async def test_an_explicit_category_is_understood() -> None:
     import json as jsonlib
 
-    appels: list[tuple[str, str, Any]] = []
-    await tracker(_jira_francais(appels)).set_state("BILL-42", TrackerStateMapping(status="category:done"))
-    envoye = jsonlib.loads(next(c for c in appels if c[0] == "POST")[2])
-    assert envoye == {"transition": {"id": "31"}}
+    calls: list[tuple[str, str, Any]] = []
+    await tracker(_french_jira(calls)).set_state("BILL-42", TrackerStateMapping(status="category:done"))
+    sent_body = jsonlib.loads(next(c for c in calls if c[0] == "POST")[2])
+    assert sent_body == {"transition": {"id": "31"}}
 
 
-async def test_deux_statuts_de_meme_categorie_ne_se_departagent_pas_au_hasard() -> None:
+async def test_two_statuses_of_the_same_category_are_not_told_apart_by_chance() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
             json={
                 "transitions": [
-                    {"id": "21", "to": {"name": "En cours", "statusCategory": {"key": "indeterminate"}}},
+                    {
+                        "id": "21",
+                        "to": {"name": "En cours", "statusCategory": {"key": "indeterminate"}},  # lang: fr-ok
+                    },
                     {"id": "22", "to": {"name": "En revue", "statusCategory": {"key": "indeterminate"}}},
                 ]
             },
@@ -201,77 +212,82 @@ async def test_deux_statuts_de_meme_categorie_ne_se_departagent_pas_au_hasard() 
     with pytest.raises(ConfigurationError) as error:
         await tracker(handler).set_state("BILL-42", TrackerStateMapping(status="In Progress"))
     message = str(error.value)
-    assert "En cours" in message and "En revue" in message, "l'erreur nomme les deux candidats"
+    assert "En cours" in message and "En revue" in message, (  # lang: fr-ok (a French-speaking Jira site)
+        "the error names both candidates"
+    )
 
 
-async def test_le_commentaire_de_suivi_est_reecrit_et_non_duplique() -> None:
+async def test_the_status_comment_is_rewritten_not_duplicated() -> None:
     from choregos_adapters.tracker.jira import STATUS_COMMENT_MARKER
 
-    appels: list[tuple[str, str]] = []
+    calls: list[tuple[str, str]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        appels.append((request.method, request.url.path))
+        calls.append((request.method, request.url.path))
         if request.method == "GET":
             return httpx.Response(
                 200,
                 json={
                     "comments": [
-                        {"id": "1", "body": markdown_to_adf("bonjour")},
-                        {"id": "2", "body": markdown_to_adf(f"{STATUS_COMMENT_MARKER}\nancien")},
+                        {"id": "1", "body": markdown_to_adf("hello")},
+                        {"id": "2", "body": markdown_to_adf(f"{STATUS_COMMENT_MARKER}\nold")},
                     ]
                 },
             )
         return httpx.Response(200, json={"id": "2"})
 
-    await tracker(handler).upsert_status_comment("BILL-42", "### Suivi\n\nnouveau")
+    await tracker(handler).upsert_status_comment("BILL-42", "### Status\n\nnew")
 
-    assert ("PUT", "/rest/api/3/issue/BILL-42/comment/2") in appels
-    assert not any(method == "POST" for method, _ in appels), "aucun second commentaire"
+    assert ("PUT", "/rest/api/3/issue/BILL-42/comment/2") in calls
+    assert not any(method == "POST" for method, _ in calls), "no second comment"
 
 
-async def test_le_tableau_de_suivi_part_en_adf() -> None:
-    envoye: dict[str, Any] = {}
+async def test_the_status_table_goes_out_as_adf() -> None:
+    sent_body: dict[str, Any] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.method == "GET":
             return httpx.Response(200, json={"comments": []})
         import json as jsonlib
 
-        envoye.update(jsonlib.loads(request.content))
+        sent_body.update(jsonlib.loads(request.content))
         return httpx.Response(201, json={"id": "9"})
 
-    markdown = "### Choregos\n\n| Étape | Coût |\n| --- | --- |\n| implement | 0,42 € |"
+    markdown = "### Choregos\n\n| Step | Cost |\n| --- | --- |\n| implement | 0.42 EUR |"
     await tracker(handler).upsert_status_comment("BILL-42", markdown)
 
-    document = envoye["body"]
+    document = sent_body["body"]
     assert document["type"] == "doc"
     kinds = [node["type"] for node in document["content"]]
-    assert "table" in kinds, "le tableau n'est pas envoyé en markdown brut"
+    assert "table" in kinds, "the table is not sent as raw markdown"
     assert "implement" in text_of_adf(document)
 
 
-async def test_les_champs_absents_du_projet_sont_ignores() -> None:
-    envoye: list[dict[str, Any]] = []
+async def test_fields_absent_from_the_project_are_ignored() -> None:
+    sent_body: list[dict[str, Any]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         import json as jsonlib
 
         if request.url.path == "/rest/api/3/field":
-            return httpx.Response(200, json=[{"id": "customfield_1", "name": "Coût (€)"}])
-        envoye.append(jsonlib.loads(request.content))
+            return httpx.Response(
+                200,
+                json=[{"id": "customfield_1", "name": "Coût (€)"}],  # lang: fr-ok (former name)
+            )
+        sent_body.append(jsonlib.loads(request.content))
         return httpx.Response(204)
 
-    await tracker(handler).set_fields("BILL-42", {"Coût (€)": 1.25, "Run": "https://x/run/1"})
+    await tracker(handler).set_fields("BILL-42", {"Coût (€)": 1.25, "Run": "https://x/run/1"})  # lang: fr-ok
 
-    assert envoye == [{"fields": {"customfield_1": 1.25}}], "seul le champ existant est écrit"
+    assert sent_body == [{"fields": {"customfield_1": 1.25}}], "only the existing field is written"
 
 
-async def test_les_champs_anglais_vont_dans_les_champs_francais_d_un_projet_d_avant() -> None:
-    """S22-21 : l'orchestrateur écrit `Cost (€)`, `Size`, `Risk` ; un projet Jira monté avant n'a que
-    `Coût (€)`, `Taille`, `Risque` — la valeur y va ; s'il a les deux, le nom anglais l'emporte."""
-    envoye: list[dict[str, Any]] = []
-    champs = [
-        {"id": "customfield_1", "name": "Coût (€)"},
+async def test_english_fields_go_into_the_french_fields_of_an_older_project() -> None:
+    """S22-21: the orchestrator writes `Cost (€)`, `Size`, `Risk`; a Jira project set up before has only
+    the former French names: the value goes there; if it has both, the English name wins."""
+    sent_body: list[dict[str, Any]] = []
+    board_fields = [
+        {"id": "customfield_1", "name": "Coût (€)"},  # lang: fr-ok (former name)
         {"id": "customfield_2", "name": "Taille"},
         {"id": "customfield_3", "name": "Risque"},
         {"id": "customfield_4", "name": "Risk"},
@@ -281,41 +297,41 @@ async def test_les_champs_anglais_vont_dans_les_champs_francais_d_un_projet_d_av
         import json as jsonlib
 
         if request.url.path == "/rest/api/3/field":
-            return httpx.Response(200, json=champs)
-        envoye.append(jsonlib.loads(request.content))
+            return httpx.Response(200, json=board_fields)
+        sent_body.append(jsonlib.loads(request.content))
         return httpx.Response(204)
 
     await tracker(handler).set_fields("BILL-42", {"Cost (€)": 1.25, "Size": "M", "Risk": "low"})
 
-    assert envoye == [{"fields": {"customfield_1": 1.25, "customfield_2": "M", "customfield_4": "low"}}]
+    assert sent_body == [{"fields": {"customfield_1": 1.25, "customfield_2": "M", "customfield_4": "low"}}]
 
 
-def test_une_configuration_d_avant_qui_nomme_taille_vaut_pour_size() -> None:
-    client = RestClient(BASE, auth=("bot@varga.dev", "jeton"), service="jira")
+def test_an_older_configuration_naming_the_former_size_stands_for_size() -> None:
+    client = RestClient(BASE, auth=("bot@varga.dev", "token"), service="jira")
     jira = JiraTracker(client, "BILL", field_names={"Taille": "T-shirt"})
     assert jira.field_names["Size"] == "T-shirt" and "Taille" not in jira.field_names
 
 
-async def test_creation_de_ticket_et_lien() -> None:
-    appels: list[tuple[str, str]] = []
+async def test_ticket_creation_and_link() -> None:
+    calls: list[tuple[str, str]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        appels.append((request.method, request.url.path))
+        calls.append((request.method, request.url.path))
         if request.url.path == "/rest/api/3/issue":
             return httpx.Response(201, json={"key": "BILL-77"})
         return httpx.Response(201, json={})
 
     jira = tracker(handler)
-    key = await jira.create_item(NewItem(title="Fuite de connexion", body="Trouvé en revue"))
+    key = await jira.create_item(NewItem(title="Connection leak", body="Found in review"))
     assert key == "BILL-77"
 
     await jira.link("BILL-77", "BILL-42", "origin")
-    assert ("POST", "/rest/api/3/issueLink") in appels
+    assert ("POST", "/rest/api/3/issueLink") in calls
 
 
-async def test_une_panne_jira_est_nommee() -> None:
+async def test_a_jira_failure_is_named() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(403, text="jeton révoqué")
+        return httpx.Response(403, text="token revoked")
 
     with pytest.raises(UpstreamError) as error:
         await tracker(handler).fetch_item("BILL-42")
@@ -323,17 +339,17 @@ async def test_une_panne_jira_est_nommee() -> None:
     assert error.value.status_code == 403
 
 
-def test_le_secret_partage_protege_le_webhook() -> None:
+def test_the_shared_secret_protects_the_webhook() -> None:
     jira = tracker(lambda request: httpx.Response(200, json={}))
     assert jira.verify_webhook({"X-Choregos-Secret": "s3cret"}, b"{}") is True
-    assert jira.verify_webhook({"X-Choregos-Secret": "autre"}, b"{}") is False
+    assert jira.verify_webhook({"X-Choregos-Secret": "other"}, b"{}") is False
     assert jira.verify_webhook({}, b"{}") is False
 
 
 # ───────────────────────────── webhooks ─────────────────────────────
 
 
-def test_un_changement_de_statut_devient_un_deplacement() -> None:
+def test_a_status_change_becomes_a_move() -> None:
     events = parse_jira_event(
         "d-1",
         {
@@ -351,7 +367,7 @@ def test_un_changement_de_statut_devient_un_deplacement() -> None:
     assert events[0].actor == "Marie"
 
 
-def test_un_label_ajoute_est_reconnu() -> None:
+def test_an_added_label_is_recognised() -> None:
     events = parse_jira_event(
         "d-2",
         {
@@ -368,7 +384,7 @@ def test_un_label_ajoute_est_reconnu() -> None:
     assert events[0].payload["removed"] is False
 
 
-def test_une_commande_en_commentaire_devient_une_decision() -> None:
+def test_a_command_in_a_comment_becomes_a_decision() -> None:
     events = parse_jira_event(
         "d-3",
         {
@@ -393,7 +409,7 @@ def test_une_commande_en_commentaire_devient_une_decision() -> None:
     }
 
 
-def test_un_evenement_inconnu_ne_produit_rien() -> None:
+def test_an_unknown_event_produces_nothing() -> None:
     assert parse_jira_event("d-4", {"webhookEvent": "sprint_started"}) == []
     assert parse_jira_event("d-5", {}) == []
 
