@@ -35,7 +35,14 @@ from ..services import (
 )
 from ..services.initiator import initiator
 from ..services.routage import with_tracker
-from ..temporal import deliver_inbound, get_temporal, interpreter_id, train_id
+from ..temporal import (
+    MemoryLoopNotRunningError,
+    deliver_inbound,
+    get_temporal,
+    interpreter_id,
+    signal_memory_loop,
+    train_id,
+)
 
 router = APIRouter(tags=["webhooks"], prefix="/webhooks")
 logger = get_logger("choregos.webhooks")
@@ -521,11 +528,29 @@ async def alertmanager_webhook(
             },
         )
         project = await _project_for(session, event.project_slug)
-        if project is not None:
-            await get_temporal().signal(f"mem-{project.slug}", "alert", event.model_dump(mode="json"))
+        if project is not None and await _alert_reaches_memory(session, project, event):
             received_events.record(session, project, event, "signalled")
         count += 1
     return WebhookAck(accepted=True, events=count)
+
+
+async def _alert_reaches_memory(session: Any, project: Project, event: InboundEvent) -> bool:
+    """Hand an alert to the project's memory loop, started if it does not run (S51-02).
+
+    `False`, and a log line, when the project's policy disables memory or the loop cannot be reached:
+    Alertmanager would retry a 500 forever, and nothing it can resend changes either answer.
+    """
+    from ..services import policy_engine
+
+    if not (await policy_engine(session, project.id)).memory_enabled():
+        logger.info("alert not kept: memory disabled", project=project.slug, delivery=event.delivery_id)
+        return False
+    try:
+        await signal_memory_loop(project.slug, "alert", event.model_dump(mode="json"))
+    except MemoryLoopNotRunningError as exc:
+        logger.warning("alert not kept: memory loop not running", project=project.slug, reason=exc.cause)
+        return False
+    return True
 
 
 # ───────────────────────────── Jira / GitLab (S13-04) ─────────────────────────────

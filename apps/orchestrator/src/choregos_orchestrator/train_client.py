@@ -91,6 +91,23 @@ async def start_reconciliation_loop(project_slug: str) -> bool:
     )
 
 
+async def start_memory_loop(project_slug: str) -> bool:
+    """Start a project's memory loop (`mem-<slug>`, `MemoryIngestion`); `False` if one already runs.
+
+    Nothing started it before S51-02: the memory was never fed, and the API's `reimport` and alert
+    signals went to a workflow that did not exist. Called when the worker starts, for every active
+    project whose policy keeps memory, and when a project becomes active. The payload names no `org`:
+    the weekly A/B report is the organisation's, and one loop per project would post it once per project.
+    """
+    return await start_workflow_once(
+        "MemoryIngestion",
+        f"mem-{project_slug}",
+        {"project_slug": project_slug},
+        # A loop that died in failure restarts when the worker starts, like the tracker catch-up.
+        relancer_si_echoue=True,  # lang: fr-ok (the keyword test_reconciliation pins)
+    )
+
+
 async def signal_workflow(
     workflow_id: str, name: str, payload: dict[str, Any], *, start: str | None = None
 ) -> None:

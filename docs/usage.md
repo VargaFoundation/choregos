@@ -1702,7 +1702,23 @@ it (an organisation administrator, the project's owner: `memory:write`). After a
 project's memory ingestion to read its sources again now rather than at its next cycle
 (`POST /projects/{id}/memory/reimport`, with optional `sources`; without them the API's defaults). The API
 answers 202: the import is scheduled, not done, so the console says when it was scheduled and no counts;
-the facts it finds reach the memory as the ingestion runs.
+the facts it finds reach the memory as the ingestion runs. It answers **409** with the reason when the
+project's policy disables memory, or when the project's loop does not run and cannot be started (its
+project was archived): never a 500.
+
+**The ingestion loop.** Each active project whose policy keeps memory has one loop, `MemoryIngestion`
+under the id `mem-<slug>`: every 15 minutes it ingests what the platform holds of the project — tickets
+closed in the last year, deployments, failed runs' lessons, and (when a re-import asks for them) findings
+— as an upsert by external id, so a fact is kept once; the `merged_prs`, `adr`, `docs` and `readme`
+sources are accepted and read nothing yet. It takes an Alertmanager alert at once (an incident). The orchestrator's worker starts the loop of every
+such project when it starts, and an activation (provisioning, or `POST /projects/{id}/provision` on a
+project without steps) starts the project's; archiving stops it. After 96 cycles it continues as a new run
+of the same id rather than ending. A signal to a loop that does not run starts it first: a re-import or an
+alert never meets a missing workflow. A failed run also leaves its lesson as soon as its outcome is
+recorded (`run:<id>`, the same fact the loop would ingest), in its write binding — as a proposal for a
+global memory — unless the policy disables memory or the work item read a restricted base. The weekly
+A/B report is not sent by these loops: it is the organisation's, and one loop per project would post
+it once per project.
 
 ### Release an agent: eval, testing, production
 

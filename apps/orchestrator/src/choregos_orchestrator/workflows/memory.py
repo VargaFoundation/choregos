@@ -19,6 +19,8 @@ with workflow.unsafe.imports_passed_through():
     from ..activities import memory as memory_activities
 
 RETRY = RetryPolicy(maximum_attempts=3, initial_interval=timedelta(seconds=5))
+#: `workflow.patched` id (S51-02): a loop past `max_cycles` continues as new instead of returning.
+LOOP_CONTINUES = "memory-loop-continues-as-new"
 DEFAULT_SOURCES = ["closed_issues", "merged_prs", "adr", "docs", "deployments", "run_lessons"]
 
 
@@ -102,6 +104,11 @@ class MemoryIngestion:
             await self._weekly_ab_report(params)
             if workflow.info().get_current_history_length() > 10_000:
                 workflow.continue_as_new({**payload, "last_report_week": self.last_report_week})
+        if not self.stopped and workflow.patched(LOOP_CONTINUES):
+            # The loop is a project's for its whole life (S51-02): a completed `mem-<slug>` cannot be
+            # started again under its id (the start reuses only a FAILED id), so after `max_cycles` it
+            # carries on as a new run instead of returning. Only `stop` (the project archived) ends it.
+            workflow.continue_as_new({**payload, "last_report_week": self.last_report_week})
         return {"cycles": self.cycles, "ingested": self.ingested}
 
     async def _weekly_ab_report(self, params: MemoryInput) -> None:

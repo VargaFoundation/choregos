@@ -414,6 +414,7 @@ async def finish_provisioning(payload: dict[str, Any]) -> dict[str, Any]:
             failed=[s["name"] for s in failed],
         )
         slug = bundle.slug
+        memory_enabled = bundle.engine.memory_enabled()
     if not failed:
         # After the commit: the loop's first pass reads the project. Best effort, the worker's next
         # start catches a missing loop up; the provisioning itself succeeded.
@@ -423,4 +424,12 @@ async def finish_provisioning(payload: dict[str, Any]) -> dict[str, Any]:
             await start_reconciliation_loop(slug)
         except Exception as exc:  # the project is active; the worker start catches up
             activity.logger.warning("tracker catch-up not started for %s: %s", slug, exc)
+        # The memory is fed from activation on (S51-02), unless the project's policy disables it.
+        if memory_enabled:
+            from ..train_client import start_memory_loop
+
+            try:
+                await start_memory_loop(slug)
+            except Exception as exc:  # the project is active; the worker start catches up
+                activity.logger.warning("memory loop not started for %s: %s", slug, exc)
     return {"status": state["status"], "failed": [s["name"] for s in failed]}
