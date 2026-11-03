@@ -131,6 +131,7 @@ def _issue_comment(delivery_id: str, payload: dict[str, Any]) -> list[InboundEve
                     "argument": command["argument"],
                     "channel": "tracker",
                     "by": (comment.get("user") or {}).get("login"),
+                    "by_id": str((comment.get("user") or {}).get("id") or ""),
                 },
                 **common,
             )

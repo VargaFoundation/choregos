@@ -497,6 +497,26 @@ class ApiToken(Base, PkMixin, TimestampMixin):
     last_client: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
+class TrackerIdentity(Base, PkMixin, TimestampMixin):
+    """A member's account on a tracker, by the provider's stable numeric user id (S47-14, ADR 0102).
+
+    Linked by an organisation administrator (not proven by the member). A login or a display name is
+    never matched: only `external_id`. `login` is shown, nothing more."""
+
+    __tablename__ = "tracker_identities"
+    __table_args__ = (
+        UniqueConstraint("org_id", "tracker", "external_id", name="uq_tracker_identities_external"),
+        UniqueConstraint("org_id", "user_id", "tracker", name="uq_tracker_identities_member"),
+    )
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    tracker: Mapped[str] = mapped_column(String(16))
+    external_id: Mapped[str] = mapped_column(String(64))
+    login: Mapped[str] = mapped_column(String(255))
+    created_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+
+
 class A2aPushConfig(Base, PkMixin, TimestampMixin):
     """A URL an A2A client registered to hear of a task (ADR 0078 §5, S40-23d).
 

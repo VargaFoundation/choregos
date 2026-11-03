@@ -170,6 +170,25 @@ export type Membership = {
   role: Role;
 };
 
+/** A member's account on a tracker, by the provider's stable numeric user id. Only GitHub for now: the other trackers come when their deliveries are signed per source. */
+export type TrackerIdentity = {
+  tracker: "github";
+  /** the provider's numeric user id */
+  external_id: string;
+  /** display only, never matched */
+  login: string;
+  user_id: string;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type TrackerIdentityPut = {
+  /** the provider's numeric user id */
+  external_id: string;
+  /** display only */
+  login: string;
+};
+
 export type MembershipUpsert = {
   email: string;
   role: Role;
@@ -4473,6 +4492,7 @@ export interface Operations {
   deleteOrgConnector: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}"; body: never; response: void };
   deleteOutboundProxy: { method: "DELETE"; path: "/orgs/{org}/outbound-proxy"; body: never; response: void };
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
+  deleteTrackerIdentity: { method: "DELETE"; path: "/orgs/{org}/members/{user_id}/tracker-identities/{tracker}"; body: never; response: void };
   departTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/depart"; body: never; response: void };
   describeBuiltinAgent: { method: "GET"; path: "/projects/{id}/builtin-agent"; body: never; response: BuiltinAgent };
   detachAgentCredential: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}/credentials/{credential_id}"; body: never; response: void };
@@ -4744,6 +4764,7 @@ export interface Operations {
   listSkillCatalogue: { method: "GET"; path: "/orgs/{org}/skill-catalogue"; body: never; response: SkillCatalogue };
   listSkills: { method: "GET"; path: "/orgs/{org}/skills"; body: never; response: Array<Skill> };
   listTemplates: { method: "GET"; path: "/templates"; body: never; response: Array<TemplateSummary> };
+  listTrackerIdentities: { method: "GET"; path: "/orgs/{org}/members/{user_id}/tracker-identities"; body: never; response: Array<TrackerIdentity> };
   listTriggers: { method: "GET"; path: "/projects/{id}/triggers"; body: never; response: Array<Trigger> };
   listUsableModels: { method: "GET"; path: "/orgs/{org}/models/usable"; body: never; response: Array<UsableModel> };
   listWorkItemArtifacts: { method: "GET"; path: "/work-items/{id}/artifacts"; body: never; response: Array<Artifact> };
@@ -4841,6 +4862,7 @@ export interface Operations {
   setConnectorSecret: { method: "PUT"; path: "/projects/{id}/connectors/{kind}/secrets/{field}"; body: SecretValue; response: Connector };
   setOrgConnectorSecret: { method: "PUT"; path: "/orgs/{org}/connectors/{name}/secrets/{field}"; body: SecretValue; response: OrgConnector };
   setProjectAgentChannel: { method: "PUT"; path: "/projects/{id}/agent-channel"; body: ProjectAgentChannel; response: ProjectAgentChannel };
+  setTrackerIdentity: { method: "PUT"; path: "/orgs/{org}/members/{user_id}/tracker-identities/{tracker}"; body: TrackerIdentityPut; response: TrackerIdentity };
   shareWorkflow: { method: "POST"; path: "/orgs/{org}/workflow-catalogue"; body: WorkflowShare; response: WorkflowCatalogueEntry };
   startAgentEvaluation: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/evaluations"; body: AgentEvaluationCreate; response: AgentEvaluation };
   startAgentTrial: { method: "POST"; path: "/orgs/{org}/agent-trials"; body: AgentTrialCreate; response: AgentTrial };
