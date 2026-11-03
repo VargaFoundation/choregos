@@ -5175,7 +5175,7 @@ components:
     WorkflowCatalogueEntry:
       type: object
       additionalProperties: false
-      required: [source, name, version, title, summary, tags, requires, needs_repository, groups, agents, yaml]
+      required: [source, name, version, title, summary, tags, requires, needs_repository, groups, agents]
       description: A workflow the organisation can adopt (ADR 0111).
       properties:
         source:
@@ -5191,7 +5191,11 @@ components:
         needs_repository: { type: boolean, description: "it requires an `scm`: a project without a repository cannot run it" }
         groups: { type: array, items: { type: string }, description: "the human groups its actors name (ADR 0044)" }
         agents: { type: array, items: { $ref: "#/components/schemas/WorkflowCatalogueAgent" } }
-        yaml: { type: string }
+        yaml:
+          type: [string, "null"]
+          description: >-
+            The workflow's YAML: in the answer to a share only. The list leaves it out (null): every entry's
+            whole text made the library slow to load and no page reads it (S55-04b).
         shared_by: { type: [string, "null"], description: "for an `org` entry" }
         shared_from: { type: [string, "null"], description: "for an `org` entry: `<project>/<workflow>@<version>`" }
         shared_at: { type: [string, "null"], format: date-time }

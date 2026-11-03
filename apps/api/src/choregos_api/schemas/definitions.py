@@ -56,7 +56,8 @@ class WorkflowCatalogueEntryDto(Dto):
     needs_repository: bool
     groups: list[str]
     agents: list[WorkflowCatalogueAgentDto]
-    yaml: str
+    #: In the answer to a share only; the list leaves it out (S55-04b).
+    yaml: str | None = None
     shared_by: str | None = None
     shared_from: str | None = None
     shared_at: datetime | None = None

@@ -56,6 +56,8 @@ const nextConfig = {
       { source: "/p/:slug/proposals/:id", destination: "/p/:slug/actions/:id", permanent: true },
       // La boîte des décisions est devenue l'inbox (S23-02) : tickets ET actions qui attendent quelqu'un.
       { source: "/approvals", destination: "/inbox", permanent: true },
+      // The workflow catalogue is the workflow library (S55-04): the word read as French.
+      { source: "/p/:slug/workflows/catalogue", destination: "/p/:slug/workflows/library", permanent: true },
     ];
   },
   async headers() {

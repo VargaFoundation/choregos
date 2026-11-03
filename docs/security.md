@@ -343,6 +343,12 @@ connector's account.
   adapter (values it resolved are masked in logs and error texts). A `store:` reference is derived by
   the platform and refused when written by hand, so a connector cannot point at another's secret.
   A database dump or backup alone reveals nothing; losing the KEK loses the values.
+  The key-encryption keys sit behind a `KeyWrapper` seam ([ADR 0103](adr/0103-secret-keks-sit-behind-a-key-wrapper.md)):
+  the default `EnvKeyWrapper` is the keyring above, and the bytes it writes are unchanged. An
+  extension can supply a KMS or Vault-transit wrapper (`set_secret_store`, or a `SealedDbSecretStore`
+  built with a wrapper); core ships no KMS client. The wrapper's `kek_id` is stored in `org_secrets`
+  and is at most 32 characters; `rewrap` moves the rows whose `kek_id` differs from the wrapper's
+  active id.
 - GitHub App installations are tenant boundaries ([ADR 0073](adr/0073-github-app-installations-are-discovered-not-typed.md)):
   one App serves the deployment, so a token for `owner/repo` is minted only through an installation
   **claimed** by the organisation of the connector or run. With several organisations the claim needs

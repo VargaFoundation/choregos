@@ -17,6 +17,7 @@ plugin they obtain, whatever the supply (`plugin_sources.assess_plugin`).
 
 from __future__ import annotations
 
+import asyncio
 import re
 import time
 from collections.abc import AsyncIterator
@@ -172,9 +173,13 @@ class _Nothing:
         return {}
 
 
-#: What the sources' indexes say each plugin ships, kept a minute: a catalogue listing reads it.
-_SHIPPING_TTL_SECONDS = 60.0
+#: What the sources' indexes say each plugin ships. The workflow library reads it on every listing, and
+#: reading it pulls every source's index (OCI and signatures, or every offline archive): the library took
+#: seconds to load (S55-04). It is kept ten minutes, and an expired copy is served at once while ONE
+#: refresh runs behind it; only the very first reader of the process waits.
+_SHIPPING_TTL_SECONDS = 600.0
 _shipping_cache: dict[str, tuple[float, dict[str, Shipped]]] = {}
+_shipping_refresh: dict[str, asyncio.Task[tuple[float, dict[str, Shipped]]]] = {}
 
 
 class SourcesSupply:
@@ -206,9 +211,23 @@ class SourcesSupply:
 
     async def shipping(self, slugs: set[str]) -> dict[str, Shipped]:
         cached = _shipping_cache.get("sources")
-        if cached is None or time.monotonic() - cached[0] > _SHIPPING_TTL_SECONDS:
-            cached = _shipping_cache["sources"] = (time.monotonic(), await self._every_agent())
+        if cached is None:
+            # Nothing to serve yet: wait, but share the read with whoever else is waiting.
+            cached = await asyncio.shield(self._refresh())
+        elif time.monotonic() - cached[0] > _SHIPPING_TTL_SECONDS:
+            self._refresh()
         return {slug: shipped for slug, shipped in cached[1].items() if slug in slugs}
+
+    def _refresh(self) -> asyncio.Task[tuple[float, dict[str, Shipped]]]:
+        """The one refresh in flight, started if there is none."""
+        running = _shipping_refresh.get("sources")
+        if running is None or running.done():
+            running = _shipping_refresh["sources"] = asyncio.get_running_loop().create_task(self._read())
+        return running
+
+    async def _read(self) -> tuple[float, dict[str, Shipped]]:
+        read = _shipping_cache["sources"] = (time.monotonic(), await self._every_agent())
+        return read
 
     async def _every_agent(self) -> dict[str, Shipped]:
         """Each agent slug the newest admissible release of each plugin ships, by its index."""

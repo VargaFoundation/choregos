@@ -246,7 +246,7 @@ test("workflows : un projet en porte plusieurs, chacun se lit en processus et en
 });
 
 test("workflows : un libellé changé sur la carte se lit dans la vue processus, puis se publie", async ({ page }) => {
-  await page.goto("/p/billing-api/workflows/default-simple/map?vue=list");
+  await page.goto("/p/billing-api/workflows/default-simple/map?view=list");
   const carte = page.getByTestId("workflow-graph");
   await carte.getByTestId("etat-inbox").click();
   const panneau = page.getByTestId("panneau-etat");
