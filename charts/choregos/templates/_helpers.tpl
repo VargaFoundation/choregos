@@ -306,6 +306,15 @@ http://{{ .Release.Name }}-ecphoria:8432
 {{- end -}}
 {{- end -}}
 
+{{/* The secret (key `api-key`) of the decision model's bearer (ADR 0121): Laya asks for it, LiteLLM sends it. */}}
+{{- define "choregos.decisionsKeySecret" -}}
+{{- if .Values.global.decisions.apiKeySecret -}}
+{{ .Values.global.decisions.apiKeySecret }}
+{{- else -}}
+{{ .Release.Name }}-laya
+{{- end -}}
+{{- end -}}
+
 {{- define "choregos.memoryTokenSecret" -}}
 {{- if .Values.global.memory.tokenSecret -}}
 {{ .Values.global.memory.tokenSecret }}

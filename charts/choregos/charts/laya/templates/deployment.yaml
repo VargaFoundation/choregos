@@ -1,0 +1,106 @@
+{{- $name := printf "%s-laya" .Release.Name }}
+{{- if not .Values.global.gateway.embedded }}
+{{- fail "global.decisions.embedded needs global.gateway.embedded: only the embedded LiteLLM serves Laya as platform/decide, and Laya admits no other caller (ADR 0121)" }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: choregos-laya
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      # NOT `app.kubernetes.io/part-of: choregos`: `choregos-allow-ingress` admits every pod of the
+      # namespace to the pods that carry it, and Laya admits LiteLLM only (the policy below).
+      labels:
+        app.kubernetes.io/name: choregos-laya
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: decisions
+    spec:
+      {{- include "choregos.imagePullSecrets" $ | nindent 6 }}
+      # It calls nothing: no API token to mount.
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: laya
+          image: {{ include "choregos.image" (dict "global" .Values.global "image" .Values.image) }}
+          env:
+            # The image sets the rest (CPU, the multilingual checkpoint, `LAYA_PORT=8000`); these
+            # two are said again so that the pod's spec shows that it is offline and on CPU.
+            - { name: HF_HUB_OFFLINE, value: "1" }
+            - { name: LAYA_DEVICE, value: cpu }
+            - { name: LAYA_THREADS, value: {{ .Values.threads | quote }} }
+            # Every route but the liveness half of `/health` asks for this bearer; LiteLLM has it.
+            - name: LAYA_API_KEY
+              valueFrom: { secretKeyRef: { name: {{ include "choregos.decisionsKeySecret" . }}, key: api-key } }
+          ports:
+            - { name: http, containerPort: 8000 }
+          # The port opens once the checkpoint is loaded (`LAYA_PRELOAD=1`): until then, nothing answers.
+          startupProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  selector:
+    app.kubernetes.io/name: choregos-laya
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - { name: http, port: 8000, targetPort: http }
+---
+# ADR 0121: the platform never calls a decision model directly, always through the gateway, where
+# the cost is counted and the cap enforced. So only LiteLLM's pods reach Laya, and Laya reaches
+# nothing: its checkpoint is in the image.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $name }}
+  labels: {{- include "choregos.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: choregos-laya
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes: ["Ingress", "Egress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: choregos-litellm
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - { protocol: TCP, port: 8000 }
+  egress: []

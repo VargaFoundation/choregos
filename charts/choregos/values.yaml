@@ -304,6 +304,18 @@ global:
     # Gateway secret (key `master-key`). Empty with `embedded: true`: the chart
     # generates one, stable from one update to the next.
     secretRef: choregos-gateway-secrets
+  decisions:
+    # ADR 0121: `true` deploys Laya (a CPU decision model, `charts/laya`) and the embedded LiteLLM
+    # serves it as `platform/decide`, the catalogue entry a workflow's `decision` step names. Only
+    # with `gateway.embedded: true`: an external gateway serves its own decision models.
+    embedded: false
+    # Secret (key `api-key`) of the bearer Laya requires and LiteLLM sends. Empty: the chart
+    # generates one, stable from one update to the next.
+    apiKeySecret: ""
+    # The internal price of a decision (ADR 0004: a local model is accounted with a configured
+    # internal price), per token of the state read, in USD. Laya counts the tokens it read as
+    # `input_tokens` and answers none. Zero would hide its spend from the cost ledger.
+    inputCostPerToken: 0.00000002
   memory:
     embedded: false
     url: http://ecphoria.choregos-memory.svc:8432
