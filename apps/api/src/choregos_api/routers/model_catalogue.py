@@ -8,7 +8,7 @@ whatever the gateway is. Reads are for every member; changes need `model:catalog
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from choregos_core import utcnow
 from choregos_core.models import PLATFORM_PROFILES, TIERS
@@ -18,8 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
 from ..db.models import ModelCatalogueRow, Organization
-from ..deps import Db, Me
-from ..errors import conflict, forbidden, not_found, unprocessable
+from ..deps import Db, Me, exiger_admin_de_plateforme
+from ..errors import ApiError, conflict, forbidden, not_found, unprocessable
 from ..rbac import Permission
 from ..schemas.definitions import (
     ModelCatalogue,
@@ -37,7 +37,7 @@ from ..schemas.definitions import (
     UsableModel,
 )
 from ..services import model_catalogue as service
-from ..services.gateway import org_gateway, org_gateway_and_type
+from ..services.gateway import org_brings_its_gateway, org_gateway, org_gateway_and_type
 from ..services.organisations import organisation_by_slug
 
 router = APIRouter(tags=["models"])
@@ -100,9 +100,36 @@ async def _row(session: AsyncSession, organisation: Organization, entry_id: str)
     return row
 
 
-async def _gateway_info(session: AsyncSession, organisation: Organization) -> ModelCatalogueGateway:
+async def _gateway_info(
+    session: AsyncSession, organisation: Organization, principal: Me
+) -> ModelCatalogueGateway:
+    """The gateway behind the catalogue, where it is set and, to whoever may read it, its address
+    (owner review of 2026-11-03: the page did not say the deployment's gateway is an environment
+    setting, nor which one it is)."""
     kind, gateway = await org_gateway_and_type(session, organisation.id)
-    return ModelCatalogueGateway(type=kind, capabilities=sorted(gateway.capabilities))
+    source: Literal["organisation", "deployment"] = (
+        "organisation" if await org_brings_its_gateway(session, organisation.id) else "deployment"
+    )
+    address = getattr(gateway, "base_url", None)
+    shown = (
+        isinstance(address, str)
+        and address != ""
+        and (source == "organisation" or await _platform_admin(session, principal))
+    )
+    return ModelCatalogueGateway(
+        type=kind,
+        capabilities=sorted(gateway.capabilities),
+        source=source,
+        base_url=address if shown else None,
+    )
+
+
+async def _platform_admin(session: AsyncSession, principal: Me) -> bool:
+    try:
+        await exiger_admin_de_plateforme(session, principal)
+    except ApiError:
+        return False
+    return True
 
 
 @router.get("/orgs/{org}/models", response_model=ModelCatalogue, operation_id="getModelCatalogue")
@@ -112,7 +139,7 @@ async def get_catalogue(org: str, session: Db, principal: Me) -> ModelCatalogue:
     settings = service.org_settings(organisation)
     return ModelCatalogue(
         mode=settings["mode"],
-        gateway=await _gateway_info(session, organisation),
+        gateway=await _gateway_info(session, organisation, principal),
         tiers=ModelTiers.model_validate({t: settings["tiers"].get(t) for t in TIERS}),
         entries=[_dto(r) for r in await _rows(session, organisation)],
     )

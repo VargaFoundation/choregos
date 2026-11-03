@@ -260,6 +260,33 @@ describe("the Models page", () => {
     expect(screen.queryByRole("link", { name: "Connect your organisation's gateway" })).toBeNull();
   });
 
+  it("names the deployment's gateway, its address to whom may read it, and that the environment sets it (owner review of 2026-11-03)", async () => {
+    vi.mocked(api.modelCatalogue).mockResolvedValue(
+      catalogue({ gateway: { type: "litellm", capabilities: [], source: "deployment", base_url: "http://litellm.choregos-gateway:4000" } }),
+    );
+    show();
+    const facts = await screen.findByTestId("gateway-facts");
+    expect(facts).toHaveTextContent("http://litellm.choregos-gateway:4000");
+    expect(within(facts).getByTestId("gateway-source")).toHaveTextContent("The deployment's environment (CHOREGOS_GATEWAY_TYPE, CHOREGOS_GATEWAY_URL)");
+  });
+
+  it("without the address (not a platform administrator), says who knows it", async () => {
+    vi.mocked(api.modelCatalogue).mockResolvedValue(catalogue({ gateway: { type: "litellm", capabilities: [], source: "deployment", base_url: null } }));
+    show();
+    expect(await screen.findByTestId("gateway-facts")).toHaveTextContent("Known to the platform administrators");
+  });
+
+  it("the organisation's own gateway is set in Installed connectors", async () => {
+    vi.mocked(api.modelCatalogue).mockResolvedValue(
+      catalogue({ gateway: { type: "openai-compatible", capabilities: [], source: "organisation", base_url: "https://llm.acme.example/v1" } }),
+    );
+    show();
+    const source = await screen.findByTestId("gateway-source");
+    expect(source).toHaveTextContent("Your organisation's connector");
+    expect(within(source).getByRole("link", { name: "Installed connectors" })).toHaveAttribute("href", "/admin/connectors");
+    expect(screen.getByTestId("gateway-facts")).toHaveTextContent("https://llm.acme.example/v1");
+  });
+
   it("a member is not offered to connect a gateway", async () => {
     session.role = "viewer";
     show();

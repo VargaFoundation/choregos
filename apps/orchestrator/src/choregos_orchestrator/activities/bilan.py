@@ -13,7 +13,7 @@ from urllib.parse import urlsplit
 import structlog
 from choregos_api.db.models import Finding as FindingRow
 from choregos_api.db.models import Project, Run
-from choregos_api.services import persist_event, ranger_les_sorties, record_cost
+from choregos_api.services import DecidedBy, persist_event, ranger_les_sorties, record_cost, record_decisions
 from choregos_api.services.artifacts import record_inline_outputs
 from choregos_api.services.budget_alerts import unsent_month_alerts
 from choregos_api.services.budgets import ticket_budget, ticket_spent
@@ -21,16 +21,20 @@ from choregos_api.services.model_catalogue import priced_spend
 from choregos_api.services.tickets import sorties_a_ranger
 from choregos_contracts import EventType, StageInput, StageResult, StageStatus
 from choregos_core import Message, Spend, elapsed_seconds, utcnow
+from choregos_core.decision_ledger import declared_confidences
 from sqlalchemy import select
 from temporalio import activity
 
 from ..config import get_settings
 from ..train_client import signal_findings
-from .base import db, load_work_item, project_bundle
+from .base import db, load_work_item, project_bundle, workflow_du_ticket
+from .job import JOB_BACKEND
 from .remote import declared_cost_usd
 from .run_key import release_run_key
 
 logger = structlog.get_logger("choregos.bilan")
+#: An agent's declared confidence in the decision ledger (ADR 0121 §6).
+AGENT_SOURCE = "agent"
 
 
 async def _tell_slack_of_agent_alerts(session: Any, bundle: Any) -> None:
@@ -239,6 +243,8 @@ async def record_run_outcome(payload: dict[str, Any]) -> dict[str, Any]:
             )
         if result.artifacts.pr_url:
             item.pr_url = result.artifacts.pr_url
+        if result.status == StageStatus.DONE and project is not None and run.backend != JOB_BACKEND:
+            await _record_declared_confidences(session, project, item, run, result, declarees)
         recorded = await _persist_findings(session, run, item, result)
         outcome = {"recorded": True, "status": run.status, "findings": recorded}
     if outcome["status"] == "failed":
@@ -255,6 +261,38 @@ async def _keep_the_lesson(run_id: str) -> None:
         await keep_the_lesson_of_a_failed_run(run_id)
     except Exception as error:
         logger.warning("lesson of a failed run not kept", run_id=run_id, error=str(error)[:300])
+
+
+async def _record_declared_confidences(
+    session: Any, project: Project, item: Any, run: Run, result: StageResult, declared: list[str]
+) -> None:
+    """The confidence an agent declared (ADR 0106) goes to the decision ledger beside a decision
+    model's answers (ADR 0121 §6), to be measured on the same footing. What it is the probability of
+    is `choregos_core.decision_ledger`'s rule; a job's figures are measured, not declared, and are
+    left out. Recorded once per run and question: a retried activity adds nothing."""
+    answers = declared_confidences(result.outputs.model_dump(mode="json", exclude_none=True), declared)
+    if not answers:
+        return
+    transition = (run.stage_input or {}).get("transition") or {}
+    workflow = await workflow_du_ticket(session, item)
+    decided = DecidedBy(
+        org_id=project.org_id,
+        project_id=project.id,
+        project_slug=project.slug,
+        work_item_id=item.id,
+        work_item_key=item.tracker_key,
+        run_id=run.id,
+        workflow=workflow.metadata.name,
+        workflow_version=workflow.metadata.version,
+        step=str(transition.get("from") or transition.get("from_") or run.transition_id or ""),
+        transition_id=run.transition_id,
+        source=AGENT_SOURCE,
+        model=run.model or run.backend or AGENT_SOURCE,
+        # The registry agent and its version: its instructions are what its confidence is measured on.
+        model_version=f"{run.agent_slug}@{run.agent_version}" if run.agent_slug else None,
+        decided_at=run.ended_at or utcnow(),
+    )
+    await record_decisions(session, decided, answers)
 
 
 async def _persist_findings(session: Any, run: Run, item: Any, result: StageResult) -> list[str]:
