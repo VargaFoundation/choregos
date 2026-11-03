@@ -280,7 +280,7 @@ class ModelMatrix(Dto):
 
 # ───────────── the organisation's model catalogue (S39-07b, ADR 0060) ─────────────
 
-Usage = Literal["agent", "embed", "distill", "eval", "route"]
+Usage = Literal["agent", "embed", "distill", "eval", "route", "decide"]
 
 
 def _agent_usage() -> list[Usage]:
