@@ -6,7 +6,7 @@ Every ticket in flight is **one Temporal workflow** (`WorkflowInterpreter`), and
 provisioning and every release train. Temporal holds their *histories*: which stage ran,
 what it returned, where the workflow is waiting. The platform database holds the
 *business state* (tickets, runs, evidence, ledger, events) and is backed up separately
-(`restauration-postgres.md`).
+(`postgres-restore.md`).
 
 Losing Temporal therefore loses **the position of every ticket in flight**, not the
 tickets themselves. A ticket whose workflow is gone stays in its current state forever,
@@ -17,7 +17,7 @@ with no event and no failure — the API reads the workflow status on every work
 
 The embedded Temporal is `temporal server start-dev`: one process, **SQLite** on a
 PersistentVolume (`/data/temporal.db`), one replica, `Recreate` strategy. It exists for a
-bench. The chart refuses it in `staging` and `prod` (`templates/garde.yaml`).
+bench. The chart refuses it in `staging` and `prod` (`templates/guard.yaml`).
 
 If you still need a copy of it — to move a bench, or to keep a history for a replay test:
 
@@ -41,13 +41,13 @@ mounting the same PVC), scale back up. The workflow ids are deterministic
 
 Temporal's state is its **persistence database** — PostgreSQL or Cassandra, provisioned by
 whoever runs Temporal. Back that database up with the same tool and the same RPO as the
-platform database; the `restauration-postgres.md` procedure applies to a CloudNativePG
+platform database; the `postgres-restore.md` procedure applies to a CloudNativePG
 cluster hosting `temporal` and `temporal_visibility`.
 
 Two rules that are not obvious:
 
 - **`numHistoryShards` never changes** after the first start. A restore into a cluster
-  configured with another value is a corrupt cluster (`montee-temporal.md`).
+  configured with another value is a corrupt cluster (`temporal-upgrade.md`).
 - **Restore Temporal and the platform database to the same instant.** A Temporal older than
   the platform database replays stages whose runs already finished — idempotent by run id
   (ADR 0008), so no double spend, but the tickets go back to an earlier state. A Temporal

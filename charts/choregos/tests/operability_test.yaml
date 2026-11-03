@@ -8,7 +8,7 @@ templates:
   - charts/choregos-orchestrator/templates/pdb.yaml
   - charts/choregos-orchestrator/templates/deployments.yaml
   - charts/choregos-api/templates/deployment.yaml
-  - templates/garde.yaml
+  - templates/guard.yaml
 # Offline rendering: the default executor (agent_sandbox, ADR 0072) refuses to render without its
 # operator among the cluster's API versions, which a unit test does not have.
 set:
@@ -102,7 +102,7 @@ tests:
             value: "http://choregos-egress.{namespace}.svc:3128"
 
   - it: in production, an embedded dependency stops the rendering and is named
-    template: templates/garde.yaml
+    template: templates/guard.yaml
     set:
       global.environment: prod
       global.database.embedded: true
@@ -112,7 +112,7 @@ tests:
           errorPattern: "global.database.embedded, global.devLogin.enabled"
 
   - it: in staging, the secrets written by the chart are refused
-    template: templates/garde.yaml
+    template: templates/guard.yaml
     set:
       global.environment: staging
       global.devSecrets: true
@@ -121,7 +121,7 @@ tests:
           errorPattern: "global.devSecrets"
 
   - it: in dev, embedding everything stays allowed
-    template: templates/garde.yaml
+    template: templates/guard.yaml
     set:
       global.environment: dev
       global.database.embedded: true

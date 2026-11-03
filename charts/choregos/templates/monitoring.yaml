@@ -14,7 +14,7 @@ the operator loop, which the platform operator has already paid for once.
 */ -}}
 {{- $saveur := .Values.monitoring.flavour | default "prometheus" }}
 {{- if not (has $saveur (list "prometheus" "victoriametrics")) }}
-{{- fail (printf "monitoring.flavour=%s inconnu : `prometheus` ou `victoriametrics`." $saveur) }}
+{{- fail (printf "monitoring.flavour=%s is unknown: use `prometheus` or `victoriametrics`." $saveur) }}
 {{- end }}
 {{- $vm := eq $saveur "victoriametrics" }}
 {{- if .Values.monitoring.serviceMonitor }}
@@ -44,7 +44,7 @@ metadata:
   labels: {{- include "choregos.labels" . | nindent 4 }}
 spec:
   groups:
-    - name: choregos.plateforme
+    - name: choregos.platform
       rules:
-{{ include "choregos.reglesDAlerte" . | indent 8 }}
+{{ include "choregos.alertRules" . | indent 8 }}
 {{- end }}

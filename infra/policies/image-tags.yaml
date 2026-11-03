@@ -20,7 +20,7 @@ spec:
     # Ephemeral containers (`kubectl debug`) are OUT of this rule on purpose: an operator
     # debugging a pod picks a throwaway tool image (`busybox`) and must not be blocked from it
     # during an incident; the pod's own images, the ones that run the workload, are judged here.
-    - name: interdire-latest
+    - name: forbid-latest-tag
       match:
         any:
           - resources:

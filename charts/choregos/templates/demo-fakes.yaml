@@ -3,7 +3,7 @@
 The HR scenario fakes served by ONE process (S20-07). The API (two replicas) and
 the orchestrator are distinct processes: an in-memory fake would show them as many
 fleets, directories and badge readers as there are processes. A single replica is the whole
-point. For a demonstration: `garde.yaml` refuses it in staging and prod.
+point. For a demonstration: `guard.yaml` refuses it in staging and prod.
 */ -}}
 apiVersion: apps/v1
 kind: Deployment
@@ -40,7 +40,7 @@ spec:
           image: {{ include "choregos.image" (dict "global" .Values.global "image" (index .Values "choregos-api" "image")) }}
           imagePullPolicy: {{ .Values.global.imagePullPolicy }}
           securityContext: {{- toYaml .Values.global.securityContext | nindent 12 }}
-          command: ["python", "-m", "choregos_adapters.fakes.serveur"]
+          command: ["python", "-m", "choregos_adapters.fakes.server"]
           ports:
             - name: http
               containerPort: {{ .Values.demoFakes.port }}
@@ -50,7 +50,7 @@ spec:
             {{- with .Values.demoFakes.tokenSecret }}
             # The MCP servers' token, and the fake Graph's application secret: by
             # reference, like any secret; without it, the network policy is the only gate.
-            - name: CONNECTOR_DEMO_JETON
+            - name: CONNECTOR_DEMO_TOKEN
               valueFrom: { secretKeyRef: { name: {{ .name }}, key: {{ .key }} } }
             {{- end }}
           readinessProbe:
