@@ -1,5 +1,5 @@
 # docs-plan: French findings per file (ADR 0098). Counts only go down: tools/check_english.py --update-baseline
-docs/plan/00-index.md	48
+docs/plan/00-index.md	47
 docs/plan/01-architecture-and-contracts.md	34
 docs/plan/01-architecture-et-contrats.md	1
 docs/plan/02-orchestrator-agents-runner.md	46
