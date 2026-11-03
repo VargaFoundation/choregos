@@ -127,6 +127,46 @@ describe("the board shows every workflow of the project (2026-11-02)", () => {
     expect(screen.queryByRole("region", { name: "fon-support" })).toBeNull();
     expect(screen.queryByText("Add a maintainer")).toBeNull();
     expect(screen.queryByRole("link", { name: "Only this workflow" })).toBeNull();
-    expect(screen.getByLabelText("Board workflow")).toHaveValue("fon-access");
+    const switcher = screen.getByRole("navigation", { name: "Board workflow" });
+    expect(within(switcher).getByRole("link", { name: /fon-access/ })).toHaveAttribute("aria-current", "page");
+    expect(within(switcher).getByRole("link", { name: "All workflows" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("names its workflow even when the project has only one (S55-03)", async () => {
+    vi.mocked(api.workflows).mockResolvedValueOnce([
+      { name: "fon-support", version: 1, is_default: true, open_items: 1 },
+    ] as Awaited<ReturnType<typeof api.workflows>>);
+    board();
+    const switcher = await screen.findByRole("navigation", { name: "Board workflow" });
+    expect(within(switcher).getByRole("link", { name: /fon-support/ })).toHaveAttribute("aria-current", "page");
+    expect(within(switcher).queryByRole("link", { name: "All workflows" })).toBeNull();
+  });
+
+  it("reads every page of tickets, not the first 50 (S55-03)", async () => {
+    vi.mocked(api.workItems)
+      .mockResolvedValueOnce({
+        items: [item({ id: "w1", tracker_key: "FON-1", title: "On the first page", state: "inbox", workflow_name: "fon-access" })],
+        meta: { has_more: true, next_cursor: "w1" },
+      })
+      .mockResolvedValueOnce({
+        items: [item({ id: "w2", tracker_key: "FON-2", title: "On the second page", state: "inbox", workflow_name: "fon-access" })],
+        meta: { has_more: false },
+      });
+    board();
+    expect(await screen.findByText("On the second page")).toBeInTheDocument();
+    expect(screen.getByText("On the first page")).toBeInTheDocument();
+    expect(api.workItems).toHaveBeenLastCalledWith("fon", { limit: "200", cursor: "w1" });
+    expect(screen.queryByTestId("board-truncated")).toBeNull();
+  });
+
+  it("says so when it stopped reading before the end", async () => {
+    vi.mocked(api.workItems).mockResolvedValue({
+      items: Array.from({ length: 200 }, (_, n) =>
+        item({ id: `w${n}`, tracker_key: `FON-${n}`, title: `Ticket ${n}`, state: "inbox", workflow_name: "fon-access" }),
+      ),
+      meta: { has_more: true, next_cursor: "more" },
+    });
+    board();
+    expect(await screen.findByTestId("board-truncated")).toHaveTextContent("1,000 most recent tickets");
   });
 });

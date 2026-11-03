@@ -948,6 +948,15 @@ export const api = {
 
   workItems: (id: string, params?: Record<string, string>) =>
     request<WorkItemPage>(`/projects/${qualify(id)}/work-items${query(params)}`),
+  /**
+   * Every work item of a project, page after page, up to `cap` (S55-03). The board, the overview and
+   * the inbox's count read the first page only — 50 tickets — and the rest vanished without a word.
+   * `meta.has_more` stays true when the cap stopped the reading: the page must say so.
+   */
+  // A method, not an arrow: it reads the pages through `this.workItems`, the one a test stubs.
+  allWorkItems(id: string, cap: number = WORK_ITEMS_CAP): Promise<WorkItemPage> {
+    return allWorkItems((params) => this.workItems(id, params), cap);
+  },
   workItem: (id: string) => request<WorkItemDto>(`/work-items/${id}`),
   /** The webhook events a project received and what the platform did with each (S42-06f), newest first. */
   receivedEvents: (id: string, params?: Record<string, string>) =>
@@ -1100,6 +1109,27 @@ function memoryParams(which?: MemoryChoice): Record<string, string> {
   if (which?.memory && which.memory !== "shared") out.memory = which.memory;
   if (which?.memory === "own" && which.agent) out.agent = which.agent;
   return out;
+}
+
+/** How many tickets a project page reads at most: five pages of 200. */
+export const WORK_ITEMS_CAP = 1000;
+
+async function allWorkItems(
+  readPage: (params: Record<string, string>) => Promise<WorkItemPage>,
+  cap: number,
+): Promise<WorkItemPage> {
+  const items: WorkItemPage["items"] = [];
+  let cursor: string | null | undefined;
+  let hasMore = false;
+  do {
+    const params: Record<string, string> = { limit: "200" };
+    if (cursor) params.cursor = cursor;
+    const page = await readPage(params);
+    items.push(...page.items);
+    cursor = page.meta.next_cursor;
+    hasMore = page.meta.has_more;
+  } while (hasMore && cursor && items.length < cap);
+  return { items, meta: { has_more: hasMore, next_cursor: hasMore ? (cursor ?? null) : null } };
 }
 
 function query(params?: Record<string, string>): string {
