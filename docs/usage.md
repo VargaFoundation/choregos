@@ -1005,6 +1005,51 @@ time limit, and the `<name>` and `<name>_confidence` outputs a `when` compares. 
 creates one ("A decision") and edits it: the sources are chips checked against the patterns above,
 questions are added and removed with their options or levels, and only the fields that changed are
 written back, as one gesture you can undo (ADR 0112).
+**Every decision is recorded, and measured** ([ADR 0121](adr/0121-a-decision-is-a-step-recorded-and-measured.md)
+§6–7). The `decision_records` ledger keeps one row per run and question: the work item, the run, the
+workflow and its version, the step (the state it ran from) and its transition, the model and its
+version, the answer, its probability, then what followed. A retried or replayed write adds nothing
+(unique on run and question).
+
+- **What is recorded**: a decision step's answers (`source: decision_model`; the model's version is the
+  model the gateway says answered behind the catalogue entry), and the confidence an agent declares
+  (`source: agent`; the version is the registry agent and its version, `developer@4`). For an agent,
+  `<name>_confidence` is the probability of the output `<name>`; a bare `confidence` is the probability of
+  the output declared just before it in the transition's `outputs:` (`outputs: [done, confidence]` →
+  `done`), or written just before it when `confidence` is not declared. Only a probability in [0, 1] (a
+  number, or a text that reads as one) of an answer that is a boolean, a number or a text of at most 200
+  characters is recorded; a job's figures are not.
+- **The transition taken**: the state the transition the workflow selects right after the step leads to
+  (`billing`, or `triage` when the model was unsure), written once by the interpreter.
+- **Overridden**: judged by the first human step decided after the decision — an approval or a task on
+  a transition carried by a `human` actor. Sent back or rejected: `true`; approved or completed:
+  `false`. A later verdict does not change it. Not detected: a move by hand in the tracker (the
+  interpreter applies one only in a state with no way out, where a person is expected to route the work
+  item), an escalation's approval, an answer to an agent's question, an edit of the fields.
+- **Terminal**: when the work item ends, its terminal state's `outcome` (`success`, `declined`,
+  `cancelled`); `cancelled` when it was stopped outside a terminal state.
+- **Reopened**: when a tracker event says the issue of an ended work item is open again — GitHub's
+  `reopened`, GitLab's `reopen`, a Jira status change out of a status a terminal state maps to into one
+  none does.
+
+A decision is **observed** once one of these tells whether it was right, and **right** when nobody
+overrode it, its work item ended in `success`, and it did not come back. A workflow whose `declined`
+end is a legitimate answer (an access request turned down) therefore measures those decisions as wrong:
+read its calibration with that in mind.
+
+`GET /projects/{id}/workflows/{name}/steps/{step}/calibration?target=0.9` (`step`: the state the step
+runs from; every version of the workflow counts) gives, per question, source, model and model version:
+the decisions recorded and observed, the accuracy among the observed, ten reliability bins of
+probability (`[0, 0.1)` … `[0.9, 1]`, each with its count, mean probability and observed accuracy), the
+expected calibration error (the bins' gap between probability and accuracy, weighted by their counts:
+0 for a calibrated model), and for each threshold from 0.50 to 0.95 the coverage (the share of observed
+decisions at or above it) and the accuracy among them. It suggests the lowest threshold whose accuracy
+reaches `target` with at least 10 observed decisions above it — and none, with the reason, under 30
+observed decisions or when no threshold reaches the target. Until then, a threshold on a model's
+probability is a guess. The validator warns `decision.threshold_without_human` when a `when` reads a
+`*_confidence` output and the state's default exit (its transition without `when`) neither is a human
+step nor leads to a state a human step leaves: the work items the model was least sure of would move
+on unchecked, and nobody's verdict would measure the decision.
 
 The `joiners-leavers` template goes further, with no agent writing anything itself: an agent
 prepares the access plan with its skills, a person from HR validates it, and every write is a

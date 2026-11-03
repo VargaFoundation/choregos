@@ -664,6 +664,51 @@ class TriggerToken(Base, PkMixin):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class DecisionRecordRow(Base, PkMixin):
+    """One answered question and what followed it: the decision ledger (ADR 0121 §6, S52-05).
+
+    A decision step's answer (`source = decision_model`) or the confidence an agent declared
+    (`source = agent`), one row per run and question, written once when the run's result is written.
+    `transition` is filled when the workflow selects its next transition; the outcome fields when they
+    become known — a person's verdict (`overridden`), the work item's end (`terminal`), its return
+    (`reopened`). Calibration is computed from these rows (`services.decision_ledger`)."""
+
+    __tablename__ = "decision_records"
+    __table_args__ = (
+        UniqueConstraint("run_id", "question", name="uq_decision_records_run_question"),
+        Index("ix_decision_records_step", "project_id", "workflow", "step"),
+    )
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    work_item_id: Mapped[str] = mapped_column(ForeignKey("work_items.id", ondelete="CASCADE"), index=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("runs.id", ondelete="CASCADE"), index=True)
+    #: The work item's tracker key and the project's slug, as the contract names them.
+    work_item_key: Mapped[str] = mapped_column(String(255))
+    project_slug: Mapped[str] = mapped_column(String(64))
+    workflow: Mapped[str] = mapped_column(String(100))
+    workflow_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: The state the step ran from, and the step's transition.
+    step: Mapped[str] = mapped_column(String(64))
+    transition_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    question: Mapped[str] = mapped_column(String(64))
+    #: `decision_model` or `agent`.
+    source: Mapped[str] = mapped_column(String(16))
+    model: Mapped[str] = mapped_column(String(200))
+    model_version: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    #: A boolean, a number or a short text, kept as JSON.
+    answer: Mapped[Any] = mapped_column(Json)
+    probability: Mapped[float] = mapped_column(Float)
+    #: The state the workflow went to after the step, once known.
+    transition: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    overridden: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    #: `success`, `declined` or `cancelled`.
+    terminal: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    reopened: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    observed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class BackendRegistryRow(Base, PkMixin, TimestampMixin):
     """État des backends ACP : activés, résultats de conformité (S2-11)."""
 

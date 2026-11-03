@@ -37,17 +37,18 @@ from choregos_adapters.decisions import (
 )
 from choregos_adapters.errors import ConfigurationError, UpstreamError
 from choregos_api.db.models import Run
-from choregos_api.services import persist_event
+from choregos_api.services import DecidedBy, persist_event, record_decisions, record_transition_taken
 from choregos_api.services.model_catalogue import load_policy
 from choregos_contracts import DecisionActor, EventType, StageResult, StageStatus
 from choregos_contracts.workflow import CONFIDENCE_SUFFIX
 from choregos_core import utcnow
+from choregos_core.decision_ledger import Answered
 from choregos_core.llm_guardrail import mask
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
 from ..config import get_settings
-from .base import db, load_work_item, project_bundle
+from .base import db, load_work_item, project_bundle, workflow_du_ticket
 from .bilan import book_spend, ticket_view
 from .garde import guard_sources
 from .run_key import mint_key, record_step_key, revoke
@@ -69,6 +70,8 @@ DECISION_KEY_BUDGET_USD = 0.05
 DECISION_KEY_TTL_S = 300
 #: The activity's time beyond the model's own timeout: the database, the key, the spend.
 DECISION_MARGIN_S = 60
+#: A decision step's records in the ledger (ADR 0121 §6), beside an agent's declared confidence.
+DECISION_MODEL_SOURCE = "decision_model"
 
 
 def decision_run_id(work_item_id: str, transition_id: str, attempt: int) -> str:
@@ -155,7 +158,9 @@ async def decide(payload: dict[str, Any]) -> dict[str, Any]:
             sent=sorted(state),
             secrets_masked=masked,
         )
-        result = await _ask_through_the_gateway(session, bundle, item, run, decision, state, settings)
+        result = await _ask_through_the_gateway(
+            session, bundle, item, run, decision, state, settings, step=str(payload.get("from_state") or "")
+        )
         await persist_event(
             session,
             EventType.RUN_FINISHED,
@@ -171,6 +176,16 @@ async def decide(payload: dict[str, Any]) -> dict[str, Any]:
         return await _decided(session, bundle, run, settings, reused=False)
 
 
+@activity.defn(name="note_transition_taken")
+async def note_transition_taken(payload: dict[str, Any]) -> dict[str, Any]:
+    """The transition the workflow selected after a recorded step: the state it leads to, written on the
+    step's ledger records (ADR 0121 §6). The interpreter calls it once, behind its marker; a retry
+    writes nothing more, a record that knows its transition keeps it."""
+    async with db() as session:
+        noted = await record_transition_taken(session, str(payload["run_id"]), str(payload["transition"]))
+    return {"noted": noted}
+
+
 async def _ask_through_the_gateway(
     session: Any,
     bundle: Any,
@@ -179,8 +194,11 @@ async def _ask_through_the_gateway(
     decision: DecisionActor,
     state: dict[str, Any],
     settings: Any,
+    *,
+    step: str,
 ) -> StageResult:
-    """Mint the step's key, ask, write the result, book the spend; the key is revoked in any case."""
+    """Mint the step's key, ask, write the result and its ledger records, book the spend; the key is
+    revoked in any case."""
     budget = min(DECISION_KEY_BUDGET_USD, bundle.engine.stage_usd(str(decision.role), item.size))
     try:
         key = await mint_key(
@@ -216,8 +234,10 @@ async def _ask_through_the_gateway(
             questions=decision.questions,
             timeout_s=float(decision.timeout_seconds),
         )
+        reply: DecisionReply | None = None
         try:
-            result = answered(decision, await bundle.adapters.decisions.decide(call))
+            reply = await bundle.adapters.decisions.decide(call)
+            result = answered(decision, reply)
         except InvalidDecisionError as refused:
             result = StageResult.failure(
                 f"the decision model's answer is refused: {refused}"[:4000], INVALID_DECISION
@@ -227,6 +247,12 @@ async def _ask_through_the_gateway(
                 f"the decision model did not answer: {error}"[:4000], DECISION_UNREACHABLE
             )
         _write(run, result)
+        if reply is not None and result.status is StageStatus.DONE:
+            # The ledger, in the transaction of the result: a retry that reads the result back finds
+            # them written, and a replayed insert adds nothing (ADR 0121 §6).
+            await record_decisions(
+                session, await _decided_by(session, bundle, item, run, decision, step, reply), _answers(reply)
+            )
         await session.flush()
         try:
             await book_spend(session, bundle, run, settings)  # reads the spend, then revokes the key
@@ -237,6 +263,36 @@ async def _ask_through_the_gateway(
         if not released:
             await revoke(bundle, key.key_id)
     return result
+
+
+async def _decided_by(
+    session: Any, bundle: Any, item: Any, run: Run, decision: DecisionActor, step: str, reply: DecisionReply
+) -> DecidedBy:
+    """What every record of this decision shares. The model's version is the model the gateway says
+    answered, when it names another than the catalogue entry asked: the entry is an alias, and the
+    calibration of one model does not carry over to the next."""
+    workflow = await workflow_du_ticket(session, item)
+    answered_by = reply.model if reply.model and reply.model != decision.model else None
+    return DecidedBy(
+        org_id=bundle.project.org_id,
+        project_id=bundle.project.id,
+        project_slug=bundle.slug,
+        work_item_id=item.id,
+        work_item_key=item.tracker_key,
+        run_id=run.id,
+        workflow=workflow.metadata.name,
+        workflow_version=workflow.metadata.version,
+        step=step or str(run.transition_id or ""),
+        transition_id=run.transition_id,
+        source=DECISION_MODEL_SOURCE,
+        model=decision.model,
+        model_version=answered_by,
+        decided_at=run.ended_at or utcnow(),
+    )
+
+
+def _answers(reply: DecisionReply) -> list[Answered]:
+    return [Answered(name, answer.value, answer.probability) for name, answer in reply.answers.items()]
 
 
 def _write(run: Run, result: StageResult) -> StageResult:
@@ -384,4 +440,5 @@ __all__ = [
     "decision_request",
     "decision_run_id",
     "mask_state",
+    "note_transition_taken",
 ]

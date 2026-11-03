@@ -68,6 +68,10 @@ def _issue(delivery_id: str, payload: dict[str, Any]) -> list[InboundEvent]:
         return [InboundEvent(type=InboundEventType.ITEM_CREATED, payload=opened, **common)]
     if action == "close":
         return [InboundEvent(type=InboundEventType.ITEM_CLOSED, payload=body, **common)]
+    if action == "reopen":
+        # The issue is open again: an ended work item's decisions were not right (ADR 0121 §6).
+        reopened = {**body, "reopened": True}
+        return [InboundEvent(type=InboundEventType.ITEM_UPDATED, payload=reopened, **common)]
     added = _added_labels(payload)
     if added:
         return [

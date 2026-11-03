@@ -12,6 +12,14 @@ from .couts import (
     estimate_cost,
     record_cost,
 )
+from .decision_ledger import (
+    DecidedBy,
+    record_decisions,
+    record_human_verdict,
+    record_reopened,
+    record_terminal_outcome,
+    record_transition_taken,
+)
 from .definitions import (
     DEFAULT_POLICY_PRESET,
     DEFAULT_WORKFLOW,
@@ -74,6 +82,7 @@ __all__ = [
     "DEFAULT_WORKFLOW",
     "DOCUMENTS_LOGICIELS",
     "MIN_TICKETS_PAR_GROUPE",
+    "DecidedBy",
     "Naissance",
     "_ab_verdict",
     "_statut_temporal",
@@ -106,6 +115,11 @@ __all__ = [
     "publier_workflow",
     "ranger_les_sorties",
     "record_cost",
+    "record_decisions",
+    "record_human_verdict",
+    "record_reopened",
+    "record_terminal_outcome",
+    "record_transition_taken",
     "release_dto",
     "run_dto",
     "run_summary",

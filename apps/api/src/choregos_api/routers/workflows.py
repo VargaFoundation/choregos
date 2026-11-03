@@ -8,6 +8,7 @@ from typing import Annotated, Any
 
 from choregos_contracts import Role
 from choregos_core import parse_policy, parse_workflow, to_graph, to_process, utcnow
+from choregos_core.calibration import DEFAULT_TARGET
 from choregos_core.dsl import TEMPLATE_NAMES, load_template, template_yaml
 from choregos_core.policy import unenforced_governance
 from choregos_core.policy_ceiling import PolicyCeiling, widenings
@@ -30,6 +31,7 @@ from ..schemas import (
     RoutingPreviewRequest,
     StateActivity,
     StepActivity,
+    StepCalibration,
     WorkflowActivity,
     WorkflowDefDto,
     WorkflowEditRequest,
@@ -52,6 +54,7 @@ from ..services import (
     signaler_ce_que_la_politique_n_applique_pas,
     workflow_actif,
 )
+from ..services.decision_ledger import step_calibration as measure_step
 from ..services.definitions import CEILING_KEY, ceiling_of, policy_engine, policy_model
 from ..services.llm_routing import book
 from ..services.memory_policy import (
@@ -421,6 +424,27 @@ async def workflow_activity(
         ],
         steps=steps,
     )
+
+
+@router.get(
+    "/projects/{id}/workflows/{name}/steps/{step}/calibration",
+    response_model=StepCalibration,
+    operation_id="getStepCalibration",
+)
+async def step_calibration(
+    name: str,
+    step: str,
+    ctx: ProjectCtx,
+    session: Db,
+    target: Annotated[float, Query(gt=0, le=1)] = DEFAULT_TARGET,
+) -> StepCalibration:
+    """How well a step's probabilities predicted what followed (ADR 0121 §7): for each question and
+    model version, the reliability bins, the expected calibration error, the coverage and accuracy at
+    each threshold from 0.50 to 0.95, and the lowest threshold that reaches `target` accuracy (none
+    under 30 observed decisions). `step` is the state the step runs from. Every version of the
+    workflow counts. Read only."""
+    await _actif(session, ctx, name)
+    return await measure_step(session, ctx.id, name, step, target)
 
 
 @router.post(

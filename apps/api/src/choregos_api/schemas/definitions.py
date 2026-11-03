@@ -439,3 +439,58 @@ class WorkflowActivity(Dto):
     days: int
     states: list[StateActivity] = Field(default_factory=list)
     steps: list[StepActivity] = Field(default_factory=list)
+
+
+class ReliabilityBin(Dto):
+    """One bin of probability, `[lower, upper)` (the last one closed), over the observed decisions."""
+
+    lower: float
+    upper: float
+    count: int
+    #: The mean probability the decisions of the bin were given; `None` for an empty bin.
+    mean_probability: float | None = None
+    #: The share of them that were right; `None` for an empty bin.
+    accuracy: float | None = None
+
+
+class ThresholdPoint(Dto):
+    """What a threshold keeps of the observed decisions: how many, which share, how many right."""
+
+    threshold: float
+    count: int
+    coverage: float | None = None
+    accuracy: float | None = None
+
+
+class QuestionCalibration(Dto):
+    """One question's calibration, for one source, model and model version (ADR 0121 §7)."""
+
+    question: str
+    source: Literal["decision_model", "agent"]
+    model: str
+    model_version: str | None = None
+    #: Every recorded decision, and those whose outcome is observed.
+    count: int
+    observed: int
+    #: The share of observed decisions that were right: nobody contradicted them, the work item ended
+    #: in success, and it did not come back.
+    accuracy: float | None = None
+    #: The expected calibration error over the ten bins.
+    ece: float | None = None
+    bins: list[ReliabilityBin] = Field(default_factory=list)
+    thresholds: list[ThresholdPoint] = Field(default_factory=list)
+    #: The lowest threshold whose accuracy reaches the target; `None` with the reason why not.
+    suggested_threshold: float | None = None
+    suggestion_reason: str | None = None
+
+
+class StepCalibration(Dto):
+    """A step's decisions, measured from the ledger (ADR 0121 §7): per question and model version."""
+
+    workflow: str
+    #: The state the step runs from.
+    step: str
+    target_accuracy: float
+    #: The observed decisions below which no threshold is suggested.
+    min_observed: int
+    questions: list[QuestionCalibration] = Field(default_factory=list)
