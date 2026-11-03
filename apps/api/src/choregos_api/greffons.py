@@ -1,353 +1,73 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Les routes qu'un greffon ajoute à l'API — sans forker `main.py`.
-
-Un greffon (`choregos.plugins`, voir `choregos_adapters.charger_les_greffons`) savait déjà
-enregistrer un connecteur, une garantie, déclarer une édition ou un mappeur de groupes. Il ne
-pouvait pas **servir** quoi que ce soit : `create_app()` n'incluait que ses propres routeurs. Toute
-fonctionnalité qui a besoin d'une route — le cycle de vie d'une organisation, une intégration
-maison — demandait donc un patch du cœur.
-
-Le greffon appelle `declarer_un_routeur(routeur)` depuis son `brancher()` ; `create_app()`
-l'inclut sous `/api/v1`, **après** ceux du cœur. Les dépendances d'authentification et de droits
-restent celles que le routeur déclare lui-même, comme pour n'importe quel routeur du cœur.
-
-**Une route du greffon qui recouvre une route du cœur (même chemin, même méthode) arrête le
-démarrage.** Starlette sert la première route qui correspond : le greffon serait ignoré sans un
-mot — ou, si l'ordre changeait un jour, il remplacerait en silence une route du cœur, y compris
-une route d'authentification. Un remplacement n'est pas un ajout ; il se demande par une couture
-nommée, comme le mappeur de groupes.
-"""
+# lang: fr-ok-file alias:external — former module of the extension API, removed in 0.22.0 (ADR 0098)
+"""The former name of `choregos_api.extensions`: every name still resolves, with a warning."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any
-
-from fastapi import APIRouter
-from fastapi.routing import APIRoute, APIWebSocketRoute
-
-_ROUTEURS: list[APIRouter] = []
-
-
-def declarer_un_routeur(routeur: APIRouter) -> None:
-    """Appelée par un greffon à son chargement. Le cœur ne l'appelle jamais."""
-    if not isinstance(routeur, APIRouter):
-        raise TypeError(f"un routeur FastAPI est attendu, pas {type(routeur).__name__}")
-    if routeur not in _ROUTEURS:
-        _ROUTEURS.append(routeur)
-
-
-def routeurs_declares() -> tuple[APIRouter, ...]:
-    return tuple(_ROUTEURS)
-
-
-def signatures(routeur: APIRouter, prefixe: str = "") -> set[tuple[str, str]]:
-    """{(méthode, chemin)} servis par un routeur, préfixe compris.
-
-    Un routeur IMBRIQUÉ (`include_router` dans le routeur) est refusé plutôt que sauté : FastAPI
-    ne l'expose que par un objet privé, et une route qu'on ne voit pas est une route dont on ne
-    peut pas garantir qu'elle ne recouvre rien.
-    """
-    servies: set[tuple[str, str]] = set()
-    for route in routeur.routes:
-        if isinstance(route, APIWebSocketRoute):  # a socket is served on its path, like a method
-            servies.add(("WEBSOCKET", prefixe + route.path))
-            continue
-        if not isinstance(route, APIRoute):
-            raise TypeError(
-                f"route {type(route).__name__} dans un routeur de greffon : seules les routes "
-                "directes (`@routeur.get`, `@routeur.post`…) sont prises en charge, pas un routeur imbriqué."
-            )
-        for methode in route.methods or ():
-            servies.add((methode, prefixe + route.path))
-    return servies
-
-
-def reinitialiser() -> None:
-    """Pour les tests : aucun routeur de greffon, aucun contrôle de geste, aucun outil, aucune section,
-    aucun installateur de gabarit."""
-    _ROUTEURS.clear()
-    _FOURNISSEURS_D_OUTILS.clear()
-    _FOURNISSEURS_HUMAINS.clear()
-    _SECTIONS.clear()
-    _INSTALLATEURS.clear()
-    _THEME_PROVIDER.clear()
-    reinitialiser_les_controles()
-
-
-# ───────────────────────────── sections d'administration ─────────────────────────────
-#
-# Un greffon qui sert des routes d'administration — l'édition entreprise : organisations, SAML,
-# SCIM, sessions — n'a pas d'écran à lui. Il déclare ses sections comme des DONNÉES (un manifeste :
-# formulaire, table, action, secret montré une fois), et la console les rend avec ses propres
-# blocs : aucun code de greffon ne s'exécute dans la page qui porte la session et les décisions
-# (ADR 0032). `create_app()` valide chaque manifeste et vérifie que chacun de ses chemins est servi.
-
-_SECTIONS: list[dict[str, Any]] = []
-
-# What the core's section manifests support, so a plugin detects a feature without parsing versions
-# (S42-02). `block_permission`: a block may carry its own `permission`. `asset_upload` (S42-13): a form
-# property of `format: "asset"` uploads its file to its `x-upload` path. `section_icon` (S42-15): a
-# section may name its navigation icon from the schema's closed `icon` vocabulary.
-SECTION_FEATURES: frozenset[str] = frozenset({"block_permission", "asset_upload", "section_icon"})
-
-
-def declarer_une_section_d_administration(manifeste: dict[str, Any]) -> None:
-    """Appelée par un greffon à son chargement ; la validation se fait au démarrage de l'API."""
-    import copy
-
-    if not isinstance(manifeste, dict):
-        raise TypeError(f"un manifeste est un objet, pas {type(manifeste).__name__}")
-    for section in _SECTIONS:
-        if section.get("id") != manifeste.get("id"):
-            continue
-        # Le même greffon chargé deux fois — par l'orchestrateur que l'API importe, puis par
-        # `create_app()` — redéclare la même section : rien à refaire, comme pour un routeur. Une
-        # AUTRE section sous le même identifiant, elle, en masquerait une.
-        if section == manifeste:
-            return
-        raise ValueError(f"section d'administration déclarée deux fois : {manifeste.get('id')}")
-    _SECTIONS.append(copy.deepcopy(manifeste))
-
-
-def sections_declarees() -> tuple[dict[str, Any], ...]:
-    return tuple(_SECTIONS)
-
-
-def _televersements(schema: Any) -> list[tuple[str, str]]:
-    """The POST paths of a form schema's `format: "asset"` properties (`x-upload`, S42-13)."""
-    if not isinstance(schema, dict):
-        return []
-    proprietes = schema.get("properties")
-    if not isinstance(proprietes, dict):
-        return []
-    return [
-        ("POST", str(propriete["x-upload"]))
-        for propriete in proprietes.values()
-        if isinstance(propriete, dict) and propriete.get("format") == "asset" and "x-upload" in propriete
-    ]
-
-
-def chemins_d_une_section(manifeste: dict[str, Any]) -> list[tuple[str, str]]:
-    """{(méthode, chemin)} qu'une section appelle : la console n'en appellera pas d'autre."""
-    chemins: list[tuple[str, str]] = []
-
-    def action(bloc: dict[str, Any], defaut: str = "POST") -> None:
-        chemins.append((str(bloc.get("method") or defaut), str(bloc["path"])))
-
-    for bloc in manifeste.get("blocks", []):
-        sorte = bloc.get("kind")
-        if sorte == "form":
-            chemins.append(("GET", str(bloc["read"])))
-            chemins.append((str(bloc.get("write_method") or "PUT"), str(bloc["write"])))
-            chemins.extend(_televersements(bloc.get("schema")))
-        elif sorte == "table":
-            chemins.append(("GET", str(bloc["list"])))
-            for ligne in bloc.get("row_actions", []):
-                action(ligne)
-        elif sorte in {"action", "secret_once"}:
-            action(bloc)
-    return chemins
-
-
-# ───────────────────────────── outils des runs ─────────────────────────────
-#
-# Le catalogue d'outils (`catalogue.py`) décrit des API tierces, déclarées par le déploiement dans
-# un fichier. Un greffon peut avoir les siens, qui dépendent du PROJET du run et non du
-# déploiement : les outils générés depuis l'ontologie d'un projet, par exemple. Ils passent par le
-# même chemin que ceux du catalogue — `GET /internal/runs/{id}/tools` les annonce au serveur MCP
-# `choregos-tools` de l'agent, `POST /internal/runs/{id}/tools/{nom}` les appelle sous le même
-# plafond d'appels par run, avec la même ligne au registre des coûts et le même événement. Le
-# jeton du run reste l'unique authentification : le fournisseur reçoit le run et son projet, déjà
-# vérifiés, jamais le jeton.
-
-
-@dataclass(frozen=True)
-class FournisseurDOutils:
-    """`lister(session, run, projet)` rend des outils au format MCP (`name`, `description`,
-    `inputSchema`) ; `appeler(session, run, projet, nom, arguments)` rend `(code HTTP, corps)`.
-    A code of 400 or more is an answer the agent reads, not a failure.
-
-    A listed tool may carry `result_max_bytes` (an integer of at least 1024): how much of its answer
-    the agent reads, as a catalogue entry declares it (S40-17b); the agent is never shown it."""
-
-    lister: Any
-    appeler: Any
-
-
-_FOURNISSEURS_D_OUTILS: dict[str, FournisseurDOutils] = {}
-
-
-def declarer_un_fournisseur_d_outils(nom: str, lister: Any, appeler: Any) -> None:
-    """Appelée par un greffon à son chargement. Deux greffons ne déclarent pas le même nom."""
-    if nom in _FOURNISSEURS_D_OUTILS and _FOURNISSEURS_D_OUTILS[nom] != FournisseurDOutils(lister, appeler):
-        raise ValueError(f"fournisseur d'outils « {nom} » déjà déclaré")
-    _FOURNISSEURS_D_OUTILS[nom] = FournisseurDOutils(lister, appeler)
-
-
-def fournisseurs_d_outils() -> dict[str, FournisseurDOutils]:
-    return dict(_FOURNISSEURS_D_OUTILS)
-
-
-# ───────────────────────────── outils servis aux humains, par la porte MCP ─────────────────────────────
-
-
-@dataclass(frozen=True)
-class FournisseurHumain:
-    """Les outils qu'un greffon sert à la porte MCP des clients externes (ADR 0030), avec les droits
-    de l'HUMAIN qui a frappé le jeton — jamais ceux d'un agent de la plateforme.
-
-    - `lister(session, principal, projet, org)` rend des outils au format MCP (`name`,
-      `description`, `inputSchema`), plus `ecriture: bool` : un outil d'écriture n'est annoncé qu'à
-      un jeton `mcp:write` ;
-    - `appeler(session, principal, projet, org, nom, arguments)` rend `(code HTTP, corps)` ; un code
-      ≥ 400 est un refus que le modèle lit ;
-    - `en_attente(session, principal, projet, org)`, facultatif, rend ce qui attend une décision
-      humaine : `[{key, title, kind, question, requested_at, can_decide, decision_path}]`, où
-      `decision_path` est le chemin de la console où la décision se prend.
-
-    Un outil d'un greffon ne prend jamais le nom d'un outil du cœur : la porte l'écarterait.
-    """
-
-    lister: Any
-    appeler: Any
-    en_attente: Any = None
-
-
-_FOURNISSEURS_HUMAINS: dict[str, FournisseurHumain] = {}
-
-
-def declarer_des_outils_pour_les_humains(nom: str, lister: Any, appeler: Any, en_attente: Any = None) -> None:
-    """Appelée par un greffon à son chargement. Deux greffons ne déclarent pas le même nom."""
-    fournisseur = FournisseurHumain(lister, appeler, en_attente)
-    if nom in _FOURNISSEURS_HUMAINS and _FOURNISSEURS_HUMAINS[nom] != fournisseur:
-        raise ValueError(f"fournisseur d'outils pour les humains « {nom} » déjà déclaré")
-    _FOURNISSEURS_HUMAINS[nom] = fournisseur
-
-
-def fournisseurs_humains() -> dict[str, FournisseurHumain]:
-    return dict(_FOURNISSEURS_HUMAINS)
-
-
-# ───────────────────────────── ce qu'un gabarit livre à un greffon ─────────────────────────────
-#
-# Un gabarit livre des workflows, une politique, des agents et des skills : le cœur sait les
-# installer. Il peut livrer aussi ce que seul un greffon comprend — une ontologie, par exemple :
-# `defaults.extensions: {<installateur>: <dossier du gabarit>}`. À la naissance du projet, le cœur lit
-# le dossier (sans en sortir, sans lien symbolique) et le remet à l'installateur déclaré sous ce
-# nom, dans la transaction qui crée le projet : un refus de l'installateur (`HTTPException`) fait
-# échouer la naissance, comme un workflow invalide. Sans installateur — le greffon n'est pas là, ou
-# pas actif —, le projet naît sans, et le journal d'audit le dit (S20-09).
-
-_INSTALLATEURS: dict[str, Any] = {}
-
-
-def declarer_un_installateur_de_gabarit(nom: str, installer: Any) -> None:
-    """`installer(session, projet, fichiers, auteur)`, asynchrone, rend ce qu'il a installé (un objet
-    que l'audit garde) ; `fichiers` : chemin relatif au dossier → texte. Deux greffons ne déclarent pas
-    le même nom."""
-    if nom in _INSTALLATEURS and _INSTALLATEURS[nom] is not installer:
-        raise ValueError(f"installateur de gabarit « {nom} » déjà déclaré")
-    _INSTALLATEURS[nom] = installer
-
-
-def installateurs_de_gabarit() -> dict[str, Any]:
-    return dict(_INSTALLATEURS)
-
-
-# ───────────────────────────── contrôle des gestes humains ─────────────────────────────
-#
-# Certains gestes humains portent une règle d'exploitation que le cœur ne connaît pas : un plafond
-# de projets par organisation, une authentification FRAÎCHE pour approuver une mise en production.
-# Un greffon déclare un contrôle, joué par la route AVANT qu'elle agisse — après les droits du
-# cœur, qui restent les premiers juges : un contrôle ne peut que refuser davantage.
-
-#: Les gestes contrôlables, et ce que la route passe dans `cible`.
-GESTES = {
-    "project.create": "slug du projet à créer",
-    "workitem.decision": "ticket, transition, nature de la demande et de la décision",
-    "release.approve": "release, environnement",
-    # Releasing an agent revision to production or to a canary share (S40-02, ADR 0071).
-    "agent.release": "agent, channel, version, kind",
-}
-
-
-@dataclass(frozen=True)
-class DemandeDeGeste:
-    geste: str
-    org: str
-    principal: Any
-    cible: dict[str, Any] = field(default_factory=dict)
-
-
-class GesteRefuse(Exception):  # noqa: N818 - une décision, pas une erreur
-    """`nature` choisit la réponse : `interdit` (403), `conflit` (409), `reauth` (401 — refaire
-    `GET /api/v1/auth/login?reauth=1`, puis le geste)."""
-
-    def __init__(self, raison: str, nature: str = "interdit") -> None:
-        if nature not in {"interdit", "conflit", "reauth"}:
-            raise ValueError(f"nature inconnue : {nature!r}")
-        super().__init__(raison)
-        self.nature = nature
-
-
-_CONTROLES: dict[str, dict[str, Any]] = {geste: {} for geste in GESTES}
-
-
-def declarer_un_controle_de_geste(geste: str, nom: str, fonction: Any) -> None:
-    """`fonction(session_db, demande)`, synchrone ou asynchrone ; lève `GesteRefuse` pour refuser.
-    Toute autre exception remonte : un contrôle en panne n'est pas une autorisation."""
-    if geste not in GESTES:
-        raise ValueError(f"geste inconnu : {geste!r} (connus : {sorted(GESTES)})")
-    _CONTROLES[geste][nom] = fonction
-
-
-async def controler(session: Any, demande: DemandeDeGeste) -> None:
-    """Appelée par les routes du cœur. Traduit le premier refus en réponse HTTP, préfixée du nom."""
-    import inspect
-
-    from .errors import conflict, forbidden, unauthorized
-
-    for nom, fonction in _CONTROLES[demande.geste].items():
-        try:
-            resultat = fonction(session, demande)
-            if inspect.isawaitable(resultat):
-                await resultat
-        except GesteRefuse as refus:
-            raison = f"{nom}: {refus}"
-            if refus.nature == "conflit":
-                raise conflict(raison) from refus
-            if refus.nature == "reauth":
-                raise unauthorized(f"{raison} — sign in again (GET /api/v1/auth/login?reauth=1)") from refus
-            raise forbidden(raison) from refus
-
-
-def reinitialiser_les_controles() -> None:
-    for controles in _CONTROLES.values():
-        controles.clear()
-
-
-# ───────────────────────────── the theme provider (S39-03, ADR 0064) ─────────────────────────────
-#
-# The community edition serves its default theme. A plugin that customises the look declares ONE
-# provider: `provider(session, org) -> dict | None` (sync or async), where `org` is the slug the
-# console asked for, or None for the instance. The core validates whatever it returns against the
-# contract and the console's contrast budget (`choregos_api.theme`); an invalid theme is replaced by
-# the default, never served.
-
-_THEME_PROVIDER: list[Any] = []
-
-
-def declare_theme_provider(provider: Any) -> None:
-    """Called by a plugin when it loads. A second declaration stops the start: two plugins
-    deciding the look of the same console would be a silent last-one-wins."""
-    if not callable(provider):
-        raise TypeError("a theme provider is a callable (session, org) -> dict | None")
-    if _THEME_PROVIDER and _THEME_PROVIDER[0] is not provider:
-        raise RuntimeError("a theme provider is already declared; only one is allowed")
-    if not _THEME_PROVIDER:
-        _THEME_PROVIDER.append(provider)
-
-
-def theme_provider() -> Any | None:
-    return _THEME_PROVIDER[0] if _THEME_PROVIDER else None
+import sys
+
+from choregos_core.compat import replace_module
+
+from .extensions import (
+    _GESTURE_CHECKS,
+    _HUMAN_TOOL_PROVIDERS,
+    _INSTALLERS,
+    _ROUTERS,
+    _TOOL_PROVIDERS,
+    GESTURES,
+    SECTION_FEATURES,
+    GestureRefused,
+    GestureRequest,
+    HumanToolProvider,
+    ToolProvider,
+    _uploads,
+    check_gesture,
+    declare_admin_section,
+    declare_gesture_check,
+    declare_human_tools,
+    declare_router,
+    declare_template_installer,
+    declare_theme_provider,
+    declare_tool_provider,
+    declared_routers,
+    declared_sections,
+    human_tool_providers,
+    reset,
+    reset_gesture_checks,
+    section_paths,
+    signatures,
+    template_installers,
+    theme_provider,
+    tool_providers,
+)
+
+__all__ = ["SECTION_FEATURES", "declare_theme_provider", "signatures", "theme_provider"]
+
+declarer_un_routeur = declare_router  # lang: fr-ok alias:external
+routeurs_declares = declared_routers  # lang: fr-ok alias:external
+reinitialiser = reset  # lang: fr-ok alias:external
+declarer_une_section_d_administration = declare_admin_section  # lang: fr-ok alias:external
+sections_declarees = declared_sections  # lang: fr-ok alias:external
+chemins_d_une_section = section_paths  # lang: fr-ok alias:external
+FournisseurDOutils = ToolProvider  # lang: fr-ok alias:external
+declarer_un_fournisseur_d_outils = declare_tool_provider  # lang: fr-ok alias:external
+fournisseurs_d_outils = tool_providers  # lang: fr-ok alias:external
+FournisseurHumain = HumanToolProvider  # lang: fr-ok alias:external
+declarer_des_outils_pour_les_humains = declare_human_tools  # lang: fr-ok alias:external
+fournisseurs_humains = human_tool_providers  # lang: fr-ok alias:external
+declarer_un_installateur_de_gabarit = declare_template_installer  # lang: fr-ok alias:external
+installateurs_de_gabarit = template_installers  # lang: fr-ok alias:external
+GESTES = GESTURES  # lang: fr-ok alias:external
+DemandeDeGeste = GestureRequest  # lang: fr-ok alias:external
+GesteRefuse = GestureRefused  # lang: fr-ok alias:external
+declarer_un_controle_de_geste = declare_gesture_check  # lang: fr-ok alias:external
+controler = check_gesture  # lang: fr-ok alias:external
+reinitialiser_les_controles = reset_gesture_checks  # lang: fr-ok alias:external
+_ROUTEURS = _ROUTERS  # lang: fr-ok alias:external
+_FOURNISSEURS_D_OUTILS = _TOOL_PROVIDERS  # lang: fr-ok alias:external
+_FOURNISSEURS_HUMAINS = _HUMAN_TOOL_PROVIDERS  # lang: fr-ok alias:external
+_INSTALLATEURS = _INSTALLERS  # lang: fr-ok alias:external
+_CONTROLES = _GESTURE_CHECKS  # lang: fr-ok alias:external
+_televersements = _uploads  # lang: fr-ok alias:external
+
+replace_module(__name__, sys.modules["choregos_api.extensions"])
