@@ -104,6 +104,14 @@ spec:
               value: /etc/choregos/plugins/plugins.yaml
             {{- end }}
             {{- end }}
+            {{- $hostedCosign := ne ((.Values.global.images | default dict).hostedCosign | default "off") "off" }}
+            {{- if or $hostedCosign (.Values.global.plugins | default dict).sources }}
+            # Cosign's trust root cache (Sigstore's TUF metadata), for a hosted image's signature or a
+            # plugin source's: the root filesystem is read-only, and without it every check fails on
+            # `mkdir ~/.sigstore` (choregos#1327).
+            - name: TUF_ROOT
+              value: /tmp/sigstore
+            {{- end }}
             {{- $servers := ((.Values.global.plugins | default dict).servers | default dict) }}
             {{- if $servers.enabled }}
             # Plugin servers (ADR 0096): run by the API in their namespace, through its Role there.
@@ -188,11 +196,6 @@ spec:
             {{- end }}
             - name: CHOREGOS_HOSTED_COSIGN_TLOG
               value: {{ ne (toString .hostedCosignTlog) "false" | quote }}
-            {{- if ne (.hostedCosign | default "off") "off" }}
-            # Cosign's trust root cache (Sigstore's TUF metadata): the root filesystem is read-only.
-            - name: TUF_ROOT
-              value: /tmp/sigstore
-            {{- end }}
             {{- end }}
             # The cluster's version: a hosted version is refused at publication below 1.29 (S41-16).
             - name: CHOREGOS_CLUSTER_VERSION
