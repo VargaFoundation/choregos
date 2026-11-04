@@ -20,7 +20,7 @@ TWO MANUFACTURING CONSTRAINTS, checked here because they decide the shape of the
    bench for example.
 
 Checked by hand on 2026-09-28 in an environment where the core is complete: the wheel installs
-with `--no-deps`, `charger_les_greffons()` loads it, the edition becomes `enterprise`, and
+with `--no-deps`, `load_extensions()` loads it, the edition becomes `enterprise`, and
 uninstalling returns `community`. This test guards the half that can be checked without
 polluting the suite's environment; the other half — the wheel placed in a real CE image — is
 `test_image_ee.py`. The wheel itself is built in `conftest.py`.

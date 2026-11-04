@@ -16,10 +16,10 @@ from ..activity_names import named
 from ..scheduling import execute_on_its_queue
 
 with workflow.unsafe.imports_passed_through():
-    from choregos_contracts.workflow import effet_de_la_transition
+    from choregos_contracts.workflow import transition_effect
     from choregos_core import WorkflowEngine
-    from choregos_core.dsl.dates import DateIllisible, echeance
-    from choregos_core.gates import ACTION_REGLEE, GateOutcome
+    from choregos_core.dsl.dates import UnreadableDate, due_date
+    from choregos_core.gates import ACTION_SETTLED, GateOutcome
 
     from ...activities import actions as action_activities
     from ...activities import children as children_activities
@@ -45,7 +45,7 @@ class SystemMixin(InterpreterBase):
 
         # What the platform does is WRITTEN (`does`, #175); a workflow published before carried it in
         # the target state's name, and is still read that way: a recorded history replays identically.
-        effect = effet_de_la_transition(transition)
+        effect = transition_effect(transition)
         if effect == "open_pr":
             try:
                 # `draft` only when the transition asks for one (S51-11): every other transition
@@ -108,7 +108,7 @@ class SystemMixin(InterpreterBase):
             return engine.after_gates(transition, [refusal_outcome], self._counted_attempts(transition.key))
         action_id, action_status = str(proposed["action_id"]), str(proposed["status"])
         self.current_action = action_id
-        while action_status not in ACTION_REGLEE and not self.stopped:
+        while action_status not in ACTION_SETTLED and not self.stopped:
             await wait_signal(lambda: action_id in self.settled_actions or self.stopped, ACTION_REREAD)
             if action_id in self.settled_actions:
                 action_status = self.settled_actions.pop(action_id)
@@ -186,8 +186,8 @@ class SystemMixin(InterpreterBase):
         while not self.stopped and self.workflow_override is None:
             seen_version = self.fields_version
             try:
-                target = echeance(expression, self.fields)
-            except DateIllisible:
+                target = due_date(expression, self.fields)
+            except UnreadableDate:
                 target = None
             now = workflow.now()
             if target is not None and target <= now:

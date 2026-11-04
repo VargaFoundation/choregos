@@ -487,7 +487,7 @@ def _register_forges() -> None:
     from .scm.gitlab import GitLabScm
     from .tracker.github import GitHubTracker
     from .tracker.gitlab import GitLabTracker
-    from .tracker.interne import InternalTracker
+    from .tracker.internal import InternalTracker
 
     register("tracker", "github-issues", _SHIPPED_SPECS[("tracker", "github-issues")])(
         lambda cfg: GitHubTracker(
@@ -643,7 +643,7 @@ def _register_memory_and_gateways() -> None:
     from .gateway.litellm import LiteLlmGateway
     from .gateway.openai_compatible import OpenAiCompatibleGateway
     from .memory.ecphoria import EcphoriaMemory
-    from .memory.lexicale import LexicalMemory
+    from .memory.lexical import LexicalMemory
 
     register("memory", "ecphoria", _SHIPPED_SPECS[("memory", "ecphoria")])(
         lambda cfg: EcphoriaMemory(

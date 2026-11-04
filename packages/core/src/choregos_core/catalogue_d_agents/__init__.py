@@ -17,7 +17,6 @@ from choregos_core.agent_catalogue import (
     CatalogueEntry,
     CatalogueSkill,
     EvalCase,
-    _context,
     catalogue,
     catalogue_skills,
     entries,
@@ -47,6 +46,5 @@ entrees = entries  # lang: fr-ok alias:external
 entree = entry  # lang: fr-ok alias:external
 skills_du_catalogue = catalogue_skills  # lang: fr-ok alias:external
 fichiers_de_la_skill = skill_files  # lang: fr-ok alias:external
-_contexte = _context  # lang: fr-ok alias:internal
 
 replace_module(__name__, sys.modules["choregos_core.agent_catalogue"])

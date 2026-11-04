@@ -73,20 +73,6 @@ class CatalogueEntry:
         raw = json.dumps(self.document, sort_keys=True, ensure_ascii=False).encode("utf-8")
         return "sha256:" + hashlib.sha256(raw).hexdigest()
 
-    empreinte = digest  # lang: fr-ok alias:internal
-
-    @property
-    def genre(self) -> Literal["internal", "external"]:  # lang: fr-ok alias:internal
-        return self.kind
-
-    @property
-    def resume(self) -> str:  # lang: fr-ok alias:internal
-        return self.summary
-
-    @property
-    def portee(self) -> Literal["always", "cloud"] | None:  # lang: fr-ok alias:internal
-        return self.reach
-
     @property
     def provenance(self) -> str:
         """`plugin:<plugin>/<slug>@<catalogue version>`: the author of what installing it writes."""
@@ -294,7 +280,6 @@ entrees = entries  # lang: fr-ok alias:external
 entree = entry  # lang: fr-ok alias:external
 skills_du_catalogue = catalogue_skills  # lang: fr-ok alias:external
 fichiers_de_la_skill = skill_files  # lang: fr-ok alias:external
-_contexte = _context  # lang: fr-ok alias:internal
 
 alias_names(
     __name__,
@@ -308,4 +293,3 @@ alias_names(
     },
     removed_in=EXTERNAL_ALIAS_REMOVAL,
 )
-alias_names(__name__, {"_contexte": "_context"})  # lang: fr-ok alias:internal

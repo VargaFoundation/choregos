@@ -10,7 +10,7 @@ from typing import Any, Literal
 from choregos_contracts import InboundEvent, InboundEventType, ProjectConfig, Risk, Size
 from choregos_core.domain import Comment, NewItem, TrackerStateMapping, WorkItemData, utcnow
 
-from ..tracker.champs import nom_actuel, nom_present
+from ..tracker.fields import current_name, present_name
 
 
 class FakeTracker:
@@ -145,8 +145,8 @@ class FakeTracker:
         """Like the GitHub board: keeps, renames the former French name, creates what is missing."""
         self.calls.append(("ensure_project_fields", list(fields)))
         summary: dict[str, list[str]] = {"kept": [], "renamed": [], "created": []}
-        for wanted in dict.fromkeys(nom_actuel(str(field_name)) for field_name in fields):
-            present = nom_present(wanted, self.board_fields)
+        for wanted in dict.fromkeys(current_name(str(field_name)) for field_name in fields):
+            present = present_name(wanted, self.board_fields)
             if present == wanted:
                 summary["kept"].append(wanted)
             elif present is not None:

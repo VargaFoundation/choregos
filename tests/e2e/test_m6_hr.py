@@ -41,21 +41,21 @@ class Fakes:
     def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
         import choregos_adapters
         from choregos_adapters.fakes.entra import FakeEntra
-        from choregos_adapters.fakes.rh import (
+        from choregos_adapters.fakes.hr import (
             FakeBadges,
-            FakeFournisseur,
+            FakeCarrier,
             FakeMdm,
-            FakeTransporteur,
-            serveur_mcp,
+            FakeSupplier,
+            mcp_server,
         )
 
-        self.directory = FakeEntra(secret_attendu=KEY_DIRECTORY)
-        self.fleet = FakeMdm(cle_attendue=KEY_FLEET)
-        self.carrier = FakeTransporteur(cle_attendue=KEY_FLEET)
-        self.readers = FakeBadges(cle_attendue=KEY_FLEET)
-        self.supplier = FakeFournisseur()
-        self.server = serveur_mcp(self.supplier, jeton=KEY_SUPPLIER)
-        monkeypatch.setattr(choregos_adapters, "FAUX_ENTRA", self.directory)
+        self.directory = FakeEntra(expected_secret=KEY_DIRECTORY)
+        self.fleet = FakeMdm(expected_key=KEY_FLEET)
+        self.carrier = FakeCarrier(expected_key=KEY_FLEET)
+        self.readers = FakeBadges(expected_key=KEY_FLEET)
+        self.supplier = FakeSupplier()
+        self.server = mcp_server(self.supplier, token=KEY_SUPPLIER)
+        monkeypatch.setattr(choregos_adapters, "FAKE_ENTRA", self.directory)
         monkeypatch.setattr(choregos_adapters, "FAKE_MCP", self.server)
         for famille, fake in (
             ("mdm", self.fleet),
@@ -269,33 +269,32 @@ async def test_an_arrival_from_the_request_by_claude_to_the_check_on_d1(
         # D-10: the policy allowed the account and its group — the action is born approved and plays.
         status = await _wait_for(interprete, lambda s: s.get("waiting_until"), "D-10 awaited")
         assert status["waiting_until"].startswith((arrival - timedelta(days=10)).isoformat())
-        assert fake.directory.comptes == {}, "nothing before D-10"
+        assert fake.directory.accounts == {}, "nothing before D-10"
         await platform.env.sleep(timedelta(days=5, hours=1))
         await _state(client, ticket["work_item"], "accounts_created", "the account is created at D-10")
-        (account,) = fake.directory.comptes.values()
+        (account,) = fake.directory.accounts.values()
         assert (
-            account["userPrincipalName"] == "lea@acme.test"
-            and account["id"] in fake.directory.membres_de_l_unite
+            account["userPrincipalName"] == "lea@acme.test" and account["id"] in fake.directory.unit_members
         )
-        assert account["id"] in fake.directory.groupes["devs"]
+        assert account["id"] in fake.directory.groups["devs"]
 
         # The sensitive group: a re-authenticated person.
         await _approuver_l_action(client, project, "onboarding.sensitive_group")
         await _state(client, ticket["work_item"], "sensitive_granted", "the sensitive group is decided")
-        assert account["id"] in fake.directory.groupes["prod-read"]
+        assert account["id"] in fake.directory.groups["prod-read"]
 
         # D-7: the supplier order is decided; the fleet and the shipment follow its serial number.
         await _wait_for(interprete, lambda s: s.get("waiting_until"), "D-7 awaited")
-        assert fake.supplier.commandes == {}
+        assert fake.supplier.orders == {}
         await platform.env.sleep(timedelta(days=3))
         await _approuver_l_action(client, project, "onboarding.laptop")
         await _state(
             client, ticket["work_item"], "laptop_shipped", "the laptop is ordered, enrolled, shipped"
         )
-        (order,) = fake.supplier.commandes.values()
+        (order,) = fake.supplier.orders.values()
         serial = order["serial"]
-        assert fake.fleet.postes[serial] == {"serial": serial, "upn": "lea@acme.test", "state": "enrolled"}
-        (shipment,) = fake.carrier.envois.values()
+        assert fake.fleet.devices[serial] == {"serial": serial, "upn": "lea@acme.test", "state": "enrolled"}
+        (shipment,) = fake.carrier.shipments.values()
         assert (shipment["items"], shipment["address"]) == ([serial], fields["address"])
         assert {e["authorization"] for _, e, _ in fake.server.recues} == {f"Bearer {KEY_SUPPLIER}"}
 
@@ -341,10 +340,10 @@ async def test_a_departure_on_d0_cuts_everything_the_workstation_is_taken_back_r
     await login(client)
     await _organisation(client)
     project = await _hr_project(client)
-    identifiant = fake.directory.ajouter_compte("paul@acme.test")
-    fake.directory.groupes["devs"] = {identifiant}
+    identifiant = fake.directory.add_account("paul@acme.test")
+    fake.directory.groups["devs"] = {identifiant}
     fake.readers.badges["04D5E6F7"] = {"uid": "04D5E6F7", "holder": "paul@acme.test", "active": True}
-    fake.fleet.postes["PC-0042"] = {"serial": "PC-0042", "upn": "paul@acme.test", "state": "enrolled"}
+    fake.fleet.devices["PC-0042"] = {"serial": "PC-0042", "upn": "paul@acme.test", "state": "enrolled"}
     start = await platform.env.get_current_time()
     depart = (start + timedelta(days=3)).date()
     fields = {"full_name": "Paul Durand", "upn": "paul@acme.test", "last_day": depart.isoformat(),
@@ -365,15 +364,15 @@ async def test_a_departure_on_d0_cuts_everything_the_workstation_is_taken_back_r
             await client.post(f"/api/v1/work-items/{ticket['work_item']}/decisions", json={"kind": "approve"})
         ).status_code == 202
         await _wait_for(interprete, lambda s: s.get("waiting_until"), "D0 awaited")
-        assert fake.directory.comptes[identifiant]["accountEnabled"] is True, "nothing before D0"
+        assert fake.directory.accounts[identifiant]["accountEnabled"] is True, "nothing before D0"
         await platform.env.sleep(timedelta(days=3, hours=1))
         await _state(
             client, ticket["work_item"], "pickup_scheduled", "the access is cut and the pickup scheduled"
         )
-        assert fake.directory.comptes[identifiant]["accountEnabled"] is False
-        assert fake.directory.sessions_revoquees == ["paul@acme.test"]
+        assert fake.directory.accounts[identifiant]["accountEnabled"] is False
+        assert fake.directory.revoked_sessions == ["paul@acme.test"]
         assert fake.readers.badges["04D5E6F7"]["active"] is False
-        retour = fake.carrier.envois[f"{ticket['key']}-return"]
+        retour = fake.carrier.shipments[f"{ticket['key']}-return"]
         assert (retour["direction"], retour["address"]) == ("return", fields["address"])
 
         assert (await _request(client, ticket["work_item"]))["kind"] == "task"
@@ -384,7 +383,7 @@ async def test_a_departure_on_d0_cuts_everything_the_workstation_is_taken_back_r
         assert reception.status_code == 202, reception.text
         result = await interprete.result()
     assert result["state"] == "closed"
-    assert fake.fleet.postes["PC-0042"]["state"] == "wiped"
+    assert fake.fleet.devices["PC-0042"]["state"] == "wiped"
     actions = await _actions(client, project)
     assert {k: a["status"] for k, a in actions.items()} == {
         "offboarding.cut_access": "succeeded",

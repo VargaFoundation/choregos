@@ -90,7 +90,6 @@ declarer_une_admission = declare_admission  # lang: fr-ok alias:external
 admissions_declarees = declared_admissions  # lang: fr-ok alias:external
 verifier = check  # lang: fr-ok alias:external
 reinitialiser = reset  # lang: fr-ok alias:external
-_CONTROLES = _CHECKS  # lang: fr-ok alias:internal
 
 alias_names(
     __name__,

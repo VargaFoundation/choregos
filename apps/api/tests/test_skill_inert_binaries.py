@@ -13,7 +13,7 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from choregos_contracts import MAX_BINARY_BYTES, empreinte_de_skill, skill_file_bytes
+from choregos_contracts import MAX_BINARY_BYTES, skill_digest, skill_file_bytes
 from httpx import AsyncClient
 
 from .test_skills_from_git import ANTHROPICS, SHA1, _import, _skill_md, tarball
@@ -47,10 +47,10 @@ async def test_a_zip_with_an_image_is_stored_as_base64_and_digested_on_its_bytes
     version = (await client.get("/api/v1/orgs/varga/skills/branded/versions/1")).json()
     assert version["files"]["assets/logo.png"] == base64.b64encode(PNG).decode()
     assert skill_file_bytes("assets/logo.png", version["files"]["assets/logo.png"]) == PNG
-    assert version["digest"] == empreinte_de_skill(version["files"])
+    assert version["digest"] == skill_digest(version["files"])
     # the digest is over the bytes: the same bytes under another base64 spelling are the same digest
     spelled = {**version["files"], "assets/logo.png": base64.b64encode(PNG).decode()}
-    assert empreinte_de_skill(spelled) == version["digest"]
+    assert skill_digest(spelled) == version["digest"]
 
 
 @pytest.mark.parametrize(

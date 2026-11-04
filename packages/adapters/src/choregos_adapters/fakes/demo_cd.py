@@ -21,7 +21,7 @@ from typing import Any
 
 from choregos_core.domain import Change, Health, PromotionRef, RolloutState, Window
 
-from ..registry import OperationSpec, schema_d_entree
+from ..registry import OperationSpec, build_input_schema
 from .hr import BusinessFake
 
 _OBJECT_LIST: dict[str, Any] = {"type": "array", "items": {"type": "object"}}
@@ -31,23 +31,23 @@ DEMO_CD_OPERATIONS: tuple[OperationSpec, ...] = (
         "promote",
         "write",
         "promotes a release's changes to an environment (the same release twice: done)",
-        schema_d_entree("env", "release", changes=_OBJECT_LIST),
+        build_input_schema("env", "release", changes=_OBJECT_LIST),
     ),
-    OperationSpec("health", "read", "reads an application's health and revision", schema_d_entree("app")),
-    OperationSpec("rollout_status", "read", "reads an application's rollout", schema_d_entree("app")),
-    OperationSpec("abort_rollout", "write", "aborts an application's rollout", schema_d_entree("app")),
-    OperationSpec("current_revision", "read", "reads an application's revision", schema_d_entree("app")),
+    OperationSpec("health", "read", "reads an application's health and revision", build_input_schema("app")),
+    OperationSpec("rollout_status", "read", "reads an application's rollout", build_input_schema("app")),
+    OperationSpec("abort_rollout", "write", "aborts an application's rollout", build_input_schema("app")),
+    OperationSpec("current_revision", "read", "reads an application's revision", build_input_schema("app")),
     OperationSpec(
         "set_sync_window",
         "write",
         "sets an application's sync windows",
-        schema_d_entree("app", windows=_OBJECT_LIST),
+        build_input_schema("app", windows=_OBJECT_LIST),
     ),
     OperationSpec(
         "break_next_rollout",
         "write",
         "makes the next rollout analysis fail, to show a rollback",
-        schema_d_entree(),
+        build_input_schema(),
     ),
 )
 
@@ -157,8 +157,3 @@ class DemoCd:
 
 
 __all__ = ["DEMO_CD_OPERATIONS", "DemoCd", "FakeDemoCd"]
-
-# Former names that other code imports (ADR 0098 §3 (b)); `fakes/cd_de_demo.py` keeps the former path.
-OPERATIONS_CD_DE_DEMO = DEMO_CD_OPERATIONS  # lang: fr-ok alias:internal
-CdDeDemo = DemoCd  # lang: fr-ok alias:internal
-FakeCdDeDemo = FakeDemoCd  # lang: fr-ok alias:internal

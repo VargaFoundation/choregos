@@ -657,7 +657,7 @@ def _render_playbook_text(
         "production_indicators": production_indicator_sources(bundle.config, agent),
     }
     if agent is not None and agent.spec.instructions.strip():
-        from choregos_core.instructions import rendre_les_instructions
+        from choregos_core.instructions import render_instructions
         from jinja2 import TemplateError
         from temporalio.exceptions import ApplicationError
 
@@ -665,7 +665,7 @@ def _render_playbook_text(
         # template that does not render (a sandbox-refused escape included) is not retried: it
         # will not render any better the fifth time.
         try:
-            return frame(rendre_les_instructions(agent.spec.instructions, **variables))
+            return frame(render_instructions(agent.spec.instructions, **variables))
         except TemplateError as error:
             who = f"{agent.agent.slug}@{agent.version}"
             raise ApplicationError(

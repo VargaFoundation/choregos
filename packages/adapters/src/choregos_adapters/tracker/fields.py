@@ -45,7 +45,3 @@ def present_name(name: str, present: Container[str]) -> str | None:
     if former is not None and former in present:
         return former
     return None
-
-
-nom_actuel = current_name  # lang: fr-ok alias:internal
-nom_present = present_name  # lang: fr-ok alias:internal

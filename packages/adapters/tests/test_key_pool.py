@@ -17,7 +17,7 @@ import pytest
 from choregos_adapters.http import pool as pool_module
 from choregos_adapters.http.pool import Pool
 from choregos_adapters.marketdata import AlphaVantageProvider, RateLimited
-from choregos_adapters.registry import configuration_resolue, validate_config
+from choregos_adapters.registry import resolved_configuration, validate_config
 from choregos_adapters.web_search import BraveSearch, SearchError, SearchRateLimited
 from choregos_core.egress import hosts_of_config
 
@@ -158,16 +158,16 @@ def _sealed(values: dict[str, str]) -> tuple[dict[str, str], dict[str, str]]:
 
 def test_the_slots_of_a_pooled_field_become_a_list_in_slot_order() -> None:
     refs, values = _sealed({"api_key.10": "ten", "api_key": "one", "api_key.2": "two"})
-    resolved = configuration_resolue("web_search", "brave", {}, refs, preresolved=values)
+    resolved = resolved_configuration("web_search", "brave", {}, refs, preresolved=values)
     assert resolved["api_key"] == ["one", "two", "ten"]
     assert not any("." in k for k in resolved)
 
 
 def test_one_key_stays_a_string_and_a_type_that_pools_nothing_sees_no_slot() -> None:
     refs, values = _sealed({"api_key": "one"})
-    assert configuration_resolue("web_search", "brave", {}, refs, preresolved=values) == {"api_key": "one"}
+    assert resolved_configuration("web_search", "brave", {}, refs, preresolved=values) == {"api_key": "one"}
     refs, values = _sealed({"api_key": "one", "api_key.2": "two"})
-    firecrawl = configuration_resolue("web_search", "firecrawl", {}, refs, preresolved=values)
+    firecrawl = resolved_configuration("web_search", "firecrawl", {}, refs, preresolved=values)
     assert firecrawl == {"api_key": "one"}
 
 

@@ -9,8 +9,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from choregos_core.mcp import METHODE_INCONNUE, PARAMETRES_INVALIDES, negocier
-from choregos_core.mcp import erreur as _error
+from choregos_core.mcp import INVALID_PARAMS, METHOD_NOT_FOUND, negotiate
+from choregos_core.mcp import error as _error
 from choregos_core.mcp import ok as _ok
 
 from .client import InternalClient
@@ -41,7 +41,7 @@ class McpServer:
             return _ok(
                 request_id,
                 {
-                    "protocolVersion": negocier(params.get("protocolVersion", PROTOCOL_VERSION)),
+                    "protocolVersion": negotiate(params.get("protocolVersion", PROTOCOL_VERSION)),
                     "serverInfo": SERVER_INFO,
                     "capabilities": {"tools": {"listChanged": False}},
                 },
@@ -56,13 +56,13 @@ class McpServer:
             try:
                 result = await self.call(name, arguments)
             except KeyError as exc:
-                return _error(request_id, PARAMETRES_INVALIDES, f"missing argument: {exc}")
+                return _error(request_id, INVALID_PARAMS, f"missing argument: {exc}")
             except Exception as exc:  # an API outage must not kill the agent's session
                 return _ok(request_id, text_result(f"tool `{name}` failed: {exc}", is_error=True))
             return _ok(request_id, result)
         if method == "ping":
             return _ok(request_id, {})
-        return _error(request_id, METHODE_INCONNUE, f"unknown method: {method}")
+        return _error(request_id, METHOD_NOT_FOUND, f"unknown method: {method}")
 
     async def _catalogue_tools(self) -> list[dict[str, Any]]:
         if self._catalogue is None:

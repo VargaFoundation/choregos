@@ -55,23 +55,10 @@ def train_after_merge(workflow: Workflow) -> Transition | None:
     return None
 
 
-# Former names, still imported outside core until their own stories switch them (ADR 0098 §3 (b)).
-ApprobationDuTrain = TrainApproval  # lang: fr-ok alias:internal
-prend_le_train = takes_the_train  # lang: fr-ok alias:internal
-env_du_train = train_env  # lang: fr-ok alias:internal
-approbation_du_train = train_approval  # lang: fr-ok alias:internal
-train_apres_fusion = train_after_merge  # lang: fr-ok alias:internal
-
-
 __all__ = [
-    "ApprobationDuTrain",
     "TrainApproval",
-    "approbation_du_train",
-    "env_du_train",
-    "prend_le_train",
     "takes_the_train",
     "train_after_merge",
     "train_approval",
-    "train_apres_fusion",
     "train_env",
 ]

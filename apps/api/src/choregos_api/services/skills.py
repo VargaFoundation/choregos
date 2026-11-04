@@ -25,9 +25,9 @@ from typing import TYPE_CHECKING
 import yaml
 from choregos_contracts import (
     check_inert_binary,
-    empreinte_de_skill,
     encode_binary,
     is_inert_binary_path,
+    skill_digest,
     skill_file_bytes,
 )
 from choregos_core.compat import alias_names
@@ -178,7 +178,7 @@ def validate(files: dict[str, str], slug: str | None = None) -> FrontMatter:
 
 def digest(files: dict[str, str]) -> str:
     """The digest of a version: the runner recomputes it before laying the files down."""
-    return empreinte_de_skill(files)
+    return skill_digest(files)
 
 
 async def publish_version(  # noqa: PLR0913 - the old `_publier`, moved, plus one switch

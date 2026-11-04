@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 import httpx
-from choregos_core.instructions import erreurs_des_instructions
+from choregos_core.instructions import instruction_errors
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -344,7 +344,7 @@ def checked(
                 notes.append(f"dropped tool `{tool}` of `{name}`: no such operation")
         servers.append({"connector": name, "tools": tools})
     instructions = str(answer.get("instructions") or "").strip()
-    if instructions and (problems := erreurs_des_instructions(instructions)):
+    if instructions and (problems := instruction_errors(instructions)):
         notes.append(f"emptied the instructions: they do not render ({problems[0]})")
         instructions = ""
     elif not instructions:

@@ -99,7 +99,6 @@ Fournisseur = QuotaProvider  # lang: fr-ok alias:external
 declarer_un_quota = declare_quota  # lang: fr-ok alias:external
 quota_pour = quota_for  # lang: fr-ok alias:external
 reinitialiser = reset  # lang: fr-ok alias:external
-_FOURNISSEURS = _PROVIDERS  # lang: fr-ok alias:internal
 
 alias_names(
     __name__,

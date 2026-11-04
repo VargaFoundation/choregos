@@ -3,6 +3,6 @@
 
 from __future__ import annotations
 
-from .entra import OPERATIONS_ENTRA, EntraIdentity, HorsDeLUnite, OutsideUnit
+from .entra import OPERATIONS_ENTRA, EntraIdentity, OutsideUnit
 
-__all__ = ["OPERATIONS_ENTRA", "EntraIdentity", "HorsDeLUnite", "OutsideUnit"]
+__all__ = ["OPERATIONS_ENTRA", "EntraIdentity", "OutsideUnit"]

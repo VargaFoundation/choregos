@@ -99,21 +99,21 @@ async def _typee(famille: str, key: str, monkeypatch: pytest.MonkeyPatch) -> Cas
     """A `<family>: demo` connector, built by the registry, as the platform does."""
     import choregos_adapters
     from choregos_adapters import build
-    from choregos_adapters.fakes.rh import FAUX_PAR_FAMILLE
+    from choregos_adapters.fakes.hr import FAKES_BY_FAMILY
 
-    fake = FAUX_PAR_FAMILLE[famille](cle_attendue=SECRET)
+    fake = FAKES_BY_FAMILY[famille](expected_key=SECRET)
     monkeypatch.setitem(choregos_adapters.FAUX_METIER, famille, fake)
     client = build(famille, "demo", {"api_key": key})
     surcharges = {"create_return": {"reference": "reference-retour"}}
-    return Cas(_typees(f"{famille}/demo"), client.executer, fake.etat, client, surcharges)
+    return Cas(_typees(f"{famille}/demo"), client.execute, fake.state, client, surcharges)
 
 
 async def _en_mcp(fake: Any, key: str) -> Cas:
     """The same fake, served over MCP: its tools are discovered, and the client calls them."""
-    from choregos_adapters.fakes.rh import serveur_mcp
-    from choregos_adapters.mcp import ClientMcp
+    from choregos_adapters.fakes.hr import mcp_server
+    from choregos_adapters.mcp import McpClient
 
-    client = ClientMcp(URL, token=key, transport=serveur_mcp(fake, jeton=SECRET).transport())
+    client = McpClient(URL, token=key, transport=mcp_server(fake, token=SECRET).transport())
 
     async def call(name: str, params: dict[str, Any]) -> dict[str, Any]:
         result = await client.call_tool(name, params)
@@ -127,7 +127,7 @@ async def _en_mcp(fake: Any, key: str) -> Cas:
             for o in await client.list_tools()
         ]
 
-    cas = Cas([], call, fake.etat, client, {"create_return": {"reference": "reference-retour"}})
+    cas = Cas([], call, fake.state, client, {"create_return": {"reference": "reference-retour"}})
     if key == SECRET:
         cas.operations = await decouvrir()
     return cas
@@ -137,28 +137,28 @@ async def _servie(famille: str, key: str) -> Cas:
     """A `demo` connector that carries a `url`: the fake served by ONE process (`fakes/serveur.py`),
     what the dev deploys — its operations are the family's, declared, not discovered."""
     import httpx
-    from choregos_adapters.fakes.rh import GuichetDistant
-    from choregos_adapters.fakes.serveur import ApplicationDeDemo
-    from choregos_adapters.mcp import ClientMcp
+    from choregos_adapters.fakes.hr import RemoteDesk
+    from choregos_adapters.fakes.serveur import DemoApplication
+    from choregos_adapters.mcp import McpClient
 
-    app = ApplicationDeDemo(jeton=SECRET)
-    client = GuichetDistant(
-        ClientMcp(f"http://demo/{famille}/mcp", token=key, transport=httpx.ASGITransport(app=app))
+    app = DemoApplication(token=SECRET)
+    client = RemoteDesk(
+        McpClient(f"http://demo/{famille}/mcp", token=key, transport=httpx.ASGITransport(app=app))
     )
     surcharges = {"create_return": {"reference": "reference-retour"}}
-    return Cas(_typees(f"{famille}/demo"), client.executer, app.faux[famille].etat, client, surcharges)
+    return Cas(_typees(f"{famille}/demo"), client.execute, app.fakes[famille].state, client, surcharges)
 
 
 async def _entra(key: str) -> Cas:
     from choregos_adapters.fakes.entra import FakeEntra
     from choregos_adapters.identity import EntraIdentity
 
-    graph = FakeEntra(secret_attendu=SECRET)
+    graph = FakeEntra(expected_secret=SECRET)
     client = EntraIdentity(
         tenant_id="acme",
         client_id="choregos",
         client_secret=key,
-        administrative_unit_id=graph.unite,
+        administrative_unit_id=graph.unit,
         transport=graph.transport(),
     )
 
@@ -167,24 +167,24 @@ async def _entra(key: str) -> Cas:
 
         return copy.deepcopy(
             {
-                "comptes": graph.comptes,
-                "groupes": {g: sorted(m) for g, m in graph.groupes.items()},
-                "unite": sorted(graph.membres_de_l_unite),
-                "revoquees": sorted(set(graph.sessions_revoquees)),
+                "comptes": graph.accounts,
+                "groupes": {g: sorted(m) for g, m in graph.groups.items()},
+                "unite": sorted(graph.unit_members),
+                "revoquees": sorted(set(graph.revoked_sessions)),
             }
         )
 
-    return Cas(_typees("identity/entra"), client.executer, state, client)
+    return Cas(_typees("identity/entra"), client.execute, state, client)
 
 
 async def ouvrir(name: str, monkeypatch: pytest.MonkeyPatch, key: str = SECRET) -> Cas:
-    from choregos_adapters.fakes.rh import FAUX_PAR_FAMILLE, FakeFournisseur
+    from choregos_adapters.fakes.hr import FAKES_BY_FAMILY, FakeSupplier
 
     forme, _, famille = name.partition(":")
     if forme == "demo":
         return await _typee(famille, key, monkeypatch)
     if forme == "mcp":
-        fake = FakeFournisseur() if famille == "fournisseur" else FAUX_PAR_FAMILLE[famille]()
+        fake = FakeSupplier() if famille == "fournisseur" else FAKES_BY_FAMILY[famille]()
         return await _en_mcp(fake, key)
     if forme == "servi":
         return await _servie(famille, key)
@@ -250,11 +250,11 @@ def test_the_schema_and_the_signature_say_the_same_thing(name: str) -> None:
     import inspect
     import typing
 
-    from choregos_adapters.fakes.rh import FAUX_PAR_FAMILLE
+    from choregos_adapters.fakes.hr import FAKES_BY_FAMILY
     from choregos_adapters.identity import EntraIdentity
 
     forme, _, famille = name.partition(":")
-    implementation: type[Any] = FAUX_PAR_FAMILLE[famille] if forme == "demo" else EntraIdentity
+    implementation: type[Any] = FAKES_BY_FAMILY[famille] if forme == "demo" else EntraIdentity
     for operation in _typees(f"{famille}/demo" if forme == "demo" else "identity/entra"):
         methode = getattr(implementation, operation.name)
         params = [

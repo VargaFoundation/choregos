@@ -1,5 +1,4 @@
-"""The workflow DSL, gates, policy, instructions and presets are English (S45-07, ADR 0098), and every
-former name another package imports still resolves to the English object."""
+"""The workflow DSL, gates, policy, instructions and presets are English (S45-07, ADR 0098)."""
 
 from __future__ import annotations
 
@@ -72,33 +71,3 @@ def test_dsl_gates_policy_have_no_french() -> None:
     except RuntimeError:  # an exported tree without .git: nothing to scan
         pytest.skip("not a git checkout")
     assert [str(f) for f in found] == []
-
-
-def test_former_names_still_import() -> None:
-    from choregos_core import instructions
-    from choregos_core.dsl import dates, edition, exigences, requirements, trains
-    from choregos_core.gates import ACTION_REGLEE, ACTION_SETTLED  # lang: fr-ok
-
-    assert exigences.exigences is requirements.requirements  # lang: fr-ok
-    assert exigences.ORDRE is requirements.ORDER  # lang: fr-ok
-    assert exigences.Exigence is requirements.Requirement  # lang: fr-ok
-    assert trains.approbation_du_train is trains.train_approval  # lang: fr-ok
-    assert trains.env_du_train is trains.train_env  # lang: fr-ok
-    assert trains.train_apres_fusion is trains.train_after_merge  # lang: fr-ok
-    assert trains.prend_le_train is trains.takes_the_train  # lang: fr-ok
-    assert dates.DateIllisible is dates.UnreadableDate  # lang: fr-ok
-    assert dates.champ_de is dates.field_of  # lang: fr-ok
-    assert dates.echeance is dates.due_date  # lang: fr-ok
-    assert edition.EditionRefusee is edition.EditRefused  # lang: fr-ok
-    assert edition.editer is edition.edit  # lang: fr-ok
-    assert ACTION_REGLEE is ACTION_SETTLED  # lang: fr-ok
-    assert instructions.rendre_les_instructions is instructions.render_instructions  # lang: fr-ok
-    assert instructions.erreurs_des_instructions is instructions.instruction_errors  # lang: fr-ok
-
-
-def test_a_requirement_is_read_under_both_names() -> None:
-    from choregos_core.dsl.requirements import Requirement
-
-    requirement = Requirement("scm", ("a reason",))
-    assert requirement.capacite == requirement.capability == "scm"  # lang: fr-ok
-    assert requirement.raisons == requirement.reasons == ("a reason",)  # lang: fr-ok

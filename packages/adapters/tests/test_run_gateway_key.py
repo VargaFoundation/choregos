@@ -24,7 +24,7 @@ from choregos_adapters.fakes.agent_sandbox import FakeSandboxCluster
 from choregos_contracts import ExecutorKind, StageInput, StageResult, StageStatus
 from choregos_core.domain import RUN_GATEWAY_KEY_ENV, ExecRef, StageJobSpec
 
-from ._transport import Fil
+from ._transport import Wire
 
 KEY = "sk-run-gateway-key"
 NS = "choregos"
@@ -91,7 +91,7 @@ async def test_k8s_job_renew_replaces_the_token_and_keeps_the_key() -> None:
 
 
 async def test_tekton_puts_the_key_in_the_run_secret() -> None:
-    fil = Fil(
+    fil = Wire(
         {
             ("POST", f"{CORE_API}/namespaces/{NS}/secrets"): (201, {}),
             ("POST", f"{TEKTON_API}/namespaces/{NS}/pipelineruns"): (201, {}),
@@ -99,15 +99,15 @@ async def test_tekton_puts_the_key_in_the_run_secret() -> None:
     )
     client = KubernetesClient("https://k8s.test", token="sa", client=fil.client())
     await TektonExecutor(client).start(_spec())
-    secret = fil.corps(-2)
+    secret = fil.body(-2)
     assert secret["data"]["gateway-key"] == _b64(KEY)
-    assert KEY not in json.dumps(fil.corps(-1)), "never in the PipelineRun"
+    assert KEY not in json.dumps(fil.body(-1)), "never in the PipelineRun"
 
 
 async def test_tekton_rewrites_a_secret_left_by_an_earlier_attempt() -> None:
     """A run started again must not run with the key of an attempt rolled back (revoked or unbooked)."""
     path = f"{CORE_API}/namespaces/{NS}/secrets/run-r-1"
-    fil = Fil(
+    fil = Wire(
         {
             ("GET", path): (200, {"data": {"gateway-key": _b64("sk-old")}}),
             ("PUT", path): (200, {}),
@@ -116,7 +116,7 @@ async def test_tekton_rewrites_a_secret_left_by_an_earlier_attempt() -> None:
     )
     client = KubernetesClient("https://k8s.test", token="sa", client=fil.client())
     await TektonExecutor(client).start(_spec())
-    put = next(r for r in fil.requetes if r.method == "PUT")
+    put = next(r for r in fil.requests if r.method == "PUT")
     assert json.loads(put.content)["data"]["gateway-key"] == _b64(KEY)
 
 

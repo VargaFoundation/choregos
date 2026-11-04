@@ -96,10 +96,10 @@ async def test_a_notifier_that_is_down_leaves_the_alert_to_the_next_try(setup: F
     await _with_cap(setup, 10.0)
     notifier: Any = setup.adapters.notify
     await _spend_as_agent(setup, 6.0, 0)
-    notifier.panne = "slack is down"
+    notifier.failure = "slack is down"
     await _tell(setup)
     assert notifier.sent == []
-    notifier.panne = None
+    notifier.failure = None
     await _tell(setup)
     assert len(notifier.sent) == 1
 

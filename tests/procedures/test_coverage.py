@@ -43,7 +43,7 @@ SOURCE_FIELDS = {
 
 def connector_targets() -> list[str]:
     """Every shipped `kind/type`, deprecated aliases included, fakes (test doubles) excluded."""
-    return sorted(f"{kind}/{name}" for (kind, name) in choregos_adapters._SPECS_LIVREES if name != "fake")
+    return sorted(f"{kind}/{name}" for (kind, name) in choregos_adapters._SHIPPED_SPECS if name != "fake")
 
 
 def missing_connector_procedures(targets: list[str], catalogue: core.Catalogue = CATALOGUE) -> list[str]:

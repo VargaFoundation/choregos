@@ -10,7 +10,6 @@ from typing import Any
 import httpx
 
 Reply = tuple[int, Any] | httpx.Response | Exception
-Reponse = Reply  # lang: fr-ok alias:internal
 
 
 @dataclass
@@ -23,10 +22,6 @@ class Wire:
 
     routes: dict[tuple[str, str], Reply | list[Reply]] = field(default_factory=dict)
     requests: list[httpx.Request] = field(default_factory=list)
-
-    @property
-    def requetes(self) -> list[httpx.Request]:  # lang: fr-ok alias:internal
-        return self.requests
 
     def client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(transport=httpx.MockTransport(self._reply))
@@ -53,15 +48,8 @@ class Wire:
     def body(self, index: int = -1) -> Any:
         return json.loads(self.requests[index].content)
 
-    corps = body  # lang: fr-ok alias:internal
-
     def sent(self, method: str | None = None) -> list[tuple[str, str]]:
         return [(r.method, r.url.path) for r in self.requests if method is None or r.method == method]
-
-    envoyees = sent  # lang: fr-ok alias:internal
-
-
-Fil = Wire  # lang: fr-ok alias:internal
 
 
 def no_wait(monkeypatch: Any, module: Any) -> list[float]:
@@ -73,9 +61,6 @@ def no_wait(monkeypatch: Any, module: Any) -> list[float]:
 
     monkeypatch.setattr(module.asyncio, "sleep", _sleep)
     return waits
-
-
-sans_attente = no_wait  # lang: fr-ok alias:internal
 
 
 def handler(fn: Callable[[httpx.Request], httpx.Response]) -> httpx.AsyncClient:

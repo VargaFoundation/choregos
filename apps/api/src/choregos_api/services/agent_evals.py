@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from choregos_core.instructions import rendre_les_instructions
+from choregos_core.instructions import render_instructions
 from jinja2 import TemplateError
 
 from ..errors import ApiError
@@ -32,7 +32,7 @@ def evaluate(spec: AgentSpec, cases: Iterable[AgentEvalCase]) -> list[AgentEvalR
         # instruction reading `ticket.fields.tracker` behind a guard renders (S51-04).
         ticket = {"key": "EVAL-1", "title": sample.title, "body": sample.body, "fields": dict(sample.fields)}
         try:
-            text = rendre_les_instructions(spec.instructions, ticket=ticket)
+            text = render_instructions(spec.instructions, ticket=ticket)
         except TemplateError as error:
             results.append(
                 AgentEvalResult(name=case.name, passed=False, error=f"{type(error).__name__}: {error}")

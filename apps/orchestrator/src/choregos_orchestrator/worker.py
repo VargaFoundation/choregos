@@ -115,14 +115,14 @@ async def start_knowledge_sync_loops() -> list[str]:
 
 
 async def run_worker(queues: list[str]) -> None:
-    from choregos_adapters import charger_les_greffons
+    from choregos_adapters import load_extensions
     from temporalio.client import Client
     from temporalio.worker import Worker
 
     # Extensions also declare EFFECTS of governed actions (ADR 0035): the API knows them in order
     # to propose, and the worker must know them in order to PLAY them. It did not load them, so an
     # extension's effect was "unknown" in the very place where it had to run (S20-08).
-    charger_les_greffons()  # lang: fr-ok (renamed by S45-10)
+    load_extensions()  # lang: fr-ok (renamed by S45-10)
     settings = get_settings()
     client = await Client.connect(settings.temporal_address, namespace=settings.temporal_namespace)
     workers = [

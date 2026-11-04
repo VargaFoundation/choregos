@@ -522,9 +522,9 @@ def _clients(prepared: _Prepared) -> dict[str, dict[str, str | None]]:
     """An external client's `catalogue.client` and `catalogue.reach` (ADR 0040): which client the
     Integrations page offers it as, and whether it calls from its vendor's cloud."""
     return {
-        slug: {"client": entry.client, "reach": entry.portee}
+        slug: {"client": entry.client, "reach": entry.reach}
         for slug, entry in sorted(prepared.agents.items())
-        if entry.genre == "external"
+        if entry.kind == "external"
     }
 
 

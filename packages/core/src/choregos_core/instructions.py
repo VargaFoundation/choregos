@@ -53,17 +53,8 @@ def instruction_errors(source: str) -> list[str]:
     return []
 
 
-# Former names, still imported outside core until their own stories switch them (ADR 0098 §3 (b)).
-VARIABLES_D_EXEMPLE = SAMPLE_VARIABLES  # lang: fr-ok alias:internal
-rendre_les_instructions = render_instructions  # lang: fr-ok alias:internal
-erreurs_des_instructions = instruction_errors  # lang: fr-ok alias:internal
-
-
 __all__ = [
     "SAMPLE_VARIABLES",
-    "VARIABLES_D_EXEMPLE",
-    "erreurs_des_instructions",
     "instruction_errors",
     "render_instructions",
-    "rendre_les_instructions",
 ]

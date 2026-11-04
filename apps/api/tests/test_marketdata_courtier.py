@@ -23,7 +23,7 @@ def marche(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     from choregos_adapters.fakes.marketdata import FakeMarketData
 
     faux = FakeMarketData()
-    monkeypatch.setattr(choregos_adapters, "FAUX_MARKETDATA", faux)
+    monkeypatch.setattr(choregos_adapters, "FAKE_MARKETDATA", faux)
     monkeypatch.setenv("CONNECTOR_TEST_MARKETDATA_KEY", CLE)
     yield faux
 

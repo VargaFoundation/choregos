@@ -30,24 +30,15 @@ ROOT_NAMES = (
     "FAKE_MCP_GATEWAY",
     "FAKE_NETOPS",
     "FAKE_WEB_SEARCH",
-    "FAUX_ENTRA",
-    "FAUX_MARKETDATA",
     "FAUX_METIER",
-    "FAUX_WEB_SEARCH",
     "GATEWAY_SERVER_PATTERN",
-    "GROUPE_DE_GREFFONS",
     "MCP_GATEWAY_TYPE",
-    "POLITIQUES",
     "_SHIPPED_SPECS",
-    "_SPECS_LIVREES",
     "_github_client",
     "_jira_tracker",
     "_register_builtins",
-    "charger_les_greffons",
-    "configuration_resolue",
     "fake_mcp_gateway",
     "load_extensions",
-    "type_par_defaut",
 )
 
 
@@ -108,7 +99,6 @@ def test_the_spec_table_is_one_object() -> None:
     from choregos_adapters import specs
 
     assert choregos_adapters._SHIPPED_SPECS is specs._SHIPPED_SPECS
-    assert choregos_adapters._SPECS_LIVREES is specs._SHIPPED_SPECS
 
 
 def test_a_rebound_fake_is_the_one_the_factories_use(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -130,4 +120,3 @@ def test_a_fake_singleton_is_created_on_the_package(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(choregos_adapters, "FAKE_WEB_SEARCH", None)
     created = builtins._fake_web_search({})
     assert choregos_adapters.FAKE_WEB_SEARCH is created
-    assert choregos_adapters.FAUX_WEB_SEARCH is created  # lang: fr-ok alias:internal

@@ -132,7 +132,7 @@ class Facts:
     #: names of the active workflows, and the default one
     workflows: tuple[str, ...]
     default_workflow: str | None
-    #: (capability, reasons) as `exigences` derives them
+    #: (capability, reasons) as `requirements` derives them
     requirements: tuple[tuple[str, tuple[str, ...]], ...]
     connectors: dict[str, ConnectorFact]
     #: capabilities the deployment provides on its own
@@ -812,7 +812,7 @@ def _deployment_provides(capability: str) -> bool:
 
 async def _connector_facts(session: AsyncSession, project: Project) -> dict[str, ConnectorFact]:
     from choregos_adapters import spec_of
-    from choregos_adapters.registry import references_de_secret
+    from choregos_adapters.registry import secret_references
 
     from ..secret_store import secret_states
 
@@ -823,7 +823,7 @@ async def _connector_facts(session: AsyncSession, project: Project) -> dict[str,
     for row in rows:
         spec = spec_of(row.kind, row.type)
         expected = tuple(s for s in (spec.secret_fields if spec else ()) if s not in OPTIONAL_SECRETS)
-        references = references_de_secret(row.kind, row.type, dict(row.secret_refs or {}), row.secret_ref)
+        references = secret_references(row.kind, row.type, dict(row.secret_refs or {}), row.secret_ref)
         states = await secret_states(session, project.org_id, references)
         is_set = frozenset(
             s.field
@@ -1015,7 +1015,7 @@ async def _direct_mcp_connectors(session: AsyncSession, project: Project) -> tup
 
 
 async def load_facts(session: AsyncSession, project: Project, org_slug: str) -> Facts:
-    from choregos_core.dsl.exigences import exigences
+    from choregos_core.dsl.requirements import requirements as workflow_requirements
 
     config = ProjectConfig.model_validate(project.config)
     workflow_rows = (
@@ -1030,7 +1030,7 @@ async def load_facts(session: AsyncSession, project: Project, org_slug: str) -> 
         .all()
     )
     workflows = [workflow_model(row) for row in workflow_rows]
-    requirements = tuple((e.capacite, tuple(e.raisons)) for e in exigences(workflows))
+    requirements = tuple((e.capability, tuple(e.reasons)) for e in workflow_requirements(workflows))
     connectors = await _connector_facts(session, project)
     policy = policy_model(await active_policy(session, project.id))
     known_groups = await groups_known_in(session, project.org_id)

@@ -126,7 +126,7 @@ async def test_cycles_across_monday_midnight_report_once_per_week(
 async def test_the_report_without_a_notifier_is_still_returned(setup: Fixture) -> None:
     """#497: a notifier failure (no Slack on the tenant) never fails the report that notifies."""
     await _closed_tickets(setup.project_id, count=3, attempts=1, cost=1.0)
-    setup.adapters.notify.panne = (
+    setup.adapters.notify.failure = (
         "[slack] ni `bot_token` ni `webhook_url` configurés"  # lang: fr-ok (the verbatim upstream error)
     )
 

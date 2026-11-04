@@ -12,7 +12,7 @@ from datetime import datetime, time
 from choregos_core import utcnow
 from choregos_core.compat import alias_names
 from choregos_core.hosted import native_sidecars_refusal
-from choregos_core.instructions import erreurs_des_instructions
+from choregos_core.instructions import instruction_errors
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -50,7 +50,7 @@ def digest(spec: AgentSpec) -> str:
 def version_errors(spec: AgentSpec) -> None:
     """Instructions that would not render (syntax, unknown variable, or access refused by the
     sandbox) are refused at publication, not discovered at the first run."""
-    errors = erreurs_des_instructions(spec.instructions)
+    errors = instruction_errors(spec.instructions)
     if errors:
         raise unprocessable(
             "the agent's instructions do not render",

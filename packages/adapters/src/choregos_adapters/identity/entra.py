@@ -21,7 +21,7 @@ import httpx
 
 from ..errors import AdapterError, UpstreamError
 from ..http.rest import RestClient
-from ..registry import schema_d_entree as _schema
+from ..registry import build_input_schema as _schema
 
 _UPN = _schema("upn")
 _GROUP = _schema("upn", "group_id")
@@ -66,10 +66,6 @@ class EntraIdentity:
         self.login_url = login_url.rstrip("/")
         self._http = httpx.AsyncClient(timeout=20.0, transport=transport)
         self._token: tuple[str, float] | None = None
-
-    @property
-    def unite(self) -> str | None:  # lang: fr-ok alias:internal
-        return self.unit
 
     async def _graph(self) -> RestClient:
         if self._token is None or self._token[1] < time.monotonic() + 60:
@@ -201,8 +197,6 @@ class EntraIdentity:
         result: dict[str, Any] = await getattr(self, operation)(**params)
         return result
 
-    executer = execute  # lang: fr-ok alias:internal
-
     async def test(self) -> dict[str, Any]:
         await self._graph()
         return {"ok": True, "tenant": self.tenant_id, "administrative_unit": self.unit}
@@ -212,7 +206,3 @@ def _throwaway_password() -> str:
     import secrets
 
     return "C" + secrets.token_urlsafe(24) + "!7a"
-
-
-# Former names that other code imports (ADR 0098 §3 (b)).
-HorsDeLUnite = OutsideUnit  # lang: fr-ok alias:internal

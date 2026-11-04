@@ -238,8 +238,6 @@ class MarketDataProvider:
             return await self.get_instrument(params.get("symbol"))  # type: ignore[arg-type]
         raise AdapterError(f"{type(self).__name__} has no operation {operation}")
 
-    executer = execute  # lang: fr-ok alias:internal
-
     # ── helpers ─────────────────────────────────────────────────────────────────────────────
     def scrub(self, text: str) -> str:
         """No key leaves in a message, whatever the provider echoes."""

@@ -21,7 +21,7 @@ import sys
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..instructions import rendre_les_instructions
+from ..instructions import render_instructions
 from . import CatalogueEntry, EvalCase, catalogue, entry
 
 
@@ -39,7 +39,7 @@ def evaluate(case: dict[str, Any], agent: CatalogueEntry | None = None) -> Agent
     agent = agent or entry(str(case["agent"]))
     if agent is None:
         return AgentEvalResult(str(case["agent"]), False, 0.0, missing=["<no such catalogue agent>"])
-    rendered = rendre_les_instructions(
+    rendered = render_instructions(
         str(agent.document["spec"].get("instructions", "")),
         inputs=dict(case.get("inputs") or {}),
         # What the platform says the project can measure in production (S22-48); none by default.

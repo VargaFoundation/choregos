@@ -11,9 +11,9 @@ import sys
 
 from choregos_core.compat import replace_module
 
-from .server import ApplicationDeDemo, application, main
+from .server import DemoApplication, application, main
 
-__all__ = ["ApplicationDeDemo", "application", "main"]
+__all__ = ["DemoApplication", "application", "main"]
 
 if __name__ == "__main__":  # pragma: no cover - the former container command
     main()

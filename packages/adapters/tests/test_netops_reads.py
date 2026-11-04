@@ -42,7 +42,7 @@ def _pfsense(fake: FakePfSense, key: str = KEY) -> PfSenseFirewall:
 
 async def test_pfsense_reads_rules_with_the_key_in_its_header_and_hands_back_data_only() -> None:
     fake = FakePfSense(api_key=KEY)
-    rules = await _pfsense(fake).executer("list_firewall_rules", {"interface": "wan"})
+    rules = await _pfsense(fake).execute("list_firewall_rules", {"interface": "wan"})
     assert [r["descr"] for r in rules["rules"]] == ["WAN to the reverse proxy", "Default deny on WAN"]
     assert rules["count"] == 2
     assert "response_id" not in json.dumps(rules), "the envelope stays in the connector"
@@ -60,17 +60,17 @@ async def test_pfsense_reads_rules_with_the_key_in_its_header_and_hands_back_dat
     ],
 )
 async def test_pfsense_reads_each_declared_collection(operation: str, field: str, expected: int) -> None:
-    result = await _pfsense(FakePfSense()).executer(operation, {})
+    result = await _pfsense(FakePfSense()).execute(operation, {})
     assert len(result[field]) == expected
 
 
 async def test_pfsense_refuses_a_wrong_key_and_an_undeclared_operation() -> None:
     fake = FakePfSense(api_key=KEY)
     with pytest.raises(UpstreamError) as refused:
-        await _pfsense(fake, "someone-else").executer("list_aliases", {})
+        await _pfsense(fake, "someone-else").execute("list_aliases", {})
     assert refused.value.status_code == 401
     with pytest.raises(AdapterError, match="no operation"):
-        await _pfsense(fake).executer("delete_everything", {})
+        await _pfsense(fake).execute("delete_everything", {})
     with pytest.raises(AdapterError, match="no API key"):
         PfSenseFirewall(base_url="https://fw", api_key="")
 
@@ -147,11 +147,11 @@ def _cilium(kubernetes: FakeCiliumKubernetes) -> CiliumNetwork:
 
 async def test_cilium_lists_policies_without_their_managed_fields() -> None:
     cilium = _cilium(FakeCiliumKubernetes(token="reader-token"))
-    shop = await cilium.executer("list_network_policies", {"namespace": "shop"})
+    shop = await cilium.execute("list_network_policies", {"namespace": "shop"})
     assert [p["name"] for p in shop["policies"]] == ["api-ingress", "api-egress"]
     assert shop["policies"][0]["spec"]["ingress"][0]["fromEndpoints"] == [{"matchLabels": {"app": "gateway"}}]
     assert "managedFields" not in json.dumps(shop)
-    clusterwide = await cilium.executer("list_clusterwide_policies", {})
+    clusterwide = await cilium.execute("list_clusterwide_policies", {})
     assert [(p["kind"], p["name"]) for p in clusterwide["policies"]] == [
         ("CiliumClusterwideNetworkPolicy", "allow-dns")
     ]
@@ -162,7 +162,7 @@ async def test_cilium_is_read_only_by_construction() -> None:
     kubernetes = FakeCiliumKubernetes(token="reader-token")
     cilium = _cilium(kubernetes)
     for operation in ("list_network_policies", "list_clusterwide_policies", "get_flows"):
-        await cilium.executer(operation, {})
+        await cilium.execute(operation, {})
     assert {method for method, _ in kubernetes.received} == {"GET"}
     verbs = {name for name in vars(ReadOnlyKubernetes) if not name.startswith("_")}
     assert verbs == {"get"}
@@ -172,16 +172,16 @@ async def test_cilium_is_read_only_by_construction() -> None:
 
 async def test_the_recorded_trace_shows_frontend_dropped_by_policy_on_its_way_to_api() -> None:
     cilium = _cilium(FakeCiliumKubernetes())
-    dropped = await cilium.executer("get_flows", {"namespace": "shop", "verdict": "DROPPED"})
+    dropped = await cilium.execute("get_flows", {"namespace": "shop", "verdict": "DROPPED"})
     assert dropped["count"] == dropped["dropped"] == 3
     flow = dropped["flows"][0]
     assert flow["drop_reason"] == "POLICY_DENIED"
     assert (flow["direction"], flow["protocol"]) == ("INGRESS", "TCP")
     assert flow["source"]["pod"].startswith("frontend-") and "k8s:app=frontend" in flow["source"]["labels"]
     assert flow["destination"]["pod"].startswith("api-") and flow["destination"]["port"] == 8080
-    allowed = await cilium.executer("get_flows", {"pod": "gateway", "verdict": "FORWARDED"})
+    allowed = await cilium.execute("get_flows", {"pod": "gateway", "verdict": "FORWARDED"})
     assert {f["destination"]["port"] for f in allowed["flows"]} == {8080}, "gateway reaches api:8080"
-    assert (await cilium.executer("get_flows", {"last": 2}))["count"] == 2
+    assert (await cilium.execute("get_flows", {"last": 2}))["count"] == 2
 
 
 def test_an_unknown_verdict_is_refused_before_hubble_is_asked() -> None:
@@ -231,13 +231,13 @@ async def test_hubble_cli_failures_are_named(tmp_path: Path) -> None:
 async def test_nginx_reads_its_configuration_from_the_repository_and_stays_in_its_root() -> None:
     repo = FakeRepo()
     nginx = NginxConfig(repo, root="nginx")
-    listed = await nginx.executer("list_nginx_files", {})
+    listed = await nginx.execute("list_nginx_files", {})
     assert listed["files"] == ["nginx/conf.d/shop.conf", "nginx/nginx.conf"]
-    read = await nginx.executer("read_nginx_file", {"path": "conf.d/shop.conf"})
+    read = await nginx.execute("read_nginx_file", {"path": "conf.d/shop.conf"})
     assert read["path"] == "nginx/conf.d/shop.conf" and "proxy_pass http://shop_api" in read["content"]
     for outside in ("../secrets/tls.key", "/../etc/passwd", "nginx/../../etc/shadow"):
         with pytest.raises(AdapterError, match="outside the configuration root"):
-            await nginx.executer("read_nginx_file", {"path": outside})
+            await nginx.execute("read_nginx_file", {"path": outside})
     assert repo.reads == ["nginx/conf.d/shop.conf"]
 
 

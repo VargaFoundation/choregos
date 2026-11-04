@@ -213,9 +213,6 @@ def skill_digest(files: dict[str, str]) -> str:
     return "sha256:" + hasher.hexdigest()
 
 
-empreinte_de_skill = skill_digest  # lang: fr-ok alias:internal
-
-
 class StageMemory(Strict):
     """One memory a run reads and/or writes, resolved by the platform (S40-11, ADR 0075)."""
 

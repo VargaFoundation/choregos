@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from choregos_core.secrets import est_une_reference_du_magasin
+from choregos_core.secrets import is_store_reference
 from fastapi import APIRouter, Path, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -349,7 +349,7 @@ async def update_org_connector(
     operator_refs = [
         r for f, r in (instance.secret_refs or {}).items() if f not in refs_in and f not in values
     ]
-    deployment_held = any(not est_une_reference_du_magasin(r) for r in [*refs_in.values(), *operator_refs])
+    deployment_held = any(not is_store_reference(r) for r in [*refs_in.values(), *operator_refs])
     may_reference = not deployment_held or await is_instance_admin(session, principal)
     if body.config is not None and not may_reference:
         raise unprocessable(

@@ -109,7 +109,7 @@ class OrchestratorSettings(BaseSettings):
         The contract is simple, and it holds for every executor: the platform announces a local
         address, and someone serves it: a sidecar under Tekton, the runner everywhere else. A
         NON-local address is served by no one automatically: it is up to the deployment to provide
-        the server, and `demarrer_si_absent` then abstains, on purpose.
+        the server, and `start_if_absent` then abstains, on purpose.
         """
         return self.tools_mcp_url
 

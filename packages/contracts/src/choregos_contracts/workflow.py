@@ -601,9 +601,3 @@ def transition_effect(transition: Transition) -> Literal["open_pr", "merge_pr"] 
 def is_production_state(name: str, state: State | None) -> bool:
     """A production state: written (`production: true`), otherwise deduced from its name prefix."""
     return bool(state is not None and state.production) or name.startswith(PRODUCTION_PREFIX)
-
-
-PREFIXE_PRODUCTION = PRODUCTION_PREFIX  # lang: fr-ok alias:internal
-effet_implicite = implicit_effect  # lang: fr-ok alias:internal
-effet_de_la_transition = transition_effect  # lang: fr-ok alias:internal
-est_un_etat_de_production = is_production_state  # lang: fr-ok alias:internal

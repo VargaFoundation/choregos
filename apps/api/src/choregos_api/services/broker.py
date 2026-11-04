@@ -488,7 +488,7 @@ async def _call(
         else:
             # A connector that is not MCP (a directory): its declared operation, by its name,
             # returned in the format of an MCP result — the agent reads the same everywhere.
-            raw = await client.executer(tool.operation.name, arguments)
+            raw = await client.execute(tool.operation.name, arguments)
             result = {"content": [{"type": "text", "text": _json(raw)}], "structuredContent": raw}
     except McpError as mcp_error:
         return 502, {"error": redact(str(mcp_error))}

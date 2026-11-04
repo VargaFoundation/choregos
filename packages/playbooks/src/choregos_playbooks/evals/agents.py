@@ -123,7 +123,7 @@ async def evidence(case: dict[str, Any]) -> dict[str, Any]:
     for call in case.get("evidence", []):
         # The kind's FAKE, whatever `CHOREGOS_FAKES` says: the evidence is the recording, by design.
         connector = choregos_adapters.build(str(call["kind"]), "fake", {})
-        results[str(call["tool"])] = await connector.executer(
+        results[str(call["tool"])] = await connector.execute(
             str(call["operation"]), dict(call.get("arguments") or {})
         )
     return results
@@ -137,9 +137,9 @@ def _ask_the_model(case: dict[str, Any], instructions: str, tools: dict[str, Any
     key = os.environ.get("CHOREGOS_GATEWAY_KEY", "")
     if not base_url or not key:
         return None
-    from choregos_core.instructions import rendre_les_instructions
+    from choregos_core.instructions import render_instructions
 
-    system = rendre_les_instructions(instructions)
+    system = render_instructions(instructions)
     user = (
         str(case.get("task", ""))
         + "\n\n"

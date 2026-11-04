@@ -353,10 +353,10 @@ async def get_project_tools(ctx: ProjectCtx, session: Db) -> dict[str, Any]:
                 "source": "mcp" if tool.mcp is not None else "http",
                 "groups": tool.groups,
                 "allowed": (everything or tool.name in authorised)
-                and tool.ouvert_a(groups)
+                and tool.open_to(groups)
                 and not tool.may_write,
             }
-            for tool in catalogue().outils
+            for tool in catalogue().tools
         ],
         "allows_all": everything,
     }

@@ -16,10 +16,10 @@ from typing import Any
 import httpx
 from choregos_core.catalogue import (
     Catalogue,
-    OutilCatalogue,
-    charger_catalogue,
-    construire_requete,
-    valider_les_arguments,
+    CatalogueTool,
+    build_request,
+    load_catalogue,
+    validate_arguments,
 )
 from choregos_core.compat import alias_names
 
@@ -30,7 +30,7 @@ def catalogue() -> Catalogue:
     path = os.environ.get("CHOREGOS_TOOL_CATALOG", "")
     if not path or not Path(path).is_file():
         return Catalogue()
-    return charger_catalogue(Path(path).read_text(encoding="utf-8"))
+    return load_catalogue(Path(path).read_text(encoding="utf-8"))
 
 
 def clear_cache() -> None:
@@ -39,10 +39,10 @@ def clear_cache() -> None:
 
 def project_tools(
     allowed: list[str], groups: list[str] | None = None, *, include_writers: bool = False
-) -> list[OutilCatalogue]:
+) -> list[CatalogueTool]:
     """What a project may call. Empty list = nothing, and that is the default.
 
-    A tool that may write (`OutilCatalogue.may_write`) is dropped unless `include_writers` is set:
+    A tool that may write (`CatalogueTool.may_write`) is dropped unless `include_writers` is set:
     writes reach a third party only as governed actions (ADR 0034 §7). Only the direct call uses
     `include_writers=True`, to answer the refusal with the way out.
 
@@ -56,16 +56,14 @@ def project_tools(
     # tool); the project says what IT uses (`tools`). A project that declares a tool reserved for
     # a group it does not belong to does not get it, otherwise the project's list would become the
     # only control, and the project's team can edit it.
-    open_tools = [
-        o for o in catalogue().outils if o.ouvert_a(groups) and (include_writers or not o.may_write)
-    ]
+    open_tools = [o for o in catalogue().tools if o.open_to(groups) and (include_writers or not o.may_write)]
     if allowed == ["*"]:
         return open_tools
     permitted = set(allowed)
     return [o for o in open_tools if o.name in permitted]
 
 
-async def call(tool: OutilCatalogue, arguments: dict[str, Any]) -> tuple[int, Any]:
+async def call(tool: CatalogueTool, arguments: dict[str, Any]) -> tuple[int, Any]:
     """Calls the provider: direct HTTP or a remote MCP server.
 
     Returns the code and the body, never the key. And above all: **the run's token does not leave**.
@@ -74,11 +72,11 @@ async def call(tool: OutilCatalogue, arguments: dict[str, Any]) -> tuple[int, An
     something to it only.
     """
     # Before any call, and for BOTH paths: an announced schema must be enforced.
-    valider_les_arguments(tool, arguments)
+    validate_arguments(tool, arguments)
     if tool.mcp is not None:
         return await _call_mcp(tool, arguments)
     key = os.environ.get(tool.credential_env, "") if tool.credential_env else None
-    request = construire_requete(tool, arguments, key)
+    request = build_request(tool, arguments, key)
     async with httpx.AsyncClient() as client:
         response = await client.request(
             request["method"],
@@ -96,7 +94,7 @@ async def call(tool: OutilCatalogue, arguments: dict[str, Any]) -> tuple[int, An
         return response.status_code, {"text": response.text[:20_000]}
 
 
-async def _call_mcp(tool: OutilCatalogue, arguments: dict[str, Any]) -> tuple[int, Any]:
+async def _call_mcp(tool: CatalogueTool, arguments: dict[str, Any]) -> tuple[int, Any]:
     """JSON-RPC `tools/call` on an MCP server outside the organisation.
 
     What leaves: the tool's name AT THE REMOTE, the agent's arguments, and the catalogue's headers,

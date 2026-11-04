@@ -34,15 +34,15 @@ from choregos_contracts import (
     Control,
     type_of_filename,
 )
-from choregos_core.mcp import ERREUR_DE_SYNTAXE as PARSE_ERROR
-from choregos_core.mcp import ERREUR_INTERNE as INTERNAL_ERROR
 from choregos_core.mcp import (
-    METHODE_INCONNUE,
-    PARAMETRES_INVALIDES,
-    REQUETE_INVALIDE,
-    defaut_du_message,
-    erreur,
-    est_notification,
+    INTERNAL_ERROR,
+    INVALID_PARAMS,
+    INVALID_REQUEST,
+    METHOD_NOT_FOUND,
+    PARSE_ERROR,
+    error,
+    is_notification,
+    message_defect,
     ok,
 )
 from fastapi import APIRouter, Request
@@ -321,19 +321,19 @@ async def endpoint(org: str, request: Request, session: Db, settings: Config) ->
     try:
         message = json.loads(body)
     except (json.JSONDecodeError, UnicodeDecodeError):
-        return JSONResponse(erreur(None, PARSE_ERROR, "unreadable body: JSON is expected"), status_code=400)
-    fault = defaut_du_message(message)
+        return JSONResponse(error(None, PARSE_ERROR, "unreadable body: JSON is expected"), status_code=400)
+    fault = message_defect(message)
     if fault is not None:
         ident = message.get("id") if isinstance(message, dict) else None
-        return JSONResponse(erreur(ident, REQUETE_INVALIDE, fault), status_code=400)
-    if est_notification(message):
+        return JSONResponse(error(ident, INVALID_REQUEST, fault), status_code=400)
+    if is_notification(message):
         return Response(status_code=202)
     ident, method = message.get("id"), message["method"]
     params = message.get("params") or {}
     outcome = "ok"
     try:
         if not isinstance(params, dict):
-            raise Fault(PARAMETRES_INVALIDES, "`params` is an object")
+            raise Fault(INVALID_PARAMS, "`params` is an object")
         if method in {"message/stream", "tasks/resubscribe"}:
             stream = await _open_stream(door, settings, ident, method, params)
             await _audit(door, method, outcome)
@@ -342,7 +342,7 @@ async def endpoint(org: str, request: Request, session: Db, settings: Config) ->
         answer = ok(ident, await _dispatch(door, method, params))
     except Fault as refused:
         outcome = "refus"  # lang: fr-ok - persisted audit value, S45-39
-        answer = erreur(ident, refused.code, str(refused), refused.data)
+        answer = error(ident, refused.code, str(refused), refused.data)
     await _audit(door, method, outcome)
     return JSONResponse(answer)
 
@@ -366,7 +366,7 @@ async def _dispatch(door: Door, method: str, params: dict[str, Any]) -> Any:
         from .push import configure
 
         return await configure(door, method, params)
-    raise Fault(METHODE_INCONNUE, f"unknown method: {method}")
+    raise Fault(METHOD_NOT_FOUND, f"unknown method: {method}")
 
 
 async def _audit(door: Door, method: str, outcome: str) -> None:
@@ -396,12 +396,12 @@ def _pick_skill(served: list[Skill], metadata: dict[str, Any]) -> Skill:
     if wanted is None:
         if len(served) == 1:
             return served[0]
-        raise Fault(PARAMETRES_INVALIDES, "name the skill in `message.metadata.skill` (see the agent card)")
+        raise Fault(INVALID_PARAMS, "name the skill in `message.metadata.skill` (see the agent card)")
     matches = [s for s in served if wanted in {s.id, s.id.split("/", 1)[1]}]
     if len(matches) != 1:
         # A skill outside the caller's rights does not exist for them: the same answer as an unknown one.
         raise Fault(
-            PARAMETRES_INVALIDES, f"unknown skill: {wanted}" if not matches else f"ambiguous skill: {wanted}"
+            INVALID_PARAMS, f"unknown skill: {wanted}" if not matches else f"ambiguous skill: {wanted}"
         )
     return matches[0]
 
@@ -416,30 +416,30 @@ def _read_file(part: dict[str, Any], skill: Skill, index: int, limit: int) -> Se
     """A file part (A2A 0.3.0 `FilePart`): its bytes in base64, a media type the skill takes."""
     file = part.get("file")
     if not isinstance(file, dict):
-        raise Fault(PARAMETRES_INVALIDES, "a file part carries `file`, with its content in `bytes`")
+        raise Fault(INVALID_PARAMS, "a file part carries `file`, with its content in `bytes`")
     if "bytes" not in file:
         # Fetching a URL the caller chose would be a request made on a stranger's behalf.
-        raise Fault(PARAMETRES_INVALIDES, "a file part by `uri` is not fetched: send its content in `bytes`")
+        raise Fault(INVALID_PARAMS, "a file part by `uri` is not fetched: send its content in `bytes`")
     media_type = file.get("mimeType")
     if not isinstance(media_type, str) or not media_type:
-        raise Fault(PARAMETRES_INVALIDES, "a file part names its `mimeType`")
+        raise Fault(INVALID_PARAMS, "a file part names its `mimeType`")
     if media_type not in skill.input_modes:
         raise Fault(CONTENT_TYPE_NOT_SUPPORTED, f"skill {skill.id} does not take {media_type}")
     name = file.get("name") or f"attachment-{index}"
     if not isinstance(name, str) or not _ARTIFACT_NAME.fullmatch(name):
         raise Fault(
-            PARAMETRES_INVALIDES,
+            INVALID_PARAMS,
             f"file name refused: {str(name)[:130]!r} (letters, digits, `_`, `.` and `-`, 128 at most)",
         )
     raw = file["bytes"]
     if not isinstance(raw, str) or len(raw) > _encoded(limit):
-        raise Fault(PARAMETRES_INVALIDES, f"file `{name}` too large: {limit} bytes at most for this project")
+        raise Fault(INVALID_PARAMS, f"file `{name}` too large: {limit} bytes at most for this project")
     try:
         data = base64.b64decode(raw, validate=True)
     except (binascii.Error, ValueError) as unreadable:
-        raise Fault(PARAMETRES_INVALIDES, f"file `{name}`: `bytes` is not base64") from unreadable
+        raise Fault(INVALID_PARAMS, f"file `{name}`: `bytes` is not base64") from unreadable
     if len(data) > limit:
-        raise Fault(PARAMETRES_INVALIDES, f"file `{name}` too large: {limit} bytes at most for this project")
+        raise Fault(INVALID_PARAMS, f"file `{name}` too large: {limit} bytes at most for this project")
     return SentFile(name=name, media_type=media_type, type=_type_of(media_type, name), data=data)
 
 
@@ -447,9 +447,9 @@ def _read_parts(parts: Any, skill: Skill) -> tuple[str, dict[str, Any], list[Sen
     """The text parts become the work item's body, one data part its fields, each file an input
     artefact (ADR 0078 §6), within the project's limit for one part and for all of them."""
     if not isinstance(parts, list) or not parts:
-        raise Fault(PARAMETRES_INVALIDES, "`message.parts` is a non-empty list")
+        raise Fault(INVALID_PARAMS, "`message.parts` is a non-empty list")
     if len(parts) > MAX_PARTS:
-        raise Fault(PARAMETRES_INVALIDES, f"too many parts: {MAX_PARTS} at most")
+        raise Fault(INVALID_PARAMS, f"too many parts: {MAX_PARTS} at most")
     limit = file_limit(skill.project)
     texts: list[str] = []
     fields: dict[str, Any] = {}
@@ -464,23 +464,23 @@ def _read_parts(parts: Any, skill: Skill) -> tuple[str, dict[str, Any], list[Sen
             if "application/json" not in skill.input_modes:
                 raise Fault(CONTENT_TYPE_NOT_SUPPORTED, f"skill {skill.id} does not take application/json")
             if fields:
-                raise Fault(PARAMETRES_INVALIDES, "one data part at most: it carries the work item's fields")
+                raise Fault(INVALID_PARAMS, "one data part at most: it carries the work item's fields")
             fields = part["data"]
         elif kind == "file":
             sent = _read_file(part, skill, len(files) + 1, limit)
             if any(f.name == sent.name for f in files):
-                raise Fault(PARAMETRES_INVALIDES, f"two files named `{sent.name}`: a name is an artefact's")
+                raise Fault(INVALID_PARAMS, f"two files named `{sent.name}`: a name is an artefact's")
             files.append(sent)
             if sum(len(f.data) for f in files) > limit:
                 raise Fault(
-                    PARAMETRES_INVALIDES,
+                    INVALID_PARAMS,
                     f"the files of a message: {limit} bytes at most together for this project",
                 )
         else:
-            raise Fault(PARAMETRES_INVALIDES, "a part is `text`, `data` or `file`")
+            raise Fault(INVALID_PARAMS, "a part is `text`, `data` or `file`")
     text = "\n\n".join(texts)
     if len(text) > MAX_TEXT:
-        raise Fault(PARAMETRES_INVALIDES, f"message too long: {MAX_TEXT} characters of text at most")
+        raise Fault(INVALID_PARAMS, f"message too long: {MAX_TEXT} characters of text at most")
     return text, fields, files
 
 
@@ -492,19 +492,17 @@ def task_id_of(org_id: str, client: str, message_id: str) -> str:
 async def _send(door: Door, params: dict[str, Any]) -> dict[str, Any]:
     message = params.get("message")
     if not isinstance(message, dict):
-        raise Fault(PARAMETRES_INVALIDES, "`message` is missing")
+        raise Fault(INVALID_PARAMS, "`message` is missing")
     configuration = params.get("configuration")
     if isinstance(configuration, dict) and configuration.get("pushNotificationConfig"):
         # Its secret would have nowhere to be shown: `set` is the one answer that carries it.
         raise Fault(
-            PARAMETRES_INVALIDES,
+            INVALID_PARAMS,
             "register push notifications with tasks/pushNotificationConfig/set once the task exists",
         )
     message_id = message.get("messageId")
     if not isinstance(message_id, str) or not message_id or len(message_id) > MAX_MESSAGE_ID:
-        raise Fault(
-            PARAMETRES_INVALIDES, f"`message.messageId` is a string of 1 to {MAX_MESSAGE_ID} characters"
-        )
+        raise Fault(INVALID_PARAMS, f"`message.messageId` is a string of 1 to {MAX_MESSAGE_ID} characters")
     if message.get("taskId"):
         # Answering a waiting task would be a decision: a re-authenticated person takes it (ADR 0030 §5).
         item, project = await _task(door, message["taskId"])
@@ -523,7 +521,7 @@ async def _send(door: Door, params: dict[str, Any]) -> dict[str, Any]:
     skill = _pick_skill(await skills(door), metadata)
     project, principal = skill.project, door.caller.principal
     if not principal.can(Permission.ITEM_CONTROL, door.org.slug, project.slug):
-        raise Fault(PARAMETRES_INVALIDES, f"you cannot open work items in {door.org.slug}:{project.slug}")
+        raise Fault(INVALID_PARAMS, f"you cannot open work items in {door.org.slug}:{project.slug}")
     text, fields, files = _read_parts(message.get("parts"), skill)
     if await writes_today(door.session, principal.user_id) >= WRITES_PER_DAY:
         raise Fault(BUDGET_EXHAUSTED, f"budget_exhausted: {WRITES_PER_DAY} writes a day through MCP and A2A")
@@ -538,12 +536,12 @@ async def _send(door: Door, params: dict[str, Any]) -> dict[str, Any]:
             title=title, body=body, workflow=skill.workflow, fields=fields, start=not files
         )
     except ValidationError as refused:
-        raise Fault(PARAMETRES_INVALIDES, f"invalid message: {refused.errors()[0]['msg']}") from refused
+        raise Fault(INVALID_PARAMS, f"invalid message: {refused.errors()[0]['msg']}") from refused
     stored = await _put_files(door, task_id, files)
     try:
         item = await creer_un_ticket(door.session, principal, project, draft, canal="a2a", item_id=task_id)
     except ApiError as refused:
-        raise Fault(PARAMETRES_INVALIDES, refused.detail or refused.title) from refused
+        raise Fault(INVALID_PARAMS, refused.detail or refused.title) from refused
     for one in stored:
         row = await record_input_file(door.session, org_id=door.org.id, item=item, stored=one)
         await record(
@@ -853,7 +851,7 @@ async def _follow(
                 try:
                     task = await _reread(door, settings, task["id"])
                 except Fault as lost:
-                    yield {"data": json.dumps(erreur(ident, lost.code, str(lost)))}
+                    yield {"data": json.dumps(error(ident, lost.code, str(lost)))}
                     return
                 if _mark(task) == seen:
                     continue

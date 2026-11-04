@@ -321,7 +321,7 @@ async def project_tracker(session: AsyncSession, project: Project) -> tuple[Conn
     ).scalar_one_or_none()
     if row is None or row.type in {"internal", "fake"}:
         return row, None
-    from choregos_adapters import build, configuration_resolue
+    from choregos_adapters import build, resolved_configuration
 
     from .github_app import pin_installation
 
@@ -330,7 +330,7 @@ async def project_tracker(session: AsyncSession, project: Project) -> tuple[Conn
 
         pinned = await pin_installation(session, project.org_id, "tracker", row.type, row.config)
         pinned = await pin_plugin_tracker(session, project.org_id, "tracker", row.type, pinned)
-        config = configuration_resolue("tracker", row.type, pinned, row.secret_refs, row.secret_ref)
+        config = resolved_configuration("tracker", row.type, pinned, row.secret_refs, row.secret_ref)
         return row, build("tracker", row.type, config)
     except (AdapterError, SecretIntrouvable, ValueError, KeyError) as error:
         raise upstream(row.type, f"the tracker connector cannot be built: {error}") from error

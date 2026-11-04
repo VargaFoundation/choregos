@@ -55,9 +55,3 @@ def _instant(name: str, value: Any) -> datetime:
     except ValueError as error:
         raise UnreadableDate(f"the field `{name}` is not a date: {text!r}") from error
     return instant if instant.tzinfo is not None else instant.replace(tzinfo=UTC)
-
-
-# Former names, still imported outside core until their own stories switch them (ADR 0098 §3 (b)).
-DateIllisible = UnreadableDate  # lang: fr-ok alias:internal
-champ_de = field_of  # lang: fr-ok alias:internal
-echeance = due_date  # lang: fr-ok alias:internal

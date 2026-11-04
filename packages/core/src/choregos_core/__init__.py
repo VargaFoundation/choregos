@@ -111,13 +111,6 @@ from .policy import (
 
 __version__ = "0.1.0"
 
-# Former names (ADR 0098 §3 (b)): other packages import them until their own stories switch.
-Acces = AccessLine  # lang: fr-ok alias:internal
-RapportAcces = AccessReport  # lang: fr-ok alias:internal
-rapport_d_acces = access_report  # lang: fr-ok alias:internal
-OutilCatalogue = CatalogueTool  # lang: fr-ok alias:internal
-charger_catalogue = load_catalogue  # lang: fr-ok alias:internal
-construire_requete = build_request  # lang: fr-ok alias:internal
 
 __all__ = [
     "BY_SIZE_MAP",

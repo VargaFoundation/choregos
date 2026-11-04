@@ -150,11 +150,6 @@ class McpClient:
         self.server: dict[str, Any] = {}
 
     @property
-    def serveur(self) -> dict[str, Any]:  # lang: fr-ok alias:internal
-        # former name, kept for importers (ADR 0046)
-        return self.server
-
-    @property
     def negotiated_version(self) -> str | None:
         """The protocol version the server answered at `initialize`; None before it."""
         return self._version
@@ -290,10 +285,3 @@ class McpClient:
     async def test(self) -> dict[str, Any]:
         tools = await self.list_tools()
         return {"ok": True, "server": self.server.get("serverInfo"), "tools": len(tools)}
-
-
-# Former names of this module, kept for the importers that other stories switch (ADR 0046, ADR 0098 §3).
-ClientMcp = McpClient  # lang: fr-ok alias:internal
-ErreurMcp = McpError  # lang: fr-ok alias:internal
-OutilMcp = McpTool  # lang: fr-ok alias:internal
-empreinte_du_schema = schema_digest  # lang: fr-ok alias:internal

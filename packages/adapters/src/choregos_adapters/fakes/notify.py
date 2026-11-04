@@ -19,13 +19,5 @@ class FakeNotifier:
             raise RuntimeError(self.failure)
         self.sent.append((channel, message))
 
-    @property
-    def panne(self) -> str | None:  # lang: fr-ok alias:internal
-        return self.failure
-
-    @panne.setter
-    def panne(self, value: str | None) -> None:  # lang: fr-ok alias:internal
-        self.failure = value
-
     def last(self) -> Message | None:
         return self.sent[-1][1] if self.sent else None

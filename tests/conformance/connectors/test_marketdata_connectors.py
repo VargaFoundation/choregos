@@ -143,7 +143,7 @@ async def test_each_operation_declares_a_closed_schema_the_implementation_follow
         # an argument outside the schema never reaches the provider
         assert not Draft202012Validator(schema).is_valid({**params, "url": "https://evil.test"})
         assert not Draft202012Validator(schema).is_valid({**params, "symbol": "AAPL/../x"})
-        result = await ouvrir(name).executer(operation.name, params)
+        result = await ouvrir(name).execute(operation.name, params)
         json.dumps(result)
         assert result["symbol"] == "AAPL" and result["provider"]
         if operation.name == "get_bars":
@@ -162,13 +162,13 @@ async def test_the_key_serves_and_appears_nowhere(name: str, caplog: pytest.LogC
     with structlog.testing.capture_logs() as events:
         cas = ouvrir(name)
         results = [
-            await cas.executer("get_bars", {"symbol": "AAPL", "start": "2024-01-02", "end": "2024-01-31"}),
-            await cas.executer("get_instrument", {"symbol": "AAPL"}),
+            await cas.execute("get_bars", {"symbol": "AAPL", "start": "2024-01-02", "end": "2024-01-31"}),
+            await cas.execute("get_instrument", {"symbol": "AAPL"}),
             await cas.test(),
         ]
         intrus = ouvrir(name, key=MAUVAISE)
         with pytest.raises(MarketDataError) as refusal:
-            await intrus.executer("get_bars", {"symbol": "AAPL", "start": "2024-01-02", "end": "2024-01-31"})
+            await intrus.execute("get_bars", {"symbol": "AAPL", "start": "2024-01-02", "end": "2024-01-31"})
     traces = [
         *(r.getMessage() for r in caplog.records),
         *(repr(e) for e in events),

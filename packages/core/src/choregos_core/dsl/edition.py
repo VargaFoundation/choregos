@@ -177,10 +177,6 @@ class Edition:
     inverse: list[Any] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
-    @property
-    def avertissements(self) -> list[str]:  # lang: fr-ok alias:internal
-        return self.warnings
-
 
 def edit(text: str, operations: list[Any]) -> Edition:
     """Apply the operations in order; the inverse undoes them in the opposite order.
@@ -867,19 +863,12 @@ _APPLIERS: dict[str, Callable[[str, Any], tuple[str, Any, list[str]]]] = {
     "set_workflow": _set_workflow,
 }
 
-# Former names, still imported outside core until their own stories switch them (ADR 0098 §3 (b)).
-EditionRefusee = EditRefused  # lang: fr-ok alias:internal
-editer = edit  # lang: fr-ok alias:internal
-PREFIXES_A_EFFET = PREFIXES_WITH_EFFECT  # lang: fr-ok alias:internal
 
 __all__ = [
     "OPERATIONS",
-    "PREFIXES_A_EFFET",
     "PREFIXES_WITH_EFFECT",
     "EditRefused",
     "Edition",
-    "EditionRefusee",
     "Operation",
     "edit",
-    "editer",
 ]
