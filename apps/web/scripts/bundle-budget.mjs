@@ -27,7 +27,10 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // and the regenerated API types tip the total over it by a fraction of a kilobyte.
 // 2026-11-03 (S52-06b, on S52-05 and S52-06): 2075 -> 2100 kB. The decision step on the map (S52-06) and its
 // calibration card with the demo mode's calibration (S52-06b) measure 2076 kB, 1 kB over the line.
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2100);
+// 2026-11-04 (#1280, main at 544bc257): 2100 -> 2150 kB. The S55 train (colour that orients, page headers, the
+// workflow library and graph, grouped settings) and S45-28 landed while `web` was skipped on main; main measures
+// 2126 kB.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2150);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* fichiers(dir) {
