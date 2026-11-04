@@ -3,12 +3,44 @@
 
 from __future__ import annotations
 
+import os
+from collections.abc import Mapping
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+#: The prefix of the run's own variables: `CHOREGOS_RUN_TOKEN`, `CHOREGOS_RUN_REMOTE_TOKEN` and
+#: `CHOREGOS_RUN_GATEWAY_KEY`, which `k8s_job`, ACA, local Docker and Tekton put in the runner's
+#: environment from the run's Secret (#519, #523, ADR 0062). `agent_sandbox` keeps the token in
+#: memory and puts the other two in the environment its assignment carries.
+RUN_VARIABLE_PREFIX = "CHOREGOS_RUN_"
+#: The run's variables that are not credentials: what a process the runner starts may inherit.
+#: Every other `CHOREGOS_RUN_*` variable is taken for a credential, so that a new one is kept out
+#: of the agent's reach until somebody decides otherwise here.
+INHERITABLE_RUN_VARIABLES = frozenset({"CHOREGOS_RUN_ID"})
+
+
+def agent_base_environment(environ: Mapping[str, str] | None = None) -> dict[str, str]:
+    """The environment every process the runner starts begins from: the runner's own
+    (`os.environ` by default), without the run's credentials (ADR 0115).
+
+    The agent, the commands it can shape (the project's checks run the code it wrote, and their
+    output comes back to it) and the runner's git all start from here. The runner keeps the
+    credentials in its settings, read before anything starts, and hands one on by name only where
+    it means to: a job's run token (ADR 0056), the gateway key under the backend's own variable
+    (`Backend.model_env`). `os.environ` is left as it is: the settings may be read again
+    (`reset_settings_cache`), and removing a variable would not erase it from
+    `/proc/<runner>/environ`, which the confinement keeps out of the agent's reach (ADR 0094).
+    """
+    base = os.environ if environ is None else environ
+    return {
+        name: value
+        for name, value in base.items()
+        if not name.startswith(RUN_VARIABLE_PREFIX) or name in INHERITABLE_RUN_VARIABLES
+    }
 
 
 class RunnerSettings(BaseSettings):

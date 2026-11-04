@@ -8,7 +8,6 @@ identity. No credential is written into the image: the token is mounted in memor
 from __future__ import annotations
 
 import asyncio
-import os
 import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -16,6 +15,8 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 from choregos_contracts import ContextPack, StageInput
+
+from .config import agent_base_environment
 
 # Files written by the runner in the workspace: they do not belong to the repository.
 RUNNER_FILES = (
@@ -141,8 +142,11 @@ async def run_command(
     timeout: float = 900.0,
 ) -> CommandResult:
     """Run a command, capture everything, never raise on a non-zero code."""
-    # `cwd` is the run's workspace: it is the one git must consider safe.
-    merged = {**clean_git_environment(os.environ, Path(cwd)), **_git_env(Path(cwd)), **(env or {})}
+    # `cwd` is the run's workspace: it is the one git must consider safe. Never the run's
+    # credentials (ADR 0115): the project's checks run the code the agent wrote, and what they print
+    # comes back to it. A job gets its run token in `env`, on purpose (ADR 0056).
+    base = clean_git_environment(agent_base_environment(), Path(cwd))
+    merged = {**base, **_git_env(Path(cwd)), **(env or {})}
     if isinstance(command, str):
         process = await asyncio.create_subprocess_shell(
             command,
