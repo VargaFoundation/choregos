@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from choregos_adapters.mcp.client import ClientMcp
+from choregos_adapters.mcp.client import McpClient
 from choregos_contracts import StageInput, StageResult
 from choregos_core.egress import use_policy
 from choregos_core.prompt_loop import LoopOutcome, LoopRequest, LoopTool, run_loop
@@ -68,7 +68,7 @@ class PromptStep:
 
 @dataclass
 class _Mcp:
-    client: ClientMcp
+    client: McpClient
     server: str
     tool: str
 
@@ -79,7 +79,7 @@ def tool_name(server: str, tool: str) -> str:
 
 
 def _auth(env: dict[str, str]) -> dict[str, str]:
-    """The header a server's `env` declares, as `ClientMcp` takes it: `Authorization: Bearer x` is a
+    """The header a server's `env` declares, as `McpClient` takes it: `Authorization: Bearer x` is a
     bearer token, any other header carries its value as it is."""
     for header, value in env.items():
         if header.lower() == "authorization":
@@ -187,7 +187,7 @@ class PromptRun:
         for server, ref in self.stage_input.tools.mcp.items():
             if not ref.url:
                 continue  # a stdio server is a process a coding agent starts; the loop has none
-            client = ClientMcp(ref.url, transport=self.mcp_transport, **_auth(ref.env))  # type: ignore[arg-type]
+            client = McpClient(ref.url, transport=self.mcp_transport, **_auth(ref.env))  # type: ignore[arg-type]
             try:
                 listed = await client.list_tools()
             except Exception as exc:  # a server that does not answer leaves the others

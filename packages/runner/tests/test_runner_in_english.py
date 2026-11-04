@@ -1,4 +1,4 @@
-"""The runner is English (S45-11, ADR 0098), and the former local-tools module still imports."""
+"""The runner is English (S45-11, ADR 0098)."""
 
 from __future__ import annotations
 
@@ -28,10 +28,3 @@ def test_runner_has_no_french() -> None:
     except RuntimeError:  # an exported tree without .git: nothing to scan
         pytest.skip("not a git checkout")
     assert [str(f) for f in found] == []
-
-
-def test_former_local_tools_module_still_imports() -> None:
-    from choregos_runner import local_tools, outils_locaux
-
-    assert outils_locaux.demarrer_si_absent is local_tools.start_if_absent  # lang: fr-ok alias:internal
-    assert outils_locaux.arreter is local_tools.stop  # lang: fr-ok alias:internal

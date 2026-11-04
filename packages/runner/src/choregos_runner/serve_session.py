@@ -30,7 +30,7 @@ from choregos_adapters.base import RealtimeClosed, RealtimeConnector, RealtimeLi
 from choregos_adapters.realtime_ws import WebsocketsConnector
 from choregos_contracts import StageInput
 from choregos_core.hosted import CONNECT_PORT, MCP_PORT, MODEL_PORT
-from choregos_core.mcp import METHODE_INCONNUE, erreur, negocier, ok, resultat_texte
+from choregos_core.mcp import METHOD_NOT_FOUND, error, negotiate, ok, text_result
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -162,7 +162,7 @@ class SessionToolsMcp:
         except json.JSONDecodeError:
             message = None
         if not isinstance(message, dict):
-            return JSONResponse(erreur(None, -32700, "the body is not a JSON-RPC message"), 400)
+            return JSONResponse(error(None, -32700, "the body is not a JSON-RPC message"), 400)
         if "id" not in message:  # a notification: nothing to answer
             return Response(status_code=202)
         return JSONResponse(await self._answer(message))
@@ -174,7 +174,7 @@ class SessionToolsMcp:
             return ok(
                 id_,
                 {
-                    "protocolVersion": negocier(params.get("protocolVersion")),
+                    "protocolVersion": negotiate(params.get("protocolVersion")),
                     "capabilities": {"tools": {}},
                     "serverInfo": {"name": "choregos-session", "version": "1"},
                 },
@@ -185,7 +185,7 @@ class SessionToolsMcp:
             return ok(id_, {"tools": await self.client.list_tools()})
         if method == "tools/call":
             return ok(id_, await self._call(str(params.get("name") or ""), params.get("arguments") or {}))
-        return erreur(id_, METHODE_INCONNUE, f"`{method[:100]}` is not served")
+        return error(id_, METHOD_NOT_FOUND, f"`{method[:100]}` is not served")
 
     async def _call(self, tool: str, arguments: dict[str, Any]) -> dict[str, Any]:
         decision = self.guards.decide(
@@ -196,14 +196,12 @@ class SessionToolsMcp:
         )
         self.calls += 1
         if not decision.allowed:
-            return resultat_texte(f"refused by the session's guard rails: {decision.reason}", en_erreur=True)
+            return text_result(f"refused by the session's guard rails: {decision.reason}", is_error=True)
         try:
-            return resultat_texte(await self.client.call_tool(tool, arguments))
+            return text_result(await self.client.call_tool(tool, arguments))
         except SessionApiError as refusal:
             if refusal.status_code == 404:
-                return resultat_texte(
-                    f"no tool named `{tool[:100]}` is granted to this session", en_erreur=True
-                )
+                return text_result(f"no tool named `{tool[:100]}` is granted to this session", is_error=True)
             raise
 
 
