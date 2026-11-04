@@ -1,6 +1,6 @@
 # ops: French findings per file (ADR 0098). Counts only go down: tools/check_english.py --update-baseline
 docker/README.md	25
-docker/api.Dockerfile	29
+docker/api.Dockerfile	28
 docker/base.Dockerfile	5
 docker/runner.Dockerfile	29
 docker/shims/refuse.sh	3

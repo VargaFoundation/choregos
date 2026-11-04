@@ -14,14 +14,14 @@ import pathlib
 import re
 
 STATUS = pathlib.Path(__file__).resolve().parents[2] / "docs" / "plan" / "STATUS.md"
-# The French total line of STATUS.md is parsed as it is written (rewritten by S45-36).
+# The total line of STATUS.md, parsed as it is written.
 TOTAL = re.compile(
-    r"\*\*Total\*\* : (\d+) livrées, (\d+) partielles, (\d+) non commencée",  # lang: fr-ok S45-36
+    r"\*\*Total\*\*: (\d+) delivered, (\d+) partial, (\d+) not started",
     re.M,
 )
 
 
-def test_the_total_is_the_one_of_the_table() -> None:
+def test_the_total_matches_the_table() -> None:
     text = STATUS.read_text(encoding="utf-8")
     announced = TOTAL.search(text)
     assert announced, "STATUS announces no total any more, or its shape changed without this test"
