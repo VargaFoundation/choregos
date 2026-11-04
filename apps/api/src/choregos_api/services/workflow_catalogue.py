@@ -119,7 +119,7 @@ def _core() -> list[Offered]:
 
 def _template_entries(source: str, manifest: dict[str, Any], folder: Any) -> list[Offered]:
     """A template's own workflow files; a `template:<core>` reference is already a `core` entry."""
-    from .gabarits import shipped_workflows
+    from .templates import shipped_workflows
 
     out: list[Offered] = []
     for ref, text in shipped_workflows(manifest, folder):
@@ -131,9 +131,9 @@ def _template_entries(source: str, manifest: dict[str, Any], folder: Any) -> lis
 
 
 def _templates() -> list[Offered]:
-    from .gabarits import repertoire_des_gabarits
+    from .templates import templates_directory
 
-    root = repertoire_des_gabarits()
+    root = templates_directory()
     out: list[Offered] = []
     for folder in sorted(root.iterdir()) if root.is_dir() else []:
         manifest_path = folder / "manifest.yaml"
@@ -218,7 +218,7 @@ async def resolutions(
 ) -> dict[str, Resolution]:
     """Where each slug resolves in the organisation, in the order of ADR 0040 §4: its own agent (a plugin's,
     a remote one), else the platform's catalogue (installed on adoption), else nowhere."""
-    from .catalogue_d_agents import catalogue_of
+    from .agent_catalogue import catalogue_of
 
     if not slugs:
         return {}

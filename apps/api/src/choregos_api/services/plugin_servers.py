@@ -55,7 +55,7 @@ from ..db.models import ConnectorOperation, OrgConnector
 from ..errors import conflict, unprocessable, upstream
 from ..logging import get_logger
 from ..rbac import Principal
-from ..schemas.projets import OrgConnectorServer
+from ..schemas.projects import OrgConnectorServer
 from ..secret_store import resolved_configuration, store_ref
 from .connector_secrets import drop_replaced_store_values, put_values, require_store
 

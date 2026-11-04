@@ -69,10 +69,10 @@ def tokens_create(
 @orgs_app.command("bootstrap")
 def orgs_bootstrap() -> None:
     """Replay the bootstrap (`CHOREGOS_BOOTSTRAP_ORG`, `CHOREGOS_BOOTSTRAP_ADMINS`). Idempotent."""
-    from .amorcage import amorcer
+    from .bootstrap import bootstrap_installation
     from .config import get_settings
 
-    created = asyncio.run(amorcer(get_settings()))
+    created = asyncio.run(bootstrap_installation(get_settings()))
     organisations = ", ".join(created["organisations"]) or "none"
     admins = ", ".join(created["administrateurs"]) or "none"
     typer.echo(f"organisations created: {organisations}; admins: {admins}")

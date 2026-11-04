@@ -66,7 +66,7 @@ async def test_a_departure_on_an_empty_train_does_not_make_it_spin(
     temporal_env: Any, worker_factory: Any
 ) -> None:
     looks: list[int] = []
-    async with worker_factory(remplacements=_doubles(looks)):
+    async with worker_factory(replacements=_doubles(looks)):
         train = await temporal_env.client.start_workflow(
             "ReleaseTrain",
             {"project_slug": "empty", "env": "staging"},
@@ -112,7 +112,7 @@ async def test_a_departure_on_a_frozen_train_does_not_make_it_spin(
 ) -> None:
     """A manual departure on a frozen train is dropped: after the unfreeze, the batch waits its window."""
     looks: list[int] = []
-    async with worker_factory(remplacements=_doubles(looks)):
+    async with worker_factory(replacements=_doubles(looks)):
         train = await temporal_env.client.start_workflow(
             "ReleaseTrain",
             {"project_slug": "frozen", "env": "staging", "frozen": True},
@@ -156,7 +156,7 @@ async def test_a_hotfix_on_a_frozen_train_waits_without_spinning_and_leaves_at_t
 ) -> None:
     """`express` is kept across the freeze: no spin while frozen, an express departure at the unfreeze."""
     looks: list[int] = []
-    async with worker_factory(remplacements=_doubles(looks)):
+    async with worker_factory(replacements=_doubles(looks)):
         train = await temporal_env.client.start_workflow(
             "ReleaseTrain",
             {"project_slug": "hotfix", "env": "staging", "frozen": True},

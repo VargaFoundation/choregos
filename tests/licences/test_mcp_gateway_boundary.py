@@ -85,7 +85,6 @@ DOOR_DIRS = ("apps/api/src/choregos_api/mcp", "apps/api/src/choregos_api/a2a")
 #: serves Choregos's own tools and workflows; if it imported one of these it would forward a call.
 FORBIDDEN_MODULES = frozenset(
     {
-        "choregos_api.services.courtier",
         "choregos_api.services.broker",
         "choregos_api.services.mcp_gateway",
         "choregos_api.services.mcp_gateway_identity",
@@ -420,29 +419,28 @@ def _module_of(path: pathlib.Path) -> tuple[str, bool]:
 
 
 def test_the_import_check_sees_through_relative_and_from_imports() -> None:
-    door = "choregos_api.mcp.outils"
+    door = "choregos_api.mcp.tools"
     assert forbidden_imports("from ..services import broker", door) == ["choregos_api.services.broker"]
-    assert forbidden_imports("from ..services import courtier", door) == ["choregos_api.services.courtier"]
-    assert forbidden_imports("from ..services.courtier import outils_du_courtier", door) == [
-        "choregos_api.services.courtier"
+    assert forbidden_imports("from ..services.broker import broker_tools", door) == [
+        "choregos_api.services.broker"
     ]
     assert forbidden_imports("from choregos_adapters import build", door) == ["choregos_adapters.build"]
     assert forbidden_imports("import choregos_adapters.mcp.client", door) == ["choregos_adapters.mcp.client"]
     assert forbidden_imports("from choregos_adapters.mcp.x import y", door) == ["choregos_adapters.mcp.x"]
     assert forbidden_imports("from choregos_adapters.mcp import McpClient", door) == ["choregos_adapters.mcp"]
     # A sibling import, and the same line in an `__init__.py` (one level less to climb).
-    assert forbidden_imports("from . import courtier", "choregos_api.services.x") == [
-        "choregos_api.services.courtier"
+    assert forbidden_imports("from . import broker", "choregos_api.services.x") == [
+        "choregos_api.services.broker"
     ]
     assert forbidden_imports("from ..services import broker", "choregos_api.mcp", is_package=True) == [
         "choregos_api.services.broker"
     ]
     assert forbidden_imports("from ..services import broker", "choregos_api.mcp") == []  # climbs too far
-    assert forbidden_imports("from .courtier import outils_du_courtier", "choregos_api.services", True) == [
-        "choregos_api.services.courtier"
+    assert forbidden_imports("from .broker import broker_tools", "choregos_api.services", True) == [
+        "choregos_api.services.broker"
     ]
     # What a door does import.
-    assert forbidden_imports("from ..services import creer_un_ticket", door) == []
+    assert forbidden_imports("from ..services import create_work_item", door) == []
     assert forbidden_imports("from choregos_adapters.storage import ObjectStoreError", door) == []
     assert forbidden_imports("import choregos_adapters", door) == []
     assert forbidden_imports("from choregos_adapters.mcpx import y", door) == []  # a prefix ends at a dot
@@ -808,11 +806,11 @@ def test_the_client_and_listener_checks_see_what_they_guard() -> None:
 
 
 def test_the_attribute_check_follows_an_imported_package() -> None:
-    door = "choregos_api.mcp.outils"
+    door = "choregos_api.mcp.tools"
     reach = "from .. import services as s\ns.broker.call()"
     assert forbidden_attributes(reach, door) == ["choregos_api.services.broker"]
-    assert forbidden_attributes("import choregos_api\nchoregos_api.services.courtier.x", door) == [
-        "choregos_api.services.courtier"
+    assert forbidden_attributes("import choregos_api\nchoregos_api.services.broker.x", door) == [
+        "choregos_api.services.broker"
     ]
     assert forbidden_attributes("import choregos_adapters as a\na.mcp.McpClient('u')", door) == [
         "choregos_adapters.mcp"
@@ -820,7 +818,7 @@ def test_the_attribute_check_follows_an_imported_package() -> None:
     assert forbidden_attributes("from .. import routers\nrouters.internal.router", door) == [
         "choregos_api.routers.internal"
     ]
-    assert forbidden_attributes("from .. import services as s\ns.parcours(x)", door) == []
+    assert forbidden_attributes("from .. import services as s\ns.journey(x)", door) == []
     assert forbidden_attributes("import choregos_adapters\nchoregos_adapters.mcpx", door) == []
 
 

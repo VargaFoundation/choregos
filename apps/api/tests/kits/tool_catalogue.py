@@ -92,7 +92,7 @@ async def run_with_catalogue(
     file.write_text(CATALOGUE, encoding="utf-8")
     monkeypatch.setenv("CHOREGOS_TOOL_CATALOG", str(file))
     monkeypatch.setenv("ANNUAIRE_API_KEY", "cle-du-coffre")
-    catalogue_service.vider_cache()
+    catalogue_service.clear_cache()
 
     async with session_scope() as session:
         row = await session.get(Project, project["id"])
@@ -135,7 +135,7 @@ async def project_with_mcp(
     file.write_text(MCP_CATALOGUE, encoding="utf-8")
     monkeypatch.setenv("CHOREGOS_TOOL_CATALOG", str(file))
     monkeypatch.setenv("FOURNISSEUR_MCP_KEY", "cle-du-fournisseur")
-    catalogue_service.vider_cache()
+    catalogue_service.clear_cache()
 
     async with session_scope() as session:
         row = await session.get(Project, project["id"])

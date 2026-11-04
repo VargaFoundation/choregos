@@ -48,14 +48,14 @@ async def _work_item_to_dev(setup: Fixture, temporal_env: Any) -> tuple[Any, Any
     from choregos_api.db.models import Project, WorkItem
     from choregos_api.db.session import session_scope
     from choregos_api.rbac import SYSTEM
-    from choregos_api.services.definitions import publier_workflow
+    from choregos_api.services.definitions import publish_workflow
     from choregos_api.temporal import interpreter_id
     from choregos_orchestrator.train_client import fake_signals
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
         assert project is not None
-        definition = await publier_workflow(session, SYSTEM, project, TO_DEV)
+        definition = await publish_workflow(session, SYSTEM, project, TO_DEV)
         item = await session.get(WorkItem, setup.work_item_id)
         assert item is not None
         item.workflow_def_id = definition.id

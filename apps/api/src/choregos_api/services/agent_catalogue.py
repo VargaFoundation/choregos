@@ -23,7 +23,6 @@ from choregos_contracts import Workflow
 from choregos_contracts.workflow import AgentActor
 from choregos_core import agent_catalogue as _catalogue
 from choregos_core.agent_catalogue import Catalogue, CatalogueEntry, CatalogueSkill, entry_of
-from choregos_core.compat import alias_names
 from choregos_core.plugins.sources import SourceError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -38,7 +37,7 @@ from .agents import digest, version_errors
 from .installation import install_skills_and_agents
 from .network import check_agent_network
 from .skill_gate import platform_columns
-from .skills import empreinte as skill_digest
+from .skills import digest as skill_digest
 
 #: The prefix of the author of a version the catalogue wrote: `plugin:<plugin>/<slug>@<version>`.
 PREFIX = "plugin:"
@@ -334,33 +333,6 @@ def catalogue() -> Catalogue:
     # Through the function, not an imported name: a test that replaces the catalogue sees it here too.
     return offline_catalogue()
 
-
-EtatDansLOrganisation = OrgState  # lang: fr-ok alias:internal
-PREFIXE = PREFIX  # lang: fr-ok alias:internal
-auteur = author_of  # lang: fr-ok alias:internal
-spec_de = spec_of  # lang: fr-ok alias:internal
-etat = state  # lang: fr-ok alias:internal
-installer = install  # lang: fr-ok alias:internal
-mettre_a_jour = upgrade  # lang: fr-ok alias:internal
-offre = offer  # lang: fr-ok alias:internal
-agents_nommes = named_agents  # lang: fr-ok alias:internal
-installer_les_agents_nommes = install_named_agents  # lang: fr-ok alias:internal
-
-alias_names(
-    __name__,
-    {
-        "EtatDansLOrganisation": "OrgState",  # lang: fr-ok alias:internal
-        "PREFIXE": "PREFIX",  # lang: fr-ok alias:internal
-        "auteur": "author_of",  # lang: fr-ok alias:internal
-        "spec_de": "spec_of",  # lang: fr-ok alias:internal
-        "etat": "state",  # lang: fr-ok alias:internal
-        "installer": "install",
-        "mettre_a_jour": "upgrade",  # lang: fr-ok alias:internal
-        "offre": "offer",  # lang: fr-ok alias:internal
-        "agents_nommes": "named_agents",  # lang: fr-ok alias:internal
-        "installer_les_agents_nommes": "install_named_agents",  # lang: fr-ok alias:internal
-    },
-)
 
 __all__ = [
     "OrgState",

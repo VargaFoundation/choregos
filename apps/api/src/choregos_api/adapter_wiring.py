@@ -14,10 +14,9 @@ from typing import Any
 from choregos_adapters import register
 from choregos_adapters.errors import ConfigurationError
 from choregos_adapters.memory.lexical import LexicalMemory, MemoryModels
-from choregos_core.compat import alias_names
 
 from .db.models import MemoryFact, MemoryStore, Organization, Project
-from .db.session import TOUT, session_scope
+from .db.session import ALL_ORGS, session_scope
 
 
 def _lexical_memory(cfg: dict[str, Any]) -> LexicalMemory:
@@ -35,7 +34,7 @@ def _lexical_memory(cfg: dict[str, Any]) -> LexicalMemory:
             "lexical memory: the project's organisation is missing (`org`); without it, RLS "
             "would show nothing"
         )
-    scope: str | list[str] = TOUT if org == TOUT else [org]
+    scope: str | list[str] = ALL_ORGS if org == ALL_ORGS else [org]
     return LexicalMemory(
         partial(session_scope, orgs=scope),
         MemoryModels(
@@ -53,6 +52,3 @@ def attach_lexical_memory() -> None:
     """
     register("memory", "lexical")(_lexical_memory)
     register("memory", "pgvector")(_lexical_memory)
-
-
-alias_names(__name__, {"brancher_memoire_lexicale": "attach_lexical_memory"})  # lang: fr-ok alias:internal

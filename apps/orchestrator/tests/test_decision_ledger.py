@@ -55,12 +55,12 @@ async def _pin(setup: Fixture, yaml: str) -> None:
     from choregos_api.db.models import Project, WorkItem
     from choregos_api.db.session import session_scope
     from choregos_api.rbac import SYSTEM
-    from choregos_api.services.definitions import publier_workflow
+    from choregos_api.services.definitions import publish_workflow
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
         assert project is not None
-        definition = await publier_workflow(session, SYSTEM, project, yaml)
+        definition = await publish_workflow(session, SYSTEM, project, yaml)
         item = await session.get(WorkItem, setup.work_item_id)
         assert item is not None
         item.workflow_def_id = definition.id
@@ -223,7 +223,7 @@ async def _agent_run(setup: Fixture, outputs: dict[str, Any], *, backend: str = 
 
 
 async def test_an_agent_s_declared_confidence_is_recorded_beside_its_answer(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.bilan import record_run_outcome
+    from choregos_orchestrator.activities.outcome import record_run_outcome
 
     await _pin(setup, DEVELOP)
     run_id = await _agent_run(setup, {"done": True, "confidence": 0.85})
@@ -238,7 +238,7 @@ async def test_an_agent_s_declared_confidence_is_recorded_beside_its_answer(setu
 
 async def test_a_job_and_an_unfinished_stage_record_no_confidence(setup: Fixture) -> None:
     from choregos_contracts import StageResult, StageStatus
-    from choregos_orchestrator.activities.bilan import record_run_outcome
+    from choregos_orchestrator.activities.outcome import record_run_outcome
 
     await _pin(setup, DEVELOP)
     run_id = await _agent_run(setup, {"done": True, "confidence": 0.85}, backend="job")
@@ -347,7 +347,7 @@ async def test_the_end_of_the_work_item_is_its_decisions_terminal_outcome(
 
 
 async def test_a_declined_end_is_recorded_as_declined(setup: Fixture) -> None:
-    from choregos_orchestrator.activities.bilan import record_run_outcome
+    from choregos_orchestrator.activities.outcome import record_run_outcome
     from choregos_orchestrator.activities.tracker import close_out
 
     await _pin(setup, DEVELOP)

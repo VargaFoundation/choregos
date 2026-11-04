@@ -222,13 +222,13 @@ async def test_an_external_tracker_files_the_issue_through_mcp(
     from choregos_api.services import tickets
 
     fake = FakeTracker("billing-api")
-    real = tickets.tracker_du_projet  # lang: fr-ok — S45-21 renames it, and keeps this name working
+    real = tickets.project_tracker
 
     async def with_the_fake(session: Any, project_row: Any) -> Any:
         row, _ = await real(session, project_row)
         return row, fake
 
-    monkeypatch.setattr(tickets, "tracker_du_projet", with_the_fake)  # lang: fr-ok — as above
+    monkeypatch.setattr(tickets, "project_tracker", with_the_fake)
     response = await client.put(
         f"/api/v1/projects/{project['id']}/connectors/tracker",
         json={"type": "github-issues", "config": {"repo": "varga/billing-api"}},

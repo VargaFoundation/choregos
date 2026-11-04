@@ -106,7 +106,7 @@ async def spawn_children(payload: dict[str, Any]) -> dict[str, Any]:
     from choregos_api.rbac import SYSTEM
     from choregos_api.schemas.tickets import WorkItemCreate
     from choregos_api.services.initiator import initiator
-    from choregos_api.services.tickets import creer_un_ticket
+    from choregos_api.services.tickets import create_work_item
     from choregos_api.temporal import interpreter_id
     from temporalio.exceptions import WorkflowAlreadyStartedError
 
@@ -144,7 +144,7 @@ async def spawn_children(payload: dict[str, Any]) -> dict[str, Any]:
                     "parent": {"key": parent.tracker_key, "title": parent.title},
                 }
                 try:
-                    child = await creer_un_ticket(
+                    child = await create_work_item(
                         session,
                         SYSTEM,
                         bundle.project,
@@ -156,7 +156,7 @@ async def spawn_children(payload: dict[str, Any]) -> dict[str, Any]:
                             start=False,
                         ),
                         canal="fan-out",
-                        cle=key,
+                        key=key,
                         initiated_by=initiator("work_item", parent.tracker_key),
                         # Its title and fields come from the parent's outputs (ADR 0114 §4).
                         restricted_knowledge=list(parent.restricted_knowledge or []),

@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, Header, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import AgentSessionRecord, Project
-from ..db.session import TOUT, limiter_aux_organisations, session_scope
+from ..db.session import ALL_ORGS, limit_to_organisations, session_scope
 from ..deps import Db
 from ..errors import ApiError, forbidden, not_found, unauthorized
 from ..schemas.agent_sessions import (
@@ -61,7 +61,7 @@ async def session_pod_record(
     if claims.run_id != session_run_id(id):
         raise forbidden("this token belongs to another run or another session")
     # The token's scope is the session it names, not an organisation (as a run's, `run_claims`).
-    await limiter_aux_organisations(session, TOUT)
+    await limit_to_organisations(session, ALL_ORGS)
     record = await session.get(AgentSessionRecord, id)
     if record is None:
         raise not_found("Agent session", id)
@@ -83,10 +83,10 @@ async def _project(session: AsyncSession, record: AgentSessionRecord) -> Project
 
 
 async def _spec(session: AsyncSession, record: AgentSessionRecord, project: Project) -> Any:
-    from ..services.agents import resoudre_l_agent
+    from ..services.agents import resolve_agent
 
     served = f"{record.agent_slug}@{record.agent_version}"
-    return (await resoudre_l_agent(session, record.org_id, project.id, served)).spec
+    return (await resolve_agent(session, record.org_id, project.id, served)).spec
 
 
 @router.get("/agent-sessions/{id}/input", operation_id="getAgentSessionInput")
@@ -116,7 +116,7 @@ async def get_next_turn(
     await session.commit()  # the request's own transaction holds nothing while it waits
     deadline = time.monotonic() + wait
     while True:
-        async with session_scope(orgs=TOUT) as db:
+        async with session_scope(orgs=ALL_ORGS) as db:
             current = await db.get(AgentSessionRecord, id)
             if current is None or current.org_id != org_id:
                 raise not_found("Agent session", id)
@@ -163,7 +163,7 @@ async def get_socket_frames(
     await session.commit()  # as `turns/next`: nothing is held while it waits
     deadline = time.monotonic() + wait
     while True:
-        async with session_scope(orgs=TOUT) as db:
+        async with session_scope(orgs=ALL_ORGS) as db:
             current = await db.get(AgentSessionRecord, id)
             if current is None:
                 raise not_found("Agent session", id)
@@ -192,7 +192,7 @@ async def post_socket_frames(
     async def act(db: AsyncSession, current: AgentSessionRecord) -> int:
         return await record_out(db, current, body)
 
-    return AgentSessionSocketRecorded(out_n=int(await write(id, act, orgs=TOUT) or 0))
+    return AgentSessionSocketRecorded(out_n=int(await write(id, act, orgs=ALL_ORGS) or 0))
 
 
 @router.get(
@@ -204,7 +204,7 @@ async def list_session_tools(id: str, session: Db, record: SessionPod) -> AgentS
     """The read tools the agent's `mcp_servers` grant in the project, as MCP announces them."""
     project = await _project(session, record)
     tools = await session_tools(session, await _spec(session, record, project), project)
-    return AgentSessionTools(tools=[tool.annonce() for tool in tools.values()])
+    return AgentSessionTools(tools=[tool.announcement() for tool in tools.values()])
 
 
 @router.post(

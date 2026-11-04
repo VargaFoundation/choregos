@@ -182,16 +182,13 @@ async def _call_the_connector(ctx: EffectContext, params: dict[str, Any]) -> dic
             )
         )
     ).scalar_one_or_none()
-    from .services.connecteurs import politique_pour_le_projet
+    from .services.connectors import policy_for_project
     from .services.mcp_gateway import connector_client
     from .services.mcp_gateway_identity import identity_of_action
 
     # The PROJECT's: the organisation's, tightened by the project, bounded by its groups. An approved
     # action plays an `approval` operation; an operation this project forbids itself, never.
-    if (
-        row is None
-        or await politique_pour_le_projet(ctx.session, ctx.project, name, operation) == "forbidden"
-    ):
+    if row is None or await policy_for_project(ctx.session, ctx.project, name, operation) == "forbidden":
         raise EffectRefused(f"{name}/{operation} is forbidden to this project, or unknown")
     if row.input_schema:
         import jsonschema
@@ -247,7 +244,7 @@ async def _platform_arguments(
     import hashlib
     import json
 
-    from .services.connecteurs import declared_operation
+    from .services.connectors import declared_operation
 
     declared = declared_operation(instance, operation)
     if declared is None or not declared.platform_arguments:
@@ -312,13 +309,3 @@ _FORMER = {
     "reinitialiser": "reset",  # lang: fr-ok alias:external
 }
 alias_names(__name__, _FORMER, removed_in=EXTERNAL_ALIAS_REMOVAL)
-alias_names(
-    __name__,
-    {
-        "_EFFETS": "_EFFECTS",  # lang: fr-ok alias:internal
-        "_POLITIQUES": "_POLICIES",  # lang: fr-ok alias:internal
-        "_appel_de_connecteur": "_connector_call",  # lang: fr-ok alias:internal
-        "_appeler_le_connecteur": "_call_the_connector",  # lang: fr-ok alias:internal
-        "_arguments_de_la_plateforme": "_platform_arguments",  # lang: fr-ok alias:internal
-    },
-)

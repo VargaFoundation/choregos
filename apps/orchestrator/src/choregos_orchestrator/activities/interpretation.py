@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from choregos_api.db.models import Event, Run, WorkflowDef, WorkItem
-from choregos_api.services import persist_event, workflow_du_ticket, workflow_model
+from choregos_api.services import persist_event, work_item_workflow, workflow_model
 from choregos_api.services.budgets import ticket_budget, ticket_spent
 from choregos_contracts import EventType
 from choregos_core import utcnow
@@ -38,7 +38,7 @@ async def load_context(payload: dict[str, Any]) -> dict[str, Any]:
         # The version the work item was born in (ADR 0031). A work item from before the pin gets it
         # here, once: replaying the activity reads the same one. Only the BODY of the activity
         # changes, with no new command in the history, so the archived histories replay.
-        pinned = await workflow_du_ticket(session, item)
+        pinned = await work_item_workflow(session, item)
         if item.workflow_def_id is None and pinned is not None:
             item.workflow_def_id = pinned.id
         workflow = workflow_model(pinned)
@@ -271,7 +271,7 @@ async def escalation_context(payload: dict[str, Any]) -> dict[str, Any]:
             return {"parked": None}
         parked = arrival.get("parked")
         if not (isinstance(parked, list) and len(parked) == 3 and parked[0] == state):
-            engine = WorkflowEngine(workflow_model(await workflow_du_ticket(session, item)))
+            engine = WorkflowEngine(workflow_model(await work_item_workflow(session, item)))
             parked = await _derived_parking(session, item.id, engine, state, arrival)
         if parked is None:
             return {"parked": None}
@@ -391,7 +391,3 @@ async def signal_train(payload: dict[str, Any]) -> dict[str, Any]:
             },
         )
         return {"signalled": True}
-
-
-message_de = message_of  # lang: fr-ok alias:internal
-activite_de = activity_of  # lang: fr-ok alias:internal

@@ -44,7 +44,7 @@ def initiator(kind: str, subject: str | None = None) -> str:
 
 
 def of_principal(principal: Principal, channel: str) -> str:
-    """The initiator of a work item a principal creates through a door (`creer_un_ticket`)."""
+    """The initiator of a work item a principal creates through a door (`create_work_item`)."""
     if principal.kind != "user":
         return initiator("system")
     return initiator(channel if channel in ("mcp", "a2a") else "person", principal.email)

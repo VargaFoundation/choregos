@@ -10,7 +10,6 @@ import httpx
 import structlog
 from choregos_adapters.errors import AdapterError
 from choregos_contracts import EventType
-from choregos_core.compat import alias_names
 from choregos_core.domain import NewItem
 from choregos_core.restricted import RESTRICTED_TITLE, WITHHELD, mark
 from choregos_core.secrets import SecretIntrouvable
@@ -380,7 +379,6 @@ async def create_work_item(  # noqa: PLR0913 - one creation path, the birth fact
     *,
     canal: str = "api",
     key: str | None = None,
-    cle: str | None = None,  # lang: fr-ok alias:internal
     initiated_by: str | None = None,
     item_id: str | None = None,
     restricted_knowledge: list[str] | None = None,
@@ -400,15 +398,12 @@ async def create_work_item(  # noqa: PLR0913 - one creation path, the birth fact
 
     `restricted_knowledge` marks it at birth (ADR 0114): a fan-out child of a marked parent. An
     external tracker then receives a neutral title and no body; the work item keeps its own.
-
-    `key` was `cle`: the former keyword still works (ADR 0098 §3 (e)).
     """
-    given_key = key if key is not None else cle
     row, adapter = await project_tracker(session, project)
     url: str | None = None
     if adapter is None:
         # A schedule gives its own key, one per window, so that a second firing finds the first (S38-11).
-        key = given_key or await internal_work_item_key(session, project)
+        key = key or await internal_work_item_key(session, project)
     else:
         # Validate first: a refused field or budget must not leave an issue behind.
         await verify_birth(
@@ -624,29 +619,3 @@ async def timeline(session: AsyncSession, item: WorkItem) -> list[TimelineEntry]
             )
         )
     return sorted(entries, key=lambda e: e.ts)
-
-
-_statut_temporal = _temporal_status  # lang: fr-ok alias:internal
-cle_de_ticket_interne = internal_work_item_key  # lang: fr-ok alias:internal
-le_tracker_est_interne = tracker_is_internal  # lang: fr-ok alias:internal
-tracker_du_projet = project_tracker  # lang: fr-ok alias:internal
-DOCUMENTS_LOGICIELS = SOFTWARE_DOCUMENTS  # lang: fr-ok alias:internal
-sorties_a_ranger = outputs_to_store  # lang: fr-ok alias:internal
-ranger_les_sorties = store_outputs  # lang: fr-ok alias:internal
-creer_un_ticket = create_work_item  # lang: fr-ok alias:internal
-chronologie = timeline  # lang: fr-ok alias:internal
-
-alias_names(
-    __name__,
-    {
-        "_statut_temporal": "_temporal_status",  # lang: fr-ok alias:internal
-        "cle_de_ticket_interne": "internal_work_item_key",  # lang: fr-ok alias:internal
-        "le_tracker_est_interne": "tracker_is_internal",  # lang: fr-ok alias:internal
-        "tracker_du_projet": "project_tracker",  # lang: fr-ok alias:internal
-        "DOCUMENTS_LOGICIELS": "SOFTWARE_DOCUMENTS",  # lang: fr-ok alias:internal
-        "sorties_a_ranger": "outputs_to_store",  # lang: fr-ok alias:internal
-        "ranger_les_sorties": "store_outputs",  # lang: fr-ok alias:internal
-        "creer_un_ticket": "create_work_item",  # lang: fr-ok alias:internal
-        "chronologie": "timeline",  # lang: fr-ok alias:internal
-    },
-)

@@ -27,7 +27,7 @@ from ..schemas.agents import AgentNetwork, AgentSpec
 from ..schemas.network import NetworkDecisionBatch, RunNetwork
 from .definitions import ceiling_of, effective_policy
 from .egress import org_runner_hosts
-from .evenements import persist_event
+from .events import persist_event
 
 
 def instance_deny() -> list[str]:

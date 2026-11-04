@@ -31,7 +31,6 @@ from collections import OrderedDict, deque
 from collections.abc import Awaitable, Callable
 from functools import lru_cache
 
-from choregos_core.compat import alias_names
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
@@ -54,12 +53,7 @@ _WITH_PORT_OR_BRACKETS = re.compile(r"\[(?P<bracketed>[^\]]*)\](?::[0-9]+)?|(?P<
 
 
 class RateLimiter:
-    def __init__(self, per_minute: int | None = None, *, par_minute: int | None = None) -> None:
-        # The former keyword stays accepted until its callers are switched (ADR 0098 §3 (e)).
-        if per_minute is None:
-            per_minute = par_minute  # lang: fr-ok alias:internal
-        if per_minute is None:
-            raise TypeError("RateLimiter needs `per_minute`")
+    def __init__(self, per_minute: int) -> None:
         self.per_minute = per_minute
         self._windows: OrderedDict[str, deque[float]] = OrderedDict()
 
@@ -81,17 +75,6 @@ class RateLimiter:
         while len(self._windows) > MAX_KEYS:
             self._windows.popitem(last=False)
         return True, 0
-
-    admet = admits  # lang: fr-ok alias:internal
-
-    @property
-    def _fenetres(self) -> OrderedDict[str, deque[float]]:  # lang: fr-ok alias:internal
-        """The former name of `_windows`, which tests of other stories read and replace."""
-        return self._windows
-
-    @_fenetres.setter
-    def _fenetres(self, value: OrderedDict[str, deque[float]]) -> None:  # lang: fr-ok alias:internal
-        self._windows = value
 
 
 @lru_cache(maxsize=16)
@@ -180,13 +163,3 @@ def install(app: FastAPI, per_minute: int) -> RateLimiter:
         return await call_next(request)
 
     return limiter
-
-
-alias_names(
-    __name__,
-    {  # lang: fr-ok alias:internal
-        "Limiteur": "RateLimiter",
-        "installer": "install",
-        "FENETRE_S": "WINDOW_S",
-    },
-)

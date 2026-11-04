@@ -245,15 +245,15 @@ async def platform(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncItera
 @pytest.fixture
 def worker(platform: Platform) -> Any:
     from choregos_orchestrator.activities import ALL_ACTIVITIES
-    from choregos_orchestrator.testing import workers_repartis
+    from choregos_orchestrator.testing import workers_by_queue
     from choregos_orchestrator.workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
 
     def factory(task_queue: str = "e2e") -> Any:
-        return workers_repartis(
+        return workers_by_queue(
             platform.env.client,
-            activites=[*ALL_ACTIVITIES, *WORKFLOW_ACTIVITIES],
+            activities=[*ALL_ACTIVITIES, *WORKFLOW_ACTIVITIES],
             workflows=ALL_WORKFLOWS,
-            file_du_workflow=task_queue,
+            workflow_queue=task_queue,
         )
 
     return factory

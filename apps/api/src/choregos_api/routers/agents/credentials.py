@@ -54,7 +54,7 @@ def _credential_dto(db_row: AgentCredential, api_token: ApiToken | None = None) 
 async def list_org_credentials(org: str, session: Db, principal: Me) -> list[AgentCredentialDto]:
     """Every client attached to an agent of the organisation, with its agent (S30-04): the AI
     clients' page read one list per external agent."""
-    from ...db.session import en_portee_de_plateforme
+    from ...db.session import in_platform_scope
 
     _admin(principal, org)
     organisation = await organisation_by_slug(session, org)
@@ -69,7 +69,7 @@ async def list_org_credentials(org: str, session: Db, principal: Me) -> list[Age
     ids = [db_row.api_token_id for db_row, _ in db_rows if db_row.api_token_id]
     api_tokens: dict[str, ApiToken] = {}
     if ids:
-        async with en_portee_de_plateforme(session):
+        async with in_platform_scope(session):
             found_tokens = await session.execute(select(ApiToken).where(ApiToken.id.in_(ids)))
             api_tokens = {api_token.id: api_token for api_token in found_tokens.scalars()}
     return [
@@ -84,7 +84,7 @@ async def list_org_credentials(org: str, session: Db, principal: Me) -> list[Age
     operation_id="listAgentCredentials",
 )
 async def list_credentials(org: str, slug: Slug, session: Db, principal: Me) -> list[AgentCredentialDto]:
-    from ...db.session import en_portee_de_plateforme
+    from ...db.session import in_platform_scope
 
     _, agent, subject = await load_visible_agent(session, principal, org, slug)
     enforce_decision(decide(principal, org, subject, Action.MANAGE))
@@ -96,7 +96,7 @@ async def list_credentials(org: str, slug: Slug, session: Db, principal: Me) -> 
     ids = [db_row.api_token_id for db_row in db_rows if db_row.api_token_id]
     api_tokens: dict[str, ApiToken] = {}
     if ids:
-        async with en_portee_de_plateforme(session):
+        async with in_platform_scope(session):
             found_tokens = await session.execute(select(ApiToken).where(ApiToken.id.in_(ids)))
             api_tokens = {api_token.id: api_token for api_token in found_tokens.scalars()}
     return [_credential_dto(db_row, api_tokens.get(db_row.api_token_id or "")) for db_row in db_rows]
@@ -113,7 +113,7 @@ async def attach_credential(
 ) -> AgentCredentialDto:
     """Attach an MCP door client to an `external` agent: its calls then carry the agent,
     and its rights are those of the human intersected with those of the agent's version."""
-    from ...db.session import en_portee_de_plateforme
+    from ...db.session import in_platform_scope
 
     organisation, agent, subject = await load_visible_agent(session, principal, org, slug)
     enforce_decision(decide(principal, org, subject, Action.MANAGE))
@@ -122,7 +122,7 @@ async def attach_credential(
     if body.kind == "token":
         if not body.token_id:
             raise unprocessable("`token_id` is missing")
-        async with en_portee_de_plateforme(session):
+        async with in_platform_scope(session):
             api_token = await session.get(ApiToken, body.token_id)
         if api_token is None or not set(api_token.scopes or []) & {"mcp:read", "mcp:write"}:
             raise unprocessable("an existing `mcp:read` or `mcp:write` token is expected")

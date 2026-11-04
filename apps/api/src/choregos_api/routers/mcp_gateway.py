@@ -28,7 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..audit import record
 from ..config import get_settings
 from ..db.models import Organization, OrgConnector
-from ..deps import Db, DbPlateforme, Me
+from ..deps import Db, Me, PlatformDb
 from ..errors import conflict, forbidden, not_found
 from ..rbac import Principal
 from ..schemas.mcp_gateway import (
@@ -273,7 +273,7 @@ async def rotate_assertion_key(org: str, session: Db, principal: Me) -> McpGatew
 
 
 @router.get("/orgs/{org}/mcp-gateway/jwks.json", response_model=None, operation_id="getMcpGatewayJwks")
-async def get_jwks(org: str, session: DbPlateforme) -> Response:
+async def get_jwks(org: str, session: PlatformDb) -> Response:
     """The organisation's public assertion keys, unauthenticated. One 404 for an unknown organisation
     and for one without a key. Reads `Organization.settings` only, never the secret store."""
     organisation = (

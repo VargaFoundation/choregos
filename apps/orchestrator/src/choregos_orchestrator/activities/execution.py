@@ -17,7 +17,7 @@ from urllib.parse import urlsplit
 from choregos_adapters.errors import ConfigurationError
 from choregos_adapters.executor.log_archive import archive_run_logs
 from choregos_api.db.models import Run, RunEvent, WorkItem
-from choregos_api.db.session import limiter_aux_organisations
+from choregos_api.db.session import limit_to_organisations
 from choregos_api.security import mint_run_token
 from choregos_api.services import persist_event
 from choregos_contracts import EventType, StageInput, StageResult, StageStatus
@@ -239,7 +239,7 @@ async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
         if stage_input.remote is not None:
             await session.commit()
             # The scope of the transaction ended with the commit (RLS is transaction-local).
-            await limiter_aux_organisations(session, "*")
+            await limit_to_organisations(session, "*")
         spec = StageJobSpec(
             run_id=stage_input.run_id,
             project_slug=bundle.slug,
@@ -255,8 +255,8 @@ async def start_run(payload: dict[str, Any]) -> dict[str, Any]:
             remote_token=remote_token,
             stage_input=stage_input.model_copy(update={"gateway_key": None}),
             timeout_minutes=stage_input.budget.max_minutes + 10,
-            runtime_class=classe_d_execution(settings, bundle.policy),
-            env=env_du_runner(settings, _runner_namespace(settings, bundle.slug)),
+            runtime_class=runtime_class(settings, bundle.policy),
+            env=runner_environment(settings, _runner_namespace(settings, bundle.slug)),
             labels={
                 "choregos/project": bundle.slug,
                 "choregos/run-id": stage_input.run_id,
@@ -631,9 +631,3 @@ async def cancel_run(payload: dict[str, Any]) -> None:
             run.status = "cancelled"
         run.ended_at = run.ended_at or utcnow()
     await close_run_spend(payload["project_id"], payload["run_id"])
-
-
-hotes_a_joindre_en_direct = hosts_to_reach_directly  # lang: fr-ok alias:internal
-env_du_runner = runner_environment  # lang: fr-ok alias:internal
-classe_d_execution = runtime_class  # lang: fr-ok alias:internal
-FILE_MAX_MINUTES = QUEUE_MAX_MINUTES  # lang: fr-ok alias:internal

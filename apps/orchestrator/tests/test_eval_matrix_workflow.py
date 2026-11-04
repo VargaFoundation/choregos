@@ -8,7 +8,7 @@ from temporalio import activity
 
 
 async def _play_matrix(payload: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    from choregos_orchestrator.testing import workers_repartis
+    from choregos_orchestrator.testing import workers_by_queue
     from choregos_orchestrator.workflows.evals import EvalMatrix
     from temporalio.testing import WorkflowEnvironment
 
@@ -29,11 +29,11 @@ async def _play_matrix(payload: dict[str, Any]) -> tuple[list[dict[str, Any]], d
 
     environment = await WorkflowEnvironment.start_time_skipping()
     try:
-        async with workers_repartis(
+        async with workers_by_queue(
             environment.client,
-            activites=[list_fixtures, run_eval_cell, publish_matrix],
+            activities=[list_fixtures, run_eval_cell, publish_matrix],
             workflows=[EvalMatrix],
-            file_du_workflow="evals",
+            workflow_queue="evals",
         ):
             result = await environment.client.execute_workflow(
                 "EvalMatrix", payload, id="evals-contexts", task_queue="evals"
@@ -59,7 +59,7 @@ async def test_a_matrix_without_contexts_asks_the_none_cells() -> None:
 
 async def _play_live(payload: dict[str, Any], *, failing: str = "") -> tuple[list[str], dict[str, Any]]:
     """The live path with stub activities: the names of the activities, in the order they ran."""
-    from choregos_orchestrator.testing import workers_repartis
+    from choregos_orchestrator.testing import workers_by_queue
     from choregos_orchestrator.workflows.evals import EvalMatrix
     from temporalio.exceptions import ApplicationError
     from temporalio.testing import WorkflowEnvironment
@@ -98,8 +98,8 @@ async def _play_live(payload: dict[str, Any], *, failing: str = "") -> tuple[lis
     ]
     environment = await WorkflowEnvironment.start_time_skipping()
     try:
-        async with workers_repartis(
-            environment.client, activites=activities, workflows=[EvalMatrix], file_du_workflow="evals"
+        async with workers_by_queue(
+            environment.client, activities=activities, workflows=[EvalMatrix], workflow_queue="evals"
         ):
             result = await environment.client.execute_workflow(
                 "EvalMatrix", payload, id="evals-live", task_queue="evals"
@@ -168,7 +168,7 @@ async def _cancel_live(blocking: str) -> tuple[list[str], list[dict[str, Any]], 
     that ran, the payloads `cancel_run` received, the error of the workflow and its history."""
     import asyncio
 
-    from choregos_orchestrator.testing import workers_repartis
+    from choregos_orchestrator.testing import workers_by_queue
     from choregos_orchestrator.workflows.evals import EvalMatrix
     from temporalio.client import WorkflowFailureError
     from temporalio.testing import WorkflowEnvironment
@@ -213,8 +213,8 @@ async def _cancel_live(blocking: str) -> tuple[list[str], list[dict[str, Any]], 
     error: BaseException = AssertionError("the cancelled matrix ended normally")
     environment = await WorkflowEnvironment.start_time_skipping()
     try:
-        async with workers_repartis(
-            environment.client, activites=activities, workflows=[EvalMatrix], file_du_workflow="evals"
+        async with workers_by_queue(
+            environment.client, activities=activities, workflows=[EvalMatrix], workflow_queue="evals"
         ):
             handle = await environment.client.start_workflow(
                 "EvalMatrix", payload, id=f"evals-cancel-{blocking}", task_queue="evals"

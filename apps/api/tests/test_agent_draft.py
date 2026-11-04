@@ -26,7 +26,7 @@ SKILL_MD = (
 
 @pytest.fixture(autouse=True)
 def _fresh_window() -> None:
-    agent_drafts.limiter._fenetres.clear()
+    agent_drafts.limiter._windows.clear()
 
 
 class Scripted:

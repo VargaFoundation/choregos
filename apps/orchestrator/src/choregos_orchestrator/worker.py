@@ -45,7 +45,7 @@ async def start_reconciliation_loops() -> list[str]:
     The start is idempotent: restarting a worker does not create a second loop, and a project added
     afterwards is picked up at the next restart or by the API.
     """
-    from choregos_api.services.projets import active_project_slugs
+    from choregos_api.services.projects import active_project_slugs
 
     from .train_client import start_reconciliation_loop
 
@@ -69,7 +69,7 @@ async def start_memory_loops() -> list[str]:
     Idempotent like the tracker loops: restarting a worker does not create a second loop, and a loop
     that died in failure starts again. A project whose policy says `memory.enabled: false` gets none.
     """
-    from choregos_api.services.projets import active_project_slugs
+    from choregos_api.services.projects import active_project_slugs
 
     from .train_client import start_memory_loop
 

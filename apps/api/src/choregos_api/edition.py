@@ -124,7 +124,7 @@ def declare_group_mapper(function: Any) -> None:
     """Replaces the translation of IdP groups into roles per organisation. The core never calls it.
 
     Expected signature: `(groups: list[str], default_org: str) -> dict[str, Role]`, the same as
-    `routers.auth.roles_des_groupes`, which stays the default.
+    `routers.auth.roles_from_groups`, which stays the default.
 
     WARNING: **a replacement mapper must DELEGATE to the core's mapper for what it does not
     understand**, instead of returning an empty dictionary. It replaces the WHOLE translation: a
@@ -134,7 +134,7 @@ def declare_group_mapper(function: Any) -> None:
     organisation, and the cause was not where the message pointed.
 
         def mine(groups, default_org):
-            roles = dict(roles_des_groupes(groups, default_org))   # the core first
+            roles = dict(roles_from_groups(groups, default_org))   # the core first
             ...                                                    # then the house forms
             return roles
     """

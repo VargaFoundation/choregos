@@ -165,25 +165,23 @@ def test_recorded_error_types_stay_on_marked_lines() -> None:
     assert found == RECORDED_ERROR_TYPES
 
 
-def test_former_module_paths_still_resolve() -> None:
+def test_the_english_modules_hold_what_the_former_paths_forwarded() -> None:
     outcome = importlib.import_module("choregos_orchestrator.activities.outcome")
     guard = importlib.import_module("choregos_orchestrator.activities.injection_guard")
-    assert importlib.import_module("choregos_orchestrator.activities.bilan") is outcome  # lang: fr-ok
-    assert importlib.import_module("choregos_orchestrator.activities.garde") is guard  # lang: fr-ok
+    for former in ("bilan", "garde"):
+        assert importlib.util.find_spec(f"choregos_orchestrator.activities.{former}") is None  # lang: fr-ok
     assert hasattr(outcome, "collect_spend") and hasattr(outcome, "record_run_outcome")
     assert hasattr(guard, "guard_against_injection") and hasattr(guard, "guard_sources")
 
 
-def test_former_names_still_resolve() -> None:
+def test_the_english_helpers_are_defined() -> None:
     from choregos_orchestrator.activities import execution, gates, interpretation, provisioning, stage
 
-    assert execution.env_du_runner is execution.runner_environment  # lang: fr-ok
-    assert execution.classe_d_execution is execution.runtime_class  # lang: fr-ok
-    assert execution.hotes_a_joindre_en_direct is execution.hosts_to_reach_directly  # lang: fr-ok
-    assert stage.env_du_runner is execution.runner_environment  # lang: fr-ok
-    assert stage.FILE_MAX_MINUTES == execution.QUEUE_MAX_MINUTES  # lang: fr-ok
-    assert gates.texte_ajoute is gates.added_text_of  # lang: fr-ok
-    assert interpretation.message_de is interpretation.message_of  # lang: fr-ok
-    assert interpretation.activite_de is interpretation.activity_of  # lang: fr-ok
-    assert provisioning.etiquettes_du_pas is provisioning.step_labels  # lang: fr-ok
-    assert provisioning.repertoire_templates is provisioning.templates_dir  # lang: fr-ok
+    assert callable(execution.runner_environment) and callable(execution.runtime_class)
+    assert callable(execution.hosts_to_reach_directly)
+    assert stage.runner_environment is execution.runner_environment
+    assert stage.QUEUE_MAX_MINUTES == execution.QUEUE_MAX_MINUTES
+    assert callable(gates.added_text_of)
+    assert callable(interpretation.message_of) and callable(interpretation.activity_of)
+    assert callable(provisioning.step_labels)
+    assert provisioning.templates_dir is not None

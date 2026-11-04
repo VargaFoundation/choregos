@@ -433,7 +433,3 @@ async def finish_provisioning(payload: dict[str, Any]) -> dict[str, Any]:
             except Exception as exc:  # the project is active; the worker start catches up
                 activity.logger.warning("memory loop not started for %s: %s", slug, exc)
     return {"status": state["status"], "failed": [s["name"] for s in failed]}
-
-
-repertoire_templates = templates_dir  # lang: fr-ok alias:internal
-etiquettes_du_pas = step_labels  # lang: fr-ok alias:internal

@@ -8,7 +8,7 @@ import re
 from typing import Any
 
 from choregos_api.db.models import Finding, WorkItem
-from choregos_api.services import Naissance, nouveau_ticket, persist_event
+from choregos_api.services import WorkItemBirth, new_work_item, persist_event
 from choregos_api.services.initiator import initiator
 from choregos_contracts import EventType
 from choregos_core import Message, NewItem, utcnow
@@ -135,10 +135,10 @@ async def triage_finding(payload: dict[str, Any]) -> dict[str, Any]:
             # to return the title, hence keys like `[docs] Base de profils manquante`.
             key = await internal_ticket_key(session, bundle)
         # Born in the workflow its labels designate (ADR 0031), no longer hard-coded in `inbox` (#173).
-        created = await nouveau_ticket(
+        created = await new_work_item(
             session,
             bundle.project,
-            Naissance(
+            WorkItemBirth(
                 tracker_key=key,
                 title=row.title,
                 body=body,

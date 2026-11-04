@@ -14,8 +14,7 @@ What a run sees is the intersection of four decisions:
 - the operation's GROUPS, which must intersect the project's (none: all);
 - what the PROJECT tightens.
 
-This module was `services/courtier.py` (ADR 0034, ADR 0046): that path is now a shim that
-re-exports these names under their former ones, until S45 switches the importers.
+This module was `services/courtier.py` (ADR 0034, ADR 0046); the former path is gone.
 """
 
 from __future__ import annotations
@@ -41,7 +40,7 @@ from ..db.models import (
     Run,
 )
 from .catalogue_rights import SELECTED_PROJECTS, enabled_ids
-from .connecteurs import declared_operation, human_floor, plus_stricte
+from .connectors import declared_operation, human_floor, stricter
 from .mcp_gateway import connector_client, route_of
 from .mcp_gateway_identity import GatewayRefusal, identity_of_run
 from .platform_network import (
@@ -104,26 +103,6 @@ class BrokerTool:
             "description": f"[{self.connector.name}] {description}",
             "inputSchema": self.operation.input_schema or {"type": "object"},
         }
-
-    # former names, read by routers/internal.py and services/agent_sessions.py until S45 (ADR 0046)
-    @property
-    def nom(self) -> str:  # lang: fr-ok alias:internal
-        return self.name
-
-    @property
-    def connecteur(self) -> OrgConnector:  # lang: fr-ok alias:internal
-        return self.connector
-
-    @property
-    def sous_validation(self) -> bool:  # lang: fr-ok alias:internal
-        return self.needs_approval
-
-    @property
-    def ecriture(self) -> bool:  # lang: fr-ok alias:internal
-        return self.is_write
-
-    def annonce(self) -> dict[str, Any]:  # lang: fr-ok alias:internal
-        return self.announcement()
 
 
 async def _selection_of_run(session: AsyncSession, run: Run) -> dict[str, list[str]]:
@@ -191,7 +170,7 @@ async def tools_of_selection(
         if connector.availability == SELECTED_PROJECTS and connector.id not in enabled:
             continue
         effective = human_floor(
-            connector, operation.name, plus_stricte(operation.policy, tightened.get(operation.id))
+            connector, operation.name, stricter(operation.policy, tightened.get(operation.id))
         )
         if effective == "forbidden":
             continue
@@ -241,8 +220,8 @@ async def _propose_tool_action(
     from choregos_contracts import ActionOrigin
 
     from ..rbac import SYSTEM
-    from ..schemas.actions import ActionCreate, ActionEffectSpec, Approbateur, ApprovalSpec
-    from .actions import proposer
+    from ..schemas.actions import ActionCreate, ActionEffectSpec, ApprovalSpec, Approver
+    from .actions import propose
 
     effect: dict[str, Any] = {
         "effect": "connector.call",
@@ -263,7 +242,7 @@ async def _propose_tool_action(
     # Who approves (ADR 0052): the members of the group the organisation named for this operation —
     # with at least a developer's rank on the project —, otherwise the project's owners (ADR 0035).
     approval = (
-        ApprovalSpec(approvers=[Approbateur(role="developer", group=tool.operation.approver_group)])
+        ApprovalSpec(approvers=[Approver(role="developer", group=tool.operation.approver_group)])
         if tool.operation.approver_group
         else ApprovalSpec()
     )
@@ -276,12 +255,12 @@ async def _propose_tool_action(
         approval=approval,
         work_item_id=run.work_item_id,
     )
-    return await proposer(
+    return await propose(
         session,
         project,
         body,
-        origine=ActionOrigin.TOOL.value,
-        propose_par={"kind": "agent", "id": f"agent:{run.agent_slug}", "run_id": run.id},
+        origin=ActionOrigin.TOOL.value,
+        proposed_by={"kind": "agent", "id": f"agent:{run.agent_slug}", "run_id": run.id},
         principal=SYSTEM,
         run_id=run.id,
         action_id=action_id,
@@ -316,26 +295,26 @@ async def write_through_action(
 
     from ..config import get_settings
     from ..db.models import Action
-    from ..db.session import TOUT, limiter_aux_organisations, session_scope
+    from ..db.session import ALL_ORGS, limit_to_organisations, session_scope
     from ..temporal import action_id as temporal_action_id
     from ..temporal import get_temporal
-    from .actions import approuvee_par_la_politique, politique_de_l_action
+    from .actions import action_policy, approved_by_policy
 
     action_id = call_id(run.id, tool.name, arguments)
     action = await session.get(Action, action_id)
     created = action is None
     if action is None:
         action = await _propose_tool_action(session, run, project, tool, arguments, action_id)
-        worst, _reasons = await politique_de_l_action(session, project, action.effects, action.params or {})
+        worst, _reasons = await action_policy(session, project, action.effects, action.params or {})
         if worst != "allowed":
             # Tightened since the announcement (the organisation, the project): a person decides.
             return 202, _pending(project, action), created
-        await approuvee_par_la_politique(session, project, action)
+        await approved_by_policy(session, project, action)
         # The row must be VISIBLE before the workflow reads it, and the wait below reads what the
         # worker commits: we commit here, then the run token's scope is set again — it only lives
         # for the length of one transaction.
         await session.commit()
-        await limiter_aux_organisations(session, TOUT)
+        await limit_to_organisations(session, ALL_ORGS)
         await get_temporal().start_action(temporal_action_id(action.id), {"action_id": action.id})
     deadline = time.monotonic() + get_settings().courtier_attente_ecriture_s
     finished = {ActionStatus.SUCCEEDED.value, ActionStatus.FAILED.value, ActionStatus.REJECTED.value}
@@ -343,7 +322,7 @@ async def write_through_action(
         # One SHORT read per round: a transaction held open between two rounds would keep, under
         # SQLite, the lock that stops the worker from committing what it writes — the wait would
         # bound itself.
-        async with session_scope(orgs=TOUT) as reading:
+        async with session_scope(orgs=ALL_ORGS) as reading:
             current = await reading.get(Action, action_id)
             status = current.status if current is not None else action.status
         if status in finished or time.monotonic() >= deadline:

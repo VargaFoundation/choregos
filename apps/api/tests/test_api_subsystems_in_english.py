@@ -52,14 +52,3 @@ async def test_door_audit_keys_unchanged(client: AsyncClient, project: dict[str,
     assert calls
     for call in calls:
         assert {"ecriture", "jeton", "issue"} <= set(call.payload)  # lang: fr-ok - persisted audit keys
-
-
-def test_former_session_names_still_import() -> None:
-    from choregos_api.db import session
-    from choregos_api.db.models import is_core_object, objet_du_coeur  # lang: fr-ok alias:internal
-
-    assert session.TOUT == session.ALL_ORGS == "*"  # lang: fr-ok alias:internal
-    assert session.limiter_aux_organisations is session.limit_to_organisations  # lang: fr-ok alias:internal
-    assert session.nommer_l_utilisateur is session.name_the_user  # lang: fr-ok alias:internal
-    assert session.en_portee_de_plateforme is session.in_platform_scope  # lang: fr-ok alias:internal
-    assert objet_du_coeur is is_core_object  # lang: fr-ok alias:internal

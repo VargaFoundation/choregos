@@ -62,11 +62,8 @@ def _http_refusal(
     oauth_error: str | None = None,
     settings: Settings | None = None,
     path: str | None = None,
-    erreur_oauth: str | None = None,  # lang: fr-ok alias:internal
-    chemin: str | None = None,  # lang: fr-ok alias:internal
 ) -> JSONResponse:
-    oauth_error = oauth_error if oauth_error is not None else erreur_oauth
-    path = path or chemin or "/mcp"
+    path = path or "/mcp"
     headers = {}
     if status in {401, 403}:
         value = 'Bearer realm="choregos"'
@@ -238,7 +235,3 @@ async def _audit(ctx: Context, tool: str, write: bool, issue: str, request: Requ
 
 
 __all__ = ["Caller", "router"]
-
-TAILLE_MAX_DU_CORPS = MAX_BODY_SIZE  # lang: fr-ok alias:internal
-_origines_admises = _allowed_origins  # lang: fr-ok alias:internal
-_refus_http = _http_refusal  # lang: fr-ok alias:internal

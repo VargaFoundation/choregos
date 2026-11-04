@@ -37,8 +37,8 @@ from ...services.agent_releases import (
 )
 from ...services.agent_views import agent_pins, agent_version_dto, agent_versions
 from ...services.agents import (
-    empreinte,
-    erreurs_d_une_version,
+    digest,
+    version_errors,
 )
 from ...services.egress import egress_gate_for_remote_agent
 from ...services.hosted_builds import builds_for
@@ -70,7 +70,7 @@ async def _append_version(  # noqa: PLR0913 - the actors and the three ways a ve
     (`no_change`). A restore carries the source's exact spec and checksum. Nothing is ever rewritten.
     A remote agent's card host is opened first (S39-22, ADR 0066), with `allow_egress`."""
     enforce_decision(decide(principal, org, subject, Action.PUBLISH))
-    erreurs_d_une_version(spec)
+    version_errors(spec)
     await check_agent_network(session, organisation.id, spec)
     await _skills_usable(session, organisation, spec)
     await _model_allowed(session, organisation, spec)
@@ -91,7 +91,7 @@ async def _append_version(  # noqa: PLR0913 - the actors and the three ways a ve
     versions = await agent_versions(session, agent)
     latest_row = versions[0] if versions else None
     version_number = latest_row.version if latest_row else 0
-    checksum = restored_from.checksum if restored_from is not None else empreinte(spec)
+    checksum = restored_from.checksum if restored_from is not None else digest(spec)
     if base_version is not None:
         if base_version != version_number:
             author = latest_row.created_by if latest_row and latest_row.created_by else "someone"

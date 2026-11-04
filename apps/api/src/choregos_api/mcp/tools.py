@@ -32,10 +32,10 @@ from ..rbac import Permission
 from ..schemas import WorkItemCreate
 from ..services import (
     active_workflow,
-    chronologie,
-    creer_un_ticket,
-    le_tracker_est_interne,
+    create_work_item,
     run_dto,
+    timeline,
+    tracker_is_internal,
     work_item_dto,
     workflow_model,
 )
@@ -205,7 +205,7 @@ async def _list_projects(ctx: Context, arguments: dict[str, Any]) -> tuple[str, 
                 "project": _name(org, project),
                 "name": project.name,
                 "status": project.status,
-                "internal_tracker": await le_tracker_est_interne(ctx.session, project),
+                "internal_tracker": await tracker_is_internal(ctx.session, project),
                 "console_url": _url(ctx, project),
             }
         )
@@ -272,7 +272,7 @@ async def _create_work_item(ctx: Context, arguments: dict[str, Any]) -> tuple[st
     except ValidationError as error:
         raise ToolRefused(f"invalid arguments: {error.errors()[0]['msg']}") from error
     try:
-        item = await creer_un_ticket(ctx.session, principal, project, requested, canal="mcp")
+        item = await create_work_item(ctx.session, principal, project, requested, canal="mcp")
     except ApiError as error:
         raise ToolRefused(error.detail or error.title) from error
     dto = await work_item_dto(ctx.session, item, project)
@@ -337,7 +337,7 @@ async def _search_work_items(ctx: Context, arguments: dict[str, Any]) -> tuple[s
 async def _get_work_item(ctx: Context, arguments: dict[str, Any]) -> tuple[str, Any]:
     item, project, org = await _work_item(ctx, arguments.get("work_item"))
     dto = await work_item_dto(ctx.session, item, project, with_temporal=True)
-    history = (await chronologie(ctx.session, item))[-_limit(arguments, default=15) :]
+    history = (await timeline(ctx.session, item))[-_limit(arguments, default=15) :]
     link = _url(ctx, project, f"/items/{item.id}")
     pending_item = None
     if dto.pending_request is not None:
@@ -651,11 +651,3 @@ async def announced_tools(ctx: Context) -> list[Tool]:
 
         visible = [o for o in visible if any(fnmatchcase(o.name, pattern) for pattern in ctx.caller.reasons)]
     return visible
-
-
-OutilRefuse = ToolRefused  # lang: fr-ok alias:internal
-Contexte = Context  # lang: fr-ok alias:internal
-Executeur = Executor  # lang: fr-ok alias:internal
-Outil = Tool  # lang: fr-ok alias:internal
-annonces = announced_tools  # lang: fr-ok alias:internal
-outils = core_tools  # lang: fr-ok alias:internal

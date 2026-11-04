@@ -30,7 +30,6 @@ from choregos_contracts import (
     skill_digest,
     skill_file_bytes,
 )
-from choregos_core.compat import alias_names
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -258,31 +257,3 @@ async def publish_version(  # noqa: PLR0913 - the old `_publier`, moved, plus on
         **({"source": source} if source else {}),
     )
     return skill, version
-
-
-MAX_FICHIERS = MAX_FILES  # lang: fr-ok alias:internal
-MAX_OCTETS = MAX_BYTES  # lang: fr-ok alias:internal
-NOM = NAME  # lang: fr-ok alias:internal
-SkillRefusee = SkillRefused  # lang: fr-ok alias:internal
-Entete = FrontMatter  # lang: fr-ok alias:internal
-chemin_sur = safe_path  # lang: fr-ok alias:internal
-lire_le_zip = read_zip_files  # lang: fr-ok alias:internal
-entete = front_matter  # lang: fr-ok alias:internal
-valider = validate  # lang: fr-ok alias:internal
-empreinte = digest  # lang: fr-ok alias:internal
-
-alias_names(
-    __name__,
-    {
-        "MAX_FICHIERS": "MAX_FILES",  # lang: fr-ok alias:internal
-        "MAX_OCTETS": "MAX_BYTES",  # lang: fr-ok alias:internal
-        "NOM": "NAME",  # lang: fr-ok alias:internal
-        "SkillRefusee": "SkillRefused",  # lang: fr-ok alias:internal
-        "Entete": "FrontMatter",  # lang: fr-ok alias:internal
-        "chemin_sur": "safe_path",  # lang: fr-ok alias:internal
-        "lire_le_zip": "read_zip_files",  # lang: fr-ok alias:internal
-        "entete": "front_matter",  # lang: fr-ok alias:internal
-        "valider": "validate",  # lang: fr-ok alias:internal
-        "empreinte": "digest",  # lang: fr-ok alias:internal
-    },
-)

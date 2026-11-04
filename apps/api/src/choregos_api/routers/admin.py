@@ -26,7 +26,7 @@ from ..db.models import (
     Project,
     User,
 )
-from ..db.session import en_portee_de_plateforme
+from ..db.session import in_platform_scope
 from ..deps import Config, Db, Me, Pagination, require_platform_admin
 from ..errors import conflict, forbidden, not_found, unprocessable
 from ..schemas import (
@@ -58,7 +58,7 @@ async def rewrap_secrets(session: Db, principal: Me) -> SecretsRewrap:
 
     await require_platform_admin(session, principal)
     try:
-        async with en_portee_de_plateforme(session):
+        async with in_platform_scope(session):
             rewrapped = await SealedDbSecretStore().rewrap(session)
     except SecretStoreUnavailable as refus:
         raise conflict(str(refus)) from refus
@@ -253,7 +253,7 @@ async def add_member(org: str, body: MembershipUpsert, session: Db, principal: M
         raise unprocessable("`org_admin` is a role of the organisation, not of a project")
     # The e-mail is unique across the whole INSTANCE: a user who already belongs to another
     # organisation is invisible under the RLS of `users`, and the route tried a duplicate.
-    async with en_portee_de_plateforme(session):
+    async with in_platform_scope(session):
         user = (await session.execute(select(User).where(User.email == body.email))).scalar_one_or_none()
     if user is None:
         user = User(email=body.email, display_name=body.email.split("@")[0])

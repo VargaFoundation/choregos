@@ -25,7 +25,6 @@ from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
 from choregos_contracts import ChoregosEvent, EventType
-from choregos_core.compat import alias_names
 
 from .logging import get_logger
 
@@ -163,23 +162,14 @@ class PostgresRelay:
         self._task: asyncio.Task[None] | None = None
         self.received = 0
 
-    @property
-    def recus(self) -> int:  # lang: fr-ok alias:internal
-        """The former name of `received`."""
-        return self.received
-
     def start(self) -> None:
         self._task = asyncio.create_task(self._loop())
-
-    demarrer = start  # lang: fr-ok alias:internal
 
     async def stop(self) -> None:
         if self._task is not None:
             self._task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._task
-
-    arreter = stop  # lang: fr-ok alias:internal
 
     def _receive(self, _conn: Any, _pid: int, _channel: str, payload: str) -> None:
         try:
@@ -231,21 +221,3 @@ def sse_format(event: ChoregosEvent) -> dict[str, str]:
         "event": str(event.type),
         "data": event.model_dump_json(),
     }
-
-
-CANAL = CHANNEL  # lang: fr-ok alias:internal
-TAILLE_MAX = MAX_PAYLOAD_BYTES  # lang: fr-ok alias:internal
-diffuser = broadcast  # lang: fr-ok alias:internal
-_charge_utile = _payload_of  # lang: fr-ok alias:internal
-RelaisPostgres = PostgresRelay  # lang: fr-ok alias:internal
-
-alias_names(
-    __name__,
-    {
-        "CANAL": "CHANNEL",  # lang: fr-ok alias:internal
-        "TAILLE_MAX": "MAX_PAYLOAD_BYTES",  # lang: fr-ok alias:internal
-        "diffuser": "broadcast",  # lang: fr-ok alias:internal
-        "_charge_utile": "_payload_of",  # lang: fr-ok alias:internal
-        "RelaisPostgres": "PostgresRelay",  # lang: fr-ok alias:internal
-    },
-)

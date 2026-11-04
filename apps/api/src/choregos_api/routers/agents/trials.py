@@ -30,13 +30,13 @@ from ...services.agent_releases import (
     production_spec,
 )
 from ...services.agents import (
-    erreurs_d_une_version,
+    version_errors,
 )
 from ...services.hosted_images import pin_hosted_runtime
 from ...services.memory_access import check_bindings_at_publish
 from ...services.network import check_agent_network
 from ...services.organisations import organisation_by_slug
-from ...services.routage import nouveau_ticket_d_essai
+from ...services.routing import new_trial_work_item
 from ._common import _model_allowed
 from ._router import router
 
@@ -69,7 +69,7 @@ async def start_agent_trial(org: str, body: AgentTrialCreate, session: Db, princ
     if body.agent:
         _, _, subject = await load_visible_agent(session, principal, org, body.agent)
     enforce_decision(decide(principal, org, subject, Action.TRIAL, project_slug=body.project))
-    erreurs_d_une_version(body.spec)
+    version_errors(body.spec)
     await _model_allowed(session, organisation, body.spec)
     await check_bindings_at_publish(session, principal, organisation, body.spec)
     await check_agent_network(session, organisation.id, body.spec)
@@ -84,7 +84,7 @@ async def start_agent_trial(org: str, body: AgentTrialCreate, session: Db, princ
     if body.spec.budget.run_usd is not None:
         plafonds.append(body.spec.budget.run_usd)
     budget = round(min(plafonds), 4)
-    item = await nouveau_ticket_d_essai(
+    item = await new_trial_work_item(
         session,
         project_row,
         title=body.input.title or "Trial",

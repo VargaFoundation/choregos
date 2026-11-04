@@ -24,13 +24,13 @@ async def _pin(setup: Fixture, name: str) -> None:
     from choregos_api.db.models import Project, WorkItem
     from choregos_api.db.session import session_scope
     from choregos_api.rbac import SYSTEM
-    from choregos_api.services.definitions import publier_workflow
+    from choregos_api.services.definitions import publish_workflow
     from choregos_core.dsl import template_yaml
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
         assert project is not None
-        definition = await publier_workflow(session, SYSTEM, project, template_yaml(name))
+        definition = await publish_workflow(session, SYSTEM, project, template_yaml(name))
         item = await session.get(WorkItem, setup.work_item_id)
         assert item is not None
         item.workflow_def_id = definition.id

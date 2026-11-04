@@ -39,7 +39,7 @@ from ..errors import ApiError, conflict
 from ..rbac import Principal
 from ..schemas import WorkItemCreate
 from . import received_events
-from .definitions import project_config, workflow_du_ticket, workflow_model
+from .definitions import project_config, work_item_workflow, workflow_model
 
 #: A token reads as one in a log or a secret scanner.
 TOKEN_PREFIX = "chtrg_"  # noqa: S105 - a prefix, not a secret
@@ -318,7 +318,7 @@ async def fire(
     if firing.outcome == "duplicate":
         return firing
     if firing.item is not None:
-        firing.workflow = workflow_model(await workflow_du_ticket(session, firing.item)).metadata.name
+        firing.workflow = workflow_model(await work_item_workflow(session, firing.item)).metadata.name
     received_events.record_firing(
         session,
         org_id=org_id,
@@ -343,11 +343,11 @@ async def _open(
     principal: Principal,
     initiated_by: str,
 ) -> Firing:
-    from .tickets import cle_de_ticket_interne, creer_un_ticket, le_tracker_est_interne
+    from .tickets import create_work_item, internal_work_item_key, tracker_is_internal
 
     if not await _first_delivery(session, project, trigger.name, delivery_id):
         return Firing("duplicate")
-    if not await le_tracker_est_interne(session, project):
+    if not await tracker_is_internal(session, project):
         raise conflict(
             f"trigger `{trigger.name}`: the project's tracker is external; a trigger opens work items "
             "in the internal tracker only"
@@ -359,7 +359,7 @@ async def _open(
     mapped = map_payload(trigger, payload)
     key: str | None = None
     if mapped.key_value is not None:
-        prefix = await cle_de_ticket_interne(session, project, numerotee=False)
+        prefix = await internal_work_item_key(session, project, numerotee=False)
         key = item_key(prefix, trigger.name, mapped.key_value)
         existing = (
             await session.execute(
@@ -368,7 +368,7 @@ async def _open(
         ).scalar_one_or_none()
         if existing is not None:
             return Firing("already_open", existing)
-    item = await creer_un_ticket(
+    item = await create_work_item(
         session,
         principal,
         project,
@@ -381,7 +381,7 @@ async def _open(
             start=True,
         ),
         canal="trigger",
-        cle=key,
+        key=key,
         initiated_by=initiated_by,
     )
     return Firing("created_work_item", item)

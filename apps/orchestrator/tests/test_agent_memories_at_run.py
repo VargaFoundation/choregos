@@ -246,12 +246,12 @@ async def test_the_legacy_single_memory_is_unchanged(setup: Fixture) -> None:
 
 
 def test_the_memory_server_is_announced_only_for_the_legacy_shared_memory() -> None:
-    from choregos_orchestrator.activities.stage import _serveurs_mcp
+    from choregos_orchestrator.activities.stage import _mcp_servers
 
     settings = SimpleNamespace(tools_sidecar_url="", memory_url="http://ecphoria:8432")
-    assert "memory" in _serveurs_mcp(settings, "project")
-    assert "memory" not in _serveurs_mcp(settings, "none"), "several, global or own: not the project's server"
-    assert "memory" not in _serveurs_mcp(settings, "agent")
+    assert "memory" in _mcp_servers(settings, "project")
+    assert "memory" not in _mcp_servers(settings, "none"), "several, global or own: not the project's server"
+    assert "memory" not in _mcp_servers(settings, "agent")
 
 
 async def _run_of(setup: Fixture, memories: list[dict[str, Any]], run_id: str = "run-1") -> str:

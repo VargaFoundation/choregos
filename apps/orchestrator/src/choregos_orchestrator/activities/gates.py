@@ -351,6 +351,3 @@ def _provenance(checks: list[Any]) -> bool | None:
     if not finished:
         return None
     return all(c.conclusion == "success" for c in finished)
-
-
-texte_ajoute = added_text_of  # lang: fr-ok alias:internal

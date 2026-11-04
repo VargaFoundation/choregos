@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """An organisation's policy ceiling: what a project policy may only tighten (S27-05).
 
-The same rule as an agent version's project overrides (`services/agents.py`, `elargissements`):
+The same rule as an agent version's project overrides (`services/agents.py`, `widenings`):
 below the ceiling, a project chooses; above it, it does not. A ceiling names caps — money, turns,
 minutes, attempts, tool calls, scope sizes —; a cap it does not name leaves the project free.
 

@@ -33,7 +33,7 @@ from ...services.agent_releases import (
     production_spec,
 )
 from ...services.agents import (
-    depense_du_jour,
+    spend_today,
 )
 from ...services.organisations import organisation_by_slug
 from ._router import Slug, router
@@ -111,7 +111,7 @@ async def agent_metrics(
             AgentProjectMetrics(project=project_key, runs=int(n), cost_usd=round(c, 6))
             for project_key, (n, c) in sorted(by_project.items())
         ],
-        spent_today_usd=round(await depense_du_jour(session, organisation.id, slug), 6),
+        spent_today_usd=round(await spend_today(session, organisation.id, slug), 6),
         daily_budget_usd=AgentSpec.model_validate(production_rev or {}).budget.daily_usd,
         by_version=[
             AgentVersionMetrics(

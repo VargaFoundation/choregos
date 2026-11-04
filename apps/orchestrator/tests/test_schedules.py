@@ -112,7 +112,7 @@ async def test_a_scheduled_key_does_not_move_the_numbering(setup: Fixture) -> No
     """`<PREFIX>-<n>` counts numbers: the window's key ends with a letter and is not one."""
     from choregos_api.db.models import Project
     from choregos_api.db.session import session_scope
-    from choregos_api.services.tickets import cle_de_ticket_interne
+    from choregos_api.services.tickets import internal_work_item_key
 
     await _schedule(setup, WEEKLY)
     await _fire(setup, MONDAY)
@@ -120,7 +120,7 @@ async def test_a_scheduled_key_does_not_move_the_numbering(setup: Fixture) -> No
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
         assert project is not None
-        assert await cle_de_ticket_interne(session, project) == "BILLING-API-1"
+        assert await internal_work_item_key(session, project) == "BILLING-API-1"
 
 
 async def test_a_refused_schedule_does_not_stop_the_others(setup: Fixture) -> None:

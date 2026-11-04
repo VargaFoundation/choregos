@@ -19,7 +19,7 @@ RESULT = {"status": "done", "summary": "sorted: urgent"}
 
 async def play() -> tuple[dict[str, Any], dict[str, list[Any]], Any]:
     """The workflow against stub activities: its result, what each activity was asked, its history."""
-    from choregos_orchestrator.testing import workers_repartis
+    from choregos_orchestrator.testing import workers_by_queue
     from choregos_orchestrator.workflows.trial import AgentTrial
     from temporalio.testing import WorkflowEnvironment
 
@@ -53,9 +53,9 @@ async def play() -> tuple[dict[str, Any], dict[str, list[Any]], Any]:
 
     environment = await WorkflowEnvironment.start_time_skipping()
     try:
-        async with workers_repartis(
+        async with workers_by_queue(
             environment.client,
-            activites=[prepare_stage, start_run, await_run, collect_spend, record_run_outcome],
+            activities=[prepare_stage, start_run, await_run, collect_spend, record_run_outcome],
             workflows=[AgentTrial],
         ):
             handle = await environment.client.start_workflow(

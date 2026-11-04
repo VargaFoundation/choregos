@@ -172,9 +172,6 @@ def forget_discovery() -> None:
     _endpoints.clear()
 
 
-oublier_la_decouverte = forget_discovery  # lang: fr-ok alias:internal
-
-
 def redirection_sure(target: str | None, settings: Settings) -> str:
     """A redirect target is a relative path, or a URL of OUR front end. Nothing else."""
     if not target:
@@ -447,9 +444,6 @@ def roles_from_groups(groups: list[str], default_org: str) -> dict[str, Role]:
         if org not in roles or rank[role] < rank[roles[org]]:
             roles[org] = role
     return roles
-
-
-roles_des_groupes = roles_from_groups  # lang: fr-ok alias:internal (edition.py and the tests import it)
 
 
 async def _map_groups_to_roles(

@@ -32,7 +32,7 @@ async def _tools(client: AsyncClient, token: str) -> dict[str, Any]:
 async def test_extension_tool_marked_write_or_ecriture_is_a_write_tool(  # lang: fr-ok - names the key
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api import greffons
+    from choregos_api import extensions
 
     async def list_tools(_session: Any, _principal: Any, _project: Any, _org: Any) -> list[dict[str, Any]]:
         return [
@@ -45,8 +45,8 @@ async def test_extension_tool_marked_write_or_ecriture_is_a_write_tool(  # lang:
         return 200, {}
 
     # The extension registry of this test only: nothing leaks into the next one.
-    monkeypatch.setattr(greffons, "_FOURNISSEURS_HUMAINS", {})
-    greffons.declarer_des_outils_pour_les_humains("test-extension", list_tools, call_tool)
+    monkeypatch.setattr(extensions, "_HUMAN_TOOL_PROVIDERS", {})
+    extensions.declare_human_tools("test-extension", list_tools, call_tool)
     read_token, write_token = await _token(client, "mcp:read"), await _token(client, "mcp:write")
     client.cookies.clear()
 
@@ -67,7 +67,7 @@ async def test_writes_today_counts_write_and_ecriture(  # lang: fr-ok - names th
 ) -> None:
     from choregos_api.db.models import AuditLog, Organization, User
     from choregos_api.db.session import session_scope
-    from choregos_api.mcp.garde_fous import ecritures_du_jour
+    from choregos_api.mcp.limits import writes_today
     from choregos_core import utcnow
     from sqlalchemy import select
 
@@ -97,4 +97,4 @@ async def test_writes_today_counts_write_and_ecriture(  # lang: fr-ok - names th
                 )
             )
     async with session_scope() as session:
-        assert await ecritures_du_jour(session, user_id) == 2
+        assert await writes_today(session, user_id) == 2

@@ -1671,6 +1671,21 @@ imported the former name. Every user has switched, and the aliases and shims def
 `choregos_runner.outils_locaux`, and every former name of those packages' `alias:internal` lines.
 Only the names marked `alias:external` (removed in 0.23.0) still resolve.
 
+**Internal aliases and shims under `apps/` are gone too (S45-46).** The same holds for the rows
+below whose former name is marked internal or "a shim": every importer has switched, and the shims
+defined under `apps/api` and `apps/orchestrator` are deleted: `choregos_api.adaptateurs`,
+`amorcage`, `fraicheur`, `limiteur`, `metriques`, `mcp.appelant`, `mcp.garde_fous`, `mcp.outils`,
+`schemas.identite`, `livraison`, `mesures`, `plateforme`, `projets`, `services.catalogue_d_agents`,
+`connecteurs`, `courtier`, `couts`, `evenements`, `gabarits`, `memoire`, `parcours`, `projets`,
+`recus`, `routage`, `choregos_orchestrator.repartition`, `workflows.planification`,
+`activities.bilan` and `activities.garde`, with every former name of the `alias:internal` lines of
+those apps and the former keywords of the wrappers (`proposer`, `publier_workflow`,
+`installer_skills_et_agents`, `Caller(jeton=...)`, `RateLimiter(par_minute=...)`,
+`workers_by_queue(activites=...)`). The test-only variable `CHOREGOS_ARCHIVER_HISTORIQUE` is no longer
+read. The `alias:external` windows (`greffons`, `effets`, `edition`, `migrer`, `outils`,
+`Principal.authentifie_le`) are unchanged.
+<!-- lang: fr-ok -->
+
 ### Alerts
 
 The rule expressions, thresholds and `for:` durations are unchanged. Each renamed alert carries its
@@ -1867,7 +1882,7 @@ The Rust crate keeps its name `choregos-runtime-essai`, because `Cargo.lock` is 
 
 | Former | New | What an operator does |
 | :-- | :-- | :-- |
-| `CHOREGOS_ARCHIVER_HISTORIQUE` | `CHOREGOS_RECORD_HISTORY` | Nothing for CI: the former name still works (the English one is read first). A developer re-recording histories may use either. <!-- lang: fr-ok --> |
+| `CHOREGOS_ARCHIVER_HISTORIQUE` | `CHOREGOS_RECORD_HISTORY` | Nothing for CI. A developer re-recording histories sets the English name: the former one is no longer read (S45-46). <!-- lang: fr-ok --> |
 
 The orchestrator test helpers that other test modules imported moved to `apps/orchestrator/tests/kits/`
 (`_jusqu_a` -> `wait_until_state`, `_demandes` -> `requests_of` / `requests_of_item`,

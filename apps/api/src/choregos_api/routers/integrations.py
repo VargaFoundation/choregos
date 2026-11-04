@@ -8,7 +8,7 @@ from fastapi import APIRouter
 
 from .. import __version__
 from ..deps import Config, Me
-from ..mcp.oauth import emetteur
+from ..mcp.oauth import issuer_of
 from ..schemas import IntegrationsDto, OAuthClientDto, OAuthDto
 
 router = APIRouter(tags=["session"])
@@ -24,7 +24,7 @@ async def integrations(settings: Config, principal: Me) -> IntegrationsDto:
     if settings.mcp_oauth_enabled:
         oauth = OAuthDto(
             enabled=True,
-            authorization_server=emetteur(settings),
+            authorization_server=issuer_of(settings),
             clients={
                 name: OAuthClientDto(client_id=client.client_id, callback_port=client.callback_port)
                 for name, client in sorted(settings.mcp_oauth_clients.items())

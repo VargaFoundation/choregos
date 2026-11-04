@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Paths a document names inside its own directory: never outside, never through a symbolic link.
 
-Shared by the templates (`choregos_api.services.gabarits`) and the plugins (`choregos_core.plugins`,
+Shared by the templates (`choregos_api.services.templates`) and the plugins (`choregos_core.plugins`,
 ADR 0093): a manifest names files relative to its directory, and nothing it names may be read from
 elsewhere.
 """

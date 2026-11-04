@@ -113,11 +113,11 @@ async def pin_plugin_tracker(
 async def wire_template_tracker(session: AsyncSession, project: Project) -> None:
     """A project born from a template whose tracker is `plugin:<plugin>/<server>` gets its tracker
     connector `{type: plugin, config: {plugin, server}}` — or the creation is refused (422)."""
-    from .gabarits import manifeste_du_gabarit
+    from .templates import template_manifest
 
     if not project.template_ref:
         return
-    manifest, _ = await manifeste_du_gabarit(session, project.template_ref, project.org_id)
+    manifest, _ = await template_manifest(session, project.template_ref, project.org_id)
     wanted = ((manifest.get("requires") or {}).get("connectors") or {}).get("tracker")
     if not isinstance(wanted, str) or not wanted.startswith(PLUGIN_TRACKER):
         return

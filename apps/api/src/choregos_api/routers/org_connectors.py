@@ -52,21 +52,21 @@ from ..services.catalogue_rights import (
     enabled_projects_of,
     visible_projects,
 )
-from ..services.connecteurs import (
-    RANG,
-    check_type_config,
-    declared_operation,
-    plus_stricte,
-    spec_du_type,
-    spec_to_declare,
-    verifier_les_secrets,
-)
 from ..services.connector_secrets import (
     SECRET_FIELD,
     drop_replaced_store_values,
     put_values,
     refs_with_values,
     require_store,
+)
+from ..services.connectors import (
+    RANK,
+    check_type_config,
+    declared_operation,
+    spec_to_declare,
+    stricter,
+    type_spec,
+    verify_secrets,
 )
 from ..services.egress import egress_gate_for_connector, egress_scope
 from ..services.mcp_gateway import check_declaration, connector_client, route_of
@@ -227,7 +227,7 @@ async def declare_org_connector(
     check_type_config(kind, type_name, config)
     await check_declaration(session, organisation, kind, type_name)  # ADR 0105: mode `required`, no gateway
     prefix = f"connector/{name}"
-    verifier_les_secrets(
+    verify_secrets(
         spec,
         type_name,
         config,
@@ -329,7 +329,7 @@ async def update_org_connector(
     organisation = await organisation_by_slug(session, org)
     instance = await _instance(session, organisation, name)
     server = plugin_servers.spec_of_connector(instance)
-    spec = server or spec_du_type(instance.kind, instance.type)
+    spec = server or type_spec(instance.kind, instance.type)
     prefix = f"connector/{name}"
     config = body.config if body.config is not None else dict(instance.config or {})
     if body.config is not None and server is None:
@@ -356,7 +356,7 @@ async def update_org_connector(
             "this connector reads a key the deployment holds (`env:`): only a platform administrator "
             "changes its configuration; type the organisation's own value to edit it yourself"
         )
-    verifier_les_secrets(
+    verify_secrets(
         spec,
         instance.type,
         config,
@@ -438,8 +438,8 @@ async def set_org_connector_secret(
     require_connector_admin(principal, org)
     organisation = await organisation_by_slug(session, org)
     instance = await _instance(session, organisation, name)
-    verifier_les_secrets(
-        plugin_servers.spec_of_connector(instance) or spec_du_type(instance.kind, instance.type),
+    verify_secrets(
+        plugin_servers.spec_of_connector(instance) or type_spec(instance.kind, instance.type),
         instance.type,
         {},
         {},
@@ -755,7 +755,7 @@ async def _project_operations(ctx: ProjectCtx, session: AsyncSession) -> list[Pr
             access=operation.access,
             org_policy=operation.policy,
             project_policy=tightened.get(operation.id),
-            effective_policy=plus_stricte(operation.policy, tightened.get(operation.id)),
+            effective_policy=stricter(operation.policy, tightened.get(operation.id)),
             description=operation.description,
         )
         for operation, org_connector in op_rows
@@ -787,7 +787,7 @@ async def tighten_operation(
     actuelle = visible_ops.get((connector, operation))
     if actuelle is None:
         raise not_found("Operation", f"{connector}/{operation}")
-    if RANG[body.policy] < RANG[actuelle.org_policy]:
+    if RANK[body.policy] < RANK[actuelle.org_policy]:
         raise unprocessable(
             f"{connector}/{operation} is `{actuelle.org_policy}` in the organisation: a project can "
             f"only narrow it, not move it to `{body.policy}`"
@@ -834,7 +834,7 @@ async def tighten_operation(
         access=op_row.access,
         org_policy=op_row.policy,
         project_policy=body.policy,
-        effective_policy=plus_stricte(op_row.policy, body.policy),
+        effective_policy=stricter(op_row.policy, body.policy),
         description=op_row.description,
     )
 

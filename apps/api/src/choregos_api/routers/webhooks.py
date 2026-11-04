@@ -22,23 +22,23 @@ from sqlalchemy.exc import IntegrityError
 from ..audit import record
 from ..config import get_settings
 from ..db.models import Connector, OrgConnector, Project, TrackerIdentity, User, WebhookDelivery, WorkItem
-from ..deps import DbPlateforme, principal_for_user, resolve_project
+from ..deps import PlatformDb, principal_for_user, resolve_project
 from ..errors import ApiError, not_found, unauthorized
 from ..logging import get_logger
 from ..schemas import WebhookAck
 from ..security import body_digest, verify_github_signature, verify_shared_secret
 from ..services import (
-    Naissance,
-    noter_les_etiquettes,
-    nouveau_ticket,
+    WorkItemBirth,
+    new_work_item,
     received_events,
+    record_labels,
     tickets,
-    workflow_du_ticket,
+    work_item_workflow,
     workflow_model,
 )
 from ..services.decision_ledger import observe_reopening
 from ..services.initiator import initiator
-from ..services.routage import with_tracker
+from ..services.routing import with_tracker
 from ..services.work_item_controls import apply_control
 from ..temporal import (
     InterpreterNotRunningError,
@@ -245,7 +245,7 @@ async def _answer_tracker_command(
             f"the work item in the console: {link}. {LINK_HINT[0].upper()}{LINK_HINT[1:]}."
         )
     try:
-        _, tracker = await tickets.tracker_du_projet(session, project)
+        _, tracker = await tickets.project_tracker(session, project)
         if tracker is not None:
             await tracker.comment(item.tracker_key, f"{COMMAND_MARKER}\n{text}")
     except (ApiError, AdapterError, UpstreamError) as failure:
@@ -315,10 +315,10 @@ async def _dispatch(
             created = True
             # Born in the workflow its labels or its type designate (ADR 0031), no longer in a
             # hard-coded `inbox`, which killed the ticket on a workflow starting elsewhere (#173).
-            item = await nouveau_ticket(
+            item = await new_work_item(
                 session,
                 project,
-                Naissance(
+                WorkItemBirth(
                     tracker_key=key,
                     title=event.payload.get("title", key),
                     body=event.payload.get("body", ""),
@@ -340,7 +340,7 @@ async def _dispatch(
         label_list = event.payload.get("labels")
         if event.type in LABEL_STATE_EVENTS and isinstance(label_list, list):
             # The current state of the labels, added or removed: the express lane reads them (#279).
-            noter_les_etiquettes(item, label_list)
+            record_labels(item, label_list)
         if should_start:
             workflow_id = interpreter_id(project.slug, key)
             await get_temporal().start_interpreter(
@@ -447,7 +447,7 @@ async def _board_train(session: Any, project: Project, item: WorkItem, event: In
     """The merged ticket boards the train that ITS workflow takes after the merge, with the approval
     it requires there (ADR 0041). Every merged ticket used to board the PROD train: a study that
     merges an ADR went to production, a careful delivery skipped its staging."""
-    workflow = workflow_model(await workflow_du_ticket(session, item))
+    workflow = workflow_model(await work_item_workflow(session, item))
     train = train_after_merge(workflow)
     if train is None:
         return
@@ -478,7 +478,7 @@ async def _board_train(session: Any, project: Project, item: WorkItem, event: In
 )
 async def github_webhook(
     request: Request,
-    session: DbPlateforme,
+    session: PlatformDb,
     response: Response,
     x_github_event: Annotated[str, Header()] = "",
     x_github_delivery: Annotated[str, Header()] = "",
@@ -519,7 +519,7 @@ async def github_webhook(
 )
 async def tekton_webhook(
     request: Request,
-    session: DbPlateforme,
+    session: PlatformDb,
     ce_type: Annotated[str, Header()] = "",
     ce_id: Annotated[str, Header()] = "",
     x_choregos_secret: Annotated[str, Header()] = "",
@@ -578,7 +578,7 @@ async def tekton_webhook(
 )
 async def argocd_webhook(
     request: Request,
-    session: DbPlateforme,
+    session: PlatformDb,
     x_choregos_secret: Annotated[str, Header()] = "",
 ) -> WebhookAck:
     body = await request.body()
@@ -643,7 +643,7 @@ def _argocd_kind(health: str, rollout: Any) -> InboundEventType | None:
 )
 async def alertmanager_webhook(
     request: Request,
-    session: DbPlateforme,
+    session: PlatformDb,
     x_choregos_secret: Annotated[str, Header()] = "",
 ) -> WebhookAck:
     body = await request.body()
@@ -705,7 +705,7 @@ async def _alert_reaches_memory(session: Any, project: Project, event: InboundEv
 )
 async def jira_webhook(
     request: Request,
-    session: DbPlateforme,
+    session: PlatformDb,
     x_choregos_secret: Annotated[str, Header()] = "",
     x_atlassian_webhook_identifier: Annotated[str, Header()] = "",
 ) -> WebhookAck:
@@ -734,11 +734,11 @@ def _jira_tracker_of(session: Any) -> TrackerOf:
     Jira connector, or an issue that cannot be read, leaves `fields.tracker` as it was."""
     from choregos_core.domain import TRACKER_FIELD
 
-    from ..services.tickets import tracker_du_projet
+    from ..services.tickets import project_tracker
 
     async def read(project: Project, key: str) -> dict[str, Any] | None:
         try:
-            row, adapter = await tracker_du_projet(session, project)
+            row, adapter = await project_tracker(session, project)
             if row is None or row.type != "jira" or adapter is None:
                 return None
             found = (await adapter.fetch_item(key)).fields.get(TRACKER_FIELD)
@@ -755,7 +755,7 @@ def _jira_tracker_of(session: Any) -> TrackerOf:
 )
 async def gitlab_webhook(
     request: Request,
-    session: DbPlateforme,
+    session: PlatformDb,
     x_gitlab_token: Annotated[str, Header()] = "",
     x_gitlab_event: Annotated[str, Header()] = "",
     x_gitlab_event_uuid: Annotated[str, Header()] = "",
@@ -848,7 +848,7 @@ async def _project_of_item(session: Any, projects: list[Project], key: str) -> P
     operation_id="pluginWebhook",
 )
 async def plugin_webhook(
-    org: OrgSlug, plugin: PluginName, server: PluginName, request: Request, session: DbPlateforme
+    org: OrgSlug, plugin: PluginName, server: PluginName, request: Request, session: PlatformDb
 ) -> WebhookAck:
     """A delivery for a plugin server that is a tracker (plan S43 Decision 3).
 

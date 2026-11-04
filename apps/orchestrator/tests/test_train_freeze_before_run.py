@@ -60,7 +60,7 @@ async def test_a_freeze_delivered_with_the_start_blocks_the_departure(
     temporal_env: Any, worker_factory: Any
 ) -> None:
     created: list[int] = []
-    async with worker_factory(remplacements=_doubles(created)):
+    async with worker_factory(replacements=_doubles(created)):
         train = await temporal_env.client.start_workflow(
             "ReleaseTrain",
             {"project_slug": "early", "env": "staging"},

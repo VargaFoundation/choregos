@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import Membership, Organization, User, WorkItem
 from ..rbac import Principal
-from .definitions import workflow_du_ticket, workflow_model
+from .definitions import work_item_workflow, workflow_model
 
 
 def groups_for_org(groups: Iterable[Any] | None, org_slug: str) -> set[str]:
@@ -50,7 +50,7 @@ async def group_of_the_step(session: AsyncSession, item: WorkItem, transition_id
     """The group the transition's human actor names — `None` when the step is not addressed to one."""
     if not transition_id:
         return None
-    workflow = workflow_model(await workflow_du_ticket(session, item))
+    workflow = workflow_model(await work_item_workflow(session, item))
     for transition in workflow.transitions:
         if transition.key == transition_id:
             actor = workflow.actor_of(transition)

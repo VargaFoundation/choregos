@@ -47,12 +47,12 @@ from ..schemas import (
 from ..schemas.network import EffectiveNetworkDto, ProjectNetwork
 from ..services import (
     active_policy,
+    active_workflow_named,
     default_workflow,
     effective_policy_and_clamps,
     ensure_defaults,
-    publier_workflow,
-    signaler_ce_que_la_politique_n_applique_pas,
-    workflow_actif,
+    publish_workflow,
+    report_unenforced_policy,
 )
 from ..services.decision_ledger import step_calibration as measure_step
 from ..services.definitions import CEILING_KEY, ceiling_of, policy_engine, policy_model
@@ -64,7 +64,7 @@ from ..services.memory_policy import (
 )
 from ..services.network import project_effective_network
 from ..services.organisations import organisation_by_slug
-from ..services.routage import Naissance, route
+from ..services.routing import WorkItemBirth, route
 
 router = APIRouter(tags=["workflows"])
 
@@ -211,7 +211,7 @@ async def get_workflow(ctx: ProjectCtx, session: Db) -> WorkflowDefDto:
 async def put_workflow(ctx: ProjectCtx, body: WorkflowPut, session: Db) -> WorkflowDefDto:
     """The alias of the default: what it publishes BECOMES the default. An invalid workflow gets 422."""
     ctx.require(Permission.WORKFLOW_WRITE)
-    row = await publier_workflow(
+    row = await publish_workflow(
         session,
         ctx.principal,
         ctx.project,
@@ -219,7 +219,7 @@ async def put_workflow(ctx: ProjectCtx, body: WorkflowPut, session: Db) -> Workf
         source=body.source,
         activate=body.activate,
         base_version=body.base_version,
-        devient_le_defaut=True,
+        becomes_default=True,
     )
     return workflow_dto(row, ctx.project)
 
@@ -260,7 +260,7 @@ async def list_workflows(ctx: ProjectCtx, session: Db) -> list[WorkflowSummaryDt
 
 
 async def _active(session: Any, ctx: Any, name: str) -> WorkflowDef:
-    row = await workflow_actif(session, ctx.id, name)
+    row = await active_workflow_named(session, ctx.id, name)
     if row is None:
         raise not_found("Workflow", name)
     return row
@@ -275,7 +275,7 @@ async def get_named_workflow(name: str, ctx: ProjectCtx, session: Db) -> Workflo
 async def put_named_workflow(name: str, ctx: ProjectCtx, body: WorkflowPut, session: Db) -> WorkflowDefDto:
     """Publish the next version of THIS workflow, leaving the others alone (ADR 0031)."""
     ctx.require(Permission.WORKFLOW_WRITE)
-    row = await publier_workflow(
+    row = await publish_workflow(
         session,
         ctx.principal,
         ctx.project,
@@ -283,8 +283,8 @@ async def put_named_workflow(name: str, ctx: ProjectCtx, body: WorkflowPut, sess
         source=body.source,
         activate=body.activate,
         base_version=body.base_version,
-        nom_attendu=name,
-        creation_seule=body.create_only,
+        expected_name=name,
+        create_only=body.create_only,
     )
     return workflow_dto(row, ctx.project)
 
@@ -466,8 +466,8 @@ async def restore_version(name: str, version: int, ctx: ProjectCtx, session: Db)
     ).scalar_one_or_none()
     if earlier is None:
         raise not_found("Version", f"{name} v{version}")
-    row = await publier_workflow(
-        session, ctx.principal, ctx.project, earlier.yaml, source=earlier.source, nom_attendu=name
+    row = await publish_workflow(
+        session, ctx.principal, ctx.project, earlier.yaml, source=earlier.source, expected_name=name
     )
     return workflow_dto(row, ctx.project)
 
@@ -549,7 +549,7 @@ async def preview_routing(ctx: ProjectCtx, body: RoutingPreviewRequest, session:
     routed = await route(
         session,
         ctx.project,
-        Naissance(
+        WorkItemBirth(
             tracker_key="preview",
             title=body.title,
             body=body.body,
@@ -633,7 +633,7 @@ async def put_policy(ctx: ProjectCtx, body: PolicyPut, session: Db) -> PolicyDto
             [{"loc": ["policy", *w.split(":", 1)[0].split(".")], "msg": w} for w in widened],
         )
     # The network warnings stay logged: they are not refused.
-    signaler_ce_que_la_politique_n_applique_pas(policy, ctx.project.slug)
+    report_unenforced_policy(policy, ctx.project.slug)
     # Turning memory off under workflows whose agents ask for it: said, never refused (S51-01).
     log_memory_disabled_warnings(
         await memory_disabled_warnings(

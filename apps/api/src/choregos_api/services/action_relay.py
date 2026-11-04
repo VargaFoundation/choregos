@@ -20,7 +20,7 @@ from choregos_core import utcnow
 from sqlalchemy import select
 
 from ..db.models import Action
-from ..db.session import TOUT, session_scope
+from ..db.session import ALL_ORGS, session_scope
 from ..logging import get_logger
 
 logger = get_logger("choregos.actions.relay")
@@ -38,7 +38,7 @@ async def start_approved_actions(*, grace: timedelta = GRACE, batch: int = BATCH
     from ..temporal import action_id as workflow_id
     from ..temporal import get_temporal
 
-    async with session_scope(orgs=TOUT) as session:
+    async with session_scope(orgs=ALL_ORGS) as session:
         stranded = list(
             (
                 await session.execute(

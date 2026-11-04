@@ -68,7 +68,7 @@ async def fire_schedules(payload: dict[str, Any]) -> dict[str, Any]:
 
     # One statement for both: the orchestrator's imports of the API are capped (ADR 0099).
     from choregos_api.services import initiator, received_events
-    from choregos_api.services.tickets import cle_de_ticket_interne, creer_un_ticket, le_tracker_est_interne
+    from choregos_api.services.tickets import create_work_item, internal_work_item_key, tracker_is_internal
 
     now = datetime.fromisoformat(payload["now"]) if payload.get("now") else datetime.now(UTC)
     opened: list[str] = []
@@ -78,10 +78,10 @@ async def fire_schedules(payload: dict[str, Any]) -> dict[str, Any]:
         bundle = await project_bundle(session, payload["project_slug"])
         if not bundle.config.schedules:
             return {"opened": opened, "served": served, "refused": refused}
-        if not await le_tracker_est_interne(session, bundle.project):
+        if not await tracker_is_internal(session, bundle.project):
             logger.warning("schedules ignored: the project's tracker is external", project=bundle.slug)
             return {"opened": opened, "served": served, "skipped": "external tracker"}
-        prefix = await cle_de_ticket_interne(session, bundle.project, numerotee=False)
+        prefix = await internal_work_item_key(session, bundle.project, numerotee=False)
         for schedule in bundle.config.schedules:
             start = window_start(schedule.cron, now)
             if start is None:
@@ -98,7 +98,7 @@ async def fire_schedules(payload: dict[str, Any]) -> dict[str, Any]:
                 served.append(key)
                 continue
             try:
-                item = await creer_un_ticket(
+                item = await create_work_item(
                     session,
                     SYSTEM,
                     bundle.project,
@@ -110,7 +110,7 @@ async def fire_schedules(payload: dict[str, Any]) -> dict[str, Any]:
                         start=False,
                     ),
                     canal="schedule",
-                    cle=key,
+                    key=key,
                     initiated_by=initiator.initiator("schedule", schedule.name),
                 )
             except ApiError as erreur:

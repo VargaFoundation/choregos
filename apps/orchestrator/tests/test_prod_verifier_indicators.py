@@ -15,7 +15,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from choregos_api.catalogue import vider_cache
+from choregos_api.catalogue import clear_cache
 from choregos_api.schemas import AgentSpec
 from choregos_contracts import ContextPack, ProjectConfig
 from choregos_core.catalogue_d_agents import entree
@@ -41,9 +41,9 @@ def tool_catalogue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
     path = tmp_path / "catalogue.yaml"
     path.write_text(CATALOGUE, encoding="utf-8")
     monkeypatch.setenv("CHOREGOS_TOOL_CATALOG", str(path))
-    vider_cache()
+    clear_cache()
     yield
-    vider_cache()
+    clear_cache()
 
 
 def _config(tools: list[str]) -> ProjectConfig:

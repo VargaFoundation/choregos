@@ -16,7 +16,7 @@ from ..audit import record
 from ..config import get_settings
 from ..db.models import Membership, Organization, Project
 from ..db.org_aliases import aliases_by_org, aliases_of, holder_of_slug, keep_old_slug, release
-from ..db.session import TOUT, limiter_aux_organisations
+from ..db.session import ALL_ORGS, limit_to_organisations
 from ..deps import Db, Me, Pagination, ProjectCtx, require_platform_admin
 from ..edition import is_enterprise
 from ..errors import conflict, forbidden, not_found
@@ -38,7 +38,7 @@ from ..schemas import (
 from ..services import ensure_defaults, persist_event, project_dto
 from ..services.organisations import organisation_by_slug
 from ..services.plugin_tracker import wire_template_tracker
-from ..services.projets import config_revision
+from ..services.projects import config_revision
 from ..temporal import get_temporal, provisioning_id
 
 router = APIRouter(tags=["projects"])
@@ -80,7 +80,7 @@ async def create_org(body: OrgCreate, session: Db, principal: Me) -> OrgDto:
     # rest of the request sees the instance. Bounded to the caller's existing organisations, the session saw
     # neither the real count of organisations, nor a slug already taken elsewhere (duplicate → 500), and
     # the trace of the new organisation was refused by the RLS of `audit_log` (500 in 0.10.0).
-    await limiter_aux_organisations(session, TOUT)
+    await limit_to_organisations(session, ALL_ORGS)
     if not is_enterprise():
         # The community edition is single-organisation (ADR 0024). This is not an arbitrary
         # cap: multi-tenancy is not finished here — thirteen tables remain outside RLS —
@@ -143,7 +143,7 @@ async def update_org(org: str, body: OrgUpdate, session: Db, principal: Me) -> O
         # not a member of. The instance right is checked BEFORE the lookup: under PostgreSQL RLS, a
         # lookup bounded to the caller's organisations would not see the row (404).
         await require_platform_admin(session, principal)
-        await limiter_aux_organisations(session, TOUT)
+        await limit_to_organisations(session, ALL_ORGS)
     organisation = await organisation_by_slug(session, org)
     org_before = {"slug": organisation.slug, "name": organisation.name, "currency": moneta(organisation)}
     if body.slug is not None and body.slug != organisation.slug:
@@ -151,7 +151,7 @@ async def update_org(org: str, body: OrgUpdate, session: Db, principal: Me) -> O
         # The RLS compares SLUGS (`slug = ANY(choregos_current_orgs())`): bounded to the old one, the
         # transaction would no longer see the row it renames, and the update would be refused. The
         # instance right has just been established: the rest of the request sees the instance.
-        await limiter_aux_organisations(session, TOUT)
+        await limit_to_organisations(session, ALL_ORGS)
         # A slug is unique across current slugs AND aliases: another organisation's old address is
         # not free (ADR 0090). An organisation may take back one of its own former slugs.
         holder = await holder_of_slug(session, body.slug)
@@ -214,7 +214,7 @@ async def release_org_alias(org: str, alias: str, session: Db, principal: Me) ->
     and the IdP group names that still name the alias.
     """
     await require_platform_admin(session, principal)
-    await limiter_aux_organisations(session, TOUT)
+    await limit_to_organisations(session, ALL_ORGS)
     organisation = await organisation_by_slug(session, org)
     if not await release(session, organisation.id, alias):
         raise not_found("Alias", alias)

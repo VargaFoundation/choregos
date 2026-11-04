@@ -55,14 +55,14 @@ from ..schemas.agent_sessions import (
     AgentSessionEventDto,
 )
 from ..secret_store import get_secret_store
-from .evenements import persist_event
+from .events import persist_event
 
 if TYPE_CHECKING:
     from choregos_adapters.base import GatewayAdapter
 
     from ..rbac import Principal
     from ..schemas import AgentSpec
-    from .courtier import OutilDuCourtier
+    from .broker import BrokerTool
 
 log = get_logger(__name__)
 
@@ -149,12 +149,12 @@ async def open_session(
 
     `runtime` is the door it opens at: `prompt` on `/responses`, `voice` on `/realtime` (S41-10),
     `socket` on `/realtime` for a hosted agent's own socket (S41-21)."""
-    from .agents import AgentIndisponible, resoudre_l_agent
+    from .agents import AgentUnavailable, resolve_agent
 
     await sweep_expired(session, project.id)
     try:
-        resolved = await resoudre_l_agent(session, organisation.id, project.id, agent_slug)
-    except AgentIndisponible as refusal:
+        resolved = await resolve_agent(session, organisation.id, project.id, agent_slug)
+    except AgentUnavailable as refusal:
         raise conflict(str(refusal)) from refusal
     spec = resolved.spec
     kind = spec.runtime.kind if spec.runtime is not None else None
@@ -334,7 +334,7 @@ async def _reserve(
     """The smallest of what is left under every cap that applies, as `prepare_stage` reads it."""
     from choregos_core.policy import PolicyEngine
 
-    from .agents import depense_du_jour, depense_du_mois
+    from .agents import spend_this_month, spend_today
     from .budgets import (
         lock_budget_scopes,
         open_reservations,
@@ -364,9 +364,9 @@ async def _reserve(
         "agent_run": budget.run_usd,
     }
     if budget.daily_usd is not None:
-        left["agent_day"] = budget.daily_usd - await depense_du_jour(session, org_id, agent_slug)
+        left["agent_day"] = budget.daily_usd - await spend_today(session, org_id, agent_slug)
     if budget.monthly_usd is not None:
-        left["agent_month"] = budget.monthly_usd - await depense_du_mois(session, org_id, agent_slug)
+        left["agent_month"] = budget.monthly_usd - await spend_this_month(session, org_id, agent_slug)
     if (day := engine.daily_budget()) is not None:
         left["project_day"] = (
             day
@@ -389,13 +389,13 @@ async def respond(
     session: AsyncSession, record: AgentSessionRecord, project: Project, inputs: list[str]
 ) -> AgentResponse:
     """One response of the session: the person's input, the agent's loop, what it said."""
-    from .agents import resoudre_l_agent
+    from .agents import resolve_agent
 
     if record.status != "open" or aware(record.expires_at) <= utcnow():  # type: ignore[operator]
         if record.status == "open":
             await close_session(session, record, reason="expired")
         raise conflict(f"session {record.id} is {record.status} ({record.reason}): open a new one")
-    resolved = await resoudre_l_agent(
+    resolved = await resolve_agent(
         session, record.org_id, project.id, f"{record.agent_slug}@{record.agent_version}"
     )
     spec: AgentSpec = resolved.spec
@@ -450,7 +450,7 @@ async def respond(
             ),
             messages,
             [
-                LoopTool(t.nom, str(t.annonce().get("description") or ""), tool_parameters(t))
+                LoopTool(t.name, str(t.announcement().get("description") or ""), tool_parameters(t))
                 for t in tools.values()
             ],
             complete,
@@ -494,27 +494,25 @@ async def respond(
     )
 
 
-def tool_parameters(tool: OutilDuCourtier) -> dict[str, Any]:
-    schema = tool.annonce().get("inputSchema")
+def tool_parameters(tool: BrokerTool) -> dict[str, Any]:
+    schema = tool.announcement().get("inputSchema")
     return dict(schema) if isinstance(schema, dict) else {"type": "object", "properties": {}}
 
 
-async def session_tools(
-    session: AsyncSession, spec: AgentSpec, project: Project
-) -> dict[str, OutilDuCourtier]:
+async def session_tools(session: AsyncSession, spec: AgentSpec, project: Project) -> dict[str, BrokerTool]:
     """The read tools the agent's `mcp_servers` grant in the project: a write or an approval is a
     governed action, which needs a work item, so a session is not offered one."""
-    from .courtier import selection_of_spec, tools_of_selection
+    from .broker import selection_of_spec, tools_of_selection
 
     granted = await tools_of_selection(session, selection_of_spec(spec.model_dump(mode="json")), project)
-    return {name: tool for name, tool in granted.items() if not tool.ecriture and not tool.sous_validation}
+    return {name: tool for name, tool in granted.items() if not tool.is_write and not tool.needs_approval}
 
 
 async def call_session_tool(
     session: AsyncSession,
     record: AgentSessionRecord,
     project: Project,
-    tool: OutilDuCourtier,
+    tool: BrokerTool,
     arguments: dict[str, Any],
 ) -> str:
     """One read through the courtier, as a run's: the policy's cap, the schema, the connector's key
@@ -523,7 +521,7 @@ async def call_session_tool(
     from choregos_core.injection import suspicions as find
     from choregos_core.policy import PolicyEngine
 
-    from .courtier import ArgumentsRefuses, appeler, session_text, verifier_les_arguments
+    from .broker import ArgumentsRefused, call, check_arguments, session_text
     from .definitions import effective_policy
 
     engine = PolicyEngine(await effective_policy(session, project.id))
@@ -531,14 +529,14 @@ async def call_session_tool(
     if cap and record.tool_calls >= cap:
         return f"tool call cap reached: this session already called {record.tool_calls} tools (cap {cap})"
     try:
-        verifier_les_arguments(tool, arguments)
-    except ArgumentsRefuses as refusal:
+        check_arguments(tool, arguments)
+    except ArgumentsRefused as refusal:
         return str(refusal)
-    code, body = await appeler(session, tool, arguments, project=project)
+    code, body = await call(session, tool, arguments, project=project)
     refused_by_network = isinstance(body, dict) and body.get("type") in {"network_policy", "rate_limited"}
     text = session_text(body) if code < 400 else json.dumps(body, default=str)[:2000]
     mode = engine.policy.sandbox.prompt_injection
-    found = [] if mode == "ignore" or refused_by_network else find(text, source=f"tool.{tool.nom}")
+    found = [] if mode == "ignore" or refused_by_network else find(text, source=f"tool.{tool.name}")
     if found:
         await persist_event(
             session,
@@ -547,11 +545,11 @@ async def call_session_tool(
             project_slug=project.slug,
             subject=record.id,
             session_id=record.id,
-            tool=tool.nom,
+            tool=tool.name,
             suspicions=[s.to_dict() for s in found],
         )
         if mode == "block":
-            text = f"result of {tool.nom} withheld: suspected injection — a human reviews it"
+            text = f"result of {tool.name} withheld: suspected injection — a human reviews it"
     if not refused_by_network:
         record.tool_calls += 1
         session.add(
@@ -560,8 +558,8 @@ async def call_session_tool(
                 session_id=record.id,
                 ts=utcnow(),
                 kind="tool",
-                provider=f"mcp:{tool.connecteur.name}",
-                model=tool.nom,
+                provider=f"mcp:{tool.connector.name}",
+                model=tool.name,
                 cost_usd=tool.operation.price_usd or 0.0,
                 agent_slug=record.agent_slug,
                 agent_version=record.agent_version,
@@ -574,8 +572,8 @@ async def call_session_tool(
         project_slug=project.slug,
         subject=record.id,
         session_id=record.id,
-        tool=tool.nom,
-        provider=f"mcp:{tool.connecteur.name}",
+        tool=tool.name,
+        provider=f"mcp:{tool.connector.name}",
         status_code=code,
     )
     return text
@@ -588,7 +586,7 @@ async def close_session(session: AsyncSession, record: AgentSessionRecord, *, re
     """Books the key's spend with `session_id`, revokes the key, forgets its secret. Idempotent."""
     if record.status != "open":
         return
-    from .couts import record_cost
+    from .costs import record_cost
     from .model_catalogue import priced_spend
 
     gateway = await session_gateway(session, record.org_id)

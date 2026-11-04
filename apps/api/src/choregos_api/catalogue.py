@@ -21,7 +21,6 @@ from choregos_core.catalogue import (
     load_catalogue,
     validate_arguments,
 )
-from choregos_core.compat import alias_names
 
 
 @lru_cache(maxsize=1)
@@ -127,19 +126,3 @@ async def _call_mcp(tool: CatalogueTool, arguments: dict[str, Any]) -> tuple[int
     if isinstance(payload, dict) and "error" in payload:
         return 502, payload["error"]
     return response.status_code, (payload.get("result") if isinstance(payload, dict) else payload)
-
-
-vider_cache = clear_cache  # lang: fr-ok alias:internal
-outils_du_projet = project_tools  # lang: fr-ok alias:internal
-appeler = call  # lang: fr-ok alias:internal
-_appeler_mcp = _call_mcp  # lang: fr-ok alias:internal
-
-alias_names(
-    __name__,
-    {
-        "vider_cache": "clear_cache",  # lang: fr-ok alias:internal
-        "outils_du_projet": "project_tools",  # lang: fr-ok alias:internal
-        "appeler": "call",  # lang: fr-ok alias:internal
-        "_appeler_mcp": "_call_mcp",  # lang: fr-ok alias:internal
-    },
-)

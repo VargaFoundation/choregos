@@ -387,8 +387,8 @@ async def instructions_for(session: Any, org_id: str, base: KnowledgeBase) -> st
     rendered with the base as its work item."""
     from choregos_core.instructions import render_instructions
 
+    from ..services.agent_catalogue import catalogue_instructions
     from ..services.agent_releases import production_spec_of
-    from ..services.catalogue_d_agents import catalogue_instructions
 
     source = await production_spec_of(session, org_id, AGENT, active_only=True)
     found = (source or {}).get("instructions") or await catalogue_instructions(session, org_id, AGENT)
@@ -850,7 +850,7 @@ async def _store(org: str, base_id: str, usage: dict[str, int] | None = None, **
 async def _book(session: Any, base: KnowledgeBase, model: str, usage: dict[str, int], cost: float) -> None:
     """One `distill` line in the cost ledger: the base's owning project when it names one of the
     organisation's, otherwise the organisation (ADR 0092)."""
-    from ..services.couts import record_cost
+    from ..services.costs import record_cost
 
     project_id = None
     if base.owner_project:
@@ -1060,7 +1060,8 @@ async def step_publish(
     reused when the files are the same (a replay publishes once)."""
     from ..services.skill_gate import assess
     from ..services.skill_gate import columns as gate_columns
-    from ..services.skills import empreinte, valider
+    from ..services.skills import digest as skill_digest
+    from ..services.skills import validate
 
     await _refuse_if_stopped(org, base_id)
     loaded = await _load(org, base_id, distiller)
@@ -1074,7 +1075,7 @@ async def step_publish(
     base = loaded.base
     slug = f"{base.slug}-principles"[:63]
     files = render(slug, base, str(row.answer.get("description") or ""), principles, corpus)
-    valider(files, slug)
+    validate(files, slug)
     await _progress(org, base_id, phase="publish")
     async with session_scope(orgs=[org]) as session:
         base = await session.get(KnowledgeBase, base_id)  # type: ignore[assignment]
@@ -1095,8 +1096,8 @@ async def step_publish(
                 .limit(1)
             )
         ).scalar_one_or_none()
-        digest = empreinte(files)
-        if latest is not None and latest.digest == digest:
+        files_digest = skill_digest(files)
+        if latest is not None and latest.digest == files_digest:
             version = latest
         else:
             gate = gate_columns(assess(files))
@@ -1107,7 +1108,7 @@ async def step_publish(
                 org_id=base.org_id,
                 version=(latest.version if latest else 0) + 1,
                 files=files,
-                digest=digest,
+                digest=files_digest,
                 created_by=f"agent:{AGENT}",
                 **gate,
             )

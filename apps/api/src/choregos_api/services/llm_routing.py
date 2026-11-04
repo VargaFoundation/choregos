@@ -448,7 +448,7 @@ async def book(session: AsyncSession, project: Project, decision: Decision, work
     is read."""
     if not decision.called or decision.booked:
         return
-    from .couts import record_cost
+    from .costs import record_cost
 
     entry = await record_cost(
         session,

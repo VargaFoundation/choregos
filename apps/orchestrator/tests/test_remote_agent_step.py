@@ -16,7 +16,7 @@ import pytest
 from choregos_adapters.a2a import parse_card
 from choregos_adapters.fakes.a2a import FakeA2aAgent
 from choregos_core import utcnow
-from choregos_orchestrator.activities import bilan
+from choregos_orchestrator.activities import outcome
 from choregos_orchestrator.activities import stage as stage_activities
 from temporalio.exceptions import ApplicationError
 
@@ -240,7 +240,7 @@ async def test_the_declared_cost_is_booked_as_external_apart_from_models(setup: 
         assert run is not None
         run.started_at = utcnow() - timedelta(minutes=2)
         run.ended_at = utcnow()
-    await bilan.collect_spend({"project_id": setup.project_id, "run_id": prepared["run_id"]})
+    await outcome.collect_spend({"project_id": setup.project_id, "run_id": prepared["run_id"]})
 
     async with session_scope() as session:
         (line,) = (await session.execute(select(CostLedger))).scalars().all()
@@ -266,7 +266,7 @@ async def test_nothing_declared_is_booked_as_unmeasured(setup: Fixture) -> None:
             "stage_input": prepared["stage_input"],
         }
     )
-    await bilan.collect_spend({"project_id": setup.project_id, "run_id": prepared["run_id"]})
+    await outcome.collect_spend({"project_id": setup.project_id, "run_id": prepared["run_id"]})
     async with session_scope() as session:
         (line,) = (await session.execute(select(CostLedger))).scalars().all()
         assert line.kind == "external" and line.cost_usd == 0 and "unmeasured" in line.model

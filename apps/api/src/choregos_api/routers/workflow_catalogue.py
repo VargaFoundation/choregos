@@ -19,7 +19,7 @@ from ..errors import conflict, forbidden, not_found, unprocessable
 from ..rbac import Permission
 from ..schemas.definitions import WorkflowAdopt, WorkflowCatalogueEntryDto, WorkflowDefDto, WorkflowShare
 from ..services.agent_governance import is_admin, is_member
-from ..services.definitions import publier_workflow, workflow_actif
+from ..services.definitions import active_workflow_named, publish_workflow
 from ..services.organisations import organisation_by_slug
 from ..services.workflow_catalogue import (
     ORG,
@@ -55,7 +55,7 @@ async def _adopted_from_same_entry(
 ) -> bool:
     """The project's active workflow of that name was adopted from this very entry: adopting again
     publishes its next version (an update, ADR 0111 §5) instead of refusing a taken name."""
-    active = await workflow_actif(session, project.id, name)
+    active = await active_workflow_named(session, project.id, name)
     parts = parse_origin(active.origin or "") if active is not None and active.source == "catalogue" else None
     return parts is not None and parts[0] == source and parts[1] == entry
 
@@ -94,14 +94,14 @@ async def adopt_workflow(ctx: ProjectCtx, body: WorkflowAdopt, session: Db) -> W
     name = body.as_ or entry.name
     text = renamed(entry.yaml, name) if name != entry.name else entry.yaml
     update = await _adopted_from_same_entry(session, project, name, entry.source, entry.name)
-    row = await publier_workflow(
+    row = await publish_workflow(
         session,
         ctx.principal,
         project,
         text,
         source="catalogue",
-        creation_seule=not update,
-        devient_le_defaut=body.make_default,
+        create_only=not update,
+        becomes_default=body.make_default,
         origin=entry.origin,
     )
     await record(

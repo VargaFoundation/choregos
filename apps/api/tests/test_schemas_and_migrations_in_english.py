@@ -174,7 +174,6 @@ def test_migration_graph_unchanged() -> None:
         ("projets", "projects"),
     ],
 )
-def test_former_schema_modules_still_resolve(former: str, current: str) -> None:
-    old = importlib.import_module(f"choregos_api.schemas.{former}")
-    new = importlib.import_module(f"choregos_api.schemas.{current}")
-    assert old is new
+def test_former_schema_module_paths_are_gone(former: str, current: str) -> None:
+    assert importlib.util.find_spec(f"choregos_api.schemas.{former}") is None
+    assert importlib.import_module(f"choregos_api.schemas.{current}") is not None

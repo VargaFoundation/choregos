@@ -181,7 +181,7 @@ class Runner:
         self.tools: Any = None
 
     async def run(self) -> RunOutcome:
-        # The API is reached directly (`NO_PROXY` names it, `env_du_runner`): the client may exist
+        # The API is reached directly (`NO_PROXY` names it, `runner_environment`): the client may exist
         # before the proxy variables carry any credential.
         client = self.client or InternalClient(
             self.settings.api_url, self.settings.run_id, self.settings.run_token

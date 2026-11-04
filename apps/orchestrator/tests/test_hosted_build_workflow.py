@@ -18,7 +18,7 @@ IMAGE = "registry.internal/builds@sha256:" + "d" * 64
 
 async def play(claim: dict[str, Any], build: Any) -> tuple[dict[str, Any], dict[str, list[Any]], Any]:
     """The workflow against stub activities: its result, what each activity was asked, its history."""
-    from choregos_orchestrator.testing import workers_repartis
+    from choregos_orchestrator.testing import workers_by_queue
     from choregos_orchestrator.workflows.agent_build import HostedImageBuild
     from temporalio.testing import WorkflowEnvironment
 
@@ -43,9 +43,9 @@ async def play(claim: dict[str, Any], build: Any) -> tuple[dict[str, Any], dict[
 
     environment = await WorkflowEnvironment.start_time_skipping()
     try:
-        async with workers_repartis(
+        async with workers_by_queue(
             environment.client,
-            activites=[claim_hosted_build, build_hosted_image, record_hosted_build],
+            activities=[claim_hosted_build, build_hosted_image, record_hosted_build],
             workflows=[HostedImageBuild],
         ):
             handle = await environment.client.start_workflow(

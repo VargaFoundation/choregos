@@ -44,8 +44,8 @@ from ...services.agent_releases import (
 )
 from ...services.agent_views import agent_dto
 from ...services.agents import (
-    empreinte,
-    erreurs_d_une_version,
+    digest,
+    version_errors,
 )
 from ...services.egress import egress_gate_for_remote_agent
 from ...services.hosted_images import pin_hosted_runtime
@@ -108,7 +108,7 @@ async def create_agent(
     )
     if body.kind == "external" and body.scope != "org":
         raise unprocessable("an external agent carries an organisation credential: it is an `org` agent")
-    erreurs_d_une_version(body.spec)
+    version_errors(body.spec)
     # Its own eval suite gates its version 1 (S32-03).
     gate(body.spec, None)
     organisation = await organisation_by_slug(session, org)
@@ -156,7 +156,7 @@ async def create_agent(
             org_id=organisation.id,
             version=1,
             spec=body.spec.model_dump(mode="json"),
-            checksum=empreinte(body.spec),
+            checksum=digest(body.spec),
             created_by=principal.email,
             message=(body.message or "").strip() or "Created",
         )
@@ -185,7 +185,7 @@ async def draft_agent(org: str, body: AgentDraftRequest, session: Db, principal:
 
     if not principal.can(Permission.AGENT_MANAGE, org):
         raise forbidden("drafting an agent needs the agent:manage permission")
-    admitted, wait = agent_drafts.limiter.admet(f"{org}:{principal.user_id}")
+    admitted, wait = agent_drafts.limiter.admits(f"{org}:{principal.user_id}")
     if not admitted:
         raise ApiError(
             status.HTTP_429_TOO_MANY_REQUESTS,

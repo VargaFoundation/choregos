@@ -94,11 +94,8 @@ def test_test_modules_import_only_english_sources() -> None:
     assert not gone, f"an allowed source no longer exists, drop it from the list: {gone}"
 
 
-def test_recording_reads_the_english_variable_first(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_recording_reads_the_english_variable(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("CHOREGOS_RECORD_HISTORY", "english")
-    monkeypatch.setenv("CHOREGOS_ARCHIVER_HISTORIQUE", "1")  # lang: fr-ok alias:internal
     assert recording_history() == "english"
     monkeypatch.delenv("CHOREGOS_RECORD_HISTORY")
-    assert recording_history() == "1"
-    monkeypatch.delenv("CHOREGOS_ARCHIVER_HISTORIQUE")  # lang: fr-ok alias:internal
     assert recording_history() is None

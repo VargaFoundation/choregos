@@ -15,7 +15,6 @@ from choregos_core import (
     parse_workflow,
     policy_warnings,
 )
-from choregos_core.compat import alias_names
 from choregos_core.dsl import dump_workflow
 from choregos_core.policy import unenforced_governance
 from choregos_core.policy_ceiling import PolicyCeiling, clamp
@@ -533,50 +532,3 @@ def project_config(project: Project) -> ProjectConfig:
 
 def workflow_yaml(workflow: Workflow) -> str:
     return dump_workflow(workflow)
-
-
-async def publier_workflow(  # lang: fr-ok alias:internal  # noqa: PLR0913
-    session: AsyncSession,
-    principal: Any,
-    project: Project,
-    source_yaml: str,
-    *,
-    source: str = "platform",
-    activate: bool = True,
-    base_version: int | None = None,
-    nom_attendu: str | None = None,  # lang: fr-ok alias:internal
-    devient_le_defaut: bool = False,  # lang: fr-ok alias:internal
-    creation_seule: bool = False,  # lang: fr-ok alias:internal
-    origin: str | None = None,
-) -> WorkflowDef:
-    """The former name of `publish_workflow`, with its former keywords: the routers, the local demo
-    and the orchestrator's tests still call it so."""
-    return await publish_workflow(
-        session,
-        principal,
-        project,
-        source_yaml,
-        source=source,
-        activate=activate,
-        base_version=base_version,
-        expected_name=nom_attendu,  # lang: fr-ok alias:internal
-        becomes_default=devient_le_defaut,  # lang: fr-ok alias:internal
-        create_only=creation_seule,  # lang: fr-ok alias:internal
-        origin=origin,
-    )
-
-
-workflow_actif = active_workflow_named  # lang: fr-ok alias:internal
-workflow_du_ticket = work_item_workflow  # lang: fr-ok alias:internal
-signaler_ce_que_la_politique_n_applique_pas = report_unenforced_policy  # lang: fr-ok alias:internal
-derniere_version = latest_version  # lang: fr-ok alias:internal
-
-alias_names(
-    __name__,
-    {
-        "workflow_actif": "active_workflow_named",  # lang: fr-ok alias:internal
-        "workflow_du_ticket": "work_item_workflow",  # lang: fr-ok alias:internal
-        "signaler_ce_que_la_politique_n_applique_pas": "report_unenforced_policy",  # lang: fr-ok
-        "derniere_version": "latest_version",  # lang: fr-ok alias:internal
-    },
-)

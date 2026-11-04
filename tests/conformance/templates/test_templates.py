@@ -191,17 +191,17 @@ def test_actions_call_only_what_the_template_announces(path: Path) -> None:
 @pytest.mark.parametrize("path", MANIFESTS, ids=lambda p: p.parent.name)
 def test_the_template_agents_and_skills_are_installable(path: Path) -> None:
     from choregos_api.schemas.agents import AgentCreate
-    from choregos_api.services.agents import erreurs_d_une_version
-    from choregos_api.services.gabarits import livraison
+    from choregos_api.services.agents import version_errors
+    from choregos_api.services.templates import delivery
 
-    livree = livraison(manifest(path), path.parent)
-    from choregos_api.services.skills import valider
+    livree = delivery(manifest(path), path.parent)
+    from choregos_api.services.skills import validate
 
-    skills = {valider(files).name for files in livree.skills}
+    skills = {validate(files).name for files in livree.skills}
     agents = set()
     for document in livree.agents:
         agent = AgentCreate.model_validate(document)
-        erreurs_d_une_version(agent.spec)
+        version_errors(agent.spec)
         agents.add(agent.slug)
         orphelines = {s.slug for s in agent.spec.skills} - skills
         assert not orphelines, f"{agent.slug} names skills the template does not ship: {sorted(orphelines)}"
@@ -227,9 +227,9 @@ def test_template_extensions_are_valid_for_their_extension_package(path: Path, t
     """A shipped ontology compiles with no error NOR warning against what the plugin can play; its
     effects and proofs are served; an agent it authorises to propose is shipped by the template."""
     from choregos_api.schemas.agents import AgentCreate
-    from choregos_api.services.gabarits import livraison
+    from choregos_api.services.templates import delivery
 
-    livree = livraison(manifest(path), path.parent)
+    livree = delivery(manifest(path), path.parent)
     inconnues = set(livree.extensions) - EXTENSIONS_CONNUES
     assert not inconnues, f"extensions nobody validates: {sorted(inconnues)}"
     if "ontology" not in livree.extensions:

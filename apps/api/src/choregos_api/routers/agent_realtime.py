@@ -84,7 +84,7 @@ async def agent_realtime(
             organisation, agent, subject = await load_visible_agent(db, principal, org, slug)
             target = await project_in_org(db, organisation, project)
             enforce_decision(decide(principal, org, subject, Action.CONVERSE, project_slug=target.slug))
-            from ..services.agents import resoudre_l_agent
+            from ..services.agents import resolve_agent
 
             if await _served_kind(db, organisation.id, target.id, agent.slug) == "hosted":
                 record = await open_session(
@@ -98,7 +98,7 @@ async def agent_realtime(
                     db, principal, organisation, agent.slug, target, max_usd=max_usd, runtime="voice"
                 )
                 served = f"{record.agent_slug}@{record.agent_version}"
-                spec = (await resoudre_l_agent(db, organisation.id, target.id, served)).spec
+                spec = (await resolve_agent(db, organisation.id, target.id, served)).spec
                 name = secret_name(record.id)
                 key = (await get_secret_store().get_many(db, organisation.id, [name])).get(name, "")
                 terms = await opened_terms(db, record)
@@ -203,10 +203,10 @@ async def _serve(websocket: WebSocket, relay: VoiceRelay, after: int) -> None:
 
 
 async def _served_kind(db: Any, org_id: str, project_id: str, agent: str) -> str | None:
-    from ..services.agents import AgentIndisponible, resoudre_l_agent
+    from ..services.agents import AgentUnavailable, resolve_agent
 
     try:
-        spec = (await resoudre_l_agent(db, org_id, project_id, agent)).spec
-    except AgentIndisponible:
+        spec = (await resolve_agent(db, org_id, project_id, agent)).spec
+    except AgentUnavailable:
         return None  # `open_session` says why
     return spec.runtime.kind if spec.runtime is not None else None

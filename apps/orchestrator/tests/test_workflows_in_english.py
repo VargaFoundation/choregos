@@ -29,7 +29,6 @@ OWNED_ROOT = (
     "markdown",
     "org_egress",
     "queues",
-    "repartition",
     "testing",
     "train_client",
     "worker",
@@ -171,25 +170,13 @@ def test_signal_and_query_wire_names_unchanged() -> None:
     assert types == RECORDED_WORKFLOW_TYPES
 
 
-def test_former_modules_and_names_still_resolve() -> None:
-    from choregos_orchestrator import queues
+def test_the_former_french_modules_and_test_helpers_are_gone() -> None:
     from choregos_orchestrator import testing as testing_module
-    from choregos_orchestrator.workflows import scheduling
 
-    former_queues = importlib.import_module("choregos_orchestrator.repartition")
-    assert former_queues.ACTIVITES_PAR_FILE is queues.ACTIVITIES_BY_QUEUE  # lang: fr-ok
-    assert former_queues.FILE_PAR_ACTIVITE is queues.QUEUE_BY_ACTIVITY  # lang: fr-ok
-    assert former_queues.nom_de_l_activite is queues.activity_name  # lang: fr-ok
-    assert former_queues.file_de is queues.queue_of  # lang: fr-ok
-
-    former_scheduling = importlib.import_module("choregos_orchestrator.workflows.planification")
-    assert former_scheduling.executer_activite is scheduling.execute_on_its_queue  # lang: fr-ok
-    assert former_scheduling.demarrer_activite is scheduling.start_on_its_queue  # lang: fr-ok
-    assert former_scheduling.workflow is scheduling.workflow
-
-    assert testing_module.workers_repartis is testing_module.workers_by_queue  # lang: fr-ok
-    assert testing_module.avec_doublures is testing_module.with_doubles  # lang: fr-ok
-    assert testing_module.repartir is testing_module.group_by_queue  # lang: fr-ok
+    for former in ("choregos_orchestrator.repartition", "choregos_orchestrator.workflows.planification"):
+        assert importlib.util.find_spec(former) is None, former
+    for helper in ("workers_by_queue", "with_doubles", "group_by_queue"):
+        assert callable(getattr(testing_module, helper))
 
 
 def test_the_queue_table_routes_by_activity_name() -> None:
@@ -203,22 +190,19 @@ def test_the_queue_table_routes_by_activity_name() -> None:
     assert activity_name(object()) is None
 
 
-def test_the_tools_sidecar_url_keeps_its_former_name() -> None:
+def test_the_tools_sidecar_url_has_its_english_name() -> None:
     from choregos_orchestrator.config import OrchestratorSettings
 
     settings = OrchestratorSettings(tools_mcp_url="http://tools:7777/mcp")
     assert settings.tools_sidecar_url == "http://tools:7777/mcp"
-    assert settings.url_du_sidecar_d_outils == settings.tools_sidecar_url  # lang: fr-ok
 
 
-def test_the_train_thresholds_and_markers_keep_their_former_names() -> None:
+def test_the_train_reads_a_recorded_former_threshold_input() -> None:
     from choregos_orchestrator.workflows import train
 
-    assert train.SEUIL_DE_RELAIS == train.RELAY_THRESHOLD  # lang: fr-ok
-    assert train.LE_TRAIN_SE_RELAIE_TOT == train.TRAIN_CONTINUES_AS_NEW_EARLY  # lang: fr-ok
-    assert train.LE_TRAIN_AU_REPOS_SE_RELAIE == train.IDLE_TRAIN_CONTINUES_AS_NEW  # lang: fr-ok
     old = train.TrainInput(project_slug="p", env="e", seuil_de_relais=40)  # lang: fr-ok
-    assert old.former_idle_threshold() == old.seuil_au_repos_d_avant() == 40  # lang: fr-ok
+    assert old.former_idle_threshold() == 40
+    assert old.threshold() == 40
     assert train.TrainInput(project_slug="p", env="e").former_idle_threshold() == train.FORMER_RELAY_THRESHOLD
 
 
@@ -226,7 +210,7 @@ def test_the_action_workflow_names() -> None:
     from choregos_orchestrator.workflows import action
 
     assert issubclass(action.MissingEvidence, Exception)
-    assert action.EFFET is action.EFFECT  # lang: fr-ok
+    assert action.EFFECT.non_retryable_error_types
 
 
 @pytest.mark.parametrize(

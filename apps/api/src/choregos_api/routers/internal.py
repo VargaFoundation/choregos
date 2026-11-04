@@ -26,7 +26,6 @@ from choregos_contracts import (
     artifact_digest,
 )
 from choregos_core import PolicyEngine, matches_any, telemetry, utcnow
-from choregos_core.compat import alias_names
 from choregos_core.workspace import is_read_only_scope
 from fastapi import APIRouter, Query, Request, Response, status
 from sqlalchemy import func, select
@@ -66,7 +65,7 @@ from ..services import (
     effective_policy,
     new_human_request,
     persist_event,
-    ranger_les_sorties,
+    store_outputs,
     web_fetch,
     web_search,
 )
@@ -81,10 +80,10 @@ from ..services.artifacts import (
 )
 from ..services.artifacts import latest as latest_artifact
 from ..services.budget_alerts import check_after_spend
-from ..services.couts import dimensions_of
+from ..services.costs import dimensions_of
 from ..services.network import record_decisions, run_network
-from ..services.recus import DOCUMENTS_DU_PROMPT, LUE, PRODUITE, consigner, record_digests
-from ..services.tickets import sorties_a_ranger
+from ..services.receipts import PRODUCED, PROMPT_DOCUMENTS, READ, record, record_digests
+from ..services.tickets import outputs_to_store
 from ..temporal import get_temporal, interpreter_id
 
 router = APIRouter(tags=["internal"], prefix="/internal")
@@ -225,16 +224,16 @@ async def post_result(id: str, body: StageResult, session: Db, claims: RunAuth) 
     if outputs.allowed_paths:
         item.allowed_paths = list(outputs.allowed_paths)
     declared_outputs = list(((run.stage_input or {}).get("transition") or {}).get("outputs") or [])
-    ranger_les_sorties(item, outputs, declared_outputs)
+    store_outputs(item, outputs, declared_outputs)
     # Each stored output receives its "produced" receipt, under its fingerprint (S25-04).
-    await consigner(
+    await record(
         session,
         org_id=project.org_id,
         work_item_id=item.id,
         run_id=run.id,
         stage=run.stage_role,
-        sorties=sorties_a_ranger(outputs, declared_outputs),
-        genre=PRODUITE,
+        outputs=outputs_to_store(outputs, declared_outputs),
+        genre=PRODUCED,
     )
     # And each becomes a typed artifact revision, traced to this run (S31-01, ADR 0049).
     await record_inline_outputs(
@@ -242,7 +241,7 @@ async def post_result(id: str, body: StageResult, session: Db, claims: RunAuth) 
         org_id=project.org_id,
         item=item,
         run=run,
-        outputs=sorties_a_ranger(outputs, declared_outputs),
+        outputs=outputs_to_store(outputs, declared_outputs),
         types=dict(((run.stage_input or {}).get("transition") or {}).get("output_types") or {}),
     )
 
@@ -507,14 +506,14 @@ async def get_input_content(id: str, name: str, session: Db, claims: RunAuth) ->
         raise conflict(f"input `{name}` cannot be read from the object store: {exc}") from exc
     # An inline value keeps the receipt convention of S25-04 (its canonical JSON); a file, its sha256.
     if row.storage_key is None:
-        await consigner(
+        await record(
             session,
             org_id=project.org_id,
             work_item_id=item.id,
             run_id=run.id,
             stage=run.stage_role,
-            sorties={name: row.content},
-            genre=LUE,
+            outputs={name: row.content},
+            genre=READ,
         )
     else:
         await record_digests(
@@ -524,7 +523,7 @@ async def get_input_content(id: str, name: str, session: Db, claims: RunAuth) ->
             run_id=run.id,
             stage=run.stage_role,
             digests={name: row.digest},
-            genre=LUE,
+            genre=READ,
         )
     return Response(content=data, media_type=row.media_type, headers={"X-Choregos-Digest": row.digest})
 
@@ -581,7 +580,7 @@ async def put_output(
         run_id=run.id,
         stage=run.stage_role,
         digests={name: row.digest},
-        genre=PRODUITE,
+        genre=PRODUCED,
     )
     return to_contract(row)
 
@@ -691,16 +690,16 @@ async def get_ticket(id: str, session: Db, claims: RunAuth) -> RunTicket:
     run, item, project = await _run_and_item(session, id)
     documents = item.documents or {}
     declared = set(_declared_inputs(run))
-    served = {name: documents.get(name) for name in DOCUMENTS_DU_PROMPT if name in declared}
+    served = {name: documents.get(name) for name in PROMPT_DOCUMENTS if name in declared}
     # What the run reads here, under the fingerprint of what it reads (S25-04): the exact revision.
-    await consigner(
+    await record(
         session,
         org_id=project.org_id,
         work_item_id=item.id,
         run_id=run.id,
         stage=run.stage_role,
-        sorties=served,
-        genre=LUE,
+        outputs=served,
+        genre=READ,
     )
     return RunTicket(
         key=item.tracker_key,
@@ -1206,9 +1205,3 @@ async def _injection_guard(
 
 # The former private name of `_extension_tools`: a patch on it (a test, an edition package) is seen by
 # `get_tools` and `call_tool` (S45-16).
-_outils_des_greffons = _extension_tools  # lang: fr-ok alias:internal
-
-alias_names(
-    __name__,
-    {"_outils_des_greffons": "_extension_tools"},  # lang: fr-ok alias:internal
-)

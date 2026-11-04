@@ -15,7 +15,6 @@ from typing import Any, Literal
 from uuid import uuid4
 
 from choregos_core import WorkflowEngine
-from choregos_core.compat import alias_names
 from choregos_core.domain import TRACKER_FIELD
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -271,25 +270,3 @@ async def new_trial_work_item(
     session.add(item)
     await session.flush()
     return item
-
-
-Naissance = WorkItemBirth  # lang: fr-ok alias:internal
-choisir_workflow = choose_workflow  # lang: fr-ok alias:internal
-valider_les_champs = validate_fields  # lang: fr-ok alias:internal
-noter_les_etiquettes = record_labels  # lang: fr-ok alias:internal
-verifier_la_naissance = verify_birth  # lang: fr-ok alias:internal
-nouveau_ticket = new_work_item  # lang: fr-ok alias:internal
-nouveau_ticket_d_essai = new_trial_work_item  # lang: fr-ok alias:internal
-
-alias_names(
-    __name__,
-    {
-        "Naissance": "WorkItemBirth",  # lang: fr-ok alias:internal
-        "choisir_workflow": "choose_workflow",  # lang: fr-ok alias:internal
-        "valider_les_champs": "validate_fields",  # lang: fr-ok alias:internal
-        "noter_les_etiquettes": "record_labels",  # lang: fr-ok alias:internal
-        "verifier_la_naissance": "verify_birth",  # lang: fr-ok alias:internal
-        "nouveau_ticket": "new_work_item",  # lang: fr-ok alias:internal
-        "nouveau_ticket_d_essai": "new_trial_work_item",  # lang: fr-ok alias:internal
-    },
-)

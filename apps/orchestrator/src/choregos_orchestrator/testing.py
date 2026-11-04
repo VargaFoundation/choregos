@@ -61,26 +61,15 @@ def group_by_queue(activities: Iterable[Any], workflow_queue: str) -> dict[str, 
 async def workers_by_queue(
     client: Any,
     *,
-    activities: Iterable[Any] | None = None,
+    activities: Iterable[Any],
     workflows: Iterable[Any],
     workflow_queue: str = "test",
     replacements: Mapping[str, Any] | None = None,
-    activites: Iterable[Any] | None = None,  # lang: fr-ok alias:internal
-    file_du_workflow: str | None = None,  # lang: fr-ok alias:internal
-    remplacements: Mapping[str, Any] | None = None,  # lang: fr-ok alias:internal
     **options: Any,
 ) -> AsyncIterator[dict[str, list[Any]]]:
     """One worker per queue, for the length of the block. Yields the split, so a test can assert it."""
     from temporalio.worker import Worker
 
-    if activities is None:
-        activities = activites  # lang: fr-ok alias:internal
-    if activities is None:
-        raise TypeError("workers_by_queue() needs `activities`")
-    if file_du_workflow is not None:  # lang: fr-ok alias:internal
-        workflow_queue = file_du_workflow  # lang: fr-ok alias:internal
-    if remplacements is not None:  # lang: fr-ok alias:internal
-        replacements = remplacements  # lang: fr-ok alias:internal
     by_queue = group_by_queue(with_doubles(activities, replacements), workflow_queue)
     carried = list(workflows)
     # A queue without activities has no worker: Temporal refuses an empty worker, and a test that
@@ -101,11 +90,6 @@ async def workers_by_queue(
         for worker in workers:
             await stack.enter_async_context(worker)
         yield by_queue
-
-
-avec_doublures = with_doubles  # lang: fr-ok alias:internal
-repartir = group_by_queue  # lang: fr-ok alias:internal
-workers_repartis = workers_by_queue  # lang: fr-ok alias:internal
 
 
 #: The events that close a run: once one is in the history, no other event will follow.

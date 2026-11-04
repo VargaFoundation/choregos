@@ -18,7 +18,6 @@ import hashlib
 import json
 from typing import Any
 
-from choregos_core.compat import alias_names
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,22 +50,16 @@ async def record(
     run_id: str,
     stage: str | None,
     genre: str,
-    outputs: dict[str, Any] | None = None,
-    sorties: dict[str, Any] | None = None,  # lang: fr-ok alias:internal
+    outputs: dict[str, Any],
 ) -> int:
-    """One receipt per present output; returns the number of receipts written (zero when all existed).
-
-    `outputs` was `sorties`: the former keyword still works (ADR 0098 §3 (e))."""
-    given = outputs if outputs is not None else sorties
-    if given is None:
-        raise TypeError("record() needs `outputs`")
+    """One receipt per present output; returns the number of receipts written (zero when all existed)."""
     return await record_digests(
         session,
         org_id=org_id,
         work_item_id=work_item_id,
         run_id=run_id,
         stage=stage,
-        digests={name: digest(value) for name, value in given.items() if _present(value)},
+        digests={name: digest(value) for name, value in outputs.items() if _present(value)},
         genre=genre,
     )
 
@@ -185,25 +178,3 @@ async def work_item_handoffs(session: AsyncSession, item: WorkItem) -> list[Hand
             )
         )
     return list(passages.values())
-
-
-PRODUITE = PRODUCED  # lang: fr-ok alias:internal
-LUE = READ  # lang: fr-ok alias:internal
-DOCUMENTS_DU_PROMPT = PROMPT_DOCUMENTS  # lang: fr-ok alias:internal
-empreinte = digest  # lang: fr-ok alias:internal
-consigner = record  # lang: fr-ok alias:internal
-lu_par_le_prompt = read_by_the_prompt  # lang: fr-ok alias:internal
-passages_du_ticket = work_item_handoffs  # lang: fr-ok alias:internal
-
-alias_names(
-    __name__,
-    {
-        "PRODUITE": "PRODUCED",  # lang: fr-ok alias:internal
-        "LUE": "READ",  # lang: fr-ok alias:internal
-        "DOCUMENTS_DU_PROMPT": "PROMPT_DOCUMENTS",  # lang: fr-ok alias:internal
-        "empreinte": "digest",  # lang: fr-ok alias:internal
-        "consigner": "record",  # lang: fr-ok alias:internal
-        "lu_par_le_prompt": "read_by_the_prompt",  # lang: fr-ok alias:internal
-        "passages_du_ticket": "work_item_handoffs",  # lang: fr-ok alias:internal
-    },
-)

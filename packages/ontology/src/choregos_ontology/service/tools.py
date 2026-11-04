@@ -304,12 +304,12 @@ async def pending_for_a_person(
 ) -> list[dict[str, Any]]:
     """The proposals waiting for a decision, with the console page where it is taken — the page of the
     core's actions, which they now are (S20-08)."""
-    from choregos_api.services.actions import RANGS, rang
+    from choregos_api.services.actions import RANKS, rank
 
     pending = []
     for proposal in await actions.ontology_actions(session, project.id, actions.PENDING):
         approvers = (proposal.approval or {}).get("approvers") or [{"role": "project_owner"}]
-        required = min(RANGS.get(str(a.get("role")), 3) for a in approvers)
+        required = min(RANKS.get(str(a.get("role")), 3) for a in approvers)
         proposer = proposal.proposed_by or {}
         same_person = proposer.get("kind") == "user" and proposer.get("id") == principal.email
         meta = actions._meta(proposal)
@@ -321,7 +321,7 @@ async def pending_for_a_person(
                 "kind": "action proposal",
                 "question": proposal.justification,
                 "requested_at": proposal.created_at.isoformat() if proposal.created_at else None,
-                "can_decide": rang(principal, org_slug, project.slug) >= required and not same_person,
+                "can_decide": rank(principal, org_slug, project.slug) >= required and not same_person,
                 "decision_path": f"/p/{project.slug}/actions/{proposal.id}",
             }
         )

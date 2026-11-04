@@ -11,7 +11,7 @@ function of the seed, the publisher and exclusion files and the recordings under
 `tests/fixtures/catalogues/skills/`, so replaying them is byte-deterministic.
 
 Each skill goes through the code the platform runs at install: `read_tarball` reads it, `detect_licence`
-names its licence, `skill_gate.assess` gives its risk and `skills.empreinte` its digest. The generator
+names its licence, `skill_gate.assess` gives its risk and `skills.digest` its digest. The generator
 imports them from `choregos_api` rather than copying them, so what the catalogue says of a skill is what
 the gate will say again when it is installed.
 """
@@ -43,7 +43,7 @@ from choregos_api.services.skill_sources import (
     detect_licence,
     read_tarball,
 )
-from choregos_api.services.skills import empreinte
+from choregos_api.services.skills import digest
 from choregos_contracts.skill_files import skill_file_bytes
 
 from tools.catalogues import _github, _recording
@@ -292,7 +292,7 @@ def resolve(
         "licence_class": "permissive" if permissive else "copyleft",
         "files": len(found.files),
         "bytes": sum(len(skill_file_bytes(p, t)) for p, t in found.files.items()),
-        "digest": empreinte(found.files),
+        "digest": digest(found.files),
         "risk": assessment.risk,
         "findings_count": len(assessment.findings),
         "categories": sorted(line["categories"]),

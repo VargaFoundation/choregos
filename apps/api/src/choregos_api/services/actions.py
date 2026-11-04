@@ -19,7 +19,6 @@ from typing import Any
 
 from choregos_contracts import ActionOrigin, ActionStatus, EventType
 from choregos_core import utcnow
-from choregos_core.compat import alias_names
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -434,65 +433,3 @@ async def dto(session: AsyncSession, action: Action) -> ActionDto:
     project = await session.get(Project, action.project_id)
     result.project_slug = project.slug if project is not None else None
     return result
-
-
-async def proposer(  # lang: fr-ok alias:internal
-    session: AsyncSession,
-    project: Project,
-    body: ActionCreate,
-    *,
-    origine: str,  # lang: fr-ok alias:internal
-    propose_par: dict[str, Any],  # lang: fr-ok alias:internal
-    principal: Any,
-    run_id: str | None = None,
-    action_id: str | None = None,
-) -> Action:
-    """The former name of `propose`, with its former keywords (`origine`, `propose_par`): the broker,
-    the ontology and the actions router still call it so."""
-    return await propose(  # lang: fr-ok alias:internal
-        session,
-        project,
-        body,
-        origin=origine,  # lang: fr-ok alias:internal
-        proposed_by=propose_par,  # lang: fr-ok alias:internal
-        principal=principal,
-        run_id=run_id,
-        action_id=action_id,
-    )
-
-
-async def proposer_pour_une_transition(  # lang: fr-ok alias:internal
-    session: AsyncSession,
-    project: Project,
-    item: WorkItem,
-    spec: dict[str, Any],
-    *,
-    transition: str,
-    tentative: int,  # lang: fr-ok alias:internal
-    workflow_id: str,
-) -> Action:
-    """The former name of `propose_for_transition`, with its former keyword `tentative`: the
-    orchestrator's activity still calls it so."""
-    return await propose_for_transition(
-        session, project, item, spec, transition=transition, attempt=tentative, workflow_id=workflow_id
-    )
-
-
-RANGS = RANKS  # lang: fr-ok alias:internal
-rang = rank  # lang: fr-ok alias:internal
-politique_de_l_action = action_policy  # lang: fr-ok alias:internal
-approuvee_par_la_politique = approved_by_policy  # lang: fr-ok alias:internal
-signaler_une_preuve = signal_evidence  # lang: fr-ok alias:internal
-decider = decide  # lang: fr-ok alias:internal
-
-alias_names(
-    __name__,
-    {
-        "RANGS": "RANKS",  # lang: fr-ok alias:internal
-        "rang": "rank",  # lang: fr-ok alias:internal
-        "politique_de_l_action": "action_policy",  # lang: fr-ok alias:internal
-        "approuvee_par_la_politique": "approved_by_policy",  # lang: fr-ok alias:internal
-        "signaler_une_preuve": "signal_evidence",  # lang: fr-ok alias:internal
-        "decider": "decide",  # lang: fr-ok alias:internal
-    },
-)

@@ -66,7 +66,6 @@ DEFAULT_EXPRESS_LABEL = "hotfix"
 #: early call while replaying an old history would return `False` for the whole life of the run. So
 #: a run started on the previous version takes the fix if it is updated before the threshold.
 IDLE_TRAIN_CONTINUES_AS_NEW = "idle-train-continues-as-new"
-LE_TRAIN_AU_REPOS_SE_RELAIE = IDLE_TRAIN_CONTINUES_AS_NEW  # lang: fr-ok alias:internal
 #: The train relays BEFORE its history gets too long to replay (S22-27). Before this marker, the
 #: threshold was 15,000 events: on the dev tenant, on 10 October (0.17.11), a history of ~16,000
 #: events (2.6 MB) took 32 to 34 s to replay on the orchestrator pod (1 core):
@@ -82,7 +81,6 @@ LE_TRAIN_AU_REPOS_SE_RELAIE = IDLE_TRAIN_CONTINUES_AS_NEW  # lang: fr-ok alias:i
 #: soon as the new threshold was crossed, returned `False` for the whole life of the run, and the
 #: relay it had recorded at 15,000 became a determinism gap (TMPRL1100, verified).
 TRAIN_CONTINUES_AS_NEW_EARLY = "train-continues-as-new-early"
-LE_TRAIN_SE_RELAIE_TOT = TRAIN_CONTINUES_AS_NEW_EARLY  # lang: fr-ok alias:internal
 #: A departure requested on a train WITHOUT A BATCH is dropped (#370, S22-29). Before this marker,
 #: `depart_now` (or `express`) raised a flag that only `_depart` resets; but `_collect` does not depart
 #: without a batch, and its wait (`depart_requested or express or abort_requested`) returned at once:
@@ -122,7 +120,6 @@ FREEZE_BEFORE_RUN_IS_KEPT = "freeze-before-run-is-kept"
 #: A train can receive it in its input (`seuil_de_relais`, a recorded input): an archived history
 #: that relays earlier then replays against the code as it is, without redefining anything.
 RELAY_THRESHOLD = 2_000
-SEUIL_DE_RELAIS = RELAY_THRESHOLD  # lang: fr-ok alias:internal
 #: The threshold from before S22-27, which only the runs that did not take
 #: `TRAIN_CONTINUES_AS_NEW_EARLY` replay.
 FORMER_RELAY_THRESHOLD = 15_000
@@ -162,14 +159,10 @@ class TrainInput:
             return self.seuil_de_relais
         return RELAY_THRESHOLD
 
-    seuil = threshold  # lang: fr-ok alias:internal
-
     def former_idle_threshold(self) -> int:
         """The idle relay threshold as S22-24 read it (a run that did not take S22-27)."""
         given = self.seuil_de_relais if self.relay_threshold is None else self.relay_threshold
         return FORMER_RELAY_THRESHOLD if given is None else given
-
-    seuil_au_repos_d_avant = former_idle_threshold  # lang: fr-ok alias:internal
 
 
 @workflow.defn(name="ReleaseTrain", sandboxed=False)
@@ -365,7 +358,7 @@ class ReleaseTrain:
         `patched` is only called once the condition is true (see `TRAIN_CONTINUES_AS_NEW_EARLY`). It
         only returns `True` to a caller that relays at once: the three callers do."""
         return (
-            _history_length() > params.seuil() or workflow.info().is_continue_as_new_suggested()
+            _history_length() > params.threshold() or workflow.info().is_continue_as_new_suggested()
         ) and workflow.patched(TRAIN_CONTINUES_AS_NEW_EARLY)
 
     async def _follow_the_sync(self, params: TrainInput, payload: dict[str, Any]) -> None:

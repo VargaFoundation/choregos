@@ -28,7 +28,7 @@ from .scheduling import execute_on_its_queue
 with workflow.unsafe.imports_passed_through():
     from ..activities import evals as eval_activities
     from ..activities import stage as stage_activities
-    from ..activities.interpretation import message_de
+    from ..activities.interpretation import message_of
 
 RETRY = RetryPolicy(maximum_attempts=2, initial_interval=timedelta(seconds=5))
 #: The interpreter's, for the same activities (`workflows/interpreter.py`).
@@ -155,7 +155,7 @@ class EvalMatrix:
             if is_cancelled_exception(exc) and workflow.patched(CANCEL_STOPS_THE_MATRIX):
                 raise  # the matrix is cancelled: no run was started, there is nothing to stop
             # No run was made: the platform could not prepare it, the agent never had the case.
-            reason = f"the stage could not be prepared: {message_de(exc)}"
+            reason = f"the stage could not be prepared: {message_of(exc)}"
             return {
                 "ok": False,
                 "skipped": True,
@@ -197,7 +197,7 @@ class EvalMatrix:
             if is_cancelled_exception(exc) and workflow.patched(CANCEL_STOPS_THE_MATRIX):
                 await self._stop_case(ids)
                 raise  # re-raised, the workflow ends cancelled: no next case starts
-            failure = message_de(exc)
+            failure = message_of(exc)
         # The key is revoked and the ledger written whatever the run did: a failed case costs too.
         await execute_on_its_queue(
             stage_activities.collect_spend,
