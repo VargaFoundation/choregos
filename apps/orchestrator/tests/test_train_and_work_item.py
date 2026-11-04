@@ -471,6 +471,9 @@ async def test_a_labelled_duplicate_boarding_triggers_the_express_lane(
     """The ticket boards first without a label, then comes back labelled `hotfix` (set between the two
     boardings): it departures on the express lane. Before #351, the duplicate branch merged the approval
     and returned without reading the labels."""
+    # The cron away from now (S22-30b): when it is due, the ticket leaves on the schedule, not express,
+    # before its labelled duplicate arrives (CI, Wednesday 2026-11-04 at 17:00 UTC).
+    await _prod_policy(setup)
     setup.adapters.cd.set_health("billing-api", "Healthy")
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():
