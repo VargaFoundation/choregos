@@ -4329,11 +4329,3 @@ stories:
     size: S
     depends_on: [S57-11]
     notes: "Through the loopback MCP proxy of ADR 0080; only if S57-11 passes its gate."
-  - id: S57-03b
-    title: "fix(api): a tool call in flight is never read as a call made"
-    stream: S57
-    sprint: 3
-    priority: 1
-    size: S
-    depends_on: [S57-03]
-    notes: "The provisional ledger line of S57-03 (provider in_flight) is excluded from the tool_called gate, /runs/{id}/access and the cost counts; stale in-flight lines are swept."
