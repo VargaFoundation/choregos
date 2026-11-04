@@ -103,6 +103,3 @@ async def validate(raw: str, settings: Settings) -> dict[str, Any]:
     except (jwt.PyJWTError, httpx.HTTPError) as error:
         raise TokenRefused(f"token refused: {error}") from error
     return claims
-
-
-emetteur = issuer_of  # lang: fr-ok alias:internal

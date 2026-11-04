@@ -135,7 +135,7 @@ def test_the_former_modules_are_the_new_ones(former_module: str, module: str) ->
 def test_patching_a_former_private_name_patches_the_english_one(monkeypatch: pytest.MonkeyPatch) -> None:
     from choregos_api import extensions, greffons
 
-    monkeypatch.setattr(greffons, "_INSTALLATEURS", {})  # lang: fr-ok alias:internal
+    monkeypatch.setattr(greffons, "_INSTALLATEURS", {})  # lang: fr-ok alias:external
     assert extensions.template_installers() == {}
     extensions.declare_template_installer("x", object())
     assert "x" in extensions._INSTALLERS

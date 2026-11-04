@@ -125,13 +125,13 @@ async def put_connector(
             "the `direct` gateway is refused in this environment: it measures no cost and "
             "enforces no cap. Use `litellm`."
         )
-    from ..services.connecteurs import (
+    from ..services.connectors import (
         a_field_of,
         check_runtime_allowed,
         check_type_config,
-        spec_du_type,
         spec_to_declare,
-        verifier_les_secrets,
+        type_spec,
+        verify_secrets,
     )
     from ..services.github_app import checked_config
     from ..services.platform_network import check_connector_declaration
@@ -152,7 +152,7 @@ async def put_connector(
         update={"config": await checked_config(session, ctx.project.org_id, kind, body.type, body.config)}
     )
     prefix = _prefix(ctx, kind)
-    verifier_les_secrets(
+    verify_secrets(
         spec_to_declare(kind, body.type),
         body.type,
         body.config,
@@ -170,7 +170,7 @@ async def put_connector(
     if row is None:
         row = Connector(project_id=ctx.id, kind=kind, type=body.type)
         session.add(row)
-    spec = spec_du_type(kind, body.type)
+    spec = type_spec(kind, body.type)
     before = dict(row.secret_refs or {})
     # A PUT replaces the references, but a sealed value is kept unless this body overrides its field
     # or the type no longer has it: re-saving the configuration must not wipe a typed secret.
@@ -222,13 +222,13 @@ async def set_connector_secret(
     ctx: ProjectCtx, kind: Annotated[str, Path()], field: Field, body: SecretValue, session: Db
 ) -> ConnectorDto:
     """Type a secret once (or replace it): sealed, never returned."""
-    from ..services.connecteurs import spec_du_type, verifier_les_secrets
+    from ..services.connectors import type_spec, verify_secrets
 
     ctx.require(Permission.CONNECTOR_WRITE)
     row = await _connector_row(ctx, kind, session)
     prefix = _prefix(ctx, kind)
-    verifier_les_secrets(
-        spec_du_type(kind, row.type),
+    verify_secrets(
+        type_spec(kind, row.type),
         row.type,
         {},
         {},

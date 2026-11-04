@@ -35,7 +35,7 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     # Imported here: the migration reads the catalogue of the release that runs it.
     from choregos_api.schemas import AgentSpec
-    from choregos_api.services.agents import empreinte
+    from choregos_api.services.agents import digest
     from choregos_core.agent_catalogue import entries
 
     connection = op.get_bind()
@@ -43,7 +43,7 @@ def upgrade() -> None:
         # Forced RLS: the application role sees no row without this (S39-27).
         connection.execute(sa.text("SELECT set_config('app.current_orgs', '*', true)"))
     for entry in entries():
-        checksum = empreinte(AgentSpec.model_validate(entry.document.get("spec") or {}))
+        checksum = digest(AgentSpec.model_validate(entry.document.get("spec") or {}))
         rows = connection.execute(
             sa.text(
                 "SELECT a.id AS id, v.id AS first_id, v.checksum AS first_checksum FROM agents a "

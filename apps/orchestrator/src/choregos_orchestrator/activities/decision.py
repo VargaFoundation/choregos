@@ -48,7 +48,7 @@ from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
 from ..config import get_settings
-from .base import db, load_work_item, project_bundle, workflow_du_ticket
+from .base import db, load_work_item, project_bundle, work_item_workflow
 from .injection_guard import guard_sources
 from .outcome import book_spend, ticket_view
 from .run_key import mint_key, record_step_key, revoke
@@ -271,7 +271,7 @@ async def _decided_by(
     """What every record of this decision shares. The model's version is the model the gateway says
     answered, when it names another than the catalogue entry asked: the entry is an alias, and the
     calibration of one model does not carry over to the next."""
-    workflow = await workflow_du_ticket(session, item)
+    workflow = await work_item_workflow(session, item)
     answered_by = reply.model if reply.model and reply.model != decision.model else None
     return DecidedBy(
         org_id=bundle.project.org_id,

@@ -14,7 +14,6 @@ come back at the next restart.
 from __future__ import annotations
 
 from choregos_contracts import Role
-from choregos_core.compat import alias_names
 from sqlalchemy import select
 
 from .config import Settings
@@ -60,6 +59,3 @@ async def bootstrap_installation(settings: Settings) -> dict[str, list[str]]:
             "installation bootstrapped", organisation=settings.bootstrap_org, admins=created[ADMINISTRATORS]
         )
     return created
-
-
-alias_names(__name__, {"amorcer": "bootstrap_installation"})  # lang: fr-ok alias:internal

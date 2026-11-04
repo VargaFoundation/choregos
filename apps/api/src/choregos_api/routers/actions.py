@@ -34,12 +34,12 @@ Ident = Annotated[str, Path(min_length=1, max_length=64)]
 async def propose_action(ctx: ProjectCtx, body: ActionCreate, session: Db) -> ActionDto:
     """An action awaiting a decision. Its effects must be declared (`declare_effect`)."""
     ctx.require(Permission.ITEM_CONTROL)
-    action = await service.proposer(
+    action = await service.propose(
         session,
         ctx.project,
         body,
-        origine=ActionOrigin.TRANSITION.value if body.work_item_id else ActionOrigin.TOOL.value,
-        propose_par={"kind": ctx.principal.kind, "id": ctx.principal.email, "via": "api"},
+        origin=ActionOrigin.TRANSITION.value if body.work_item_id else ActionOrigin.TOOL.value,
+        proposed_by={"kind": ctx.principal.kind, "id": ctx.principal.email, "via": "api"},
         principal=ctx.principal,
     )
     return await service.dto(session, action)
@@ -105,7 +105,7 @@ async def decide_action(
 ) -> ActionDto:
     """Approve (a recent session is required) or reject (with a reason). A sufficient approval
     starts `action-<id>` in Temporal; nothing runs inside this request."""
-    action = await service.decider(
+    action = await service.decide(
         session, ctx.project, ctx.org_slug, action_id, body.decision, body.reason, ctx.principal
     )
     return await service.dto(session, action)

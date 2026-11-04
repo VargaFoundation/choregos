@@ -23,7 +23,7 @@ with workflow.unsafe.imports_passed_through():
     from ...activities import scm as scm_activities
     from ...activities import stage as stage_activities
     from ...activities.interpretation import (
-        message_de,
+        message_of,
     )
 
 from ..interpreter import (
@@ -158,7 +158,7 @@ class StagesMixin(InterpreterBase):
                 retry_policy=NO_RETRY,
             )
         except ActivityError as exc:
-            workflow.logger.warning("run diff not collected: %s", message_de(exc))
+            workflow.logger.warning("run diff not collected: %s", message_of(exc))
         self.current_run = None
         self.last_run = run_id  # `system` transitions evaluate their gates on this run
         # What the stage answered: the next selection reads it (S48-01). Taken from the result the

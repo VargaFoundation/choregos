@@ -64,7 +64,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from ..schemas import AgentSpec
-    from .courtier import OutilDuCourtier
+    from .broker import BrokerTool
 
 log = get_logger(__name__)
 
@@ -201,7 +201,7 @@ def error_payload(refusal: Refusal, event_id: Any = None) -> dict[str, Any]:
 
 
 def session_configuration(
-    spec: AgentSpec, model: str, tools: dict[str, OutilDuCourtier], transcription_model: str
+    spec: AgentSpec, model: str, tools: dict[str, BrokerTool], transcription_model: str
 ) -> dict[str, Any]:
     """The one `session.update` of a voice session: the agent's, never the caller's."""
     runtime: Any = spec.runtime
@@ -222,8 +222,8 @@ def session_configuration(
             "tools": [
                 {
                     "type": "function",
-                    "name": tool.nom,
-                    "description": str(tool.annonce().get("description") or ""),
+                    "name": tool.name,
+                    "description": str(tool.announcement().get("description") or ""),
                     "parameters": tool_parameters(tool),
                 }
                 for tool in tools.values()
@@ -244,7 +244,7 @@ class VoiceSession:
     model: str
     key: str
     spec: AgentSpec
-    tools: dict[str, OutilDuCourtier]
+    tools: dict[str, BrokerTool]
     max_seconds: float
     prices: RealtimePrices
     reserved_usd: float

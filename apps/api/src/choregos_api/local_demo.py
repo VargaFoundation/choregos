@@ -296,7 +296,7 @@ async def seed_local_demo(
     return what was created and what switched."""
     from .rbac import SYSTEM
     from .schemas.tickets import WorkItemCreate
-    from .services import creer_un_ticket, ensure_defaults, publier_workflow
+    from .services import create_work_item, ensure_defaults, publish_workflow
     from .services.initiator import initiator
 
     settings = settings or get_settings()
@@ -341,7 +341,7 @@ async def seed_local_demo(
             session.add(project)
             await session.flush()
             # The demo workflow first, as the default; `ensure_defaults` then only adds the policy.
-            await publier_workflow(session, SYSTEM, project, DEMO_WORKFLOW, devient_le_defaut=True)
+            await publish_workflow(session, SYSTEM, project, DEMO_WORKFLOW, becomes_default=True)
             await ensure_defaults(session, project)
             report["projects"].append(DEMO_PROJECT)
         else:
@@ -386,7 +386,7 @@ async def seed_local_demo(
             await session.execute(select(WorkItem.id).where(WorkItem.project_id == project.id).limit(1))
         ).first() is not None
         if not has_items:
-            item = await creer_un_ticket(
+            item = await create_work_item(
                 session,
                 SYSTEM,
                 project,

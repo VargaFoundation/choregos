@@ -17,7 +17,7 @@ from typing import Any
 
 from choregos_adapters.errors import ConfigurationError
 from choregos_api.db.models import AgentSessionRecord
-from choregos_api.db.session import limiter_aux_organisations
+from choregos_api.db.session import limit_to_organisations
 from choregos_api.security import mint_run_token
 from choregos_contracts import (
     AgentRef,
@@ -65,7 +65,7 @@ async def start_session_pod(payload: dict[str, Any]) -> dict[str, Any]:
     from choregos_api.secret_store import get_secret_store
     from choregos_api.services.agent_hosted_sessions import session_run_id
     from choregos_api.services.agent_sessions import secret_name
-    from choregos_api.services.agents import AgentIndisponible, resoudre_l_agent
+    from choregos_api.services.agents import AgentUnavailable, resolve_agent
     from choregos_api.services.gateway import org_gateway_url
     from choregos_api.services.hosted_builds import builds_for
 
@@ -84,8 +84,8 @@ async def start_session_pod(payload: dict[str, Any]) -> dict[str, Any]:
         bundle = await project_bundle(session, record.project_id)
         served = f"{record.agent_slug}@{record.agent_version}"
         try:
-            agent = await resoudre_l_agent(session, record.org_id, record.project_id, served)
-        except AgentIndisponible as exc:
+            agent = await resolve_agent(session, record.org_id, record.project_id, served)
+        except AgentUnavailable as exc:
             raise _refused(str(exc)) from exc
         builds = await builds_for(session, record.org_id, [agent.spec])
         # Refused here, as for a step, when no pod could run the version as published.
@@ -156,7 +156,7 @@ async def start_session_pod(payload: dict[str, Any]) -> dict[str, Any]:
         )
         await session.commit()  # the stage input is readable before the pod asks for it
         # The scope of the transaction ended with the commit (RLS is transaction-local).
-        await limiter_aux_organisations(session, "*")
+        await limit_to_organisations(session, "*")
         try:
             ref = await bundle.adapters.executor.start(spec)
         except ConfigurationError as refusal:

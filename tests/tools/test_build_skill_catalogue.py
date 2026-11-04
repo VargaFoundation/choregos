@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 from choregos_api.services.skill_gate import OPEN_LICENCES, assess
 from choregos_api.services.skill_sources import read_tarball
-from choregos_api.services.skills import empreinte, entete
+from choregos_api.services.skills import digest, front_matter
 from choregos_core import skill_catalogue
 
 from tools.catalogues import _github, _recording
@@ -113,11 +113,9 @@ def test_the_catalogue_is_what_the_gate_says_of_every_skill_it_lists() -> None:
         repo = e.repo.removeprefix("https://github.com/")
         assert e.sha == sha_of[repo], e.id
         found = next(s for s in snapshots[repo].skills if s.path == e.path)
-        assert found.name == e.id and entete(found.files["SKILL.md"])["name"] == e.id
+        assert found.name == e.id and front_matter(found.files["SKILL.md"])["name"] == e.id
         assessed = assess(found.files, executables=found.executables, repo_licences=snapshots[repo].licences)
-        assert (e.risk, e.licence, e.digest) == (assessed.risk, assessed.licence, empreinte(found.files)), (
-            e.id
-        )
+        assert (e.risk, e.licence, e.digest) == (assessed.risk, assessed.licence, digest(found.files)), e.id
         assert e.licence in OPEN_LICENCES, e.id
 
 
@@ -161,7 +159,7 @@ def test_a_bundled_image_is_shipped_as_its_bytes_and_read_back_as_the_base64_it_
         (tmp_path / relative).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / relative).write_bytes(data)
     bundle = skill_catalogue.read_bundled("demo", root=tmp_path)
-    assert bundle.files == stored and empreinte(bundle.files) == entry["digest"]
+    assert bundle.files == stored and digest(bundle.files) == entry["digest"]
 
 
 def test_a_skill_declaring_permissions_is_dropped_as_the_gate_does() -> None:
@@ -234,7 +232,7 @@ def test_an_executable_bit_makes_a_skill_high_risk() -> None:
 def test_the_entry_carries_the_platforms_own_digest_and_a_description_cut_at_300() -> None:
     entry, _ = run({"demo/SKILL.md": skill_md("demo", "word " * 100), "LICENSE": MIT})
     snapshot = read_tarball(make_tar({"demo/SKILL.md": skill_md("demo", "word " * 100), "LICENSE": MIT}), "")
-    assert entry["digest"] == empreinte(snapshot.skills[0].files)
+    assert entry["digest"] == digest(snapshot.skills[0].files)
     assert len(entry["description"]) <= 300 and entry["description"].endswith("…")
 
 

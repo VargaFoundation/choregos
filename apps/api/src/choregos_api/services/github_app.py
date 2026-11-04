@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
 from ..db.models import GitHubInstallation, Organization
-from ..db.session import en_portee_de_plateforme
+from ..db.session import in_platform_scope
 from ..errors import conflict, forbidden, unprocessable
 from ..logging import get_logger
 
@@ -134,13 +134,13 @@ def _when(value: Any) -> datetime | None:
 
 
 async def organisations(session: AsyncSession) -> list[Organization]:
-    async with en_portee_de_plateforme(session):
+    async with in_platform_scope(session):
         return list((await session.execute(select(Organization).order_by(Organization.created_at))).scalars())
 
 
 async def implicit_claim_enabled(session: AsyncSession) -> bool:
     """Exactly one organisation on the instance: nobody else to steal an installation from."""
-    async with en_portee_de_plateforme(session):
+    async with in_platform_scope(session):
         return (await session.execute(select(func.count()).select_from(Organization))).scalar_one() == 1
 
 
@@ -172,7 +172,7 @@ async def claim_implicitly(session: AsyncSession) -> int:
     orgs = await organisations(session)
     if len(orgs) != 1:
         return 0
-    async with en_portee_de_plateforme(session):
+    async with in_platform_scope(session):
         rows = (
             (await session.execute(select(GitHubInstallation).where(GitHubInstallation.org_id.is_(None))))
             .scalars()
@@ -190,7 +190,7 @@ async def sync_installations(session: AsyncSession, app: GitHubAppPort) -> int:
     """Poll GitHub, upsert every installation, drop the ones that disappeared, claim implicitly."""
     remote = await app.list_installations()
     now = datetime.now(UTC)
-    async with en_portee_de_plateforme(session):
+    async with in_platform_scope(session):
         for raw in remote:
             await upsert_installation(session, raw, now=now)
         seen = {int(r["id"]) for r in remote}
@@ -203,7 +203,7 @@ async def sync_installations(session: AsyncSession, app: GitHubAppPort) -> int:
 
 
 async def last_sync(session: AsyncSession) -> datetime | None:
-    async with en_portee_de_plateforme(session):
+    async with in_platform_scope(session):
         value = (await session.execute(select(func.max(GitHubInstallation.synced_at)))).scalar_one()
     if value is not None and value.tzinfo is None:
         value = value.replace(tzinfo=UTC)
@@ -226,7 +226,7 @@ async def sync_if_stale(session: AsyncSession, app: GitHubAppPort | None) -> Non
 async def claimed_installations(
     session: AsyncSession, org_id: str, *, usable_only: bool = False
 ) -> list[GitHubInstallation]:
-    async with en_portee_de_plateforme(session):
+    async with in_platform_scope(session):
         query = select(GitHubInstallation).where(GitHubInstallation.org_id == org_id)
         if usable_only:
             query = query.where(GitHubInstallation.suspended_at.is_(None))
@@ -239,7 +239,7 @@ async def claimed_installation_for(
     """The installation THIS organisation claimed on `owner`'s GitHub account, if it is usable.
 
     The isolation boundary (ADR 0073): a token for `owner/repo` is minted through no other."""
-    async with en_portee_de_plateforme(session):
+    async with in_platform_scope(session):
         return (
             await session.execute(
                 select(GitHubInstallation).where(
@@ -292,7 +292,7 @@ async def claim(
     manage the installation: the code GitHub sends back is exchanged for their token, and
     `GET /user/installations` must contain the id. GitHub's own docs warn that the callback's
     `installation_id` can be forged, so it is never trusted alone there."""
-    async with en_portee_de_plateforme(session):
+    async with in_platform_scope(session):
         row = await session.get(GitHubInstallation, installation_id)
     if row is not None and row.org_id not in (None, org.id):
         raise conflict(f"installation {installation_id} is already claimed by another organisation")
@@ -312,7 +312,7 @@ async def claim(
             raise forbidden(f"GitHub refused the authorization code: {exc}") from exc
         if installation_id not in allowed:
             raise forbidden(f"you do not manage GitHub installation {installation_id}")
-    async with en_portee_de_plateforme(session):
+    async with in_platform_scope(session):
         if row is None:
             remote = {int(r["id"]): r for r in await app.list_installations()}
             if installation_id not in remote:
@@ -335,7 +335,7 @@ async def apply_installation_event(session: AsyncSession, event: str, payload: d
     if not isinstance(raw, dict) or "id" not in raw:
         return False
     action = str(payload.get("action") or "")
-    async with en_portee_de_plateforme(session):
+    async with in_platform_scope(session):
         if event == "installation" and action == "deleted":
             row = await session.get(GitHubInstallation, int(raw["id"]))
             if row is not None:

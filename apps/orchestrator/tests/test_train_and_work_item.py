@@ -280,12 +280,12 @@ async def test_a_hotfix_ticket_boarded_by_the_interpreter_takes_the_express_lane
     """`signal_train` boarded with `labels: []`: a hotfix coming from the interpreter waited for the cron."""
     from choregos_api.db.models import WorkItem
     from choregos_api.db.session import session_scope
-    from choregos_api.services import noter_les_etiquettes
+    from choregos_api.services import record_labels
 
     async with session_scope() as session:
         item = await session.get(WorkItem, setup.work_item_id)
         assert item is not None
-        noter_les_etiquettes(item, ["agent-ready", "hotfix"])
+        record_labels(item, ["agent-ready", "hotfix"])
     setup.adapters.cd.set_health("billing-api", "Healthy")
     with temporal_env.auto_time_skipping_disabled():
         async with worker_factory():

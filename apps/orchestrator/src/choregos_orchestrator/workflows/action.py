@@ -47,7 +47,6 @@ EFFECT = RetryPolicy(
     # recorded before it keeps them.
     non_retryable_error_types=both_names("EffectRefused", "ActionNotFound"),
 )
-EFFET = EFFECT  # lang: fr-ok alias:internal
 
 
 @workflow.defn(name="ActionWorkflow", sandboxed=False)

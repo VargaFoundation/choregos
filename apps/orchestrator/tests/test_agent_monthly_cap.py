@@ -28,7 +28,7 @@ async def _with_cap(setup: Fixture, monthly: float, run_usd: float | None = 0.5)
 async def _spend_as_agent(setup: Fixture, usd: float, n: int) -> None:
     from choregos_api.db.models import Run
     from choregos_api.db.session import session_scope
-    from choregos_api.services.couts import record_cost
+    from choregos_api.services.costs import record_cost
 
     async with session_scope() as session:
         run = Run(
@@ -63,7 +63,7 @@ async def _spend_as_agent(setup: Fixture, usd: float, n: int) -> None:
 async def _tell(setup: Fixture) -> None:
     from choregos_api.db.session import session_scope
     from choregos_orchestrator.activities.base import project_bundle
-    from choregos_orchestrator.activities.bilan import _tell_slack_of_agent_alerts
+    from choregos_orchestrator.activities.outcome import _tell_slack_of_agent_alerts
 
     async with session_scope() as session:
         bundle = await project_bundle(session, setup.project_id)

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import Settings
 from ..db.models import ApiToken, Organization, Project, User
-from ..db.session import TOUT, limiter_aux_organisations
+from ..db.session import ALL_ORGS, limit_to_organisations
 from ..deps import _aware, _principal_from_user, record_usage
 from ..rbac import Principal
 from ..security import hash_api_token
@@ -32,19 +32,10 @@ class Refusal(Exception):  # noqa: N818 - a decision of the door, not a failure
         message: str,
         *,
         error: str | None = None,
-        erreur: str | None = None,  # lang: fr-ok alias:internal
     ) -> None:
         super().__init__(message)
         self.status = status
-        self.error = error if error is not None else erreur
-
-    @property
-    def statut(self) -> int:  # lang: fr-ok alias:internal
-        return self.status
-
-    @property
-    def erreur(self) -> str | None:  # lang: fr-ok alias:internal
-        return self.error
+        self.error = error
 
 
 @dataclass(slots=True, init=False)
@@ -64,69 +55,31 @@ class Caller:
     #: The door's tools the agent's version allows (patterns); `None`: those of the person.
     reasons: tuple[str, ...] | None
 
-    def __init__(  # noqa: PLR0913 - one parameter per field, and the former keywords
+    def __init__(  # noqa: PLR0913 - one parameter per field
         self,
         principal: Principal,
-        token: ApiToken | None = None,
-        scopes: frozenset[str] | None = None,
+        token: ApiToken | None,
+        scopes: frozenset[str],
         key: str = "",
         bound_project: Project | None = None,
         bound_project_org: str | None = None,
         agent: str | None = None,
         agent_org_id: str | None = None,
         reasons: tuple[str, ...] | None = None,
-        *,
-        jeton: ApiToken | None = None,  # lang: fr-ok alias:internal
-        portees: frozenset[str] | None = None,  # lang: fr-ok alias:internal
-        cle: str | None = None,  # lang: fr-ok alias:internal
-        projet_lie: Project | None = None,  # lang: fr-ok alias:internal
-        org_du_projet_lie: str | None = None,  # lang: fr-ok alias:internal
-        motifs: tuple[str, ...] | None = None,  # lang: fr-ok alias:internal
     ) -> None:
-        resolved = scopes if scopes is not None else portees
-        if resolved is None:
-            raise TypeError("Caller needs `scopes`")
         self.principal = principal
-        self.token = token if token is not None else jeton
-        self.scopes = resolved
-        self.key = cle if cle is not None else key
-        self.bound_project = bound_project if bound_project is not None else projet_lie
-        self.bound_project_org = bound_project_org if bound_project_org is not None else org_du_projet_lie
+        self.token = token
+        self.scopes = scopes
+        self.key = key
+        self.bound_project = bound_project
+        self.bound_project_org = bound_project_org
         self.agent = agent
         self.agent_org_id = agent_org_id
-        self.reasons = reasons if reasons is not None else motifs
+        self.reasons = reasons
 
     @property
     def writes(self) -> bool:
         return "mcp:write" in self.scopes
-
-    @property
-    def jeton(self) -> ApiToken | None:  # lang: fr-ok alias:internal
-        return self.token
-
-    @property
-    def portees(self) -> frozenset[str]:  # lang: fr-ok alias:internal
-        return self.scopes
-
-    @property
-    def cle(self) -> str:  # lang: fr-ok alias:internal
-        return self.key
-
-    @property
-    def projet_lie(self) -> Project | None:  # lang: fr-ok alias:internal
-        return self.bound_project
-
-    @property
-    def org_du_projet_lie(self) -> str | None:  # lang: fr-ok alias:internal
-        return self.bound_project_org
-
-    @property
-    def motifs(self) -> tuple[str, ...] | None:  # lang: fr-ok alias:internal
-        return self.reasons
-
-    @property
-    def ecrit(self) -> bool:  # lang: fr-ok alias:internal
-        return self.writes
 
 
 async def identify(
@@ -146,7 +99,7 @@ async def identify(
         wanted = " or ".join(sorted(scopes))
         raise Refusal(401, f"missing token: Authorization: Bearer chg_… (scope {wanted})")
     raw = header.split(" ", 1)[1].strip()
-    await limiter_aux_organisations(session, TOUT)
+    await limit_to_organisations(session, ALL_ORGS)
     if not raw.startswith("chg_") and settings.mcp_oauth_enabled:
         return await _by_oauth(session, raw, settings, scopes=scopes)
     token = (
@@ -293,10 +246,3 @@ async def act_as_agent(
         if any(s.get("connector") == "choregos" for s in spec.get("mcp_servers", []))
         else None
     )
-
-
-Appelant = Caller  # lang: fr-ok alias:internal
-Refus = Refusal  # lang: fr-ok alias:internal
-PORTEES_MCP = MCP_SCOPES  # lang: fr-ok alias:internal
-identifier = identify  # lang: fr-ok alias:internal
-incarner_l_agent = act_as_agent  # lang: fr-ok alias:internal

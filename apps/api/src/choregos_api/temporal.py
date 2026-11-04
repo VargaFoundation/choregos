@@ -15,7 +15,6 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from choregos_contracts import Control, HumanDecision, InboundEvent
-from choregos_core.compat import alias_names
 
 from .config import get_settings
 from .logging import get_logger
@@ -549,8 +548,3 @@ async def deliver_inbound(project_slug: str, tracker_key: str, event: InboundEve
 
 async def deliver_control(project_slug: str, tracker_key: str, control: Control) -> None:
     await _signal_interpreter(project_slug, tracker_key, "control", control.model_dump(mode="json"))
-
-
-_cause_lisible = _readable_cause  # lang: fr-ok alias:internal
-
-alias_names(__name__, {"_cause_lisible": "_readable_cause"})  # lang: fr-ok alias:internal

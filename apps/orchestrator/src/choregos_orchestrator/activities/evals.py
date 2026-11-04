@@ -34,7 +34,7 @@ from pathlib import Path
 from typing import Any
 
 from choregos_api.db.models import ModelProfileRow, Run, RunEvent, WorkItem
-from choregos_api.services import Naissance, le_tracker_est_interne, nouveau_ticket
+from choregos_api.services import WorkItemBirth, new_work_item, tracker_is_internal
 from choregos_api.services.initiator import initiator
 from choregos_core import elapsed_seconds, utcnow
 from sqlalchemy import select
@@ -415,7 +415,7 @@ async def seed_eval_ticket(payload: dict[str, Any]) -> dict[str, Any]:
         depot = bundle.config.repo
         if depot is None:
             return _skip(f"the eval project {bundle.slug} has no repository to commit the toy one to")
-        if not await le_tracker_est_interne(session, bundle.project):
+        if not await tracker_is_internal(session, bundle.project):
             return _skip(f"the eval project {bundle.slug} has an external tracker: eval tickets stay inside")
         if bundle.engine.memory_enabled():
             return _skip(f"the eval project {bundle.slug} has memory on: its cells would not be without it")
@@ -442,10 +442,10 @@ async def seed_eval_ticket(payload: dict[str, Any]) -> dict[str, Any]:
             )
         ).scalar_one_or_none()
         if item is None:
-            item = await nouveau_ticket(
+            item = await new_work_item(
                 session,
                 bundle.project,
-                Naissance(
+                WorkItemBirth(
                     tracker_key=key,
                     title=f"[eval] {spec.get('title', fixture)}",
                     body=str(spec.get("prompt", "")),

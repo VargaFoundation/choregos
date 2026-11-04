@@ -45,10 +45,10 @@ from ..schemas.readiness import ProjectReadiness, ReadinessFix, ReadinessItem, R
 from . import github_app
 from .catalogue_rights import SELECTED_PROJECTS, enabled_ids
 from .definitions import active_policy, policy_model, workflow_model
-from .gabarits import manifeste_du_gabarit, shipped_workflows
 from .human_groups import groups_known_in, unknown_group_warnings
 from .mcp_gateway import stored as stored_gateway
-from .projets import declares_a_release_train
+from .projects import declares_a_release_train
+from .templates import shipped_workflows, template_manifest
 from .workflow_catalogue import parse_origin
 
 #: A test older than this is worth running again.
@@ -935,7 +935,7 @@ def runtime_fact(connectors: dict[str, ConnectorFact], policy: Any) -> RuntimeFa
     from choregos_adapters.executor.agent_sandbox import runtime_class_refusal
     from choregos_adapters.registry import default_executor_kind
 
-    # `classe_d_execution` (orchestrator): a `gvisor` policy is never bypassed, nothing else is asked.
+    # `runtime_class` (orchestrator): a `gvisor` policy is never bypassed, nothing else is asked.
     if policy.sandbox.runtime != "gvisor" or fakes_enabled():
         return None
     runtime = connectors.get("runtime")
@@ -959,7 +959,7 @@ async def template_workflow_facts(
         return ()
     try:
         shipped: dict[str, tuple[str, str]] = {}
-        for ref, source in shipped_workflows(*await manifeste_du_gabarit(session, template_ref, org_id)):
+        for ref, source in shipped_workflows(*await template_manifest(session, template_ref, org_id)):
             parsed, _ = parse_workflow(source, strict=False)
             shipped[parsed.metadata.name] = (ref, checksum(parsed))
     except (ApiError, WorkflowInvalid, OSError, yaml.YAMLError):

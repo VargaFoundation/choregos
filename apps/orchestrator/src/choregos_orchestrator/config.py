@@ -113,11 +113,6 @@ class OrchestratorSettings(BaseSettings):
         """
         return self.tools_mcp_url
 
-    @property
-    def url_du_sidecar_d_outils(self) -> str:  # lang: fr-ok alias:internal
-        """Former name of `tools_sidecar_url`."""
-        return self.tools_sidecar_url
-
     object_store_url: str = "s3://choregos"
     public_url: str = "http://localhost:3000"
     log_level: str = "INFO"

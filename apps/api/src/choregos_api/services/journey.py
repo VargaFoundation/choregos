@@ -20,7 +20,6 @@ from typing import Any
 from choregos_contracts import EventType, Workflow
 from choregos_contracts.workflow import AGENT_WILDCARD
 from choregos_core import to_graph, to_process
-from choregos_core.compat import alias_names
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -309,15 +308,3 @@ async def journey(session: AsyncSession, item: WorkItem) -> WorkItemJourney:
         moves=moves,
         steps=steps,
     )
-
-
-parcours = journey  # lang: fr-ok alias:internal
-arete_du_deplacement = move_edge  # lang: fr-ok alias:internal
-
-alias_names(
-    __name__,
-    {
-        "parcours": "journey",  # lang: fr-ok alias:internal
-        "arete_du_deplacement": "move_edge",  # lang: fr-ok alias:internal
-    },
-)

@@ -138,7 +138,7 @@ async def retire(session: AsyncSession, agent: Agent) -> dict[str, Any]:
     return {"revoked_credentials": len(accreditations), "unpinned_projects": projects}
 
 
-#: The state of the work item an agent trial runs on (`routage.nouveau_ticket_d_essai`): a trial is
+#: The state of the work item an agent trial runs on (`routing.new_trial_work_item`): a trial is
 #: how an agent is tried before it serves, so it does not count as having served.
 TRIAL_STATE = "trial"
 

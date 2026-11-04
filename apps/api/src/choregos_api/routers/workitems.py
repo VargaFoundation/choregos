@@ -34,14 +34,20 @@ from ..schemas import (
     WorkItemUpdate,
 )
 from ..services import (
-    chronologie,
-    creer_un_ticket,
+    create_work_item as file_work_item,
+)
+from ..services import (
     human_request_dto,
-    parcours,
     persist_event,
     work_item_dto,
-    workflow_du_ticket,
+    work_item_workflow,
     workflow_model,
+)
+from ..services import (
+    journey as journey_of,
+)
+from ..services import (
+    timeline as timeline_of,
 )
 from ..services.artifacts import (
     ArtifactCorruptedError,
@@ -52,8 +58,8 @@ from ..services.artifacts import (
     to_contract,
 )
 from ..services.human_groups import decider_group_verdict, group_of_the_step
-from ..services.recus import passages_du_ticket
-from ..services.routage import refuse_reserved_fields, valider_les_champs
+from ..services.receipts import work_item_handoffs
+from ..services.routing import refuse_reserved_fields, validate_fields
 from ..services.work_item_controls import apply_control
 from ..temporal import (
     InterpreterNotRunningError,
@@ -131,7 +137,7 @@ async def create_work_item(ctx: ProjectCtx, body: WorkItemCreate, session: Db) -
     its key; a tracker that refuses gives a 502 and nothing is created.
     """
     ctx.require(Permission.ITEM_CONTROL)
-    item = await creer_un_ticket(session, ctx.principal, ctx.project, body)
+    item = await file_work_item(session, ctx.principal, ctx.project, body)
     return await work_item_dto(session, item, ctx.project)
 
 
@@ -154,9 +160,9 @@ async def update_work_item(id: str, body: WorkItemUpdate, session: Db, principal
         raise forbidden("changing the fields of a work item needs at least the developer role")
     # What the tracker says about the ticket stays the tracker's (S51-04): kept, never written here.
     refuse_reserved_fields(body.fields)
-    workflow = workflow_model(await workflow_du_ticket(session, item))
+    workflow = workflow_model(await work_item_workflow(session, item))
     field_values = {k: v for k, v in {**(item.fields or {}), **body.fields}.items() if v is not None}
-    valider_les_champs(workflow.metadata.inputs, field_values, workflow.metadata.name)
+    validate_fields(workflow.metadata.inputs, field_values, workflow.metadata.name)
     item.fields = field_values
     await record(
         session,
@@ -187,7 +193,7 @@ async def timeline(id: str, session: Db, principal: Me) -> list[TimelineEntry]:
     if not principal.can(Permission.PROJECT_READ, org_slug, project.slug):
         raise forbidden()
 
-    return await chronologie(session, item)
+    return await timeline_of(session, item)
 
 
 @router.get("/work-items/{id}/hand-offs", response_model=list[HandOff], operation_id="getWorkItemHandOffs")
@@ -198,7 +204,7 @@ async def hand_offs(id: str, session: Db, principal: Me) -> list[HandOff]:
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.PROJECT_READ, org_slug, project.slug):
         raise forbidden()
-    return await passages_du_ticket(session, item)
+    return await work_item_handoffs(session, item)
 
 
 async def _readable(session: Any, principal: Any, id: str) -> WorkItem:
@@ -265,7 +271,7 @@ async def journey(id: str, session: Db, principal: Me) -> WorkItemJourney:
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.PROJECT_READ, org_slug, project.slug):
         raise forbidden()
-    return await parcours(session, item)
+    return await journey_of(session, item)
 
 
 async def _complete_the_task(
@@ -292,10 +298,10 @@ async def _complete_the_task(
     attest = payload.get("attest")
     if attest and not body.attested:
         raise unprocessable(f"the task asks you to attest: “{attest}”")
-    workflow = workflow_model(await workflow_du_ticket(session, item))
+    workflow = workflow_model(await work_item_workflow(session, item))
     refuse_reserved_fields(body.values)
     field_values = {**(item.fields or {}), **body.values}
-    valider_les_champs(workflow.metadata.inputs, field_values, workflow.metadata.name)
+    validate_fields(workflow.metadata.inputs, field_values, workflow.metadata.name)
     item.fields = field_values
     return dict(body.values), (str(attest) if attest else None)
 

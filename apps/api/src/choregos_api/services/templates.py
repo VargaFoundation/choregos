@@ -17,7 +17,6 @@ from typing import Any
 
 import yaml
 from choregos_core import preset_yaml, template_yaml
-from choregos_core.compat import alias_names
 from choregos_core.paths import PathOutsideError, files_under, inside, symlinks_under
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -231,26 +230,5 @@ def _policy_source(ref: str, folder: Path | None) -> str:
             f"the template ships policy `{ref}`, which the platform does not know"
         ) from missing
 
-
-Livraison = Delivery  # lang: fr-ok alias:internal
-livraison = delivery  # lang: fr-ok alias:internal
-manifeste_du_gabarit = template_manifest  # lang: fr-ok alias:internal
-repertoire_des_gabarits = templates_directory  # lang: fr-ok alias:internal
-WORKFLOW_SANS_GABARIT = WORKFLOW_WITHOUT_TEMPLATE  # lang: fr-ok alias:internal
-POLITIQUE_SANS_GABARIT = POLICY_WITHOUT_TEMPLATE  # lang: fr-ok alias:internal
-PREFIXE_CATALOGUE = CATALOGUE_PREFIX  # lang: fr-ok alias:internal
-
-alias_names(
-    __name__,
-    {
-        "Livraison": "Delivery",  # lang: fr-ok alias:internal
-        "livraison": "delivery",  # lang: fr-ok alias:internal
-        "manifeste_du_gabarit": "template_manifest",  # lang: fr-ok alias:internal
-        "repertoire_des_gabarits": "templates_directory",  # lang: fr-ok alias:internal
-        "WORKFLOW_SANS_GABARIT": "WORKFLOW_WITHOUT_TEMPLATE",  # lang: fr-ok alias:internal
-        "POLITIQUE_SANS_GABARIT": "POLICY_WITHOUT_TEMPLATE",  # lang: fr-ok alias:internal
-        "PREFIXE_CATALOGUE": "CATALOGUE_PREFIX",  # lang: fr-ok alias:internal
-    },
-)
 
 __all__ = ["Delivery", "delivery", "shipped_workflows", "template_manifest", "templates_directory"]

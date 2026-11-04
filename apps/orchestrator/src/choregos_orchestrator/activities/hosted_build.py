@@ -27,11 +27,11 @@ async def claim_hosted_build(payload: dict[str, Any]) -> dict[str, Any]:
     """`building` when this attempt is the one to run, `ready` or `superseded` when there is
     nothing to do. A row not there yet is retried: the publication that started the workflow may
     not have committed."""
-    from choregos_api.db.session import TOUT, session_scope
+    from choregos_api.db.session import ALL_ORGS, session_scope
     from choregos_api.services.hosted_builds import build_row
 
     org, key, attempt = _key(payload)
-    async with session_scope(orgs=TOUT) as session:
+    async with session_scope(orgs=ALL_ORGS) as session:
         row = await build_row(session, org, key)
         if row is None or row.attempt < attempt:
             raise ApplicationError(f"the build {key} (attempt {attempt}) is not recorded yet")
@@ -49,14 +49,14 @@ async def build_hosted_image(payload: dict[str, Any]) -> dict[str, Any]:
     checked against the key, and the zip from the object store as the context."""
     from choregos_adapters.oci import BuildError, BuildRequest
     from choregos_api.config import get_settings
-    from choregos_api.db.session import TOUT, session_scope
+    from choregos_api.db.session import ALL_ORGS, session_scope
     from choregos_api.object_store import object_store
     from choregos_api.schemas import AgentSpec, HostedRuntime
     from choregos_api.services.hosted_builds import image_builder, spec_of_build
     from choregos_api.services.hosted_sources import SourceRefused, build_key, dockerfile, load_source_bytes
 
     org, key, _ = _key(payload)
-    async with session_scope(orgs=TOUT) as session:
+    async with session_scope(orgs=ALL_ORGS) as session:
         raw = await spec_of_build(session, org, key)
     if raw is None:
         raise ApplicationError(f"no version names the build {key}", type=BUILD_FAILED, non_retryable=True)
@@ -93,14 +93,14 @@ async def build_hosted_image(payload: dict[str, Any]) -> dict[str, Any]:
 @activity.defn(name="record_hosted_build")
 async def record_hosted_build(payload: dict[str, Any]) -> dict[str, Any]:
     """Writes the outcome of this attempt, once; a ready image releases the deferred moves."""
-    from choregos_api.db.session import TOUT, session_scope
+    from choregos_api.db.session import ALL_ORGS, session_scope
     from choregos_api.services.agent_releases import release_built
     from choregos_api.services.hosted_builds import build_row
     from choregos_core import utcnow
 
     org, key, attempt = _key(payload)
     status = str(payload["status"])
-    async with session_scope(orgs=TOUT) as session:
+    async with session_scope(orgs=ALL_ORGS) as session:
         row = await build_row(session, org, key)
         if row is None or row.attempt != attempt:
             return {"status": "superseded"}

@@ -47,7 +47,7 @@ async def _receipts(run_id: str) -> list[tuple[str, str, str]]:
 async def test_the_implementation_prompt_reads_the_spec_revision(setup: Any) -> None:
     from choregos_api.db.models import WorkItem
     from choregos_api.db.session import session_scope
-    from choregos_api.services.recus import empreinte
+    from choregos_api.services.receipts import digest
 
     async with session_scope(orgs="*") as session:
         item = await session.get(WorkItem, setup.work_item_id)
@@ -57,11 +57,11 @@ async def test_the_implementation_prompt_reads_the_spec_revision(setup: Any) -> 
     plan = await _prepare(setup)
     run_id = str(plan["run_id"])
     assert SPEC in plan["stage_input"]["playbook"]["prompt"]
-    assert await _receipts(run_id) == [("spec_markdown", "read", empreinte(SPEC))]
+    assert await _receipts(run_id) == [("spec_markdown", "read", digest(SPEC))]
 
     # The activity replayed on the same run does not make a second receipt.
     await _prepare(setup)
-    assert await _receipts(run_id) == [("spec_markdown", "read", empreinte(SPEC))]
+    assert await _receipts(run_id) == [("spec_markdown", "read", digest(SPEC))]
 
 
 async def test_without_a_spec_the_prompt_reads_nothing(setup: Any) -> None:

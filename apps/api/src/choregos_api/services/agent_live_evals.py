@@ -24,7 +24,7 @@ from ..rbac import Principal
 from ..schemas import AgentEvalCase, AgentEvaluationCase, AgentSpec
 from ..schemas import AgentEvaluation as AgentEvaluationDto
 from ..temporal import get_temporal, trial_run_id, trial_workflow_id
-from .routage import nouveau_ticket_d_essai
+from .routing import new_trial_work_item
 
 MAX_LIVE_CASES = 10
 #: What one case may spend unless it says less (the trial's own default and cap, S32-03).
@@ -104,7 +104,7 @@ async def start(
     can_run = settings.fakes or bool(settings.gateway_master_key)
     started: list[dict[str, Any]] = []
     for case, budget in zip(cases, budgets, strict=True):
-        item = await nouveau_ticket_d_essai(
+        item = await new_trial_work_item(
             session,
             project,
             title=case.input.title or case.name,

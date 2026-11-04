@@ -11,7 +11,6 @@ from typing import Annotated, Any
 import jwt
 from choregos_contracts import Role
 from choregos_core import utcnow
-from choregos_core.compat import alias_names
 from fastapi import Depends, Header, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,11 +20,11 @@ from .config import Settings, get_settings
 from .db.models import ApiToken, Membership, Organization, Project, User
 from .db.org_aliases import current_slug
 from .db.session import (
-    TOUT,
-    en_portee_de_plateforme,
+    ALL_ORGS,
     get_sessionmaker,
-    limiter_aux_organisations,
-    nommer_l_utilisateur,
+    in_platform_scope,
+    limit_to_organisations,
+    name_the_user,
     run_after_commit,
 )
 from .errors import ApiError, forbidden, not_found, unauthorized
@@ -65,7 +64,7 @@ async def get_platform_db() -> AsyncIterator[AsyncSession]:
     have checked who is calling BEFORE reading.
     """
     async with get_sessionmaker()() as session:
-        await limiter_aux_organisations(session, TOUT)
+        await limit_to_organisations(session, ALL_ORGS)
         try:
             yield session
             await session.commit()
@@ -90,7 +89,7 @@ async def _principal_from_user(session: AsyncSession, user: User, *, narrow: boo
     # arrived with `project_slug = None`, and became a role on the WHOLE organisation, so a developer
     # invited to one project read all the others. Invisible on SQLite, where RLS does not exist;
     # found by running the whole suite on PostgreSQL.
-    await limiter_aux_organisations(session, TOUT)
+    await limit_to_organisations(session, ALL_ORGS)
     rows = (
         await session.execute(
             select(Membership, Organization.slug, Project.slug)
@@ -120,8 +119,8 @@ async def _principal_from_user(session: AsyncSession, user: User, *, narrow: boo
     # because this is where we know who is speaking.
     orgs = set(org_roles) | {qualified.split("/", 1)[0] for qualified in project_roles}
     if narrow:
-        await limiter_aux_organisations(session, sorted(orgs))
-        await nommer_l_utilisateur(session, user.id)
+        await limit_to_organisations(session, sorted(orgs))
+        await name_the_user(session, user.id)
     return principal
 
 
@@ -157,7 +156,7 @@ async def current_principal(
     The token and the user are read in PLATFORM scope: `api_tokens` and `users` are under RLS since
     0.11, and we do not yet know who is speaking. `_principal_from_user` narrows afterwards.
     """
-    await limiter_aux_organisations(session, TOUT)
+    await limit_to_organisations(session, ALL_ORGS)
     if authorization and authorization.lower().startswith("bearer "):
         raw = authorization.split(" ", 1)[1].strip()
         token = (
@@ -236,7 +235,7 @@ async def require_platform_admin(session: AsyncSession, principal: Principal) ->
 
     # On the WHOLE instance: under the RLS of `organizations`, the count made from the scope of the
     # administrator of a single organisation would be 1, and they would pass for administrator of all.
-    async with en_portee_de_plateforme(session):
+    async with in_platform_scope(session):
         slugs = set((await session.execute(select(Organization.slug))).scalars().all())
     administered = {org for org, role in principal.org_roles.items() if role == Role.ORG_ADMIN}
     if not slugs or not slugs <= administered:
@@ -364,7 +363,7 @@ async def run_claims(
     bind(run_id=claims.run_id, project=claims.project_slug, work_item=claims.work_item_key)
     # A run token is minted by the platform for ONE run: the scope is already in the token
     # (`claims.run_id`, checked by every route), not in an organisation.
-    await limiter_aux_organisations(session, TOUT)
+    await limit_to_organisations(session, ALL_ORGS)
     return claims
 
 
@@ -391,7 +390,7 @@ async def network_claims(
     if claims.run_id != id:
         raise forbidden("this token belongs to another run")
     bind(run_id=claims.run_id, project=claims.project_slug, work_item=claims.work_item_key)
-    await limiter_aux_organisations(session, TOUT)
+    await limit_to_organisations(session, ALL_ORGS)
     return claims
 
 
@@ -425,23 +424,3 @@ async def pagination(
 
 
 Pagination = Annotated[Page, Depends(pagination)]
-
-
-get_db_plateforme = get_platform_db  # lang: fr-ok alias:internal
-DbPlateforme = PlatformDb  # lang: fr-ok alias:internal
-jeton_rest = is_rest_token  # lang: fr-ok alias:internal
-noter_l_usage = record_usage  # lang: fr-ok alias:internal
-exiger_admin_de_plateforme = require_platform_admin  # lang: fr-ok alias:internal
-_valider_la_session = _validate_session  # lang: fr-ok alias:internal
-
-alias_names(
-    __name__,
-    {
-        "get_db_plateforme": "get_platform_db",  # lang: fr-ok alias:internal
-        "DbPlateforme": "PlatformDb",  # lang: fr-ok alias:internal
-        "jeton_rest": "is_rest_token",  # lang: fr-ok alias:internal
-        "noter_l_usage": "record_usage",  # lang: fr-ok alias:internal
-        "exiger_admin_de_plateforme": "require_platform_admin",  # lang: fr-ok alias:internal
-        "_valider_la_session": "_validate_session",  # lang: fr-ok alias:internal
-    },
-)

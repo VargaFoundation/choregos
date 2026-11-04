@@ -150,9 +150,9 @@ def test_the_limiter_holds_at_most_ten_thousand_keys() -> None:
     limiter = RateLimiter(5)
     for n in range(12_000):
         assert limiter.admits(f"key-{n}", 0.0)[0]
-    assert len(limiter._fenetres) <= 10_000
-    assert "key-11999" in limiter._fenetres, "the newest key was evicted"
-    assert "key-0" not in limiter._fenetres, "the least recently seen key goes first"
+    assert len(limiter._windows) <= 10_000
+    assert "key-11999" in limiter._windows, "the newest key was evicted"
+    assert "key-0" not in limiter._windows, "the least recently seen key goes first"
 
 
 def test_a_key_seen_again_is_evicted_last() -> None:
@@ -164,7 +164,7 @@ def test_a_key_seen_again_is_evicted_last() -> None:
         limiter.admits(f"key-{n}", 0.0)
     assert not limiter.admits("key-0", 1.0)[0], "key-0 has spent its minute"
     limiter.admits("newcomer", 1.0)
-    assert "key-0" in limiter._fenetres and "key-1" not in limiter._fenetres
+    assert "key-0" in limiter._windows and "key-1" not in limiter._windows
     assert not limiter.admits("key-0", 2.0)[0], "eviction gave a throttled key a fresh window"
 
 
@@ -188,10 +188,10 @@ def test_no_request_walks_the_table() -> None:
     from choregos_api.rate_limit import RateLimiter
 
     limiter = RateLimiter(5)
-    limiter._fenetres = _Unwalkable()
+    limiter._windows = _Unwalkable()
     for n in range(10_100):
         limiter.admits(f"key-{n}", 0.0)
-    assert len(limiter._fenetres) == 10_000
+    assert len(limiter._windows) == 10_000
 
 
 def test_a_malformed_trusted_proxy_network_is_refused() -> None:

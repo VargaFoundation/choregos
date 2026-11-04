@@ -15,7 +15,7 @@ from typing import Annotated
 from fastapi import APIRouter, Header, Query, Response
 from fastapi.responses import JSONResponse
 
-from ..db.session import TOUT, get_sessionmaker, limiter_aux_organisations
+from ..db.session import ALL_ORGS, get_sessionmaker, limit_to_organisations
 from ..extensions import theme_provider
 from ..theme import DEFAULT_THEME, ORG_SLUG, resolve_theme
 
@@ -33,9 +33,9 @@ async def get_theme(
         theme, source = DEFAULT_THEME, "default"
     else:
         # The provider reads its own tables, for any organisation, before anyone is signed in:
-        # it gets the platform scope, like the webhooks (`get_db_plateforme`).
+        # it gets the platform scope, like the webhooks (`get_platform_db`).
         async with get_sessionmaker()() as session:
-            await limiter_aux_organisations(session, TOUT)
+            await limit_to_organisations(session, ALL_ORGS)
             theme, source = await resolve_theme(session, org)
             await session.commit()
     body = json.dumps(theme, sort_keys=True, separators=(",", ":"))

@@ -12,8 +12,6 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from choregos_core.compat import alias_names
-
 from .errors import ApiError
 
 REAUTH = "GET /api/v1/auth/login?reauth=1"
@@ -39,12 +37,3 @@ def require_fresh_authentication(principal: Any, minutes: int, now: float | None
             errors=[{"error": "step_up_required", "reauth": REAUTH}],
         )
     return age
-
-
-alias_names(
-    __name__,
-    {
-        "age_de_l_authentification": "authentication_age",
-        "exiger_une_authentification_fraiche": "require_fresh_authentication",
-    },  # lang: fr-ok alias:internal
-)

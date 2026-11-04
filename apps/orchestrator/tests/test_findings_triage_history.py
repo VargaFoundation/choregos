@@ -35,7 +35,7 @@ async def play() -> tuple[dict[str, Any], dict[str, list[Any]], Any]:
     - the first triage starts while no workflow task is in flight, and ends once none is: the test
       server schedules one more workflow task when an activity starts or ends during one.
     """
-    from choregos_orchestrator.testing import wait_for_event, workers_repartis
+    from choregos_orchestrator.testing import wait_for_event, workers_by_queue
     from choregos_orchestrator.workflows.findings import FindingsTriage
     from temporalio.api.enums.v1 import EventType
     from temporalio.testing import WorkflowEnvironment
@@ -55,8 +55,8 @@ async def play() -> tuple[dict[str, Any], dict[str, list[Any]], Any]:
     completed = EventType.EVENT_TYPE_WORKFLOW_TASK_COMPLETED
     environment = await WorkflowEnvironment.start_time_skipping()
     try:
-        async with workers_repartis(
-            environment.client, activites=[triage_finding], workflows=[FindingsTriage]
+        async with workers_by_queue(
+            environment.client, activities=[triage_finding], workflows=[FindingsTriage]
         ):
             handle = await environment.client.start_workflow(
                 "FindingsTriage", PAYLOAD, id=WORKFLOW_ID, task_queue="test"

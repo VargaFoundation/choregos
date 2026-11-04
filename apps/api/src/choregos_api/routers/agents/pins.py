@@ -48,10 +48,10 @@ from ...services.agent_releases import (
     served,
 )
 from ...services.agents import (
-    AgentIndisponible,
+    AgentUnavailable,
     effective,
-    elargissements,
-    resoudre_l_agent,
+    resolve_agent,
+    widenings,
 )
 from ._router import AgentRef, Slug, router
 
@@ -338,8 +338,8 @@ async def resolve_project_agents(
     for reference in ref:
         slug = reference.partition("@")[0]
         try:
-            resolu = await resoudre_l_agent(session, ctx.project.org_id, ctx.project.id, reference)
-        except AgentIndisponible as erreur:
+            resolu = await resolve_agent(session, ctx.project.org_id, ctx.project.id, reference)
+        except AgentUnavailable as erreur:
             agent = (
                 await session.execute(
                     select(Agent).where(Agent.org_id == ctx.project.org_id, Agent.slug == slug)
@@ -411,7 +411,7 @@ async def pin_agent(slug: Slug, body: ProjectAgentPut, ctx: ProjectCtx, session:
     else:
         pinned_version = agent.stable_version or await _latest(session, agent)
     spec = AgentSpec.model_validate((await _version_row(session, agent, pinned_version)).spec)
-    ecarts = elargissements(spec, body.overrides)
+    ecarts = widenings(spec, body.overrides)
     if ecarts:
         raise unprocessable(
             "a project can only narrow an agent version, never widen it",

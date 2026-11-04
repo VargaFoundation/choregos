@@ -118,7 +118,7 @@ def test_a_project_without_a_tracker_connector_gets_the_internal_tracker(
 ) -> None:
     """#704: the default was `github-issues`, whose factory needs a `repo` nobody gave: KeyError.
 
-    `le_tracker_est_interne` already reads "no tracker connector" as internal; the adapters agree.
+    `tracker_is_internal` already reads "no tracker connector" as internal; the adapters agree.
     """
     from choregos_adapters.tracker.internal import InternalTracker
 

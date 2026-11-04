@@ -8,9 +8,9 @@ from typing import Any
 from choregos_api.db.models import Deployment, Finding, HumanRequest, Release, Run, WorkItem
 from choregos_api.logging import get_logger
 from choregos_api.services import (
-    Naissance,
+    WorkItemBirth,
     new_human_request,
-    nouveau_ticket,
+    new_work_item,
     persist_event,
     record_human_verdict,
     record_terminal_outcome,
@@ -640,10 +640,10 @@ async def reconcile_tracker(payload: dict[str, Any]) -> dict[str, Any]:
                     skipped.append(key)
                     continue
                 # Born in the workflow its labels or its type designate (ADR 0031).
-                item = await nouveau_ticket(
+                item = await new_work_item(
                     session,
                     bundle.project,
-                    Naissance(
+                    WorkItemBirth(
                         tracker_key=key,
                         title=data.title,
                         body=data.body,

@@ -222,8 +222,8 @@ async def test_an_undeclared_tool_is_refused_and_the_token_rides_every_call(
 ) -> None:
     from choregos_api.db.models import ConnectorOperation, OrgConnector, Project
     from choregos_api.db.session import session_scope
+    from choregos_api.services.broker import tools_of_selection
     from choregos_api.services.connectors import policy_for_project
-    from choregos_api.services.courtier import tools_of_selection
     from choregos_api.services.plugin_servers import use_plugin_transport
 
     await _install(client)
@@ -260,7 +260,7 @@ async def test_an_undeclared_tool_is_refused_and_the_token_rides_every_call(
         project = (await session.execute(select(Project).where(Project.slug == "greet"))).scalar_one()
         tools = await tools_of_selection(session, {"hello": ["*"]}, project)
         assert "hello__say_hello" in tools and "hello__rogue" not in tools
-        assert tools["hello__post_greeting"].sous_validation
+        assert tools["hello__post_greeting"].needs_approval
         assert await policy_for_project(session, project, "hello", "rogue") == "forbidden"
 
 

@@ -43,11 +43,3 @@ async def writes_today(session: AsyncSession, user_id: str) -> int:
     ).scalars()
     keys = ("write", "ecriture")  # lang: fr-ok — the audit key persisted before S45-39 (ADR 0098 §4)
     return sum(1 for payload in rows if any((payload or {}).get(key) for key in keys))
-
-
-APPELS_PAR_MINUTE = CALLS_PER_MINUTE  # lang: fr-ok alias:internal
-ECRITURES_PAR_JOUR = WRITES_PER_DAY  # lang: fr-ok alias:internal
-TAILLE_MAX = MAX_SIZE  # lang: fr-ok alias:internal
-LIMITEUR = RATE_LIMITER  # lang: fr-ok alias:internal
-tronquer = truncate  # lang: fr-ok alias:internal
-ecritures_du_jour = writes_today  # lang: fr-ok alias:internal

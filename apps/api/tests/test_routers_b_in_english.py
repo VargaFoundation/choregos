@@ -48,13 +48,7 @@ def test_owned_routers_have_no_french() -> None:
     assert [str(f) for f in found] == []
 
 
-def test_the_former_extension_tools_name_is_an_alias() -> None:
-    from choregos_api.routers import internal
-
-    assert internal._outils_des_greffons is internal._extension_tools  # type: ignore[attr-defined]
-
-
-async def test_patching_the_former_extension_tools_name_still_works(
+async def test_patching_the_extension_tools_provider_reaches_the_listing(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from choregos_api.routers import internal
@@ -69,7 +63,7 @@ async def test_patching_the_former_extension_tools_name_still_works(
             )
         }
 
-    monkeypatch.setattr(internal, "_outils_des_greffons", provided)
+    monkeypatch.setattr(internal, "_extension_tools", provided)
     listed = await client.get("/api/v1/internal/runs/run-former-name-1/tools", headers=headers)
     assert listed.status_code == 200, listed.text
     assert "from_extension" in {tool["name"] for tool in listed.json()["tools"]}

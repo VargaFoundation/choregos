@@ -550,16 +550,11 @@ _FORMER = {
     "declarer_un_controle_de_geste": "declare_gesture_check",  # lang: fr-ok alias:external
     "controler": "check_gesture",  # lang: fr-ok alias:external
     "reinitialiser_les_controles": "reset_gesture_checks",  # lang: fr-ok alias:external
+    "_ROUTEURS": "_ROUTERS",  # lang: fr-ok alias:external
+    "_FOURNISSEURS_D_OUTILS": "_TOOL_PROVIDERS",  # lang: fr-ok alias:external
+    "_FOURNISSEURS_HUMAINS": "_HUMAN_TOOL_PROVIDERS",  # lang: fr-ok alias:external
+    "_INSTALLATEURS": "_INSTALLERS",  # lang: fr-ok alias:external
+    "_CONTROLES": "_GESTURE_CHECKS",  # lang: fr-ok alias:external
+    "_televersements": "_uploads",  # lang: fr-ok alias:external
 }
 alias_names(__name__, _FORMER, removed_in=EXTERNAL_ALIAS_REMOVAL)
-alias_names(
-    __name__,
-    {
-        "_ROUTEURS": "_ROUTERS",  # lang: fr-ok alias:internal
-        "_FOURNISSEURS_D_OUTILS": "_TOOL_PROVIDERS",  # lang: fr-ok alias:internal
-        "_FOURNISSEURS_HUMAINS": "_HUMAN_TOOL_PROVIDERS",  # lang: fr-ok alias:internal
-        "_INSTALLATEURS": "_INSTALLERS",  # lang: fr-ok alias:internal
-        "_CONTROLES": "_GESTURE_CHECKS",  # lang: fr-ok alias:internal
-        "_televersements": "_uploads",  # lang: fr-ok alias:internal
-    },
-)

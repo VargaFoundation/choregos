@@ -204,9 +204,3 @@ async def create_all() -> None:
 async def drop_all() -> None:
     async with get_engine().begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
-
-
-TOUT = ALL_ORGS  # lang: fr-ok alias:internal
-limiter_aux_organisations = limit_to_organisations  # lang: fr-ok alias:internal
-nommer_l_utilisateur = name_the_user  # lang: fr-ok alias:internal
-en_portee_de_plateforme = in_platform_scope  # lang: fr-ok alias:internal

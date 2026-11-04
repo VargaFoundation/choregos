@@ -29,9 +29,6 @@ class Approver(Dto):
     min: int = Field(default=1, ge=1, le=5)
 
 
-Approbateur = Approver  # lang: fr-ok alias:internal
-
-
 class ApprovalSpec(Dto):
     approvers: list[Approver] = Field(default_factory=lambda: [Approver()], min_length=1)
     step_up_minutes: int = Field(default=10, ge=1, le=120)

@@ -23,7 +23,7 @@ PAYLOAD = {"project_slug": "replay", "sources": ["closed_issues"], "max_cycles":
 async def play() -> tuple[str, dict[str, Any] | None, dict[str, list[Any]], Any]:
     """One cycle of a loop whose `max_cycles` is 1: how its first run ended, the input of the next run,
     what the activity was asked, and the first run's history."""
-    from choregos_orchestrator.testing import wait_for_event, workers_repartis
+    from choregos_orchestrator.testing import wait_for_event, workers_by_queue
     from choregos_orchestrator.workflows.memory import MemoryIngestion
     from temporalio.api.enums.v1 import EventType
     from temporalio.client import WorkflowContinuedAsNewError
@@ -39,8 +39,8 @@ async def play() -> tuple[str, dict[str, Any] | None, dict[str, list[Any]], Any]
 
     environment = await WorkflowEnvironment.start_time_skipping()
     try:
-        async with workers_repartis(
-            environment.client, activites=[ingest_sources], workflows=[MemoryIngestion]
+        async with workers_by_queue(
+            environment.client, activities=[ingest_sources], workflows=[MemoryIngestion]
         ):
             handle = await environment.client.start_workflow(
                 "MemoryIngestion", PAYLOAD, id=WORKFLOW_ID, task_queue="test"

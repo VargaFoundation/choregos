@@ -150,18 +150,18 @@ async def temporal(app: Any) -> AsyncIterator[Any]:
     effects, as in a deployment."""
     from choregos_api.temporal import set_temporal
     from choregos_orchestrator.activities import ALL_ACTIVITIES
-    from choregos_orchestrator.testing import workers_repartis
+    from choregos_orchestrator.testing import workers_by_queue
     from choregos_orchestrator.workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
     from temporalio.testing import WorkflowEnvironment
 
     environment = await WorkflowEnvironment.start_time_skipping()
     set_temporal(TestServerGateway(environment.client))
     try:
-        async with workers_repartis(
+        async with workers_by_queue(
             environment.client,
-            activites=[*ALL_ACTIVITIES, *WORKFLOW_ACTIVITIES],
+            activities=[*ALL_ACTIVITIES, *WORKFLOW_ACTIVITIES],
             workflows=ALL_WORKFLOWS,
-            file_du_workflow="test",
+            workflow_queue="test",
         ):
             yield environment
     finally:

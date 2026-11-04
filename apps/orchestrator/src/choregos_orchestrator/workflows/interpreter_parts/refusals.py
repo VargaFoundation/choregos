@@ -16,7 +16,7 @@ with workflow.unsafe.imports_passed_through():
     from ...activities import scm as scm_activities
     from ...activities.execution import START_REFUSED
     from ...activities.interpretation import (
-        message_de,
+        message_of,
     )
 
 from ..interpreter import (
@@ -57,7 +57,7 @@ class RefusalsMixin(InterpreterBase):
         the configuration and replay the stage. `None` — the interpreter fails, as before — for any
         other error, for a history recorded before the marker, and for a transition with nowhere
         to escalate to: going back to the state it started from would refuse again, forever."""
-        detail = message_de(error)
+        detail = message_of(error)
         return await self._refusal_escalates(
             params,
             engine,
@@ -80,7 +80,7 @@ class RefusalsMixin(InterpreterBase):
         closed `failed` with the reason, and the work item escalates at once with it — another attempt
         would be refused the same way. Any other error of `start_run` is `None`, and fails the
         interpreter as before."""
-        detail = message_de(error)
+        detail = message_of(error)
         return await self._refusal_escalates(
             params,
             engine,
@@ -103,7 +103,7 @@ class RefusalsMixin(InterpreterBase):
         implementation changed nothing. The work item escalates with that reason, instead of the
         interpreter failing on GitHub's 422. Any other error — a 403, a 5xx once its retries are
         spent — is `None`, and fails the interpreter as before."""
-        detail = message_de(error)
+        detail = message_of(error)
         return await self._refusal_escalates(
             params,
             engine,
@@ -139,7 +139,7 @@ class RefusalsMixin(InterpreterBase):
         # the marker being asked for an error the old code did not escalate.
         if decision.next_state == transition.from_ or not workflow.patched(refusal.marker):
             return None
-        detail = message_de(error)
+        detail = message_of(error)
         if decision.next_state == engine.question_state():
             await self._create_request(
                 params,

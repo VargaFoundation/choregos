@@ -16,12 +16,8 @@ os.environ.setdefault("CHOREGOS_FAKES", "1")
 
 
 def recording_history() -> str | None:
-    """The value of the history-recording switch (`CHOREGOS_RECORD_HISTORY`), or None when off.
-
-    The English variable is read first; the former French name stays a working alias."""
-    return os.environ.get("CHOREGOS_RECORD_HISTORY") or os.environ.get(
-        "CHOREGOS_ARCHIVER_HISTORIQUE"  # lang: fr-ok alias:internal
-    )
+    """The value of the history-recording switch (`CHOREGOS_RECORD_HISTORY`), or None when off."""
+    return os.environ.get("CHOREGOS_RECORD_HISTORY") or None
 
 
 @dataclass
@@ -169,20 +165,20 @@ def worker_factory(temporal_env: Any) -> Any:
 
     A single worker carrying every activity proves nothing about the split: it answers whatever
     queue is asked. The workflows schedule each activity on its declared queue
-    (`workflows.planification`), and that is exactly what must be exercised. On 2026-09-27, on the
+    (`workflows.scheduling`), and that is exactly what must be exercised. On 2026-09-27, on the
     dev tenant, `start_run` ran on `orchestrator` while the network policy opened the Kubernetes API
     to `executor` only: the Job was never created.
     """
     from choregos_orchestrator.activities import ALL_ACTIVITIES
-    from choregos_orchestrator.testing import workers_repartis
+    from choregos_orchestrator.testing import workers_by_queue
     from choregos_orchestrator.workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
 
     def factory(task_queue: str = "test", **kwargs: Any) -> Any:
-        return workers_repartis(
+        return workers_by_queue(
             temporal_env.client,
-            activites=[*ALL_ACTIVITIES, *WORKFLOW_ACTIVITIES],
+            activities=[*ALL_ACTIVITIES, *WORKFLOW_ACTIVITIES],
             workflows=ALL_WORKFLOWS,
-            file_du_workflow=task_queue,
+            workflow_queue=task_queue,
             **kwargs,
         )
 

@@ -25,9 +25,9 @@ with workflow.unsafe.imports_passed_through():
 
     from ..activities import tracker as tracker_activities
     from ..activities.interpretation import (
-        activite_de,
+        activity_of,
         load_context,
-        message_de,
+        message_of,
         record_workflow_failure,
     )
 
@@ -48,7 +48,6 @@ TRAIN_PER_ENVIRONMENT = "train-par-environnement"  # lang: fr-ok — a patch id 
 #: brings it back to the state it left, with a fresh attempts budget. Before this marker,
 #: `on_answer: resume` was declared and nothing played it: only the abandon got out of it.
 RESUME_AFTER_ESCALATION = "resume-after-escalation"
-REPRISE_APRES_ESCALADE = RESUME_AFTER_ESCALATION  # lang: fr-ok alias:internal
 #: A `done` result that lacks a declared output fails the stage, whatever the output's type (S31-02,
 #: ADR 0049). Histories recorded before this marker advanced on such a result unless a gate refused.
 DECLARED_OUTPUTS_REQUIRED = "declared-outputs-required"
@@ -345,8 +344,8 @@ class WorkflowInterpreter(
                     {
                         "project_id": params.project_id,
                         "work_item_id": params.work_item_id,
-                        "message": message_de(exc),
-                        "activity": activite_de(exc),
+                        "message": message_of(exc),
+                        "activity": activity_of(exc),
                         "state": self.state,
                     },
                     start_to_close_timeout=timedelta(seconds=30),

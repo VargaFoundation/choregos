@@ -9,14 +9,9 @@ import sys
 from choregos_core.compat import replace_module
 
 from .effects import (
-    _EFFECTS,
-    _POLICIES,
     EffectContext,
     EffectRefused,
     Execute,
-    _call_the_connector,
-    _connector_call,
-    _platform_arguments,
     declare_effect,
     declared_effects,
     effect,
@@ -34,10 +29,5 @@ effet = effect  # lang: fr-ok alias:external
 effets_declares = declared_effects  # lang: fr-ok alias:external
 rendre = render  # lang: fr-ok alias:external
 reinitialiser = reset  # lang: fr-ok alias:external
-_EFFETS = _EFFECTS  # lang: fr-ok alias:internal
-_POLITIQUES = _POLICIES  # lang: fr-ok alias:internal
-_appel_de_connecteur = _connector_call  # lang: fr-ok alias:internal
-_appeler_le_connecteur = _call_the_connector  # lang: fr-ok alias:internal
-_arguments_de_la_plateforme = _platform_arguments  # lang: fr-ok alias:internal
 
 replace_module(__name__, sys.modules["choregos_api.effects"])

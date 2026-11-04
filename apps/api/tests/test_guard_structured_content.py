@@ -76,7 +76,7 @@ def plugin(tmp_path: pathlib.Path) -> Iterator[None]:
 
 
 def test_readable_text_holds_the_structured_content() -> None:
-    from choregos_api.services.courtier import readable_text
+    from choregos_api.services.broker import readable_text
 
     text = readable_text(ANSWER)
     assert "Ticket 42: two comments." in text and INJECTION in text

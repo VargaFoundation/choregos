@@ -38,7 +38,7 @@ def _via_proxy(target: str) -> str:
         RUNNERS,
         "probe-proxy",
         # curl ignores upper-case `HTTP_PROXY` (CGI legacy): both cases, as the runner
-        # receives them (`env_du_runner`).
+        # receives them (`runner_environment`).
         f"export HTTPS_PROXY={PROXY} HTTP_PROXY={PROXY} https_proxy={PROXY} http_proxy={PROXY}; "
         f"curl -s -m 20 -o /dev/null -w '%{{http_code}}' {target} || echo KO",
     )

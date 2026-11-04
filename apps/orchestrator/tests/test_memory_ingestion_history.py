@@ -18,7 +18,7 @@ PAYLOAD = {"project_slug": "replay", "sources": ["closed_issues", "adr"]}
 
 async def play() -> tuple[dict[str, Any], dict[str, list[Any]], Any]:
     """The workflow against stub activities: its result, what each activity was asked, its history."""
-    from choregos_orchestrator.testing import wait_for_event, workers_repartis
+    from choregos_orchestrator.testing import wait_for_event, workers_by_queue
     from choregos_orchestrator.workflows.memory import MemoryIngestion
     from temporalio.api.enums.v1 import EventType
     from temporalio.testing import WorkflowEnvironment
@@ -32,8 +32,8 @@ async def play() -> tuple[dict[str, Any], dict[str, list[Any]], Any]:
 
     environment = await WorkflowEnvironment.start_time_skipping()
     try:
-        async with workers_repartis(
-            environment.client, activites=[ingest_sources], workflows=[MemoryIngestion]
+        async with workers_by_queue(
+            environment.client, activities=[ingest_sources], workflows=[MemoryIngestion]
         ):
             handle = await environment.client.start_workflow(
                 "MemoryIngestion", PAYLOAD, id=WORKFLOW_ID, task_queue="test"

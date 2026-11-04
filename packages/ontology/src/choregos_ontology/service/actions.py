@@ -3,7 +3,7 @@
 CORE's governed actions (ADR 0035, S20-08).
 
 The trial did everything in the request that decided. A proposal is now a core action (origin
-`ontology`): it is decided by the core (`decider`) — human session, rank, separation of duties, recent
+`ontology`): it is decided by the core (`decide`) — human session, rank, separation of duties, recent
 authentication when the rule has a `stepUp` —, and the `ActionWorkflow` plays it in Temporal, effect by
 effect under its key; what was done is compensated if what follows fails.
 
@@ -405,7 +405,7 @@ async def propose(
         for j in range(len(evidence))
     ]
     from choregos_api.schemas.actions import ActionCreate
-    from choregos_api.services.actions import proposer
+    from choregos_api.services.actions import propose
 
     body = ActionCreate.model_validate(
         {
@@ -426,12 +426,12 @@ async def propose(
     )
     from choregos_api.rbac import SYSTEM
 
-    created = await proposer(
+    created = await propose(
         session,
         project,
         body,
-        origine=ORIGIN,
-        propose_par=actor.as_dict(),
+        origin=ORIGIN,
+        proposed_by=actor.as_dict(),
         principal=principal or SYSTEM,
         run_id=actor.run_id,
         action_id=proposal_id,
@@ -479,12 +479,12 @@ async def decide(
     decision: str,
     reason: str | None,
 ) -> dict[str, Any]:
-    """The human decision, taken by the CORE (`decider`): human session, rank, separation of duties,
+    """The human decision, taken by the CORE (`decide`): human session, rank, separation of duties,
     recent authentication if the rule has a `stepUp` — and, once approved, the action leaves for
     Temporal. Nothing runs in this request."""
-    from choregos_api.services.actions import decider
+    from choregos_api.services.actions import decide
 
-    decided = await decider(session, project, org_slug, action.id, decision, reason, principal)
+    decided = await decide(session, project, org_slug, action.id, decision, reason, principal)
     await _audit(session, project, principal, "decided", decided, decision=decision)
     return describe(decided)
 
@@ -566,11 +566,11 @@ def _record(action: Any, kind: str, index: int, entry: dict[str, Any]) -> None:
 async def _record_failure(ctx: Any, kind: str, index: int, entry: dict[str, Any]) -> None:
     """A refusal rolls the activity's transaction back: what it says is recorded in ITS OWN, after
     undoing what the effect had started — the file says why the action failed."""
-    from choregos_api.db.session import limiter_aux_organisations
+    from choregos_api.db.session import limit_to_organisations
 
     action_id, model = ctx.action.id, type(ctx.action)
     await ctx.session.rollback()
-    await limiter_aux_organisations(ctx.session, "*")
+    await limit_to_organisations(ctx.session, "*")
     action = await ctx.session.get(model, action_id)
     if action is None:
         return
@@ -676,13 +676,13 @@ async def on_report(
     session: AsyncSession, project: Any, observations: list[Observation] | None, partial_reason: str | None
 ) -> list[str]:
     """A collector report arrives: it settles the pending `collector.rerun` evidence, and HANDS it back
-    to its action (`signaler_une_preuve`), which resumes or fails — in Temporal.
+    to its action (`signal_evidence`), which resumes or fails — in Temporal.
 
     The first report received after the request decides. A partial report, an absent layer or an
     `unreachable` line for the layer make the evidence impossible: `failed`, never "key absent".
     Returns the ids of the actions settled.
     """
-    from choregos_api.services.actions import signaler_une_preuve
+    from choregos_api.services.actions import signal_evidence
 
     decided: list[str] = []
     signals: list[tuple[str, int, bool, str]] = []
@@ -757,5 +757,5 @@ async def on_report(
         # with evidence that had no `result`.
         await session.commit()
     for action_id, position, ok, detail in signals:
-        await signaler_une_preuve(action_id, position, ok=ok, detail=detail)
+        await signal_evidence(action_id, position, ok=ok, detail=detail)
     return decided

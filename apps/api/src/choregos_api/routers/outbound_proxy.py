@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
 from ..db.models import Organization
-from ..deps import Db, DbPlateforme, Me
+from ..deps import Db, Me, PlatformDb
 from ..errors import ApiError, forbidden, not_found, unauthorized, unprocessable
 from ..logging import get_logger
 from ..rbac import Principal
@@ -199,7 +199,7 @@ def relay_org(org: str, authorization: Annotated[str | None, Header()] = None) -
 async def get_relay_outbound_proxy(
     kind: ProxyKind,
     response: Response,
-    session: DbPlateforme,
+    session: PlatformDb,
     org: Annotated[str, Depends(relay_org)],
 ) -> RelayOutboundProxy:
     """The proxy `kind` of the organisation's traffic goes through, or `proxy: null` (direct). 503 when

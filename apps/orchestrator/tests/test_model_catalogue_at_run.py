@@ -95,7 +95,7 @@ async def _collect(setup: Fixture, *, capabilities: frozenset[str] | None = None
     from choregos_api.db.models import CostLedger, Run
     from choregos_api.db.session import session_scope
     from choregos_core import utcnow
-    from choregos_orchestrator.activities.bilan import collect_spend
+    from choregos_orchestrator.activities.outcome import collect_spend
     from sqlalchemy import select
 
     gateway = setup.adapters.gateway

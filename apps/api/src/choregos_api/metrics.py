@@ -27,7 +27,6 @@ from datetime import timedelta
 from typing import Any
 
 from choregos_core import utcnow
-from choregos_core.compat import alias_names
 from prometheus_client import CollectorRegistry, generate_latest
 from prometheus_client import Counter as PromCounter
 from prometheus_client.core import GaugeMetricFamily, HistogramMetricFamily
@@ -363,22 +362,3 @@ async def refresh_loop(interval_s: float) -> None:
 
 def _stub_for_type_checkers() -> None:  # pragma: no cover
     _ = defaultdict, contextlib
-
-
-alias_names(
-    __name__,
-    {  # lang: fr-ok alias:internal
-        "NOMS": "NAMES",
-        "SECONDES_DEMARRAGE": "START_SECONDS",
-        "SECONDES_LIVRAISON": "DELIVERY_SECONDS",
-        "ENVIRONNEMENTS": "ENVIRONMENTS",
-        "ETATS_TRAIN": "TRAIN_STATES",
-        "registre": "registry",
-        "requetes_http": "http_requests",
-        "Instantane": "Snapshot",
-        "CollecteurPlateforme": "PlatformCollector",
-        "exposer": "expose",
-        "rafraichir": "refresh",
-        "boucle_de_rafraichissement": "refresh_loop",
-    },
-)

@@ -62,7 +62,7 @@ from ..services.skill_views import (
     skill_version_dto,
     source_unavailable,
 )
-from ..services.skills import SkillRefusee, empreinte, publish_version, read_zip, valider
+from ..services.skills import SkillRefused, digest, publish_version, read_zip, validate
 
 router = APIRouter(tags=["agents"])
 
@@ -106,8 +106,8 @@ async def create_skill(org: str, body: SkillFiles, session: Db, principal: Me) -
     _gerer(principal, org)
     organisation = await organisation_by_slug(session, org)
     try:
-        name = valider(body.files).name
-    except SkillRefusee as refus:
+        name = validate(body.files).name
+    except SkillRefused as refus:
         raise unprocessable(str(refus)) from refus
     if (
         await session.execute(select(Skill.id).where(Skill.org_id == organisation.id, Skill.slug == name))
@@ -132,7 +132,7 @@ async def import_skill(org: str, request: Request, session: Db, principal: Me) -
         raise unprocessable(f"archive larger than {ARCHIVE_MAX // (1024 * 1024)} MiB")
     try:
         files, executables = read_zip(content)
-    except SkillRefusee as refus:
+    except SkillRefused as refus:
         raise unprocessable(str(refus)) from refus
     skill, _ = await publish_version(session, principal, organisation, files, None, executables=executables)
     return await skill_dto(session, organisation, skill, with_versions=True)
@@ -457,7 +457,7 @@ async def check_skill_update(
     else:
         before: dict[str, str] = dict(latest.files or {})
         after = found.files
-        response.digest = empreinte(after)
+        response.digest = digest(after)
         response.added = sorted(set(after) - set(before))
         response.removed = sorted(set(before) - set(after))
         response.modified = sorted(c for c in set(before) & set(after) if before[c] != after[c])

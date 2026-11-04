@@ -27,7 +27,6 @@ EGRESS_NAME = "choregos-egress"
 KUBE_NS = "kubernetes.io/metadata.name"
 #: What the proxy NEVER reaches: the cluster itself and the link-local range (cloud metadata).
 PRIVATE_RANGES = ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16"]
-PLAGES_PRIVEES = PRIVATE_RANGES  # lang: fr-ok alias:internal
 
 
 def squid_config(allowed_domains: list[str]) -> str:

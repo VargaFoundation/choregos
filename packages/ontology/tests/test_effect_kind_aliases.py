@@ -16,13 +16,13 @@ import pytest
 def test_both_effect_kinds_resolve(plugin: None, monkeypatch: pytest.MonkeyPatch) -> None:
     """With the ontology extension active, each effect resolves under its English kind and its
     former one, to the same executor, under the same policy."""
-    from choregos_api import effets
+    from choregos_api import effects, effets
     from choregos_ontology.service import actions
     from choregos_ontology.service.plugin import register
 
     # This test's effect registry only: nothing leaks into the next test.
-    monkeypatch.setattr(effets, "_EFFETS", dict(effets._EFFETS))
-    monkeypatch.setattr(effets, "_POLITIQUES", dict(effets._POLITIQUES))
+    monkeypatch.setattr(effects, "_EFFECTS", dict(effects._EFFECTS))
+    monkeypatch.setattr(effects, "_POLICIES", dict(effects._POLICIES))
     register()
 
     assert (actions.EFFECT_EN, actions.EVIDENCE_EN) == ("ontology.effect", "ontology.evidence")

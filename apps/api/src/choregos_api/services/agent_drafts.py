@@ -35,12 +35,12 @@ from ..db.models import (
     Skill,
 )
 from ..knowledge.access import visible_to
-from ..limiteur import Limiteur
+from ..rate_limit import RateLimiter
 from ..rbac import Principal
 from ..schemas import AgentDraft, AgentDraftRequest, AgentSampleInput, AgentSpec
 from ..schemas.agents import RESERVED_SLUGS, AgentSkillRef
 from .agent_releases import production_spec_of
-from .agents import erreurs_d_une_version
+from .agents import version_errors
 from .skill_review import unusable_skills
 
 AGENT = "agent-drafter"
@@ -55,7 +55,7 @@ MAX_TURNS, MAX_MINUTES, MAX_RUN_USD = 100, 120, 5.0
 PER_MINUTE = 10
 
 #: One window for the process, keyed `org:user`.
-limiter = Limiteur(PER_MINUTE)
+limiter = RateLimiter(PER_MINUTE)
 
 
 class DraftingError(RuntimeError):
@@ -207,7 +207,7 @@ def get_drafter(settings: Settings | None = None) -> AgentDrafter:
 async def instructions_for_drafter(session: AsyncSession, org_id: str) -> str:
     """The organisation's `agent-drafter` (latest version) if installed, else the catalogue's (the plugin
     `authoring`, ADR 0093 §6)."""
-    from .catalogue_d_agents import catalogue_instructions
+    from .agent_catalogue import catalogue_instructions
 
     own = await production_spec_of(session, org_id, AGENT, active_only=True)
     # Not rendered: the drafter's text quotes the template variables it teaches, as plain words.
@@ -384,7 +384,7 @@ def checked(
             "evals": evals,
         }
     )
-    erreurs_d_une_version(spec)
+    version_errors(spec)
     sample_in = _obj(answer.get("sample"))
     sample = AgentSampleInput(
         title=str(sample_in.get("title") or "")[:500], body=str(sample_in.get("body") or "")[:20_000]

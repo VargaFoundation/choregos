@@ -12,12 +12,12 @@ def worker_with(temporal_env: Any, replacements: dict[str, Any]) -> Any:
     queue, so a double of `await_run` registers on `executor`, where the workflow schedules it.
     """
     from choregos_orchestrator.activities import ALL_ACTIVITIES
-    from choregos_orchestrator.testing import workers_repartis
+    from choregos_orchestrator.testing import workers_by_queue
     from choregos_orchestrator.workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
 
-    return workers_repartis(
+    return workers_by_queue(
         temporal_env.client,
-        activites=[*ALL_ACTIVITIES, *WORKFLOW_ACTIVITIES],
+        activities=[*ALL_ACTIVITIES, *WORKFLOW_ACTIVITIES],
         workflows=ALL_WORKFLOWS,
-        remplacements=replacements,
+        replacements=replacements,
     )

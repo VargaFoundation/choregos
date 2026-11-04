@@ -15,9 +15,9 @@ from typing import Any
 from choregos_adapters import AdapterSet, account_of, load_extensions
 from choregos_api.adapter_wiring import attach_lexical_memory
 from choregos_api.db.models import Connector, Organization, OrgConnector, PolicyDef, Project, WorkItem
-from choregos_api.db.session import TOUT, session_scope
+from choregos_api.db.session import ALL_ORGS, session_scope
 from choregos_api.services import default_workflow, policy_model, workflow_model
-from choregos_api.services import workflow_du_ticket as _workflow_du_ticket
+from choregos_api.services import work_item_workflow as _workflow_du_ticket
 from choregos_api.services.definitions import ceiling_of
 from choregos_api.services.github_app import pin_for_runtime
 from choregos_api.services.plugin_tracker import pin_plugin_tracker
@@ -130,7 +130,7 @@ async def load_project(session: AsyncSession, project_id: str) -> ProjectBundle:
         # like its own sessions (`db()`).
         c.kind: {
             "type": c.type,
-            "config": {**configs[c.kind], "org": TOUT} if c.kind == "memory" else configs[c.kind],
+            "config": {**configs[c.kind], "org": ALL_ORGS} if c.kind == "memory" else configs[c.kind],
             # REFERENCES (ADR 0034): `from_connectors` resolves them as it builds.
             "secret_refs": c.secret_refs or {},
             "secret_ref": c.secret_ref,
@@ -232,8 +232,8 @@ def tracker_owns_items(adapter: object) -> bool:
 
 
 async def internal_ticket_key(session: AsyncSession, bundle: ProjectBundle) -> str:
-    """See `choregos_api.services.cle_de_ticket_interne`: a single place assigns the keys."""
-    from choregos_api.services import cle_de_ticket_interne as assign
+    """See `choregos_api.services.internal_work_item_key`: a single place assigns the keys."""
+    from choregos_api.services import internal_work_item_key as assign
 
     return await assign(session, bundle.project)
 
@@ -305,7 +305,7 @@ async def org_memory(session: AsyncSession, bundle: ProjectBundle) -> Any:
     type_name = row.type if row is not None else DEFAULT_TYPES["memory"]
     config = dict(row.config or {}) if row is not None else {}
     # As the project's own memory: a platform process, seen from every organisation (`*`).
-    config = {**config, "org": TOUT}
+    config = {**config, "org": ALL_ORGS}
     sealed = await _sealed_org_values(session, bundle.project.org_id, row) if row is not None else {}
     resolved = resolved_configuration(
         "memory", type_name, config, row.secret_refs if row is not None else None, None, preresolved=sealed
@@ -373,7 +373,3 @@ def without_secrets(stage_input: dict[str, Any] | None, *, keep_gateway_key: boo
     if not keep_gateway_key and cleaned.get("gateway_key") is not None:
         cleaned["gateway_key"] = None
     return cleaned
-
-
-workflow_du_ticket = work_item_workflow  # lang: fr-ok alias:internal
-cle_de_ticket_interne = internal_ticket_key  # lang: fr-ok alias:internal

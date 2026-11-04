@@ -13,12 +13,12 @@ from urllib.parse import urlsplit
 import structlog
 from choregos_api.db.models import Finding as FindingRow
 from choregos_api.db.models import Project, Run
-from choregos_api.services import DecidedBy, persist_event, ranger_les_sorties, record_cost, record_decisions
+from choregos_api.services import DecidedBy, persist_event, record_cost, record_decisions, store_outputs
 from choregos_api.services.artifacts import record_inline_outputs
 from choregos_api.services.budget_alerts import unsent_month_alerts
 from choregos_api.services.budgets import ticket_budget, ticket_spent
 from choregos_api.services.model_catalogue import priced_spend
-from choregos_api.services.tickets import sorties_a_ranger
+from choregos_api.services.tickets import outputs_to_store
 from choregos_contracts import EventType, StageInput, StageResult, StageStatus
 from choregos_core import Message, Spend, elapsed_seconds, utcnow
 from choregos_core.decision_ledger import declared_confidences
@@ -27,7 +27,7 @@ from temporalio import activity
 
 from ..config import get_settings
 from ..train_client import signal_findings
-from .base import db, load_work_item, notification_target, project_bundle, workflow_du_ticket
+from .base import db, load_work_item, notification_target, project_bundle, work_item_workflow
 from .job import JOB_BACKEND
 from .remote import declared_cost_usd
 from .run_key import release_run_key
@@ -218,7 +218,7 @@ async def record_run_outcome(payload: dict[str, Any]) -> dict[str, Any]:
         if outputs.allowed_paths:
             item.allowed_paths = list(outputs.allowed_paths)
         declared_outputs = list(((run.stage_input or {}).get("transition") or {}).get("outputs") or [])
-        documents = ranger_les_sorties(item, outputs, declared_outputs)
+        documents = store_outputs(item, outputs, declared_outputs)
         # An infrastructure PR declared by the agent (`artifacts.reports["infra_pr"]`) follows the
         # work item to the train, which triggers its Atlantis `apply` after approval.
         infra_pr = result.artifacts.reports.get("infra_pr")
@@ -238,7 +238,7 @@ async def record_run_outcome(payload: dict[str, Any]) -> dict[str, Any]:
                 org_id=project.org_id,
                 item=item,
                 run=run,
-                outputs=sorties_a_ranger(outputs, declared_outputs),
+                outputs=outputs_to_store(outputs, declared_outputs),
                 types=dict(((run.stage_input or {}).get("transition") or {}).get("output_types") or {}),
             )
         if result.artifacts.pr_url:
@@ -274,7 +274,7 @@ async def _record_declared_confidences(
     if not answers:
         return
     transition = (run.stage_input or {}).get("transition") or {}
-    workflow = await workflow_du_ticket(session, item)
+    workflow = await work_item_workflow(session, item)
     decided = DecidedBy(
         org_id=project.org_id,
         project_id=project.id,

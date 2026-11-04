@@ -18,7 +18,7 @@ from choregos_api.services import persist_event
 from choregos_api.services.artifacts import producing_runs
 from choregos_api.services.hosted_builds import builds_for
 from choregos_api.services.model_catalogue import load_policy
-from choregos_api.services.recus import LUE, consigner, lu_par_le_prompt
+from choregos_api.services.receipts import READ, read_by_the_prompt, record
 from choregos_contracts import (
     AgentRef,
     ApiFormat,
@@ -108,7 +108,6 @@ from .stage_tools import (
 
 __all__ = [
     "CODE_BACKEND",
-    "FILE_MAX_MINUTES",
     "HOSTED_BACKEND",
     "MEMORY_DISABLED",
     "PROMPT_BACKEND",
@@ -122,9 +121,7 @@ __all__ = [
     "_skill_exists",
     "await_run",
     "cancel_run",
-    "classe_d_execution",
     "collect_spend",
-    "env_du_runner",
     "prepare_stage",
     "record_run_outcome",
     "runner_environment",
@@ -132,9 +129,6 @@ __all__ = [
     "start_run",
 ]
 
-FILE_MAX_MINUTES = QUEUE_MAX_MINUTES  # lang: fr-ok alias:internal
-classe_d_execution = runtime_class  # lang: fr-ok alias:internal
-env_du_runner = runner_environment  # lang: fr-ok alias:internal
 
 logger = structlog.get_logger("choregos.stage")
 
@@ -412,14 +406,14 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         # What this run's prompt carries from the earlier steps, under the fingerprint of the
         # embedded revision (S25-04). Replayable: an existing receipt is not rewritten (ADR 0008).
         # From the same reads, `_record_chain` writes the run's chain on the row (ADR 0077 §2).
-        await consigner(
+        await record(
             session,
             org_id=bundle.project.org_id,
             work_item_id=item.id,
             run_id=run_id,
             stage=plan.role,
-            sorties=await _record_chain(session, run, item, list(plan.inputs or []), playbook_prompt),
-            genre=LUE,
+            outputs=await _record_chain(session, run, item, list(plan.inputs or []), playbook_prompt),
+            genre=READ,
         )
         await persist_event(
             session,
@@ -539,7 +533,7 @@ async def _memories_and_pack(
 async def _record_chain(session: Any, run: Run, item: Any, inputs: list[str], prompt: str) -> dict[str, Any]:
     """The run's chain (ADR 0077 §2), from what the platform holds, never from the agent: who started
     the work item, and the runs that produced what this step reads. Returns what the prompt embeds."""
-    embedded = lu_par_le_prompt(item.documents or {}, inputs, prompt)
+    embedded = read_by_the_prompt(item.documents or {}, inputs, prompt)
     run.initiated_by = item.initiated_by
     run.inputs_from = await producing_runs(session, item.id, [*inputs, *embedded], embedded, reader=run.id)
     return embedded
@@ -704,15 +698,15 @@ async def _plan_agent(session: Any, bundle: Any, plan: StagePlan) -> Any:
     """The agent the actor names, resolved for this project; `None` if the actor names none."""
     if not plan.agent:
         return None
-    from choregos_api.services.agents import AgentIndisponible, resoudre_l_agent
+    from choregos_api.services.agents import AgentUnavailable, resolve_agent
     from temporalio.exceptions import ApplicationError
 
     try:
         # The work item decides a canary share, so every stage and retry of it gets one revision.
-        resolved = await resoudre_l_agent(
+        resolved = await resolve_agent(
             session, bundle.project.org_id, bundle.project.id, plan.agent, work_item_id=plan.work_item_id
         )
-    except AgentIndisponible as refusal:
+    except AgentUnavailable as refusal:
         raise ApplicationError(
             str(refusal),
             type="AgentIndisponible",  # lang: fr-ok — recorded wire value, S45-39
@@ -728,6 +722,3 @@ async def _plan_agent(session: Any, bundle: Any, plan: StagePlan) -> Any:
         agent_source=resolved.source,
     )
     return resolved
-
-
-_serveurs_mcp = _mcp_servers  # lang: fr-ok alias:internal

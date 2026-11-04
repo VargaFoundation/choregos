@@ -25,7 +25,7 @@ async def play(
     script: Any = None,
 ) -> tuple[dict[str, Any], dict[str, list[Any]], Any]:
     """The workflow against stub activities. `script(handle, env)` acts on it while it runs."""
-    from choregos_orchestrator.testing import workers_repartis
+    from choregos_orchestrator.testing import workers_by_queue
     from choregos_orchestrator.workflows.agent_session import AgentSessionPod
     from temporalio.testing import WorkflowEnvironment
 
@@ -45,9 +45,9 @@ async def play(
 
     environment = await WorkflowEnvironment.start_time_skipping()
     try:
-        async with workers_repartis(
+        async with workers_by_queue(
             environment.client,
-            activites=[start_session_pod, stop_session_pod],
+            activities=[start_session_pod, stop_session_pod],
             workflows=[AgentSessionPod],
         ):
             now = await environment.get_current_time()

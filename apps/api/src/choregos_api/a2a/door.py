@@ -2,7 +2,7 @@
 """The card and the JSON-RPC endpoint of the A2A door, A2A 0.3.0 as ADR 0062 pins it (ADR 0078).
 
 `GET /a2a/orgs/{org}/.well-known/agent-card.json` and `POST /a2a/orgs/{org}`. The task IS the work
-item: `message/send` opens one through `creer_un_ticket`, under an id derived from the
+item: `message/send` opens one through `create_work_item`, under an id derived from the
 organisation, the client and the `messageId` (ADR 0008), and `tasks/get` reads it back.
 `message/stream` and `tasks/resubscribe` follow it over server-sent events: an event of the work
 item only wakes the stream up, the task is read again from the database each time. No state lives
@@ -69,7 +69,7 @@ from ..mcp.transport import MAX_BODY_SIZE, _allowed_origins, _http_refusal
 from ..object_store import object_store
 from ..rbac import Permission
 from ..schemas import WorkItemCreate
-from ..services import creer_un_ticket, workflow_du_ticket, workflow_model
+from ..services import create_work_item, work_item_workflow, workflow_model
 from ..services.artifacts import (
     ArtifactCorruptedError,
     StoredInput,
@@ -539,7 +539,7 @@ async def _send(door: Door, params: dict[str, Any]) -> dict[str, Any]:
         raise Fault(INVALID_PARAMS, f"invalid message: {refused.errors()[0]['msg']}") from refused
     stored = await _put_files(door, task_id, files)
     try:
-        item = await creer_un_ticket(door.session, principal, project, draft, canal="a2a", item_id=task_id)
+        item = await create_work_item(door.session, principal, project, draft, canal="a2a", item_id=task_id)
     except ApiError as refused:
         raise Fault(INVALID_PARAMS, refused.detail or refused.title) from refused
     for one in stored:
@@ -635,7 +635,7 @@ def _status_message(item: WorkItem, state: str, parts: list[dict[str, Any]]) -> 
 async def task_of(door: Door, item: WorkItem, project: Project) -> dict[str, Any]:
     """The work item read as an A2A task. States map one way; nothing here can move it."""
     link = _console_url(door, project, item)
-    workflow = workflow_model(await workflow_du_ticket(door.session, item))
+    workflow = workflow_model(await work_item_workflow(door.session, item))
     declared = workflow.states.get(item.state)
     terminal = declared is not None and declared.terminal
     waiting = (

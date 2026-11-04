@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_core.compat import alias_names
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,7 +28,7 @@ from .agents import version_errors
 from .hosted_images import pin_hosted_runtime
 from .network import check_agent_network
 from .skill_gate import platform_columns
-from .skills import SkillRefusee, empreinte, valider
+from .skills import SkillRefused, digest, validate
 
 logger = get_logger("choregos.templates")
 
@@ -97,8 +96,8 @@ async def install_skills_and_agents(
     installed: dict[str, list[str]] = {"skills": [], "agents": []}
     for files in skills:
         try:
-            head = valider(files)
-        except SkillRefusee as refusal:
+            head = validate(files)
+        except SkillRefused as refusal:
             raise unprocessable(f"{what} delivers a refused skill: {refusal}") from refusal
         if (
             await session.execute(select(Skill.id).where(Skill.org_id == org_id, Skill.slug == head.name))
@@ -113,7 +112,7 @@ async def install_skills_and_agents(
                 org_id=org_id,
                 version=1,
                 files=dict(files),
-                digest=empreinte(files),
+                digest=digest(files),
                 created_by=author,
                 **platform_columns(files),
             )
@@ -166,29 +165,6 @@ async def install_skills_and_agents(
     return installed
 
 
-async def installer_skills_et_agents(  # lang: fr-ok alias:internal
-    session: AsyncSession,
-    org_id: Any,
-    skills: list[dict[str, str]],
-    agents: list[dict[str, Any]],
-    author: str,
-    *,
-    quoi: str,  # lang: fr-ok alias:internal
-    du_catalogue: dict[str, str] | None = None,  # lang: fr-ok alias:internal
-) -> dict[str, list[str]]:
-    """The former name of `install_skills_and_agents`, with its former keywords: the plugin installer
-    still calls it that way."""
-    return await install_skills_and_agents(
-        session,
-        org_id,
-        skills,
-        agents,
-        author,
-        what=quoi,
-        catalogue_provenance=du_catalogue,  # lang: fr-ok
-    )
-
-
 async def _install_extensions(
     session: AsyncSession, project: Project, delivered: Any, author: str, installed: dict[str, list[str]]
 ) -> None:
@@ -212,11 +188,3 @@ async def _install_extensions(
                      result=result)  # fmt: skip
         installed["extensions"].append(name)
     await session.flush()
-
-
-installer_ce_que_livre_le_gabarit = install_what_template_delivers  # lang: fr-ok alias:internal
-
-alias_names(
-    __name__,
-    {"installer_ce_que_livre_le_gabarit": "install_what_template_delivers"},  # lang: fr-ok alias:internal
-)

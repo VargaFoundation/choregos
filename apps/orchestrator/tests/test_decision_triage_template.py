@@ -19,14 +19,14 @@ async def _publish(setup: Fixture) -> None:
     from choregos_api.db.models import ModelCatalogueRow, Project, WorkItem
     from choregos_api.db.session import session_scope
     from choregos_api.rbac import SYSTEM
-    from choregos_api.services.definitions import publier_workflow
+    from choregos_api.services.definitions import publish_workflow
 
     async with session_scope() as session:
         project = await session.get(Project, setup.project_id)
         assert project is not None
         session.add(ModelCatalogueRow(org_id=project.org_id, model_name="platform/decide", usages=["decide"]))
         await session.flush()
-        definition = await publier_workflow(session, SYSTEM, project, template_yaml("decision-triage"))
+        definition = await publish_workflow(session, SYSTEM, project, template_yaml("decision-triage"))
         item = await session.get(WorkItem, setup.work_item_id)
         assert item is not None
         item.workflow_def_id = definition.id

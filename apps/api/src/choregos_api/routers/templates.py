@@ -14,7 +14,7 @@ from ..db.models import Template
 from ..deps import Db, Me, require_platform_admin
 from ..errors import not_found, unprocessable
 from ..schemas import TemplateDetail, TemplateSummary, TemplateUpsert
-from ..services.gabarits import repertoire_des_gabarits
+from ..services.templates import templates_directory
 
 router = APIRouter(tags=["templates"])
 
@@ -22,7 +22,7 @@ router = APIRouter(tags=["templates"])
 def _from_disk() -> list[TemplateDetail]:
     """The templates shipped in the repository are visible even without a populated database."""
     out: list[TemplateDetail] = []
-    root = repertoire_des_gabarits()
+    root = templates_directory()
     if not root.is_dir():
         return out
     for manifest_path in sorted(root.glob("*/manifest.yaml")):

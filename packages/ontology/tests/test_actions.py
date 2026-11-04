@@ -181,14 +181,14 @@ async def test_approving_needs_a_recent_authentication_then_the_platform_opens_t
 ) -> None:
     import time
 
-    from choregos_api import fraicheur
+    from choregos_api import freshness
 
     proposal = (await _propose(client, it4it))["result"]["proposal"]
 
     # Eleven minutes later, the session's authentication is older than `stepUp`.
     later = time.time() + 11 * 60
     with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(fraicheur.time, "time", lambda: later)
+        patch.setattr(freshness.time, "time", lambda: later)
         refusal = await _decide(client, project, proposal, "approve")
     assert refusal.status_code == 401, refusal.text
     assert refusal.json()["errors"][0]["error"] == "step_up_required"

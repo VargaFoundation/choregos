@@ -83,7 +83,7 @@ async def _reservation(
     (`lock_budget_scopes`), so a second stage reads the first one's reservation instead of the same
     remainder."""
     from choregos_api.db.models import Organization
-    from choregos_api.services.agents import depense_du_jour, depense_du_mois
+    from choregos_api.services.agents import spend_this_month, spend_today
     from choregos_api.services.budgets import (
         lock_budget_scopes,
         open_reservations,
@@ -121,7 +121,7 @@ async def _reservation(
     if agent is not None:
         left["agent_run"] = agent.spec.budget.run_usd
         if agent.spec.budget.daily_usd is not None and not trial:
-            spent = await depense_du_jour(session, org_id, agent.agent.slug)
+            spent = await spend_today(session, org_id, agent.agent.slug)
             held = await open_reservations(
                 session, org_id=org_id, agent_slug=agent.agent.slug, exclude_run=run_id
             )
@@ -129,7 +129,7 @@ async def _reservation(
         if agent.spec.budget.monthly_usd is not None and not trial:
             # The monthly cap is a reservation too (S27-09): a run cannot spend past it, nor can
             # the agent's runs in flight, each of which may still spend its key's cap (S27-11).
-            month = await depense_du_mois(session, org_id, agent.agent.slug)
+            month = await spend_this_month(session, org_id, agent.agent.slug)
             held = await open_reservations(
                 session, org_id=org_id, agent_slug=agent.agent.slug, exclude_run=run_id
             )
@@ -202,7 +202,7 @@ async def _refuse_on_budget(
 async def _daily_budget(session: Any, bundle: Any, agent: Any) -> None:
     """An agent that has spent its daily budget (models and tools) launches no run before
     midnight (UTC). The refusal is not retried: retrying would not give the budget back."""
-    from choregos_api.services.agents import depense_du_jour, depense_du_mois
+    from choregos_api.services.agents import spend_this_month, spend_today
     from choregos_api.services.budget_alerts import suspend_for_budget
     from temporalio.exceptions import ApplicationError
 
@@ -210,7 +210,7 @@ async def _daily_budget(session: Any, bundle: Any, agent: Any) -> None:
     org_id = bundle.project.org_id
     cap = agent.spec.budget.daily_usd
     if cap is not None:
-        spent_today = await depense_du_jour(session, org_id, slug)
+        spent_today = await spend_today(session, org_id, slug)
         if spent_today >= cap:
             raise ApplicationError(
                 f"run refused before it started — the agent `{slug}` spent {spent_today:.2f} $ "
@@ -220,7 +220,7 @@ async def _daily_budget(session: Any, bundle: Any, agent: Any) -> None:
             )
     monthly = agent.spec.budget.monthly_usd
     if monthly is not None:
-        spent = await depense_du_mois(session, org_id, slug)
+        spent = await spend_this_month(session, org_id, slug)
         if spent >= monthly:
             # The hard stop of the monthly cap (S27-09); normally the spend that crossed it has
             # already suspended the agent, this covers a cap set below what was already spent.

@@ -7,7 +7,6 @@ from __future__ import annotations
 from typing import Any
 
 from choregos_adapters import POLICIES, ConnectorTypeSpec, OperationSpec
-from choregos_core.compat import alias_names
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -236,21 +235,3 @@ async def policy_for_project(session: AsyncSession, project: Project, connector:
         )
     ).scalar_one_or_none()
     return human_floor(instance, operation, stricter(found.policy, tightened))
-
-
-RANG = RANK  # lang: fr-ok alias:internal
-plus_stricte = stricter  # lang: fr-ok alias:internal
-spec_du_type = type_spec  # lang: fr-ok alias:internal
-verifier_les_secrets = verify_secrets  # lang: fr-ok alias:internal
-politique_pour_le_projet = policy_for_project  # lang: fr-ok alias:internal
-
-alias_names(
-    __name__,
-    {
-        "RANG": "RANK",  # lang: fr-ok alias:internal
-        "plus_stricte": "stricter",  # lang: fr-ok alias:internal
-        "spec_du_type": "type_spec",  # lang: fr-ok alias:internal
-        "verifier_les_secrets": "verify_secrets",  # lang: fr-ok alias:internal
-        "politique_pour_le_projet": "policy_for_project",  # lang: fr-ok alias:internal
-    },
-)

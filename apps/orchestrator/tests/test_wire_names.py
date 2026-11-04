@@ -86,10 +86,10 @@ def test_configuration_refusals_accept_both_names() -> None:
 
 
 def test_effect_retry_policy_names_both() -> None:
-    from choregos_orchestrator.workflows.action import EFFET
+    from choregos_orchestrator.workflows.action import EFFECT
 
     expected = {"EffectRefused", "EffetRefuse", "ActionNotFound", "ActionIntrouvable"}  # lang: fr-ok
-    assert set(EFFET.non_retryable_error_types or []) == expected
+    assert set(EFFECT.non_retryable_error_types or []) == expected
 
 
 async def _action(setup: Fixture) -> str:
@@ -225,7 +225,7 @@ async def test_migration_record_without_a_key_still_fails(setup: Fixture) -> Non
 def test_train_input_decodes_with_and_without_relay_threshold() -> None:
     """A continue-as-new input recorded before S45-03 names the threshold `seuil_de_relais`; one
     written after S45-39 names it `relay_threshold`. Both decode, to the same threshold."""
-    from choregos_orchestrator.workflows.train import SEUIL_DE_RELAIS, TrainInput
+    from choregos_orchestrator.workflows.train import RELAY_THRESHOLD, TrainInput
     from temporalio.converter import DataConverter
 
     converter = DataConverter.default.payload_converter
@@ -244,7 +244,6 @@ def test_train_input_decodes_with_and_without_relay_threshold() -> None:
         old, new = decode(former), decode(english)
         assert (old.relay_threshold, new.relay_threshold) == (None, 40)
         assert old.threshold() == new.threshold() == 40
-        assert old.seuil_au_repos_d_avant() == new.seuil_au_repos_d_avant() == 40
-        assert old.seuil() == old.threshold(), "the former name delegates"
+        assert old.former_idle_threshold() == new.former_idle_threshold() == 40
     unset = as_dataclass(base)
-    assert unset.threshold() == SEUIL_DE_RELAIS
+    assert unset.threshold() == RELAY_THRESHOLD

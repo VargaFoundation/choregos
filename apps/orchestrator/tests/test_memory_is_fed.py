@@ -115,7 +115,7 @@ async def _failed_run(setup: Fixture, run_id: str = "run-failed") -> str:
 
 async def _record_failure(run_id: str) -> dict[str, Any]:
     from choregos_contracts import StageResult
-    from choregos_orchestrator.activities.bilan import record_run_outcome
+    from choregos_orchestrator.activities.outcome import record_run_outcome
 
     result = StageResult.failure("the tests did not pass", "tests")
     return await record_run_outcome(

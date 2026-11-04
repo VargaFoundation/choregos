@@ -325,11 +325,11 @@ async def test_a_principal_for_a_webhook_leaves_the_session_unnarrowed(
     async def name(session: Any, user_id: str) -> None:
         named.append(user_id)
 
-    monkeypatch.setattr(deps, "limiter_aux_organisations", limit)
-    monkeypatch.setattr(deps, "nommer_l_utilisateur", name)
+    monkeypatch.setattr(deps, "limit_to_organisations", limit)
+    monkeypatch.setattr(deps, "name_the_user", name)
     async with session_scope() as session:
         user = (await session.execute(select(User).where(User.email == "alice@varga.dev"))).scalar_one()
         await deps.principal_for_user(session, user, narrow=False)
-        assert scopes == [deps.TOUT] and not named, "no narrowing and no attribution to this member"
+        assert scopes == [deps.ALL_ORGS] and not named, "no narrowing and no attribution to this member"
         await deps.principal_for_user(session, user)
         assert scopes[-1] == ["varga"] and named == [user.id]

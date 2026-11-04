@@ -99,14 +99,14 @@ class LexicalMemory:
         if self._sessionmaker is None:
             raise ConfigurationError(
                 "lexical memory: no session injected — the application must register the "
-                "factory (`choregos_api.adaptateurs.brancher_memoire_lexicale`)"
+                "factory (`choregos_api.adapter_wiring.attach_lexical_memory`)"
             )
         return self._sessionmaker
 
     @property
     def models(self) -> MemoryModels:
         if self._models is None:
-            raise ConfigurationError("lexical memory: models not injected (see `brancher_memoire_lexicale`)")
+            raise ConfigurationError("lexical memory: models not injected (see `attach_lexical_memory`)")
         return self._models
 
     @staticmethod

@@ -22,7 +22,7 @@ from ..secret_store import (
 )
 
 #: A secret field of a type, or a slot of a field it pools: `api_key.2` … `api_key.10` (ADR 0089).
-#: The route accepts the shape; `verifier_les_secrets` says whether this type has this slot.
+#: The route accepts the shape; `verify_secrets` says whether this type has this slot.
 SECRET_FIELD = r"^[a-z][a-z0-9_]{0,63}(\.([2-9]|10))?$"  # noqa: S105 - a pattern, not a secret
 
 

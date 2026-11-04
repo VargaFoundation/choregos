@@ -42,7 +42,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from ..db.base import uuid7
 from ..db.models import DecisionRecordRow
 from ..schemas.definitions import QuestionCalibration, ReliabilityBin, StepCalibration, ThresholdPoint
-from .definitions import workflow_du_ticket, workflow_model
+from .definitions import work_item_workflow, workflow_model
 
 DECISION_MODEL = "decision_model"
 AGENT = "agent"
@@ -192,7 +192,7 @@ async def observe_reopening(session: Any, item: Any, event_type: str, payload: d
     changes nothing."""
     if item.closed_at is None or event_type not in ("tracker.item.updated", "tracker.item.moved"):
         return 0
-    workflow = workflow_model(await workflow_du_ticket(session, item))
+    workflow = workflow_model(await work_item_workflow(session, item))
     statuses = [
         state.tracker.status for state in workflow.states.values() if state.terminal and state.tracker
     ]

@@ -10,7 +10,7 @@ The plugin arrives already loaded and validated by `choregos_core.plugins` (S43-
   played on its agent, level 1 and its deterministic `cases`; procedure ids that no other procedure of
   the deployment or plugin of the organisation holds; the plugins it requires installed;
 - installs skills then agents through the path the catalogue and templates share
-  (`installer_skills_et_agents`): version 1 when absent, never rewritten when present. Provenance is
+  (`install_skills_and_agents`): version 1 when absent, never rewritten when present. Provenance is
   `plugin:<plugin>/<slug>@<catalogue version>` for an agent and `plugin:<plugin>/<skill>@<plugin version>`
   for a skill. An object of that name the organisation already has, and that the plugin did not
   install, wins and is left untouched (ADR 0040 §4);
@@ -40,8 +40,8 @@ from typing import Any
 
 import yaml
 from choregos_core import procedures as core_procedures
-from choregos_core.catalogue_d_agents import EntreeDuCatalogue, entry_of
-from choregos_core.catalogue_d_agents.evals import evaluate
+from choregos_core.agent_catalogue import EntreeDuCatalogue, entry_of
+from choregos_core.agent_catalogue.evals import evaluate
 from choregos_core.paths import PathOutsideError, SymlinkRefusedError, files_under, inside
 from choregos_core.plugins import Plugin
 from pydantic import ValidationError
@@ -66,16 +66,16 @@ from ..rbac import SYSTEM, Principal
 from ..schemas.agents import MAX_TAGS, AgentCreate, AgentEvalCase
 from ..schemas.plugins import InstalledPlugin, PluginContents
 from . import plugin_servers
+from .agent_catalogue import DIVERGE
 from .agent_evals import evaluate as evaluate_cases
 from .agent_releases import after_publish
-from .agents import empreinte, erreurs_d_une_version
-from .catalogue_d_agents import DIVERGE
-from .installation import installer_skills_et_agents
+from .agents import digest, version_errors
+from .installation import install_skills_and_agents
 from .network import check_agent_network
 from .plugin_supply import PluginSupply, semver_key
 from .skill_gate import platform_columns
-from .skills import SkillRefusee, valider
-from .skills import empreinte as skill_digest
+from .skills import SkillRefused, validate
+from .skills import digest as skill_digest
 
 PREFIX = "plugin:"
 INSTALLED = "installed"
@@ -148,8 +148,8 @@ async def _prepare(
         paths = _dir_files(root, ref)
         files = {name: _text(path, f"{ref}/{name}") for name, path in paths.items()}
         try:
-            head = valider(files)
-        except SkillRefusee as refusal:
+            head = validate(files)
+        except SkillRefused as refusal:
             raise unprocessable(f"`{ref}`: the skill is refused: {refusal}") from refusal
         prepared.skills[head.name] = files
         for name, path in paths.items():
@@ -166,7 +166,7 @@ async def _prepare(
             raise unprocessable(
                 f"the agent `{slug}` of `{plugin.name}` is not a valid agent", _agent_errors(error)
             ) from error
-        erreurs_d_une_version(body.spec)
+        version_errors(body.spec)
         await check_agent_network(session, org_id, body.spec)
         prepared.agents[slug], prepared.specs[slug] = entry, body
 
@@ -349,9 +349,9 @@ async def _install_skill(
     """`True` when the skill is the plugin's (installed now, or earlier by it)."""
     skill, versions = await _skill_and_versions(session, org_id, name)
     if skill is None:
-        await installer_skills_et_agents(
+        await install_skills_and_agents(
             session, org_id, [prepared.skills[name]], [],
-            provenance(prepared.name, name, prepared.plugin.version), quoi=f"the plugin `{prepared.name}`",
+            provenance(prepared.name, name, prepared.plugin.version), what=f"the plugin `{prepared.name}`",
         )  # fmt: skip
         return True
     if versions and _ours(versions[0].created_by, prepared.name):
@@ -366,10 +366,10 @@ async def _install_agent(
     agent, versions = await _agent_and_versions(session, org_id, slug)
     if agent is None:
         entry = prepared.agents[slug]
-        await installer_skills_et_agents(
+        await install_skills_and_agents(
             session, org_id, [], [entry.document], f"{PREFIX}{prepared.name}@{prepared.plugin.version}",
-            quoi=f"the plugin `{prepared.name}`",
-            du_catalogue={slug: provenance(prepared.name, slug, entry.version)},
+            what=f"the plugin `{prepared.name}`",
+            catalogue_provenance={slug: provenance(prepared.name, slug, entry.version)},
         )  # fmt: skip
         return True
     if versions and _ours(versions[0].created_by, prepared.name):
@@ -392,7 +392,7 @@ async def _upgrade_agent(
     entry, spec = prepared.agents[slug], prepared.specs[slug].spec
     new_tags = [t for t in entry.tags if t not in (agent.tags or [])]
     agent.tags = [*(agent.tags or []), *new_tags][:MAX_TAGS]
-    if versions[-1].checksum == empreinte(spec):
+    if versions[-1].checksum == digest(spec):
         return "unchanged"
     author = provenance(prepared.name, slug, entry.version)
     version = versions[-1].version + 1
@@ -402,7 +402,7 @@ async def _upgrade_agent(
             org_id=org_id,
             version=version,
             spec=spec.model_dump(mode="json"),
-            checksum=empreinte(spec),
+            checksum=digest(spec),
             created_by=author,
             message=f"Plugin update to {prepared.name} {prepared.plugin.version} ({slug}@{entry.version})",
         )

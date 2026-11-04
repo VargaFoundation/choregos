@@ -67,8 +67,7 @@ async def _replayed(handle: Any, archive: str) -> None:
 
     history = await handle.fetch_history()
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
-    former_switch = os.environ.get("CHOREGOS_ARCHIVER_HISTORIQUE")  # lang: fr-ok alias:internal
-    if os.environ.get("CHOREGOS_RECORD_HISTORY") or former_switch:
+    if os.environ.get("CHOREGOS_RECORD_HISTORY"):
         target = HISTORIES / archive
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 

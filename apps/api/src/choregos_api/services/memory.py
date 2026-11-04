@@ -9,7 +9,6 @@ from typing import Any
 from choregos_core import (
     utcnow,
 )
-from choregos_core.compat import alias_names
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -144,11 +143,3 @@ def _ab_verdict(groups: dict[str, Any]) -> tuple[str, str]:
     if delta_rate < -0.05 or delta_cost > 0.2 * max(cost_without, 0.01):
         return ("memory does not pay off", detail)
     return ("no clear difference", detail)
-
-
-MIN_TICKETS_PAR_GROUPE = MIN_WORK_ITEMS_PER_GROUP  # lang: fr-ok alias:internal
-
-alias_names(
-    __name__,
-    {"MIN_TICKETS_PAR_GROUPE": "MIN_WORK_ITEMS_PER_GROUP"},  # lang: fr-ok alias:internal
-)

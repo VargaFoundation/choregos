@@ -59,7 +59,7 @@ def test_the_decision_is_listed() -> None:
 @pytest.mark.parametrize(
     ("schema", "model"),
     [
-        ("ConnectorType", "projets.ConnectorType"),
+        ("ConnectorType", "projects.ConnectorType"),
         ("ConnectorCatalogueEntry", "catalogues.ConnectorCatalogueEntryDto"),
     ],
 )

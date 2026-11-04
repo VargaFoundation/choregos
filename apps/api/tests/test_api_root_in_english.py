@@ -18,9 +18,7 @@ SRC = "apps/api/src/choregos_api/"
 OWNED = (
     "__init__",
     "adapter_wiring",
-    "adaptateurs",
     "bootstrap",
-    "amorcage",
     "audit",
     "catalogue",
     "config",
@@ -29,14 +27,11 @@ OWNED = (
     "errors",
     "events",
     "freshness",
-    "fraicheur",
     "rate_limit",
-    "limiteur",
     "local_demo",
     "logging",
     "main",
     "metrics",
-    "metriques",
     "object_store",
     "rbac",
     "secret_store",
@@ -65,52 +60,13 @@ def test_api_root_has_no_french() -> None:
     assert [str(f) for f in found] == []
 
 
-def test_former_root_modules_still_import() -> None:
-    from choregos_api import adapter_wiring, bootstrap, freshness, metrics, rate_limit
-    from choregos_api.limiteur import Limiteur
+def test_the_rate_limiter_reads_its_window_from_the_module(monkeypatch: pytest.MonkeyPatch) -> None:
+    from choregos_api import rate_limit
 
-    assert Limiteur is rate_limit.RateLimiter
-    for former, current in (
-        ("fraicheur", freshness),
-        ("metriques", metrics),
-        ("amorcage", bootstrap),
-        ("adaptateurs", adapter_wiring),
-        ("limiteur", rate_limit),
-    ):
-        assert importlib.import_module(f"choregos_api.{former}") is current
-    from choregos_api.adaptateurs import brancher_memoire_lexicale
-    from choregos_api.amorcage import amorcer
-    from choregos_api.fraicheur import age_de_l_authentification, exiger_une_authentification_fraiche
-    from choregos_api.metriques import ETATS_TRAIN, NOMS, rafraichir
-
-    assert brancher_memoire_lexicale is adapter_wiring.attach_lexical_memory
-    assert amorcer is bootstrap.bootstrap_installation
-    assert age_de_l_authentification is freshness.authentication_age
-    assert exiger_une_authentification_fraiche is freshness.require_fresh_authentication
-    assert NOMS is metrics.NAMES
-    assert ETATS_TRAIN is metrics.TRAIN_STATES
-    assert rafraichir is metrics.refresh
-
-
-def test_former_names_of_the_root_modules_reach_the_english_ones(monkeypatch: pytest.MonkeyPatch) -> None:
-    from choregos_api import catalogue, deps, events, rate_limit
-
-    assert deps.exiger_admin_de_plateforme is deps.require_platform_admin
-    assert deps.DbPlateforme is deps.PlatformDb
-    assert deps.jeton_rest is deps.is_rest_token
-    assert deps.noter_l_usage is deps.record_usage
-    assert catalogue.outils_du_projet is catalogue.project_tools
-    assert catalogue.appeler is catalogue.call
-    assert events.diffuser is events.broadcast
-    assert events.RelaisPostgres is events.PostgresRelay
-    # A patch of the former name is a patch of the English one.
-    monkeypatch.setattr(rate_limit, "FENETRE_S", 1.0)
-    assert rate_limit.WINDOW_S == 1.0
+    monkeypatch.setattr(rate_limit, "WINDOW_S", 1.0)
     limiter = rate_limit.RateLimiter(per_minute=1)
-    assert limiter.admet is not None
     assert limiter.admits("k", 0.0) == (True, 0)
     assert limiter.admits("k", 0.5) == (False, 1)
-    assert rate_limit.RateLimiter(par_minute=3).per_minute == 3, "the former keyword still works"
 
 
 def test_edition_former_names_warn_and_resolve() -> None:

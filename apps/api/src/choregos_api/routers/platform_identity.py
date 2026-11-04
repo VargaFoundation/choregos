@@ -13,7 +13,7 @@ from fastapi import APIRouter
 
 from ..config import Settings
 from ..deps import Config, Db, Me, require_platform_admin
-from ..mcp.oauth import emetteur
+from ..mcp.oauth import issuer_of
 from ..schemas import PlatformIdentity, PlatformIdentityRow
 from ..tenant_sign_in import has_resolver
 
@@ -85,7 +85,7 @@ def _rows(settings: Settings) -> list[PlatformIdentityRow]:
         ),
     ]
     if settings.mcp_oauth_enabled:
-        rows.append(row("mcp.oauth.issuer", "MCP OAuth issuer", emetteur(settings), "derived"))
+        rows.append(row("mcp.oauth.issuer", "MCP OAuth issuer", issuer_of(settings), "derived"))
         rows.append(
             row(
                 "mcp.oauth.audience",

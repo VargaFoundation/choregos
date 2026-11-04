@@ -267,7 +267,7 @@ async def propose_transition_action(payload: dict[str, Any]) -> dict[str, Any]:
     A final refusal (a missing variable, an unknown effect, a forbidden operation) comes back in
     `refused`: the transition fails, named; it is not a failure to retry."""
     from choregos_api.errors import ApiError
-    from choregos_api.services.actions import proposer_pour_une_transition
+    from choregos_api.services.actions import propose_for_transition
 
     async with db() as session:
         project = await session.get(Project, payload["project_id"])
@@ -275,13 +275,13 @@ async def propose_transition_action(payload: dict[str, Any]) -> dict[str, Any]:
         if project is None or item is None:
             return {"refus": "work item or project not found"}  # lang: fr-ok — recorded wire value, S45-39
         try:
-            action = await proposer_pour_une_transition(
+            action = await propose_for_transition(
                 session,
                 project,
                 item,
                 dict(payload["action"]),
                 transition=str(payload["transition"]),
-                tentative=int(payload["attempt"]),
+                attempt=int(payload["attempt"]),
                 workflow_id=str(payload["workflow_id"]),
             )
         except EffectRefused as refused:

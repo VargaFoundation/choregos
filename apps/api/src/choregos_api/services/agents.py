@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from datetime import datetime, time
 
 from choregos_core import utcnow
-from choregos_core.compat import alias_names
 from choregos_core.hosted import native_sidecars_refusal
 from choregos_core.instructions import instruction_errors
 from sqlalchemy import select
@@ -266,31 +265,6 @@ async def spend_this_month(session: AsyncSession, org_id: str, agent_slug: str) 
     first = datetime.combine(utcnow().date().replace(day=1), time.min, tzinfo=utcnow().tzinfo)
     return await spend_since(session, org_id, agent_slug, first)
 
-
-empreinte = digest  # lang: fr-ok alias:internal
-erreurs_d_une_version = version_errors  # lang: fr-ok alias:internal
-elargissements = widenings  # lang: fr-ok alias:internal
-AgentIndisponible = AgentUnavailable  # lang: fr-ok alias:internal
-AgentResolu = ResolvedAgent  # lang: fr-ok alias:internal
-resoudre_l_agent = resolve_agent  # lang: fr-ok alias:internal
-depense_depuis = spend_since  # lang: fr-ok alias:internal
-depense_du_jour = spend_today  # lang: fr-ok alias:internal
-depense_du_mois = spend_this_month  # lang: fr-ok alias:internal
-
-alias_names(
-    __name__,
-    {
-        "empreinte": "digest",  # lang: fr-ok alias:internal
-        "erreurs_d_une_version": "version_errors",  # lang: fr-ok alias:internal
-        "elargissements": "widenings",  # lang: fr-ok alias:internal
-        "AgentIndisponible": "AgentUnavailable",  # lang: fr-ok alias:internal
-        "AgentResolu": "ResolvedAgent",  # lang: fr-ok alias:internal
-        "resoudre_l_agent": "resolve_agent",  # lang: fr-ok alias:internal
-        "depense_depuis": "spend_since",  # lang: fr-ok alias:internal
-        "depense_du_jour": "spend_today",  # lang: fr-ok alias:internal
-        "depense_du_mois": "spend_this_month",  # lang: fr-ok alias:internal
-    },
-)
 
 __all__ = [
     "AgentUnavailable",

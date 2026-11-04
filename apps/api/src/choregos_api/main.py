@@ -15,7 +15,6 @@ from typing import Any
 
 from choregos_adapters import load_extensions
 from choregos_core import telemetry
-from choregos_core.compat import alias_names
 from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -506,8 +505,3 @@ def main() -> None:
         reload=settings.env == "dev",
         log_config=None,
     )
-
-
-_verifier_l_edition = _check_the_edition  # lang: fr-ok alias:internal
-
-alias_names(__name__, {"_verifier_l_edition": "_check_the_edition"})  # lang: fr-ok alias:internal

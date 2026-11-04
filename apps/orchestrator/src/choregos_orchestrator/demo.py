@@ -29,7 +29,7 @@ async def seed() -> tuple[str, str, Any]:
     from choregos_adapters import AdapterSet
     from choregos_api.db.models import Organization, Project
     from choregos_api.db.session import create_all, session_scope
-    from choregos_api.services import Naissance, ensure_defaults, nouveau_ticket
+    from choregos_api.services import WorkItemBirth, ensure_defaults, new_work_item
     from choregos_api.services.initiator import initiator
     from choregos_contracts import Evidence, StageResult, StageStatus
     from choregos_core.domain import WorkItemData
@@ -72,10 +72,10 @@ async def seed() -> tuple[str, str, Any]:
         session.add(project)
         await session.flush()
         await ensure_defaults(session, project)
-        item = await nouveau_ticket(
+        item = await new_work_item(
             session,
             project,
-            Naissance(
+            WorkItemBirth(
                 tracker_key="varga/billing-api#123",
                 title="Credits are not deducted from the invoice total",
                 body="When an order has a credit, the total shown ignores the discount.",

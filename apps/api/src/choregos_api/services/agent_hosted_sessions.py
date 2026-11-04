@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
 from ..db.models import AgentSessionEvent, AgentSessionRecord, Organization, Project
-from ..db.session import limiter_aux_organisations, session_scope
+from ..db.session import limit_to_organisations, session_scope
 from ..errors import not_found
 from ..logging import get_logger
 from ..schemas.agent_sessions import (
@@ -109,7 +109,7 @@ async def respond_hosted(
     # The pod reads the turn from its own transaction: this one must be committed, and the waiting
     # below must hold no lock (SQLite's SHARED lock would block the pod's answer).
     await session.commit()
-    await limiter_aux_organisations(session, [org_slug])
+    await limit_to_organisations(session, [org_slug])
 
     error: AgentResponseError | None = None
     result: AgentSessionTurnResult | None = None
@@ -268,7 +268,7 @@ async def fail_open_turns(session: AsyncSession, record: AgentSessionRecord, rea
 
 async def session_network(session: AsyncSession, record: AgentSessionRecord) -> RunNetwork:
     """The network the session's pod may use, as a run of the same agent version gets it."""
-    from .agents import resoudre_l_agent
+    from .agents import resolve_agent
     from .network import project_effective_network
 
     project = await session.get(Project, record.project_id)
@@ -276,7 +276,7 @@ async def session_network(session: AsyncSession, record: AgentSessionRecord) -> 
         raise not_found("Project of the session", record.id)
     organisation = await session.get(Organization, project.org_id)
     served = f"{record.agent_slug}@{record.agent_version}"
-    spec = (await resoudre_l_agent(session, record.org_id, project.id, served)).spec
+    spec = (await resolve_agent(session, record.org_id, project.id, served)).spec
     effective, _ = await project_effective_network(session, project, spec.network)
     return RunNetwork(
         run_id=session_run_id(record.id),

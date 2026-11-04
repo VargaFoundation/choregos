@@ -144,9 +144,6 @@ def is_core_object(obj: Any, name: str | None, type_: str, reflected: bool, comp
     }
 
 
-objet_du_coeur = is_core_object  # lang: fr-ok alias:internal
-
-
 __all__ = [
     "ALL_TABLES",
     "A2aPushConfig",
@@ -239,7 +236,6 @@ __all__ = [
     "func",
     "is_core_object",
     "mapped_column",
-    "objet_du_coeur",
     "relationship",
     "text",
     "utcnow",

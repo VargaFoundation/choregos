@@ -29,7 +29,7 @@ from ..services.organisations import organisation_by_slug
 from ..services.platform_network import check_platform_host
 from ..services.skill_sources import GitSource, SourceRefused, allowed, get_fetcher, parse_repo_url
 from ..services.skill_views import require_skill_reader, skill_dto, skill_snapshot, skill_sources
-from ..services.skills import empreinte, publish_version
+from ..services.skills import digest, publish_version
 
 router = APIRouter(tags=["agents"])
 
@@ -191,7 +191,7 @@ async def install_skill_catalogue_entry(
         )
     async with egress_scope(session, organisation, "api", f"skill-catalogue:{entry.id}", settings):
         files, executables, repo_licences = await _files_of(entry, source, settings.fakes)
-    if empreinte(files) != entry.digest:
+    if digest(files) != entry.digest:
         raise unprocessable(
             f"`{entry.id}` is not what the catalogue pinned (digest mismatch): the catalogue is regenerated "
             "from the pinned commit, so this is a defect, not something to override"

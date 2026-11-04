@@ -22,7 +22,7 @@ from ..db.models import Agent, AgentRelease, AgentVersion, Organization, Project
 from ..deps import _aware
 from ..errors import ApiError, conflict, forbidden, not_found, unprocessable
 from ..extensions import GestureRequest, check_gesture
-from ..fraicheur import age_de_l_authentification, exiger_une_authentification_fraiche
+from ..freshness import authentication_age, require_fresh_authentication
 from ..rbac import Permission, Principal
 from ..schemas import (
     AgentChannelStats,
@@ -335,7 +335,7 @@ async def checks_for(
                 required=session_required,
             )
         )
-        age = age_de_l_authentification(principal, now)
+        age = authentication_age(principal, now)
         fresh = age is not None and age <= gates.step_up_minutes * 60
         checks.append(
             _check(
@@ -554,7 +554,7 @@ async def release(
         )
     if _gated(agent, body.channel, kind, percent):
         if is_human_session(principal):
-            exiger_une_authentification_fraiche(principal, policy.stable.step_up_minutes)
+            require_fresh_authentication(principal, policy.stable.step_up_minutes)
         elif policy.on_publish != "stable":
             raise forbidden("a release to production is made in a human session, not with an API token")
         await check_gesture(
@@ -748,13 +748,13 @@ async def decide_release(
     if body.decision == "cancel":
         if (row.requested_by or "").lower() != me and not is_admin(principal, organisation.slug):
             raise forbidden("only the requester or an org_admin cancels a release request")
-        age: int | None = age_de_l_authentification(principal)
+        age: int | None = authentication_age(principal)
     elif body.decision == "reject":
         if not (body.reason or "").strip():
             raise unprocessable("a rejection must say why")
-        age = age_de_l_authentification(principal)
+        age = authentication_age(principal)
     else:
-        age = exiger_une_authentification_fraiche(principal, gates.step_up_minutes)
+        age = require_fresh_authentication(principal, gates.step_up_minutes)
         if gates.separation_of_duties:
             author = (
                 await session.execute(
