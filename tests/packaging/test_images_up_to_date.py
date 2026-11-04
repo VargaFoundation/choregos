@@ -16,38 +16,38 @@ from __future__ import annotations
 import pathlib
 import re
 
-RACINE = pathlib.Path(__file__).resolve().parents[2]
-DOCKER = RACINE / "docker"
-ETAPE = re.compile(r"^FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\S+))?\s*$", re.M | re.I)
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+DOCKER = ROOT / "docker"
+STAGE = re.compile(r"^FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\S+))?\s*$", re.M | re.I)
 SOURCE = re.compile(r"COPY\s+--from=(\S+)")
-MISE_A_JOUR = re.compile(r"apt-get\s+upgrade\s+-y")
+UPGRADE = re.compile(r"apt-get\s+upgrade\s+-y")
 
 
-def _etapes_finales() -> list[tuple[str, str, str]]:
+def _final_stages() -> list[tuple[str, str, str]]:
     """(file, stage, body) of every stage that ends up in an image and starts from an external one."""
     finales: list[tuple[str, str, str]] = []
-    for chemin in sorted(DOCKER.glob("*.Dockerfile")):
-        texte = chemin.read_text(encoding="utf-8")
-        debuts = list(ETAPE.finditer(texte))
-        etapes = []
-        for i, debut in enumerate(debuts):
-            fin = debuts[i + 1].start() if i + 1 < len(debuts) else len(texte)
-            etapes.append((debut.group(2) or f"#{i}", debut.group(1), texte[debut.end() : fin]))
-        noms = {nom for nom, _, _ in etapes}
-        bases_internes = {base for _, base, _ in etapes if base in noms}
-        sources = set(SOURCE.findall(texte))
-        for nom, base, corps in etapes:
-            if base in noms:
+    for path in sorted(DOCKER.glob("*.Dockerfile")):
+        text = path.read_text(encoding="utf-8")
+        debuts = list(STAGE.finditer(text))
+        stages = []
+        for i, start in enumerate(debuts):
+            end = debuts[i + 1].start() if i + 1 < len(debuts) else len(text)
+            stages.append((start.group(2) or f"#{i}", start.group(1), text[start.end() : end]))
+        names = {name for name, _, _ in stages}
+        bases_internes = {base for _, base, _ in stages if base in names}
+        sources = set(SOURCE.findall(text))
+        for name, base, body in stages:
+            if base in names:
                 continue  # it inherits from the stage it starts from
-            if nom in sources and nom not in bases_internes:
+            if name in sources and name not in bases_internes:
                 continue  # a build stage: only what is copied from it is kept
-            finales.append((chemin.name, nom, corps))
+            finales.append((path.name, name, body))
     return finales
 
 
 def test_il_y_a_bien_des_images_a_verifier() -> None:
     """Without this guard, renaming the stages would leave the suite green and empty."""
-    vues = {(fichier, etape) for fichier, etape, _ in _etapes_finales()}
+    vues = {(file, stage) for file, stage, _ in _final_stages()}
     assert {
         ("api.Dockerfile", "commun"),
         ("tools.Dockerfile", "runtime"),
@@ -57,7 +57,7 @@ def test_il_y_a_bien_des_images_a_verifier() -> None:
     } <= vues, vues
 
 
-def test_chaque_image_applique_les_correctifs_de_debian() -> None:
-    finales = _etapes_finales()
-    sans = [f"{fichier} / {etape}" for fichier, etape, corps in finales if not MISE_A_JOUR.search(corps)]
-    assert not sans, f"final stages without `apt-get upgrade -y`: {sans}"
+def test_each_image_applies_the_debian_fixes() -> None:
+    finales = _final_stages()
+    solo = [f"{file} / {stage}" for file, stage, body in finales if not UPGRADE.search(body)]
+    assert not solo, f"final stages without `apt-get upgrade -y`: {solo}"

@@ -112,7 +112,7 @@ FROM python:3.12-slim-bookworm AS commun
 # (ADR 0024). Le venv, créé par uv, n'a pas de `pip` ; celui du PATH est celui du système. Sans
 # cette ligne, `pip install --no-deps choregos_ee-*.whl` réussit, pose la roue dans `~/.local`,
 # hors du venv — l'image se construit, démarre, et tourne en `community` sans rien dire. Essayé
-# sur `choregos-api:0.8.3` le 2026-09-28 ; `tests/paquets/test_image_ee.py` le garde.
+# sur `choregos-api:0.8.3` le 2026-09-28 ; `tests/packaging/test_image_ee.py` le garde.  # lang: fr-ok
 ENV PYTHONUNBUFFERED=1 PATH="/app/.venv/bin:$PATH" PIP_PYTHON=/app/.venv/bin/python
 # Les correctifs de sécurité de Debian, appliqués à la construction : l'image de base (une étiquette,
 # reconstruite à son rythme) peut porter un paquet déjà corrigé dans `bookworm-security` — perl-base
@@ -174,7 +174,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends git \
 # `buildctl`: the executor worker builds hosted zips through the chart's `buildkitd` (S41-13, ADR
 # 0080 §9). The client of the very image the chart deploys, pinned by digest: a client and a daemon
 # of two releases apart is a combination nobody tested. A bump moves both, and
-# `tests/paquets/test_buildctl_in_the_worker_image.py` refuses one without the other.
+# `tests/packaging/test_buildctl_in_the_worker_image.py` refuses one without the other.
 COPY --from=moby/buildkit:v0.34.1-rootless@sha256:f68752a5a94acfcdad2d07867b7075601a421638e17fc5f28efc1c814d0c4f89 /usr/bin/buildctl /usr/local/bin/buildctl
 USER 1000
 CMD ["python", "-m", "choregos_orchestrator.worker", "--queues", "orchestrator,executor,tracker,memory"]

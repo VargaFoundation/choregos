@@ -66,72 +66,70 @@ TIINGO = [
 ]  # fmt: skip
 
 
-def serveur(cle_attendue: str) -> httpx.MockTransport:
+def server(expected_key: str) -> httpx.MockTransport:
     """A stand-in for the four providers: answers by host, and refuses a wrong key where one is used."""
 
-    def handler(requete: httpx.Request) -> httpx.Response:
-        cle = requete.url.params.get("apikey")
-        if requete.url.host == "api.tiingo.com":
+    def handler(request: httpx.Request) -> httpx.Response:
+        key = request.url.params.get("apikey")
+        if request.url.host == "api.tiingo.com":
             # Tiingo's token is a header (S38-22): a wrong one is a 401, as Tiingo answers.
-            if requete.headers.get("Authorization") != f"Token {cle_attendue}":
+            if request.headers.get("Authorization") != f"Token {expected_key}":
                 return httpx.Response(401, json={"detail": "Invalid token."})
-            if requete.url.path.endswith("/prices"):
+            if request.url.path.endswith("/prices"):
                 return httpx.Response(200, json=TIINGO)
             return httpx.Response(200, json={"ticker": "aapl", "name": "Apple Inc", "exchangeCode": "NASDAQ"})
-        if requete.url.host in {"stooq.com", "www.alphavantage.co"} and cle != cle_attendue:
+        if request.url.host in {"stooq.com", "www.alphavantage.co"} and key != expected_key:
             return httpx.Response(403, text="forbidden")
-        if requete.url.host == "stooq.com":
+        if request.url.host == "stooq.com":
             return httpx.Response(200, text=STOOQ)
-        if requete.url.host == "www.alphavantage.co":
+        if request.url.host == "www.alphavantage.co":
             return httpx.Response(200, json=ALPHA)
         return httpx.Response(200, json=YAHOO)
 
     return httpx.MockTransport(handler)
 
 
-def ouvrir(nom: str, cle: str = SECRET) -> MarketDataProvider:
+def ouvrir(name: str, key: str = SECRET) -> MarketDataProvider:
     sources = {
-        "stooq": {"api_key": cle},
-        "alphavantage": {"api_key": cle},
-        "tiingo": {"api_key": cle},
+        "stooq": {"api_key": key},
+        "alphavantage": {"api_key": key},
+        "tiingo": {"api_key": key},
         "yahoo": {},
         "fake": {},
     }
-    if nom == "composite":
-        fournisseur = build(
+    if name == "composite":
+        supplier = build(
             "marketdata",
             "composite",
             {
                 "sources": ["stooq", "alphavantage", "tiingo"],
-                "stooq_api_key": cle,
-                "alphavantage_api_key": cle,
-                "tiingo_api_key": cle,
+                "stooq_api_key": key,
+                "alphavantage_api_key": key,
+                "tiingo_api_key": key,
             },
         )
-        for _, source in fournisseur._sources:
+        for _, source in supplier._sources:
             # The provider's own headers (Tiingo's token) stay: only the network is replaced.
-            source._client = httpx.AsyncClient(transport=serveur(SECRET), headers=source._client.headers)
-        return fournisseur  # type: ignore[no-any-return]
-    fournisseur = build("marketdata", nom, sources[nom])
-    if nom != "fake":
-        fournisseur._client = httpx.AsyncClient(
-            transport=serveur(SECRET), headers=fournisseur._client.headers
-        )
-    return fournisseur  # type: ignore[no-any-return]
+            source._client = httpx.AsyncClient(transport=server(SECRET), headers=source._client.headers)
+        return supplier  # type: ignore[no-any-return]
+    supplier = build("marketdata", name, sources[name])
+    if name != "fake":
+        supplier._client = httpx.AsyncClient(transport=server(SECRET), headers=supplier._client.headers)
+    return supplier  # type: ignore[no-any-return]
 
 
 TYPES = ["stooq", "yahoo", "alphavantage", "tiingo", "composite"]
 
 
-def exemple(nom: str, schema: dict[str, Any]) -> Any:
-    return {"symbol": "AAPL", "start": "2024-01-02", "end": "2024-01-31"}[nom]
+def example(name: str, schema: dict[str, Any]) -> Any:
+    return {"symbol": "AAPL", "start": "2024-01-02", "end": "2024-01-31"}[name]
 
 
-@pytest.mark.parametrize("nom", [*TYPES, "fake"])
-async def test_each_operation_declares_a_closed_schema_the_implementation_follows(nom: str) -> None:
+@pytest.mark.parametrize("name", [*TYPES, "fake"])
+async def test_each_operation_declares_a_closed_schema_the_implementation_follows(name: str) -> None:
     import choregos_adapters.fakes.marketdata  # noqa: F401 - the `fake` type registers itself at import
 
-    spec = spec_of("marketdata", nom if nom != "fake" else "stooq")
+    spec = spec_of("marketdata", name if name != "fake" else "stooq")
     assert spec is not None
     assert {o.name for o in spec.operations} == {"get_bars", "get_instrument"}
     for operation in spec.operations:
@@ -140,42 +138,42 @@ async def test_each_operation_declares_a_closed_schema_the_implementation_follow
         Draft202012Validator.check_schema(schema)
         assert schema.get("additionalProperties") is False
         assert set(schema["required"]) <= set(schema["properties"])
-        params = {k: exemple(k, v) for k, v in schema["properties"].items()}
+        params = {k: example(k, v) for k, v in schema["properties"].items()}
         Draft202012Validator(schema).validate(params)
         # an argument outside the schema never reaches the provider
         assert not Draft202012Validator(schema).is_valid({**params, "url": "https://evil.test"})
         assert not Draft202012Validator(schema).is_valid({**params, "symbol": "AAPL/../x"})
-        resultat = await ouvrir(nom).executer(operation.name, params)
-        json.dumps(resultat)
-        assert resultat["symbol"] == "AAPL" and resultat["provider"]
+        result = await ouvrir(name).executer(operation.name, params)
+        json.dumps(result)
+        assert result["symbol"] == "AAPL" and result["provider"]
         if operation.name == "get_bars":
-            dates = [b["date"] for b in resultat["bars"]]
+            dates = [b["date"] for b in result["bars"]]
             assert dates and dates == sorted(set(dates)), "sorted, one bar per date"
-            assert set(resultat["bars"][0]) == {"date", "open", "high", "low", "close", "adj_close", "volume"}
-            assert isinstance(resultat["bars"][0]["close"], float)
-            assert isinstance(resultat["adjusted"], bool)
+            assert set(result["bars"][0]) == {"date", "open", "high", "low", "close", "adj_close", "volume"}
+            assert isinstance(result["bars"][0]["close"], float)
+            assert isinstance(result["adjusted"], bool)
         else:
-            assert resultat["type"] in {"stock", "etf", "unknown"}
+            assert result["type"] in {"stock", "etf", "unknown"}
 
 
-@pytest.mark.parametrize("nom", ["stooq", "alphavantage", "tiingo", "composite"])
-async def test_the_key_serves_and_appears_nowhere(nom: str, caplog: pytest.LogCaptureFixture) -> None:
+@pytest.mark.parametrize("name", ["stooq", "alphavantage", "tiingo", "composite"])
+async def test_the_key_serves_and_appears_nowhere(name: str, caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.DEBUG)
-    with structlog.testing.capture_logs() as evenements:
-        cas = ouvrir(nom)
-        resultats = [
+    with structlog.testing.capture_logs() as events:
+        cas = ouvrir(name)
+        results = [
             await cas.executer("get_bars", {"symbol": "AAPL", "start": "2024-01-02", "end": "2024-01-31"}),
             await cas.executer("get_instrument", {"symbol": "AAPL"}),
             await cas.test(),
         ]
-        intrus = ouvrir(nom, cle=MAUVAISE)
-        with pytest.raises(MarketDataError) as refus:
+        intrus = ouvrir(name, key=MAUVAISE)
+        with pytest.raises(MarketDataError) as refusal:
             await intrus.executer("get_bars", {"symbol": "AAPL", "start": "2024-01-02", "end": "2024-01-31"})
     traces = [
         *(r.getMessage() for r in caplog.records),
-        *(repr(e) for e in evenements),
-        *(json.dumps(r, default=str) for r in resultats),
-        str(refus.value),
+        *(repr(e) for e in events),
+        *(json.dumps(r, default=str) for r in results),
+        str(refusal.value),
         repr(cas),
         repr(intrus),
     ]

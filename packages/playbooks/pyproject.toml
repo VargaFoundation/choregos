@@ -15,6 +15,6 @@ build-backend = "hatchling.build"
 # `force-include` on `roles/` added them a second time at the same path, and hatchling
 # refuses ("A second file is being added to the wheel archive at the same path"). The release
 # job therefore failed on this one package ever since it started building wheels (v0.4.0).
-# `tests/paquets/` builds EVERY package and checks that its data files are really in the
+# `tests/packaging/` builds EVERY package and checks that its data files are really in the
 # wheel, not only that the build passes.
 packages = ["src/choregos_playbooks"]

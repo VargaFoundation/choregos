@@ -1,6 +1,6 @@
 """The fakes of the HR scenario (S20-04): what the conformance suite does not say — what each one
 REFUSES, by name, and what the staging moves forward. Idempotence, schemas and secrets:
-`tests/conformance/connecteurs/`."""
+`tests/conformance/connectors/`."""
 
 from __future__ import annotations
 

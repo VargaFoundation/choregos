@@ -2,7 +2,7 @@
 
 `scenario_hr.py` plays the `joiners-leavers` template on the dev tenant, with a real agent and
 real decisions. The same scenario, in accelerated time and on in-memory fakes, is
-`tests/e2e/test_m6_rh.py`: this one shows the same thing **deployed**.
+`tests/e2e/test_m6_hr.py`: this one shows the same thing **deployed**.
 
 ## What the dev tenant needs
 

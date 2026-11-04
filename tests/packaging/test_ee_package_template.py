@@ -42,34 +42,34 @@ pytestmark = [
 ]
 
 
-def test_la_roue_porte_son_point_d_entree(roue_ee: pathlib.Path) -> None:
+def test_the_wheel_carries_its_entry_point(ee_wheel: pathlib.Path) -> None:
     """The published wheel's metadata, not a hand-written `.dist-info`.
 
     This is what breaks silently: a mistake in `[project.entry-points."choregos.plugins"]`
     gives a wheel that installs perfectly and never registers.
     """
-    with zipfile.ZipFile(roue_ee) as archive:
-        noms = archive.namelist()
-        chemin = next((n for n in noms if n.endswith("entry_points.txt")), None)
-        assert chemin is not None, f"no entry_points.txt in the wheel: {noms}"
-        contenu = archive.read(chemin).decode("utf-8")
+    with zipfile.ZipFile(ee_wheel) as archive:
+        names = archive.namelist()
+        path = next((n for n in names if n.endswith("entry_points.txt")), None)
+        assert path is not None, f"no entry_points.txt in the wheel: {names}"
+        content = archive.read(path).decode("utf-8")
 
-    assert "[choregos.plugins]" in contenu, contenu
-    assert "choregos-ee = choregos_ee:brancher" in contenu, contenu
+    assert "[choregos.plugins]" in content, content
+    assert "choregos-ee = choregos_ee:brancher" in content, content
 
 
-def test_la_roue_ne_depend_pas_du_coeur(roue_ee: pathlib.Path) -> None:
+def test_the_wheel_does_not_depend_on_the_core(ee_wheel: pathlib.Path) -> None:
     """Declaring the core would send pip looking in an index that does not have it: its wheels
     are GitHub release artifacts, not PyPI ones."""
-    with zipfile.ZipFile(roue_ee) as archive:
-        chemin = next(n for n in archive.namelist() if n.endswith("METADATA"))
-        metadata = archive.read(chemin).decode("utf-8")
+    with zipfile.ZipFile(ee_wheel) as archive:
+        path = next(n for n in archive.namelist() if n.endswith("METADATA"))
+        metadata = archive.read(path).decode("utf-8")
 
-    requises = [ligne for ligne in metadata.splitlines() if ligne.startswith("Requires-Dist:")]
+    requises = [line for line in metadata.splitlines() if line.startswith("Requires-Dist:")]
     assert not requises, f"an EE wheel does not declare the core as a dependency: {requises}"
 
 
-def test_le_module_ne_touche_pas_au_coeur_a_l_import(roue_ee: pathlib.Path, tmp_path: pathlib.Path) -> None:
+def test_the_module_does_not_touch_the_core_on_import(ee_wheel: pathlib.Path, tmp_path: pathlib.Path) -> None:
     """Importable without the core: a build bench does not have Choregos installed.
 
     We unpack the wheel into an isolated directory and import it in an interpreter **without**
@@ -77,10 +77,10 @@ def test_le_module_ne_touche_pas_au_coeur_a_l_import(roue_ee: pathlib.Path, tmp_
     module loads.
     """
     deplie = tmp_path / "deplie"
-    with zipfile.ZipFile(roue_ee) as archive:
+    with zipfile.ZipFile(ee_wheel) as archive:
         archive.extractall(deplie)
 
-    fait = subprocess.run(
+    completed = subprocess.run(
         [sys.executable, "-S", "-c", "import choregos_ee; print(choregos_ee.brancher.__name__)"],
         cwd=deplie,
         capture_output=True,
@@ -88,5 +88,7 @@ def test_le_module_ne_touche_pas_au_coeur_a_l_import(roue_ee: pathlib.Path, tmp_
         env={"PYTHONPATH": str(deplie), "PATH": "/usr/bin:/bin"},
         check=False,
     )
-    assert fait.returncode == 0, f"the module does not import without the core:\n{fait.stderr[-600:]}"
-    assert fait.stdout.strip() == "brancher"
+    assert completed.returncode == 0, (
+        f"the module does not import without the core:\n{completed.stderr[-600:]}"
+    )
+    assert completed.stdout.strip() == "brancher"

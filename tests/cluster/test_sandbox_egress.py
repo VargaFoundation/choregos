@@ -37,7 +37,7 @@ def project() -> None:
     kubectl("delete", "ns", RUNNERS, f"proj-{SLUG}-ci", "--ignore-not-found", check=False)
 
 
-def test_le_cni_applique_vraiment_les_politiques() -> None:
+def test_the_cni_really_enforces_the_policies() -> None:
     """Safeguard: if the CNI ignores NetworkPolicy, everything else is a false positive."""
     logs = run_probe(
         RUNNERS,
@@ -50,18 +50,18 @@ def test_le_cni_applique_vraiment_les_politiques() -> None:
     )
 
 
-def test_un_runner_ne_joint_pas_internet() -> None:
+def test_a_runner_cannot_reach_the_internet() -> None:
     """An agent must not be able to exfiltrate or pull code from anywhere."""
-    for cible in ("https://example.com", "https://pypi.org/simple/", "http://1.1.1.1"):
+    for target in ("https://example.com", "https://pypi.org/simple/", "http://1.1.1.1"):
         logs = run_probe(
             RUNNERS,
             "probe-internet",
-            f"curl -s -m 8 -o /dev/null -w '%{{http_code}}' {cible} || echo BLOCKED",
+            f"curl -s -m 8 -o /dev/null -w '%{{http_code}}' {target} || echo BLOCKED",
         )
-        assert "BLOCKED" in logs, f"{cible} reachable from a runner: {logs!r}"
+        assert "BLOCKED" in logs, f"{target} reachable from a runner: {logs!r}"
 
 
-def test_le_dns_reste_ouvert() -> None:
+def test_dns_stays_open() -> None:
     """Without DNS, a runner cannot reach what it is allowed to reach either."""
     logs = run_probe(
         RUNNERS,
@@ -71,7 +71,7 @@ def test_le_dns_reste_ouvert() -> None:
     assert "DNS_OK" in logs, logs
 
 
-def test_la_plateforme_reste_joignable() -> None:
+def test_the_platform_stays_reachable() -> None:
     """The runner must reach the internal API: that is how it posts its result."""
     kubectl("create", "ns", "choregos-system", "--dry-run=client", "-o", "yaml")
     kubectl(
@@ -106,7 +106,7 @@ def test_la_plateforme_reste_joignable() -> None:
     assert "200" in logs, f"the internal API must stay reachable from a runner: {logs!r}"
 
 
-def test_un_port_non_autorise_de_la_plateforme_reste_ferme() -> None:
+def test_a_non_allowed_platform_port_stays_closed() -> None:
     """The policy opens named ports, not a whole namespace."""
     kubectl(
         "apply",
@@ -132,12 +132,12 @@ def test_un_port_non_autorise_de_la_plateforme_reste_ferme() -> None:
     assert "BLOCKED" in logs, f"a port not opened by the policy must stay closed: {logs!r}"
 
 
-def test_le_namespace_du_projet_est_en_pod_security_restricted() -> None:
+def test_the_project_namespace_is_pod_security_restricted() -> None:
     labels = kubectl("get", "ns", RUNNERS, "-o", "jsonpath={.metadata.labels}")
     assert '"pod-security.kubernetes.io/enforce":"restricted"' in labels.replace(" ", ""), labels
 
 
-def test_un_pod_privilegie_est_refuse_par_le_cluster() -> None:
+def test_a_privileged_pod_is_refused_by_the_cluster() -> None:
     """`restricted` is not an intention: the API must refuse the pod."""
     manifest = (
         "apiVersion: v1\nkind: Pod\nmetadata:\n  name: privilegie\n"

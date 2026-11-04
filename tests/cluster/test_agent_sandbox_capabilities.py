@@ -5,7 +5,7 @@ doing its part. What it cannot do from outside the cluster is push an assignment
 that part is `test_agent_sandbox_executor.py`, which pushes from a pod.
 
 Each test carries `@pytest.mark.capability(executor, name)`: the conformance suite
-(`tests/conformance/executeurs/test_cluster_proofs.py`) refuses an executor that announces a
+(`tests/conformance/executors/test_cluster_proofs.py`) refuses an executor that announces a
 capability no cluster test carries — an announced, absent capability is worse than an absent one.
 """
 

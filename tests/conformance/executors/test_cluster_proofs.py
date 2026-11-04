@@ -1,7 +1,7 @@
 """S35-04 — a capability an executor announces must have its test on a real cluster.
 
 ADR 0013 refused an executor announcing a capability it does not IMPLEMENT
-(`test_capacites.py`). ADR 0016 asked for more before `agent_sandbox` announced anything: a
+(`test_capabilities.py`). ADR 0016 asked for more before `agent_sandbox` announced anything: a
 capability is proved where it runs, by `tests/cluster`. This is the rule that makes the request
 hold: every capability an executor announces is carried by at least one test in `tests/cluster`
 marked `@pytest.mark.capability(executor, capability)`, in a module marked `cluster`. Announce a
@@ -22,7 +22,7 @@ from collections.abc import Mapping
 import pytest
 from choregos_adapters import available, build
 
-from .test_capacites import CONFIGS
+from .test_capabilities import CONFIGS
 
 pytestmark = pytest.mark.conformance
 

@@ -51,32 +51,32 @@ class Operation:
 @dataclass
 class Cas:
     operations: list[Operation]
-    appeler: Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
-    etat: Callable[[], Any]
+    call: Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]]
+    state: Callable[[], Any]
     client: Any
     #: example values specific to one operation, when the family's would contradict each other
     surcharges: dict[str, dict[str, Any]] = field(default_factory=dict)
 
-    def parametres(self, operation: Operation, *, tout: bool = True) -> dict[str, Any]:
+    def params(self, operation: Operation, *, everything: bool = True) -> dict[str, Any]:
         schema = operation.schema
         requis = set(schema.get("required", []))
-        valeurs = {
-            nom: _exemple(nom, sous_schema)
-            for nom, sous_schema in schema.get("properties", {}).items()
-            if tout or nom in requis
+        values = {
+            name: _example(name, sous_schema)
+            for name, sous_schema in schema.get("properties", {}).items()
+            if everything or name in requis
         }
-        valeurs.update(
-            {k: v for k, v in self.surcharges.get(operation.name, {}).items() if tout or k in requis}
+        values.update(
+            {k: v for k, v in self.surcharges.get(operation.name, {}).items() if everything or k in requis}
         )
-        return valeurs
+        return values
 
 
-def _exemple(nom: str, schema: dict[str, Any]) -> Any:
+def _example(name: str, schema: dict[str, Any]) -> Any:
     """A value drawn from the property NAME: from one operation to the next, `serial` or `upn`
     designate the same workstation, the same account — the suite plays a coherent story."""
     match schema.get("type"):
         case "array":
-            return [_exemple(nom, schema.get("items") or {"type": "string"})]
+            return [_example(name, schema.get("items") or {"type": "string"})]
         case "integer":
             return 1
         case "boolean":
@@ -84,7 +84,7 @@ def _exemple(nom: str, schema: dict[str, Any]) -> Any:
         case "object":
             return {}
         case _:
-            return f"{nom}-1"
+            return f"{name}-1"
 
 
 def _typees(famille: str) -> list[Operation]:
@@ -95,31 +95,31 @@ def _typees(famille: str) -> list[Operation]:
     return [Operation(o.name, o.access, dict(o.input_schema or {})) for o in spec.operations]
 
 
-async def _typee(famille: str, cle: str, monkeypatch: pytest.MonkeyPatch) -> Cas:
+async def _typee(famille: str, key: str, monkeypatch: pytest.MonkeyPatch) -> Cas:
     """A `<family>: demo` connector, built by the registry, as the platform does."""
     import choregos_adapters
     from choregos_adapters import build
     from choregos_adapters.fakes.rh import FAUX_PAR_FAMILLE
 
-    faux = FAUX_PAR_FAMILLE[famille](cle_attendue=SECRET)
-    monkeypatch.setitem(choregos_adapters.FAUX_METIER, famille, faux)
-    client = build(famille, "demo", {"api_key": cle})
+    fake = FAUX_PAR_FAMILLE[famille](cle_attendue=SECRET)
+    monkeypatch.setitem(choregos_adapters.FAUX_METIER, famille, fake)
+    client = build(famille, "demo", {"api_key": key})
     surcharges = {"create_return": {"reference": "reference-retour"}}
-    return Cas(_typees(f"{famille}/demo"), client.executer, faux.etat, client, surcharges)
+    return Cas(_typees(f"{famille}/demo"), client.executer, fake.etat, client, surcharges)
 
 
-async def _en_mcp(faux: Any, cle: str) -> Cas:
+async def _en_mcp(fake: Any, key: str) -> Cas:
     """The same fake, served over MCP: its tools are discovered, and the client calls them."""
     from choregos_adapters.fakes.rh import serveur_mcp
     from choregos_adapters.mcp import ClientMcp
 
-    client = ClientMcp(URL, token=cle, transport=serveur_mcp(faux, jeton=SECRET).transport())
+    client = ClientMcp(URL, token=key, transport=serveur_mcp(fake, jeton=SECRET).transport())
 
-    async def appeler(nom: str, params: dict[str, Any]) -> dict[str, Any]:
-        resultat = await client.call_tool(nom, params)
-        if resultat.get("isError"):
-            raise AdapterError(str(resultat["content"][0]["text"]))
-        return dict(resultat["structuredContent"])
+    async def call(name: str, params: dict[str, Any]) -> dict[str, Any]:
+        result = await client.call_tool(name, params)
+        if result.get("isError"):
+            raise AdapterError(str(result["content"][0]["text"]))
+        return dict(result["structuredContent"])
 
     async def decouvrir() -> list[Operation]:
         return [
@@ -127,13 +127,13 @@ async def _en_mcp(faux: Any, cle: str) -> Cas:
             for o in await client.list_tools()
         ]
 
-    cas = Cas([], appeler, faux.etat, client, {"create_return": {"reference": "reference-retour"}})
-    if cle == SECRET:
+    cas = Cas([], call, fake.etat, client, {"create_return": {"reference": "reference-retour"}})
+    if key == SECRET:
         cas.operations = await decouvrir()
     return cas
 
 
-async def _servie(famille: str, cle: str) -> Cas:
+async def _servie(famille: str, key: str) -> Cas:
     """A `demo` connector that carries a `url`: the fake served by ONE process (`fakes/serveur.py`),
     what the dev deploys — its operations are the family's, declared, not discovered."""
     import httpx
@@ -143,13 +143,13 @@ async def _servie(famille: str, cle: str) -> Cas:
 
     app = ApplicationDeDemo(jeton=SECRET)
     client = GuichetDistant(
-        ClientMcp(f"http://demo/{famille}/mcp", token=cle, transport=httpx.ASGITransport(app=app))
+        ClientMcp(f"http://demo/{famille}/mcp", token=key, transport=httpx.ASGITransport(app=app))
     )
     surcharges = {"create_return": {"reference": "reference-retour"}}
     return Cas(_typees(f"{famille}/demo"), client.executer, app.faux[famille].etat, client, surcharges)
 
 
-async def _entra(cle: str) -> Cas:
+async def _entra(key: str) -> Cas:
     from choregos_adapters.fakes.entra import FakeEntra
     from choregos_adapters.identity import EntraIdentity
 
@@ -157,12 +157,12 @@ async def _entra(cle: str) -> Cas:
     client = EntraIdentity(
         tenant_id="acme",
         client_id="choregos",
-        client_secret=cle,
+        client_secret=key,
         administrative_unit_id=graph.unite,
         transport=graph.transport(),
     )
 
-    def etat() -> Any:
+    def state() -> Any:
         import copy
 
         return copy.deepcopy(
@@ -174,21 +174,21 @@ async def _entra(cle: str) -> Cas:
             }
         )
 
-    return Cas(_typees("identity/entra"), client.executer, etat, client)
+    return Cas(_typees("identity/entra"), client.executer, state, client)
 
 
-async def ouvrir(nom: str, monkeypatch: pytest.MonkeyPatch, cle: str = SECRET) -> Cas:
+async def ouvrir(name: str, monkeypatch: pytest.MonkeyPatch, key: str = SECRET) -> Cas:
     from choregos_adapters.fakes.rh import FAUX_PAR_FAMILLE, FakeFournisseur
 
-    forme, _, famille = nom.partition(":")
+    forme, _, famille = name.partition(":")
     if forme == "demo":
-        return await _typee(famille, cle, monkeypatch)
+        return await _typee(famille, key, monkeypatch)
     if forme == "mcp":
-        faux = FakeFournisseur() if famille == "fournisseur" else FAUX_PAR_FAMILLE[famille]()
-        return await _en_mcp(faux, cle)
+        fake = FakeFournisseur() if famille == "fournisseur" else FAUX_PAR_FAMILLE[famille]()
+        return await _en_mcp(fake, key)
     if forme == "servi":
-        return await _servie(famille, cle)
-    return await _entra(cle)
+        return await _servie(famille, key)
+    return await _entra(key)
 
 
 CAS = [
@@ -206,28 +206,28 @@ CAS = [
 ]
 
 
-@pytest.mark.parametrize("nom", CAS)
-async def test_chaque_operation_declare_un_schema_ferme_que_l_implementation_suit(
-    nom: str, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("name", CAS)
+async def test_each_operation_declares_a_closed_schema_the_implementation_follows(
+    name: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    cas = await ouvrir(nom, monkeypatch)
-    assert cas.operations, f"{nom} announces no operation"
+    cas = await ouvrir(name, monkeypatch)
+    assert cas.operations, f"{name} announces no operation"
     assert {o.access for o in cas.operations} == {"read", "write"}, "a family reads and writes"
     for operation in cas.operations:
         Draft202012Validator.check_schema(operation.schema)
         assert operation.schema.get("type") == "object"
         assert operation.schema.get("additionalProperties") is False, (
-            f"{nom}/{operation.name}: an unexpected argument must be refused before the call"
+            f"{name}/{operation.name}: an unexpected argument must be refused before the call"
         )
         assert set(operation.schema.get("required", [])) <= set(operation.schema.get("properties", {}))
-    for tout in (True, False):
-        cas = await ouvrir(nom, monkeypatch)
+    for everything in (True, False):
+        cas = await ouvrir(name, monkeypatch)
         for operation in cas.operations:
-            params = cas.parametres(operation, tout=tout)
+            params = cas.params(operation, everything=everything)
             Draft202012Validator(operation.schema).validate(params)
-            resultat = await cas.appeler(operation.name, params)
-            assert isinstance(resultat, dict), f"{nom}/{operation.name} returns an object"
-            json.dumps(resultat)
+            result = await cas.call(operation.name, params)
+            assert isinstance(result, dict), f"{name}/{operation.name} returns an object"
+            json.dumps(result)
 
 
 #: The JSON type of each Python annotation of a parameter.
@@ -243,8 +243,8 @@ def _type_json(annotation: Any) -> str:
     return TYPES_JSON[typing.get_origin(annotation) or annotation]
 
 
-@pytest.mark.parametrize("nom", ["demo:mdm", "demo:shipping", "demo:access_control", "entra"])
-def test_le_schema_et_la_signature_disent_la_meme_chose(nom: str) -> None:
+@pytest.mark.parametrize("name", ["demo:mdm", "demo:shipping", "demo:access_control", "entra"])
+def test_the_schema_and_the_signature_say_the_same_thing(name: str) -> None:
     """What the family declares, the implementation takes: the same parameters, required when they
     have no default value, of the same type."""
     import inspect
@@ -253,72 +253,72 @@ def test_le_schema_et_la_signature_disent_la_meme_chose(nom: str) -> None:
     from choregos_adapters.fakes.rh import FAUX_PAR_FAMILLE
     from choregos_adapters.identity import EntraIdentity
 
-    forme, _, famille = nom.partition(":")
+    forme, _, famille = name.partition(":")
     implementation: type[Any] = FAUX_PAR_FAMILLE[famille] if forme == "demo" else EntraIdentity
     for operation in _typees(f"{famille}/demo" if forme == "demo" else "identity/entra"):
         methode = getattr(implementation, operation.name)
-        parametres = [
+        params = [
             p
             for p in inspect.signature(methode).parameters.values()
             if p.name != "self" and p.kind is not inspect.Parameter.VAR_KEYWORD
         ]
         types_python = typing.get_type_hints(methode)
         proprietes = operation.schema.get("properties", {})
-        assert {p.name for p in parametres} == set(proprietes), f"{nom}/{operation.name}"
-        assert {p.name for p in parametres if p.default is inspect.Parameter.empty} == set(
+        assert {p.name for p in params} == set(proprietes), f"{name}/{operation.name}"
+        assert {p.name for p in params if p.default is inspect.Parameter.empty} == set(
             operation.schema.get("required", [])
-        ), f"{nom}/{operation.name}: required on one side, optional on the other"
-        for parametre in parametres:
-            attendu = proprietes[parametre.name].get("type")
-            assert _type_json(types_python[parametre.name]) == attendu, (
-                f"{nom}/{operation.name}.{parametre.name}"
+        ), f"{name}/{operation.name}: required on one side, optional on the other"
+        for parametre in params:
+            expected = proprietes[parametre.name].get("type")
+            assert _type_json(types_python[parametre.name]) == expected, (
+                f"{name}/{operation.name}.{parametre.name}"
             )
 
 
-@pytest.mark.parametrize("nom", CAS)
-async def test_une_ecriture_rejouee_ne_change_rien_et_une_lecture_n_ecrit_pas(
-    nom: str, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("name", CAS)
+async def test_a_replayed_write_changes_nothing_and_a_read_writes_nothing(
+    name: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    cas = await ouvrir(nom, monkeypatch)
+    cas = await ouvrir(name, monkeypatch)
     for operation in cas.operations:
-        params = cas.parametres(operation)
-        avant = cas.etat()
-        await cas.appeler(operation.name, params)
-        apres = cas.etat()
+        params = cas.params(operation)
+        avant = cas.state()
+        await cas.call(operation.name, params)
+        after = cas.state()
         if operation.access == "read":
-            assert apres == avant, f"{nom}/{operation.name} is a read, and wrote"
+            assert after == avant, f"{name}/{operation.name} is a read, and wrote"
             # What does not exist reads as absent: no error, and nothing created.
             inconnu = {k: f"{v}-inconnu" if isinstance(v, str) else v for k, v in params.items()}
-            await cas.appeler(operation.name, inconnu)
-            assert cas.etat() == apres, f"{nom}/{operation.name} created what it was asked to read"
+            await cas.call(operation.name, inconnu)
+            assert cas.state() == after, f"{name}/{operation.name} created what it was asked to read"
             continue
-        assert apres != avant, f"{nom}/{operation.name} wrote nothing: its idempotence proves nothing"
-        await cas.appeler(operation.name, params)
-        assert cas.etat() == apres, f"{nom}/{operation.name}, replayed, changed the state"
+        assert after != avant, f"{name}/{operation.name} wrote nothing: its idempotence proves nothing"
+        await cas.call(operation.name, params)
+        assert cas.state() == after, f"{name}/{operation.name}, replayed, changed the state"
 
 
-@pytest.mark.parametrize("nom", CAS)
-async def test_la_cle_sert_et_n_apparait_nulle_part(
-    nom: str, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+@pytest.mark.parametrize("name", CAS)
+async def test_the_key_is_used_and_appears_nowhere(
+    name: str, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     caplog.set_level(logging.DEBUG)
-    with structlog.testing.capture_logs() as evenements:
-        cas = await ouvrir(nom, monkeypatch)
-        resultats: list[Any] = [await cas.appeler(o.name, cas.parametres(o)) for o in cas.operations]
-        resultats.append(await cas.client.test())
-        intrus = await ouvrir(nom, monkeypatch, cle=MAUVAISE)
+    with structlog.testing.capture_logs() as events:
+        cas = await ouvrir(name, monkeypatch)
+        results: list[Any] = [await cas.call(o.name, cas.params(o)) for o in cas.operations]
+        results.append(await cas.client.test())
+        intrus = await ouvrir(name, monkeypatch, key=MAUVAISE)
         premiere = cas.operations[0]
-        with pytest.raises(Exception) as refus:
-            await intrus.appeler(premiere.name, intrus.parametres(premiere))
-    code = getattr(refus.value, "status_code", None) or getattr(refus.value, "code", None)
-    assert code == 401, f"{nom}: a wrong key gets through — the key is useless, hiding it proves nothing"
+        with pytest.raises(Exception) as refusal:
+            await intrus.call(premiere.name, intrus.params(premiere))
+    code = getattr(refusal.value, "status_code", None) or getattr(refusal.value, "code", None)
+    assert code == 401, f"{name}: a wrong key gets through — the key is useless, hiding it proves nothing"
     traces = [
         *(r.getMessage() for r in caplog.records),
-        *(repr(e) for e in evenements),
-        *(json.dumps(r, default=str) for r in resultats),
-        str(refus.value),
+        *(repr(e) for e in events),
+        *(json.dumps(r, default=str) for r in results),
+        str(refusal.value),
         repr(cas.client),
         repr(intrus.client),
     ]
     fuites = [t for t in traces if SECRET in t or MAUVAISE in t]
-    assert fuites == [], f"{nom}: a key can be read in {fuites[:3]}"
+    assert fuites == [], f"{name}: a key can be read in {fuites[:3]}"

@@ -96,7 +96,7 @@ async def test_context_pack_injecte_et_trace(platform: Platform) -> None:
     assert any("rounded" in content.lower() for content in contents), pack
 
 
-async def test_une_panne_memoire_ne_bloque_pas_un_stage(platform: Platform) -> None:
+async def test_a_memory_outage_does_not_block_a_stage(platform: Platform) -> None:
     """Proof before dependency: without memory, the platform carries on with an empty pack."""
     await login(platform.client)
     platform.adapters.memory.fail = True
@@ -136,7 +136,7 @@ async def test_une_panne_memoire_ne_bloque_pas_un_stage(platform: Platform) -> N
         assert run.stage_input is not None, "the stage is ready despite the memory outage"
 
 
-async def test_matrice_d_evals_publiee_et_opposable(platform: Platform) -> None:
+async def test_evals_matrix_published_and_enforceable(platform: Platform) -> None:
     """An unvalidated combination is refused at registration, with a clear message."""
     await login(platform.client)
     from choregos_orchestrator.activities import evals as eval_activities
@@ -212,7 +212,7 @@ async def test_the_matrix_shows_the_four_context_cells_with_their_tokens(platfor
     assert "details" not in shown["none"], "the matrix shows its own fields, not the cell's journal"
 
 
-async def test_changement_de_modele_sans_redeploiement(platform: Platform) -> None:
+async def test_model_change_without_redeployment(platform: Platform) -> None:
     """A project changes profile through the API: no redeployment, the resolution follows."""
     await login(platform.client)
     response = await platform.client.put(

@@ -1,7 +1,7 @@
 # The HR scenario on the dev tenant - results of 2026-10-06
 
 **Question**: does the `joiners-leavers` template hold on the deployed dev tenant, in 0.16.1, as
-it holds in the accelerated-time e2e (`tests/e2e/test_m6_rh.py`)?
+it holds in the accelerated-time e2e (`tests/e2e/test_m6_hr.py`)?
 
 **Answer, up to the first human decision: yes**, after a fix to the script. The rest -
 the HR approval, the sensitive group, the laptop order, the "badge" task - waits for

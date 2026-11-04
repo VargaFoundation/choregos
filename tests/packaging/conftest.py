@@ -43,21 +43,21 @@ def brancher() -> None:
 
 
 @pytest.fixture
-def roue_ee(tmp_path: pathlib.Path) -> pathlib.Path:
+def ee_wheel(tmp_path: pathlib.Path) -> pathlib.Path:
     """Build a real wheel with `uv build`, as the private repository's CI would."""
     source = tmp_path / "src" / "choregos_ee"
     source.mkdir(parents=True)
     (source / "__init__.py").write_text(MODULE, encoding="utf-8")
     (tmp_path / "pyproject.toml").write_text(PYPROJECT, encoding="utf-8")
 
-    fait = subprocess.run(
+    completed = subprocess.run(
         ["uv", "build", "--wheel", "-o", "dist"],
         cwd=tmp_path,
         capture_output=True,
         text=True,
         check=False,
     )
-    assert fait.returncode == 0, f"the wheel does not build:\n{fait.stderr[-800:]}"
+    assert completed.returncode == 0, f"the wheel does not build:\n{completed.stderr[-800:]}"
     roues = list((tmp_path / "dist").glob("*.whl"))
     assert len(roues) == 1, roues
     return roues[0]

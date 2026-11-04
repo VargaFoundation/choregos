@@ -106,7 +106,7 @@ async def wait_for(executor: AcaExecutor, ref: ExecRef, states: set[str], timeou
     raise AssertionError(f"state {sorted(states)} never reached — last seen: {last}")
 
 
-async def test_un_job_demarre_et_son_etat_terminal_remonte(executor: AcaExecutor) -> None:
+async def test_a_job_starts_and_its_terminal_state_comes_back(executor: AcaExecutor) -> None:
     """The full cycle: creation, trigger, terminal state observed, consistent timestamps.
 
     The timeout is deliberately short (one minute): its expiry is what ends the execution, and a
@@ -134,7 +134,7 @@ async def test_un_job_demarre_et_son_etat_terminal_remonte(executor: AcaExecutor
         await cleanup(executor, ref.name)
 
 
-async def test_start_rejoue_ne_double_pas_l_execution(executor: AcaExecutor) -> None:
+async def test_a_replayed_start_does_not_double_the_execution(executor: AcaExecutor) -> None:
     """The property that costs money if it is false.
 
     The orchestrator replays an activity after a crash; if `start` re-triggered the job, the
@@ -153,7 +153,7 @@ async def test_start_rejoue_ne_double_pas_l_execution(executor: AcaExecutor) -> 
         await cleanup(executor, ref.name)
 
 
-async def test_le_jeton_de_run_n_apparait_pas_dans_arm(executor: AcaExecutor) -> None:
+async def test_the_run_token_does_not_appear_in_arm(executor: AcaExecutor) -> None:
     """An `az containerapp job show` must not return the token.
 
     It goes out as a job *secret*, referenced by `secretRef`: ARM returns the secret's name, not
@@ -179,7 +179,7 @@ async def test_le_jeton_de_run_n_apparait_pas_dans_arm(executor: AcaExecutor) ->
         await cleanup(executor, ref.name)
 
 
-async def test_une_execution_peut_etre_annulee(executor: AcaExecutor) -> None:
+async def test_an_execution_can_be_cancelled(executor: AcaExecutor) -> None:
     """`cancel` stops the running execution — stopping an expensive run must be immediate."""
     run_id = f"live-{uuid.uuid4().hex[:8]}"
     ref = await executor.start(spec(run_id, timeout_minutes=5))
@@ -197,7 +197,7 @@ async def test_une_execution_peut_etre_annulee(executor: AcaExecutor) -> None:
         await cleanup(executor, ref.name)
 
 
-async def test_un_job_inexistant_est_une_absence_pas_une_panne(executor: AcaExecutor) -> None:
+async def test_a_missing_job_is_an_absence_not_a_failure(executor: AcaExecutor) -> None:
     """ARM answers 404; the executor must translate it into "nothing", not an exception."""
     ref = ExecRef(
         kind=executor.kind,
@@ -210,7 +210,7 @@ async def test_un_job_inexistant_est_une_absence_pas_une_panne(executor: AcaExec
     assert "aucune exécution" in status.message  # lang: fr-ok (product output)
 
 
-async def test_les_logs_disent_ou_regarder_sans_workspace(executor: AcaExecutor) -> None:
+async def test_the_logs_say_where_to_look_without_a_workspace(executor: AcaExecutor) -> None:
     """Without a configured workspace, `logs()` explains where to look instead of returning silence."""
     ref = ExecRef(
         kind=executor.kind,

@@ -28,14 +28,14 @@ from .conftest import Platform, login
 pytestmark = [pytest.mark.e2e, pytest.mark.asyncio]
 
 ORG = "/api/v1/orgs/varga"
-CLE_ANNUAIRE = "secret-de-l-application-entra"
-CLE_PARC = "cle-du-parc"
-CLE_FOURNISSEUR = "jeton-du-fournisseur"
+KEY_DIRECTORY = "secret-de-l-application-entra"
+KEY_FLEET = "cle-du-parc"
+KEY_SUPPLIER = "jeton-du-fournisseur"
 ATTESTATION_BADGE = "I handed the badge to its holder in person"
 ATTESTATION_RECEPTION = "I received this laptop and checked its serial number"
 
 
-class Faux:
+class Fakes:
     """The systems the HR scenario touches, each with the key it expects."""
 
     def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -49,51 +49,51 @@ class Faux:
             serveur_mcp,
         )
 
-        self.annuaire = FakeEntra(secret_attendu=CLE_ANNUAIRE)
-        self.parc = FakeMdm(cle_attendue=CLE_PARC)
-        self.transporteur = FakeTransporteur(cle_attendue=CLE_PARC)
-        self.lecteurs = FakeBadges(cle_attendue=CLE_PARC)
-        self.fournisseur = FakeFournisseur()
-        self.serveur = serveur_mcp(self.fournisseur, jeton=CLE_FOURNISSEUR)
-        monkeypatch.setattr(choregos_adapters, "FAUX_ENTRA", self.annuaire)
-        monkeypatch.setattr(choregos_adapters, "FAKE_MCP", self.serveur)
-        for famille, faux in (
-            ("mdm", self.parc),
-            ("shipping", self.transporteur),
-            ("access_control", self.lecteurs),
+        self.directory = FakeEntra(secret_attendu=KEY_DIRECTORY)
+        self.fleet = FakeMdm(cle_attendue=KEY_FLEET)
+        self.carrier = FakeTransporteur(cle_attendue=KEY_FLEET)
+        self.readers = FakeBadges(cle_attendue=KEY_FLEET)
+        self.supplier = FakeFournisseur()
+        self.server = serveur_mcp(self.supplier, jeton=KEY_SUPPLIER)
+        monkeypatch.setattr(choregos_adapters, "FAUX_ENTRA", self.directory)
+        monkeypatch.setattr(choregos_adapters, "FAKE_MCP", self.server)
+        for famille, fake in (
+            ("mdm", self.fleet),
+            ("shipping", self.carrier),
+            ("access_control", self.readers),
         ):
-            monkeypatch.setitem(choregos_adapters.FAUX_METIER, famille, faux)
-        monkeypatch.setenv("CONNECTOR_E2E_CLE_ANNUAIRE", CLE_ANNUAIRE)
-        monkeypatch.setenv("CONNECTOR_E2E_CLE_PARC", CLE_PARC)
-        monkeypatch.setenv("CONNECTOR_E2E_CLE_FOURNISSEUR", CLE_FOURNISSEUR)
+            monkeypatch.setitem(choregos_adapters.FAUX_METIER, famille, fake)
+        monkeypatch.setenv("CONNECTOR_E2E_KEY_DIRECTORY", KEY_DIRECTORY)
+        monkeypatch.setenv("CONNECTOR_E2E_KEY_FLEET", KEY_FLEET)
+        monkeypatch.setenv("CONNECTOR_E2E_KEY_SUPPLIER", KEY_SUPPLIER)
 
 
 @pytest.fixture
-def faux(monkeypatch: pytest.MonkeyPatch) -> Faux:
-    return Faux(monkeypatch)
+def fake(monkeypatch: pytest.MonkeyPatch) -> Fakes:
+    return Fakes(monkeypatch)
 
 
 async def _organisation(client: AsyncClient) -> None:
     """The administrator's gesture: the five connectors the template announces, their keys by
     reference, and what the organisation allows without a human decision."""
-    for corps in (
+    for body in (
         {"name": "directory", "kind": "identity", "type": "entra",
          "config": {"tenant_id": "acme", "client_id": "choregos"},
-         "secret_refs": {"client_secret": "env:CONNECTOR_E2E_CLE_ANNUAIRE"}},
+         "secret_refs": {"client_secret": "env:CONNECTOR_E2E_KEY_DIRECTORY"}},
         {"name": "devices", "kind": "mdm", "type": "demo",
-         "secret_refs": {"api_key": "env:CONNECTOR_E2E_CLE_PARC"}},
+         "secret_refs": {"api_key": "env:CONNECTOR_E2E_KEY_FLEET"}},
         {"name": "carrier", "kind": "shipping", "type": "demo",
-         "secret_refs": {"api_key": "env:CONNECTOR_E2E_CLE_PARC"}},
+         "secret_refs": {"api_key": "env:CONNECTOR_E2E_KEY_FLEET"}},
         {"name": "badge-readers", "kind": "access_control", "type": "demo",
-         "secret_refs": {"api_key": "env:CONNECTOR_E2E_CLE_PARC"}},
+         "secret_refs": {"api_key": "env:CONNECTOR_E2E_KEY_FLEET"}},
         {"name": "supplier", "kind": "mcp", "type": "mcp", "config": {"url": "https://supplier.test/mcp"},
-         "secret_refs": {"token": "env:CONNECTOR_E2E_CLE_FOURNISSEUR"}},
+         "secret_refs": {"token": "env:CONNECTOR_E2E_KEY_SUPPLIER"}},
     ):  # fmt: skip
-        cree = await client.post(f"{ORG}/connectors", json=corps)
+        cree = await client.post(f"{ORG}/connectors", json=body)
         assert cree.status_code == 201, cree.text
     # The supplier's tools are DISCOVERED, and are born closed.
-    decouverte = await client.post(f"{ORG}/connectors/supplier/discover")
-    assert decouverte.status_code == 200, decouverte.text
+    discovery = await client.post(f"{ORG}/connectors/supplier/discover")
+    assert discovery.status_code == 200, discovery.text
     operations = {
         o["name"]: o["policy"] for o in (await client.get(f"{ORG}/connectors/supplier")).json()["operations"]
     }
@@ -106,10 +106,10 @@ async def _organisation(client: AsyncClient) -> None:
         "carrier": ["create_shipment", "create_return"],
         "badge-readers": ["activate_badge", "deactivate_badge"],
     }
-    for connecteur, noms in permises.items():
-        for nom in noms:
+    for connector, names in permises.items():
+        for name in names:
             ouverte = await client.patch(
-                f"{ORG}/connectors/{connecteur}/operations/{nom}", json={"policy": "allowed"}
+                f"{ORG}/connectors/{connector}/operations/{name}", json={"policy": "allowed"}
             )
             assert ouverte.status_code == 200, ouverte.text
     # A purchase is decided: the laptop order stays under approval.
@@ -119,7 +119,7 @@ async def _organisation(client: AsyncClient) -> None:
     assert sous_validation.status_code == 200, sous_validation.text
 
 
-async def _projet_rh(client: AsyncClient) -> dict[str, Any]:
+async def _hr_project(client: AsyncClient) -> dict[str, Any]:
     cree = await client.post(
         f"{ORG}/projects",
         json={
@@ -130,38 +130,38 @@ async def _projet_rh(client: AsyncClient) -> dict[str, Any]:
         },
     )
     assert cree.status_code == 201, cree.text
-    projet = dict(cree.json())
+    project = dict(cree.json())
     tracker = await client.put(
-        f"/api/v1/projects/{projet['id']}/connectors/tracker", json={"type": "internal", "config": {}}
+        f"/api/v1/projects/{project['id']}/connectors/tracker", json={"type": "internal", "config": {}}
     )
     assert tracker.status_code == 200, tracker.text
-    return projet
+    return project
 
 
-async def _par_claude(platform: Platform, client: AsyncClient, champs: dict[str, Any]) -> dict[str, Any]:
+async def _par_claude(platform: Platform, client: AsyncClient, fields: dict[str, Any]) -> dict[str, Any]:
     """The request, filed by an HR person's Claude: an `mcp:write` token, the project's door."""
-    jeton = (
+    token = (
         await client.post("/api/v1/me/tokens", json={"name": "claude-de-la-rh", "scopes": ["mcp:write"]})
     ).json()
     claude = AsyncClient(transport=client._transport, base_url="http://e2e")
     try:
-        appel = await claude.post(
+        call = await claude.post(
             "/mcp/projects/varga:rh",
-            headers={"Authorization": f"Bearer {jeton['token']}"},
+            headers={"Authorization": f"Bearer {token['token']}"},
             json={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
                   "params": {"name": "create_work_item",
-                             "arguments": {"title": f"Arrival of {champs['full_name']}",
-                                           "workflow": "onboarding", "fields": champs}}},
+                             "arguments": {"title": f"Arrival of {fields['full_name']}",
+                                           "workflow": "onboarding", "fields": fields}}},
         )  # fmt: skip
     finally:
         await claude.aclose()
-    assert appel.status_code == 200, appel.text
-    resultat = appel.json()["result"]
-    assert resultat["isError"] is False, resultat
-    return dict(resultat["structuredContent"])
+    assert call.status_code == 200, call.text
+    result = call.json()["result"]
+    assert result["isError"] is False, result
+    return dict(result["structuredContent"])
 
 
-async def _demarrer(platform: Platform, projet: dict[str, Any], ticket: dict[str, Any]) -> Any:
+async def _start(platform: Platform, project: dict[str, Any], ticket: dict[str, Any]) -> Any:
     """The scenario starts the interpreter on the workers' queue, under the API's identifier."""
     from choregos_api.temporal import interpreter_id
     from choregos_core.domain import WorkItemData
@@ -171,23 +171,23 @@ async def _demarrer(platform: Platform, projet: dict[str, Any], ticket: dict[str
     )
     return await platform.env.client.start_workflow(
         "WorkflowInterpreter",
-        {"project_id": projet["id"], "project_slug": "rh", "work_item_id": ticket["work_item"],
+        {"project_id": project["id"], "project_slug": "rh", "work_item_id": ticket["work_item"],
          "tracker_key": ticket["key"]},
         id=interpreter_id("rh", ticket["key"]),
         task_queue="e2e",
     )  # fmt: skip
 
 
-async def _etat(client: AsyncClient, ticket_id: str, attendu: str, quoi: str) -> dict[str, Any]:
+async def _state(client: AsyncClient, ticket_id: str, expected: str, quoi: str) -> dict[str, Any]:
     for _ in range(400):
         lu = (await client.get(f"/api/v1/work-items/{ticket_id}")).json()
-        if lu["state"] == attendu:
+        if lu["state"] == expected:
             return dict(lu)
         await asyncio.sleep(0.05)
-    raise AssertionError(f"{quoi}: the ticket is in `{lu['state']}`, not in `{attendu}`")
+    raise AssertionError(f"{quoi}: the ticket is in `{lu['state']}`, not in `{expected}`")
 
 
-async def _demande(client: AsyncClient, ticket_id: str) -> dict[str, Any]:
+async def _request(client: AsyncClient, ticket_id: str) -> dict[str, Any]:
     """The human request the interpreter has just opened on the ticket."""
     for _ in range(400):
         lu = (await client.get(f"/api/v1/work-items/{ticket_id}")).json()
@@ -197,116 +197,118 @@ async def _demande(client: AsyncClient, ticket_id: str) -> dict[str, Any]:
     raise AssertionError("no human request open")
 
 
-async def _attendre(handle: Any, predicat: Any, quoi: str) -> dict[str, Any]:
+async def _wait_for(handle: Any, predicat: Any, quoi: str) -> dict[str, Any]:
     for _ in range(400):
-        statut = await handle.query("status")
-        if predicat(statut):
-            return dict(statut)
+        status = await handle.query("status")
+        if predicat(status):
+            return dict(status)
         await asyncio.sleep(0.05)
     raise AssertionError(f"{quoi}: never true ({await handle.query('status')})")
 
 
-async def _approuver_l_action(client: AsyncClient, projet: dict[str, Any], genre: str) -> dict[str, Any]:
+async def _approuver_l_action(client: AsyncClient, project: dict[str, Any], genre: str) -> dict[str, Any]:
     """The pending action of this kind, approved by a re-authenticated person."""
     for _ in range(400):
-        attente = (
+        waiting = (
             await client.get(
-                f"/api/v1/projects/{projet['id']}/actions", params={"status": "pending_approval"}
+                f"/api/v1/projects/{project['id']}/actions", params={"status": "pending_approval"}
             )
         ).json()
-        trouvees = [a for a in attente if a["kind"] == genre]
+        trouvees = [a for a in waiting if a["kind"] == genre]
         if trouvees:
             break
         await asyncio.sleep(0.05)
     else:
         raise AssertionError(f"no `{genre}` action pending")
     decidee = await client.post(
-        f"/api/v1/projects/{projet['id']}/actions/{trouvees[0]['id']}/decision", json={"decision": "approve"}
+        f"/api/v1/projects/{project['id']}/actions/{trouvees[0]['id']}/decision", json={"decision": "approve"}
     )
     assert decidee.status_code == 200 and decidee.json()["status"] == "approved", decidee.text
     return dict(decidee.json())
 
 
-async def _actions(client: AsyncClient, projet: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    return {a["kind"]: a for a in (await client.get(f"/api/v1/projects/{projet['id']}/actions")).json()}
+async def _actions(client: AsyncClient, project: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {a["kind"]: a for a in (await client.get(f"/api/v1/projects/{project['id']}/actions")).json()}
 
 
-def _plan(nom: str) -> StageResult:
+def _plan(name: str) -> StageResult:
     return StageResult(
-        status=StageStatus.DONE, summary="plan ready", outputs={nom: f"## {nom}\n- nothing unusual"}
+        status=StageStatus.DONE, summary="plan ready", outputs={name: f"## {name}\n- nothing unusual"}
     )
 
 
-async def test_une_arrivee_de_la_demande_par_claude_au_controle_a_j_plus_1(
-    platform: Platform, worker: Any, faux: Faux
+async def test_an_arrival_from_the_request_by_claude_to_the_check_on_d1(
+    platform: Platform, worker: Any, fake: Fakes
 ) -> None:
     client = platform.client
     await login(client)
     await _organisation(client)
-    projet = await _projet_rh(client)
-    debut = await platform.env.get_current_time()
-    arrivee = (debut + timedelta(days=15)).date()
-    champs = {
+    project = await _hr_project(client)
+    start = await platform.env.get_current_time()
+    arrival = (start + timedelta(days=15)).date()
+    fields = {
         "full_name": "Léa Martin",
         "upn": "lea@acme.test",
-        "start_date": arrivee.isoformat(),
+        "start_date": arrival.isoformat(),
         "job": "Developer",
         "group": "devs",
         "sensitive_group": "prod-read",
         "address": "12 Peace Street, Paris",
     }
-    ticket = await _par_claude(platform, client, champs)
+    ticket = await _par_claude(platform, client, fields)
 
     async with worker():
         platform.adapters.executor.queue_result(_plan("access_plan"))
-        interprete = await _demarrer(platform, projet, ticket)
-        await _etat(client, ticket["work_item"], "planned", "the registry agent prepared the plan")
-        await _demande(client, ticket["work_item"])
+        interprete = await _start(platform, project, ticket)
+        await _state(client, ticket["work_item"], "planned", "the registry agent prepared the plan")
+        await _request(client, ticket["work_item"])
         assert (
             await client.post(f"/api/v1/work-items/{ticket['work_item']}/decisions", json={"kind": "approve"})
         ).status_code == 202
 
         # D-10: the policy allowed the account and its group — the action is born approved and plays.
-        statut = await _attendre(interprete, lambda s: s.get("waiting_until"), "D-10 awaited")
-        assert statut["waiting_until"].startswith((arrivee - timedelta(days=10)).isoformat())
-        assert faux.annuaire.comptes == {}, "nothing before D-10"
+        status = await _wait_for(interprete, lambda s: s.get("waiting_until"), "D-10 awaited")
+        assert status["waiting_until"].startswith((arrival - timedelta(days=10)).isoformat())
+        assert fake.directory.comptes == {}, "nothing before D-10"
         await platform.env.sleep(timedelta(days=5, hours=1))
-        await _etat(client, ticket["work_item"], "accounts_created", "the account is created at D-10")
-        (compte,) = faux.annuaire.comptes.values()
+        await _state(client, ticket["work_item"], "accounts_created", "the account is created at D-10")
+        (account,) = fake.directory.comptes.values()
         assert (
-            compte["userPrincipalName"] == "lea@acme.test"
-            and compte["id"] in faux.annuaire.membres_de_l_unite
+            account["userPrincipalName"] == "lea@acme.test"
+            and account["id"] in fake.directory.membres_de_l_unite
         )
-        assert compte["id"] in faux.annuaire.groupes["devs"]
+        assert account["id"] in fake.directory.groupes["devs"]
 
         # The sensitive group: a re-authenticated person.
-        await _approuver_l_action(client, projet, "onboarding.sensitive_group")
-        await _etat(client, ticket["work_item"], "sensitive_granted", "the sensitive group is decided")
-        assert compte["id"] in faux.annuaire.groupes["prod-read"]
+        await _approuver_l_action(client, project, "onboarding.sensitive_group")
+        await _state(client, ticket["work_item"], "sensitive_granted", "the sensitive group is decided")
+        assert account["id"] in fake.directory.groupes["prod-read"]
 
         # D-7: the supplier order is decided; the fleet and the shipment follow its serial number.
-        await _attendre(interprete, lambda s: s.get("waiting_until"), "D-7 awaited")
-        assert faux.fournisseur.commandes == {}
+        await _wait_for(interprete, lambda s: s.get("waiting_until"), "D-7 awaited")
+        assert fake.supplier.commandes == {}
         await platform.env.sleep(timedelta(days=3))
-        await _approuver_l_action(client, projet, "onboarding.laptop")
-        await _etat(client, ticket["work_item"], "laptop_shipped", "the laptop is ordered, enrolled, shipped")
-        (commande,) = faux.fournisseur.commandes.values()
-        serie = commande["serial"]
-        assert faux.parc.postes[serie] == {"serial": serie, "upn": "lea@acme.test", "state": "enrolled"}
-        (envoi,) = faux.transporteur.envois.values()
-        assert (envoi["items"], envoi["address"]) == ([serie], champs["address"])
-        assert {e["authorization"] for _, e, _ in faux.serveur.recues} == {f"Bearer {CLE_FOURNISSEUR}"}
+        await _approuver_l_action(client, project, "onboarding.laptop")
+        await _state(
+            client, ticket["work_item"], "laptop_shipped", "the laptop is ordered, enrolled, shipped"
+        )
+        (order,) = fake.supplier.commandes.values()
+        serial = order["serial"]
+        assert fake.fleet.postes[serial] == {"serial": serial, "upn": "lea@acme.test", "state": "enrolled"}
+        (shipment,) = fake.carrier.envois.values()
+        assert (shipment["items"], shipment["address"]) == ([serial], fields["address"])
+        assert {e["authorization"] for _, e, _ in fake.server.recues} == {f"Bearer {KEY_SUPPLIER}"}
 
         # The badge: a task, its proof; then the platform activates it.
-        demande = await _demande(client, ticket["work_item"])
-        assert (demande["kind"], demande["payload"]["attest"]) == ("task", ATTESTATION_BADGE)
-        tache = await client.post(
+        request = await _request(client, ticket["work_item"])
+        assert (request["kind"], request["payload"]["attest"]) == ("task", ATTESTATION_BADGE)
+        task = await client.post(
             f"/api/v1/work-items/{ticket['work_item']}/decisions",
             json={"kind": "complete", "values": {"badge_uid": "04A1B2C3"}, "attested": True},
         )
-        assert tache.status_code == 202, tache.text
-        await _etat(client, ticket["work_item"], "active", "the badge is active")
-        assert faux.lecteurs.badges["04A1B2C3"] == {
+        assert task.status_code == 202, task.text
+        await _state(client, ticket["work_item"], "active", "the badge is active")
+        assert fake.readers.badges["04A1B2C3"] == {
             "uid": "04A1B2C3",
             "holder": "lea@acme.test",
             "active": True,
@@ -314,10 +316,10 @@ async def test_une_arrivee_de_la_demande_par_claude_au_controle_a_j_plus_1(
 
         # D+1: the platform re-reads and checks.
         await platform.env.sleep(timedelta(days=12))
-        resultat = await interprete.result()
-    assert resultat["state"] == "ready"
+        result = await interprete.result()
+    assert result["state"] == "ready"
 
-    actions = await _actions(client, projet)
+    actions = await _actions(client, project)
     assert {k: a["status"] for k, a in actions.items()} == {
         "onboarding.accounts": "succeeded",
         "onboarding.sensitive_group": "succeeded",
@@ -332,58 +334,58 @@ async def test_une_arrivee_de_la_demande_par_claude_au_controle_a_j_plus_1(
     assert ATTESTATION_BADGE in chronologie, "the proof of the handover can be read in the case file"
 
 
-async def test_un_depart_a_j0_tout_coupe_le_poste_repris_recu_efface(
-    platform: Platform, worker: Any, faux: Faux
+async def test_a_departure_on_d0_cuts_everything_the_workstation_is_taken_back_received_wiped(
+    platform: Platform, worker: Any, fake: Fakes
 ) -> None:
     client = platform.client
     await login(client)
     await _organisation(client)
-    projet = await _projet_rh(client)
-    identifiant = faux.annuaire.ajouter_compte("paul@acme.test")
-    faux.annuaire.groupes["devs"] = {identifiant}
-    faux.lecteurs.badges["04D5E6F7"] = {"uid": "04D5E6F7", "holder": "paul@acme.test", "active": True}
-    faux.parc.postes["PC-0042"] = {"serial": "PC-0042", "upn": "paul@acme.test", "state": "enrolled"}
-    debut = await platform.env.get_current_time()
-    depart = (debut + timedelta(days=3)).date()
-    champs = {"full_name": "Paul Durand", "upn": "paul@acme.test", "last_day": depart.isoformat(),
+    project = await _hr_project(client)
+    identifiant = fake.directory.ajouter_compte("paul@acme.test")
+    fake.directory.groupes["devs"] = {identifiant}
+    fake.readers.badges["04D5E6F7"] = {"uid": "04D5E6F7", "holder": "paul@acme.test", "active": True}
+    fake.fleet.postes["PC-0042"] = {"serial": "PC-0042", "upn": "paul@acme.test", "state": "enrolled"}
+    start = await platform.env.get_current_time()
+    depart = (start + timedelta(days=3)).date()
+    fields = {"full_name": "Paul Durand", "upn": "paul@acme.test", "last_day": depart.isoformat(),
               "badge_uid": "04D5E6F7", "serial": "PC-0042", "address": "8 Fog Quay, Lyon"}  # fmt: skip
     cree = await client.post(
-        f"/api/v1/projects/{projet['id']}/work-items",
-        json={"title": "Departure of Paul", "labels": ["leaver"], "fields": champs},
+        f"/api/v1/projects/{project['id']}/work-items",
+        json={"title": "Departure of Paul", "labels": ["leaver"], "fields": fields},
     )
     assert cree.status_code == 201 and cree.json()["workflow_name"] == "offboarding", cree.text
     ticket = {"work_item": cree.json()["id"], "key": cree.json()["tracker_key"]}
 
     async with worker():
         platform.adapters.executor.queue_result(_plan("leaver_plan"))
-        interprete = await _demarrer(platform, projet, ticket)
-        await _etat(client, ticket["work_item"], "planned", "the leaver plan is ready")
-        await _demande(client, ticket["work_item"])
+        interprete = await _start(platform, project, ticket)
+        await _state(client, ticket["work_item"], "planned", "the leaver plan is ready")
+        await _request(client, ticket["work_item"])
         assert (
             await client.post(f"/api/v1/work-items/{ticket['work_item']}/decisions", json={"kind": "approve"})
         ).status_code == 202
-        await _attendre(interprete, lambda s: s.get("waiting_until"), "D0 awaited")
-        assert faux.annuaire.comptes[identifiant]["accountEnabled"] is True, "nothing before D0"
+        await _wait_for(interprete, lambda s: s.get("waiting_until"), "D0 awaited")
+        assert fake.directory.comptes[identifiant]["accountEnabled"] is True, "nothing before D0"
         await platform.env.sleep(timedelta(days=3, hours=1))
-        await _etat(
+        await _state(
             client, ticket["work_item"], "pickup_scheduled", "the access is cut and the pickup scheduled"
         )
-        assert faux.annuaire.comptes[identifiant]["accountEnabled"] is False
-        assert faux.annuaire.sessions_revoquees == ["paul@acme.test"]
-        assert faux.lecteurs.badges["04D5E6F7"]["active"] is False
-        retour = faux.transporteur.envois[f"{ticket['key']}-return"]
-        assert (retour["direction"], retour["address"]) == ("return", champs["address"])
+        assert fake.directory.comptes[identifiant]["accountEnabled"] is False
+        assert fake.directory.sessions_revoquees == ["paul@acme.test"]
+        assert fake.readers.badges["04D5E6F7"]["active"] is False
+        retour = fake.carrier.envois[f"{ticket['key']}-return"]
+        assert (retour["direction"], retour["address"]) == ("return", fields["address"])
 
-        assert (await _demande(client, ticket["work_item"]))["kind"] == "task"
+        assert (await _request(client, ticket["work_item"]))["kind"] == "task"
         reception = await client.post(
             f"/api/v1/work-items/{ticket['work_item']}/decisions",
             json={"kind": "complete", "values": {"laptop_condition": "intact"}, "attested": True},
         )
         assert reception.status_code == 202, reception.text
-        resultat = await interprete.result()
-    assert resultat["state"] == "closed"
-    assert faux.parc.postes["PC-0042"]["state"] == "wiped"
-    actions = await _actions(client, projet)
+        result = await interprete.result()
+    assert result["state"] == "closed"
+    assert fake.fleet.postes["PC-0042"]["state"] == "wiped"
+    actions = await _actions(client, project)
     assert {k: a["status"] for k, a in actions.items()} == {
         "offboarding.cut_access": "succeeded",
         "offboarding.pickup": "succeeded",

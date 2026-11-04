@@ -10,7 +10,7 @@ from .conftest import Platform, login
 pytestmark = [pytest.mark.e2e, pytest.mark.asyncio]
 
 
-async def test_reprise_apres_panne_sans_double_cout(platform: Platform) -> None:
+async def test_recovery_after_an_outage_without_double_cost(platform: Platform) -> None:
     """The heart of the promise: replaying a stage never bills twice."""
     await login(platform.client)
     from choregos_api.db.models import CostLedger, Run, WorkItem
@@ -82,7 +82,7 @@ async def test_reprise_apres_panne_sans_double_cout(platform: Platform) -> None:
     assert platform.adapters.executor.start_calls_by_run[first["run_id"]] >= 1
 
 
-async def test_le_runner_ne_peut_pas_sortir_du_perimetre(platform: Platform) -> None:
+async def test_the_runner_cannot_leave_the_perimeter(platform: Platform) -> None:
     """Sandbox: what the agent tries outside its scope is refused and traced."""
     from choregos_contracts import Permissions
     from choregos_runner.guardrails import GuardRails
@@ -107,7 +107,7 @@ async def test_le_runner_ne_peut_pas_sortir_du_perimetre(platform: Platform) -> 
     assert guards.check_network("https://pypi.org/simple/").allowed
 
 
-async def test_les_manifestes_de_projet_verrouillent_le_reseau(platform: Platform) -> None:
+async def test_project_manifests_lock_the_network(platform: Platform) -> None:
     """Provisioning writes a deny-by-default egress and quotas: it is GitOps."""
     import yaml
     from choregos_contracts import ProjectConfig
@@ -138,7 +138,7 @@ async def test_les_manifestes_de_projet_verrouillent_le_reseau(platform: Platfor
     assert all(rule.get("apiGroups") != ["*"] for rule in role["rules"]), "no wildcard right"
 
 
-async def test_annulation_d_un_run_est_propre(platform: Platform) -> None:
+async def test_cancelling_a_run_is_clean(platform: Platform) -> None:
     await login(platform.client)
     from choregos_api.db.models import Run, WorkItem
     from choregos_api.db.session import session_scope
@@ -185,7 +185,7 @@ async def test_annulation_d_un_run_est_propre(platform: Platform) -> None:
     assert prepared["run_id"] in platform.adapters.executor.cancelled
 
 
-async def test_second_ecosysteme_refuse_proprement_tant_qu_il_n_est_pas_active(platform: Platform) -> None:
+async def test_second_ecosystem_is_cleanly_refused_until_it_is_enabled(platform: Platform) -> None:
     """Jira and GitLab accept webhooks but clearly announce that they are inactive."""
     from choregos_api.config import get_settings
 

@@ -198,7 +198,7 @@ def single_pod_on(app: str, node: str, timeout_s: float = 180.0) -> str:
     raise AssertionError(f"not exactly one `{app}` pod on {node}: {last}")
 
 
-def test_un_noeud_perdu_est_remarque_puis_le_travail_repart(stack: None) -> None:
+def test_a_lost_node_is_noticed_then_the_work_restarts(stack: None) -> None:
     """How long the work stays still — the number nobody measures.
 
     Three instants matter: the node's disappearance, the moment Kubernetes declares it
@@ -256,7 +256,7 @@ def test_un_noeud_perdu_est_remarque_puis_le_travail_repart(stack: None) -> None
     assert pod_on(API_NODE, "api") == api_before, "the API moved although its node was intact"
 
 
-def test_une_tolerance_courte_divise_l_attente(stack: None) -> None:
+def test_a_short_tolerance_divides_the_wait(stack: None) -> None:
     """The same failure, with `tolerationSeconds: 20`: the replacement arrives in tens of seconds.
 
     This is the fix, and it can be measured. The node was stopped by the previous test: this test

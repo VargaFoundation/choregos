@@ -33,22 +33,22 @@ def project() -> Iterator[None]:
     kubectl("delete", "ns", RUNNERS, f"proj-{SLUG}-ci", "--ignore-not-found", check=False)
 
 
-def _via_proxy(cible: str) -> str:
+def _via_proxy(target: str) -> str:
     return run_probe(
         RUNNERS,
         "probe-proxy",
         # curl ignores upper-case `HTTP_PROXY` (CGI legacy): both cases, as the runner
         # receives them (`env_du_runner`).
         f"export HTTPS_PROXY={PROXY} HTTP_PROXY={PROXY} https_proxy={PROXY} http_proxy={PROXY}; "
-        f"curl -s -m 20 -o /dev/null -w '%{{http_code}}' {cible} || echo KO",
+        f"curl -s -m 20 -o /dev/null -w '%{{http_code}}' {target} || echo KO",
     )
 
 
-def test_un_domaine_de_l_allowlist_passe() -> None:
+def test_an_allowlisted_domain_passes() -> None:
     assert _via_proxy("https://api.github.com/").strip() == "200"
 
 
-def test_un_domaine_hors_allowlist_est_refuse_par_le_proxy() -> None:
+def test_a_domain_outside_the_allowlist_is_refused_by_the_proxy() -> None:
     # A refused CONNECT tunnel: curl returns 000 then "KO", or 403 depending on the version.
     tunnel = _via_proxy("https://example.com/").strip()
     assert tunnel.startswith("403") or tunnel.endswith("KO"), tunnel
