@@ -1661,6 +1661,16 @@ with `--profile decisions`: the variable is also what tells `litellm-config` to 
 chart reads (an alert route, a PolicyException, a mounted path) keeps a shim for one release or tells
 you what to do by hand; this section lists each. The shims go in 0.23.0.
 
+**Internal aliases and shims are gone (S45-40).** Where a Python row below says "internal" and
+"alias keeps working" or "a shim keeps it importable", that held while another package still
+imported the former name. Every user has switched, and the aliases and shims defined under
+`packages/` are deleted: `choregos_core.acces`, `choregos_core.sorties`,
+`choregos_core.dsl.exigences`, `choregos_adapters.fakes.rh`, `choregos_adapters.fakes.cd_de_demo`,
+`choregos_adapters.familles`, `choregos_adapters.memory.lexicale`,
+`choregos_adapters.tracker.champs`, `choregos_adapters.tracker.interne` and
+`choregos_runner.outils_locaux`, and every former name of those packages' `alias:internal` lines.
+Only the names marked `alias:external` (removed in 0.23.0) still resolve.
+
 ### Alerts
 
 The rule expressions, thresholds and `for:` durations are unchanged. Each renamed alert carries its

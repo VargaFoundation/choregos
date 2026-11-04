@@ -93,7 +93,7 @@ async def test_a_window_missed_for_more_than_the_catch_up_is_skipped(setup: Fixt
 
 
 async def test_the_reconciliation_pass_starts_what_the_schedule_opened(setup: Fixture) -> None:
-    from choregos_adapters.tracker.interne import InternalTracker
+    from choregos_adapters.tracker.internal import InternalTracker
 
     clear_fake_signals()
     setup.adapters.tracker = InternalTracker()

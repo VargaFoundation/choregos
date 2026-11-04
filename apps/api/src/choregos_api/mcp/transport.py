@@ -13,17 +13,19 @@ import json
 from typing import Any
 from urllib.parse import urlsplit
 
-from choregos_core.mcp import ERREUR_DE_SYNTAXE as PARSE_ERROR  # lang: fr-ok alias:internal
-from choregos_core.mcp import METHODE_INCONNUE as METHOD_NOT_FOUND  # lang: fr-ok alias:internal
-from choregos_core.mcp import PARAMETRES_INVALIDES as INVALID_PARAMS  # lang: fr-ok alias:internal
-from choregos_core.mcp import REQUETE_INVALIDE as INVALID_REQUEST  # lang: fr-ok alias:internal
-from choregos_core.mcp import defaut_du_message as message_defect  # lang: fr-ok alias:internal
-from choregos_core.mcp import erreur as error_response  # lang: fr-ok alias:internal
-from choregos_core.mcp import est_notification as is_notification  # lang: fr-ok alias:internal
-from choregos_core.mcp import negocier as negotiate  # lang: fr-ok alias:internal
-from choregos_core.mcp import ok
-from choregos_core.mcp import resultat_texte as text_result  # lang: fr-ok alias:internal
-from choregos_core.mcp import version_acceptable as acceptable_version  # lang: fr-ok alias:internal
+from choregos_core.mcp import (
+    INVALID_PARAMS,
+    INVALID_REQUEST,
+    METHOD_NOT_FOUND,
+    PARSE_ERROR,
+    acceptable_version,
+    is_notification,
+    message_defect,
+    negotiate,
+    ok,
+    text_result,
+)
+from choregos_core.mcp import error as error_response
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response
 
@@ -204,10 +206,10 @@ async def _call(ctx: Context, request_id: Any, params: dict[str, Any], request: 
             # Every write counts: a work item opened, an action proposed (ADR 0030).
             raise ToolRefused(f"budget_exhausted: {WRITES_PER_DAY} writes a day through MCP")
         text, structure = await tool.execute(ctx, arguments)
-        result = text_result(truncate(text), structure=structure)
+        result = text_result(truncate(text), structured=structure)
     except ToolRefused as refusal:
         issue = "refus"  # lang: fr-ok — persisted audit value, S45-39 (ADR 0098 §4)
-        result = text_result(str(refusal), en_erreur=True)
+        result = text_result(str(refusal), is_error=True)
     await _audit(ctx, tool.name, tool.write and issue == "ok", issue, request)
     return ok(request_id, result)
 

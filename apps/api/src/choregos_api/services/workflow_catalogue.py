@@ -4,7 +4,7 @@
 Four sources, listed together: the core's workflows (`core`), the workflows of the deployment's templates
 (`template:<name>`), those of the templates its installed plugins brought (`plugin:<name>`, the external
 catalogues: signed, pinned, through the supply-chain gate) and the ones it shared from its projects
-(`org`). What an entry requires is computed by the engine (`exigences`), never declared; each agent it
+(`org`). What an entry requires is computed by the engine (`requirements`), never declared; each agent it
 names is resolved in the organisation. Adopting copies the YAML into a project and installs the catalogue
 agents it names — never a plugin.
 """
@@ -22,7 +22,7 @@ from choregos_contracts import AgentActor, HumanActor, Workflow
 from choregos_core import ValidationError as WorkflowInvalid
 from choregos_core import parse_workflow
 from choregos_core.dsl import TEMPLATE_NAMES, template_yaml
-from choregos_core.dsl.exigences import exigences
+from choregos_core.dsl.requirements import requirements
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -100,9 +100,9 @@ def _parsed(text: str) -> Workflow | None:
 
 @lru_cache(maxsize=512)
 def _requirements(text: str) -> tuple[Any, ...]:
-    """What a workflow requires (`exigences`), once per text, like its parse."""
+    """What a workflow requires (`requirements`), once per text, like its parse."""
     workflow = _parsed(text)
-    return tuple(exigences([workflow])) if workflow is not None else ()
+    return tuple(requirements([workflow])) if workflow is not None else ()
 
 
 def _offered(source: str, text: str, **shared: Any) -> Offered | None:
@@ -259,7 +259,7 @@ async def resolutions(
                 out[slug] = Resolution("org", display_name=agent.display_name)
             continue
         found = view.entry(slug)
-        if found is not None and found.genre == "internal":
+        if found is not None and found.kind == "internal":
             out[slug] = Resolution("catalogue", display_name=str(found.document.get("display_name") or slug))
         else:
             out[slug] = Resolution("unresolved")
@@ -306,9 +306,10 @@ def entry_dto(
         summary=(info.summary if info and info.summary else (meta.description or "")),
         tags=list(info.tags) if info else [],
         requires=[
-            WorkflowCatalogueRequirementDto(capability=e.capacite, reasons=list(e.raisons)) for e in requires
+            WorkflowCatalogueRequirementDto(capability=e.capability, reasons=list(e.reasons))
+            for e in requires
         ],
-        needs_repository=any(e.capacite == "scm" for e in requires),
+        needs_repository=any(e.capability == "scm" for e in requires),
         groups=groups,
         agents=agents,
         yaml=o.yaml if with_yaml else None,

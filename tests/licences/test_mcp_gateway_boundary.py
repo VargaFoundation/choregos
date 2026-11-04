@@ -238,7 +238,7 @@ ROUTE_CALLS = frozenset(
 WEBSOCKET_CALLS = frozenset({"add_websocket_route", "add_api_websocket_route"})
 #: A mount hands every path beneath it to another application, whatever that application is.
 MOUNT = "MOUNT"
-MCP_CLIENTS = frozenset({"ClientMcp", "McpClient", "PluginServerClient"})
+MCP_CLIENTS = frozenset({"McpClient", "PluginServerClient"})
 #: `asyncio.start_server` and the event loop's `create_server`, TCP or Unix.
 LISTENERS = frozenset({"start_server", "start_unix_server", "create_server", "create_unix_server"})
 #: An import the AST does not see as one: a door must not make any.
@@ -429,7 +429,7 @@ def test_the_import_check_sees_through_relative_and_from_imports() -> None:
     assert forbidden_imports("from choregos_adapters import build", door) == ["choregos_adapters.build"]
     assert forbidden_imports("import choregos_adapters.mcp.client", door) == ["choregos_adapters.mcp.client"]
     assert forbidden_imports("from choregos_adapters.mcp.x import y", door) == ["choregos_adapters.mcp.x"]
-    assert forbidden_imports("from choregos_adapters.mcp import ClientMcp", door) == ["choregos_adapters.mcp"]
+    assert forbidden_imports("from choregos_adapters.mcp import McpClient", door) == ["choregos_adapters.mcp"]
     # A sibling import, and the same line in an `__init__.py` (one level less to climb).
     assert forbidden_imports("from . import courtier", "choregos_api.services.x") == [
         "choregos_api.services.courtier"
@@ -784,10 +784,10 @@ def test_the_route_freeze_compares_names_and_verbs() -> None:
 
 
 def test_the_client_and_listener_checks_see_what_they_guard() -> None:
-    assert mcp_client_subclasses("class Mine(ClientMcp): ...") == ["Mine"]
+    assert mcp_client_subclasses("class Mine(McpClient): ...") == ["Mine"]
     assert mcp_client_subclasses("class Mine(mcp.McpClient): ...") == ["Mine"]
     assert mcp_client_subclasses("class Mine(PluginServerClient, Base): ...") == ["Mine"]
-    assert mcp_client_subclasses("class Mine(Base): ...\nclient = ClientMcp('x')") == []
+    assert mcp_client_subclasses("class Mine(Base): ...\nclient = McpClient('x')") == []
     assert listeners("server = await asyncio.start_server(handler, host, port)") == [1]
     assert listeners("await start_unix_server(handler, path)") == [1]
     assert listeners("uvicorn.run(app)\nserver.start()") == []
@@ -799,7 +799,7 @@ def test_the_client_and_listener_checks_see_what_they_guard() -> None:
     assert mcp_client_subclasses("from choregos_adapters.mcp import McpClient as Up\nclass R(Up): ...") == [
         "R"
     ]
-    assert mcp_client_subclasses("Base = mcp.ClientMcp\nclass R(Base): ...") == ["R"]
+    assert mcp_client_subclasses("Base = mcp.McpClient\nclass R(Base): ...") == ["R"]
     # A door's imports by a computed name.
     assert dynamic_imports("import importlib\nm = importlib.import_module('x')") == [2]
     assert dynamic_imports("from importlib import import_module as load\nload('x')") == [2]
@@ -966,7 +966,7 @@ def below(cls):
         yield sub
         yield from below(sub)
 
-bases = (mcp.McpClient, mcp.ClientMcp)
+bases = (mcp.McpClient,)
 classes = sorted({f"{c.__module__}.{c.__qualname__}" for base in bases for c in below(base)})
 with open(out, "w", encoding="utf-8") as file:
     json.dump({"closure": closure, "routes": routes, "failures": failures, "subclasses": classes}, file)

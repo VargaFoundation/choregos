@@ -280,7 +280,7 @@ async def project_requirements(ctx: ProjectCtx, session: Db) -> list[ProjectRequ
     """What the project's active workflows require of its connectors, and why (ADR 0034):
     a project with no repository or train has no use for an `scm`, a `ci` or a `cd`."""
     from choregos_adapters import deployment_default_type
-    from choregos_core.dsl.exigences import exigences
+    from choregos_core.dsl.requirements import requirements
 
     from ..db.models import WorkflowDef
     from ..services.definitions import workflow_model
@@ -296,12 +296,14 @@ async def project_requirements(ctx: ProjectCtx, session: Db) -> list[ProjectRequ
     }
     return [
         ProjectRequirement(
-            capability=e.capacite,
-            reasons=list(e.raisons),
-            connector=await _dto(session, ctx, configures[e.capacite]) if e.capacite in configures else None,
-            default_type=None if e.capacite in configures else deployment_default_type(e.capacite),
+            capability=e.capability,
+            reasons=list(e.reasons),
+            connector=await _dto(session, ctx, configures[e.capability])
+            if e.capability in configures
+            else None,
+            default_type=None if e.capability in configures else deployment_default_type(e.capability),
         )
-        for e in exigences(workflow_model(row) for row in actifs)
+        for e in requirements(workflow_model(row) for row in actifs)
     ]
 
 

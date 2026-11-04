@@ -14,7 +14,7 @@ from typing import Annotated, Any
 from choregos_adapters.errors import AdapterError, UpstreamError
 from choregos_contracts import InboundEvent, InboundEventType
 from choregos_core import utcnow
-from choregos_core.dsl.trains import approbation_du_train, env_du_train, train_apres_fusion
+from choregos_core.dsl.trains import train_after_merge, train_approval, train_env
 from fastapi import APIRouter, Header, Path, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -448,14 +448,14 @@ async def _board_train(session: Any, project: Project, item: WorkItem, event: In
     it requires there (ADR 0041). Every merged ticket used to board the PROD train: a study that
     merges an ADR went to production, a careful delivery skipped its staging."""
     workflow = workflow_model(await workflow_du_ticket(session, item))
-    train = train_apres_fusion(workflow)
+    train = train_after_merge(workflow)
     if train is None:
         return
     # The PR's labels AND the ticket's: a `hotfix` ticket takes the express lane, whether this
     # webhook or the interpreter boards it first (#279).
     merged_labels = [*event.payload.get("labels", []), *(item.documents or {}).get("labels", [])]
     await get_temporal().signal(
-        train_id(project.slug, env_du_train(train)),
+        train_id(project.slug, train_env(train)),
         "merged",
         {
             "work_item_key": item.tracker_key,
@@ -465,7 +465,7 @@ async def _board_train(session: Any, project: Project, item: WorkItem, event: In
             "labels": list(dict.fromkeys(merged_labels)),
             "pr_url": event.payload.get("pr_url"),
             "title": item.title,
-            "approval": dict(approbation_du_train(workflow, train)),
+            "approval": dict(train_approval(workflow, train)),
         },
     )
 

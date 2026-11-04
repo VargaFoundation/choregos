@@ -67,3 +67,18 @@ def test_a_french_comment_in_a_translated_package_is_caught() -> None:
     content = '"""The sidecar."""\n\n# le serveur répond avant la fin du run\nx = 1\n'  # lang: fr-ok
     found = ce.file_findings("packages/tools-mcp/src/choregos_tools_mcp/x.py", content)
     assert [(f.kind, f.line) for f in found] == [("prose", 3)]
+
+
+@pytest.mark.skipif(not _in_a_git_checkout(), reason="not a git checkout: the search reads `git grep`")
+def test_no_internal_alias_remains_under_packages() -> None:
+    """An internal alias or shim (`alias:internal`) lives until its last user switched (ADR 0098 §3);
+    S45-40 deleted the ones defined under `packages/`, the user of a package alias having switched."""
+    found = subprocess.run(
+        ["git", "grep", "-n", "alias:internal", "--", "packages"],
+        check=False,
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert found.returncode == 1, found.stdout  # `git grep` exits 1 when nothing matches
+    assert found.stdout == ""

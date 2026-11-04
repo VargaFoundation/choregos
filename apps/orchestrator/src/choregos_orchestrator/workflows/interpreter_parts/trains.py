@@ -14,7 +14,7 @@ from ..scheduling import execute_on_its_queue
 
 with workflow.unsafe.imports_passed_through():
     from choregos_core import WorkflowEngine
-    from choregos_core.dsl.trains import approbation_du_train, env_du_train
+    from choregos_core.dsl.trains import train_approval, train_env
 
     from ...activities.interpretation import (
         signal_train,
@@ -31,7 +31,7 @@ class TrainsMixin(InterpreterBase):
     async def _run_train(self, params: InterpreterInput, engine: WorkflowEngine, transition: Any) -> Any:
         """Board the ticket, then wait for ITS train to have delivered: `finish_release` and `rollback`
         warn it (ADR 0041). The approval the workflow requires travels with it up to the departure."""
-        env = env_du_train(transition)
+        env = train_env(transition)
         per_environment = workflow.patched(TRAIN_PER_ENVIRONMENT)
         boarding: dict[str, Any] = {
             "project_id": params.project_id,
@@ -40,7 +40,7 @@ class TrainsMixin(InterpreterBase):
             "env": env,
         }
         if per_environment:
-            boarding["approval"] = dict(approbation_du_train(engine.wf, transition))
+            boarding["approval"] = dict(train_approval(engine.wf, transition))
         await execute_on_its_queue(
             signal_train,
             boarding,

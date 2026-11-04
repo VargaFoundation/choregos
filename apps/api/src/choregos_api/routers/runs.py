@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 from typing import Annotated, Any
 
-from choregos_core import matches_any, rapport_d_acces
+from choregos_core import access_report, matches_any
 from fastapi import APIRouter, Header, Query, Request
 from sqlalchemy import select
 from sse_starlette.sse import EventSourceResponse
@@ -132,7 +132,7 @@ async def run_access(id: str, session: Db, principal: Me) -> dict[str, Any]:
     events += [
         {"type": "choregos.tool.called", "payload": {"tool": a.model, "provider": a.provider}} for a in calls
     ]
-    report = rapport_d_acces(events)
+    report = access_report(events)
     tool_cost_eur = round(sum(a.cost_eur for a in calls), 4)
     record: dict[str, Any] = {
         **report.to_dict(),

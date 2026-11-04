@@ -177,7 +177,7 @@ async def edit(body: WorkflowEditRequest) -> WorkflowEditResult:
         yaml=edition.yaml,
         diff=diff,
         inverse=[o.model_dump(mode="json", by_alias=True, exclude_none=True) for o in edition.inverse],
-        notices=edition.avertissements,
+        notices=edition.warnings,
     )
 
 

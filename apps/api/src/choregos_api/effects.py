@@ -66,7 +66,7 @@ def declare_effect(
     `policy`: what a workflow action needs to play it: `approval` (a person decides, the default),
     `allowed` (the transition is enough) or `forbidden`. `politique=` is the former name of
     `policy=`: it keeps working until 0.23.0 and warns."""
-    from choregos_adapters import POLITIQUES
+    from choregos_adapters import POLICIES
 
     if politique is not None:  # lang: fr-ok alias:external
         warnings.warn(
@@ -76,8 +76,8 @@ def declare_effect(
             stacklevel=2,
         )
         policy = politique  # lang: fr-ok alias:external
-    if policy not in POLITIQUES:
-        raise ValueError(f"unknown policy for the effect {name}: {policy} (known: {POLITIQUES})")
+    if policy not in POLICIES:
+        raise ValueError(f"unknown policy for the effect {name}: {policy} (known: {POLICIES})")
     if name in _EFFECTS and _EFFECTS[name] is not execute:
         raise ValueError(f"effect already declared: {name}")
     _EFFECTS[name] = execute
@@ -155,7 +155,7 @@ async def _call_the_connector(ctx: EffectContext, params: dict[str, Any]) -> dic
     The action was approved: an `approval` operation therefore runs; a `forbidden` one does not."""
     import httpx
     from choregos_adapters.errors import AdapterError, UpstreamError
-    from choregos_adapters.mcp import ErreurMcp
+    from choregos_adapters.mcp import McpError
     from choregos_contracts import ActionStatus
     from choregos_core.egress import EgressRefusedError
 
@@ -219,13 +219,13 @@ async def _call_the_connector(ctx: EffectContext, params: dict[str, Any]) -> dic
             # as for a typed connector, not the protocol's envelope (S20-07).
             structure = result.get("structuredContent")
             return dict(structure) if isinstance(structure, dict) else dict(result)
-        return dict(await client.executer(operation, arguments))
+        return dict(await client.execute(operation, arguments))
     except UpstreamError as failure:
         code = failure.status_code or 0
         if code in {0, 429} or code >= 500:
             raise  # transient: Temporal retries
         raise EffectRefused(f"{name}/{operation} : {failure}") from failure
-    except ErreurMcp as error:
+    except McpError as error:
         if error.code in {401, 403}:
             raise EffectRefused(f"{name}/{operation} : {error}") from error
         raise

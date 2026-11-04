@@ -172,7 +172,7 @@ async def test_a_critical_finding_without_a_notifier_is_still_filed(setup: Fixtu
     from choregos_api.db.session import session_scope
     from choregos_orchestrator.activities import findings as findings_activities
 
-    setup.adapters.notify.panne = NO_SLACK
+    setup.adapters.notify.failure = NO_SLACK
     finding_id = await _add_finding(
         setup, "Secret in a log line", "src/auth/login.py:12 — token logged", severity="critical"
     )
@@ -199,7 +199,7 @@ async def test_the_false_positive_alert_without_a_notifier_still_answers(setup: 
             row = await session.get(Finding, finding_id)
             assert row is not None
             row.relevant = False
-    setup.adapters.notify.panne = NO_SLACK
+    setup.adapters.notify.failure = NO_SLACK
 
     outcome = await findings_activities.finding_quality_ratio({"project_slug": setup.project_slug})
 

@@ -14,7 +14,7 @@ import inspect
 
 import pytest
 from choregos_adapters import available, build
-from choregos_adapters.base import CAPACITES_EXECUTEUR
+from choregos_adapters.base import EXECUTOR_CAPABILITIES
 
 pytestmark = pytest.mark.conformance
 
@@ -44,7 +44,7 @@ def _executors() -> list[str]:
 
 def test_the_vocabulary_stays_closed() -> None:
     """A capability invented on the fly means nothing to the caller."""
-    assert frozenset({"queue", "renew", "suspend", "resume", "snapshot"}) == CAPACITES_EXECUTEUR
+    assert frozenset({"queue", "renew", "suspend", "resume", "snapshot"}) == EXECUTOR_CAPABILITIES
 
 
 @pytest.mark.parametrize("name", _executors())
@@ -52,7 +52,7 @@ def test_each_executor_declares_its_capabilities(name: str) -> None:
     executor = build("runtime", name, CONFIGS.get(name, {}))
     capabilities = getattr(executor, "capabilities", None)
     assert isinstance(capabilities, frozenset), f"{name} announces nothing: a caller would have to guess"
-    inconnues = capabilities - CAPACITES_EXECUTEUR
+    inconnues = capabilities - EXECUTOR_CAPABILITIES
     assert not inconnues, f"{name} announces capabilities outside the vocabulary: {sorted(inconnues)}"
 
 

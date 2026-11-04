@@ -29,7 +29,7 @@ from typing import Any
 import httpx
 from choregos_core import utcnow
 from choregos_core.egress import EgressRefusedError, host_port_of
-from choregos_core.mcp import METHODE_INCONNUE, PARAMETRES_INVALIDES
+from choregos_core.mcp import INVALID_PARAMS, METHOD_NOT_FOUND
 from choregos_core.secrets import SecretIntrouvable
 from sqlalchemy import exists, func, or_, select
 
@@ -88,35 +88,35 @@ async def configure(door: Door, method: str, params: dict[str, Any]) -> Any:
         config = await _one(door, params)
         await _forget(door, config)
         return None
-    raise Fault(METHODE_INCONNUE, f"unknown method: {method}")
+    raise Fault(METHOD_NOT_FOUND, f"unknown method: {method}")
 
 
 async def _set(door: Door, params: dict[str, Any]) -> dict[str, Any]:
     item, _ = await _task(door, params.get("taskId"))
     asked = params.get("pushNotificationConfig")
     if not isinstance(asked, dict):
-        raise Fault(PARAMETRES_INVALIDES, "`pushNotificationConfig` is an object")
+        raise Fault(INVALID_PARAMS, "`pushNotificationConfig` is an object")
     url = asked.get("url")
     target = host_port_of(url) if isinstance(url, str) and len(url) <= MAX_URL else None
     if target is None or not str(url).startswith("https://"):
-        raise Fault(PARAMETRES_INVALIDES, f"`url` is an https URL of {MAX_URL} characters at most")
+        raise Fault(INVALID_PARAMS, f"`url` is an https URL of {MAX_URL} characters at most")
     if asked.get("authentication"):
         raise Fault(
-            PARAMETRES_INVALIDES,
+            INVALID_PARAMS,
             "`authentication` is not taken: a notification carries your `token` and an HMAC signature",
         )
     token = asked.get("token")
     if token is not None and (not isinstance(token, str) or not 0 < len(token) <= MAX_TOKEN):
-        raise Fault(PARAMETRES_INVALIDES, f"`token` is a string of {MAX_TOKEN} characters at most")
+        raise Fault(INVALID_PARAMS, f"`token` is a string of {MAX_TOKEN} characters at most")
     config_id = asked.get("id") or item.id
     if not isinstance(config_id, str) or len(config_id) > MAX_ID:
-        raise Fault(PARAMETRES_INVALIDES, f"`id` is a string of {MAX_ID} characters at most")
+        raise Fault(INVALID_PARAMS, f"`id` is a string of {MAX_ID} characters at most")
     await _open_in_egress(door, *target)
     known = {config.config_id: config for config in await _configs(door, item.id)}
     config = known.get(config_id)
     if config is None:
         if len(known) >= MAX_CONFIGS:
-            raise Fault(PARAMETRES_INVALIDES, f"{MAX_CONFIGS} push notification configs per task at most")
+            raise Fault(INVALID_PARAMS, f"{MAX_CONFIGS} push notification configs per task at most")
         assert door.caller.token is not None
         config = A2aPushConfig(
             org_id=door.org.id,
@@ -157,7 +157,7 @@ async def _open_in_egress(door: Door, host: str, port: int) -> None:
         policy.check(host, port, "api", "a2a.push")
     except EgressRefusedError as refused:
         raise Fault(
-            PARAMETRES_INVALIDES,
+            INVALID_PARAMS,
             f"{host}:{port} is not open in the organisation's egress list ({refused.reason}): "
             "an administrator opens it (ADR 0066)",
         ) from refused

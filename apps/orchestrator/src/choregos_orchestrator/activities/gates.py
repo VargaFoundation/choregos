@@ -12,7 +12,7 @@ from choregos_api.db.models import CostLedger, Run
 from choregos_contracts import StageResult
 from choregos_core import GateContext, GateOutcome, evaluate, is_async_gate, matches_any, scan_secrets
 from choregos_core.domain import DiffSummary, PrRef
-from choregos_core.gates import ALREADY_FIXED_GATE, DIFF_GATES, MOTIF_ADR, unchanged_run
+from choregos_core.gates import ADR_PATTERN, ALREADY_FIXED_GATE, DIFF_GATES, unchanged_run
 from temporalio import activity
 
 from .base import db, load_work_item, project_bundle
@@ -249,7 +249,7 @@ async def _default_branch_files(bundle: Any, params: dict[str, Any]) -> list[str
     list_files = getattr(bundle.adapters.scm, "list_files", None)
     if repo_config is None or list_files is None:
         return None
-    pattern = str(params.get("pattern") or MOTIF_ADR)
+    pattern = str(params.get("pattern") or ADR_PATTERN)
     fixed = re.split(r"[*?\[]", pattern, maxsplit=1)[0]
     folder = fixed.rsplit("/", 1)[0] if "/" in fixed else ""
     try:

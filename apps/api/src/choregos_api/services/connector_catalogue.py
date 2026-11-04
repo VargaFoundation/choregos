@@ -12,7 +12,7 @@ an entry. Nothing secret is in an entry: field names, never values.
 from __future__ import annotations
 
 from choregos_adapters import offered_connector_types
-from choregos_core.dsl.exigences import ORDRE
+from choregos_core.dsl.requirements import ORDER
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,7 +35,7 @@ from .catalogue_rights import (
 
 PLATFORM_KINDS = frozenset({"runtime", "gateway", "memory"})
 #: The kinds a project configures for itself (its delivery connectors): tracker, scm, ci, cd, notify.
-PROJECT_KINDS = frozenset(ORDRE) - PLATFORM_KINDS
+PROJECT_KINDS = frozenset(ORDER) - PLATFORM_KINDS
 
 FAMILIES: dict[str, str] = {
     "scm": "Source code",

@@ -29,7 +29,7 @@ def backend(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     from choregos_adapters.fakes.web_search import FakeSearchBackend
 
     fake = FakeSearchBackend()
-    monkeypatch.setattr(choregos_adapters, "FAUX_WEB_SEARCH", fake)
+    monkeypatch.setattr(choregos_adapters, "FAKE_WEB_SEARCH", fake)
     monkeypatch.setenv("CONNECTOR_TEST_SEARCH_KEY", KEY)
     yield fake
 

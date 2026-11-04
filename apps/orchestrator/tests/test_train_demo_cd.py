@@ -24,7 +24,7 @@ async def _until(handle: Any, predicate: Any, timeout: float = 60.0) -> dict[str
 
 def _demo_cd(setup: Fixture) -> Any:
     from choregos_adapters.fakes.demo_cd import DemoCd, FakeDemoCd
-    from choregos_adapters.fakes.rh import Desk
+    from choregos_adapters.fakes.hr import Desk
 
     fake = FakeDemoCd()
     setup.adapters.cd = DemoCd(Desk(fake))

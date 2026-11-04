@@ -85,7 +85,7 @@ SYMBOLS = [{"symbol": "AAA", "dsr": 0.97}, {"symbol": "BBB", "dsr": 0.91}]
 
 
 async def _install(setup: Fixture, research: dict[str, Any], fields: dict[str, Any]) -> None:
-    from choregos_adapters.tracker.interne import InternalTracker
+    from choregos_adapters.tracker.internal import InternalTracker
     from choregos_api.db.models import WorkflowDef, WorkItem
     from choregos_api.db.session import session_scope
     from choregos_contracts import Workflow

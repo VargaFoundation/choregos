@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_adapters import POLITIQUES, ConnectorTypeSpec, OperationSpec
+from choregos_adapters import POLICIES, ConnectorTypeSpec, OperationSpec
 from choregos_core.compat import alias_names
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,7 +16,7 @@ from ..errors import unprocessable
 from .catalogue_rights import connector_enabled_for
 
 #: The rank of each policy: a project can only go up (ADR 0034).
-RANK = {policy: rank for rank, policy in enumerate(POLITIQUES)}
+RANK = {policy: rank for rank, policy in enumerate(POLICIES)}
 
 
 def stricter(a: str, b: str | None) -> str:
@@ -155,7 +155,7 @@ def verify_secrets(
     `store_prefix` (the idempotent re-send of a DTO). Otherwise a project owner could point a
     connector at `store:connector/entra-acme/client_secret` and read the organisation's secret
     through a host they control."""
-    from choregos_core.secrets import ReferenceInvalide, est_une_reference_du_magasin, verifier
+    from choregos_core.secrets import InvalidReference, check, is_store_reference
 
     in_clear = sorted(set(config) & set(spec.secret_fields))
     if in_clear:
@@ -186,7 +186,7 @@ def verify_secrets(
         raise unprocessable(f"{', '.join(empty)}: an empty secret value (to remove a secret, clear it)")
     written = [(f, r) for f, r in [*secret_refs.items(), *([("", secret_ref)] if secret_ref else [])]]
     for field, reference in written:
-        if est_une_reference_du_magasin(reference):
+        if is_store_reference(reference):
             if field and store_prefix is not None and reference == f"store:{store_prefix}/{field}":
                 continue
             raise unprocessable(
@@ -199,8 +199,8 @@ def verify_secrets(
                 "deployment's environment, which every organisation shares; type the value instead"
             )
         try:
-            verifier(reference)
-        except ReferenceInvalide as refus:
+            check(reference)
+        except InvalidReference as refus:
             raise unprocessable(str(refus)) from refus
 
 

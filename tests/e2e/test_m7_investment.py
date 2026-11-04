@@ -159,7 +159,7 @@ def market(monkeypatch: pytest.MonkeyPatch) -> Any:
     fake = FakeMarketData()
     fake.fixtures["TRND.US"] = sawtooth()
     fake.fixtures["TRN2.US"] = sawtooth(seed=11, phase=20)
-    monkeypatch.setattr(choregos_adapters, "FAUX_MARKETDATA", fake)
+    monkeypatch.setattr(choregos_adapters, "FAKE_MARKETDATA", fake)
     monkeypatch.setenv("CONNECTOR_E2E_MARKETDATA_KEY", KEY)
     return fake
 

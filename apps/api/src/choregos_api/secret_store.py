@@ -35,7 +35,7 @@ from choregos_core.redaction import remember_secret
 from choregos_core.secrets import (
     STORE_SCHEME,
     SecretIntrouvable,
-    est_une_reference_du_magasin,
+    is_store_reference,
 )
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -424,7 +424,7 @@ def store_ref(name: str) -> str:
 
 def store_names(references: Mapping[str, str]) -> dict[str, str]:
     """field -> secret name, for the references that point to the store."""
-    return {f: r[len(STORE_SCHEME) + 1 :] for f, r in references.items() if est_une_reference_du_magasin(r)}
+    return {f: r[len(STORE_SCHEME) + 1 :] for f, r in references.items() if is_store_reference(r)}
 
 
 async def secret_states(
@@ -468,9 +468,9 @@ async def resolve_store_fields(
 ) -> dict[str, str]:
     """field -> value for the `store:` references of a connector, read with the organisation's
     context in one query. A missing value raises `SecretIntrouvable`, naming the reference."""
-    from choregos_adapters.registry import references_de_secret
+    from choregos_adapters.registry import secret_references
 
-    names = store_names(references_de_secret(kind, type_name, dict(secret_refs or {}), secret_ref))
+    names = store_names(secret_references(kind, type_name, dict(secret_refs or {}), secret_ref))
     if not names:
         return {}
     values = await (store or get_secret_store()).get_many(session, org_id, list(names.values()))
@@ -492,17 +492,17 @@ async def resolved_configuration(
     """The configuration with its secrets RESOLVED — `store:` through the store, the rest through
     the core's resolvers. To build an adapter, never to save or return. Every resolved value is
     remembered by the redaction, so that a log line or an error text cannot carry it out."""
-    from choregos_adapters.registry import configuration_resolue, references_de_secret, slot_of
+    from choregos_adapters.registry import resolved_configuration, secret_references, slot_of
 
     from .services.github_app import pin_installation
 
     # A GitHub connector builds with the installation its organisation claimed (ADR 0073).
     config = await pin_installation(session, org_id, kind, type_name, dict(config or {}))
     preresolved = await resolve_store_fields(session, org_id, kind, type_name, secret_refs, secret_ref, store)
-    resolved = configuration_resolue(
+    resolved = resolved_configuration(
         kind, type_name, config, dict(secret_refs or {}), secret_ref, preresolved=preresolved
     )
-    for name in references_de_secret(kind, type_name, dict(secret_refs or {}), secret_ref):
+    for name in secret_references(kind, type_name, dict(secret_refs or {}), secret_ref):
         value = resolved.get(slot_of(name)[0])
         for one in value if isinstance(value, list) else [value]:
             if isinstance(one, str):

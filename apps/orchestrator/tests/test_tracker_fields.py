@@ -46,7 +46,7 @@ async def test_the_instructions_read_the_requester_and_the_catalogue_context_mar
 ) -> None:
     from choregos_api.db.models import WorkItem
     from choregos_api.db.session import session_scope
-    from choregos_core.catalogue_d_agents import _contexte
+    from choregos_core.agent_catalogue import _context
     from choregos_orchestrator.activities.stage import prepare_stage
 
     async with session_scope() as session:
@@ -54,7 +54,7 @@ async def test_the_instructions_read_the_requester_and_the_catalogue_context_mar
         assert item is not None
         item.fields = {"tracker": BLOCK}
     instructions = (
-        _contexte()
+        _context()
         + "Filed by {{ ticket.fields.tracker.reporter.display_name }} "
         + "({{ ticket.fields.tracker.answers['Project name'] }})."
     )
