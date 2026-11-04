@@ -21,8 +21,6 @@ tests/e2e/test_m3_prod_maitrisee.py	6
 tests/e2e/test_m4_multibackend_memoire.py	4
 tests/e2e/test_m5_durci.py	6
 tests/e2e/test_m6_rh.py	40
-tests/essai/__init__.py	1
-tests/essai/test_scenario_dev.py	1
 tests/fixtures/repos/node-toy/README.md	3
 tests/fixtures/repos/node-toy/src/slug.js	1
 tests/fixtures/repos/node-toy/test/slug.test.js	3
