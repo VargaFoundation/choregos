@@ -240,6 +240,6 @@ def test_sync_and_eval_call_the_endpoints() -> None:
 def test_the_shipped_example_is_a_valid_manifest() -> None:
     from choregos_cli.knowledge import collect_uploads, load_manifest
 
-    example = Path(__file__).parents[3] / "essai" / "knowledge" / "example-kb.yaml"
+    example = Path(__file__).parents[3] / "trials" / "knowledge" / "example-kb.yaml"
     manifest = load_manifest(example)
     assert {u.filename for u in collect_uploads(manifest, example.parent)} == {"offers.md", "about.md"}
