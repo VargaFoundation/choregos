@@ -1,0 +1,3159 @@
+[
+  {
+    "capabilities": [
+      "tracker"
+    ],
+    "config_schema": {
+      "properties": {},
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "fake",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "tracker",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "fake"
+  },
+  {
+    "capabilities": [
+      "scm"
+    ],
+    "config_schema": {
+      "properties": {},
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "fake",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "scm",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "fake"
+  },
+  {
+    "capabilities": [
+      "ci"
+    ],
+    "config_schema": {
+      "properties": {},
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "fake",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "ci",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "fake"
+  },
+  {
+    "capabilities": [
+      "cd"
+    ],
+    "config_schema": {
+      "properties": {},
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "fake",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "cd",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "fake"
+  },
+  {
+    "capabilities": [
+      "runtime"
+    ],
+    "config_schema": {
+      "properties": {},
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "fake",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "runtime",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "fake"
+  },
+  {
+    "capabilities": [
+      "memory"
+    ],
+    "config_schema": {
+      "properties": {},
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "fake",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "memory",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "fake"
+  },
+  {
+    "capabilities": [
+      "gateway"
+    ],
+    "config_schema": {
+      "properties": {},
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "fake",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "gateway",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "fake"
+  },
+  {
+    "capabilities": [
+      "notify"
+    ],
+    "config_schema": {
+      "properties": {},
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "fake",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "notify",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "fake"
+  },
+  {
+    "capabilities": [
+      "mcp"
+    ],
+    "config_schema": {
+      "properties": {},
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "fake",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "mcp",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "fake"
+  },
+  {
+    "capabilities": [
+      "identity"
+    ],
+    "config_schema": {
+      "properties": {},
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "fake",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "identity",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "fake"
+  },
+  {
+    "capabilities": [
+      "documents"
+    ],
+    "config_schema": {
+      "properties": {},
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "fake",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "documents",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "fake"
+  },
+  {
+    "capabilities": [
+      "mdm"
+    ],
+    "config_schema": {
+      "properties": {},
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "fake",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "mdm",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "fake"
+  },
+  {
+    "capabilities": [
+      "shipping"
+    ],
+    "config_schema": {
+      "properties": {},
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "fake",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "shipping",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "fake"
+  },
+  {
+    "capabilities": [
+      "access_control"
+    ],
+    "config_schema": {
+      "properties": {},
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "fake",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "access_control",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "fake"
+  },
+  {
+    "capabilities": [
+      "firewall"
+    ],
+    "config_schema": {
+      "properties": {},
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "fake",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "firewall",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "fake"
+  },
+  {
+    "capabilities": [
+      "network_policy"
+    ],
+    "config_schema": {
+      "properties": {},
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "fake",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "network_policy",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "fake"
+  },
+  {
+    "capabilities": [
+      "web_server"
+    ],
+    "config_schema": {
+      "properties": {},
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "fake",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "web_server",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "fake"
+  },
+  {
+    "capabilities": [
+      "tracker"
+    ],
+    "config_schema": {
+      "properties": {
+        "org": {
+          "type": "string"
+        },
+        "project_number": {
+          "type": "integer"
+        },
+        "repo": {
+          "description": "owner/repo, picked among the repositories the App can see",
+          "format": "github-repo",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "GitHub Issues + Projects v2",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "tracker",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "webhook_secret"
+    ],
+    "type": "github-issues"
+  },
+  {
+    "capabilities": [
+      "tracker"
+    ],
+    "config_schema": {
+      "properties": {},
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "internal (Choregos holds the work items)",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "tracker",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "internal"
+  },
+  {
+    "capabilities": [
+      "tracker"
+    ],
+    "config_schema": {
+      "properties": {
+        "auth": {
+          "default": "basic",
+          "description": "`scoped` for a scoped API token (a service account's): it is called through api.atlassian.com",
+          "enum": [
+            "basic",
+            "scoped"
+          ],
+          "type": "string"
+        },
+        "base_url": {
+          "description": "the site, https://<site>.atlassian.net, even with a scoped token",
+          "type": "string"
+        },
+        "candidates_jql": {
+          "description": "JQL of the issues to take on without a webhook (polled every minute, within the project); empty: the issues labelled agent-ready",
+          "type": "string"
+        },
+        "cloud_id": {
+          "description": "scoped tokens only, read from the site if empty",
+          "type": "string"
+        },
+        "email": {
+          "description": "the account the API token belongs to",
+          "type": "string"
+        },
+        "field_names": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "project_key": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "base_url",
+        "email",
+        "project_key"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Jira Cloud",
+    "has_check_config": false,
+    "has_egress": true,
+    "has_factory": true,
+    "kind": "tracker",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "api_token",
+      "webhook_secret"
+    ],
+    "type": "jira"
+  },
+  {
+    "capabilities": [
+      "tracker"
+    ],
+    "config_schema": {
+      "properties": {
+        "plugin": {
+          "description": "the installed plugin",
+          "type": "string"
+        },
+        "server": {
+          "description": "its server that `implements: [tracker]`",
+          "type": "string"
+        }
+      },
+      "required": [
+        "plugin",
+        "server"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "a plugin's server (tracker profile, S43-07)",
+    "has_check_config": true,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "tracker",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "plugin"
+  },
+  {
+    "capabilities": [
+      "tracker"
+    ],
+    "config_schema": {
+      "properties": {
+        "base_url": {
+          "default": "https://gitlab.com",
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "GitLab Issues",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "tracker",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "token",
+      "webhook_secret"
+    ],
+    "type": "gitlab-issues"
+  },
+  {
+    "capabilities": [
+      "scm"
+    ],
+    "config_schema": {
+      "properties": {
+        "merge_method": {
+          "default": "SQUASH",
+          "enum": [
+            "MERGE",
+            "SQUASH",
+            "REBASE"
+          ],
+          "type": "string"
+        },
+        "merge_queue": {
+          "default": true,
+          "type": "boolean"
+        },
+        "repo": {
+          "description": "owner/repo, picked among the repositories the App can see",
+          "format": "github-repo",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "GitHub (App choregos-bot)",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "scm",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "github"
+  },
+  {
+    "capabilities": [
+      "scm"
+    ],
+    "config_schema": {
+      "properties": {
+        "base_url": {
+          "default": "https://gitlab.com",
+          "type": "string"
+        },
+        "default_branch": {
+          "default": "main",
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "GitLab",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "scm",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "token"
+    ],
+    "type": "gitlab"
+  },
+  {
+    "capabilities": [
+      "ci"
+    ],
+    "config_schema": {
+      "properties": {
+        "namespace": {
+          "type": "string"
+        },
+        "pipeline": {
+          "default": "choregos-ci",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Tekton Pipelines",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "ci",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "tekton"
+  },
+  {
+    "capabilities": [
+      "ci"
+    ],
+    "config_schema": {
+      "properties": {
+        "base_url": {
+          "default": "https://gitlab.com",
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "project"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "GitLab CI",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "ci",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "token"
+    ],
+    "type": "gitlab"
+  },
+  {
+    "capabilities": [
+      "cd"
+    ],
+    "config_schema": {
+      "properties": {
+        "app_pattern": {
+          "default": "{app}-{env}",
+          "type": "string"
+        },
+        "base_url": {
+          "type": "string"
+        },
+        "gitops_repo": {
+          "type": "string"
+        },
+        "path_prefix": {
+          "default": "apps",
+          "type": "string"
+        }
+      },
+      "required": [
+        "gitops_repo"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Argo CD + Rollouts",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "cd",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "token"
+    ],
+    "type": "argocd"
+  },
+  {
+    "capabilities": [
+      "runtime"
+    ],
+    "config_schema": {
+      "properties": {
+        "pipeline": {
+          "default": "choregos-agent",
+          "type": "string"
+        },
+        "service_account": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Tekton PipelineRun",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "runtime",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "tekton"
+  },
+  {
+    "capabilities": [
+      "runtime"
+    ],
+    "config_schema": {
+      "properties": {},
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "k8s_job",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "runtime",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "k8s_job"
+  },
+  {
+    "capabilities": [
+      "runtime"
+    ],
+    "config_schema": {
+      "properties": {
+        "assignment_port": {
+          "type": "integer"
+        },
+        "env_from_secrets": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "max_active": {
+          "type": "integer"
+        },
+        "pool_image": {
+          "type": "string"
+        },
+        "runtime_class": {
+          "type": "string"
+        },
+        "ttl_seconds": {
+          "type": "integer"
+        },
+        "warm_pool": {
+          "default": "choregos-runner",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "kubernetes-sigs/agent-sandbox (warm pool, opt-in)",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "runtime",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "agent_sandbox"
+  },
+  {
+    "capabilities": [
+      "runtime"
+    ],
+    "config_schema": {
+      "properties": {
+        "client_id": {
+          "type": "string"
+        },
+        "environment_id": {
+          "type": "string"
+        },
+        "identity_id": {
+          "type": "string"
+        },
+        "location": {
+          "default": "westeurope",
+          "type": "string"
+        },
+        "log_analytics_workspace_id": {
+          "type": "string"
+        },
+        "registry_server": {
+          "type": "string"
+        },
+        "resource_group": {
+          "type": "string"
+        },
+        "subscription_id": {
+          "type": "string"
+        },
+        "tenant_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "subscription_id",
+        "resource_group",
+        "environment_id"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Azure Container Apps jobs",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "runtime",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "client_secret",
+      "token"
+    ],
+    "type": "aca"
+  },
+  {
+    "capabilities": [
+      "runtime"
+    ],
+    "config_schema": {
+      "properties": {
+        "network": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "local Docker (development)",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "runtime",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "local_docker"
+  },
+  {
+    "capabilities": [
+      "memory"
+    ],
+    "config_schema": {
+      "properties": {
+        "base_url": {
+          "type": "string"
+        },
+        "read_timeout_ms": {
+          "type": "integer"
+        },
+        "tenant": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Ecphoria (memory and knowledge base)",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "memory",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "token"
+    ],
+    "type": "ecphoria"
+  },
+  {
+    "capabilities": [
+      "memory"
+    ],
+    "config_schema": {
+      "properties": {},
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "lexical (fallback, no service)",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "memory",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "lexical"
+  },
+  {
+    "capabilities": [
+      "memory"
+    ],
+    "config_schema": {
+      "properties": {},
+      "type": "object"
+    },
+    "deprecated": true,
+    "dev_only": false,
+    "display": "pgvector (deprecated alias of lexical)",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "memory",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "pgvector"
+  },
+  {
+    "capabilities": [
+      "gateway"
+    ],
+    "config_schema": {
+      "properties": {
+        "models": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "direct (development only: no cost measured, no cap)",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "gateway",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "key"
+    ],
+    "type": "direct"
+  },
+  {
+    "capabilities": [
+      "gateway"
+    ],
+    "config_schema": {
+      "properties": {
+        "base_url": {
+          "type": "string"
+        },
+        "enterprise_tags": {
+          "default": false,
+          "type": "boolean"
+        },
+        "internal_prices": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "team_id": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "LiteLLM",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "gateway",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "master_key"
+    ],
+    "type": "litellm"
+  },
+  {
+    "capabilities": [
+      "gateway"
+    ],
+    "config_schema": {
+      "properties": {
+        "base_url": {
+          "type": "string"
+        },
+        "headers": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "timeout_s": {
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "OpenAI-compatible gateway (discovery only: no virtual keys, no cap, no measured cost)",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "gateway",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "api_key",
+      "run_key"
+    ],
+    "type": "openai-compatible"
+  },
+  {
+    "capabilities": [
+      "documents"
+    ],
+    "config_schema": {
+      "properties": {
+        "client_id": {
+          "type": "string"
+        },
+        "graph_url": {
+          "default": "https://graph.microsoft.com/v1.0",
+          "type": "string"
+        },
+        "login_url": {
+          "default": "https://login.microsoftonline.com",
+          "type": "string"
+        },
+        "tenant_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "tenant_id",
+        "client_id"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Microsoft SharePoint and OneDrive (Graph, Sites.Selected)",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "documents",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "client_secret"
+    ],
+    "type": "sharepoint"
+  },
+  {
+    "capabilities": [
+      "documents"
+    ],
+    "config_schema": {
+      "properties": {
+        "auth": {
+          "default": "basic",
+          "description": "`scoped` for a scoped API token: it is called through api.atlassian.com",
+          "enum": [
+            "basic",
+            "scoped"
+          ],
+          "type": "string"
+        },
+        "base_url": {
+          "description": "the Atlassian Cloud site, https://<site>.atlassian.net",
+          "pattern": "^https://[a-z0-9-]+\\.atlassian\\.net/?$",
+          "type": "string"
+        },
+        "cloud_id": {
+          "description": "scoped tokens only; `test` reports it",
+          "type": "string"
+        },
+        "email": {
+          "description": "the service account the API token belongs to",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base_url",
+        "email"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Atlassian Confluence Cloud (read)",
+    "has_check_config": false,
+    "has_egress": true,
+    "has_factory": true,
+    "kind": "documents",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "api_token"
+    ],
+    "type": "confluence"
+  },
+  {
+    "capabilities": [
+      "documents"
+    ],
+    "config_schema": {
+      "properties": {
+        "api_url": {
+          "default": "https://api.github.com",
+          "type": "string"
+        },
+        "app_id": {
+          "type": "string"
+        },
+        "auth": {
+          "default": "token",
+          "enum": [
+            "token",
+            "github_app"
+          ],
+          "type": "string"
+        },
+        "host": {
+          "default": "github.com",
+          "type": "string"
+        },
+        "installation_id": {
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Git over https (token or GitHub App)",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "documents",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "token",
+      "private_key"
+    ],
+    "type": "git"
+  },
+  {
+    "capabilities": [
+      "documents"
+    ],
+    "config_schema": {
+      "properties": {
+        "auth": {
+          "default": "bearer",
+          "enum": [
+            "bearer",
+            "basic",
+            "header"
+          ],
+          "type": "string"
+        },
+        "header_name": {
+          "description": "auth header: the header the secret goes in (X-API-Key, Cookie)",
+          "type": "string"
+        },
+        "headers": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "plain headers sent with every request, e.g. Accept-Language",
+          "type": "object"
+        },
+        "host": {
+          "description": "the site's host; the credential is sent nowhere else",
+          "type": "string"
+        },
+        "username": {
+          "description": "auth basic: the user name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "host"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Web site behind a login (bearer, basic or header)",
+    "has_check_config": true,
+    "has_egress": true,
+    "has_factory": true,
+    "kind": "documents",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "secret"
+    ],
+    "type": "web"
+  },
+  {
+    "capabilities": [
+      "identity"
+    ],
+    "config_schema": {
+      "properties": {
+        "administrative_unit_id": {
+          "description": "every account the platform creates enters it; any other is refused",
+          "type": "string"
+        },
+        "client_id": {
+          "type": "string"
+        },
+        "graph_url": {
+          "default": "https://graph.microsoft.com/v1.0",
+          "type": "string"
+        },
+        "login_url": {
+          "default": "https://login.microsoftonline.com",
+          "type": "string"
+        },
+        "tenant_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "tenant_id",
+        "client_id"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Microsoft Entra ID (Graph)",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "identity",
+    "operations": [
+      {
+        "access": "read",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "upn": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "upn"
+          ],
+          "type": "object"
+        },
+        "name": "get_user",
+        "platform_arguments": []
+      },
+      {
+        "access": "write",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "display_name": {
+              "type": "string"
+            },
+            "mail_nickname": {
+              "type": "string"
+            },
+            "upn": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "upn",
+            "display_name"
+          ],
+          "type": "object"
+        },
+        "name": "create_user",
+        "platform_arguments": []
+      },
+      {
+        "access": "write",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "group_id": {
+              "type": "string"
+            },
+            "upn": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "upn",
+            "group_id"
+          ],
+          "type": "object"
+        },
+        "name": "add_to_group",
+        "platform_arguments": []
+      },
+      {
+        "access": "write",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "group_id": {
+              "type": "string"
+            },
+            "upn": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "upn",
+            "group_id"
+          ],
+          "type": "object"
+        },
+        "name": "remove_from_group",
+        "platform_arguments": []
+      },
+      {
+        "access": "write",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "upn": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "upn"
+          ],
+          "type": "object"
+        },
+        "name": "disable_user",
+        "platform_arguments": []
+      },
+      {
+        "access": "write",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "upn": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "upn"
+          ],
+          "type": "object"
+        },
+        "name": "revoke_sessions",
+        "platform_arguments": []
+      }
+    ],
+    "pooled_fields": [],
+    "secret_fields": [
+      "client_secret"
+    ],
+    "type": "entra"
+  },
+  {
+    "capabilities": [
+      "mdm"
+    ],
+    "config_schema": {
+      "properties": {
+        "url": {
+          "description": "the MCP endpoint of the single process serving the fakes (`choregos_adapters.fakes.server`); empty: in this process",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": true,
+    "display": "demo device management (in memory: demonstrations only, refused in staging and prod)",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "mdm",
+    "operations": [
+      {
+        "access": "write",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "serial": {
+              "type": "string"
+            },
+            "upn": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "serial",
+            "upn"
+          ],
+          "type": "object"
+        },
+        "name": "enroll_device",
+        "platform_arguments": []
+      },
+      {
+        "access": "write",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "serial": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "serial"
+          ],
+          "type": "object"
+        },
+        "name": "wipe_device",
+        "platform_arguments": []
+      },
+      {
+        "access": "read",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "serial": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "serial"
+          ],
+          "type": "object"
+        },
+        "name": "device_status",
+        "platform_arguments": []
+      }
+    ],
+    "pooled_fields": [],
+    "secret_fields": [
+      "api_key"
+    ],
+    "type": "demo"
+  },
+  {
+    "capabilities": [
+      "shipping"
+    ],
+    "config_schema": {
+      "properties": {
+        "url": {
+          "description": "the MCP endpoint of the single process serving the fakes (`choregos_adapters.fakes.server`); empty: in this process",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": true,
+    "display": "demo carrier (in memory: demonstrations only, refused in staging and prod)",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "shipping",
+    "operations": [
+      {
+        "access": "write",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "address": {
+              "type": "string"
+            },
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "reference": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "reference",
+            "address"
+          ],
+          "type": "object"
+        },
+        "name": "create_shipment",
+        "platform_arguments": []
+      },
+      {
+        "access": "write",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "address": {
+              "type": "string"
+            },
+            "reference": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "reference",
+            "address"
+          ],
+          "type": "object"
+        },
+        "name": "create_return",
+        "platform_arguments": []
+      },
+      {
+        "access": "read",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "reference": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "reference"
+          ],
+          "type": "object"
+        },
+        "name": "shipment_status",
+        "platform_arguments": []
+      }
+    ],
+    "pooled_fields": [],
+    "secret_fields": [
+      "api_key"
+    ],
+    "type": "demo"
+  },
+  {
+    "capabilities": [
+      "access_control"
+    ],
+    "config_schema": {
+      "properties": {
+        "url": {
+          "description": "the MCP endpoint of the single process serving the fakes (`choregos_adapters.fakes.server`); empty: in this process",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": true,
+    "display": "demo badge readers (in memory: demonstrations only, refused in staging and prod)",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "access_control",
+    "operations": [
+      {
+        "access": "write",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "holder": {
+              "type": "string"
+            },
+            "uid": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "uid",
+            "holder"
+          ],
+          "type": "object"
+        },
+        "name": "activate_badge",
+        "platform_arguments": []
+      },
+      {
+        "access": "write",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "uid": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "uid"
+          ],
+          "type": "object"
+        },
+        "name": "deactivate_badge",
+        "platform_arguments": []
+      },
+      {
+        "access": "read",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "uid": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "uid"
+          ],
+          "type": "object"
+        },
+        "name": "badge_status",
+        "platform_arguments": []
+      }
+    ],
+    "pooled_fields": [],
+    "secret_fields": [
+      "api_key"
+    ],
+    "type": "demo"
+  },
+  {
+    "capabilities": [
+      "cd"
+    ],
+    "config_schema": {
+      "properties": {
+        "url": {
+          "description": "the MCP endpoint of the single process serving the fakes (`choregos_adapters.fakes.server`); empty: in this process",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": true,
+    "display": "demo deployment (in memory: demonstrations only, refused in staging and prod)",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "cd",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "api_key"
+    ],
+    "type": "demo"
+  },
+  {
+    "capabilities": [
+      "firewall"
+    ],
+    "config_schema": {
+      "properties": {
+        "base_url": {
+          "description": "https://<pfsense>, without /api/v2",
+          "type": "string"
+        },
+        "ca_cert": {
+          "description": "PEM of the CA that signed the device's certificate",
+          "type": "string"
+        },
+        "verify_tls": {
+          "default": true,
+          "description": "false: dev only, logged each time; refused in staging and prod",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "base_url"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "pfSense (REST API package, v2)",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "firewall",
+    "operations": [
+      {
+        "access": "read",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "interface": {
+              "type": "string"
+            },
+            "limit": {
+              "maximum": 1000,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          "required": [],
+          "type": "object"
+        },
+        "name": "list_firewall_rules",
+        "platform_arguments": []
+      },
+      {
+        "access": "read",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "string"
+            }
+          },
+          "required": [],
+          "type": "object"
+        },
+        "name": "list_aliases",
+        "platform_arguments": []
+      },
+      {
+        "access": "read",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "interface": {
+              "type": "string"
+            }
+          },
+          "required": [],
+          "type": "object"
+        },
+        "name": "list_port_forwards",
+        "platform_arguments": []
+      },
+      {
+        "access": "read",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {},
+          "required": [],
+          "type": "object"
+        },
+        "name": "list_interfaces",
+        "platform_arguments": []
+      },
+      {
+        "access": "read",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {},
+          "required": [],
+          "type": "object"
+        },
+        "name": "gateway_status",
+        "platform_arguments": []
+      },
+      {
+        "access": "write",
+        "compensation": {
+          "arguments": {
+            "tracker": "{{ result.tracker }}"
+          },
+          "operation": "delete_firewall_rule"
+        },
+        "human_approval": true,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "rule": {
+              "description": "pfrest v2 rule fields: type, interface, ipprotocol, protocol, source, destination, destination_port, descr\u2026",
+              "type": "object"
+            }
+          },
+          "required": [
+            "rule"
+          ],
+          "type": "object"
+        },
+        "name": "create_firewall_rule",
+        "platform_arguments": [
+          "action_key"
+        ]
+      },
+      {
+        "access": "write",
+        "compensation": {
+          "arguments": {
+            "snapshot": "{{ result.snapshot }}"
+          },
+          "operation": "restore_firewall_rule"
+        },
+        "human_approval": true,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "changes": {
+              "description": "pfrest v2 rule fields: type, interface, ipprotocol, protocol, source, destination, destination_port, descr\u2026",
+              "type": "object"
+            },
+            "tracker": {
+              "description": "the rule's `tracker`, its stable identity (its `id` is a position and moves)",
+              "type": [
+                "string",
+                "integer"
+              ]
+            }
+          },
+          "required": [
+            "tracker",
+            "changes"
+          ],
+          "type": "object"
+        },
+        "name": "update_firewall_rule",
+        "platform_arguments": [
+          "action_key"
+        ]
+      },
+      {
+        "access": "write",
+        "compensation": {
+          "arguments": {
+            "snapshot": "{{ result.snapshot }}"
+          },
+          "operation": "restore_firewall_rule"
+        },
+        "human_approval": true,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "tracker": {
+              "description": "the rule's `tracker`, its stable identity (its `id` is a position and moves)",
+              "type": [
+                "string",
+                "integer"
+              ]
+            }
+          },
+          "required": [
+            "tracker"
+          ],
+          "type": "object"
+        },
+        "name": "delete_firewall_rule",
+        "platform_arguments": []
+      },
+      {
+        "access": "write",
+        "compensation": null,
+        "human_approval": true,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "snapshot": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "snapshot"
+          ],
+          "type": "object"
+        },
+        "name": "restore_firewall_rule",
+        "platform_arguments": []
+      }
+    ],
+    "pooled_fields": [],
+    "secret_fields": [
+      "api_key"
+    ],
+    "type": "pfsense"
+  },
+  {
+    "capabilities": [
+      "network_policy",
+      "flows"
+    ],
+    "config_schema": {
+      "properties": {
+        "ca_cert": {
+          "description": "PEM of the cluster's CA",
+          "type": "string"
+        },
+        "gitops_base": {
+          "default": "main",
+          "type": "string"
+        },
+        "gitops_path": {
+          "default": "cilium",
+          "description": "the policies' directory",
+          "type": "string"
+        },
+        "gitops_repo": {
+          "description": "owner/repo where policy changes are proposed",
+          "type": "string"
+        },
+        "hubble_ca_cert": {
+          "description": "PEM of Hubble Relay's CA",
+          "type": "string"
+        },
+        "hubble_client_cert": {
+          "description": "PEM, when Relay requires mTLS",
+          "type": "string"
+        },
+        "hubble_server": {
+          "default": "hubble-relay.kube-system.svc:443",
+          "type": "string"
+        },
+        "hubble_tls": {
+          "default": true,
+          "type": "boolean"
+        },
+        "hubble_tls_server_name": {
+          "type": "string"
+        },
+        "kubernetes_url": {
+          "description": "the cluster's API server, https",
+          "type": "string"
+        },
+        "verify_tls": {
+          "default": true,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "kubernetes_url"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Cilium (network policies, Hubble flows)",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "network_policy",
+    "operations": [
+      {
+        "access": "read",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "namespace": {
+              "type": "string"
+            }
+          },
+          "required": [],
+          "type": "object"
+        },
+        "name": "list_network_policies",
+        "platform_arguments": []
+      },
+      {
+        "access": "read",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {},
+          "required": [],
+          "type": "object"
+        },
+        "name": "list_clusterwide_policies",
+        "platform_arguments": []
+      },
+      {
+        "access": "read",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "last": {
+              "maximum": 2000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "namespace": {
+              "type": "string"
+            },
+            "pod": {
+              "description": "a pod name or its prefix",
+              "type": "string"
+            },
+            "since": {
+              "description": "a duration such as 10m, or an RFC 3339 time",
+              "type": "string"
+            },
+            "verdict": {
+              "enum": [
+                "FORWARDED",
+                "DROPPED",
+                "ERROR",
+                "AUDIT"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [],
+          "type": "object"
+        },
+        "name": "get_flows",
+        "platform_arguments": []
+      },
+      {
+        "access": "write",
+        "compensation": null,
+        "human_approval": true,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "manifest": {
+              "description": "the policy's YAML, whole",
+              "type": "string"
+            },
+            "path": {
+              "description": "the file, under the connector's GitOps root",
+              "type": "string"
+            },
+            "rationale": {
+              "description": "why: the findings and the risk",
+              "type": "string"
+            },
+            "title": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "manifest",
+            "title",
+            "rationale"
+          ],
+          "type": "object"
+        },
+        "name": "propose_network_policy",
+        "platform_arguments": [
+          "action_key",
+          "work_item_key"
+        ]
+      }
+    ],
+    "pooled_fields": [],
+    "secret_fields": [
+      "token",
+      "hubble_client_key",
+      "gitops_token"
+    ],
+    "type": "cilium"
+  },
+  {
+    "capabilities": [
+      "web_server"
+    ],
+    "config_schema": {
+      "properties": {
+        "api_url": {
+          "default": "https://api.github.com",
+          "type": "string"
+        },
+        "ref": {
+          "default": "main",
+          "type": "string"
+        },
+        "repo": {
+          "description": "owner/repo of the GitOps repository",
+          "type": "string"
+        },
+        "root": {
+          "default": "nginx",
+          "description": "the configuration's directory",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "nginx (configuration from the GitOps repository)",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "web_server",
+    "operations": [
+      {
+        "access": "read",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [],
+          "type": "object"
+        },
+        "name": "list_nginx_files",
+        "platform_arguments": []
+      },
+      {
+        "access": "read",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "type": "object"
+        },
+        "name": "read_nginx_file",
+        "platform_arguments": []
+      },
+      {
+        "access": "write",
+        "compensation": null,
+        "human_approval": true,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "content": {
+              "description": "the file's new content, whole",
+              "type": "string"
+            },
+            "path": {
+              "description": "the file, under the connector's root",
+              "type": "string"
+            },
+            "rationale": {
+              "description": "why: the findings and the risk",
+              "type": "string"
+            },
+            "title": {
+              "maxLength": 200,
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "content",
+            "title",
+            "rationale"
+          ],
+          "type": "object"
+        },
+        "name": "propose_nginx_config",
+        "platform_arguments": [
+          "action_key",
+          "work_item_key"
+        ]
+      }
+    ],
+    "pooled_fields": [],
+    "secret_fields": [
+      "token"
+    ],
+    "type": "nginx"
+  },
+  {
+    "capabilities": [
+      "marketdata"
+    ],
+    "config_schema": {
+      "properties": {
+        "key_rotation": {
+          "default": "failover",
+          "description": "with several keys (`api_key.2` \u2026): `failover` uses the first that answers, `round_robin` spreads the calls",
+          "enum": [
+            "failover",
+            "round_robin"
+          ]
+        },
+        "suffix_map": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "ticker suffix -> Stooq market suffix, e.g. {\"\": \".us\", \".L\": \".uk\"}",
+          "type": "object"
+        },
+        "timeout_s": {
+          "default": 20,
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Stooq (daily CSV, free)",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "marketdata",
+    "operations": [
+      {
+        "access": "read",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "end": {
+              "description": "YYYY-MM-DD, not before start",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+              "type": "string"
+            },
+            "start": {
+              "description": "YYYY-MM-DD",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+              "type": "string"
+            },
+            "symbol": {
+              "description": "e.g. AAPL, MC.PA, ^GSPC",
+              "pattern": "^[A-Za-z0-9.^=_-]{1,20}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "symbol",
+            "start",
+            "end"
+          ],
+          "type": "object"
+        },
+        "name": "get_bars",
+        "platform_arguments": []
+      },
+      {
+        "access": "read",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "symbol": {
+              "description": "e.g. AAPL",
+              "pattern": "^[A-Za-z0-9.^=_-]{1,20}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "symbol"
+          ],
+          "type": "object"
+        },
+        "name": "get_instrument",
+        "platform_arguments": []
+      }
+    ],
+    "pooled_fields": [
+      "api_key"
+    ],
+    "secret_fields": [
+      "api_key"
+    ],
+    "type": "stooq"
+  },
+  {
+    "capabilities": [
+      "marketdata"
+    ],
+    "config_schema": {
+      "properties": {
+        "timeout_s": {
+          "default": 20,
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Yahoo Finance chart (unofficial: personal use only, may break)",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "marketdata",
+    "operations": [
+      {
+        "access": "read",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "end": {
+              "description": "YYYY-MM-DD, not before start",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+              "type": "string"
+            },
+            "start": {
+              "description": "YYYY-MM-DD",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+              "type": "string"
+            },
+            "symbol": {
+              "description": "e.g. AAPL, MC.PA, ^GSPC",
+              "pattern": "^[A-Za-z0-9.^=_-]{1,20}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "symbol",
+            "start",
+            "end"
+          ],
+          "type": "object"
+        },
+        "name": "get_bars",
+        "platform_arguments": []
+      },
+      {
+        "access": "read",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "symbol": {
+              "description": "e.g. AAPL",
+              "pattern": "^[A-Za-z0-9.^=_-]{1,20}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "symbol"
+          ],
+          "type": "object"
+        },
+        "name": "get_instrument",
+        "platform_arguments": []
+      }
+    ],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "yahoo"
+  },
+  {
+    "capabilities": [
+      "marketdata"
+    ],
+    "config_schema": {
+      "properties": {
+        "key_rotation": {
+          "default": "failover",
+          "description": "with several keys (`api_key.2` \u2026): `failover` uses the first that answers, `round_robin` spreads the calls",
+          "enum": [
+            "failover",
+            "round_robin"
+          ]
+        },
+        "outputsize": {
+          "default": "auto",
+          "description": "`compact`: always the last 100 trading days (free key); cross-check only",
+          "enum": [
+            "auto",
+            "compact"
+          ]
+        },
+        "timeout_s": {
+          "default": 20,
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Alpha Vantage (free key: about 25 requests a day, unadjusted daily bars)",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "marketdata",
+    "operations": [
+      {
+        "access": "read",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "end": {
+              "description": "YYYY-MM-DD, not before start",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+              "type": "string"
+            },
+            "start": {
+              "description": "YYYY-MM-DD",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+              "type": "string"
+            },
+            "symbol": {
+              "description": "e.g. AAPL, MC.PA, ^GSPC",
+              "pattern": "^[A-Za-z0-9.^=_-]{1,20}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "symbol",
+            "start",
+            "end"
+          ],
+          "type": "object"
+        },
+        "name": "get_bars",
+        "platform_arguments": []
+      },
+      {
+        "access": "read",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "symbol": {
+              "description": "e.g. AAPL",
+              "pattern": "^[A-Za-z0-9.^=_-]{1,20}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "symbol"
+          ],
+          "type": "object"
+        },
+        "name": "get_instrument",
+        "platform_arguments": []
+      }
+    ],
+    "pooled_fields": [
+      "api_key"
+    ],
+    "secret_fields": [
+      "api_key"
+    ],
+    "type": "alphavantage"
+  },
+  {
+    "capabilities": [
+      "marketdata"
+    ],
+    "config_schema": {
+      "properties": {
+        "timeout_s": {
+          "default": 20,
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Tiingo (free key: 30+ years of daily history, internal and personal use only)",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "marketdata",
+    "operations": [
+      {
+        "access": "read",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "end": {
+              "description": "YYYY-MM-DD, not before start",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+              "type": "string"
+            },
+            "start": {
+              "description": "YYYY-MM-DD",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+              "type": "string"
+            },
+            "symbol": {
+              "description": "e.g. AAPL, MC.PA, ^GSPC",
+              "pattern": "^[A-Za-z0-9.^=_-]{1,20}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "symbol",
+            "start",
+            "end"
+          ],
+          "type": "object"
+        },
+        "name": "get_bars",
+        "platform_arguments": []
+      },
+      {
+        "access": "read",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "symbol": {
+              "description": "e.g. AAPL",
+              "pattern": "^[A-Za-z0-9.^=_-]{1,20}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "symbol"
+          ],
+          "type": "object"
+        },
+        "name": "get_instrument",
+        "platform_arguments": []
+      }
+    ],
+    "pooled_fields": [],
+    "secret_fields": [
+      "api_key"
+    ],
+    "type": "tiingo"
+  },
+  {
+    "capabilities": [
+      "marketdata"
+    ],
+    "config_schema": {
+      "properties": {
+        "cross_check": {
+          "default": true,
+          "type": "boolean"
+        },
+        "key_rotation": {
+          "default": "failover",
+          "description": "with several keys (`api_key.2` \u2026): `failover` uses the first that answers, `round_robin` spreads the calls",
+          "enum": [
+            "failover",
+            "round_robin"
+          ]
+        },
+        "source_configs": {
+          "additionalProperties": {
+            "type": "object"
+          },
+          "description": "sub-configuration by provider type, e.g. {\"stooq\": {\"suffix_map\": {}}}",
+          "type": "object"
+        },
+        "sources": {
+          "description": "provider types, in the order they are tried",
+          "items": {
+            "enum": [
+              "stooq",
+              "yahoo",
+              "alphavantage",
+              "tiingo"
+            ]
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "tolerance": {
+          "default": 0.02,
+          "minimum": 0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "sources"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "market data from several sources, with fallback and a cross-check of the closes",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "marketdata",
+    "operations": [
+      {
+        "access": "read",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "end": {
+              "description": "YYYY-MM-DD, not before start",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+              "type": "string"
+            },
+            "start": {
+              "description": "YYYY-MM-DD",
+              "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+              "type": "string"
+            },
+            "symbol": {
+              "description": "e.g. AAPL, MC.PA, ^GSPC",
+              "pattern": "^[A-Za-z0-9.^=_-]{1,20}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "symbol",
+            "start",
+            "end"
+          ],
+          "type": "object"
+        },
+        "name": "get_bars",
+        "platform_arguments": []
+      },
+      {
+        "access": "read",
+        "compensation": null,
+        "human_approval": false,
+        "input_schema": {
+          "additionalProperties": false,
+          "properties": {
+            "symbol": {
+              "description": "e.g. AAPL",
+              "pattern": "^[A-Za-z0-9.^=_-]{1,20}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "symbol"
+          ],
+          "type": "object"
+        },
+        "name": "get_instrument",
+        "platform_arguments": []
+      }
+    ],
+    "pooled_fields": [
+      "stooq_api_key",
+      "alphavantage_api_key"
+    ],
+    "secret_fields": [
+      "stooq_api_key",
+      "alphavantage_api_key",
+      "tiingo_api_key"
+    ],
+    "type": "composite"
+  },
+  {
+    "capabilities": [
+      "marketdata"
+    ],
+    "config_schema": {
+      "properties": {},
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "fake",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "marketdata",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "fake"
+  },
+  {
+    "capabilities": [
+      "web_search"
+    ],
+    "config_schema": {
+      "properties": {
+        "data_handling": {
+          "additionalProperties": false,
+          "description": "a stricter declaration than the backend's, from the organisation's contract (`terms_ref` required)",
+          "properties": {
+            "query_retention_days": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "query_reuse": {
+              "type": "boolean"
+            },
+            "region": {
+              "type": "string"
+            },
+            "terms_ref": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "key_rotation": {
+          "default": "failover",
+          "description": "with several keys (`api_key.2` \u2026): `failover` uses the first that answers, `round_robin` spreads the calls",
+          "enum": [
+            "failover",
+            "round_robin"
+          ]
+        },
+        "price_usd_per_query": {
+          "default": 0,
+          "description": "what one query costs under the organisation's plan, written to the ledger",
+          "minimum": 0,
+          "type": "number"
+        },
+        "requests_per_minute": {
+          "default": 30,
+          "description": "the organisation's queries to this backend per minute; beyond, a 429",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "timeout_s": {
+          "default": 20,
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Brave Search API",
+    "has_check_config": false,
+    "has_egress": true,
+    "has_factory": true,
+    "kind": "web_search",
+    "operations": [],
+    "pooled_fields": [
+      "api_key"
+    ],
+    "secret_fields": [
+      "api_key"
+    ],
+    "type": "brave"
+  },
+  {
+    "capabilities": [
+      "web_search"
+    ],
+    "config_schema": {
+      "properties": {
+        "data_handling": {
+          "additionalProperties": false,
+          "description": "a stricter declaration than the backend's, from the organisation's contract (`terms_ref` required)",
+          "properties": {
+            "query_retention_days": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "query_reuse": {
+              "type": "boolean"
+            },
+            "region": {
+              "type": "string"
+            },
+            "terms_ref": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "key_rotation": {
+          "default": "failover",
+          "description": "with several keys (`api_key.2` \u2026): `failover` uses the first that answers, `round_robin` spreads the calls",
+          "enum": [
+            "failover",
+            "round_robin"
+          ]
+        },
+        "price_usd_per_query": {
+          "default": 0,
+          "description": "what one query costs under the organisation's plan, written to the ledger",
+          "minimum": 0,
+          "type": "number"
+        },
+        "requests_per_minute": {
+          "default": 30,
+          "description": "the organisation's queries to this backend per minute; beyond, a 429",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "timeout_s": {
+          "default": 20,
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Tavily search (links and snippets only)",
+    "has_check_config": false,
+    "has_egress": true,
+    "has_factory": true,
+    "kind": "web_search",
+    "operations": [],
+    "pooled_fields": [
+      "api_key"
+    ],
+    "secret_fields": [
+      "api_key"
+    ],
+    "type": "tavily"
+  },
+  {
+    "capabilities": [
+      "web_search"
+    ],
+    "config_schema": {
+      "properties": {
+        "base_url": {
+          "description": "the address of your self-hosted Firecrawl instance, required; Firecrawl's cloud (firecrawl.dev) is refused",
+          "type": "string"
+        },
+        "data_handling": {
+          "additionalProperties": false,
+          "description": "a stricter declaration than the backend's, from the organisation's contract (`terms_ref` required)",
+          "properties": {
+            "query_retention_days": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "query_reuse": {
+              "type": "boolean"
+            },
+            "region": {
+              "type": "string"
+            },
+            "terms_ref": {
+              "type": "string"
+            }
+          },
+          "type": "object"
+        },
+        "price_usd_per_query": {
+          "default": 0,
+          "description": "what one query costs under the organisation's plan, written to the ledger",
+          "minimum": 0,
+          "type": "number"
+        },
+        "requests_per_minute": {
+          "default": 30,
+          "description": "the organisation's queries to this backend per minute; beyond, a 429",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "timeout_s": {
+          "default": 20,
+          "type": "number"
+        }
+      },
+      "required": [
+        "base_url"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Firecrawl search, self-hosted only (no scraping)",
+    "has_check_config": true,
+    "has_egress": true,
+    "has_factory": true,
+    "kind": "web_search",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "api_key"
+    ],
+    "type": "firecrawl"
+  },
+  {
+    "capabilities": [
+      "web_search"
+    ],
+    "config_schema": {
+      "properties": {},
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "fake",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "web_search",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "fake"
+  },
+  {
+    "capabilities": [
+      "mcp"
+    ],
+    "config_schema": {
+      "properties": {
+        "auth_header": {
+          "default": "Authorization",
+          "description": "the header the token travels in: `Authorization` sends a Bearer, another name (`X-API-Key`) sends the raw token",
+          "type": "string"
+        },
+        "auth_scheme": {
+          "default": "bearer",
+          "description": "how the token is sent: Bearer, or Basic base64(username:token)",
+          "enum": [
+            "bearer",
+            "basic"
+          ],
+          "type": "string"
+        },
+        "timeout_s": {
+          "default": 30,
+          "type": "number"
+        },
+        "url": {
+          "description": "the server's MCP endpoint, https",
+          "type": "string"
+        },
+        "username": {
+          "description": "the account, for `basic` (an email)",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "MCP server (Streamable HTTP)",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "mcp",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "token"
+    ],
+    "type": "mcp"
+  },
+  {
+    "capabilities": [
+      "mcp"
+    ],
+    "config_schema": {
+      "properties": {
+        "server": {
+          "description": "the server's name at the organisation's MCP gateway",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$",
+          "type": "string"
+        },
+        "timeout_s": {
+          "description": "seconds before a call is abandoned; absent: the gateway's timeout",
+          "maximum": 120,
+          "minimum": 1,
+          "type": "number"
+        }
+      },
+      "required": [
+        "server"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "MCP server through the organisation's MCP gateway",
+    "has_check_config": true,
+    "has_egress": true,
+    "has_factory": true,
+    "kind": "mcp",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "mcp-gateway"
+  },
+  {
+    "capabilities": [
+      "notify"
+    ],
+    "config_schema": {
+      "properties": {
+        "channel": {
+          "default": "#choregos",
+          "type": "string"
+        },
+        "public_url": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "Slack",
+    "has_check_config": false,
+    "has_egress": false,
+    "has_factory": true,
+    "kind": "notify",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "webhook_url",
+      "bot_token"
+    ],
+    "type": "slack"
+  },
+  {
+    "capabilities": [
+      "notify"
+    ],
+    "config_schema": {
+      "properties": {
+        "from_address": {
+          "type": "string"
+        },
+        "host": {
+          "type": "string"
+        },
+        "port": {
+          "default": 587,
+          "type": "integer"
+        },
+        "starttls": {
+          "default": true,
+          "type": "boolean"
+        },
+        "to": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "use_ssl": {
+          "default": false,
+          "type": "boolean"
+        },
+        "username": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "host",
+        "from_address"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "E-mail (SMTP)",
+    "has_check_config": false,
+    "has_egress": true,
+    "has_factory": true,
+    "kind": "notify",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [
+      "password"
+    ],
+    "type": "email"
+  }
+]
