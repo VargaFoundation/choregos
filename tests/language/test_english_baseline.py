@@ -387,15 +387,15 @@ def test_a_lower_count_or_a_gone_file_is_stale_not_a_failure(
     # the same, through the command line, on a temporary baseline directory
     baselines = tmp_path / "baselines"
     ce.write_baselines({f"{API}/module.py": 2, "apps/api/gone.py": 1}, ["api-root"], baselines, init=True)
-    assert ce.main(["--all", "--baseline-dir", str(baselines)]) == 0
+    assert ce.main(["--all", "--lenient", "--baseline-dir", str(baselines)]) == 0
     assert (
         "stale: api-root — run tools/check_english.py --update-baseline --area api-root"
         in capsys.readouterr().out
     )
-    assert ce.main(["--all", "--strict", "--baseline-dir", str(baselines)]) == 1
+    assert ce.main(["--all", "--baseline-dir", str(baselines)]) == 1
     assert ce.main(["--update-baseline", "--area", "api-root", "--baseline-dir", str(baselines)]) == 0
     assert ce.load_baselines(baselines)["api-root"] == {f"{API}/module.py": 1}
-    assert ce.main(["--all", "--strict", "--baseline-dir", str(baselines)]) == 0
+    assert ce.main(["--all", "--baseline-dir", str(baselines)]) == 0
 
 
 def test_an_equal_count_is_neither() -> None:
@@ -451,11 +451,11 @@ def test_init_refuses_when_baselines_exist(tmp_path: pathlib.Path) -> None:
     assert [p.name for p in tmp_path.iterdir()] == ["core.tsv"], "nothing else was written"
 
 
-def test_init_alone_and_strict_alone_are_usage_errors() -> None:
+def test_init_alone_and_lenient_alone_are_usage_errors() -> None:
     with pytest.raises(SystemExit):
         ce.main(["--init"])
     with pytest.raises(SystemExit):
-        ce.main(["--strict"])
+        ce.main(["--lenient"])
 
 
 # ───────────────────────────────── the whole tool, on a throwaway tree ─────────────────────────────────

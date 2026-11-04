@@ -24,7 +24,7 @@ from choregos_api.secret_store import FakeSecretStore, set_secret_store
 from httpx import AsyncClient
 from sqlalchemy import func, select
 
-from .test_courtier import ORG, OUTILS, _preparer
+from .test_broker import ORG, TOOLS, _prepare
 from .test_plugin_servers import HELLO, INSTALL, SECOND
 
 GATEWAY = f"{ORG}/mcp-gateway"
@@ -49,15 +49,15 @@ def store() -> Iterator[FakeSecretStore]:
 
 @pytest.fixture
 def direct_server(monkeypatch: pytest.MonkeyPatch) -> Iterator[FakeMcpServer]:
-    """The server of the direct `fournisseur` connector (the one `test_courtier._preparer` declares)."""
-    server = _server(OUTILS, token="cle-fournisseur")
+    """The server of the direct `fournisseur` connector (the one `test_broker._prepare` declares)."""
+    server = _server(TOOLS, token="cle-fournisseur")
     monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_CLE_FOURNISSEUR", "cle-fournisseur")
     yield server
 
 
 def _server(tools: list[dict[str, Any]], token: str = "") -> FakeMcpServer:
-    return FakeMcpServer(outils=[dict(t) for t in tools], jeton=token)
+    return FakeMcpServer(tools=[dict(t) for t in tools], token=token)
 
 
 async def _put_gateway(client: AsyncClient, mode: str = "available", **over: Any) -> dict[str, Any]:
@@ -85,7 +85,7 @@ async def _install_gateway(
         audience="gw",
         issuer=state["assertion"]["issuer"],
         upstreams={
-            "supplier": GatewayUpstream(server=_server(OUTILS, token="upstream-key"), token="upstream-key")
+            "supplier": GatewayUpstream(server=_server(TOOLS, token="upstream-key"), token="upstream-key")
         },
     )
     monkeypatch.setattr(choregos_adapters, "FAKE_MCP_GATEWAY", fake)
@@ -158,7 +158,7 @@ async def _prepare_gateway(
 
 async def _prepare_direct(client: AsyncClient, project: dict[str, Any]) -> tuple[str, dict[str, str]]:
     """A direct `fournisseur` connector (discovered, opened) and a run of its agent."""
-    return await _preparer(client, project, ["*"])
+    return await _prepare(client, project, ["*"])
 
 
 async def _ledger(provider: str) -> int:
@@ -257,7 +257,9 @@ async def test_discovery_goes_through_the_gateway_and_tools_are_born_closed(
         c["purpose"] == "discovery" and c["sub"] == "person:admin@varga.dev" for c in claims
     )
     upstream = _upstream(fake)
-    assert upstream.recues and {h["authorization"] for _, h, _ in upstream.recues} == {"Bearer upstream-key"}
+    assert upstream.received and {h["authorization"] for _, h, _ in upstream.received} == {
+        "Bearer upstream-key"
+    }
     assert "upstream-key" not in {value[0] for value in store.values.values()}
 
 
@@ -273,7 +275,7 @@ async def test_a_runs_read_reaches_the_server_through_the_gateway_with_its_ident
     fake, headers = await _prepare_gateway(client, project, monkeypatch)
     answer = await client.post(f"{BASE}/supplier__suivi_commande", headers=headers, json={"numero": "42"})
     assert answer.status_code == 200 and answer.json()["status_code"] == 200, answer.text
-    assert _upstream(fake).appels == [("suivi_commande", {"numero": "42"})]
+    assert _upstream(fake).calls == [("suivi_commande", {"numero": "42"})]
     (call,) = [c for c in fake.calls if c.method == "tools/call"]
     assert call.claims is not None
     assert {
@@ -340,7 +342,7 @@ async def test_required_mode_refuses_direct_connectors_at_declaration_and_at_cal
     assert read.status_code == 200 and read.json()["status_code"] == 403, read.text
     assert read.json()["result"]["type"] == "network_policy"
     assert read.json()["result"]["code"] == "gateway_required"
-    assert not [name for name, _args in direct_server.appels], "nothing reached the server"
+    assert not [name for name, _args in direct_server.calls], "nothing reached the server"
     assert await _ledger("mcp:fournisseur") == 0
 
 
@@ -363,7 +365,7 @@ async def test_required_mode_refuses_a_direct_write_and_an_approval_without_an_a
     assert write.status_code == 200 and write.json()["status_code"] == 403, write.text
     assert write.json()["result"]["code"] == "gateway_required"
     assert await _actions() == 0
-    assert direct_server.appels == []
+    assert direct_server.calls == []
     assert await _ledger("mcp:fournisseur") == 0
 
 
@@ -484,7 +486,7 @@ async def test_an_effect_refused_by_the_gateway_route_is_final(
         call = {"connector": "fournisseur", "operation": "suivi_commande", "arguments": {"numero": "1"}}
         with pytest.raises(EffectRefused, match="only through its MCP gateway"):
             await effect("connector.call")(EffectContext(session, action, found), call)
-    assert direct_server.appels == []
+    assert direct_server.calls == []
 
 
 # ───────────────────────────── a plugin's server ─────────────────────────────

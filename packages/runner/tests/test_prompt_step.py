@@ -100,15 +100,15 @@ async def test_the_gateway_key_goes_to_the_gateway_only(
     stage_input: StageInput, runner_settings: Any
 ) -> None:
     crm = FakeMcpServer(
-        outils=[{"name": "lookup", "description": "Look up.", "inputSchema": {"type": "object"}}]
+        tools=[{"name": "lookup", "description": "Look up.", "inputSchema": {"type": "object"}}]
     )
     model = FakeModelServer(key=KEY).call("crm__lookup", {"customer": "acme"}).say("Acme is a customer.")
     stage = _prompt(stage_input, tools=ToolsRef(mcp={"crm": McpServerRef(url=CRM)}))
     _, client = await _run(stage, model, runner_settings, crm)
 
-    assert crm.appels == [("lookup", {"customer": "acme"})]
+    assert crm.calls == [("lookup", {"customer": "acme"})]
     assert all(headers.get("authorization") == f"Bearer {KEY}" for headers, _ in model.requests)
-    assert not any(KEY in json.dumps(headers) or KEY in json.dumps(body) for _, headers, body in crm.recues)
+    assert not any(KEY in json.dumps(headers) or KEY in json.dumps(body) for _, headers, body in crm.received)
     assert KEY not in json.dumps(client.events), "the key is in no journal event"
     assert client.results[-1].status is StageStatus.DONE, "text answers a step that declares no output"
 
@@ -129,13 +129,13 @@ async def test_the_loop_stops_at_max_turns(stage_input: StageInput, runner_setti
 async def test_a_tool_the_model_was_not_offered_is_never_relayed(
     stage_input: StageInput, runner_settings: Any
 ) -> None:
-    crm = FakeMcpServer(outils=[{"name": "lookup", "description": "", "inputSchema": {"type": "object"}}])
-    crm.gestes["drop_table"] = lambda arguments: {"dropped": True}
+    crm = FakeMcpServer(tools=[{"name": "lookup", "description": "", "inputSchema": {"type": "object"}}])
+    crm.gestures["drop_table"] = lambda arguments: {"dropped": True}
     model = FakeModelServer(key=KEY).call("crm__drop_table", {}).call("drop_table", {}).say("Nothing to do.")
     stage = _prompt(stage_input, tools=ToolsRef(mcp={"crm": McpServerRef(url=CRM)}))
     _, client = await _run(stage, model, runner_settings, crm)
 
-    assert crm.appels == []
+    assert crm.calls == []
     assert [event["tool"] for event in _events(client, "prompt.tool_refused")] == [
         "crm__drop_table",
         "drop_table",
@@ -146,12 +146,12 @@ async def test_a_tool_the_model_was_not_offered_is_never_relayed(
 async def test_an_mcp_call_the_guard_rails_refuse_is_not_relayed(
     stage_input: StageInput, runner_settings: Any
 ) -> None:
-    crm = FakeMcpServer(outils=[{"name": "run", "description": "", "inputSchema": {"type": "object"}}])
+    crm = FakeMcpServer(tools=[{"name": "run", "description": "", "inputSchema": {"type": "object"}}])
     model = FakeModelServer(key=KEY).call("crm__run", {"command": "kubectl delete ns prod"}).say("Done.")
     stage = _prompt(stage_input, tools=ToolsRef(mcp={"crm": McpServerRef(url=CRM)}))
     _, client = await _run(stage, model, runner_settings, crm)
 
-    assert crm.appels == []
+    assert crm.calls == []
     assert "refused by the run's guard rails" in model.requests[1][1]["messages"][-1]["content"]
     assert client.results[-1].diagnostics.permission_denials == 1
 
@@ -226,12 +226,12 @@ async def test_a_declared_file_is_written_where_the_runner_stores_it(
 async def test_an_mcp_server_on_a_denied_host_is_never_reached(
     stage_input: StageInput, runner_settings: Any
 ) -> None:
-    crm = FakeMcpServer(outils=[{"name": "lookup", "description": "", "inputSchema": {"type": "object"}}])
+    crm = FakeMcpServer(tools=[{"name": "lookup", "description": "", "inputSchema": {"type": "object"}}])
     model = FakeModelServer(key=KEY).call("crm__lookup", {}).say("Nothing.")
     permissions = stage_input.permissions.model_copy(update={"deny_domains": ["crm.internal"]})
     stage = _prompt(stage_input, tools=ToolsRef(mcp={"crm": McpServerRef(url=CRM)}), permissions=permissions)
     _, client = await _run(stage, model, runner_settings, crm)
 
-    assert crm.recues == [], "the denied host sees no request, not even the listing"
+    assert crm.received == [], "the denied host sees no request, not even the listing"
     assert "egress refused" in _events(client, "prompt.mcp_unavailable")[0]["error"]
     assert "crm__lookup" not in {tool["function"]["name"] for tool in model.requests[0][1]["tools"]}

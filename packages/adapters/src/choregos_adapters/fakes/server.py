@@ -59,7 +59,7 @@ class DemoApplication:
             return httpx.Response(200, json={"ok": True})
         parts = path.strip("/").split("/")
         if len(parts) == 2 and parts[1] == "mcp" and parts[0] in self.servers:
-            return self.servers[parts[0]].repondre(request)
+            return self.servers[parts[0]].respond(request)
         if path.startswith("/login/"):
             return self.directory.respond(request)
         if path.startswith("/graph/"):

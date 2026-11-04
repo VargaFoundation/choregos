@@ -268,7 +268,7 @@ def mcp_server(fake: BusinessFake, *, token: str = "") -> FakeMcpServer:
     """The same fake, served as an MCP server: each operation becomes a tool (a read carries
     `readOnlyHint`) and each call plays the same method, on the same state."""
     return FakeMcpServer(
-        outils=[
+        tools=[
             {
                 "name": operation.name,
                 "description": operation.description,
@@ -277,8 +277,8 @@ def mcp_server(fake: BusinessFake, *, token: str = "") -> FakeMcpServer:
             }
             for operation in fake.operations
         ],
-        jeton=token,
-        gestes={
+        token=token,
+        gestures={
             name: partial(fake.perform, name)
             for name in [*(operation.name for operation in fake.operations), *fake.former_names]
         },

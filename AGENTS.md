@@ -16,14 +16,14 @@ Contracts: `packages/contracts` — **do not modify without a `contract-change` 
 **Everything is in English** (ADR 0046, superseding ADR 0039 §2-3): code, identifiers, comments,
 docstrings, tests, file names, the reference documentation (`docs/`), `docs/plan/` (STATUS,
 BLOCKERS), ADRs, commit messages and PR descriptions. The French archives were deleted (ADR 0098).
-Existing French code is renamed package by package (S34-04); do not mass-translate code your story
-does not otherwise touch. `make lint` and CI refuse French in new or modified lines
-(`tools/check_english.py`); a line that must stay French (a `workflow.patched` id, a French alias
-kept for running workflows) carries `lang: fr-ok` in a comment.
-New identifiers are English, and no file's French count may rise: per-file counts live in
-`tools/english_baseline/` and only go down (`make english-ratchet`). A compatibility shim carries
-`lang: fr-ok-file`; an alias line carries `lang: fr-ok alias:internal` or `alias:external`
-(ADR 0098).
+There is no French in the repository; the ratchet is at zero (ADR 0098): every file in
+`tools/english_baseline/` holds only its header, and `make english-ratchet` (`tools/check_english.py
+--all`) fails on any French finding and on any stale entry (`--lenient` is for a local run).
+`make lint` and CI refuse French in new or modified lines (`tools/check_english.py`); a line that
+must stay French (a `workflow.patched` id, a French alias kept for running workflows, a test fixture
+whose accents are the point) carries `lang: fr-ok` in a comment. A compatibility shim for an external
+consumer carries `lang: fr-ok-file alias:external`, an alias line `lang: fr-ok alias:external`, and
+each window has a removal issue (ADR 0098, 'Windows'); there is no internal alias any more.
 
 ## Commands (the CI's, no others)
 - Everything that blocks a PR: `make ci` = `lint` + `typecheck` + `test-cov` + `contracts-check` + `procedures-check` + `charts-lint`.

@@ -10,7 +10,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-from .test_courtier import ORG, _preparer, fournisseur  # noqa: F401  (a fixture, used by name)
+from .test_broker import ORG, _prepare, supplier  # noqa: F401  (a fixture, used by name)
 
 CEILING = f"{ORG}/policy-ceiling"
 BASE = "/api/v1/orgs/varga/knowledge"
@@ -95,20 +95,20 @@ async def test_an_internal_address_is_not_the_internet(client: AsyncClient, admi
 async def test_a_ceiling_tightened_after_creation_refuses_the_call_and_journals_it(
     client: AsyncClient,
     project: dict[str, Any],
-    fournisseur: Any,  # noqa: F811  # lang: fr-ok: the fixture of S46-01's test_courtier
+    supplier: Any,  # noqa: F811  # lang: fr-ok: the fixture of S46-01's test_broker
 ) -> None:
-    base, headers = await _preparer(client, project, ["*"])
+    base, headers = await _prepare(client, project, ["*"])
     assert (await client.post(f"{base}/fournisseur__stock", headers=headers, json={})).json()[
         "status_code"
     ] == 200
-    reached = len(fournisseur.appels)
+    reached = len(supplier.calls)
     await _ceiling(client, {"deny_domains": ["fournisseur.test"]})
     for _ in range(2):
         answer = await client.post(f"{base}/fournisseur__stock", headers=headers, json={})
         assert answer.status_code == 200 and answer.json()["status_code"] == 403, answer.text
         assert "network_policy" in str(answer.json()["result"])
         assert "fournisseur.test" in answer.json()["result"]["error"]
-    assert len(fournisseur.appels) == reached, "the server was not reached"
+    assert len(supplier.calls) == reached, "the server was not reached"
     (row,) = await _decisions()
     assert (row.layer, row.host, row.decision, row.count) == ("broker", "fournisseur.test", "denied", 2)
     assert row.run_id == "run-courtier-1" and row.project_id == project["id"]
@@ -126,7 +126,7 @@ async def test_discovery_obeys_the_ceiling_too(client: AsyncClient, admin: str) 
 async def test_a_governed_write_reads_the_ceiling_again_when_it_runs(
     client: AsyncClient,
     project: dict[str, Any],
-    fournisseur: Any,  # noqa: F811  # lang: fr-ok: the fixture of S46-01's test_courtier
+    supplier: Any,  # noqa: F811  # lang: fr-ok: the fixture of S46-01's test_broker
 ) -> None:
     """The effect of an approved action is played later, by a workflow: it must not reach a host the
     organisation has closed since."""
@@ -135,7 +135,7 @@ async def test_a_governed_write_reads_the_ceiling_again_when_it_runs(
     from choregos_api.effects import EffectContext, EffectRefused, _connector_call
     from sqlalchemy import select
 
-    await _preparer(client, project, ["*"])
+    await _prepare(client, project, ["*"])
     await _ceiling(client, {"deny_domains": ["fournisseur.test"]})
     async with session_scope() as session:
         stored = (await session.execute(select(Project).where(Project.id == project["id"]))).scalar_one()
@@ -145,15 +145,15 @@ async def test_a_governed_write_reads_the_ceiling_again_when_it_runs(
                 EffectContext(session, action, stored),
                 {"connector": "fournisseur", "operation": "stock", "arguments": {}},
             )
-    assert fournisseur.appels == []
+    assert supplier.calls == []
 
 
 async def test_the_organisation_calls_a_host_at_most_n_times_a_minute(
     client: AsyncClient,
     project: dict[str, Any],
-    fournisseur: Any,  # noqa: F811  # lang: fr-ok: the fixture of S46-01's test_courtier
+    supplier: Any,  # noqa: F811  # lang: fr-ok: the fixture of S46-01's test_broker
 ) -> None:
-    base, headers = await _preparer(client, project, ["*"])
+    base, headers = await _prepare(client, project, ["*"])
     await _ceiling(client, {"per_host_per_minute": 2})
     codes = []
     for _ in range(4):
@@ -161,7 +161,7 @@ async def test_the_organisation_calls_a_host_at_most_n_times_a_minute(
             (await client.post(f"{base}/fournisseur__stock", headers=headers, json={})).json()["status_code"]
         )
     assert codes == [200, 200, 429, 429]
-    assert len(fournisseur.appels) == 2, "the throttled calls did not reach the server"
+    assert len(supplier.calls) == 2, "the throttled calls did not reach the server"
     rows = {(r.decision, r.reason): r.count for r in await _decisions()}
     assert rows == {("rate_limited", "per_host_per_minute:2"): 2}
 
@@ -169,7 +169,7 @@ async def test_the_organisation_calls_a_host_at_most_n_times_a_minute(
 async def test_the_rate_is_counted_over_the_last_minute_only(
     client: AsyncClient,
     project: dict[str, Any],
-    fournisseur: Any,  # noqa: F811  # lang: fr-ok: the fixture of S46-01's test_courtier
+    supplier: Any,  # noqa: F811  # lang: fr-ok: the fixture of S46-01's test_broker
 ) -> None:
     from choregos_api.db.models import OrgConnector
     from choregos_api.db.session import session_scope
@@ -177,7 +177,7 @@ async def test_the_rate_is_counted_over_the_last_minute_only(
     from choregos_core import utcnow
     from sqlalchemy import select
 
-    base, headers = await _preparer(client, project, ["*"])
+    base, headers = await _prepare(client, project, ["*"])
     for _ in range(3):
         await client.post(f"{base}/fournisseur__stock", headers=headers, json={})
     async with session_scope() as session:
@@ -195,16 +195,16 @@ async def test_the_rate_is_counted_over_the_last_minute_only(
 async def test_mcp_calls_carry_the_organisations_contact(
     client: AsyncClient,
     project: dict[str, Any],
-    fournisseur: Any,  # noqa: F811  # lang: fr-ok: the fixture of S46-01's test_courtier
+    supplier: Any,  # noqa: F811  # lang: fr-ok: the fixture of S46-01's test_broker
 ) -> None:
     from choregos_api import __version__
 
-    base, headers = await _preparer(client, project, ["*"])
+    base, headers = await _prepare(client, project, ["*"])
     await _ceiling(client, {"user_agent_contact": "security@ops.example"})
     assert (await client.post(f"{base}/fournisseur__stock", headers=headers, json={})).json()[
         "status_code"
     ] == 200
-    agents = {received["user-agent"] for _, received, _ in fournisseur.recues[-3:]}
+    agents = {received["user-agent"] for _, received, _ in supplier.received[-3:]}
     assert agents == {f"Choregos/{__version__} (+security@ops.example)"}
 
 

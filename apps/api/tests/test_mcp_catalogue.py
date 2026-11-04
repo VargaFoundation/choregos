@@ -39,7 +39,7 @@ def vendor(monkeypatch: pytest.MonkeyPatch) -> Any:
     import choregos_adapters
     from choregos_adapters.fakes.mcp import FakeMcpServer
 
-    server = FakeMcpServer(outils=[dict(t) for t in TOOLS], jeton="vendor-key")
+    server = FakeMcpServer(tools=[dict(t) for t in TOOLS], token="vendor-key")
     monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_CATALOGUE_TEST", "vendor-key")
     return server
@@ -107,7 +107,7 @@ async def test_install_declares_a_closed_connector_with_a_reference(
         "search": "forbidden",
         "create_issue": "forbidden",
     }
-    for _, headers, _ in vendor.recues:
+    for _, headers, _ in vendor.received:
         assert headers["authorization"] == "Bearer vendor-key", "the connector's key, resolved in the API"
 
     state = _by_id((await client.get(BASE)).json())["github"]
@@ -193,7 +193,7 @@ async def test_atlassian_rovo_installs_with_a_service_account_key(
     assert installed.json()["config"] == {"url": "https://mcp.atlassian.com/v2/mcp"}
     discovered = await client.post("/api/v1/orgs/varga/connectors/atlassian/discover")
     assert discovered.status_code == 200, discovered.text
-    for _, headers, _ in vendor.recues:
+    for _, headers, _ in vendor.received:
         assert headers["authorization"] == "Bearer vendor-key"
 
 
@@ -326,7 +326,7 @@ async def test_a_header_entry_installs_with_its_header_and_the_key_travels_in_it
     monkeypatch.setenv("CHOREGOS_MCP_CATALOGUE_EXTRA", str(site))
     monkeypatch.setenv("CONNECTOR_CATALOGUE_KEYED", "the-raw-key")
     reset_settings_cache()
-    server = FakeMcpServer(outils=[dict(t) for t in TOOLS])
+    server = FakeMcpServer(tools=[dict(t) for t in TOOLS])
     monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
 
     installed = await client.post(
@@ -335,8 +335,8 @@ async def test_a_header_entry_installs_with_its_header_and_the_key_travels_in_it
     assert installed.status_code == 201, installed.text
     assert installed.json()["config"] == {"url": "https://mcp.keyed.example/mcp", "auth_header": "X-API-Key"}
     assert (await client.post("/api/v1/orgs/varga/connectors/keyed/discover")).status_code == 200
-    assert server.recues
-    for method, headers, _ in server.recues:
+    assert server.received
+    for method, headers, _ in server.received:
         assert headers["x-api-key"] == "the-raw-key", method
         assert "authorization" not in headers, method
 

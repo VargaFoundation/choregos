@@ -14,7 +14,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from .conftest import login
-from .test_courtier import OUTILS, _preparer
+from .test_broker import TOOLS, _prepare
 
 
 @pytest.fixture
@@ -22,7 +22,7 @@ def supplier(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     import choregos_adapters
     from choregos_adapters.fakes.mcp import FakeMcpServer
 
-    server = FakeMcpServer(outils=[dict(o) for o in OUTILS], jeton="cle-fournisseur")
+    server = FakeMcpServer(tools=[dict(o) for o in TOOLS], token="cle-fournisseur")
     monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_CLE_FOURNISSEUR", "cle-fournisseur")
     yield server
@@ -33,14 +33,14 @@ async def test_a_tool_under_validation_proposes_an_action_and_nothing_reaches_th
 ) -> None:
     from choregos_api.temporal import get_temporal
 
-    base, headers = await _preparer(client, project, ["*"])
+    base, headers = await _prepare(client, project, ["*"])
     call = await client.post(
         f"{base}/fournisseur__commander_poste", headers=headers, json={"model": "portable-14"}
     )
     assert call.status_code == 200 and call.json()["status_code"] == 202, call.text
     action_id = call.json()["result"]["action"]
     assert call.json()["result"]["decision_path"] == f"/p/billing-api/actions/{action_id}"
-    assert supplier.appels == [], "nothing reaches the server before the decision"
+    assert supplier.calls == [], "nothing reaches the server before the decision"
 
     inbox = (await client.get("/api/v1/orgs/varga/actions", params={"status": "pending_approval"})).json()
     (waiting,) = [a for a in inbox if a["id"] == action_id]
@@ -69,7 +69,7 @@ async def test_a_tool_under_validation_proposes_an_action_and_nothing_reaches_th
         await hr.aclose()
     assert approved.status_code == 200 and approved.json()["status"] == "approved"
     assert f"action-{action_id}" in get_temporal().started  # type: ignore[attr-defined]
-    assert supplier.appels == [], "even approved: Temporal runs it, not the request"
+    assert supplier.calls == [], "even approved: Temporal runs it, not the request"
 
 
 async def test_a_proposal_counts_towards_the_runs_ceiling(
@@ -80,7 +80,7 @@ async def test_a_proposal_counts_towards_the_runs_ceiling(
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
-    base, headers = await _preparer(client, project, ["*"])
+    base, headers = await _prepare(client, project, ["*"])
     async with session_scope() as session:
         policy = (
             (

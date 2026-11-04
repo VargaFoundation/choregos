@@ -30,7 +30,7 @@ def supplier(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     import choregos_adapters
     from choregos_adapters.fakes.mcp import FakeMcpServer
 
-    server = FakeMcpServer(outils=[dict(o) for o in TOOLS], jeton="supplier-key")
+    server = FakeMcpServer(tools=[dict(o) for o in TOOLS], token="supplier-key")
     monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_KEY_SUPPLIER", "supplier-key")
     yield server
@@ -77,8 +77,8 @@ async def test_a_drifting_schema_closes_the_operation(client: AsyncClient, admin
     assert (await _operations(client))["order_device"]["policy"] == "approval", "nothing moved"
 
     # The server widens `order_device` (a quantity) and removes `cancel_order`.
-    supplier.outils[1]["inputSchema"]["properties"]["quantity"] = {"type": "integer"}
-    supplier.outils.pop(2)
+    supplier.tools[1]["inputSchema"]["properties"]["quantity"] = {"type": "integer"}
+    supplier.tools.pop(2)
     diff = (await client.post("/api/v1/orgs/varga/connectors/supplier/discover")).json()
     assert diff == {
         "added": [],
@@ -96,7 +96,7 @@ async def test_only_the_connectors_key_goes_to_the_server(
 ) -> None:
     await _declare(client)
     assert (await client.post("/api/v1/orgs/varga/connectors/supplier/discover")).status_code == 200
-    for method, headers, _ in supplier.recues:
+    for method, headers, _ in supplier.received:
         assert headers["authorization"] == "Bearer supplier-key", method
         assert "cookie" not in headers and "chg_" not in str(headers), method
 

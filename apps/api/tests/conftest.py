@@ -34,11 +34,7 @@ os.environ.setdefault("CHOREGOS_COURTIER_ATTENTE_ECRITURE_S", "0.3")
 #: `CHOREGOS_TEST_SUITE_ON_POSTGRES=1` (with `CHOREGOS_TEST_DATABASE_URL`): the WHOLE API suite runs on
 #: PostgreSQL, migrated schema, non-superuser role, so under RLS. On SQLite there is no RLS: webhooks
 #: delivered nothing in production without a single test seeing it (#143).
-#: The former variable name is still read until S45-47 removes it.
-SUITE_ON_POSTGRES = bool(
-    os.environ.get("CHOREGOS_TEST_SUITE_ON_POSTGRES")
-    or os.environ.get("CHOREGOS_TEST_SUITE_SUR_POSTGRES")  # lang: fr-ok alias:internal (S45-47 removes it)
-)
+SUITE_ON_POSTGRES = bool(os.environ.get("CHOREGOS_TEST_SUITE_ON_POSTGRES"))
 
 
 @pytest.fixture

@@ -377,3 +377,23 @@ def test_a_french_spoken_string_is_found_in_a_package(
     )  # lang: fr-ok
     monkeypatch.setattr(ce, "ROOT", tmp_path)
     assert ce.french_spoken_strings("pkg/src") == ["pkg/src/said.py:1: 'Intervention humaine'"]  # lang: fr-ok
+
+
+# ───────────────────────────────────── the ratchet is strict ─────────────────────────────────────
+
+
+def test_all_is_strict(tmp_path: pathlib.Path) -> None:
+    """`--all` fails on a stale baseline entry (ADR 0098: the ratchet is at zero); `--lenient` only prints."""
+    try:
+        subprocess.run(
+            ["git", "rev-parse", "--is-inside-work-tree"], cwd=ROOT, check=True, capture_output=True
+        )
+    except (subprocess.CalledProcessError, OSError):
+        pytest.skip("not a git checkout: the tree scan reads `git ls-files`")
+    baselines = tmp_path / "baselines"
+    ce.write_baselines({}, list(ce.AREAS), baselines, init=True)
+    assert ce.main(["--all", "--baseline-dir", str(baselines)]) == 0, "an empty baseline over an English tree"
+    stale = baselines / "core.tsv"
+    stale.write_text(stale.read_text(encoding="utf-8") + "packages/core/src/gone.py\t1\n", encoding="utf-8")
+    assert ce.main(["--all", "--baseline-dir", str(baselines)]) == 1, "a stale entry fails"
+    assert ce.main(["--all", "--lenient", "--baseline-dir", str(baselines)]) == 0, "unless the run is lenient"

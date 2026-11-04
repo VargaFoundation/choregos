@@ -110,11 +110,11 @@ async def test_warn_mode_in_the_policy_logs_and_passes() -> None:
 
 
 async def test_the_mcp_client_is_guarded() -> None:
-    server = FakeMcpServer(outils=TOOLS)
+    server = FakeMcpServer(tools=TOOLS)
     client = McpClient("https://vendor.test/mcp", transport=server.transport())
     with use_policy(_policy()), pytest.raises(EgressRefusedError):
         await client.list_tools()
-    assert server.recues == [], "the vendor received nothing"
+    assert server.received == [], "the vendor received nothing"
     with use_policy(_policy("vendor.test")):
         assert [o.name for o in await client.list_tools()] == ["read"]
 

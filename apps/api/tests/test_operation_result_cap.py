@@ -19,7 +19,7 @@ from httpx import AsyncClient
 
 from .kits import tool_catalogue
 from .kits.tool_catalogue import intercept, run_with_catalogue
-from .test_courtier import OUTILS, _preparer
+from .test_broker import TOOLS, _prepare
 
 pytestmark = pytest.mark.asyncio
 
@@ -32,7 +32,7 @@ def server(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     import choregos_adapters
     from choregos_adapters.fakes.mcp import FakeMcpServer
 
-    fake = FakeMcpServer(outils=[dict(o) for o in OUTILS], jeton="cle-fournisseur")
+    fake = FakeMcpServer(tools=[dict(o) for o in TOOLS], token="cle-fournisseur")
     monkeypatch.setattr(choregos_adapters, "FAKE_MCP", fake)
     monkeypatch.setenv("CONNECTOR_TEST_CLE_FOURNISSEUR", "cle-fournisseur")
     yield fake
@@ -54,8 +54,8 @@ async def _read(client: AsyncClient, base: str, headers: dict[str, str]) -> dict
 async def test_a_lower_operation_cap_cuts_what_the_default_lets_through(
     client: AsyncClient, project: dict[str, Any], server: Any
 ) -> None:
-    server.reponses["suivi_commande"] = LINE * 1_000  # 24 KB: under the 64 KiB default
-    base, headers = await _preparer(client, project, ["*"])
+    server.answers["suivi_commande"] = LINE * 1_000  # 24 KB: under the 64 KiB default
+    base, headers = await _prepare(client, project, ["*"])
     assert "truncated" not in await _read(client, base, headers)
 
     patched = await client.patch(OPERATION, json={"result_max_bytes": 4096})
@@ -71,8 +71,8 @@ async def test_a_lower_operation_cap_cuts_what_the_default_lets_through(
 async def test_a_higher_operation_cap_lets_through_what_the_default_cuts(
     client: AsyncClient, project: dict[str, Any], server: Any
 ) -> None:
-    server.reponses["suivi_commande"] = LINE * 5_000  # 120 KB: over the 64 KiB default
-    base, headers = await _preparer(client, project, ["*"])
+    server.answers["suivi_commande"] = LINE * 5_000  # 120 KB: over the 64 KiB default
+    base, headers = await _prepare(client, project, ["*"])
     assert "truncated" in await _read(client, base, headers)
 
     assert (await client.patch(OPERATION, json={"result_max_bytes": 262_144})).status_code == 200
@@ -86,8 +86,8 @@ async def test_a_cap_above_the_ceiling_is_refused_and_null_restores_the_default(
 ) -> None:
     from choregos_api.config import get_settings
 
-    server.reponses["suivi_commande"] = LINE * 1_000
-    base, headers = await _preparer(client, project, ["*"])
+    server.answers["suivi_commande"] = LINE * 1_000
+    base, headers = await _prepare(client, project, ["*"])
     ceiling = get_settings().broker_result_ceiling_bytes
 
     above = await client.patch(OPERATION, json={"result_max_bytes": ceiling + 1})
@@ -112,8 +112,8 @@ async def test_a_ceiling_lowered_later_clips_a_cap_set_before_it(
 ) -> None:
     from choregos_api.config import get_settings
 
-    server.reponses["suivi_commande"] = LINE * 5_000
-    base, headers = await _preparer(client, project, ["*"])
+    server.answers["suivi_commande"] = LINE * 5_000
+    base, headers = await _prepare(client, project, ["*"])
     assert (await client.patch(OPERATION, json={"result_max_bytes": 262_144})).status_code == 200
 
     monkeypatch.setattr(get_settings(), "broker_result_ceiling_bytes", 8192)
@@ -151,7 +151,7 @@ async def test_a_governed_write_result_is_held_to_its_operation_cap(
     from choregos_api.db.session import ALL_ORGS, session_scope
     from sqlalchemy import select
 
-    base, headers = await _preparer(client, project, ["*"])
+    base, headers = await _prepare(client, project, ["*"])
     opened = await client.patch(
         "/api/v1/orgs/varga/connectors/fournisseur/operations/commander_poste",
         json={"policy": "allowed", "result_max_bytes": 4096},

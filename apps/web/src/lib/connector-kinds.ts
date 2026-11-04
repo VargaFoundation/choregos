@@ -47,7 +47,7 @@ export function kindLabel(kind: string): string {
 
 /**
  * The delivery tools of a PROJECT (ADR 0034): they are set in each project's settings, never at
- * organisation level. The order is that of the requirements (`choregos_core.dsl.exigences`).
+ * organisation level. The order is that of the requirements (`choregos_core.dsl.requirements`).
  */
 export const PROJECT_KINDS = ["tracker", "scm", "ci", "cd", "runtime", "gateway", "memory"] as const;
 

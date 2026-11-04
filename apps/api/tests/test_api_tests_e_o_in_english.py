@@ -5,7 +5,7 @@ that range (`test_announced_edition`, `test_workflow_editing`, `test_work_item_l
 `test_template_extensions`, `test_tool_groups`, `test_software_delivery_template`,
 `test_run_git_token`, `test_run_tokens`, `test_rbac_matrix`, `test_work_item_migration`).
 
-Left out of the slice: S46-01's `test_marketdata_courtier.py`, S45-14's `test_mcp_door.py` and
+Left out of the slice: S45-14's `test_mcp_door.py` and
 `test_mcp_oauth.py`, S45-04's `test_extension_api_aliases.py`, `test_mcp_write_key.py`, and the
 files an earlier S45 story created to check an English rename (`test_mcp_door_in_english.py`, this
 file), whose French is the point. A line that must stay French carries `lang: fr-ok`.
@@ -36,7 +36,6 @@ OWNED = (
     f"{TESTS}test_work_item_migration.py",
 )
 LEFT_OUT = {
-    f"{TESTS}test_marketdata_courtier.py",
     f"{TESTS}test_mcp_door.py",
     f"{TESTS}test_mcp_door_in_english.py",
     f"{TESTS}test_mcp_oauth.py",

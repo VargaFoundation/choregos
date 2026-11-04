@@ -254,7 +254,6 @@ jobs:
         run: uv run pytest apps/api/tests -q
         env:
           CHOREGOS_TEST_SUITE_ON_POSTGRES: "1"
-          CHOREGOS_TEST_SUITE_SUR_POSTGRES: "1" # lang: fr-ok alias:internal — conftest switches in S45-42
       # The orchestrator's suite, on the same PostgreSQL. The orchestrator is the component that
       # writes straight through the API's models, and the advisory lock of the budget reservation
       # (`lock_budget_scopes`, S27-11) only exists on PostgreSQL: SQLite stands in with an in-process

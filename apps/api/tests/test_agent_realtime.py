@@ -17,7 +17,7 @@ from httpx import AsyncClient
 
 from .egress_support import as_person
 from .test_agent_sessions import _key_rows, _ledger
-from .test_courtier import OUTILS
+from .test_broker import TOOLS
 from .ws_support import AsgiWebSocket, Closed, cookie_header
 
 ORG = "/api/v1/orgs/varga"
@@ -273,7 +273,7 @@ def supplier(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     import choregos_adapters
     from choregos_adapters.fakes.mcp import FakeMcpServer
 
-    server = FakeMcpServer(outils=[dict(o) for o in OUTILS], jeton="supplier-key")
+    server = FakeMcpServer(tools=[dict(o) for o in TOOLS], token="supplier-key")
     monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_SUPPLIER_KEY", "supplier-key")
     yield server
@@ -304,7 +304,7 @@ async def test_a_granted_read_goes_through_the_broker_and_anything_else_is_refus
         await socket.until("response.output_audio_transcript.done")
         await socket.hang_up()
 
-    assert [call[0] for call in supplier.appels] == ["suivi_commande"], "only the granted read reached it"
+    assert [call[0] for call in supplier.calls] == ["suivi_commande"], "only the granted read reached it"
     outputs = [e["item"] for e in voice.model.sent("conversation.item.create")]
     assert [o["type"] for o in outputs] == ["function_call_output", "function_call_output"]
     assert "not granted" in outputs[1]["output"] and "not granted" not in outputs[0]["output"]

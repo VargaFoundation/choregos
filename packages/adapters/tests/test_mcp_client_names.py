@@ -46,7 +46,7 @@ def test_the_fake_mcp_hook_is_named_fake_mcp() -> None:
 
 
 async def test_the_client_says_why_in_english() -> None:
-    server = FakeMcpServer(jeton="right")
+    server = FakeMcpServer(token="right")
     client = McpClient("https://x.test/mcp", token="wrong", transport=server.transport())
     with pytest.raises(McpError) as refused:
         await client.list_tools()

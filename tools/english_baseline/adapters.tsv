@@ -1,3 +1,1 @@
 # adapters: French findings per file (ADR 0098). Counts only go down: tools/check_english.py --update-baseline
-packages/adapters/src/choregos_adapters/fakes/mcp.py	26
-packages/adapters/tests/test_client_mcp.py	15
