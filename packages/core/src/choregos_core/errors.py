@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Erreurs du cœur Choregos, localisées quand la source est connue."""
+"""Errors of the Choregos core, located when the source is known."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from choregos_contracts.issue_codes import deprecated_issue_code
 
 @dataclass(slots=True, frozen=True)
 class Issue:
-    """Une erreur ou un avertissement de validation, localisé si possible."""
+    """A validation error or warning, located when possible."""
 
     code: str
     message: str
@@ -39,12 +39,12 @@ class Issue:
 
 
 class ChoregosError(Exception):
-    """Base des erreurs Choregos."""
+    """Base of the Choregos errors."""
 
 
 @dataclass
 class ValidationError(ChoregosError):
-    """Validation d'un document (workflow, politique, template) en échec."""
+    """Validation of a document (workflow, policy, template) failed."""
 
     issues: list[Issue] = field(default_factory=list)
     subject: str = "document"
@@ -55,12 +55,12 @@ class ValidationError(ChoregosError):
 
 
 class PolicyError(ChoregosError):
-    """Violation de politique (budget, périmètre, approbation)."""
+    """Policy violation (budget, perimeter, approval)."""
 
 
 class ModelResolutionError(ChoregosError):
-    """Un profil de modèle n'a pas pu être résolu."""
+    """A model profile could not be resolved."""
 
 
 class GateError(ChoregosError):
-    """Une gate inconnue ou mal paramétrée."""
+    """An unknown gate, or one with wrong parameters."""
