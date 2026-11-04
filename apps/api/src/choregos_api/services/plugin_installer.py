@@ -722,9 +722,11 @@ async def uninstall(
     return outcome
 
 
-async def to_dto(row: OrgPlugin, supply: PluginSupply | None) -> InstalledPlugin:
+async def to_dto(row: OrgPlugin, supply: PluginSupply | None, *, wait: bool = True) -> InstalledPlugin:
+    """`wait=False` (a list): the newest version a source offers is the one already known, never read
+    from the network while the list waits."""
     meta = dict((row.manifest or {}).get("metadata") or {})
-    latest = await supply.latest(row.source, row.name) if supply is not None else None
+    latest = await supply.latest(row.source, row.name, wait=wait) if supply is not None else None
     if latest is not None and semver_key(latest) <= semver_key(row.version):
         latest = None
     return InstalledPlugin(
