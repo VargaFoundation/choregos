@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Registre des backends ACP livrés."""
+"""Registry of the ACP backends shipped."""
 
 from __future__ import annotations
 
@@ -28,8 +28,8 @@ BACKENDS: dict[str, type[Backend]] = {
     PromptBackend.name: PromptBackend,
 }
 
-# Backends retirés : un nom qu'on reconnaît, pour refuser avec la raison plutôt qu'avec un
-# « backend inconnu » qui laisserait croire à une faute de frappe.
+# Retired backends: a name we recognise, to refuse with the reason rather than with an
+# "unknown backend" that would suggest a typo.
 RETIRED: dict[str, str] = {
     "openhands": (
         "retired on 2026-09-21: OpenHands exposes no command-line ACP agent — neither in 0.59 "
@@ -42,7 +42,7 @@ VERSIONS_LOCK = Path(__file__).parent / "versions.lock"
 
 
 def get_backend(name: str) -> Backend:
-    """Instancie un backend par son nom ; une erreur explicite si le nom est inconnu."""
+    """Instantiate a backend by its name; an explicit error if the name is unknown."""
     if name in RETIRED:
         raise KeyError(f"backend {name} {RETIRED[name]}")
     backend_class = BACKENDS.get(name)
@@ -75,12 +75,12 @@ BACKEND_BINARIES: dict[str, str] = {
 
 
 def backend_version(name: str) -> str | None:
-    """Version épinglée du binaire qui sert ce backend."""
+    """Pinned version of the binary that serves this backend."""
     return pinned_versions().get(BACKEND_BINARIES.get(name, name))
 
 
 def pinned_versions() -> dict[str, str]:
-    """Versions épinglées des agents installés dans l'image du runner."""
+    """Pinned versions of the agents installed in the runner image."""
     if not VERSIONS_LOCK.exists():
         return {}
     versions: dict[str, str] = {}

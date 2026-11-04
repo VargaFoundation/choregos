@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""CLI du runner : `choregos-runner run`, et quelques commandes de diagnostic."""
+"""Runner CLI: `choregos-runner run`, and a few diagnostic commands."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def run(
     write_status: Annotated[Path | None, typer.Option("--write-status")] = None,
     dry_run: Annotated[bool, typer.Option("--dry-run", help="do not push the branch")] = False,
 ) -> None:
-    """Exécute l'étape désignée par `--run-id` et sort avec le code documenté (§2.2)."""
+    """Run the step designated by `--run-id` and exit with the documented code (§2.2)."""
     reset_settings_cache()
     settings = get_settings()
     if run_id:
@@ -62,7 +62,7 @@ def run(
             ensure_ascii=False,
         )
     )
-    # Résultats Tekton : l'orchestrateur les lit si le runner n'a pas pu poster.
+    # Tekton results: the orchestrator reads them if the runner could not post.
     if write_status is not None:
         write_status.write_text(status, encoding="utf-8")
     if write_result_url is not None:
@@ -147,14 +147,14 @@ def serve_session(
 
 @app.command()
 def backends() -> None:
-    """Liste les backends ACP connus et les versions épinglées dans l'image."""
+    """List the known ACP backends and the versions pinned in the image."""
     for name in known_backends():
         typer.echo(f"{name:<14} {backend_version(name) or '—'}")
 
 
 @app.command()
 def validate(path: Annotated[Path, typer.Argument()] = Path(".choregos/result.json")) -> None:
-    """Valide un `result.json` contre le contrat, avec des erreurs lisibles."""
+    """Validate a `result.json` against the contract, with readable errors."""
     from .result import load_result
 
     load = load_result(path)

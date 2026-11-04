@@ -1,4 +1,4 @@
-"""Fixtures du runner : dépôt jouet, StageInput, API interne simulée, agent ACP factice."""
+"""Runner fixtures: toy repository, StageInput, simulated internal API, fake ACP agent."""
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ def git(*args: str, cwd: Path) -> None:
 
 @pytest.fixture
 def toy_repo(tmp_path: Path) -> Path:
-    """Dépôt jouet local : un Makefile dont `make test` passe ou échoue sur commande."""
+    """Local toy repository: a Makefile whose `make test` passes or fails on command."""
     origin = tmp_path / "origin"
     origin.mkdir()
     git("init", "--bare", "--initial-branch=main", cwd=origin)
@@ -81,7 +81,7 @@ def stage_input(toy_repo: Path, tmp_path: Path) -> StageInput:
         work_item=WorkItemRef(
             key="varga/demo#1",
             title="Corriger le total",
-            body="Le total ignore les avoirs.",
+            body="The total ignores credit notes.",
             size="M",
             risk="low",
         ),
@@ -94,7 +94,7 @@ def stage_input(toy_repo: Path, tmp_path: Path) -> StageInput:
         gateway_key="sk-fake",
         budget=Budget(usd=5, max_turns=20, max_minutes=5),
         allowed_paths=["src/orders.py", "src/orders/**", "tests/**"],
-        playbook=PlaybookRef(ref="implement@test", prompt="Tu implémentes la correction."),
+        playbook=PlaybookRef(ref="implement@test", prompt="You implement the fix."),
         permissions=Permissions(
             write_paths=["src/orders.py", "src/orders/**", "tests/**"],
             deny_commands=["kubectl", "terraform apply"],
@@ -107,7 +107,7 @@ def stage_input(toy_repo: Path, tmp_path: Path) -> StageInput:
 
 
 class FakeInternalClient:
-    """API interne en mémoire : enregistre ce que le runner publie."""
+    """In-memory internal API: records what the runner publishes."""
 
     def __init__(self, stage_input: StageInput, *, context: ContextPack | None = None) -> None:
         self.stage_input = stage_input
@@ -120,11 +120,11 @@ class FakeInternalClient:
         self.scope_decision = {"decision": "granted", "allowed_paths": []}
         self.ticket = {"key": stage_input.work_item.key, "title": stage_input.work_item.title, "body": ""}
         self.ci_logs = ""
-        #: Les skills que l'API interne livrerait (ADR 0033).
+        #: The skills that the internal API would deliver (ADR 0033).
         self.skills: list[dict[str, Any]] = []
         #: The knowledge bases the internal API would deliver (ADR 0051).
         self.knowledge: list[dict[str, Any]] = []
-        #: Le jeton git que l'API frapperait pour ce run (S22-07), et combien de fois on l'a demandé.
+        #: The git token that the API would mint for this run (S22-07), and how many times it was requested.
         self.git_token: str | None = None
         self.git_token_calls = 0
         #: The egress token the internal API would mint (ADR 0115); an exception: an older API.
@@ -203,7 +203,7 @@ class FakeInternalClient:
 
 
 def agent_script(script: dict[str, Any], stage_input: StageInput, workspace: Path) -> None:
-    """Injecte le scénario de l'agent factice dans son environnement de lancement."""
+    """Inject the fake agent's scenario into its launch environment."""
     stage_input.agent.launch.env.update(
         {
             "FAKE_AGENT_SCRIPT": json.dumps(script, ensure_ascii=False),
@@ -212,7 +212,7 @@ def agent_script(script: dict[str, Any], stage_input: StageInput, workspace: Pat
     )
 
 
-def valid_result(summary: str = "correction appliquée", **kwargs: Any) -> dict[str, Any]:
+def valid_result(summary: str = "fix applied", **kwargs: Any) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "schema": "choregos/StageResult/v1",
         "status": "done",

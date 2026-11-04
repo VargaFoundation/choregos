@@ -238,7 +238,7 @@ async def test_an_mcp_call_carries_the_servers_credential_the_container_never_ho
     stage_input: StageInput, runner_settings: Any
 ) -> None:
     crm = FakeMcpServer(outils=[{"name": "lookup", "description": "", "inputSchema": {"type": "object"}}])
-    crm.jeton = CRM_SECRET
+    crm.jeton = CRM_SECRET  # lang: fr-ok - attribute of the adapters fake, renamed by its own story
     agent = FakeHostedAgent(script=[("mcp", "crm", "lookup", {"customer": "acme"})], answer="Acme.")
     tools = ToolsRef(mcp={"crm": McpServerRef(url=CRM, env={"Authorization": f"Bearer {CRM_SECRET}"})})
     _, client = await _run(_hosted(stage_input, tools=tools), agent, runner_settings, mcp=crm)
