@@ -13,6 +13,7 @@ from choregos_core.mcp import INVALID_PARAMS, METHOD_NOT_FOUND, negotiate
 from choregos_core.mcp import error as _error
 from choregos_core.mcp import ok as _ok
 
+from .answer import render_answer
 from .client import InternalClient
 from .tools import TOOL_SCHEMAS, ToolContext, finding_from, text_result
 
@@ -78,13 +79,10 @@ class McpServer:
         handler = getattr(self, f"_tool_{name}", None)
         if handler is None:
             if any(o.get("name") == name for o in await self._catalogue_tools()):
-                answer = await self.client.call_tool(name, arguments)
-                code = int(answer.get("status_code", 0))
-                body = json.dumps(answer.get("result"), ensure_ascii=False, indent=2)[:20_000]
-                # A provider's 4xx is an answer, not an outage: the agent must read it and
-                # decide. It is flagged as an error so the agent does not take it for a
-                # success, but the body is handed back.
-                return text_result(body, is_error=code >= 400)
+                # The API's answer keeps its meaning on the way to the model (S57-04): a proposal
+                # says it is one, the injection guard's flags and the calls left reach it, and a
+                # provider's 4xx is flagged as an error with its body handed back.
+                return render_answer(await self.client.call_tool(name, arguments))
             return text_result(f"unknown tool: {name}", is_error=True)
         return await handler(arguments)  # type: ignore[no-any-return]
 

@@ -235,3 +235,29 @@ async def test_an_mcp_server_on_a_denied_host_is_never_reached(
     assert crm.received == [], "the denied host sees no request, not even the listing"
     assert "egress refused" in _events(client, "prompt.mcp_unavailable")[0]["error"]
     assert "crm__lookup" not in {tool["function"]["name"] for tool in model.requests[0][1]["tools"]}
+
+
+async def test_the_last_notice_of_an_error_answer_reaches_the_model(
+    stage_input: StageInput, runner_settings: Any
+) -> None:
+    """The platform's tool server ends a relayed answer with the calls left under the cap, within the
+    loop's own bound (S57-04); the loop's error prefix must not push that line out of the cut."""
+    from choregos_adapters.errors import AdapterError
+    from choregos_tools_mcp.answer import render_answer
+
+    answer = render_answer({"status_code": 404, "result": {"error": "x" * 50_000}, "remaining": 2})
+    rendered = answer["content"][0]["text"]
+    assert answer["isError"] and rendered.endswith("Tool calls left in this run: 2.")
+
+    def refuse(arguments: dict[str, Any]) -> dict[str, Any]:
+        raise AdapterError(rendered)
+
+    crm = FakeMcpServer(tools=[{"name": "lookup", "description": "", "inputSchema": {"type": "object"}}])
+    crm.gestures["lookup"] = refuse
+    model = FakeModelServer(key=KEY).call("crm__lookup", {}).say("Nothing found.")
+    stage = _prompt(stage_input, tools=ToolsRef(mcp={"crm": McpServerRef(url=CRM)}))
+    await _run(stage, model, runner_settings, crm)
+
+    read = model.requests[1][1]["messages"][-1]["content"]
+    assert read.startswith("the tool reported an error: ")
+    assert read.endswith("Tool calls left in this run: 2."), read[-80:]

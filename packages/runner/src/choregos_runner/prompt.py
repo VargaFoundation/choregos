@@ -230,7 +230,9 @@ class PromptRun:
         texts = [part.get("text", "") for part in answer.get("content") or [] if isinstance(part, dict)]
         text = "\n".join(t for t in texts if t) or json.dumps(answer.get("structuredContent") or {})
         prefix = "the tool reported an error: " if answer.get("isError") else ""
-        return (prefix + text)[:_MAX_TOOL_TEXT]
+        # The text is cut, not the prefix with it: the platform's tool server bounds its own text to
+        # this size and ends it with a notice (the calls left, S57-04) that a cut must not take away.
+        return prefix + text[:_MAX_TOOL_TEXT]
 
     def _inside(self, relative: str) -> Path:
         target = (self.workspace / relative).resolve()
