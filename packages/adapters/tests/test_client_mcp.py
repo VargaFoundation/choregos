@@ -66,7 +66,7 @@ async def test_un_refus_ou_une_erreur_du_serveur_est_une_erreur_nommee() -> None
 def test_l_empreinte_d_un_schema_change_avec_le_moindre_ecart() -> None:
     a = {"type": "object", "properties": {"modele": {"type": "string"}}}
     b = {"properties": {"modele": {"type": "string"}}, "type": "object"}
-    assert schema_digest(a) == schema_digest(b), "l'ordre des clés ne compte pas"
+    assert schema_digest(a) == schema_digest(b), "the key order does not count"
     elargi = {"type": "object", "properties": {"modele": {"type": "string"}, "quantite": {"type": "integer"}}}
     assert schema_digest(a) != schema_digest(elargi)
 
