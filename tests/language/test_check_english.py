@@ -185,7 +185,7 @@ def test_makefile_reads_comments_only() -> None:
         (".github/workflows/ci.yml", True),
         ("dev/compose.yaml", True),
         ("Makefile", True),
-        ("docs/fr/guide.md", False),
+        ("docs/fr/guide.md", True),
         ("docs/cli.md", False),
         ("apps/web/pnpm-lock.yaml", False),
         ("packages/core/src/choregos_core/injection.py", False),

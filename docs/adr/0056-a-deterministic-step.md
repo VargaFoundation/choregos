@@ -3,9 +3,9 @@
 - **Status**: accepted, 2026-10-14
 - **Concerns**: the workflow contract (`packages/contracts`, `workflow.schema.json`,
   `stage-input.schema.json`), the DSL engine and validator, the orchestrator's stage preparation, the
-  runner; builds on [ADR 0005](0005-adaptateurs-et-fakes.md) (fakes),
-  [ADR 0008](0008-idempotence-et-run-id.md) (idempotence),
-  [ADR 0045](0045-la-provenance-d-un-signal.md) (where a signal comes from) and
+  runner; builds on [ADR 0005](0005-adapters-and-fakes.md) (fakes),
+  [ADR 0008](0008-idempotence-and-run-id.md) (idempotence),
+  [ADR 0045](0045-the-provenance-of-a-signal.md) (where a signal comes from) and
   [ADR 0049](0049-an-artifact-is-typed-stored-and-traced.md) (artifacts)
 
 ## Context

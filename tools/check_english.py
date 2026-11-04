@@ -100,7 +100,6 @@ SCANNED_NAMES = {"Dockerfile", "justfile", "CODEOWNERS"}
 SCANNED_ROOT_FILES = {"compose.yaml", "justfile", "pyproject.toml", "cliff.toml", "CODEOWNERS"}
 #: Paths never read, and why. A line here is a decision, not an oversight.
 EXCLUDED = (
-    "docs/fr/",  # the archived French documentation, no longer maintained
     "docs/cli.md",  # generated from the CLI's help strings, which are read at their source
     "packages/contracts/ts/",  # generated from the schemas, which are read at their source
     # Third-party skills, redistributed verbatim under their own licence (ADR 0065): their text is theirs.

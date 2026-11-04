@@ -5,7 +5,7 @@
   `openapi.yaml`), `choregos_core/network.py` and `policy_ceiling.py`, the API (`services/network.py`,
   `routers/internal.py`, `routers/workflows.py`, `routers/admin.py`, `network_decisions`), then the
   orchestrator and the runner (S40-01b) and an egress proxy with its chart (S40-01c); builds on
-  [ADR 0005](0005-adaptateurs-et-fakes.md) (fakes), [ADR 0034](0034-connectors-by-capability.md) (the
+  [ADR 0005](0005-adapters-and-fakes.md) (fakes), [ADR 0034](0034-connectors-by-capability.md) (the
   tool broker) and [ADR 0044](0044-people-are-declared-in-the-workflow.md) (a setting nothing enforces
   is said so)
 

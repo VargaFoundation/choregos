@@ -3,7 +3,7 @@
 - **Status**: accepted, 2026-10-14
 - **Concerns**: the workflow contract (`packages/contracts`, `workflow.schema.json`), the DSL
   validator, the orchestrator's interpreter and its `close_out`; builds on
-  [ADR 0008](0008-idempotence-et-run-id.md) (idempotence) and
+  [ADR 0008](0008-idempotence-and-run-id.md) (idempotence) and
   [ADR 0056](0056-a-deterministic-step.md) (a deterministic step)
 
 ## Context

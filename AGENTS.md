@@ -15,7 +15,7 @@ Contracts: `packages/contracts` — **do not modify without a `contract-change` 
 ## Languages
 **Everything is in English** (ADR 0046, superseding ADR 0039 §2-3): code, identifiers, comments,
 docstrings, tests, file names, the reference documentation (`docs/`), `docs/plan/` (STATUS,
-BLOCKERS), ADRs, commit messages and PR descriptions. `docs/fr/` is an unmaintained archive.
+BLOCKERS), ADRs, commit messages and PR descriptions. The French archives were deleted (ADR 0098).
 Existing French code is renamed package by package (S34-04); do not mass-translate code your story
 does not otherwise touch. `make lint` and CI refuse French in new or modified lines
 (`tools/check_english.py`); a line that must stay French (a `workflow.patched` id, a French alias

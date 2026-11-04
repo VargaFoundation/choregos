@@ -6,7 +6,7 @@
   `routers/org_connectors.py`, `routers/connectors.py`), the orchestrator's `load_project`, the
   contract (`openapi.yaml`), the chart (`global.secrets`), the console; amends
   [ADR 0034](0034-connectors-by-capability.md) (point 3: "references **or** sealed values"); builds on
-  [ADR 0005](0005-adaptateurs-et-fakes.md) (fakes)
+  [ADR 0005](0005-adapters-and-fakes.md) (fakes)
 
 ## Context
 
