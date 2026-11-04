@@ -34,7 +34,7 @@ from choregos_core.hosted import CONNECT_PORT, MCP_PORT, MODEL_PORT
 from choregos_core.redaction import REDACTED, redact
 from pydantic import ValidationError
 
-from . import compression, confine
+from . import compression, confine, tool_scripts
 from .acp import AcpClient, AgentUnreachableError
 from .acp.client import PromptOutcome
 from .acp.guard import TurnGuard
@@ -315,6 +315,8 @@ class Runner:
             **backend.model_env(stage_input.model, stage_input.gateway_key),
             **workspace_env(stage_input),
         }
+        # The client a script imports (ADR 0122 §3), for every shell backend: its environment only.
+        env.update(await self._tool_client(client, journal, stage_input, workspace, env))
         # The agent reads its repository with its own git: the same `safe.directory` as the
         # runner, counted on the environment it will really receive (the runner's without the run's
         # credentials, ADR 0115, then its own).
@@ -509,6 +511,50 @@ class Runner:
                 {"started": False, "error": str(exc)[:300]},
             )
             return None
+
+    async def _tool_client(
+        self,
+        client: InternalClient,
+        journal: EventJournal,
+        stage_input: StageInput,
+        workspace: Workspace,
+        env: dict[str, str],
+    ) -> dict[str, str]:
+        """When the run is offered tool scripts (ADR 0122 §3, §5): the client a script imports, written
+        outside the workspace from the tool list the bridge hands back (`relay_tools`, read by the
+        runner's own client), the instructions that say when a script pays, added to the task, and
+        what the agent's environment gains (`env` is the launch environment so far). Nothing at all
+        otherwise: the agent's environment and its prompt are those of a run without scripts. A client
+        that cannot be written leaves the run without it, and without the instructions, and the
+        journal says why."""
+        if stage_input.tools.scripts is None:
+            return {}
+        announced = stage_input.tools.mcp.get("choregos")
+        bridge = tool_scripts.bridge_url((announced.url if announced else "") or self.settings.tools_url)
+        try:
+            relayed = await client.relay_tools()
+            tools, error = tool_scripts.tool_list(relayed.status_code, relayed.content)
+        except Exception as exc:  # the client still reaches every tool by its name
+            tools, error = [], f"the run's tool list could not be read: {str(exc)[:300]}"
+        try:
+            written = tool_scripts.write_client(
+                tool_scripts.client_directory(), tools, bridge=bridge, run_id=stage_input.run_id
+            )
+        except OSError as exc:
+            await journal.record("tools.client", {"written": False, "error": str(exc)[:300]})
+            return {}
+        task = workspace.path / ".choregos" / "task.md"
+        task.write_text(task.read_text(encoding="utf-8") + tool_scripts.INSTRUCTIONS, encoding="utf-8")
+        await journal.record(
+            "tools.client",
+            {
+                "written": True,
+                "tools": len(written.tools),
+                "modules": written.modules,
+                **({"error": error} if error else {}),
+            },
+        )
+        return tool_scripts.agent_environment(written, {**agent_base_environment(), **env})
 
     async def _execute_job(
         self,

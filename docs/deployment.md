@@ -557,6 +557,19 @@ posts its events through `POST /internal/runs/{id}/events`, numbered from 1,000,
 a number of the runner's. The run's journal is ordered by number, so the sidecar's events come after the
 runner's; each carries its own time.
 
+The runner also writes the client a script imports (S57-08, [ADR 0122](adr/0122-an-agent-may-call-its-run-s-tools-from-a-script.md)
+§3): `choregos_tools` under `$TMPDIR/choregos/tools`, outside the workspace and anew for each run, from the list
+`GET /bridge/v1/tools` hands back (the runner reads it with its own client, so the same list whether it or the
+Tekton sidecar serves the bridge); the package's code is `packages/runner/src/choregos_runner/tool_client.py`,
+copied, and only the per-server modules and the index are generated. The agent's environment gains
+`CHOREGOS_TOOLS_DIR` (that directory), `CHOREGOS_TOOLS_BRIDGE` (`http://<the tool server's host:port>/bridge/v1`),
+`PYTHONPATH` (the directory first, an existing value kept after it) and `TMPDIR` (the runner's temporary
+directory, which the confinement lets the agent write), for every shell backend; its task gains the section
+"Calling tools from a script". The run's journal says `tools.client` (`written`, `tools`, `modules`, and
+`error` when the tool list could not be read: the client is then written without modules, `call` reaching a
+tool by its name); a client that cannot be written (`written: false`) leaves the run without it and without
+the section. A run that is not offered scripts gets none of it.
+
 No new port and no new credential: the routes are on the port the agent's MCP client already uses, so the
 confinement's port list is the same with and without scripts, and the run token stays with the runner (or the
 sidecar), in no answer and no journal line. Each relayed call holds one API database connection for its whole

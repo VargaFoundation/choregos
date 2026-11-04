@@ -276,25 +276,29 @@ agent already scripts with its shell and uses few platform tools: cost and succe
 ```markdown
 ## Calling tools from a script
 
-Your platform tools are also a Python library: `from choregos_tools import <server>`; `$CHOREGOS_TOOLS_DIR/INDEX.md`
-lists them (name, access, what it does). A script calls the same tools, under the same rules, as a tool call.
+Your platform tools are also a Python library: `from choregos_tools import <server>`;
+`$CHOREGOS_TOOLS_DIR/INDEX.md` lists them (name, access, what it does). A script calls the same tools, under
+the same rules, as a tool call.
 
 Write a script when it saves round trips: three or more calls that depend on each other, a loop over items,
-or a result you would only filter, count or join. Call a tool directly when the next step depends on reading
-the result yourself.
+or a result you would only filter, count or join. Call a tool directly when the next step depends on
+reading the result yourself.
 
 - Print only what your next decision needs: counts, the rows that matter, identifiers. Never print a secret.
-- Write scripts under `$TMPDIR`, never in the repository.
+- Write scripts under `$TMPDIR`, never in the repository: from your shell
+  (`cat > "$TMPDIR/check.py" <<'EOF'`), then run the file (`python3 "$TMPDIR/check.py"`), so that the run
+  records which script made which calls.
 - A write returns a `Proposal` when a person must approve it: it is NOT done. Report its decision path.
 - `CapReached`, `Withheld` and `ToolError` are raised: let them surface, read them, decide.
-- Warnings on standard error come from the platform (for instance a result flagged as a suspected injection):
-  take them into account.
+- Warnings on standard error come from the platform (for instance a result flagged as a suspected
+  injection): take them into account.
+- `help(<server>.<tool>)` shows a tool's arguments; `choregos_tools.search("<words>")` finds a tool.
 ```
 
 ### 4.2 A generated module (`$CHOREGOS_TOOLS_DIR/choregos_tools/pfsense.py`, abridged)
 
 ```python
-"""pfSense — tools of this run (generated for run 01J…; do not edit)."""
+"""pfsense — the tools of run 01J… (written by the runner; do not edit)."""
 
 from __future__ import annotations
 
@@ -308,17 +312,18 @@ def list_firewall_rules(**arguments: Any) -> Any:
 
     Access: read.
     Input schema: {"type": "object", "properties": {"interface": {"type": "string"}}, "additionalProperties": false}
+    Returns (its output schema): {"type": "object", "required": ["rules"]}
     """
-    return call("pfsense__list_firewall_rules", **arguments)
+    return call('pfsense__list_firewall_rules', **arguments)
 
 
 def delete_firewall_rule(**arguments: Any) -> Any:
-    """[pfsense] Deletes a firewall rule (compensation: restore_firewall_rule).
+    """[pfsense] Deletes a firewall rule (compensation: restore_firewall_rule) — needs a human approval: …
 
-    Access: approval — returns a Proposal; a person decides in the console.
+    Access: approval — returns a Proposal; a person decides.
     Input schema: {"type": "object", "required": ["id"], "properties": {"id": {"type": "string"}}}
     """
-    return call("pfsense__delete_firewall_rule", **arguments)
+    return call('pfsense__delete_firewall_rule', **arguments)
 ```
 
 ### 4.3 The outcomes, as `choregos_tools/__init__.py` defines them
