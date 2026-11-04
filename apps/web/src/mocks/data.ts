@@ -2561,7 +2561,7 @@ const checkoutWebConnectors = [
   { id: "c-argo", kind: "cd", type: "argocd", config: {}, secret_refs: {}, status: "error", last_error: "401 from Argo CD" },
 ];
 /**
- * The project `dev` as `essai/projet-dev/scenario_dev.py preparer` leaves it: a tracker, a repository, and
+ * The project `dev` as `trials/dev-project/scenario_dev.py prepare` leaves it: a tracker, a repository, and
  * a CD that is the demo stand-in, never tested. The runtime is the deployment's own (agent-sandbox).
  */
 const devConnectors = [

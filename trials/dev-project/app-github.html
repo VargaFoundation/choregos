@@ -1,0 +1,49 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: Apache-2.0 -->
+<!--
+  The dev tenant's GitHub App, through GitHub's "manifest flow" (S21-29): open this file in a
+  browser signed in to GitHub, click, confirm at GitHub. GitHub then redirects to
+  localhost with `?code=...` (the page does not display: copy the code from the address bar), then:
+
+    gh api -X POST app-manifests/<code>/conversions > app.json   # id, pem, webhook_secret - a SECRET
+
+  `id` -> GITHUB_APP_ID and `pem` -> GITHUB_APP_PRIVATE_KEY in Infisical (project choregos, env dev, /app),
+  then delete app.json. Install the App on DiametralGroup/choregos-sandbox-dev from
+  https://github.com/apps/choregos-diametral-dev/installations/new ; the installation id is
+  in the URL of the installation page.
+
+  Webhook inactive: the tenant's host is internal, GitHub cannot reach it; the orchestrator's
+  periodic catch-up reads the `agent-ready` issues, and CI is read on the PR.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Choregos - GitHub App for the dev tenant</title>
+  </head>
+  <body>
+    <h1>Create the Choregos GitHub App on DiametralGroup</h1>
+    <form action="https://github.com/organizations/DiametralGroup/settings/apps/new?state=choregos-dev" method="post">
+      <input type="hidden" name="manifest" id="manifest" />
+      <button type="submit">Create the app on GitHub</button>
+    </form>
+    <script>
+      document.getElementById("manifest").value = JSON.stringify({
+        name: "choregos-diametral-dev",
+        url: "http://choregos.internal.dev.diametral.com",
+        description: "Choregos on the Diametral dev tenant: agents open, update and merge pull requests under policy.",
+        hook_attributes: { url: "http://choregos.internal.dev.diametral.com/api/v1/webhooks/github", active: false },
+        redirect_url: "http://localhost:8787/",
+        public: false,
+        default_permissions: {
+          contents: "write",
+          pull_requests: "write",
+          issues: "write",
+          checks: "write",
+          statuses: "read",
+          metadata: "read",
+        },
+        default_events: [],
+      });
+    </script>
+  </body>
+</html>

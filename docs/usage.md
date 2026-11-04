@@ -2201,7 +2201,7 @@ changes anything. Uploads are local globs relative to the manifest, or `url:` en
 over https (at most 20 MiB); a file whose bytes changed replaces the previous document of the same
 name. Without `--prune`, sources and uploads the manifest does not declare are left alone (the plan
 says so). `--dry-run` reads and prints, changes nothing. An example about a fictitious company is in
-`essai/knowledge/`. `choregos knowledge sync <slug>` syncs every source now, and
+`trials/knowledge/`. `choregos knowledge sync <slug>` syncs every source now, and
 `choregos knowledge eval <slug>` runs the eval set and prints recall@5. The command needs an
 organisation administrator's token (`agent:manage`). Refresh schedules in the manifest are the
 source's `interval_minutes` today.
