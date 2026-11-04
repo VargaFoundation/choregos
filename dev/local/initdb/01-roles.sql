@@ -3,7 +3,7 @@
 --
 -- The platform connects as a NON-superuser role: a superuser ignores row-level security,
 -- whatever the policies say. Migrations run under this role too, so it owns the tables and
--- `FORCE ROW LEVEL SECURITY` applies to it (same set-up as `essai/demarrage-local`).
+-- `FORCE ROW LEVEL SECURITY` applies to it (same set-up as `trials/local-start`).
 -- Development passwords only: this file never leaves a laptop.
 CREATE ROLE choregos_app LOGIN PASSWORD 'local-dev-only' NOSUPERUSER;
 GRANT ALL PRIVILEGES ON DATABASE choregos TO choregos_app;

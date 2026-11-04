@@ -83,7 +83,7 @@ services:
     # 2026-10-12. In memory it loses every running workflow at each restart while PostgreSQL keeps
     # the work items, which then never move again; with `--db-filename` (SQLite on a volume) the
     # `default` namespace is listed but every `start_workflow` answers "Namespace default is not
-    # found", for minutes. `auto-setup` on PostgreSQL is what `essai/demarrage-local` measured
+    # found", for minutes. `auto-setup` on PostgreSQL is what `trials/local-start` measured
     # healthy in 18–21 s.
     image: temporalio/auto-setup:1.26.2
     depends_on:
