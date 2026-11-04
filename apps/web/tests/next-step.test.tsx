@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { NextStepBanner } from "@/components/ticket/next-step-banner";
 import { FOLD_AFTER, LongText, RequestCard } from "@/components/ticket/request-card";
+import { fieldTitles } from "@/components/workflows/fields";
 import { nextStep } from "@/lib/next-step";
 import type { JourneyStep, WorkItemDto, WorkItemJourney } from "@/lib/types";
 
@@ -119,6 +120,20 @@ describe("RequestCard", () => {
     expect(screen.getByText("Monday").tagName).toBe("STRONG");
   });
 
+  it("labels a field with the title its workflow gives it, else with its name (S55-14)", () => {
+    render(
+      <RequestCard
+        body={null}
+        fields={{ start_date: "2026-11-09", needs_laptop: true }}
+        titles={{ start_date: "first day at work" }}
+      />,
+    );
+    const fields = screen.getByLabelText("Fields of the request");
+    expect(within(fields).getByText("First day at work")).toBeInTheDocument();
+    expect(fields).not.toHaveTextContent("Start date");
+    expect(within(fields).getByText("Needs laptop")).toBeInTheDocument();
+  });
+
   it("says when the request was a title only", () => {
     render(<RequestCard body={null} fields={{}} />);
     expect(screen.getByTestId("request-card")).toHaveTextContent("The request was filed with a title only.");
@@ -127,5 +142,26 @@ describe("RequestCard", () => {
   it("folds a long text behind Show all", () => {
     render(<LongText text={"word ".repeat(FOLD_AFTER)} />);
     expect(screen.getByText("Show all")).toBeInTheDocument();
+  });
+});
+
+describe("fieldTitles (S55-14)", () => {
+  it("reads the titles of `metadata.inputs`, leaving out a field without one", () => {
+    expect(
+      fieldTitles({
+        type: "object",
+        properties: {
+          incident_id: { type: "string", title: " incident id " },
+          severity: { type: "string", enum: ["sev1"] },
+          blank: { type: "string", title: "  " },
+        },
+      }),
+    ).toEqual({ incident_id: "incident id" });
+  });
+
+  it("reads nothing from a workflow without inputs", () => {
+    expect(fieldTitles(undefined)).toEqual({});
+    expect(fieldTitles({ type: "object" })).toEqual({});
+    expect(fieldTitles({ properties: null })).toEqual({});
   });
 });

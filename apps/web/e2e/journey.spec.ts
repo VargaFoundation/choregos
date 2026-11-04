@@ -71,6 +71,9 @@ test("work item: the journey is followed live, replayed, and every agent shows w
   });
   expect(debord.droite).toBeLessThanOrEqual(debord.fenetre);
 
+  // The player is folded until asked for (S55-14).
+  await expect(journey.getByRole("button", { name: "Replay the journey" })).toBeHidden();
+  await journey.getByText("Replay this ticket").click();
   await journey.getByRole("button", { name: "2×" }).click();
   await journey.getByRole("button", { name: "Replay the journey" }).click();
   await expect(journey.getByTestId("journey-moment")).toContainText("/ 34");

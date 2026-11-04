@@ -2,7 +2,7 @@
 "use client";
 
 import { type RefObject, useEffect, useId, useMemo, useRef, useState } from "react";
-import { buttonClasses } from "@/components/ui";
+import { buttonClasses, Disclosure } from "@/components/ui";
 import { KIND_COLOURS } from "@/components/workflows/map/layout";
 import { cn } from "@/lib/cn";
 import { toSentenceCase, relative, shortDate, usd } from "@/lib/format";
@@ -55,8 +55,9 @@ const SPEEDS: Speed[] = [0.5, 1, 2];
  * train (pill). What runs pulses, what waits for someone too, more slowly; a review that sends
  * back draws an orange arc and counts its rounds; a detour (review rework, CI repair) hangs under
  * its row. Live, the map follows the API; "Replay" plays the work item's life back event by
- * event, at the chosen speed, and a clicked phase jumps there. Clicking a box opens its panel:
- * every attempt, what the agent did, its log.
+ * event, at the chosen speed, and a clicked phase jumps there. The replay player is folded under
+ * "Replay this ticket" until asked for (S55-14): a clicked phase opens it, closing it goes back to
+ * live. Clicking a box opens its panel: every attempt, what the agent did, its log.
  */
 export function JourneyMap({
   journey,
@@ -85,11 +86,28 @@ export function JourneyMap({
   const placement = useMemo(() => place(model, width), [model, width]);
   const selectedStep = selected ? model.byId.get(selected) : undefined;
   const story = reader.mode === "replay" ? narrate(model, instant.latest) : "";
+  // The player is folded until asked for (S55-14); a past moment is never shown with it folded.
+  const [replayOpen, setReplayOpen] = useState(false);
+  const goTo = (index: number) => {
+    setReplayOpen(true);
+    reader.goTo(index);
+  };
 
   return (
     <section className="space-y-3" data-testid="journey" aria-label={`Journey of ${journey.tracker_key ?? "the work item"}`}>
       <Header journey={journey} model={model} instant={instant} />
-      <ReaderBar reader={reader} frames={frames} story={story} />
+      <Disclosure
+        title="Replay this ticket"
+        summary="Its life played back, event by event"
+        open={replayOpen}
+        onToggle={(open) => {
+          setReplayOpen(open);
+          if (!open) reader.live();
+        }}
+      >
+        <ReaderBar reader={reader} frames={frames} story={story} />
+      </Disclosure>
+      <StatusLegend />
       <div className={cn("grid gap-4", selectedStep && "xl:grid-cols-[minmax(0,1fr)_26rem]")}>
         <div ref={frame} className="min-w-0">
           <Diagram
@@ -115,7 +133,7 @@ export function JourneyMap({
           />
         )}
       </div>
-      <Phases journey={journey} model={model} instant={instant} frames={frames} onGoTo={reader.goTo} />
+      <Phases journey={journey} model={model} instant={instant} frames={frames} onGoTo={goTo} />
     </section>
   );
 }
@@ -322,19 +340,25 @@ function ReaderBar({ reader, frames, story }: { reader: ReturnType<typeof useRea
             </span>
           </label>
         )}
-        <ul className="ml-auto flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted" aria-label="Legend">
-          {STATUS_LEGEND.map(([status, label]) => (
-            <li key={status} className="inline-flex items-center gap-1.5">
-              <StatusDot status={status} />
-              {label}
-            </li>
-          ))}
-        </ul>
       </div>
       <p className={cn("min-h-5 text-sm", story ? "text-ink" : "text-ink-muted")} aria-live="polite" data-testid="journey-story">
         {story || (live ? "Live: the map follows the work item. Replay plays its life back, event by event." : "")}
       </p>
     </div>
+  );
+}
+
+/** What each status looks like: outside the folded player, it reads the map (S55-14). */
+function StatusLegend() {
+  return (
+    <ul className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-muted" aria-label="Legend">
+      {STATUS_LEGEND.map(([status, label]) => (
+        <li key={status} className="inline-flex items-center gap-1.5">
+          <StatusDot status={status} />
+          {label}
+        </li>
+      ))}
+    </ul>
   );
 }
 

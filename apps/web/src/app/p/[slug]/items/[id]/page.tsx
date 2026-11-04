@@ -34,6 +34,8 @@ import { viaInWords } from "@/lib/who-writes";
 import { NextStepBanner } from "@/components/ticket/next-step-banner";
 import { LongText, RequestCard } from "@/components/ticket/request-card";
 import { WorkflowChip } from "@/components/workflow-chip";
+import { fieldTitles } from "@/components/workflows/fields";
+import { useWorkflowDefinition } from "@/components/workflows/use-workflow";
 import { nextStep } from "@/lib/next-step";
 
 /** While an agent runs or a person is awaited, the journey is re-read: the map follows. */
@@ -62,6 +64,8 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
     queryFn: () => api.journey(id),
     refetchInterval: (query) => (enMouvement(query.state.data) ? 4000 : false),
   });
+  // The titles its workflow gives the request's fields (S55-14); unread, the names stand in.
+  const workflow = useWorkflowDefinition(slug, item.data?.workflow_name);
 
   if (item.error) return <ErrorNote>{(item.error as Error).message}</ErrorNote>;
   if (!item.data) return <Empty>Loading…</Empty>;
@@ -177,7 +181,11 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
               />
             </Card>
           )}
-          <RequestCard body={data.body_snapshot} fields={data.fields} />
+          <RequestCard
+            body={data.body_snapshot}
+            fields={data.fields}
+            titles={fieldTitles(workflow.data?.json?.metadata?.inputs)}
+          />
         </div>
         <Card title="About this ticket" data-testid="ticket-facts" className="self-start">
           <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
