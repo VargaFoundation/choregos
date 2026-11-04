@@ -6,7 +6,7 @@ import pytest
 import yaml
 from choregos_core.agent_catalogue import catalogue_skills, entries, entry, skill_files
 from choregos_core.dsl import TEMPLATES_DIR
-from choregos_core.instructions import rendre_les_instructions
+from choregos_core.instructions import render_instructions
 
 INTERNAL = [e for e in entries() if e.kind == "internal"]
 
@@ -61,14 +61,14 @@ def test_every_catalogue_agent_renders_without_error(agent) -> None:  # type: ig
     """With the sample variables, without inputs, then with all of them: `StrictUndefined` refuses a
     name the template would read without `.get` — the agent would die at its first run."""
     instructions = agent.document["spec"]["instructions"]
-    empty = rendre_les_instructions(instructions)
-    full = rendre_les_instructions(instructions, inputs=dict.fromkeys(_workflow_inputs(), "x"))
+    empty = render_instructions(instructions)
+    full = render_instructions(instructions, inputs=dict.fromkeys(_workflow_inputs(), "x"))
     assert "## Work item" in empty and "DEMO-1" in empty
     assert len(full) >= len(empty)
 
 
 def test_the_ticket_context_precedes_an_internal_agents_instructions() -> None:
-    rendered = rendre_les_instructions(
+    rendered = render_instructions(
         entry("developer").document["spec"]["instructions"],  # type: ignore[union-attr]
         ticket={"key": "SBX-12", "title": "Fix rounding", "body": "Totals are off by one cent."},
         spec="Given an invoice",
@@ -133,7 +133,7 @@ def test_the_architect_checks_its_number_before_accepting() -> None:
     architect = entry("architect")
     assert architect is not None
     instructions = architect.document["spec"]["instructions"]
-    accept = rendre_les_instructions(instructions, inputs={"adr_path": "docs/adr/0007-queue.md"})
+    accept = render_instructions(instructions, inputs={"adr_path": "docs/adr/0007-queue.md"})
     assert "docs/adr/0007-queue.md" in accept
     assert "adr_number_free" in accept and "git ls-tree" in accept
     assert "highest number on the default branch plus one" in accept
@@ -165,7 +165,7 @@ def test_the_context_file_has_its_new_name() -> None:
     from choregos_core.agent_catalogue import FOLDER
 
     assert (FOLDER / "_context.md").is_file()
-    assert not (FOLDER / "_contexte.md").exists()  # lang: fr-ok alias:internal
+    assert not (FOLDER / "_contexte.md").exists()  # lang: fr-ok
 
 
 def test_former_package_is_the_new_one(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -191,17 +191,3 @@ def test_former_names_resolve_to_the_new_ones() -> None:
     assert former.skills_du_catalogue is new.catalogue_skills  # lang: fr-ok alias:external
     assert former.fichiers_de_la_skill is new.skill_files  # lang: fr-ok alias:external
     assert former.entree("architect") == new.entry("architect")  # lang: fr-ok alias:external
-
-
-def test_former_entry_attributes_still_read() -> None:
-    agent = entry("architect")
-    assert agent is not None
-    assert (agent.genre, agent.resume, agent.portee) == (  # lang: fr-ok alias:internal
-        agent.kind,
-        agent.summary,
-        agent.reach,
-    )
-    assert agent.empreinte == agent.digest  # lang: fr-ok alias:internal
-    external = entry("chatgpt")
-    assert external is not None
-    assert external.portee == external.reach == "cloud"  # lang: fr-ok alias:internal

@@ -15,7 +15,7 @@ from typing import Any
 import yaml
 from choregos_contracts import Workflow
 from choregos_core import parse_workflow
-from choregos_core.dsl.edition import editer
+from choregos_core.dsl.edition import edit
 from choregos_core.dsl.graph import to_graph, to_mermaid
 from choregos_core.dsl.process import to_process
 
@@ -96,12 +96,12 @@ DECISION_SPEC: dict[str, Any] = {
 
 
 def test_the_console_creates_a_decision_actor_and_undoes_it_to_the_byte() -> None:
-    edition = editer(WORKFLOW, [{"op": "add_actor", "name": "triage", "spec": DECISION_SPEC}])
+    edition = edit(WORKFLOW, [{"op": "add_actor", "name": "triage", "spec": DECISION_SPEC}])
     assert yaml.safe_load(edition.yaml)["actors"]["triage"] == DECISION_SPEC
     workflow, _ = parse_workflow(edition.yaml, strict=False)
     assert workflow.actors["triage"].type == "decision"
     inverse = [o.model_dump(by_alias=True, exclude_none=True) for o in edition.inverse]
-    assert editer(edition.yaml, inverse).yaml == WORKFLOW
+    assert edit(edition.yaml, inverse).yaml == WORKFLOW
 
 
 def test_the_console_edits_a_decision_written_as_lines_and_undoes_it_to_the_byte() -> None:
@@ -115,7 +115,7 @@ def test_the_console_edits_a_decision_written_as_lines_and_undoes_it_to_the_byte
         {"op": "set_actor", "name": "router", "field": "timeout_seconds", "value": 30},
         {"op": "set_actor", "name": "router", "field": "model", "value": "platform/decide-large"},
     ]
-    edition = editer(WORKFLOW, operations)
+    edition = edit(WORKFLOW, operations)
     router = yaml.safe_load(edition.yaml)["actors"]["router"]
     assert router["questions"] == questions
     assert (router["state"], router["timeout_seconds"], router["model"]) == (
@@ -124,4 +124,4 @@ def test_the_console_edits_a_decision_written_as_lines_and_undoes_it_to_the_byte
         "platform/decide-large",
     )
     assert "        instructions: Which team?" in edition.yaml.splitlines(), edition.yaml
-    assert editer(edition.yaml, edition.inverse).yaml == WORKFLOW
+    assert edit(edition.yaml, edition.inverse).yaml == WORKFLOW

@@ -2,10 +2,11 @@
 """Former names that keep working after a rename (ADR 0098 §3).
 
 A renamed name that only gets imported keeps a typed alias in the module that defines it, and
-nothing else:
+nothing else (an external one, `# lang: fr-ok alias:external`; an internal one is deleted once
+its last user has switched):
 
     NewName = ...
-    OldName = NewName  # lang: fr-ok alias:internal
+    OldName = NewName  # lang: fr-ok alias:external
 
 A plain alias does not forward a patch: `monkeypatch.setattr(module, "OldName", fake)` rebinds
 `OldName` and leaves `NewName`, which the module's own code reads, untouched. A module whose former

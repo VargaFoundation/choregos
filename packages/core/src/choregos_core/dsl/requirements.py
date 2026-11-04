@@ -45,14 +45,6 @@ class Requirement:
     capability: str
     reasons: tuple[str, ...]
 
-    @property
-    def capacite(self) -> str:  # lang: fr-ok alias:internal
-        return self.capability
-
-    @property
-    def raisons(self) -> tuple[str, ...]:  # lang: fr-ok alias:internal
-        return self.reasons
-
 
 class _Reasons:
     """The reasons of each capability, in the order they are discovered, without duplicates."""

@@ -46,25 +46,6 @@ class AccessLine:
         return self.refusals > 0
 
     # Former member names (ADR 0098 §3 (d)): read-only views of the renamed fields.
-    @property
-    def cible(self) -> str:  # lang: fr-ok alias:internal
-        return self.target
-
-    @property
-    def demandes(self) -> int:  # lang: fr-ok alias:internal
-        return self.requests
-
-    @property
-    def refus(self) -> int:  # lang: fr-ok alias:internal
-        return self.refusals
-
-    @property
-    def motifs(self) -> list[str]:  # lang: fr-ok alias:internal
-        return self.reasons
-
-    @property
-    def refuse(self) -> bool:  # lang: fr-ok alias:internal
-        return self.refused
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -102,23 +83,6 @@ class AccessReport:
         return [line for line in self.lines if line.nature == nature]
 
     # Former member names (ADR 0098 §3 (d)).
-    @property
-    def acces(self) -> list[AccessLine]:  # lang: fr-ok alias:internal
-        return self.lines
-
-    @property
-    def evenements(self) -> int:  # lang: fr-ok alias:internal
-        return self.events
-
-    @property
-    def deduites(self) -> int:  # lang: fr-ok alias:internal
-        return self.inferred
-
-    @property
-    def refuses(self) -> list[AccessLine]:  # lang: fr-ok alias:internal
-        return self.refused_lines
-
-    par_nature = by_nature  # lang: fr-ok alias:internal
 
     def to_dict(self) -> dict[str, Any]:
         return {

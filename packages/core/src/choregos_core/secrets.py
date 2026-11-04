@@ -155,13 +155,6 @@ __all__ = [
     "schemas",
 ]
 
-ReferenceInvalide = InvalidReference  # lang: fr-ok alias:internal
-VariableRefusee = RefusedVariable  # lang: fr-ok alias:internal
-PATTERN_PAR_DEFAUT = DEFAULT_PATTERN  # lang: fr-ok alias:internal
-est_une_reference_du_magasin = is_store_reference  # lang: fr-ok alias:internal
-verifier = check  # lang: fr-ok alias:internal
-resoudre = resolve  # lang: fr-ok alias:internal
-reinitialiser = reset  # lang: fr-ok alias:internal
 SecretIntrouvable = SecretNotFound  # lang: fr-ok alias:external
 declarer_un_resolveur = declare_resolver  # lang: fr-ok alias:external
 

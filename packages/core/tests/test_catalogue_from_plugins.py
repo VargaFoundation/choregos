@@ -65,7 +65,7 @@ def test_every_agent_comes_from_its_plugin() -> None:
 @pytest.mark.parametrize("slug", sorted(FINGERPRINTS))
 def test_the_documents_are_the_cores_byte_for_byte(slug: str) -> None:
     found = entree(slug)
-    assert found is not None and found.empreinte == FINGERPRINTS[slug]
+    assert found is not None and found.digest == FINGERPRINTS[slug]
 
 
 def test_the_context_is_prepended_once() -> None:
@@ -76,7 +76,7 @@ def test_the_context_is_prepended_once() -> None:
 
 def test_a_client_keeps_its_client_and_reach() -> None:
     claude = entree("claude-ai")
-    assert claude is not None and (claude.client, claude.portee) == ("claude-ai", "cloud")
+    assert claude is not None and (claude.client, claude.reach) == ("claude-ai", "cloud")
 
 
 def test_madr_4_is_the_plugins_with_its_licence() -> None:

@@ -40,7 +40,6 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 from .errors import ChoregosError
 
 PLACEHOLDER = re.compile(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}")
-GABARIT = PLACEHOLDER  # lang: fr-ok alias:internal
 
 _logger = logging.getLogger("choregos.catalogue")
 _former_key_warned: set[str] = set()  # the key is warned about once per process
@@ -138,9 +137,6 @@ class CatalogueTool(Model):
         """Is the tool open to these groups? With no declared restriction, yes."""
         return not self.groups or bool(set(self.groups) & set(groups))
 
-    def ouvert_a(self, groups: list[str]) -> bool:  # lang: fr-ok alias:internal
-        return self.open_to(groups)
-
 
 class Catalogue(Model):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
@@ -165,15 +161,8 @@ class Catalogue(Model):
                 )
         return data
 
-    @property
-    def outils(self) -> list[CatalogueTool]:  # lang: fr-ok alias:internal
-        return self.tools
-
     def by_name(self, name: str) -> CatalogueTool | None:
         return next((t for t in self.tools if t.name == name), None)
-
-    def par_nom(self, name: str) -> CatalogueTool | None:  # lang: fr-ok alias:internal
-        return self.by_name(name)
 
 
 class UnknownToolError(ChoregosError):
@@ -293,15 +282,6 @@ def load_catalogue(text: str) -> Catalogue:
         data = {"tools": data}
     return Catalogue.model_validate(data)
 
-
-AppelHttp = HttpCall  # lang: fr-ok alias:internal
-AppelMcp = McpCall  # lang: fr-ok alias:internal
-OutilCatalogue = CatalogueTool  # lang: fr-ok alias:internal
-OutilInconnuError = UnknownToolError  # lang: fr-ok alias:internal
-ArgumentRefuseError = ArgumentRefusedError  # lang: fr-ok alias:internal
-valider_les_arguments = validate_arguments  # lang: fr-ok alias:internal
-construire_requete = build_request  # lang: fr-ok alias:internal
-charger_catalogue = load_catalogue  # lang: fr-ok alias:internal
 
 __all__ = [
     "ArgumentRefusedError",

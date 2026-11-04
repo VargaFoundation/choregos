@@ -7,7 +7,7 @@ from __future__ import annotations
 import pytest
 from choregos_core import parse_workflow
 from choregos_core.dsl import template_yaml
-from choregos_core.dsl.edition import editer
+from choregos_core.dsl.edition import edit
 from choregos_core.errors import ValidationError
 
 OPEN_PR = "    does: open_pr\n"
@@ -32,7 +32,7 @@ def test_without_it_nothing_changes() -> None:
 
 
 def test_the_typed_edition_writes_it() -> None:
-    edited = editer(
+    edited = edit(
         template_yaml("default-simple"),
         [{"op": "set_transition", "id": "t-open-pr", "field": "pull_request", "value": {"draft": True}}],
     )
@@ -43,7 +43,7 @@ def test_the_typed_edition_writes_it() -> None:
 
 @pytest.mark.parametrize("transition", ["t-merge", "t-approve-spec"])
 def test_a_transition_that_does_not_open_the_pull_request_cannot_say_how(transition: str) -> None:
-    edited = editer(
+    edited = edit(
         template_yaml("default-simple"),
         [{"op": "set_transition", "id": transition, "field": "pull_request", "value": {"draft": True}}],
     )

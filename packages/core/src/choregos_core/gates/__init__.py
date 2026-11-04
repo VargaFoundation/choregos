@@ -450,8 +450,6 @@ def _outputs_present(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
 
 #: The states of an action that will not move again.
 ACTION_SETTLED = frozenset({"succeeded", "failed", "rejected"})
-ACTION_REGLEE = ACTION_SETTLED  # lang: fr-ok alias:internal
-MOTIF_ADR = ADR_PATTERN  # lang: fr-ok alias:internal
 
 
 @gate("action_succeeded", asynchronous=True)

@@ -26,12 +26,6 @@ METHOD_NOT_FOUND: Final = -32601
 INVALID_PARAMS: Final = -32602
 INTERNAL_ERROR: Final = -32603
 
-ERREUR_DE_SYNTAXE: Final = PARSE_ERROR  # lang: fr-ok alias:internal
-REQUETE_INVALIDE: Final = INVALID_REQUEST  # lang: fr-ok alias:internal
-METHODE_INCONNUE: Final = METHOD_NOT_FOUND  # lang: fr-ok alias:internal
-PARAMETRES_INVALIDES: Final = INVALID_PARAMS  # lang: fr-ok alias:internal
-ERREUR_INTERNE: Final = INTERNAL_ERROR  # lang: fr-ok alias:internal
-
 
 def negotiate(requested: object) -> str:
     """The version the server answers to `initialize`."""
@@ -59,14 +53,8 @@ def text_result(
     *,
     is_error: bool = False,
     structured: Any = None,
-    en_erreur: bool | None = None,  # lang: fr-ok alias:internal
-    structure: Any = None,  # lang: fr-ok alias:internal
 ) -> dict[str, Any]:
     """The result of a tool: text for the model, the structure for the client that reads it."""
-    if en_erreur is not None:  # lang: fr-ok alias:internal
-        is_error = en_erreur  # lang: fr-ok alias:internal
-    if structure is not None:  # lang: fr-ok alias:internal
-        structured = structure  # lang: fr-ok alias:internal
     result: dict[str, Any] = {"content": [{"type": "text", "text": text}], "isError": is_error}
     if structured is not None:
         result["structuredContent"] = structured
@@ -89,11 +77,3 @@ def message_defect(message: object) -> str | None:
     if not isinstance(message.get("method"), str):
         return "`method` is missing"
     return None
-
-
-negocier = negotiate  # lang: fr-ok alias:internal
-version_acceptable = acceptable_version  # lang: fr-ok alias:internal
-erreur = error  # lang: fr-ok alias:internal
-resultat_texte = text_result  # lang: fr-ok alias:internal
-est_notification = is_notification  # lang: fr-ok alias:internal
-defaut_du_message = message_defect  # lang: fr-ok alias:internal
