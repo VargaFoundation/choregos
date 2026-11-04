@@ -529,6 +529,39 @@ Two things have to be true for an agent to actually get a tool, and both are eas
    project's list comes back `allowed: false`, and the agent correctly reports that it has no such
    tool — which is exactly what happened on the dev tenant on 2026-09-27, and cost an hour.
 
+### The tool bridge
+
+When a run is offered tool scripts (`tools.scripts` in its stage input,
+[ADR 0122](adr/0122-an-agent-may-call-its-run-s-tools-from-a-script.md)), the server on `localhost:7777` also
+serves the **tool bridge** (`choregos_tools_mcp/bridge.py`): a script the agent writes calls the run's tools
+through it, holding no credential of its own.
+
+| Route | What it does |
+|---|---|
+| `GET /bridge/v1/tools` | the run's tool list as `GET /internal/runs/{id}/tools` answers it, whole (`inputSchema`, `outputSchema`, `x-choregos-access`) |
+| `POST /bridge/v1/tools/{name}` | the body is the arguments (empty means `{}`), relayed to `POST /internal/runs/{id}/tools/{name}` with the run token, `X-Choregos-Tool-Origin: script` and the request's `X-Choregos-Script` (64 lowercase hexadecimal characters, else `400`); the API's answer comes back unchanged, status and bytes: a `200` carrying `{status_code, result, remaining, suspicions}`, or the API's problem with its own status (`404`, `409`, `429`, `400`) |
+| `POST /bridge/v1/scripts` | `{"sha256", "text"}`: the script's text, journaled once per digest (`201` the first time, `200` after); a text over 64 KiB or a digest that is not the SHA-256 of the UTF-8 text is a `400` |
+
+The bridge adds no rule: the API governs each call as it governs the model's. It bounds what it relays: at most
+`max_concurrent_calls` (1-16, default 4) calls of the run at once, the next one waiting for a place rather than
+refused; 60 s per call (a governed write waits up to 30 s on the API's side), after which it answers `504`; `502`
+when the API cannot be reached; `413` for a request body over 1 MiB. Without `tools.scripts` the routes answer
+`404`, as routes that do not exist.
+
+It journals `tools.script` (`sha256`, `bytes`, `text`) and, for each relayed call, `tools.script.call` (`tool`;
+`status_code`, the answer's own on a `200`, `202` for a proposal, the HTTP status otherwise; `duration_ms`;
+`response_bytes`, what it handed back; `script_sha256`, or null). The runner's own server writes them into the
+run's journal and says `bridge: true` on its `tools.local` event. The Tekton sidecar is not told its run's input:
+it reads it from the API (`GET /internal/runs/{id}/input`, with the run token) on the bridge's first request, and
+posts its events through `POST /internal/runs/{id}/events`, numbered from 1,000,000,000 so that they never take
+a number of the runner's. The run's journal is ordered by number, so the sidecar's events come after the
+runner's; each carries its own time.
+
+No new port and no new credential: the routes are on the port the agent's MCP client already uses, so the
+confinement's port list is the same with and without scripts, and the run token stays with the runner (or the
+sidecar), in no answer and no journal line. Each relayed call holds one API database connection for its whole
+length (#1354): a run that scripts can hold `max_concurrent_calls` of them at once, besides its model's own calls.
+
 ### A catalogue tool that may write is not offered
 
 Writes reach a third party only as governed actions (ADR 0034 §7), and a catalogue call is not one.

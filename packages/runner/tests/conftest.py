@@ -30,6 +30,7 @@ from choregos_contracts import (
     TransitionRef,
     WorkItemRef,
 )
+from choregos_tools_mcp.client import Relayed
 
 FAKE_AGENT = Path(__file__).parent / "fixtures" / "fake_agent.py"
 
@@ -130,6 +131,22 @@ class FakeInternalClient:
         #: The egress token the internal API would mint (ADR 0115); an exception: an older API.
         self.egress_token: str | BaseException = "egress-tok"
         self.egress_token_calls = 0
+        #: What `getRunTools` and `callRunTool` would answer the tool bridge (ADR 0122), and the calls
+        #: it relayed: `{name, arguments, script}`.
+        self.run_tools: list[dict[str, Any]] = []
+        self.tool_answer = Relayed(
+            200, b'{"status_code":200,"result":{"ok":true},"remaining":null}', "application/json"
+        )
+        self.relayed: list[dict[str, Any]] = []
+
+    async def relay_tools(self) -> Relayed:
+        return Relayed(200, json.dumps({"tools": self.run_tools}).encode(), "application/json")
+
+    async def relay_tool_call(
+        self, name: str, arguments: bytes, *, script: str | None, within_s: float
+    ) -> Relayed:
+        self.relayed.append({"name": name, "arguments": arguments, "script": script})
+        return self.tool_answer
 
     async def fetch_skills(self) -> list[dict[str, Any]]:
         return list(self.skills)

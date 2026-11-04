@@ -136,6 +136,37 @@ def _unasked(actions: list[dict[str, Any]]) -> None:
     (Path(os.environ["HOME"]) / "unasked.json").write_text(json.dumps(outcomes), encoding="utf-8")
 
 
+def _http(calls: list[dict[str, Any]]) -> None:
+    """`http`: what a script the agent wrote would send to the run's tool server (the tool bridge,
+    ADR 0122), with no credential of its own. Each answer (status, body) goes to `$HOME/http.json`,
+    in order, beside the run variables the agent's process holds."""
+    if not calls:
+        return
+    import urllib.error
+    import urllib.request
+
+    answers: list[dict[str, Any]] = []
+    for call in calls:
+        method = call.get("method", "POST")
+        request = urllib.request.Request(
+            call["url"],
+            data=json.dumps(call.get("body", {})).encode() if method == "POST" else None,
+            method=method,
+            headers={"content-type": "application/json", **call.get("headers", {})},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=10) as answer:
+                answers.append({"status": answer.status, "body": answer.read().decode()})
+        except urllib.error.HTTPError as error:
+            answers.append({"status": error.code, "body": error.read().decode()})
+        except OSError as exc:
+            answers.append({"status": None, "body": type(exc).__name__})
+    held = sorted(name for name in os.environ if name.startswith("CHOREGOS_RUN_"))
+    (Path(os.environ["HOME"]) / "http.json").write_text(
+        json.dumps({"answers": answers, "run_variables": held}), encoding="utf-8"
+    )
+
+
 def _say(session_id: str, notes: list[str]) -> None:
     for note in notes:
         send(
@@ -229,6 +260,7 @@ def main() -> int:
 
             outgoing_id = _report_tool_calls(session_id, plan.get("tool_calls", []), outgoing_id)
             _unasked(plan.get("unasked", []))
+            _http(plan.get("http", []))
 
             for command in plan.get("commands", []):
                 outgoing_id += 1
