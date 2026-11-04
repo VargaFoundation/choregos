@@ -28,7 +28,7 @@ from typing import Protocol
 
 import yaml
 from choregos_core.plugins import MANIFEST, Plugin, PluginError, opened
-from choregos_core.plugins.sources import SourceError
+from choregos_core.plugins.sources import Index, SourceError
 
 from ..config import Settings
 
@@ -61,8 +61,9 @@ class PluginSupply(Protocol):
         `PluginVersionUnsupportedError` or `choregos_core.plugins.PluginError`."""
         ...
 
-    async def latest(self, source: str, name: str) -> str | None:
-        """The newest version `source` offers for `name`, or `None`."""
+    async def latest(self, source: str, name: str, *, wait: bool = True) -> str | None:
+        """The newest version `source` offers for `name`, or `None`. `wait=False` never waits for a
+        source: what is not known yet is answered `None`, and learnt behind the reader."""
         ...
 
     async def shipping(self, slugs: set[str], *, wait: bool = True) -> dict[str, Shipped]:
@@ -128,7 +129,7 @@ class OfflineDirectory:
     def obtain(self, source: str, name: str, version: str | None) -> AbstractAsyncContextManager[Plugin]:
         return self._obtain(source, name, version)
 
-    async def latest(self, source: str, name: str) -> str | None:
+    async def latest(self, source: str, name: str, *, wait: bool = True) -> str | None:
         try:
             versions = self._versions(source, name)
         except PluginNotFoundError:
@@ -167,7 +168,7 @@ class _Nothing:
     def obtain(self, source: str, name: str, version: str | None) -> AbstractAsyncContextManager[Plugin]:
         return self._obtain(source, name, version)
 
-    async def latest(self, source: str, name: str) -> str | None:
+    async def latest(self, source: str, name: str, *, wait: bool = True) -> str | None:
         return None
 
     async def shipping(self, slugs: set[str], *, wait: bool = True) -> dict[str, Shipped]:
@@ -182,6 +183,15 @@ class _Nothing:
 _SHIPPING_TTL_SECONDS = 600.0
 _shipping_cache: dict[str, tuple[float, dict[str, Shipped]]] = {}
 _shipping_refresh: dict[str, asyncio.Task[tuple[float, dict[str, Shipped]]]] = {}
+
+#: Each remote source's index as `latest` last read it, or `None` when it could not be read, by source
+#: name. An organisation's plugin list asked every installed plugin's source for its newest version, one
+#: pull and signature check per plugin: with a source the deployment cannot reach, 20 s per plugin, and
+#: the list of four plugins answered after 80 s, past the ingress's minute. A read is now kept ten
+#: minutes, an unreadable source included, and the list never waits for one. The offline directory is
+#: read each time: it is local, and fast.
+_index_cache: dict[str, tuple[float, Index | None]] = {}
+_index_refresh: dict[str, asyncio.Task[tuple[float, Index | None]]] = {}
 
 
 class SourcesSupply:
@@ -198,7 +208,7 @@ class SourcesSupply:
     def obtain(self, source: str, name: str, version: str | None) -> AbstractAsyncContextManager[Plugin]:
         return self._obtain(source, name, version)
 
-    async def latest(self, source: str, name: str) -> str | None:
+    async def latest(self, source: str, name: str, *, wait: bool = True) -> str | None:
         from choregos_core.plugins.sources import resolve
         from choregos_core.plugins.versions import core_version
 
@@ -206,10 +216,49 @@ class SourcesSupply:
 
         try:
             config = plugins_config()
-            index = await read_index(config.source(source), config)
+            declared = config.source(source)
+            if declared.offline:
+                index: Index | None = await read_index(declared, config)
+            else:
+                index = await self._index(source, wait=wait)
+            if index is None:
+                return None
             return resolve(index, name, "*", core_version()).version
         except SourceError:
             return None
+
+    async def _index(self, source: str, *, wait: bool) -> Index | None:
+        """A remote source's index from the ten-minute copy, refreshed behind the reader; `None` when
+        it could not be read, or, not waiting, when it was never read."""
+        cached = _index_cache.get(source)
+        if cached is None:
+            refresh = self._refresh_index(source)
+            if not wait:
+                return None
+            cached = await asyncio.shield(refresh)
+        elif time.monotonic() - cached[0] > _SHIPPING_TTL_SECONDS:
+            self._refresh_index(source)
+        return cached[1]
+
+    def _refresh_index(self, source: str) -> asyncio.Task[tuple[float, Index | None]]:
+        """The one read of `source` in flight, started if there is none."""
+        running = _index_refresh.get(source)
+        if running is None or running.done():
+            running = _index_refresh[source] = asyncio.get_running_loop().create_task(
+                self._read_index(source)
+            )
+        return running
+
+    async def _read_index(self, source: str) -> tuple[float, Index | None]:
+        from .plugin_sources import plugins_config, read_index
+
+        try:
+            config = plugins_config()
+            index: Index | None = await read_index(config.source(source), config)
+        except SourceError:
+            index = None
+        read = _index_cache[source] = (time.monotonic(), index)
+        return read
 
     async def shipping(self, slugs: set[str], *, wait: bool = True) -> dict[str, Shipped]:
         cached = _shipping_cache.get("sources")

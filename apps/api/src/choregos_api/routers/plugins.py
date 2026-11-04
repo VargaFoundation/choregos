@@ -95,7 +95,9 @@ async def list_plugins(org: str, session: Db, principal: Me, settings: Config) -
     org_id = await installer.org_id_of(session, org)
     supply = plugin_supply(settings)
     return PluginList(
-        items=[await installer.to_dto(r, supply) for r in await installer.installed(session, org_id)]
+        items=[
+            await installer.to_dto(r, supply, wait=False) for r in await installer.installed(session, org_id)
+        ]
     )
 
 
