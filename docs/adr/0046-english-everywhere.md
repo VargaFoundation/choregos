@@ -41,7 +41,7 @@ Decision D2 (Vincent Devillers, 2026-10-12): everything is in English, identifie
    - **Workflow template keys** (joiners-leavers: `a_revoir`, `clos`, `date_depart`…) change in a
      new template version; installed workflows move by the existing workflow migration path.
      Done for `joiners-leavers` 2.0.0 (S39-11); `templates/` is now read by `tools/check_english.py`
-     like the other directories, and its identifiers by `tests/langue/test_template_identifiers.py`.
+     like the other directories, and its identifiers by `tests/language/test_template_identifiers.py`.
    - **Log event names** change together with the alerts that query them.
    - **ADR and plan file names** are renamed with redirects, links checked by the docs test (S34-05).
 4. **Git history is not rewritten.** Past commit messages stay as they are.
@@ -49,7 +49,7 @@ Decision D2 (Vincent Devillers, 2026-10-12): everything is in English, identifie
    change adds — comments, docstrings and strings in Python and TypeScript, JSX text, Markdown
    outside code blocks, YAML values and comments, Makefile comments — and the commit messages of
    the branch. It runs in `make lint` and in the `english` job of CI on every pull request. Its
-   detector extends the one of `tests/langue/test_anglais.py`: French-only accents (proper names
+   detector extends the one of `tests/language/test_shipped_text_in_english.py`: French-only accents (proper names
    and loanwords aside), a French lexicon, French contractions, French function words. A line that
    must stay French — a patch id, an alias, a test sample of French — carries `lang: fr-ok` in a
    comment on the same line.

@@ -315,7 +315,7 @@ def test_there_are_23_areas_and_the_longest_prefix_wins() -> None:
         "packages/runner/src/x.py": "runner",
         "packages/contracts/openapi.yaml": "contracts",
         "packages/cli/src/x.py": "packages-other",
-        "tests/langue/test_x.py": "tests-language",
+        "tests/language/test_x.py": "tests-language",
         "tests/charts/test_x.py": "tests-language",
         "tests/replay/test_x.py": "tests",
         "docs/plan/STATUS.md": "docs-plan",

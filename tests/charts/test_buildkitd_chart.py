@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 import yaml
 
-from .test_securite_des_pods import manquements
+from .test_pod_security import violations
 
 CHART = pathlib.Path(__file__).resolve().parents[2] / "charts" / "choregos"
 KYVERNO = "kyverno.io/v2/PolicyException"
@@ -111,7 +111,7 @@ def test_the_strict_rule_faults_the_builder_for_what_it_does_unconfined_and_an_e
     None
 ):
     plain = _docs(BUILDS)
-    assert manquements(_builder(plain)) == [
+    assert violations(_builder(plain)) == [
         "buildkitd.seccompProfile",
         "buildkitd.appArmorProfile",
         "buildkitd.allowPrivilegeEscalation",

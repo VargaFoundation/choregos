@@ -23,10 +23,10 @@ pytestmark = pytest.mark.skipif(shutil.which("helm") is None, reason="helm absen
 
 
 def _env_du_web(*surcharges: str) -> dict[str, str]:
-    commande = ["helm", "template", "choregos", str(CHART)]
+    command = ["helm", "template", "choregos", str(CHART)]
     for surcharge in surcharges:
-        commande += ["--set", surcharge]
-    rendu = subprocess.run(commande, capture_output=True, text=True, check=False)
+        command += ["--set", surcharge]
+    rendu = subprocess.run(command, capture_output=True, text=True, check=False)
     assert rendu.returncode == 0, rendu.stderr
     documents: list[dict[str, Any]] = [d for d in yaml.safe_load_all(rendu.stdout) if d]
     (web,) = [

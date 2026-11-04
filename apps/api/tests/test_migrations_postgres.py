@@ -362,7 +362,7 @@ async def test_the_latest_migrations_go_down_and_up_again_over_data(monkeypatch:
 
 # ───────────────────────────── as the migration job (S40-22e) ─────────────────────────────
 #
-# The chart's Job migrates as the API's own role (`tests/charts/test_hook_de_migration.py`), under
+# The chart's Job migrates as the API's own role (`tests/charts/test_migration_hook.py`), under
 # forced RLS: a data step sees only the organisations the session opened. Every test here migrates
 # as that role, over rows seeded by the superuser, and reads the result back as the superuser.
 

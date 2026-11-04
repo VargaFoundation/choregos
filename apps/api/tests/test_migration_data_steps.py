@@ -1,7 +1,7 @@
 """Every migration step that writes rows opens every organisation first (S40-22e).
 
 The chart's Job migrates as the API's own role, under forced RLS (`tests/charts/
-test_hook_de_migration.py`): an `UPDATE`, `DELETE` or `INSERT … SELECT` that runs before
+test_migration_hook.py`): an `UPDATE`, `DELETE` or `INSERT … SELECT` that runs before
 `set_config('app.current_orgs', '*', true)` sees zero rows and says nothing. The release channels'
 downgrade did exactly that: it deleted no channel pin, and the `NOT NULL` after it failed on them.
 `test_migrations_postgres.py` proves two such steps over rows; this reads every migration, upgrade

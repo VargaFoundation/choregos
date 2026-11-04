@@ -338,7 +338,7 @@ def test_ci_runs_the_ratchet() -> None:
 
 
 def test_shipped_detector_is_the_former_one() -> None:
-    """The detector of ADR 0039 §4 moved here from `tests/langue/test_anglais.py` (ADR 0098)."""
+    """The detector of ADR 0039 §4 moved here from `test_shipped_text_in_english.py` (ADR 0098)."""
     for french in ("Intervention humaine", "En cours", "Remettre le badge en main propre"):  # lang: fr-ok
         assert ce.looks_like_shipped_french(french), french
     for english in (

@@ -17,19 +17,19 @@ PILE = pathlib.Path(__file__).resolve().parents[2] / "dev" / "compose.yaml"
 
 def _images() -> dict[str, str]:
     services = yaml.safe_load(PILE.read_text(encoding="utf-8"))["services"]
-    return {nom: str(service["image"]) for nom, service in services.items() if "image" in service}
+    return {name: str(service["image"]) for name, service in services.items() if "image" in service}
 
 
-def test_chaque_image_porte_une_etiquette_explicite() -> None:
+def test_every_image_carries_an_explicit_tag() -> None:
     flottantes = {
-        nom: image
-        for nom, image in _images().items()
+        name: image
+        for name, image in _images().items()
         if ":" not in image.rsplit("/", 1)[-1] or image.endswith(":latest")
     }
     assert not flottantes, f"images without an explicit tag: {flottantes}"
 
 
-def test_le_stockage_s3_n_est_plus_minio() -> None:
+def test_the_s3_storage_is_no_longer_minio() -> None:
     """The MinIO server is no longer published: a fresh machine cannot pull it."""
     serveurs = ("minio/minio", "quay.io/minio/minio")
     assert not [image for image in _images().values() if image.startswith(serveurs)]

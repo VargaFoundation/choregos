@@ -21,15 +21,15 @@ CHART = pathlib.Path(__file__).resolve().parents[2] / "charts" / "choregos"
 pytestmark = pytest.mark.skipif(shutil.which("helm") is None, reason="helm absent")
 
 
-def _rendu(*surcharges: str) -> subprocess.CompletedProcess[str]:
-    commande = ["helm", "template", "choregos", str(CHART)]
+def _rendered(*surcharges: str) -> subprocess.CompletedProcess[str]:
+    command = ["helm", "template", "choregos", str(CHART)]
     for surcharge in surcharges:
-        commande += ["--set", surcharge]
-    return subprocess.run(commande, capture_output=True, text=True, check=False)
+        command += ["--set", surcharge]
+    return subprocess.run(command, capture_output=True, text=True, check=False)
 
 
-def _env_de_l_api(*surcharges: str) -> dict[str, str]:
-    rendu = _rendu(*surcharges)
+def _api_env(*surcharges: str) -> dict[str, str]:
+    rendu = _rendered(*surcharges)
     assert rendu.returncode == 0, rendu.stderr
     documents: list[dict[str, Any]] = [d for d in yaml.safe_load_all(rendu.stdout) if d]
     deploiements = [d for d in documents if d.get("kind") == "Deployment"]
@@ -38,12 +38,12 @@ def _env_de_l_api(*surcharges: str) -> dict[str, str]:
     return {e["name"]: e.get("value", "") for e in conteneur.get("env", []) if "value" in e}
 
 
-def test_eteinte_par_defaut() -> None:
-    assert not [nom for nom in _env_de_l_api() if nom.startswith("CHOREGOS_MCP_OAUTH_")]
+def test_switched_off_by_default() -> None:
+    assert not [name for name in _api_env() if name.startswith("CHOREGOS_MCP_OAUTH_")]
 
 
-def test_allumee_avec_ses_clients() -> None:
-    env = _env_de_l_api(
+def test_switched_on_with_its_clients() -> None:
+    env = _api_env(
         "global.mcp.oauth.enabled=true",
         "global.mcp.oauth.clients.claude-code.clientId=choregos-claude-code",
         "global.mcp.oauth.clients.claude-code.callbackPort=33418",
@@ -58,27 +58,27 @@ def test_allumee_avec_ses_clients() -> None:
     }
 
 
-def test_l_api_lit_ce_que_le_chart_ecrit(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_api_reads_what_the_chart_writes(monkeypatch: pytest.MonkeyPatch) -> None:
     """The rendered JSON is what the API settings accept -- not merely JSON."""
     from choregos_api.config import Settings
 
-    env = _env_de_l_api(
+    env = _api_env(
         "global.mcp.oauth.enabled=true",
         "global.mcp.oauth.issuer=https://idp.example/realms/autre",
         "global.mcp.oauth.clients.claude-code.clientId=choregos-claude-code",
         "global.mcp.oauth.clients.claude-code.callbackPort=33418",
     )
-    for nom, valeur in env.items():
-        if nom.startswith("CHOREGOS_MCP_OAUTH_"):
-            monkeypatch.setenv(nom, valeur)
-    reglages = Settings()
-    assert reglages.mcp_oauth_enabled is True
-    assert reglages.mcp_oauth_issuer == "https://idp.example/realms/autre"
-    assert reglages.mcp_oauth_clients["claude-code"].callback_port == 33418
+    for name, value in env.items():
+        if name.startswith("CHOREGOS_MCP_OAUTH_"):
+            monkeypatch.setenv(name, value)
+    settings = Settings()
+    assert settings.mcp_oauth_enabled is True
+    assert settings.mcp_oauth_issuer == "https://idp.example/realms/autre"
+    assert settings.mcp_oauth_clients["claude-code"].callback_port == 33418
 
 
-def test_une_variable_posee_deux_fois_est_refusee() -> None:
-    rendu = _rendu(
+def test_a_variable_set_twice_is_refused() -> None:
+    rendu = _rendered(
         "global.mcp.oauth.enabled=true",
         "global.extraEnv[0].name=CHOREGOS_MCP_OAUTH_AUDIENCE",
         "global.extraEnv[0].value=autre",

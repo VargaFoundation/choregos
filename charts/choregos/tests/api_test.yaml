@@ -45,7 +45,7 @@ tests:
     template: charts/choregos-api/templates/migrations-job.yaml
     # The template has rendered two documents since 2026-09-26: the HOOK's service account
     # (index 0) then the Job (index 1). The full guard is in
-    # `tests/charts/test_hook_de_migration.py`, which renders the chart for real.
+    # `tests/charts/test_migration_hook.py`, which renders the chart for real.
     documentIndex: 1
     asserts:
       - equal:

@@ -24,27 +24,27 @@ from typing import Any
 import pytest
 import yaml
 
-RACINE = pathlib.Path(__file__).resolve().parents[2]
-CHART = RACINE / "charts" / "choregos"
-ENVIRONNEMENTS = ("local", "dev", "staging", "prod")
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+CHART = ROOT / "charts" / "choregos"
+ENVIRONMENTS = ("local", "dev", "staging", "prod")
 
 pytestmark = pytest.mark.skipif(shutil.which("helm") is None, reason="helm absent")
 
 
-def _rendu(env: str) -> list[dict[str, Any]]:
-    resultat = subprocess.run(
+def _rendered(env: str) -> list[dict[str, Any]]:
+    result = subprocess.run(
         ["helm", "template", "choregos", str(CHART), "-f", str(CHART / "values" / f"{env}.yaml")],
         capture_output=True,
         text=True,
         check=True,
         timeout=120,
     )
-    return [d for d in yaml.safe_load_all(resultat.stdout) if d]
+    return [d for d in yaml.safe_load_all(result.stdout) if d]
 
 
-def _un(documents: list[dict[str, Any]], kind: str, nom: str) -> dict[str, Any]:
-    trouves = [d for d in documents if d.get("kind") == kind and d.get("metadata", {}).get("name") == nom]
-    assert len(trouves) == 1, f"{kind}/{nom} expected once, found {len(trouves)} times"
+def _un(documents: list[dict[str, Any]], kind: str, name: str) -> dict[str, Any]:
+    trouves = [d for d in documents if d.get("kind") == kind and d.get("metadata", {}).get("name") == name]
+    assert len(trouves) == 1, f"{kind}/{name} expected once, found {len(trouves)} times"
     return trouves[0]
 
 
@@ -53,20 +53,20 @@ def _hook(doc: dict[str, Any]) -> dict[str, str]:
     return {k: v for k, v in annotations if k.startswith("helm.sh/")}
 
 
-@pytest.mark.parametrize("env", ENVIRONNEMENTS)
-def test_le_job_de_migration_ne_depend_d_aucune_ressource_ordinaire(env: str) -> None:
+@pytest.mark.parametrize("env", ENVIRONMENTS)
+def test_the_migration_job_depends_on_no_ordinary_resource(env: str) -> None:
     """Its service account is created by the SAME hook, so it exists when the Job starts."""
-    documents = _rendu(env)
+    documents = _rendered(env)
     jobs = [d for d in documents if d.get("kind") == "Job" and "migrations" in d["metadata"]["name"]]
     if not jobs:
         pytest.skip(f"{env} does not render a migration Job")
     job = jobs[0]
-    compte = job["spec"]["template"]["spec"].get("serviceAccountName")
-    assert compte == "choregos-migrations", (
-        f'{env}: the Job runs under "{compte}". If it is not a hook account, the pod '
+    account = job["spec"]["template"]["spec"].get("serviceAccountName")
+    assert account == "choregos-migrations", (
+        f'{env}: the Job runs under "{account}". If it is not a hook account, the pod '
         "is never created in pre-install/PreSync."
     )
-    sa = _un(documents, "ServiceAccount", compte)
+    sa = _un(documents, "ServiceAccount", account)
     assert _hook(sa)["helm.sh/hook"] == _hook(job)["helm.sh/hook"], (
         f"{env}: the account and the Job are not in the same hook -- one will go without the other"
     )
@@ -75,19 +75,19 @@ def test_le_job_de_migration_ne_depend_d_aucune_ressource_ordinaire(env: str) ->
     )
 
 
-@pytest.mark.parametrize("env", ENVIRONNEMENTS)
-def test_le_compte_du_hook_ne_monte_pas_de_jeton(env: str) -> None:
+@pytest.mark.parametrize("env", ENVIRONMENTS)
+def test_the_account_of_the_hook_mounts_no_token(env: str) -> None:
     """The migrations only talk to the database: no Kubernetes API call, so
     no reason to carry a service account token."""
-    documents = _rendu(env)
-    comptes = [
+    documents = _rendered(env)
+    accounts = [
         d
         for d in documents
         if d.get("kind") == "ServiceAccount" and d["metadata"]["name"] == "choregos-migrations"
     ]
-    if not comptes:
+    if not accounts:
         pytest.skip(f"{env} does not render the hook account")
-    assert comptes[0].get("automountServiceAccountToken") is False
+    assert accounts[0].get("automountServiceAccountToken") is False
 
 
 def _database_url(pod: dict[str, Any]) -> Any:
@@ -100,14 +100,14 @@ def _database_url(pod: dict[str, Any]) -> Any:
     return found[-1] if found else None
 
 
-@pytest.mark.parametrize("env", ENVIRONNEMENTS)
+@pytest.mark.parametrize("env", ENVIRONMENTS)
 def test_the_migrations_connect_as_the_api_does(env: str) -> None:
     """S40-22e: the Job migrates as the API's own role, never the database's administrator.
 
     So a migration runs under the same forced RLS as a request: a data step that does not open
     every organisation (`set_config('app.current_orgs', '*', true)`) sees zero rows.
     `apps/api/tests/test_migrations_postgres.py` migrates as that role for this reason."""
-    documents = _rendu(env)
+    documents = _rendered(env)
     jobs = [d for d in documents if d.get("kind") == "Job" and "migrations" in d["metadata"]["name"]]
     if not jobs:
         pytest.skip(f"{env} does not render a migration Job")
@@ -122,11 +122,11 @@ def test_the_migrations_connect_as_the_api_does(env: str) -> None:
         )
 
 
-def test_les_annotations_de_compte_de_service_suivent_sur_le_compte_du_hook() -> None:
+def test_the_service_account_annotations_follow_on_the_account_of_the_hook() -> None:
     """A database that authenticates through workload identity (IRSA, Workload
     Identity) carries that identity in the annotations: the hook must have them too,
     otherwise the migrations are the ONLY component that cannot connect."""
-    resultat = subprocess.run(
+    result = subprocess.run(
         [
             "helm",
             "template",
@@ -142,7 +142,7 @@ def test_les_annotations_de_compte_de_service_suivent_sur_le_compte_du_hook() ->
         check=True,
         timeout=120,
     )
-    documents = [d for d in yaml.safe_load_all(resultat.stdout) if d]
+    documents = [d for d in yaml.safe_load_all(result.stdout) if d]
     sa = _un(documents, "ServiceAccount", "choregos-migrations")
     annotations = sa["metadata"]["annotations"]
     assert annotations["eks.amazonaws.com/role-arn"] == "arn:aws:iam::1:role/choregos"

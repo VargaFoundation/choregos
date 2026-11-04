@@ -8,7 +8,7 @@ English is the reference language since 2026-09-24. The French originals of the 
 written before that date are kept in [`docs/fr/adr/`](../fr/adr/) and are no longer
 maintained; the files below keep their original names, which are their identifiers.
 
-The table below is the whole list, and it is checked by `tests/docs/test_index_des_adr.py`:
+The table below is the whole list, and it is checked by `tests/docs/test_adr_index.py`:
 every file in this folder appears in it, with the status the file itself declares. A second,
 hand-kept summary table used to live here; it silently stopped at 0014 and told readers that
 nine records did not exist.

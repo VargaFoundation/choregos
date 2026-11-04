@@ -42,7 +42,7 @@ stories, keeps every name that cannot move behind an alias with a window, and fr
    or a new file with French, fails `make lint` and the `english` job; a stale entry (a count
    below its baseline, a file that is gone) only prints the command that lowers it, until the
    ratchet is made strict at zero (§8). It replaces the `ENGLISH` and `STILL_FRENCH` lists of
-   `tests/langue/test_english_packages.py`. Three escapes exist: `lang: fr-ok` on a line (a name
+   `tests/language/test_english_packages.py`. Three escapes exist: `lang: fr-ok` on a line (a name
    or a sentence that must stay French), `lang: fr-ok-file` in the first five lines of a file (a
    compatibility shim or a redirect stub), and `FROZEN_PATHS` in the tool (paths whose French
    stem is a recorded workflow id), each with its reason.
@@ -160,7 +160,7 @@ stories, keeps every name that cannot move behind an alias with a window, and fr
   not only on the lines a change adds; `make english-ratchet` runs the same check alone.
 - The shipped-text detector of [ADR 0039](0039-everything-a-user-reads-is-in-english.md) §4 moved
   into `tools/check_english.py` (`looks_like_shipped_french`); the guards of the playbooks, the
-  API errors and the orchestrator load it from there, and `tests/langue/test_anglais.py` keeps
+  API errors and the orchestrator load it from there, and `tests/language/test_shipped_text_in_english.py` keeps
   its former name as an alias.
 - Four stems of replay histories stay French by `FROZEN_PATHS`; every other French name has an
   English name, an alias with a window, or a reason on its line.

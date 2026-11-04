@@ -28,7 +28,7 @@ from typing import Any
 import pytest
 import yaml
 
-from .test_securite_des_pods import manquements
+from .test_pod_security import violations
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CHART = ROOT / "charts" / "choregos"
@@ -107,7 +107,7 @@ def test_the_validator_does_refuse_a_pruned_field() -> None:
 @needs_helm
 def test_the_sandbox_pod_passes_the_kyverno_non_root_rule() -> None:
     pod = _objects()["SandboxTemplate/choregos-runner"]["spec"]["podTemplate"]["spec"]
-    assert manquements(pod) == []
+    assert violations(pod) == []
 
 
 def test_the_template_policy_carries_the_pod_rule() -> None:
