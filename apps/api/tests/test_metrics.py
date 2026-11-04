@@ -1,4 +1,4 @@
-"""Métriques de livraison : DORA calculé sur les déploiements, export CSV des coûts."""
+"""Delivery metrics: DORA computed on the deployments, CSV export of the costs."""
 
 from __future__ import annotations
 
@@ -10,17 +10,17 @@ from httpx import AsyncClient
 
 
 async def _seed_releases(project_id: str) -> None:
-    """Trois mises en production : deux réussies, une annulée puis rétablie."""
+    """Three production releases: two successful, one rolled back then restored."""
     from choregos_api.db.models import Deployment, Release
     from choregos_api.db.session import session_scope
     from choregos_core import utcnow
 
     now = utcnow()
     plan = [
-        # (jours avant maintenant, statut, heures entre fusion et fin de déploiement)
+        # (days before now, status, hours between merge and the end of the deployment)
         (20, "succeeded", 6.0),
         (10, "rolled_back", None),
-        (10, "succeeded", 30.0),  # le rétablissement, 3 h après le rollback
+        (10, "succeeded", 30.0),  # the restoration, 3 h after the rollback
     ]
     async with session_scope() as session:
         for index, (days, status, lead_hours) in enumerate(plan):
@@ -50,22 +50,22 @@ async def _seed_releases(project_id: str) -> None:
             )
 
 
-async def test_dora_se_calcule_sur_les_deploiements(client: AsyncClient, project: dict[str, Any]) -> None:
+async def test_dora_is_computed_on_the_deployments(client: AsyncClient, project: dict[str, Any]) -> None:
     await _seed_releases(project["id"])
     report = (await client.get(f"/api/v1/projects/{project['id']}/metrics/dora")).json()
 
     assert report["env"] == "prod"
-    assert report["deployments"] == 2, "seules les mises en production réussies comptent"
+    assert report["deployments"] == 2, "only the successful production releases count"
     assert report["deployment_frequency"]["value"] == pytest.approx(2 / 30, abs=0.01)
-    assert report["lead_time"]["value"] == pytest.approx(18.0, abs=0.5), "médiane de 6 h et 30 h"
+    assert report["lead_time"]["value"] == pytest.approx(18.0, abs=0.5), "median of 6 h and 30 h"
     assert report["change_failure_rate"]["value"] == pytest.approx(1 / 3, abs=0.01)
     assert report["change_failure_rate"]["level"] == "low"
     assert report["time_to_restore"]["sample"] == 1
     assert report["time_to_restore"]["value"] is not None
 
 
-async def test_dora_sans_deploiement_ne_note_rien(client: AsyncClient, project: dict[str, Any]) -> None:
-    """Aucune donnée n'autorise aucun verdict : `unknown`, pas `low`."""
+async def test_dora_without_a_deployment_rates_nothing(client: AsyncClient, project: dict[str, Any]) -> None:
+    """No data allows no verdict: `unknown`, not `low`."""
     report = (await client.get(f"/api/v1/projects/{project['id']}/metrics/dora")).json()
     assert report["deployments"] == 0
     for metric in ("deployment_frequency", "lead_time", "change_failure_rate", "time_to_restore"):
@@ -73,7 +73,7 @@ async def test_dora_sans_deploiement_ne_note_rien(client: AsyncClient, project: 
         assert report[metric]["sample"] == 0
 
 
-async def test_dora_filtre_par_environnement(client: AsyncClient, project: dict[str, Any]) -> None:
+async def test_dora_filters_by_environment(client: AsyncClient, project: dict[str, Any]) -> None:
     await _seed_releases(project["id"])
     staging = (
         await client.get(f"/api/v1/projects/{project['id']}/metrics/dora", params={"env": "staging"})
@@ -81,7 +81,7 @@ async def test_dora_filtre_par_environnement(client: AsyncClient, project: dict[
     assert staging["deployments"] == 0
 
 
-async def test_export_csv_des_couts(client: AsyncClient, project: dict[str, Any]) -> None:
+async def test_csv_export_of_the_costs(client: AsyncClient, project: dict[str, Any]) -> None:
     from choregos_api.db.models import CostLedger
     from choregos_api.db.session import session_scope
     from choregos_core import utcnow
@@ -108,15 +108,17 @@ async def test_export_csv_des_couts(client: AsyncClient, project: dict[str, Any]
     assert response.headers["content-type"].startswith("text/csv")
     assert "attachment; filename=" in response.headers["content-disposition"]
     body = response.text
-    assert body.startswith("﻿"), "le BOM évite qu'Excel casse les accents"
-    lignes = [ligne for ligne in body.splitlines() if ligne]
-    assert lignes[0].lstrip("﻿").startswith("stage;cout_usd;cout_eur")
-    assert any(ligne.startswith("implement;0.500000;0.460000;1200;340;0;1") for ligne in lignes)
-    assert any(ligne.startswith("total;0.500000") for ligne in lignes)
+    assert body.startswith("﻿"), "the BOM keeps Excel from breaking the accents"
+    lines = [line for line in body.splitlines() if line]
+    assert (
+        lines[0].lstrip("﻿").startswith("stage;cout_usd;cout_eur")
+    )  # lang: fr-ok (the CSV header is still French)
+    assert any(line.startswith("implement;0.500000;0.460000;1200;340;0;1") for line in lines)
+    assert any(line.startswith("total;0.500000") for line in lines)
 
 
-async def test_l_export_csv_respecte_les_droits(client: AsyncClient, project: dict[str, Any]) -> None:
-    """Un export est une lecture du projet : sans session, pas de CSV."""
+async def test_the_csv_export_respects_the_rights(client: AsyncClient, project: dict[str, Any]) -> None:
+    """An export is a read of the project: without a session, no CSV."""
     client.cookies.clear()
     response = await client.get(f"/api/v1/projects/{project['id']}/costs.csv")
     assert response.status_code == 401

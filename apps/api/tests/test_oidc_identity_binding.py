@@ -13,7 +13,7 @@ import respx
 from choregos_api.config import reset_settings_cache
 from choregos_api.db.models import AuditLog, User
 from choregos_api.db.session import session_scope
-from choregos_api.routers.auth import oublier_la_decouverte
+from choregos_api.routers.auth import forget_discovery
 from httpx import AsyncClient, Response
 from sqlalchemy import select
 
@@ -40,10 +40,10 @@ def _provider(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")
     monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", ISSUER)
     reset_settings_cache()
-    oublier_la_decouverte()
+    forget_discovery()
     yield
     reset_settings_cache()
-    oublier_la_decouverte()
+    forget_discovery()
 
 
 async def _sign_in(

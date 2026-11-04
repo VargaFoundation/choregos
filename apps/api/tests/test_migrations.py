@@ -1,9 +1,9 @@
-"""Les migrations disent-elles la même chose que les modèles ?
+"""Do the migrations say the same thing as the models?
 
-Ce test existe à cause d'un défaut réel : `runs.spend_collected` vivait dans le modèle et
-dans aucune migration. Rien ne le disait, parce que l'API posait le schéma elle-même au
-démarrage (`create_all`) et que le banc sur cluster lançait alembic avec `|| true`. Le
-défaut n'apparaissait que sur une vraie base migrée, au premier commentaire d'état écrit.
+This test exists because of a real defect: `runs.spend_collected` lived in the model and in no
+migration. Nothing said so, because the API laid the schema itself at start-up (`create_all`) and
+the cluster bench ran alembic with `|| true`. The defect only showed on a really migrated
+database, at the first status comment written.
 """
 
 from __future__ import annotations
@@ -16,84 +16,85 @@ from alembic.autogenerate import compare_metadata
 from alembic.config import Config
 from alembic.migration import MigrationContext
 from choregos_api.config import get_settings
-from choregos_api.db.models import Base, objet_du_coeur
+from choregos_api.db.models import Base, is_core_object
 from sqlalchemy import create_engine
 
 API = pathlib.Path(__file__).resolve().parents[1]
 
 
 def _config(url: str) -> Config:
-    """`migrations/env.py` prend l'URL des RÉGLAGES, pas de la config alembic (c'est ce qui
-    évite de répéter la chaîne de connexion en deux endroits). Le test suit donc le même
-    chemin : il pose la variable d'environnement et vide le cache des réglages."""
+    """`migrations/env.py` takes the URL from the SETTINGS, not from the alembic config (which
+    avoids repeating the connection string in two places). The test therefore follows the same
+    path: it sets the environment variable and empties the settings cache."""
     config = Config(str(API / "alembic.ini"))
     config.set_main_option("script_location", str(API / "src" / "choregos_api" / "migrations"))
     config.set_main_option("sqlalchemy.url", url)
     return config
 
 
-def test_les_migrations_produisent_le_schema_des_modeles(tmp_path: pathlib.Path) -> None:
-    """Une base migrée doit être indiscernable de `Base.metadata`.
+def test_the_migrations_produce_the_schema_of_the_models(tmp_path: pathlib.Path) -> None:
+    """A migrated database must be indistinguishable from `Base.metadata`.
 
-    SQLite suffit : les migrations n'emploient aucun type propre à PostgreSQL. Ce qu'on
-    compare, ce sont les tables et les colonnes — pas les détails de dialecte, qui sont
-    filtrés plus bas.
+    SQLite is enough: the migrations use no PostgreSQL-specific type. What is compared is the
+    tables and the columns, not the dialect details, which are filtered below.
     """
-    fichier = tmp_path / "migre.db"
+    file = tmp_path / "migrated.db"
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{fichier}")
+    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{file}")
     get_settings.cache_clear()
     try:
-        command.upgrade(_config(f"sqlite:///{fichier}"), "head")
+        command.upgrade(_config(f"sqlite:///{file}"), "head")
     finally:
         monkeypatch.undo()
         get_settings.cache_clear()
 
-    url = f"sqlite:///{fichier}"
+    url = f"sqlite:///{file}"
 
-    moteur = create_engine(url)
-    with moteur.connect() as connexion:
-        # Les tables d'un greffon chargé plus tôt dans la session sont dans `Base` : elles ne sont
-        # pas au cœur, et ses migrations à lui les créent (voir `objet_du_coeur`).
-        contexte = MigrationContext.configure(connexion, opts={"include_object": objet_du_coeur})
-        ecarts = compare_metadata(contexte, Base.metadata)
+    engine = create_engine(url)
+    with engine.connect() as connection:
+        # The tables of an extension loaded earlier in the session are in `Base`: they are not
+        # the core's, and its own migrations create them (see `is_core_object`).
+        context = MigrationContext.configure(connection, opts={"include_object": is_core_object})
+        differences = compare_metadata(context, Base.metadata)
 
-    interessants = [
+    interesting = [
         difference
-        for difference in ecarts
-        # `modify_type` et `modify_default` sur SQLite parlent du dialecte, pas du schéma :
-        # une colonne absente ou en trop, elle, est un vrai désaccord.
+        for difference in differences
+        # `modify_type` and `modify_default` on SQLite speak of the dialect, not of the schema:
+        # a missing or extra column, on the other hand, is a real disagreement.
         if not (isinstance(difference, tuple) and str(difference[0]).startswith("modify_"))
     ]
-    if interessants:
-        detail = "\n".join(f"  - {difference}" for difference in interessants)
+    if interesting:
+        detail = "\n".join(f"  - {difference}" for difference in interesting)
         pytest.fail(
-            "les migrations et les modèles ne disent pas la même chose :\n"
+            "the migrations and the models do not say the same thing:\n"
             f"{detail}\n\n"
-            "Générer la migration manquante :\n"
+            "Generate the missing migration:\n"
             "  cd apps/api && alembic revision --autogenerate -m '…'"
         )
 
 
-def test_les_migrations_redescendent_et_remontent(tmp_path: pathlib.Path) -> None:
-    """`downgrade base` puis `upgrade head` : aucune migration n'était jamais redescendue."""
-    fichier = tmp_path / "aller-retour.db"
+def test_the_migrations_go_back_down_and_up(tmp_path: pathlib.Path) -> None:
+    """`downgrade base` then `upgrade head`: no migration had ever been brought back down."""
+    file = tmp_path / "round-trip.db"
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{fichier}")
+    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{file}")
     get_settings.cache_clear()
     try:
-        config = _config(f"sqlite:///{fichier}")
+        config = _config(f"sqlite:///{file}")
         command.upgrade(config, "head")
         command.downgrade(config, "base")
-        moteur = create_engine(f"sqlite:///{fichier}")
-        with moteur.connect() as connexion:
-            tables = connexion.exec_driver_sql("select name from sqlite_master where type='table'").fetchall()
-        assert {t[0] for t in tables} <= {"alembic_version"}, "tout doit être redescendu"
+        engine = create_engine(f"sqlite:///{file}")
+        with engine.connect() as connection:
+            tables = connection.exec_driver_sql(
+                "select name from sqlite_master where type='table'"
+            ).fetchall()
+        assert {t[0] for t in tables} <= {"alembic_version"}, "everything must have gone back down"
         command.upgrade(config, "head")
-        with moteur.connect() as connexion:
-            contexte = MigrationContext.configure(connexion, opts={"include_object": objet_du_coeur})
-            ecarts = compare_metadata(contexte, Base.metadata)
-        assert not [d for d in ecarts if not (isinstance(d, tuple) and str(d[0]).startswith("modify_"))]
+        with engine.connect() as connection:
+            context = MigrationContext.configure(connection, opts={"include_object": is_core_object})
+            differences = compare_metadata(context, Base.metadata)
+        assert not [d for d in differences if not (isinstance(d, tuple) and str(d[0]).startswith("modify_"))]
     finally:
         monkeypatch.undo()
         get_settings.cache_clear()

@@ -26,13 +26,13 @@ EMAIL = "jo@varga.dev"
 async def idp(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[dict[str, Any]]:
     """An instance provider whose userinfo answers `state["groups"]`."""
     from choregos_api.config import reset_settings_cache
-    from choregos_api.routers.auth import oublier_la_decouverte
+    from choregos_api.routers.auth import forget_discovery
 
     monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")
     monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", ISSUER)
     monkeypatch.setenv("CHOREGOS_PUBLIC_URL", "http://front.test")
     reset_settings_cache()
-    oublier_la_decouverte()
+    forget_discovery()
     state: dict[str, Any] = {"groups": []}
     with respx.mock(assert_all_called=False) as mock:
         mock.get(f"{ISSUER}/.well-known/openid-configuration").mock(
@@ -54,7 +54,7 @@ async def idp(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[dict[str, Any]]:
         )
         yield state
     reset_settings_cache()
-    oublier_la_decouverte()
+    forget_discovery()
 
 
 async def _sign_in(client: AsyncClient, idp: dict[str, Any], groups: list[str]) -> None:

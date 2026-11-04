@@ -1,8 +1,8 @@
-"""Le client de référence du protocole parle à la porte MCP (ADR 0030).
+"""The protocol's reference client talks to the MCP door (ADR 0030).
 
-La porte est écrite à la main : ses propres tests disent ce QU'ELLE croit du protocole. Celui-ci la
-confronte au SDK `mcp` (dépendance de test seulement) servi par un vrai serveur HTTP : si le SDK
-initialise, liste et appelle, un client réel — Claude Code, Cursor, VS Code — le fera aussi.
+The door is written by hand: its own tests say what IT believes of the protocol. This one
+confronts it with the `mcp` SDK (a test-only dependency) served by a real HTTP server: if the SDK
+initialises, lists and calls, a real client (Claude Code, Cursor, VS Code) will too.
 """
 
 from __future__ import annotations
@@ -16,46 +16,46 @@ import uvicorn
 from httpx import AsyncClient
 
 
-def _port_libre() -> int:
-    with socket.socket() as prise:
-        prise.bind(("127.0.0.1", 0))
-        return int(prise.getsockname()[1])
+def _free_port() -> int:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
 
 
-async def test_le_client_de_reference_initialise_liste_et_appelle(
+async def test_the_reference_client_initialises_lists_and_calls(
     app: Any, client: AsyncClient, project: dict[str, Any]
 ) -> None:
     pytest.importorskip("mcp")
     from mcp import ClientSession
     from mcp.client.streamable_http import create_mcp_http_client, streamable_http_client
 
-    cree = await client.post("/api/v1/me/tokens", json={"name": "sdk", "scopes": ["mcp:read"]})
-    jeton = cree.json()["token"]
+    created = await client.post("/api/v1/me/tokens", json={"name": "sdk", "scopes": ["mcp:read"]})
+    token = created.json()["token"]
 
-    port = _port_libre()
-    serveur = uvicorn.Server(
+    port = _free_port()
+    server = uvicorn.Server(
         uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning", lifespan="off")
     )
-    tache = asyncio.create_task(serveur.serve())
+    task = asyncio.create_task(server.serve())
     try:
         for _ in range(100):
-            if serveur.started:
+            if server.started:
                 break
             await asyncio.sleep(0.05)
-        http = create_mcp_http_client(headers={"Authorization": f"Bearer {jeton}"})
+        http = create_mcp_http_client(headers={"Authorization": f"Bearer {token}"})
         async with (
             http,
-            streamable_http_client(f"http://127.0.0.1:{port}/mcp", http_client=http) as flux,
-            ClientSession(flux[0], flux[1]) as session,
+            streamable_http_client(f"http://127.0.0.1:{port}/mcp", http_client=http) as stream,
+            ClientSession(stream[0], stream[1]) as session,
         ):
             await session.initialize()
-            outils = await session.list_tools()
-            noms = {outil.name for outil in outils.tools}
-            assert {"list_projects", "get_work_item"} <= noms
-            assert "create_work_item" not in noms, "un jeton de lecture ne voit pas l'écriture"
-            resultat = await session.call_tool("list_projects", {})
-            assert not resultat.is_error
-            assert "varga:billing-api" in resultat.content[0].text
+            tools = await session.list_tools()
+            names = {tool.name for tool in tools.tools}
+            assert {"list_projects", "get_work_item"} <= names
+            assert "create_work_item" not in names, "a read token does not see writing"
+            result = await session.call_tool("list_projects", {})
+            assert not result.is_error
+            assert "varga:billing-api" in result.content[0].text
     finally:
-        serveur.should_exit = True
-        await tache
+        server.should_exit = True
+        await task

@@ -148,7 +148,7 @@ async def test_a_governed_write_result_is_held_to_its_operation_cap(
 ) -> None:
     """A write's result is what its action's effect recorded (#241): the same cap applies to it."""
     from choregos_api.db.models import Action, ActionEffect
-    from choregos_api.db.session import TOUT, session_scope
+    from choregos_api.db.session import ALL_ORGS, session_scope
     from sqlalchemy import select
 
     base, headers = await _preparer(client, project, ["*"])
@@ -164,7 +164,7 @@ async def test_a_governed_write_result_is_held_to_its_operation_cap(
     action_id = first["result"]["action"]
 
     recorded = {"content": [{"type": "text", "text": LINE * 1_000}]}  # 24 KB: under the default
-    async with session_scope(orgs=TOUT) as session:
+    async with session_scope(orgs=ALL_ORGS) as session:
         action = await session.get(Action, action_id)
         assert action is not None
         action.status = "succeeded"

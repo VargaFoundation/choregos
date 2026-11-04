@@ -29,7 +29,7 @@ ANSWER: dict[str, Any] = {
 }
 
 PLUGIN = f"""
-from choregos_api.greffons import declarer_un_fournisseur_d_outils
+from choregos_api.extensions import declare_tool_provider
 
 TOOL = {{
     "name": "ticket_reader",
@@ -47,13 +47,13 @@ async def appeler(session, run, projet, nom, arguments):
 
 
 def brancher():
-    declarer_un_fournisseur_d_outils("plugin_structured", lister, appeler)
+    declare_tool_provider("plugin_structured", lister, appeler)
 """
 
 
 @pytest.fixture
 def plugin(tmp_path: pathlib.Path) -> Iterator[None]:
-    from choregos_api.greffons import reinitialiser
+    from choregos_api.extensions import reset
 
     root = tmp_path / "site"
     root.mkdir()
@@ -72,7 +72,7 @@ def plugin(tmp_path: pathlib.Path) -> Iterator[None]:
     finally:
         sys.path.remove(str(root))
         sys.modules.pop("plugin_structured", None)
-        reinitialiser()
+        reset()
 
 
 def test_readable_text_holds_the_structured_content() -> None:

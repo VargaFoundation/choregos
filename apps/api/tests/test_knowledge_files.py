@@ -112,11 +112,11 @@ async def test_an_agent_names_its_knowledge_bases_without_changing_older_digests
     client: AsyncClient, admin: str
 ) -> None:
     from choregos_api.schemas import AgentSpec
-    from choregos_api.services.agents import empreinte
+    from choregos_api.services.agents import digest
 
-    before = empreinte(AgentSpec(instructions="x"))
-    assert before == empreinte(AgentSpec(instructions="x", knowledge=[])), "an empty list changes nothing"
-    assert before != empreinte(AgentSpec.model_validate({"instructions": "x", "knowledge": [{"slug": "kb"}]}))
+    before = digest(AgentSpec(instructions="x"))
+    assert before == digest(AgentSpec(instructions="x", knowledge=[])), "an empty list changes nothing"
+    assert before != digest(AgentSpec.model_validate({"instructions": "x", "knowledge": [{"slug": "kb"}]}))
     created = await client.post(
         "/api/v1/orgs/varga/agents",
         json={

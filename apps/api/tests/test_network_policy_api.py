@@ -175,13 +175,13 @@ async def test_without_a_ceiling_any_pattern_is_publishable_and_empty_means_no_i
 def test_the_digest_of_a_version_without_a_network_has_not_moved() -> None:
     """Versions published before `network` existed keep the digest they were published with."""
     from choregos_api.schemas.agents import AgentNetwork, AgentSpec
-    from choregos_api.services.agents import empreinte
+    from choregos_api.services.agents import digest
 
-    assert empreinte(AgentSpec.model_validate(LEGACY_SPEC)) == LEGACY_DIGEST
-    assert empreinte(AgentSpec()) == EMPTY_DIGEST
+    assert digest(AgentSpec.model_validate(LEGACY_SPEC)) == LEGACY_DIGEST
+    assert digest(AgentSpec()) == EMPTY_DIGEST
     with_network = AgentSpec.model_validate({**LEGACY_SPEC, "network": {"domains": []}})
-    assert empreinte(with_network) != LEGACY_DIGEST, "a declared network is part of what the version IS"
-    assert empreinte(AgentSpec(network=AgentNetwork(builtin_web_tools=False))) != EMPTY_DIGEST
+    assert digest(with_network) != LEGACY_DIGEST, "a declared network is part of what the version IS"
+    assert digest(AgentSpec(network=AgentNetwork(builtin_web_tools=False))) != EMPTY_DIGEST
 
 
 # ───────────────────────── the run's effective network and its decisions ─────────────────────────

@@ -97,11 +97,11 @@ async def test_a_session_and_a_token_issued_before_the_rename_keep_working(
 async def test_a_restart_with_the_old_bootstrap_slug_does_not_create_a_second_organisation(
     client: AsyncClient, admin: str
 ) -> None:
-    from choregos_api.amorcage import amorcer
+    from choregos_api.bootstrap import bootstrap_installation
     from choregos_api.config import Settings
 
     await _rename(client)
-    done = await amorcer(Settings(bootstrap_org="varga", bootstrap_admins="x@varga.dev"))
+    done = await bootstrap_installation(Settings(bootstrap_org="varga", bootstrap_admins="x@varga.dev"))
     assert done == {"organisations": [], "administrateurs": []}
     assert [o["slug"] for o in (await client.get(ORG)).json()] == ["fondation"]
 
@@ -149,11 +149,11 @@ async def test_listing_shows_the_aliases_and_releasing_one_frees_it(
 async def test_releasing_an_alias_makes_the_old_address_a_404(
     app: Any, client: AsyncClient, admin: str
 ) -> None:
-    from choregos_api.edition import declarer_un_administrateur_de_plateforme, reinitialiser
+    from choregos_api.edition import declare_platform_administrator, reset
 
     await _rename(client)
-    reinitialiser()
-    declarer_un_administrateur_de_plateforme(lambda session, principal: principal.email == "admin@varga.dev")
+    reset()
+    declare_platform_administrator(lambda session, principal: principal.email == "admin@varga.dev")
     try:
         gone = await client.delete(f"{ORG}/fondation/aliases/varga")
         assert gone.status_code == 204, gone.text
@@ -162,7 +162,7 @@ async def test_releasing_an_alias_makes_the_old_address_a_404(
         assert (await client.get(ORG)).json()[0]["aliases"] == []
         assert (await client.patch(f"{ORG}/fondation", json={"slug": "varga"})).status_code == 200
     finally:
-        reinitialiser()
+        reset()
 
 
 async def test_the_project_config_follows_the_rename(

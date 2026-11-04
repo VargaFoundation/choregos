@@ -28,7 +28,7 @@ def _memory() -> Any:
 async def test_the_old_slug_still_names_the_organisation_after_a_rename(
     client: AsyncClient, admin: str
 ) -> None:
-    from choregos_api.edition import reinitialiser
+    from choregos_api.edition import reset
 
     await client.post(f"{ORG}/memories", json={"slug": "lessons", "display_name": "L"})
     declared = await client.post(
@@ -47,4 +47,4 @@ async def test_the_old_slug_still_names_the_organisation_after_a_rename(
         found = await client.get("/api/v1/orgs/diametral/memories/lessons/search", params={"q": "HSTS"})
         assert [m["subject"] for m in found.json()] == ["hsts"]
     finally:
-        reinitialiser()
+        reset()

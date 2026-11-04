@@ -122,9 +122,9 @@ async def test_only_an_org_admin_distils(client: AsyncClient, admin: str) -> Non
 
 
 def test_the_distiller_is_in_the_catalogue_in_english() -> None:
-    from choregos_core.catalogue_d_agents import entree
+    from choregos_core.agent_catalogue import entry
 
-    distiller = entree("knowledge-distiller")
+    distiller = entry("knowledge-distiller")
     assert distiller is not None and distiller.role == "distill"
     assert "cites at least one source" in distiller.document["spec"]["instructions"]
 
@@ -155,7 +155,7 @@ async def test_a_stale_running_distillation_does_not_block(client: AsyncClient, 
     from datetime import timedelta
 
     from choregos_api.db.models import KnowledgeBase
-    from choregos_api.db.session import TOUT, session_scope
+    from choregos_api.db.session import ALL_ORGS, session_scope
     from choregos_api.knowledge.conversion import conversions
     from choregos_core import utcnow
     from sqlalchemy import select
@@ -163,7 +163,7 @@ async def test_a_stale_running_distillation_does_not_block(client: AsyncClient, 
     await _framework(client)
 
     async def set_distillation(value: dict[str, Any]) -> None:
-        async with session_scope(orgs=TOUT) as session:
+        async with session_scope(orgs=ALL_ORGS) as session:
             base = (await session.execute(select(KnowledgeBase))).scalars().one()
             base.distillation = value
 
@@ -194,10 +194,10 @@ async def test_a_restart_marks_the_running_distillation_failed(client: AsyncClie
     await conversions.drain()
     # The task of a replica that stopped leaves `running` behind.
     from choregos_api.db.models import KnowledgeBase
-    from choregos_api.db.session import TOUT, session_scope
+    from choregos_api.db.session import ALL_ORGS, session_scope
     from sqlalchemy import select
 
-    async with session_scope(orgs=TOUT) as session:
+    async with session_scope(orgs=ALL_ORGS) as session:
         base = (await session.execute(select(KnowledgeBase))).scalars().one()
         base.distillation = {"status": "running", "started_at": utcnow().isoformat()}
     await conversions.recover()

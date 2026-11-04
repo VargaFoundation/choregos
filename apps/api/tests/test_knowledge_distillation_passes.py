@@ -362,12 +362,12 @@ async def test_a_second_start_while_one_runs_is_refused(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from choregos_api.db.models import KnowledgeBase
-    from choregos_api.db.session import TOUT, session_scope
+    from choregos_api.db.session import ALL_ORGS, session_scope
     from choregos_core import utcnow
     from sqlalchemy import select
 
     await _base(client, FOUR, monkeypatch)
-    async with session_scope(orgs=TOUT) as session:
+    async with session_scope(orgs=ALL_ORGS) as session:
         base = (await session.execute(select(KnowledgeBase))).scalars().one()
         base.distillation = {"status": "running", "started_at": utcnow().isoformat()}
     assert (await client.post(f"{BASE}/architecture/distill", json={"exclude": ["d3.md"]})).status_code == 409
