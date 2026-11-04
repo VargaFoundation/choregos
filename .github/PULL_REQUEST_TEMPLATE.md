@@ -15,4 +15,4 @@ What this PR proves, and what it does not prove. The integrator copies it into `
 ## Release note
 Operator-visible change, or "none".
 ## Rename table
-S45 stories only: old -> new modules, symbols, paths and environment variables; also appended to `docs/upgrade-notes/0.21/<story-id>.md`.
+S45 stories only: old -> new modules, symbols, paths and environment variables; the integrator folds it into the "Renamed in 0.21" section of `docs/deployment.md`.

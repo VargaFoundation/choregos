@@ -797,6 +797,10 @@ that follows from it. Rule since that day: nothing is ✅ without a test that fa
 | S45-30 | S45 | ✅ | #1311 | Not edited (integrator's S45-36). Proposed: proves that the first half of tests/ has no French (scan test) and that the old directory name is gone from code, CI, ADRs; does not prove the helm-rendered chart tests pass (they skip without helm), nor that docs/*.md pages stop naming the old paths (S45-44). |
 | S45-31 | S45 | ✅ | #1312 | see the PR |
 | S45-36 | S45 | ✅ | #1314 | S45-36 / S47-28: proves that `docs/plan/STATUS.md` is English (it joins the pages `test_plan_pages_in_english.py` scans), that its row and emoji counts did not move, that S1-08 and S7-10 agree with the repository (two guards) and that S0-08, S6-05 and S7-07 say what the workflows and the code do today. Does not prove: the French `**Total**` line (kept for S45-30's test, switched by the integrator), the names of files in historical rows that other S45 stories rename, or that every claim of the ~830 translated rows was re-verified against the code (the translation keeps what each row said, it do |
+| S45-38 | S45 | ✅ | #1316 | Proves: `docs/fr`, the 43 French ADR stubs and the 7 French plan pages are gone. Every link to them is fixed, and tests refuse their return (`test_there_is_no_french_archive`, `test_no_french_named_page_in_docs`) while still checking that each remaining redirect has a target. `check_english.py` now scans what used to be `docs/fr/`. Does not prove: that the baselines are regenerated (integrator), that the STATUS.md and backlog mentions of the deleted pages are updated, or that the full `make ci` is green on GitHub. |
+| S45-34 | S45 | ✅ | #1317 | proves that the root config, Makefile help, Dockerfiles, `docker/`, `infra/` and `demo/` carry no French prose or French identifiers (scan test over those paths, `make help`, renovate descriptions), and that `demo/tools/catalogue.yaml` loads under `tools:`. It does not prove the images build (comments only changed, CI images job not run locally), that Kyverno still passes its policy tests, or that a cluster `make demo-up`/`demo-seed` run works with the renamed ConfigMap and `--start` flag. |
+| S45-44 | S45 | ✅ | #1318 | **Proves**: the backticked repository paths of `docs/*.md`, `docs/runbooks` and the non-dated `docs/plan` pages name files that exist in the tree (`test_backticked_repository_paths_exist`, with a 5-entry reasoned allowlist); the 0.21 upgrade-note fragments are folded into `docs/deployment.md` with every row and the folder is gone; the live docs scan finds no French. **Does not prove**: that external bookmarks or runbook links to former paths were updated; that the PLAN files, BLOCKERS and STATUS (excluded) are free of former paths; that backticked names that are not repository paths (modules, functions) are current: this was checked by a one-off scan of the fragment's former names, not by a test. |
+| S45-45 | S45 | ✅ | #1319 | see the PR |
 | S42-06b | S42 | ✅ | #1069 | Declaring a connector from `/admin/connectors` (owner report, 2026-10-28: a Confluence connector named `Diametral Confluence` came back with a bare "the body or the parameters do not match the contract"). The form states the name rule (`^[a-z][a-z0-9-]{1,62}$`), marks the field invalid and keeps **Declare** off until the name passes; the in-memory `demo` types (`ConnectorTypeSpec.dev_only`) are neither offered (`GET /connectors/types`, the catalogue) nor declarable (422) in staging and prod. **Proves**: the name rule is shown and enforced in the form; in staging and prod the demo types are neither offered nor declarable (`test_demo_types_in_prod.py`, red without the change). **Does not prove**: a `demo` connector already declared in prod is neither removed nor flagged; elsewhere a 422's detail still does not name the field at fault. |
 | S39-10e | S39 | ✅ | #1070 | Atlassian Rovo installs from the MCP catalogue (owner report, 2026-10-28: "I can list the vendors' MCPs but not connect them"): the `atlassian` entry is `auth: bearer` on `https://mcp.atlassian.com/v2/mcp` (a service account key as Bearer; a personal token declared by hand with `auth_scheme: basic`), the procedure `connector.mcp.mcp.atlassian-rovo` v2 and `docs/integrations.md` say the same. **Proves**: the entry installs and the key is sent as Bearer (`test_atlassian_rovo_installs_with_a_service_account_key`, red on the previous catalogue). **Does not prove**: that Atlassian's live server lists the Jira and Confluence tools for a real key (CI has no Atlassian credential); the tools Atlassian keeps for OAuth (Compass, code search, Teams) stay out of reach. |
 | S42-06c | S42 | ✅ | #1086 | The two catalogues say what they are for (owner review, 2026-10-28: "is the ticket moved by API or by MCP, and with whose account?"): a shared "What it is for" block opens `/catalogue/connectors` (the platform's own integrations, called through each system's API under the connector's account) and `/catalogue/mcp-servers` (tools an agent calls, under the connector's key the platform holds), each linking to the other. **Proves**: the block, its account sentence and its link are on both pages (red with the pages' change stashed). **Does not prove**: which connector and account a step writes with on the run, workflow and project pages (S42-06g). |
@@ -868,7 +872,7 @@ that follows from it. Rule since that day: nothing is ✅ without a test that fa
 
 
 
-**Total**: 539 delivered, 292 partial, 8 not started.
+**Total**: 543 delivered, 292 partial, 8 not started.
 
 
 **2026-10-05 — ADR 0029: Choregos becomes a platform of governed agents, for general use; 0028 is
@@ -1006,7 +1010,7 @@ the 492 tests did not say:
    v0.3.0, the release refuses a diverging tag), wheels attached, coverage with `apps/api`
    and `adapters` (70 % threshold = 72 % measured). **P1-1a delivered**: `docs/` is the reference,
    in English (getting started, deployment, usage, concepts, development, security,
-   contributing, `cli.md` generated and tested); `docs/fr/` archives the French guides; ADR
+   contributing, `cli.md` generated and tested); `docs/fr/` archived the French guides (deleted in 0.21, ADR 0098); ADR
    and runbook indexes with English summaries. **`CLAUDE.md` → `AGENTS.md` was WRONG**: the same
    commit replaced the content of `AGENTS.md` with an import of itself (eleven bytes), and
    `CLAUDE.md` being a symbolic link to it, the repository's instructions were empty on
@@ -1133,7 +1137,7 @@ the 492 tests did not say:
    **P1-1c delivered**: the 14 ADRs and the 11 runbooks are **in English** in `docs/adr/` and
    `docs/runbooks/` (file names unchanged: they are identifiers, the alerts and
    the pages point to them); the French originals are archived in `docs/fr/adr/` and
-   `docs/fr/runbooks/`, no longer maintained. The indexes no longer say "French". P1-1b
+   `docs/fr/runbooks/` (deleted in 0.21, ADR 0098). The indexes no longer say "French". P1-1b
    remains: the interface in English.
    **P3 (1–3) set down as ADRs**: ADR 0015 (signed AI authorship attestation, in-toto/DSSE,
    art. 50 evidence pack) and ADR 0016 (`agent-sandbox` executor: warm pool, suspension
