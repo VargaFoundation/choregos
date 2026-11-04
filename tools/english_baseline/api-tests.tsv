@@ -41,7 +41,7 @@ apps/api/tests/test_embarquement.py	18
 apps/api/tests/test_erreurs_en_anglais.py	51
 apps/api/tests/test_etiquettes_du_ticket.py	22
 apps/api/tests/test_evenements_postgres.py	15
-apps/api/tests/test_gabarit_extensions.py	24
+apps/api/tests/test_gabarit_extensions.py	23
 apps/api/tests/test_gabarit_joiners_leavers.py	18
 apps/api/tests/test_gabarit_livraison_logicielle.py	15
 apps/api/tests/test_gabarit_plusieurs_workflows.py	29

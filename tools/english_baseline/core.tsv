@@ -1,16 +1,1 @@
 # core: French findings per file (ADR 0098). Counts only go down: tools/check_english.py --update-baseline
-packages/core/src/choregos_core/__init__.py	3
-packages/core/src/choregos_core/acces.py	37
-packages/core/src/choregos_core/catalogue.py	96
-packages/core/src/choregos_core/errors.py	6
-packages/core/src/choregos_core/mcp.py	31
-packages/core/src/choregos_core/memory_scope.py	1
-packages/core/src/choregos_core/models.py	18
-packages/core/src/choregos_core/secrets.py	17
-packages/core/src/choregos_core/sorties.py	9
-packages/core/tests/test_acces.py	17
-packages/core/tests/test_catalogue.py	55
-packages/core/tests/test_injection.py	7
-packages/core/tests/test_models_resolution.py	2
-packages/core/tests/test_secrets.py	7
-packages/core/tests/test_skill_catalogue.py	1
