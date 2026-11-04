@@ -38,7 +38,7 @@ describe("the lifecycle of an agent, in the console (S32-04)", () => {
     expect(screen.queryByTestId("cycle")).toBeNull();
     rerender(<LifecycleBadges agent={agent({ lifecycle: "deprecated", unused: true })} />);
     expect(screen.getByTestId("cycle").textContent).toContain("deprecated");
-    expect(screen.getByTestId("inutilise").textContent).toContain("unused for 60 days");
+    expect(screen.getByTestId("unused").textContent).toContain("unused for 60 days");
   });
 
   it("the checklist reads in one sentence", () => {

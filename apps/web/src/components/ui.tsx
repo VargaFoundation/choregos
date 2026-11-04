@@ -587,7 +587,7 @@ export function Card({
             <div className="min-w-0 space-y-1">
               {eyebrow != null && <Label>{eyebrow}</Label>}
               {typeof title === "string" ? (
-                <h2 className="text-sm font-semibold text-ink" data-donnee={titreDonnee || undefined}>
+                <h2 className="text-sm font-semibold text-ink" data-verbatim={titreDonnee || undefined}>
                   {title}
                 </h2>
               ) : (
@@ -1016,6 +1016,3 @@ export function Tabs({ className, ...props }: HTMLAttributes<HTMLElement>) {
   return <nav className={cn("flex gap-6 overflow-x-auto border-b border-line pb-px", className)} {...props} />;
 }
 
-export { toneOfState as tonDEtat }; // alias:internal (S45-28): 1 file(s) outside this story still import the old name
-export { EngineSentence as PhraseDuMoteur }; // alias:internal (S45-28): 2 file(s) outside this story still import the old name
-export { ReadState as EtatDeLecture }; // alias:internal (S45-28): 1 file(s) outside this story still import the old name

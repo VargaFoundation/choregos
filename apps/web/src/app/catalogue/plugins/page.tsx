@@ -148,7 +148,7 @@ export default function PluginsPage() {
             <ul className="mt-2 space-y-1" data-testid="approvals-decided">
               {decided.map((a) => (
                 <li key={a.id}>
-                  <span data-donnee>{a.name}</span> {a.version} — {a.action}, approved by {a.decided_by ?? "?"}
+                  <span data-verbatim>{a.name}</span> {a.version} — {a.action}, approved by {a.decided_by ?? "?"}
                 </li>
               ))}
             </ul>
@@ -192,7 +192,7 @@ function OutcomeNote({ outcome }: { outcome: Outcome }) {
         <span data-testid="outcome-pending">
           Nothing is installed yet: {outcome.name}
           {outcome.version ? ` ${outcome.version}` : ""} needs another administrator&apos;s approval. Reason:{" "}
-          <span data-donnee>{outcome.pending.reason}</span>
+          <span data-verbatim>{outcome.pending.reason}</span>
         </span>
       </Alert>
     );
@@ -307,7 +307,7 @@ function InstalledCard({
     <Card
       title={
         <h3 className="text-sm font-semibold">
-          <span data-donnee>{plugin.name}</span> {plugin.version}
+          <span data-verbatim>{plugin.name}</span> {plugin.version}
         </h3>
       }
       action={
@@ -319,7 +319,7 @@ function InstalledCard({
       data-testid={`installed-${plugin.name}`}
     >
       <div className="space-y-3 text-sm">
-        <p className="text-ink-muted" data-donnee>
+        <p className="text-ink-muted" data-verbatim>
           {plugin.description}
         </p>
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
@@ -389,7 +389,7 @@ function Contents({ contents }: { contents: PluginContents }) {
           <li key={key} className="flex items-start gap-2" data-testid={`contents-${key}`}>
             <Icon aria-hidden className="mt-0.5 h-4 w-4 shrink-0 text-ink-muted" />
             <span>
-              <span className="text-ink-muted">{label}:</span> <span data-donnee>{contents[key].join(", ")}</span>
+              <span className="text-ink-muted">{label}:</span> <span data-verbatim>{contents[key].join(", ")}</span>
             </span>
           </li>
         );
@@ -404,7 +404,7 @@ function ServerLine({ server, admin, connector }: { server: string; admin: boole
     <li className="flex flex-wrap items-center gap-2" data-testid={`server-${server}`}>
       <ServerCog aria-hidden className="h-4 w-4 text-ink-muted" />
       <span>
-        Server <strong data-donnee>{server}</strong>, connector <Code>{server}</Code>
+        Server <strong data-verbatim>{server}</strong>, connector <Code>{server}</Code>
       </span>
       <Badge tone={state.tone}>{state.label}</Badge>
       {state.label === "unconfigured" && <span className="text-xs text-ink-muted">no replica until its settings are complete</span>}
@@ -451,7 +451,7 @@ function ApprovalRow({
   return (
     <li className="space-y-2 rounded border border-line p-3 text-sm" data-testid={`approval-${approval.id}`}>
       <p>
-        <strong data-donnee>{approval.name}</strong> {approval.version} — {approval.action} from {approval.source}{" "}
+        <strong data-verbatim>{approval.name}</strong> {approval.version} — {approval.action} from {approval.source}{" "}
         <Code title={approval.digest}>{shortDigest(approval.digest)}</Code>
         {approval.default && (
           <>
@@ -462,7 +462,7 @@ function ApprovalRow({
       </p>
       <p className="text-ink-muted">
         Asked by {approval.requested_by ?? "the platform (a default plugin)"} on {approval.created_at.slice(0, 10)}.
-        Reason: <span data-donnee>{approval.reason}</span>
+        Reason: <span data-verbatim>{approval.reason}</span>
       </p>
       {mine && <p className="text-xs text-ink-muted">You asked for it: another administrator approves it.</p>}
       <Gesture admin={admin} tone="primary" busy={busy} onClick={() => void approve()}>
@@ -487,7 +487,7 @@ function SourceCard({
   onDone: (outcome: Outcome) => Promise<void>;
 }) {
   return (
-    <Card title={<h3 className="text-sm font-semibold" data-donnee>{source.name}</h3>} data-testid={`source-${source.name}`}>
+    <Card title={<h3 className="text-sm font-semibold" data-verbatim>{source.name}</h3>} data-testid={`source-${source.name}`}>
       <div className="space-y-3 text-sm">
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-xs">
           <dt className="text-ink-muted">Index</dt>
@@ -566,7 +566,7 @@ function SourceEntry({
   return (
     <li className="space-y-2 rounded border border-line p-3" data-testid={id}>
       <p>
-        <strong data-donnee>{entry.name}</strong>
+        <strong data-verbatim>{entry.name}</strong>
         {installed && (
           <>
             {" "}
@@ -575,7 +575,7 @@ function SourceEntry({
         )}
       </p>
       {entry.description && (
-        <p className="text-ink-muted" data-donnee>
+        <p className="text-ink-muted" data-verbatim>
           {entry.description}
         </p>
       )}

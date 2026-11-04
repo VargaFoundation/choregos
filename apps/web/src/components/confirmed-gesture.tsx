@@ -154,4 +154,3 @@ export function ConfirmedGesture({
     </span>
   );
 }
-export { ConfirmedGesture as GesteConfirme }; // alias:internal (S45-28): the workflows draft bar still imports the old name

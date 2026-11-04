@@ -2,7 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { LiveLog } from "@/components/live-log";
 import { AgentPlanView } from "@/components/agent-plan";
-import { planDeLAgent } from "@/lib/plan-de-l-agent";
+import { agentPlan } from "@/lib/agent-plan";
 import type { RunEventDto } from "@/lib/types";
 
 const t = (content: string, status: string, priority = "medium") => ({ content, priority, status });
@@ -21,12 +21,12 @@ const message = (seq: number, text: string): RunEventDto => ({
 
 describe("the agent's plan, re-read from the journal (S25-01)", () => {
   it("nothing without a published plan: no task guessed from the agent's messages", () => {
-    expect(planDeLAgent([message(1, "TODO: read the code, then fix")])).toBeNull();
-    expect(planDeLAgent([])).toBeNull();
+    expect(agentPlan([message(1, "TODO: read the code, then fix")])).toBeNull();
+    expect(agentPlan([])).toBeNull();
   });
 
   it("the current plan is the last revision: the agent sends the whole list, it replaces", () => {
-    const relu = planDeLAgent([
+    const relu = agentPlan([
       plan(1, [t("read", "in_progress", "high"), t("fix", "pending")]),
       message(2, "je lis"),
       plan(3, [t("read", "completed", "high"), t("fix", "in_progress")]),
@@ -40,7 +40,7 @@ describe("the agent's plan, re-read from the journal (S25-01)", () => {
   });
 
   it("a task that disappears is struck out, never counted as done, even if ticked before", () => {
-    const relu = planDeLAgent([
+    const relu = agentPlan([
       plan(1, [t("read", "completed"), t("documenter", "completed"), t("fix", "pending")]),
       plan(2, [t("read", "completed"), t("fix", "in_progress")]),
     ])!;
@@ -49,7 +49,7 @@ describe("the agent's plan, re-read from the journal (S25-01)", () => {
   });
 
   it("two revisions reconcile without a silent merge: a reworded task is another task", () => {
-    const relu = planDeLAgent([
+    const relu = agentPlan([
       plan(1, [t("ajouter un test", "in_progress")]),
       plan(2, [t("add regression tests", "in_progress")]),
     ])!;
@@ -58,26 +58,26 @@ describe("the agent's plan, re-read from the journal (S25-01)", () => {
       ["ajouter un test", true],
     ]);
     // Spaces do not make another task; case does: the agent is the one writing.
-    const espaces = planDeLAgent([plan(1, [t("read  the code ", "pending")]), plan(2, [t("read the code", "completed")])])!;
+    const espaces = agentPlan([plan(1, [t("read  the code ", "pending")]), plan(2, [t("read the code", "completed")])])!;
     expect(espaces.taches).toHaveLength(1);
   });
 
   it("the order is the agent's: live and stored overlap, a number counts once", () => {
     const two = plan(2, [t("read", "completed")]);
-    const relu = planDeLAgent([two, plan(1, [t("read", "pending")]), two])!;
+    const relu = agentPlan([two, plan(1, [t("read", "pending")]), two])!;
     expect(relu.revisions.map((r) => r.seq)).toEqual([1, 2]);
     expect(relu.faites).toBe(1);
   });
 
   it("a malformed entry is ignored, an unknown status or priority takes the default", () => {
-    const relu = planDeLAgent([plan(1, [null, { status: "completed" }, { content: "read", status: "fait", priority: "urgente" }])])!;
+    const relu = agentPlan([plan(1, [null, { status: "completed" }, { content: "read", status: "fait", priority: "urgente" }])])!;
     expect(relu.taches).toEqual([{ contenu: "read", priorite: "medium", statut: "pending", retiree: false }]);
   });
 });
 
 describe("the plan list", () => {
   it("says the current plan's progress, and strikes out what was removed", () => {
-    const relu = planDeLAgent([
+    const relu = agentPlan([
       plan(1, [t("read", "completed", "high"), t("changelog", "pending", "low")]),
       plan(2, [t("read", "completed", "high"), t("fix", "in_progress")]),
     ])!;
@@ -86,7 +86,7 @@ describe("the plan list", () => {
     expect(screen.getByRole("progressbar", { name: "Tasks done" })).toHaveAttribute("aria-valuenow", "1");
     const list = screen.getByRole("list", { name: "Agent plan" });
     const rows = within(list).getAllByRole("listitem");
-    expect(rows.map((l) => l.getAttribute("data-statut"))).toEqual(["completed", "in_progress", "removed"]);
+    expect(rows.map((l) => l.getAttribute("data-status"))).toEqual(["completed", "in_progress", "removed"]);
     expect(rows[0]).toHaveTextContent("read — done");
     expect(rows[2]).toHaveTextContent("changelog removed in revision 2");
     expect(within(rows[2]!).getByText("changelog")).toHaveClass("line-through");
@@ -115,7 +115,7 @@ describe("opencode's plan, published through its todowrite tool (S25-05)", () =>
   });
 
   it("reads each todowrite call as a plan revision, with the same rules as an ACP plan", () => {
-    const plan = planDeLAgent([
+    const plan = agentPlan([
       todowrite(1, [t("Inspect the code", "in_progress", "high"), t("Fix the total", "pending", "high")]),
       todowrite(2, [t("Inspect the code", "completed", "high"), t("Fix the total", "completed", "high")]),
     ])!;
@@ -124,7 +124,7 @@ describe("opencode's plan, published through its todowrite tool (S25-05)", () =>
   });
 
   it("a cancelled todo is removed, never counted as done", () => {
-    const plan = planDeLAgent([
+    const plan = agentPlan([
       todowrite(1, [t("Inspect the code", "completed"), t("Update the docs", "pending")]),
       todowrite(2, [t("Inspect the code", "completed"), t("Update the docs", "cancelled")]),
     ])!;
@@ -140,7 +140,7 @@ describe("opencode's plan, published through its todowrite tool (S25-05)", () =>
       ts: "2026-10-15T08:02:00Z",
       payload: { sessionId: "s", update: { sessionUpdate: "tool_call_update", toolCallId: "c2", title: "Read a.py", rawInput: { todos: [t("x", "pending")] } } },
     };
-    expect(planDeLAgent([withoutEntry, other])).toBeNull();
+    expect(agentPlan([withoutEntry, other])).toBeNull();
   });
 });
 

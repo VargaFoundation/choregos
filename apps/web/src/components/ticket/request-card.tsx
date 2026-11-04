@@ -31,7 +31,7 @@ export function RequestCard({ body, fields }: { body?: string | null; fields?: R
               {entries.map(([name, value]) => (
                 <div key={name} className="contents">
                   <dt className="text-ink-muted">{toSentenceCase(libelleDeCode(name))}</dt>
-                  <dd data-donnee className="min-w-0 break-words">
+                  <dd data-verbatim className="min-w-0 break-words">
                     {fieldValue(value)}
                   </dd>
                 </div>

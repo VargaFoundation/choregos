@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { use, useState } from "react";
 import { Button, Card, ErrorNote, Field, Input, Select } from "@/components/ui";
-import { renommer } from "@/components/workflows/renommer";
+import { rename } from "@/components/workflows/rename";
 import { ApiError, api } from "@/lib/api";
 
 const NAME_PATTERN = /^[a-z][a-z0-9-]{0,62}$/;
@@ -56,7 +56,7 @@ export default function NewWorkflowPage({
     setEnvoi(true);
     setErreur(null);
     try {
-      await api.createWorkflow(slug, nom, renommer(choisi.yaml, nom));
+      await api.createWorkflow(slug, nom, rename(choisi.yaml, nom));
       if (makeDefault) {
         const routing = await api.workflowRouting(slug);
         await api.putWorkflowRouting(slug, { ...routing, default: nom });

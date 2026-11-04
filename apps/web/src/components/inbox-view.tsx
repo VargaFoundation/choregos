@@ -9,7 +9,7 @@ import { Status, propose } from "@/components/actions/status";
 import { orgConnectorHref } from "@/lib/connector-link";
 import { DecisionBar } from "@/components/decision-bar";
 import { Badge, Button, Card, Empty, ErrorNote, Eyebrow, Heading } from "@/components/ui";
-import { libelleDeDemande, phraseDeBudget, resumeDeDemande, useADecider } from "@/lib/a-decider";
+import { requestLabel, phraseDeBudget, requestSummary, useADecider } from "@/lib/a-decider";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
 import { FAMILY_LABEL } from "@/lib/egress";
@@ -65,20 +65,20 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
         ) : inbox.tickets.length === 0 ? (
           <Empty title="No ticket waits" icon={CircleCheck} hue={6}>Every ticket in flight is in the hands of an agent or the platform.</Empty>
         ) : (
-          <ul className="divide-y divide-line" data-testid="tickets-en-attente">
+          <ul className="divide-y divide-line" data-testid="waiting-tickets">
             {inbox.tickets.map(({ item, demande, enRetard }) => (
-              <li key={item.id} className="space-y-2 py-4 first:pt-0" data-testid={`attente-${item.id}`}>
+              <li key={item.id} className="space-y-2 py-4 first:pt-0" data-testid={`waiting-${item.id}`}>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <Badge tone={demande.kind === "approval" ? "ink" : "neutral"}>{libelleDeDemande(demande.kind)}</Badge>
+                  <Badge tone={demande.kind === "approval" ? "ink" : "neutral"}>{requestLabel(demande.kind)}</Badge>
                   <Link href={`/p/${item.project_slug}/items/${item.id}`} className="font-medium hover:underline">
                     {item.title}
                   </Link>
                 </div>
-                <p className="text-sm">{resumeDeDemande(demande)}</p>
+                <p className="text-sm">{requestSummary(demande)}</p>
                 <p className="text-xs text-ink-muted">
                   {!project && (
                     <>
-                      <span data-donnee>{item.project_slug}</span> ·{" "}
+                      <span data-verbatim>{item.project_slug}</span> ·{" "}
                     </>
                   )}
                   {item.tracker_key} · {item.state_display ?? item.state} · asked{" "}
@@ -120,7 +120,7 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
         ) : inbox.actions.length === 0 ? (
           <Empty title="Nothing waits" icon={CircleCheck} hue={6}>No action needs a decision.</Empty>
         ) : (
-          <ul className="space-y-2" data-testid="boite">
+          <ul className="space-y-2" data-testid="inbox">
             {inbox.actions.map((action) => (
               <li key={action.id} className="flex flex-wrap items-center gap-3 border-t border-line pt-2 text-sm">
                 <Link
@@ -133,7 +133,7 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
                 <span className="text-xs text-ink-muted">
                   {!project && (
                     <>
-                      <span data-donnee>{action.project_slug}</span> ·{" "}
+                      <span data-verbatim>{action.project_slug}</span> ·{" "}
                     </>
                   )}
                   proposed by {propose(action.proposed_by)}
@@ -159,7 +159,7 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
             <ul className="space-y-2" data-testid="egress-requests">
               {inbox.egressRequests.map((rule) => (
                 <li key={rule.id} className="flex flex-wrap items-center gap-3 border-t border-line pt-2 text-sm" data-testid={`egress-${rule.id}`}>
-                  <span className="font-medium" data-donnee>
+                  <span className="font-medium" data-verbatim>
                     {rule.host}
                   </span>
                   <Badge tone="neutral">{rule.used_by.map((f) => FAMILY_LABEL[f]).join(", ")}</Badge>
@@ -212,7 +212,7 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
         ) : inbox.budgets.length === 0 ? (
           <Empty title="No budget crossed">Nothing has reached its alert threshold today.</Empty>
         ) : (
-          <ul className="space-y-2" data-testid="budgets-franchis">
+          <ul className="space-y-2" data-testid="budgets-exceeded">
             {inbox.budgets.map((alerte) => (
               <li key={alerte.id} className="flex flex-wrap items-center gap-3 border-t border-line pt-2 text-sm">
                 <Badge tone={alerte.threshold >= 100 ? "danger" : "warn"}>{alerte.threshold} %</Badge>

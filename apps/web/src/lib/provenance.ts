@@ -14,7 +14,6 @@ export function evidenceProvenance(evidence: { measured?: string[] | null } | nu
   if (!measured) return "unknown";
   return measured.includes(key) ? "observed" : "declared";
 }
-export const provenanceDePreuve = evidenceProvenance; // lang: fr-ok alias:internal
 
 type Verdict = { passed: boolean; pending: boolean };
 
@@ -29,4 +28,3 @@ export function declaredEnd(statutDeclare: string | null | undefined, verdicts: 
   if (verdicts.length === 0 || verdicts.some((v) => v.pending)) return "declared done, not verified yet";
   return null;
 }
-export const finDeclaree = declaredEnd; // lang: fr-ok alias:internal

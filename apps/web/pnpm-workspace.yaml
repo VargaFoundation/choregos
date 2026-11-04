@@ -1,8 +1,8 @@
-# pnpm 12 bloque les scripts d'installation des dépendances par défaut : chacun doit être
-# autorisé nommément, ici, où la revue le voit passer.
+# pnpm 12 blocks the install scripts of dependencies by default: each one must be allowed by
+# name, here, where the review sees it go by.
 allowBuilds:
-  # Télécharge et vérifie le binaire natif de la plateforme ; vite et vitest en dépendent.
+  # Downloads and verifies the platform's native binary; vite and vitest depend on it.
   esbuild: true
-  # Résolveur natif d'`eslint-plugin-import` (via `eslint-config-next`) : sans son binaire,
-  # le lint échoue sur la résolution des imports.
+  # Native resolver of `eslint-plugin-import` (via `eslint-config-next`): without its binary,
+  # lint fails on import resolution.
   unrs-resolver: true

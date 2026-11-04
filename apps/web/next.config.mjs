@@ -1,12 +1,11 @@
 /**
- * Le front ne parle qu'à l'API Choregos. En développement, `/api/v1` est relayé
- * vers l'API locale (ou vers le mock Prism) pour éviter toute configuration CORS.
+ * The front end talks to the Choregos API only. In development, `/api/v1` is relayed to the
+ * local API (or to the Prism mock) to avoid any CORS configuration.
  *
- * En `.mjs` et non en `.ts` : `next start` charge ce fichier au démarrage, et pour un `.ts`
- * il lui faut le paquet `typescript`. L'image de production n'embarque que les
- * `dependencies` — elle tentait donc d'installer TypeScript au lancement du conteneur, et
- * échouait sur « Failed to load next.config.ts ». Le JSDoc ci-dessous garde le typage dans
- * l'éditeur et au `tsc`.
+ * In `.mjs` and not `.ts`: `next start` loads this file at startup, and for a `.ts` it needs
+ * the `typescript` package. The production image ships only the `dependencies`, so it tried to
+ * install TypeScript when the container started, and failed on "Failed to load
+ * next.config.ts". The JSDoc below keeps the typing in the editor and in `tsc`.
  */
 const apiUrl = process.env.CHOREGOS_API_URL ?? "http://localhost:8000";
 
@@ -34,27 +33,27 @@ const nextConfig = {
   async rewrites() {
     return [
       { source: "/api/v1/:path*", destination: `${apiUrl}/api/v1/:path*` },
-      // La porte MCP des clients externes (ADR 0030). En production, l'Ingress l'envoie à l'API ;
-      // en développement, le relais évite d'avoir deux origines à configurer dans un client.
+      // The MCP gate of external clients (ADR 0030). In production, the Ingress sends it to the API;
+      // in development, the relay avoids having two origins to configure in a client.
       { source: "/mcp", destination: `${apiUrl}/mcp` },
       { source: "/mcp/:path*", destination: `${apiUrl}/mcp/:path*` },
       // The A2A door (ADR 0078): an outside agent's card and task calls.
       { source: "/a2a/:path*", destination: `${apiUrl}/a2a/:path*` },
-      // Ses métadonnées OAuth (RFC 9728), lues par claude.ai avant de se connecter.
+      // Its OAuth metadata (RFC 9728), read by claude.ai before it connects.
       {
         source: "/.well-known/oauth-protected-resource/:path*",
         destination: `${apiUrl}/.well-known/oauth-protected-resource/:path*`,
       },
     ];
   },
-  // Une proposition de l'ontologie est une action du cœur depuis S20-08, sous le MÊME identifiant :
-  // la page « proposals » s'est fondue dans celle des actions (S20-10), et un lien de décision émis
-  // avant — par la porte MCP, dans un courriel — mène toujours à la bonne page.
+  // An ontology proposal has been a core action since S20-08, under the SAME identifier: the
+  // "proposals" page merged into the actions page (S20-10), and a decision link issued before —
+  // through the MCP gate, in an email — still leads to the right page.
   async redirects() {
     return [
       { source: "/p/:slug/proposals", destination: "/p/:slug/actions", permanent: true },
       { source: "/p/:slug/proposals/:id", destination: "/p/:slug/actions/:id", permanent: true },
-      // La boîte des décisions est devenue l'inbox (S23-02) : tickets ET actions qui attendent quelqu'un.
+      // The decisions box became the inbox (S23-02): tickets AND actions that wait for someone.
       { source: "/approvals", destination: "/inbox", permanent: true },
       // The workflow catalogue is the workflow library (S55-04): the word read as French.
       { source: "/p/:slug/workflows/catalogue", destination: "/p/:slug/workflows/library", permanent: true },
@@ -69,7 +68,7 @@ const nextConfig = {
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          // La Content-Security-Policy est posée par `src/proxy.ts`, avec un nonce par requête.
+          // The Content-Security-Policy is set by `src/proxy.ts`, with one nonce per request.
         ],
       },
     ];

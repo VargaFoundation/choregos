@@ -74,11 +74,11 @@ export function WorkflowMap({
   );
 
   function focusState(id: string) {
-    container.current?.querySelector<HTMLElement>(`[data-testid="etat-${CSS.escape(id)}"]`)?.focus();
+    container.current?.querySelector<HTMLElement>(`[data-testid="state-${CSS.escape(id)}"]`)?.focus();
   }
 
   function onKeyboard(event: KeyboardEvent<HTMLButtonElement>) {
-    const current = (event.target as HTMLElement).closest<HTMLElement>("[data-etat]")?.dataset.etat;
+    const current = (event.target as HTMLElement).closest<HTMLElement>("[data-state-id]")?.dataset.stateId;
     if (!current) return;
     const target = nav.move(current, event.key);
     if (target === undefined) return;
@@ -105,7 +105,7 @@ export function WorkflowMap({
       // eslint-disable-next-line jsx-a11y/no-static-element-interactions
       <div
         className={cn("raised border border-l-[3px] border-line px-3 py-2 text-sm", side && "border-dashed")}
-        data-genre={kind}
+        data-kind={kind}
         style={{
           borderLeftColor: colour.border,
           borderLeftStyle: "solid",
@@ -116,10 +116,10 @@ export function WorkflowMap({
       >
         <button
           type="button"
-          data-testid={`etat-${id}`}
-          data-etat={id}
+          data-testid={`state-${id}`}
+          data-state-id={id}
           className="block w-full text-left focus-visible:outline-2"
-          aria-describedby={node.terminal ? `${descriptionsId}-etat-${id}` : undefined}
+          aria-describedby={node.terminal ? `${descriptionsId}-state-${id}` : undefined}
           onFocus={() => setFocus(id)}
           onKeyDown={onKeyboard}
           onBlur={() => setFocus(null)}
@@ -151,12 +151,12 @@ export function WorkflowMap({
               </span>
             )}
           </span>
-          <span data-titre className="mt-0.5 block text-[15px] font-semibold text-ink">
+          <span data-title className="mt-0.5 block text-[15px] font-semibold text-ink">
             {node.display}
           </span>
           <span className="block font-mono text-xs text-ink-muted">{id}</span>
           {node.terminal && (
-            <span id={`${descriptionsId}-etat-${id}`} hidden>
+            <span id={`${descriptionsId}-state-${id}`} hidden>
               Terminal state
             </span>
           )}
@@ -190,7 +190,7 @@ export function WorkflowMap({
           </div>
         )}
         {exits.length > 0 && showExits && (
-          <ul className="mt-1.5 space-y-0.5 border-t border-line pt-1.5 text-xs text-retrying-ink" data-testid={`secondaires-${id}`}>
+          <ul className="mt-1.5 space-y-0.5 border-t border-line pt-1.5 text-xs text-retrying-ink" data-testid={`secondary-${id}`}>
             {exits.map((a) => (
               <li key={a.id ?? `${a.to}-${a.kind}`}>
                 {toSentenceCase(howReached(a))} → {name(a.to)}

@@ -48,7 +48,7 @@ export function OrganisationMemoryStore({ org }: { org: string }) {
       {memory ? (
         <>
           the organisation&apos;s memory connector{" "}
-          <Link href={orgConnectorHref(memory.name)} className="font-medium underline" data-donnee>
+          <Link href={orgConnectorHref(memory.name)} className="font-medium underline" data-verbatim>
             {memory.name}
           </Link>{" "}
           <span className="text-ink-muted">({memory.type})</span>

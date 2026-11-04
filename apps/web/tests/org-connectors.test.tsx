@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import OrgConnectorsPage from "@/app/admin/connectors/page";
 import { deliveryRows, groupConnectors } from "@/components/org-connectors";
 import { ApiError } from "@/lib/api";
-import { libelleDeSorte } from "@/lib/sortes-de-connecteurs";
+import { kindLabel } from "@/lib/connector-kinds";
 import type { ConnectorDto, ConnectorType, OrgConnector } from "@/lib/types";
 
 const { params } = vi.hoisted(() => ({ params: new URLSearchParams() }));
@@ -49,10 +49,10 @@ describe("the connectors, sorted by what they are (S21-04)", () => {
   });
 
   it("a kind is read in plain words; an extension's keeps its name", () => {
-    expect(libelleDeSorte("identity")).toBe("directory (identity)");
-    expect(libelleDeSorte("mcp")).toBe("MCP server");
-    expect(libelleDeSorte("scm")).toBe("source code");
-    expect(libelleDeSorte("payroll")).toBe("payroll");
+    expect(kindLabel("identity")).toBe("directory (identity)");
+    expect(kindLabel("mcp")).toBe("MCP server");
+    expect(kindLabel("scm")).toBe("source code");
+    expect(kindLabel("payroll")).toBe("payroll");
   });
 
   it("the delivery tools are read per project, in the order of the requirements, without what is not one", () => {
@@ -83,7 +83,7 @@ describe("the connectors, sorted by what they are (S21-04)", () => {
         <OrgConnectorsPage />
       </QueryClientProvider>,
     );
-    const business = screen.getByTestId("section-metier");
+    const business = screen.getByTestId("business-section");
     const mcp = screen.getByTestId("section-mcp");
     expect(within(business).getByRole("heading", { name: /^Business systems \(API\) \(\d+\)$/ })).toBeInTheDocument();
     expect(await within(business).findByText(/entra-acme/)).toBeInTheDocument();
@@ -92,7 +92,7 @@ describe("the connectors, sorted by what they are (S21-04)", () => {
     expect(await within(mcp).findByText(/supplier-agent/)).toBeInTheDocument();
     expect(mcp).toHaveTextContent("A supplier's agent served over MCP is declared here");
     // The delivery tools, read-only, and the refused project does not hide the other.
-    expect(await screen.findByTestId("livraison-billing-api")).toHaveTextContent("Work tracker: jira");
+    expect(await screen.findByTestId("delivery-billing-api")).toHaveTextContent("Work tracker: jira");
     expect(await screen.findByText("No access")).toBeInTheDocument();
     // The choice of type: families, never a tracker (it is set in the project).
     await screen.findAllByRole("option", { name: /entra/ });

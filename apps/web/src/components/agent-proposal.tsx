@@ -60,7 +60,7 @@ export function AgentProposal({ slug, runs, prUrl }: { slug: string; runs: reado
       </p>
       {(title || outcome || confidence !== undefined) && (
         <div className="flex flex-wrap items-center gap-2">
-          {title && <p className="text-sm font-medium" data-donnee>{title}</p>}
+          {title && <p className="text-sm font-medium" data-verbatim>{title}</p>}
           {outcome && <Badge tone="neutral">outcome: {outcome}</Badge>}
           {confidence !== undefined && confidence !== null && <Badge tone="neutral">confidence {String(confidence)}</Badge>}
         </div>

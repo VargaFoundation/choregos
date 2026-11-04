@@ -6,7 +6,6 @@
  * table fits in memory, and no dependency enters the bundle.
  */
 export type DiffLine = { kind: "same" | "add" | "del"; text: string; before?: number; after?: number };
-export type LigneDeDiff = DiffLine; // lang: fr-ok alias:internal
 
 export function diffLines(avant: string, apres: string): DiffLine[] {
   const a = avant.split("\n");

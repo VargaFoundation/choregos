@@ -5,11 +5,11 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 import { DecisionBar } from "@/components/decision-bar";
-import { verdictsDe } from "@/components/garanties";
+import { verdictsDe } from "@/components/guarantees";
 import { LiveLog } from "@/components/live-log";
-import { PlanDeLAgent } from "@/components/plan-de-l-agent";
+import { AgentPlanView } from "@/components/agent-plan";
 import { Provenance } from "@/components/provenance";
-import { Empty, LEGENDE, PhraseDuMoteur } from "@/components/ui";
+import { Empty, LEGENDE, EngineSentence } from "@/components/ui";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { duration, relative, shortDate, usd } from "@/lib/format";
@@ -54,7 +54,7 @@ export function StepPanel({
     <aside
       className="raised min-w-0 self-start border border-line p-4 xl:sticky xl:top-16"
       aria-label={`${step.label}: attempts, actions and log`}
-      data-testid="panneau-parcours"
+      data-testid="journey-panel"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -85,11 +85,11 @@ export function StepPanel({
           </p>
           {step.sentence && (
             <p className="mt-1 text-ink-muted">
-              <PhraseDuMoteur texte={step.sentence} />
+              <EngineSentence texte={step.sentence} />
             </p>
           )}
           {outputsOf(step) && (
-            <p className="mt-1 text-xs text-ink-muted" data-testid="sorties-de-l-etape">
+            <p className="mt-1 text-xs text-ink-muted" data-testid="step-outputs">
               Produces {outputsOf(step)!.slice(2)}
             </p>
           )}
@@ -107,9 +107,9 @@ export function StepPanel({
 
       {attempts.length === 0 ? (
         <p className="mt-4 text-sm text-ink-muted">
-          {state.status === "en_cours"
+          {state.status === "running"
             ? "The platform is on it: this step has no agent run of its own."
-            : state.status === "fait"
+            : state.status === "done"
               ? "Done by the platform, without an agent run."
               : "Not reached yet."}
         </p>
@@ -122,7 +122,7 @@ export function StepPanel({
                 type="button"
                 role="tab"
                 aria-selected={t.id === attempt?.id}
-                data-testid={`tentative-${t.id}`}
+                data-testid={`attempt-${t.id}`}
                 onClick={() => setChosen(t.id)}
                 className={cn(
                   "rounded-full border px-2.5 py-0.5 text-xs pointer-coarse:min-h-11",
@@ -301,11 +301,11 @@ function WhatItDid({ runId, events }: { runId: string; events: RunEventDto[] }) 
   const files = diff.data?.files ?? [];
   const plan = agentPlan(events);
   return (
-    <div className="space-y-3 text-sm" data-testid="ce-qu-il-a-fait">
+    <div className="space-y-3 text-sm" data-testid="what-it-did">
       {plan && (
         <section>
           <h4 className={cn(LEGENDE, "mb-1")}>Agent plan</h4>
-          <PlanDeLAgent plan={plan} />
+          <AgentPlanView plan={plan} />
         </section>
       )}
       <section>

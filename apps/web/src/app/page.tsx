@@ -73,7 +73,7 @@ export default function ProjectsPage() {
               title={
                 <span className="flex items-center gap-2.5">
                   <ProjectAvatar name={project.name} slug={project.slug} />
-                  <h2 className="text-sm font-semibold text-ink" data-donnee>
+                  <h2 className="text-sm font-semibold text-ink" data-verbatim>
                     {project.name}
                   </h2>
                 </span>
@@ -99,7 +99,7 @@ export default function ProjectsPage() {
                 )}
               </div>
               <p className="mt-6 text-xs text-ink-muted">
-                <span data-donnee>{project.workflow_name ?? "—"}</span> · {project.policy_name ?? "—"} ·{" "}
+                <span data-verbatim>{project.workflow_name ?? "—"}</span> · {project.policy_name ?? "—"} ·{" "}
                 {relative(project.updated_at)}
               </p>
             </Card>

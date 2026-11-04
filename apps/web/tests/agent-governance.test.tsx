@@ -101,7 +101,7 @@ describe("the Access tab", () => {
     const spec = { mcp_servers: [{ connector: "rovo", tools: ["search"] }, { connector: "sentry", tools: [] }] };
     vi.mocked(api.agent).mockResolvedValue(common({ versions: [{ version: 3, spec, checksum: "sha256:abc" }] }));
     await open(page());
-    const access = await screen.findByTestId("acces-de-l-agent");
+    const access = await screen.findByTestId("agent-access");
     expect(access).toHaveTextContent("rovo — search");
     expect(access).toHaveTextContent("sentry — no tool — name tools, or * for all");
     expect(access).not.toHaveTextContent("every tool");

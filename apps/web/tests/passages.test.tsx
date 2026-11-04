@@ -52,10 +52,10 @@ describe("the hand-off receipts, read (S25-04)", () => {
     );
     const [spec, profils] = [...screen.getByRole("list", { name: "Hand-offs" }).querySelectorAll<HTMLElement>(":scope > li")];
     expect(spec).toHaveTextContent("Specification");
-    expect(within(spec!).getByTestId("modifiee-apres-coup")).toHaveTextContent("Modified after it was produced");
+    expect(within(spec!).getByTestId("modified-afterwards")).toHaveTextContent("Modified after it was produced");
     expect(within(spec!).getByText("The revision produced")).toBeInTheDocument();
     expect(spec).toHaveTextContent("Produced by refine · attempt 1");
     expect(profils).toHaveTextContent("profils");
-    expect(within(profils!).queryByTestId("modifiee-apres-coup")).not.toBeInTheDocument();
+    expect(within(profils!).queryByTestId("modified-afterwards")).not.toBeInTheDocument();
   });
 });

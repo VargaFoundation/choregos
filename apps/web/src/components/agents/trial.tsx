@@ -30,7 +30,7 @@ export function EvalSuiteEditor({ cases, onChange }: { cases: AgentEvalCase[]; o
   const update = (index: number, patch: Partial<AgentEvalCase>) =>
     onChange(cases.map((c, i) => (i === index ? { ...c, ...patch } : c)));
   return (
-    <div className="space-y-3" data-testid="suite-d-evals">
+    <div className="space-y-3" data-testid="eval-suite">
       <p className="text-xs text-ink-muted">
         Each case renders the instructions on its sample and checks what the text must and must not contain — no model, the
         same answer every time. Publishing needs every case of the published version and of the new one to pass.
@@ -179,7 +179,7 @@ export function TrialBench({
   }
 
   return (
-    <section className="space-y-3 rounded-md border border-line p-4" aria-label="Try it" data-testid="banc-d-essai">
+    <section className="space-y-3 rounded-md border border-line p-4" aria-label="Try it" data-testid="trial-bench">
       <h3 className="text-sm font-semibold">Try it</h3>
       <p className="text-xs text-ink-muted">
         Runs the draft once, without publishing it, in a project of yours — its model profiles, backend and tools apply —
@@ -214,7 +214,7 @@ export function TrialBench({
       </Button>
       {error && <ErrorNote>{error}</ErrorNote>}
       {trial && (
-        <div className="space-y-2" data-testid="resultat-d-essai" role="status">
+        <div className="space-y-2" data-testid="trial-result" role="status">
           <p className="text-sm">
             Trial run <span className="font-mono">{trial.run_id}</span> in <span className="font-mono">{trial.project}</span>,
             capped at {usd(trial.budget_usd)}: {run.data?.status ?? trial.status}

@@ -13,7 +13,7 @@
 "use client";
 
 import { useQueries, useQuery } from "@tanstack/react-query";
-import { scopeOf } from "@/components/coquille/navigation";
+import { scopeOf } from "@/components/shell/navigation";
 import { api } from "./api";
 import type { Action, BudgetAlert, EgressRule, HumanRequest, WorkItemDto } from "./types";
 
@@ -23,7 +23,6 @@ export interface Waiting {
   /** The due date has passed: the request will be chased, then escalated. */
   enRetard: boolean;
 }
-export type Attente = Waiting; // lang: fr-ok alias:internal
 
 const LIBELLES: Record<string, string> = {
   approval: "approval",
@@ -35,7 +34,6 @@ const LIBELLES: Record<string, string> = {
 export function requestLabel(kind: string): string {
   return LIBELLES[kind] ?? kind.replace(/_/g, " ");
 }
-export const libelleDeDemande = requestLabel; // lang: fr-ok alias:internal
 
 /** What the request says about itself: its question, its summary, otherwise its kind. */
 export function requestSummary(request: HumanRequest): string {
@@ -46,7 +44,6 @@ export function requestSummary(request: HumanRequest): string {
   }
   return requestLabel(request.kind);
 }
-export const resumeDeDemande = requestSummary; // lang: fr-ok alias:internal
 
 /**
  * The tickets that wait for someone, in the order to handle them: what is overdue first, then the
@@ -67,7 +64,6 @@ export function waitingTickets(items: WorkItemDto[], now: number = Date.now()): 
         new Date(a.demande.requested_at).getTime() - new Date(b.demande.requested_at).getTime(),
     );
 }
-export const ticketsEnAttente = waitingTickets; // lang: fr-ok alias:internal
 
 /**
  * What waits in ONE project (S39-04): its actions, and the budget alerts of the project itself. An

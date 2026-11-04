@@ -20,7 +20,7 @@ test("install a bundled skill and read its provenance in the library", async ({ 
 
   // It lands on the skill, approved by the platform, with where it comes from.
   await expect(page).toHaveURL(/\/skills\/write-spec$/);
-  const gate = page.getByTestId("porte");
+  const gate = page.getByTestId("gate");
   await expect(gate).toContainText("Approved by platform");
   await expect(gate).toContainText("github.com/anthropics/knowledge-work-plugins");
   await expect(gate).toContainText("Apache-2.0");
@@ -28,7 +28,7 @@ test("install a bundled skill and read its provenance in the library", async ({ 
   // The library lists it, and the catalogue says it is installed.
   // Client-side navigation: the demo data lives in the page, a reload would forget the install.
   await page.getByRole("complementary", { name: "Sidebar" }).getByRole("link", { name: "Skills" }).click();
-  await expect(page.getByTestId("bibliotheque")).toContainText("write-spec");
+  await expect(page.getByTestId("library")).toContainText("write-spec");
   await page.getByRole("link", { name: "Catalogue" }).click();
   await page.getByLabel("Search the catalogue").fill("write spec");
   await expect(page.getByTestId("entry-write-spec")).toContainText("Installed, version 1");
@@ -44,5 +44,5 @@ test("a high-risk git skill says a second administrator will have to approve it,
   await expect(drawer.getByTestId("confirmation")).toContainText("a second administrator will have to approve it");
   await drawer.getByRole("button", { name: "Install" }).click();
   await expect(page).toHaveURL(/\/skills\/systematic-debugging$/);
-  await expect(page.getByTestId("porte")).toContainText("Pending review");
+  await expect(page.getByTestId("gate")).toContainText("Pending review");
 });

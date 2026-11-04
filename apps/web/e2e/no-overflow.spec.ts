@@ -1,11 +1,11 @@
 import { expect, test } from "@playwright/test";
 
 /**
- * Aucune page ne défile en largeur (S23-01). Le 08/10, TOUTES les pages de la console débordaient
- * sous 1280 px — l'en-tête ne se repliait pas (1091 px de large dans une fenêtre de 390) — et la
- * page des findings débordait même à 1280. Trois causes, trois gardes : l'en-tête replié derrière
- * « menu », les tableaux qui défilent dans leur case, et les textes `sr-only` qui ne s'échappent
- * plus d'un conteneur qui défile (`globals.css`).
+ * No page scrolls sideways (S23-01). On 10/08, ALL the console's pages overflowed below
+ * 1280 px — the header did not fold (1091 px wide in a 390 px window) — and the findings page
+ * overflowed even at 1280. Three causes, three guards: the header folded behind "menu", the
+ * tables that scroll inside their box, and the `sr-only` texts that no longer escape a
+ * scrolling container (`globals.css`).
  */
 const PAGES = [
   "/",
@@ -72,42 +72,42 @@ const PAGES = [
   "/login",
 ];
 
-for (const largeur of [360, 768, 1024, 1280]) {
-  test(`aucune page ne défile en largeur à ${largeur} px`, async ({ page }) => {
+for (const width of [360, 768, 1024, 1280]) {
+  test(`no page scrolls sideways at ${width} px`, async ({ page }) => {
     test.setTimeout(120_000);
-    await page.setViewportSize({ width: largeur, height: 900 });
-    const debordent: string[] = [];
-    for (const chemin of PAGES) {
-      await page.goto(chemin);
+    await page.setViewportSize({ width, height: 900 });
+    const overflowing: string[] = [];
+    for (const path of PAGES) {
+      await page.goto(path);
       await page.waitForLoadState("networkidle");
       await page.evaluate(() => document.fonts.ready);
-      const largeurDeLaPage = await page.evaluate(() => document.documentElement.scrollWidth);
-      if (largeurDeLaPage > largeur) debordent.push(`${chemin} : ${largeurDeLaPage} px`);
+      const pageWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+      if (pageWidth > width) overflowing.push(`${path}: ${pageWidth} px`);
     }
-    expect(debordent).toEqual([]);
+    expect(overflowing).toEqual([]);
   });
 }
 
-test("sous 1280 px, la navigation se replie derrière « menu », et s'y ouvre", async ({ page }) => {
+test("below 1280 px, the navigation folds behind \"menu\", and opens from it", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 });
   await page.goto("/");
   const navigation = page.getByRole("navigation", { name: "Main navigation" });
   await expect(navigation.getByRole("link", { name: "Skills" })).toBeHidden();
   const menu = navigation.getByRole("button", { name: "Menu" });
   await expect(menu).toHaveAttribute("aria-expanded", "false");
-  // Une cible tactile d'au moins 44 px de haut.
+  // A touch target at least 44 px tall.
   expect((await menu.boundingBox())?.height).toBeGreaterThanOrEqual(44);
 
   await menu.click();
   await expect(menu).toHaveAttribute("aria-expanded", "true");
   await expect(navigation.getByRole("link", { name: "Projects" })).toHaveAttribute("aria-current", "page");
   await expect(navigation.getByRole("button", { name: "Sign out" })).toBeVisible();
-  // Échap referme, et rend le focus au bouton.
+  // Escape closes it, and gives the focus back to the button.
   await page.keyboard.press("Escape");
   await expect(menu).toHaveAttribute("aria-expanded", "false");
   await expect(menu).toBeFocused();
 
-  // Suivre un lien referme le menu.
+  // Following a link closes the menu.
   await menu.click();
   await navigation.getByRole("link", { name: "Skills" }).click();
   await expect(page).toHaveURL(/\/skills$/);

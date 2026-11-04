@@ -160,22 +160,22 @@ describe("the project settings page (S40-03b)", () => {
 
   it("puts a required connector nothing provides before the others", async () => {
     await renderPage("connections");
-    const cards = (await screen.findAllByTestId(/^connecteur-/)).map((card) => card.getAttribute("data-testid"));
-    expect(cards.slice(0, 1)).toEqual(["connecteur-scm"]);
+    const cards = (await screen.findAllByTestId(/^connector-kind-/)).map((card) => card.getAttribute("data-testid"));
+    expect(cards.slice(0, 1)).toEqual(["connector-kind-scm"]);
   });
 
   it("shows the demo badge on a demo CD, and says the runtime is provided by the platform", async () => {
     await renderPage("connections");
-    const cd = await screen.findByTestId("connecteur-cd");
+    const cd = await screen.findByTestId("connector-kind-cd");
     expect(within(cd).getByText("Demo stand-in")).toBeTruthy();
     expect(within(cd).getByText("Not tested yet")).toBeTruthy();
-    const runtime = screen.getByTestId("connecteur-runtime");
+    const runtime = screen.getByTestId("connector-kind-runtime");
     expect(within(runtime).getByText("Provided by the platform")).toBeTruthy();
   });
 
   it("a GitHub card says which account's installation it goes through (no installation id)", async () => {
     await renderPage("connections");
-    const card = await screen.findByTestId("connecteur-tracker");
+    const card = await screen.findByTestId("connector-kind-tracker");
     expect(await within(card).findByText("via the Choregos App on acme")).toBeTruthy();
     expect(card.textContent).not.toMatch(/installation id/i);
   });
@@ -251,14 +251,14 @@ describe("the project settings page (S40-03b)", () => {
 
   it("opens a drawer to configure a connector", async () => {
     await renderPage("connections");
-    const scm = await screen.findByTestId("connecteur-scm");
+    const scm = await screen.findByTestId("connector-kind-scm");
     fireEvent.click(within(scm).getByRole("button", { name: "Configure" }));
     expect(screen.getAllByRole("dialog", { hidden: true }).some((d) => d.hasAttribute("open"))).toBe(true);
   });
 
   it("the runtime form lists only the executors the deployment runs", async () => {
     await renderPage("connections");
-    const runtime = await screen.findByTestId("connecteur-runtime");
+    const runtime = await screen.findByTestId("connector-kind-runtime");
     fireEvent.click(within(runtime).getByRole("button", { name: "Configure" }));
     const options = within(runtime).getAllByRole("option", { hidden: true }).map((o) => o.textContent);
     expect(options).toEqual(["Kubernetes · agent-sandbox (warm pool)", "Kubernetes Job"]);

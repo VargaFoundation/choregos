@@ -7,7 +7,7 @@ import { useState } from "react";
 import { Badge, Button, Card, Empty, ErrorNote } from "@/components/ui";
 import { api } from "@/lib/api";
 import { TagList } from "@/components/agents/tags";
-import { estClient, extrait, urlDeLaPorte } from "@/lib/integrations";
+import { estClient, extrait, gateUrl } from "@/lib/integrations";
 import type { AgentCatalogueConnection, AgentCatalogueEntry } from "@/lib/types";
 
 /** The state of an entry in the organisation, in plain words: what the button will do. */
@@ -80,7 +80,7 @@ export function AiClientCatalogue({ org }: { org: string }) {
           external agent: its calls carry the agent&apos;s name and limits, within your rights, and you get its
           configuration once. To connect one simply as yourself, use the steps above.
         </p>
-        <ul className="space-y-2" data-testid="clients-du-catalogue">
+        <ul className="space-y-2" data-testid="catalogue-clients">
           {clients.map((entree) => (
             <ClientDuCatalogue key={entree.slug} org={org} entree={entree} />
           ))}
@@ -156,7 +156,7 @@ function ClientDuCatalogue({ org, entree }: { org: string; entree: AgentCatalogu
     }
   }
   const id = entree.client ?? entree.slug;
-  const url = infos.data ? urlDeLaPorte(infos.data.mcp_url) : "…";
+  const url = infos.data ? gateUrl(infos.data.mcp_url) : "…";
   const code = connexion?.token && estClient(id) ? extrait(id, url, connexion.token.token) : null;
   return (
     <li className="space-y-2 rounded border border-line p-3" data-testid={`client-catalogue-${entree.slug}`}>

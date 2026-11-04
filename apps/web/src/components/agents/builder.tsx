@@ -658,7 +658,7 @@ export function AgentBuilder({
 
         {error && <ErrorNote>{error}</ErrorNote>}
         {failing.length > 0 && (
-          <ul className="space-y-1 text-sm text-failed-ink" aria-label="Failing eval cases" data-testid="evals-en-echec">
+          <ul className="space-y-1 text-sm text-failed-ink" aria-label="Failing eval cases" data-testid="failing-evals">
             {failing.map((f) => (
               <li key={f}>{f}</li>
             ))}
@@ -754,7 +754,7 @@ export function AgentBuilder({
       <aside
         className="min-w-0 space-y-3 xl:sticky xl:top-16 xl:max-h-[calc(100dvh-5rem)] xl:overflow-y-auto"
         aria-label="Try it and what it costs"
-        data-testid="panneau-lateral"
+        data-testid="side-panel"
       >
         <h2 className="sr-only">Trial and costs</h2>
         <div role="tablist" aria-label="Side panel" className="flex gap-6 border-b border-line">
@@ -874,7 +874,7 @@ function SkillsSection({
   const chosen = library.find((s) => s.slug === adding);
   return (
     <Disclosure title="Skills" summary={summary} defaultOpen={defaultOpen}>
-      <div data-testid="skills-de-la-version" className="space-y-2">
+      <div data-testid="version-skills" className="space-y-2">
         {carried.length === 0 ? (
           <p className="text-xs text-ink-muted">None — the playbook of its role is all it reads.</p>
         ) : (
@@ -978,7 +978,7 @@ function McpSection({
         The organisation&apos;s MCP connectors, and the tools of each the agent may call: names, or patterns such as{" "}
         <code>search_*</code>. None: the tools the platform gives a run of its project.
       </p>
-      <ul className="space-y-3" data-testid="serveurs-mcp">
+      <ul className="space-y-3" data-testid="mcp-servers">
         {servers.map((server, index) => (
           <li key={server.connector} className="space-y-1 rounded border border-line p-3">
             <div className="flex items-center justify-between gap-2">
@@ -1223,7 +1223,7 @@ function KnowledgeSection({
   const read = spec.knowledge ?? [];
   return (
     <Disclosure title="Knowledge" summary={summary} defaultOpen={defaultOpen}>
-      <div data-testid="bases-de-la-version" className="space-y-2">
+      <div data-testid="version-bases" className="space-y-2">
         {read.length === 0 ? (
           <p className="text-xs text-ink-muted">None — it reads no knowledge base.</p>
         ) : (
@@ -1300,7 +1300,7 @@ export function BuilderSummary({
   const model = models.find((m) => m.model_name === spec.model);
   const servers = spec.mcp_servers ?? [];
   return (
-    <section className="raised h-fit space-y-4 rounded-md border border-line p-4 text-sm" aria-label="What this version costs and allows" data-testid="ce-que-ca-permet">
+    <section className="raised h-fit space-y-4 rounded-md border border-line p-4 text-sm" aria-label="What this version costs and allows" data-testid="what-it-allows">
       <h3 className="text-sm font-semibold">What it costs and allows</h3>
       <div className="space-y-1">
         <h4 className="text-xs font-medium text-ink-muted">Model</h4>
@@ -1325,7 +1325,7 @@ export function BuilderSummary({
         )}
       </div>
       {spec.runtime?.kind === "code" && (
-        <div className="space-y-1" data-testid="runtime-resolu">
+        <div className="space-y-1" data-testid="runtime-resolved">
           <h4 className="text-xs font-medium text-ink-muted">Runtime</h4>
           <p>
             Your code runs in the image <span className="font-mono">{spec.runtime.image || "…"}</span>, started by the runner.
@@ -1362,7 +1362,7 @@ export function BuilderSummary({
           return found && !skillUsable(found);
         }) && <p className="text-failed-ink">A skill it carries is not usable: the run would stop.</p>}
       </div>
-      <div className="space-y-1" data-testid="outils-resolus">
+      <div className="space-y-1" data-testid="resolved-tools">
         <h4 className="text-xs font-medium text-ink-muted">Tools</h4>
         {servers.length === 0 ? (
           <p>No MCP server of its own: the tools the platform gives a run of its project.</p>
@@ -1395,7 +1395,7 @@ export function BuilderSummary({
           external agent, with its human&apos;s rights.
         </p>
       </div>
-      <div className="space-y-1" data-testid="connaissances-resolues">
+      <div className="space-y-1" data-testid="resolved-knowledge">
         <h4 className="text-xs font-medium text-ink-muted">Knowledge</h4>
         {(spec.knowledge ?? []).length === 0 ? (
           <p>None.</p>
@@ -1420,7 +1420,7 @@ export function BuilderSummary({
       </div>
       <div className="space-y-1">
         <h4 className="text-xs font-medium text-ink-muted">Memory</h4>
-        <div data-testid="memoire-resolue">
+        <div data-testid="resolved-memory">
           {bindings.length === 0 ? (
             <p>No memory: a run neither reads nor writes what earlier runs learnt.</p>
           ) : (

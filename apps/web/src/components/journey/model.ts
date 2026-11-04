@@ -320,7 +320,7 @@ function phasesOf(steps: Step[], byState: Map<string, GraphNode>): Phase[] {
 
 // ───────────────────────── the journey's state at an instant ─────────────────────────
 
-export type StepStatus = "a_venir" | "en_cours" | "attend" | "fait" | "renvoye" | "echoue";
+export type StepStatus = "upcoming" | "running" | "waiting" | "done" | "sent_back" | "failed";
 
 export type StepState = {
   status: StepStatus;
@@ -392,21 +392,21 @@ export function atInstant(journey: Pick<WorkItemJourney, "moves" | "steps">, mod
     if (running.length > 0) {
       status =
         step.kind === "human" || running.some((p) => WAITING.has(p.status) && Number.isNaN(ms(p.ended_at)))
-          ? "attend"
-          : "en_cours";
+          ? "waiting"
+          : "running";
     } else if (state === step.from && !isEnd(model, state)) {
       // The work item is where this step starts: it is the next one to play, even if it was
       // already crossed (a review that sends back makes the tests run again). A platform
       // transition has no attempt of its own; neither does an agent between two attempts.
-      status = step.kind === "human" ? "attend" : "en_cours";
+      status = step.kind === "human" ? "waiting" : "running";
     } else if (lastPass > lastSentBack && passes.length > 0) {
-      status = "fait";
+      status = "done";
     } else if (sentBack.length > 0) {
-      status = "renvoye";
+      status = "sent_back";
     } else if (last && FAILURES.has(last.status)) {
-      status = "echoue";
+      status = "failed";
     } else {
-      status = "a_venir";
+      status = "upcoming";
     }
     const verdict = [...attempts].reverse().find((p) => p.verdict)?.verdict ?? null;
     steps.set(step.id, {
@@ -430,10 +430,10 @@ export function atInstant(journey: Pick<WorkItemJourney, "moves" | "steps">, mod
   const phase = model.phases.findIndex((p) =>
     p.steps.some((id) => {
       const s = steps.get(id)?.status;
-      return s === "en_cours" || s === "attend" || s === "renvoye" || s === "echoue";
+      return s === "running" || s === "waiting" || s === "sent_back" || s === "failed";
     }),
   );
-  const lastDone = model.phases.findLastIndex((p) => p.steps.some((id) => steps.get(id)?.status === "fait"));
+  const lastDone = model.phases.findLastIndex((p) => p.steps.some((id) => steps.get(id)?.status === "done"));
   return {
     t,
     state,
@@ -500,7 +500,7 @@ export function narrate(model: JourneyModel, move: JourneyMove | null): string {
  */
 export function structure(model: JourneyModel): Instant {
   const steps = new Map<string, StepState>();
-  for (const id of model.byId.keys()) steps.set(id, { status: "a_venir", attempts: [], rounds: 0, verdict: null });
+  for (const id of model.byId.keys()) steps.set(id, { status: "upcoming", attempts: [], rounds: 0, verdict: null });
   const arcs = new Map(model.arcs.map((a) => [a.key, { times: 0, latest: false }]));
   return { t: Number.NEGATIVE_INFINITY, state: "", steps, visited: new Set(), arcs, latest: null, phase: null };
 }

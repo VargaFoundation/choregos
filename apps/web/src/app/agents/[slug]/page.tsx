@@ -94,8 +94,8 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
   const a = agent.data;
   return (
     <div className="space-y-6">
-      <Breadcrumbs steps={[{ href: "/agents", label: "Agents" }, { label: <span data-donnee>{a.display_name}</span> }]} />
-      <OrgPageHeader title={<span data-donnee>{a.display_name}</span>} eyebrow={<span className="font-mono">{a.slug}</span>} />
+      <Breadcrumbs steps={[{ href: "/agents", label: "Agents" }, { label: <span data-verbatim>{a.display_name}</span> }]} />
+      <OrgPageHeader title={<span data-verbatim>{a.display_name}</span>} eyebrow={<span className="font-mono">{a.slug}</span>} />
       <div className="flex flex-wrap items-baseline gap-3">
         <Badge tone={a.kind === "internal" ? "neutral" : "accent"}>
           {a.kind === "external" ? "External" : a.kind === "remote" ? "Remote · A2A" : "Internal"}
@@ -231,7 +231,7 @@ function AgentMetrics({ org, slug }: { org: string; slug: string }) {
       {!m ? (
         <p className="text-sm text-ink-muted">Reading…</p>
       ) : (
-        <div className="space-y-3" data-testid="mesures">
+        <div className="space-y-3" data-testid="measures">
           <dl className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4">
             <div>
               <dt className="text-xs text-ink-muted">Runs</dt>
@@ -384,7 +384,7 @@ function Runs({ org, slug }: { org: string; slug: string }) {
   if (runs.data.length === 0) return <Empty title="No run yet">A workflow that names this agent runs it.</Empty>;
   return (
     <Card title="Latest runs" padding="none" className="overflow-hidden">
-      <Table aria-label="Runs" data-testid="runs-de-l-agent">
+      <Table aria-label="Runs" data-testid="agent-runs">
         <THead>
           <TR>
             <TH>Started</TH>
@@ -399,7 +399,7 @@ function Runs({ org, slug }: { org: string; slug: string }) {
             <TR key={run.id} interactive>
               <TD className="font-mono text-xs">{run.started_at ? shortDate(run.started_at) : "—"}</TD>
               <TD>
-                <span data-donnee>{run.project_slug}</span>
+                <span data-verbatim>{run.project_slug}</span>
               </TD>
               <TD>
                 <Link href={`/p/${run.project_slug}/runs/${run.id}`} className="hover:underline">
@@ -432,7 +432,7 @@ function AgentAccess({ agent }: { agent: Agent }) {
           {agent.kind === "external" ? ", within its human's rights" : ""}.
         </p>
       ) : (
-        <ul className="space-y-1 text-sm" data-testid="acces-de-l-agent">
+        <ul className="space-y-1 text-sm" data-testid="agent-access">
           {serveurs.map((s) => (
             <li key={s.connector}>
               <span className="font-mono">{s.connector}</span>
@@ -473,7 +473,7 @@ function Clients({ org, slug }: { org: string; slug: string }) {
         {(links.data ?? []).length === 0 ? (
           <p className="text-sm text-ink-muted">No client yet: attach one of your MCP tokens below.</p>
         ) : (
-          <ul className="space-y-2" data-testid="clients-de-l-agent">
+          <ul className="space-y-2" data-testid="agent-clients">
             {(links.data ?? []).map((lien) => {
               const state = clientState(lien);
               return (

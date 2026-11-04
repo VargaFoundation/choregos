@@ -10,13 +10,13 @@ test("a map of eighteen states reads without zoom: one column, no overflow, no o
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/p/billing-api/workflows/release-full?view=list");
   const diagram = page.getByTestId("workflow-graph");
-  await expect(diagram.locator("[data-etat]")).toHaveCount(18);
+  await expect(diagram.locator("[data-state-id]")).toHaveCount(18);
   await page.evaluate(() => document.fonts.ready);
   const measure = await page.evaluate(() => {
-    const boxes = [...document.querySelectorAll<HTMLElement>('[aria-label="Nominal path"] > li [data-etat]')].map((el) =>
+    const boxes = [...document.querySelectorAll<HTMLElement>('[aria-label="Nominal path"] > li [data-state-id]')].map((el) =>
       el.closest("div")!.getBoundingClientRect(),
     );
-    const titles = [...document.querySelectorAll<HTMLElement>("[data-etat] [data-titre]")].map((el) =>
+    const titles = [...document.querySelectorAll<HTMLElement>("[data-state-id] [data-title]")].map((el) =>
       parseFloat(getComputedStyle(el).fontSize),
     );
     return {
@@ -40,31 +40,31 @@ test("a map of eighteen states reads without zoom: one column, no overflow, no o
 test("the panel stays within reach when the map is scrolled down", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/p/billing-api/workflows/release-full?view=list");
-  await page.getByTestId("etat-verified_prod").click();
-  await expect(page.getByTestId("panneau-etat")).toBeInViewport();
+  await page.getByTestId("state-verified_prod").click();
+  await expect(page.getByTestId("state-panel")).toBeInViewport();
   await page.mouse.wheel(0, 3000);
-  await expect(page.getByTestId("panneau-etat")).toBeInViewport();
+  await expect(page.getByTestId("state-panel")).toBeInViewport();
 });
 
 test("Tab reaches an arrow, Enter opens its transition's panel", async ({ page }) => {
   await page.goto("/p/billing-api/workflows/release-full?view=list");
-  await page.getByTestId("etat-ready").focus();
+  await page.getByTestId("state-ready").focus();
   await page.keyboard.press("Tab");
   await expect(page.getByTestId("transition-t-implement")).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(page.getByTestId("panneau-transition")).toBeVisible();
+  await expect(page.getByTestId("transition-panel")).toBeVisible();
   await expect(page.getByText("Transition t-implement", { exact: true })).toBeVisible();
 });
 
 test("the map opens as a snake, without overflowing, and a clicked step opens its transition (S22-05)", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/p/billing-api/workflows/release-full");
-  const diagram = page.getByTestId("carte-en-serpentin");
+  const diagram = page.getByTestId("serpentine-map");
   await expect(diagram).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
-  await diagram.getByTestId("etape-t-implement").click();
-  await expect(page.getByTestId("panneau-transition")).toBeVisible();
+  await diagram.getByTestId("step-t-implement").click();
+  await expect(page.getByTestId("transition-panel")).toBeVisible();
   await page.getByRole("button", { name: "List" }).click();
   await expect(page).toHaveURL(/view=list/);
   await expect(page.getByTestId("workflow-graph")).toBeVisible();

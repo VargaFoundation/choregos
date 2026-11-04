@@ -403,7 +403,7 @@ function Routing({
       {courantes.length === 0 ? (
         <p className="text-ink-muted">No rule — every request that names no workflow goes to the default.</p>
       ) : (
-        <ol className="divide-y divide-line border-y border-line" aria-label="Routing rules" data-testid="regles">
+        <ol className="divide-y divide-line border-y border-line" aria-label="Routing rules" data-testid="rules">
           {courantes.map((regle, index) => (
             <li
               key={`${index}-${regle.workflow}`}

@@ -17,7 +17,7 @@
  * preferences (`lib/preferences.ts`) before the first paint.
  */
 
-/* ───────────────────────────── sombre (défaut) ───────────────────────────── */
+/* ───────────────────────────── dark (default) ───────────────────────────── */
 :root {
   color-scheme: dark;
 
@@ -82,24 +82,24 @@
   --violet-9: #6e56cf;
   --violet-11: #baa7ff;
 
-  /* Surfaces : la page, ce qui s'élève dessus (cartes, menus, tiroir), la barre latérale plus sombre. */
+  /* Surfaces: the page, what rises above it (cards, menus, drawer), the darker sidebar. */
   --choregos-surface: var(--slate-1);
   --choregos-raised: var(--slate-2);
   --choregos-sidebar: color-mix(in srgb, var(--slate-1) 75%, #000);
   --choregos-surface-muted: var(--slate-3);
   --choregos-surface-sunken: var(--slate-3);
 
-  /* Filets : visibles (1,6:1) ; la bordure d'un contrôle porte 3:1 au moins (WCAG 1.4.11). */
+  /* Rules: visible (1.6:1); a control's border carries 3:1 at least (WCAG 1.4.11). */
   --choregos-line: var(--slate-6);
   --choregos-line-strong: var(--slate-9);
 
-  /* Texte : 16:1, plus 19 — le blanc pur sur le quasi-noir fatiguait. */
+  /* Text: 16:1, not 19 — pure white on near-black was tiring. */
   --choregos-ink: var(--slate-12);
   --choregos-ink-muted: var(--slate-11);
   --choregos-ink-subtle: var(--slate-9);
   --choregos-ink-placeholder: var(--slate-11);
 
-  /* L'action : un seul accent, l'iris — l'aplat inversé (blanc en sombre) devient l'accent. */
+  /* The action: a single accent, iris — the inverted fill (white in dark) becomes the accent. */
   --choregos-inverse: var(--iris-9);
   --choregos-inverse-ink: #fff;
   --choregos-inverse-hover: color-mix(in srgb, var(--iris-9) 85%, #000);
@@ -115,7 +115,7 @@
   --choregos-warn: var(--amber-11);
   --choregos-danger: var(--red-11);
 
-  /* Les états d'un run ou d'un ticket : une pastille teintée (fond, filet, texte) et un plein. */
+  /* The states of a run or a ticket: a tinted pill (fill, rule, text) and a solid. */
   --choregos-running-solid: var(--blue-9);
   --choregos-running-soft: var(--blue-3);
   --choregos-running-line: var(--blue-6);
@@ -140,7 +140,7 @@
   --choregos-neutral-soft: var(--slate-3);
   --choregos-neutral-line: var(--slate-6);
   --choregos-neutral-ink: var(--slate-11);
-  /* Ce qui tourne sans vous — un agent — a sa teinte : la prune. */
+  /* What runs without you — an agent — has its own tint: plum. */
   --choregos-agent-solid: var(--plum-9);
   --choregos-agent-soft: var(--plum-3);
   --choregos-agent-line: var(--plum-6);
@@ -187,7 +187,7 @@
   --choregos-info-soft: var(--blue-3);
   --choregos-info-line: var(--blue-6);
 
-  /* Le défilement d'un tableau se signale par un voile, qu'une ombre noire ne montrait pas en sombre. */
+  /* A table's scrolling is signalled by a veil, which a black shadow did not show in dark. */
   --choregos-scroll-hint: color-mix(in srgb, var(--slate-12) 14%, transparent);
   --choregos-shadow-raised: none;
 
@@ -201,7 +201,7 @@
   --choregos-easing: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* ───────────────────────────── clair ───────────────────────────── */
+/* ───────────────────────────── light ───────────────────────────── */
 :root[data-theme="light"] {
   color-scheme: light;
 
@@ -285,8 +285,8 @@
   --choregos-focus: var(--iris-9);
 
   /*
-   * En clair, le pas 11 d'une teinte vive tombe à 4:1 sur son propre fond teinté : il s'assombrit
-   * vers le pas 12 de la même échelle (5,2:1 au moins partout, mesuré par le test de contraste).
+   * In light, step 11 of a vivid hue falls to 4:1 on its own tinted fill: it darkens
+   * towards step 12 of the same scale (5.2:1 at least everywhere, measured by the contrast test).
    */
   --choregos-ok: color-mix(in srgb, var(--green-11) 70%, var(--green-12));
   --choregos-warn: color-mix(in srgb, var(--amber-11) 70%, var(--amber-12));
@@ -312,8 +312,8 @@
 }
 
 /*
- * Ce qui s'élève (carte, menu, tiroir) redéfinit la surface pour tout ce qu'il contient : un champ, un
- * halo de texte ou un dégradé qui « prend la couleur du fond » prend alors la bonne.
+ * What rises (card, menu, drawer) redefines the surface for everything it holds: a field, a
+ * text halo or a gradient that "takes the colour of the background" then takes the right one.
  */
 .raised {
   --choregos-surface: var(--choregos-raised);

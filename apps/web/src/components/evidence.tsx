@@ -4,7 +4,7 @@
 import { Provenance } from "@/components/provenance";
 import { Card, Empty } from "@/components/ui";
 import { toSentenceCase } from "@/lib/format";
-import { provenanceDePreuve } from "@/lib/provenance";
+import { evidenceProvenance } from "@/lib/provenance";
 import type { Run } from "@/lib/types";
 
 type Evidence = NonNullable<NonNullable<Run["result"]>["evidence"]>;
@@ -48,7 +48,7 @@ export function EvidencePanel({ evidence }: { evidence?: Evidence }) {
               <span>
                 {toSentenceCase(nom.replace(/_/g, " "))}: {typeof valeur === "boolean" ? (valeur ? "✓" : "✗") : String(valeur)}
               </span>
-              <Provenance de={provenanceDePreuve(evidence, cle)} />
+              <Provenance de={evidenceProvenance(evidence, cle)} />
             </li>
           ))}
         </ul>

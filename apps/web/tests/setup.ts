@@ -1,12 +1,12 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach } from "vitest";
 
-// Chaque test est un onglet neuf : un brouillon de workflow gardé par un test (S23-06) ne doit pas
-// apparaître dans le suivant. Les tests en environnement node n'ont pas de fenêtre.
+// Each test is a fresh tab: a workflow draft kept by one test (S23-06) must not show up in the
+// next. Tests in the node environment have no window.
 afterEach(() => {
   if (typeof window === "undefined") return;
   window.sessionStorage.clear();
-  // Le thème choisi et la barre repliée (ADR 0043) ne passent pas d'un test à l'autre non plus.
+  // The chosen theme and the collapsed sidebar (ADR 0043) do not carry over from one test to the next either.
   window.localStorage.removeItem("choregos.theme");
   window.localStorage.removeItem("choregos.sidebar");
   delete document.documentElement.dataset.theme;

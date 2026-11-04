@@ -61,16 +61,16 @@ export function CatalogueCard({
       aria-labelledby={`entry-title-${id}`}
     >
       <header className="space-y-1">
-        <Title id={`entry-title-${id}`} className="flex items-center gap-2 text-sm font-semibold text-ink" data-donnee>
+        <Title id={`entry-title-${id}`} className="flex items-center gap-2 text-sm font-semibold text-ink" data-verbatim>
           {icon}
           {title}
         </Title>
-        <p className="text-xs text-ink-muted" data-donnee>
+        <p className="text-xs text-ink-muted" data-verbatim>
           {publisher}
         </p>
       </header>
       {badges && <div className="flex flex-wrap gap-1.5">{badges}</div>}
-      <p className="text-sm text-ink-muted" data-donnee>
+      <p className="text-sm text-ink-muted" data-verbatim>
         {description}
       </p>
       {facts && <div className="space-y-1 text-xs text-ink-muted">{facts}</div>}

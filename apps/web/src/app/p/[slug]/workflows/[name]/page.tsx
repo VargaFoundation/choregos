@@ -13,7 +13,7 @@ import { SnakeMap } from "@/components/journey/journey-map";
 import { Button, Card, Drawer, Empty, ErrorNote } from "@/components/ui";
 import { Cog, Plus, Users } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { useBrouillon } from "@/components/workflows/brouillon";
+import { useDraft } from "@/components/workflows/draft";
 import { WorkflowMap } from "@/components/workflows/map/workflow-map";
 import {
   mapEdge,
@@ -28,10 +28,10 @@ import {
   waitingSentence,
 } from "@/components/workflows/step-activity";
 import {
-  FormulaireDEtape,
-  PanneauDEtat,
-  PanneauDeTransition,
-} from "@/components/workflows/panneaux";
+  StepForm,
+  StatePanel,
+  TransitionPanel,
+} from "@/components/workflows/panels";
 import {
   ArtifactFlowCard,
   type Highlight,
@@ -39,7 +39,7 @@ import {
 import { StepDetails } from "@/components/workflows/step-details";
 import { decisionActorOf } from "@/components/workflows/document";
 import { workflowThresholds } from "@/components/workflows/decision-calibration";
-import { TexteIllisible } from "@/components/workflows/texte-illisible";
+import { UnreadableText } from "@/components/workflows/unreadable-text";
 import { ActorsPanel } from "@/components/workflows/actors-panel";
 import { WorkflowSettingsPanel } from "@/components/workflows/workflow-settings";
 import { api } from "@/lib/api";
@@ -72,7 +72,7 @@ type Definition = {
  * to edit the states.
  */
 export default function MapPage() {
-  const draft = useBrouillon();
+  const draft = useDraft();
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -163,9 +163,9 @@ export default function MapPage() {
         title="Add a step"
       >
         {tool === "step" && (
-          <FormulaireDEtape
-            etats={noeuds}
-            acteurs={acteurs}
+          <StepForm
+            states={noeuds}
+            actors={acteurs}
             onDone={() => setTool(null)}
           />
         )}
@@ -219,10 +219,10 @@ export default function MapPage() {
           >
             <div
               className={
-                draft.grapheObsolete ? "space-y-3 opacity-60" : "space-y-3"
+                draft.graphStale ? "space-y-3 opacity-60" : "space-y-3"
               }
             >
-              {draft.grapheObsolete && <TexteIllisible />}
+              {draft.graphStale && <UnreadableText />}
               {vue === "diagram" ? (
                 <SnakeMap
                   graph={graph}
@@ -258,16 +258,16 @@ export default function MapPage() {
         </div>
         <div
           className="space-y-4 self-start lg:sticky lg:top-16"
-          data-testid="panneaux-de-la-carte"
+          data-testid="map-panels"
         >
           {drawn && (
             <Card title={`New transition from ${drawn.from} to ${drawn.to}`}>
-              <FormulaireDEtape
+              <StepForm
                 key={`${drawn.from}-${drawn.to}`}
-                depart={drawn.from}
+                from={drawn.from}
                 initialTarget={drawn.to}
-                etats={noeuds}
-                acteurs={acteurs}
+                states={noeuds}
+                actors={acteurs}
                 onDone={() => setDrawn(null)}
               />
               <button
@@ -280,11 +280,11 @@ export default function MapPage() {
             </Card>
           )}
           {graphNode && (
-            <PanneauDEtat
+            <StatePanel
               key={`n-${graphNode.id}`}
-              noeud={graphNode}
-              etats={noeuds}
-              acteurs={acteurs}
+              node={graphNode}
+              states={noeuds}
+              actors={acteurs}
             />
           )}
           {arete && chosenStep && (
@@ -314,7 +314,7 @@ export default function MapPage() {
               ) && (
                 <p
                   className="mt-2 text-xs text-ink-muted"
-                  data-testid="attente-de-l-etape"
+                  data-testid="step-waiting"
                 >
                   {waitingSentence(
                     activity.data,
@@ -326,7 +326,7 @@ export default function MapPage() {
               {stepActivitySentence(activity.data, chosenStep.id) && (
                 <p
                   className="mt-2 text-xs text-ink-muted"
-                  data-testid="activite-de-l-etape"
+                  data-testid="step-activity"
                 >
                   {stepActivitySentence(activity.data, chosenStep.id)}
                 </p>
@@ -343,10 +343,10 @@ export default function MapPage() {
             </Card>
           )}
           {arete && (
-            <PanneauDeTransition
+            <TransitionPanel
               key={`e-${arete.id ?? arete.from}`}
-              arete={arete}
-              acteurs={acteurs}
+              edge={arete}
+              actors={acteurs}
               definitions={definition.actors}
               gates={chosenStep?.gates}
               timing={timing}
@@ -358,11 +358,11 @@ export default function MapPage() {
               arrival state prefilled, the target and the actor chosen in the form. */}
           {arete && !noeuds.find((n) => n.id === arete.to)?.terminal && (
             <Card title="Add a step after this one" data-testid="step-after-step">
-              <FormulaireDEtape
+              <StepForm
                 key={`after-${arete.id ?? arete.from}`}
-                depart={arete.to}
-                etats={noeuds}
-                acteurs={acteurs}
+                from={arete.to}
+                states={noeuds}
+                actors={acteurs}
               />
             </Card>
           )}

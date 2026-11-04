@@ -11,7 +11,6 @@
 import type { RunEventDto } from "./types";
 
 export type CallStatus = "pending" | "in_progress" | "completed" | "failed";
-export type StatutDAppel = CallStatus; // lang: fr-ok alias:internal
 
 export type ToolCall = {
   id: string;
@@ -30,13 +29,10 @@ export type ToolCall = {
   /** A sub-agent: the tool the agent launches to delegate a task. */
   sousAgent: boolean;
 };
-export type AppelDOutil = ToolCall; // lang: fr-ok alias:internal
 
 export type Refusal = { cible: string; raison: string; appel?: string };
-export type Refus = Refusal; // lang: fr-ok alias:internal
 
 export type RunActivity = { appels: ToolCall[]; refus: Refusal[]; termines: number; sousAgents: number };
-export type ActiviteDuRun = RunActivity; // lang: fr-ok alias:internal
 
 const STATUSES = new Set<CallStatus>(["pending", "in_progress", "completed", "failed"]);
 const FINISHED = new Set<CallStatus>(["completed", "failed"]);
@@ -112,4 +108,3 @@ export function runActivity(events: RunEventDto[]): RunActivity {
     sousAgents: list.filter((a) => a.sousAgent).length,
   };
 }
-export const activiteDuRun = runActivity; // lang: fr-ok alias:internal

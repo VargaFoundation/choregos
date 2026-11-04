@@ -30,8 +30,8 @@ describe("the gate of a skill, in the console (S32-06)", () => {
       "neutral",
     ]);
     render(<RiskBadge risk="high" reviewStatus="pending_review" />);
-    expect(screen.getByTestId("risque").textContent).toContain("High risk");
-    expect(screen.getByTestId("revue").textContent).toContain("Pending review");
+    expect(screen.getByTestId("risk").textContent).toContain("High risk");
+    expect(screen.getByTestId("review").textContent).toContain("Pending review");
   });
 
   it("the most severe finding comes first", () => {
@@ -41,7 +41,7 @@ describe("the gate of a skill, in the console (S32-06)", () => {
     ]);
     expect(sorted.map((f) => f.code)).toEqual(["prompt_injection", "licence_missing"]);
     render(<Findings findings={sorted} />);
-    expect(screen.getByTestId("constats").textContent).toContain("SKILL.md:4");
+    expect(screen.getByTestId("findings").textContent).toContain("SKILL.md:4");
   });
 
   it("a refused candidate cannot be picked", () => {
@@ -65,7 +65,7 @@ describe("the gate of a skill, in the console (S32-06)", () => {
     ]);
     render(<GitImport org="varga" />);
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
-    await waitFor(() => expect(screen.getByTestId("apercu")).toBeTruthy());
+    await waitFor(() => expect(screen.getByTestId("preview")).toBeTruthy());
     expect(api.previewSkillsFromGit).toHaveBeenCalledWith("varga", {
       repo_url: "https://github.com/anthropics/skills",
       ref: "main",

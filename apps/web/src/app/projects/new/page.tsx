@@ -325,7 +325,7 @@ export default function NewProjectPage() {
         )}
 
         {step === 3 && (
-          <dl className="space-y-2 text-sm" data-testid="recapitulatif">
+          <dl className="space-y-2 text-sm" data-testid="summary">
             {recapitulatif.map(([libelle, valeur]) => (
               <div key={libelle} className="flex justify-between gap-4">
                 <dt className="text-ink-muted">{libelle}</dt>

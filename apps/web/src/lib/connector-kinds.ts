@@ -39,25 +39,21 @@ export function kindTitle(kind: string): string {
   const label = LIBELLES[kind] ?? kind;
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
-export const titreDeSorte = kindTitle; // lang: fr-ok alias:internal
 
 /** What a kind designates; a kind that an extension brings keeps its own name. */
 export function kindLabel(kind: string): string {
   return LIBELLES[kind] ?? kind;
 }
-export const libelleDeSorte = kindLabel; // lang: fr-ok alias:internal
 
 /**
  * The delivery tools of a PROJECT (ADR 0034): they are set in each project's settings, never at
  * organisation level. The order is that of the requirements (`choregos_core.dsl.exigences`).
  */
 export const PROJECT_KINDS = ["tracker", "scm", "ci", "cd", "runtime", "gateway", "memory"] as const;
-export const SORTES_DU_PROJET = PROJECT_KINDS; // lang: fr-ok alias:internal
 
 export function isProjectKind(kind: string): boolean {
   return (PROJECT_KINDS as readonly string[]).includes(kind);
 }
-export const estUneSorteDuProjet = isProjectKind; // lang: fr-ok alias:internal
 
 /**
  * A kind an ORGANISATION may declare (S44-04): every kind but a project's delivery tools, except the

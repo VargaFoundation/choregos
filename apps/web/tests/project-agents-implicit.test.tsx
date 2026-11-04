@@ -64,7 +64,7 @@ describe("the project's built-in agents", () => {
     await waitFor(() =>
       expect(screen.getByTestId("project-owned-none")).toHaveTextContent("Its workflows still run 2 built-in agents"),
     );
-    const list = await screen.findByTestId("implicites");
+    const list = await screen.findByTestId("implicit");
     await waitFor(() => expect(within(list).getAllByTestId("builtin-agent")).toHaveLength(2));
     expect(api.describeBuiltinAgent).toHaveBeenCalledWith("foundation", expect.objectContaining({ role: "implement" }));
     expect(within(list).getAllByTestId("builtin-agent-prompt")[0]).toHaveTextContent("You carry the implement role");
@@ -80,7 +80,7 @@ describe("the project's built-in agents", () => {
         </QueryClientProvider>,
       );
     });
-    const table = await screen.findByTestId("agents-du-projet");
+    const table = await screen.findByTestId("project-agents");
     await waitFor(() => expect(within(table).getByText(/v3 · pinned/)).toBeInTheDocument());
     const rows = within(table).getAllByRole("row").slice(1).map((r) => r.textContent);
     expect(rows[0]).toContain("built-in agent · implement playbook");
@@ -98,7 +98,7 @@ describe("the project's built-in agents", () => {
         </QueryClientProvider>,
       );
     });
-    const list = await screen.findByTestId("implicites");
+    const list = await screen.findByTestId("implicit");
     fireEvent.click(within(list).getAllByRole("button", { name: "Register" })[0]!);
     await waitFor(() => expect(api.createAgent).toHaveBeenCalled());
     const [, body] = vi.mocked(api.createAgent).mock.calls[0]!;

@@ -9,7 +9,7 @@ import type { SecretDraft } from "@/components/secret-field";
 import { Badge, Button, Drawer } from "@/components/ui";
 import { WritesAs } from "@/components/who-writes";
 import { connectorState } from "@/lib/connector-state";
-import { titreDeSorte } from "@/lib/sortes-de-connecteurs";
+import { kindTitle } from "@/lib/connector-kinds";
 import type { ConnectorDto, ConnectorType, ProjectRequirement } from "@/lib/types";
 
 /** The config keys that say WHERE a connector points, in the order a person would look for them. */
@@ -86,11 +86,11 @@ export function ConnectorCard({
   const reglage = configurationEnClair(actuel?.config);
   const raisons = exigence?.reasons ?? [];
   const workflows = workflowsQuiExigent(raisons);
-  const title = titreDeSorte(sorte);
+  const title = kindTitle(sorte);
   return (
     <li
       className="flex flex-col gap-3 rounded-md border border-line bg-surface p-4"
-      data-testid={`connecteur-${sorte}`}
+      data-testid={`connector-kind-${sorte}`}
     >
       <div className="flex items-start gap-3">
         <span
@@ -104,7 +104,7 @@ export function ConnectorCard({
           <h3 className="text-sm font-semibold text-ink">
             {title} <code className="ml-1 text-xs font-normal text-ink-muted">{sorte}</code>
           </h3>
-          {typeName && <p className="text-xs break-words text-ink-muted" data-donnee>{typeName}</p>}
+          {typeName && <p className="text-xs break-words text-ink-muted" data-verbatim>{typeName}</p>}
           {reglage && <p className="font-mono text-xs break-all text-ink-muted">{reglage}</p>}
           {actuel && GITHUB_TYPES.has(actuel.type) && typeof actuel.config?.repo === "string" && (
             <GitHubVia repo={actuel.config.repo} />
@@ -115,7 +115,7 @@ export function ConnectorCard({
       </div>
       {state && (
         <div>
-          <Badge tone={state.tone} data-testid={`etat-${sorte}`}>
+          <Badge tone={state.tone} data-testid={`state-${sorte}`}>
             {state.label}
           </Badge>
         </div>

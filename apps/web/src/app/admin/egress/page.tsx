@@ -103,7 +103,7 @@ export default function EgressPage() {
             <ul className="space-y-2" data-testid="egress-pending">
               {data.requests.map((rule) => (
                 <li key={rule.id} className="flex flex-wrap items-center gap-3 border-t border-line pt-2 text-sm first:border-t-0 first:pt-0">
-                  <span className="font-medium" data-donnee>
+                  <span className="font-medium" data-verbatim>
                     {rule.host}
                   </span>
                   <span className="text-xs text-ink-muted">
@@ -149,7 +149,7 @@ export default function EgressPage() {
                   {data.rules.map((rule) => (
                     <TR key={rule.id}>
                       <TD>
-                        <span data-donnee>{hostLabel({ host: rule.host, port: rule.ports[0] ?? 443 })}</span>
+                        <span data-verbatim>{hostLabel({ host: rule.host, port: rule.ports[0] ?? 443 })}</span>
                         {rule.ports.length > 1 || (rule.ports[0] ?? 443) !== 443 ? (
                           <span className="text-xs text-ink-muted"> ports {rule.ports.join(", ")}</span>
                         ) : null}
@@ -188,7 +188,7 @@ export default function EgressPage() {
             <ul className="list-disc pl-5">
               {outside.map(({ rule, family }) => (
                 <li key={`${rule.id}:${family}`}>
-                  <span data-donnee>{rule.host}</span> <span className="text-ink-muted">({FAMILY_LABEL[family]})</span>
+                  <span data-verbatim>{rule.host}</span> <span className="text-ink-muted">({FAMILY_LABEL[family]})</span>
                 </li>
               ))}
             </ul>

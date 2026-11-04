@@ -15,6 +15,6 @@ test("the project's sidebar Inbox opens the project's inbox, without another pro
 
 test("the organisation's inbox can be narrowed to a project", async ({ page }) => {
   await page.goto("/inbox?project=billing-api");
-  await expect(page.getByTestId("budgets-franchis").getByText(/Project billing-api has spent/)).toBeVisible();
-  await expect(page.getByTestId("budgets-franchis").getByText(/^Agent /)).toHaveCount(0);
+  await expect(page.getByTestId("budgets-exceeded").getByText(/Project billing-api has spent/)).toBeVisible();
+  await expect(page.getByTestId("budgets-exceeded").getByText(/^Agent /)).toHaveCount(0);
 });
