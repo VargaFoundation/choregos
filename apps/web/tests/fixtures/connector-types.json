@@ -132,6 +132,10 @@
   "type": "github"
  },
  {
+  "kind": "scm",
+  "type": "gitlab"
+ },
+ {
   "kind": "shipping",
   "type": "demo"
  },
