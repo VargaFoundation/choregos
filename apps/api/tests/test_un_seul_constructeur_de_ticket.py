@@ -12,7 +12,7 @@ import ast
 import pathlib
 
 RACINE = pathlib.Path(__file__).resolve().parents[3]
-PERMIS = {RACINE / "apps/api/src/choregos_api/services/routage.py"}
+PERMIS = {RACINE / "apps/api/src/choregos_api/services/routing.py"}
 
 
 def test_aucun_work_item_construit_hors_de_nouveau_ticket() -> None:
