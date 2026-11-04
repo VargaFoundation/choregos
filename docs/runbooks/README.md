@@ -3,8 +3,8 @@
 A runbook is read at 3 a.m. by someone who did not write the code. Each one starts with
 *how to know it is this*, then gives the commands, then says *how to check it is fixed*.
 
-English is the reference language since 2026-09-24; the French originals are kept in
-[`docs/fr/runbooks/`](../fr/runbooks/) and no longer maintained. Seven runbooks were
+English is the reference language since 2026-09-24; the French originals were deleted in 0.21
+(ADR 0098). Seven runbooks were
 renamed in 0.21 (ADR 0098). The former file names stay as one-line redirect stubs, because deployed
 alerts carry their `runbook_url`; the stubs go in 0.23.0.
 

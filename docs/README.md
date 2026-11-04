@@ -3,8 +3,8 @@
 Choregos is a delivery platform for agent work. A request comes in as a ticket, agents move
 it through a workflow you declare, and every step is bounded, evidenced and auditable.
 
-> Since 2026-09-24 this documentation is the **reference**, in English. `docs/fr/` archives
-> the earlier French guides. Since 2026-10-12 `docs/plan/` and the code are written in English
+> Since 2026-09-24 this documentation is the **reference**, in English; the earlier French
+> guides were deleted in 0.21 (ADR 0098). Since 2026-10-12 `docs/plan/` and the code are written in English
 > too (ADR 0046); their older parts are still French until they are renamed. Where a page and
 > the code disagree, the code wins — and the page is a bug.
 

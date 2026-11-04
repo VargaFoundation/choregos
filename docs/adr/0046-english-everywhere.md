@@ -22,7 +22,8 @@ Decision D2 (Vincent Devillers, 2026-10-12): everything is in English, identifie
 
 1. **Everything new is in English**: identifiers, comments, docstrings, test names, file names,
    `docs/` including `docs/plan/` (STATUS, BLOCKERS, plans), ADRs, commit messages, pull request
-   titles and descriptions. `docs/fr/` stays an unmaintained archive.
+   titles and descriptions. `docs/fr/` stays an unmaintained archive
+   (amended by ADR 0098: `docs/fr/` deleted).
 2. **Identifiers are renamed too** (reversing ADR 0039 §2) — by a mechanical rename, **one pull
    request per package** (S34-04), scheduled where no feature stream touches that package. Comments
    and docstrings are translated in the same pass. Until a package's turn comes, its French code

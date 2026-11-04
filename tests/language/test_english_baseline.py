@@ -282,7 +282,6 @@ def test_json_and_excluded_paths_are_not_read() -> None:
     for path in (
         "apps/web/package.json",
         "tests/replay/histories/x.json",
-        "docs/fr/guide.md",
         "packages/core/src/choregos_core/injection.py",
         "docs/cli.md",
     ):

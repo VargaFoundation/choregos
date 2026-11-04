@@ -247,7 +247,7 @@ This document has two parts: what is true today (A), and the work plan that foll
 ### P1 — The product deploys and documents itself honestly
 
 - **P1-1 Docs**: English becomes the reference (getting started, dev, security, runbooks, ADRs
-  translated; French archived under `docs/fr/`); every factual error above corrected; a generated
+  translated; French archived under `docs/fr/`, deleted in 0.21, ADR 0098); every factual error above corrected; a generated
   CLI reference; `CLAUDE.md` merged into `AGENTS.md`; `AGENTS.md` commands aligned with CI.
 - **P1-2 Delivery chain**: SBOM + provenance on image builds, `cosign attest`; Trivy on release
   images; nightly scan blocking and wired to the alert; secret scanning; fixed registry actor;
