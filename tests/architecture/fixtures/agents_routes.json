@@ -1,0 +1,247 @@
+[
+  {
+    "path": "/orgs/{org}/agents",
+    "methods": [
+      "GET"
+    ],
+    "operation_id": "listAgents"
+  },
+  {
+    "path": "/orgs/{org}/agents",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "createAgent"
+  },
+  {
+    "path": "/orgs/{org}/agent-drafts",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "draftAgent"
+  },
+  {
+    "path": "/orgs/{org}/hosted-sources",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "uploadHostedSource"
+  },
+  {
+    "path": "/orgs/{org}/hosted-sources/{sha256}",
+    "methods": [
+      "GET"
+    ],
+    "operation_id": "getHostedSource"
+  },
+  {
+    "path": "/orgs/{org}/agents/{slug}",
+    "methods": [
+      "GET"
+    ],
+    "operation_id": "getAgent"
+  },
+  {
+    "path": "/orgs/{org}/agents/{slug}/versions",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "publishAgentVersion"
+  },
+  {
+    "path": "/orgs/{org}/agents/{slug}/versions/publish",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "publishAgentVersionWithMessage"
+  },
+  {
+    "path": "/orgs/{org}/agents/{slug}/versions/{version}/restore",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "restoreAgentVersion"
+  },
+  {
+    "path": "/orgs/{org}/agents/{slug}/versions/{version}",
+    "methods": [
+      "GET"
+    ],
+    "operation_id": "getAgentVersion"
+  },
+  {
+    "path": "/orgs/{org}/agents/{slug}/metrics",
+    "methods": [
+      "GET"
+    ],
+    "operation_id": "getAgentMetrics"
+  },
+  {
+    "path": "/orgs/{org}/agent-metrics",
+    "methods": [
+      "GET"
+    ],
+    "operation_id": "listAgentMetrics"
+  },
+  {
+    "path": "/orgs/{org}/agents/{slug}/runs",
+    "methods": [
+      "GET"
+    ],
+    "operation_id": "listAgentRuns"
+  },
+  {
+    "path": "/orgs/{org}/agents/{slug}",
+    "methods": [
+      "PATCH"
+    ],
+    "operation_id": "updateAgent"
+  },
+  {
+    "path": "/orgs/{org}/agents/{slug}/lifecycle",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "changeAgentLifecycle"
+  },
+  {
+    "path": "/orgs/{org}/agents/{slug}",
+    "methods": [
+      "DELETE"
+    ],
+    "operation_id": "deleteAgent"
+  },
+  {
+    "path": "/orgs/{org}/agents/{slug}/owner",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "transferAgentOwnership"
+  },
+  {
+    "path": "/orgs/{org}/agents/{slug}/fork",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "forkAgent"
+  },
+  {
+    "path": "/orgs/{org}/agents/{slug}/scope",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "changeAgentScope"
+  },
+  {
+    "path": "/projects/{id}/agents",
+    "methods": [
+      "GET"
+    ],
+    "operation_id": "listProjectAgents"
+  },
+  {
+    "path": "/projects/{id}/implicit-agents",
+    "methods": [
+      "GET"
+    ],
+    "operation_id": "listImplicitAgents"
+  },
+  {
+    "path": "/projects/{id}/workflow-agents",
+    "methods": [
+      "GET"
+    ],
+    "operation_id": "listWorkflowAgents"
+  },
+  {
+    "path": "/projects/{id}/builtin-agent",
+    "methods": [
+      "GET"
+    ],
+    "operation_id": "describeBuiltinAgent"
+  },
+  {
+    "path": "/projects/{id}/groups/{group}/members",
+    "methods": [
+      "GET"
+    ],
+    "operation_id": "listGroupMembers"
+  },
+  {
+    "path": "/projects/{id}/agent-resolution",
+    "methods": [
+      "GET"
+    ],
+    "operation_id": "resolveProjectAgents"
+  },
+  {
+    "path": "/projects/{id}/agents/{slug}",
+    "methods": [
+      "PUT"
+    ],
+    "operation_id": "pinProjectAgent"
+  },
+  {
+    "path": "/projects/{id}/agents/{slug}",
+    "methods": [
+      "DELETE"
+    ],
+    "operation_id": "unpinProjectAgent"
+  },
+  {
+    "path": "/orgs/{org}/agent-trials",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "startAgentTrial"
+  },
+  {
+    "path": "/orgs/{org}/agent-credentials",
+    "methods": [
+      "GET"
+    ],
+    "operation_id": "listOrgAgentCredentials"
+  },
+  {
+    "path": "/orgs/{org}/agents/{slug}/credentials",
+    "methods": [
+      "GET"
+    ],
+    "operation_id": "listAgentCredentials"
+  },
+  {
+    "path": "/orgs/{org}/agents/{slug}/credentials",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "attachAgentCredential"
+  },
+  {
+    "path": "/orgs/{org}/agents/{slug}/credentials/{credential_id}",
+    "methods": [
+      "DELETE"
+    ],
+    "operation_id": "detachAgentCredential"
+  },
+  {
+    "path": "/orgs/{org}/agent-catalogue",
+    "methods": [
+      "GET"
+    ],
+    "operation_id": "listAgentCatalogue"
+  },
+  {
+    "path": "/orgs/{org}/agent-catalogue/{slug}/install",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "installCatalogueAgent"
+  },
+  {
+    "path": "/orgs/{org}/agent-catalogue/{slug}/connect",
+    "methods": [
+      "POST"
+    ],
+    "operation_id": "connectCatalogueClient"
+  }
+]
