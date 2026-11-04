@@ -8,10 +8,10 @@ import {
   useRouter,
   useSearchParams,
 } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SnakeMap } from "@/components/journey/journey-map";
 import { Button, Card, Drawer, Empty, ErrorNote } from "@/components/ui";
-import { Cog, Plus, Users } from "lucide-react";
+import { Cog, Link2, Plus, Users } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useDraft } from "@/components/workflows/draft";
 import { WorkflowMap } from "@/components/workflows/map/workflow-map";
@@ -84,7 +84,16 @@ export default function MapPage() {
     id: string;
   } | null>(null);
   const [flux, setFlux] = useState<Highlight | null>(null);
-  const [drawn, setDrawn] = useState<{ from: string; to: string } | null>(null);
+  // A transition being drawn: dragged in the list view (both ends known), or started with
+  // "Connect to…" from a chosen node (S55-13), the target then picked in the form.
+  const [drawn, setDrawn] = useState<{ from: string; to?: string } | null>(
+    null,
+  );
+  const drawnCard = useRef<HTMLDivElement>(null);
+  // "Connect to…" is reached by the keyboard (ADR 0112 §6): the form it opens takes the focus.
+  useEffect(() => {
+    if (drawn && !drawn.to) drawnCard.current?.querySelector("select")?.focus();
+  }, [drawn]);
   // What the toolbar opened (S55-06): each tool in a drawer, so the graph keeps the width.
   const [tool, setTool] = useState<"step" | "actors" | "settings" | null>(null);
   const { slug, name } = useParams<{ slug: string; name: string }>();
@@ -113,6 +122,13 @@ export default function MapPage() {
   const arete =
     choix?.kind === "edge" ? mapEdge(graph, choix.id) : undefined;
   const steps = draft.process ?? [];
+  // Where "Connect to…" starts (S55-13): the state the step chosen on the diagram leaves, where its
+  // work items wait — "Add a step after this one" already starts from its arrival, and a state chosen
+  // in the list view holds the same form in its own panel. Never from a terminal state.
+  const connectFrom =
+    vue === "diagram" && arete
+      ? noeuds.find((n) => n.id === arete.from && !n.terminal)
+      : undefined;
   const chosenStep = arete
     ? steps.find((e) => e.id === arete.id)
     : undefined;
@@ -229,7 +245,10 @@ export default function MapPage() {
                   process={draft.process ?? []}
                   initial={definition.initial}
                   selected={choix?.kind === "edge" ? choix.id : null}
-                  onSelect={(id) => setChoix({ kind: "edge", id })}
+                  onSelect={(id) => {
+                    setDrawn(null);
+                    setChoix({ kind: "edge", id });
+                  }}
                   highlight={flux}
                   openItems={openItemsByState(activity.data)}
                 />
@@ -239,7 +258,10 @@ export default function MapPage() {
                   process={draft.process}
                   initial={definition.initial}
                   actors={definition.actors}
-                  onSelect={(kind, id) => setChoix({ kind, id })}
+                  onSelect={(kind, id) => {
+                    setDrawn(null);
+                    setChoix({ kind, id });
+                  }}
                   onDraw={(from, to) => {
                     setChoix(null);
                     setDrawn({ from, to });
@@ -261,15 +283,24 @@ export default function MapPage() {
           data-testid="map-panels"
         >
           {drawn && (
-            <Card title={`New transition from ${drawn.from} to ${drawn.to}`}>
-              <StepForm
-                key={`${drawn.from}-${drawn.to}`}
-                from={drawn.from}
-                initialTarget={drawn.to}
-                states={noeuds}
-                actors={acteurs}
-                onDone={() => setDrawn(null)}
-              />
+            <Card
+              title={
+                drawn.to
+                  ? `New transition from ${drawn.from} to ${drawn.to}`
+                  : `New transition from ${drawn.from}`
+              }
+              data-testid="drawn-transition"
+            >
+              <div ref={drawnCard}>
+                <StepForm
+                  key={`${drawn.from}-${drawn.to ?? ""}`}
+                  from={drawn.from}
+                  initialTarget={drawn.to}
+                  states={noeuds}
+                  actors={acteurs}
+                  onDone={() => setDrawn(null)}
+                />
+              </div>
               <button
                 type="button"
                 className="mt-2 text-xs underline"
@@ -278,6 +309,21 @@ export default function MapPage() {
                 Cancel
               </button>
             </Card>
+          )}
+          {connectFrom && drawn?.from !== connectFrom.id && (
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                onClick={() => setDrawn({ from: connectFrom.id })}
+                aria-describedby="connect-from"
+              >
+                <Link2 aria-hidden className="size-4" /> Connect to…
+              </Button>
+              <span id="connect-from" className="text-xs text-ink-muted">
+                A new transition out of{" "}
+                <span data-verbatim>{connectFrom.display}</span>
+              </span>
+            </div>
           )}
           {graphNode && (
             <StatePanel
@@ -368,9 +414,10 @@ export default function MapPage() {
           )}
           {!graphNode && !arete && !drawn && (
             <Empty title="Change a step">
-              Choose a step on the graph to see what it does, change it, or add
-              the step that follows it (click, or Tab then Enter). In the list
-              view, drag a state onto another to draw a new transition.
+              Choose a step on the graph to see what it does, change it, add
+              the step that follows it, or connect it to another state (click,
+              or Tab then Enter). In the list view, drag a state onto another
+              to draw a new transition.
             </Empty>
           )}
         </div>
