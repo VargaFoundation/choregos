@@ -3,7 +3,7 @@
 - **Status**: proposed, 2026-10-26
 - **Concerns**: the contract (`openapi.yaml`: `Org.aliases`, `releaseOrgAlias`), the API
   (`org_slug_aliases`, `services/org_aliases.py`, an ASGI middleware, `routers/projects.py`,
-  `routers/auth.py`, `amorcage.py`, `db/session.py`), the console (redirect); builds on
+  `routers/auth.py`, `bootstrap.py`, `db/session.py`), the console (redirect); builds on
   [ADR 0024](0024-two-editions.md) (editions), [ADR 0026](0026-what-the-core-rls-covers.md) (RLS, identity
   tables) and the memory key of S40-11 (`choregos_core.memory_scope`)
 

@@ -3,7 +3,7 @@
 - **Status**: accepted, 2026-11-02 — S51-06. Extends [ADR 0051](0051-knowledge-bases.md) (bases were made
   by hand only) and [ADR 0093](0093-an-agent-ships-as-a-plugin.md) (a plugin ships what its templates ship)
 - **Concerns**: `template.schema.json` (`defaults.knowledge`), `choregos_api.services.template_knowledge`,
-  `services.installation.installer_ce_que_livre_le_gabarit`, `knowledge.sync.open_source` /
+  `services.installation.install_what_template_delivers`, `knowledge.sync.open_source` /
   `github_app_credential`, `PATCH …/sources/{id}`, `choregos_core.plugins` (`Plugin.warnings`),
   `choregos plugin validate`
 

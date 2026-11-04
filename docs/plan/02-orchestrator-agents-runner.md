@@ -15,7 +15,7 @@
 
 Task queues: `orchestrator` (workflows + light activities), `executor` (creation/tracking of runs), `tracker` (external API calls, rate-limited), `memory`. Workers: `apps/orchestrator/worker.py --queues …`; deployed with 2+ replicas per queue (section 6).
 
-The table that says **which activity goes on which queue** lives in `choregos_orchestrator.repartition`, and the workflows schedule each activity on the declared queue through `workflows.planification.executer_activite`. This detail is not a detail: until 2026-09-27, the table was only read by the worker (to know what it registers) and never by the workflows (to know where to schedule). `workflow.execute_activity` without a `task_queue` schedules on the *workflow's* queue — so everything ran on `orchestrator`, the three specialised workers received nothing, and a network policy written from the declared distribution failed. The four histories in `tests/replay/` carry the trace: 83 activities scheduled, **all** on `orchestrator`.
+The table that says **which activity goes on which queue** lives in `choregos_orchestrator.queues`, and the workflows schedule each activity on the declared queue through `workflows.scheduling.execute_on_its_queue`. This detail is not a detail: until 2026-09-27, the table was only read by the worker (to know what it registers) and never by the workflows (to know where to schedule). `workflow.execute_activity` without a `task_queue` schedules on the *workflow's* queue — so everything ran on `orchestrator`, the three specialised workers received nothing, and a network policy written from the declared distribution failed. The four histories in `tests/replay/` carry the trace: 83 activities scheduled, **all** on `orchestrator`.
 
 ### `WorkflowInterpreter` — algorithm
 
@@ -126,7 +126,7 @@ class WorkflowInterpreter:
         return r.to if self.attempts[t.id] < r.max_attempts else r.escalate_to
 ```
 
-Activities (`apps/orchestrator/activities/`): `mirror_state`, `resolve_model`, `mint_gateway_key`, `collect_spend`, `revoke_key`, `build_context_pack`, `start_run`, `await_run` (with heartbeat and cancellation), `record_run`, `update_ticket_status_comment`, `emit_finding`, `create_human_request`, `notify`, `evaluate_gate`, `signal_train`, `close_out`, `write_run_lesson` (memory). All idempotent by `(run_id|work_item_id, step)`. Temporal retries: network 5× exponential; business errors (`ApplicationError(non_retryable=True)`).
+Activities (`apps/orchestrator/src/choregos_orchestrator/activities/`): `mirror_state`, `resolve_model`, `mint_gateway_key`, `collect_spend`, `revoke_key`, `build_context_pack`, `start_run`, `await_run` (with heartbeat and cancellation), `record_run`, `update_ticket_status_comment`, `emit_finding`, `create_human_request`, `notify`, `evaluate_gate`, `signal_train`, `close_out`, `write_run_lesson` (memory). All idempotent by `(run_id|work_item_id, step)`. Temporal retries: network 5× exponential; business errors (`ApplicationError(non_retryable=True)`).
 
 Human wait: `create_human_request` posts a structured comment on the ticket (and a notification), then `wait_for(HumanDecision)` with timers: reminder at `sla_hours`, then escalation to `escalate_to`. A decision can arrive through the board (card moved), through a `/choregos approve|reject|answer …` comment (parsed by the webhook), through the front end, or through the CLI.
 
@@ -136,7 +136,7 @@ Migration: signal `control(migrate, workflow_def_id)` → the interpreter checks
 
 ## 2.2 The runner (`packages/runner`) — headless ACP client
 
-Image `ghcr.io/vargafoundation/choregos-runner:<version>`: Debian slim + Python 3.12 + `git`, `gh`, `glab`, `jq`, `ripgrep`, the usual test tools (node 22, pnpm, uv, go, java 21 in image variants), scanners (Semgrep, Trivy, gitleaks), **preinstalled ACP agents** (`claude-agent-acp`, `codex-acp`, Gemini CLI, Goose, OpenCode — OpenHands removed, [ADR 0011](../adr/0011-openhands-removed.md)) at versions pinned in `packages/runner/backends/versions.lock`.
+Image `ghcr.io/vargafoundation/choregos-runner:<version>`: Debian slim + Python 3.12 + `git`, `gh`, `glab`, `jq`, `ripgrep`, the usual test tools (node 22, pnpm, uv, go, java 21 in image variants), scanners (Semgrep, Trivy, gitleaks), **preinstalled ACP agents** (`claude-agent-acp`, `codex-acp`, Gemini CLI, Goose, OpenCode — OpenHands removed, [ADR 0011](../adr/0011-openhands-removed.md)) at versions pinned in `packages/runner/src/choregos_runner/backends/versions.lock`.
 
 ### Algorithm
 
@@ -166,7 +166,7 @@ Image `ghcr.io/vargafoundation/choregos-runner:<version>`: Debian slim + Python 
 
 Standardised exits: code 0 (result posted, whatever the `status`), 10 (input not found), 20 (clone impossible), 30 (agent unreachable — broken backend), 40 (invalid result after repairs). Any other code = crash → the `await_run` activity replays once with the same `run_id`.
 
-### Backends (`packages/runner/backends/`)
+### Backends (`packages/runner/src/choregos_runner/backends/`)
 
 | Backend | `launch_spec` | `model_env` | Notes |
 | :-- | :-- | :-- | :-- |
@@ -229,7 +229,7 @@ spec:
       env: [{ name: CHOREGOS_RUN_TOKEN, valueFrom: { secretKeyRef: { name: run-$(params.run-id), key: token } } }]
 ```
 
-The Tekton `Executor` (`packages/adapters/executor/tekton.py`): creates the `Secret run-<id>` (token, TTL) and the `PipelineRun` (Pipeline `choregos-agent` = git-clone → agent-stage, or the Task alone) in `proj-<slug>-runners`, with `runtimeClassName: gvisor` if the policy requires it, `activeDeadlineSeconds`, labels `choregos/run-id`, `choregos/project`; follows it via watch + CloudEvents; retrieves `result-url`; deletes the Secret; lets Tekton Results archive the logs. Chains signs the `PipelineRun`: the provenance of agent commits is verifiable.
+The Tekton `Executor` (`packages/adapters/src/choregos_adapters/executor/tekton.py`): creates the `Secret run-<id>` (token, TTL) and the `PipelineRun` (Pipeline `choregos-agent` = git-clone → agent-stage, or the Task alone) in `proj-<slug>-runners`, with `runtimeClassName: gvisor` if the policy requires it, `activeDeadlineSeconds`, labels `choregos/run-id`, `choregos/project`; follows it via watch + CloudEvents; retrieves `result-url`; deletes the Secret; lets Tekton Results archive the logs. Chains signs the `PipelineRun`: the provenance of agent commits is verifiable.
 
 K8s Job `Executor` (`k8s_job.py`): same image, same contract, `Job` + `ConfigMap` + `Secret`, `ttlSecondsAfterFinished`. ACA `Executor` (`azure_container_apps.py`): phase 6.
 
@@ -260,4 +260,4 @@ Invariants common to all prompts: write `.choregos/result.json` conforming to th
 | `release_notes` | batch | markdown | |
 | `verify_prod` | release, SLO | go/no-go + evidence | read-only |
 
-Evals (in-house, in the style of `claude plugin eval`, `packages/playbooks/evals/runner.py`): fixture cases (toy repositories), rubrics graded by a judge model + deterministic assertions (file created, tests green, valid `result.json`). A minimum score per role blocks the playbooks' CI.
+Evals (in-house, in the style of `claude plugin eval`, `packages/playbooks/src/choregos_playbooks/evals/runner.py`): fixture cases (toy repositories), rubrics graded by a judge model + deterministic assertions (file created, tests green, valid `result.json`). A minimum score per role blocks the playbooks' CI.

@@ -58,7 +58,7 @@ needs no `ci` connector), an agent whose role works in a repository needs an `sc
 train or a production state (`production: true`) needs a `cd`, a transition that opens or merges a
 pull request (`does`) needs an `scm` — and says why for each. An HR project shows
 neither `scm`, nor `ci`, nor `cd`; the settings page lists what is required, what is configured,
-and *add a connector* for the rest. `GET /connectors/types` reads the adapter registry, plugins
+and *add a connector* for the rest. `GET /connectors/types` reads the adapter registry, extensions
 included: each type gives its capabilities, the JSON Schema of its configuration (the console
 draws the form from it) and its **secret fields**.
 
@@ -145,7 +145,7 @@ sets the one gateway the organisation's MCP traffic can go through, from **Admin
 SharePoint, `api_token` of Jira…) is a password input: the value is sealed in the database
 ([ADR 0058](adr/0058-connector-secrets-are-write-only-values.md)) and **never shown again** — the
 console shows `set · rotated 3 d ago by x`, with *Replace* (type a new value) and *Clear*. An
-operator who prefers a vault can instead give a **reference** (`env:NAME`, or a plugin scheme) behind
+operator who prefers a vault can instead give a **reference** (`env:NAME`, or an extension scheme) behind
 *use a reference instead*. The API: `secret_values` on create or update, `PUT|DELETE
 /orgs/{org}/connectors/{name}/secrets/{field}` (the organisation's administrator) and
 `PUT|DELETE /projects/{id}/connectors/{kind}/secrets/{field}` (`connector:write`). If the deployment
@@ -339,7 +339,7 @@ families have **no real type yet**: type `demo` keeps them in memory, each proce
 demonstration, refused in staging and prod: there the console does not offer it, and declaring one
 is a 422. Where the API and the orchestrator are several
 processes, give the `demo` connector a `url`: it then reaches the fakes served by **one** pod
-(`demoFakes.enabled` in the chart, `python -m choregos_adapters.fakes.serveur`), which also serves a
+(`demoFakes.enabled` in the chart, `python -m choregos_adapters.fakes.server`), which also serves a
 fake Microsoft Graph for an `entra` connector whose `graph_url` and `login_url` point to it, and a
 demonstration environment for a `cd: demo` connector (`/cd/mcp`): the release train of a demo
 project promotes, checks and rolls back there, with no Argo CD — refused in staging and prod too. A supplier's agent needs no family: it is an MCP
@@ -1677,8 +1677,8 @@ How people sign in to the instance is on **Administration → Identity** (below)
 
 `/admin/identity` (**Administration → Identity**, S44-04) is the one page about who people are and how
 they sign in: the read-only card *How people sign in to this instance* (platform administrators), then
-every identity section a plugin declares (an `icon` of `fingerprint` or `log-in`: single sign-on,
-directory provisioning), drawn on this page instead of as entries of their own. A plugin block that
+every identity section an extension declares (an `icon` of `fingerprint` or `log-in`: single sign-on,
+directory provisioning), drawn on this page instead of as entries of their own. An extension block that
 reads `/platform/identity` again is not drawn a second time; an old `/admin/x/<section>` link to such
 a section opens this page.
 
@@ -1860,7 +1860,7 @@ canary share). *Publish* saves the next revision; *release* points a channel at 
 | :-- | :-- | :-- |
 | **eval** | the revision's eval suite, run on its instructions (level 1) | saving it: the instructions render and the suite passes |
 | **testing** | served to the projects that follow testing, and to a share of the other projects' work items | the suite passes again, and the revision is newer than production |
-| **production** | what every project that pins nothing runs | the policy's gates, a person with a fresh sign-in, the plugin gesture |
+| **production** | what every project that pins nothing runs | the policy's gates, a person with a fresh sign-in, the extension gesture check |
 
 **What a run loads**, first match wins: `agent: slug@N` in the workflow; the project's fixed pin; the
 project's pin on a channel (`follow production` or `follow testing`); the project's "follow testing"
@@ -1928,7 +1928,7 @@ organisation agents, the project owner for a project agent, the owner for a pers
 owner switches *their project* to follow testing, or pins an agent on a channel, with the right to pin.
 **Releasing to production, or to a canary share above 0, is a person's decision**: it needs a human
 session (an API token gets `403`) with a sign-in less than `step_up_minutes` old (default 10; else
-`401 step_up_required`, and the console re-authenticates, as for governed actions), and the plugin
+`401 step_up_required`, and the console re-authenticates, as for governed actions), and the extension
 gesture check `agent.release`, where an edition can add its own rule. A token may save revisions, send
 one to testing without a share and withdraw the candidate. A personal agent is exempt from the sign-in
 rule and the gesture; an agent whose policy is `on_publish: stable` (the organisation chose "publish is
@@ -3041,7 +3041,7 @@ when the slug is taken) is shown on the card.
 `<org>:<project>`, every MCP address `/mcp/projects/<org>:<project>`, every A2A address
 `/a2a/orgs/<org>`, the CLI profiles that name `--org <slug>`, and the IdP group names
 `choregos:<org>:<group>`). Projects, members, tokens and everything below follow — they hold the
-organisation by its id. A platform administrator granted by an edition plugin can rename an
+organisation by its id. A platform administrator granted by an edition extension can rename an
 organisation they do not belong to (the response then carries no `role`). The old slug is kept as an
 **alias** of the organisation (`aliases` in `GET /orgs` and in the `PATCH` response, ADR 0090), so what
 was copied elsewhere keeps working: `/api/v1/orgs/<old>/…` and `/a2a/orgs/<old>` (the response carries

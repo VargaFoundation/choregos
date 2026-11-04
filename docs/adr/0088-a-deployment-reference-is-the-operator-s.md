@@ -3,7 +3,7 @@
 - **Status**: accepted, 2026-10-26 — implemented by S39-06f; amends
   [ADR 0058](0058-connector-secrets-are-write-only-values.md) §10 (RBAC) and the S39-06b rule that
   an organisation's administrator writes `env:` references
-- **Concerns**: `verifier_les_secrets` (`choregos_api.services.connecteurs`), the connector write
+- **Concerns**: `verify_secrets` (`choregos_api.services.connectors`), the connector write
   routes (organisation, project, MCP catalogue install), `choregos_api.deps.is_instance_admin`
 
 ## Context

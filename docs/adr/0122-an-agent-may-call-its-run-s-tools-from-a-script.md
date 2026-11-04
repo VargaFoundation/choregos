@@ -7,7 +7,7 @@
 - **Concerns**: `policy.schema.json` (a top-level `tools` section), `stage-input.schema.json`
   (`tools.scripts`), `getRunTools` (tool annotations) and `callRunTool` (the origin headers), the
   `choregos.tool.called` event (`origin`, `script_sha256`, `response_bytes`), the runner's local tool server
-  (`choregos_tools_mcp.app`, `choregos_runner.outils_locaux`), a generated client `choregos_tools`, the eval
+  (`choregos_tools_mcp.app`, `choregos_runner.local_tools`), a generated client `choregos_tools`, the eval
   matrix (`workflows/evals.py`, a `tools` dimension); builds on
   [ADR 0004](0004-cost-counted-at-the-gateway.md), [ADR 0010](0010-gates-are-mechanisms.md),
   [ADR 0035](0035-governed-actions-in-the-core.md), [ADR 0055](0055-fewer-tokens-per-run.md),
@@ -42,7 +42,7 @@ What exists today, on `main`:
   `goose`, `opencode`, `copilot-cli`) has a shell inside the run's sandbox: gVisor or Landlock (ADR 0094),
   the egress proxy (ADR 0070), the run's writable roots. A script adds no new runtime and no new pod.
 - **The local tool server is not a boundary.** The runner serves the platform's tools on loopback
-  (`localhost:7777/mcp`, `outils_locaux.py`), and the server asks the caller for nothing
+  (`localhost:7777/mcp`, `local_tools.py`), and the server asks the caller for nothing
   (`choregos_tools_mcp/app.py`). Any process in the sandbox can post a JSON-RPC `tools/call` to it today;
   `NO_PROXY` and the confinement's port set already let it through. Such a call skips the runner's
   permission check, its turn counter and its journal. **The API still governs it in full.**

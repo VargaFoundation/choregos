@@ -3,7 +3,7 @@
 - **Status**: accepted, 2026-11-02. Amends [ADR 0031](0031-several-workflows-per-project.md) §2 (the
   order of birth)
 - **Concerns**: `projects.routing_strategy` and `projects.routing_hints`, `getWorkflowRouting`,
-  `putWorkflowRouting` and `previewWorkflowRouting`, `services/routage.py` (`route`),
+  `putWorkflowRouting` and `previewWorkflowRouting`, `services/routing.py` (`route`),
   `services/llm_routing.py`, the model catalogue's usages, the console's workflows page; related to
   [ADR 0004](0004-cost-counted-at-the-gateway.md), [ADR 0005](0005-adapters-and-fakes.md),
   [ADR 0008](0008-idempotence-and-run-id.md), [ADR 0060](0060-a-gateway-agnostic-model-catalogue.md),

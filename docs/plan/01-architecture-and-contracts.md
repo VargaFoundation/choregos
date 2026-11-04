@@ -97,7 +97,7 @@ Separate repository `VargaFoundation/choregos-infra`: Argo CD app-of-apps bootst
 
 ## 1.3 Data model (PostgreSQL)
 
-Conventions: UUID v7 as primary key, `created_at`/`updated_at` everywhere, `jsonb` for schema-validated documents, Alembic migrations in `apps/api/src/choregos_api/migrations/` (run by `python -m choregos_api.migrer`). All tables carrying project data have `project_id` and are covered by RLS (`SET app.current_org`).
+Conventions: UUID v7 as primary key, `created_at`/`updated_at` everywhere, `jsonb` for schema-validated documents, Alembic migrations in `apps/api/src/choregos_api/migrations/` (run by `python -m choregos_api.migrate`). All tables carrying project data have `project_id` and are covered by RLS (`SET app.current_org`).
 
 | Table | Key columns | Notes |
 | :-- | :-- | :-- |
@@ -156,9 +156,9 @@ defaults: { from_any_agent_state?: { on_question: stateId, on_budget_exceeded: s
 
 Static validation rules (blocking errors): exactly one initial state (the first declared); at least one reachable terminal state; no orphan state; every return transition carries `max_attempts`; every `deployed_prod*` state is reachable only `via: release_train`; the referenced actors exist; the gates exist in the registry; the referenced `profile:` is resolved at pinning time. Warnings: no `needs_human` state, no `verify` before `pr_open`.
 
-Registry gates (`packages/core/gates/`): `ci_green`, `scans_ok`, `evidence_present`, `scope_respected`, `review_approved`, `coverage_delta_min(x)`, `diff_size_max(n)`, `no_secrets`, `provenance_signed`, `external(url)`.
+Registry gates (`packages/core/src/choregos_core/gates/`): `ci_green`, `scans_ok`, `evidence_present`, `scope_respected`, `review_approved`, `coverage_delta_min(x)`, `diff_size_max(n)`, `no_secrets`, `provenance_signed`, `external(url)`.
 
-Delivered templates: `full-auto`, `default-simple`, `advanced` (complete definitions in `packages/core/dsl/templates/`).
+Delivered templates: `full-auto`, `default-simple`, `advanced` (complete definitions in `packages/core/src/choregos_core/dsl/templates/`).
 
 ## 1.5 `StageInput` (orchestrator → runner)
 
@@ -246,7 +246,7 @@ Base `/api/v1`. Auth: OIDC session (cookie) or `Authorization: Bearer <api_token
 
 The front end consumes only this API; the CLI too. The orchestrator does not go through the API for the database (direct access via `packages/core`), but inbound webhooks go through the API, which signals Temporal.
 
-## 1.9 Adapter interfaces (Python `Protocol`, `packages/adapters/base.py`)
+## 1.9 Adapter interfaces (Python `Protocol`, `packages/adapters/src/choregos_adapters/base.py`)
 
 ```python
 class TrackerAdapter(Protocol):
@@ -328,7 +328,7 @@ class Notifier(Protocol):
     async def send(self, channel: str, message: Message) -> None: ...
 ```
 
-Each adapter has an in-memory `Fake*` implementation (`packages/adapters/fakes/`) used by the orchestrator and front-end tests (through the API in `CHOREGOS_FAKES=1` mode): this is what lets the streams work in parallel without waiting for the real connectors.
+Each adapter has an in-memory `Fake*` implementation (`packages/adapters/src/choregos_adapters/fakes/`) used by the orchestrator and front-end tests (through the API in `CHOREGOS_FAKES=1` mode): this is what lets the streams work in parallel without waiting for the real connectors.
 
 ## 1.10 Security of the contracts
 
