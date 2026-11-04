@@ -1,8 +1,8 @@
-# projects/ — écrit par la plateforme, appliqué par Argo CD
+# projects/ — written by the platform, applied by Argo CD
 
-Chaque sous-répertoire est un projet provisionné : namespaces, quotas, NetworkPolicies,
-RBAC du runner, EventListener Tekton et Applications Argo. Le contenu est **généré** par
-l'activité `gitops.write_project_manifests` (voir `apps/orchestrator/gitops.py`), déposé
-par une PR, puis synchronisé par l'`ApplicationSet` voisin.
+Each subdirectory is a provisioned project: namespaces, quotas, NetworkPolicies, the runner's
+RBAC, Tekton EventListener and Argo Applications. The content is **generated** by the
+`gitops.write_project_manifests` activity (see `apps/orchestrator/gitops.py`), dropped by a PR,
+then synchronised by the neighbouring `ApplicationSet`.
 
-Supprimer un projet = supprimer son répertoire : `prune: true` nettoie le cluster.
+Deleting a project = deleting its directory: `prune: true` cleans the cluster.

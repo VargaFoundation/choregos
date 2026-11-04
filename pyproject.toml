@@ -68,16 +68,16 @@ extend-exclude = [
   "apps/web",
   "**/generated/**",
   "apps/api/src/choregos_api/migrations/versions",
-  # Dépôts jouets des évals : ils imitent du code de client, pas notre style maison.
+  # The evals' toy repositories: they imitate customer code, not our house style.
   "tests/fixtures/repos",
 ]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "ASYNC", "S", "RET", "PL", "RUF"]
-# PLC0415 : les imports paresseux sont assumés (rupture de cycles, coût de démarrage).
-# PLR0911 (retours) et PLR0917 (positionnels) restent ignorés ; les autres règles de
-# complexité sont actives avec des seuils réalistes (ci-dessous) — l'état des lieux du
-# 2026-09-24 les trouvait toutes ignorées, et trois fonctions dépassaient largement.
+# PLC0415: lazy imports are deliberate (breaking cycles, start-up cost).
+# PLR0911 (returns) and PLR0917 (positionals) stay ignored; the other complexity rules are
+# active with realistic thresholds (below) — the 2026-09-24 stocktake found them all ignored,
+# and three functions exceeded them by far.
 ignore = ["S101", "PLR2004", "RUF001", "RUF002", "RUF003", "B008", "PLR0911", "SIM108", "PLC0415", "PLR0917"]
 extend-select = ["C901"]
 
@@ -93,24 +93,24 @@ max-statements = 80
 "**/tests/**" = ["S", "PLR", "ASYNC"]
 "tests/**" = ["S", "PLR", "ASYNC"]
 "**/fakes/**" = ["S"]
-# Valeurs par défaut de développement, jamais des secrets réels.
+# Development defaults, never real secrets.
 "apps/api/src/choregos_api/config.py" = ["S105"]
 "apps/api/src/choregos_api/security.py" = ["S105"]
 "apps/api/src/choregos_api/migrations/**" = ["E501", "W291", "I001"]
-# Singletons de moteur/session et de bus : un seul par processus, assumé.
+# Engine/session and bus singletons: one per process, deliberately.
 "apps/api/src/choregos_api/db/session.py" = ["PLW0603"]
 "apps/api/src/choregos_api/temporal.py" = ["PLW0603"]
 "apps/orchestrator/src/choregos_orchestrator/activities/base.py" = ["PLW0603"]
 "apps/orchestrator/src/choregos_orchestrator/train_client.py" = ["PLW0603"]
-# Lecture de fixtures locales dans une activité : I/O disque court et assumé.
+# Reading local fixtures in an activity: short disk I/O, deliberately.
 "apps/orchestrator/src/choregos_orchestrator/activities/evals.py" = ["ASYNC240"]
 "apps/orchestrator/src/choregos_orchestrator/activities/provisioning.py" = ["ASYNC240"]
 # Build-time probe: loopback URLs and a fixed headroom command line, no untrusted input.
 "docker/headroom/relays_budget_refusal.py" = ["S310", "S603", "S607"]
-# Le `timeout` explicite fait partie du contrat de ces fonctions (RPC, sous-processus).
+# The explicit `timeout` is part of these functions' contract (RPC, subprocesses).
 "packages/runner/src/choregos_runner/**" = ["ASYNC109"]
 "packages/adapters/src/choregos_adapters/**" = ["ASYNC109"]
-# Données de démonstration : le hasard n'a rien de cryptographique, et c'est voulu.
+# Demonstration data: the randomness is not cryptographic, on purpose.
 "dev/scripts/seed.py" = ["S311", "E501"]
 
 [tool.ruff.format]
@@ -139,8 +139,8 @@ disallow_untyped_defs = false
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["packages", "apps", "tests"]
-# Les dépôts jouets des évals ont leurs propres tests : ils sont joués par la matrice
-# d'évals dans une copie jetable, pas par la suite de la plateforme.
+# The evals' toy repositories have their own tests: the evals matrix runs them in a throwaway
+# copy, not the platform's suite.
 norecursedirs = [
   "apps/web",
   "tests/live",
@@ -152,12 +152,12 @@ norecursedirs = [
 ]
 addopts = "-q --strict-markers --import-mode=importlib"
 markers = [
-  "integration: nécessite des services externes (kind, docker)",
-  "e2e: scénario bout en bout",
-  "conformance: suite de conformité backends/templates",
-  "slow: test long",
-  "live: nécessite des identifiants réels (Jira, GitLab, Azure) — ignoré sans eux",
-  "cluster: nécessite un vrai cluster Kubernetes (CNI appliquant les NetworkPolicy)",
+  "integration: needs external services (kind, docker)",
+  "e2e: end-to-end scenario",
+  "conformance: backends/templates conformance suite",
+  "slow: long test",
+  "live: needs real credentials (Jira, GitLab, Azure) — skipped without them",
+  "cluster: needs a real Kubernetes cluster (a CNI that enforces NetworkPolicies)",
   "capability(executor, name): this cluster test proves that capability of that executor (S35-04)",
   "buildkit: needs a real buildkitd and a registry (S41-13, the `hosted-build` CI job)",
   "cosign_real: runs the real cosign against a registry (CHOREGOS_COSIGN_REAL_REGISTRY); skipped without them",

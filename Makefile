@@ -1,25 +1,25 @@
-# Choregos — commandes du monorepo (voir AGENTS.md)
+# Choregos — monorepo commands (see AGENTS.md)
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 UV ?= uv
 KIND_CONFIG ?= dev/kind.yaml
-# La version de pnpm est LUE dans `apps/web/package.json`, jamais recopiée. Le commentaire
-# précédent disait déjà « c'est celle de package.json » au-dessus d'un 9.15.0 écrit à la main,
-# resté là quand le dépôt est passé à pnpm 12 : `make web-install` échouait sur « packages field
-# missing or empty », parce que pnpm 9 lit `pnpm-workspace.yaml` comme une définition d'espace de
-# travail là où pnpm 12 y met `allowBuilds`. La CI, elle, ne recopie rien (`package_json_file`),
-# et c'est pour cette raison qu'elle marchait quand le Makefile ne marchait plus.
+# The pnpm version is READ from `apps/web/package.json`, never copied. The previous comment
+# already said "it is the one in package.json" above a hand-written 9.15.0, left behind when the
+# repository moved to pnpm 12: `make web-install` failed on "packages field missing or empty",
+# because pnpm 9 reads `pnpm-workspace.yaml` as a workspace definition where pnpm 12 puts
+# `allowBuilds` in it. CI copies nothing (`package_json_file`), which is why it worked while the
+# Makefile did not.
 PNPM_VERSION ?= $(shell python3 -c "import json;print(json.load(open('apps/web/package.json'))['packageManager'].split('@')[1])")
 PNPM ?= corepack pnpm@$(PNPM_VERSION)
 PY_PATHS := packages apps/api apps/orchestrator tools tests
 
 .PHONY: help
-help:  ## Affiche cette aide
+help:  ## Print this help
 	@grep -hE '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
 
-# ───────────────────────── socle ─────────────────────────
+# ───────────────────────── foundation ─────────────────────────
 .PHONY: setup
-setup:  ## Installe les dépendances (Python + web)
+setup:  ## Install the dependencies (Python + web)
 	$(UV) sync
 	@command -v $(PNPM) >/dev/null 2>&1 || corepack enable pnpm
 	@[ -d apps/web ] && $(PNPM) -C apps/web install --prefer-offline || true
@@ -41,16 +41,16 @@ english-ratchet:  ## Every file at or below its French baseline (ADR 0098)
 	$(UV) run python tools/check_english.py --all
 
 .PHONY: format
-format:  ## Formate le code Python
+format:  ## Format the Python code
 	$(UV) run ruff format $(PY_PATHS)
 	$(UV) run ruff check --fix $(PY_PATHS)
 
 .PHONY: typecheck
-typecheck:  ## mypy --strict sur packages et apps
+typecheck:  ## mypy --strict over packages and apps
 	$(UV) run mypy packages/*/src apps/api/src apps/orchestrator/src tools
 
 .PHONY: test
-test:  ## Tests unitaires
+test:  ## Unit tests
 	$(UV) run pytest -q
 
 .PHONY: test-cov
@@ -58,7 +58,7 @@ test-cov:  ## Tests with coverage over the packages in pyproject's coverage sour
 	$(UV) run pytest --cov --cov-report=term-missing --cov-report=xml -q
 
 .PHONY: contracts
-contracts:  ## Régénère les types depuis packages/contracts (à committer)
+contracts:  ## Regenerate the types from packages/contracts (to commit)
 	$(UV) run python tools/gen_contracts.py
 
 .PHONY: catalogues
@@ -85,7 +85,7 @@ plugins-check:  ## No network: the archives of plugins/offline/ are what plugins
 	$(UV) run python -m tools.plugins.update_lock --check
 
 .PHONY: docs-cli
-docs-cli:  ## Régénère docs/cli.md depuis la CLI (à committer)
+docs-cli:  ## Regenerate docs/cli.md from the CLI (to commit)
 	$(UV) run python tools/gen_cli_reference.py
 
 .PHONY: headroom-lock
@@ -112,7 +112,7 @@ procedures-check:  ## Fails if docs/procedures/ differs from the setup procedure
 	$(UV) run python tools/procedures/export_docs.py --check
 
 .PHONY: contracts-check
-contracts-check:  ## Vérifie que les types générés sont à jour
+contracts-check:  ## Check that the generated types are up to date
 	$(UV) run python tools/gen_contracts.py --check
 
 # ───────────────────────── web ─────────────────────────
@@ -121,48 +121,48 @@ web-install:
 	$(PNPM) -C apps/web install --prefer-offline
 
 .PHONY: web-lint
-web-lint:  ## Lint du front
+web-lint:  ## Front end lint
 	$(PNPM) -C apps/web lint
 
 .PHONY: web-typecheck
-web-typecheck:  ## Typage du front
+web-typecheck:  ## Front end typecheck
 	$(PNPM) -C apps/web typecheck
 
 .PHONY: web-test
-web-test:  ## Tests unitaires du front
+web-test:  ## Front end unit tests
 	$(PNPM) -C apps/web test
 
 .PHONY: web-build
-web-build:  ## Build de production du front
+web-build:  ## Front end production build
 	$(PNPM) -C apps/web build
 
 .PHONY: web-ci
-web-ci: web-lint web-typecheck web-test web-build  ## CI du front
+web-ci: web-lint web-typecheck web-test web-build  ## Front end CI
 
 # ───────────────────────── charts ─────────────────────────
 .PHONY: charts-lint
-charts-lint:  ## helm lint + kubeconform (ignoré si helm absent)
-	@command -v helm >/dev/null 2>&1 || { echo "helm absent — étape ignorée"; exit 0; }
+charts-lint:  ## helm lint + kubeconform (skipped if helm is missing)
+	@command -v helm >/dev/null 2>&1 || { echo "helm is missing — step skipped"; exit 0; }
 	helm lint charts/choregos --set choregos-orchestrator.runner.skipOperatorCheck=true
 	@command -v kubeconform >/dev/null 2>&1 \
 		&& helm template choregos charts/choregos --set choregos-orchestrator.runner.skipOperatorCheck=true | kubeconform -strict -ignore-missing-schemas -summary \
-		|| echo "kubeconform absent — validation de schéma ignorée"
+		|| echo "kubeconform is missing — schema validation skipped"
 
 .PHONY: charts-test
 charts-test:  ## helm unittest
-	@command -v helm >/dev/null 2>&1 || { echo "helm absent — installer Helm >= 3.18"; exit 1; }
-	@# La version du greffon est ÉPINGLÉE, et il faut la vérifier, pas seulement sa présence :
-	@# `|| install` n'installe que s'il n'y en a aucun, donc un vieux greffon restait en place
-	@# et rendait un verdict faux. Constaté le 2026-09-26 : 0.5.1 sur ce poste déclarait rouge
-	@# un test vert en CI (il traite un chemin JSONPath absent comme une erreur). Un test dont
-	@# le verdict dépend du poste ne vaut rien ; mieux vaut refuser de le jouer.
+	@command -v helm >/dev/null 2>&1 || { echo "helm is missing — install Helm >= 3.18"; exit 1; }
+	@# The plugin version is PINNED, and it must be checked, not just its presence:
+	@# `|| install` only installs when there is none, so an old plugin stayed in place
+	@# and gave a wrong verdict. Seen on 2026-09-26: 0.5.1 on this machine reported red
+	@# a test that was green in CI (it treats a missing JSONPath as an error). A test whose
+	@# verdict depends on the machine is worthless; better to refuse to run it.
 	@v=$$(helm plugin list 2>/dev/null | awk '$$1=="unittest"{print $$2}'); \
 	if [ "$$v" != "1.1.2" ]; then \
-	  echo "greffon helm-unittest en « $${v:-absent} », épinglé à 1.1.2."; \
+	  echo "helm-unittest plugin is \"$${v:-missing}\", pinned to 1.1.2."; \
 	  echo "  helm plugin uninstall unittest 2>/dev/null; rm -rf ~/.local/share/helm/plugins/helm-unittest"; \
 	  echo "  helm plugin install https://github.com/helm-unittest/helm-unittest --version v1.1.2"; \
-	  echo "Il exige Helm >= 3.18 (platformHooks dans son plugin.yaml) ; ici : $$(helm version --short)."; \
-	  echo "En attendant, tests/charts/ rend le chart et l'éprouve en Python, sans greffon."; \
+	  echo "It requires Helm >= 3.18 (platformHooks in its plugin.yaml); here: $$(helm version --short)."; \
+	  echo "Meanwhile, tests/charts/ renders the chart and checks it in Python, without the plugin."; \
 	  exit 1; \
 	fi
 	helm unittest charts/choregos
@@ -186,36 +186,36 @@ policies-test:  ## The Kyverno engine judges infra/policies against infra/polici
 	fi
 
 # ───────────────────────── images ─────────────────────────
-# `--target` n'est pas optionnel sur `api.Dockerfile` : sans lui, Docker construit la dernière
-# étape du fichier, qui est `worker`.
+# `--target` is not optional on `api.Dockerfile`: without it, Docker builds the last stage of
+# the file, which is `worker`.
 .PHONY: images
-images:  ## Construit les cinq images de la plateforme en local (tag `:dev`)
+images:  ## Build the platform's five images locally (tag `:dev`)
 	docker build -f docker/api.Dockerfile    --target api    -t choregos-api:dev .
 	docker build -f docker/api.Dockerfile    --target worker -t choregos-orchestrator:dev .
 	docker build -f docker/tools.Dockerfile                  -t choregos-tools:dev .
 	docker build -f docker/web.Dockerfile                    -t choregos-web:dev .
 	docker build -f docker/runner.Dockerfile                 -t choregos-runner:dev .
 
-# Archive les historiques de workflows d'un Temporal joignable (port-forward du banc) pour
-# que `tests/replay` les rejoue en CI. Sans historique, ce test SKIPPE — il l'a fait pendant
-# une semaine sans que personne le voie.
+# Archives the workflow histories of a reachable Temporal (port-forward of the test bench) so
+# that `tests/replay` replays them in CI. Without a history, that test SKIPS — it did so for a
+# week without anyone noticing.
 TEMPORAL_ADDRESS ?= 127.0.0.1:7233
 REPLAY_IDS ?=
 .PHONY: replay-record
-replay-record:  ## Archive des historiques Temporal dans tests/replay/histories (REPLAY_IDS=… ou tous les interpréteurs)
+replay-record:  ## Archive Temporal histories into tests/replay/histories (REPLAY_IDS=… or every interpreter)
 	$(UV) run python tools/replay_record.py --address $(TEMPORAL_ADDRESS) $(if $(REPLAY_IDS),$(REPLAY_IDS),--all-interpreters)
 
-# ───────────────────────── démonstration (kind mono-nœud, vrais agents) ─────────────────────────
-# Le chart de la démonstration attend `local/choregos-*:demo` avec `imagePullPolicy: Never` :
-# les images doivent être construites ICI et chargées dans le nœud kind. Sans cette étape,
-# chaque pod reste en `ErrImageNeverPull` — et c'est ce qui arrivait à quiconque suivait le
-# README avant le 2026-09-24, qui ne la mentionnait pas.
+# ───────────────────────── demonstration (single-node kind, real agents) ─────────────────────────
+# The demonstration chart expects `local/choregos-*:demo` with `imagePullPolicy: Never`:
+# the images must be built HERE and loaded into the kind node. Without this step, every pod
+# stays in `ErrImageNeverPull` — which is what happened to anyone following the README before
+# 2026-09-24, which did not mention it.
 KIND_DEMO ?= choregos-demo
 DEMO_NS ?= choregos
 DEMO_IMAGES := local/choregos-api:demo local/choregos-orchestrator:demo local/choregos-runner:demo local/choregos-web:demo
 
 .PHONY: demo-images
-demo-images:  ## Construit les images de la démonstration et les charge dans le kind `choregos-demo`
+demo-images:  ## Build the demonstration images and load them into the `choregos-demo` kind cluster
 	docker build -f docker/api.Dockerfile    --target api    -t local/choregos-api:demo .
 	docker build -f docker/api.Dockerfile    --target worker -t local/choregos-orchestrator:demo .
 	docker build -f docker/runner.Dockerfile                 -t local/choregos-runner:demo .
@@ -223,19 +223,19 @@ demo-images:  ## Construit les images de la démonstration et les charge dans le
 	kind load docker-image --name $(KIND_DEMO) $(DEMO_IMAGES)
 
 .PHONY: demo-up
-demo-up:  ## Cluster kind (si absent), namespace, dépôt git, ConfigMaps, chart
+demo-up:  ## kind cluster (if missing), namespace, git repository, ConfigMaps, chart
 	kind get clusters | grep -qx $(KIND_DEMO) || kind create cluster --config demo/kind.yaml
 	kubectl get ns $(DEMO_NS) >/dev/null 2>&1 || kubectl create ns $(DEMO_NS)
 	kubectl -n $(DEMO_NS) apply -k demo
 	helm upgrade --install choregos charts/choregos -n $(DEMO_NS) \
 	  -f charts/choregos/values/local.yaml -f demo/values-demo.yaml --wait --timeout 10m
 
-# `SERIE=b` suffixe les clés (`DEMO-1b`, `RH-1b`) : un ticket n'a qu'un interpréteur, rejouer
-# demande de nouveaux tickets. `GATEWAY=direct` pour un banc sans clé de fournisseur.
+# `SERIE=b` suffixes the keys (`DEMO-1b`, `RH-1b`): a ticket has only one interpreter, so a
+# replay needs new tickets. `GATEWAY=direct` for a bench without a provider key.
 SERIE ?=
 GATEWAY ?= litellm
 .PHONY: demo-seed
-demo-seed:  ## Pose (ou complète) les projets et les tickets, et démarre chaque ticket
+demo-seed:  ## Lay down (or complete) the projects and tickets, and start each ticket
 	kubectl -n $(DEMO_NS) apply -k demo
 	kubectl -n $(DEMO_NS) delete job demo-seed --ignore-not-found
 	sed -e 's/__SERIE__/$(SERIE)/' -e 's/__GATEWAY__/$(GATEWAY)/' demo/manifests/seed-job.yaml | kubectl -n $(DEMO_NS) apply -f -
@@ -243,7 +243,7 @@ demo-seed:  ## Pose (ou complète) les projets et les tickets, et démarre chaqu
 	kubectl -n $(DEMO_NS) logs job/demo-seed
 
 .PHONY: demo-status
-demo-status:  ## Où en sont les tickets, les runs et le registre de coûts
+demo-status:  ## Where the tickets, the runs and the cost ledger stand
 	@kubectl -n $(DEMO_NS) get pods -l choregos/run-id 2>/dev/null || true
 	@kubectl -n $(DEMO_NS) exec choregos-postgresql-0 -- sh -c 'psql -U "$${POSTGRES_USER:-choregos}" -d "$${POSTGRES_DB:-choregos}" \
 	  -c "select tracker_key, state from work_items order by 1" \
@@ -251,19 +251,19 @@ demo-status:  ## Où en sont les tickets, les runs et le registre de coûts
 
 # ───────────────────────── dev ─────────────────────────
 .PHONY: dev-up
-dev-up:  ## Cluster kind + plateforme + Tilt
+dev-up:  ## kind cluster + platform + Tilt
 	dev/scripts/dev-up.sh
 
 .PHONY: dev-down
-dev-down:  ## Détruit le cluster de dev
+dev-down:  ## Destroy the dev cluster
 	dev/scripts/dev-down.sh
 
 .PHONY: dev-seed
-dev-seed:  ## Org, projet démo, tickets, train
+dev-seed:  ## Org, demo project, tickets, train
 	$(UV) run python dev/scripts/seed.py
 
 .PHONY: compose-up
-compose-up:  ## Dépendances en docker compose (sans Kubernetes)
+compose-up:  ## Dependencies in docker compose (no Kubernetes)
 	docker compose -f dev/compose.yaml up -d
 
 .PHONY: compose-down
@@ -271,7 +271,7 @@ compose-down:
 	docker compose -f dev/compose.yaml down -v
 
 .PHONY: demo
-demo:  ## Scénario bout en bout en mémoire (fakes, sans cluster)
+demo:  ## End-to-end scenario in memory (fakes, no cluster)
 	CHOREGOS_FAKES=1 $(UV) run python -m choregos_orchestrator.demo
 
 .PHONY: demo-investment
@@ -279,41 +279,41 @@ demo-investment:  ## Investment campaigns on fakes with the real runner and engi
 	$(UV) run python -m pytest -q -p no:warnings tests/e2e/test_m7_investment.py
 
 .PHONY: api
-api:  ## Lance l'API en local (fakes)
+api:  ## Run the API locally (fakes)
 	CHOREGOS_FAKES=1 $(UV) run uvicorn choregos_api.main:app --reload --port 8000
 
 .PHONY: worker
-worker:  ## Lance les workers Temporal
+worker:  ## Run the Temporal workers
 	$(UV) run python -m choregos_orchestrator.worker --queues orchestrator,executor,tracker,memory
 
 .PHONY: mock-api
-mock-api:  ## Sert l'API mockée depuis l'OpenAPI (Prism)
+mock-api:  ## Serve the mocked API from the OpenAPI (Prism)
 	npx --yes @stoplight/prism-cli mock packages/contracts/openapi.yaml -p 4010
 
-# ───────────────────────── e2e & évals ─────────────────────────
+# ───────────────────────── e2e & evals ─────────────────────────
 .PHONY: e2e
-e2e:  ## Scénarios bout en bout (kind requis)
+e2e:  ## End-to-end scenarios (kind required)
 	$(UV) run pytest tests/e2e -m e2e -q
 
 .PHONY: cluster-up
-cluster-up:  ## Cluster kind dédié aux tests (Calico : les NetworkPolicy sont appliquées)
-	@command -v kind >/dev/null || { echo "✗ kind est requis (voir docs/development.md)"; exit 1; }
+cluster-up:  ## kind cluster dedicated to tests (Calico: NetworkPolicies are enforced)
+	@command -v kind >/dev/null || { echo "✗ kind is required (see docs/development.md)"; exit 1; }
 	kind create cluster --config $(KIND_CONFIG) --wait 180s || true
 	kubectl --context kind-choregos apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.28.2/manifests/calico.yaml
-	@echo "· attente du CNI…"
+	@echo "· waiting for the CNI…"
 	kubectl --context kind-choregos -n kube-system rollout status ds/calico-node --timeout=300s
-	@echo "✓ cluster prêt — CHOREGOS_CLUSTER_CONTEXT=kind-choregos make test-cluster"
+	@echo "✓ cluster ready — CHOREGOS_CLUSTER_CONTEXT=kind-choregos make test-cluster"
 
 .PHONY: cluster-gvisor
 cluster-gvisor:  ## gVisor in the test cluster's runners node and the `gvisor` RuntimeClass (S41-17), after cluster-up
 	dev/scripts/gvisor.sh kind
 
 .PHONY: cluster-down
-cluster-down:  ## Détruit le cluster de test
+cluster-down:  ## Destroy the test cluster
 	kind delete cluster --name choregos
 
 .PHONY: test-cluster
-test-cluster:  ## Tests qui exigent un vrai cluster (S2-12, S7-04, S8-06)
+test-cluster:  ## Tests that need a real cluster (S2-12, S7-04, S8-06)
 	CHOREGOS_CLUSTER_CONTEXT=$${CHOREGOS_CLUSTER_CONTEXT:-kind-choregos} \
 	  $(UV) run pytest tests/cluster -m cluster -q
 
@@ -324,11 +324,11 @@ test-live-local:  ## A work item through a REAL model on the local install (key 
 	python3 tools/local_install_check.py --expect-real --stage-timeout 900
 
 .PHONY: test-live
-test-live:  ## Tests contre les vrais services (identifiants dans l'environnement)
+test-live:  ## Tests against the real services (credentials in the environment)
 	$(UV) run pytest tests/live -m live -q
 
 .PHONY: conformance
-conformance:  ## Suites de conformité (backends ACP, templates)
+conformance:  ## Conformance suites (ACP backends, templates)
 	$(UV) run pytest tests/conformance -m conformance -q
 
 .PHONY: conformance-agent
@@ -355,6 +355,6 @@ evals:  ## Evals of the playbooks and of the catalogue agents
 	$(UV) run python -m choregos_core.agent_catalogue.evals --all
 
 .PHONY: clean
-clean:  ## Nettoie les artefacts locaux
+clean:  ## Clean the local artefacts
 	rm -rf .pytest_cache .mypy_cache .ruff_cache htmlcov coverage.xml
 	find . -name __pycache__ -type d -prune -exec rm -rf {} +

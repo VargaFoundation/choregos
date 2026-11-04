@@ -1,18 +1,18 @@
-# API Choregos **et** workers Temporal : un seul fichier, deux cibles.
+# Choregos API **and** Temporal workers: one file, two targets.
 #
-# Les deux images portent exactement le même jeu de dépendances et le même code — le worker
-# n'est que l'API avec une autre commande. Les séparer en deux Dockerfiles avait un coût réel :
-# `orchestrator.Dockerfile` partait de `choregos-api:latest`, c'est-à-dire d'une image qui
-# n'existe pas au premier build et qui, ensuite, vient du commit **précédent** — les workers
-# auraient embarqué le code d'hier sans que rien ne le signale. Deux cibles (`--target api`,
-# `--target worker`) d'un même build règlent les deux.
+# The two images carry exactly the same dependencies and the same code — the worker is just the
+# API with another command. Splitting them into two Dockerfiles had a real cost:
+# `orchestrator.Dockerfile` started from `choregos-api:latest`, that is, from an image that does
+# not exist at the first build and that afterwards comes from the **previous** commit — the
+# workers would have shipped yesterday's code without anything saying so. Two targets
+# (`--target api`, `--target worker`) of one build settle both.
 FROM python:3.12-slim-bookworm AS builder
 
 ENV UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 UV_PYTHON_DOWNLOADS=never
 COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv
 WORKDIR /app
 
-# Les métadonnées d'abord : le cache de dépendances survit aux changements de code.
+# The metadata first: the dependency cache survives code changes.
 COPY pyproject.toml uv.lock README.md ./
 COPY packages/contracts/pyproject.toml packages/contracts/
 COPY packages/core/pyproject.toml packages/core/
@@ -23,29 +23,29 @@ COPY packages/playbooks/pyproject.toml packages/playbooks/
 COPY packages/cli/pyproject.toml packages/cli/
 COPY apps/api/pyproject.toml apps/api/
 COPY apps/orchestrator/pyproject.toml apps/orchestrator/
-# `/bin/sh` n'étend pas les accolades : elles créaient un répertoire nommé littéralement
-# `packages/{contracts,core,…}`, que uv prenait ensuite pour un membre de l'espace de travail
-# sans `pyproject.toml`.
+# `/bin/sh` does not expand braces: they created a directory literally named
+# `packages/{contracts,core,…}`, which uv then took for a workspace member without a
+# `pyproject.toml`.
 RUN for p in contracts core adapters runner tools-mcp playbooks cli; do mkdir -p "packages/$p/src"; done \
  && for a in api orchestrator; do mkdir -p "apps/$a/src"; done
 
 COPY packages packages
 COPY apps/api apps/api
 COPY apps/orchestrator apps/orchestrator
-# Les templates de projet (manifest, scaffold) : le provisioning les lit à l'exécution.
-# Ils manquaient à l'image — `provisioning.py` cherchait `/app/templates` qui n'existait
-# pas, et aucun projet à template ne pouvait être provisionné depuis un pod (état des
-# lieux du 2026-09-24, P1-4).
+# The project templates (manifest, scaffold): provisioning reads them at run time.
+# The image lacked them — `provisioning.py` looked for `/app/templates`, which did not exist,
+# and no project with a template could be provisioned from a pod (stocktake of 2026-09-24,
+# P1-4).
 COPY templates templates
 # The eval matrix's reference tickets and toy repositories (S12-01): `activities/evals.py` reads
 # them from `/app/tests/fixtures`. The image did not carry them, and a live matrix on dev played
 # nothing and published four empty cells (S37-13).
 COPY tests/fixtures/tickets tests/fixtures/tickets
 COPY tests/fixtures/repos tests/fixtures/repos
-# `uv sync` n'accepte qu'un seul `--package` : deux occurrences font échouer la construction
-# ("the argument '--package <PACKAGE>' cannot be used multiple times"). La cible `worker`
-# partage ce builder, donc il doit porter les deux applications — on synchronise l'espace de
-# travail entier, qui les contient et rien de plus lourd.
+# `uv sync` accepts only one `--package`: two occurrences fail the build
+# ("the argument '--package <PACKAGE>' cannot be used multiple times"). The `worker` target
+# shares this builder, so it must carry both applications — the whole workspace is synced,
+# which holds them and nothing heavier.
 # The agent SDK (a package for agent authors: openai, the ACP SDK) is not something the API or the
 # workers run: it stays out of the image.
 RUN uv sync --frozen --no-dev --all-packages --no-install-package choregos-agent-sdk
@@ -106,17 +106,17 @@ RUN set -eu; \
     echo "${sum}  /out/cosign" | sha256sum -c -; \
     chmod 0755 /out/cosign
 
-# Socle commun aux deux cibles : rien qui décide de ce que le conteneur fait.
+# Base common to both targets (stage `commun`): nothing that decides what the container does.
 FROM python:3.12-slim-bookworm AS commun
-# `PIP_PYTHON` : l'image de l'édition entreprise est construite FROM celle-ci et y ajoute sa roue
-# (ADR 0024). Le venv, créé par uv, n'a pas de `pip` ; celui du PATH est celui du système. Sans
-# cette ligne, `pip install --no-deps choregos_ee-*.whl` réussit, pose la roue dans `~/.local`,
-# hors du venv — l'image se construit, démarre, et tourne en `community` sans rien dire. Essayé
-# sur `choregos-api:0.8.3` le 2026-09-28 ; `tests/packaging/test_image_ee.py` le garde.  # lang: fr-ok
+# `PIP_PYTHON`: the enterprise edition's image is built FROM this one and adds its wheel
+# (ADR 0024). The venv, created by uv, has no `pip`; the one on the PATH is the system's. Without
+# this line, `pip install --no-deps choregos_ee-*.whl` succeeds and drops the wheel in `~/.local`,
+# outside the venv — the image builds, starts, and runs as `community` without a word. Tried
+# on `choregos-api:0.8.3` on 2026-09-28; `tests/packaging/test_image_ee.py` guards it.
 ENV PYTHONUNBUFFERED=1 PATH="/app/.venv/bin:$PATH" PIP_PYTHON=/app/.venv/bin/python
-# Les correctifs de sécurité de Debian, appliqués à la construction : l'image de base (une étiquette,
-# reconstruite à son rythme) peut porter un paquet déjà corrigé dans `bookworm-security` — perl-base
-# 5.36.0-7+deb12u3 et ses trois CRITICAL ont arrêté la release 0.16.0 au scan Trivy.
+# Debian's security fixes, applied at build time: the base image (a tag, rebuilt at its own pace)
+# can carry a package already fixed in `bookworm-security` — perl-base 5.36.0-7+deb12u3 and its
+# three CRITICALs stopped release 0.16.0 at the Trivy scan.
 RUN apt-get update && apt-get upgrade -y --no-install-recommends \
  && apt-get install -y --no-install-recommends ca-certificates tini \
  && rm -rf /var/lib/apt/lists/* \
@@ -138,7 +138,7 @@ ENV CHOREGOS_BUILD_REVISION=$REVISION
 USER 1000
 ENTRYPOINT ["/usr/bin/tini", "--"]
 
-# --- Cible `api` : le service HTTP.
+# --- Target `api`: the HTTP service.
 FROM commun AS api
 # `cosign`: publication verifies a hosted agent's image signature on its digest (S41-14, ADR 0080
 # §8). The same release as the `hosted-cosign` CI job, fetched and checked in the `cosign` stage above.
@@ -160,12 +160,12 @@ FROM commun AS worker-local
 COPY --from=docker:28.5.1-cli /usr/local/bin/docker /usr/local/bin/docker
 CMD ["python", "-m", "choregos_orchestrator.worker", "--queues", "orchestrator,executor,tracker,memory"]
 
-# --- Cible `worker` : les workers Temporal.
+# --- Target `worker`: the Temporal workers.
 #
-# Ni `EXPOSE` ni `HEALTHCHECK` : un worker n'écoute sur rien. L'ancienne image héritait de la
-# sonde de l'API et interrogeait un port 8000 que personne ne servait — le conteneur se
-# déclarait `unhealthy` en permanence, et tout ce qui lit ce drapeau (docker, compose, un
-# ordonnanceur qui n'utilise pas les sondes Kubernetes) le croyait.
+# Neither `EXPOSE` nor `HEALTHCHECK`: a worker listens on nothing. The old image inherited the
+# API's probe and queried a port 8000 nobody served — the container declared itself `unhealthy`
+# permanently, and everything that reads that flag (docker, compose, a scheduler that does not
+# use Kubernetes probes) believed it.
 FROM commun AS worker
 # `git`: a knowledge base synced from a repository fetches it here (S33-04, ADR 0051).
 USER root

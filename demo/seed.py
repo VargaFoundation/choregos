@@ -15,7 +15,7 @@ import os
 import pathlib
 import sys
 
-RACINE = pathlib.Path(__file__).resolve().parent
+ROOT = pathlib.Path(__file__).resolve().parent
 
 # Two ways of giving the agents a model, chosen by DEMO_GATEWAY:
 #
@@ -27,17 +27,17 @@ RACINE = pathlib.Path(__file__).resolve().parent
 #   `agent-creds`). It talks to the provider DIRECTLY, so the name must be the model's
 #   identifier at the provider (`claude-sonnet-5`), not the prefixed form LiteLLM expects
 #   for routing. Nothing is counted, nothing is capped beyond turns and minutes.
-PASSERELLE = os.environ.get("DEMO_GATEWAY", "litellm")
-if PASSERELLE not in {"litellm", "direct"}:
-    raise SystemExit(f"DEMO_GATEWAY={PASSERELLE!r}: expected `litellm` or `direct`")
-MODELES = (
+GATEWAY = os.environ.get("DEMO_GATEWAY", "litellm")
+if GATEWAY not in {"litellm", "direct"}:
+    raise SystemExit(f"DEMO_GATEWAY={GATEWAY!r}: expected `litellm` or `direct`")
+MODELS = (
     {
         "standard": "platform/standard",
         "strong": "platform/strong",
         "cheap": "platform/cheap",
         "by_size": "platform/standard",
     }
-    if PASSERELLE == "litellm"
+    if GATEWAY == "litellm"
     else {
         "standard": "claude-sonnet-5",
         "strong": "claude-sonnet-5",
@@ -47,22 +47,22 @@ MODELES = (
 )
 # A ticket has only one interpreter (Temporal refuses a finished id): replaying the
 # demonstration takes NEW tickets. `DEMO_SERIE=b` suffixes the keys (`DEMO-1b`).
-SERIE = os.environ.get("DEMO_SERIE", "")
+SERIES = os.environ.get("DEMO_SERIE", "")
 
 
-def chemin_workflow(nom: str) -> pathlib.Path:
-    """`demo/workflows/<nom>` locally, `<nom>` flat when a ConfigMap mounts them."""
-    for candidat in (RACINE / "workflows" / nom, RACINE / nom):
-        if candidat.exists():
-            return candidat
-    raise FileNotFoundError(f"workflow not found: {nom}")
+def workflow_path(name: str) -> pathlib.Path:
+    """`demo/workflows/<name>` locally, `<name>` flat when a ConfigMap mounts them."""
+    for candidate in (ROOT / "workflows" / name, ROOT / name):
+        if candidate.exists():
+            return candidate
+    raise FileNotFoundError(f"workflow not found: {name}")
 
 
-PROJETS = {
+PROJECTS = {
     "panier": {
-        "nom": "Cart (software demo)",
+        "name": "Cart (software demo)",
         "workflow": "demo-code.yaml",
-        "etat_initial": "inbox",
+        "initial_state": "inbox",
         "config": {
             "slug": "panier",
             "org": "demo",
@@ -72,17 +72,17 @@ PROJETS = {
                 "default_branch": "main",
                 "language": "python",
             },
-            "models": {"profiles": MODELES},
+            "models": {"profiles": MODELS},
         },
         # Connectors are separate rows (table `connectors`), not configuration.
         # `fake` for the tracker and the SCM: no GitHub on a bench. The rest is real.
-        "connecteurs": {
+        "connectors": {
             "tracker": ("internal", {}),
             "scm": ("fake", {}),
             "ci": ("fake", {}),
             "cd": ("fake", {}),
             "runtime": ("k8s_job", {}),
-            "gateway": (PASSERELLE, {}),
+            "gateway": (GATEWAY, {}),
             "memory": ("ecphoria", {}),
             "notify": ("fake", {}),
         },
@@ -111,9 +111,9 @@ PROJETS = {
         ],
     },
     "staffing": {
-        "nom": "Staffing (business demo)",
+        "name": "Staffing (business demo)",
         "workflow": "staffing.yaml",
-        "etat_initial": "demande",
+        "initial_state": "demande",
         "config": {
             "slug": "staffing",
             "org": "demo",
@@ -121,15 +121,15 @@ PROJETS = {
             # is no longer obliged to declare one (ADR 0012, limit no. 1 — lifted). The agent
             # works in an empty directory: nothing to clone, nothing to push, and the
             # guarantees that read a diff refuse because they have nothing to read.
-            "models": {"profiles": MODELES},
+            "models": {"profiles": MODELS},
         },
-        "connecteurs": {
+        "connectors": {
             "tracker": ("internal", {}),
             "scm": ("fake", {}),
             "ci": ("fake", {}),
             "cd": ("fake", {}),
             "runtime": ("k8s_job", {}),
-            "gateway": (PASSERELLE, {}),
+            "gateway": (GATEWAY, {}),
             "memory": ("ecphoria", {}),
             "notify": ("fake", {}),
         },
@@ -170,96 +170,98 @@ async def main() -> int:
             session.add(org)
             await session.flush()
 
-        for slug, spec in PROJETS.items():
-            projet = (await session.execute(select(Project).where(Project.slug == slug))).scalar_one_or_none()
-            if projet is None:
-                projet = Project(
+        for slug, spec in PROJECTS.items():
+            project = (
+                await session.execute(select(Project).where(Project.slug == slug))
+            ).scalar_one_or_none()
+            if project is None:
+                project = Project(
                     org_id=org.id,
                     slug=slug,
-                    name=spec["nom"],
+                    name=spec["name"],
                     status="active",
                     config=spec["config"],
                 )
-                session.add(projet)
+                session.add(project)
                 await session.flush()
                 print(f"project {slug} created")
             else:
-                projet.config = spec["config"]
+                project.config = spec["config"]
                 print(f"project {slug} updated")
 
-            for kind, (type_, config) in spec["connecteurs"].items():
-                ligne = (
+            for kind, (type_, config) in spec["connectors"].items():
+                row = (
                     await session.execute(
-                        select(Connector).where(Connector.project_id == projet.id, Connector.kind == kind)
+                        select(Connector).where(Connector.project_id == project.id, Connector.kind == kind)
                     )
                 ).scalar_one_or_none()
-                if ligne is None:
+                if row is None:
                     session.add(
-                        Connector(project_id=projet.id, kind=kind, type=type_, config=config, status="ok")
+                        Connector(project_id=project.id, kind=kind, type=type_, config=config, status="ok")
                     )
                 else:
-                    ligne.type, ligne.config = type_, config
+                    row.type, row.config = type_, config
             await session.flush()
 
-            source = chemin_workflow(str(spec["workflow"])).read_text(encoding="utf-8")
-            workflow, rapport = parse_workflow(source, strict=False)
-            if not rapport.valid:
-                print(f"invalid workflow for {slug}: {rapport.errors}", file=sys.stderr)
+            source = workflow_path(str(spec["workflow"])).read_text(encoding="utf-8")
+            workflow, report = parse_workflow(source, strict=False)
+            if not report.valid:
+                print(f"invalid workflow for {slug}: {report.errors}", file=sys.stderr)
                 return 1
             # The project first gets its defaults (policy, the product's workflow), then
             # THIS workflow is installed in their place — which is what `PUT /workflow` does.
-            await ensure_defaults(session, projet)
-            for ancien in (
+            await ensure_defaults(session, project)
+            for previous in (
                 await session.execute(
                     select(WorkflowDef).where(
-                        WorkflowDef.project_id == projet.id, WorkflowDef.is_active.is_(True)
+                        WorkflowDef.project_id == project.id, WorkflowDef.is_active.is_(True)
                     )
                 )
             ).scalars():
-                ancien.is_active = False
+                previous.is_active = False
             # Replayable: (project, name, version) is unique. The existing one is updated
             # rather than a second inserted — otherwise a second run breaks on the
             # constraint, and the script would stop being replayable.
-            defini = (
+            definition = (
                 await session.execute(
                     select(WorkflowDef).where(
-                        WorkflowDef.project_id == projet.id,
+                        WorkflowDef.project_id == project.id,
                         WorkflowDef.name == workflow.metadata.name,
                         WorkflowDef.version == workflow.metadata.version,
                     )
                 )
             ).scalar_one_or_none()
             document = workflow.model_dump(mode="json", by_alias=True, exclude_none=True)
-            if defini is None:
-                defini = WorkflowDef(
-                    project_id=projet.id,
+            if definition is None:
+                definition = WorkflowDef(
+                    project_id=project.id,
                     name=workflow.metadata.name,
                     version=workflow.metadata.version,
-                    source="projet",
+                    source="projet",  # lang: fr-ok persisted value, read back by the API
                 )
-                session.add(defini)
-            defini.yaml = source
-            defini.json_doc = document
-            defini.checksum = checksum(workflow)
-            defini.is_active = True
+                session.add(definition)
+            definition.yaml = source
+            definition.json_doc = document
+            definition.checksum = checksum(workflow)
+            definition.is_active = True
             await session.flush()
 
-            for cle_de_base, titre, corps, taille in spec["tickets"]:
-                cle = f"{cle_de_base}{SERIE}"
-                deja = (
-                    await session.execute(select(WorkItem).where(WorkItem.tracker_key == cle))
+            for base_key, title, body, size in spec["tickets"]:
+                key = f"{base_key}{SERIES}"
+                existing = (
+                    await session.execute(select(WorkItem).where(WorkItem.tracker_key == key))
                 ).scalar_one_or_none()
-                if deja is not None:
-                    print(f"  ticket {cle} already there ({deja.state})")
+                if existing is not None:
+                    print(f"  ticket {key} already there ({existing.state})")
                     continue
                 session.add(
                     WorkItem(
-                        project_id=projet.id,
-                        tracker_key=cle,
-                        title=titre,
-                        body_snapshot=corps,
-                        state=spec["etat_initial"],
-                        size=taille,
+                        project_id=project.id,
+                        tracker_key=key,
+                        title=title,
+                        body_snapshot=body,
+                        state=spec["initial_state"],
+                        size=size,
                         # A scope of PATHS only makes sense where there are project
                         # files. The seed used to impose it on every ticket, HR included:
                         # the HR agent, in its empty directory, stopped on "src/ and tests/
@@ -268,13 +270,13 @@ async def main() -> int:
                         allowed_paths=["src/**", "tests/**"] if spec["config"].get("repo") else [],
                     )
                 )
-                print(f"  ticket {cle} created")
-    if "--demarrer" in sys.argv:
-        await demarrer()
+                print(f"  ticket {key} created")
+    if "--start" in sys.argv:
+        await start_tickets()
     return 0
 
 
-async def demarrer() -> None:
+async def start_tickets() -> None:
     """Starts each ticket's interpreter — what `mark_agent_ready` does in the API.
 
     A ticket put in the database does not move by itself: it is a Temporal workflow, one per
@@ -290,19 +292,19 @@ async def demarrer() -> None:
         rows = (
             await session.execute(select(WorkItem, Project).join(Project, Project.id == WorkItem.project_id))
         ).all()
-        for item, projet in rows:
+        for item, project in rows:
             if item.temporal_wf_id:
                 print(f"  {item.tracker_key} already started")
                 continue
-            workflow_id = interpreter_id(projet.slug, item.tracker_key)
-            charge = {
-                "project_id": projet.id,
-                "project_slug": projet.slug,
+            workflow_id = interpreter_id(project.slug, item.tracker_key)
+            payload = {
+                "project_id": project.id,
+                "project_slug": project.slug,
                 "work_item_id": item.id,
                 "tracker_key": item.tracker_key,
             }
             try:
-                await get_temporal().start_interpreter(workflow_id, charge)
+                await get_temporal().start_interpreter(workflow_id, payload)
                 print(f"  {item.tracker_key} started ({workflow_id})")
             except Exception as exc:
                 # A workflow of that name is already running: a ticket has only one

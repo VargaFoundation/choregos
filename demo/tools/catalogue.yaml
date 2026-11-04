@@ -18,7 +18,7 @@
 #       headers: { Authorization: "Bearer {{ credential }}" }
 #     credential_env: ANNUAIRE_API_KEY   # the NAME of the variable, never the key
 #     price_eur: 0.02
-outils:
+tools:
   - name: verifier_adresse
     description: >-
       Normalises a French postal address and returns its official form, its postcode and its

@@ -85,7 +85,7 @@ something new. A directory that updates itself is not an access control.
 - The MCP sidecar mixes catalogue tools with its own: the agent sees them as ordinary
   tools. An unreachable catalogue does not deprive it of `report_finding` and the others.
 - `global.toolCatalog` in the chart: a ConfigMap for the catalogue, a Secret for the keys.
-- `demo/outils/catalogue.yaml` holds **one** real, keyless tool — the French government's
+- `demo/tools/catalogue.yaml` holds **one** real, keyless tool — the French government's
   Adresse API — so the chain can be shown without asking anyone for an account.
 - A migration adds `cost_ledger.kind`, with a `server_default`: autogeneration produced a
   `NOT NULL` column without default, which PostgreSQL refuses on a populated table.

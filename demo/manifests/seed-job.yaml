@@ -15,7 +15,7 @@ spec:
           image: local/choregos-api:demo
           imagePullPolicy: Never
           workingDir: /app
-          command: ["python", "/demo/seed.py", "--demarrer"]
+          command: ["python", "/demo/seed.py", "--start"]
           env:
             - { name: CHOREGOS_ENV, value: dev }
             # `litellm` (default): the projects go through the embedded gateway, one key per

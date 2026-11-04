@@ -1,5 +1,5 @@
-# Image de base Python de la plateforme : dépendances système, utilisateur non-root, uv.
-# Publiée sous `ghcr.io/vargafoundation/choregos-python-base`.
+# The platform's Python base image: system dependencies, non-root user, uv.
+# Published as `ghcr.io/vargafoundation/choregos-python-base`.
 FROM python:3.12-slim-bookworm AS base
 
 ENV PYTHONUNBUFFERED=1 \
@@ -8,9 +8,9 @@ ENV PYTHONUNBUFFERED=1 \
     UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=1
 
-# Les correctifs de sécurité de Debian, appliqués à la construction : l'image de base (une étiquette,
-# reconstruite à son rythme) peut porter un paquet déjà corrigé dans `bookworm-security` — perl-base
-# 5.36.0-7+deb12u3 et ses trois CRITICAL ont arrêté la release 0.16.0 au scan Trivy.
+# Debian's security fixes, applied at build time: the base image (a tag, rebuilt at its own pace)
+# can carry a package already fixed in `bookworm-security` — perl-base 5.36.0-7+deb12u3 and its
+# three CRITICALs stopped release 0.16.0 at the Trivy scan.
 RUN apt-get update && apt-get upgrade -y --no-install-recommends \
  && apt-get install -y --no-install-recommends \
       ca-certificates curl git tini \

@@ -1,4 +1,4 @@
-# Équivalent just du Makefile (mêmes cibles)
+# The just equivalent of the Makefile (same targets)
 set shell := ["bash", "-uc"]
 
 default: help

@@ -1,5 +1,5 @@
-# gVisor sur le pool `runners` : le shim est installé par un DaemonSet, la RuntimeClass
-# est déclarée pour que les PipelineRun des projets puissent l'exiger.
+# gVisor on the `runners` pool: the shim is installed by a DaemonSet, the RuntimeClass
+# is declared so that the projects' PipelineRuns can require it.
 apiVersion: node.k8s.io/v1
 kind: RuntimeClass
 metadata:

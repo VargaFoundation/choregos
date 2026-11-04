@@ -1,4 +1,4 @@
-# Le seul manifeste appliqué à la main. Il déclare Argo CD comme propriétaire du reste.
+# The only manifest applied by hand. It declares Argo CD as the owner of the rest.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

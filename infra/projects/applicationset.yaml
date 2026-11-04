@@ -1,5 +1,5 @@
-# Un projet provisionné = un répertoire dans `projects/`. L'ApplicationSet fait le reste :
-# création, synchronisation, et `prune` propre à la suppression du répertoire.
+# A provisioned project = a directory in `projects/`. The ApplicationSet does the rest:
+# creation, synchronisation, and a clean `prune` when the directory is deleted.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:

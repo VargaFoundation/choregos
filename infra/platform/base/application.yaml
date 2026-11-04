@@ -1,4 +1,4 @@
-# La plateforme elle-même, déployée par Argo CD depuis le monorepo.
+# The platform itself, deployed by Argo CD from the monorepo.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

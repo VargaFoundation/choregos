@@ -1,4 +1,4 @@
-# git-cliff : le changelog d'une release, depuis les commits conventionnels (en français).
+# git-cliff: a release's changelog, from the conventional commits (in English).
 [changelog]
 header = ""
 body = """
@@ -15,9 +15,9 @@ trim = true
 conventional_commits = true
 filter_unconventional = true
 commit_parsers = [
-  { message = "^feat", group = "<!-- 0 -->Nouveautés" },
-  { message = "^fix", group = "<!-- 1 -->Corrections" },
-  { message = "^contract", group = "<!-- 2 -->Contrats" },
+  { message = "^feat", group = "<!-- 0 -->Features" },
+  { message = "^fix", group = "<!-- 1 -->Fixes" },
+  { message = "^contract", group = "<!-- 2 -->Contracts" },
   { message = "^docs", group = "<!-- 3 -->Documentation" },
   { message = "^(chore|ci|build|refactor|style|test|perf)", skip = true },
 ]

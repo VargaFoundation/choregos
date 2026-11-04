@@ -472,7 +472,7 @@ The tool catalogue declares third-party capabilities the platform uses **on beha
 agent, with the provider credential staying server-side. Two kinds of entry:
 
 ```yaml
-outils:
+tools:
   # A plain HTTP API.
   - name: verifier_adresse
     description: Normalises a French postal address.
@@ -565,7 +565,10 @@ catalogue does not stop the API from starting.
 A project declares what it calls in its own configuration (`tools: [verifier_adresse]`, or
 `["*"]` for everything it is entitled to) and which groups it belongs to (`groups: [rh]`).
 Both default to empty, which means **no tools at all**. See [ADR 0014](adr/0014-a-platform-held-tool-catalogue.md)
-and `demo/outils/catalogue.yaml` for a working example that needs no key at all.
+and `demo/tools/catalogue.yaml` for a working example that needs no key at all.
+
+The catalogue's top-level key is `tools:`. The former `outils:` key still loads, with a warning, until
+0.23.0; rename it in your own catalogue before then.
 
 ## Network access: the egress allowlist and its ceiling
 

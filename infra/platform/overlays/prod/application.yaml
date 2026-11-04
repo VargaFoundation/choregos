@@ -18,8 +18,8 @@ spec:
   syncPolicy:
     automated: { prune: true, selfHeal: false }
     syncOptions: [CreateNamespace=true, ServerSideApply=true]
-  # En production, la synchronisation automatique est désactivée : c'est le release train
-  # de la plateforme qui promeut, après approbation d'un release captain (dogfooding).
+  # In production, automatic sync is disabled: it is the platform's release train that
+  # promotes, after a release captain's approval (dogfooding).
   syncWindows:
     - kind: allow
       schedule: "0 9-17 * * 1-4"
