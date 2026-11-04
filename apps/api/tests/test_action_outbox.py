@@ -21,14 +21,14 @@ EFFECTS = [{"effect": "test.noop", "with": {}}]
 
 @pytest.fixture(autouse=True)
 def noop_effect() -> Iterator[None]:
-    from choregos_api import effets
+    from choregos_api import effects
 
     async def noop(_ctx: Any, _params: dict[str, Any]) -> dict[str, Any]:
         return {}
 
-    effets.declarer_un_effet("test.noop", noop)
+    effects.declare_effect("test.noop", noop)
     yield
-    effets.reinitialiser()
+    effects.reset()
 
 
 async def _proposed(client: AsyncClient, app: Any, pid: str, count: int = 1) -> list[str]:

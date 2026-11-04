@@ -56,7 +56,7 @@ async def test_a_trial_runs_the_draft_capped_and_off_the_board(
 ) -> None:
     from choregos_api.temporal import get_temporal
 
-    essai = await client.post(
+    trial = await client.post(
         "/api/v1/orgs/varga/agent-trials",
         json={
             "project": "billing-api",
@@ -65,22 +65,22 @@ async def test_a_trial_runs_the_draft_capped_and_off_the_board(
             "budget_usd": 2.0,
         },
     )
-    assert essai.status_code == 201, essai.text
-    corps = essai.json()
-    assert corps["budget_usd"] == pytest.approx(0.5), "a trial never spends more than 0.50 $"
-    assert corps["run_id"] == f"{corps['work_item_id']}-trial-1"
-    assert corps["evals"] == [{"name": "vip", "passed": True, "missing": [], "forbidden": [], "error": None}]
-    demarre = get_temporal().started[f"trial-{corps['work_item_id']}"]  # type: ignore[attr-defined]
-    assert demarre["budget_usd"] == pytest.approx(0.5)
-    assert demarre["spec"]["instructions"] == "Escalate {{ ticket.title }}."
-    assert demarre["project_id"] == project["id"]
+    assert trial.status_code == 201, trial.text
+    body = trial.json()
+    assert body["budget_usd"] == pytest.approx(0.5), "a trial never spends more than 0.50 $"
+    assert body["run_id"] == f"{body['work_item_id']}-trial-1"
+    assert body["evals"] == [{"name": "vip", "passed": True, "missing": [], "forbidden": [], "error": None}]
+    started = get_temporal().started[f"trial-{body['work_item_id']}"]  # type: ignore[attr-defined]
+    assert started["budget_usd"] == pytest.approx(0.5)
+    assert started["spec"]["instructions"] == "Escalate {{ ticket.title }}."
+    assert started["project_id"] == project["id"]
     # The trial's work item is off the board, and readable as such.
-    liste = (await client.get(f"/api/v1/projects/{project['id']}/work-items")).json()["items"]
-    assert corps["work_item_id"] not in {w["id"] for w in liste}
-    essais = (
+    listing = (await client.get(f"/api/v1/projects/{project['id']}/work-items")).json()["items"]
+    assert body["work_item_id"] not in {w["id"] for w in listing}
+    trials = (
         await client.get(f"/api/v1/projects/{project['id']}/work-items", params={"state": "trial"})
     ).json()
-    assert [w["id"] for w in essais["items"]] == [corps["work_item_id"]]
+    assert [w["id"] for w in trials["items"]] == [body["work_item_id"]]
 
 
 async def test_a_trial_s_draft_must_render(client: AsyncClient, project: dict[str, Any]) -> None:

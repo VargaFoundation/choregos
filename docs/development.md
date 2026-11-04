@@ -505,7 +505,7 @@ Three hooks in `choregos_api.edition`, next to the group mapper:
   the path for a gate that requires a fresh authentication. Sessions issued before 0.10.0 have no
   `iat` and read as too old.
 
-`apps/api/tests/test_coutures_identite.py` proves each with an extension installed for real.
+`apps/api/tests/test_identity_seams.py` proves each with an extension installed for real.
 
 ## Refusing a human gesture from an extension
 
@@ -526,7 +526,7 @@ def register_extension() -> None:
 
 The nature picks the answer: `forbidden` → 403, `conflict` → 409, `reauth` → 401 pointing at
 `/api/v1/auth/login?reauth=1`. A check can only refuse more than the core; an exception other
-than `GestureRefused` propagates. `apps/api/tests/test_controle_des_gestes.py` proves the three routes.
+than `GestureRefused` propagates. `apps/api/tests/test_gesture_checks.py` proves the three routes.
 
 ## Running the API suite on PostgreSQL
 

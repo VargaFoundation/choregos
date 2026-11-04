@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Les coutures d'identité : révoquer une session, désigner un administrateur de plateforme,
-exiger une authentification fraîche — chacune éprouvée par un greffon INSTALLÉ.
+"""The identity seams: revoking a session, designating a platform administrator, demanding a fresh
+authentication, each proved by an INSTALLED extension.
 
-Le greffon est un vrai module avec son `.dist-info` ; `create_app()` le charge comme au démarrage.
+The extension is a real module with its `.dist-info`; `create_app()` loads it as at start-up.
 """
 
 from __future__ import annotations
@@ -21,50 +21,50 @@ from httpx import ASGITransport, AsyncClient, Response
 from .kits.identity_seams import connect, state_of
 
 
-async def test_la_session_porte_son_heure_d_authentification(extended_client: AsyncClient) -> None:
-    avant = int(time.time())
+async def test_the_session_carries_its_authentication_time(extended_client: AsyncClient) -> None:
+    before = int(time.time())
     await connect(extended_client, "admin@varga.dev")
     assert (await extended_client.get("/api/v1/me")).status_code == 200
     (payload,) = state_of()["seen"]
-    assert avant <= payload["iat"] <= int(time.time())
+    assert before <= payload["iat"] <= int(time.time())
 
 
-async def test_une_session_revoquee_est_refusee_a_la_requete_suivante(extended_client: AsyncClient) -> None:
+async def test_a_revoked_session_is_refused_on_the_next_request(extended_client: AsyncClient) -> None:
     await connect(extended_client, "admin@varga.dev")
     assert (await extended_client.get("/api/v1/me")).status_code == 200
     state_of()["revoked"].add("admin@varga.dev")
-    refus = await extended_client.get("/api/v1/me")
-    assert refus.status_code == 401
-    assert "session revoked by the administrator" in refus.text
+    refused = await extended_client.get("/api/v1/me")
+    assert refused.status_code == 401
+    assert "session revoked by the administrator" in refused.text
 
 
-async def test_une_validation_en_panne_ne_vaut_pas_acceptation(extended_client: AsyncClient) -> None:
+async def test_a_validation_that_is_down_does_not_count_as_acceptance(extended_client: AsyncClient) -> None:
     await connect(extended_client, "admin@varga.dev")
     state_of()["outage"] = True
     # Since S26-02 the failure is answered as a problem+json 500 rather than propagated: still a refusal.
-    reponse = await extended_client.get("/api/v1/me")
-    assert reponse.status_code == 500
-    assert reponse.headers["content-type"].startswith("application/problem+json")
+    response = await extended_client.get("/api/v1/me")
+    assert response.status_code == 500
+    assert response.headers["content-type"].startswith("application/problem+json")
 
 
-async def test_un_greffon_accorde_l_administration_de_la_plateforme_sans_la_retirer(
+async def test_an_extension_grants_platform_administration_without_withdrawing_it(
     extended_client: AsyncClient,
 ) -> None:
-    """Deux organisations : la règle du cœur (admin de TOUTES) refuse le chef de `varga` seul ; le
-    greffon peut l'accorder à quelqu'un d'autre, sans retirer le droit à qui le cœur le donne."""
+    """Two organisations: the core's rule (admin of ALL) refuses the head of `varga` alone; the
+    extension can grant it to someone else, without withdrawing the right from whom the core gives it."""
     from choregos_api.db.models import Membership, Organization, User
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
     await connect(extended_client, "admin@varga.dev")
-    # Une seconde organisation, posée en base : l'édition communautaire refuse de la créer par l'API.
+    # A second organisation, put in the database: the community edition refuses to create it through the API.
     async with session_scope(orgs="*") as session:
-        seconde = Organization(slug="seconde", name="S")
-        session.add(seconde)
+        second = Organization(slug="second", name="S")
+        session.add(second)
         await session.flush()
         admin = (await session.execute(select(User).where(User.email == "admin@varga.dev"))).scalar_one()
-        session.add(Membership(user_id=admin.id, org_id=seconde.id, role="org_admin"))
-    # L'admin administre les deux : le cœur le lui accorde, greffon ou pas.
+        session.add(Membership(user_id=admin.id, org_id=second.id, role="org_admin"))
+    # The admin administers both: the core grants it, extension or not.
     assert (await extended_client.get("/api/v1/platform/gateway/keys")).status_code == 200
 
     await connect(extended_client, "ops@varga.dev")
@@ -76,16 +76,16 @@ async def test_un_greffon_accorde_l_administration_de_la_plateforme_sans_la_reti
 ISSUER = "https://idp.example.test/realms/x"
 
 
-async def test_reauth_demande_a_l_idp_de_re_authentifier(
+async def test_reauth_asks_the_idp_to_authenticate_again(
     extended_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from choregos_api.config import reset_settings_cache
-    from choregos_api.routers.auth import oublier_la_decouverte
+    from choregos_api.routers.auth import forget_discovery
 
     monkeypatch.setenv("CHOREGOS_DEV_LOGIN_ENABLED", "false")
     monkeypatch.setenv("CHOREGOS_OIDC_ISSUER", ISSUER)
     reset_settings_cache()
-    oublier_la_decouverte()
+    forget_discovery()
     try:
         with respx.mock(assert_all_called=False) as mock:
             mock.get(f"{ISSUER}/.well-known/openid-configuration").mock(
@@ -99,31 +99,31 @@ async def test_reauth_demande_a_l_idp_de_re_authentifier(
                     },
                 )
             )
-            ordinaire = parse_qs(
+            ordinary = parse_qs(
                 urlparse((await extended_client.get("/api/v1/auth/login")).headers["location"]).query
             )
-            assert "prompt" not in ordinaire and "max_age" not in ordinaire
-            frais = await extended_client.get("/api/v1/auth/login", params={"reauth": "1"})
-            query = parse_qs(urlparse(frais.headers["location"]).query)
+            assert "prompt" not in ordinary and "max_age" not in ordinary
+            fresh = await extended_client.get("/api/v1/auth/login", params={"reauth": "1"})
+            query = parse_qs(urlparse(fresh.headers["location"]).query)
             assert query["prompt"] == ["login"] and query["max_age"] == ["0"]
     finally:
         reset_settings_cache()
-        oublier_la_decouverte()
+        forget_discovery()
 
 
-GREFFON_SAML = '''
+SAML_EXTENSION = '''
 from fastapi import APIRouter
 
 from choregos_api.deps import Db
-from choregos_api.greffons import declarer_un_routeur
-from choregos_api.routers.auth import terminer_la_connexion
+from choregos_api.extensions import declare_router
+from choregos_api.routers.auth import terminer_la_connexion  # lang: fr-ok
 
-routeur = APIRouter()
+router = APIRouter()
 
 
-@routeur.post("/greffon/acs")
+@router.post("/extension/acs")
 async def acs(session: Db, cible: str = "/"):
-    """Comme un service SAML, APRÈS avoir vérifié l'assertion (ici : rien à vérifier)."""
+    """Like a SAML service, AFTER verifying the assertion (here: nothing to verify)."""
     return await terminer_la_connexion(
         session,
         email="marie@varga.dev",
@@ -135,27 +135,27 @@ async def acs(session: Db, cible: str = "/"):
     )
 
 
-def brancher():
-    declarer_un_routeur(routeur)
+def plug_in():
+    declare_router(router)
 '''
 
 
 @pytest.fixture
-async def client_saml(tmp_path: pathlib.Path) -> AsyncIterator[AsyncClient]:
-    from choregos_api.greffons import reinitialiser
+async def saml_client(tmp_path: pathlib.Path) -> AsyncIterator[AsyncClient]:
+    from choregos_api.extensions import reset
 
-    racine = tmp_path / "site-saml"
-    racine.mkdir()
-    (racine / "greffon_saml.py").write_text(GREFFON_SAML, encoding="utf-8")
-    info = racine / "greffon_saml-0.1.0.dist-info"
+    root = tmp_path / "site-saml"
+    root.mkdir()
+    (root / "extension_saml.py").write_text(SAML_EXTENSION, encoding="utf-8")
+    info = root / "extension_saml-0.1.0.dist-info"
     info.mkdir()
     (info / "METADATA").write_text(
-        "Metadata-Version: 2.1\nName: greffon_saml\nVersion: 0.1.0\n", encoding="utf-8"
+        "Metadata-Version: 2.1\nName: extension_saml\nVersion: 0.1.0\n", encoding="utf-8"
     )
     (info / "entry_points.txt").write_text(
-        "[choregos.plugins]\ngreffon_saml = greffon_saml:brancher\n", encoding="utf-8"
+        "[choregos.plugins]\nextension_saml = extension_saml:plug_in\n", encoding="utf-8"
     )
-    sys.path.insert(0, str(racine))
+    sys.path.insert(0, str(root))
     os.environ["CHOREGOS_DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_path}/saml.db"
     from choregos_api.config import reset_settings_cache
     from choregos_api.db import session as db_session
@@ -175,29 +175,29 @@ async def client_saml(tmp_path: pathlib.Path) -> AsyncIterator[AsyncClient]:
     finally:
         await db_session.dispose_engine()
         reset_settings_cache()
-        sys.path.remove(str(racine))
-        sys.modules.pop("greffon_saml", None)
-        reinitialiser()
+        sys.path.remove(str(root))
+        sys.modules.pop("extension_saml", None)
+        reset()
 
 
-async def test_un_autre_protocole_ouvre_une_session_exactement_comme_oidc(client_saml: AsyncClient) -> None:
+async def test_another_protocol_opens_a_session_exactly_like_oidc(saml_client: AsyncClient) -> None:
     from choregos_api.db.models import AuditLog
     from choregos_api.db.session import session_scope
     from choregos_api.security import read_session
     from sqlalchemy import select
 
-    reponse = await client_saml.post("/api/v1/greffon/acs", params={"cible": "https://evil.example/vol"})
-    assert reponse.status_code == 307
-    # La cible est bornée comme pour OIDC : pas de redirection ouverte par ce chemin.
-    assert not reponse.headers["location"].startswith("https://evil.example")
-    cookie = client_saml.cookies.get("choregos_session")
-    assert cookie, "aucune session posée"
-    charge = read_session(cookie)
-    assert charge is not None and isinstance(charge.get("iat"), int)
+    response = await saml_client.post("/api/v1/extension/acs", params={"cible": "https://evil.example/theft"})
+    assert response.status_code == 307
+    # The target is bounded as for OIDC: no open redirect through this path.
+    assert not response.headers["location"].startswith("https://evil.example")
+    cookie = saml_client.cookies.get("choregos_session")
+    assert cookie, "no session set"
+    payload = read_session(cookie)
+    assert payload is not None and isinstance(payload.get("iat"), int)
 
-    moi = (await client_saml.get("/api/v1/me")).json()
-    assert moi["email"] == "marie@varga.dev"
-    assert {(m["org"], m["role"]) for m in moi["memberships"]} == {("varga", "org_admin")}
+    me = (await saml_client.get("/api/v1/me")).json()
+    assert me["email"] == "marie@varga.dev"
+    assert {(m["org"], m["role"]) for m in me["memberships"]} == {("varga", "org_admin")}
     async with session_scope(orgs="*") as session:
-        (trace,) = (await session.execute(select(AuditLog).where(AuditLog.action == "auth.login"))).scalars()
-    assert trace.payload == {"canal": "saml"}
+        (trail,) = (await session.execute(select(AuditLog).where(AuditLog.action == "auth.login"))).scalars()
+    assert trail.payload == {"canal": "saml"}

@@ -142,7 +142,7 @@ def test_the_mapping_is_the_offline_plugins() -> None:
     """The migration writes its mapping out; it must be what the shipped plugins hold."""
     import importlib.util
 
-    from choregos_core.catalogue_d_agents import catalogue
+    from choregos_core.agent_catalogue import catalogue
 
     path = next(
         (API / "src" / "choregos_api" / "migrations" / "versions").glob(

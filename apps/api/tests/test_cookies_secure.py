@@ -13,17 +13,17 @@ from httpx import AsyncClient
 from .conftest import login
 
 
-def _flags(reponse_headers: list[str], nom: str) -> str:
-    lignes = [h for h in reponse_headers if h.startswith(f"{nom}=")]
-    assert len(lignes) == 1, f"expected one Set-Cookie for {nom}, got {reponse_headers}"
-    return lignes[0].lower()
+def _flags(response_headers: list[str], name: str) -> str:
+    lines = [h for h in response_headers if h.startswith(f"{name}=")]
+    assert len(lines) == 1, f"expected one Set-Cookie for {name}, got {response_headers}"
+    return lines[0].lower()
 
 
 def _settings(monkeypatch: pytest.MonkeyPatch, **env: str) -> None:
     from choregos_api.config import reset_settings_cache
 
-    for cle, valeur in env.items():
-        monkeypatch.setenv(f"CHOREGOS_{cle.upper()}", valeur)
+    for key, value in env.items():
+        monkeypatch.setenv(f"CHOREGOS_{key.upper()}", value)
     reset_settings_cache()
 
 
@@ -43,8 +43,8 @@ def test_cookies_secure_follows_the_url_and_the_environment(
 ) -> None:
     from choregos_api.config import Settings
 
-    reglages = Settings(env=env, public_url=public_url, api_url=api_url, dev_login_enabled=False)  # type: ignore[arg-type]
-    assert reglages.cookies_secure is secure
+    settings_obj = Settings(env=env, public_url=public_url, api_url=api_url, dev_login_enabled=False)  # type: ignore[arg-type]
+    assert settings_obj.cookies_secure is secure
 
 
 async def test_over_https_in_dev_both_cookies_are_secure(
@@ -57,20 +57,20 @@ async def test_over_https_in_dev_both_cookies_are_secure(
     )
     # a browser returns a Secure cookie over https only
     client.base_url = "https://agentic.dev.example.test"
-    debut = await client.get("/api/v1/auth/login", params={"as": "admin@varga.dev"})
-    assert debut.status_code == 307, debut.text
-    assert "secure" in _flags(debut.headers.get_list("set-cookie"), "choregos_oidc")
-    fin = await client.get(debut.headers["location"])
-    assert fin.status_code == 307, fin.text
-    assert "secure" in _flags(fin.headers.get_list("set-cookie"), "choregos_session")
+    start = await client.get("/api/v1/auth/login", params={"as": "admin@varga.dev"})
+    assert start.status_code == 307, start.text
+    assert "secure" in _flags(start.headers.get_list("set-cookie"), "choregos_oidc")
+    end = await client.get(start.headers["location"])
+    assert end.status_code == 307, end.text
+    assert "secure" in _flags(end.headers.get_list("set-cookie"), "choregos_session")
 
 
 async def test_over_http_in_dev_cookies_stay_usable_on_a_bench(
     client: AsyncClient, org: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _settings(monkeypatch, public_url="http://localhost:3000", api_url="http://localhost:8000")
-    debut = await client.get("/api/v1/auth/login", params={"as": "admin@varga.dev"})
-    assert "secure" not in _flags(debut.headers.get_list("set-cookie"), "choregos_oidc")
-    fin = await client.get(debut.headers["location"])
-    assert "secure" not in _flags(fin.headers.get_list("set-cookie"), "choregos_session")
+    start = await client.get("/api/v1/auth/login", params={"as": "admin@varga.dev"})
+    assert "secure" not in _flags(start.headers.get_list("set-cookie"), "choregos_oidc")
+    end = await client.get(start.headers["location"])
+    assert "secure" not in _flags(end.headers.get_list("set-cookie"), "choregos_session")
     await login(client, "admin@varga.dev")

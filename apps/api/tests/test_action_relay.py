@@ -29,7 +29,7 @@ TASK_QUEUE = "choregos-relay-test"
 @pytest.fixture(autouse=True)
 def noop_effect() -> Iterator[list[str]]:
     """The calls of the action's one effect: what the world outside saw, once or more."""
-    from choregos_api import effets
+    from choregos_api import effects
 
     calls: list[str] = []
 
@@ -37,9 +37,9 @@ def noop_effect() -> Iterator[list[str]]:
         calls.append(str(ctx.action.id))
         return {}
 
-    effets.declarer_un_effet("test.noop", noop)
+    effects.declare_effect("test.noop", noop)
     yield calls
-    effets.reinitialiser()
+    effects.reset()
 
 
 @pytest.fixture
@@ -166,14 +166,14 @@ async def test_the_relay_starts_one_run_on_a_real_temporal(
 def workers(temporal_server: Any) -> Any:
     """The orchestrator's workers on the test queue, one per queue as the chart deploys them."""
     from choregos_orchestrator.activities import ALL_ACTIVITIES
-    from choregos_orchestrator.testing import workers_repartis
+    from choregos_orchestrator.testing import workers_by_queue
     from choregos_orchestrator.workflows import ALL_WORKFLOWS, WORKFLOW_ACTIVITIES
 
-    return workers_repartis(
+    return workers_by_queue(
         temporal_server.client,
-        activites=[*ALL_ACTIVITIES, *WORKFLOW_ACTIVITIES],
+        activities=[*ALL_ACTIVITIES, *WORKFLOW_ACTIVITIES],
         workflows=ALL_WORKFLOWS,
-        file_du_workflow=TASK_QUEUE,
+        workflow_queue=TASK_QUEUE,
     )
 
 

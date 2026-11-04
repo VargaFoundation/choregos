@@ -64,7 +64,7 @@ a success response for a lost write. The tests did not see it, because
 `ASGITransport` waits for the application to finish before returning the response.
 
 Fix in the branch: `Depends(get_db, scope="function")`, which commits the transaction before
-sending. The test `apps/api/tests/test_commit_avant_la_reponse.py` calls the ASGI application
+sending. The test `apps/api/tests/test_commit_before_the_answer.py` calls the ASGI application
 directly and checks the order of events; without the fix, it fails. A `finding` issue
 opened for the main line.
 

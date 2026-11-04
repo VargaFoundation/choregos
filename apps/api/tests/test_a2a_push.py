@@ -61,7 +61,7 @@ async def _happen(task_id: str, state: str | None = None) -> str:
     so that it also reaches that project's streams (S40-23j); with `state`, the item moved first."""
     from choregos_api.db.models import Project, WorkItem
     from choregos_api.db.session import session_scope
-    from choregos_api.services.evenements import persist_event
+    from choregos_api.services.events import persist_event
     from choregos_contracts import EventType
 
     async with session_scope(orgs="*") as session:

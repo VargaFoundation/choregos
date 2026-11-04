@@ -18,43 +18,43 @@ from httpx import AsyncClient
 from .test_migrations import _config
 
 
-def _insert(connexion: Any, table: str, **values: Any) -> None:
+def _insert(connection: Any, table: str, **values: Any) -> None:
     """Inserts a row, filling every other NOT NULL column with a dummy: the backfill reads only
     the columns it joins on."""
-    colonnes = sa.inspect(connexion).get_columns(table)
-    ligne = dict(values)
-    for colonne in colonnes:
-        nom = colonne["name"]
-        if nom in ligne or colonne["nullable"] or colonne.get("default") is not None:
+    columns = sa.inspect(connection).get_columns(table)
+    row = dict(values)
+    for column in columns:
+        name = column["name"]
+        if name in row or column["nullable"] or column.get("default") is not None:
             continue
-        genre = colonne["type"]
-        if isinstance(genre, sa.Boolean):
-            ligne[nom] = 0
-        elif isinstance(genre, sa.Integer | sa.Float):
-            ligne[nom] = 1
-        elif isinstance(genre, sa.DateTime):
-            ligne[nom] = "2026-10-01 00:00:00"
-        elif isinstance(genre, sa.JSON):
-            ligne[nom] = "{}"
+        kind = column["type"]
+        if isinstance(kind, sa.Boolean):
+            row[name] = 0
+        elif isinstance(kind, sa.Integer | sa.Float):
+            row[name] = 1
+        elif isinstance(kind, sa.DateTime):
+            row[name] = "2026-10-01 00:00:00"
+        elif isinstance(kind, sa.JSON):
+            row[name] = "{}"
         else:
-            ligne[nom] = f"x-{table}-{nom}"[:30]
-    cles = ", ".join(ligne)
-    marques = ", ".join(f":{k}" for k in ligne)
-    connexion.execute(sa.text(f"INSERT INTO {table} ({cles}) VALUES ({marques})"), ligne)
+            row[name] = f"x-{table}-{name}"[:30]
+    keys = ", ".join(row)
+    marks = ", ".join(f":{k}" for k in row)
+    connection.execute(sa.text(f"INSERT INTO {table} ({keys}) VALUES ({marks})"), row)
 
 
 def test_the_migration_backfills_a_seeded_ledger(tmp_path: pathlib.Path) -> None:
-    fichier = tmp_path / "backfill.db"
-    url = f"sqlite:///{fichier}"
+    file = tmp_path / "backfill.db"
+    url = f"sqlite:///{file}"
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{fichier}")
+    monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{file}")
     get_settings.cache_clear()
     try:
         config = _config(url)
         command.upgrade(config, "a3c5e7f9b1d2")
-        moteur = sa.create_engine(url)
+        engine = sa.create_engine(url)
         ts = "2026-10-01 00:00:00"
-        with moteur.begin() as c:
+        with engine.begin() as c:
             _insert(c, "organizations", id="org1", slug="o", name="O")
             _insert(c, "projects", id="p1", org_id="org1", slug="p", name="P")
             _insert(c, "workflow_defs", id="wd1", project_id="p1", name="delivery", version=3, yaml="y")
@@ -73,8 +73,8 @@ def test_the_migration_backfills_a_seeded_ledger(tmp_path: pathlib.Path) -> None
             _insert(c, "cost_ledger", id="l2", project_id="p1", work_item_id="wi2", ts=ts)
             _insert(c, "cost_ledger", id="l3", project_id="p1", ts=ts)
         command.upgrade(config, "head")
-        with moteur.connect() as c:
-            lignes = {
+        with engine.connect() as c:
+            rows = {
                 r[0]: tuple(r[1:])
                 for r in c.execute(
                     sa.text(
@@ -86,9 +86,9 @@ def test_the_migration_backfills_a_seeded_ledger(tmp_path: pathlib.Path) -> None
     finally:
         monkeypatch.undo()
         get_settings.cache_clear()
-    assert lignes["l1"] == ("reviewer", 2, "delivery", 3), "agent from the run, workflow from the work item"
-    assert lignes["l2"] == (None, None, None, None), "a work item pinned to no definition stays empty"
-    assert lignes["l3"] == (None, None, None, None), "no run, no item: nothing to say"
+    assert rows["l1"] == ("reviewer", 2, "delivery", 3), "agent from the run, workflow from the work item"
+    assert rows["l2"] == (None, None, None, None), "a work item pinned to no definition stays empty"
+    assert rows["l3"] == (None, None, None, None), "no run, no item: nothing to say"
 
 
 async def test_a_run_s_ledger_lines_carry_its_agent_and_workflow(
@@ -96,7 +96,7 @@ async def test_a_run_s_ledger_lines_carry_its_agent_and_workflow(
 ) -> None:
     from choregos_api.db.models import CostLedger, Run, WorkflowDef, WorkItem
     from choregos_api.db.session import session_scope
-    from choregos_api.services.couts import record_cost
+    from choregos_api.services.costs import record_cost
     from sqlalchemy import select
 
     async with session_scope() as session:
@@ -140,6 +140,6 @@ async def test_a_run_s_ledger_lines_carry_its_agent_and_workflow(
             fx_rate=0.9,
         )
         await session.flush()
-        ligne = (await session.execute(select(CostLedger))).scalar_one()
-        assert (ligne.agent_slug, ligne.agent_version) == ("coordinator", 4)
-        assert (ligne.workflow_name, ligne.workflow_version) == (definition.name, definition.version)
+        row = (await session.execute(select(CostLedger))).scalar_one()
+        assert (row.agent_slug, row.agent_version) == ("coordinator", 4)
+        assert (row.workflow_name, row.workflow_version) == (definition.name, definition.version)

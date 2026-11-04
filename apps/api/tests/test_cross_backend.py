@@ -1,4 +1,4 @@
-"""Mesure de la revue croisée : un autre backend attrape-t-il davantage ? (S13-03)"""
+"""Cross-review measurement: does another backend catch more? (S13-03)"""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ async def _review(
     reviewer: str,
     caught: bool,
 ) -> None:
-    """Un ticket implémenté par `implementer`, relu par `reviewer`, avec ou sans trouvaille."""
+    """A work item implemented by `implementer`, reviewed by `reviewer`, with or without a finding."""
     from choregos_api.db.models import Finding, Run, WorkItem
     from choregos_api.db.session import session_scope
 
@@ -63,7 +63,9 @@ async def _review(
             )
 
 
-async def test_sans_assez_de_revues_on_ne_compare_pas(client: AsyncClient, project: dict[str, Any]) -> None:
+async def test_without_enough_reviews_nothing_is_compared(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
     await _review(project["id"], index=1, implementer="codex", reviewer="claude-code", caught=True)
     report = (await client.get(f"/api/v1/projects/{project['id']}/metrics/cross-backend")).json()
     assert report["verdict"] == "not enough data"
@@ -71,7 +73,7 @@ async def test_sans_assez_de_revues_on_ne_compare_pas(client: AsyncClient, proje
     assert report["same_backend"]["reviews"] == 0
 
 
-async def test_la_revue_croisee_attrape_plus(client: AsyncClient, project: dict[str, Any]) -> None:
+async def test_cross_review_catches_more(client: AsyncClient, project: dict[str, Any]) -> None:
     for index in range(6):
         await _review(project["id"], index=index, implementer="codex", reviewer="claude-code", caught=True)
     for index in range(6, 12):
@@ -90,16 +92,16 @@ async def test_la_revue_croisee_attrape_plus(client: AsyncClient, project: dict[
     assert "100 %" in report["detail"] or "100%" in report["detail"]
 
 
-async def test_une_revue_sans_implementeur_connu_est_ignoree(
+async def test_a_review_without_a_known_implementer_is_ignored(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    """Sans run d'implémentation, on ne sait pas à quoi comparer : on ne compte pas."""
+    """Without an implementation run there is nothing to compare with: it is not counted."""
     from choregos_api.db.models import Run, WorkItem
     from choregos_api.db.session import session_scope
 
     async with session_scope() as session:
         item = WorkItem(
-            project_id=project["id"], tracker_key="varga/billing-api#77", title="orphelin", state="verifying"
+            project_id=project["id"], tracker_key="varga/billing-api#77", title="orphan", state="verifying"
         )
         session.add(item)
         await session.flush()
@@ -119,7 +121,9 @@ async def test_une_revue_sans_implementeur_connu_est_ignoree(
     assert report["other_backend"]["reviews"] == 0
 
 
-async def test_le_rapport_dit_si_la_politique_l_exige(client: AsyncClient, project: dict[str, Any]) -> None:
+async def test_the_report_says_whether_the_policy_demands_it(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
     from choregos_api.db.session import session_scope
     from choregos_api.services import active_policy, policy_model
 
