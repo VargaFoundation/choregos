@@ -35,7 +35,6 @@ For a project owner. Procedure `connector.scm.gitlab`, version 1, reviewed 2026-
   next time a run starts, the connector deletes the project's expired `choregos-run-` tokens (at most 20
   per run, and a failure there never stops the run). Tokens with other names are never touched. Each token
   is backed by a bot user in the project: this cleanup is what keeps them from piling up.
-- The model and its limits are in ADR 0104.
 
 ## In Choregos
 
