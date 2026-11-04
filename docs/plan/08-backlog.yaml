@@ -4094,6 +4094,14 @@ stories:
     size: S
     depends_on: [S52-04]
     notes: "ADR 0121; ADR 0111 catalogue"
+  - id: S52-08
+    title: "contract(api): routing asks a decision model, held to the project's minimum confidence"
+    stream: S52
+    sprint: 2
+    priority: 1
+    size: M
+    depends_on: [S52-03]
+    notes: "ADR 0116 amendment, ADR 0121 §3: a catalogue entry for route and decide is asked on /v1/systemone; min_confidence"
   - id: S52-09
     title: "feat(api,adapters): the catalogue knows a decision model — `decide` only, no tools, from the gateway's mode"
     stream: S52

@@ -1203,6 +1203,7 @@ export const workflowRouting: WorkflowRouting = {
   rules: [{ when: { labels_any: ["incident"], labels_all: [], item_type: null }, workflow: "hotfix" }],
   strategy: "labels",
   hints: {},
+  min_confidence: null,
 };
 
 const requirement = (capability: string, reason: string) => ({ capability, reasons: [reason] });
@@ -3205,6 +3206,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     workflowRouting.rules = reqBody.rules;
     if (reqBody.strategy) workflowRouting.strategy = reqBody.strategy;
     if (reqBody.hints) workflowRouting.hints = Object.fromEntries(Object.entries(reqBody.hints).filter(([, h]) => h.trim()));
+    if (reqBody.min_confidence !== undefined) workflowRouting.min_confidence = reqBody.min_confidence;
     for (const w of workflowSummaries) w.is_default = w.name === reqBody.default;
     return workflowRouting as T;
   }

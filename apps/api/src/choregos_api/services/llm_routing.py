@@ -8,6 +8,12 @@ answers one workflow among them or none; anything else (an unknown name, a timeo
 model the catalogue refuses, no gateway key) leaves the work item to the default. The birth never
 fails because of the model.
 
+Two kinds of model can answer (ADR 0121). When the organisation's catalogue enables an entry for both
+`route` and `decide`, that decision model is asked one `choice` question on the gateway's
+`/v1/systemone` and answers a workflow with a probability; below the project's `min_confidence` the
+default takes the item. Otherwise the `cheap` tier is asked on `/v1/chat/completions` for one JSON
+object, and its answer carries no confidence.
+
 It is asked once per birth (ADR 0008): the decision is kept in the database session by a digest of
 what was asked, so checking a birth and creating the work item ask once. Its spend is one `route`
 line in the cost ledger, in the transaction that creates the work item (ADR 0004, 0092).
@@ -37,6 +43,10 @@ logger = get_logger(__name__)
 ROUTER_AGENT = "workflow-router"
 #: The catalogue usage the model must be enabled for (ADR 0060).
 ROUTE_USAGE = "route"
+#: With `route`, it makes the entry a decision model asked on `/v1/systemone` (ADR 0121).
+DECIDE_USAGE = "decide"
+#: The one question a decision model is asked; its options are the active workflows.
+DECISION_QUESTION = "Which of the project's workflows should handle this work item?"
 TIMEOUT_SECONDS = 15.0
 MAX_ANSWER_TOKENS = 200
 BODY_CHARS = 4000
@@ -78,6 +88,8 @@ class Answer:
     reason: str
     input_tokens: int
     output_tokens: int
+    #: The probability a decision model gives its choice; a chat model gives none.
+    confidence: float | None = None
 
 
 class WorkflowRouter(Protocol):
@@ -134,6 +146,24 @@ class FakeWorkflowRouter:
         return Answer(winner, reason, len(prompt) // CHARS_PER_TOKEN, 20)
 
 
+class FakeDecisionRouter:
+    """Deterministic (ADR 0005), as a decision model answers: always one workflow, with a probability.
+
+    The workflow sharing the most words with the item, at 0.5 plus 0.1 per shared word (at most 0.95);
+    on a tie or when nothing is shared, the first by name at one over the number of candidates."""
+
+    model = "fake/decide"
+
+    async def choose(self, candidates: list[Candidate], item: Item) -> Answer:
+        chosen = await FakeWorkflowRouter().choose(candidates, item)
+        if chosen.workflow is not None:
+            shared = chosen.reason.removeprefix("the item speaks of ").split(", ")
+            confidence = min(0.95, 0.5 + 0.1 * len(shared))
+            return Answer(chosen.workflow, chosen.reason, chosen.input_tokens, 0, confidence)
+        first = min(c.name for c in candidates)
+        return Answer(first, "no workflow clearly fits", chosen.input_tokens, 0, 1 / len(candidates))
+
+
 class GatewayWorkflowRouter:
     """One chat completion on the gateway, not streamed, answering one JSON object."""
 
@@ -188,6 +218,79 @@ class GatewayWorkflowRouter:
         )
 
 
+def criteria_of(candidates: list[Candidate]) -> dict[str, str | None]:
+    """Each workflow's name, with what the decision model reads of it: its description and its hint."""
+    return {c.name: " ".join(t for t in (c.description, c.hint) if t) or None for c in candidates}
+
+
+class DecisionWorkflowRouter:
+    """One `choice` question on the gateway's `/v1/systemone` (LiteLLM 1.105.5, ADR 0121): the item is
+    the state, the active workflows are the options, and the answer carries its probability. LiteLLM
+    translates it for an OpenAI decision model as for a self-hosted one."""
+
+    def __init__(
+        self,
+        base_url: str,
+        key: str,
+        model: str,
+        *,
+        timeout: float = TIMEOUT_SECONDS,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
+        self.base_url, self.key, self.model, self.timeout = base_url.rstrip("/"), key, model, timeout
+        self.transport = transport
+
+    async def choose(self, candidates: list[Candidate], item: Item) -> Answer:
+        state = {
+            "title": item.title,
+            "description": (item.body or "")[:BODY_CHARS],
+            "labels": list(item.labels),
+            "type": item.item_type,
+        }
+        question = {"type": "choice", "instructions": DECISION_QUESTION, "criteria": criteria_of(candidates)}
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout, transport=self.transport) as client:
+                response = await client.post(
+                    f"{self.base_url.removesuffix('/v1')}/v1/systemone",
+                    headers={"Authorization": f"Bearer {self.key}"},
+                    json={
+                        "model": self.model,
+                        "state": state,
+                        "questions": {"workflow": question},
+                        "metadata": {"choregos_agent": ROUTER_AGENT},
+                    },
+                )
+        except httpx.HTTPError as exc:
+            raise RoutingError(f"the gateway did not answer: {type(exc).__name__}") from exc
+        if response.status_code >= 400:
+            raise RoutingError(f"the gateway answered {response.status_code}: {response.text[:200]}")
+        try:
+            body = response.json()
+            answer = body["answers"]["workflow"]
+            choice, confidence = str(answer["choice"]), float(answer["confidence"])
+        except (ValueError, KeyError, TypeError) as exc:
+            raise RoutingError("the decision model did not answer the question") from exc
+        used = body.get("usage") or {}
+        sent = len(json.dumps(state) + json.dumps(question))
+        return Answer(
+            workflow=choice or None,
+            reason=f"the decision model chose `{choice}` with a confidence of {confidence:.2f}",
+            input_tokens=int(used.get("input_tokens") or sent // CHARS_PER_TOKEN),
+            output_tokens=int(used.get("output_tokens") or 0),
+            confidence=confidence,
+        )
+
+
+def get_decision_router(model: str, settings: Settings | None = None) -> WorkflowRouter:
+    """The decision model's client, read from the same gateway as the chat model's."""
+    settings = settings or get_settings()
+    if settings.fakes:
+        return FakeDecisionRouter()
+    if not settings.gateway_master_key:
+        raise RoutingError("no gateway key: the router has no model to call")
+    return DecisionWorkflowRouter(settings.gateway_url, settings.gateway_master_key, model)
+
+
 def get_workflow_router(model: str, settings: Settings | None = None) -> WorkflowRouter:
     """The single place that reads the gateway's address and key for routing (as the distiller's)."""
     settings = settings or get_settings()
@@ -206,6 +309,8 @@ class Decision:
     reason: str
     model: str
     called: bool = False
+    #: The decision model's probability for its choice; `None` from a chat model.
+    confidence: float | None = None
     tokens_in: int = 0
     tokens_out: int = 0
     cost_usd: float = 0.0
@@ -229,14 +334,31 @@ async def candidates_of(session: AsyncSession, project: Project) -> list[Candida
     ]
 
 
-async def _model_for(session: AsyncSession, org_id: str, settings: Settings) -> tuple[str, str | None]:
-    """The organisation's `cheap` tier, else the deployment's; and the catalogue's refusal, if any."""
-    if settings.fakes:
-        return FakeWorkflowRouter.model, None
+@dataclass(frozen=True, slots=True)
+class RoutingModel:
+    """Who is asked, on which route, and the catalogue's refusal if any."""
+
+    name: str
+    decision: bool
+    refusal: str | None = None
+
+
+async def _model_for(session: AsyncSession, org_id: str, settings: Settings) -> RoutingModel:
+    """The first entry (by name) the catalogue enables for both `route` and `decide`, asked as a
+    decision model; else the organisation's `cheap` tier, else the deployment's, asked as a chat model."""
     policy = await load_policy(session, org_id)
+    deciders = sorted(
+        name
+        for name, entry in policy.entries.items()
+        if entry.enabled and ROUTE_USAGE in entry.usages and DECIDE_USAGE in entry.usages
+    )
+    if deciders:
+        return RoutingModel(deciders[0], decision=True)
+    if settings.fakes:
+        return RoutingModel(FakeWorkflowRouter.model, decision=False)
     model = policy.tier_model("cheap") or settings.default_model_profiles.get("cheap") or "platform/cheap"
     refusal = policy.check(model, None, usage=ROUTE_USAGE)
-    return model, (f"{refusal} — change it in /admin/models" if refusal else None)
+    return RoutingModel(model, False, f"{refusal} — change it in /admin/models" if refusal else None)
 
 
 def _digest(project_id: str, model: str, candidates: list[Candidate], item: Item) -> str:
@@ -254,17 +376,17 @@ async def ask_the_model(
     none or could not answer, and `reason` says which."""
     settings = settings or get_settings()
     candidates = await candidates_of(session, project)
-    model, refusal = await _model_for(session, project.org_id, settings)
+    chosen = await _model_for(session, project.org_id, settings)
     memo: dict[str, Decision] = session.info.setdefault(_SESSION_KEY, {})
-    key = _digest(project.id, model, candidates, item)
+    key = _digest(project.id, chosen.name, candidates, item)
     if key in memo:
         return memo[key]
-    if refusal is not None:
-        decision = Decision(None, refusal, model)
+    if chosen.refusal is not None:
+        decision = Decision(None, chosen.refusal, chosen.name)
     elif not candidates:
-        decision = Decision(None, "the project has no active workflow", model)
+        decision = Decision(None, "the project has no active workflow", chosen.name)
     else:
-        decision = await _ask(session, project, candidates, item, model, settings)
+        decision = await _ask(session, project, candidates, item, chosen, settings)
     memo[key] = decision
     return decision
 
@@ -274,15 +396,18 @@ async def _ask(
     project: Project,
     candidates: list[Candidate],
     item: Item,
-    model: str,
+    chosen: RoutingModel,
     settings: Settings,
 ) -> Decision:
     try:
-        router = get_workflow_router(model, settings)
+        if chosen.decision:
+            router = get_decision_router(chosen.name, settings)
+        else:
+            router = get_workflow_router(chosen.name, settings)
         answer = await router.choose(candidates, item)
     except RoutingError as exc:
         logger.warning("workflow_routing.model_failed", project=project.slug, reason=str(exc))
-        return Decision(None, str(exc), model)
+        return Decision(None, str(exc), chosen.name)
     decision = Decision(
         workflow=None,
         reason=answer.reason,
@@ -291,12 +416,19 @@ async def _ask(
         tokens_in=answer.input_tokens,
         tokens_out=answer.output_tokens,
         cost_usd=await _cost(session, project.org_id, router.model, answer),
+        confidence=answer.confidence,
     )
     names = {c.name for c in candidates}
+    threshold = project.routing_min_confidence
     if answer.workflow is None:
         decision.reason = answer.reason or "no workflow clearly fits"
     elif answer.workflow not in names:
         decision.reason = f"the model answered `{answer.workflow}`, which is not an active workflow"
+    elif threshold is not None and answer.confidence is not None and answer.confidence < threshold:
+        decision.reason = (
+            f"the decision model chose `{answer.workflow}` with a confidence of {answer.confidence:.2f}, "
+            f"below the project's minimum of {threshold:.2f}"
+        )
     else:
         decision.workflow = answer.workflow
     return decision
@@ -341,10 +473,17 @@ async def book(session: AsyncSession, project: Project, decision: Decision, work
 
 def routing_record(by: str, reason: str | None, decision: Decision | None) -> dict[str, Any]:
     """What the work item keeps of how it was routed (`documents.routing`)."""
-    return {"by": by, "reason": reason, "model": decision.model if decision else None}
+    return {
+        "by": by,
+        "reason": reason,
+        "model": decision.model if decision else None,
+        "confidence": decision.confidence if decision else None,
+    }
 
 
 __all__ = [
+    "DECIDE_USAGE",
+    "DECISION_QUESTION",
     "INSTRUCTIONS",
     "ROUTER_AGENT",
     "ROUTE_USAGE",
@@ -352,6 +491,8 @@ __all__ = [
     "Answer",
     "Candidate",
     "Decision",
+    "DecisionWorkflowRouter",
+    "FakeDecisionRouter",
     "FakeWorkflowRouter",
     "GatewayWorkflowRouter",
     "Item",
@@ -361,6 +502,8 @@ __all__ = [
     "ask_the_model",
     "book",
     "candidates_of",
+    "criteria_of",
+    "get_decision_router",
     "get_workflow_router",
     "routing_record",
 ]
