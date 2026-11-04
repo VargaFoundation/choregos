@@ -20,7 +20,7 @@ describe("who writes, and with which account (S42-06g, ADR 0107)", () => {
     render(
       <ul>
         <ConnectorCard
-          sorte="tracker"
+          kind="tracker"
           actuel={jira}
           types={[]}
           onSave={async () => {}}

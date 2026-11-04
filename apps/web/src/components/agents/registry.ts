@@ -4,8 +4,8 @@ import type { AgentCredential, AgentResolution, AgentSpec, ApiToken, ImplicitAge
 /** The scopes that open the MCP door (ADR 0030): a token that carries one is an MCP client. */
 const MCP_SCOPES = new Set(["mcp:read", "mcp:write"]);
 
-export function isMcpClient(jeton: Pick<ApiToken, "scopes">): boolean {
-  return (jeton.scopes ?? []).some((portee) => MCP_SCOPES.has(portee));
+export function isMcpClient(token: Pick<ApiToken, "scopes">): boolean {
+  return (token.scopes ?? []).some((scope) => MCP_SCOPES.has(scope));
 }
 
 /**
@@ -30,7 +30,7 @@ export function versionSummary(spec: AgentSpec | undefined | null): string {
   else if (spec.backend) morceaux.push(spec.backend);
   const skills = spec.skills?.length ?? 0;
   if (skills) morceaux.push(`${skills} skill${skills > 1 ? "s" : ""}`);
-  const tools = (spec.mcp_servers ?? []).reduce((total, serveur) => total + (serveur.tools?.length ?? 0), 0);
+  const tools = (spec.mcp_servers ?? []).reduce((total, server) => total + (server.tools?.length ?? 0), 0);
   if (tools) morceaux.push(`${tools} tool pattern${tools > 1 ? "s" : ""}`);
   if (spec.budget?.daily_usd != null) morceaux.push(`$${spec.budget.daily_usd}/day`);
   if (spec.budget?.monthly_usd != null) morceaux.push(`$${spec.budget.monthly_usd}/month`);

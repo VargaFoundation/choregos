@@ -14,10 +14,10 @@ import type { AdminAction, AdminForm, AdminSecretOnce, AdminSection, AdminTable 
  * The manifest says `{id}`; the extension's route may name its parameter differently,
  * the core matched them at start-up.
  */
-export function remplir(chemin: string, org: string, cle?: string): string {
-  return chemin
+export function fillPath(path: string, org: string, key?: string): string {
+  return path
     .replaceAll("{org}", encodeURIComponent(org))
-    .replace(/\{[^}]+\}/g, encodeURIComponent(cle ?? ""));
+    .replace(/\{[^}]+\}/g, encodeURIComponent(key ?? ""));
 }
 
 /** A section declared by an extension, rendered by the console's blocks (ADR 0032). */
@@ -44,7 +44,7 @@ function BlocFormulaire({ bloc, org }: { bloc: AdminForm; org: string }) {
   const schema = bloc.schema as JsonSchema;
   const lu = useQuery({
     queryKey: ["admin-form", org, bloc.read],
-    queryFn: () => api.sectionCall<Record<string, unknown>>("GET", remplir(bloc.read, org)),
+    queryFn: () => api.sectionCall<Record<string, unknown>>("GET", fillPath(bloc.read, org)),
   });
   const [saisie, setSaisie] = useState<Record<string, unknown> | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -58,7 +58,7 @@ function BlocFormulaire({ bloc, org }: { bloc: AdminForm; org: string }) {
       // route would refuse the rest.
       const fields = new Set(Object.keys(schema.properties ?? {}));
       const body = Object.fromEntries(Object.entries(values).filter(([nom]) => fields.has(nom)));
-      await api.sectionCall(bloc.write_method ?? "PUT", remplir(bloc.write, org), body);
+      await api.sectionCall(bloc.write_method ?? "PUT", fillPath(bloc.write, org), body);
       setMessage("Saved");
       setSaisie(null);
       await lu.refetch();
@@ -95,7 +95,7 @@ function BlocTable({ bloc, org }: { bloc: AdminTable; org: string }) {
   const rows = useQuery({
     queryKey: ["admin-table", org, bloc.list],
     queryFn: async () => {
-      const response = await api.sectionCall<unknown>("GET", remplir(bloc.list, org));
+      const response = await api.sectionCall<unknown>("GET", fillPath(bloc.list, org));
       return (Array.isArray(response) ? response : ((response as { items?: unknown[] })?.items ?? [])) as Array<
         Record<string, unknown>
       >;
@@ -122,11 +122,11 @@ function BlocTable({ bloc, org }: { bloc: AdminTable; org: string }) {
             </TR>
           </THead>
           <TBody>
-            {rows.data.map((ligne, index) => (
-              <TR key={String(ligne[rowKey] ?? index)}>
+            {rows.data.map((row, index) => (
+              <TR key={String(row[rowKey] ?? index)}>
                 {bloc.columns.map((colonne) => (
                   <TD key={colonne.key}>
-                    <Cellule valeur={ligne[colonne.key]} format={colonne.format} />
+                    <Cellule valeur={row[colonne.key]} format={colonne.format} />
                   </TD>
                 ))}
                 {bloc.row_actions && bloc.row_actions.length > 0 && (
@@ -137,7 +137,7 @@ function BlocTable({ bloc, org }: { bloc: AdminTable; org: string }) {
                           key={action.label}
                           action={action}
                           org={org}
-                          cle={String(ligne[rowKey] ?? "")}
+                          itemKey={String(row[rowKey] ?? "")}
                           onDone={() => void rows.refetch()}
                         />
                       ))}
@@ -211,18 +211,18 @@ function pendingActionValues(method: string, path: string): Record<string, unkno
 function BoutonDAction({
   action,
   org,
-  cle,
+  itemKey,
   onDone,
 }: {
   action: AdminAction;
   org: string;
-  cle?: string;
+  itemKey?: string;
   onDone?: () => void;
 }) {
   const client = useQueryClient();
   const params = action.params as JsonSchema | undefined;
   const method = action.method ?? "POST";
-  const path = remplir(action.path, org, cle);
+  const path = fillPath(action.path, org, itemKey);
   const [resumed] = useState(() => (action.reauth ? pendingActionValues(method, path) : null));
   const [ouvert, setOuvert] = useState(resumed !== null);
   const [valeurs, setValeurs] = useState<Record<string, unknown>>(resumed ?? {});
@@ -314,7 +314,7 @@ function BlocSecret({ bloc, org }: { bloc: AdminSecretOnce; org: string }) {
     try {
       const secretResponse = await api.sectionCall<Record<string, unknown>>(
         bloc.method ?? "POST",
-        remplir(bloc.path, org),
+        fillPath(bloc.path, org),
         params ? valeurs : undefined,
       );
       setSecret(String(secretResponse?.[bloc.secret_field] ?? ""));

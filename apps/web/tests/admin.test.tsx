@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
-import { remplir } from "@/components/admin/section";
+import { fillPath } from "@/components/admin/section";
 import { SchemaForm, missingFields, parseMapping, type JsonSchema } from "@/components/schema-form";
 import { versCsv } from "@/lib/csv";
 
@@ -18,11 +18,11 @@ const schema: JsonSchema = {
 };
 
 function Formulaire({ onValue }: { onValue: (v: Record<string, unknown>) => void }) {
-  const [valeurs, setValeurs] = useState<Record<string, unknown>>({});
+  const [values, setValeurs] = useState<Record<string, unknown>>({});
   return (
     <SchemaForm
       schema={schema}
-      value={valeurs}
+      value={values}
       onChange={(v) => {
         setValeurs(v);
         onValue(v);
@@ -64,7 +64,7 @@ const saml: JsonSchema = {
 };
 
 function FormulaireSaml({ initial, onValue }: { initial: Record<string, unknown>; onValue: (v: Record<string, unknown>) => void }) {
-  const [valeurs, setValeurs] = useState<Record<string, unknown>>(initial);
+  const [values, setValeurs] = useState<Record<string, unknown>>(initial);
   return (
     <>
       <button type="button" onClick={() => setValeurs({ correspondance: { lus: "viewer" } })}>
@@ -72,7 +72,7 @@ function FormulaireSaml({ initial, onValue }: { initial: Record<string, unknown>
       </button>
       <SchemaForm
         schema={saml}
-        value={valeurs}
+        value={values}
         onChange={(v) => {
           setValeurs(v);
           onValue(v);
@@ -118,14 +118,14 @@ describe("SchemaForm: multi-line texts and mappings (S17-04)", () => {
 
   it("an empty mapping is missing, if it is required", () => {
     expect(missingFields({ required: ["m"], properties: { m: { type: "object" } } }, { m: {} })).toEqual(["m"]);
-    expect(parseMapping(" = x\na = b = c").valeurs).toEqual({ a: "b = c" });
+    expect(parseMapping(" = x\na = b = c").values).toEqual({ a: "b = c" });
   });
 });
 
 describe("a section's paths", () => {
   it("take the organisation and the row's key, whatever the parameter's name", () => {
-    expect(remplir("/orgs/{org}/scim/tokens/{id}", "acme", "t 1")).toBe("/orgs/acme/scim/tokens/t%201");
-    expect(remplir("/orgs/{org}/saml/providers/{provider_id}", "acme", "p1")).toBe("/orgs/acme/saml/providers/p1");
+    expect(fillPath("/orgs/{org}/scim/tokens/{id}", "acme", "t 1")).toBe("/orgs/acme/scim/tokens/t%201");
+    expect(fillPath("/orgs/{org}/saml/providers/{provider_id}", "acme", "p1")).toBe("/orgs/acme/saml/providers/p1");
   });
 });
 

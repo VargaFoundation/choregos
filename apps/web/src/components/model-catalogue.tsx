@@ -187,7 +187,7 @@ export function ModelCataloguePanel() {
                 </span>
               }
               action={() => api.putModelCatalogueSettings(org, { mode: "curated", tiers: tiersBody(data.tiers) })}
-              onFait={() => {
+              onDone={() => {
                 setPreview(null);
                 setMessage("Mode set to curated");
                 void client.invalidateQueries({ queryKey: ["model-catalogue", org] });

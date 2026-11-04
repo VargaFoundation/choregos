@@ -156,9 +156,9 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
                     onChange={(e) => setDuree(Number(e.target.value) as (typeof DUREES)[number])}
                     className="w-auto"
                   >
-                    {DUREES.map((jours) => (
-                      <option key={jours} value={jours}>
-                        {jours} days
+                    {DUREES.map((days) => (
+                      <option key={days} value={days}>
+                        {days} days
                       </option>
                     ))}
                   </Select>
@@ -263,8 +263,8 @@ function TokenState({ id }: { id: string }) {
   const tokens = useQuery({
     queryKey: ["tokens"],
     queryFn: () => api.myTokens(),
-    refetchInterval: (requete) => {
-      const token = requete.state.data?.find((t) => t.id === id);
+    refetchInterval: (query) => {
+      const token = query.state.data?.find((t) => t.id === id);
       return token?.last_used_at ? false : 3000;
     },
   });

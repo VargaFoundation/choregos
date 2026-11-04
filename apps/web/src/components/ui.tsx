@@ -535,7 +535,7 @@ export function ActorIcon({ kind, name, point = true }: { kind: string; name?: s
 export interface CardProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   title?: ReactNode;
   /** The title is data (a project's name): it keeps its case (ADR 0048 §3). */
-  titreDonnee?: boolean;
+  verbatimTitle?: boolean;
   /** A short line above the title. */
   eyebrow?: ReactNode;
   /** A button or a link, on the right of the header. */
@@ -558,7 +558,7 @@ const CARD_PADDINGS = { none: "", sm: "p-4", md: "p-5", lg: "p-8" } as const;
  */
 export function Card({
   title,
-  titreDonnee,
+  verbatimTitle,
   eyebrow,
   action,
   interactive,
@@ -587,7 +587,7 @@ export function Card({
             <div className="min-w-0 space-y-1">
               {eyebrow != null && <Label>{eyebrow}</Label>}
               {typeof title === "string" ? (
-                <h2 className="text-sm font-semibold text-ink" data-verbatim={titreDonnee || undefined}>
+                <h2 className="text-sm font-semibold text-ink" data-verbatim={verbatimTitle || undefined}>
                   {title}
                 </h2>
               ) : (
@@ -832,16 +832,16 @@ export function Button({
  * An engine sentence, whose names (an agent, a produced field) are between backticks: they
  * read like code, without the backticks (S23-11).
  */
-export function EngineSentence({ texte }: { texte: string }) {
+export function EngineSentence({ text }: { text: string }) {
   return (
     <>
-      {segmentsDeCode(texte).map((segment, index) =>
+      {segmentsDeCode(text).map((segment, index) =>
         segment.code ? (
           <code key={index} className="font-mono text-[0.92em]">
-            {segment.texte}
+            {segment.text}
           </code>
         ) : (
-          <span key={index}>{segment.texte}</span>
+          <span key={index}>{segment.text}</span>
         ),
       )}
     </>

@@ -620,7 +620,7 @@ export function PendingRelease({ org, agent }: { org: string; agent: Agent }) {
           <ConfirmedGesture
             question={`Reject v${pending.version}? The request closes; ask again after a change.`}
             confirmer="Reject"
-            raison={{ label: "Why", requise: true }}
+            reason={{ label: "Why", required: true }}
             disabled={locked}
             action={decide("reject")}
           >

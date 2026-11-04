@@ -33,8 +33,8 @@ export const ENTERPRISE_FEATURES: ReadonlyArray<readonly [string, string]> = [
 
 const LIBELLES = new Map(ENTERPRISE_FEATURES);
 
-export function libelleFonction(cle: string): string {
-  return LIBELLES.get(cle) ?? cle;
+export function functionLabel(key: string): string {
+  return LIBELLES.get(key) ?? key;
 }
 
 /** The top bar's badge: which edition the platform runs. */
@@ -83,8 +83,8 @@ export function EditionCard({ edition }: { edition: Edition | undefined }) {
       </p>
       {isEnterprise ? (
         <ul className="mt-2 space-y-1 text-xs" aria-label="Enterprise features">
-          {edition.features.map((cle) => (
-            <li key={cle}>{libelleFonction(cle)}</li>
+          {edition.features.map((key) => (
+            <li key={key}>{functionLabel(key)}</li>
           ))}
         </ul>
       ) : (
@@ -93,8 +93,8 @@ export function EditionCard({ edition }: { edition: Edition | undefined }) {
             This installation runs the community core: one organisation. The enterprise edition adds:
           </p>
           <ul className="mt-1 space-y-1 text-xs" aria-label="What the enterprise edition adds">
-            {ENTERPRISE_FEATURES.map(([cle, libelle]) => (
-              <li key={cle}>{libelle}</li>
+            {ENTERPRISE_FEATURES.map(([key, libelle]) => (
+              <li key={key}>{libelle}</li>
             ))}
           </ul>
         </>
@@ -171,9 +171,9 @@ export function AboutPanel() {
   if (!data) return <ReadState lecture={edition} quoi="the version information" />;
   const enterprise = data.edition === "enterprise";
 
-  async function copy(texte: string) {
+  async function copy(text: string) {
     try {
-      await navigator.clipboard.writeText(texte);
+      await navigator.clipboard.writeText(text);
       setCopied("yes");
     } catch {
       setCopied("no");

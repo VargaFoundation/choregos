@@ -67,8 +67,8 @@ export const CLIENTS: ReadonlyArray<ClientInfo> = [
 
 export const PLACEHOLDER = "<token>";
 
-export function estClient(valeur: string): valeur is ClientId {
-  return CLIENTS.some((client) => client.id === valeur);
+export function estClient(value: string): value is ClientId {
+  return CLIENTS.some((client) => client.id === value);
 }
 
 /** The client the IdP registered for this client of the page, or `null` when the gate does not accept OAuth. */
@@ -90,9 +90,9 @@ export function clientState(info: ClientInfo, url: string, oauth?: OAuth | null)
 }
 
 /** The URL of a project's gate: `/mcp/projects/org:slug`. Without a project, the gate of all. */
-export function gateUrl(base: string, projet?: string | null): string {
+export function gateUrl(base: string, project?: string | null): string {
   const root = base.replace(/\/+$/, "");
-  return projet ? `${root}/projects/${projet}` : root;
+  return project ? `${root}/projects/${project}` : root;
 }
 
 /** The platform's origin, derived from the gate's URL (`.../mcp`). */
@@ -136,7 +136,7 @@ export interface Extrait {
 export function extrait(
   client: ClientId,
   url: string,
-  jeton: string = PLACEHOLDER,
+  token: string = PLACEHOLDER,
   oauth?: OAuth | null,
 ): Extrait | null {
   const http = url.startsWith("http:");
@@ -155,7 +155,7 @@ export function extrait(
         where: "a terminal",
         language: "bash",
         code: [
-          `export CHOREGOS_TOKEN=${jeton}`,
+          `export CHOREGOS_TOKEN=${token}`,
           `claude mcp add --transport http choregos ${url} --header "Authorization: Bearer $CHOREGOS_TOKEN"`,
         ].join("\n"),
       };
@@ -169,7 +169,7 @@ export function extrait(
               choregos: {
                 command: "npx",
                 args: ["-y", "mcp-remote", url, "--header", "Authorization:${AUTH}", ...(http ? ["--allow-http"] : [])],
-                env: { AUTH: `Bearer ${jeton}` },
+                env: { AUTH: `Bearer ${token}` },
               },
             },
           },
@@ -204,7 +204,7 @@ export function extrait(
       return {
         where: "your client's MCP settings",
         language: "text",
-        code: [`URL:        ${url}`, "Transport:  Streamable HTTP", `Header:     Authorization: Bearer ${jeton}`].join(
+        code: [`URL:        ${url}`, "Transport:  Streamable HTTP", `Header:     Authorization: Bearer ${token}`].join(
           "\n",
         ),
       };

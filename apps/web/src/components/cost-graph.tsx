@@ -5,9 +5,9 @@ import type { CostReport } from "@/lib/types";
 
 type CostRow = CostReport["rows"][number];
 
-function dayLabel(cle: string): string {
-  const date = new Date(`${cle}T00:00:00Z`);
-  if (Number.isNaN(date.getTime())) return cle;
+function dayLabel(key: string): string {
+  const date = new Date(`${key}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return key;
   return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "UTC" }).format(date);
 }
 

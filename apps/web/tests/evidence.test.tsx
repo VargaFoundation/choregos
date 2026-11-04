@@ -36,8 +36,8 @@ describe("a run's evidence", () => {
       />,
     );
     const rows = screen.getAllByRole("listitem");
-    const provenance = (texte: string) =>
-      rows.find((l) => l.textContent?.startsWith(texte))!.querySelector("[data-provenance]")!.getAttribute("data-provenance");
+    const provenance = (text: string) =>
+      rows.find((l) => l.textContent?.startsWith(text))!.querySelector("[data-provenance]")!.getAttribute("data-provenance");
     expect(provenance("Tests")).toBe("observed");
     expect(provenance("Lint")).toBe("observed");
     expect(provenance("Coverage")).toBe("declared");

@@ -3,10 +3,10 @@ import { test } from 'node:test';
 
 import { slugify } from '../src/slug.js';
 
-test('les accents et la casse disparaissent', () => {
+test('accents and case disappear', () => {
   assert.equal(slugify('Café Éclair'), 'cafe-eclair');
 });
 
-test('les séparateurs en trop sont retirés', () => {
+test('extra separators are removed', () => {
   assert.equal(slugify('  --Bonjour, le monde !--  '), 'bonjour-le-monde');
 });

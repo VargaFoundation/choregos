@@ -9,7 +9,7 @@ import { ThemeProvider } from "@/lib/theme";
 const route = { current: "/" };
 vi.mock("next/navigation", () => ({ usePathname: () => route.current }));
 vi.mock("@/lib/session", () => ({
-  useSession: () => ({ me: null, orgs: [], org: "acme", choisirOrg: vi.fn(), deconnecter: vi.fn() }),
+  useSession: () => ({ me: null, orgs: [], org: "acme", selectOrg: vi.fn(), deconnecter: vi.fn() }),
 }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const reel = await importOriginal<typeof import("@/lib/api")>();
@@ -46,8 +46,8 @@ describe("the sidebar (S24-03, ADR 0043)", () => {
   it("arranges the navigation in three named groups", () => {
     const barre = mount("/");
     const navigation = within(barre).getByRole("navigation", { name: "Main navigation" });
-    const names = (liste: string) =>
-      within(within(navigation).getByRole("list", { name: liste }))
+    const names = (list: string) =>
+      within(within(navigation).getByRole("list", { name: list }))
         .getAllByRole("link")
         .map((lien) => lien.textContent);
     expect(names("Work")).toEqual(["Projects", "Inbox"]);

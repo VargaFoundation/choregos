@@ -38,13 +38,13 @@ export function useSectionWrites(slug: string) {
   const queryClient = useQueryClient();
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  async function faire(action: () => Promise<unknown>, succes: string, cles: string[]) {
+  async function faire(action: () => Promise<unknown>, succes: string, keys: string[]) {
     setError(null);
     setMessage(null);
     try {
       await action();
       setMessage(succes);
-      for (const key of cles) void queryClient.invalidateQueries({ queryKey: [key, slug] });
+      for (const key of keys) void queryClient.invalidateQueries({ queryKey: [key, slug] });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "refused");
     }

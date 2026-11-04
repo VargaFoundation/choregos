@@ -7,7 +7,7 @@ describe("a confirmed gesture (S23-07)", () => {
     const action = vi.fn().mockRejectedValueOnce(new Error("409: the last administrator stays")).mockResolvedValue(undefined);
     const done = vi.fn();
     render(
-      <ConfirmedGesture question="remove alice?" confirmer="remove alice" action={action} onFait={done}>
+      <ConfirmedGesture question="remove alice?" confirmer="remove alice" action={action} onDone={done}>
         remove
       </ConfirmedGesture>,
     );
@@ -27,7 +27,7 @@ describe("a confirmed gesture (S23-07)", () => {
   it("a required reason blocks execution while it is empty, and leaves with the gesture", async () => {
     const action = vi.fn().mockResolvedValue(undefined);
     render(
-      <ConfirmedGesture question="abort?" confirmer="abort it" raison={{ label: "why", requise: true }} action={action}>
+      <ConfirmedGesture question="abort?" confirmer="abort it" reason={{ label: "why", required: true }} action={action}>
         abort
       </ConfirmedGesture>,
     );

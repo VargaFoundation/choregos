@@ -66,15 +66,15 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
           <Empty title="No ticket waits" icon={CircleCheck} hue={6}>Every ticket in flight is in the hands of an agent or the platform.</Empty>
         ) : (
           <ul className="divide-y divide-line" data-testid="waiting-tickets">
-            {inbox.tickets.map(({ item, demande, enRetard }) => (
+            {inbox.tickets.map(({ item, request, overdue }) => (
               <li key={item.id} className="space-y-2 py-4 first:pt-0" data-testid={`waiting-${item.id}`}>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                  <Badge tone={demande.kind === "approval" ? "ink" : "neutral"}>{requestLabel(demande.kind)}</Badge>
+                  <Badge tone={request.kind === "approval" ? "ink" : "neutral"}>{requestLabel(request.kind)}</Badge>
                   <Link href={`/p/${item.project_slug}/items/${item.id}`} className="font-medium hover:underline">
                     {item.title}
                   </Link>
                 </div>
-                <p className="text-sm">{requestSummary(demande)}</p>
+                <p className="text-sm">{requestSummary(request)}</p>
                 <p className="text-xs text-ink-muted">
                   {!project && (
                     <>
@@ -82,15 +82,15 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
                     </>
                   )}
                   {item.tracker_key} · {item.state_display ?? item.state} · asked{" "}
-                  {relative(demande.requested_at)}
-                  {demande.due_at && (
-                    <span className={enRetard ? "font-medium text-danger" : undefined}>
+                  {relative(request.requested_at)}
+                  {request.due_at && (
+                    <span className={overdue ? "font-medium text-danger" : undefined}>
                       {" "}
-                      · {enRetard ? "overdue" : "due"} {relative(demande.due_at)}
+                      · {overdue ? "overdue" : "due"} {relative(request.due_at)}
                     </span>
                   )}
                 </p>
-                {demande.kind === "task" ? (
+                {request.kind === "task" ? (
                   // A form and an attestation do not fit in a row: the ticket's page.
                   <Link href={`/p/${item.project_slug}/items/${item.id}`} className="text-sm">
                     Do the task
@@ -98,8 +98,8 @@ export function InboxView({ project, heading = "h1" }: { project?: string; headi
                 ) : (
                   <DecisionBar
                     itemId={item.id}
-                    kind={demande.kind}
-                    request={demande}
+                    kind={request.kind}
+                    request={request}
                     onDone={() => queryClient.invalidateQueries({ queryKey: ["items", item.project_slug] })}
                   />
                 )}

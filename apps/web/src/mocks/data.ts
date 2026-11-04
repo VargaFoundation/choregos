@@ -1565,24 +1565,24 @@ function editionSimulee(yaml: string, operations: WorkflowOperation[]): Workflow
   const inverse: WorkflowOperation[] = [];
   for (const op of operations) {
     if (op.op !== "set_state" || op.field !== "display") continue;
-    yamlText = yamlText.replace(INLINE_STATE, (ligne, debut: string, wfName: string, ancien: string, fin: string) => {
-      if (wfName !== op.name) return ligne;
-      inverse.unshift({ op: "set_state", name: wfName, field: "display", value: ancien });
-      return `${debut}${String(op.value)}${fin}`;
+    yamlText = yamlText.replace(INLINE_STATE, (match, start: string, wfName: string, previous: string, end: string) => {
+      if (wfName !== op.name) return match;
+      inverse.unshift({ op: "set_state", name: wfName, field: "display", value: previous });
+      return `${start}${String(op.value)}${end}`;
     });
   }
   const libelles = new Map([...yamlText.matchAll(INLINE_STATE)].map((m) => [m[2], m[3]]));
   const avant = yaml.split("\n");
   const afterLines = yamlText.split("\n");
-  const changees = avant.flatMap((ligne, index) => (ligne === afterLines[index] ? [] : [`-${ligne}`, `+${afterLines[index]}`]));
+  const changees = avant.flatMap((match, index) => (match === afterLines[index] ? [] : [`-${match}`, `+${afterLines[index]}`]));
   const workflowMap = workflowValidation.graph ?? { nodes: [], edges: [] };
   return {
     ...workflowValidation,
     graph: { ...workflowMap, nodes: workflowMap.nodes.map((n) => ({ ...n, display: libelles.get(n.id) ?? n.display })) },
-    process: workflowValidation.process?.map((etape) => ({
-      ...etape,
-      from_display: libelles.get(etape.from) ?? etape.from_display,
-      to_display: libelles.get(etape.to) ?? etape.to_display,
+    process: workflowValidation.process?.map((step) => ({
+      ...step,
+      from_display: libelles.get(step.from) ?? step.from_display,
+      to_display: libelles.get(step.to) ?? step.to_display,
     })),
     yaml: yamlText,
     diff: changees.length ? `--- workflow.yaml\n+++ workflow.yaml\n${changees.join("\n")}\n` : "",

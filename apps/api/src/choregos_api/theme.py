@@ -10,7 +10,7 @@ served: the route answers the default theme instead, so a theme can never break 
 `validate_theme` is public so that a plugin can run the same check when its operator WRITES a
 theme, and refuse it there rather than discover at read time that it falls back.
 
-The budget is the one of `apps/web/tests/theme-contraste.test.ts` (ADR 0043), rule for rule, with
+The budget is the one of `apps/web/tests/theme-contrast.test.ts` (ADR 0043), rule for rule, with
 the same thresholds. Changing one without the other makes the console's tests and the API's
 disagree: `tests/test_theme_budget.py` pins this copy, the web test pins `theme.css`.
 """
@@ -190,7 +190,7 @@ def effective_tokens(theme: dict[str, Any], mode: Mode) -> dict[str, str]:
 
 
 def _rules() -> list[tuple[str, str, float, str]]:
-    """`(text, background, minimum ratio, what)`: the pairs of `theme-contraste.test.ts`."""
+    """`(text, background, minimum ratio, what)`: the pairs of `theme-contrast.test.ts`."""
     rules: list[tuple[str, str, float, str]] = []
     for text in ("ink-muted", "ink-placeholder", "accent-strong"):
         rules += [(text, surface, 4.5, "secondary text") for surface in _SURFACES]
@@ -216,7 +216,7 @@ def _rules() -> list[tuple[str, str, float, str]]:
 
 
 def budget_violations(tokens: dict[str, str], mode: str = "") -> list[str]:
-    """What `theme-contraste.test.ts` asserts, on one mode's complete set of colours."""
+    """What `theme-contrast.test.ts` asserts, on one mode's complete set of colours."""
     out: list[str] = []
     where = f" ({mode})" if mode else ""
     for surface in _SURFACES:

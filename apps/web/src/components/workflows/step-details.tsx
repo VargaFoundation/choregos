@@ -184,7 +184,7 @@ function StepDetailsCard({
           <>
             <ActorIcon kind={ACTOR_KIND_ICON[step.actor_type] ?? "system"} />
             <span className="text-ink-muted">
-              <EngineSentence texte={step.who} />
+              <EngineSentence text={step.who} />
             </span>
           </>
         )}

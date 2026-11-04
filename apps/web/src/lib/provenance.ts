@@ -22,8 +22,8 @@ type Verdict = { passed: boolean; pending: boolean };
  * the agent does not say it is finished; "not observed" when a guarantee refused; "not verified"
  * when none has judged, or one is still judging.
  */
-export function declaredEnd(statutDeclare: string | null | undefined, verdicts: Verdict[]): string | null {
-  if (statutDeclare !== "done") return null;
+export function declaredEnd(declaredStatus: string | null | undefined, verdicts: Verdict[]): string | null {
+  if (declaredStatus !== "done") return null;
   if (verdicts.some((v) => !v.passed && !v.pending)) return "declared done, not observed";
   if (verdicts.length === 0 || verdicts.some((v) => v.pending)) return "declared done, not verified yet";
   return null;

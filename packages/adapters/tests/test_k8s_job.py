@@ -358,20 +358,20 @@ async def test_the_agent_pod_has_only_one_container() -> None:
     """No tools sidecar here, and it is a verified CHOICE, not an oversight.
 
     One was added on 2026-09-27 on the belief that nothing served the catalogue under this
-    executor. That was wrong: `runner/outils_locaux.py` starts this server itself when
+    executor. That was wrong: `runner/local_tools.py` starts this server itself when
     the announced address is local and nothing answers; its header describes exactly the defect
     that was thought to exist. The sidecar cost a container, an image pull and quota per agent pod
     to redo what worked, and it won the race for port 7777, so the runner's own server
     held back.
 
-    This test exists so that nobody adds one without having read `outils_locaux.py`.
+    This test exists so that nobody adds one without having read `local_tools.py`.
     """
     client = _RecordingClient()
     await KubernetesJobExecutor(client=client).start(_spec())  # type: ignore[arg-type]
     job = next(body for method, path, body in client.calls if method == "POST" and path.endswith("/jobs"))
     pod = job["spec"]["template"]["spec"]
     assert "initContainers" not in pod, (
-        "the catalogue is served by the runner itself (`outils_locaux.py`): a sidecar here "
+        "the catalogue is served by the runner itself (`local_tools.py`): a sidecar here "
         "redoes what works, and it takes the port before it"
     )
     assert [c["name"] for c in pod["containers"]] == ["runner"]

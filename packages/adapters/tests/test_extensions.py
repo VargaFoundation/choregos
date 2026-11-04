@@ -99,7 +99,7 @@ def test_an_extension_outside_the_tree_registers_its_connector(
 def test_a_declared_extension_that_does_not_load_stops_everything(temporary_path: pathlib.Path) -> None:
     """Silently absent, it would leave a platform that looks complete and is not.
 
-    The same rule as `garde.yaml` and as the refusal of an unresolved setting: someone installed
+    The same rule as `guard.yaml` and as the refusal of an unresolved setting: someone installed
     it so that it would serve. Better not to start, and to name the culprit.
     """
     from choregos_adapters import load_extensions

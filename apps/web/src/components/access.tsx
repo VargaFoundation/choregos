@@ -56,10 +56,10 @@ export function Access({ acces }: { acces?: RunAccess }) {
             <div className="mb-4 border-l-2 border-failed pl-3">
               <p className={cn(LEGENDE, "mb-1 text-failed-ink")}>Refused</p>
               <ul className="space-y-1 text-sm">
-                {refuses.map((ligne) => (
-                  <li key={`${ligne.nature}:${ligne.target}`}>
-                    <span className="font-mono text-xs">{ligne.target}</span>
-                    <span className="text-ink-muted"> — {ligne.reasons?.join(" · ") || "no reason"}</span>
+                {refuses.map((row) => (
+                  <li key={`${row.nature}:${row.target}`}>
+                    <span className="font-mono text-xs">{row.target}</span>
+                    <span className="text-ink-muted"> — {row.reasons?.join(" · ") || "no reason"}</span>
                   </li>
                 ))}
               </ul>
@@ -75,15 +75,15 @@ export function Access({ acces }: { acces?: RunAccess }) {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((ligne) => (
-                  <tr key={`${ligne.nature}:${ligne.target}`}>
-                    <td className="text-xs">{LIBELLE[ligne.nature] ?? ligne.nature}</td>
+                {rows.map((row) => (
+                  <tr key={`${row.nature}:${row.target}`}>
+                    <td className="text-xs">{LIBELLE[row.nature] ?? row.nature}</td>
                     <td>
-                      <span className="font-mono text-xs break-all">{ligne.target}</span>
+                      <span className="font-mono text-xs break-all">{row.target}</span>
                     </td>
                     <td className="text-xs">
-                      {ligne.requests}
-                      {ligne.refusals > 0 && <span className="text-danger"> · {ligne.refusals} refused</span>}
+                      {row.requests}
+                      {row.refusals > 0 && <span className="text-danger"> · {row.refusals} refused</span>}
                     </td>
                   </tr>
                 ))}

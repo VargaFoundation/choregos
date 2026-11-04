@@ -24,28 +24,28 @@ export function groupConnectors(instances: OrgConnector[]): { metier: OrgConnect
 
 export type DeliveryRow = {
   slug: string;
-  nom: string;
-  outils: { kind: string; type: string; status: string }[] | null;
-  refus: string | null;
+  name: string;
+  tools: { kind: string; type: string; status: string }[] | null;
+  refusal: string | null;
 };
 
 /** One row per project: its configured delivery tools, in the order of the requirements, or why they are not seen. */
 export function deliveryRows(
-  projets: Pick<ProjectDto, "slug" | "name">[],
+  projects: Pick<ProjectDto, "slug" | "name">[],
   lectures: { data?: ConnectorDto[]; error?: unknown }[],
 ): DeliveryRow[] {
-  return projets.map((projet, index) => {
+  return projects.map((project, index) => {
     const lecture = lectures[index] ?? {};
     if (lecture.error) {
       const interdit = lecture.error instanceof ApiError && lecture.error.status === 403;
-      return { slug: projet.slug, nom: projet.name, outils: null, refus: interdit ? "No access" : "Could not read" };
+      return { slug: project.slug, name: project.name, tools: null, refusal: interdit ? "No access" : "Could not read" };
     }
-    if (!lecture.data) return { slug: projet.slug, nom: projet.name, outils: null, refus: null };
+    if (!lecture.data) return { slug: project.slug, name: project.name, tools: null, refusal: null };
     const tools = lecture.data
-      .filter((connecteur) => isProjectKind(connecteur.kind))
+      .filter((connector) => isProjectKind(connector.kind))
       .sort((a, b) => PROJECT_KINDS.indexOf(a.kind as never) - PROJECT_KINDS.indexOf(b.kind as never))
-      .map((connecteur) => ({ kind: connecteur.kind, type: connecteur.type, status: connecteur.status ?? "unknown" }));
-    return { slug: projet.slug, nom: projet.name, outils: tools, refus: null };
+      .map((connector) => ({ kind: connector.kind, type: connector.type, status: connector.status ?? "unknown" }));
+    return { slug: project.slug, name: project.name, tools: tools, refusal: null };
   });
 }
 
@@ -54,9 +54,9 @@ export function DeliveryTools({ org }: { org: string }) {
   const projects = useQuery({ queryKey: ["projects", org], queryFn: () => api.projects(org) });
   const list = projects.data?.items ?? [];
   const lectures = useQueries({
-    queries: list.map((projet) => ({
-      queryKey: ["connectors", projet.slug],
-      queryFn: () => api.connectors(projet.slug),
+    queries: list.map((project) => ({
+      queryKey: ["connectors", project.slug],
+      queryFn: () => api.connectors(project.slug),
       retry: false,
     })),
   });
@@ -87,22 +87,22 @@ export function DeliveryTools({ org }: { org: string }) {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((ligne) => (
-                  <tr key={ligne.slug} className="border-t border-line" data-testid={`delivery-${ligne.slug}`}>
-                    <td className="py-2 font-medium">{ligne.nom}</td>
+                {rows.map((row) => (
+                  <tr key={row.slug} className="border-t border-line" data-testid={`delivery-${row.slug}`}>
+                    <td className="py-2 font-medium">{row.name}</td>
                     <td className="py-2">
-                      {ligne.refus ? (
-                        <span className="text-xs text-ink-muted">{ligne.refus}</span>
-                      ) : !ligne.outils ? (
+                      {row.refusal ? (
+                        <span className="text-xs text-ink-muted">{row.refusal}</span>
+                      ) : !row.tools ? (
                         <span className="text-xs text-ink-muted">Reading…</span>
-                      ) : ligne.outils.length === 0 ? (
+                      ) : row.tools.length === 0 ? (
                         <span className="text-xs text-ink-muted">Platform defaults only</span>
                       ) : (
                         <span className="flex flex-wrap gap-2">
-                          {ligne.outils.map((outil) => (
-                            <span key={outil.kind} title={`Status: ${outil.status}`}>
-                              <Badge tone={outil.status === "error" ? "danger" : "neutral"}>
-                                {toSentenceCase(kindLabel(outil.kind))}: {outil.type}
+                          {row.tools.map((tool) => (
+                            <span key={tool.kind} title={`Status: ${tool.status}`}>
+                              <Badge tone={tool.status === "error" ? "danger" : "neutral"}>
+                                {toSentenceCase(kindLabel(tool.kind))}: {tool.type}
                               </Badge>
                             </span>
                           ))}
@@ -110,7 +110,7 @@ export function DeliveryTools({ org }: { org: string }) {
                       )}
                     </td>
                     <td className="py-2 text-right">
-                      <Link href={`/p/${ligne.slug}/settings`} className="text-xs underline">
+                      <Link href={`/p/${row.slug}/settings`} className="text-xs underline">
                         Settings
                       </Link>
                     </td>

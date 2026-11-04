@@ -29,7 +29,7 @@ export function configurationEnClair(config: Record<string, unknown> | undefined
  * and keeps the full sentences behind a disclosure.
  */
 export function workflowsQuiExigent(reasons: string[]): string[] {
-  const names = reasons.map((raison) => /^([\w.-]+): /.exec(raison)?.[1]).filter((nom): nom is string => !!nom);
+  const names = reasons.map((reason) => /^([\w.-]+): /.exec(reason)?.[1]).filter((name): name is string => !!name);
   return [...new Set(names)];
 }
 
@@ -61,7 +61,7 @@ function GitHubVia({ repo }: { repo: string }) {
 }
 
 export function ConnectorCard({
-  sorte,
+  kind,
   exigence,
   actuel,
   types,
@@ -70,11 +70,11 @@ export function ConnectorCard({
   onClearSecret,
   onTest,
 }: {
-  sorte: string;
+  kind: string;
   exigence?: ProjectRequirement;
   actuel?: ConnectorDto;
   types: ConnectorType[];
-  onSave: (corps: ConnectorBody) => Promise<void>;
+  onSave: (body: ConnectorBody) => Promise<void>;
   onSecret: (field: string, draft: SecretDraft) => Promise<void>;
   onClearSecret: (field: string) => Promise<void>;
   onTest: () => Promise<void>;
@@ -86,11 +86,11 @@ export function ConnectorCard({
   const reglage = configurationEnClair(actuel?.config);
   const raisons = exigence?.reasons ?? [];
   const workflows = workflowsQuiExigent(raisons);
-  const title = kindTitle(sorte);
+  const title = kindTitle(kind);
   return (
     <li
       className="flex flex-col gap-3 rounded-md border border-line bg-surface p-4"
-      data-testid={`connector-kind-${sorte}`}
+      data-testid={`connector-kind-${kind}`}
     >
       <div className="flex items-start gap-3">
         <span
@@ -98,11 +98,11 @@ export function ConnectorCard({
           aria-label={typeName ?? title}
           className="grid size-10 shrink-0 place-items-center rounded-md border border-line bg-surface-sunken text-ink"
         >
-          <ConnectorIcon kind={sorte} type={shownType ?? ""} size={22} />
+          <ConnectorIcon kind={kind} type={shownType ?? ""} size={22} />
         </span>
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-ink">
-            {title} <code className="ml-1 text-xs font-normal text-ink-muted">{sorte}</code>
+            {title} <code className="ml-1 text-xs font-normal text-ink-muted">{kind}</code>
           </h3>
           {typeName && <p className="text-xs break-words text-ink-muted" data-verbatim>{typeName}</p>}
           {reglage && <p className="font-mono text-xs break-all text-ink-muted">{reglage}</p>}
@@ -110,12 +110,12 @@ export function ConnectorCard({
             <GitHubVia repo={actuel.config.repo} />
           )}
           {/* Who the bookkeeping's writes act as (ADR 0107 point 4). */}
-          {actuel && sorte === "tracker" && <WritesAs type={actuel.type} config={actuel.config} />}
+          {actuel && kind === "tracker" && <WritesAs type={actuel.type} config={actuel.config} />}
         </div>
       </div>
       {state && (
         <div>
-          <Badge tone={state.tone} data-testid={`state-${sorte}`}>
+          <Badge tone={state.tone} data-testid={`state-${kind}`}>
             {state.label}
           </Badge>
         </div>
@@ -139,8 +139,8 @@ export function ConnectorCard({
         <details className="text-xs text-ink-muted">
           <summary className="cursor-pointer">Why it is needed</summary>
           <ul className="mt-1 list-disc space-y-0.5 pl-5">
-            {raisons.map((raison) => (
-              <li key={raison}>{raison}</li>
+            {raisons.map((reason) => (
+              <li key={reason}>{reason}</li>
             ))}
           </ul>
         </details>
@@ -164,8 +164,8 @@ export function ConnectorCard({
             actuel={actuel}
             onSecret={onSecret}
             onClearSecret={onClearSecret}
-            onSave={async (corps) => {
-              await onSave(corps);
+            onSave={async (body) => {
+              await onSave(body);
               setOuvert(false);
             }}
           />

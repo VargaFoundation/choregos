@@ -37,9 +37,9 @@ export type JsonSchema = {
 type Values = Record<string, unknown>;
 
 /** The required fields left empty: enough to disable "save" before the API. */
-export function missingFields(schema: JsonSchema, valeurs: Values): string[] {
-  return (schema.required ?? []).filter((nom) => {
-    const value = valeurs[nom];
+export function missingFields(schema: JsonSchema, values: Values): string[] {
+  return (schema.required ?? []).filter((name) => {
+    const value = values[name];
     if (value === undefined || value === null || value === "") return true;
     if (Array.isArray(value)) return value.length === 0;
     return typeof value === "object" && Object.keys(value).length === 0;
@@ -49,8 +49,8 @@ export function missingFields(schema: JsonSchema, valeurs: Values): string[] {
 /** The schema's default values, to seed an empty form. */
 export function defaultValues(schema: JsonSchema): Values {
   const values: Values = {};
-  for (const [nom, propriete] of Object.entries(schema.properties ?? {})) {
-    if (propriete.default !== undefined) values[nom] = propriete.default;
+  for (const [name, propriete] of Object.entries(schema.properties ?? {})) {
+    if (propriete.default !== undefined) values[name] = propriete.default;
   }
   return values;
 }
@@ -78,21 +78,21 @@ export function SchemaForm({
   if (proprietes.length === 0) return null;
   return (
     <div className="grid gap-3 md:grid-cols-2">
-      {proprietes.map(([nom, propriete]) => (
+      {proprietes.map(([name, propriete]) => (
         <Field
-          key={nom}
-          id={`${base}-${nom}`}
-          nom={nom}
+          key={name}
+          id={`${base}-${name}`}
+          name={name}
           propriete={propriete}
-          requis={requis.has(nom)}
-          valeur={value[nom]}
+          requis={requis.has(name)}
+          value={value[name]}
           disabled={disabled}
           org={org}
           connectorType={connectorType}
-          onChange={(valeur) => {
+          onChange={(next) => {
             const suivantes = { ...value };
-            if (valeur === undefined) delete suivantes[nom];
-            else suivantes[nom] = valeur;
+            if (next === undefined) delete suivantes[name];
+            else suivantes[name] = next;
             onChange(suivantes);
           }}
         />
@@ -103,26 +103,26 @@ export function SchemaForm({
 
 function Field({
   id,
-  nom,
+  name,
   propriete,
   requis,
-  valeur,
+  value,
   disabled,
   org,
   connectorType,
   onChange,
 }: {
   id: string;
-  nom: string;
+  name: string;
   propriete: JsonSchema;
   requis: boolean;
-  valeur: unknown;
+  value: unknown;
   disabled?: boolean;
   org?: string;
   connectorType?: string;
-  onChange: (valeur: unknown) => void;
+  onChange: (value: unknown) => void;
 }) {
-  const libelle = propriete.title ?? nom.replaceAll("_", " ");
+  const libelle = propriete.title ?? name.replaceAll("_", " ");
   const aide = propriete.description ? `${id}-aide` : undefined;
   const label = (
     <label htmlFor={id} className="text-xs text-ink-muted">
@@ -143,7 +143,7 @@ function Field({
         <input
           id={id}
           type="checkbox"
-          checked={Boolean(valeur)}
+          checked={Boolean(value)}
           disabled={disabled}
           aria-describedby={aide}
           onChange={(event) => onChange(event.target.checked)}
@@ -158,15 +158,15 @@ function Field({
     control = (
       <Select
         id={id}
-        value={valeur === undefined ? "" : String(valeur)}
+        value={value === undefined ? "" : String(value)}
         disabled={disabled}
         aria-describedby={aide}
         onChange={(event) => onChange(event.target.value === "" ? undefined : event.target.value)}
       >
         <option value="">—</option>
-        {propriete.enum.map((choix) => (
-          <option key={String(choix)} value={String(choix)}>
-            {String(choix)}
+        {propriete.enum.map((choice) => (
+          <option key={String(choice)} value={String(choice)}>
+            {String(choice)}
           </option>
         ))}
       </Select>
@@ -176,7 +176,7 @@ function Field({
     control = (
       <GitHubRepoField
         id={id}
-        value={typeof valeur === "string" ? valeur : ""}
+        value={typeof value === "string" ? value : ""}
         disabled={disabled}
         describedBy={aide}
         onChange={onChange}
@@ -187,24 +187,24 @@ function Field({
       <AssetField
         id={id}
         propriete={propriete}
-        valeur={valeur}
+        value={value}
         disabled={disabled}
         describedBy={aide}
         org={org}
         onChange={onChange}
       />
     );
-  } else if (nom === "data_handling" && connectorType && propriete.properties?.terms_ref) {
-    control = <DataHandlingField id={id} type={connectorType} value={valeur} disabled={disabled} onChange={onChange} />;
+  } else if (name === "data_handling" && connectorType && propriete.properties?.terms_ref) {
+    control = <DataHandlingField id={id} type={connectorType} value={value} disabled={disabled} onChange={onChange} />;
   } else if (propriete.type === "object") {
-    control = <Correspondance id={id} valeur={valeur} disabled={disabled} aide={aide} onChange={onChange} />;
+    control = <Correspondance id={id} value={value} disabled={disabled} aide={aide} onChange={onChange} />;
   } else if (propriete.format === "multiline") {
     control = (
       <Textarea
         id={id}
         className="w-auto font-mono text-xs"
         rows={6}
-        value={typeof valeur === "string" ? valeur : ""}
+        value={typeof value === "string" ? value : ""}
         required={requis}
         disabled={disabled}
         aria-describedby={aide}
@@ -215,7 +215,7 @@ function Field({
     control = (
       <Input
         id={id}
-        value={Array.isArray(valeur) ? valeur.join(", ") : ""}
+        value={Array.isArray(value) ? value.join(", ") : ""}
         placeholder="Comma separated"
         disabled={disabled}
         aria-describedby={aide}
@@ -234,7 +234,7 @@ function Field({
       <Input
         id={id}
         type={isNumber ? "number" : propriete.format === "date" ? "date" : propriete.format === "password" ? "password" : "text"}
-        value={valeur === undefined || valeur === null ? "" : String(valeur)}
+        value={value === undefined || value === null ? "" : String(value)}
         required={requis}
         disabled={disabled}
         aria-describedby={aide}
@@ -249,7 +249,7 @@ function Field({
     );
   }
   return (
-    <div className={nom === "data_handling" && connectorType ? "space-y-1 md:col-span-2" : "space-y-1"}>
+    <div className={name === "data_handling" && connectorType ? "space-y-1 md:col-span-2" : "space-y-1"}>
       {label}
       {control}
       {indication}
@@ -258,25 +258,25 @@ function Field({
 }
 
 /** `key = value`, one per line: what is read, and what is typed. */
-export function parseMapping(texte: string): { valeurs: Record<string, string>; illisibles: number[] } {
+export function parseMapping(text: string): { values: Record<string, string>; unreadable: number[] } {
   const parsed: Record<string, string> = {};
-  const illisibles: number[] = [];
-  texte.split("\n").forEach((ligne, index) => {
-    if (!ligne.trim()) return;
-    const egal = ligne.indexOf("=");
-    const key = egal < 0 ? "" : ligne.slice(0, egal).trim();
+  const unreadable: number[] = [];
+  text.split("\n").forEach((line, index) => {
+    if (!line.trim()) return;
+    const egal = line.indexOf("=");
+    const key = egal < 0 ? "" : line.slice(0, egal).trim();
     if (!key) {
-      illisibles.push(index + 1);
+      unreadable.push(index + 1);
       return;
     }
-    parsed[key] = ligne.slice(egal + 1).trim();
+    parsed[key] = line.slice(egal + 1).trim();
   });
-  return { valeurs: parsed, illisibles };
+  return { values: parsed, unreadable };
 }
 
-function writeMapping(valeur: unknown): string {
-  if (!valeur || typeof valeur !== "object" || Array.isArray(valeur)) return "";
-  return Object.entries(valeur as Record<string, unknown>)
+function writeMapping(value: unknown): string {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+  return Object.entries(value as Record<string, unknown>)
     .map(([cle, contenu]) => `${cle} = ${String(contenu)}`)
     .join("\n");
 }
@@ -288,45 +288,45 @@ function writeMapping(valeur: unknown): string {
  */
 function Correspondance({
   id,
-  valeur,
+  value,
   disabled,
   aide,
   onChange,
 }: {
   id: string;
-  valeur: unknown;
+  value: unknown;
   disabled?: boolean;
   aide?: string;
-  onChange: (valeur: unknown) => void;
+  onChange: (value: unknown) => void;
 }) {
-  const [texte, setTexte] = useState(() => writeMapping(valeur));
-  const [recue, setRecue] = useState(valeur);
-  if (valeur !== recue) {
+  const [text, setTexte] = useState(() => writeMapping(value));
+  const [recue, setRecue] = useState(value);
+  if (value !== recue) {
     // A value that came from elsewhere (the read) replaces the text; one that was just typed does not.
-    setRecue(valeur);
-    const tapee = parseMapping(texte).valeurs;
-    if (JSON.stringify(tapee) !== JSON.stringify(valeur ?? {})) setTexte(writeMapping(valeur));
+    setRecue(value);
+    const tapee = parseMapping(text).values;
+    if (JSON.stringify(tapee) !== JSON.stringify(value ?? {})) setTexte(writeMapping(value));
   }
-  const { illisibles } = parseMapping(texte);
+  const { unreadable } = parseMapping(text);
   return (
     <>
       <Textarea
         id={id}
         className="w-full font-mono"
         rows={4}
-        value={texte}
+        value={text}
         placeholder="key = value"
         disabled={disabled}
         aria-describedby={aide}
         onChange={(event) => {
           setTexte(event.target.value);
-          const { valeurs } = parseMapping(event.target.value);
-          onChange(Object.keys(valeurs).length > 0 ? valeurs : undefined);
+          const { values } = parseMapping(event.target.value);
+          onChange(Object.keys(values).length > 0 ? values : undefined);
         }}
       />
-      {illisibles.length > 0 && (
+      {unreadable.length > 0 && (
         <p className="text-xs text-danger" role="alert">
-          Line{illisibles.length > 1 ? "s" : ""} {illisibles.join(", ")}: key = value expected
+          Line{unreadable.length > 1 ? "s" : ""} {unreadable.join(", ")}: key = value expected
         </p>
       )}
     </>
@@ -334,23 +334,23 @@ function Correspondance({
 }
 
 /** The path an asset field uploads to, `{org}` filled in; null when it cannot be (no org, or another placeholder). */
-export function uploadPath(modele: string | undefined, org: string | undefined): string | null {
-  if (!modele) return null;
-  if (modele.includes("{org}")) {
+export function uploadPath(template: string | undefined, org: string | undefined): string | null {
+  if (!template) return null;
+  if (template.includes("{org}")) {
     if (!org) return null;
-    modele = modele.replaceAll("{org}", encodeURIComponent(org));
+    template = template.replaceAll("{org}", encodeURIComponent(org));
   }
-  return /[{}]/.test(modele) ? null : modele;
+  return /[{}]/.test(template) ? null : template;
 }
 
 /** Why a file cannot be offered, from the schema's limits, or null. A courtesy: the upload route is the judge. */
-export function fileRefusal(fichier: { type: string; size: number }, propriete: JsonSchema): string | null {
+export function fileRefusal(file: { type: string; size: number }, propriete: JsonSchema): string | null {
   const accepte = propriete["x-accept"];
-  if (accepte && accepte.length > 0 && !accepte.includes(fichier.type)) {
+  if (accepte && accepte.length > 0 && !accepte.includes(file.type)) {
     return `This file type is not accepted (${accepte.join(", ")})`;
   }
   const max = propriete["x-max-bytes"];
-  if (max !== undefined && fichier.size > max) {
+  if (max !== undefined && file.size > max) {
     return `This file is larger than ${max >= 1024 ? `${Math.round(max / 1024)} KiB` : `${max} bytes`}`;
   }
   return null;
@@ -365,7 +365,7 @@ export function fileRefusal(fichier: { type: string; size: number }, propriete: 
 function AssetField({
   id,
   propriete,
-  valeur,
+  value,
   disabled,
   describedBy,
   org,
@@ -373,27 +373,27 @@ function AssetField({
 }: {
   id: string;
   propriete: JsonSchema;
-  valeur: unknown;
+  value: unknown;
   disabled?: boolean;
   describedBy?: string;
   org?: string;
-  onChange: (valeur: unknown) => void;
+  onChange: (value: unknown) => void;
 }) {
   const [envoi, setEnvoi] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const path = uploadPath(propriete["x-upload"], org);
-  const actuel = typeof valeur === "string" && valeur !== "" ? valeur : null;
+  const actuel = typeof value === "string" && value !== "" ? value : null;
   // Only a same-origin served file is drawn; any other reference is shown as text, never loaded.
   const image = actuel ? safeAsset(actuel) : undefined;
 
-  async function choose(fichier: File | undefined) {
+  async function choose(file: File | undefined) {
     setErreur(null);
-    if (!fichier || !path) return;
-    const refusal = fileRefusal(fichier, propriete);
+    if (!file || !path) return;
+    const refusal = fileRefusal(file, propriete);
     if (refusal) return setErreur(refusal);
     setEnvoi(true);
     try {
-      const { ref } = await api.sectionUpload(path, fichier);
+      const { ref } = await api.sectionUpload(path, file);
       onChange(ref);
     } catch (cause) {
       setErreur(cause instanceof Error ? cause.message : "upload refused");

@@ -47,15 +47,15 @@ function callDuration(ms: number | undefined): string {
  * its duration, and the refusal that blocked it; then the refusals that nothing links to a call.
  */
 export function RunActivityView({ activite }: { activite: RunActivity }) {
-  const { appels, refus, termines, sousAgents } = activite;
-  const orphelins = refus.filter((r) => !r.appel || !appels.some((a) => a.id === r.appel));
+  const { calls, refusals, termines, sousAgents } = activite;
+  const orphelins = refusals.filter((r) => !r.call || !calls.some((a) => a.id === r.call));
   return (
     <div className="space-y-3" data-testid="run-activity">
       <p className="font-mono text-xs text-ink-muted" data-testid="activity-summary">
-        {appels.length} tool call{appels.length === 1 ? "" : "s"} · {termines} finished · {refus.length} refused
+        {calls.length} tool call{calls.length === 1 ? "" : "s"} · {termines} finished · {refusals.length} refused
         {sousAgents > 0 ? ` · ${sousAgents} sub-agent${sousAgents === 1 ? "" : "s"}` : ""}
       </p>
-      {appels.length > 0 && (
+      {calls.length > 0 && (
         <div className="max-h-96 overflow-auto">
           <Table aria-label="Tool calls">
             <THead>
@@ -67,8 +67,8 @@ export function RunActivityView({ activite }: { activite: RunActivity }) {
               </TR>
             </THead>
             <TBody>
-              {appels.map((appel) => (
-                <Row key={appel.id} appel={appel} />
+              {calls.map((call) => (
+                <Row key={call.id} call={call} />
               ))}
             </TBody>
           </Table>
@@ -77,10 +77,10 @@ export function RunActivityView({ activite }: { activite: RunActivity }) {
       {orphelins.length > 0 && (
         <ul aria-label="Refusals outside a tool call" className="space-y-1 text-xs">
           {orphelins.map((r, i) => (
-            <li key={`${r.cible}-${i}`} className="flex flex-wrap items-baseline gap-2">
+            <li key={`${r.target}-${i}`} className="flex flex-wrap items-baseline gap-2">
               <Badge tone="failed">Denied</Badge>
-              <span className="font-mono">{r.cible}</span>
-              <span className="text-ink-muted">{r.raison}</span>
+              <span className="font-mono">{r.target}</span>
+              <span className="text-ink-muted">{r.reason}</span>
             </li>
           ))}
         </ul>
@@ -89,31 +89,31 @@ export function RunActivityView({ activite }: { activite: RunActivity }) {
   );
 }
 
-function Row({ appel }: { appel: ToolCall }) {
-  const Icone = appel.sousAgent ? Bot : (ICONES[appel.genre] ?? Wrench);
+function Row({ call }: { call: ToolCall }) {
+  const Icone = call.sousAgent ? Bot : (ICONES[call.genre] ?? Wrench);
   return (
-    <TR data-call={appel.id} data-status={appel.statut}>
-      <TD className="font-mono text-xs whitespace-nowrap text-ink-muted tabular-nums">{HEURE.format(new Date(appel.debut))}</TD>
+    <TR data-call={call.id} data-status={call.status}>
+      <TD className="font-mono text-xs whitespace-nowrap text-ink-muted tabular-nums">{HEURE.format(new Date(call.start))}</TD>
       <TD className="min-w-0">
         <span className="flex min-w-0 items-center gap-2">
           <Icone aria-hidden className="size-4 shrink-0 text-ink-muted" strokeWidth={1.75} />
-          <span className="truncate" title={appel.chemins.join(", ") || undefined}>
-            {appel.titre}
+          <span className="truncate" title={call.paths.join(", ") || undefined}>
+            {call.title}
           </span>
-          <span className="sr-only">, {appel.sousAgent ? "sub-agent" : appel.genre} </span>
-          {appel.sousAgent && <Badge tone="agent">Sub-agent</Badge>}{" "}
-          {appel.refus && (
-            <span title={appel.refus}>
+          <span className="sr-only">, {call.sousAgent ? "sub-agent" : call.genre} </span>
+          {call.sousAgent && <Badge tone="agent">Sub-agent</Badge>}{" "}
+          {call.refusals && (
+            <span title={call.refusals}>
               <Badge tone="failed">Denied</Badge>
             </span>
           )}
         </span>
       </TD>
       <TD>
-        <Badge tone={TONS[appel.statut]}>{LIBELLES[appel.statut]}</Badge>
+        <Badge tone={TONS[call.status]}>{LIBELLES[call.status]}</Badge>
       </TD>
       <TD align="right" className="font-mono text-xs whitespace-nowrap tabular-nums">
-        {callDuration(appel.dureeMs)}
+        {callDuration(call.durationMs)}
       </TD>
     </TR>
   );

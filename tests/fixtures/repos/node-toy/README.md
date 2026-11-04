@@ -1,4 +1,4 @@
-# slugger — dépôt jouet Node
+# slugger — a toy Node repository
 
-Dépôt minimal utilisé par les évals Choregos. Aucune dépendance : les tests
-tournent avec le lanceur intégré de Node (`node --test`), donc sans `npm install`.
+A minimal repository used by the Choregos evals. No dependency: the tests run
+with Node's built-in runner (`node --test`), so without `npm install`.

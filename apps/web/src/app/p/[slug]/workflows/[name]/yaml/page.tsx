@@ -58,7 +58,7 @@ export default function YamlPage() {
           {draft.errors.map((issue, index) => (
             <ErrorNote key={index}>
               {issue.line ? (
-                <button type="button" className="underline" onClick={() => editor.current?.allerALaLigne(issue.line!)}>
+                <button type="button" className="underline" onClick={() => editor.current?.goToLine(issue.line!)}>
                   Line {issue.line}
                 </button>
               ) : null}

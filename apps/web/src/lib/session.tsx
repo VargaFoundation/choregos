@@ -12,7 +12,7 @@ type Session = {
   me: MeDto | null;
   orgs: Org[];
   org: string;
-  choisirOrg: (slug: string) => void;
+  selectOrg: (slug: string) => void;
   chargement: boolean;
   deconnecter: () => Promise<void>;
 };
@@ -78,7 +78,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         me: me.data ?? null,
         orgs: orgs.data ?? [],
         org,
-        choisirOrg: chooseOrg,
+        selectOrg: chooseOrg,
         chargement: me.isLoading || (!!me.data && orgs.isLoading),
         deconnecter,
       }}

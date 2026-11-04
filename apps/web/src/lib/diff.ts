@@ -7,9 +7,9 @@
  */
 export type DiffLine = { kind: "same" | "add" | "del"; text: string; before?: number; after?: number };
 
-export function diffLines(avant: string, apres: string): DiffLine[] {
+export function diffLines(avant: string, after: string): DiffLine[] {
   const a = avant.split("\n");
-  const b = apres.split("\n");
+  const b = after.split("\n");
   const largeur = b.length + 1;
   // table[i * largeur + j]: the longest common subsequence of a[i:] and b[j:]
   const table = new Int32Array((a.length + 1) * largeur);
@@ -41,15 +41,15 @@ export function diffLines(avant: string, apres: string): DiffLine[] {
 }
 
 /** Only the lines that change, with `contexte` unchanged lines around them, like `diff -u`. */
-export function hunks(lignes: DiffLine[], contexte = 2): DiffLine[][] {
-  const garder = lignes.map((ligne, index) =>
-    lignes.slice(Math.max(0, index - contexte), index + contexte + 1).some((voisine) => voisine.kind !== "same"),
+export function hunks(lines: DiffLine[], context = 2): DiffLine[][] {
+  const garder = lines.map((line, index) =>
+    lines.slice(Math.max(0, index - context), index + context + 1).some((voisine) => voisine.kind !== "same"),
   );
   const morceaux: DiffLine[][] = [];
   let courant: DiffLine[] = [];
-  lignes.forEach((ligne, index) => {
+  lines.forEach((line, index) => {
     if (garder[index]) {
-      courant.push(ligne);
+      courant.push(line);
     } else if (courant.length > 0) {
       morceaux.push(courant);
       courant = [];

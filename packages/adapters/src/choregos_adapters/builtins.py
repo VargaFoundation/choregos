@@ -94,7 +94,7 @@ def _direct_gateway(cfg: dict[str, Any]) -> Any:
     ledger stays at zero: the bench ran like this for a week and "proved" a spend ceiling that had
     never measured any spend (BLOCKERS, S12). On a serious environment, this is not a
     configuration: it is accounting switched off without anyone having decided it. So building it
-    is refused, naming the way out, as `garde.yaml` refuses an embedded dependency in staging and
+    is refused, naming the way out, as `guard.yaml` refuses an embedded dependency in staging and
     prod.
     """
     from .gateway.direct import DirectGateway  # a lazy import, like the others'

@@ -157,22 +157,22 @@ function Diff({ avant, apres }: { avant?: WorkflowDef; apres?: WorkflowDef }) {
     <div className="mt-3 space-y-3" data-testid="workflow-diff" aria-label={`Changes from v${avant.version} to v${apres.version}`}>
       {morceaux.map((morceau, index) => (
         <pre key={index} className="overflow-hidden whitespace-pre-wrap break-all rounded border border-line bg-surface p-2 text-xs">
-          {morceau.map((ligne, rang) => (
+          {morceau.map((row, rang) => (
             <div
               key={rang}
               // The text stays in ink: the colour is only a marker in the margin (AA contrast), the
               // sign and the screen-reader text carry the meaning.
               className={
-                ligne.kind === "add"
+                row.kind === "add"
                   ? "border-l-2 border-ok bg-ok/10 pl-1 text-ink"
-                  : ligne.kind === "del"
+                  : row.kind === "del"
                     ? "border-l-2 border-danger bg-danger/10 pl-1 text-ink"
                     : "pl-1.5 text-ink-muted"
               }
             >
-              <span aria-hidden>{ligne.kind === "add" ? "+ " : ligne.kind === "del" ? "- " : "  "}</span>
-              <span className="sr-only">{ligne.kind === "add" ? "added: " : ligne.kind === "del" ? "removed: " : ""}</span>
-              {ligne.text}
+              <span aria-hidden>{row.kind === "add" ? "+ " : row.kind === "del" ? "- " : "  "}</span>
+              <span className="sr-only">{row.kind === "add" ? "added: " : row.kind === "del" ? "removed: " : ""}</span>
+              {row.text}
             </div>
           ))}
         </pre>

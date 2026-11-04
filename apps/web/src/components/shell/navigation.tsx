@@ -128,10 +128,10 @@ export interface ProjectFeatures {
 }
 
 export function orgGroups(): NavGroup[] {
-  return GROUPS.map((groupe) => ({
-    title: groupe.titre,
-    hue: groupe.hue,
-    entries: groupe.entrees.map((href) => {
+  return GROUPS.map((group) => ({
+    title: group.titre,
+    hue: group.hue,
+    entries: group.entrees.map((href) => {
       const navEntry = NAV.find((n) => n.href === href)!;
       return {
         href,
@@ -491,25 +491,25 @@ export function NavigationList({
   return (
     <>
       <ScopeHeader scope={scope} compact={barre} rail={rail} />
-      {groups.map((groupe) => {
+      {groups.map((group) => {
         // A title may hold spaces, and `aria-labelledby` reads a space as two ids.
-        const titleId = `${id}-${groupe.title.replace(/[^A-Za-z0-9_-]+/g, "-")}`;
+        const titleId = `${id}-${group.title.replace(/[^A-Za-z0-9_-]+/g, "-")}`;
         return (
-          <div key={groupe.title} className={barre ? "mb-3" : "mt-4"}>
+          <div key={group.title} className={barre ? "mb-3" : "mt-4"}>
             {/* A caption, not a heading: the page carries its only h1 and its sections. */}
             <p id={titleId} className={cn("px-2 pb-1 text-xs font-medium text-ink-muted", barre && "rail:sr-only")}>
-              {groupe.title}
+              {group.title}
             </p>
             <ul aria-labelledby={titleId}>
-              {groupe.entries.map((entree) => {
-                const Icone = entree.icon;
-                const active = entree.active(pathname);
+              {group.entries.map((entry) => {
+                const Icone = entry.icon;
+                const active = entry.active(pathname);
                 return (
-                  <li key={entree.href}>
+                  <li key={entry.href}>
                     <Link
-                      href={entree.href}
+                      href={entry.href}
                       aria-current={active ? "page" : undefined}
-                      title={barre && rail ? entree.label : undefined}
+                      title={barre && rail ? entry.label : undefined}
                       className={cn(
                         "relative flex items-center rounded no-underline",
                         barre
@@ -520,11 +520,11 @@ export function NavigationList({
                     >
                       <Icone
                         aria-hidden
-                        className={cn("size-4 shrink-0", groupe.hue && HUE_CLASSES[groupe.hue].ink)}
+                        className={cn("size-4 shrink-0", group.hue && HUE_CLASSES[group.hue].ink)}
                         strokeWidth={1.75}
                       />
-                      <span className={cn(barre && "rail:sr-only")}>{entree.label}</span>
-                      {entree.counts && aDecider > 0 && (
+                      <span className={cn(barre && "rail:sr-only")}>{entry.label}</span>
+                      {entry.counts && aDecider > 0 && (
                         <Count
                           n={aDecider}
                           className={cn(

@@ -98,7 +98,7 @@ export function NewWorkItemForm({
             <InputField
               key={field.name}
               field={field}
-              valeur={entered[field.name]}
+              value={entered[field.name]}
               onChange={(value) => setEntered((before) => ({ ...before, [field.name]: value }))}
             />
           ))}
@@ -160,25 +160,25 @@ export function NewWorkItemForm({
 /** One input of the work item, as the control its type calls for. */
 function InputField({
   field,
-  valeur,
+  value,
   onChange,
 }: {
   field: Field;
-  valeur: string | boolean | undefined;
-  onChange: (valeur: string | boolean) => void;
+  value: string | boolean | undefined;
+  onChange: (value: string | boolean) => void;
 }) {
   const label = `${field.label}${field.required ? " (required)" : ""}`;
   if (field.control === "boolean") {
     return (
       <label className="flex items-center gap-2">
-        <input type="checkbox" checked={Boolean(valeur)} onChange={(event) => onChange(event.target.checked)} />
+        <input type="checkbox" checked={Boolean(value)} onChange={(event) => onChange(event.target.checked)} />
         {label}
       </label>
     );
   }
   if (field.control === "choice") {
     return (
-      <Select aria-label={label} value={String(valeur ?? "")} onChange={(event) => onChange(event.target.value)}>
+      <Select aria-label={label} value={String(value ?? "")} onChange={(event) => onChange(event.target.value)}>
         <option value="">{label}</option>
         {field.choices?.map((choice) => (
           <option key={choice} value={choice}>
@@ -196,7 +196,7 @@ function InputField({
       title={field.hint}
       type={type}
       required={field.required}
-      value={String(valeur ?? "")}
+      value={String(value ?? "")}
       placeholder={field.control === "list" ? `${field.label}, comma separated` : field.label}
       onChange={(event) => onChange(event.target.value)}
     />

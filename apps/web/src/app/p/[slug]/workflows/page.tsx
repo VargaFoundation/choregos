@@ -42,10 +42,10 @@ function condition(rule: Rule): string {
 }
 
 /** "incident, sev1" -> ["incident", "sev1"]: labels, with no blank and no duplicate. */
-function labelsOf(texte: string): string[] {
+function labelsOf(text: string): string[] {
   return [
     ...new Set(
-      texte
+      text
         .split(",")
         .map((e) => e.trim())
         .filter(Boolean),
@@ -300,8 +300,8 @@ function Routing({
   }
   function deplacer(index: number, sens: -1 | 1) {
     const suivantes = [...courantes];
-    const [regle] = suivantes.splice(index, 1);
-    suivantes.splice(index + sens, 0, regle!);
+    const [rule] = suivantes.splice(index, 1);
+    suivantes.splice(index + sens, 0, rule!);
     changer(suivantes);
   }
   function resetForm() {
@@ -393,9 +393,9 @@ function Routing({
               Choose the default
             </option>
           )}
-          {names.map((nom) => (
-            <option key={nom} value={nom}>
-              {nom}
+          {names.map((name) => (
+            <option key={name} value={name}>
+              {name}
             </option>
           ))}
         </Select>
@@ -404,15 +404,15 @@ function Routing({
         <p className="text-ink-muted">No rule — every request that names no workflow goes to the default.</p>
       ) : (
         <ol className="divide-y divide-line border-y border-line" aria-label="Routing rules" data-testid="rules">
-          {courantes.map((regle, index) => (
+          {courantes.map((rule, index) => (
             <li
-              key={`${index}-${regle.workflow}`}
+              key={`${index}-${rule.workflow}`}
               className={`flex flex-wrap items-center gap-2 py-2 ${editing === index ? "bg-surface-muted" : ""}`}
               aria-current={editing === index ? "true" : undefined}
             >
               <span className="w-5 text-ink-muted">{index + 1}.</span>
               <span className="min-w-0 flex-1">
-                {condition(regle)} → <strong>{regle.workflow}</strong>
+                {condition(rule)} → <strong>{rule.workflow}</strong>
               </span>
               <Button
                 size="sm"
@@ -497,9 +497,9 @@ function Routing({
             onChange={(event) => setCible(event.target.value)}
             className="w-auto"
           >
-            {names.map((nom) => (
-              <option key={nom} value={nom}>
-                {nom}
+            {names.map((name) => (
+              <option key={name} value={name}>
+                {name}
               </option>
             ))}
           </Select>
@@ -592,7 +592,7 @@ function Routing({
       )}
       {erreur && (
         <ErrorNote>
-          <EngineSentence texte={erreur} />
+          <EngineSentence text={erreur} />
         </ErrorNote>
       )}
       {message && <p role="status">{message}</p>}
@@ -667,7 +667,7 @@ function TryRouting({ slug }: { slug: string }) {
       )}
       {erreur && (
         <ErrorNote>
-          <EngineSentence texte={erreur} />
+          <EngineSentence text={erreur} />
         </ErrorNote>
       )}
     </form>

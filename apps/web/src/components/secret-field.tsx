@@ -7,8 +7,8 @@ import { relative } from "@/lib/format";
 import type { ConnectorSecretState } from "@/lib/types";
 
 /** A secret reference, not a value: `scheme:rest` (`env:JIRA_TOKEN`). */
-export function isReference(valeur: string): boolean {
-  return /^[a-z][a-z0-9-]{1,31}:.+$/.test(valeur);
+export function isReference(value: string): boolean {
+  return /^[a-z][a-z0-9-]{1,31}:.+$/.test(value);
 }
 
 /**

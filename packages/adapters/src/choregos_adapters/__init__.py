@@ -117,7 +117,7 @@ def load_extensions(group: str = EXTENSION_GROUP) -> list[str]:
 
     Each entry point designates a callable with no argument, which makes its `register(...)` calls.
 
-    **A declared extension that does not load stops the process.** The same rule as `garde.yaml`
+    **A declared extension that does not load stops the process.** The same rule as `guard.yaml`
     and as the refusal of an unresolved setting: someone installed it so that it would serve, and
     a silently absent extension leaves a platform that looks complete and is not.
     """

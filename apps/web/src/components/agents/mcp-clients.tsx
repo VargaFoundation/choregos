@@ -43,8 +43,8 @@ export function McpClients({ org, clients, agents }: { org: string; clients: Api
         <Empty title="No AI client">Connect Claude Code or another client above: it appears here once it has called.</Empty>
       ) : (
         <ul className="space-y-3" data-testid="mcp-clients">
-          {clients.map((jeton) => (
-            <ClientMcp key={jeton.id} org={org} jeton={jeton} agent={agentByToken.get(jeton.id)} />
+          {clients.map((token) => (
+            <ClientMcp key={token.id} org={org} token={token} agent={agentByToken.get(token.id)} />
           ))}
         </ul>
       )}
@@ -52,18 +52,18 @@ export function McpClients({ org, clients, agents }: { org: string; clients: Api
   );
 }
 
-function ClientMcp({ org, jeton, agent }: { org: string; jeton: ApiToken; agent?: Agent }) {
+function ClientMcp({ org, token, agent }: { org: string; token: ApiToken; agent?: Agent }) {
   const client = useQueryClient();
   const [ouvert, setOuvert] = useState(false);
-  const [slug, setSlug] = useState(() => actorSlug(jeton.name));
-  const [nom, setNom] = useState(jeton.name);
+  const [slug, setSlug] = useState(() => actorSlug(token.name));
+  const [nom, setNom] = useState(token.name);
   const [lecture, setLecture] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   async function enregistrer() {
     setErreur(null);
     try {
       await api.createAgent(org, { slug, kind: "external", display_name: nom || slug, spec: versionDuClient(lecture) });
-      await api.attachAgentToken(org, slug, jeton.id);
+      await api.attachAgentToken(org, slug, token.id);
       setOuvert(false);
       await client.invalidateQueries({ queryKey: ["agents", org] });
       await client.invalidateQueries({ queryKey: ["agent-credentials", org] });
@@ -72,19 +72,19 @@ function ClientMcp({ org, jeton, agent }: { org: string; jeton: ApiToken; agent?
     }
   }
   return (
-    <li className="space-y-2 rounded border border-line p-3" data-testid={`client-${jeton.id}`}>
+    <li className="space-y-2 rounded border border-line p-3" data-testid={`client-${token.id}`}>
       <div className="flex flex-wrap items-center gap-3 text-sm">
-        <span className="font-medium">{jeton.name}</span>
-        {jeton.last_used_at ? (
+        <span className="font-medium">{token.name}</span>
+        {token.last_used_at ? (
           <Badge tone="ok">Connected</Badge>
         ) : (
           <Badge tone="neutral">Never called</Badge>
         )}
         <span className="text-xs text-ink-muted">
-          {jeton.last_used_at ? `Last call ${relative(jeton.last_used_at)}` : "No call yet"}
-          {jeton.last_client ? ` · ${jeton.last_client}` : ""}
-          {` · ${jeton.scopes.join(", ")}`}
-          {jeton.project ? ` · ${jeton.project}` : ""}
+          {token.last_used_at ? `Last call ${relative(token.last_used_at)}` : "No call yet"}
+          {token.last_client ? ` · ${token.last_client}` : ""}
+          {` · ${token.scopes.join(", ")}`}
+          {token.project ? ` · ${token.project}` : ""}
         </span>
         <span className="ml-auto">
           {agent ? (

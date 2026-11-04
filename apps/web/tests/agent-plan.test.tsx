@@ -32,7 +32,7 @@ describe("the agent's plan, re-read from the journal (S25-01)", () => {
       plan(3, [t("read", "completed", "high"), t("fix", "in_progress")]),
     ])!;
     expect(relu.revisions).toHaveLength(2);
-    expect(relu.taches.map((x) => [x.contenu, x.retiree ? "removed" : x.statut])).toEqual([
+    expect(relu.tasks.map((x) => [x.content, x.retiree ? "removed" : x.status])).toEqual([
       ["read", "completed"],
       ["fix", "in_progress"],
     ]);
@@ -45,7 +45,7 @@ describe("the agent's plan, re-read from the journal (S25-01)", () => {
       plan(2, [t("read", "completed"), t("fix", "in_progress")]),
     ])!;
     expect([relu.faites, relu.total]).toEqual([1, 2]);
-    expect(relu.taches.at(-1)).toEqual({ contenu: "documenter", priorite: "medium", retiree: true, avant: "completed", revision: 2 });
+    expect(relu.tasks.at(-1)).toEqual({ content: "documenter", priorite: "medium", retiree: true, avant: "completed", revision: 2 });
   });
 
   it("two revisions reconcile without a silent merge: a reworded task is another task", () => {
@@ -53,13 +53,13 @@ describe("the agent's plan, re-read from the journal (S25-01)", () => {
       plan(1, [t("ajouter un test", "in_progress")]),
       plan(2, [t("add regression tests", "in_progress")]),
     ])!;
-    expect(relu.taches.map((x) => [x.contenu, x.retiree])).toEqual([
+    expect(relu.tasks.map((x) => [x.content, x.retiree])).toEqual([
       ["add regression tests", false],
       ["ajouter un test", true],
     ]);
     // Spaces do not make another task; case does: the agent is the one writing.
     const espaces = agentPlan([plan(1, [t("read  the code ", "pending")]), plan(2, [t("read the code", "completed")])])!;
-    expect(espaces.taches).toHaveLength(1);
+    expect(espaces.tasks).toHaveLength(1);
   });
 
   it("the order is the agent's: live and stored overlap, a number counts once", () => {
@@ -71,7 +71,7 @@ describe("the agent's plan, re-read from the journal (S25-01)", () => {
 
   it("a malformed entry is ignored, an unknown status or priority takes the default", () => {
     const relu = agentPlan([plan(1, [null, { status: "completed" }, { content: "read", status: "fait", priority: "urgente" }])])!;
-    expect(relu.taches).toEqual([{ contenu: "read", priorite: "medium", statut: "pending", retiree: false }]);
+    expect(relu.tasks).toEqual([{ content: "read", priorite: "medium", status: "pending", retiree: false }]);
   });
 });
 
@@ -129,7 +129,7 @@ describe("opencode's plan, published through its todowrite tool (S25-05)", () =>
       todowrite(2, [t("Inspect the code", "completed"), t("Update the docs", "cancelled")]),
     ])!;
     expect([plan.faites, plan.total]).toEqual([1, 1]);
-    expect(plan.taches.at(-1)).toMatchObject({ contenu: "Update the docs", retiree: true });
+    expect(plan.tasks.at(-1)).toMatchObject({ content: "Update the docs", retiree: true });
   });
 
   it("ignores the call without input and any other tool that happens to carry a list", () => {

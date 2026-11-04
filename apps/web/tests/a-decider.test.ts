@@ -5,11 +5,11 @@ import type { Action, BudgetAlert, HumanRequest, WorkItemDto } from "@/lib/types
 const MAINTENANT = Date.parse("2026-10-08T12:00:00Z");
 const heure = (h: number) => new Date(MAINTENANT + h * 3_600_000).toISOString();
 
-const ticket = (id: string, demande?: Partial<HumanRequest>) =>
+const ticket = (id: string, request?: Partial<HumanRequest>) =>
   ({
     id,
     title: id,
-    pending_request: demande ? { id: `hr-${id}`, kind: "approval", payload: {}, requested_at: heure(-1), ...demande } : null,
+    pending_request: request ? { id: `hr-${id}`, kind: "approval", payload: {}, requested_at: heure(-1), ...request } : null,
   }) as unknown as WorkItemDto;
 
 describe("what waits for a person (S23-02)", () => {
@@ -34,7 +34,7 @@ describe("what waits for a person (S23-02)", () => {
       "sans-echeance-ancien",
       "sans-echeance-recent",
     ]);
-    expect(attentes.filter((a) => a.enRetard).map((a) => a.item.id)).toEqual(["en-retard"]);
+    expect(attentes.filter((a) => a.overdue).map((a) => a.item.id)).toEqual(["en-retard"]);
   });
 
   it("names the request by its question or its summary, otherwise by its kind, in words", () => {

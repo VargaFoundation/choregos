@@ -175,9 +175,9 @@ function History({ slug }: { slug: string }) {
                         tonDuBouton="danger"
                         question={`Abort batch R-${release.batch_no}? Nothing of it reaches ${release.env}.`}
                         confirmer={`Abort R-${release.batch_no}`}
-                        raison={{ label: "Why", requise: true }}
-                        action={async (raison) => {
-                          await api.abortRelease(release.id, raison);
+                        reason={{ label: "Why", required: true }}
+                        action={async (reason) => {
+                          await api.abortRelease(release.id, reason);
                           await queryClient.invalidateQueries({ queryKey: ["releases", slug] });
                         }}
                       >
