@@ -21,6 +21,7 @@ describe("the icon of a connector (S40-03b)", () => {
     expect(brand("scm", "github")).toBe("github");
     expect(brand("tracker", "github-issues")).toBe("github");
     expect(brand("tracker", "gitlab-issues")).toBe("gitlab");
+    expect(brand("ci", "gitlab")).toBe("gitlab");
     expect(brand("tracker", "jira")).toBe("jira");
     expect(brand("documents", "confluence")).toBe("confluence");
     expect(brand("ci", "tekton")).toBe("tekton");

@@ -45,6 +45,7 @@ const BRAND_OF_TYPE: Record<string, Brand> = {
   "github-issues": "github",
   github: "github",
   "gitlab-issues": "gitlab",
+  gitlab: "gitlab",
   jira: "jira",
   confluence: "confluence",
   git: "git",
