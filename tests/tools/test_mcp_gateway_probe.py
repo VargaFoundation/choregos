@@ -17,7 +17,7 @@ ENDPOINT = "https://gw.test/{server}/mcp"
 
 def gateway(token: str) -> FakeMcpGateway:
     tool = {"name": "ping", "description": "ping", "inputSchema": {"type": "object"}}
-    server = FakeMcpServer(outils=[tool])
+    server = FakeMcpServer(tools=[tool])
     return FakeMcpGateway(auth="bearer", token=token, upstreams={"s": GatewayUpstream(server=server)})
 
 

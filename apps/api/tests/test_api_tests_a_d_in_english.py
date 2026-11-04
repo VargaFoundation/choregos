@@ -1,6 +1,6 @@
 """The API tests `test_a*` to `test_d*` are English (S45-19, ADR 0098).
 
-Left out of the slice: S46-01's `test_courtier.py`, and the files an earlier S45 story created
+Left out of the slice: the files an earlier S45 story created
 (`*_in_english.py`, `test_configuration_aliases.py`, `test_cross_module_imports.py`), whose French
 is the point. A line that must stay French carries `lang: fr-ok`.
 """
@@ -18,7 +18,6 @@ ROOT = pathlib.Path(__file__).resolve().parents[3]
 TESTS = "apps/api/tests/"
 OWNED = tuple(f"{TESTS}test_{letter}" for letter in "abcd")
 LEFT_OUT = {
-    f"{TESTS}test_courtier.py",
     f"{TESTS}test_configuration_aliases.py",
     f"{TESTS}test_cross_module_imports.py",
 }

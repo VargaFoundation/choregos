@@ -5,7 +5,7 @@ that range (`test_bounded_pool`, `test_agent_registry`, `test_bare_routers`, `te
 `test_authentication_security`, `test_human_task`, `test_one_work_item_builder`,
 `test_multiple_workflows`).
 
-Left out of the slice: S46-01's `test_courtier.py` and `test_marketdata_courtier.py`, S45-14's
+Left out of the slice: S45-14's
 `test_scoped_tokens.py`, S45-04's `test_plugin_api_aliases.py`, and the files an earlier S45 story
 created to check an English rename (`test_*_in_english.py`, this file), whose French is the point.
 A line that must stay French carries `lang: fr-ok`.
@@ -43,13 +43,7 @@ OWNED = (
     f"{TESTS}test_one_work_item_builder.py",
     f"{TESTS}test_multiple_workflows.py",
 )
-#: S46-01's tests keep their French until that story renames them.
-S46_TESTS = {
-    f"{TESTS}test_courtier.py",
-    f"{TESTS}test_marketdata_courtier.py",
-}
 LEFT_OUT = {
-    *S46_TESTS,
     f"{TESTS}test_scoped_tokens.py",
     f"{TESTS}test_plugin_api_aliases.py",
     f"{TESTS}test_api_tests_p_z_in_english.py",
@@ -83,4 +77,4 @@ def test_api_tests_baseline_holds_only_s44_files() -> None:
     except RuntimeError:
         pytest.skip("not a git checkout")
     with_findings = {f.path for f in found if not f.path.endswith("_in_english.py")}
-    assert sorted(with_findings - S46_TESTS) == []
+    assert sorted(with_findings) == []

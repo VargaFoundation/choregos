@@ -18,7 +18,7 @@ import pytest
 from httpx import AsyncClient
 
 from .egress_support import as_person
-from .test_courtier import OUTILS
+from .test_broker import TOOLS
 
 ORG = "/api/v1/orgs/varga"
 RUN = "run-who-writes-1"
@@ -29,7 +29,7 @@ def supplier(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     import choregos_adapters
     from choregos_adapters.fakes.mcp import FakeMcpServer
 
-    server = FakeMcpServer(outils=[dict(o) for o in OUTILS], jeton="supplier-key")
+    server = FakeMcpServer(tools=[dict(o) for o in TOOLS], token="supplier-key")
     monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_SUPPLIER_KEY", "supplier-key")
     yield server

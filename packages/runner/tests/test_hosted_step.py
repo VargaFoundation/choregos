@@ -237,14 +237,14 @@ async def test_a_spent_key_stops_the_step_on_budget(stage_input: StageInput, run
 async def test_an_mcp_call_carries_the_servers_credential_the_container_never_holds(
     stage_input: StageInput, runner_settings: Any
 ) -> None:
-    crm = FakeMcpServer(outils=[{"name": "lookup", "description": "", "inputSchema": {"type": "object"}}])
-    crm.jeton = CRM_SECRET  # lang: fr-ok - attribute of the adapters fake, renamed by its own story
+    crm = FakeMcpServer(tools=[{"name": "lookup", "description": "", "inputSchema": {"type": "object"}}])
+    crm.token = CRM_SECRET
     agent = FakeHostedAgent(script=[("mcp", "crm", "lookup", {"customer": "acme"})], answer="Acme.")
     tools = ToolsRef(mcp={"crm": McpServerRef(url=CRM, env={"Authorization": f"Bearer {CRM_SECRET}"})})
     _, client = await _run(_hosted(stage_input, tools=tools), agent, runner_settings, mcp=crm)
 
-    assert crm.appels == [("lookup", {"customer": "acme"})]
-    assert agent.seen[0][1]["result"]["content"][0]["text"] == "lookup fait"
+    assert crm.calls == [("lookup", {"customer": "acme"})]
+    assert agent.seen[0][1]["result"]["content"][0]["text"] == "lookup done"
     assert agent.env["CHOREGOS_MCP_SERVERS"] == "crm"
     assert client.results[-1].diagnostics.tool_calls == 1
     assert [e["tool"] for e in _events(client, "session/request_permission")] == ["crm/lookup"]
@@ -253,27 +253,27 @@ async def test_an_mcp_call_carries_the_servers_credential_the_container_never_ho
 async def test_an_mcp_server_the_step_was_not_granted_is_not_served(
     stage_input: StageInput, runner_settings: Any
 ) -> None:
-    crm = FakeMcpServer(outils=[{"name": "lookup", "description": "", "inputSchema": {"type": "object"}}])
+    crm = FakeMcpServer(tools=[{"name": "lookup", "description": "", "inputSchema": {"type": "object"}}])
     agent = FakeHostedAgent(script=[("mcp", "erp", "lookup", {})], answer="Nothing.")
     tools = ToolsRef(mcp={"crm": McpServerRef(url=CRM)})
     _, client = await _run(_hosted(stage_input, tools=tools), agent, runner_settings, mcp=crm)
 
     assert agent.seen[0][0] == 404
-    assert crm.recues == []
+    assert crm.received == []
     assert _events(client, "hosted.mcp_refused") == [{"server": "erp", "reason": "not granted"}]
 
 
 async def test_an_mcp_call_the_guard_rails_refuse_never_reaches_the_server(
     stage_input: StageInput, runner_settings: Any
 ) -> None:
-    crm = FakeMcpServer(outils=[{"name": "run", "description": "", "inputSchema": {"type": "object"}}])
+    crm = FakeMcpServer(tools=[{"name": "run", "description": "", "inputSchema": {"type": "object"}}])
     agent = FakeHostedAgent(
         script=[("mcp", "crm", "run", {"command": "kubectl delete ns prod"})], answer="Ok."
     )
     tools = ToolsRef(mcp={"crm": McpServerRef(url=CRM)})
     _, client = await _run(_hosted(stage_input, tools=tools), agent, runner_settings, mcp=crm)
 
-    assert crm.appels == []
+    assert crm.calls == []
     answer = agent.seen[0][1]["result"]
     assert answer["isError"] and "refused by the run's guard rails" in answer["content"][0]["text"]
     assert client.results[-1].diagnostics.permission_denials == 1
@@ -282,7 +282,7 @@ async def test_an_mcp_call_the_guard_rails_refuse_never_reaches_the_server(
 async def test_an_mcp_server_on_a_denied_host_is_never_reached(
     stage_input: StageInput, runner_settings: Any
 ) -> None:
-    crm = FakeMcpServer(outils=[{"name": "lookup", "description": "", "inputSchema": {"type": "object"}}])
+    crm = FakeMcpServer(tools=[{"name": "lookup", "description": "", "inputSchema": {"type": "object"}}])
     agent = FakeHostedAgent(script=[("mcp", "crm", "lookup", {})], answer="Nothing.")
     permissions = stage_input.permissions.model_copy(update={"deny_domains": ["crm.internal"]})
     tools = ToolsRef(mcp={"crm": McpServerRef(url=CRM)})
@@ -290,7 +290,7 @@ async def test_an_mcp_server_on_a_denied_host_is_never_reached(
     _, client = await _run(stage, agent, runner_settings, mcp=crm)
 
     assert agent.seen[0][0] == 403
-    assert crm.recues == []
+    assert crm.received == []
     assert _events(client, "hosted.mcp_refused")[0]["server"] == "crm"
 
 

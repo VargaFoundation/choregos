@@ -10,7 +10,7 @@ import { Button, ErrorNote, Select } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { ConnectorDto, ProjectRequirement } from "@/lib/types";
 
-/** The order in which the console shows the capabilities (that of `choregos_core.dsl.exigences`). */
+/** The order in which the console shows the capabilities (that of `choregos_core.dsl.requirements`). */
 const ORDRE = ["tracker", "scm", "ci", "cd", "runtime", "gateway", "memory", "notify"];
 
 /**

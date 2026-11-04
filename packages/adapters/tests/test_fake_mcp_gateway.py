@@ -54,11 +54,11 @@ def _server(
     token: str = "",
     gestures: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] | None = None,
 ) -> FakeMcpServer:
-    return FakeMcpServer(outils=list(tools), jeton=token, gestes=dict(gestures or {}))
+    return FakeMcpServer(tools=list(tools), token=token, gestures=dict(gestures or {}))
 
 
 def _received(server: FakeMcpServer) -> list[tuple[str, dict[str, str], dict[str, Any]]]:
-    return server.recues
+    return server.received
 
 
 def _methods(server: FakeMcpServer) -> list[str]:

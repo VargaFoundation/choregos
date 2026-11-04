@@ -296,7 +296,7 @@ async def test_an_arrival_from_the_request_by_claude_to_the_check_on_d1(
         assert fake.fleet.devices[serial] == {"serial": serial, "upn": "lea@acme.test", "state": "enrolled"}
         (shipment,) = fake.carrier.shipments.values()
         assert (shipment["items"], shipment["address"]) == ([serial], fields["address"])
-        assert {e["authorization"] for _, e, _ in fake.server.recues} == {f"Bearer {KEY_SUPPLIER}"}
+        assert {e["authorization"] for _, e, _ in fake.server.received} == {f"Bearer {KEY_SUPPLIER}"}
 
         # The badge: a task, its proof; then the platform activates it.
         request = await _request(client, ticket["work_item"])

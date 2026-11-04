@@ -384,7 +384,7 @@ async def test_the_pods_tool_calls_go_through_the_broker(
         f"{base}/tools/fournisseur__commander_poste", json={"arguments": {}}, headers=_token(session_id)
     )
     assert write.status_code == 404, "a write is not a session's"
-    assert [call[0] for call in supplier.appels] == ["suivi_commande"]
+    assert [call[0] for call in supplier.calls] == ["suivi_commande"]
     await _pod(pod_http, session_id, [{"status": "answered", "text": "On its way.", "tool_calls": 1}], [])
     answer = (await asked).json()
     assert answer["output_text"] == "On its way."
@@ -416,7 +416,7 @@ async def test_an_injection_in_a_pods_tool_answer_is_withheld_under_block(
     policy = yaml.safe_load((await client.get(url)).json()["yaml"])
     policy.setdefault("sandbox", {})["prompt_injection"] = "block"
     assert (await client.put(url, json={"yaml": yaml.safe_dump(policy)})).status_code == 200
-    supplier.reponses["suivi_commande"] = injection
+    supplier.answers["suivi_commande"] = injection
     await _supplier(client)
     await _hosted(client, mcp_servers=[{"connector": "fournisseur", "tools": ["suivi_*"]}])
     asked = asyncio.create_task(_ask(client, "Where is order 42?"))
@@ -467,8 +467,8 @@ async def test_a_pod_reads_a_structured_content_its_text_does_not_carry_masked(
 ) -> None:
     """S40-18c: a server's `structuredContent` that its text does not serialize reaches the session's
     model, masked like the rest; one its text already serializes is not given twice."""
-    supplier.reponses["suivi_commande"] = "Order 42 shipped."
-    supplier.structures["suivi_commande"] = {"carrier": "Colissimo", "note": "password=hunter2-carrier"}
+    supplier.answers["suivi_commande"] = "Order 42 shipped."
+    supplier.structured["suivi_commande"] = {"carrier": "Colissimo", "note": "password=hunter2-carrier"}
     text = await _pods_tool_text(client, temporal, pod_http)
     assert text.startswith("Order 42 shipped."), text
     assert "Colissimo" in text, "the structured part is the model's to read"
@@ -503,8 +503,8 @@ async def test_an_injection_only_in_a_pods_structured_content_is_withheld_under_
     policy = yaml.safe_load((await client.get(url)).json()["yaml"])
     policy.setdefault("sandbox", {})["prompt_injection"] = "block"
     assert (await client.put(url, json={"yaml": yaml.safe_dump(policy)})).status_code == 200
-    supplier.reponses["suivi_commande"] = "Order 42 shipped."
-    supplier.structures["suivi_commande"] = {"comments": [injection]}
+    supplier.answers["suivi_commande"] = "Order 42 shipped."
+    supplier.structured["suivi_commande"] = {"comments": [injection]}
     text = await _pods_tool_text(client, temporal, pod_http)
     assert "withheld" in text and injection not in text, text
 
@@ -521,8 +521,8 @@ async def test_an_oversized_structured_content_is_dropped_under_the_cap(
 ) -> None:
     """S40-18c: the structured part comes under the result's cap; over it, half an object is not
     given to the model, the text is, with the marker."""
-    supplier.reponses["suivi_commande"] = "Order 42 shipped."
-    supplier.structures["suivi_commande"] = {"log": ["a line of a very long log"] * 20_000}
+    supplier.answers["suivi_commande"] = "Order 42 shipped."
+    supplier.structured["suivi_commande"] = {"log": ["a line of a very long log"] * 20_000}
     text = await _pods_tool_text(client, temporal, pod_http)
     assert text.startswith("Order 42 shipped.")
     assert "a line of a very long log" not in text

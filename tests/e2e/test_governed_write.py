@@ -42,7 +42,7 @@ async def _prepare(platform: Platform, monkeypatch: pytest.MonkeyPatch) -> tuple
         {"name": "suivi_commande", "description": "where the order stands", "inputSchema": {"type": "object"},
          "annotations": {"readOnlyHint": True}},
     ]  # fmt: skip
-    server = FakeMcpServer(outils=tools, jeton="cle-fournisseur", gestes={"commander_poste": _order})
+    server = FakeMcpServer(tools=tools, token="cle-fournisseur", gestures={"commander_poste": _order})
     monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_KEY_SUPPLIER", "cle-fournisseur")
     client = platform.client
@@ -104,8 +104,8 @@ async def test_an_allowed_write_is_done_once_by_the_action_and_returns_its_resul
             "the agent reads what the server returned"
         )
         action_id = body["result"]["action"]
-        assert server.appels == [("commander_poste", {"modele": "x14"})]
-        assert {received_headers["authorization"] for _, received_headers, _ in server.recues} == {
+        assert server.calls == [("commander_poste", {"modele": "x14"})]
+        assert {received_headers["authorization"] for _, received_headers, _ in server.received} == {
             "Bearer cle-fournisseur"
         }
 
@@ -114,7 +114,7 @@ async def test_an_allowed_write_is_done_once_by_the_action_and_returns_its_resul
         ).json()
         assert rejoue["result"]["action"] == action_id
         assert rejoue["result"]["structuredContent"]["serial"] == "SN-x14"
-        assert server.appels == [("commander_poste", {"modele": "x14"})], (
+        assert server.calls == [("commander_poste", {"modele": "x14"})], (
             "replayed, the call does not write twice"
         )
 
@@ -139,7 +139,7 @@ async def test_a_refused_write_tells_the_agent(
         ).json()
     assert refusal["status_code"] == 422, refusal
     assert refusal["result"]["action"], "the refusal keeps its action: the journal says why"
-    assert server.appels == [("commander_poste", {"modele": "introuvable"})]
+    assert server.calls == [("commander_poste", {"modele": "introuvable"})]
 
 
 async def test_the_price_is_counted_once_and_the_result_passes_the_guard(

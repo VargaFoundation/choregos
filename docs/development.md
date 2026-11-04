@@ -541,8 +541,8 @@ CHOREGOS_TEST_DATABASE_URL=postgresql+asyncpg://choregos:choregos@localhost:5432
 CHOREGOS_TEST_SUITE_ON_POSTGRES=1 uv run pytest apps/api/tests
 ```
 
-CI sets both `CHOREGOS_TEST_SUITE_ON_POSTGRES` and the former `CHOREGOS_TEST_SUITE_SUR_POSTGRES`: the
-conftest still reads the former one until S45-42 switches it.
+CI sets `CHOREGOS_TEST_SUITE_ON_POSTGRES`, the only name the conftest reads (the former
+`CHOREGOS_TEST_SUITE_SUR_POSTGRES` was removed by S45-47).
 
 In that mode, a test's bare `session_scope()` — a fixture setting up data — means "as the platform".
 Product code never opens an unscoped session, so this hides nothing; `test_rls_postgres.py` keeps the
@@ -639,14 +639,14 @@ English file.
 ```bash
 make english-ratchet                                    # = tools/check_english.py --all, part of `make lint`
 uv run python tools/check_english.py --all --report     # the totals per area and pass
-uv run python tools/check_english.py --all --strict     # a stale entry fails too
+uv run python tools/check_english.py --all --lenient    # a local run: a stale entry only prints
 uv run python tools/check_english.py --all --area core  # one area (repeatable)
 ```
 
 It exits 1 when a file is **above** its baseline or a new file has French; it prints the file and
 its first findings. A stale entry (a count below its baseline, a file that is gone) prints
-`stale: <area> — run tools/check_english.py --update-baseline --area <area>` and exits 0 unless
-`--strict`.
+`stale: <area> — run tools/check_english.py --update-baseline --area <area>` and exits 1 too (the
+ratchet is strict, ADR 0098); `--lenient` only prints it, for a local run.
 
 Baselines are `tools/english_baseline/<area>.tsv`: a header line, then sorted `path<TAB>count`
 lines, zero counts omitted. `--update-baseline [--area NAME]` lowers counts, drops zeros and

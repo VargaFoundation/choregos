@@ -87,8 +87,7 @@ def test_no_internal_alias_remains_under_packages() -> None:
 @pytest.mark.skipif(not _in_a_git_checkout(), reason="not a git checkout: the search reads `git grep`")
 def test_no_internal_alias_remains_under_apps() -> None:
     """S45-46 deleted every internal alias and shim defined under `apps/api` and `apps/orchestrator`,
-    each user having switched. Only the test suite's database switch keeps its former variable until
-    S45-47 drops it together with `ci.yml`'s line."""
+    each user having switched; S45-47 dropped the test suite's former database variable."""
     found = subprocess.run(
         ["git", "grep", "-n", "alias:internal", "--", "apps"],
         check=False,
@@ -96,8 +95,47 @@ def test_no_internal_alias_remains_under_apps() -> None:
         capture_output=True,
         text=True,
     )
-    lines = found.stdout.splitlines()
-    assert len(lines) == 1, found.stdout
-    assert (
-        lines[0].startswith("apps/api/tests/conftest.py:") and "CHOREGOS_TEST_SUITE_SUR_POSTGRES" in lines[0]
+    assert found.returncode == 1, found.stdout
+    assert found.stdout == ""
+
+
+@pytest.mark.skipif(not _in_a_git_checkout(), reason="not a git checkout: the search reads `git grep`")
+def test_no_internal_alias_remains_anywhere() -> None:
+    """The track is closed: no `alias:internal` is left outside the pages that explain the escape.
+    An external alias (`alias:external`) stays until its window closes (ADR 0098 'Windows')."""
+    found = subprocess.run(
+        [
+            "git",
+            "grep",
+            "-n",
+            "alias:internal",
+            "--",
+            ".",
+            ":(exclude)docs",
+            ":(exclude)AGENTS.md",
+            ":(exclude)tests/language",
+            ":(exclude)tests/web",
+            ":(exclude)tools",
+        ],
+        check=False,
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
     )
+    assert found.returncode == 1, found.stdout
+    assert found.stdout == ""
+
+
+def test_every_baseline_is_empty() -> None:
+    """The ratchet is closed (S45-47): every `tools/english_baseline/*.tsv` holds its header and no
+    data line. The MCP-gateway (S46) stream finished, so there is no leftover to list."""
+    full = []
+    for path in sorted((ROOT / "tools" / "english_baseline").glob("*.tsv")):
+        data = [
+            line
+            for line in path.read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.startswith("#")
+        ]
+        if data:
+            full.append(f"{path.name}: {len(data)} line(s), first {data[0]!r}")
+    assert not full, "a baseline is not empty (ADR 0098, the ratchet is at zero):\n" + "\n".join(full)

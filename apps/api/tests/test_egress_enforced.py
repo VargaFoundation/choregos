@@ -12,7 +12,8 @@ import pytest
 from httpx import AsyncClient
 
 from .egress_support import ORG, rules_in_db
-from .test_courtier import OUTILS, _preparer
+from .test_broker import TOOLS as BROKER_TOOLS
+from .test_broker import _prepare
 from .test_skills_from_git import ANTHROPICS, REPO_V1, SHA1, tarball
 
 TOOLS = [{"name": "order_status", "inputSchema": {"type": "object"}}]
@@ -31,7 +32,7 @@ def vendor(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     import choregos_adapters
     from choregos_adapters.fakes.mcp import FakeMcpServer
 
-    server = FakeMcpServer(outils=[dict(t) for t in TOOLS])
+    server = FakeMcpServer(tools=[dict(t) for t in TOOLS])
     monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
     yield server
 
@@ -47,13 +48,13 @@ async def test_discovery_on_a_revoked_host_is_a_connector_error_and_the_vendor_s
     body = {"name": "vendor", "type": "mcp", "config": {"url": "https://vendor.test/mcp"}}
     assert (await client.post(f"{ORG}/connectors", json={**body, "allow_egress": True})).status_code == 201
     assert (await client.post(f"{ORG}/connectors/vendor/discover")).status_code == 200
-    reached = len(vendor.recues)
+    reached = len(vendor.received)
     assert reached > 0
     await _revoke(client, "vendor.test")
     refused = await client.post(f"{ORG}/connectors/vendor/discover")
     assert refused.status_code == 502 and "egress refused" in refused.text, refused.text
     assert "vendor.test" in refused.text and "/admin/egress" in refused.text
-    assert len(vendor.recues) == reached, "the refused call never left"
+    assert len(vendor.received) == reached, "the refused call never left"
     connector = (await client.get(f"{ORG}/connectors/vendor")).json()
     assert connector["status"] == "error" and "egress refused" in connector["last_error"]
 
@@ -68,21 +69,21 @@ async def test_a_broker_call_during_a_run_on_a_revoked_host_is_a_tool_error_not_
     import choregos_adapters
     from choregos_adapters.fakes.mcp import FakeMcpServer
 
-    server = FakeMcpServer(outils=[dict(o) for o in OUTILS])
+    server = FakeMcpServer(tools=[dict(o) for o in BROKER_TOOLS])
     monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_CLE_FOURNISSEUR", "x")
     # open the host first (the setup declares and discovers under enforce)
     assert (
         await client.post(f"{ORG}/egress/rules", json={"host": "fournisseur.test", "used_by": ["api"]})
     ).status_code == 201
-    base, headers = await _preparer(client, project, ["*"])
+    base, headers = await _prepare(client, project, ["*"])
     ok = await client.post(f"{base}/fournisseur__stock", headers=headers, json={})
     assert ok.json()["status_code"] == 200, ok.text
-    reached = len(server.recues)
+    reached = len(server.received)
     await _revoke(client, "fournisseur.test")
     refused = await client.post(f"{base}/fournisseur__stock", headers=headers, json={})
     assert refused.json()["status_code"] == 422 and "egress refused" in refused.text, refused.text
-    assert len(server.recues) == reached, "nothing left for the vendor"
+    assert len(server.received) == reached, "nothing left for the vendor"
 
 
 @pytest.fixture

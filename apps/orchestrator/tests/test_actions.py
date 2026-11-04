@@ -243,7 +243,7 @@ async def test_an_approved_action_reaches_the_server_with_the_connector_key(
     from choregos_api.db.session import session_scope
 
     server = FakeMcpServer(
-        outils=[{"name": "order_workstation", "inputSchema": {"type": "object"}}], jeton="provider-key"
+        tools=[{"name": "order_workstation", "inputSchema": {"type": "object"}}], token="provider-key"
     )
     monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_PROVIDER_KEY", "provider-key")
@@ -281,8 +281,8 @@ async def test_an_approved_action_reaches_the_server_with_the_connector_key(
     action_id = await _action(setup, [effect])
     result, _ = await _run(temporal_env, worker_factory, action_id)
     assert result["status"] == "succeeded", result
-    assert server.appels == [("order_workstation", {"model": "laptop-14"})]
-    assert {headers["authorization"] for _, headers, _ in server.recues} == {"Bearer provider-key"}
+    assert server.calls == [("order_workstation", {"model": "laptop-14"})]
+    assert {headers["authorization"] for _, headers, _ in server.received} == {"Bearer provider-key"}
 
 
 async def test_an_action_started_before_its_row_is_visible_waits_until_it_is(

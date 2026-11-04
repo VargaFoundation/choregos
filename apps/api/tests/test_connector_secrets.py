@@ -41,7 +41,7 @@ def vendor(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     import choregos_adapters
     from choregos_adapters.fakes.mcp import FakeMcpServer
 
-    server = FakeMcpServer(outils=[dict(t) for t in TOOLS], jeton=VALUE_1)
+    server = FakeMcpServer(tools=[dict(t) for t in TOOLS], token=VALUE_1)
     monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
     yield server
 
@@ -104,7 +104,7 @@ async def test_a_replaced_secret_is_the_one_the_vendor_receives(
 ) -> None:
     await client.post(ORG, json=_declare(secret_values={"token": VALUE_1}))
     assert (await client.post(f"{ORG}/vendor/discover")).status_code == 200
-    assert vendor.recues[-1][1]["authorization"] == f"Bearer {VALUE_1}"
+    assert vendor.received[-1][1]["authorization"] == f"Bearer {VALUE_1}"
 
     replaced = await client.put(f"{ORG}/vendor/secrets/token", json={"value": VALUE_2})
     assert replaced.status_code == 200, replaced.text
@@ -113,9 +113,9 @@ async def test_a_replaced_secret_is_the_one_the_vendor_receives(
     # The vendor still wants the old key: the NEW value is what went out, and it was refused.
     refused = await client.post(f"{ORG}/vendor/discover")
     assert refused.status_code == 502, refused.text
-    assert vendor.recues[-1][1]["authorization"] == f"Bearer {VALUE_2}"
+    assert vendor.received[-1][1]["authorization"] == f"Bearer {VALUE_2}"
     assert VALUE_2 not in refused.text and VALUE_1 not in refused.text
-    vendor.jeton = VALUE_2  # lang: fr-ok - the fake's field keeps its name
+    vendor.token = VALUE_2
     assert (await client.post(f"{ORG}/vendor/discover")).status_code == 200
     audit = await _audit_text()
     assert VALUE_2 not in audit and '"version": 2' in audit
@@ -212,7 +212,7 @@ async def test_a_reference_whose_stored_value_is_gone_fails_loudly(
     refused = await client.post(f"{ORG}/vendor/discover")
     assert refused.status_code == 502 and "no value is stored" in refused.text
     assert (await client.get(f"{ORG}/vendor")).json()["status"] == "error"
-    assert vendor.recues == [], "nothing was sent to the vendor without a key"
+    assert vendor.received == [], "nothing was sent to the vendor without a key"
 
 
 async def test_without_a_deployment_key_a_value_is_refused_and_a_reference_still_works(

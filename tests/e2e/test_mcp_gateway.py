@@ -34,15 +34,15 @@ UPSTREAM_KEY = "upstream-key"
 def _server(tools: list[dict[str, Any]], token: str, gestures: dict[str, Any]) -> Any:
     from choregos_adapters.fakes.mcp import FakeMcpServer
 
-    return FakeMcpServer(outils=tools, jeton=token, gestes=gestures)
+    return FakeMcpServer(tools=tools, token=token, gestures=gestures)
 
 
 def _received(server: Any) -> list[tuple[str, dict[str, str], dict[str, Any]]]:
-    return list(server.recues)
+    return list(server.received)
 
 
 def _called(server: Any) -> list[tuple[str, dict[str, Any]]]:
-    return list(server.appels)
+    return list(server.calls)
 
 
 def _order_pc(arguments: dict[str, Any]) -> dict[str, Any]:

@@ -1023,9 +1023,9 @@ def _resolves(ref: str) -> bool:
     return True
 
 
-def _ratchet(findings: list[Finding], areas: list[str], directory: pathlib.Path, *, strict: bool) -> int:
-    """`--all`: every file at or below its baseline. Exit 1 on a rise (and on a stale entry when
-    `strict`); a stale entry otherwise only prints the command that lowers it."""
+def _ratchet(findings: list[Finding], areas: list[str], directory: pathlib.Path, *, lenient: bool) -> int:
+    """`--all`: every file at or below its baseline. Exit 1 on a rise and on a stale entry (the ratchet
+    is strict, ADR 0098); `lenient` only prints the command that lowers a stale entry."""
     baselines = load_baselines(directory)
     if not baselines:
         print(f"check_english: no baseline in {directory}; create them with --update-baseline --init")
@@ -1058,7 +1058,7 @@ def _ratchet(findings: list[Finding], areas: list[str], directory: pathlib.Path,
             file=sys.stderr,
         )
         return 1
-    if stale_areas and strict:
+    if stale_areas and not lenient:
         return 1
     left = sum(len(by_path[path]) for area in areas for path in by_area[area])
     print(f"check_english: every file is at or below its baseline ({left} French finding(s) left)")
@@ -1086,7 +1086,7 @@ def _tree_mode(args: argparse.Namespace) -> int:
     if args.report:
         print(report(findings, areas))
     if args.all and not args.update_baseline:
-        return _ratchet(findings, areas, directory, strict=args.strict)
+        return _ratchet(findings, areas, directory, lenient=args.lenient)
     return 0
 
 
@@ -1111,7 +1111,9 @@ def main(argv: Iterable[str] | None = None) -> int:
         "--init", action="store_true", help="with --update-baseline: create baselines that do not exist yet"
     )
     parser.add_argument("--report", action="store_true", help="print the totals per area and pass")
-    parser.add_argument("--strict", action="store_true", help="with --all: a stale baseline entry fails")
+    parser.add_argument(
+        "--lenient", action="store_true", help="with --all: a stale baseline entry only prints (a local run)"
+    )
     parser.add_argument(
         "--baseline-dir",
         type=pathlib.Path,
@@ -1121,8 +1123,8 @@ def main(argv: Iterable[str] | None = None) -> int:
     args = parser.parse_args(list(argv) if argv is not None else None)
     if args.init and not args.update_baseline:
         parser.error("--init needs --update-baseline")
-    if args.strict and not args.all:
-        parser.error("--strict needs --all")
+    if args.lenient and not args.all:
+        parser.error("--lenient needs --all")
     if args.all or args.update_baseline or args.report:
         return _tree_mode(args)
 

@@ -1,2 +1,1 @@
 # tests: French findings per file (ADR 0098). Counts only go down: tools/check_english.py --update-baseline
-tests/fixtures/repos/node-toy/test/slug.test.js	1

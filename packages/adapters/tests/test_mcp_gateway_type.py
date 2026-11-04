@@ -25,11 +25,11 @@ OTHER_TOOLS = [{"name": "list_pages", "inputSchema": {"type": "object"}}]
 
 
 def _server(tools: list[dict[str, Any]]) -> FakeMcpServer:
-    return FakeMcpServer(outils=list(tools))
+    return FakeMcpServer(tools=list(tools))
 
 
 def _received(server: FakeMcpServer) -> list[tuple[str, dict[str, str], dict[str, Any]]]:
-    return server.recues
+    return server.received
 
 
 def _injected(**more: Any) -> dict[str, Any]:

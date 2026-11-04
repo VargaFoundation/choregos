@@ -44,7 +44,7 @@ def isolated() -> Iterator[FakeSecretStore]:
 
 
 def _server() -> FakeMcpServer:
-    return FakeMcpServer(outils=[dict(t) for t in TOOLS])
+    return FakeMcpServer(tools=[dict(t) for t in TOOLS])
 
 
 @pytest.fixture
@@ -373,8 +373,10 @@ async def test_the_test_lists_a_servers_tools_through_the_gateway(
     assert result["ok"] is True and result["tools"] == 3, result
     assert result["protocol_version"] and result["error"] is None
     assert gateway.calls and all(c.headers["authorization"] == f"Bearer {SECRET}" for c in gateway.calls)
-    seen = [value for _, headers, _ in supplier.recues for value in headers.values()]
-    assert supplier.recues and SECRET not in " ".join(seen), "the upstream never saw the caller's credential"
+    seen = [value for _, headers, _ in supplier.received for value in headers.values()]
+    assert supplier.received and SECRET not in " ".join(seen), (
+        "the upstream never saw the caller's credential"
+    )
     (audit,) = await _audit("mcp_gateway.test")
     assert audit == {"server": "supplier", "ok": True}
     assert SECRET not in await _all_audit_text()

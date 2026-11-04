@@ -40,8 +40,8 @@ stories, keeps every name that cannot move behind an alias with a window, and fr
    `tools/english_baseline/<area>.tsv`, one file per area (23 areas, the longest prefix wins) so
    that no two stories write the same file. A count can only go down: a file above its baseline,
    or a new file with French, fails `make lint` and the `english` job; a stale entry (a count
-   below its baseline, a file that is gone) only prints the command that lowers it, until the
-   ratchet is made strict at zero (§8). It replaces the `ENGLISH` and `STILL_FRENCH` lists of
+   below its baseline, a file that is gone) also fails since S45-47, when the ratchet closed at
+   zero (§8); `--lenient` only prints it, for a local run. It replaces the `ENGLISH` and `STILL_FRENCH` lists of
    `tests/language/test_english_packages.py`. Three escapes exist: `lang: fr-ok` on a line (a name
    or a sentence that must stay French), `lang: fr-ok-file` in the first five lines of a file (a
    compatibility shim or a redirect stub), and `FROZEN_PATHS` in the tool (paths whose French
@@ -182,4 +182,34 @@ stories, keeps every name that cannot move behind an alias with a window, and fr
   provisioned dashboard would break.
 - **Dual Kyverno rules**: the policies are renamed with an upgrade note instead.
 - **Failing on stale entries from the start**: a count below its baseline is progress, and a
-  guard that fails on progress is switched off; it turns strict when the baselines are empty.
+  guard that fails on progress is switched off; it turned strict when the baselines were empty
+  (S45-47).
+
+## Windows
+
+The ratchet closed at zero in S45-47: every `tools/english_baseline/*.tsv` holds only its header,
+`--all` fails on a stale entry, and AGENTS.md says there is no French left. The external aliases
+(`alias:external`) stay until their window closes, **0.23.0** (0.22.x shipped before the renames
+finished); one issue each, label `deprecation`:
+
+- the extension API former names (`choregos_api.greffons` to `choregos_api.extensions`, effects,
+  edition, quotas, admission, secrets, `Principal.authentifie_le`, the former keywords, `lister`,
+  `appeler`, `en_attente`, the `GesteRefuse` natures): [#1228](https://github.com/VargaFoundation/choregos/issues/1228),
+  with the choregos-ee coordination in [#1229](https://github.com/VargaFoundation/choregos/issues/1229);
+- the environment variables `CHOREGOS_ESSAI_ONTOLOGIE` and `CONNECTOR_DEMO_JETON`:
+  [#1330](https://github.com/VargaFoundation/choregos/issues/1330);
+- the entry points `choregos_api.migrer`, `choregos_api.outils`, `choregos_core.catalogue_d_agents`
+  (and `.evals`) and `choregos_adapters.fakes.serveur`:
+  [#1235](https://github.com/VargaFoundation/choregos/issues/1235);
+- the contract fields `evenements`, `deduites` and `acces`, and the `deprecated_code` of
+  `role.playbook_introuvable`: [#1331](https://github.com/VargaFoundation/choregos/issues/1331);
+- the `outils:` catalogue key: [#1332](https://github.com/VargaFoundation/choregos/issues/1332);
+- `legacy_alertname`: [#1253](https://github.com/VargaFoundation/choregos/issues/1253);
+- the runbook redirect stubs: [#1254](https://github.com/VargaFoundation/choregos/issues/1254);
+- the draft-key migration of the workflow editor:
+  [#1333](https://github.com/VargaFoundation/choregos/issues/1333);
+- `FORMER_FIXTURE_NAMES`: [#1334](https://github.com/VargaFoundation/choregos/issues/1334);
+- `?jeton=` (the issue decides whether to keep it indefinitely):
+  [#1335](https://github.com/VargaFoundation/choregos/issues/1335).
+
+The entry-point group `choregos.plugins` is not an alias and has no window.

@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Un faux serveur MCP, scriptable (ADR 0005) : une application ASGI que le client joint par un
-transport en mémoire. Il sert ses outils par pages, répond en JSON ou en SSE, exige une session
-après `initialize`, et note chaque requête — de quoi vérifier ce qui sort de la plateforme.
+"""A scriptable fake MCP server (ADR 0005): an ASGI application that the client reaches through an
+in-memory transport. It serves its tools by pages, answers in JSON or SSE, requires a session
+after `initialize`, and records every request, to check what leaves the platform.
 
-Un outil rend un texte (`reponses`), ou FAIT quelque chose (`gestes`) : une fonction appelée avec
-ses arguments, dont l'objet revient en `structuredContent` — et en texte JSON, pour un client qui
-ne le lit pas. Un refus (`AdapterError`) revient en résultat `isError`, comme MCP le veut d'une
-erreur d'outil : ce n'est pas une erreur du protocole."""
+A tool returns a text (`answers`), or DOES something (`gestures`): a function called with its
+arguments, whose object comes back in `structuredContent` and as JSON text, for a client that does
+not read it. A refusal (`AdapterError`) comes back as an `isError` result, as MCP wants for a tool
+error: it is not a protocol error."""
 
 from __future__ import annotations
 
@@ -22,84 +22,84 @@ from ..errors import AdapterError
 
 @dataclass
 class FakeMcpServer:
-    outils: list[dict[str, Any]] = field(default_factory=list)
-    #: le jeton attendu ; vide : aucun
-    jeton: str = ""
-    par_page: int = 2
+    tools: list[dict[str, Any]] = field(default_factory=list)
+    #: the expected token; empty: none
+    token: str = ""
+    page_size: int = 2
     sse: bool = False
-    #: (méthode, en-têtes, corps) de chaque requête reçue
-    recues: list[tuple[str, dict[str, str], dict[str, Any]]] = field(default_factory=list)
-    appels: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
+    #: (method, headers, body) of every request received
+    received: list[tuple[str, dict[str, str], dict[str, Any]]] = field(default_factory=list)
+    calls: list[tuple[str, dict[str, Any]]] = field(default_factory=list)
     session: str = "session-1"
-    #: le texte que rend un outil ; par défaut « <outil> fait »
-    reponses: dict[str, str] = field(default_factory=dict)
-    #: ce qu'un outil fait, quand il fait quelque chose
-    gestes: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = field(default_factory=dict)
+    #: the text a tool returns; by default "<tool> done"
+    answers: dict[str, str] = field(default_factory=dict)
+    #: what a tool does, when it does something
+    gestures: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = field(default_factory=dict)
     #: a tool's `structuredContent`, sent beside its text and free to say what the text does not
-    structures: dict[str, Any] = field(default_factory=dict)
+    structured: dict[str, Any] = field(default_factory=dict)
 
     def transport(self) -> httpx.MockTransport:
-        return httpx.MockTransport(self.repondre)
+        return httpx.MockTransport(self.respond)
 
-    def repondre(self, requete: httpx.Request) -> httpx.Response:
-        corps = json.loads(requete.content or b"{}")
-        entetes = {k.lower(): v for k, v in requete.headers.items()}
-        methode = str(corps.get("method", ""))
-        self.recues.append((methode, entetes, corps))
-        if self.jeton and entetes.get("authorization") != f"Bearer {self.jeton}":
+    def respond(self, request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content or b"{}")
+        headers = {k.lower(): v for k, v in request.headers.items()}
+        method = str(body.get("method", ""))
+        self.received.append((method, headers, body))
+        if self.token and headers.get("authorization") != f"Bearer {self.token}":
             return httpx.Response(401, json={"error": "unauthorized"})
-        if "id" not in corps:
+        if "id" not in body:
             return httpx.Response(202)
-        if methode != "initialize" and entetes.get("mcp-session-id") != self.session:
-            return httpx.Response(400, json={"error": "session manquante"})
-        resultat = self._resultat(methode, corps.get("params") or {})
-        message: dict[str, Any] = {"jsonrpc": "2.0", "id": corps["id"]}
-        if isinstance(resultat, tuple):
-            message["error"] = {"code": resultat[0], "message": resultat[1]}
+        if method != "initialize" and headers.get("mcp-session-id") != self.session:
+            return httpx.Response(400, json={"error": "missing session"})
+        result = self._result(method, body.get("params") or {})
+        message: dict[str, Any] = {"jsonrpc": "2.0", "id": body["id"]}
+        if isinstance(result, tuple):
+            message["error"] = {"code": result[0], "message": result[1]}
         else:
-            message["result"] = resultat
-        entetes_reponse = {"Mcp-Session-Id": self.session} if methode == "initialize" else {}
+            message["result"] = result
+        response_headers = {"Mcp-Session-Id": self.session} if method == "initialize" else {}
         if self.sse:
-            texte = 'event: message\ndata: {"jsonrpc":"2.0","method":"notifications/progress"}\n\n'
-            texte += f"event: message\ndata: {json.dumps(message)}\n\n"
+            text = 'event: message\ndata: {"jsonrpc":"2.0","method":"notifications/progress"}\n\n'
+            text += f"event: message\ndata: {json.dumps(message)}\n\n"
             return httpx.Response(
-                200, text=texte, headers={"Content-Type": "text/event-stream", **entetes_reponse}
+                200, text=text, headers={"Content-Type": "text/event-stream", **response_headers}
             )
-        return httpx.Response(200, json=message, headers=entetes_reponse)
+        return httpx.Response(200, json=message, headers=response_headers)
 
-    def _resultat(self, methode: str, params: dict[str, Any]) -> dict[str, Any] | tuple[int, str]:
-        if methode == "initialize":
+    def _result(self, method: str, params: dict[str, Any]) -> dict[str, Any] | tuple[int, str]:
+        if method == "initialize":
             return {
                 "protocolVersion": params.get("protocolVersion", "2025-06-18"),
                 "capabilities": {"tools": {}},
                 "serverInfo": {"name": "fake-mcp", "version": "1"},
             }
-        if methode == "tools/list":
-            debut = int(params.get("cursor") or 0)
-            page = self.outils[debut : debut + self.par_page]
-            suite = debut + self.par_page
-            return {"tools": page, **({"nextCursor": str(suite)} if suite < len(self.outils) else {})}
-        if methode == "tools/call":
-            nom = str(params.get("name"))
+        if method == "tools/list":
+            start = int(params.get("cursor") or 0)
+            page = self.tools[start : start + self.page_size]
+            following = start + self.page_size
+            return {"tools": page, **({"nextCursor": str(following)} if following < len(self.tools) else {})}
+        if method == "tools/call":
+            name = str(params.get("name"))
             # A gesture is callable even when not announced: a tool kept under its former name.
-            if nom not in self.gestes and not any(o["name"] == nom for o in self.outils):
-                return (-32602, f"outil inconnu : {nom}")
+            if name not in self.gestures and not any(o["name"] == name for o in self.tools):
+                return (-32602, f"unknown tool: {name}")
             arguments = dict(params.get("arguments") or {})
-            self.appels.append((nom, arguments))
-            geste = self.gestes.get(nom)
-            if geste is not None:
+            self.calls.append((name, arguments))
+            gesture = self.gestures.get(name)
+            if gesture is not None:
                 try:
-                    objet = geste(arguments)
-                except AdapterError as refus:
-                    return {"content": [{"type": "text", "text": str(refus)}], "isError": True}
+                    produced = gesture(arguments)
+                except AdapterError as refusal:
+                    return {"content": [{"type": "text", "text": str(refusal)}], "isError": True}
                 return {
-                    "content": [{"type": "text", "text": json.dumps(objet, ensure_ascii=False)}],
-                    "structuredContent": objet,
+                    "content": [{"type": "text", "text": json.dumps(produced, ensure_ascii=False)}],
+                    "structuredContent": produced,
                     "isError": False,
                 }
-            texte = self.reponses.get(nom, f"{nom} fait")
-            answer: dict[str, Any] = {"content": [{"type": "text", "text": texte}], "isError": False}
-            if nom in self.structures:
-                answer["structuredContent"] = self.structures[nom]
+            text = self.answers.get(name, f"{name} done")
+            answer: dict[str, Any] = {"content": [{"type": "text", "text": text}], "isError": False}
+            if name in self.structured:
+                answer["structuredContent"] = self.structured[name]
             return answer
-        return (-32601, f"méthode inconnue : {methode}")
+        return (-32601, f"unknown method: {method}")

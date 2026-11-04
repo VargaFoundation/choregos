@@ -14,35 +14,35 @@ import pytest
 from httpx import AsyncClient
 
 ORG = "/api/v1/orgs/varga"
-CLE = "cle-marketdata-du-coffre"
+KEY = "cle-marketdata-du-coffre"
 
 
 @pytest.fixture
-def marche(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
+def market(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     import choregos_adapters
     from choregos_adapters.fakes.marketdata import FakeMarketData
 
-    faux = FakeMarketData()
-    monkeypatch.setattr(choregos_adapters, "FAKE_MARKETDATA", faux)
-    monkeypatch.setenv("CONNECTOR_TEST_MARKETDATA_KEY", CLE)
-    yield faux
+    fake = FakeMarketData()
+    monkeypatch.setattr(choregos_adapters, "FAKE_MARKETDATA", fake)
+    monkeypatch.setenv("CONNECTOR_TEST_MARKETDATA_KEY", KEY)
+    yield fake
 
 
-async def _preparer(client: AsyncClient, project: dict[str, Any]) -> tuple[str, dict[str, str]]:
+async def _prepare(client: AsyncClient, project: dict[str, Any]) -> tuple[str, dict[str, str]]:
     from choregos_api.db.models import Run, WorkItem
     from choregos_api.db.session import session_scope
     from choregos_api.security import mint_run_token
 
-    corps = {
+    body = {
         "name": "cours",
         "kind": "marketdata",
         "type": "stooq",
         "secret_refs": {"api_key": "env:CONNECTOR_TEST_MARKETDATA_KEY"},
     }
-    cree = await client.post(f"{ORG}/connectors", json=corps)
-    assert cree.status_code == 201, cree.text
-    assert CLE not in cree.text
-    assert {o["name"]: o["policy"] for o in cree.json()["operations"]} == {
+    created = await client.post(f"{ORG}/connectors", json=body)
+    assert created.status_code == 201, created.text
+    assert KEY not in created.text
+    assert {o["name"]: o["policy"] for o in created.json()["operations"]} == {
         "get_bars": "allowed",
         "get_instrument": "allowed",
     }
@@ -67,61 +67,61 @@ async def _preparer(client: AsyncClient, project: dict[str, Any]) -> tuple[str, 
                 agent_version=1,
             )
         )
-    jeton = mint_run_token(
+    token = mint_run_token(
         "run-marketdata-1", project_slug="billing-api", work_item_key="varga/x#7", ttl_minutes=30
     )
-    return "/api/v1/internal/runs/run-marketdata-1/tools", {"Authorization": f"Bearer {jeton}"}
+    return "/api/v1/internal/runs/run-marketdata-1/tools", {"Authorization": f"Bearer {token}"}
 
 
 async def test_a_run_reads_prices_through_the_platform_metered_with_a_digest(
-    client: AsyncClient, project: dict[str, Any], marche: Any
+    client: AsyncClient, project: dict[str, Any], market: Any
 ) -> None:
     from choregos_api.db.models import CostLedger, Event
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
-    base, entetes = await _preparer(client, project)
-    annonces = (await client.get(base, headers=entetes)).json()["tools"]
-    assert {o["name"] for o in annonces if o["name"] != "web_fetch"} == {
+    base, headers = await _prepare(client, project)
+    announcements = (await client.get(base, headers=headers)).json()["tools"]
+    assert {o["name"] for o in announcements if o["name"] != "web_fetch"} == {
         "cours__get_bars",
         "cours__get_instrument",
     }
 
     arguments = {"symbol": "AAPL", "start": "2024-01-02", "end": "2024-01-12"}
-    reponse = await client.post(f"{base}/cours__get_bars", headers=entetes, json=arguments)
-    assert reponse.status_code == 200 and reponse.json()["status_code"] == 200, reponse.text
-    assert CLE not in reponse.text, "the key does not come back to the pod"
-    resultat = reponse.json()["result"]["structuredContent"]
-    assert resultat["symbol"] == "AAPL" and len(resultat["bars"]) == 9
-    assert marche.calls == [("get_bars", arguments)]
+    response = await client.post(f"{base}/cours__get_bars", headers=headers, json=arguments)
+    assert response.status_code == 200 and response.json()["status_code"] == 200, response.text
+    assert KEY not in response.text, "the key does not come back to the pod"
+    result = response.json()["result"]["structuredContent"]
+    assert result["symbol"] == "AAPL" and len(result["bars"]) == 9
+    assert market.calls == [("get_bars", arguments)]
 
     # a symbol that would change the URL is refused by the schema, before the provider, and costs nothing
     hostile = await client.post(
-        f"{base}/cours__get_bars", headers=entetes, json={**arguments, "symbol": "AAPL/../x"}
+        f"{base}/cours__get_bars", headers=headers, json={**arguments, "symbol": "AAPL/../x"}
     )
-    assert hostile.status_code == 400 and len(marche.calls) == 1
+    assert hostile.status_code == 400 and len(market.calls) == 1
 
     async with session_scope() as session:
-        (ligne,) = (
+        (row,) = (
             await session.execute(select(CostLedger).where(CostLedger.run_id == "run-marketdata-1"))
         ).scalars()
-        evenements = (
+        events = (
             (await session.execute(select(Event).where(Event.type == "choregos.tool.called"))).scalars().all()
         )
-    assert (ligne.kind, ligne.provider, ligne.model) == ("tool", "mcp:cours", "cours__get_bars")
-    (evenement,) = [e for e in evenements if e.subject == "run-marketdata-1"]
+    assert (row.kind, row.provider, row.model) == ("tool", "mcp:cours", "cours__get_bars")
+    (event,) = [e for e in events if e.subject == "run-marketdata-1"]
 
-    def empreinte(valeur: Any) -> str:
-        brut = json.dumps(valeur, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-        return hashlib.sha256(brut.encode()).hexdigest()
+    def digest(value: Any) -> str:
+        raw = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+        return hashlib.sha256(raw.encode()).hexdigest()
 
-    assert evenement.payload["request_sha256"] == empreinte(arguments)
-    assert evenement.payload["response_sha256"] == empreinte(reponse.json()["result"])
+    assert event.payload["request_sha256"] == digest(arguments)
+    assert event.payload["response_sha256"] == digest(response.json()["result"])
 
 
 async def test_an_unknown_symbol_is_a_named_refusal(
-    client: AsyncClient, project: dict[str, Any], marche: Any
+    client: AsyncClient, project: dict[str, Any], market: Any
 ) -> None:
-    base, entetes = await _preparer(client, project)
-    reponse = await client.post(f"{base}/cours__get_instrument", headers=entetes, json={"symbol": "NOPE1"})
-    assert reponse.json()["status_code"] == 422 and "unknown symbol" in reponse.text
+    base, headers = await _prepare(client, project)
+    response = await client.post(f"{base}/cours__get_instrument", headers=headers, json={"symbol": "NOPE1"})
+    assert response.json()["status_code"] == 422 and "unknown symbol" in response.text

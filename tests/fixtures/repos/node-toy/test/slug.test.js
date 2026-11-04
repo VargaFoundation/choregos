@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { slugify } from '../src/slug.js';
 
 test('accents and case disappear', () => {
-  assert.equal(slugify('Café Éclair'), 'cafe-eclair');
+  assert.equal(slugify('Café Éclair'), 'cafe-eclair'); // lang: fr-ok - accents are the point
 });
 
 test('extra separators are removed', () => {

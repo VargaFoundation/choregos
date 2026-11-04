@@ -1,3 +1,1 @@
 # api-tests: French findings per file (ADR 0098). Counts only go down: tools/check_english.py --update-baseline
-apps/api/tests/test_courtier.py	55
-apps/api/tests/test_marketdata_courtier.py	15

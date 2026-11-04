@@ -15,7 +15,7 @@ import yaml
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CI = ROOT / ".github" / "workflows" / "ci.yml"
-API_ON_POSTGRES = "CHOREGOS_TEST_SUITE_SUR_POSTGRES"
+API_ON_POSTGRES = "CHOREGOS_TEST_SUITE_ON_POSTGRES"
 ORCHESTRATOR_ON_POSTGRES = "CHOREGOS_TEST_ORCH_ON_POSTGRES"
 
 

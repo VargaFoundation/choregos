@@ -30,7 +30,7 @@ def vendor(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     import choregos_adapters
     from choregos_adapters.fakes.mcp import FakeMcpServer
 
-    server = FakeMcpServer(outils=[dict(o) for o in TOOLS], jeton="vendor-key")
+    server = FakeMcpServer(tools=[dict(o) for o in TOOLS], token="vendor-key")
     monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_ENABLEMENT_TEST", "vendor-key")
     yield server
@@ -107,12 +107,12 @@ async def test_restricting_a_connector_closes_the_broker_until_the_project_is_en
     assert restricted.json()["enabled_projects"] == [], "restricting turns it on for no project"
     assert await _tools(client, base, headers) == [], "the run sees no tool"
     called = await client.post(f"{base}/vendor__lookup", headers=headers, json={})
-    assert called.status_code == 404 and vendor.appels == []
+    assert called.status_code == 404 and vendor.calls == []
 
     assert (await client.put(_enablement(project))).status_code == 200
     assert await _tools(client, base, headers) == ["vendor__lookup"]
     again = await client.post(f"{base}/vendor__lookup", headers=headers, json={})
-    assert again.status_code == 200 and vendor.appels == [("lookup", {})]
+    assert again.status_code == 200 and vendor.calls == [("lookup", {})]
 
     assert (await client.delete(_enablement(project))).status_code == 204
     assert await _tools(client, base, headers) == []
