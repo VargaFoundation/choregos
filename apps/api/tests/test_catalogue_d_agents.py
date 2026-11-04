@@ -338,6 +338,6 @@ def test_a_manifest_names_the_catalogue_provenance_of_the_agents_it_takes_from_i
     reviewer = entree("reviewer")
     assert reviewer is not None
     manifest = {"defaults": {"workflows": ["template:default-simple@1"], "agents": ["catalogue:reviewer"]}}
-    assert livraison(manifest, None).agents_du_catalogue == {
+    assert livraison(manifest, None).catalogue_agents == {
         "reviewer": f"plugin:software-delivery/reviewer@{reviewer.version}"
     }

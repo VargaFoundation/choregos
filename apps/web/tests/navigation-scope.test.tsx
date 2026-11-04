@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { BarreLaterale } from "@/components/coquille/barre-laterale";
-import { projectGroups, projectTrail, scopeOf } from "@/components/coquille/navigation";
+import { Sidebar } from "@/components/shell/sidebar";
+import { projectGroups, projectTrail, scopeOf } from "@/components/shell/navigation";
 
 /**
  * The sidebar switches scope (S30-03, plan item 11): the organisation's pages at its level, a
@@ -39,7 +39,7 @@ function sidebar(pathname: string) {
   path.current = pathname;
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <BarreLaterale />
+      <Sidebar />
     </QueryClientProvider>,
   );
   return screen.getByRole("complementary", { name: "Sidebar" });

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Exécuteurs : ce qui fait tourner un run."""
+"""Executors: what runs a run."""
 
 from __future__ import annotations
 

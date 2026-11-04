@@ -67,6 +67,8 @@ class McpCatalogueEntryDto(Dto):
     stars: int | None = None
     stars_as_of: date | None = None
     install: Literal["installable", "needs_oauth", "needs_hosting"]
+    #: How this organisation can install the entry: `direct` (Choregos alone) and/or `gateway`.
+    install_routes: list[Literal["direct", "gateway"]] = Field(default_factory=list)
     hosting: dict[str, Any] | None = None
     state: Literal["available", "installed", "update"]
     installed_as: list[str] = Field(default_factory=list)
@@ -94,6 +96,10 @@ class McpCatalogueInstall(Dto):
     #: Open the server's host in the organisation's egress allowlist in the same call (S39-22);
     #: without it a missing host is a 409 `egress_required`. Needs `tools:grant`.
     allow_egress: bool = False
+    #: `direct` or `gateway`; unset, the API picks from the organisation's gateway mode.
+    route: Literal["direct", "gateway"] | None = None
+    #: Through the gateway: the server's name there (default: the entry id).
+    gateway_server: str | None = Field(default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
 class SkillCatalogueInstall(Dto):

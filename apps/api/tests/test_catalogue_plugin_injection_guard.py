@@ -16,8 +16,8 @@ import httpx
 import pytest
 from httpx import AsyncClient
 
-from .test_catalogue_outils import _intercepter, _intercepter_hote, _projet_avec_mcp, _run_avec_catalogue
-from .test_greffons_outils import _run
+from .kits.extension_tools import run_extension_tool
+from .kits.tool_catalogue import intercept, intercept_host, project_with_mcp, run_with_catalogue
 
 pytestmark = pytest.mark.asyncio
 
@@ -83,10 +83,10 @@ async def _block(client: AsyncClient, project: dict[str, Any]) -> None:
 async def _catalogue_call(
     client: AsyncClient, project: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> httpx.Response:
-    run_id, headers = await _run_avec_catalogue(project, tmp_path, monkeypatch)
+    run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch)
     request = httpx.Request("GET", "https://api.annuaire.example/v1/search")
     answer = {"profils": [{"nom": "A", "bio": INJECTION}]}
-    _intercepter(monkeypatch, httpx.Response(200, json=answer, request=request), [])
+    intercept(monkeypatch, httpx.Response(200, json=answer, request=request), [])
     return await client.post(
         f"/api/v1/internal/runs/{run_id}/tools/recherche_profils", headers=headers, json={"metier": "x"}
     )
@@ -114,8 +114,8 @@ async def test_an_injection_in_a_catalogue_answer_is_withheld_under_block(
 async def test_an_injection_from_a_catalogue_mcp_server_is_reported(
     client: AsyncClient, project: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    run_id, headers = await _projet_avec_mcp(project, tmp_path, monkeypatch, groupes=["rh"])
-    _intercepter_hote(
+    run_id, headers = await project_with_mcp(project, tmp_path, monkeypatch, groups=["rh"])
+    intercept_host(
         monkeypatch,
         "https://mcp.fournisseur.example",
         httpx.Response(
@@ -137,7 +137,7 @@ async def test_an_injection_from_a_catalogue_mcp_server_is_reported(
 async def test_an_injection_in_a_plugin_answer_is_reported(
     plugin: None, client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    run_id, headers = await _run(project["id"])
+    run_id, headers = await run_extension_tool(project["id"])
     answer = await client.post(
         f"/api/v1/internal/runs/{run_id}/tools/ticket_reader", headers=headers, json={}
     )

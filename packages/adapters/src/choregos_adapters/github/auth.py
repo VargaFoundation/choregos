@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Authentification GitHub App : JWT d'App, jetons d'installation, cache et portée minimale."""
+"""GitHub App authentication: App JWT, installation tokens, cache and minimal scope."""
 
 from __future__ import annotations
 
@@ -29,10 +29,10 @@ class InstallationToken:
 
 @dataclass
 class GitHubAppAuth:
-    """Un jeton par installation et par dépôt, de durée de vie courte (§2.4).
+    """One token per installation and per repository, short-lived (§2.4).
 
-    L'App n'a jamais de jeton « large » : `token_for()` demande exactement le dépôt
-    et les permissions nécessaires, et le résultat est mis en cache jusqu'à expiration.
+    The App never holds a "broad" token: `token_for()` asks for exactly the repository and the
+    permissions needed, and the result is cached until it expires.
     """
 
     app_id: str

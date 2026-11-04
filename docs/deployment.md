@@ -143,7 +143,7 @@ Both the API and the orchestrator read it (`global.secrets.keksSecretRef`, defau
 it, `env:` references keep working, the API logs `secrets.key_missing` at start-up, and typing a
 secret answers 409. Keep it in the vault: **losing it loses every sealed value**. To rotate, put the
 new key first, redeploy, then run `choregos admin secrets rewrap` (see
-[the runbook](runbooks/rotation-secrets.md#connector-secrets-key-secrets-keks)) before dropping the
+[the runbook](runbooks/secret-rotation.md#connector-secrets-key-secrets-keks)) before dropping the
 old key, and drop it only once no database backup older than the rewrap can still be restored. `global.secrets.keksInExternalSecret: true` lists the entry in the chart's `ExternalSecret`
 (turn it on once the key exists in the store: a missing remote property fails the whole object).
 
@@ -460,7 +460,7 @@ global:
     mountPath: /etc/choregos/playbooks
   toolCatalog:
     configMap: choregos-tools          # key: catalogue.yaml
-    mountPath: /etc/choregos/outils
+    mountPath: /etc/choregos/tools
     fileName: catalogue.yaml
     credentialsSecret: choregos-tool-keys   # provider keys, injected into the API
 ```
@@ -1331,6 +1331,102 @@ value>` on the first model call. Nothing said the key had never resolved.
 If the API refuses to start with `réglages non résolus`, fix the source of the secret — the key
 is missing where it is stored, not where it is read.
 
+## Upgrading to 0.21
+
+Read this page top to bottom before upgrading from 0.20.x: each item below can stop a start, fail a
+render or change what runs, and says how to see it and what to do. The identifier renames of the
+chart are not repeated here: they are in [Renamed in 0.21 (ADR 0098)](#renamed-in-021-adr-0098).
+
+### Session secret (S47-01)
+The API refuses to start when `CHOREGOS_SESSION_SECRET` is empty. On a deployed instance (staging or
+prod, or a public or API URL over https) it also refuses a secret shorter than 32 bytes or the
+published default. You see it in the API pod's log at start-up. Generate one with
+`openssl rand -base64 48` before upgrading. Only the API checks it; the workers and the Jobs do not.
+`CHOREGOS_SESSION_SECRET_PREVIOUS` (rotation) in `global.extraEnv` now fails the render: use the
+`session-secret-previous` key of the API secret, or `externalSecrets.sessionSecretPrevious`. Sign-ins
+in flight at the upgrade (10 minutes at most) fail once; session cookies of the previous release
+keep working for one release.
+
+### Trusted proxies (S47-02)
+The sign-in and webhook rate limit keys on the address the nearest trusted proxy saw, not on the
+client-written `X-Forwarded-For`. `choregos-api.trustedProxyCidrs` defaults to the private ranges.
+If a load balancer, CDN or WAF with public addresses sits in front of the API, add its ranges, or
+every client behind it shares one window. On-prem, narrow the list to your proxies. The limit
+applies per replica.
+
+### CORS origins (S47-03)
+The chart renders `CHOREGOS_CORS_ORIGINS`, and the API refuses cross-origin cookie mutations. A
+`CHOREGOS_CORS_ORIGINS` in `global.extraEnv` fails the render: move it to `choregos-api.corsOrigins`
+(a list). Left empty, it defaults to the console's public URL.
+
+### OIDC discovery and subject binding (S47-04, ADR 0100)
+OIDC discovery is mandatory and its `issuer` must equal `CHOREGOS_OIDC_ISSUER`; the Keycloak
+fallback is gone and a failed discovery answers 503, retried at the next sign-in. A provider
+without discovery needs `choregos-api.oidcEndpoints` (all three endpoints). A console sign-in is
+bound to the provider's `sub`, and an address the provider reports as `email_verified: false` never
+links, renames or creates an account (`choregos-api.oidcRequireEmailVerified`, default true). To
+migrate the instance's provider, set `choregos-api.oidcRelinkVerifiedEmail: true` temporarily, then
+back to `false`. Accounts created before this change are not migrated.
+
+### Roles from the identity provider (S47-05)
+An IdP sign-in now removes the organisation roles it granted (`memberships.source` `idp`) and no longer maps; roles
+granted by administrators stay. Roles that the provider withdrew before the upgrade are not
+revoked retroactively: review them once from the members page.
+
+### Governance the platform does not enforce (S47-11, ADR 0101)
+A policy that sets `approvals.*`, `attempts.default_max` or `review.require_human_for_risk` is
+refused with 422 when saved or when a project is created from a template; a workflow with
+`review.humans` or review agents other than the `by` actor is invalid. Stored documents keep
+loading. The `advanced` template is version 3 and no longer promises a maintainer review. Remove
+the keys from the policies you write.
+
+### Catalogue tools need `read_only` (S47-12)
+A POST or MCP catalogue tool without `read_only: true` is no longer listed or callable. Mark pure
+readers `read_only: true`; move writers to an organisation MCP connector.
+
+### Webhooks and tracker commands (S47-13, S47-14, S47-38, ADR 0102)
+- Unsigned GitHub and Tekton webhooks are refused on any https instance, even with
+  `CHOREGOS_ENV=dev`: set `CHOREGOS_GITHUB_WEBHOOK_SECRET` and `CHOREGOS_GENERIC_WEBHOOK_SECRET`.
+- A `/choregos ...` comment on a tracker ticket no longer reaches the workflow: Choregos replies with
+  a console link and audits it. A webhook for an ended interpreter no longer fails.
+- `/choregos pause|resume|stop` in a signed GitHub delivery applies with the rights of the member
+  whose GitHub numeric user id an organisation administrator linked. Decisions still need the console.
+- Moving a card on a GitHub Projects or Jira board no longer moves the work item: move it from the
+  console. The board follows Choregos, not the reverse.
+
+### Project allowlist of backends (S47-20)
+`agent.allowed_backends` is now enforced at stage start. A stage on a backend the project does not
+list escalates with "the agent backend `x` is not one this project allows". Check existing projects
+before upgrading: a project seeded with `['opencode']` whose workflow names a claude-code actor is
+refused.
+
+### MCP gateway (S46-09, S46-12, ADR 0105)
+Nothing changes unless `global.mcpGateway` is set (an organisation's own gateway, never part of this
+chart). When it is:
+- `global.mcpGateway.internalHosts` is rendered as `CHOREGOS_MCP_GATEWAY_INTERNAL_HOSTS`: the exact
+  host names the platform treats as the gateway. The API refuses them as a run's destination and
+  lets the platform itself call them.
+- `namespace`, `podLabels` (in-cluster) or `cidrs` (external) and `ports` open egress for the `api`
+  and `workers` families, and `hosts` are appended to those families of `egress.ceiling`, when
+  declared. Runners never get them, and the opening is revoked when the organisation moves or
+  deletes the gateway.
+- An organisation whose gateway is in `required` mode can no longer declare or call direct `mcp`
+  connectors. Organisation connectors that are plugin servers (`org_connectors.plugin_server` set)
+  are exempt: they run in the cluster, run by the platform, and are not upstreams. `mcp-gateway`
+  connectors are called through the gateway with the signed identity of the call.
+
+### Changes merged after 0.20.6
+- **Runner confinement** (ADR 0094): the runner confines the agent with Landlock by default.
+  `CHOREGOS_RUNNER_CONFINEMENT` in the chart's `runner.env` is `off`, `best_effort` (default) or
+  `enforce`; `enforce` on a kernel without Landlock ends the run with exit code 90. The run's
+  journal records `agent.confinement`. See [usage](usage.md).
+- **Plugins** (ADR 0093): `global.plugins.sources`, `defaultPlugins` and `offline` are rendered into
+  the ConfigMap `choregos-plugins` (`CHOREGOS_PLUGINS_CONFIG`); an unusable configuration stops the
+  API at start-up. See [Plugins](#plugins).
+- **Plugin servers** (ADR 0096): `global.plugins.servers.enabled`, `namespace` and `registries` give
+  the API a Role in the `choregos-plugins` namespace, under the Kyverno policy
+  `infra/policies/plugin-servers.yaml`. See [Plugin servers](#plugin-servers).
+
 ## Operating it
 
 What the chart does for a multi-node installation, and the knobs behind it:
@@ -1340,7 +1436,7 @@ What the chart does for a multi-node installation, and the knobs behind it:
 | A node drain must not take the API, the front or a worker queue down | one `PodDisruptionBudget` per component, and per orchestrator queue — rendered only when there is more than one replica (a budget on a single replica blocks the drain and protects nothing) | `choregos-api.podDisruptionBudget`, `choregos-web.podDisruptionBudget`, `choregos-orchestrator.podDisruptionBudget` |
 | Two replicas must not share a node | pod anti-affinity on `kubernetes.io/hostname`: `soft` (preferred, the default — a one-node bench still schedules), `hard` (one replica per node, or no pod), `none` | `global.antiAffinity` |
 | The database must not be exhausted under load | a **bounded** connection pool per process: at most `size + maxOverflow` connections, a short wait beyond. Size PostgreSQL's `max_connections` as (API replicas + workers) × (size + maxOverflow), plus room for migrations and an operator | `global.database.pool.{size,maxOverflow,timeoutSeconds}` |
-| A serious environment must not run on bench dependencies | the chart **refuses to render** in `staging` and `prod` when any `embedded` dependency, `devSecrets`, `devLogin` or `demoFakes` is on, and names the value | `templates/garde.yaml` |
+| A serious environment must not run on bench dependencies | the chart **refuses to render** in `staging` and `prod` when any `embedded` dependency, `devSecrets`, `devLogin` or `demoFakes` is on, and names the value | `templates/guard.yaml` |
 | A worker must not stay attached to a dead node | tolerations of 20 s instead of Kubernetes' 300 s | `choregos-orchestrator.unreachableTolerationSeconds` |
 | An agent must not reach the Internet except where the policy says | in **per-project runner namespaces** the provisioning deploys a **Squid proxy per project** with the policy's `allow_domains` (project-level, host-level, no per-agent wall), and every agent pod gets `HTTPS_PROXY` pointing to it. No allowed domain, no proxy, no door. In the **release namespace** (the `agent_sandbox` executor) the chart's **`choregos-egress`** proxy is per run: it knows which run is calling, applies the agent ∩ project ∩ organisation network, and reports every decision ([ADR 0070](adr/0070-network-access-is-bounded-and-enforced-per-run.md)) | `policy.sandbox.network.allow_domains`, `choregos-orchestrator.runner.egressProxy` (empty on a bench), `runner.egressImage` to pin by digest; `global.egress.*` for `choregos-egress` |
 | Temporal must be restorable | it holds the position of every ticket in flight; `docs/runbooks/temporal-backup.md` says what to copy and how to reconcile afterwards | — |
@@ -1369,7 +1465,7 @@ token). Nothing is rendered by default.
 
 `choregos-orchestrator.runner.egressProxy` MUST name the Service
 (`http://choregos-egress.<release-namespace>.svc:3128`) — the chart refuses to render
-`global.egress.enabled` with an empty value (`templates/garde.yaml`): a proxy nobody sends traffic to
+`global.egress.enabled` with an empty value (`templates/guard.yaml`): a proxy nobody sends traffic to
 would look like a control. The default value, `http://choregos-egress.{namespace}.svc:3128`, resolves to
 it when `runner.namespacePattern` is the release namespace.
 
@@ -1554,3 +1650,100 @@ none of them renders as before.
 On a laptop, `COMPOSE_PROFILES=decisions docker compose up` (or the line in `.env`) starts Laya and
 routes `platform/decide` to it, in fakes mode as with a model key. Set the profile this way rather than
 with `--profile decisions`: the variable is also what tells `litellm-config` to add the alias.
+
+## Renamed in 0.21 (ADR 0098)
+
+0.21 renames the French operational identifiers of the chart, the Kyverno policies and the runbooks
+([ADR 0098](adr/0098-english-everywhere-finished.md)). A rename of a name that something outside the
+chart reads (an alert route, a PolicyException, a mounted path) keeps a shim for one release or tells
+you what to do by hand; this section lists each. The shims go in 0.22.0.
+
+### Alerts
+
+The rule expressions, thresholds and `for:` durations are unchanged. Each renamed alert carries its
+former name in the `legacy_alertname` label, so a route, an inhibition or a silence written against
+the old `alertname` keeps matching if you add `legacy_alertname` to its matchers.
+
+| Former alert | New alert | What an operator does |
+| :-- | :-- | :-- |
+| `ChoregosApiErreurs5xx` | `ChoregosApi5xxErrors` | Route on `alertname` = the new name, or on `legacy_alertname` = the former one until 0.22.0. <!-- lang: fr-ok --> |
+| `ChoregosRunEnAttente` | `ChoregosRunPending` | Same. <!-- lang: fr-ok --> |
+| `ChoregosBudgetJournalier` | `ChoregosDailyBudgetHigh` | Same. <!-- lang: fr-ok --> |
+| `ChoregosTrainGele` | `ChoregosTrainFrozen` | Same. <!-- lang: fr-ok --> |
+
+`ChoregosBacklogTemporal` keeps its name. A silence is matched on `alertname`, so a silence created
+for a former name no longer silences the new alert: recreate it, or match `legacy_alertname`. In
+Alertmanager:
+
+```yaml
+route:
+  routes:
+    - matchers: ['alertname=~"ChoregosApi5xxErrors|ChoregosRunPending|ChoregosDailyBudgetHigh|ChoregosTrainFrozen"']
+      receiver: platform-oncall
+    # Until 0.22.0, the rule that still names the former alerts keeps working with:
+    - matchers: ['legacy_alertname="ChoregosTrainGele"']
+      receiver: platform-oncall
+```
+
+`legacy_alertname` is removed in 0.22.0.
+
+The rule group is renamed too (the rules inside it are the same objects):
+
+| Former rule group | New rule group | What an operator does |
+| :-- | :-- | :-- |
+| `choregos.plateforme` | `choregos.platform` | A dashboard or a recording rule that filters on `rule_group` must follow. <!-- lang: fr-ok --> |
+
+### Runbooks
+
+The six runbooks below, and the secret rotation one, moved. The former path stays as a one-line
+redirect stub until 0.22.0: the `runbook_url` annotation of an alert already deployed points at it.
+The chart's alerts now point at the new paths.
+
+| Former runbook | New runbook |
+| :-- | :-- |
+| `docs/runbooks/montee-temporal.md` | `docs/runbooks/temporal-upgrade.md` <!-- lang: fr-ok --> |
+| `docs/runbooks/perte-de-noeud.md` | `docs/runbooks/node-loss.md` <!-- lang: fr-ok --> |
+| `docs/runbooks/restauration-postgres.md` | `docs/runbooks/postgres-restore.md` <!-- lang: fr-ok --> |
+| `docs/runbooks/run-bloque.md` | `docs/runbooks/stuck-run.md` <!-- lang: fr-ok --> |
+| `docs/runbooks/train-gele.md` | `docs/runbooks/train-frozen.md` <!-- lang: fr-ok --> |
+| `docs/runbooks/webhook-perdu.md` | `docs/runbooks/lost-webhook.md` <!-- lang: fr-ok --> |
+| `docs/runbooks/rotation-secrets.md` | `docs/runbooks/secret-rotation.md` <!-- lang: fr-ok --> |
+
+### Kyverno policies
+
+Kyverno has no alias: a rule is known by its name, and a PolicyException or a PolicyReport query that
+names the former one stops matching silently. **Before upgrading**, update the exceptions and the
+queries to the new names (an exception for an old name is not rejected; it just no longer excepts,
+and the workload is then refused). The `choregos-plugins` namespace matches `choregos-*`, so an
+exception you wrote for a plugin server pod under `pas-de-hostpath` must move to `no-hostpath` too.
+
+| Former | New | What an operator does |
+| :-- | :-- | :-- |
+| Rule `interdire-latest` of `choregos-image-tags` | `forbid-latest-tag` | Update the PolicyExceptions (`spec.exceptions[].ruleNames`) and PolicyReport queries. <!-- lang: fr-ok --> |
+| Rule `verifier-signature` of `choregos-verify-images` | `verify-signature` | Same. <!-- lang: fr-ok --> |
+| Rule `pas-de-hostpath` of `choregos-pod-security` | `no-hostpath` | Same, including exceptions for the `choregos-plugins` namespace. <!-- lang: fr-ok --> |
+| Rule `labels-obligatoires` of `choregos-pod-security` | `required-labels` | Same. <!-- lang: fr-ok --> |
+| Policy `choregos-quotas-et-runtime` | `choregos-quotas-and-runtime` | Update the PolicyExceptions (`spec.exceptions[].policyName`) and delete the former policy if you applied it by hand (an Argo CD sync prunes it). <!-- lang: fr-ok --> |
+
+The messages of the policies are English now; a script that matched the French text of a refusal
+must match the rule name instead.
+
+### Chart
+
+| Former | New | What an operator does |
+| :-- | :-- | :-- |
+| Template `templates/garde.yaml` (the render-time guard) | `templates/guard.yaml` | Nothing for an install; a patch or a Kustomize overlay that names the file must follow. <!-- lang: fr-ok --> |
+| Template `templates/secrets-embarques.yaml` (`devSecrets`) | `templates/embedded-secrets.yaml` | Nothing for an install; the Secret it renders keeps its name. <!-- lang: fr-ok --> |
+| Init container `attendre-la-base` of the migration Job | `wait-for-database` | A Kyverno or Gatekeeper rule, or a log query, that names the init container must follow. <!-- lang: fr-ok --> |
+| `global.toolCatalog.mountPath` default `/etc/choregos/outils` | `/etc/choregos/tools` | The API reads the catalogue from the path the chart sets, so nothing breaks; a sidecar or a debug command that reads the old path must follow. To keep the old path, pin `global.toolCatalog.mountPath: /etc/choregos/outils`. <!-- lang: fr-ok --> |
+| Dashboard ConfigMaps `choregos-dashboard-couts`, `choregos-dashboard-memoire`, `choregos-dashboard-plateforme` | `choregos-dashboard-costs`, `choregos-dashboard-memory`, `choregos-dashboard-platform` | The Grafana uids are unchanged (`choregos-couts`, `choregos-memoire`, `choregos-plateforme`), so links, folders and alert annotations keep working; the sidecar reloads them. <!-- lang: fr-ok --> |
+
+### Variables and `python -m` modules
+
+| Former | New | What an operator does |
+| :-- | :-- | :-- |
+| `CHOREGOS_ESSAI_ONTOLOGIE=1` | `CHOREGOS_ONTOLOGY_TRIAL=1` | Rename it in `global.extraEnv`; the former one still works until 0.22.0 and warns. <!-- lang: fr-ok --> |
+| `CONNECTOR_DEMO_JETON` | `CONNECTOR_DEMO_TOKEN` | The demo fakes' chart switches itself; rename it in your own values or `.env`; the former one is still read when the new one is unset (until 0.22.0). <!-- lang: fr-ok --> |
+| `python -m choregos_adapters.fakes.serveur` | `python -m choregos_adapters.fakes.server` | The chart switches the demo fakes' command; change your own container command; the former one still serves until 0.22.0. <!-- lang: fr-ok --> |
+| `python -m choregos_api.migrer` | `python -m choregos_api.migrate` | Change a custom migration command; the former one still works until 0.22.0. <!-- lang: fr-ok --> |
+| `python -m choregos_core.catalogue_d_agents.evals` | `python -m choregos_core.agent_catalogue.evals` | Same. <!-- lang: fr-ok --> |

@@ -2,13 +2,13 @@ import { describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/api";
 
 describe("client API", () => {
-  it("transforme une erreur RFC 9457 en message lisible", () => {
-    const error = new ApiError(422, { title: "Entité non traitable", detail: "workflow invalide" });
-    expect(error.message).toBe("workflow invalide");
+  it("turns an RFC 9457 error into a readable message", () => {
+    const error = new ApiError(422, { title: "Unprocessable entity", detail: "invalid workflow" });
+    expect(error.message).toBe("invalid workflow");
     expect(error.status).toBe(422);
   });
 
-  it("appelle les chemins du contrat", async () => {
+  it("calls the contract's paths", async () => {
     const fetchMock = vi.fn(async () =>
       new Response(JSON.stringify({ items: [], meta: { has_more: false } }), { status: 200 }),
     );
@@ -19,7 +19,7 @@ describe("client API", () => {
     vi.unstubAllGlobals();
   });
 
-  it("construit un lien d'export CSV téléchargeable tel quel, qualifié par l'organisation (#178)", async () => {
+  it("builds a CSV export link that downloads as it is, qualified by the organisation (#178)", async () => {
     const { api, setCurrentOrg } = await import("@/lib/api");
     expect(api.costsCsvUrl("billing-api", "stage")).toBe(
       "/api/v1/projects/default:billing-api/costs.csv?group_by=stage",
@@ -41,7 +41,7 @@ describe("client API", () => {
     expect(defaultOrg("globex", true)).toBe("globex");
   });
 
-  it("sert les mesures DORA en mode maquette", async () => {
+  it("serves the DORA measures in mock mode", async () => {
     const { mockApi } = await import("@/mocks/data");
     const report = await mockApi<{ deployments: number; lead_time: { level: string } }>(
       "/projects/billing-api/metrics/dora?env=prod",
@@ -51,8 +51,8 @@ describe("client API", () => {
   });
 });
 
-describe("décision qui demande une authentification récente", () => {
-  it("un 401 step_up_required repasse par l'IdP avec reauth=1, et revient ici", async () => {
+describe("a decision that asks for a recent authentication", () => {
+  it("a 401 step_up_required goes back through the IdP with reauth=1, and comes back here", async () => {
     const assign = vi.fn();
     vi.stubGlobal("window", {
       location: { pathname: "/p/infra/actions/pr1", search: "", origin: "http://c", assign },
@@ -62,7 +62,7 @@ describe("décision qui demande une authentification récente", () => {
       vi.fn(
         async () =>
           new Response(
-            JSON.stringify({ title: "Décision refusée", errors: [{ error: "step_up_required", reauth: "GET …" }] }),
+            JSON.stringify({ title: "Decision refused", errors: [{ error: "step_up_required", reauth: "GET …" }] }),
             { status: 401 },
           ),
       ),
@@ -73,12 +73,12 @@ describe("décision qui demande une authentification récente", () => {
     vi.unstubAllGlobals();
   });
 
-  it("un 401 ordinaire mène toujours à la page de connexion", async () => {
+  it("an ordinary 401 still leads to the sign-in page", async () => {
     const assign = vi.fn();
     vi.stubGlobal("window", { location: { pathname: "/p/infra", search: "", origin: "http://c", assign } });
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response(JSON.stringify({ title: "Non authentifié" }), { status: 401 })),
+      vi.fn(async () => new Response(JSON.stringify({ title: "Not authenticated" }), { status: 401 })),
     );
     const { api } = await import("@/lib/api");
     await expect(api.me()).rejects.toThrow();

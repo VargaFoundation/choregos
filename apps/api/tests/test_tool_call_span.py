@@ -13,7 +13,7 @@ from httpx import AsyncClient
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import StatusCode
 
-from .test_catalogue_outils import _intercepter, _run_avec_catalogue
+from .kits.tool_catalogue import intercept, run_with_catalogue
 
 pytestmark = pytest.mark.asyncio
 
@@ -27,7 +27,7 @@ def spans() -> Iterator[InMemorySpanExporter]:
 
 
 def _provider_answers(monkeypatch: pytest.MonkeyPatch, status_code: int) -> None:
-    _intercepter(
+    intercept(
         monkeypatch,
         httpx.Response(
             status_code,
@@ -45,7 +45,7 @@ async def test_a_tool_call_is_a_child_of_the_stage_span(
     monkeypatch: pytest.MonkeyPatch,
     spans: InMemorySpanExporter,
 ) -> None:
-    run_id, headers = await _run_avec_catalogue(project, tmp_path, monkeypatch)
+    run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch)
     _provider_answers(monkeypatch, 200)
 
     response = await client.post(
@@ -81,7 +81,7 @@ async def test_a_failed_tool_call_is_an_error_span(
     monkeypatch: pytest.MonkeyPatch,
     spans: InMemorySpanExporter,
 ) -> None:
-    run_id, headers = await _run_avec_catalogue(project, tmp_path, monkeypatch)
+    run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch)
     _provider_answers(monkeypatch, 503)
 
     response = await client.post(
@@ -105,7 +105,7 @@ async def test_a_refused_tool_call_is_a_span_too(
     monkeypatch: pytest.MonkeyPatch,
     spans: InMemorySpanExporter,
 ) -> None:
-    run_id, headers = await _run_avec_catalogue(project, tmp_path, monkeypatch)
+    run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch)
 
     response = await client.post(
         f"/api/v1/internal/runs/{run_id}/tools/not_in_the_catalogue", headers=headers, json={}

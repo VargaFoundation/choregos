@@ -385,13 +385,73 @@ that against the ticket and the day and books it as a ledger line of kind `exter
 shows it apart). With nothing declared the line says `unmeasured`: Choregos does not know what Rovo
 costs.
 
-### Limits, said plainly
+### E-mail notifications
+
+A project can send its notifications by e-mail: add a `notify` connector of type **E-mail (SMTP)**
+(host, port, TLS mode, sending address, and the password as a write-only secret). Every notification
+the orchestrator sends, the release train's included, then goes to the project's e-mail addresses
+(Project settings, Notifications). When the project sets none, the connector's `to` list is used. A
+failed send is logged and never fails the work that notifies.
+
+SMTP does not go through the HTTP egress guard: the connector declares its host and port, and the
+operator's network policy must open them. The setup procedure is `docs/procedures/connector.notify.email.md`.
+
+## Limits, said plainly
 
 Not built: Choregos **as** a Rovo agent inside Jira (it needs a Forge app and an A2A server); an agent
 answering `input-required` from the console and resuming; push notifications; verification of signed
 cards (A2A 1.0). The A2A 1.0 spelling is implemented from secondary sources and exercised against a
 fake only; so is the Dynamic Client Registration exchange with Atlassian: neither has run against the
 real service yet (`tests/live/test_rovo_a2a.py`, run by hand once the consent is given).
+
+## Your organisation's MCP gateway (ADR 0105)
+
+Some MCP servers cannot be called directly: they need hosting, or OAuth, or their credential must
+stay in one place. If your organisation already runs an **MCP gateway** in front of them, Choregos
+consumes it ([ADR 0105](adr/0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md)): it calls the
+gateway like any MCP server, and never is one. It does not route, aggregate or re-serve third-party
+servers. Any gateway product can be that gateway; none is required or recommended here.
+
+**What Choregos needs from the gateway.**
+
+- MCP over Streamable HTTP.
+- A way to name the server: in the path (`{server}` in the endpoint) or in a header.
+- One of four ways to sign in: `bearer`, `header`, `oauth_client_credentials`, or `jwt_assertion`
+  (`services/mcp_gateway.py`).
+- Optionally, that it accepts the identity assertion Choregos signs for each call: an ES256 JWT of
+  60 seconds, checked against the organisation's public JWKS URL
+  (`services/mcp_gateway_identity.py`; the claims and their personal data are in
+  [Security](security.md#mcp-gateway)).
+
+**Steps** (an organisation administrator; the full walk-through is the procedure
+[Connect an MCP server through your organisation's MCP gateway](procedures/connector.mcp.mcp-gateway.md)).
+
+1. Register the server at the gateway, with its own credential or OAuth setup. Choregos never holds it.
+2. **Administration → MCP gateway**: set the mode, the endpoint, the routing, the sign-in and its secret
+   (sealed, write-only), then **Test the gateway**. Give the gateway the issuer and the JWKS URL the
+   page shows. The issuer is stored with the first key, so renaming the organisation does not change it
+   (ADR 0090; the former JWKS URL keeps resolving through `org_alias_middleware.py`).
+3. **Administration → Catalogue** (MCP servers, *Through your MCP gateway*) or **Connectors** (type
+   `mcp-gateway`, with the server's name at the gateway).
+4. Operators: the chart values and egress rules are in
+   [Deployment](deployment.md#an-mcp-gateway-adr-0105); a local try-out with a fake gateway is in
+   [Development](development.md#an-mcp-gateway-in-the-local-install-adr-0105); the console
+   page is described in [Usage](usage.md).
+
+**What changes for agents, and what does not.** An agent names the same tools as before. Policies,
+the approval of a write, the per-tool permissions, the result cap and the injection guard apply as for
+a direct connector (`services/broker.py`); the call is journaled in the cost ledger under the provider
+`mcp:<connector>`. What changes is who holds the upstream credential (the gateway) and the extra hop
+the gateway sees. In mode `required`, a direct `mcp` connector is refused with `gateway_required`
+before anything is created: no action, no ledger line. The same goes for `gateway_not_configured`
+(no gateway, or mode `off`) and `gateway_assertion_key_missing` (a lost key fails closed); removing a
+gateway that connectors use is refused with `gateway_in_use`.
+
+A plugin's server ([ADR 0096](adr/0096-a-plugin-s-code-runs-as-an-mcp-server-the-platform-runs.md): an
+organisation connector with `plugin_server` set, run by the platform in-cluster in the plugins
+namespace; `services/plugin_servers.py`) is not an upstream. It is never reached through the gateway
+and `required` mode does not refuse it. See [Servers](plugins.md#servers) and
+[Plugin servers](deployment.md#plugin-servers).
 
 ## Limits
 

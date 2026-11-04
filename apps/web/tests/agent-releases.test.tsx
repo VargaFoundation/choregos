@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ChannelBadges, RevisionChannels } from "@/components/agents/channels";
 import { publishedSentence } from "@/components/agents/builder";
-import { canarySentence, sourceLabel } from "@/components/agents/registre";
+import { canarySentence, sourceLabel } from "@/components/agents/registry";
 import {
   LifecycleTab,
   PendingRelease,

@@ -2,11 +2,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TopNav } from "@/app/top-nav";
-import { entreeActive, GROUPES, NAV, projectGroups } from "@/components/coquille/navigation";
+import { isActiveEntry, GROUPS, NAV, projectGroups } from "@/components/shell/navigation";
 import { ThemeProvider } from "@/lib/theme";
 
-const chemin = { courant: "/" };
-vi.mock("next/navigation", () => ({ usePathname: () => chemin.courant }));
+const route = { current: "/" };
+vi.mock("next/navigation", () => ({ usePathname: () => route.current }));
 vi.mock("@/lib/session", () => ({
   useSession: () => ({ me: null, orgs: [], org: "acme", choisirOrg: vi.fn(), deconnecter: vi.fn() }),
 }));
@@ -27,8 +27,8 @@ vi.mock("@/lib/api", async (importOriginal) => {
   };
 });
 
-function rendre(pathname: string) {
-  chemin.courant = pathname;
+function mount(pathname: string) {
+  route.current = pathname;
   render(
     <QueryClientProvider client={new QueryClient()}>
       <ThemeProvider>
@@ -44,46 +44,46 @@ describe("la navigation (S21-03, S24-03)", () => {
     document.body.innerHTML = "";
   });
 
-  it("chaque entrée est rangée dans un groupe, une seule fois ; les skills ont la leur", () => {
+  it("each entry is placed in a group, once; skills have their own", () => {
     expect(NAV.map((entree) => entree.label)).toContain("Skills");
-    const rangees = GROUPES.flatMap((groupe) => groupe.entrees);
+    const rangees = GROUPS.flatMap((groupe) => groupe.entrees);
     expect([...rangees].sort()).toEqual(NAV.map((entree) => entree.href).sort());
   });
 
   it("Integrations is not in the Catalogue group and is named like the project's entry (S40-08)", () => {
-    const catalogue = GROUPES.find((groupe) => groupe.titre === "Catalogue")!;
+    const catalogue = GROUPS.find((groupe) => groupe.titre === "Catalogue")!;
     expect(catalogue.entrees).not.toContain("/integrations");
-    const organisation = GROUPES.find((groupe) => groupe.titre === "Organisation")!;
+    const organisation = GROUPS.find((groupe) => groupe.titre === "Organisation")!;
     expect(organisation.entrees[0]).toBe("/integrations");
-    const projet = projectGroups("x")
+    const project = projectGroups("x")
       .flatMap((groupe) => groupe.entries)
       .find((entree) => entree.href.endsWith("/integrations"))!;
-    expect(NAV.find((entree) => entree.href === "/integrations")!.label).toBe(projet.label);
+    expect(NAV.find((entree) => entree.href === "/integrations")!.label).toBe(project.label);
   });
 
-  it("les projets restent actifs dans un projet, et une seule entrée l'est à la fois", () => {
-    expect(entreeActive("/", "/p/billing-api/board")).toBe(true);
+  it("projects stay active inside a project, and a single entry is active at a time", () => {
+    expect(isActiveEntry("/", "/p/billing-api/board")).toBe(true);
     for (const pathname of ["/", "/agents", "/skills", "/inbox", "/integrations", "/admin/connectors", "/p/x"]) {
-      expect(NAV.filter((entree) => entreeActive(entree.href, pathname))).toHaveLength(1);
+      expect(NAV.filter((entree) => isActiveEntry(entree.href, pathname))).toHaveLength(1);
     }
   });
 
-  it("sous 1280 px, se replie derrière « menu » : le panneau s'ouvre, se ferme sur Échap et rend le focus (S23-01)", () => {
-    const navigation = rendre("/");
+  it("below 1280 px, folds behind \"menu\": the panel opens, closes on Escape and gives back the focus (S23-01)", () => {
+    const navigation = mount("/");
     const menu = screen.getByRole("button", { name: /^Menu/ });
     expect(menu).toHaveAttribute("aria-expanded", "false");
     expect(navigation.querySelector("#menu-principal")).toBeNull();
 
     fireEvent.click(menu);
     expect(menu).toHaveAttribute("aria-expanded", "true");
-    const panneau = navigation.querySelector<HTMLElement>("#menu-principal");
-    expect(panneau).not.toBeNull();
-    // Les six entrées y sont, dans leurs groupes, et celle de la page courante y est marquée.
-    expect(panneau?.querySelectorAll("a")).toHaveLength(NAV.length + 1); // + « sign in »
-    expect(panneau?.querySelector('a[aria-current="page"]')?.textContent).toBe("Projects");
-    expect(within(panneau!).getByRole("list", { name: "Catalogue" })).toBeInTheDocument();
-    // Le choix du thème y est aussi : sous 1280 px, l'en-tête ne le montre plus ailleurs.
-    expect(within(panneau!).getByRole("group", { name: "Theme" })).toBeInTheDocument();
+    const panel = navigation.querySelector<HTMLElement>("#menu-principal");
+    expect(panel).not.toBeNull();
+    // The six entries are there, in their groups, and the current page's one is marked.
+    expect(panel?.querySelectorAll("a")).toHaveLength(NAV.length + 1); // + « sign in »
+    expect(panel?.querySelector('a[aria-current="page"]')?.textContent).toBe("Projects");
+    expect(within(panel!).getByRole("list", { name: "Catalogue" })).toBeInTheDocument();
+    // The theme choice is there too: below 1280 px, the header no longer shows it elsewhere.
+    expect(within(panel!).getByRole("group", { name: "Theme" })).toBeInTheDocument();
 
     fireEvent.keyDown(menu, { key: "Escape" });
     expect(menu).toHaveAttribute("aria-expanded", "false");
@@ -91,20 +91,20 @@ describe("la navigation (S21-03, S24-03)", () => {
     expect(menu).toHaveFocus();
   });
 
-  it("le bouton du menu compte ce qui attend une personne : un ticket et deux actions (S23-02)", async () => {
-    rendre("/");
+  it("the menu button counts what waits for a person: one ticket and two actions (S23-02)", async () => {
+    mount("/");
     expect(await within(screen.getByRole("button", { name: /^Menu/ })).findByText(", 3 waiting")).toBeInTheDocument();
   });
 
-  it("les deux choix du thème de l'en-tête sont deux groupes distincts", () => {
-    rendre("/");
+  it("the header's two theme choices are two distinct groups", () => {
+    mount("/");
     fireEvent.click(screen.getByRole("button", { name: /^Menu/ }));
-    // L'en-tête (à partir de 1280 px) et le panneau : un même nom n'en ferait qu'un groupe.
-    const groupes = screen.getAllByRole("group", { name: "Theme" });
-    expect(groupes).toHaveLength(2);
-    const noms = groupes.map((groupe) => within(groupe).getAllByRole("radio")[0]!.getAttribute("name"));
-    expect(new Set(noms).size).toBe(2);
-    fireEvent.click(within(groupes[1]!).getByRole("radio", { name: "Light" }));
-    for (const groupe of groupes) expect(within(groupe).getByRole("radio", { name: "Light" })).toBeChecked();
+    // The header (from 1280 px) and the panel: the same name would make only one group.
+    const groups = screen.getAllByRole("group", { name: "Theme" });
+    expect(groups).toHaveLength(2);
+    const names = groups.map((groupe) => within(groupe).getAllByRole("radio")[0]!.getAttribute("name"));
+    expect(new Set(names).size).toBe(2);
+    fireEvent.click(within(groups[1]!).getByRole("radio", { name: "Light" }));
+    for (const group of groups) expect(within(group).getByRole("radio", { name: "Light" })).toBeChecked();
   });
 });

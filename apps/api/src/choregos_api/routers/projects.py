@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Projets : création, configuration, provisioning (SSE), suspension."""
+"""Projects: creation, configuration, provisioning (SSE), suspension."""
 
 from __future__ import annotations
 
@@ -17,10 +17,10 @@ from ..config import get_settings
 from ..db.models import Membership, Organization, Project
 from ..db.org_aliases import aliases_by_org, aliases_of, holder_of_slug, keep_old_slug, release
 from ..db.session import TOUT, limiter_aux_organisations
-from ..deps import Db, Me, Pagination, ProjectCtx, exiger_admin_de_plateforme
-from ..edition import est_entreprise
+from ..deps import Db, Me, Pagination, ProjectCtx, require_platform_admin
+from ..edition import is_enterprise
 from ..errors import conflict, forbidden, not_found
-from ..greffons import DemandeDeGeste, controler
+from ..extensions import GestureRequest, check_gesture
 from ..rbac import Permission
 from ..schemas import (
     OrgCreate,
@@ -46,7 +46,7 @@ router = APIRouter(tags=["projects"])
 
 @router.get("/orgs", response_model=list[OrgDto], operation_id="listOrgs")
 async def list_orgs(session: Db, principal: Me) -> list[OrgDto]:
-    """Les organisations de l'appelant, avec son rôle — ce que le front affiche dans son sélecteur."""
+    """The caller's organisations, with their role — what the front end shows in its selector."""
     slugs = set(principal.org_roles) | {q.split("/", 1)[0] for q in principal.project_roles}
     rows = list((await session.execute(select(Organization).where(Organization.slug.in_(slugs)))).scalars())
     aliases = await aliases_by_org(session, [o.id for o in rows])
@@ -67,27 +67,27 @@ async def list_orgs(session: Db, principal: Me) -> list[OrgDto]:
 
 @router.post("/orgs", response_model=OrgDto, status_code=status.HTTP_201_CREATED, operation_id="createOrg")
 async def create_org(body: OrgCreate, session: Db, principal: Me) -> OrgDto:
-    """Crée une organisation ; l'appelant en devient administrateur.
+    """Create an organisation; the caller becomes its administrator.
 
-    Réservé à qui administre déjà une organisation. La toute première vient de l'amorçage
-    (`CHOREGOS_BOOTSTRAP_ORG`) : avant le 2026-09-24, aucune route, aucune commande ni
-    aucun écran ne savait en créer une.
+    Reserved to whoever already administers an organisation. The very first one comes from the bootstrap
+    (`CHOREGOS_BOOTSTRAP_ORG`): before 2026-09-24, no route, no command and
+    no screen could create one.
     """
-    # Créer une organisation est un geste d'INSTANCE : il faut administrer l'instance, pas une
-    # organisation parmi d'autres.
-    await exiger_admin_de_plateforme(session, principal)
-    # Créer une organisation est un geste d'INSTANCE, et le droit vient d'être établi : la suite de la
-    # requête voit l'instance. Bornée aux organisations existantes de l'appelant, la session ne
-    # voyait ni le compte réel des organisations, ni un slug déjà pris ailleurs (doublon → 500), et
-    # la trace de la nouvelle organisation était refusée par la RLS d'`audit_log` (500 en 0.10.0).
+    # Creating an organisation is an INSTANCE gesture: it takes administering the instance, not one
+    # organisation among others.
+    await require_platform_admin(session, principal)
+    # Creating an organisation is an INSTANCE gesture, and the right has just been established: the
+    # rest of the request sees the instance. Bounded to the caller's existing organisations, the session saw
+    # neither the real count of organisations, nor a slug already taken elsewhere (duplicate → 500), and
+    # the trace of the new organisation was refused by the RLS of `audit_log` (500 in 0.10.0).
     await limiter_aux_organisations(session, TOUT)
-    if not est_entreprise():
-        # L'édition communautaire est mono-organisation (ADR 0024). Ce n'est pas un plafond
-        # arbitraire : le multi-locataire n'est pas fini ici — treize tables restent hors RLS —
-        # et une installation à une seule organisation n'est exposée à aucune de ces fuites,
-        # parce qu'il n'y a rien à franchir. L'édition entreprise le déverrouille ET le termine.
-        deja = (await session.execute(select(func.count()).select_from(Organization))).scalar_one()
-        if deja:
+    if not is_enterprise():
+        # The community edition is single-organisation (ADR 0024). This is not an arbitrary
+        # cap: multi-tenancy is not finished here — thirteen tables remain outside RLS —
+        # and an installation with a single organisation is exposed to none of those leaks,
+        # because there is nothing to cross. The enterprise edition unlocks it AND finishes it.
+        already = (await session.execute(select(func.count()).select_from(Organization))).scalar_one()
+        if already:
             raise conflict(
                 "the community edition holds a single organisation. Several organisations, and the "
                 "isolation between them, are the enterprise edition (docs/adr/0024-two-editions.md)."
@@ -137,20 +137,20 @@ async def update_org(org: str, body: OrgUpdate, session: Db, principal: Me) -> O
     a workflow (`session_scope`). A slug that is taken, or an alias of ANOTHER organisation, is refused
     (409); the platform administrator releases an alias with `DELETE /orgs/{org}/aliases/{alias}`.
     """
-    est_admin = principal.org_roles.get(org) == Role.ORG_ADMIN
-    if not est_admin:
+    is_admin = principal.org_roles.get(org) == Role.ORG_ADMIN
+    if not is_admin:
         # A platform administrator (granted by an edition plugin) renames an organisation they are
         # not a member of. The instance right is checked BEFORE the lookup: under PostgreSQL RLS, a
         # lookup bounded to the caller's organisations would not see the row (404).
-        await exiger_admin_de_plateforme(session, principal)
+        await require_platform_admin(session, principal)
         await limiter_aux_organisations(session, TOUT)
     organisation = await organisation_by_slug(session, org)
-    avant = {"slug": organisation.slug, "name": organisation.name, "currency": moneta(organisation)}
+    org_before = {"slug": organisation.slug, "name": organisation.name, "currency": moneta(organisation)}
     if body.slug is not None and body.slug != organisation.slug:
-        await exiger_admin_de_plateforme(session, principal)
-        # La RLS compare les SLUGS (`slug = ANY(choregos_current_orgs())`) : bornée à l'ancien, la
-        # transaction ne verrait plus la ligne qu'elle renomme, et la mise à jour serait refusée. Le
-        # droit d'instance vient d'être établi : la suite de la requête voit l'instance.
+        await require_platform_admin(session, principal)
+        # The RLS compares SLUGS (`slug = ANY(choregos_current_orgs())`): bounded to the old one, the
+        # transaction would no longer see the row it renames, and the update would be refused. The
+        # instance right has just been established: the rest of the request sees the instance.
         await limiter_aux_organisations(session, TOUT)
         # A slug is unique across current slugs AND aliases: another organisation's old address is
         # not free (ADR 0090). An organisation may take back one of its own former slugs.
@@ -168,29 +168,37 @@ async def update_org(org: str, body: OrgUpdate, session: Db, principal: Me) -> O
                 **(organisation.settings or {}),
                 MEMORY_KEY_SETTING: organisation.slug,
             }
-        ancien = organisation.slug
+        former_slug = organisation.slug
         organisation.slug = body.slug
         await session.flush()
         # The old slug stays an address of the organisation (ADR 0090), and the copy of the slug the
         # project configuration holds (`ProjectConfig.org`) is rewritten with it.
-        await keep_old_slug(session, organisation, ancien, principal.email)
-        for projet in (
+        await keep_old_slug(session, organisation, former_slug, principal.email)
+        for project_row in (
             await session.execute(select(Project).where(Project.org_id == organisation.id))
         ).scalars():
-            if (projet.config or {}).get("org") == ancien:
-                projet.config = {**projet.config, "org": body.slug}
+            if (project_row.config or {}).get("org") == former_slug:
+                project_row.config = {**project_row.config, "org": body.slug}
     if body.name is not None:
         organisation.name = body.name
     if body.currency is not None:
         organisation.settings = {**(organisation.settings or {}), "currency": body.currency}
     await session.flush()
-    apres = {"slug": organisation.slug, "name": organisation.name, "currency": moneta(organisation)}
-    await record(session, principal, "org.update", org_id=organisation.id, target_type="org",
-                 target_id=organisation.id, avant=avant, apres=apres)  # fmt: skip
+    org_after = {"slug": organisation.slug, "name": organisation.name, "currency": moneta(organisation)}
+    await record(
+        session,
+        principal,
+        "org.update",
+        org_id=organisation.id,
+        target_type="org",
+        target_id=organisation.id,
+        avant=org_before,  # lang: fr-ok — persisted audit payload, S45-39
+        apres=org_after,  # lang: fr-ok — persisted audit payload, S45-39
+    )
     return OrgDto(
         slug=organisation.slug,
         name=organisation.name,
-        role=Role.ORG_ADMIN if est_admin else None,  # a non-member platform admin has no role here
+        role=Role.ORG_ADMIN if is_admin else None,  # a non-member platform admin has no role here
         currency=moneta(organisation),
         aliases=await aliases_of(session, organisation.id),
     )
@@ -205,7 +213,7 @@ async def release_org_alias(org: str, alias: str, session: Db, principal: Me) ->
     The platform administrator's gesture, like the rename: it is the one that breaks the old addresses
     and the IdP group names that still name the alias.
     """
-    await exiger_admin_de_plateforme(session, principal)
+    await require_platform_admin(session, principal)
     await limiter_aux_organisations(session, TOUT)
     organisation = await organisation_by_slug(session, org)
     if not await release(session, organisation.id, alias):
@@ -236,19 +244,27 @@ async def list_projects(org: str, session: Db, principal: Me, page: Pagination) 
     )
 
 
-def _avec_les_defauts_du_deploiement(config: ProjectConfig) -> dict[str, Any]:
-    """La configuration d'un projet neuf : ce que la demande dit, et — pour ce qu'elle tait — le
-    backend et les profils de modèle que le déploiement sait servir (#245). Une demande qui nomme
-    `agent` ou `models` garde les siens : le déploiement propose, le projet dispose."""
-    reglages = get_settings()
-    donnees = config.model_dump(mode="json", exclude_none=True)
-    if "agent" not in config.model_fields_set and reglages.default_agent_backend:
-        permis = list(reglages.allowed_agent_backends) or [reglages.default_agent_backend]
-        donnees["agent"] = {"default_backend": reglages.default_agent_backend, "allowed_backends": permis}
-    if "models" not in config.model_fields_set and reglages.default_model_profiles:
-        donnees["models"] = {**donnees.get("models", {}), "profiles": dict(reglages.default_model_profiles)}
-    # Repassée par le contrat : un profil s'écrit en raccourci (`standard: platform/standard`).
-    return ProjectConfig.model_validate(donnees).model_dump(mode="json", exclude_none=True)
+def _with_deployment_defaults(config: ProjectConfig) -> dict[str, Any]:
+    """The configuration of a new project: what the request says, and — for what it leaves out — the
+    backend and the model profiles the deployment can serve (#245). A request that names
+    `agent` or `models` keeps its own: the deployment proposes, the project disposes."""
+    deployment_settings = get_settings()
+    payload = config.model_dump(mode="json", exclude_none=True)
+    if "agent" not in config.model_fields_set and deployment_settings.default_agent_backend:
+        permitted = list(deployment_settings.allowed_agent_backends) or [
+            deployment_settings.default_agent_backend
+        ]
+        payload["agent"] = {
+            "default_backend": deployment_settings.default_agent_backend,
+            "allowed_backends": permitted,
+        }
+    if "models" not in config.model_fields_set and deployment_settings.default_model_profiles:
+        payload["models"] = {
+            **payload.get("models", {}),
+            "profiles": dict(deployment_settings.default_model_profiles),
+        }
+    # Passed back through the contract: a profile is written in shorthand (`standard: platform/standard`).
+    return ProjectConfig.model_validate(payload).model_dump(mode="json", exclude_none=True)
 
 
 @router.post(
@@ -268,13 +284,13 @@ async def create_project(org: str, body: ProjectCreate, session: Db, principal: 
     ).scalar_one_or_none()
     if existing is not None:
         raise conflict(f"project `{body.slug}` already exists in {org}")
-    await controler(session, DemandeDeGeste("project.create", org, principal, {"slug": body.slug}))
+    await check_gesture(session, GestureRequest("project.create", org, principal, {"slug": body.slug}))
     project = Project(
         org_id=organization.id,
         slug=body.slug,
         name=body.name,
         template_ref=body.template_ref,
-        config=_avec_les_defauts_du_deploiement(body.config),
+        config=_with_deployment_defaults(body.config),
         status="draft",
         provision_state={"status": "pending", "steps": [], "inputs": body.inputs},
     )
@@ -310,39 +326,39 @@ async def get_project(ctx: ProjectCtx, session: Db) -> ProjectDto:
 
 @router.get("/projects/{id}/tools", operation_id="getProjectTools")
 async def get_project_tools(ctx: ProjectCtx, session: Db) -> dict[str, Any]:
-    """Le catalogue du déploiement, et ce que CE projet a le droit d'appeler.
+    """The deployment catalogue, and what THIS project may call.
 
-    Les deux ensembles, pas seulement le second : sans la liste complète, on ne peut ni
-    savoir ce qu'on pourrait autoriser, ni comprendre pourquoi un outil manque.
+    Both sets, not only the second: without the complete list, one can neither
+    know what could be authorised, nor understand why a tool is missing.
     """
     from ..catalogue import catalogue
 
     config = ctx.project.config or {}
-    autorises = {str(t) for t in (config.get("tools") or [])}
-    groupes = [str(g) for g in (config.get("groups") or [])]
-    tout = "*" in autorises
+    authorised = {str(t) for t in (config.get("tools") or [])}
+    groups = [str(g) for g in (config.get("groups") or [])]
+    everything = "*" in authorised
     return {
         "tools": [
             {
-                "name": outil.name,
-                "description": outil.description,
-                "provider": outil.provider,
-                "categories": outil.categories,
-                "price_eur": outil.price_eur,
-                # La clé n'est jamais rendue : seulement le fait qu'il en faille une.
-                "needs_credential": outil.credential_env is not None,
-                # Un outil distant : la plateforme appelle le serveur MCP, et le jeton du
-                # run ne sort jamais. L'écran le dit, parce que c'est ce qu'on vient y
-                # vérifier.
-                "source": "mcp" if outil.mcp is not None else "http",
-                "groups": outil.groups,
-                "allowed": (tout or outil.name in autorises)
-                and outil.ouvert_a(groupes)
-                and not outil.may_write,
+                "name": tool.name,
+                "description": tool.description,
+                "provider": tool.provider,
+                "categories": tool.categories,
+                "price_eur": tool.price_eur,
+                # The key is never returned: only the fact that one is needed.
+                "needs_credential": tool.credential_env is not None,
+                # A remote tool: the platform calls the MCP server, and the run's token
+                # never leaves. The screen says so, because that is what people come
+                # to check.
+                "source": "mcp" if tool.mcp is not None else "http",
+                "groups": tool.groups,
+                "allowed": (everything or tool.name in authorised)
+                and tool.ouvert_a(groups)
+                and not tool.may_write,
             }
-            for outil in catalogue().outils
+            for tool in catalogue().outils
         ],
-        "allows_all": tout,
+        "allows_all": everything,
     }
 
 
@@ -369,12 +385,12 @@ async def update_project(ctx: ProjectCtx, body: ProjectUpdate, session: Db) -> P
     if body.name is not None:
         ctx.project.name = body.name
     if body.config is not None:
-        avant = sorted({str(g) for g in ((ctx.project.config or {}).get("groups") or [])})
-        apres = sorted(set(body.config.groups))
-        if apres != avant:
-            # Le second verrou de l'ADR 0014 : les groupes décident de ce que le DÉPLOIEMENT
-            # ouvre au projet. Les laisser à l'équipe du projet ferait de sa propre liste le seul
-            # contrôle — un propriétaire de projet s'ouvrait ainsi les outils d'un autre métier.
+        groups_before = sorted({str(g) for g in ((ctx.project.config or {}).get("groups") or [])})
+        groups_after = sorted(set(body.config.groups))
+        if groups_after != groups_before:
+            # The second lock of ADR 0014: groups decide what the DEPLOYMENT
+            # opens to the project. Leaving them to the project team would make its own list the only
+            # control — a project owner could thus open the tools of another trade.
             ctx.require(Permission.TOOLS_GRANT)
         ctx.project.config = body.config.model_dump(mode="json", exclude_none=True)
     config_after = ctx.project.config or {}
@@ -554,7 +570,7 @@ async def provision_status(
     session: Db,
     id: Annotated[str, Path()],
 ) -> Any:
-    """Statut du provisioning. Avec `Accept: text/event-stream`, suit les étapes en direct."""
+    """Provisioning status. With `Accept: text/event-stream`, follows the steps live."""
     if "text/event-stream" not in request.headers.get("accept", ""):
         return _provision_status(ctx.project)
 

@@ -65,9 +65,10 @@ class PluginSupply(Protocol):
         """The newest version `source` offers for `name`, or `None`."""
         ...
 
-    async def shipping(self, slugs: set[str]) -> dict[str, Shipped]:
+    async def shipping(self, slugs: set[str], *, wait: bool = True) -> dict[str, Shipped]:
         """For each slug some source's newest plugin ships as an agent, that plugin (ADR 0111 §2).
-        Never raises: a source that cannot be read says nothing."""
+        Never raises: a source that cannot be read says nothing. `wait=False` never waits for a
+        source: what is not known yet is answered empty, and learnt behind the reader."""
         ...
 
 
@@ -134,7 +135,7 @@ class OfflineDirectory:
             return None
         return max(versions, key=semver_key) if versions else None
 
-    async def shipping(self, slugs: set[str]) -> dict[str, Shipped]:
+    async def shipping(self, slugs: set[str], *, wait: bool = True) -> dict[str, Shipped]:
         newest: dict[str, tuple[str, Path]] = {}
         for manifest in sorted([*self.root.glob(f"*/{MANIFEST}"), *self.root.glob(f"*/*/{MANIFEST}")]):
             try:
@@ -169,14 +170,15 @@ class _Nothing:
     async def latest(self, source: str, name: str) -> str | None:
         return None
 
-    async def shipping(self, slugs: set[str]) -> dict[str, Shipped]:
+    async def shipping(self, slugs: set[str], *, wait: bool = True) -> dict[str, Shipped]:
         return {}
 
 
 #: What the sources' indexes say each plugin ships. The workflow library reads it on every listing, and
 #: reading it pulls every source's index (OCI and signatures, or every offline archive): the library took
 #: seconds to load (S55-04). It is kept ten minutes, and an expired copy is served at once while ONE
-#: refresh runs behind it; only the very first reader of the process waits.
+#: refresh runs behind it. A reader that asks not to wait (the library's listing) is answered at once
+#: even before the first read, and the API starts that first read when it starts (`warm_shipping`).
 _SHIPPING_TTL_SECONDS = 600.0
 _shipping_cache: dict[str, tuple[float, dict[str, Shipped]]] = {}
 _shipping_refresh: dict[str, asyncio.Task[tuple[float, dict[str, Shipped]]]] = {}
@@ -209,11 +211,16 @@ class SourcesSupply:
         except SourceError:
             return None
 
-    async def shipping(self, slugs: set[str]) -> dict[str, Shipped]:
+    async def shipping(self, slugs: set[str], *, wait: bool = True) -> dict[str, Shipped]:
         cached = _shipping_cache.get("sources")
         if cached is None:
+            refresh = self._refresh()
+            if not wait:
+                # The library's listing: a cold read of every source took 20 s on a real deployment
+                # (S55-04). The list goes out now, without the plugin hints; the next one has them.
+                return {}
             # Nothing to serve yet: wait, but share the read with whoever else is waiting.
-            cached = await asyncio.shield(self._refresh())
+            cached = await asyncio.shield(refresh)
         elif time.monotonic() - cached[0] > _SHIPPING_TTL_SECONDS:
             self._refresh()
         return {slug: shipped for slug, shipped in cached[1].items() if slug in slugs}
@@ -257,6 +264,13 @@ class SourcesSupply:
 
 
 _override: PluginSupply | None = None
+
+
+async def warm_shipping(settings: Settings) -> None:
+    """Reads the sources' index once at start-up, so that the first listing of the library already
+    names the plugins that ship its missing agents. In the background: a slow source never holds the
+    readiness probe, and `shipping` never raises."""
+    await plugin_supply(settings).shipping(set())
 
 
 def plugin_supply(settings: Settings) -> PluginSupply:

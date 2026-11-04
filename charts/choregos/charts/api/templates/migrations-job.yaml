@@ -63,7 +63,7 @@ spec:
         # chart embeds it, and an image takes as long as it takes to pull. Without
         # this wait, the Job exhausts its `backoffLimit` on a "connection refused" and
         # the installation fails blaming the migrations.
-        - name: attendre-la-base
+        - name: wait-for-database
           image: {{ include "choregos.image" (dict "global" .Values.global "image" .Values.image) }}
           command:
             - python

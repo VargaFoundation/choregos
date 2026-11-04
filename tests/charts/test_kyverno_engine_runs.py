@@ -31,5 +31,5 @@ def test_the_charts_job_runs_kyverno_test() -> None:
 def test_the_engine_judges_the_rules_that_need_it() -> None:
     test = yaml.safe_load((POLICIES / "tests" / "kyverno-test.yaml").read_text())
     judged = {(r["policy"], r["rule"], r["result"]) for r in test["results"]}
-    for policy, rule in (("choregos-image-tags", "interdire-latest"), ("choregos-pod-security", "non-root")):
+    for policy, rule in (("choregos-image-tags", "forbid-latest-tag"), ("choregos-pod-security", "non-root")):
         assert {(policy, rule, "pass"), (policy, rule, "fail")} <= judged, f"{policy}/{rule}"

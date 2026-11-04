@@ -89,7 +89,7 @@ async def test_sans_installateur_le_projet_nait_sans_et_l_audit_le_dit(
     (ligne,) = await _audit(client, "template.extension.skip")
     assert ligne["target_id"] == cree.json()["id"]
     assert ligne["payload"]["extension"] == "essai"
-    assert "aucun greffon" in ligne["payload"]["reason"]
+    assert "no active extension" in ligne["payload"]["reason"]
 
 
 async def test_un_refus_de_l_installateur_fait_echouer_la_naissance(

@@ -8,22 +8,23 @@ import { api } from "@/lib/api";
 import { percent, usd } from "@/lib/format";
 import { hasReleaseTrain } from "@/lib/release-train";
 import { CrossBackendCard } from "@/components/cross-backend-card";
-import { GrapheDesCouts } from "@/components/graphe-des-couts";
+import { CostGraph } from "@/components/cost-graph";
 import type { DoraMetric } from "@/lib/types";
-import { MiseEnRoute } from "@/components/mise-en-route";
-import { Card, CostChip, Empty, ErrorNote, EtatDeLecture, Label, Stat, StateBadge } from "@/components/ui";
+import { GettingStarted } from "@/components/getting-started";
+import { Card, CostChip, Empty, ErrorNote, ReadState, Label, Stat, StateBadge } from "@/components/ui";
+import { Activity, GitMerge, Timer, TrainFront, Wallet } from "lucide-react";
 
 export default function ProjectOverview({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
   const project = useQuery({ queryKey: ["project", slug], queryFn: () => api.project(slug) });
   const costs = useQuery({ queryKey: ["costs", slug], queryFn: () => api.costs(slug, "day") });
-  // Par NATURE : un appel d'outil du catalogue coûte comme un modèle, et se fondait
-  // dans le même total. Une dépense qu'on ne voit pas est une dépense qu'on ne borne pas.
+  // By NATURE: a catalogue tool call costs like a model, and used to melt
+  // into the same total. An expense one does not see is an expense one does not cap.
   const parNature = useQuery({ queryKey: ["costs", slug, "kind"], queryFn: () => api.costs(slug, "kind") });
   const items = useQuery({ queryKey: ["items", slug], queryFn: () => api.allWorkItems(slug) });
   const dora = useQuery({ queryKey: ["dora", slug], queryFn: () => api.dora(slug) });
-  // Tant que le projet n'est pas actif, on suit son provisioning ici — l'assistant
-  // redirigeait vers cette page et rien n'y disait où en étaient les étapes.
+  // While the project is not active, its provisioning is followed here: the wizard
+  // redirected to this page and nothing there said where the steps stood.
   const enCours = project.data?.status != null && project.data.status !== "active";
   const provisioning = useQuery({
     queryKey: ["provision", slug],
@@ -39,8 +40,8 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
 
   return (
     <div className="space-y-6">
-      <MiseEnRoute slug={slug} />
-      {enCours && !provisioning.data && <EtatDeLecture lecture={provisioning} quoi="the provisioning" />}
+      <GettingStarted slug={slug} />
+      {enCours && !provisioning.data && <ReadState lecture={provisioning} quoi="the provisioning" />}
       {enCours && provisioning.data && (
         <Card
           eyebrow="Provisioning"
@@ -70,10 +71,10 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
         className={`grid grid-cols-2 border border-line ${hasReleaseTrain(project.data) ? "md:grid-cols-4" : "md:grid-cols-3"}`}
       >
         <div className="p-6">
-          <Stat value={actifs} label="Active tickets" tone={actifs > 0 ? "accent" : "ink"} />
+          <Stat value={actifs} label="Active tickets" tone={actifs > 0 ? "accent" : "ink"} icon={Activity} hue={1} />
         </div>
         <div className="border-l border-line p-6">
-          <Stat value={percent(stats?.first_pass_merge_rate)} label="PRs merged on first pass" />
+          <Stat value={percent(stats?.first_pass_merge_rate)} label="PRs merged on first pass" icon={GitMerge} hue={6} />
         </div>
         <div className="border-t border-line p-6 md:border-t-0 md:border-l">
           <Stat
@@ -83,11 +84,13 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
                 : "—"
             }
             label="Median cycle time"
+            icon={Timer}
+            hue={5}
           />
         </div>
         {hasReleaseTrain(project.data) && (
           <div className="border-t border-l border-line p-6 md:border-t-0">
-            <Stat value={stats?.trains_pending ?? 0} label="Trains in flight" />
+            <Stat value={stats?.trains_pending ?? 0} label="Trains in flight" icon={TrainFront} hue={3} />
           </div>
         )}
       </div>
@@ -95,6 +98,8 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
       <Card
         eyebrow="Cost"
         title="The last 14 days"
+        icon={Wallet}
+        hue={7}
         action={
           <span className="flex gap-3 text-xs">
             <Link href={`/costs?project=${slug}`} className="text-ink-muted hover:text-ink">
@@ -107,28 +112,28 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
         }
       >
         {!costs.data ? (
-          <EtatDeLecture lecture={costs} quoi="the costs" />
+          <ReadState lecture={costs} quoi="the costs" />
         ) : rows.length === 0 ? (
-          <Empty>No spend recorded.</Empty>
+          <Empty icon={Wallet} hue={7}>No spend recorded.</Empty>
         ) : (
           <>
-            <GrapheDesCouts rows={rows} />
+            <CostGraph rows={rows} />
             <div className="mt-4 flex flex-wrap gap-x-10 gap-y-3">
               <Stat value={usd(costs.data?.total.cost_usd)} label="Total" />
               <Stat
-                // En dollars, comme il est déclaré : le taux 0,92 codé ici ne suivait pas celui de l'API.
+                // In dollars, as declared: the 0.92 rate hard-coded here did not follow the API's.
                 value={costs.data?.total.budget_usd ? usd(costs.data.total.budget_usd) : "—"}
                 label="Daily budget"
               />
               {(parNature.data?.rows ?? [])
                 .filter((row) => row.key === "tool")
                 .map((row) => {
-                  const appels = row.runs ?? 0;
+                  const calls = row.runs ?? 0;
                   return (
                     <Stat
                       key={row.key}
                       value={usd(row.cost_usd)}
-                      label={`Catalogue tools · ${appels} call${appels > 1 ? "s" : ""}`}
+                      label={`Catalogue tools · ${calls} call${calls > 1 ? "s" : ""}`}
                     />
                   );
                 })}
@@ -139,7 +144,7 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
 
       <Card eyebrow="Delivery" title="DORA">
         {dora.data === undefined ? (
-          <EtatDeLecture lecture={dora} quoi="the delivery measures" />
+          <ReadState lecture={dora} quoi="the delivery measures" />
         ) : dora.data.deployments === 0 ? (
           <Empty>No production deployment recorded in the window.</Empty>
         ) : (
@@ -158,7 +163,7 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
         <div className="px-6 pb-2">
           {!items.data ? (
             <div className="pb-4">
-              <EtatDeLecture lecture={items} quoi="the tickets" />
+              <ReadState lecture={items} quoi="the tickets" />
             </div>
           ) : items.data.items.length === 0 ? (
             <div className="pb-4">

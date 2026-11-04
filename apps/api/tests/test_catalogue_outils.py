@@ -14,109 +14,17 @@ import httpx
 import pytest
 from httpx import AsyncClient
 
+from .kits.tool_catalogue import intercept, intercept_host, project_with_mcp, run_with_catalogue
+
 pytestmark = pytest.mark.asyncio
-
-
-def _intercepter_hote(
-    monkeypatch: pytest.MonkeyPatch, prefixe: str, reponse: httpx.Response, vues: list[Any]
-) -> None:
-    """Comme `_intercepter`, mais pour un hôte quelconque."""
-    original = httpx.AsyncClient.request
-
-    async def faux(self: Any, *args: Any, **kwargs: Any) -> httpx.Response:
-        url = str(args[1]) if len(args) > 1 else str(kwargs.get("url", ""))
-        if not url.startswith(prefixe):
-            return await original(self, *args, **kwargs)  # type: ignore[no-any-return]
-        vues.append(httpx.Request(args[0], url, headers=kwargs.get("headers"), json=kwargs.get("json")))
-        return reponse
-
-    monkeypatch.setattr(httpx.AsyncClient, "request", faux)
-
-
-def _intercepter(monkeypatch: pytest.MonkeyPatch, reponse: httpx.Response, vues: list[Any]) -> None:
-    """Remplace l'appel au FOURNISSEUR, et lui seul.
-
-    Le client de test est lui aussi un `httpx.AsyncClient` : patcher `request` sans
-    distinguer l'hôte détournait les appels du test vers l'API elle-même, qui répondait
-    alors la réponse du fournisseur. Le premier symptôme était un `KeyError: 'tools'` sur
-    une réponse 200 — un mensonge parfait.
-    """
-    original = httpx.AsyncClient.request
-
-    async def faux(self: Any, *args: Any, **kwargs: Any) -> httpx.Response:
-        url = str(args[1]) if len(args) > 1 else str(kwargs.get("url", ""))
-        if not url.startswith("https://api.annuaire.example"):
-            return await original(self, *args, **kwargs)  # type: ignore[no-any-return]
-        vues.append(httpx.Request(args[0], url, params=kwargs.get("params"), headers=kwargs.get("headers")))
-        return reponse
-
-    monkeypatch.setattr(httpx.AsyncClient, "request", faux)
-
-
-CATALOGUE = """
-outils:
-  - name: recherche_profils
-    description: Cherche des profils.
-    provider: annuaire
-    input_schema: { type: object, required: [metier], properties: { metier: { type: string } } }
-    http:
-      method: GET
-      url: https://api.annuaire.example/v1/search
-      query: { q: "{{ metier }}" }
-      headers: { Authorization: "Bearer {{ credential }}" }
-    credential_env: ANNUAIRE_API_KEY
-    price_eur: 0.02
-"""
-
-
-async def _run_avec_catalogue(
-    project: dict[str, Any],
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    outils: str = "recherche_profils",
-) -> tuple[str, dict[str, str]]:
-    from choregos_api import catalogue as service_catalogue
-    from choregos_api.db.models import Project, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
-
-    fichier = tmp_path / "catalogue.yaml"
-    fichier.write_text(CATALOGUE, encoding="utf-8")
-    monkeypatch.setenv("CHOREGOS_TOOL_CATALOG", str(fichier))
-    monkeypatch.setenv("ANNUAIRE_API_KEY", "cle-du-coffre")
-    service_catalogue.vider_cache()
-
-    async with session_scope() as session:
-        row = await session.get(Project, project["id"])
-        assert row is not None
-        config = dict(row.config or {})
-        config["tools"] = [t for t in outils.split(",") if t]
-        row.config = config
-        item = WorkItem(project_id=project["id"], tracker_key="varga/x#9", title="T", state="ready")
-        session.add(item)
-        await session.flush()
-        run = Run(
-            id="run-outils-1",
-            work_item_id=item.id,
-            project_id=project["id"],
-            stage_role="custom",
-            transition_id="t-sourcing",
-            status="running",
-        )
-        session.add(run)
-
-    jeton = mint_run_token(
-        "run-outils-1", project_slug="billing-api", work_item_key="varga/x#9", ttl_minutes=30
-    )
-    return "run-outils-1", {"Authorization": f"Bearer {jeton}"}
 
 
 async def test_l_agent_appelle_un_outil_sans_jamais_voir_la_cle(
     client: AsyncClient, project: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    run_id, headers = await _run_avec_catalogue(project, tmp_path, monkeypatch)
+    run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch)
     vues: list[Any] = []
-    _intercepter(
+    intercept(
         monkeypatch,
         httpx.Response(
             200,
@@ -153,9 +61,9 @@ async def test_l_appel_est_inscrit_au_registre_de_couts(
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
-    run_id, headers = await _run_avec_catalogue(project, tmp_path, monkeypatch)
+    run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch)
 
-    _intercepter(
+    intercept(
         monkeypatch,
         httpx.Response(
             200, json={"profils": []}, request=httpx.Request("GET", "https://api.annuaire.example/v1/search")
@@ -188,8 +96,8 @@ async def test_the_event_carries_the_digest_of_the_request_and_the_response(
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
-    run_id, headers = await _run_avec_catalogue(project, tmp_path, monkeypatch)
-    _intercepter(
+    run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch)
+    intercept(
         monkeypatch,
         httpx.Response(
             200,
@@ -223,7 +131,7 @@ async def test_un_outil_non_declare_par_le_projet_est_introuvable(
 ) -> None:
     """Et il rend 404, pas 403 : un agent n'a pas à découvrir le catalogue du déploiement
     en essayant des noms."""
-    run_id, headers = await _run_avec_catalogue(project, tmp_path, monkeypatch, outils="")
+    run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch, tools="")
     tools = (await client.get(f"/api/v1/internal/runs/{run_id}/tools", headers=headers)).json()["tools"]
     assert [t["name"] for t in tools if t["name"] != "web_fetch"] == []
     refus = await client.post(
@@ -241,8 +149,8 @@ async def test_le_plafond_d_appels_borne_la_facture(
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
-    run_id, headers = await _run_avec_catalogue(project, tmp_path, monkeypatch)
-    _intercepter(
+    run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch)
+    intercept(
         monkeypatch,
         httpx.Response(
             200, json={"profils": []}, request=httpx.Request("GET", "https://api.annuaire.example/v1/search")
@@ -281,7 +189,7 @@ async def test_l_ecran_des_parametres_voit_tout_le_catalogue(
 ) -> None:
     """Les DEUX ensembles : sans la liste complète, on ne peut ni savoir ce qu'on pourrait
     ouvrir, ni comprendre pourquoi un outil manque à l'agent. Et jamais la clé."""
-    await _run_avec_catalogue(project, tmp_path, monkeypatch, outils="")
+    await run_with_catalogue(project, tmp_path, monkeypatch, tools="")
 
     reponse = await client.get(f"/api/v1/projects/{project['id']}/tools")
     assert reponse.status_code == 200, reponse.text
@@ -293,67 +201,6 @@ async def test_l_ecran_des_parametres_voit_tout_le_catalogue(
     assert corps["allows_all"] is False
 
 
-CATALOGUE_MCP = """
-outils:
-  - name: rechercher_entreprise
-    description: Cherche une entreprise chez un fournisseur tiers.
-    provider: annuaire-externe
-    groups: [rh]
-    input_schema: { type: object, required: [siren], properties: { siren: { type: string } } }
-    mcp:
-      url: https://mcp.fournisseur.example/mcp
-      tool: company_lookup
-      headers: { Authorization: "Bearer {{ credential }}" }
-    credential_env: FOURNISSEUR_MCP_KEY
-    read_only: true
-    price_eur: 0.05
-"""
-
-
-async def _projet_avec_mcp(
-    project: dict[str, Any],
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    *,
-    groupes: list[str],
-) -> tuple[str, dict[str, str]]:
-    from choregos_api import catalogue as service_catalogue
-    from choregos_api.db.models import Project, Run, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_api.security import mint_run_token
-
-    fichier = tmp_path / "catalogue.yaml"
-    fichier.write_text(CATALOGUE_MCP, encoding="utf-8")
-    monkeypatch.setenv("CHOREGOS_TOOL_CATALOG", str(fichier))
-    monkeypatch.setenv("FOURNISSEUR_MCP_KEY", "cle-du-fournisseur")
-    service_catalogue.vider_cache()
-
-    async with session_scope() as session:
-        row = await session.get(Project, project["id"])
-        assert row is not None
-        config = dict(row.config or {})
-        config["tools"] = ["rechercher_entreprise"]
-        config["groups"] = groupes
-        row.config = config
-        item = WorkItem(project_id=project["id"], tracker_key="varga/x#11", title="T", state="ready")
-        session.add(item)
-        await session.flush()
-        session.add(
-            Run(
-                id="run-mcp-1",
-                work_item_id=item.id,
-                project_id=project["id"],
-                stage_role="custom",
-                status="running",
-            )
-        )
-
-    jeton = mint_run_token(
-        "run-mcp-1", project_slug="billing-api", work_item_key="varga/x#11", ttl_minutes=30
-    )
-    return "run-mcp-1", {"Authorization": f"Bearer {jeton}"}
-
-
 async def test_le_jeton_du_run_ne_sort_jamais_vers_un_mcp_distant(
     client: AsyncClient, project: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -361,10 +208,10 @@ async def test_le_jeton_du_run_ne_sort_jamais_vers_un_mcp_distant(
     NOUS : le donner à un service tiers lui confierait de quoi écrire dans la plateforme —
     poster un résultat, déposer un finding, étendre un périmètre. Le distant reçoit une
     clé qui ne vaut que pour lui."""
-    run_id, headers = await _projet_avec_mcp(project, tmp_path, monkeypatch, groupes=["rh"])
+    run_id, headers = await project_with_mcp(project, tmp_path, monkeypatch, groups=["rh"])
     jeton_du_run = headers["Authorization"].removeprefix("Bearer ")
     vues: list[Any] = []
-    _intercepter_hote(
+    intercept_host(
         monkeypatch,
         "https://mcp.fournisseur.example",
         httpx.Response(
@@ -396,7 +243,7 @@ async def test_un_projet_hors_du_groupe_n_obtient_pas_l_outil(
 ) -> None:
     """Le projet déclare l'outil dans `tools` — mais il n'est pas du groupe. La liste du
     projet est modifiable par son équipe ; le groupe, non."""
-    run_id, headers = await _projet_avec_mcp(project, tmp_path, monkeypatch, groupes=["juridique"])
+    run_id, headers = await project_with_mcp(project, tmp_path, monkeypatch, groups=["juridique"])
 
     liste = await client.get(f"/api/v1/internal/runs/{run_id}/tools", headers=headers)
     assert [t["name"] for t in liste.json()["tools"] if t["name"] != "web_fetch"] == []
@@ -422,9 +269,9 @@ async def test_un_argument_hors_schema_est_refuse_et_ne_coute_rien(
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
-    run_id, headers = await _run_avec_catalogue(project, tmp_path, monkeypatch)
+    run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch)
     vues: list[Any] = []
-    _intercepter(
+    intercept(
         monkeypatch,
         httpx.Response(
             200, json={"profils": []}, request=httpx.Request("GET", "https://api.annuaire.example/v1/search")

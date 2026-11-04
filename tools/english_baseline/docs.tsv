@@ -40,9 +40,3 @@ docs/adr/0042-la-casse-de-l-interface.md	1
 docs/adr/0043-l-allure-de-la-console.md	1
 docs/adr/0044-les-humains-se-declarent-dans-le-workflow.md	1
 docs/adr/0045-la-provenance-d-un-signal.md	1
-docs/runbooks/montee-temporal.md	1
-docs/runbooks/perte-de-noeud.md	1
-docs/runbooks/restauration-postgres.md	1
-docs/runbooks/run-bloque.md	1
-docs/runbooks/train-gele.md	1
-docs/runbooks/webhook-perdu.md	1

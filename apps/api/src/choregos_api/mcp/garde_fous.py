@@ -1,45 +1,29 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Ce qui borne la porte : débit par jeton, écritures par jour, taille des résultats."""
+# lang: fr-ok-file alias:internal — former MCP door module (ADR 0098), removed by S45-48
+"""The former name of `choregos_api.mcp.limits`: the same module object under its English name."""
 
 from __future__ import annotations
 
-from datetime import timedelta
+import sys
 
-from choregos_core import utcnow
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from choregos_core.compat import replace_module
 
-from ..db.models import AuditLog
-from ..limiteur import Limiteur
+from .limits import (
+    CALLS_PER_MINUTE,
+    MAX_SIZE,
+    RATE_LIMITER,
+    WRITES_PER_DAY,
+    truncate,
+    writes_today,
+)
 
-#: Par jeton et par réplique : un client qui boucle s'arrête, un humain pressé ne le sent pas.
-APPELS_PAR_MINUTE = 120
-#: Par humain et par jour : une boucle d'agent qui créerait des tickets s'arrête vite.
-ECRITURES_PAR_JOUR = 50
-#: Sous les 25 000 jetons qu'accepte Claude Code par résultat d'outil.
-TAILLE_MAX = 60_000
+__all__: list[str] = []
 
-LIMITEUR = Limiteur(APPELS_PAR_MINUTE)
+APPELS_PAR_MINUTE = CALLS_PER_MINUTE  # lang: fr-ok alias:internal
+ECRITURES_PAR_JOUR = WRITES_PER_DAY  # lang: fr-ok alias:internal
+TAILLE_MAX = MAX_SIZE  # lang: fr-ok alias:internal
+LIMITEUR = RATE_LIMITER  # lang: fr-ok alias:internal
+tronquer = truncate  # lang: fr-ok alias:internal
+ecritures_du_jour = writes_today  # lang: fr-ok alias:internal
 
-
-def tronquer(texte: str, taille: int = TAILLE_MAX) -> str:
-    if len(texte) <= taille:
-        return texte
-    return texte[:taille] + f"\n\n[result_truncated: {len(texte) - taille} characters omitted]"
-
-
-async def ecritures_du_jour(session: AsyncSession, user_id: str) -> int:
-    """Les écritures faites par la porte depuis 24 h, lues dans l'audit : rien d'autre à tenir."""
-    depuis = utcnow() - timedelta(days=1)
-    lignes = (
-        await session.execute(
-            select(AuditLog.payload).where(
-                # The A2A door's writes (ADR 0078) count against the same daily budget.
-                AuditLog.action.in_(("mcp.call", "a2a.call")),
-                AuditLog.actor_id == user_id,
-                AuditLog.ts >= depuis,
-            )
-        )
-    ).scalars()
-    keys = ("write", "ecriture")  # lang: fr-ok — the audit key persisted before S45-39 (ADR 0098 §4)
-    return sum(1 for payload in lignes if any((payload or {}).get(key) for key in keys))
+replace_module(__name__, sys.modules["choregos_api.mcp.limits"])

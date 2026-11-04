@@ -138,16 +138,16 @@
 }
 
 /*
- * Rien ne pousse la page hors de la fenêtre (S23-01) — deux causes, mesurées le 08/10 :
+ * Nothing pushes the page out of the window (S23-01), two causes, measured on 8 Oct:
  *
- * - une case de grille s'élargissait pour son contenu (`min-width: auto`) : un tableau ou un bloc
- *   de code poussait sa carte hors de la fenêtre au lieu de défiler dans sa case ;
- * - un texte réservé aux lecteurs d'écran (`sr-only`, en position absolue) se place par rapport au
- *   premier ancêtre positionné, PAS par rapport au conteneur qui défile : la dernière colonne du
- *   board, hors champ dans son défilement, posait son libellé à 1125 px et faisait défiler la page.
- *   Un conteneur qui défile devient donc ce premier ancêtre positionné.
+ * - a grid cell grew for its content (`min-width: auto`): a table or a code block
+ *   pushed its card out of the window instead of scrolling inside its cell;
+ * - a text reserved for screen readers (`sr-only`, absolutely positioned) is placed relative to the
+ *   first positioned ancestor, NOT relative to the scrolling container: the last column of the
+ *   board, out of view in its scroll, put its label at 1125 px and made the page scroll.
+ *   A scrolling container therefore becomes that first positioned ancestor.
  *
- * En couche `base` : une classe utilitaire (`min-w-…`, `absolute`, `sticky`) l'emporte toujours.
+ * In the `base` layer: a utility class (`min-w-…`, `absolute`, `sticky`) always wins.
  */
 @layer base {
   .grid > * {
@@ -161,14 +161,14 @@
 }
 
 /*
- * Un tableau qui défile dans sa case le montre (S23-11) : sur téléphone, les colonnes d'action
- * sortaient du champ sans indice. Une ombre se pose sur le bord où il reste à lire — les deux
- * premiers fonds suivent le contenu (`local`) et couvrent l'ombre quand on est au bout, les deux
- * suivants restent au bord (`scroll`). Le `Table` de la console pose son propre conteneur.
+ * A table that scrolls in its cell shows it (S23-11): on a phone, the action columns
+ * went out of view without a hint. A shadow sits on the edge where there is more to read; the first
+ * two backgrounds follow the content (`local`) and cover the shadow at the end, the next
+ * two stay at the edge (`scroll`). The console's `Table` sets its own container.
  *
- * Le cache est du fond où le tableau est posé : `--choregos-surface`, qu'une carte (`.raised`) redéfinit
- * et que ses enfants héritent. `--color-surface`, résolu une fois sur :root, peignait sur une carte
- * deux bandes du fond de la page, plus sombres qu'elle, même sans rien à faire défiler (S24-04).
+ * The cover is the background the table sits on: `--choregos-surface`, which a card (`.raised`) redefines
+ * and its children inherit. `--color-surface`, resolved once on :root, painted on a card
+ * two bands of the page background, darker than it, even with nothing to scroll (S24-04).
  */
 .overflow-x-auto:has(> table) {
   background:
@@ -180,15 +180,15 @@
       100% no-repeat scroll;
 }
 
-/* La carte d'un workflow se parcourt au clavier : la case sous le curseur doit se voir. */
+/* A workflow's map is walked by keyboard: the cell under the cursor must be visible. */
 [data-etat]:focus-visible {
   outline: 2px solid var(--choregos-focus);
   outline-offset: 4px;
 }
 
 /*
- * Le parcours d'un ticket (S22-02) : ce qui tourne pulse, ce qu'on attend d'une personne pulse plus
- * lentement, un tronçon franchi se trace. Rien ne bouge pour qui a demandé moins de mouvement.
+ * A ticket's journey (S22-02): what is running pulses, what waits for a person pulses more
+ * slowly, a stretch that has been crossed is traced. Nothing moves for whoever asked for less motion.
  */
 @keyframes parcours-pouls {
   0% {

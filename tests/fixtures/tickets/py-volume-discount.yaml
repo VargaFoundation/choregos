@@ -1,0 +1,94 @@
+# Reference ticket: write a function in a new file.
+# What the cell really measures: the "amounts in cents" convention is written
+# nowhere in the repository — it lives in the project's memory.
+# Without memory, the agent produces a float: the assertion sees it and the case fails.
+id: py-volume-discount
+title: "10% discount beyond 5 identical items"
+repo: python-toy
+role: implement
+prompt: |
+  Add `volume_discount(line)` in `src/cart/discount.py`: it returns the discount amount
+  for a cart line, 10% of the line total from 5 units, 0 below.
+  Wire it into `total_with_tax` and cover it with a test.
+allowed_paths:
+  - "src/cart/**"
+  - "tests/**"
+expected_duration_s: 210
+# Scripted, not measured: what a fake gateway is billed per context reduction (S37-09),
+# so the matrix's tokens come from the ledger in CI. The real numbers are S37-10's.
+scripted_usage:
+  "none": { tokens_in: 198000, tokens_cached: 132000, tokens_out: 6600, turns: 14 }
+  "rtk": { tokens_in: 167200, tokens_cached: 112200, tokens_out: 6600, turns: 14 }
+  "headroom": { tokens_in: 155100, tokens_cached: 104500, tokens_out: 6800, turns: 15 }
+  "rtk+headroom": { tokens_in: 129800, tokens_cached: 86900, tokens_out: 6800, turns: 15 }
+assertions:
+  - { kind: file_exists, path: src/cart/discount.py }
+  - { kind: file_matches, path: src/cart/discount.py, pattern: "def volume_discount", absent: false }
+  - { kind: file_matches, path: src/cart/discount.py, pattern: "float", absent: true }
+  - { kind: command, run: "make test" }
+scripted:
+  with_memory:
+    files:
+      src/cart/discount.py: |
+        """Discounts applied to the cart. Amounts are in cents (project convention)."""
+
+        from __future__ import annotations
+
+        from .cart import Line
+
+        VOLUME_THRESHOLD = 5
+        VOLUME_RATE_PERCENT = 10
+
+
+        def volume_discount(line: Line) -> int:
+            """Discount in cents for a line, 10% from 5 units."""
+            if line.quantity < VOLUME_THRESHOLD:
+                return 0
+            return line.total_cents() * VOLUME_RATE_PERCENT // 100
+      tests/test_discount.py: |
+        """Tests of the volume discount."""
+
+        from __future__ import annotations
+
+        import sys
+        from pathlib import Path
+
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+        from cart import Line  # noqa: E402
+        from cart.discount import volume_discount  # noqa: E402
+
+
+        def test_no_discount_below_the_threshold() -> None:
+            assert volume_discount(Line("coffee", 349, 4)) == 0
+
+
+        def test_ten_percent_discount_at_the_threshold() -> None:
+            assert volume_discount(Line("coffee", 300, 5)) == 150
+  without_memory:
+    files:
+      src/cart/discount.py: |
+        """Discounts applied to the cart."""
+
+        from __future__ import annotations
+
+        from .cart import Line
+
+
+        def volume_discount(line: Line) -> float:
+            """Discount for a line, 10% from 5 units."""
+            if line.quantity < 5:
+                return 0.0
+            return line.total_cents() * 0.10
+      tests/test_discount.py: |
+        import sys
+        from pathlib import Path
+
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+        from cart import Line  # noqa: E402
+        from cart.discount import volume_discount  # noqa: E402
+
+
+        def test_discount() -> None:
+            assert volume_discount(Line("coffee", 300, 5)) == 150.0

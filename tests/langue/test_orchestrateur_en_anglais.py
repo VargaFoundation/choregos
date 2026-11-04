@@ -20,18 +20,11 @@ JOURNAUX = {"debug", "info", "warning", "error", "exception", "critical", "warn"
 
 #: (fichier relatif, début du littéral) — chacune avec sa raison.
 RESTE_EN_FRANCAIS = {
-    # Le banc d'évaluation des agents : un outil de la plateforme, lu par ses développeurs.
-    ("activities/evals.py", "fichier créé alors"),
-    ("activities/evals.py", "fichier modifié hors"),
-    ("activities/evals.py", "dépôt jouet absent"),
-    ("activities/evals.py", "aucune modification scriptée"),
-    ("activities/evals.py", "présent"),
-    ("activities/evals.py", "délai dépassé ("),
     # Une expression régulière, pas un texte.
     ("activities/findings.py", "[a-zà-ÿ0-9_]+"),
     # Les anciens noms des champs du board (`Coût (€)`, `Taille`, `Risque`) ne sont plus écrits par
     # l'orchestrateur depuis S22-21 : ils vivent hors de lui, dans
-    # `choregos_adapters/tracker/champs.py` (ANCIENS_NOMS), le temps qu'un board d'avant soit renommé.
+    # `choregos_adapters/tracker/fields.py` (FORMER_NAMES), le temps d'un renommage. lang: fr-ok
 }
 
 
@@ -121,7 +114,7 @@ def test_le_commentaire_de_suivi_et_une_demande_humaine_se_lisent_en_anglais() -
 
 #: Les champs du board d'avant S22-21 : des noms qu'un tracker porte encore, que rien n'écrit plus.
 ANCIENS_NOMS_DU_BOARD = {"Coût (€)", "Taille", "Risque"}
-TABLE_DE_COMPATIBILITE = "packages/adapters/src/choregos_adapters/tracker/champs.py"
+TABLE_DE_COMPATIBILITE = "packages/adapters/src/choregos_adapters/tracker/fields.py"
 
 
 def test_les_anciens_noms_du_board_ne_vivent_que_dans_la_table_de_compatibilite() -> None:

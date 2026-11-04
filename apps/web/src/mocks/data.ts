@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 /**
- * Fixtures du mode démo (`NEXT_PUBLIC_API_MODE=mock`).
+ * Fixtures of the demo mode (`NEXT_PUBLIC_API_MODE=mock`).
  *
- * Elles racontent un projet vivant : un ticket en cours d'implémentation, un autre en
- * attente de validation, un train prêt à partir, un finding à trier. Le flux front
- * avance sans l'API — c'est ce que demande la section 3.4 du plan.
+ * They tell the story of a living project: a ticket being implemented, another one waiting for
+ * validation, a train ready to leave, a finding to triage. The front end moves on without the
+ * API, which is what section 3.4 of the plan asks for.
  */
 import devComplex from "./dev-complex.json";
 import { agentReleasesApi, applyPolicy, decorateAgent, savedRevision, touchAgent } from "./agent-releases";
@@ -491,7 +491,7 @@ function run(id: string, role: string, status: string, cost: number, summary: st
       schema: "choregos/StageResult/v1",
       status: status === "running" ? "done" : "done",
       summary,
-      // La couverture vient du récit de l'agent ; le reste, le runner l'a mesuré (ADR 0045).
+      // The coverage comes from the agent's own account; the rest, the runner measured (ADR 0045).
       evidence: {
         tests_passed: true,
         tests_run: 412,
@@ -505,8 +505,8 @@ function run(id: string, role: string, status: string, cost: number, summary: st
 }
 
 /**
- * Le détail d'un ticket, accordé à son parcours (S22-02) : `#123` court dans `dev-complex`, sa revue de
- * sécurité tourne. La liste du board garde ses fixtures — ses colonnes sont celles du workflow par défaut.
+ * A ticket's detail, matched to its journey (S22-02): `#123` runs in `dev-complex`, its security review
+ * is running. The board's list keeps its fixtures: its columns are those of the default workflow.
  */
 export function ticketDetaille(id: string): WorkItemDto {
   const base = workItems.items.find((i) => i.id === id) ?? workItems.items[0]!;
@@ -530,8 +530,8 @@ export function ticketDetaille(id: string): WorkItemDto {
   };
 }
 
-/** Les deux parcours du mode démo, exposés pour la vérification de langue des fixtures. */
-export const parcoursDeDemonstration = [parcoursEnCours(), parcoursTermine()];
+/** The two journeys of the demo mode, exposed for the fixtures' language check. */
+export const demoJourneys = [parcoursEnCours(), parcoursTermine()];
 
 /** The pod log tail of the running run (`/runs/{id}/logs`, S36-03): a live snapshot, redacted. */
 export const runLogsLive: RunLogs = {
@@ -564,7 +564,7 @@ export const runLogsOom: RunLogs = {
   captured_at: iso(5),
 };
 
-/** Ce à quoi l'agent a touché, replié depuis son journal (`/runs/{id}/access`). */
+/** What the agent touched, folded from its journal (`/runs/{id}/access`). */
 export const runAccess = {
   events: 64,
   refusals: 1,
@@ -583,7 +583,7 @@ export const runAccess = {
   ],
 };
 
-/** Ce que le run a changé (`/runs/{id}/diff`). */
+/** What the run changed (`/runs/{id}/diff`). */
 export const runDiff = {
   base: "main",
   head: "choregos/billing-api-123",
@@ -595,9 +595,9 @@ export const runDiff = {
   ],
 };
 
-/** Une mise à jour ACP telle que le runner la journalise : les `params` bruts de `session/update`. */
+/** An ACP update as the runner journals it: the raw `params` of `session/update`. */
 const maj = (update: Record<string, unknown>) => ({ sessionId: "sess-r3", update });
-const tache = (content: string, status: string, priority = "medium") => ({ content, priority, status });
+const task = (content: string, status: string, priority = "medium") => ({ content, priority, status });
 
 /** A run whose step a remote agent carried (S39-08): its task and its states, from the runner's journal. */
 export const remoteRun: Run = { ...run("r-remote", "ask-rovo", "succeeded", 0.05, "Three open issues"), backend: "a2a", model: "a2a:rovo" };
@@ -647,8 +647,8 @@ export const runEvents: RunEventDto[] = [
     ts: iso(30),
     payload: { name: "evidence_present", passed: false, pending: false, detail: "no test was run (tests_run missing)" },
   },
-  // Le plan de l'agent, en trois révisions (S25-01) : la seconde coche, la troisième reformule une
-  // tâche (« Add a regression test ») et en retire une autre (« Update the changelog »).
+  // The agent's plan, in three revisions (S25-01): the second ticks one, the third rewords a
+  // task ("Add a regression test") and removes another ("Update the changelog").
   {
     seq: 2,
     type: "session/update",
@@ -656,15 +656,14 @@ export const runEvents: RunEventDto[] = [
     payload: maj({
       sessionUpdate: "plan",
       entries: [
-        tache("Read the totals code", "in_progress", "high"),
-        tache("Deduct credit notes from the total", "pending", "high"),
-        tache("Add a regression test", "pending"),
-        tache("Update the changelog", "pending", "low"),
+        task("Read the totals code", "in_progress", "high"),
+        task("Deduct credit notes from the total", "pending", "high"),
+        task("Add a regression test", "pending"),
+        task("Update the changelog", "pending", "low"),
       ],
     }),
   },
-  // Les appels d'outils (S25-02) : une lecture, un sous-agent, deux modifications — dont une refusée —,
-  // puis les tests.
+  // The tool calls (S25-02): a read, a sub-agent, two edits, one of them refused, then the tests.
   {
     seq: 3,
     type: "session/update",
@@ -725,10 +724,10 @@ export const runEvents: RunEventDto[] = [
     payload: maj({
       sessionUpdate: "plan",
       entries: [
-        tache("Read the totals code", "completed", "high"),
-        tache("Deduct credit notes from the total", "in_progress", "high"),
-        tache("Add a regression test", "pending"),
-        tache("Update the changelog", "pending", "low"),
+        task("Read the totals code", "completed", "high"),
+        task("Deduct credit notes from the total", "in_progress", "high"),
+        task("Add a regression test", "pending"),
+        task("Update the changelog", "pending", "low"),
       ],
     }),
   },
@@ -777,9 +776,9 @@ export const runEvents: RunEventDto[] = [
     payload: maj({
       sessionUpdate: "plan",
       entries: [
-        tache("Read the totals code", "completed", "high"),
-        tache("Deduct credit notes from the total", "completed", "high"),
-        tache("Add regression tests for credit notes", "in_progress"),
+        task("Read the totals code", "completed", "high"),
+        task("Deduct credit notes from the total", "completed", "high"),
+        task("Add regression tests for credit notes", "in_progress"),
       ],
     }),
   },
@@ -1134,8 +1133,8 @@ transitions:
   } as unknown as WorkflowDef["json"],
 };
 
-/** Ce que l'API répond à la validation du workflow ci-dessus : la carte de `default-simple`, et sa
- * vue processus. Les arêtes `default` partent de chaque état d'agent : la carte les dit une fois. */
+/** What the API answers to the validation of the workflow above: the map of `default-simple`, and its
+ * process view. The `default` edges leave every agent state: the map says them once. */
 export const workflowValidation: WorkflowValidation = {
   valid: true,
   errors: [],
@@ -1150,7 +1149,7 @@ export const workflowValidation: WorkflowValidation = {
     edges: [
       { id: "t-refine", from: "inbox", to: "ready", kind: "nominal", label: "t-refine", actor: "refiner", gates: [] },
       { id: "t-implement", from: "ready", to: "done", kind: "nominal", label: "t-implement", actor: "dev", gates: ["scope_respected"] },
-      // Une escalade : la carte ne la montre qu'autour de son état, ou sur demande.
+      // An escalation: the map only shows it around its state, or on request.
       { id: "ready->needs_human:escalate:when retries run out", from: "ready", to: "needs_human", kind: "escalate", label: "when retries run out" },
       { id: "inbox->needs_human:default:question", from: "inbox", to: "needs_human", kind: "default", label: "question" },
       { id: "ready->needs_human:default:question", from: "ready", to: "needs_human", kind: "default", label: "question" },
@@ -1193,7 +1192,7 @@ export const workflowValidation: WorkflowValidation = {
   ],
 };
 
-/** Les workflows du projet de démonstration : le défaut, et un flux d'incident routé par étiquette. */
+/** The demo project's workflows: the default, and an incident flow routed by label. */
 export const workflowSummaries: WorkflowSummary[] = [
   { name: "default-simple", version: 1, is_default: true, open_items: 2, created_by: "lea@acme.dev", updated_at: iso(60 * 24 * 3) },
   { name: "hotfix", version: 2, is_default: false, open_items: 0, created_by: "marc@acme.dev", updated_at: iso(60 * 5) },
@@ -1204,6 +1203,7 @@ export const workflowRouting: WorkflowRouting = {
   rules: [{ when: { labels_any: ["incident"], labels_all: [], item_type: null }, workflow: "hotfix" }],
   strategy: "labels",
   hints: {},
+  min_confidence: null,
 };
 
 const requirement = (capability: string, reason: string) => ({ capability, reasons: [reason] });
@@ -1272,7 +1272,7 @@ export const workflowCatalogue: WorkflowCatalogueEntry[] = [
   },
 ];
 
-/** Le flux d'incident : ses demandes portent des champs, que le formulaire déduit de `inputs`. */
+/** The incident flow: its requests carry fields, which the form deduces from `inputs`. */
 export const hotfix: WorkflowDef = {
   ...workflow,
   name: "hotfix",
@@ -1296,11 +1296,11 @@ export const hotfix: WorkflowDef = {
 };
 
 /**
- * Un workflow de dix-huit états (S21-07) : treize sur le chemin nominal, cinq à côté (cadrage repris,
- * réponses à la revue, correction de CI, intervention humaine, abandon). C'est la taille où l'ancienne
- * carte ne tenait plus : elle doit se lire sans zoom.
+ * A workflow of eighteen states (S21-07): thirteen on the nominal path, five beside it (scoping redone,
+ * answers to the review, CI fix, human intervention, abandonment). It is the size at which the old
+ * map no longer fitted: it must read without zooming.
  */
-const ETATS_LONGS: [string, string, string][] = [
+const LONG_STATES: [string, string, string][] = [
   ["inbox", "To triage", "agent"],
   ["triaged", "Triaged", "agent"],
   ["awaiting_spec_approval", "Spec to approve", "human"],
@@ -1329,7 +1329,7 @@ export const releaseFullValidation: WorkflowValidation = {
   errors: [],
   warnings: [],
   graph: {
-    nodes: ETATS_LONGS.map(([id, display, lane]) => ({ id, display, lane, kind: lane === "terminal" ? "terminal" : "work", terminal: lane === "terminal" })),
+    nodes: LONG_STATES.map(([id, display, lane]) => ({ id, display, lane, kind: lane === "terminal" ? "terminal" : "work", terminal: lane === "terminal" })),
     edges: [
       nominale("t-triage", "inbox", "triaged", "sorter"),
       nominale("t-refine", "triaged", "awaiting_spec_approval", "refiner"),
@@ -1390,9 +1390,9 @@ function resolutionDemo(path: string): unknown[] {
   const refs = new URLSearchParams(path.split("?")[1] ?? "").getAll("ref");
   return refs.map((ref) => {
     const slug = ref.split("@")[0]!;
-    const titre = slug.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
+    const title = slug.replace(/-/g, " ").replace(/^./, (c) => c.toUpperCase());
     return AGENTS_INSTALLES.has(slug)
-      ? { ref, slug, status: "resolved", version: Number(ref.split("@")[1] ?? 1), pinned: false, display_name: titre, lifecycle: "active", in_catalogue: true, reason: null }
+      ? { ref, slug, status: "resolved", version: Number(ref.split("@")[1] ?? 1), pinned: false, display_name: title, lifecycle: "active", in_catalogue: true, reason: null }
       : { ref, slug, status: "not_installed", version: null, pinned: false, display_name: null, lifecycle: null, in_catalogue: true, reason: `agent \`${slug}\` does not exist in the project's organisation` };
   });
 }
@@ -1450,7 +1450,7 @@ const releaseFull: WorkflowDef = {
   json: { metadata: { name: "release-full", version: 1 }, initial: "inbox", actors: { owner: { type: "human", group: "product-owners", sla_hours: 24 } } } as unknown as WorkflowDef["json"],
 };
 
-/** Deux versions : la v2, active, ajoute une garantie au passage en revue. */
+/** Two versions: v2, active, adds a guarantee to the move into review. */
 export const workflowVersions: WorkflowDef[] = [
   {
     ...workflow,
@@ -1464,7 +1464,7 @@ export const workflowVersions: WorkflowDef[] = [
   { ...workflow, version: 1, is_active: false, created_by: "lea@acme.dev", created_at: iso(60 * 24 * 3) },
 ];
 
-/** Une section qu'un greffon déclarerait (ADR 0032) : l'exemple SCIM du contrat. */
+/** A section that an extension would declare (ADR 0032): the SCIM example of the contract. */
 export const sectionScim = {
   id: "scim",
   title: "SCIM provisioning",
@@ -1554,44 +1554,44 @@ export const sectionAcmeLayered = {
     },
   ],
 };
-const ETAT_EN_LIGNE = /^( {2}([\w-]+): \{ display: )([^,}]+?)(\s*[,}])/gm;
+const INLINE_STATE = /^( {2}([\w-]+): \{ display: )([^,}]+?)(\s*[,}])/gm;
 
 /**
- * Une greffe simulée (S16-11) : la maquette sait changer le libellé d'un état, et laisse le reste du
- * texte tel quel. Comme l'API, elle rend le texte, le diff, la carte relue et l'inverse du geste.
+ * A simulated graft (S16-11): the mock can change a state's label, and leaves the rest of the
+ * text as it is. Like the API, it returns the text, the diff, the re-read map and the gesture's inverse.
  */
 function editionSimulee(yaml: string, operations: WorkflowOperation[]): WorkflowEditResult {
-  let texte = yaml;
+  let yamlText = yaml;
   const inverse: WorkflowOperation[] = [];
   for (const op of operations) {
     if (op.op !== "set_state" || op.field !== "display") continue;
-    texte = texte.replace(ETAT_EN_LIGNE, (ligne, debut: string, nom: string, ancien: string, fin: string) => {
-      if (nom !== op.name) return ligne;
-      inverse.unshift({ op: "set_state", name: nom, field: "display", value: ancien });
+    yamlText = yamlText.replace(INLINE_STATE, (ligne, debut: string, wfName: string, ancien: string, fin: string) => {
+      if (wfName !== op.name) return ligne;
+      inverse.unshift({ op: "set_state", name: wfName, field: "display", value: ancien });
       return `${debut}${String(op.value)}${fin}`;
     });
   }
-  const libelles = new Map([...texte.matchAll(ETAT_EN_LIGNE)].map((m) => [m[2], m[3]]));
+  const libelles = new Map([...yamlText.matchAll(INLINE_STATE)].map((m) => [m[2], m[3]]));
   const avant = yaml.split("\n");
-  const apres = texte.split("\n");
-  const changees = avant.flatMap((ligne, index) => (ligne === apres[index] ? [] : [`-${ligne}`, `+${apres[index]}`]));
-  const carte = workflowValidation.graph ?? { nodes: [], edges: [] };
+  const afterLines = yamlText.split("\n");
+  const changees = avant.flatMap((ligne, index) => (ligne === afterLines[index] ? [] : [`-${ligne}`, `+${afterLines[index]}`]));
+  const workflowMap = workflowValidation.graph ?? { nodes: [], edges: [] };
   return {
     ...workflowValidation,
-    graph: { ...carte, nodes: carte.nodes.map((n) => ({ ...n, display: libelles.get(n.id) ?? n.display })) },
+    graph: { ...workflowMap, nodes: workflowMap.nodes.map((n) => ({ ...n, display: libelles.get(n.id) ?? n.display })) },
     process: workflowValidation.process?.map((etape) => ({
       ...etape,
       from_display: libelles.get(etape.from) ?? etape.from_display,
       to_display: libelles.get(etape.to) ?? etape.to_display,
     })),
-    yaml: texte,
+    yaml: yamlText,
     diff: changees.length ? `--- workflow.yaml\n+++ workflow.yaml\n${changees.join("\n")}\n` : "",
     inverse,
     notices: [],
   };
 }
 
-/** Le registre de démonstration (ADR 0033) : un agent interne qui porte une skill, et un Claude Code. */
+/** The demo registry (ADR 0033): an internal agent that carries a skill, and a Claude Code. */
 /** Atlassian's real card, summarised (S39-08): one agent, two skills, OAuth with Dynamic Client Registration. */
 export const rovoDiscovery: RemoteAgentDiscovery = {
   card: {
@@ -1874,18 +1874,18 @@ export const agents: Agent[] = [
   },
 ];
 
-/** Le catalogue de la plateforme (ADR 0040) : quelques entrées, l'une installée, les clients externes. */
-const entreeDuCatalogue = (slug: string, display_name: string, role: string, summary: string, extra: Partial<AgentCatalogueEntry> = {}): AgentCatalogueEntry => ({
+/** The platform's catalogue (ADR 0040): a few entries, one installed, the external clients. */
+const catalogueEntryOf = (slug: string, display_name: string, role: string, summary: string, extra: Partial<AgentCatalogueEntry> = {}): AgentCatalogueEntry => ({
   slug, kind: "internal", display_name, role, summary, version: 1, skills: [], installed: false, installed_version: null,
   own_agent: false, update_available: false, offered: true, unavailable_reason: null, client: null, reach: null, ...extra,
 });
 export const agentCatalogue: AgentCatalogueEntry[] = [
-  entreeDuCatalogue("developer", "Developer", "implement", "Implements the specification inside the allowed paths, test first, small conventional commits.", { tags: ["implementation", "coding", "software"] }),
-  entreeDuCatalogue("tester", "Tester", "verify", "Runs the full checks, writes the missing tests for each acceptance criterion, never fixes application code.", { installed: true, installed_version: 1, tags: ["testing", "ci", "software"] }),
-  entreeDuCatalogue("reviewer", "Reviewer", "review", "Reviews the branch with fresh eyes and gives a verdict.", { installed: true, installed_version: 1, update_available: true, skills: ["madr-4"] }),
-  entreeDuCatalogue("architect", "Architect", "architect", "Writes one architecture decision record in MADR 4 format; once approved, marks it accepted.", { skills: ["madr-4"], tags: ["madr", "architecture", "design"] }),
-  entreeDuCatalogue("claude-code", "Claude Code", "external", "Claude Code acting through the MCP door, with its person's rights.", { kind: "external", client: "claude-code", reach: "always", tags: ["mcp-client", "ide"] }),
-  entreeDuCatalogue("chatgpt", "ChatGPT", "external", "ChatGPT acting through the MCP door, with its person's rights.", {
+  catalogueEntryOf("developer", "Developer", "implement", "Implements the specification inside the allowed paths, test first, small conventional commits.", { tags: ["implementation", "coding", "software"] }),
+  catalogueEntryOf("tester", "Tester", "verify", "Runs the full checks, writes the missing tests for each acceptance criterion, never fixes application code.", { installed: true, installed_version: 1, tags: ["testing", "ci", "software"] }),
+  catalogueEntryOf("reviewer", "Reviewer", "review", "Reviews the branch with fresh eyes and gives a verdict.", { installed: true, installed_version: 1, update_available: true, skills: ["madr-4"] }),
+  catalogueEntryOf("architect", "Architect", "architect", "Writes one architecture decision record in MADR 4 format; once approved, marks it accepted.", { skills: ["madr-4"], tags: ["madr", "architecture", "design"] }),
+  catalogueEntryOf("claude-code", "Claude Code", "external", "Claude Code acting through the MCP door, with its person's rights.", { kind: "external", client: "claude-code", reach: "always", tags: ["mcp-client", "ide"] }),
+  catalogueEntryOf("chatgpt", "ChatGPT", "external", "ChatGPT acting through the MCP door, with its person's rights.", {
     kind: "external", client: "chatgpt", reach: "cloud", offered: false, unavailable_reason: "the MCP door does not accept OAuth (`global.mcp.oauth`); the console's public address is not https",
   }),
 ];
@@ -2059,7 +2059,7 @@ export function implicitAgents(): ImplicitAgent[] {
   return found;
 }
 
-/** Le Claude Code de Léa a appelé la porte il y a trois minutes : la console le dit connecté. */
+/** Lea's Claude Code called the gate three minutes ago: the console says it is connected. */
 export const agentCredentials: AgentCredential[] = [
   {
     id: "cred-1",
@@ -2226,7 +2226,7 @@ export const skillGitPreview: SkillGitPreview = {
   ],
 };
 
-/** Des types tirés du registre (ADR 0034) : jira est disponible, ses secrets se nomment. */
+/** Types drawn from the registry (ADR 0034): jira is available, its secrets are named. */
 /** The `repo` property of the GitHub types: a picker over the App's repositories, no installation id (ADR 0073). */
 const githubRepoProperty = {
   type: "string",
@@ -2403,7 +2403,7 @@ export function skillCatalogue(): SkillCatalogue {
   };
 }
 
-/** Un annuaire de l'organisation (ADR 0034) : chaque opération porte sa politique. */
+/** An organisation directory (ADR 0034): every operation carries its policy. */
 export const orgConnectors: OrgConnector[] = [
   {
     name: "entra-acme",
@@ -2450,7 +2450,7 @@ export const projectOperations: ProjectOperation[] = [
   { connector: "entra-acme", operation: "create_account", access: "write", org_policy: "approval", project_policy: null, effective_policy: "approval" },
 ];
 
-/** Des actions gouvernées (ADR 0035) : une en attente, proposée par un agent ; une faite ; une défaite. */
+/** Governed actions (ADR 0035): one pending, proposed by an agent; one done; one undone. */
 export const actions: Action[] = [
   {
     id: "act-poste",
@@ -2492,7 +2492,7 @@ export const actions: Action[] = [
   },
 ];
 
-/** Une action de l'ontologie (S20-08), proposée par une personne depuis son client MCP. */
+/** An ontology action (S20-08), proposed by a person from their MCP client. */
 actions.push({
   id: "pr1",
   origin: "ontology",
@@ -2521,7 +2521,7 @@ actions.push({
   journal: [],
 });
 
-/** Ce que les workflows de Billing API exigent : du logiciel, donc un dépôt, une CI, un train. */
+/** What Billing API's workflows require: software, so a repository, a CI, a train. */
 export const projectRequirements: ProjectRequirement[] = [
   {
     capability: "tracker",
@@ -2659,7 +2659,7 @@ function recordWrite(method: string, path: string, body: unknown): void {
 /** The work items filed on Checkout Web (Jira) during this page's life, so the board shows them. */
 const filedOnTheMock: WorkItemDto[] = [];
 
-/** Routeur des fixtures : reproduit les chemins de l'API réelle. */
+/** Fixtures router: reproduces the real API's paths. */
 /** The organisation's ceiling, kept for the time of the page: the admin card writes it, the project's network reads it back (ADR 0070). */
 /** The GitHub links the mock holds, by member id (S47-15). */
 const mockTrackerIdentities = new Map<string, TrackerIdentity>();
@@ -3048,10 +3048,10 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   const filed = /^\/projects\/([^/]+)\/work-items$/.exec(path.split("?")[0] ?? path);
   if (method === "POST" && filed) {
     // Filing on a project whose tracker is external: the issue is created there, the work item takes its key (ADR 0059).
-    const corps = (body ?? {}) as WorkItemCreate;
+    const reqBody = (body ?? {}) as WorkItemCreate;
     const jira = /checkout-web$/.test(decodeURIComponent(filed[1]!));
     const made = {
-      ...item(`w-new-${filedOnTheMock.length + 1}`, jira ? `CHK-${101 + filedOnTheMock.length}` : `BILL-${900 + filedOnTheMock.length}`, corps.title, "inbox", "Inbox", { size: corps.size ?? undefined }),
+      ...item(`w-new-${filedOnTheMock.length + 1}`, jira ? `CHK-${101 + filedOnTheMock.length}` : `BILL-${900 + filedOnTheMock.length}`, reqBody.title, "inbox", "Inbox", { size: reqBody.size ?? undefined }),
       url: jira ? `https://jira.example/browse/CHK-${101 + filedOnTheMock.length}` : null,
     } as WorkItemDto;
     if (jira) filedOnTheMock.push(made);
@@ -3060,11 +3060,11 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (method === "GET" && /^\/projects\/[^/]*checkout-web\/work-items$/.test(path.split("?")[0] ?? path) && filedOnTheMock.length)
     return { items: filedOnTheMock, meta: { has_more: false } } as T;
   if (method === "POST" && path === "/workflows/validate") {
-    // Comme l'API : un texte sans `states:` n'est pas un workflow, et ne se dessine pas.
-    const texte = String((JSON.parse(String(init.body ?? "{}")) as { yaml?: string }).yaml ?? "");
-    if (/name: release-full/.test(texte)) return releaseFullValidation as T;
-    if (/name: dev-complex/.test(texte)) return devComplexValidation as T;
-    if (!/^states:/m.test(texte)) {
+    // Like the API: a text without `states:` is not a workflow, and is not drawn.
+    const yamlText = String((JSON.parse(String(init.body ?? "{}")) as { yaml?: string }).yaml ?? "");
+    if (/name: release-full/.test(yamlText)) return releaseFullValidation as T;
+    if (/name: dev-complex/.test(yamlText)) return devComplexValidation as T;
+    if (!/^states:/m.test(yamlText)) {
       return { valid: false, errors: [{ code: "workflow.states", message: "a workflow declares its states", line: 1, column: 1 }], warnings: [] } as T;
     }
     return workflowValidation as T;
@@ -3110,36 +3110,36 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     return { ref: "/api/v1/mock-theme-assets/logo.svg" } as T;
   }
   if (method === "POST" && /^\/orgs\/[^/]+\/scim\/tokens$/.test(path)) {
-    // Le secret n'existe qu'ici, une fois : la console le montre et ne le garde pas.
+    // The secret exists only here, once: the console shows it and does not keep it.
     return { id: "t2", name: "okta", token: "scim_demo_shown_once" } as T;
   }
   if (method === "POST" && path === "/me/tokens") {
-    // Le jeton n'est rendu qu'une fois, à la création : la page Integrations le glisse dans ses extraits.
-    const corps = JSON.parse(String(init.body ?? "{}")) as { name?: string; scopes?: string[]; project?: string | null };
+    // The token is returned only once, at creation: the Integrations page slips it into its snippets.
+    const reqBody = JSON.parse(String(init.body ?? "{}")) as { name?: string; scopes?: string[]; project?: string | null };
     return {
       id: "tok-demo",
-      name: corps.name ?? "demo",
+      name: reqBody.name ?? "demo",
       created_at: new Date().toISOString(),
-      scopes: corps.scopes ?? ["*"],
-      project: corps.project ?? null,
+      scopes: reqBody.scopes ?? ["*"],
+      project: reqBody.project ?? null,
       token: "chg_demo_jeton_affiche_une_fois",
     } as T;
   }
   if (method === "POST" && path === "/workflows/edit") {
-    const corps = JSON.parse(String(init.body ?? "{}")) as { yaml: string; operations: WorkflowOperation[] };
-    return editionSimulee(corps.yaml, corps.operations) as T;
+    const reqBody = JSON.parse(String(init.body ?? "{}")) as { yaml: string; operations: WorkflowOperation[] };
+    return editionSimulee(reqBody.yaml, reqBody.operations) as T;
   }
   if (method === "PUT" && /^\/projects\/[^/]+\/workflows\/[^/]+$/.test(path)) {
-    // Publier crée la version suivante de celle qui a été lue (S16-02) ; créer un nom pris est refusé (#336).
-    const corps = JSON.parse(String(init.body ?? "{}")) as { yaml: string; base_version?: number | null; create_only?: boolean };
-    const nom = decodeURIComponent(path.split("/").at(-1)!);
-    if (corps.create_only) {
-      if (workflowSummaries.some((w) => w.name === nom))
-        throw new ApiError(409, { detail: `\`${nom}\` already exists: open it to publish its next version, or choose another name` });
-      workflowSummaries.push({ name: nom, version: 1, is_default: false, open_items: 0, created_by: me.email, updated_at: new Date().toISOString() });
-      return { ...workflow, name: nom, yaml: corps.yaml, version: 1, is_default: false } as T;
+    // Publishing creates the version after the one that was read (S16-02); creating a taken name is refused (#336).
+    const reqBody = JSON.parse(String(init.body ?? "{}")) as { yaml: string; base_version?: number | null; create_only?: boolean };
+    const wfName = decodeURIComponent(path.split("/").at(-1)!);
+    if (reqBody.create_only) {
+      if (workflowSummaries.some((w) => w.name === wfName))
+        throw new ApiError(409, { detail: `\`${wfName}\` already exists: open it to publish its next version, or choose another name` });
+      workflowSummaries.push({ name: wfName, version: 1, is_default: false, open_items: 0, created_by: me.email, updated_at: new Date().toISOString() });
+      return { ...workflow, name: wfName, yaml: reqBody.yaml, version: 1, is_default: false } as T;
     }
-    return { ...workflow, yaml: corps.yaml, version: (corps.base_version ?? workflow.version) + 1 } as T;
+    return { ...workflow, yaml: reqBody.yaml, version: (reqBody.base_version ?? workflow.version) + 1 } as T;
   }
   const [chemin] = path.split("?");
   if (/^\/orgs\/[^/]+\/github(\/refresh)?$/.test(chemin ?? "")) return githubStatus() as T;
@@ -3152,10 +3152,10 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     return { url: "https://github.com/apps/choregos-bot/installations/new?state=mock-signed-state" } as T;
   const projectRoot = /^\/projects\/([^/]+)$/.exec(chemin ?? "");
   if (projectRoot && method === "PATCH") {
-    const corps = (body ?? {}) as { name?: string; config?: ProjectDto["config"] };
+    const reqBody = (body ?? {}) as { name?: string; config?: ProjectDto["config"] };
     const bare = decodeURIComponent(projectRoot[1]!).split(":").at(-1) ?? "";
     const base = mockProject(bare);
-    const updated = { ...base, name: corps.name ?? base.name, config: corps.config ?? base.config, updated_at: new Date().toISOString() };
+    const updated = { ...base, name: reqBody.name ?? base.name, config: reqBody.config ?? base.config, updated_at: new Date().toISOString() };
     writtenProjects.set(bare, updated);
     return structuredClone(updated) as T;
   }
@@ -3174,19 +3174,19 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     const current = writtenConnectors.get(project) ?? base;
     if (method === "GET" && !kind) return structuredClone(current) as T;
     if (method === "PUT" && kind) {
-      const corps = (body ?? {}) as { type?: string; config?: Record<string, unknown>; secret_refs?: Record<string, string> };
-      const repo = typeof corps.config?.repo === "string" ? corps.config.repo : "";
+      const reqBody = (body ?? {}) as { type?: string; config?: Record<string, unknown>; secret_refs?: Record<string, string> };
+      const repo = typeof reqBody.config?.repo === "string" ? reqBody.config.repo : "";
       const owner = repo.split("/")[0] ?? "";
-      if ((corps.type === "github" || corps.type === "github-issues") && owner && !githubInstallations.some((i) => i.account_login.toLowerCase() === owner.toLowerCase()))
+      if ((reqBody.type === "github" || reqBody.type === "github-issues") && owner && !githubInstallations.some((i) => i.account_login.toLowerCase() === owner.toLowerCase()))
         throw new ApiError(422, {
           detail: `The Choregos GitHub App is not installed on \`${owner}\` for this organisation. Install it: https://github.com/apps/choregos-bot/installations/new`,
         });
       const saved = {
         id: `c-${kind}`,
         kind,
-        type: corps.type ?? "demo",
-        config: corps.config ?? {},
-        secret_refs: corps.secret_refs ?? {},
+        type: reqBody.type ?? "demo",
+        config: reqBody.config ?? {},
+        secret_refs: reqBody.secret_refs ?? {},
         // Saving tests the connector (S40-05): the mock's adapters all answer.
         status: "ok",
         last_check_at: new Date().toISOString(),
@@ -3195,38 +3195,39 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       return saved as T;
     }
   }
-  // Le routage et la désactivation changent l'état de la démo, le temps de la page : les écrans se
-  // relisent comme sur la vraie API, et les mêmes refus s'y jouent (S23-13).
+  // Routing and deactivation change the demo's state for the time of the page: the screens re-read
+  // as on the real API, and the same refusals play out there (S23-13).
   if (method === "PUT" && /^\/projects\/[^/]+\/workflow-routing$/.test(chemin ?? "")) {
-    const corps = JSON.parse(String(init.body ?? "{}")) as WorkflowRouting;
+    const reqBody = JSON.parse(String(init.body ?? "{}")) as WorkflowRouting;
     const actifs = new Set(workflowSummaries.map((w) => w.name));
-    const inconnus = [corps.default, ...corps.rules.map((r) => r.workflow)].filter((n) => !actifs.has(n));
+    const inconnus = [reqBody.default, ...reqBody.rules.map((r) => r.workflow)].filter((n) => !actifs.has(n));
     if (inconnus.length) throw new ApiError(422, { detail: `unknown or inactive workflow(s): ${inconnus.join(", ")}` });
-    workflowRouting.default = corps.default;
-    workflowRouting.rules = corps.rules;
-    if (corps.strategy) workflowRouting.strategy = corps.strategy;
-    if (corps.hints) workflowRouting.hints = Object.fromEntries(Object.entries(corps.hints).filter(([, h]) => h.trim()));
-    for (const w of workflowSummaries) w.is_default = w.name === corps.default;
+    workflowRouting.default = reqBody.default;
+    workflowRouting.rules = reqBody.rules;
+    if (reqBody.strategy) workflowRouting.strategy = reqBody.strategy;
+    if (reqBody.hints) workflowRouting.hints = Object.fromEntries(Object.entries(reqBody.hints).filter(([, h]) => h.trim()));
+    if (reqBody.min_confidence !== undefined) workflowRouting.min_confidence = reqBody.min_confidence;
+    for (const w of workflowSummaries) w.is_default = w.name === reqBody.default;
     return workflowRouting as T;
   }
   if (method === "POST" && /^\/projects\/[^/]+\/workflow-routing\/preview$/.test(chemin ?? "")) {
     // The demo plays the API's order (ADR 0116): the rules, then a "model" that matches the hints'
     // words, then the default.
-    const corps = JSON.parse(String(init.body ?? "{}")) as RoutingPreviewRequest;
-    const labels = new Set(corps.labels ?? []);
+    const reqBody = JSON.parse(String(init.body ?? "{}")) as RoutingPreviewRequest;
+    const labels = new Set(reqBody.labels ?? []);
     const strategy = workflowRouting.strategy ?? "labels";
     if (strategy !== "llm") {
       const index = workflowRouting.rules.findIndex(
         (r) =>
           (!r.when.labels_any?.length || r.when.labels_any.some((l) => labels.has(l))) &&
           (r.when.labels_all ?? []).every((l) => labels.has(l)) &&
-          (!r.when.item_type || r.when.item_type === corps.item_type) &&
+          (!r.when.item_type || r.when.item_type === reqBody.item_type) &&
           Boolean(r.when.labels_any?.length || r.when.labels_all?.length || r.when.item_type),
       );
       if (index >= 0) return { workflow: workflowRouting.rules[index]!.workflow, by: "rule", reason: `routing rule ${index + 1}`, model: null } as T;
     }
     if (strategy === "labels") return { workflow: workflowRouting.default, by: "default", reason: null, model: null } as T;
-    const text = `${corps.title} ${corps.body ?? ""}`.toLowerCase();
+    const text = `${reqBody.title} ${reqBody.body ?? ""}`.toLowerCase();
     const chosen = Object.entries(workflowRouting.hints ?? {}).find(([, hint]) =>
       hint.toLowerCase().split(/[^a-z0-9]+/).some((w) => w.length >= 4 && text.includes(w)),
     );
@@ -3237,64 +3238,64 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     ) as T;
   }
   if (method === "POST" && /^\/projects\/[^/]+\/workflow-adoptions$/.test(chemin ?? "")) {
-    const corps = JSON.parse(String(init.body ?? "{}")) as WorkflowAdopt;
-    const entry = workflowCatalogue.find((e) => e.source === corps.source && e.name === corps.name);
-    if (!entry) throw new ApiError(404, { detail: `Catalogue workflow ${corps.source}/${corps.name} not found` });
+    const reqBody = JSON.parse(String(init.body ?? "{}")) as WorkflowAdopt;
+    const entry = workflowCatalogue.find((e) => e.source === reqBody.source && e.name === reqBody.name);
+    if (!entry) throw new ApiError(404, { detail: `Catalogue workflow ${reqBody.source}/${reqBody.name} not found` });
     const missing = entry.agents.filter((a) => a.resolution === "unresolved").map((a) => `\`${a.slug}\``);
     if (missing.length)
       throw new ApiError(422, {
         detail: `\`${entry.name}\` names agents this organisation does not have and no catalogue provides: ${missing.join(", ")}. An organisation administrator installs the plugin that ships them first; adopting never installs one.`,
       });
-    const name = corps.as || entry.name;
+    const name = reqBody.as || entry.name;
     if (workflowSummaries.some((w) => w.name === name))
       throw new ApiError(409, { detail: `\`${name}\` already exists: open it to publish its next version, or choose another name` });
     workflowSummaries.push({ name, version: 1, is_default: false, open_items: 0, created_by: "you", updated_at: new Date().toISOString() });
-    if (corps.make_default) {
+    if (reqBody.make_default) {
       workflowRouting.default = name;
       for (const w of workflowSummaries) w.is_default = w.name === name;
     }
-    return { ...workflow, name, version: 1, source: "catalogue", origin: `${entry.source}/${entry.name}@${entry.version}`, is_default: !!corps.make_default } as T;
+    return { ...workflow, name, version: 1, source: "catalogue", origin: `${entry.source}/${entry.name}@${entry.version}`, is_default: !!reqBody.make_default } as T;
   }
   const desactive = /^\/projects\/[^/]+\/workflows\/([^/]+)\/deactivate$/.exec(chemin ?? "");
   if (method === "POST" && desactive) {
-    const nom = decodeURIComponent(desactive[1]!);
-    if (nom === workflowRouting.default)
-      throw new ApiError(409, { detail: `\`${nom}\` is the default workflow: choose another one before deactivating it` });
-    if (workflowRouting.rules.some((r) => r.workflow === nom))
-      throw new ApiError(409, { detail: `\`${nom}\` is the target of a routing rule: remove the rule first` });
-    workflowSummaries.splice(workflowSummaries.findIndex((w) => w.name === nom), 1);
+    const wfName = decodeURIComponent(desactive[1]!);
+    if (wfName === workflowRouting.default)
+      throw new ApiError(409, { detail: `\`${wfName}\` is the default workflow: choose another one before deactivating it` });
+    if (workflowRouting.rules.some((r) => r.workflow === wfName))
+      throw new ApiError(409, { detail: `\`${wfName}\` is the target of a routing rule: remove the rule first` });
+    workflowSummaries.splice(workflowSummaries.findIndex((w) => w.name === wfName), 1);
     return undefined as T;
   }
   const agentEcrit = /^\/orgs\/[^/]+\/agents\/([^/]+)(\/[a-z]+)?$/.exec(chemin ?? "");
   if (method === "POST" && /^\/orgs\/[^/]+\/agents$/.test(chemin ?? "")) {
-    const corps = JSON.parse(String(init.body ?? "{}")) as AgentCreate;
-    evalGate(corps.spec ?? {});
+    const reqBody = JSON.parse(String(init.body ?? "{}")) as AgentCreate;
+    evalGate(reqBody.spec ?? {});
     const cree = {
-      slug: corps.slug,
-      kind: corps.kind ?? "internal",
-      display_name: corps.display_name,
-      description: corps.description ?? null,
-      tags: corps.tags ?? [],
+      slug: reqBody.slug,
+      kind: reqBody.kind ?? "internal",
+      display_name: reqBody.display_name,
+      description: reqBody.description ?? null,
+      tags: reqBody.tags ?? [],
       status: "active",
-      lifecycle: corps.lifecycle ?? "active",
+      lifecycle: reqBody.lifecycle ?? "active",
       owner: me.email,
       latest_version: 1,
-      versions: [{ version: 1, spec: corps.spec ?? {}, checksum: "sha256:nouvelle", created_by: me.email }],
+      versions: [{ version: 1, spec: reqBody.spec ?? {}, checksum: "sha256:nouvelle", created_by: me.email }],
     } as Agent;
     // The agent joins the registry for the time of the page (S32-01): its page reads it back.
     if (!agents.some((a) => a.slug === cree.slug)) {
       agents.push(cree);
-      applyPolicy(cree, corps.release_policy);
+      applyPolicy(cree, reqBody.release_policy);
     }
     return structuredClone(cree) as T;
   }
   if (method === "POST" && /^\/orgs\/[^/]+\/agent-drafts$/.test(chemin ?? "")) {
     // A fixed proposal (S39-05): nothing is saved, as on the real endpoint.
-    const corps = JSON.parse(String(init.body ?? "{}")) as { display_name: string; description: string };
+    const reqBody = JSON.parse(String(init.body ?? "{}")) as { display_name: string; description: string };
     return {
-      display_name: corps.display_name,
+      display_name: reqBody.display_name,
       slug: "release-notes-writer",
-      description: corps.description,
+      description: reqBody.description,
       spec: {
         instructions: "You are a release notes writer.\n\n1. Read {{ ticket.title }}.\n2. List the merged pull requests.\n\n## Output\nThe notes, grouped by theme.",
         skills: [{ slug: "onboarding-procedure" }],
@@ -3319,22 +3320,22 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     return undefined as T;
   }
   if (method === "POST" && agentEcrit?.[2] === "/fork") {
-    const corps = JSON.parse(String(init.body ?? "{}")) as AgentFork;
+    const reqBody = JSON.parse(String(init.body ?? "{}")) as AgentFork;
     const source = agents.find((a) => a.slug === agentEcrit[1]) ?? agents[0]!;
-    if (agents.some((a) => a.slug === corps.slug)) throw new ApiError(409, { detail: `\`${corps.slug}\` already exists: a fork takes a new slug` });
-    const copied = source.versions?.find((v) => v.version === (corps.version ?? source.latest_version)) ?? source.versions![0]!;
+    if (agents.some((a) => a.slug === reqBody.slug)) throw new ApiError(409, { detail: `\`${reqBody.slug}\` already exists: a fork takes a new slug` });
+    const copied = source.versions?.find((v) => v.version === (reqBody.version ?? source.latest_version)) ?? source.versions![0]!;
     const fork = {
-      slug: corps.slug,
+      slug: reqBody.slug,
       kind: source.kind,
-      display_name: corps.display_name || `${source.display_name} (fork)`,
+      display_name: reqBody.display_name || `${source.display_name} (fork)`,
       description: source.description ?? null,
       status: "active",
       owner: me.email,
       latest_version: 1,
-      scope: corps.scope,
-      project: corps.scope === "project" ? (corps.project ?? null) : null,
+      scope: reqBody.scope,
+      project: reqBody.scope === "project" ? (reqBody.project ?? null) : null,
       forked_from: { slug: source.slug, version: copied.version, scope: source.scope ?? "org", latest_version: source.latest_version, behind: copied.version < source.latest_version, available: true },
-      can: { publish: true, manage: true, pin: corps.scope !== "personal", fork_scopes: ["org", "project", "personal"] },
+      can: { publish: true, manage: true, pin: reqBody.scope !== "personal", fork_scopes: ["org", "project", "personal"] },
       cannot_reason: null,
       versions: [{ version: 1, spec: copied.spec, checksum: copied.checksum, created_by: me.email }],
     } as Agent;
@@ -3342,37 +3343,37 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     return structuredClone(fork) as T;
   }
   if (method === "POST" && agentEcrit?.[2] === "/scope") {
-    const corps = JSON.parse(String(init.body ?? "{}")) as AgentScopeChange;
+    const reqBody = JSON.parse(String(init.body ?? "{}")) as AgentScopeChange;
     const agent = agents.find((a) => a.slug === agentEcrit[1]) ?? agents[0]!;
-    agent.scope = corps.scope;
-    agent.project = corps.scope === "project" ? (corps.project ?? null) : null;
+    agent.scope = reqBody.scope;
+    agent.project = reqBody.scope === "project" ? (reqBody.project ?? null) : null;
     return structuredClone(agent) as T;
   }
   if (method === "POST" && /^\/orgs\/[^/]+\/agent-trials$/.test(chemin ?? "")) {
-    const corps = JSON.parse(String(init.body ?? "{}")) as AgentTrialCreate;
-    const publiee = agents.find((a) => a.slug === corps.agent);
-    const budget = Math.min(0.5, corps.budget_usd ?? 0.25, corps.spec.budget?.run_usd ?? 0.5);
+    const reqBody = JSON.parse(String(init.body ?? "{}")) as AgentTrialCreate;
+    const publiee = agents.find((a) => a.slug === reqBody.agent);
+    const budget = Math.min(0.5, reqBody.budget_usd ?? 0.25, reqBody.spec.budget?.run_usd ?? 0.5);
     return {
       run_id: trialRun.id,
       work_item_id: "trial-wi-1",
-      project: corps.project,
+      project: reqBody.project,
       budget_usd: budget,
       status: "queued",
-      evals: evalsOf(corps.spec, [...(publiee?.versions?.[0]?.spec.evals ?? []), ...(corps.spec.evals ?? [])]),
+      evals: evalsOf(reqBody.spec, [...(publiee?.versions?.[0]?.spec.evals ?? []), ...(reqBody.spec.evals ?? [])]),
     } as T;
   }
   const duCatalogue = /^\/orgs\/[^/]+\/agent-catalogue\/([^/]+)\/(install|connect)$/.exec(chemin ?? "");
   if (method === "POST" && duCatalogue) {
-    const entree = agentCatalogue.find((e) => e.slug === duCatalogue[1])!;
+    const foundEntry = agentCatalogue.find((e) => e.slug === duCatalogue[1])!;
     const agent = {
-      slug: entree.slug, kind: entree.kind, display_name: entree.display_name, status: "active", owner: null, latest_version: 1,
-      versions: [{ version: 1, spec: {}, checksum: "sha256:catalogue", created_by: `catalogue:${entree.slug}@1` }],
+      slug: foundEntry.slug, kind: foundEntry.kind, display_name: foundEntry.display_name, status: "active", owner: null, latest_version: 1,
+      versions: [{ version: 1, spec: {}, checksum: "sha256:catalogue", created_by: `catalogue:${foundEntry.slug}@1` }],
     };
     if (duCatalogue[2] === "install") return agent as T;
     const lecture = (JSON.parse(String(init.body ?? "{}")) as { read_only?: boolean }).read_only;
     return {
       agent,
-      token: { id: "tok-catalogue", name: entree.display_name, created_at: iso(0), scopes: [lecture ? "mcp:read" : "mcp:write"], token: "chg_demo_shown_once" },
+      token: { id: "tok-catalogue", name: foundEntry.display_name, created_at: iso(0), scopes: [lecture ? "mcp:read" : "mcp:write"], token: "chg_demo_shown_once" },
       oauth_client_id: null,
     } as T;
   }
@@ -3411,7 +3412,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     return { ...structuredClone(version), channels: savedRevision(agent, version.version) } as T;
   }
   if (method === "POST" && agentEcrit?.[2] === "/versions") {
-    // La version publiée s'ajoute à l'agent, le temps de la page : sa fiche la relit (S23-13).
+    // The published version is added to the agent for the time of the page: its sheet re-reads it (S23-13).
     const agent = agents.find((a) => a.slug === agentEcrit[1]) ?? agents[0]!;
     const spec = JSON.parse(String(init.body ?? "{}")) as AgentSpec;
     evalGate(spec, agent.versions?.find((v) => v.version === agent.latest_version)?.spec);
@@ -3423,9 +3424,9 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     return { ...version, channels: savedRevision(agent, version.version) } as T;
   }
   if (method === "POST" && agentEcrit?.[2] === "/credentials") {
-    const corps = JSON.parse(String(init.body ?? "{}")) as { token_id?: string };
-    const jeton = myTokens.find((t) => t.id === corps.token_id);
-    return { id: "cred-2", kind: "token", token_id: corps.token_id, token_name: jeton?.name, created_by: me.email } as T;
+    const reqBody = JSON.parse(String(init.body ?? "{}")) as { token_id?: string };
+    const foundToken = myTokens.find((t) => t.id === reqBody.token_id);
+    return { id: "cred-2", kind: "token", token_id: reqBody.token_id, token_name: foundToken?.name, created_by: me.email } as T;
   }
   if (method === "PATCH" && agentEcrit && !agentEcrit[2]) {
     const agent = agents.find((a) => a.slug === agentEcrit[1]) ?? agents[0]!;
@@ -3437,8 +3438,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     return { ...agent, ...patch } as T;
   }
   if (method === "PUT" && /^\/projects\/[^/]+\/agents\/[^/]+$/.test(chemin ?? "")) {
-    const corps = JSON.parse(String(init.body ?? "{}")) as ProjectAgentPut;
-    return { agent: chemin?.split("/").at(-1), version: corps.version, overrides: corps.overrides ?? {}, effective: {} } as T;
+    const reqBody = JSON.parse(String(init.body ?? "{}")) as ProjectAgentPut;
+    return { agent: chemin?.split("/").at(-1), version: reqBody.version, overrides: reqBody.overrides ?? {}, effective: {} } as T;
   }
   const accuse = /^\/orgs\/[^/]+\/budget-alerts\/([^/]+)\/acknowledge$/.exec(chemin ?? "");
   if (method === "POST" && accuse) {
@@ -3451,20 +3452,20 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (method === "POST" && /^\/orgs\/[^/]+\/skills\/[^/]+\/versions\/\d+\/approve$/.test(chemin ?? "")) return skillVersion as T;
   const decision = /^\/projects\/[^/]+\/actions\/([^/]+)\/decision$/.exec(chemin ?? "");
   if (method === "POST" && decision) {
-    const corps = JSON.parse(String(init.body ?? "{}")) as { decision: string; reason?: string };
+    const reqBody = JSON.parse(String(init.body ?? "{}")) as { decision: string; reason?: string };
     const action = actions.find((a) => a.id === decision[1]) ?? actions[0]!;
     return {
       ...action,
-      status: corps.decision === "approve" ? "approved" : "rejected",
-      decisions: [{ by: me.email, decision: corps.decision, reason: corps.reason ?? null, at: new Date().toISOString() }],
+      status: reqBody.decision === "approve" ? "approved" : "rejected",
+      decisions: [{ by: me.email, decision: reqBody.decision, reason: reqBody.reason ?? null, at: new Date().toISOString() }],
       temporal_wf_id: `action-${action.id}`,
     } as T;
   }
   // Connector secrets (ADR 0058): the mock keeps what the console may know — set, version, who — and,
   // like the API, never a value.
   if (/^\/orgs\/[^/]+\/connectors(\/|$)/.test(chemin ?? "") && !/\/(discover|operations)/.test(chemin ?? "")) {
-    const [, , , , nom, , champ] = (chemin ?? "").split("/");
-    const corps = JSON.parse(String(init.body ?? "{}")) as {
+    const [, , , , wfName, , champ] = (chemin ?? "").split("/");
+    const reqBody = JSON.parse(String(init.body ?? "{}")) as {
       name?: string;
       kind?: string;
       type?: string;
@@ -3474,26 +3475,26 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       availability?: "all_projects" | "selected_projects";
     };
     const maintenant = new Date().toISOString();
-    const etat = (field: string, version = 1): NonNullable<OrgConnector["secrets"]>[number] => ({
+    const secretState = (field: string, version = 1): NonNullable<OrgConnector["secrets"]>[number] => ({
       field,
       source: "store",
       version,
       rotated_at: maintenant,
       rotated_by: me.email,
     });
-    if (method === "POST" && !nom) {
+    if (method === "POST" && !wfName) {
       const cree: OrgConnector = {
-        name: corps.name ?? "new",
-        kind: corps.kind ?? "mcp",
-        type: corps.type ?? "mcp",
-        config: corps.config ?? {},
+        name: reqBody.name ?? "new",
+        kind: reqBody.kind ?? "mcp",
+        type: reqBody.type ?? "mcp",
+        config: reqBody.config ?? {},
         secret_refs: {
-          ...(corps.secret_refs ?? {}),
-          ...Object.fromEntries(Object.keys(corps.secret_values ?? {}).map((f) => [f, `store:connector/${corps.name}/${f}`])),
+          ...(reqBody.secret_refs ?? {}),
+          ...Object.fromEntries(Object.keys(reqBody.secret_values ?? {}).map((f) => [f, `store:connector/${reqBody.name}/${f}`])),
         },
         secrets: [
-          ...Object.keys(corps.secret_values ?? {}).map((f) => etat(f)),
-          ...Object.entries(corps.secret_refs ?? {}).map(([f, r]) => ({ field: f, source: "reference" as const, reference: r })),
+          ...Object.keys(reqBody.secret_values ?? {}).map((f) => secretState(f)),
+          ...Object.entries(reqBody.secret_refs ?? {}).map(([f, r]) => ({ field: f, source: "reference" as const, reference: r })),
         ],
         status: "unknown",
         operations: [],
@@ -3501,40 +3502,40 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       orgConnectors.push(cree);
       return cree as T;
     }
-    const cible = orgConnectors.find((c) => c.name === nom);
-    if (cible && method === "PUT" && champ) {
-      const avant = cible.secrets?.find((s) => s.field === champ);
-      cible.secrets = [...(cible.secrets ?? []).filter((s) => s.field !== champ), etat(champ, (avant?.version ?? 0) + 1)];
-      return structuredClone(cible) as T;
+    const target = orgConnectors.find((c) => c.name === wfName);
+    if (target && method === "PUT" && champ) {
+      const avant = target.secrets?.find((s) => s.field === champ);
+      target.secrets = [...(target.secrets ?? []).filter((s) => s.field !== champ), secretState(champ, (avant?.version ?? 0) + 1)];
+      return structuredClone(target) as T;
     }
-    if (cible && method === "DELETE" && champ) {
-      cible.secrets = (cible.secrets ?? []).filter((s) => s.field !== champ);
-      return structuredClone(cible) as T;
+    if (target && method === "DELETE" && champ) {
+      target.secrets = (target.secrets ?? []).filter((s) => s.field !== champ);
+      return structuredClone(target) as T;
     }
-    if (cible && method === "PATCH") {
-      cible.config = corps.config ?? cible.config;
-      if (corps.availability && corps.availability !== cible.availability) {
+    if (target && method === "PATCH") {
+      target.config = reqBody.config ?? target.config;
+      if (reqBody.availability && reqBody.availability !== target.availability) {
         // As the API does: restricting turns it on for no project.
-        cible.availability = corps.availability;
-        cible.enabled_projects = [];
+        target.availability = reqBody.availability;
+        target.enabled_projects = [];
       }
-      return structuredClone(cible) as T;
+      return structuredClone(target) as T;
     }
   }
   const enablement = /^\/projects\/([^/]+)\/org-connectors\/([^/]+)\/enablement$/.exec(chemin ?? "");
   if (enablement && (method === "PUT" || method === "DELETE")) {
     const slug = decodeURIComponent(enablement[1]!).replace(/^[^:/]+[:/]/, "");
-    const cible = orgConnectors.find((c) => c.name === enablement[2]);
-    if (!cible) throw new ApiError(404, { title: "Not found" });
-    if (cible.availability !== "selected_projects") {
-      throw new ApiError(409, { title: "Conflict", detail: `${cible.name} is on for every project: its administrator restricts it first` });
+    const target = orgConnectors.find((c) => c.name === enablement[2]);
+    if (!target) throw new ApiError(404, { title: "Not found" });
+    if (target.availability !== "selected_projects") {
+      throw new ApiError(409, { title: "Conflict", detail: `${target.name} is on for every project: its administrator restricts it first` });
     }
-    const on = new Set(cible.enabled_projects ?? []);
+    const on = new Set(target.enabled_projects ?? []);
     if (method === "PUT") on.add(slug);
     else on.delete(slug);
-    cible.enabled_projects = [...on].sort();
+    target.enabled_projects = [...on].sort();
     if (method === "DELETE") return undefined as T;
-    return { name: cible.name, kind: cible.kind, type: cible.type, availability: cible.availability, enabled: true, can_toggle: true } as T;
+    return { name: target.name, kind: target.kind, type: target.type, availability: target.availability, enabled: true, can_toggle: true } as T;
   }
   const skillInstall = /^\/orgs\/[^/]+\/skill-catalogue\/([^/]+)\/install$/.exec(chemin ?? "");
   if (method === "POST" && skillInstall) {
@@ -3580,22 +3581,22 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (method === "POST" && catalogueInstall) {
     // As the API does: a connector declared with the entry's URL, no operation until a discovery.
     const entry = mcpCatalogue().entries.find((e) => e.id === catalogueInstall[1]);
-    const corps = JSON.parse(String(init.body ?? "{}")) as McpCatalogueInstall;
+    const reqBody = JSON.parse(String(init.body ?? "{}")) as McpCatalogueInstall;
     if (!entry || !entry.install_routes?.length) throw new ApiError(422, { title: "Unprocessable", detail: "not installable" });
-    if (corps.route === "gateway") {
+    if (reqBody.route === "gateway") {
       if (!entry.install_routes.includes("gateway")) throw new ApiError(422, { title: "Unprocessable", detail: "no MCP gateway is available" });
-      if (Object.keys(corps.secret_refs ?? {}).length || Object.keys(corps.secret_values ?? {}).length || corps.auth_header)
+      if (Object.keys(reqBody.secret_refs ?? {}).length || Object.keys(reqBody.secret_values ?? {}).length || reqBody.auth_header)
         throw new ApiError(422, { title: "Unprocessable", detail: "the gateway holds the credential: send no secret" });
       const through: OrgConnector = {
-        name: corps.name || entry.id,
+        name: reqBody.name || entry.id,
         kind: "mcp",
         type: "mcp-gateway",
-        config: { server: corps.gateway_server || entry.id },
+        config: { server: reqBody.gateway_server || entry.id },
         secret_refs: {},
         status: "unknown",
         created_by: me.email,
         catalogue_entry: `${entry.id}@${mcpCatalogueFile.meta.catalogue_version}`,
-        availability: corps.availability ?? "all_projects",
+        availability: reqBody.availability ?? "all_projects",
         enabled_projects: [],
         operations: [],
       };
@@ -3604,15 +3605,15 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     }
     if (!entry.install_routes.includes("direct")) throw new ApiError(422, { title: "Unprocessable", detail: "not installable directly" });
     const connector: OrgConnector = {
-      name: corps.name || entry.id,
+      name: reqBody.name || entry.id,
       kind: "mcp",
       type: "mcp",
       config: { url: entry.remote?.url },
-      secret_refs: corps.secret_refs ?? {},
+      secret_refs: reqBody.secret_refs ?? {},
       status: "unknown",
       created_by: me.email,
       catalogue_entry: `${entry.id}@${mcpCatalogueFile.meta.catalogue_version}`,
-      availability: corps.availability ?? "all_projects",
+      availability: reqBody.availability ?? "all_projects",
       enabled_projects: [],
       operations: [],
     };
@@ -3624,18 +3625,18 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   }
   const catalogueEcrit = /^\/orgs\/[^/]+\/models(?:\/([^/?]+))?$/.exec(chemin ?? "");
   if (method === "PUT" && catalogueEcrit?.[1] === "settings") {
-    const corps = JSON.parse(String(init.body ?? "{}")) as { mode: "open" | "curated"; tiers?: ModelCatalogue["tiers"] };
-    modelCatalogue.mode = corps.mode;
-    modelCatalogue.tiers = { ...modelCatalogue.tiers, ...(corps.tiers ?? {}) };
+    const reqBody = JSON.parse(String(init.body ?? "{}")) as { mode: "open" | "curated"; tiers?: ModelCatalogue["tiers"] };
+    modelCatalogue.mode = reqBody.mode;
+    modelCatalogue.tiers = { ...modelCatalogue.tiers, ...(reqBody.tiers ?? {}) };
     return { mode: modelCatalogue.mode, tiers: modelCatalogue.tiers } as T;
   }
   if (method === "POST" && catalogueEcrit?.[1] === "sync") return { added: 0, missing: 0, seen: modelCatalogue.entries.length } as T;
   if (method === "POST" && catalogueEcrit && !catalogueEcrit[1]) {
-    const corps = JSON.parse(String(init.body ?? "{}")) as { model_name: string };
-    const entree: ModelCatalogue["entries"][number] = {
+    const reqBody = JSON.parse(String(init.body ?? "{}")) as { model_name: string };
+    const foundEntry: ModelCatalogue["entries"][number] = {
       id: `mc-${modelCatalogue.entries.length + 1}`,
-      model_name: corps.model_name,
-      display_name: corps.model_name,
+      model_name: reqBody.model_name,
+      display_name: reqBody.model_name,
       source: "manual",
       enabled: true,
       allowed_roles: [],
@@ -3647,16 +3648,16 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       notes: "",
       updated_by: me.email,
     };
-    modelCatalogue.entries.push(entree);
-    return entree as T;
+    modelCatalogue.entries.push(foundEntry);
+    return foundEntry as T;
   }
   if (method === "PATCH" && catalogueEcrit?.[1]) {
-    const entree = modelCatalogue.entries.find((e) => e.id === catalogueEcrit[1]) ?? modelCatalogue.entries[0]!;
-    const corps = JSON.parse(String(init.body ?? "{}")) as { clear_price_override?: boolean } & Partial<ModelCatalogue["entries"][number]>;
-    const { clear_price_override: effacer, ...champs } = corps;
-    Object.assign(entree, champs);
-    if (effacer) entree.price_override = null;
-    return entree as T;
+    const foundEntry = modelCatalogue.entries.find((e) => e.id === catalogueEcrit[1]) ?? modelCatalogue.entries[0]!;
+    const reqBody = JSON.parse(String(init.body ?? "{}")) as { clear_price_override?: boolean } & Partial<ModelCatalogue["entries"][number]>;
+    const { clear_price_override: effacer, ...champs } = reqBody;
+    Object.assign(foundEntry, champs);
+    if (effacer) foundEntry.price_override = null;
+    return foundEntry as T;
   }
   if (method === "DELETE" && catalogueEcrit?.[1]) {
     modelCatalogue.entries = modelCatalogue.entries.filter((e) => e.id !== catalogueEcrit[1]);
@@ -3664,26 +3665,26 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   }
   if (method === "POST" && /^\/orgs\/[^/]+\/agents\/discover$/.test(chemin ?? "")) return rovoDiscovery as T;
   if (method === "POST" && /^\/orgs\/[^/]+\/remote-credentials$/.test(chemin ?? "")) {
-    const corps = JSON.parse(String(init.body ?? "{}")) as { name: string; type: RemoteCredential["type"]; card_url?: string };
-    return { name: corps.name, type: corps.type, status: corps.type === "oauth2_authorization_code" ? "pending" : "connected", card_url: corps.card_url ?? null, host: null, scopes: [] } as T;
+    const reqBody = JSON.parse(String(init.body ?? "{}")) as { name: string; type: RemoteCredential["type"]; card_url?: string };
+    return { name: reqBody.name, type: reqBody.type, status: reqBody.type === "oauth2_authorization_code" ? "pending" : "connected", card_url: reqBody.card_url ?? null, host: null, scopes: [] } as T;
   }
   const autorise = /^\/orgs\/[^/]+\/remote-credentials\/([^/]+)\/authorize$/.exec(chemin ?? "");
   if (method === "POST" && autorise) return { redirect_url: `/admin/remote-agents?connected=${autorise[1]}` } as T;
   const memoryWrite = /^\/(orgs|projects)\/([^/]+)\/memories(?:\/([^/]+))?$/.exec(path.split("?")[0] ?? path);
   if (memoryWrite && method === "POST" && !memoryWrite[3]) {
-    const corps = (body ?? {}) as { slug: string; display_name: string; description?: string; reach?: "org" | "projects"; projects?: string[] };
+    const reqBody = (body ?? {}) as { slug: string; display_name: string; description?: string; reach?: "org" | "projects"; projects?: string[] };
     const project = memoryWrite[1] === "projects" ? bareSlug(memoryWrite[2]!) : null;
-    if (["shared", "own"].includes(corps.slug)) throw new ApiError(422, { detail: `\`${corps.slug}\` is reserved for the implicit memories of every project` });
-    if (memoryStores.some((m) => m.slug === corps.slug && m.scope === (project ? "project" : "global") && (project === null || m.project === project)))
-      throw new ApiError(409, { detail: `memory \`${corps.slug}\` already exists` });
+    if (["shared", "own"].includes(reqBody.slug)) throw new ApiError(422, { detail: `\`${reqBody.slug}\` is reserved for the implicit memories of every project` });
+    if (memoryStores.some((m) => m.slug === reqBody.slug && m.scope === (project ? "project" : "global") && (project === null || m.project === project)))
+      throw new ApiError(409, { detail: `memory \`${reqBody.slug}\` already exists` });
     const made: MemoryStore = {
-      slug: corps.slug,
-      display_name: corps.display_name,
-      description: corps.description ?? null,
+      slug: reqBody.slug,
+      display_name: reqBody.display_name,
+      description: reqBody.description ?? null,
       scope: project ? "project" : "global",
       project,
-      reach: project ? null : (corps.reach ?? "org"),
-      projects: project ? [project] : corps.reach === "projects" ? (corps.projects ?? []) : [],
+      reach: project ? null : (reqBody.reach ?? "org"),
+      projects: project ? [project] : reqBody.reach === "projects" ? (reqBody.projects ?? []) : [],
       status: "active",
       implicit: false,
       created_by: me.email,
@@ -3737,8 +3738,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   const actionLue = /^\/projects\/[^/]+\/actions\/([^/]+)$/.exec(route ?? "");
   if (actionLue) return (actions.find((a) => a.id === actionLue[1]) ?? actions[0]) as T;
   if (/^\/orgs\/[^/]+\/actions$/.test(route ?? "")) {
-    const statut = new URLSearchParams(path.split("?")[1] ?? "").get("status");
-    return actions.filter((a) => !statut || a.status === statut) as T;
+    const statusFilter = new URLSearchParams(path.split("?")[1] ?? "").get("status");
+    return actions.filter((a) => !statusFilter || a.status === statusFilter) as T;
   }
   // A copy: the mock keeps connectors across writes (ADR 0058), and a list returned as the same array
   // would be seen by the query cache as unchanged.
@@ -3761,11 +3762,11 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     })) as T;
   }
   const agentLu = /^\/orgs\/[^/]+\/agents\/([^/]+)$/.exec(route ?? "");
-  // Une copie : l'agent change le temps de la page (S23-13), et une lecture doit le voir comme neuf.
+  // A copy: the agent changes for the time of the page (S23-13), and a read must see it as new.
   if (agentLu) return structuredClone(decorateAgent(agents.find((a) => a.slug === agentLu[1]) ?? agents[0]!)) as T;
-  // Le parcours d'un ticket et son détail, par identifiant : chacun le sien (S22-02).
-  const parcours = /^\/work-items\/([^/]+)\/journey$/.exec(route ?? "");
-  if (parcours) return parcoursDe(parcours[1]!) as T;
+  // A ticket's journey and its detail, by identifier: each its own (S22-02).
+  const journeyMatch = /^\/work-items\/([^/]+)\/journey$/.exec(route ?? "");
+  if (journeyMatch) return parcoursDe(journeyMatch[1]!) as T;
   const ticket = /^\/work-items\/([^/]+)$/.exec(route ?? "");
   if (ticket) return ticketDetaille(ticket[1]!) as T;
   if (/^\/orgs\/[^/]+\/agent-credentials$/.test(route ?? "")) {
@@ -3808,8 +3809,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (credentials) return (credentials[1] === "leas-claude-code" ? agentCredentials : []) as T;
   if (method === "GET" && /^\/(orgs|projects)\/[^/]+\/costs$/.test(chemin ?? "") && path.includes("group_by=")) {
     // The project overview's own two reads (`day`, `kind`, no period) keep their fixed fixture.
-    const surLaPage = /^\/projects\//.test(chemin ?? "") && !/since=|group_by=(?!day&|day$|kind)/.test(path);
-    if (!surLaPage) return mockCostReport(path) as T;
+    const onPage = /^\/projects\//.test(chemin ?? "") && !/since=|group_by=(?!day&|day$|kind)/.test(path);
+    if (!onPage) return mockCostReport(path) as T;
   }
   const table: Array<[RegExp, unknown]> = [
     [/^\/me$/, me],
@@ -3905,7 +3906,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/orgs\/[^/]+\/projects$/, projects],
     [/^\/projects\/[^/]*checkout-web$/, projects.items[1]],
     [/^\/projects\/[^/]+$/, projects.items[0]],
-    // Checkout Web se provisionne : pas encore de ticket — la boîte ne compte pas deux fois ceux de Billing API.
+    // Checkout Web is being provisioned: no ticket yet, so the inbox does not count Billing API's twice.
     [/^\/projects\/[^/]*checkout-web\/work-items$/, { items: [], meta: { has_more: false } }],
     [/^\/projects\/[^/]+\/work-items$/, workItems],
     [/^\/projects\/[^/]+\/findings$/, findings],

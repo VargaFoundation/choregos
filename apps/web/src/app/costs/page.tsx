@@ -4,11 +4,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { GrapheDesCouts } from "@/components/graphe-des-couts";
+import { CostGraph } from "@/components/cost-graph";
 import { BreakdownCard, csvUrl, fetchReport, reportKey, type Scope } from "@/components/spend/breakdown";
 import { MonthPanel } from "@/components/spend/month";
-import { Card, Empty, ErrorNote, EtatDeLecture, Select } from "@/components/ui";
-import { OrgPageHeader } from "@/components/coquille/org-page-header";
+import { Card, Empty, ErrorNote, ReadState, Select } from "@/components/ui";
+import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import { type Currency, money, monthStart } from "@/lib/spend";
@@ -35,15 +35,15 @@ function Spend() {
   const { org, orgs } = useSession();
   const router = useRouter();
   const params = useSearchParams();
-  const projet = params.get("project");
-  const scope: Scope = { org, project: projet };
+  const project = params.get("project");
+  const scope: Scope = { org, project: project };
   const currency: Currency = orgs.find((o) => o.slug === org)?.currency === "USD" ? "USD" : "EUR";
   const [periode, setPeriode] = useState<Periode>("30");
   // Fixed once per mount: the forecast must not move under the reader's eyes.
   const [now] = useState(() => new Date());
   const filtre = { since: depuis(periode, now) };
-  const projets = useQuery({ queryKey: ["projects", org], queryFn: () => api.projects(org) });
-  const parJour = useQuery({
+  const projects = useQuery({ queryKey: ["projects", org], queryFn: () => api.projects(org) });
+  const byDay = useQuery({
     queryKey: reportKey(scope, "day", filtre),
     queryFn: () => fetchReport(scope, "day", filtre),
   });
@@ -67,11 +67,11 @@ function Spend() {
           <Select
             aria-label="Scope"
             className="w-auto"
-            value={projet ?? ""}
+            value={project ?? ""}
             onChange={(e) => router.replace(e.target.value ? `/costs?project=${e.target.value}` : "/costs")}
           >
             <option value="">Whole organisation</option>
-            {(projets.data?.items ?? []).map((p) => (
+            {(projects.data?.items ?? []).map((p) => (
               <option key={p.slug} value={p.slug}>
                 {p.slug}
               </option>
@@ -100,17 +100,17 @@ function Spend() {
           </a>
         }
       >
-        {parJour.error ? (
-          <ErrorNote>{String(parJour.error)}</ErrorNote>
-        ) : !parJour.data ? (
-          <EtatDeLecture lecture={parJour} quoi="the spend" />
-        ) : parJour.data.rows.length === 0 ? (
+        {byDay.error ? (
+          <ErrorNote>{String(byDay.error)}</ErrorNote>
+        ) : !byDay.data ? (
+          <ReadState lecture={byDay} quoi="the spend" />
+        ) : byDay.data.rows.length === 0 ? (
           <Empty>No spend recorded in this period.</Empty>
         ) : (
           <>
-            <GrapheDesCouts rows={parJour.data.rows} currency={currency} />
+            <CostGraph rows={byDay.data.rows} currency={currency} />
             <p className="mt-3 text-sm" data-testid="total-periode">
-              Total {money(parJour.data.rows.reduce((s, r) => s + (currency === "USD" ? r.cost_usd : r.cost_eur), 0), currency)}
+              Total {money(byDay.data.rows.reduce((s, r) => s + (currency === "USD" ? r.cost_usd : r.cost_eur), 0), currency)}
             </p>
           </>
         )}
@@ -120,7 +120,7 @@ function Spend() {
         <BreakdownCard scope={scope} currency={currency} title="Top agents" group="agent" filtre={filtre} />
         <BreakdownCard scope={scope} currency={currency} title="Top workflows" group="workflow" filtre={filtre} />
         <BreakdownCard scope={scope} currency={currency} title="Top work items" group="work_item" filtre={filtre} />
-        {!projet && <BreakdownCard scope={scope} currency={currency} title="Projects" group="project" filtre={filtre} />}
+        {!project && <BreakdownCard scope={scope} currency={currency} title="Projects" group="project" filtre={filtre} />}
         <BreakdownCard scope={scope} currency={currency} title="By model" group="model" filtre={{ ...filtre, kind: "model" }} />
         <BreakdownCard scope={scope} currency={currency} title="By tool" group="model" filtre={{ ...filtre, kind: "tool" }} />
         <BreakdownCard scope={scope} currency={currency} title="Knowledge distillations" group="model" filtre={{ ...filtre, kind: "distill" }} />

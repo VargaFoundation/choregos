@@ -19,12 +19,12 @@ const TRACKERS = [
 ];
 
 /**
- * Création d'un projet : template → projet → connecteurs → récapitulatif → provisioning.
+ * Creating a project: template -> project -> connectors -> summary -> provisioning.
  *
- * Le dépôt est FACULTATIF (ADR 0012) : un métier sans code n'en a pas, et l'assistant
- * l'exigeait quand même. Les templates viennent de l'API, pas d'une liste codée en dur ;
- * le tracker se choisit ici, et « Choregos » signifie que les demandes se posent dans
- * l'outil (`items create`, ou le board).
+ * The repository is OPTIONAL (ADR 0012): a trade without code has none, and the wizard
+ * required one anyway. The templates come from the API, not from a hard-coded list;
+ * the tracker is chosen here, and "Choregos" means requests are placed in
+ * the tool (`items create`, or the board).
  */
 export default function NewProjectPage() {
   const router = useRouter();
@@ -35,8 +35,8 @@ export default function NewProjectPage() {
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // Ce qui a déjà été créé : un échec au milieu ne se rejoue pas depuis le début (S23-06). Avant, le
-  // projet était créé, le tracker refusé, et « create » renvoyait ensuite 409 pour toujours.
+  // What has already been created: a failure in the middle is not replayed from the start (S23-06). Before, the
+  // project was created, the tracker refused, and "create" then returned 409 forever.
   const [fait, setFait] = useState<{ projet: { id: string; slug: string } | null; tracker: boolean; workflow?: boolean }>({
     projet: null,
     tracker: false,
@@ -62,16 +62,16 @@ export default function NewProjectPage() {
 
   const slugValid = /^[a-z0-9][a-z0-9-]{0,62}$/.test(form.slug);
   const repoValid = form.sansDepot || form.repo.startsWith("http") || /^[\w.-]+\/[\w.-]+$/.test(form.repo);
-  const avecTemplate = !form.sansDepot && form.template !== "";
+  const withTemplate = !form.sansDepot && form.template !== "";
   // The workflow the platform gives a project without a template (ADR 0110): adopting it again is moot.
   const automatique = form.sansDepot ? "core/default-request" : "core/default-simple";
   const offerts = (catalogue.data ?? []).filter((e) => !form.sansDepot || !e.needs_repository);
-  const choisi = avecTemplate ? undefined : offerts.find((e) => `${e.source}/${e.name}` === form.workflow);
+  const choisi = withTemplate ? undefined : offerts.find((e) => `${e.source}/${e.name}` === form.workflow);
 
   async function create() {
     setBusy(true);
     setError(null);
-    let projet = fait.projet;
+    let project = fait.projet;
     try {
       const config: Record<string, unknown> = { slug: form.slug, org };
       if (!form.sansDepot) {
@@ -83,55 +83,55 @@ export default function NewProjectPage() {
         if (form.gitops) config.gitops = { repo_url: form.gitops, apps: [form.slug] };
       }
       if (form.channel) config.notify = { slack_channel: form.channel };
-      if (!projet) {
+      if (!project) {
         const cree = await api.createProject(org, {
           slug: form.slug,
           name: form.name || form.slug,
-          template_ref: avecTemplate ? form.template : null,
+          template_ref: withTemplate ? form.template : null,
           config,
         });
-        projet = { id: cree.id, slug: cree.slug };
-        setFait({ projet, tracker: false });
+        project = { id: cree.id, slug: cree.slug };
+        setFait({ projet: project, tracker: false });
       }
       if (!fait.tracker) {
-        await api.putConnector(projet.id, "tracker", { type: form.tracker, config: {} });
-        setFait({ projet, tracker: true });
+        await api.putConnector(project.id, "tracker", { type: form.tracker, config: {} });
+        setFait({ projet: project, tracker: true });
       }
       if (choisi && form.workflow !== automatique && !fait.workflow) {
-        await api.adoptWorkflow(projet.id, { source: choisi.source, name: choisi.name, version: choisi.version, make_default: true });
-        setFait({ projet, tracker: true, workflow: true });
+        await api.adoptWorkflow(project.id, { source: choisi.source, name: choisi.name, version: choisi.version, make_default: true });
+        setFait({ projet: project, tracker: true, workflow: true });
       }
       // Without a template, a project with no repository has nothing to provision: the API activates it.
-      if (avecTemplate || form.sansDepot) await api.provision(projet.id);
-      router.push(`/p/${projet.slug}`);
+      if (withTemplate || form.sansDepot) await api.provision(project.id);
+      router.push(`/p/${project.slug}`);
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "refused";
       setError(
-        projet
-          ? `${projet.slug} was created, but ${fait.tracker ? "provisioning" : "connecting its tracker"} failed: ${message}`
+        project
+          ? `${project.slug} was created, but ${fait.tracker ? "provisioning" : "connecting its tracker"} failed: ${message}`
           : `creation refused: ${message}`,
       );
       setBusy(false);
     }
   }
 
-  const raisonDAttente =
+  const waitingReason =
     step === 0 && form.sansDepot === null
-      ? "say what the project delivers to go on"
+      ? "Say what the project delivers to go on"
       : step === 1 && !form.slug
-      ? "an identifier is needed to go on"
+      ? "An identifier is needed to go on"
       : step === 1 && !slugValid
-        ? "the identifier is not valid yet"
+        ? "The identifier is not valid yet"
         : step === 1 && !repoValid
           ? form.repo
-            ? "the repository is not valid yet"
-            : "a repository is needed — or choose a business process in the first step"
+            ? "The repository is not valid yet"
+            : "A repository is needed — or choose a business process in the first step"
           : null;
 
   const recapitulatif: [string, string][] = [
     ["Organisation", org],
     ["Template", form.sansDepot ? "None — no code repository" : form.template || "None"],
-    ...(avecTemplate ? [] : ([["Workflow", choisi ? `${choisi.title} (${choisi.source})` : "Automatic"]] as [string, string][])),
+    ...(withTemplate ? [] : ([["Workflow", choisi ? `${choisi.title} (${choisi.source})` : "Automatic"]] as [string, string][])),
     ["Identifier", form.slug],
     ["Display name", form.name || form.slug],
     ["Repository", form.sansDepot ? "None" : form.repo],
@@ -146,8 +146,8 @@ export default function NewProjectPage() {
       <Heading as="h1" size="xl">
         New project
       </Heading>
-      {/* Deux colonnes sur téléphone, quatre au-delà : à 360 px, quatre cases de 78 px ne tenaient
-          pas un numéro et « connectors », et la page débordait (S23-01). */}
+      {/* Two columns on a phone, four beyond: at 360 px, four 78 px cells did not hold
+              a number and "connectors", and the page overflowed (S23-01). */}
       <ol className="grid grid-cols-2 border border-line sm:grid-cols-4">
         {STEPS.map((label, index) => (
           <li
@@ -225,7 +225,7 @@ export default function NewProjectPage() {
                 </span>
               </label>
             )}
-            {form.sansDepot !== null && !avecTemplate && (
+            {form.sansDepot !== null && !withTemplate && (
               <label className="block space-y-1">
                 <span>Workflow</span>
                 <Select aria-label="Workflow" value={form.workflow} onChange={(event) => set("workflow", event.target.value)} className="w-full">
@@ -350,28 +350,28 @@ export default function NewProjectPage() {
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <Button
             onClick={() => setStep((current) => Math.max(0, current - 1))}
-            // Le projet existe : revenir changer son identifiant ne le renommerait pas.
+            // The project exists: going back to change its identifier would not rename it.
             disabled={step === 0 || fait.projet !== null}
           >
             Previous
           </Button>
-          {raisonDAttente && (
+          {waitingReason && (
             <p className="ml-auto text-xs text-ink-muted" id="raison-d-attente">
-              {raisonDAttente}
+              {waitingReason}
             </p>
           )}
           {step < STEPS.length - 1 ? (
             <Button
               tone="primary"
               onClick={() => setStep((current) => current + 1)}
-              disabled={raisonDAttente !== null}
-              aria-describedby={raisonDAttente ? "raison-d-attente" : undefined}
+              disabled={waitingReason !== null}
+              aria-describedby={waitingReason ? "raison-d-attente" : undefined}
             >
               Next
             </Button>
           ) : (
             <Button tone="primary" onClick={create} disabled={busy || !slugValid || !repoValid}>
-              {fait.projet ? "Retry" : avecTemplate ? "Create and provision" : "Create"}
+              {fait.projet ? "Retry" : withTemplate ? "Create and provision" : "Create"}
             </Button>
           )}
         </div>

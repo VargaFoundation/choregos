@@ -1,10 +1,10 @@
-"""`migrate` : le ticket change de définition sans mourir (ADR 0031, S16-05).
+"""`migrate`: the ticket changes definition without dying (ADR 0031, S16-05).
 
-L'API transmettait l'identifiant de la cible, et l'interpréteur validait le message de contrôle
-LUI-MÊME comme une définition : `Workflow.model_validate` levait dans le code du workflow, et le
-ticket mourait. La définition arrive désormais dans le signal, lue par l'API ; l'interpréteur
-remappe l'état, consigne la migration, et l'épingle du ticket suit — un `continue_as_new` rechargera
-la cible, pas l'ancienne. Une migration devenue impossible laisse le ticket en vie, sur sa définition.
+The API forwarded the target's identifier, and the interpreter validated the control message
+ITSELF as a definition: `Workflow.model_validate` raised in the workflow code, and the
+ticket died. The definition now arrives in the signal, read by the API; the interpreter
+remaps the state, records the migration, and the ticket's pin follows: a `continue_as_new` will reload
+the target, not the old one. A migration that became impossible leaves the ticket alive, on its definition.
 """
 
 from __future__ import annotations
@@ -20,70 +20,73 @@ from .conftest import Fixture, recording_history
 
 pytestmark = pytest.mark.asyncio
 
-HISTORIQUES = pathlib.Path(__file__).resolve().parents[3] / "tests" / "replay" / "histories"
+HISTORIES = pathlib.Path(__file__).resolve().parents[3] / "tests" / "replay" / "histories"
 
-#: Un ticket garé : un état d'attente sans transition sortante, que seul le board ferait bouger.
-GARAGE: dict[str, Any] = {
+#: A parked ticket: a waiting state with no outgoing transition, which only the board would move.
+PARKING: dict[str, Any] = {
     "apiVersion": "choregos/v1",
     "kind": "Workflow",
-    "metadata": {"name": "garage", "version": 1},
-    "initial": "gare",
-    "actors": {"rh": {"type": "human", "group": "rh"}},
-    "states": {"gare": {"display": "Garé", "kind": "wait"}, "fait": {"display": "Fait", "terminal": True}},
+    "metadata": {"name": "parking", "version": 1},
+    "initial": "parked",
+    "actors": {"hr": {"type": "human", "group": "hr"}},
+    "states": {
+        "parked": {"display": "Parked", "kind": "wait"},
+        "done": {"display": "Done", "terminal": True},
+    },
     "transitions": [],
 }
-ARRIVEE: dict[str, Any] = {
+ARRIVAL: dict[str, Any] = {
     "apiVersion": "choregos/v1",
     "kind": "Workflow",
     "metadata": {"name": "onboarding", "version": 1},
-    "initial": "demande",
-    "actors": {"plateforme": {"type": "system"}},
+    "initial": "request",
+    "actors": {"platform": {"type": "system"}},
     "states": {
-        "demande": {"display": "Demande", "kind": "wait"},
-        "fait": {"display": "Fait", "terminal": True},
+        "request": {"display": "Request", "kind": "wait"},
+        "done": {"display": "Done", "terminal": True},
     },
-    "transitions": [{"id": "t-faire", "from": "demande", "to": "fait", "by": "plateforme"}],
+    "transitions": [{"id": "t-do", "from": "request", "to": "done", "by": "platform"}],
 }
 
 
-async def _definir(setup: Fixture, document: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-    """Une définition en base, et ce que l'API en enverrait dans le signal."""
+async def _define(setup: Fixture, document: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """A definition in the database, and what the API would send of it in the signal."""
     from choregos_api.db.models import WorkflowDef
     from choregos_api.db.session import session_scope
     from choregos_contracts import Workflow
 
-    modele = Workflow.model_validate(document)
-    signal = modele.model_dump(mode="json", by_alias=True, exclude_none=True)
+    model = Workflow.model_validate(document)
+    signal = model.model_dump(mode="json", by_alias=True, exclude_none=True)
     async with session_scope() as session:
-        ligne = WorkflowDef(
+        row = WorkflowDef(
             project_id=setup.project_id,
-            name=modele.metadata.name,
-            version=modele.metadata.version,
+            name=model.metadata.name,
+            version=model.metadata.version,
             source="platform",
             yaml="",
             json_doc=signal,
-            checksum=f"sha256:{modele.metadata.name}",
+            checksum=f"sha256:{model.metadata.name}",
             is_active=True,
         )
-        session.add(ligne)
+        session.add(row)
         await session.flush()
-        return ligne.id, signal
+        return row.id, signal
 
 
-async def _garer(setup: Fixture) -> str:
-    """Le ticket naît dans `garage`, à l'état `gare`."""
+async def _park(setup: Fixture) -> str:
+    """The ticket is born in `parking`, in state `parked`."""
     from choregos_api.db.models import WorkItem
     from choregos_api.db.session import session_scope
 
-    garage, _ = await _definir(setup, GARAGE)
+    parking, _ = await _define(setup, PARKING)
     async with session_scope() as session:
         item = await session.get(WorkItem, setup.work_item_id)
         assert item is not None
-        item.workflow_def_id, item.state = garage, "gare"
-    return garage
+        item.workflow_def_id, item.state = parking, "parked"
+    return parking
 
 
-async def _demarrer(env: Any, setup: Fixture) -> Any:
+async def _start(env: Any, setup: Fixture) -> Any:
     return await env.client.start_workflow(
         "WorkflowInterpreter",
         {
@@ -97,28 +100,28 @@ async def _demarrer(env: Any, setup: Fixture) -> Any:
     )
 
 
-async def _attendre(handle: Any, predicat: Any, quoi: str) -> dict[str, Any]:
+async def _wait_for(handle: Any, predicate: Any, what: str) -> dict[str, Any]:
     for _ in range(600):
         status = await handle.query("status")
-        if predicat(status):
+        if predicate(status):
             return dict(status)
         await asyncio.sleep(0.1)
-    raise AssertionError(f"{quoi} : jamais vrai (status : {await handle.query('status')})")
+    raise AssertionError(f"{what}: never true (status: {await handle.query('status')})")
 
 
-async def _evenements(setup: Fixture) -> list[Any]:
+async def _events(setup: Fixture) -> list[Any]:
     from choregos_api.db.models import Event
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
     async with session_scope() as session:
-        lignes = await session.execute(
+        rows = await session.execute(
             select(Event).where(Event.work_item_id == setup.work_item_id, Event.type.like("%migrat%"))
         )
-        return list(lignes.scalars())
+        return list(rows.scalars())
 
 
-async def test_un_ticket_gare_migre_et_finit_sur_sa_nouvelle_definition(
+async def test_a_parked_ticket_migrates_and_ends_on_its_new_definition(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
     from choregos_api.db.models import WorkItem
@@ -126,87 +129,89 @@ async def test_un_ticket_gare_migre_et_finit_sur_sa_nouvelle_definition(
     from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
 
-    await _garer(setup)
-    arrivee, signal = await _definir(setup, ARRIVEE)
+    await _park(setup)
+    arrival, signal = await _define(setup, ARRIVAL)
     async with worker_factory():
-        handle = await _demarrer(temporal_env, setup)
-        await _attendre(handle, lambda s: s["state"] == "gare", "le ticket est garé")
+        handle = await _start(temporal_env, setup)
+        await _wait_for(handle, lambda s: s["state"] == "parked", "the ticket is parked")
         await handle.signal(
             "control",
             {
                 "action": "migrate",
-                "workflow_def_id": arrivee,
+                "workflow_def_id": arrival,
                 "workflow": signal,
-                "state_mapping": {"gare": "demande"},
+                "state_mapping": {"parked": "request"},
                 "by": "admin@varga.dev",
             },
         )
-        # Sans réveil, un ticket garé n'aurait jamais migré : le test le dirait, au lieu d'attendre.
-        resultat = await asyncio.wait_for(handle.result(), timeout=120)
-        historique = await handle.fetch_history()
+        # Without a wake-up, a parked ticket would never have migrated: the test says so, not waits.
+        result = await asyncio.wait_for(handle.result(), timeout=120)
+        history = await handle.fetch_history()
 
-    assert resultat["state"] == "fait", "la transition système de la NOUVELLE définition a joué"
+    assert result["state"] == "done", "the system transition of the NEW definition played"
     async with session_scope() as session:
         item = await session.get(WorkItem, setup.work_item_id)
         assert item is not None
-        assert item.workflow_def_id == arrivee, "l'épingle suit : un continue_as_new rechargerait la cible"
+        assert item.workflow_def_id == arrival, "the pin follows: a continue_as_new would reload the target"
         assert item.failure is None
-    (migration,) = await _evenements(setup)
+    (migration,) = await _events(setup)
     assert migration.type == "choregos.workitem.migrated"
-    assert (migration.payload["from_state"], migration.payload["to_state"]) == ("gare", "demande")
+    assert (migration.payload["from_state"], migration.payload["to_state"]) == ("parked", "request")
 
-    # Le nouvel historique rejoue contre le code courant — et s'archive pour les suivants.
-    await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(historique)
+    # The new history replays against the current code, and is archived for those to come.
+    await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
     if recording_history():
-        cible = HISTORIQUES / "wi-migration-S16-05.json"
-        cible.write_text(json.dumps(json.loads(historique.to_json()), indent=1) + "\n", encoding="utf-8")
+        target = HISTORIES / "wi-migration-S16-05.json"
+        target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 
 
-async def test_une_migration_impossible_laisse_le_ticket_en_vie(
+async def test_an_impossible_migration_leaves_the_ticket_alive(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
     from choregos_api.db.models import WorkItem
     from choregos_api.db.session import session_scope
 
-    garage = await _garer(setup)
-    arrivee, signal = await _definir(setup, ARRIVEE)
+    parking = await _park(setup)
+    arrival, signal = await _define(setup, ARRIVAL)
     async with worker_factory():
-        handle = await _demarrer(temporal_env, setup)
-        await _attendre(handle, lambda s: s["state"] == "gare", "le ticket est garé")
-        # Aucun mapping : `gare` n'existe pas dans `onboarding`.
-        await handle.signal("control", {"action": "migrate", "workflow_def_id": arrivee, "workflow": signal})
+        handle = await _start(temporal_env, setup)
+        await _wait_for(handle, lambda s: s["state"] == "parked", "the ticket is parked")
+        # No mapping: `parked` does not exist in `onboarding`.
+        await handle.signal("control", {"action": "migrate", "workflow_def_id": arrival, "workflow": signal})
         for _ in range(600):
-            if await _evenements(setup):
+            if await _events(setup):
                 break
             await asyncio.sleep(0.1)
         status = await handle.query("status")
-        assert (status["state"], status["stopped"]) == ("gare", False), "le ticket vit, sur sa définition"
+        assert (status["state"], status["stopped"]) == ("parked", False), (
+            "the ticket lives, on its definition"
+        )
         await handle.signal("control", {"action": "stop"})
-        resultat = await handle.result()
+        result = await handle.result()
 
-    assert resultat["state"] == "gare"
-    (refus,) = await _evenements(setup)
-    assert refus.type == "choregos.workitem.migration_refused"
-    assert "gare" in refus.payload["reason"]
+    assert result["state"] == "parked"
+    (refusal,) = await _events(setup)
+    assert refusal.type == "choregos.workitem.migration_refused"
+    assert "parked" in refusal.payload["reason"]
     async with session_scope() as session:
         item = await session.get(WorkItem, setup.work_item_id)
         assert item is not None
-        assert item.workflow_def_id == garage and item.failure is None
+        assert item.workflow_def_id == parking and item.failure is None
 
 
-async def test_consigner_deux_fois_la_meme_migration_ne_la_double_pas(setup: Fixture) -> None:
-    """Une activité rejouée (ADR 0008) : la clé de la migration est dans l'événement."""
+async def test_recording_the_same_migration_twice_does_not_double_it(setup: Fixture) -> None:
+    """A replayed activity (ADR 0008): the migration's key is in the event."""
     from choregos_orchestrator.activities.interpretation import record_migration
 
-    arrivee, _ = await _definir(setup, ARRIVEE)
-    consigne = {
+    arrival, _ = await _define(setup, ARRIVAL)
+    recorded_migration = {
         "project_id": setup.project_id,
         "work_item_id": setup.work_item_id,
-        "cle": "wi-x/run-1/1",
+        "key": "wi-x/run-1/1",
         "from_state": "inbox",
-        "to_state": "demande",
-        "workflow_def_id": arrivee,
+        "to_state": "request",
+        "workflow_def_id": arrival,
     }
-    assert (await record_migration(consigne))["recorded"] is True
-    assert (await record_migration(consigne))["recorded"] is False
-    assert len(await _evenements(setup)) == 1
+    assert (await record_migration(recorded_migration))["recorded"] is True
+    assert (await record_migration(recorded_migration))["recorded"] is False
+    assert len(await _events(setup)) == 1

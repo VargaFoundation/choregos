@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Activités tracker : miroir d'état, commentaire de suivi, champs du board, demandes humaines."""
+"""Tracker activities: state mirror, status comment, board fields, human requests."""
 
 from __future__ import annotations
 
@@ -29,10 +29,11 @@ from ..markdown import STATUS_MARKER, StageLine, StatusComment, render_human_req
 from .base import (
     db,
     load_work_item,
+    notification_target,
     project_bundle,
     send_courtesy,
-    tracker_possede_les_tickets,
-    workflow_du_ticket,
+    tracker_owns_items,
+    work_item_workflow,
 )
 from .interpretation import FINISHED_RUNS
 
@@ -69,7 +70,7 @@ async def mirror_state(payload: dict[str, Any]) -> dict[str, Any]:
         bundle = await project_bundle(session, payload["project_id"])
         item = await load_work_item(session, payload["work_item_id"])
         state_name = payload["state"]
-        state = (await workflow_du_ticket(session, item)).states.get(state_name)
+        state = (await work_item_workflow(session, item)).states.get(state_name)
         previous = item.state
         item.state = state_name
         if payload.get("reason") != STARTED_REASON:
@@ -108,13 +109,13 @@ async def mirror_state(payload: dict[str, Any]) -> dict[str, Any]:
 
 @activity.defn(name="update_status_comment")
 async def update_status_comment(payload: dict[str, Any]) -> dict[str, str]:
-    """Réécrit l'unique commentaire de suivi et les champs structurés du board (§4.3)."""
+    """Rewrite the single status comment and the structured fields of the board (§4.3)."""
     settings = get_settings()
     async with db() as session:
         bundle = await project_bundle(session, payload["project_id"])
         item = await load_work_item(session, payload["work_item_id"])
-        # Le workflow DU TICKET (ADR 0031) : le commentaire nomme celui où il est né.
-        workflow = await workflow_du_ticket(session, item)
+        # The WORK ITEM's workflow (ADR 0031): the comment names the one it was born in.
+        workflow = await work_item_workflow(session, item)
         runs = (
             (await session.execute(select(Run).where(Run.work_item_id == item.id).order_by(Run.created_at)))
             .scalars()
@@ -221,8 +222,8 @@ async def update_status_comment(payload: dict[str, Any]) -> dict[str, str]:
         await bundle.adapters.tracker.set_fields(
             item.tracker_key,
             {
-                # Un board d'avant S22-21 (`Coût (€)`, `Taille`, `Risque`) reçoit ces valeurs
-                # dans ses champs français : l'adaptateur écrit dans celui qui existe.
+                # A board from before S22-21 (`Coût (€)`, `Taille`, `Risque`) receives these values in
+                # its French fields: the adapter writes into the one that exists.
                 "Cost (€)": round(float(totals.get("cost_eur", 0.0)), 2),
                 "Size": item.size or "",
                 "Risk": item.risk or "",
@@ -234,7 +235,7 @@ async def update_status_comment(payload: dict[str, Any]) -> dict[str, str]:
 
 @activity.defn(name="create_human_request")
 async def create_human_request(payload: dict[str, Any]) -> dict[str, Any]:
-    """Crée la demande humaine, la poste sur le ticket et notifie — idempotente par transition."""
+    """Create the human request, post it on the work item and notify; idempotent by transition."""
     settings = get_settings()
     async with db() as session:
         bundle = await project_bundle(session, payload["project_id"])
@@ -272,21 +273,20 @@ async def create_human_request(payload: dict[str, Any]) -> dict[str, Any]:
         )
         markdown = render_human_request(payload["kind"], outward, settings.public_url, item.tracker_key)
         await bundle.adapters.tracker.comment(item.tracker_key, markdown)
-        channel = bundle.config.notify.slack_channel or "#choregos"
-        # La notification est une COURTOISIE, pas la demande. La demande existe (en base) et se
-        # lit (commentaire sur le ticket, écran du front, API) sans elle.
+        channel = notification_target(bundle)
+        # The notification is a COURTESY, not the request. The request exists (in the database)
+        # and can be read (comment on the work item, front-end screen, API) without it.
         #
-        # Avant le 2026-09-27 elle était dans le chemin critique, et le défaut était brutal : sur
-        # un déploiement sans Slack — le locataire dev — `notify.send` lève, l'exception annule la
-        # TRANSACTION (donc la demande qu'on vient d'écrire), les cinq tentatives échouent au même
-        # endroit, et le ticket meurt sur « [slack] ni bot_token ni webhook_url configurés ».
-        # Autrement dit : la porte humaine était inatteignable sur toute installation sans
-        # notificateur, et le message accusait Slack au lieu de dire « la demande est là, personne
-        # n'a été prévenu ».
+        # Before 2026-09-27 it was in the critical path, and the flaw was brutal: on a deployment
+        # without Slack (the dev tenant) `notify.send` raises, the exception rolls back the
+        # TRANSACTION (hence the request just written), the five attempts fail at the same place,
+        # and the work item dies on "[slack] neither bot_token nor webhook_url configured".
+        # In other words: the human gate was unreachable on any installation without a notifier,
+        # and the message blamed Slack instead of saying "the request is there, nobody was told".
         #
-        # `notifiee` part dans l'événement et dans le retour : un silence se voit au lieu d'être
-        # deviné. Ne rien dire aurait remplacé une panne bruyante par une panne muette.
-        notifiee = True
+        # `notified` goes in the event and in the return value: a silence shows instead of being
+        # guessed. Saying nothing would have replaced a noisy failure with a silent one.
+        notified = True
         try:
             await bundle.adapters.notify.send(
                 channel,
@@ -301,11 +301,11 @@ async def create_human_request(payload: dict[str, Any]) -> dict[str, Any]:
                     ],
                 ),
             )
-        # Volontairement large : aucune panne de notificateur ne doit tuer un ticket.
+        # Deliberately broad: no notifier failure may kill a work item.
         except Exception as exc:
-            notifiee = False
+            notified = False
             activity.logger.warning(
-                "demande humaine %s créée mais NON notifiée sur %s : %s", row.id, channel, exc
+                "human request %s created but NOT notified on %s: %s", row.id, channel, exc
             )
         await persist_event(
             session,
@@ -316,17 +316,17 @@ async def create_human_request(payload: dict[str, Any]) -> dict[str, Any]:
             subject=item.tracker_key,
             kind=payload["kind"],
             request_id=row.id,
-            notified=notifiee,
+            notified=notified,
             **_via(bundle),
         )
-        return {"request_id": row.id, "reused": False, "notified": notifiee}
+        return {"request_id": row.id, "reused": False, "notified": notified}
 
 
 @activity.defn(name="close_human_request")
 async def close_human_request(payload: dict[str, Any]) -> dict[str, Any]:
-    """Clôt la demande et garde la raison d'un refus là où l'agent suivant la lit : une transition
-    qui déclare `inputs: [human_feedback]` la reçoit. Elle se perdait — l'agent refaisait le même
-    travail sans savoir pourquoi on le lui renvoyait. Une approbation l'efface : elle a servi."""
+    """Close the request and keep the reason for a refusal where the next agent reads it: a
+    transition that declares `inputs: [human_feedback]` receives it. It used to be lost: the agent
+    redid the same work without knowing why it was sent back. An approval erases it: it has served."""
     async with db() as session:
         row = await session.get(HumanRequest, payload["request_id"]) if payload.get("request_id") else None
         if row is None:
@@ -335,9 +335,9 @@ async def close_human_request(payload: dict[str, Any]) -> dict[str, Any]:
             row.decided_at = utcnow()
             row.decided_by = payload.get("decided_by", "the platform")
             row.decision = payload.get("decision", {})
-        # Même close par l'API avant que l'activité ne passe — c'est le cas d'une réponse —, la
-        # demande dépose sa raison ou sa réponse là où l'agent suivant la lit.
-        await _garder_la_raison(session, row, dict(payload.get("decision") or {}))
+        # Even if the API closed it before the activity ran (the case of an answer), the
+        # request leaves its reason or its answer where the next agent reads it.
+        await _keep_the_reason(session, row, dict(payload.get("decision") or {}))
         await _judge_the_decisions(session, row, dict(payload.get("decision") or row.decision or {}))
         return {"closed": True}
 
@@ -357,31 +357,31 @@ async def _judge_the_decisions(session: Any, request: HumanRequest, decision: di
     item = await session.get(WorkItem, request.work_item_id)
     if item is None:
         return
-    workflow = await workflow_du_ticket(session, item)
+    workflow = await work_item_workflow(session, item)
     step = next((t for t in workflow.transitions if t.key == request.transition_id), None)
     if step is None or not isinstance(workflow.actor_of(step), HumanActor):
         return
     await record_human_verdict(session, item.id, request.requested_at, bool(decision.get("approved")))
 
 
-async def _garder_la_raison(session: Any, demande: HumanRequest, decision: dict[str, Any]) -> None:
-    item = await session.get(WorkItem, demande.work_item_id)
+async def _keep_the_reason(session: Any, request: HumanRequest, decision: dict[str, Any]) -> None:
+    item = await session.get(WorkItem, request.work_item_id)
     if item is None:
         return
     documents = dict(item.documents or {})
-    reponse = str(decision.get("answer") or "").strip()
-    if decision.get("kind") == "question" and reponse:
-        # La réponse va à l'agent qui reprend (#313), quelles que soient les entrées qu'il déclare :
-        # elle tranche la question qui l'avait arrêté, et se perdait.
-        question = str((demande.payload or {}).get("question") or "").strip()
-        documents["human_answer"] = f"Question: {question}\n\nAnswer: {reponse}" if question else reponse
+    answer = str(decision.get("answer") or "").strip()
+    if decision.get("kind") == "question" and answer:
+        # The answer goes to the agent that resumes (#313), whatever inputs it declares: it
+        # settles the question that had stopped it, and used to be lost.
+        question = str((request.payload or {}).get("question") or "").strip()
+        documents["human_answer"] = f"Question: {question}\n\nAnswer: {answer}" if question else answer
         item.documents = documents
         return
-    raison = str(decision.get("reason") or "").strip()
+    reason = str(decision.get("reason") or "").strip()
     if decision.get("approved"):
         documents.pop("human_feedback", None)
-    elif raison:
-        documents["human_feedback"] = raison
+    elif reason:
+        documents["human_feedback"] = reason
     else:
         return
     item.documents = documents
@@ -396,7 +396,7 @@ async def notify(payload: dict[str, Any]) -> dict[str, Any]:
     a courtesy; the request it reminds of lives on without it."""
     async with db() as session:
         bundle = await project_bundle(session, payload["project_id"])
-        channel = payload.get("channel") or bundle.config.notify.slack_channel or "#choregos"
+        channel = payload.get("channel") or notification_target(bundle)
         sent = await send_courtesy(
             bundle.adapters.notify, channel, Message.model_validate(payload["message"])
         )
@@ -405,7 +405,7 @@ async def notify(payload: dict[str, Any]) -> dict[str, Any]:
 
 @activity.defn(name="close_out")
 async def close_out(payload: dict[str, Any]) -> dict[str, Any]:
-    """Fin de ticket : état terminal reflété, commentaire final, leçon écrite en mémoire."""
+    """End of a work item: terminal state mirrored, final comment, lesson written to memory."""
     from .children import notify_parent, parent_of
 
     async with db() as session:
@@ -459,7 +459,7 @@ async def close_out(payload: dict[str, Any]) -> dict[str, Any]:
 async def _terminal_outcome(session: Any, item: WorkItem) -> str:
     """How the work item ended, for its decisions (ADR 0121 §6): its terminal state's outcome, or
     `cancelled` when it was stopped outside a terminal state."""
-    state = (await workflow_du_ticket(session, item)).states.get(item.state)
+    state = (await work_item_workflow(session, item)).states.get(item.state)
     if state is not None and state.terminal:
         return str(state.outcome)
     return CANCELLED_OUTCOME
@@ -473,7 +473,7 @@ async def _close_delivered_item(session: Any, bundle: Any, item: WorkItem) -> bo
     Delivered means a terminal state other than the abandon state, reached by a work item that a
     release train deployed (`deployed_release`, set by `finish_release`). The tracker is a courtesy
     here: a failure is logged and never fails the end of the work item."""
-    workflow = await workflow_du_ticket(session, item)
+    workflow = await work_item_workflow(session, item)
     state = workflow.states.get(item.state)
     defaults = workflow.defaults.needs_human if workflow.defaults else None
     abandon = defaults.on_abandon if defaults else None
@@ -505,7 +505,7 @@ async def _close_already_fixed_item(session: Any, bundle: Any, item: WorkItem) -
     `already_fixed_proven`, which the interpreter takes only on that evidence. The comment cites the
     evidence of the work item's last run, the one the guarantee judged. As for a delivery, the
     tracker is a courtesy: a failure is logged and never fails the end of the work item."""
-    workflow = await workflow_du_ticket(session, item)
+    workflow = await work_item_workflow(session, item)
     state = workflow.states.get(item.state)
     exits = [
         t
@@ -568,12 +568,12 @@ async def _release_name(session: Any, release: Release) -> str:
 
 @activity.defn(name="reconcile_tracker")
 async def reconcile_tracker(payload: dict[str, Any]) -> dict[str, Any]:
-    """Rattrapage des webhooks perdus : les tickets `agent-ready` que personne n'a vus (S3-06).
+    """Catch-up for lost webhooks: the `agent-ready` work items nobody saw (S3-06).
 
-    Un webhook peut se perdre — livraison en échec, plateforme injoignable, secret changé.
-    Le tracker reste alors la seule source de vérité : on relit ses candidats et on crée ce
-    qui manque. Le démarrage passe par un identifiant déterministe, donc un ticket déjà
-    traité ne repart jamais une seconde fois.
+    A webhook can get lost: failed delivery, unreachable platform, changed secret. The tracker is
+    then the only source of truth: its candidates are read again and what is missing is created.
+    The start goes through a deterministic identifier, so a work item already handled never starts
+    a second time.
     """
     from choregos_api.temporal import interpreter_id
 
@@ -587,13 +587,13 @@ async def reconcile_tracker(payload: dict[str, Any]) -> dict[str, Any]:
             # An archived project's loop is stopped, a suspended one starts nothing: should the
             # signal have missed, a pass still takes nothing on.
             return {"skipped": bundle.project.status, "created": [], "started": []}
-        if tracker_possede_les_tickets(bundle.adapters.tracker):
+        if tracker_owns_items(bundle.adapters.tracker):
             candidates = await bundle.adapters.tracker.list_candidates(bundle.config)
         else:
-            # Pas de dehors : les candidats sont les tickets de la base qui n'ont pas fini.
-            # Sans cette branche, `list_candidates` rendait `[]` et un ticket créé par la
-            # plateforme — un finding promu, une demande saisie dans le front — n'était
-            # jamais découvert : il restait dans son état initial pour toujours.
+            # No outside: the candidates are the database's work items that have not finished.
+            # Without this branch, `list_candidates` returned `[]` and a work item created by the
+            # platform (a promoted finding, a request typed in the front end) was never discovered:
+            # it stayed in its initial state forever.
             candidates = list(
                 (
                     await session.execute(
@@ -617,7 +617,7 @@ async def reconcile_tracker(payload: dict[str, Any]) -> dict[str, Any]:
             ).scalar_one_or_none()
             if item is None:
                 data = await bundle.adapters.tracker.fetch_item(key)
-                # Né dans le workflow que désignent ses étiquettes ou son type (ADR 0031).
+                # Born in the workflow its labels or its type designate (ADR 0031).
                 item = await nouveau_ticket(
                     session,
                     bundle.project,
@@ -637,7 +637,7 @@ async def reconcile_tracker(payload: dict[str, Any]) -> dict[str, Any]:
                     ),
                 )
                 created.append(key)
-            state = (await workflow_du_ticket(session, item)).states.get(item.state)
+            state = (await work_item_workflow(session, item)).states.get(item.state)
             if item.paused or item.closed_at is not None or (state is not None and state.terminal):
                 continue
             workflow_id = interpreter_id(bundle.slug, key)

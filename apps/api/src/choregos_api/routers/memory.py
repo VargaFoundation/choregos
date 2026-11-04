@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Mémoire : recherche, file des faits proposés, réimport."""
+"""Memory: search, queue of proposed facts, re-import."""
 
 from __future__ import annotations
 
@@ -22,12 +22,12 @@ router = APIRouter(tags=["memory"])
 
 
 async def _adapter(ctx: ProjectContext, session: AsyncSession) -> Any:
-    """La mémoire du projet, selon SON connecteur `memory` — pas Ecphoria d'office.
+    """The project memory, according to ITS `memory` connector — not Ecphoria by default.
 
-    Le type était codé en dur : un projet configuré en `lexical` (le repli sans service
-    de plus) lisait Ecphoria ici et le repli dans l'orchestrateur. L'organisation est
-    passée à la fabrique : sur PostgreSQL, la mémoire lexicale ne voit que ce que la RLS
-    montre à cette organisation.
+    The type used to be hard-coded: a project configured as `lexical` (the fallback with no extra
+    service) read Ecphoria here and the fallback in the orchestrator. The organisation is
+    passed to the factory: on PostgreSQL, the lexical memory only sees what the RLS
+    shows to this organisation.
     """
     return await project_adapter(session, ctx.id, ctx.slug, ctx.org_slug)
 
@@ -152,11 +152,11 @@ async def ab_report(
     principal: Me,
     weeks: Annotated[int, Query(ge=1, le=52)] = 4,
 ) -> MemoryAbReport:
-    """Compare les projets avec et sans mémoire sur le premier passage et le coût par ticket.
+    """Compare projects with and without memory on first pass and cost per ticket.
 
-    Le même calcul que le rapport hebdomadaire envoyé par `MemoryIngestion` : tant qu'un
-    groupe a moins de dix tickets fermés sur la fenêtre, le verdict reste « échantillon
-    insuffisant » plutôt qu'une conclusion prise sur trois tickets.
+    The same computation as the weekly report sent by `MemoryIngestion`: as long as a
+    group has fewer than ten closed tickets over the window, the verdict stays "insufficient
+    sample" rather than a conclusion drawn from three tickets.
     """
     if not principal.can(Permission.PROJECT_READ, org):
         raise forbidden()

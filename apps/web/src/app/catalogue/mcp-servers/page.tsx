@@ -10,12 +10,12 @@ import { CataloguePurpose } from "@/components/catalogue/catalogue-purpose";
 import { CatalogueFacets } from "@/components/catalogue/facets";
 import { EnablementDrawer } from "@/components/catalogue/enablement-drawer";
 import { InstallDrawer } from "@/components/catalogue/install-drawer";
-import { resumeDeLaDecouverte } from "@/components/decouverte";
+import { discoverySummary } from "@/components/discovery";
 import { egressFlag, useEgressGuard } from "@/components/egress/egress-provider";
 import { ProcedurePanel } from "@/components/procedures/procedure-panel";
 import { bodyOfDrafts, EMPTY_DRAFT, problemOfDraft, SecretField, type SecretDraft } from "@/components/secret-field";
-import { Alert, Badge, Button, EtatDeLecture, ErrorNote, Input } from "@/components/ui";
-import { OrgPageHeader } from "@/components/coquille/org-page-header";
+import { Alert, Badge, Button, ReadState, ErrorNote, Input } from "@/components/ui";
+import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
 import { categoriesOf, NO_FILTERS, stars, type CatalogueFilters } from "@/lib/catalogue";
 import { authLabel, filterMcpEntries, hostOf, routesOf, whyNotInstallable } from "@/lib/mcp-catalogue";
@@ -67,7 +67,7 @@ export default function McpCataloguePage() {
           Stars are a snapshot.
         </p>
       )}
-      <EtatDeLecture lecture={catalogue} quoi="the catalogue" />
+      <ReadState lecture={catalogue} quoi="the catalogue" />
       {catalogue.data && (
         <>
           <CatalogueFacets
@@ -261,7 +261,7 @@ function InstallForm({ org, entry, onDone }: { org: string; entry: McpCatalogueE
     // place, its page says why and offers the discovery again.
     let summary = "";
     try {
-      summary = resumeDeLaDecouverte(await api.discoverConnectorOperations(org, created));
+      summary = discoverySummary(await api.discoverConnectorOperations(org, created));
     } catch (cause) {
       summary = cause instanceof Error ? `Discovery failed: ${cause.message}` : "Discovery failed";
     }

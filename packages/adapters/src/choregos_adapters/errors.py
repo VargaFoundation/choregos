@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Erreurs des adaptateurs : toute panne externe est nommée et porte un `retry_after`."""
+"""Adapter errors: every external failure is named and carries a `retry_after`."""
 
 from __future__ import annotations
 
@@ -8,11 +8,11 @@ from choregos_core.hosted import UNSUPPORTED_CLUSTER
 
 
 class AdapterError(ChoregosError):
-    """Base des erreurs d'adaptateur."""
+    """Base of the adapter errors."""
 
 
 class UpstreamError(AdapterError):
-    """Un service externe a refusé ou échoué."""
+    """An external service refused or failed."""
 
     def __init__(
         self,
@@ -29,7 +29,7 @@ class UpstreamError(AdapterError):
 
 
 class ConfigurationError(AdapterError):
-    """Configuration de connecteur incomplète ou incohérente."""
+    """A connector configuration that is incomplete or inconsistent."""
 
 
 class UnsupportedClusterError(ConfigurationError):

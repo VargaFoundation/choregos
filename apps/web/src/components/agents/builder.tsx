@@ -23,7 +23,7 @@ import { Button, Disclosure, ErrorNote, Input, Select, Textarea, tabClasses } fr
 import { diffSpecs } from "@/lib/agent-diff";
 import { ApiError, api } from "@/lib/api";
 import { type CeilingNetwork, flaggedByCeiling, isDefaultNetwork, networkMode, parseHosts } from "@/lib/network";
-import { scopeHint, scopeLabel } from "./registre";
+import { scopeHint, scopeLabel } from "./registry";
 import { refusalSentence, MAX_MESSAGE } from "./history";
 import { ChangeList } from "./spec-changes";
 import { TagEditor } from "./tags";

@@ -3,9 +3,9 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Confirmation } from "@/components/geste-confirme";
+import { Confirmation } from "@/components/confirmed-gesture";
 import { AdditiveRolesNote, PROJECT_ROLES, ROLE_LABELS, ROLES, peopleOf, rank, type Role } from "@/components/members";
-import { Button, Card, Empty, ErrorNote, EtatDeLecture, Input, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
+import { Button, Card, Empty, ErrorNote, ReadState, Input, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
@@ -126,7 +126,7 @@ export function MembersTable({ project }: { project?: string }) {
         {members.error ? (
           <ErrorNote>{String(members.error)}</ErrorNote>
         ) : !members.data ? (
-          <EtatDeLecture lecture={members} quoi="the members" />
+          <ReadState lecture={members} quoi="the members" />
         ) : people.length === 0 ? (
           <Empty>No member</Empty>
         ) : (

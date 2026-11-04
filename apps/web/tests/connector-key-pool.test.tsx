@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import OrgConnectorsPage from "@/app/admin/connectors/page";
-import { Connecteurs } from "@/components/connecteurs";
+import { Connectors } from "@/components/connectors";
 import { inSlotOrder, nextSlot } from "@/components/secret-field";
 import type { ConnectorDto, ConnectorType, OrgConnector } from "@/lib/types";
 
@@ -159,7 +159,7 @@ describe("a project's connector: a pooled field takes another key (S39-30c)", ()
   });
 
   it("sends the new slot's value with the form, never a reference", async () => {
-    wrap(<Connecteurs slug="billing-api" />);
+    wrap(<Connectors slug="billing-api" />);
     fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
     fireEvent.click(screen.getByRole("button", { name: "Add a key to api token" }));
     fireEvent.change(screen.getByLabelText("api token.2 value"), { target: { value: VALUE } });

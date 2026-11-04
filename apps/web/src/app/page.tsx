@@ -8,7 +8,7 @@ import { hasReleaseTrain } from "@/lib/release-train";
 import { useSession } from "@/lib/session";
 import { eur, percent, relative } from "@/lib/format";
 import { buttonClasses, Card, Empty, ErrorNote, Stat, StateBadge } from "@/components/ui";
-import { OrgPageHeader } from "@/components/coquille/org-page-header";
+import { OrgPageHeader } from "@/components/org-page-header";
 import { Activity, FolderKanban, Wallet } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { HUE_CLASSES, hueOf } from "@/lib/workflow-hue";
@@ -18,7 +18,7 @@ export default function ProjectsPage() {
   const { data, isLoading, error } = useQuery({ queryKey: ["projects", org], queryFn: () => api.projects(org) });
   const projects = data?.items ?? [];
   const actifs = projects.reduce((n, p) => n + (p.stats?.active_work_items ?? 0), 0);
-  const cout = projects.reduce((n, p) => n + (p.stats?.cost_month_eur ?? 0), 0);
+  const cost = projects.reduce((n, p) => n + (p.stats?.cost_month_eur ?? 0), 0);
 
   return (
     <div className="space-y-12">
@@ -58,7 +58,7 @@ export default function ProjectsPage() {
             <Stat value={actifs} label="Tickets in flight" tone={actifs > 0 ? "accent" : "ink"} icon={Activity} hue={5} />
           </div>
           <div className="col-span-2 border-t border-line p-6 md:col-span-1 md:border-t-0 md:border-l">
-            <Stat value={eur(cout)} label="Spent this month" icon={Wallet} hue={7} />
+            <Stat value={eur(cost)} label="Spent this month" icon={Wallet} hue={7} />
           </div>
         </div>
       )}

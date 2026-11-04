@@ -3,7 +3,7 @@
 
 import { useState } from "react";
 import { Button, Card, Input, Select } from "@/components/ui";
-import { useBrouillon } from "@/components/workflows/brouillon";
+import { useDraft } from "@/components/workflows/draft";
 import type { WorkflowDocument } from "@/components/workflows/document";
 import { FieldsEditor } from "@/components/workflows/fields-editor";
 import { rowsToSchema, schemaToRows } from "@/components/workflows/fields-schema";
@@ -12,14 +12,14 @@ import type { WorkflowOperation } from "@/lib/types";
 
 /** The workflow's own fields (ADR 0112 §3): what it is for, where a request starts, what it carries. */
 export function WorkflowSettingsPanel() {
-  const draft = useBrouillon();
+  const draft = useDraft();
   const document = draft.document;
   if (!document) return null;
   return <WorkflowSettingsForm key={JSON.stringify([document.metadata, document.initial])} document={document} />;
 }
 
 function WorkflowSettingsForm({ document }: { document: WorkflowDocument }) {
-  const draft = useBrouillon();
+  const draft = useDraft();
   const [description, setDescription] = useState(document.metadata.description ?? "");
   const [initial, setInitial] = useState(document.initial ?? "");
   const [rows, setRows] = useState(schemaToRows(document.metadata.inputs));
@@ -33,7 +33,7 @@ function WorkflowSettingsForm({ document }: { document: WorkflowDocument }) {
     const inputs = rowsToSchema(rows, document.metadata.inputs);
     if (JSON.stringify(inputs) !== JSON.stringify(document.metadata.inputs ?? null) && (inputs || document.metadata.inputs))
       ops.push(operations.workflowField("inputs", inputs));
-    if (ops.length > 0) void draft.appliquer(...ops);
+    if (ops.length > 0) void draft.apply(...ops);
   }
 
   return (
@@ -62,7 +62,7 @@ function WorkflowSettingsForm({ document }: { document: WorkflowDocument }) {
           </Select>
         </label>
         <FieldsEditor label="Fields of a request" rows={rows} onChange={setRows} />
-        <Button size="sm" type="submit" disabled={draft.occupe}>
+        <Button size="sm" type="submit" disabled={draft.busy}>
           Save the workflow&apos;s fields
         </Button>
       </form>

@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { DecisionDAction } from "@/components/actions/decision";
-import { propose } from "@/components/actions/statut";
+import { propose } from "@/components/actions/status";
 import { api } from "@/lib/api";
 import type { Action } from "@/lib/types";
 
@@ -13,7 +13,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
 
 const action = { id: "act-1", origin: "tool", kind: "k", title: "t", status: "pending_approval", approval: { step_up_minutes: 10 } } as Action;
 
-function rendre(a: Action = action) {
+function mount(a: Action = action) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
       <DecisionDAction projet="rh" action={a} />
@@ -21,10 +21,10 @@ function rendre(a: Action = action) {
   );
 }
 
-describe("décider d'une action gouvernée (ADR 0035, S20-02)", () => {
-  it("un rejet dit pourquoi : le bouton reste fermé sans raison", async () => {
+describe("deciding on a governed action (ADR 0035, S20-02)", () => {
+  it("a rejection says why: the button stays closed without a reason", async () => {
     vi.mocked(api.decideAction).mockResolvedValue(action);
-    rendre();
+    mount();
     const rejeter = screen.getByRole("button", { name: "Reject" });
     expect(rejeter).toBeDisabled();
     fireEvent.change(screen.getByLabelText("Reason to reject"), { target: { value: "not hired yet" } });
@@ -35,17 +35,17 @@ describe("décider d'une action gouvernée (ADR 0035, S20-02)", () => {
     );
   });
 
-  it("approuver n'envoie pas de raison, et une action décidée ne se redécide pas", async () => {
+  it("approving sends no reason, and a decided action is not decided again", async () => {
     vi.mocked(api.decideAction).mockResolvedValue(action);
-    const { unmount } = rendre();
+    const { unmount } = mount();
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
     await waitFor(() => expect(api.decideAction).toHaveBeenLastCalledWith("rh", "act-1", { decision: "approve" }));
     unmount();
-    rendre({ ...action, status: "approved" });
+    mount({ ...action, status: "approved" });
     expect(screen.queryByTestId("decision")).toBeNull();
   });
 
-  it("un agent qui propose se nomme comme tel", () => {
+  it("an agent that proposes is named as such", () => {
     expect(propose({ kind: "agent", id: "agent:coordinateur" })).toBe("the agent coordinateur");
     expect(propose({ kind: "user", id: "lea@acme.dev" })).toBe("lea@acme.dev");
   });

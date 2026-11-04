@@ -9,7 +9,7 @@ import { Alert, Badge, Button, Drawer, Field, Input, Select, type Tone } from "@
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import type { Agent } from "@/lib/types";
-import { forkSlug, scopeHint, scopeLabel, SCOPES, type AgentScope, type MakeScope } from "./registre";
+import { forkSlug, scopeHint, scopeLabel, SCOPES, type AgentScope, type MakeScope } from "./registry";
 
 /**
  * Who owns an agent and who may change it (S39-09, ADR 0061). The console never guesses from roles:

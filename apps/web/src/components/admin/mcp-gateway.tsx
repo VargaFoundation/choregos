@@ -4,7 +4,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { egressFlag, useEgressGuard } from "@/components/egress/egress-provider";
-import { GesteConfirme } from "@/components/geste-confirme";
+import { ConfirmedGesture } from "@/components/confirmed-gesture";
 import { Button, Card, ErrorNote, Field, Input, Select } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import {
@@ -276,7 +276,7 @@ function GatewayForm({ org, stored }: { org: string; stored: McpGateway | null }
           Save MCP gateway
         </Button>
         {stored && (
-          <GesteConfirme
+          <ConfirmedGesture
             tonDuBouton="danger"
             question="Remove the MCP gateway and its sealed secret? Connectors that go through it must be changed first, and the secret does not come back."
             confirmer="Remove the gateway"
@@ -293,7 +293,7 @@ function GatewayForm({ org, stored }: { org: string; stored: McpGateway | null }
             }}
           >
             Remove
-          </GesteConfirme>
+          </ConfirmedGesture>
         )}
         {saved && <span className="text-sm text-ok">MCP gateway saved</span>}
       </div>
@@ -367,7 +367,7 @@ function AssertionBlock({ org, assertion }: { org: string; assertion: McpGateway
           ))}
         </ul>
       )}
-      <GesteConfirme
+      <ConfirmedGesture
         question="Create a new assertion key? It signs from now on; the previous keys stay published until they are retired."
         confirmer="Rotate the key"
         ton="primary"
@@ -378,7 +378,7 @@ function AssertionBlock({ org, assertion }: { org: string; assertion: McpGateway
         }}
       >
         Rotate key
-      </GesteConfirme>
+      </ConfirmedGesture>
     </div>
   );
 }

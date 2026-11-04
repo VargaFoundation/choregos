@@ -39,7 +39,7 @@ until then, upgrading is the fix.
 | The nightly dependency scan **blocks**, and its failure opens an issue | `nightly.yml` (`exit-code: 1`, job `alerte`) |
 | Secrets never enter git: gitleaks is a gate on every pull request | `ci.yml` job `secrets` |
 | Organisations are isolated by fail-closed PostgreSQL RLS, audit included | migrations `b2d4f6a8c0e1`, `c3e5a7f9b1d4`, `db/session.py` |
-| Secrets rotate on the schedule in `docs/runbooks/rotation-secrets.md` | that runbook |
+| Secrets rotate on the schedule in `docs/runbooks/secret-rotation.md` | that runbook |
 
 ## What we do **not** guarantee, stated rather than discovered
 

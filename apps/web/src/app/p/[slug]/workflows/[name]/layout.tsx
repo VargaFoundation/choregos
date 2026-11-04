@@ -19,7 +19,7 @@ const VUES = [
   { suffix: "/history", label: "History" },
 ];
 
-/** Un workflow du projet, par son nom : son processus, sa carte, son YAML, son historique. */
+/** A project's workflow, by its name: its process, its map, its YAML, its history. */
 export default function WorkflowLayout({
   children,
   params,
@@ -61,8 +61,8 @@ export default function WorkflowLayout({
           );
         })}
       </Tabs>
-      {/* Le brouillon est commun à la carte et à la vue processus : un geste sur l'une se voit sur
-          l'autre, et rien n'est publié avant « publish ». */}
+      {/* The draft is shared by the map and the process view: a gesture on one shows on
+              the other, and nothing is published before "publish". */}
       <BrouillonProvider slug={slug} name={name}>
         <BarreDuBrouillon />
         {children}

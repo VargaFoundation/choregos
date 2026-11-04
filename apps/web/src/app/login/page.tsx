@@ -7,10 +7,10 @@ import { Suspense, useState } from "react";
 import { api, IS_MOCK } from "@/lib/api";
 
 /**
- * La page de connexion. Le front n'en avait pas : un visiteur non connecté voyait une
- * erreur brute sur chaque page. Ici : un bouton vers l'IdP (l'API fait la redirection,
- * PKCE et `state` compris), et, quand le déploiement l'autorise, la connexion de
- * développement par e-mail — jamais en production, l'API la refuse d'elle-même.
+ * The sign-in page. The front end had none: a visitor who was not signed in saw a raw
+ * error on every page. Here: a button to the IdP (the API does the redirect,
+ * PKCE and `state` included), and, when the deployment allows it, the development
+ * sign-in by e-mail, never in production, the API refuses it by itself.
  */
 export default function LoginPage() {
   return (

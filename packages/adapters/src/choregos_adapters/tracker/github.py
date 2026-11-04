@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """TrackerAdapter GitHub : Issues (REST) + Projects v2 (GraphQL).
 
-Le board est la vue humaine : Choregos y écrit l'état, le coût, la taille, le risque
-et le lien vers le run. Le provisioning crée les champs qui manquent et renomme ceux qu'un Choregos
-d'avant S22-21 avait créés en français (`ensure_project_fields`) ; une écriture vers un champ que le
-board n'a pas ne crée rien.
+The board is the human view: Choregos writes the state, the cost, the size, the risk and the link
+to the run there. Provisioning creates the missing fields and renames those that a Choregos from
+before S22-21 had created in French (`ensure_project_fields`); a write to a field the board does
+not have creates nothing.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from choregos_core.domain import Comment, NewItem, TrackerStateMapping, WorkItem
 
 from ..errors import ConfigurationError
 from ..github.client import GitHubClient
-from .champs import COUT, RISQUE, RUN, TAILLE, nom_actuel, nom_present
+from .fields import COST, RISK, RUN, SIZE, current_name, present_name
 from .github_events import parse_github_event
 from .start_rules import label_searches
 
@@ -111,19 +111,19 @@ mutation(
 }
 """
 
-#: Le type de chaque champ que Choregos crée ; un champ inconnu est un texte. *Status* est natif à
-#: tout board Projects v2 : on ne le crée jamais.
-TYPES_DES_CHAMPS: dict[str, tuple[str, tuple[str, ...]]] = {
-    COUT: ("NUMBER", ()),
-    TAILLE: ("SINGLE_SELECT", ("S", "M", "L", "XL")),
-    RISQUE: ("SINGLE_SELECT", ("low", "medium", "high")),
+#: The type of each field Choregos creates; an unknown field is a text. *Status* is native to
+#: every Projects v2 board: it is never created.
+FIELD_TYPES: dict[str, tuple[str, tuple[str, ...]]] = {
+    COST: ("NUMBER", ()),
+    SIZE: ("SINGLE_SELECT", ("S", "M", "L", "XL")),
+    RISK: ("SINGLE_SELECT", ("low", "medium", "high")),
     RUN: ("TEXT", ()),
 }
-CHAMPS_NATIFS = frozenset({"Status", "Title", "Assignees", "Labels"})
+NATIVE_FIELDS = frozenset({"Status", "Title", "Assignees", "Labels"})
 
 
 class GitHubTracker:
-    """Issues + Projects v2. `repo` est `owner/name` ; `project_number` est le board."""
+    """Issues + Projects v2. `repo` is `owner/name`; `project_number` is the board."""
 
     owns_items = True
 
@@ -138,7 +138,7 @@ class GitHubTracker:
         label_prefix: str = "choregos:",
     ) -> None:
         if "/" not in repo:
-            raise ConfigurationError(f"`repo` doit valoir owner/name (reçu : {repo})")
+            raise ConfigurationError(f"`repo` must be owner/name (got: {repo})")
         self.client = client
         self.repo = repo
         self.owner, self.name = repo.split("/", 1)
@@ -193,7 +193,7 @@ class GitHubTracker:
             found.update({f"{self.repo}#{i['number']}": None for i in issues if "pull_request" not in i})
         return list(found)
 
-    # ───────────────────────── écriture ─────────────────────────
+    # ───────────────────────── writing ─────────────────────────
 
     async def create_item(self, data: NewItem) -> str:
         issue = await self.client.request(
@@ -210,7 +210,7 @@ class GitHubTracker:
         return f"{data.repo or self.repo}#{issue['number']}"
 
     async def set_state(self, key: str, state_mapping: TrackerStateMapping) -> None:
-        """Label scopé côté issue, colonne *Status* côté board."""
+        """A scoped label on the issue side, the *Status* column on the board side."""
         number = self._number(key)
         if state_mapping.label:
             issue = await self.client.request("GET", f"/repos/{self.repo}/issues/{number}", repo=self.repo)
@@ -242,7 +242,7 @@ class GitHubTracker:
     async def upsert_status_comment(
         self, key: str, markdown: str, marker: str = STATUS_COMMENT_MARKER
     ) -> None:
-        """Un unique commentaire de suivi, réécrit à chaque étape (§4.3)."""
+        """A single status comment, rewritten at every stage (§4.3)."""
         number = self._number(key)
         body = markdown if marker in markdown else f"{marker}\n{markdown}"
         comments = await self.client.paginate(f"/repos/{self.repo}/issues/{number}/comments", repo=self.repo)
@@ -275,10 +275,10 @@ class GitHubTracker:
         await self.comment(a, f"<!-- choregos:link:{relation} -->\n{wording}")
 
     async def set_fields(self, key: str, fields: dict[str, Any]) -> None:
-        """Champs structurés du board : *Cost (€)*, *Size*, *Risk*, *Run*.
+        """The board's structured fields: *Cost (€)*, *Size*, *Risk*, *Run*.
 
-        Un board provisionné avant S22-21 porte encore *Coût (€)*, *Taille*, *Risque* : la valeur va
-        dans le champ qui existe (voir `_set_board_field`)."""
+        A board provisioned before S22-21 still carries the former French names of these fields:
+        the value goes into the field that exists (see `_set_board_field`)."""
         if not self.project_number:
             return
         number = self._number(key)
@@ -331,48 +331,48 @@ class GitHubTracker:
         return str(data["addProjectV2ItemById"]["item"]["id"])
 
     async def ensure_project_fields(self, fields: list[str]) -> dict[str, list[str]]:
-        """Provisioning : chaque champ voulu existe sur le board, sous son nom d'aujourd'hui.
+        """Provisioning: every wanted field exists on the board, under today's name.
 
-        Un champ présent est gardé ; un champ présent sous son ancien nom français est RENOMMÉ (ses
-        valeurs restent sur les cartes) plutôt que doublé ; un champ absent est créé. Rejouable : un
-        second passage ne trouve plus rien à faire.
+        A field that is present is kept; a field present under its former French name is RENAMED
+        (its values stay on the cards) rather than doubled; a missing field is created. Replayable:
+        a second pass finds nothing left to do.
         """
-        bilan: dict[str, list[str]] = {"kept": [], "renamed": [], "created": []}
+        report: dict[str, list[str]] = {"kept": [], "renamed": [], "created": []}
         if not self.project_number:
-            return bilan
+            return report
         self._project_cache = None
         project = await self._project()
-        par_nom = {str(f.get("name")): f for f in project["fields"]["nodes"] if f.get("name")}
-        for voulu in dict.fromkeys(nom_actuel(str(nom)) for nom in fields):
-            present = nom_present(voulu, par_nom)
-            if present == voulu:
-                bilan["kept"].append(voulu)
+        by_name = {str(f.get("name")): f for f in project["fields"]["nodes"] if f.get("name")}
+        for wanted in dict.fromkeys(current_name(str(name)) for name in fields):
+            present = present_name(wanted, by_name)
+            if present == wanted:
+                report["kept"].append(wanted)
             elif present is not None:
                 await self.client.graphql(
-                    RENAME_FIELD_MUTATION, {"fieldId": par_nom[present]["id"], "name": voulu}, repo=self.repo
+                    RENAME_FIELD_MUTATION, {"fieldId": by_name[present]["id"], "name": wanted}, repo=self.repo
                 )
-                bilan["renamed"].append(f"{present} → {voulu}")
-            elif voulu not in CHAMPS_NATIFS:
-                type_, options = TYPES_DES_CHAMPS.get(voulu, ("TEXT", ()))
-                variables: dict[str, Any] = {"projectId": project["id"], "name": voulu, "dataType": type_}
+                report["renamed"].append(f"{present} → {wanted}")
+            elif wanted not in NATIVE_FIELDS:
+                type_, options = FIELD_TYPES.get(wanted, ("TEXT", ()))
+                variables: dict[str, Any] = {"projectId": project["id"], "name": wanted, "dataType": type_}
                 if options:
                     variables["options"] = [
                         {"name": option, "color": "GRAY", "description": ""} for option in options
                     ]
                 await self.client.graphql(CREATE_FIELD_MUTATION, variables, repo=self.repo)
-                bilan["created"].append(voulu)
+                report["created"].append(wanted)
         self._project_cache = None
-        return bilan
+        return report
 
     async def _set_board_field(self, issue_number: int, field_name: str, value: Any) -> None:
         project = await self._project()
-        par_nom = {str(f.get("name")): f for f in project["fields"]["nodes"] if f.get("name")}
-        # Le nom d'aujourd'hui, sinon l'ancien français : un board provisionné avant S22-21 que le
-        # provisioning n'a pas encore renommé reçoit encore ses valeurs (à retirer une version après).
-        nom = nom_present(field_name, par_nom)
-        field = par_nom.get(nom) if nom is not None else None
+        by_name = {str(f.get("name")): f for f in project["fields"]["nodes"] if f.get("name")}
+        # Today's name, otherwise the former French one: a board provisioned before S22-21 that
+        # provisioning has not renamed yet still receives its values (to remove one release later).
+        name = present_name(field_name, by_name)
+        field = by_name.get(name) if name is not None else None
         if field is None:
-            return  # le champ n'existe pas sur ce board : on n'invente rien
+            return  # the field does not exist on this board: nothing is invented
         item_id = await self._ensure_item(issue_number)
         payload: dict[str, Any]
         if field.get("dataType") == "SINGLE_SELECT" or "options" in field:
@@ -445,7 +445,7 @@ class GitHubTracker:
         return hmac.compare_digest(expected, signature)
 
     async def ensure_labels(self, labels: dict[str, str]) -> None:
-        """Provisioning : crée les labels manquants (nom → couleur)."""
+        """Provisioning: creates the missing labels (name -> colour)."""
         existing = {
             label["name"]
             for label in await self.client.paginate(f"/repos/{self.repo}/labels", repo=self.repo)

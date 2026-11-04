@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Les connecteurs de l'organisation, et la politique de chaque opération (ADR 0034).
+"""The organisation's connectors, and the policy of each operation (ADR 0034).
 
-Un annuaire, un gestionnaire de parc, un serveur MCP : l'administrateur de l'organisation les
-déclare une fois, nommés, et décide pour chaque opération si elle est permise, soumise à
-validation (une action gouvernée, ADR 0035) ou interdite — et pour quels groupes de projets.
-Un projet ne fait que RESSERRER : une opération `approval` ne devient jamais `allowed` en dessous
-de l'organisation, et seul l'administrateur change les groupes (le second verrou de l'ADR 0014).
+A directory, a fleet manager, an MCP server: the organisation's administrator declares them
+once, named, and decides for each operation whether it is allowed, subject to approval
+(a governed action, ADR 0035) or forbidden, and for which groups of projects.
+A project can only TIGHTEN: an `approval` operation never becomes `allowed` below the
+organisation's level, and only the administrator changes the groups (the second lock of ADR 0014).
 """
 
 from __future__ import annotations
@@ -69,6 +69,10 @@ from ..services.connector_secrets import (
     require_store,
 )
 from ..services.egress import egress_gate_for_connector, egress_scope
+from ..services.mcp_gateway import check_declaration, connector_client, route_of
+from ..services.mcp_gateway_identity import CallIdentity, GatewayRefusal, identity_of_person
+from ..services.org_connector_access import require_connector_admin
+from ..services.organisations import organisation_by_slug
 from ..services.platform_network import (
     PlatformNetworkRefused,
     check_connector_declaration,
@@ -78,33 +82,17 @@ from ..services.platform_network import (
 
 router = APIRouter(tags=["connectors"])
 
-Nom = Annotated[str, Path(pattern=r"^[a-z][a-z0-9-]{1,62}$")]
+Name = Annotated[str, Path(pattern=r"^[a-z][a-z0-9-]{1,62}$")]
 
 
-async def _organisation(session: AsyncSession, org: str) -> Organization:
-    trouvee = (
-        await session.execute(select(Organization).where(Organization.slug == org))
-    ).scalar_one_or_none()
-    if trouvee is None:
-        raise not_found("Organisation", org)
-    return trouvee
-
-
-def _administrer(principal: Me, org: str) -> None:
-    """Déclarer un connecteur, ouvrir une opération, choisir ses groupes : décider de ce que
-    l'organisation ouvre à ses projets. L'administrateur de l'organisation seul."""
-    if not principal.can(Permission.TOOLS_GRANT, org):
-        raise forbidden(f"the connectors of {org} and their operations are decided by its administrator")
-
-
-async def _instance(session: AsyncSession, organisation: Organization, nom: str) -> OrgConnector:
+async def _instance(session: AsyncSession, organisation: Organization, name: str) -> OrgConnector:
     instance = (
         await session.execute(
-            select(OrgConnector).where(OrgConnector.org_id == organisation.id, OrgConnector.name == nom)
+            select(OrgConnector).where(OrgConnector.org_id == organisation.id, OrgConnector.name == name)
         )
     ).scalar_one_or_none()
     if instance is None:
-        raise not_found("Connector", nom)
+        raise not_found("Connector", name)
     return instance
 
 
@@ -156,7 +144,7 @@ async def _audit_secrets(
 async def list_org_connectors(org: str, session: Db, principal: Me) -> list[OrgConnectorDto]:
     if not principal.can(Permission.PROJECT_READ, org):
         raise forbidden(f"the connectors of {org} are readable by its members only")
-    organisation = await _organisation(session, org)
+    organisation = await organisation_by_slug(session, org)
     instances = (
         await session.execute(
             select(OrgConnector).where(OrgConnector.org_id == organisation.id).order_by(OrgConnector.name)
@@ -174,18 +162,18 @@ async def list_org_connectors(org: str, session: Db, principal: Me) -> list[OrgC
 async def create_org_connector(
     org: str, body: OrgConnectorCreate, session: Db, principal: Me
 ) -> OrgConnectorDto:
-    """Une instance naît avec les opérations que son type déclare, à leur politique par défaut :
-    une lecture permise, une écriture soumise à validation."""
+    """An instance is born with the operations its type declares, at their default policy:
+    a read is allowed, a write is subject to approval."""
     from choregos_adapters import connector_types
 
-    _administrer(principal, org)
-    organisation = await _organisation(session, org)
+    require_connector_admin(principal, org)
+    organisation = await organisation_by_slug(session, org)
     kind = body.kind
     if kind is None:
-        sortes = sorted({k for k, t, _ in connector_types() if t == body.type})
-        if len(sortes) != 1:
-            raise unprocessable(f"`{body.type}`: specify the capability (`kind`) among {sortes or 'none'}")
-        kind = sortes[0]
+        kinds = sorted({k for k, t, _ in connector_types() if t == body.type})
+        if len(kinds) != 1:
+            raise unprocessable(f"`{body.type}`: specify the capability (`kind`) among {kinds or 'none'}")
+        kind = kinds[0]
     if kind == "gateway":
         await _check_org_gateway(session, organisation, body.type)
     return await declare_org_connector(
@@ -237,6 +225,7 @@ async def declare_org_connector(
     config, secret_refs = body.config, body.secret_refs
     spec = spec_to_declare(kind, type_name)
     check_type_config(kind, type_name, config)
+    await check_declaration(session, organisation, kind, type_name)  # ADR 0105: mode `required`, no gateway
     prefix = f"connector/{name}"
     verifier_les_secrets(
         spec,
@@ -260,12 +249,12 @@ async def declare_org_connector(
         body.allow_egress,
         origin=f"mcp-catalogue:{catalogue_entry}" if catalogue_entry else None,
     )
-    deja = (
+    already = (
         await session.execute(
             select(OrgConnector.id).where(OrgConnector.org_id == organisation.id, OrgConnector.name == name)
         )
     ).first()
-    if deja is not None:
+    if already is not None:
         raise conflict(f"a connector `{name}` already exists in {organisation.slug}")
     instance = OrgConnector(
         org_id=organisation.id,
@@ -319,23 +308,25 @@ async def declare_org_connector(
 
 
 @router.get("/orgs/{org}/connectors/{name}", response_model=OrgConnectorDto, operation_id="getOrgConnector")
-async def get_org_connector(org: str, name: Nom, session: Db, principal: Me) -> OrgConnectorDto:
+async def get_org_connector(org: str, name: Name, session: Db, principal: Me) -> OrgConnectorDto:
     if not principal.can(Permission.PROJECT_READ, org):
         raise forbidden(f"the connectors of {org} are readable by its members only")
-    return await _dto(session, await _instance(session, await _organisation(session, org), name), principal)
+    return await _dto(
+        session, await _instance(session, await organisation_by_slug(session, org), name), principal
+    )
 
 
 @router.patch(
     "/orgs/{org}/connectors/{name}", response_model=OrgConnectorDto, operation_id="updateOrgConnector"
 )
 async def update_org_connector(
-    org: str, name: Nom, body: OrgConnectorUpdate, session: Db, principal: Me
+    org: str, name: Name, body: OrgConnectorUpdate, session: Db, principal: Me
 ) -> OrgConnectorDto:
     """Edit what an administrator declared: the configuration, and the secrets. `secret_refs` and
     `secret_values` merge into the connector's; a field given as a reference after being a stored
     value drops the stored value. The operations are not touched (their own route)."""
-    _administrer(principal, org)
-    organisation = await _organisation(session, org)
+    require_connector_admin(principal, org)
+    organisation = await organisation_by_slug(session, org)
     instance = await _instance(session, organisation, name)
     server = plugin_servers.spec_of_connector(instance)
     spec = server or spec_du_type(instance.kind, instance.type)
@@ -389,7 +380,7 @@ async def update_org_connector(
     instance.status = "unknown"
     if body.availability is not None and body.availability != instance.availability:
         decision = decide(principal, org, CatalogueAction.SET_AVAILABILITY)
-        if not decision.allowed:  # pragma: no cover - `_administrer` already refused
+        if not decision.allowed:  # pragma: no cover - `require_connector_admin` already refused
             raise forbidden(decision.reason or "refused")
         previous, instance.availability = instance.availability, body.availability
         await record(
@@ -437,15 +428,15 @@ async def update_org_connector(
 )
 async def set_org_connector_secret(
     org: str,
-    name: Nom,
+    name: Name,
     field: Annotated[str, Path(pattern=SECRET_FIELD)],
     body: SecretValue,
     session: Db,
     principal: Me,
 ) -> OrgConnectorDto:
     """Type a secret once (or replace it): sealed, never returned. The response says it is set."""
-    _administrer(principal, org)
-    organisation = await _organisation(session, org)
+    require_connector_admin(principal, org)
+    organisation = await organisation_by_slug(session, org)
     instance = await _instance(session, organisation, name)
     verifier_les_secrets(
         plugin_servers.spec_of_connector(instance) or spec_du_type(instance.kind, instance.type),
@@ -476,14 +467,14 @@ async def set_org_connector_secret(
 )
 async def clear_org_connector_secret(
     org: str,
-    name: Nom,
+    name: Name,
     field: Annotated[str, Path(pattern=SECRET_FIELD)],
     session: Db,
     principal: Me,
 ) -> OrgConnectorDto:
     """Remove a secret field's value or reference: the connector no longer holds it."""
-    _administrer(principal, org)
-    organisation = await _organisation(session, org)
+    require_connector_admin(principal, org)
+    organisation = await organisation_by_slug(session, org)
     instance = await _instance(session, organisation, name)
     before = dict(instance.secret_refs or {})
     if field not in before:
@@ -501,9 +492,9 @@ async def clear_org_connector_secret(
 @router.delete(
     "/orgs/{org}/connectors/{name}", status_code=status.HTTP_204_NO_CONTENT, operation_id="deleteOrgConnector"
 )
-async def delete_org_connector(org: str, name: Nom, session: Db, principal: Me) -> Response:
-    _administrer(principal, org)
-    organisation = await _organisation(session, org)
+async def delete_org_connector(org: str, name: Name, session: Db, principal: Me) -> Response:
+    require_connector_admin(principal, org)
+    organisation = await organisation_by_slug(session, org)
     instance = await _instance(session, organisation, name)
     if instance.plugin_server is not None:
         raise conflict(
@@ -531,20 +522,20 @@ async def delete_org_connector(org: str, name: Nom, session: Db, principal: Me) 
     operation_id="updateConnectorOperation",
 )
 async def update_operation(
-    org: str, name: Nom, operation: str, body: OperationPatch, session: Db, principal: Me
+    org: str, name: Name, operation: str, body: OperationPatch, session: Db, principal: Me
 ) -> OperationDto:
-    """La politique, les groupes, le prix d'une opération : la décision de l'organisation."""
-    _administrer(principal, org)
-    organisation = await _organisation(session, org)
+    """An operation's policy, groups and price: the organisation's decision."""
+    require_connector_admin(principal, org)
+    organisation = await organisation_by_slug(session, org)
     instance = await _instance(session, organisation, name)
-    ligne = (
+    op_row = (
         await session.execute(
             select(ConnectorOperation).where(
                 ConnectorOperation.connector_id == instance.id, ConnectorOperation.name == operation
             )
         )
     ).scalar_one_or_none()
-    if ligne is None:
+    if op_row is None:
         raise not_found("Operation", operation)
     if body.policy == "allowed":
         declared = declared_operation(instance, operation)
@@ -554,15 +545,15 @@ async def update_operation(
                 "`approval` or `forbidden` only"
             )
     if body.policy is not None:
-        ligne.policy = body.policy
+        op_row.policy = body.policy
     if body.groups is not None:
-        ligne.groups = sorted(set(body.groups))
+        op_row.groups = sorted(set(body.groups))
     if "price_usd" in body.model_fields_set:
-        ligne.price_usd = body.price_usd
+        op_row.price_usd = body.price_usd
     if "approver_group" in body.model_fields_set:
-        if body.approver_group and ligne.access != "write":
+        if body.approver_group and op_row.access != "write":
             raise unprocessable(f"{name}/{operation} is a read: nobody approves it")
-        ligne.approver_group = body.approver_group
+        op_row.approver_group = body.approver_group
     if "result_max_bytes" in body.model_fields_set:
         from ..config import get_settings
 
@@ -572,19 +563,25 @@ async def update_operation(
                 f"{name}/{operation}: a result cap of {body.result_max_bytes} bytes is above the"
                 f" platform's ceiling ({ceiling} bytes, CHOREGOS_BROKER_RESULT_CEILING_BYTES)"
             )
-        ligne.result_max_bytes = body.result_max_bytes
+        op_row.result_max_bytes = body.result_max_bytes
     await record(
         session,
         principal,
         "org.connector.operation",
         org_id=organisation.id,
         target_type="connector_operation",
-        target_id=ligne.id,
+        target_id=op_row.id,
         connector=name,
         operation=operation,
         **body.model_dump(exclude_unset=True),
     )
-    return OperationDto.model_validate(ligne)
+    return OperationDto.model_validate(op_row)
+
+
+async def _discovery_identity(
+    organisation: Organization, principal: Me, instance: OrgConnector
+) -> CallIdentity:
+    return identity_of_person(organisation, principal.email, instance, "discovery")
 
 
 @router.post(
@@ -592,41 +589,51 @@ async def update_operation(
     response_model=ConnectorDiscovery,
     operation_id="discoverConnectorOperations",
 )
-async def discover_operations(org: str, name: Nom, session: Db, principal: Me) -> ConnectorDiscovery:
-    """Demande au serveur ses outils et en tire le diff (ADR 0034).
+async def discover_operations(org: str, name: Name, session: Db, principal: Me) -> ConnectorDiscovery:
+    """Ask the server for its tools and derive the diff from them (ADR 0034).
 
-    Un outil NOUVEAU naît fermé (`forbidden`) : un serveur n'ajoute pas une capacité dans le dos de
-    l'administrateur. Un outil dont le schéma d'entrée DÉRIVE est refermé : un `commander_poste`
-    qui accepte soudain une quantité n'est plus l'opération qu'on avait ouverte. Un outil que le
-    serveur ne propose plus disparaît, avec ce que les projets en resserraient."""
+    A NEW tool is born closed (`forbidden`): a server does not add a capability behind the
+    administrator's back. A tool whose input schema DRIFTS is closed again: an `order_workstation`
+    that suddenly accepts a quantity is no longer the operation that was opened. A tool the
+    server no longer offers disappears, along with what the projects tightened on it."""
     import httpx
-    from choregos_adapters.mcp import ErreurMcp, empreinte_du_schema
+    from choregos_adapters.mcp import McpError, schema_digest
     from choregos_core import utcnow
     from choregos_core.redaction import redact
-    from choregos_core.secrets import SecretIntrouvable
+    from choregos_core.secrets import SecretNotFound
 
-    _administrer(principal, org)
-    organisation = await _organisation(session, org)
+    require_connector_admin(principal, org)
+    organisation = await organisation_by_slug(session, org)
     instance = await _instance(session, organisation, name)
+    # ADR 0105: the route is judged before anything leaves; a refusal is a 409 and never marks the
+    # connector `error` (the connector is fine, its route is not).
     try:
-        await enforce_connector_call(session, instance, polite=False)
+        route = await route_of(session, instance)
+    except GatewayRefusal as refused:
+        raise conflict(str(refused), extra={"code": refused.code}) from refused
+    try:
+        await enforce_connector_call(session, instance, polite=False, host=route.host)
     except PlatformNetworkRefused as refused:
         raise refusal_error(refused) from refused
     try:
-        client: Any = await plugin_servers.connector_client(session, instance)
-        lister = getattr(client, "list_tools", None)
-        if lister is None:
+        client: Any = await connector_client(
+            session, instance, lambda: _discovery_identity(organisation, principal, instance)
+        )
+        list_tools_fn = getattr(client, "list_tools", None)
+        if list_tools_fn is None:
             raise unprocessable(f"`{instance.type}` does not discover its operations: its type declares them")
         async with egress_scope(session, organisation, "api", f"org-connector:{name}"):
-            outils = await lister()
-    except (ErreurMcp, SecretIntrouvable, httpx.HTTPError) as panne:
+            tools = await list_tools_fn()
+    except GatewayRefusal as refused:  # a lost assertion key: refused, the connector is not `error`
+        raise conflict(str(refused), extra={"code": refused.code}) from refused
+    except (McpError, SecretNotFound, httpx.HTTPError) as failure:
         instance.status, instance.last_check_at = "error", utcnow()
-        instance.last_error = redact(str(panne))[:1000]
-        # La réponse est une erreur, et la requête serait annulée avec elle : l'état du connecteur,
-        # lui, doit rester — l'écran dit pourquoi il est en panne. Rien ne suit cette validation.
+        instance.last_error = redact(str(failure))[:1000]
+        # The response is an error, and the request would be rolled back with it: the connector's
+        # state, however, must stay: the screen says why it is down. Nothing follows this commit.
         await session.commit()
-        raise upstream(instance.name, redact(str(panne))[:500]) from panne
-    existantes = {
+        raise upstream(instance.name, redact(str(failure))[:500]) from failure
+    existing_ops = {
         op.name: op
         for op in (
             await session.execute(
@@ -637,56 +644,60 @@ async def discover_operations(org: str, name: Nom, session: Db, principal: Me) -
     diff = ConnectorDiscovery()
     declared = (instance.plugin_server or {}).get("operations")
     undeclared_tools: list[str] = []
-    for outil in outils:
-        empreinte = empreinte_du_schema(outil.input_schema)
-        acces = "read" if outil.read_only else "write"
+    for tool in tools:
+        input_digest = schema_digest(tool.input_schema)
+        access_kind = "read" if tool.read_only else "write"
         if declared is not None:
             # A plugin's server (ADR 0096): its `operations` are the floor. A tool it does not declare
             # is never added; a declared one keeps its declared access, whatever the server hints.
-            if outil.name not in declared:
-                undeclared_tools.append(outil.name)
+            if tool.name not in declared:
+                undeclared_tools.append(tool.name)
                 continue
-            acces = str(declared[outil.name]["access"])
-        operation = existantes.pop(outil.name, None)
+            access_kind = str(declared[tool.name]["access"])
+        operation = existing_ops.pop(tool.name, None)
         if operation is None:
             session.add(
                 ConnectorOperation(
                     org_id=organisation.id,
                     connector_id=instance.id,
-                    name=outil.name,
-                    access=acces,
+                    name=tool.name,
+                    access=access_kind,
                     policy="forbidden",
                     groups=[],
-                    schema_digest=empreinte,
-                    input_schema=outil.input_schema,
-                    output_schema=getattr(outil, "output_schema", None),
-                    description=outil.description or None,
+                    schema_digest=input_digest,
+                    input_schema=tool.input_schema,
+                    output_schema=getattr(tool, "output_schema", None),
+                    description=tool.description or None,
                 )
             )
-            diff.added.append(outil.name)
+            diff.added.append(tool.name)
             continue
         # The declared output schema follows the server on every discovery: it bounds what the agent
         # reads (#755), it does not change what the tool does, so it does not close the operation.
-        operation.output_schema = getattr(outil, "output_schema", None)
+        operation.output_schema = getattr(tool, "output_schema", None)
         if declared is not None and operation.schema_digest is None:
             # A declared operation the server lists for the first time: its schema is learnt, not a
             # drift — the plugin's declaration opened it at its floor (ADR 0096).
-            operation.schema_digest, operation.input_schema = empreinte, outil.input_schema
-            operation.description = operation.description or outil.description or None
+            operation.schema_digest, operation.input_schema = input_digest, tool.input_schema
+            operation.description = operation.description or tool.description or None
             diff.unchanged += 1
             continue
-        if operation.schema_digest != empreinte or operation.access != acces:
-            operation.policy, operation.schema_digest, operation.access = "forbidden", empreinte, acces
-            operation.input_schema = outil.input_schema
-            operation.description = outil.description or operation.description
-            diff.changed.append(outil.name)
+        if operation.schema_digest != input_digest or operation.access != access_kind:
+            operation.policy, operation.schema_digest, operation.access = (
+                "forbidden",
+                input_digest,
+                access_kind,
+            )
+            operation.input_schema = tool.input_schema
+            operation.description = tool.description or operation.description
+            diff.changed.append(tool.name)
         else:
             diff.unchanged += 1
-    for nom, operation in existantes.items():
-        if declared is not None and nom in declared:
+    for tool_name, operation in existing_ops.items():
+        if declared is not None and tool_name in declared:
             continue  # declared by the plugin: kept even while the server does not list it
         await session.delete(operation)
-        diff.removed.append(nom)
+        diff.removed.append(tool_name)
     instance.status, instance.last_check_at, instance.last_error = "ok", utcnow(), None
     await session.flush()
     await record(
@@ -702,14 +713,14 @@ async def discover_operations(org: str, name: Nom, session: Db, principal: Me) -
     return diff
 
 
-# ───────────────────────────── ce qu'un projet en voit, et resserre ─────────────────────────────
+# ───────────────────────────── what a project sees of it, and tightens ─────────────────────────────
 
 
-async def _operations_du_projet(ctx: ProjectCtx, session: AsyncSession) -> list[ProjectOperationDto]:
-    """Les opérations ouvertes à ce projet : celles dont les groupes croisent les siens (aucun
-    groupe : tous les projets), avec la politique de l'organisation, la sienne, et l'effective."""
-    groupes = {str(g) for g in ((ctx.project.config or {}).get("groups") or [])}
-    lignes = (
+async def _project_operations(ctx: ProjectCtx, session: AsyncSession) -> list[ProjectOperationDto]:
+    """The operations open to this project: those whose groups intersect its own (no group:
+    every project), with the organisation's policy, its own, and the effective one."""
+    project_groups = {str(g) for g in ((ctx.project.config or {}).get("groups") or [])}
+    op_rows = (
         await session.execute(
             select(ConnectorOperation, OrgConnector.name)
             .join(OrgConnector, OrgConnector.id == ConnectorOperation.connector_id)
@@ -717,7 +728,7 @@ async def _operations_du_projet(ctx: ProjectCtx, session: AsyncSession) -> list[
             .order_by(OrgConnector.name, ConnectorOperation.name)
         )
     ).all()
-    resserres = {
+    tightened = {
         p.operation_id: p.policy
         for p in (
             await session.execute(
@@ -726,7 +737,7 @@ async def _operations_du_projet(ctx: ProjectCtx, session: AsyncSession) -> list[
         ).scalars()
     }
     allumes = await enabled_ids(session, ctx.project)
-    fermes = {
+    closed_connectors = {
         row.id
         for row in (
             await session.execute(
@@ -739,16 +750,17 @@ async def _operations_du_projet(ctx: ProjectCtx, session: AsyncSession) -> list[
     }
     return [
         ProjectOperationDto(
-            connector=connecteur,
+            connector=org_connector,
             operation=operation.name,
             access=operation.access,
             org_policy=operation.policy,
-            project_policy=resserres.get(operation.id),
-            effective_policy=plus_stricte(operation.policy, resserres.get(operation.id)),
+            project_policy=tightened.get(operation.id),
+            effective_policy=plus_stricte(operation.policy, tightened.get(operation.id)),
             description=operation.description,
         )
-        for operation, connecteur in lignes
-        if operation.connector_id not in fermes and (not operation.groups or groupes & set(operation.groups))
+        for operation, org_connector in op_rows
+        if operation.connector_id not in closed_connectors
+        and (not operation.groups or project_groups & set(operation.groups))
     ]
 
 
@@ -758,7 +770,7 @@ async def _operations_du_projet(ctx: ProjectCtx, session: AsyncSession) -> list[
     operation_id="listProjectOperations",
 )
 async def list_project_operations(ctx: ProjectCtx, session: Db) -> list[ProjectOperationDto]:
-    return await _operations_du_projet(ctx, session)
+    return await _project_operations(ctx, session)
 
 
 @router.put(
@@ -767,12 +779,12 @@ async def list_project_operations(ctx: ProjectCtx, session: Db) -> list[ProjectO
     operation_id="tightenProjectOperation",
 )
 async def tighten_operation(
-    ctx: ProjectCtx, connector: Nom, operation: str, body: ProjectOperationPut, session: Db
+    ctx: ProjectCtx, connector: Name, operation: str, body: ProjectOperationPut, session: Db
 ) -> ProjectOperationDto:
-    """Un projet RESSERRE une opération ; il ne l'élargit jamais (422)."""
+    """A project TIGHTENS an operation; it never widens it (422)."""
     ctx.require(Permission.CONNECTOR_WRITE)
-    visibles = {(o.connector, o.operation): o for o in await _operations_du_projet(ctx, session)}
-    actuelle = visibles.get((connector, operation))
+    visible_ops = {(o.connector, o.operation): o for o in await _project_operations(ctx, session)}
+    actuelle = visible_ops.get((connector, operation))
     if actuelle is None:
         raise not_found("Operation", f"{connector}/{operation}")
     if RANG[body.policy] < RANG[actuelle.org_policy]:
@@ -780,7 +792,7 @@ async def tighten_operation(
             f"{connector}/{operation} is `{actuelle.org_policy}` in the organisation: a project can "
             f"only narrow it, not move it to `{body.policy}`"
         )
-    ligne = (
+    op_row = (
         await session.execute(
             select(ConnectorOperation)
             .join(OrgConnector, OrgConnector.id == ConnectorOperation.connector_id)
@@ -794,13 +806,13 @@ async def tighten_operation(
     resserre = (
         await session.execute(
             select(ProjectOperationPolicy).where(
-                ProjectOperationPolicy.project_id == ctx.id, ProjectOperationPolicy.operation_id == ligne.id
+                ProjectOperationPolicy.project_id == ctx.id, ProjectOperationPolicy.operation_id == op_row.id
             )
         )
     ).scalar_one_or_none()
     if resserre is None:
         resserre = ProjectOperationPolicy(
-            org_id=ctx.project.org_id, project_id=ctx.id, operation_id=ligne.id, policy=body.policy
+            org_id=ctx.project.org_id, project_id=ctx.id, operation_id=op_row.id, policy=body.policy
         )
         session.add(resserre)
     resserre.policy = body.policy
@@ -811,7 +823,7 @@ async def tighten_operation(
         "project.operation.tighten",
         org_id=ctx.project.org_id,
         target_type="connector_operation",
-        target_id=ligne.id,
+        target_id=op_row.id,
         connector=connector,
         operation=operation,
         policy=body.policy,
@@ -819,11 +831,11 @@ async def tighten_operation(
     return ProjectOperationDto(
         connector=connector,
         operation=operation,
-        access=ligne.access,
-        org_policy=ligne.policy,
+        access=op_row.access,
+        org_policy=op_row.policy,
         project_policy=body.policy,
-        effective_policy=plus_stricte(ligne.policy, body.policy),
-        description=ligne.description,
+        effective_policy=plus_stricte(op_row.policy, body.policy),
+        description=op_row.description,
     )
 
 
@@ -832,10 +844,10 @@ async def tighten_operation(
     status_code=status.HTTP_204_NO_CONTENT,
     operation_id="relaxProjectOperation",
 )
-async def relax_operation(ctx: ProjectCtx, connector: Nom, operation: str, session: Db) -> Response:
-    """Retirer ce que le projet resserrait : l'opération revient à la politique de l'organisation."""
+async def relax_operation(ctx: ProjectCtx, connector: Name, operation: str, session: Db) -> Response:
+    """Remove what the project tightened: the operation goes back to the organisation's policy."""
     ctx.require(Permission.CONNECTOR_WRITE)
-    lignes = (
+    op_rows = (
         await session.execute(
             select(ProjectOperationPolicy)
             .join(ConnectorOperation, ConnectorOperation.id == ProjectOperationPolicy.operation_id)
@@ -847,8 +859,8 @@ async def relax_operation(ctx: ProjectCtx, connector: Nom, operation: str, sessi
             )
         )
     ).scalars()
-    for ligne in lignes:
-        await session.delete(ligne)
+    for op_row in op_rows:
+        await session.delete(op_row)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -916,7 +928,7 @@ async def _selected(ctx: ProjectCtx, session: Db, connector: str) -> OrgConnecto
     response_model=ProjectOrgConnectorDto,
     operation_id="enableOrgConnector",
 )
-async def enable_org_connector(ctx: ProjectCtx, connector: Nom, session: Db) -> ProjectOrgConnectorDto:
+async def enable_org_connector(ctx: ProjectCtx, connector: Name, session: Db) -> ProjectOrgConnectorDto:
     """Turn an organisation connector on for this project (idempotent). Its owner or an administrator."""
     row = await _selected(ctx, session, connector)
     if not await connector_enabled_for(session, row, ctx.project):
@@ -947,7 +959,7 @@ async def enable_org_connector(ctx: ProjectCtx, connector: Nom, session: Db) -> 
     status_code=status.HTTP_204_NO_CONTENT,
     operation_id="disableOrgConnector",
 )
-async def disable_org_connector(ctx: ProjectCtx, connector: Nom, session: Db) -> Response:
+async def disable_org_connector(ctx: ProjectCtx, connector: Name, session: Db) -> Response:
     """Turn it off for this project; turning off one that was not on is a no-op."""
     row = await _selected(ctx, session, connector)
     existing = (

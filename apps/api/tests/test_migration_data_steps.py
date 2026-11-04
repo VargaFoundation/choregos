@@ -63,7 +63,7 @@ def test_the_scan_finds_the_data_steps() -> None:
         for step, (writes, _) in _steps(path).items()
         if writes
     }
-    assert ("20261005_1800_un_ticket_epingle_sa_definition.py", "upgrade") in writing
+    assert ("20261005_1800_a_work_item_pins_its_definition.py", "upgrade") in writing
     assert ("20261017_0900_agent_release_channels.py", "downgrade") in writing
     assert ("20261016_1900_s39_data_under_rls.py", "upgrade") in writing, "a backfill imported from a module"
     assert len(writing) >= 12

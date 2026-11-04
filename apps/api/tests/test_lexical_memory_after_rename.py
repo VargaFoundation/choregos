@@ -9,7 +9,7 @@ from choregos_core.domain import Fact
 from httpx import AsyncClient
 
 from .agent_scopes_kit import ORG
-from .test_renommer_une_organisation import _declarer_administrateur
+from .kits.organisation import declare_administrator
 
 pytestmark = pytest.mark.usefixtures("real_adapters")
 
@@ -38,7 +38,7 @@ async def test_the_old_slug_still_names_the_organisation_after_a_rename(
     memory = _memory()
     namespace = "org:varga#memory:lessons"
     await memory.write_fact(namespace, Fact(kind="decision", subject="tls", content="Pin TLS."))
-    await _declarer_administrateur({"admin@varga.dev"})
+    await declare_administrator({"admin@varga.dev"})
     try:
         renamed = await client.patch("/api/v1/orgs/varga", json={"slug": "diametral"})
         assert renamed.status_code == 200, renamed.text

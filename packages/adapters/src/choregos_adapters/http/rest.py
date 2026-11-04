@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Client REST minimal partagé par les trackers Jira et GitLab.
+"""A minimal REST client shared by the Jira and GitLab trackers.
 
-Ni l'un ni l'autre n'a les subtilités de GitHub (App, installations, secondary limits) :
-un jeton statique, un `base_url`, un backoff sur 429 et 5xx suffisent. Tout est passé
-par un `httpx.AsyncClient` injectable, pour que les tests parlent au protocole sans réseau.
+Neither has the subtleties of GitHub (App, installations, secondary limits): a static token, a
+`base_url` and a backoff on 429 and 5xx are enough. Everything goes through an injectable
+`httpx.AsyncClient`, so that the tests speak the protocol without a network.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ MAX_RETRIES = 4
 
 
 class RestClient:
-    """Enveloppe fine : `request`, `paginate`, backoff borné, erreurs explicites."""
+    """A thin wrapper: `request`, `paginate`, bounded backoff, explicit errors."""
 
     def __init__(
         self,
@@ -66,7 +66,7 @@ class RestClient:
     async def paginate(
         self, path: str, *, params: dict[str, Any] | None = None, limit: int = 500
     ) -> list[Any]:
-        """Pagination par page : GitLab rend une liste, Jira un objet avec un tableau."""
+        """Page-by-page pagination: GitLab returns a list, Jira an object holding an array."""
         out: list[Any] = []
         page = 1
         while len(out) < limit:
@@ -84,8 +84,8 @@ class RestClient:
 
 
 def _backoff(response: httpx.Response, attempt: int) -> float:
-    """Respecte `Retry-After` quand il est là ; sinon exponentiel avec un peu de bruit."""
+    """Honours `Retry-After` when it is there; otherwise exponential with a little jitter."""
     retry_after = response.headers.get("Retry-After")
     if retry_after and retry_after.isdigit():
         return min(float(retry_after), 30.0)
-    return float(min(2**attempt + random.random(), 30.0))  # noqa: S311 - attente, pas de crypto
+    return float(min(2**attempt + random.random(), 30.0))  # noqa: S311 - wait, not crypto

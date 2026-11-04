@@ -5,9 +5,9 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BadgeCheck, BookOpen, Bot, ScrollText, ServerCog, Workflow, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
-import { Confirmation } from "@/components/geste-confirme";
-import { Alert, Badge, Button, Card, Code, Empty, ErrorNote, EtatDeLecture, Select } from "@/components/ui";
-import { OrgPageHeader } from "@/components/coquille/org-page-header";
+import { Confirmation } from "@/components/confirmed-gesture";
+import { Alert, Badge, Button, Card, Code, Empty, ErrorNote, ReadState, Select } from "@/components/ui";
+import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
 import {
   admissibleVersions,
@@ -105,7 +105,7 @@ export default function PluginsPage() {
         <h2 id="plugins-installed" className="text-lg font-semibold">
           Installed ({items.length})
         </h2>
-        <EtatDeLecture lecture={installed} quoi="the installed plugins" />
+        <ReadState lecture={installed} quoi="the installed plugins" />
         {installed.data &&
           (items.length === 0 ? (
             <Empty title="No plugin installed">Install one from a source below.</Empty>
@@ -131,7 +131,7 @@ export default function PluginsPage() {
           Each request was checked in full at the version and content digest shown. Another administrator than the one
           who asked approves it; the plugin is then fetched again and installed only if its digest is unchanged.
         </p>
-        <EtatDeLecture lecture={approvals} quoi="the plugin approvals" />
+        <ReadState lecture={approvals} quoi="the plugin approvals" />
         {approvals.data &&
           (waiting.length === 0 ? (
             <p className="text-sm text-ink-muted">Nothing waits.</p>
@@ -164,7 +164,7 @@ export default function PluginsPage() {
           Declared by the operator of this deployment, not here. Each lists what its index offers; a version outside
           this core&apos;s range is shown but cannot be installed.
         </p>
-        <EtatDeLecture lecture={sources} quoi="the plugin sources" />
+        <ReadState lecture={sources} quoi="the plugin sources" />
         {sources.data &&
           (sources.data.sources.length === 0 ? (
             <Empty title="No source declared">The operator declares sources in the chart (`global.plugins.sources`).</Empty>

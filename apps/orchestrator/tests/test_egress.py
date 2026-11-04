@@ -1,10 +1,10 @@
-"""Le proxy d'egress d'un projet : livré par le provisioning, pas promis par une annotation.
+"""A project's egress proxy: delivered by provisioning, not promised by an annotation.
 
-L'état des lieux du 2026-09-24 : la NetworkPolicy des runners ouvrait un namespace
-`choregos-egress` qu'aucun chart ne déployait, et l'allowlist par domaine n'était qu'une
-annotation. Ces tests lisent les manifests que le provisioning écrit : un Squid dans le
-namespace des runners, sa configuration tirée de la politique, la politique réseau qui
-n'ouvre Internet qu'à lui, et l'environnement d'un pod d'agent qui le désigne.
+The inventory of 2026-09-24: the runners' NetworkPolicy opened a `choregos-egress` namespace that
+no chart deployed, and the per-domain allowlist was only an annotation. These tests read the
+manifests that provisioning writes: a Squid in the runners' namespace, its configuration drawn
+from the policy, the network policy that opens the Internet only to it, and the environment of an
+agent pod that names it.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from types import SimpleNamespace
 import yaml
 from choregos_contracts import ProjectConfig, RepoConfig
 from choregos_core import load_preset
-from choregos_orchestrator.activities.stage import env_du_runner
+from choregos_orchestrator.activities.execution import runner_environment
 from choregos_orchestrator.gitops import EGRESS_NAME, KUBE_NS, render_project_manifests, squid_config
 
 
@@ -24,88 +24,88 @@ def _config() -> ProjectConfig:
     )
 
 
-def _docs(texte: str) -> list[dict]:
-    return list(yaml.safe_load_all(texte))
+def _docs(text: str) -> list[dict]:
+    return list(yaml.safe_load_all(text))
 
 
-def test_le_proxy_est_rendu_avec_l_allowlist_de_la_politique() -> None:
+def test_the_proxy_is_rendered_with_the_policys_allowlist() -> None:
     files = render_project_manifests("billing", _config(), load_preset("team"))
     assert "egress.yaml" in files
     docs = {(d["kind"], d["metadata"]["name"]): d for d in _docs(files["egress.yaml"])}
     conf = docs[("ConfigMap", EGRESS_NAME)]["data"]["squid.conf"]
-    for domaine in load_preset("team").sandbox.network.allow_domains:
-        assert f".{domaine}" in conf, domaine
+    for domain in load_preset("team").sandbox.network.allow_domains:
+        assert f".{domain}" in conf, domain
     assert "http_access deny all" in conf
     assert "http_access deny CONNECT !SSL_ports" in conf
     assert "egress.yaml" in _docs(files["kustomization.yaml"])[0]["resources"]
 
 
-def test_le_proxy_tourne_sans_root_sans_capacite_en_lecture_seule() -> None:
+def test_the_proxy_runs_without_root_without_capabilities_read_only() -> None:
     files = render_project_manifests("billing", _config(), load_preset("team"))
-    deploiement = next(d for d in _docs(files["egress.yaml"]) if d["kind"] == "Deployment")
-    pod = deploiement["spec"]["template"]["spec"]
-    conteneur = pod["containers"][0]
+    deployment = next(d for d in _docs(files["egress.yaml"]) if d["kind"] == "Deployment")
+    pod = deployment["spec"]["template"]["spec"]
+    container = pod["containers"][0]
     assert pod["securityContext"]["runAsNonRoot"] is True
     assert pod["automountServiceAccountToken"] is False
-    assert conteneur["securityContext"]["readOnlyRootFilesystem"] is True
-    assert conteneur["securityContext"]["capabilities"] == {"drop": ["ALL"]}
-    assert conteneur["command"][0] == "squid", "sans le point d'entrée de l'image, qui veut root"
+    assert container["securityContext"]["readOnlyRootFilesystem"] is True
+    assert container["securityContext"]["capabilities"] == {"drop": ["ALL"]}
+    assert container["command"][0] == "squid", "without the image's entrypoint, which wants root"
 
 
-def test_seul_le_proxy_sort_vers_internet() -> None:
+def test_only_the_proxy_goes_out_to_the_internet() -> None:
     files = render_project_manifests("billing", _config(), load_preset("team"))
     netpol = {d["metadata"]["name"]: d for d in _docs(files["netpol.yaml"])}
-    regles = netpol["allow-platform-egress"]["spec"]["egress"]
-    destinations = [to for regle in regles for to in regle["to"]]
+    rules = netpol["allow-platform-egress"]["spec"]["egress"]
+    destinations = [to for rule in rules for to in rule["to"]]
     assert {"podSelector": {"matchLabels": {"app.kubernetes.io/name": EGRESS_NAME}}} in destinations
-    espaces = [to.get("namespaceSelector", {}).get("matchLabels", {}).get(KUBE_NS) for to in destinations]
-    assert "choregos-egress" not in espaces, "le namespace fantôme n'est plus promis"
-    sortie = next(d for d in _docs(files["egress.yaml"]) if d["kind"] == "NetworkPolicy")
-    assert sortie["spec"]["podSelector"] == {"matchLabels": {"app.kubernetes.io/name": EGRESS_NAME}}
-    bloc = sortie["spec"]["egress"][0]["to"][0]["ipBlock"]
-    assert bloc["cidr"] == "0.0.0.0/0" and "10.0.0.0/8" in bloc["except"]
+    namespaces = [to.get("namespaceSelector", {}).get("matchLabels", {}).get(KUBE_NS) for to in destinations]
+    assert "choregos-egress" not in namespaces, "the phantom namespace is no longer promised"
+    outbound = next(d for d in _docs(files["egress.yaml"]) if d["kind"] == "NetworkPolicy")
+    assert outbound["spec"]["podSelector"] == {"matchLabels": {"app.kubernetes.io/name": EGRESS_NAME}}
+    block = outbound["spec"]["egress"][0]["to"][0]["ipBlock"]
+    assert block["cidr"] == "0.0.0.0/0" and "10.0.0.0/8" in block["except"]
 
 
-def test_sans_domaine_autorise_pas_de_proxy_ni_de_porte() -> None:
+def test_without_an_allowed_domain_there_is_no_proxy_and_no_door() -> None:
     files = render_project_manifests("billing", _config(), load_preset("regulated"))
     assert "egress.yaml" not in files
     assert "egress.yaml" not in _docs(files["kustomization.yaml"])[0]["resources"]
     netpol = {d["metadata"]["name"]: d for d in _docs(files["netpol.yaml"])}
-    destinations = [to for regle in netpol["allow-platform-egress"]["spec"]["egress"] for to in regle["to"]]
+    destinations = [to for rule in netpol["allow-platform-egress"]["spec"]["egress"] for to in rule["to"]]
     assert not any("podSelector" in to for to in destinations)
 
 
-def test_la_configuration_normalise_les_domaines() -> None:
+def test_the_configuration_normalises_the_domains() -> None:
     conf = squid_config(["github.com", ".pypi.org", "github.com"])
     assert "acl allowed dstdomain .github.com .pypi.org" in conf
 
 
-def test_le_pod_d_agent_recoit_le_proxy_de_son_namespace() -> None:
+def test_the_agent_pod_receives_the_proxy_of_its_namespace() -> None:
     settings = SimpleNamespace(
         runner_env={"TZ": "UTC"}, runner_egress_proxy="http://choregos-egress.{namespace}.svc:3128"
     )
-    env = env_du_runner(settings, "proj-billing-runners")
+    env = runner_environment(settings, "proj-billing-runners")
     assert env["HTTPS_PROXY"] == "http://choregos-egress.proj-billing-runners.svc:3128"
     assert env["https_proxy"] == env["HTTPS_PROXY"]
     assert ".svc" in env["NO_PROXY"] and "127.0.0.1" in env["NO_PROXY"]
     assert env["TZ"] == "UTC"
 
 
-def test_sans_proxy_configure_l_environnement_reste_celui_du_deploiement() -> None:
-    env = env_du_runner(SimpleNamespace(runner_env={"TZ": "UTC"}, runner_egress_proxy=""), "choregos")
+def test_without_a_configured_proxy_the_environment_stays_the_deployments() -> None:
+    env = runner_environment(SimpleNamespace(runner_env={"TZ": "UTC"}, runner_egress_proxy=""), "choregos")
     assert env == {"TZ": "UTC"}
 
 
-def test_le_rappel_interne_ne_passe_jamais_par_le_proxy_d_egress() -> None:
-    """`NO_PROXY` doit nommer les hôtes que la PLATEFORME donne au runner, pas un suffixe.
+def test_the_internal_callback_never_goes_through_the_egress_proxy() -> None:
+    """`NO_PROXY` must name the hosts that the PLATFORM gives the runner, not a suffix.
 
-    Le suffixe `.svc` couvre `choregos-api.choregos.svc` et **pas** `choregos-api` — or c'est
-    la forme courte que la plateforme fabrique elle-même (`callback_url`). Sur le locataire dev
-    du 2026-09-27, le premier appel du runner (chercher son `StageInput`) partait donc vers le
-    proxy d'egress, qui n'existait pas dans ce namespace : « Name or service not known », sans
-    que le message nomme ni l'URL ni le proxy. Le runner en concluait « StageInput introuvable ».
+    The `.svc` suffix covers `choregos-api.choregos.svc` and **not** `choregos-api` — yet that is
+    the short form the platform builds itself (`callback_url`). On the dev tenant on 2026-09-27,
+    the runner's first call (fetching its `StageInput`) therefore went to the egress proxy, which
+    did not exist in that namespace: "Name or service not known", without the message naming the
+    URL or the proxy. The runner concluded "StageInput not found".
 
-    Le proxy existe pour contrôler ce qui SORT. Le rappel interne ne sort pas.
+    The proxy exists to control what GOES OUT. The internal callback does not go out.
     """
     settings = SimpleNamespace(
         runner_env={},
@@ -114,34 +114,34 @@ def test_le_rappel_interne_ne_passe_jamais_par_le_proxy_d_egress() -> None:
         gateway_url="http://litellm:4000",
         memory_url="http://ecphoria:8432",
     )
-    sans_proxy = env_du_runner(settings, "choregos")["NO_PROXY"].split(",")
-    for hote in ("choregos-api", "litellm", "ecphoria"):
-        assert hote in sans_proxy, f"{hote} passerait par le proxy d'egress ({sans_proxy})"
+    without_proxy = runner_environment(settings, "choregos")["NO_PROXY"].split(",")
+    for host in ("choregos-api", "litellm", "ecphoria"):
+        assert host in without_proxy, f"{host} would go through the egress proxy ({without_proxy})"
 
 
-def test_les_hotes_directs_viennent_des_url_de_la_plateforme() -> None:
-    """Aucun nom n'est deviné : un changement d'URL suit, sans toucher à cette liste."""
-    from choregos_orchestrator.activities.execution import hotes_a_joindre_en_direct
+def test_the_direct_hosts_come_from_the_platforms_urls() -> None:
+    """No name is guessed: a change of URL follows, without touching this list."""
+    from choregos_orchestrator.activities.execution import hosts_to_reach_directly
 
-    hotes = hotes_a_joindre_en_direct(
+    hosts = hosts_to_reach_directly(
         SimpleNamespace(
-            # Un hôte SANS point ni port collé à « api » : `api.x:8443/api/v1/...` déclenche la
-            # règle générique de gitleaks, qui y voit une clé. Le test porte sur l'extraction
-            # d'un hôte, pas sur la forme du nom.
-            callback_url="https://interne-exemple:8443/api/v1/internal",
-            gateway_url="http://passerelle:4000",
+            # A host WITHOUT a dot or a port stuck to "api": `api.x:8443/api/v1/...` triggers the
+            # generic gitleaks rule, which sees a key in it. The test is about extracting a
+            # host, not about the shape of the name.
+            callback_url="https://internal-example:8443/api/v1/internal",
+            gateway_url="http://gateway:4000",
             memory_url="",
         )
     )
-    assert hotes == ["interne-exemple", "passerelle"], hotes
+    assert hosts == ["internal-example", "gateway"], hosts
 
 
-def test_le_pod_ne_reclame_des_identifiants_au_proxy_que_si_le_deploiement_le_demande() -> None:
+def test_the_pod_asks_the_proxy_for_credentials_only_if_the_deployment_requires_it() -> None:
     """ADR 0070: `CHOREGOS_EGRESS_AUTH=run` tells the runner to present its run id and token."""
     proxy = "http://choregos-egress.{namespace}.svc:3128"
     base = {"runner_env": {"TZ": "UTC"}, "runner_egress_proxy": proxy}
-    with_auth = env_du_runner(SimpleNamespace(**base, runner_egress_auth="run"), "choregos")
+    with_auth = runner_environment(SimpleNamespace(**base, runner_egress_auth="run"), "choregos")
     assert with_auth["CHOREGOS_EGRESS_AUTH"] == "run"
     assert with_auth["HTTPS_PROXY"] == "http://choregos-egress.choregos.svc:3128", "no credentials here"
     for settings in (SimpleNamespace(**base, runner_egress_auth=""), SimpleNamespace(**base)):
-        assert "CHOREGOS_EGRESS_AUTH" not in env_du_runner(settings, "choregos")
+        assert "CHOREGOS_EGRESS_AUTH" not in runner_environment(settings, "choregos")

@@ -24,12 +24,12 @@ describe("a real opencode run from the dev tenant (S25-06)", () => {
   });
 
   it("its activity counts each tool call once, however many updates it had", () => {
-    const activite = activiteDuRun(journal);
+    const activity = activiteDuRun(journal);
     expect(journal.filter((e) => e.type === "session/update")).toHaveLength(123);
-    expect(activite.appels).toHaveLength(29);
-    expect(activite.termines).toBe(29);
-    expect(activite.refus).toEqual([]);
-    expect(activite.sousAgents).toBe(0);
-    expect(activite.appels.map((a) => a.titre)).toContain("make test");
+    expect(activity.appels).toHaveLength(29);
+    expect(activity.termines).toBe(29);
+    expect(activity.refus).toEqual([]);
+    expect(activity.sousAgents).toBe(0);
+    expect(activity.appels.map((a) => a.titre)).toContain("make test");
   });
 });

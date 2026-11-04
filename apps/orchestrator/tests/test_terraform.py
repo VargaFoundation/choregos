@@ -1,4 +1,4 @@
-"""Terraform : l'`apply` part du train, après approbation, et jamais sans Atlantis (S9-05)."""
+"""Terraform: the `apply` leaves with the train, after approval, and never without Atlantis (S9-05)."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ async def _release(setup: Fixture, *, with_infra: bool) -> str:
     from choregos_api.db.session import session_scope
     from choregos_core import utcnow
 
-    item: dict[str, Any] = {"work_item_key": setup.tracker_key, "title": "un ticket"}
+    item: dict[str, Any] = {"work_item_key": setup.tracker_key, "title": "a ticket"}
     if with_infra:
         item["infra_pr_url"] = INFRA_PR
     async with session_scope() as session:
@@ -44,7 +44,7 @@ async def _enable_atlantis(project_id: str) -> None:
         row = await active_policy(session, project_id)
         assert row is not None
         model = policy_model(row)
-        assert model.release_train.get("prod") is not None, "le preset de test a un train prod"
+        assert model.release_train.get("prod") is not None, "the test preset has a prod train"
         doc = model.model_dump(mode="json", exclude_none=True)
         doc["release_train"]["prod"]["terraform"] = {"via": "atlantis", "apply_requires_approval": True}
         row.json_doc = doc
@@ -57,7 +57,7 @@ def _seed_pr(setup: Fixture) -> None:
     setup.adapters.scm.prs[("varga/billing-api-infra", 7)] = PrState(ref=ref, title="infra")
 
 
-async def test_l_apply_est_declenche_sur_la_pr_d_infra(setup: Fixture) -> None:
+async def test_the_apply_is_triggered_on_the_infra_pr(setup: Fixture) -> None:
     await _enable_atlantis(setup.project_id)
     _seed_pr(setup)
     setup.adapters.scm.atlantis("success")
@@ -72,7 +72,7 @@ async def test_l_apply_est_declenche_sur_la_pr_d_infra(setup: Fixture) -> None:
     assert ("varga/billing-api-infra", 7, "atlantis apply") in setup.adapters.scm.comments
 
 
-async def test_un_apply_en_echec_arrete_le_depart(setup: Fixture) -> None:
+async def test_a_failed_apply_stops_the_departure(setup: Fixture) -> None:
     await _enable_atlantis(setup.project_id)
     _seed_pr(setup)
     setup.adapters.scm.atlantis("failure")
@@ -84,11 +84,11 @@ async def test_un_apply_en_echec_arrete_le_depart(setup: Fixture) -> None:
 
     assert outcome["ok"] is False
     assert "failure" in outcome["reason"]
-    titres = [message.title for _, message in setup.adapters.notify.sent]
-    assert any("Terraform" in titre for titre in titres), titres
+    titles = [message.title for _, message in setup.adapters.notify.sent]
+    assert any("Terraform" in title for title in titles), titles
 
 
-async def test_sans_pr_d_infra_le_train_ne_commente_rien(setup: Fixture) -> None:
+async def test_without_an_infra_pr_the_train_comments_nothing(setup: Fixture) -> None:
     await _enable_atlantis(setup.project_id)
     release_id = await _release(setup, with_infra=False)
 
@@ -101,8 +101,8 @@ async def test_sans_pr_d_infra_le_train_ne_commente_rien(setup: Fixture) -> None
     assert setup.adapters.scm.comments == []
 
 
-async def test_sans_atlantis_configure_rien_ne_se_passe(setup: Fixture) -> None:
-    """`terraform.via: none` : commenter une PR serait une surprise."""
+async def test_without_atlantis_configured_nothing_happens(setup: Fixture) -> None:
+    """`terraform.via: none`: commenting on a PR would be a surprise."""
     from choregos_api.db.session import session_scope
     from choregos_api.services import active_policy, policy_model
 
@@ -124,7 +124,7 @@ async def test_sans_atlantis_configure_rien_ne_se_passe(setup: Fixture) -> None:
     assert setup.adapters.scm.comments == []
 
 
-async def test_une_url_de_pr_illisible_est_refusee(setup: Fixture) -> None:
+async def test_an_unreadable_pr_url_is_refused(setup: Fixture) -> None:
     from choregos_api.db.models import Release
     from choregos_api.db.session import session_scope
 
@@ -133,7 +133,7 @@ async def test_une_url_de_pr_illisible_est_refusee(setup: Fixture) -> None:
     async with session_scope() as session:
         release = await session.get(Release, release_id)
         assert release is not None
-        release.items = [{"work_item_key": "x", "infra_pr_url": "pas-une-url"}]
+        release.items = [{"work_item_key": "x", "infra_pr_url": "not-a-url"}]
 
     outcome = await train_activities.apply_terraform(
         {"project_slug": setup.project_slug, "env": "prod", "release_id": release_id}
@@ -143,8 +143,8 @@ async def test_une_url_de_pr_illisible_est_refusee(setup: Fixture) -> None:
     assert "unreadable" in outcome["reason"]
 
 
-async def test_la_pr_d_infra_declaree_par_l_agent_suit_le_ticket(setup: Fixture) -> None:
-    """`artifacts.reports["infra_pr"]` est le canal : pas de contrat neuf pour ça."""
+async def test_the_infra_pr_declared_by_the_agent_follows_the_ticket(setup: Fixture) -> None:
+    """`artifacts.reports["infra_pr"]` is the channel: no new contract for this."""
     from choregos_api.db.models import Run
     from choregos_api.db.session import session_scope
     from choregos_orchestrator.activities import stage as stage_activities
@@ -162,7 +162,7 @@ async def test_la_pr_d_infra_declaree_par_l_agent_suit_le_ticket(setup: Fixture)
         )
         session.add(run)
 
-    result = stage_result("infra et code", artifacts={"reports": {"infra_pr": INFRA_PR}})
+    result = stage_result("infra and code", artifacts={"reports": {"infra_pr": INFRA_PR}})
     await stage_activities.record_run_outcome(
         {"run_id": "run-infra", "result": result.model_dump(mode="json", by_alias=True)}
     )

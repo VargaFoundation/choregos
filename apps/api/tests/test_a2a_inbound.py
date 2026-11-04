@@ -576,7 +576,7 @@ async def test_the_door_is_rate_limited(
     from choregos_api.limiteur import Limiteur
 
     token = await _ready(client, project)
-    monkeypatch.setattr(door, "LIMITEUR", Limiteur(1))
+    monkeypatch.setattr(door, "RATE_LIMITER", Limiteur(1))
     assert (await _rpc(client, token, "tasks/get", {"id": "x"})).status_code == 200
     limited = await _rpc(client, token, "tasks/get", {"id": "x"})
     assert limited.status_code == 429, limited.text

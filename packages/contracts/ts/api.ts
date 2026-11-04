@@ -1005,6 +1005,8 @@ export type WorkflowRouting = {
   hints?: {
     [key: string]: string;
   };
+  /** ADR 0121: when the router is a decision model (a catalogue entry enabled for `route` and `decide`), a choice below this probability is not taken and the default takes the item. A chat model answers no probability and is never held to it. Absent from a PUT, unchanged; `null`, every answer is taken. */
+  min_confidence?: number | null;
 };
 
 export type RoutingPreviewRequest = {
@@ -1019,6 +1021,8 @@ export type RoutingPreview = {
   by: "explicit" | "rule" | "llm" | "default";
   reason?: string | null;
   model?: string | null;
+  /** The decision model's probability for its choice; null from a chat model or without a model. */
+  confidence?: number | null;
 };
 
 export type WorkflowValidateRequest = {

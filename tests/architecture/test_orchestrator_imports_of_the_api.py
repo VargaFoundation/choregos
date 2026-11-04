@@ -10,7 +10,7 @@ ORCHESTRATOR_SRC = ROOT / "apps" / "orchestrator" / "src"
 
 # Measured at 87ea1831d. Lower it in the PR that removes imports; raise it only for a mechanical
 # rename that splits an existing statement, saying so in the PR body, or by amending ADR 0099.
-CEILING = 153
+CEILING = 156  # S47-33: +3, the stage helpers moved to stage_*.py repeat three imports of the stage module
 
 HTTP_LAYER = (
     "choregos_api.routers",

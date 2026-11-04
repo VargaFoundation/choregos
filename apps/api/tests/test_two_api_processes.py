@@ -25,7 +25,7 @@ import httpx
 import pytest
 from httpx import AsyncClient
 
-from .conftest import PG_URL, SUITE_SUR_POSTGRES, _administrer
+from .conftest import PG_URL, SUITE_ON_POSTGRES, _administer
 from .test_a2a_inbound import _ready, _send, _stream
 from .test_a2a_replicas_and_limits import _persisted_elsewhere
 from .test_action_relay import TASK_QUEUE, _state, _stranded, noop_effect, temporal_server, workers
@@ -33,8 +33,8 @@ from .test_action_relay import TASK_QUEUE, _state, _stranded, noop_effect, tempo
 __all__ = ["noop_effect", "temporal_server", "workers"]  # fixtures, used by name
 
 pytestmark = pytest.mark.skipif(
-    not SUITE_SUR_POSTGRES,
-    reason="two processes share a database: PostgreSQL only (CHOREGOS_TEST_SUITE_SUR_POSTGRES)",
+    not SUITE_ON_POSTGRES,
+    reason="two processes share a database: PostgreSQL only (CHOREGOS_TEST_SUITE_ON_POSTGRES)",
 )
 
 
@@ -204,7 +204,7 @@ async def test_a_listen_connection_the_server_kills_is_taken_back_at_once(
             break
         await asyncio.sleep(0.1)
     (before,) = await _listeners()
-    await _administrer(PG_URL, f"SELECT pg_terminate_backend({before})")
+    await _administer(PG_URL, f"SELECT pg_terminate_backend({before})")
     back: list[int] = []
     for _ in range(50):  # five seconds, where the keepalive alone would take thirty
         back = [pid for pid in await _listeners() if pid != before]

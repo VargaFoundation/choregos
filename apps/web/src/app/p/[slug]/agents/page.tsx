@@ -6,11 +6,11 @@ import Link from "next/link";
 import { use, useState } from "react";
 import {
   implicitFromApi,
-  resumeDeLaVersion,
-  slugDeLActeur,
-  versionDeLActeur,
+  versionSummary,
+  actorSlug,
+  actorVersion,
   type AgentImplicite,
-} from "@/components/agents/registre";
+} from "@/components/agents/registry";
 import { ScopeBadge } from "@/components/agents/governance";
 import {
   Badge,
@@ -32,12 +32,12 @@ import {
 import { ApiError, api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import type { Agent, ProjectAgent, WorkflowAgent } from "@/lib/types";
-import { GesteConfirme } from "@/components/geste-confirme";
+import { ConfirmedGesture } from "@/components/confirmed-gesture";
 import { BuiltinAgentOfActor } from "@/components/agents/builtin-agent";
 
 /**
- * Les agents d'un projet : ceux qu'il épingle — une version du registre, que ses surcharges ne
- * peuvent que resserrer — et les agents implicites de ses workflows, à enregistrer.
+ * A project's agents: the ones it pins (a version from the registry, which its overrides can
+ * only tighten) and the implicit agents of its workflows, to be registered.
  */
 export default function ProjectAgentsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
@@ -111,7 +111,7 @@ export default function ProjectAgentsPage({ params }: { params: Promise<{ slug: 
         ) : (
           <ul className="space-y-3" data-testid="epingles">
             {epingles.data.map((epingle) => (
-              <Epingle key={epingle.agent} projet={slug} epingle={epingle} />
+              <Pinned key={epingle.agent} projet={slug} epingle={epingle} />
             ))}
           </ul>
         )}
@@ -173,7 +173,7 @@ function ProjectChannel({ projet }: { projet: string }) {
   );
 }
 
-function Epingle({ projet, epingle }: { projet: string; epingle: ProjectAgent }) {
+function Pinned({ projet, epingle }: { projet: string; epingle: ProjectAgent }) {
   const client = useQueryClient();
   const resserre = Object.values(epingle.overrides ?? {}).some((valeur) => valeur != null);
   return (
@@ -186,9 +186,9 @@ function Epingle({ projet, epingle }: { projet: string; epingle: ProjectAgent })
         {epingle.channel === "candidate" ? "follows testing" : epingle.channel === "stable" ? "follows production" : "fixed revision"}
       </Badge>
       {resserre && <Badge tone="warn">Tightened</Badge>}
-      <span className="text-xs text-ink-muted">{resumeDeLaVersion(epingle.effective)}</span>
+      <span className="text-xs text-ink-muted">{versionSummary(epingle.effective)}</span>
       <span className="ml-auto">
-        <GesteConfirme
+        <ConfirmedGesture
           question={`Unpin ${epingle.agent}? Its workflows run its production version from now on${resserre ? ", and the limits tightened here are lost" : ""}.`}
           confirmer={`Unpin ${epingle.agent}`}
           action={async () => {
@@ -197,13 +197,13 @@ function Epingle({ projet, epingle }: { projet: string; epingle: ProjectAgent })
           }}
         >
           Unpin
-        </GesteConfirme>
+        </ConfirmedGesture>
       </span>
     </li>
   );
 }
 
-/** Épingler une version ; ses limites et budgets ne se changent qu'à la baisse (l'API le refuse sinon). */
+/** Pin a version; its limits and budgets can only be lowered (the API refuses otherwise). */
 function Epingler({ projet, agents }: { projet: string; agents: Agent[] }) {
   const client = useQueryClient();
   const [agent, setAgent] = useState("");
@@ -301,7 +301,7 @@ function Epingler({ projet, agents }: { projet: string; agents: Agent[] }) {
   );
 }
 
-/** Les acteurs `agent` des workflows du projet qui ne nomment aucun agent du registre. */
+/** The `agent` actors of the project's workflows that name no agent from the registry. */
 function Implicites({ projet, org, registre }: { projet: string; org: string; registre: Agent[] }) {
   // One request: the API reads the active workflows (S30-04) — it was one request per workflow.
   const lecture = useQuery({ queryKey: ["implicit-agents", projet], queryFn: () => api.implicitAgents(projet) });
@@ -348,8 +348,8 @@ function Implicite({
   const client = useQueryClient();
   const [fait, setFait] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
-  const slug = slugDeLActeur(implicite.acteur);
-  const deja = pris.some((a) => a.slug === slug);
+  const slug = actorSlug(implicite.acteur);
+  const already = pris.some((a) => a.slug === slug);
   async function enregistrer() {
     setErreur(null);
     // What the built-in agent ran, as instructions: without them the registered agent had nothing to edit.
@@ -371,7 +371,7 @@ function Implicite({
         kind: "internal",
         display_name: implicite.acteur,
         description: `Registered from the ${implicite.workflow} workflow${implicite.role ? ` (role ${implicite.role})` : ""}`,
-        spec: versionDeLActeur(implicite, instructions),
+        spec: actorVersion(implicite, instructions),
       });
       setFait(
         `Registered${instructions ? ` with the ${implicite.role} playbook as its instructions` : " without instructions (the playbook could not be read)"}: name it in ${implicite.workflow} — actors.${implicite.acteur}.agent: ${slug}`,
@@ -396,7 +396,7 @@ function Implicite({
           <span role="status" className="text-xs">
             {fait}
           </span>
-        ) : deja ? (
+        ) : already ? (
           <span className="text-xs text-ink-muted">
             <Link href={`/agents/${slug}`} className="underline">
               {slug}

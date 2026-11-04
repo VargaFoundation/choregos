@@ -3,14 +3,14 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { use, useState } from "react";
-import { ActiviteDuRunVue } from "@/components/activite-du-run";
+import { RunActivityView } from "@/components/run-activity";
 import { ContextReductionCard } from "@/components/context-reduction";
 import { LiveLog } from "@/components/live-log";
-import { PlanDeLAgent } from "@/components/plan-de-l-agent";
+import { AgentPlanView } from "@/components/agent-plan";
 import { Provenance } from "@/components/provenance";
-import { Acces } from "@/components/acces";
-import { Garanties, verdictsDe } from "@/components/garanties";
-import { Preuves } from "@/components/preuves";
+import { Access } from "@/components/access";
+import { Guarantees, verdictsDe } from "@/components/guarantees";
+import { EvidencePanel } from "@/components/evidence";
 import { Badge, Breadcrumbs, Card, Empty, ErrorNote, Heading, StateBadge, tabClasses } from "@/components/ui";
 import { PodLogs } from "@/components/pod-logs";
 import { api } from "@/lib/api";
@@ -23,13 +23,13 @@ import { planDeLAgent } from "@/lib/plan-de-l-agent";
 import { finDeclaree } from "@/lib/provenance";
 import { useEventStream } from "@/lib/sse";
 import type { RunEventDto } from "@/lib/types";
-import { GesteConfirme } from "@/components/geste-confirme";
+import { ConfirmedGesture } from "@/components/confirmed-gesture";
 import { RunIdentity } from "@/components/who-writes";
 
 export default function RunPage({ params }: { params: Promise<{ slug: string; id: string }> }) {
   const { slug, id } = use(params);
   const run = useQuery({ queryKey: ["run", id], queryFn: () => api.run(id) });
-  // Le ticket du run, pour le fil d'Ariane : même clé que sa page, une seule lecture.
+  // The run's ticket, for the breadcrumb: same key as its page, a single read.
   const idDuTicket = run.data?.work_item_id;
   const ticket = useQuery({
     queryKey: ["item", idDuTicket],
@@ -39,9 +39,9 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
   const [relance, setRelance] = useState(false);
   const stored = useQuery({ queryKey: ["run-events", id], queryFn: () => api.runEvents(id) });
   const diff = useQuery({ queryKey: ["run-diff", id], queryFn: () => api.runDiff(id) });
-  // Ce à quoi l'agent a touché, replié depuis le journal : les 200 événements bruts
-  // d'un run ne se lisent pas, et un journal que personne ne lit n'est pas un audit.
-  const acces = useQuery({ queryKey: ["run-access", id], queryFn: () => api.runAccess(id) });
+  // What the agent touched, folded from the journal: a run's 200 raw events
+  // are not readable, and a journal nobody reads is not an audit.
+  const access = useQuery({ queryKey: ["run-access", id], queryFn: () => api.runAccess(id) });
   const transcript = useQuery({
     queryKey: ["run-transcript", id],
     queryFn: () => api.transcript(id),
@@ -68,14 +68,14 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
 
   const events = dedupe([...(stored.data ?? []), ...live.events]);
   const evidence = run.data.result?.evidence;
-  // Le plan que l'agent publie en ACP, révision après révision (S25-01) ; rien s'il n'en publie pas.
+  // The plan the agent publishes over ACP, revision after revision (S25-01); nothing if it publishes none.
   const plan = planDeLAgent(events);
-  // Ce que l'agent a appelé, relu du même journal (S25-02) : lisible, au-dessus du journal brut.
-  const activite = activiteDuRun(events);
+  // What the agent called, re-read from the same journal (S25-02): readable, above the raw journal.
+  const activity = activiteDuRun(events);
   // What the remote agent did, when the step called one (ADR 0062).
   const remote = remoteTask(events);
-  // L'agent se dit fini ; la plateforme l'a-t-elle constaté (ADR 0045) ?
-  const fin = finDeclaree(run.data.result?.status, verdictsDe(events));
+  // The agent says it is done; did the platform verify it (ADR 0045)?
+  const declaredEnd = finDeclaree(run.data.result?.status, verdictsDe(events));
 
   return (
     <div className="space-y-4">
@@ -98,9 +98,9 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {fin && (
+          {declaredEnd && (
             <Badge tone="waiting" data-testid="fin-declaree" title="The agent says it is done; the platform has not observed it">
-              {fin}
+              {declaredEnd}
             </Badge>
           )}
           <StateBadge
@@ -119,7 +119,7 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
             </a>
           )}
           {run.data.work_item_id && (
-            <GesteConfirme
+            <ConfirmedGesture
               ton="accent"
               question={`Replay this stage? An agent runs it again from the start — a new run, billed like this one (${usd(run.data.cost_usd)}).`}
               confirmer="Replay the stage"
@@ -127,7 +127,7 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
               onFait={() => setRelance(true)}
             >
               Replay the stage
-            </GesteConfirme>
+            </ConfirmedGesture>
           )}
           {relance && (
             <span className="text-xs" role="status">
@@ -149,7 +149,7 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
           <p className="text-2xl">{duration(run.data.tokens?.duration_s)}</p>
           <p className="text-xs text-ink-muted">{run.data.result?.diagnostics?.turns ?? 0} agent turns</p>
         </Card>
-        <Preuves evidence={evidence} />
+        <EvidencePanel evidence={evidence} />
         <Card title="Scope" action={<Provenance de="observed" />}>
           <ul className="space-y-1 font-mono text-xs text-ink-muted">
             {(run.data.allowed_paths ?? []).map((path) => (
@@ -160,25 +160,25 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
         </Card>
       </div>
 
-      <RunIdentity run={run.data} chain={acces.data?.chain} />
+      <RunIdentity run={run.data} chain={access.data?.chain} />
 
       {remote && <RemoteTaskCard task={remote} />}
 
       {plan && (
         <Card title="Agent plan" action={<Provenance de="declared" />}>
-          <PlanDeLAgent plan={plan} />
+          <AgentPlanView plan={plan} />
         </Card>
       )}
 
-      <Garanties events={events} />
+      <Guarantees events={events} />
 
       <ContextReductionCard reduction={contextReductionOf(events)} />
 
-      <Acces acces={acces.data} />
+      <Access acces={access.data} />
 
-      {(activite.appels.length > 0 || activite.refus.length > 0) && (
+      {(activity.appels.length > 0 || activity.refus.length > 0) && (
         <Card title="Activity" action={<Provenance de="declared" />}>
-          <ActiviteDuRunVue activite={activite} />
+          <RunActivityView activite={activity} />
         </Card>
       )}
 

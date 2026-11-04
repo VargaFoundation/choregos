@@ -3,7 +3,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Badge, Card, Empty, EtatDeLecture, Select, TBody, TD, TH, THead, TR, Table } from "@/components/ui";
+import { Badge, Card, Empty, ReadState, Select, TBody, TD, TH, THead, TR, Table } from "@/components/ui";
 import type { Tone } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
@@ -48,7 +48,7 @@ export function NetworkActivityCard({ org }: { org: string }) {
             </Select>
           </label>
         </div>
-        <EtatDeLecture lecture={activity} quoi="the network activity" />
+        <ReadState lecture={activity} quoi="the network activity" />
         {activity.data && rows.length === 0 && (
           <Empty>{refusedOnly ? "Nothing was refused in this period." : "No network activity in this period."}</Empty>
         )}

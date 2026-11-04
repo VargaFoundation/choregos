@@ -42,13 +42,14 @@ from ..db.models import (
 )
 from .catalogue_rights import SELECTED_PROJECTS, enabled_ids
 from .connecteurs import declared_operation, human_floor, plus_stricte
+from .mcp_gateway import connector_client, route_of
+from .mcp_gateway_identity import GatewayRefusal, identity_of_run
 from .platform_network import (
     WHERE,
     PlatformNetworkRefused,
     PlatformRateLimited,
     enforce_connector_call,
 )
-from .plugin_servers import connector_client
 
 __all__ = [
     "SEPARATOR",
@@ -209,6 +210,16 @@ async def propose_call(
     """A tool under approval, called: a governed action, proposed in the name of the run's agent
     (`agent:<slug>`). Nothing reaches the server before a re-authenticated human approves it —
     and whoever owns the agent does not approve it (separation of roles)."""
+    from ..errors import ApiError
+
+    # ADR 0105: the route is judged BEFORE the action exists, so a refused connector (mode `required`,
+    # `off`, no gateway) leaves no pending action for a person to approve.
+    try:
+        await route_of(session, tool.connector)
+    except GatewayRefusal as refused:
+        raise ApiError(
+            403, "Network policy", str(refused), type_="network_policy", extra={"code": refused.code}
+        ) from refused
     action = await _propose_tool_action(session, run, project, tool, arguments)
     return {
         "action": action.id,
@@ -294,6 +305,13 @@ async def write_through_action(
 
     Returns (code, body, created) — `created`: this call created the action (the price is counted once).
     """
+    # ADR 0105: the route is judged BEFORE the action exists. Refused here, nothing is created, the
+    # price is 0 (`created` is False) and the ledger skips a `network_policy` result; judged only in the
+    # workers, an action and a priced line would already exist.
+    try:
+        await route_of(session, tool.connector)
+    except GatewayRefusal as refused:
+        return 403, {"error": str(refused), "type": "network_policy", "code": refused.code}, False
     from choregos_contracts import ActionStatus
 
     from ..config import get_settings
@@ -432,11 +450,16 @@ async def _call(
 ) -> tuple[int, dict[str, Any]]:
     import httpx
     from choregos_adapters.errors import AdapterError
-    from choregos_adapters.mcp import ErreurMcp as McpError
+    from choregos_adapters.mcp import McpError
     from choregos_core.redaction import redact
     from choregos_core.secrets import SecretIntrouvable
 
     instance = tool.connector
+    # ADR 0105: how the connector is reached is decided first; a gateway refusal leaves nothing behind.
+    try:
+        route = await route_of(session, instance)
+    except GatewayRefusal as refused:
+        return 403, {"error": str(refused), "type": "network_policy", "code": refused.code}
     try:
         await enforce_connector_call(
             session,
@@ -444,14 +467,22 @@ async def _call(
             project=project,
             run_id=run.id if run else None,
             agent_slug=run.agent_slug if run else None,
+            # The gateway's host is judged like any other; its politeness is the gateway's job (ADR 0105).
+            polite=not route.via_gateway,
+            host=route.host,
         )
     except PlatformNetworkRefused as refused:
         return 403, {"error": f"{refused.message()}: {WHERE}", "type": "network_policy"}
     except PlatformRateLimited as rate_limited:
         return 429, {"error": str(rate_limited), "type": "rate_limited"}
     try:
-        # A plugin's server (ADR 0096): its Service, its bearer token; any other: its type's adapter.
-        client: Any = await connector_client(session, instance)
+        # A gateway connector (ADR 0105) goes through the gateway, signed with this call's identity; a
+        # plugin's server (ADR 0096), its Service and bearer token; any other, its type's adapter.
+        client: Any = await connector_client(
+            session,
+            instance,
+            lambda: identity_of_run(session, run, project, instance, tool.operation.name),
+        )
         if hasattr(client, "call_tool"):
             result = await client.call_tool(tool.operation.name, arguments)
         else:
@@ -461,6 +492,8 @@ async def _call(
             result = {"content": [{"type": "text", "text": _json(raw)}], "structuredContent": raw}
     except McpError as mcp_error:
         return 502, {"error": redact(str(mcp_error))}
+    except GatewayRefusal as refused:  # a lost assertion key or credential: refused, never a 500
+        return 403, {"error": str(refused), "type": "network_policy", "code": refused.code}
     except AdapterError as adapter_refusal:
         return 422, {"error": redact(str(adapter_refusal))}
     except (SecretIntrouvable, httpx.HTTPError) as failure:

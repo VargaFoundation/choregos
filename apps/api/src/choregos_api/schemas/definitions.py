@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Workflow, politique et modèles d'un projet."""
+"""A project's workflow, policy and models."""
 
 from __future__ import annotations
 
@@ -85,9 +85,9 @@ class WorkflowPut(Dto):
     yaml: str
     source: Literal["repo", "platform", "template"] = "platform"
     activate: bool = True
-    #: La version active que l'éditeur a lue : si une autre a été publiée depuis, 409.
+    #: The active version the editor read: if another was published since, 409.
     base_version: int | None = None
-    #: Créer, pas republier : un workflow de ce nom, actif ou non, répond 409 (#336).
+    #: Create, not republish: a workflow of that name, active or not, answers 409 (#336).
     create_only: bool = False
 
 
@@ -127,6 +127,9 @@ class WorkflowRoutingDto(Dto):
     #: What the model reads about each workflow, beside its description: workflow name → hint.
     #: Absent from a PUT: unchanged.
     hints: dict[str, Annotated[str, Field(max_length=500)]] | None = None
+    #: Below it, a decision model's choice is not taken and the default takes the item (ADR 0121).
+    #: Absent from a PUT: unchanged; `null`: every answer is taken.
+    min_confidence: float | None = Field(default=None, ge=0, le=1)
 
 
 class RoutingPreviewRequest(Dto):
@@ -143,6 +146,8 @@ class RoutingPreviewDto(Dto):
     by: Literal["explicit", "rule", "llm", "default"]
     reason: str | None = None
     model: str | None = None
+    #: The decision model's probability for its choice; `None` from a chat model or without a model.
+    confidence: float | None = None
 
 
 class WorkflowValidateRequest(Dto):
@@ -167,7 +172,7 @@ class WorkflowValidation(Dto):
     errors: list[WorkflowIssue] = Field(default_factory=list)
     warnings: list[WorkflowIssue] = Field(default_factory=list)
     graph: dict[str, Any] | None = None
-    #: La vue « processus » : chaque transition dite en clair (ADR 0031).
+    #: The "process" view: each transition said in plain words (ADR 0031).
     process: list[dict[str, Any]] = Field(default_factory=list)
     #: The workflow as JSON, as the engine read it: the map's panels show the draft's actors and
     #: transitions from it, not the published version's (ADR 0112).
@@ -176,7 +181,7 @@ class WorkflowValidation(Dto):
 
 class WorkflowEditRequest(Dto):
     yaml: str
-    #: Validées par `choregos_core.dsl.edition.OPERATIONS` : un refus dit laquelle et pourquoi.
+    #: Validated by `choregos_core.dsl.edition.OPERATIONS`: a refusal says which one and why.
     operations: list[dict[str, Any]] = Field(min_length=1)
 
 

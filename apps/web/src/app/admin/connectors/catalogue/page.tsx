@@ -5,6 +5,6 @@ import { redirect } from "next/navigation";
  * The MCP catalogue left the administration for Catalogue → MCP servers (ADR 0074): links and
  * documents that point here land on the new page.
  */
-export default function AncienneCatalogueMcp() {
+export default function FormerMcpCatalogue() {
   redirect("/catalogue/mcp-servers");
 }

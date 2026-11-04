@@ -32,7 +32,7 @@ from sqlalchemy.orm import undefer
 
 from ..config import get_settings
 from ..db.models import KnowledgeBase, KnowledgeDocument, Organization
-from ..db.session import TOUT, session_scope
+from ..db.session import ALL_ORGS, session_scope
 from ..logging import get_logger
 from .formats import STRUCTURED
 
@@ -249,7 +249,7 @@ class Conversions:
         """Re-schedules what a stopped replica left: pending documents, and stale `converting` ones."""
         settings = get_settings()
         stale = utcnow() - timedelta(seconds=settings.knowledge_conversion_timeout_s * 2 + 60)
-        async with session_scope(orgs=TOUT) as session:
+        async with session_scope(orgs=ALL_ORGS) as session:
             await session.execute(
                 update(KnowledgeDocument)
                 .where(KnowledgeDocument.status == CONVERTING, KnowledgeDocument.updated_at < stale)
@@ -275,7 +275,7 @@ class Conversions:
         only the in-process distillation of the fakes is interrupted."""
         if not get_settings().fakes:
             return 0
-        async with session_scope(orgs=TOUT) as session:
+        async with session_scope(orgs=ALL_ORGS) as session:
             bases = (
                 await session.execute(select(KnowledgeBase).where(KnowledgeBase.distillation.is_not(None)))
             ).scalars()

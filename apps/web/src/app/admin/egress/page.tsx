@@ -8,7 +8,7 @@ import { NetworkCeilingCard } from "@/components/admin/network-ceiling";
 import { McpGatewayCard } from "@/components/admin/mcp-gateway";
 import { OutboundProxyCard } from "@/components/admin/outbound-proxy";
 import { PlatformChangeBlock } from "@/components/egress/egress-modal";
-import { Alert, Badge, Button, Card, Empty, ErrorNote, EtatDeLecture, Heading, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
+import { Alert, Badge, Button, Card, Empty, ErrorNote, ReadState, Heading, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 import { api } from "@/lib/api";
 import { FAMILY_LABEL, hostLabel, outsideCeiling } from "@/lib/egress";
 import { relative } from "@/lib/format";
@@ -68,7 +68,7 @@ export default function EgressPage() {
         network policy: what the platform must still open is listed below, never applied.
       </p>
       {error && <ErrorNote>{error}</ErrorNote>}
-      <EtatDeLecture lecture={overview} quoi="the network access" />
+      <ReadState lecture={overview} quoi="the network access" />
 
       {data && (
         <Card title="Deployment" >

@@ -5,8 +5,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState } from "react";
 import { DecisionBar } from "@/components/decision-bar";
-import { CarteDuParcours } from "@/components/parcours/carte-du-parcours";
-import { gare } from "@/components/parcours/modele";
+import { JourneyMap } from "@/components/journey/journey-map";
+import { parked } from "@/components/journey/model";
 import {
   ActorIcon,
   Breadcrumbs,
@@ -24,7 +24,7 @@ import {
 import { api } from "@/lib/api";
 import { libelleDeCode, relative, shortDate, tokens, usd } from "@/lib/format";
 import type { WorkItemJourney } from "@/lib/types";
-import { GesteConfirme } from "@/components/geste-confirme";
+import { ConfirmedGesture } from "@/components/confirmed-gesture";
 import { AgentProposal } from "@/components/agent-proposal";
 import { Artifacts } from "@/components/artifacts";
 import { Passages } from "@/components/passages";
@@ -36,7 +36,7 @@ import { LongText, RequestCard } from "@/components/ticket/request-card";
 import { WorkflowChip } from "@/components/workflow-chip";
 import { nextStep } from "@/lib/next-step";
 
-/** Tant qu'un agent tourne ou qu'une personne est attendue, le parcours se relit : la carte suit. */
+/** While an agent runs or a person is awaited, the journey is re-read: the map follows. */
 function enMouvement(journey: WorkItemJourney | undefined): boolean {
   if (!journey || journey.closed) return false;
   return journey.steps.some(
@@ -50,7 +50,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
   const [erreurDeControle, setErreurDeControle] = useState<string | null>(null);
   const item = useQuery({ queryKey: ["item", id], queryFn: () => api.workItem(id) });
   const timeline = useQuery({ queryKey: ["timeline", id], queryFn: () => api.timeline(id) });
-  // Les reçus de passage (S25-04) : qui a produit chaque sortie d'étape, qui l'a lue, sous quelle empreinte.
+  // The hand-off receipts (S25-04): who produced each step output, who read it, under which fingerprint.
   const passages = useQuery({ queryKey: ["hand-offs", id], queryFn: () => api.handOffs(id) });
   const runs = useQuery({ queryKey: ["runs", id], queryFn: () => api.runs(id) });
   // The tracker connector the bookkeeping writes through (ADR 0107 point 4).
@@ -107,14 +107,14 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
           >
             {data.paused ? "Resume" : "Pause"}
           </Button>
-          <GesteConfirme
+          <ConfirmedGesture
             tonDuBouton="danger"
             question="Stop this ticket? Its run is cancelled and it leaves the workflow — it does not resume, it has to be filed again."
             confirmer="Stop the ticket"
             action={() => control("stop")}
           >
             Stop
-          </GesteConfirme>
+          </ConfirmedGesture>
         </div>
       </div>
 
@@ -125,15 +125,15 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
             <a href="#decision" className={buttonClasses("accent", "sm")}>
               {next.action.label}
             </a>
-          ) : next.action?.kind === "replay" || gare(journey.data) ? (
-            <GesteConfirme
+          ) : next.action?.kind === "replay" || parked(journey.data) ? (
+            <ConfirmedGesture
               ton="accent"
               question="Replay the stage that escalated? An agent runs it again from the start — a new run, billed."
               confirmer="Replay the stage"
               action={() => control("rerun_stage")}
             >
               Replay the stage
-            </GesteConfirme>
+            </ConfirmedGesture>
           ) : undefined
         }
       />
@@ -222,7 +222,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
 
       <Card title="Journey">
         {journey.data ? (
-          <CarteDuParcours
+          <JourneyMap
             journey={journey.data}
             slug={slug}
             itemId={id}
@@ -290,7 +290,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
         </Card>
 
         <Card title="Timeline">
-          {/* Un rail, et sur lui un point par moment, à la couleur de qui a agi (S24-04). */}
+          {/* A rail, and on it a dot per moment, in the colour of whoever acted (S24-04). */}
           <ol className="relative space-y-3 before:absolute before:top-2 before:bottom-2 before:left-[3.5px] before:w-px before:bg-line">
             {(timeline.data ?? []).map((entry, index) => (
               <li key={`${entry.ts}-${index}`} className="relative pl-5">

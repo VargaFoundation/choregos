@@ -97,6 +97,10 @@
  },
  {
   "kind": "notify",
+  "type": "email"
+ },
+ {
+  "kind": "notify",
   "type": "slack"
  },
  {

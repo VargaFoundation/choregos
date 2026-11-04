@@ -4,7 +4,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Button, Card, Input, Select } from "@/components/ui";
-import { useBrouillon } from "@/components/workflows/brouillon";
+import { useDraft } from "@/components/workflows/draft";
 import {
   DecisionActorFields,
   DecisionProblems,
@@ -44,7 +44,7 @@ export function offeredAgents(agents: Agent[], catalogue: AgentCatalogueEntry[])
 
 /** The workflow's actors (ADR 0112 §2): who acts in it, added, edited (a decision, ADR 0121) and removed as typed operations. */
 export function ActorsPanel({ org }: { org: string }) {
-  const draft = useBrouillon();
+  const draft = useDraft();
   const actors = Object.entries(draft.document?.actors ?? {});
   const [editing, setEditing] = useState<string | null>(null);
   return (
@@ -73,7 +73,7 @@ export function ActorsPanel({ org }: { org: string }) {
                     type="button"
                     className="text-xs text-ink-muted underline hover:text-danger"
                     aria-label={`Remove the actor ${name}`}
-                    onClick={() => void draft.appliquer(operations.removeActor(name))}
+                    onClick={() => void draft.apply(operations.removeActor(name))}
                   >
                     Remove
                   </button>
@@ -83,8 +83,8 @@ export function ActorsPanel({ org }: { org: string }) {
                 <EditDecisionActor
                   name={name}
                   actor={actor}
-                  apply={draft.appliquer}
-                  busy={draft.occupe}
+                  apply={draft.apply}
+                  busy={draft.busy}
                   onDone={() => setEditing(null)}
                 />
               )}
@@ -98,7 +98,7 @@ export function ActorsPanel({ org }: { org: string }) {
 }
 
 function AddActorForm({ org, taken }: { org: string; taken: Set<string> }) {
-  const draft = useBrouillon();
+  const draft = useDraft();
   const agents = useQuery({ queryKey: ["agents", org], queryFn: () => api.agents(org), enabled: !!org });
   const catalogue = useQuery({ queryKey: ["agent-catalogue", org], queryFn: () => api.agentCatalogue(org), enabled: !!org });
   const offered = offeredAgents(agents.data ?? [], catalogue.data ?? []);
@@ -143,7 +143,7 @@ function AddActorForm({ org, taken }: { org: string; taken: Set<string> }) {
       aria-label="Add an actor"
       onSubmit={(event) => {
         event.preventDefault();
-        void draft.appliquer(operations.addActor(effectiveName, spec())).then((ok) => {
+        void draft.apply(operations.addActor(effectiveName, spec())).then((ok) => {
           if (!ok) return;
           setName("");
           setAgent("");
@@ -216,7 +216,7 @@ function AddActorForm({ org, taken }: { org: string; taken: Set<string> }) {
         <Input value={effectiveName} onChange={(e) => setName(e.target.value)} />
       </label>
       {taken.has(effectiveName) && <p className="text-xs text-warn">An actor already has this name.</p>}
-      <Button size="sm" type="submit" disabled={!valid || draft.occupe}>
+      <Button size="sm" type="submit" disabled={!valid || draft.busy}>
         Add the actor
       </Button>
     </form>

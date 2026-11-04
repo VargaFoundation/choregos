@@ -13,7 +13,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
   };
 });
 
-function rendre(section: AdminSection) {
+function mount(section: AdminSection) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
@@ -24,7 +24,7 @@ function rendre(section: AdminSection) {
 
 describe("a section whose blocks carry their own permission (S42-02)", () => {
   it("renders the title and the description of each block", async () => {
-    rendre(sectionAcmeLayered as AdminSection);
+    mount(sectionAcmeLayered as AdminSection);
     expect(await screen.findByText("This organisation")).toBeInTheDocument();
     expect(screen.getByText("Applies to Acme only.")).toBeInTheDocument();
     expect(screen.getByText("The whole instance")).toBeInTheDocument();
@@ -33,14 +33,14 @@ describe("a section whose blocks carry their own permission (S42-02)", () => {
 
   it("renders fine once the API has filtered the platform block out", async () => {
     const filtree = { ...sectionAcmeLayered, blocks: [sectionAcmeLayered.blocks[0]] } as AdminSection;
-    rendre(filtree);
+    mount(filtree);
     expect(await screen.findByText("This organisation")).toBeInTheDocument();
     expect(screen.queryByText("The whole instance")).not.toBeInTheDocument();
     expect(within(screen.getByTestId("admin-section-acme-layered")).getAllByRole("button", { name: "Save" })).toHaveLength(1);
   });
 
   it("shows the description of an action block", () => {
-    rendre({
+    mount({
       id: "x",
       title: "x",
       scope: "organisation",

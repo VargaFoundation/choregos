@@ -103,7 +103,7 @@ test("carte en cours d'édition sans violation sérieuse", async ({ page }) => {
   const panneau = page.getByTestId("panneau-etat");
   await panneau.getByLabel("label").fill("Nouvelles demandes");
   await panneau.getByRole("button", { name: "Set label" }).click();
-  await expect(page.getByTestId("brouillon")).toContainText("1 change not published yet");
+  await expect(page.getByTestId("draft")).toContainText("1 change not published yet");
   const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"]).analyze();
   const bloquantes = results.violations;
   expect(

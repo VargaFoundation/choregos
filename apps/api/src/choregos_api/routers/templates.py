@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Templates de stack : catalogue, détail, publication (admin)."""
+"""Stack templates: catalogue, detail, publication (admin)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from sqlalchemy import select
 
 from ..audit import record
 from ..db.models import Template
-from ..deps import Db, Me, exiger_admin_de_plateforme
+from ..deps import Db, Me, require_platform_admin
 from ..errors import not_found, unprocessable
 from ..schemas import TemplateDetail, TemplateSummary, TemplateUpsert
 from ..services.gabarits import repertoire_des_gabarits
@@ -20,12 +20,12 @@ router = APIRouter(tags=["templates"])
 
 
 def _from_disk() -> list[TemplateDetail]:
-    """Les templates livrés dans le dépôt sont visibles même sans base peuplée."""
+    """The templates shipped in the repository are visible even without a populated database."""
     out: list[TemplateDetail] = []
-    racine = repertoire_des_gabarits()
-    if not racine.is_dir():
+    root = repertoire_des_gabarits()
+    if not root.is_dir():
         return out
-    for manifest_path in sorted(racine.glob("*/manifest.yaml")):
+    for manifest_path in sorted(root.glob("*/manifest.yaml")):
         try:
             manifest: dict[str, Any] = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
         except yaml.YAMLError:
@@ -109,10 +109,10 @@ def _validate_manifest(manifest: dict[str, Any]) -> None:
     operation_id="createTemplate",
 )
 async def create_template(body: TemplateUpsert, session: Db, principal: Me) -> TemplateSummary:
-    # Un template est de PLATEFORME (son audit porte `org_id=None`) : le droit se juge donc sur
-    # l'instance, pas sur une organisation. `is_platform_admin()` rendait vrai pour l'admin de
-    # n'importe quel locataire.
-    await exiger_admin_de_plateforme(session, principal)
+    # A template belongs to the PLATFORM (its audit carries `org_id=None`): the right is therefore judged on
+    # the instance, not on an organisation. `is_platform_admin()` was true for the admin of
+    # any tenant.
+    await require_platform_admin(session, principal)
     _validate_manifest(body.manifest)
     metadata = body.manifest.get("metadata", {})
     row = Template(
@@ -128,7 +128,7 @@ async def create_template(body: TemplateUpsert, session: Db, principal: Me) -> T
         session,
         principal,
         "template.create",
-        org_id=None,  # un template est de plateforme, pas d'une organisation
+        org_id=None,  # a template belongs to the platform, not to an organisation
         target_type="template",
         target_id=row.id,
         name=row.name,
@@ -145,7 +145,7 @@ async def create_template(body: TemplateUpsert, session: Db, principal: Me) -> T
 
 @router.put("/templates/{name}", response_model=TemplateSummary, operation_id="updateTemplate")
 async def update_template(name: str, body: TemplateUpsert, session: Db, principal: Me) -> TemplateSummary:
-    await exiger_admin_de_plateforme(session, principal)
+    await require_platform_admin(session, principal)
     _validate_manifest(body.manifest)
     metadata = body.manifest.get("metadata", {})
     row = (

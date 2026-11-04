@@ -1,20 +1,20 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Session : OIDC (discovery, PKCE, `state` signé) en production, connexion de développement en local.
+"""Session: OIDC (discovery, PKCE, signed `state`) in production, development sign-in locally.
 
-Ce que ce routeur garantit, et pourquoi chaque garantie existe :
+What this router guarantees, and why each guarantee exists:
 
-- **Discovery** : les URL de l'IdP viennent de `/.well-known/openid-configuration`. Elles
-  étaient codées sur la disposition de Keycloak (`/protocol/openid-connect/…`) pendant que la
-  documentation promettait « any OIDC issuer works ».
-- **`state` signé et à usage unique** : il portait la cible de redirection en clair, sans
-  nonce — donc ni protection CSRF du login, ni contrôle de la redirection (open redirect).
-- **PKCE (S256)** : le code d'autorisation ne vaut rien sans le `code_verifier` gardé dans
-  un cookie signé de dix minutes.
-- **Rôles par organisation** : un groupe OIDC s'écrit `choregos:<org>:<groupe>`. Un groupe
-  non préfixé ne vaut que pour `oidc_default_org`, sinon rien. Avant, tout groupe donnait le
-  rôle sur TOUTES les organisations de l'instance.
-- **Connexion de développement** : éteinte par défaut, refusée en staging/prod, et
-  ORG_ADMIN seulement pour les e-mails listés dans `dev_admin_emails`.
+- **Discovery**: the IdP URLs come from `/.well-known/openid-configuration`. They
+  used to be hard-coded on Keycloak's layout (`/protocol/openid-connect/…`) while the
+  documentation promised "any OIDC issuer works".
+- **A signed, single-use `state`**: it used to carry the redirect target in the clear, with no
+  nonce — so neither CSRF protection of the login, nor control of the redirect (open redirect).
+- **PKCE (S256)**: the authorisation code is worthless without the `code_verifier` kept in
+  a ten-minute signed cookie.
+- **Roles per organisation**: an OIDC group is written `choregos:<org>:<group>`. An
+  unprefixed group only counts for `oidc_default_org`, otherwise for nothing. Before, any group gave the
+  role on ALL the organisations of the instance.
+- **Development sign-in**: off by default, refused in staging/prod, and
+  ORG_ADMIN only for the e-mails listed in `dev_admin_emails`.
 """
 
 from __future__ import annotations
@@ -33,25 +33,25 @@ from choregos_core import utcnow
 from fastapi import APIRouter, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
 from ..config import Settings, get_settings
-from ..db.models import ApiToken, Membership, Organization, Project, User
+from ..db.models import ApiToken, Membership, Organization, User
 from ..db.org_aliases import current_slugs, organisation_by_slug_or_alias
-from ..deps import Config, Db, DbPlateforme, Me, resolve_project
-from ..edition import mappeur_de_groupes
+from ..deps import Config, Db, Me, PlatformDb, resolve_project
+from ..edition import group_mapper
 from ..errors import ApiError, not_found, unauthorized, unprocessable
 from ..logging import get_logger
 from ..rbac import Permission
 from ..schemas import ApiTokenCreate, ApiTokenCreated, ApiTokenDto, MeDto, MembershipDto
 from ..security import generate_api_token, read_session, sign_session
+from ..services.api_tokens import api_token_dto, linked_projects
 from ..tenant_sign_in import OidcProvider, SignInHint, TenantSignIn, email_domain, resolve
 
 router = APIRouter(tags=["session"])
 logger = get_logger("choregos.auth")
 
-#: Cookie qui porte le `code_verifier` PKCE et le nonce entre `/login` et `/callback`.
+#: Cookie that carries the PKCE `code_verifier` and the nonce between `/login` and `/callback`.
 OIDC_COOKIE = "choregos_oidc"
 OIDC_HANDSHAKE_S = 600
 
@@ -167,13 +167,16 @@ async def _provider_endpoints(provider: OidcProvider) -> dict[str, str]:
     return await _discover(provider.issuer)
 
 
-def oublier_la_decouverte() -> None:
-    """Point d'injection pour les tests."""
+def forget_discovery() -> None:
+    """Injection point for tests."""
     _endpoints.clear()
 
 
+oublier_la_decouverte = forget_discovery  # lang: fr-ok alias:internal
+
+
 def redirection_sure(target: str | None, settings: Settings) -> str:
-    """Une cible de redirection est un chemin relatif, ou une URL de NOTRE front. Rien d'autre."""
+    """A redirect target is a relative path, or a URL of OUR front end. Nothing else."""
     if not target:
         return settings.public_url
     if target.startswith("/") and not target.startswith("//"):
@@ -181,7 +184,7 @@ def redirection_sure(target: str | None, settings: Settings) -> str:
     base = settings.public_url.rstrip("/")
     if target == base or target.startswith(base + "/"):
         return target
-    logger.warning("redirection refusée", target=target[:120])
+    logger.warning("redirect refused", target=target[:120])
     return settings.public_url
 
 
@@ -207,10 +210,10 @@ def _handshake(
     if org:
         claims["o"] = org
     state = sign_session(claims, settings, purpose="oidc-state")
-    poignee: dict[str, Any] = {"n": nonce, "v": verifier, "exp": expiry}
+    handshake: dict[str, Any] = {"n": nonce, "v": verifier, "exp": expiry}
     if reauth:
-        poignee["a"] = 1
-    cookie = sign_session(poignee, settings, purpose="oidc-handshake")
+        handshake["a"] = 1
+    cookie = sign_session(handshake, settings, purpose="oidc-handshake")
     return state, cookie, challenge, nonce
 
 
@@ -224,8 +227,8 @@ def _id_token_claims(id_token: Any) -> dict[str, Any] | None:
     if not isinstance(id_token, str) or id_token.count(".") != 2:
         return None
     try:
-        charge = id_token.split(".")[1]
-        claims = json.loads(base64.urlsafe_b64decode(charge + "=" * (-len(charge) % 4)))
+        session_claims = id_token.split(".")[1]
+        claims = json.loads(base64.urlsafe_b64decode(session_claims + "=" * (-len(session_claims) % 4)))
     except (ValueError, UnicodeDecodeError):
         return None
     return claims if isinstance(claims, dict) else None
@@ -234,8 +237,8 @@ def _id_token_claims(id_token: Any) -> dict[str, Any] | None:
 def _auth_time(id_token: Any) -> int | None:
     """The ID token's `auth_time` claim: WHEN the user authenticated at the IdP."""
     claims = _id_token_claims(id_token)
-    valeur = claims.get("auth_time") if claims is not None else None
-    return int(valeur) if isinstance(valeur, int | float) and not isinstance(valeur, bool) else None
+    value = claims.get("auth_time") if claims is not None else None
+    return int(value) if isinstance(value, int | float) and not isinstance(value, bool) else None
 
 
 def _check_id_token_claims(claims: dict[str, Any], *, issuer: str, client_id: str, nonce: object) -> None:
@@ -267,18 +270,18 @@ def _poser_cookie_oidc(response: Response, cookie: str, settings: Settings) -> N
 @router.get("/auth/login", operation_id="authLogin")
 async def login(
     request: Request,
-    session: DbPlateforme,
+    session: PlatformDb,
     settings: Config,
     redirect_to: Annotated[str | None, Query()] = None,
     reauth: Annotated[bool, Query()] = False,
     org: Annotated[str | None, Query(max_length=120)] = None,
     login_hint: Annotated[str | None, Query(max_length=320)] = None,
 ) -> RedirectResponse:
-    """Redirige vers l'IdP. En dev, `?as=email` ouvre une session directement.
+    """Redirect to the IdP. In dev, `?as=email` opens a session directly.
 
-    `reauth=1` demande à l'IdP de RE-authentifier l'utilisateur même s'il a déjà une session chez
-    lui (`prompt=login`, `max_age=0`) : c'est le chemin d'une porte qui exige une authentification
-    fraîche, sans quoi l'IdP rendrait la main sans rien demander et `iat` mentirait.
+    `reauth=1` asks the IdP to RE-authenticate the user even if they already have a session with
+    it (`prompt=login`, `max_age=0`): this is the path of a door that demands a fresh authentication,
+    without which the IdP would hand control back without asking anything and `iat` would lie.
 
     `org` (a sign-in link per organisation) and `login_hint` (the address typed on the sign-in
     page) choose the tenant's own provider when an extension declared one (ADR 0108); otherwise
@@ -424,26 +427,29 @@ async def _ensure_oidc_user(
     return user
 
 
-def roles_des_groupes(groups: list[str], default_org: str) -> dict[str, Role]:
-    """`choregos:<org>:<groupe>` → rôle sur cette org. Un groupe nu ne vaut que pour `default_org`.
+def roles_from_groups(groups: list[str], default_org: str) -> dict[str, Role]:
+    """`choregos:<org>:<group>` → role on that org. A bare group only counts for `default_org`.
 
-    Quand plusieurs groupes visent la même organisation, le plus élevé gagne — l'ordre de
-    `GROUP_ROLES` est décroissant.
+    When several groups target the same organisation, the highest wins — the order of
+    `GROUP_ROLES` is descending.
     """
-    rang = {role: i for i, role in enumerate(GROUP_ROLES.values())}
+    rank = {role: i for i, role in enumerate(GROUP_ROLES.values())}
     roles: dict[str, Role] = {}
     for group in groups:
         if group.startswith("choregos:"):
             parts = group.split(":", 2)
-            org, nom = (parts[1], parts[2]) if len(parts) == 3 else ("", "")
+            org, name = (parts[1], parts[2]) if len(parts) == 3 else ("", "")
         else:
-            org, nom = default_org, group
-        role = GROUP_ROLES.get(nom)
+            org, name = default_org, group
+        role = GROUP_ROLES.get(name)
         if not org or role is None:
             continue
-        if org not in roles or rang[role] < rang[roles[org]]:
+        if org not in roles or rank[role] < rank[roles[org]]:
             roles[org] = role
     return roles
+
+
+roles_des_groupes = roles_from_groups  # lang: fr-ok alias:internal (edition.py and the tests import it)
 
 
 async def _map_groups_to_roles(
@@ -471,19 +477,19 @@ async def _map_groups_to_roles(
         # (ADR 0052). Replaced at each sign-in — a group withdrawn at the IdP is withdrawn here at the
         # next one. A development sign-in (`ecraser=False`) leaves them as they are.
         user.groups = sorted({str(g) for g in groups})
-    # Le mappeur du cœur, ou celui qu'un greffon a déclaré (édition entreprise : un préfixe par
-    # organisation, des groupes SAML/SCIM). L'indirection tient en une ligne et évite un fork de
-    # ce fichier — c'est tout ce que la couture C3 demandait, et rien de plus.
+    # The core's mapper, or the one an extension declared (enterprise edition: a prefix per
+    # organisation, SAML/SCIM groups). The indirection fits on one line and avoids forking
+    # this file — that is all the C3 seam asked for, and nothing more.
     default_org = only_org.slug if only_org is not None else settings.oidc_default_org
-    roles = mappeur_de_groupes(roles_des_groupes)(groups, default_org)
+    roles = group_mapper(roles_from_groups)(groups, default_org)
     # A group that names a FORMER slug (`choregos:<old>:<group>`, or `CHOREGOS_OIDC_DEFAULT_ORG` left at
     # the old slug) grants its role on the renamed organisation (ADR 0090). When a current slug and an
     # alias of the same organisation both appear, the higher role wins, as for two groups of one slug.
-    rang = {role: i for i, role in enumerate(GROUP_ROLES.values())}
+    rank = {role: i for i, role in enumerate(GROUP_ROLES.values())}
     resolu: dict[str, Role] = {}
-    for nom, role in roles.items():
-        actuel = (await current_slugs(session, [nom]))[nom]
-        if actuel not in resolu or rang[role] < rang[resolu[actuel]]:
+    for name, role in roles.items():
+        actuel = (await current_slugs(session, [name]))[name]
+        if actuel not in resolu or rank[role] < rank[resolu[actuel]]:
             resolu[actuel] = role
     roles = resolu
     if only_org is not None:
@@ -626,17 +632,17 @@ async def _tenant_user(  # noqa: PLR0913 - one sign-in, fact by fact, keyword-on
     return user
 
 
-async def _groupes_de_developpement(session: Any, email: str, settings: Settings) -> list[str]:
-    """En connexion de développement : admin si l'e-mail est listé, développeur sinon.
+async def _development_groups(session: Any, email: str, settings: Settings) -> list[str]:
+    """In development sign-in: admin if the e-mail is listed, developer otherwise.
 
-    Dans `oidc_default_org` quand elle est définie ; sinon dans toutes les organisations du
-    banc — un banc n'en a qu'une, et c'est ce que « développement » veut dire.
+    In `oidc_default_org` when it is set; otherwise in every organisation of the
+    bench — a bench only has one, and that is what "development" means.
     """
-    nom = "org-admins" if email.lower() in settings.dev_admins else "developers"
+    name = "org-admins" if email.lower() in settings.dev_admins else "developers"
     if settings.oidc_default_org:
-        return [f"choregos:{settings.oidc_default_org}:{nom}"]
+        return [f"choregos:{settings.oidc_default_org}:{name}"]
     orgs = (await session.execute(select(Organization.slug))).scalars().all()
-    return [f"choregos:{org}:{nom}" for org in orgs]
+    return [f"choregos:{org}:{name}" for org in orgs]
 
 
 @router.get("/auth/callback", operation_id="authCallback")
@@ -644,28 +650,28 @@ async def callback(
     request: Request,
     code: Annotated[str, Query()],
     state: Annotated[str, Query()],
-    session: DbPlateforme,
+    session: PlatformDb,
     settings: Config,
 ) -> RedirectResponse:
-    """Vérifie `state` et le nonce, échange le code (PKCE), ouvre la session, pose le cookie signé."""
-    attendu = read_session(state, settings, purpose="oidc-state")
-    poignee = read_session(request.cookies.get(OIDC_COOKIE, ""), settings, purpose="oidc-handshake")
-    if not attendu or not poignee or attendu.get("n") != poignee.get("n"):
+    """Check `state` and the nonce, exchange the code (PKCE), open the session, set the signed cookie."""
+    expected = read_session(state, settings, purpose="oidc-state")
+    handshake = read_session(request.cookies.get(OIDC_COOKIE, ""), settings, purpose="oidc-handshake")
+    if not expected or not handshake or expected.get("n") != handshake.get("n"):
         raise unauthorized("invalid or expired sign-in state: start the sign-in again")
-    target = redirection_sure(str(attendu.get("r") or ""), settings)
-    reauth = bool(poignee.get("a"))
+    target = redirection_sure(str(expected.get("r") or ""), settings)
+    reauth = bool(handshake.get("a"))
 
     if code.startswith("dev:") and settings.dev_login_enabled:
         email = code.removeprefix("dev:")
         user = await _ensure_user(session, email, email.split("@")[0], sub=f"dev|{email}")
-        groupes = await _groupes_de_developpement(session, email, settings)
-        await _map_groups_to_roles(session, user, groupes, settings, ecraser=False)
-        # La connexion de développement EST l'authentification : elle a lieu maintenant.
+        groups = await _development_groups(session, email, settings)
+        await _map_groups_to_roles(session, user, groups, settings, ecraser=False)
+        # The development sign-in IS the authentication: it happens now.
         auth_time: int | None = int(time.time())
     else:
         import httpx
 
-        tenant_org = str(attendu.get("o") or "")
+        tenant_org = str(expected.get("o") or "")
         provider: OidcProvider | None = None
         if tenant_org:
             tenant = await resolve(session, SignInHint(org=tenant_org))
@@ -691,21 +697,21 @@ async def callback(
                     "redirect_uri": f"{settings.api_url}/api/v1/auth/callback",
                     "client_id": client_id,
                     "client_secret": client_secret,
-                    "code_verifier": str(poignee.get("v") or ""),
+                    "code_verifier": str(handshake.get("v") or ""),
                 },
             )
             if token_response.status_code >= 400:
                 raise unauthorized(f"OIDC exchange refused: {token_response.text[:200]}")
-            jetons = token_response.json()
-            access_token = jetons["access_token"]
-            claims = _id_token_claims(jetons.get("id_token"))
+            tokens = token_response.json()
+            access_token = tokens["access_token"]
+            claims = _id_token_claims(tokens.get("id_token"))
             if claims is not None:
-                _check_id_token_claims(claims, issuer=issuer, client_id=client_id, nonce=poignee.get("n"))
-            auth_time = _auth_time(jetons.get("id_token"))
-            # `reauth=1` a demandé `prompt=login` et `max_age=0` : l'IdP DOIT alors rendre un
-            # `auth_time` (OIDC Core §3.1.2.1). Sans lui, ou s'il date d'avant la poignée de main,
-            # l'IdP a rendu la main sans redemander l'authentification — une reconnexion SSO
-            # silencieuse ne vaut pas une authentification fraîche.
+                _check_id_token_claims(claims, issuer=issuer, client_id=client_id, nonce=handshake.get("n"))
+            auth_time = _auth_time(tokens.get("id_token"))
+            # `reauth=1` asked for `prompt=login` and `max_age=0`: the IdP MUST then return an
+            # `auth_time` (OIDC Core §3.1.2.1). Without it, or if it predates the handshake,
+            # the IdP handed control back without asking again — a silent SSO reconnection
+            # is not a fresh authentication.
             if reauth and (auth_time is None or time.time() - auth_time > OIDC_HANDSHAKE_S):
                 raise unauthorized(
                     "re-authentication was requested, but the IdP did not perform it (`auth_time` missing "
@@ -747,30 +753,30 @@ async def callback(
 
 
 async def ouvrir_la_session(
-    session: Any, user: User, cible: str, settings: Settings, *, canal: str, auth_time: int | None = None
+    session: Any, user: User, target: str, settings: Settings, *, canal: str, auth_time: int | None = None
 ) -> RedirectResponse:
-    """La fin de TOUTE connexion : trace d'audit, cookie signé avec `iat`, redirection bornée.
+    """The end of ANY sign-in: audit trace, signed cookie with `iat`, bounded redirect.
 
-    Publique pour qu'un autre protocole d'authentification — SAML, apporté par un greffon — ouvre
-    une session EXACTEMENT comme OIDC : mêmes clés, même durée, mêmes attributs de cookie, même
-    trace. Un second chemin écrit à la main finirait par diverger (un `iat` oublié, un `secure`
-    manquant) sans que rien ne le signale. `terminer_la_connexion` y ajoute l'utilisateur et ses
-    rôles.
+    Public so that another authentication protocol — SAML, brought by an extension — opens
+    a session EXACTLY like OIDC: same keys, same duration, same cookie attributes, same
+    trace. A second path written by hand would end up diverging (a forgotten `iat`, a missing `secure`)
+    with nothing to signal it. `terminer_la_connexion` adds the user and their
+    roles.
     """
-    # une connexion précède la résolution d'organisation : événement de plateforme
+    # a sign-in precedes the organisation resolution: a platform event
     await record(session, None, "auth.login", org_id=None, target_type="user", target_id=user.id, canal=canal)
-    # `iat` : l'heure d'authentification. C'est elle que lit une porte qui exige une authentification
-    # RÉCENTE (`reauth=1`), et une révocation côté serveur (« toute session antérieure à … »).
-    maintenant = int(time.time())
-    fin = maintenant + settings.session_max_age_s
-    charge: dict[str, Any] = {"sub": user.id, "iat": maintenant, "exp": fin}
-    # `auth_time` : quand l'utilisateur s'est VRAIMENT authentifié, si l'IdP le dit. Une reconnexion
-    # SSO silencieuse ouvre une session neuve (`iat` frais) sur une authentification ancienne.
+    # `iat`: the authentication time. It is what a door demanding a RECENT authentication reads
+    # (`reauth=1`), and a server-side revocation ("any session older than …").
+    issued_at = int(time.time())
+    expires = issued_at + settings.session_max_age_s
+    session_claims: dict[str, Any] = {"sub": user.id, "iat": issued_at, "exp": expires}
+    # `auth_time`: when the user REALLY authenticated, if the IdP says so. A silent
+    # SSO reconnection opens a new session (fresh `iat`) on an old authentication.
     if auth_time is not None:
-        charge["auth_time"] = auth_time
-    cookie = sign_session(charge, settings)
+        session_claims["auth_time"] = auth_time
+    cookie = sign_session(session_claims, settings)
     response = RedirectResponse(
-        url=redirection_sure(cible, settings), status_code=status.HTTP_307_TEMPORARY_REDIRECT
+        url=redirection_sure(target, settings), status_code=status.HTTP_307_TEMPORARY_REDIRECT
     )
     response.set_cookie(
         settings.session_cookie,
@@ -787,35 +793,35 @@ async def terminer_la_connexion(  # noqa: PLR0913 - one sign-in, fact by fact, k
     session: Any,
     *,
     email: str,
-    nom: str,
-    sujet: str | None,
-    groupes: list[str],
-    cible: str,
+    nom: str,  # lang: fr-ok — public API of editions (SAML), renamed with its callers
+    sujet: str | None,  # lang: fr-ok — public API of editions (SAML)
+    groupes: list[str],  # lang: fr-ok — public API of editions (SAML)
+    cible: str,  # lang: fr-ok — public API of editions (SAML)
     canal: str,
     settings: Settings | None = None,
     org: str | None = None,
 ) -> RedirectResponse:
-    """Pour un protocole d'authentification apporté par un greffon, APRÈS qu'il a vérifié
-    l'identité (signature d'assertion, audience, fraîcheur) : crée ou retrouve l'utilisateur,
-    traduit ses groupes en rôles par le mappeur en service, ouvre la session.
+    """For an authentication protocol brought by an extension, AFTER it has verified
+    the identity (assertion signature, audience, freshness): creates or finds the user,
+    translates their groups into roles through the mapper in service, opens the session.
 
-    Le cœur ne vérifie RIEN de l'identité passée ici : c'est la responsabilité de l'appelant.
+    The core verifies NOTHING of the identity passed here: that is the caller's responsibility.
 
     `org`: the identity comes from that tenant's own provider (a SAML IdP declared through
     `tenant_sign_in`). The sign-in is then confined to the tenant exactly as an OIDC one is
     (ADR 0108): the address domain must be the tenant's, roles land on the tenant only.
     """
-    reglages = settings or get_settings()
+    resolved_settings = settings or get_settings()
     if not email:
         raise unauthorized("the IdP did not provide an e-mail")
     if org:
         user = await _tenant_user(
-            session, org, email=email, name=nom, sub=sujet, groups=list(groupes), settings=reglages
+            session, org, email=email, name=nom, sub=sujet, groups=list(groupes), settings=resolved_settings
         )
     else:
         user = await _ensure_user(session, email, nom, sujet)
-        await _map_groups_to_roles(session, user, list(groupes), reglages)
-    return await ouvrir_la_session(session, user, cible, reglages, canal=canal)
+        await _map_groups_to_roles(session, user, list(groupes), resolved_settings)
+    return await ouvrir_la_session(session, user, cible, resolved_settings, canal=canal)
 
 
 @router.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT, operation_id="authLogout")
@@ -825,7 +831,7 @@ async def logout(settings: Config, response: Response) -> Response:
     return response
 
 
-# ───────────────────────── jetons d'API ─────────────────────────
+# ───────────────────────── API tokens ─────────────────────────
 
 
 @router.get("/me/tokens", response_model=list[ApiTokenDto], operation_id="listMyTokens")
@@ -839,8 +845,8 @@ async def list_my_tokens(session: Db, principal: Me) -> list[ApiTokenDto]:
             )
         ).scalars()
     )
-    projets = await _projets_lies(session, {row.project_id for row in rows if row.project_id})
-    return [_token_dto(row, projets.get(row.project_id or "")) for row in rows]
+    projects_by_id = await linked_projects(session, {row.project_id for row in rows if row.project_id})
+    return [api_token_dto(row, projects_by_id.get(row.project_id or "")) for row in rows]
 
 
 @router.post(
@@ -850,46 +856,46 @@ async def list_my_tokens(session: Db, principal: Me) -> list[ApiTokenDto]:
     operation_id="createMyToken",
 )
 async def create_my_token(body: ApiTokenCreate, session: Db, principal: Me) -> ApiTokenCreated:
-    """Émet un jeton porteur pour l'appelant. Le clair n'est rendu qu'ICI, une fois.
+    """Issue a bearer token for the caller. The plain text is returned HERE only, once.
 
-    `generate_api_token` existait sans qu'aucune route ne l'appelle : la documentation
-    disait `choregos login --token` et rien ne pouvait produire ce jeton.
+    `generate_api_token` existed with no route calling it: the documentation
+    said `choregos login --token` and nothing could produce that token.
     """
     if principal.kind != "user":
         raise unauthorized("only a human session can issue a token")
-    portees = sorted(set(body.scopes))
-    if "*" in portees and len(portees) > 1:
+    token_scopes = sorted(set(body.scopes))
+    if "*" in token_scopes and len(token_scopes) > 1:
         raise unprocessable(
             "the `*` scope does not combine with others: it opens the REST API, not the MCP door"
         )
-    projet_id: str | None = None
-    projet_nom: str | None = None
+    project_id: str | None = None
+    project_name: str | None = None
     if body.project is not None:
-        if "*" in portees:
+        if "*" in token_scopes:
             raise unprocessable(
                 "only an MCP or A2A token (scope mcp:read, mcp:write or a2a) can be bound to a project"
             )
-        # Un jeton ne voit jamais plus que son humain : le projet doit lui être lisible, et un
-        # projet illisible répond comme un projet inexistant.
+        # A token never sees more than its human: the project must be readable by them, and an
+        # unreadable project answers like a missing one.
         try:
-            projet, org_slug = await resolve_project(session, body.project)
-        except ApiError as erreur:
-            raise not_found("Project", body.project) from erreur
-        if not principal.can(Permission.PROJECT_READ, org_slug, projet.slug):
+            project_row, org_slug = await resolve_project(session, body.project)
+        except ApiError as error:
+            raise not_found("Project", body.project) from error
+        if not principal.can(Permission.PROJECT_READ, org_slug, project_row.slug):
             raise not_found("Project", body.project)
-        projet_id, projet_nom = projet.id, f"{org_slug}:{projet.slug}"
+        project_id, project_name = project_row.id, f"{org_slug}:{project_row.slug}"
     raw, digest = generate_api_token()
     row = ApiToken(
         user_id=principal.user_id,
         name=body.name,
         hash=digest,
-        scopes=portees,
-        project_id=projet_id,
+        scopes=token_scopes,
+        project_id=project_id,
         expires_at=utcnow() + timedelta(days=body.expires_in_days) if body.expires_in_days else None,
     )
     session.add(row)
     await session.flush()
-    # un jeton d'API appartient à un utilisateur, pas à une organisation
+    # an API token belongs to a user, not to an organisation
     await record(
         session,
         principal,
@@ -897,10 +903,10 @@ async def create_my_token(body: ApiTokenCreate, session: Db, principal: Me) -> A
         org_id=None,
         target_type="api_token",
         target_id=row.id,
-        scopes=portees,
-        project=projet_nom,
+        scopes=token_scopes,
+        project=project_name,
     )
-    return ApiTokenCreated(**_token_dto(row, projet_nom).model_dump(), token=raw)
+    return ApiTokenCreated(**api_token_dto(row, project_name).model_dump(), token=raw)
 
 
 @router.delete("/me/tokens/{id}", status_code=status.HTTP_204_NO_CONTENT, operation_id="revokeMyToken")
@@ -911,28 +917,3 @@ async def revoke_my_token(id: str, session: Db, principal: Me) -> Response:
     await session.delete(row)
     await record(session, principal, "token.revoke", org_id=None, target_type="api_token", target_id=id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-def _token_dto(row: ApiToken, projet: str | None = None) -> ApiTokenDto:
-    return ApiTokenDto(
-        id=row.id,
-        name=row.name,
-        created_at=row.created_at,
-        expires_at=row.expires_at,
-        last_used_at=row.last_used_at,
-        scopes=list(row.scopes or ["*"]),
-        project=projet,
-        last_client=row.last_client,
-    )
-
-
-async def _projets_lies(session: AsyncSession, ids: set[str]) -> dict[str, str]:
-    """`{id: "org:slug"}` des projets auxquels des jetons sont liés."""
-    if not ids:
-        return {}
-    rows = await session.execute(
-        select(Project.id, Organization.slug, Project.slug)
-        .join(Organization, Project.org_id == Organization.id)
-        .where(Project.id.in_(ids))
-    )
-    return {pid: f"{org}:{slug}" for pid, org, slug in rows}

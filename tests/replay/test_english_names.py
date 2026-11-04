@@ -57,9 +57,9 @@ def test_a_french_patch_id_is_never_renamed(patch_id: str) -> None:
 
 def test_the_worker_answers_to_both_names() -> None:
     from choregos_orchestrator.activities import ALL_ACTIVITIES
-    from choregos_orchestrator.repartition import nom_de_l_activite
+    from choregos_orchestrator.queues import activity_name
 
-    names = {nom_de_l_activite(activity) for activity in ALL_ACTIVITIES}
+    names = {activity_name(activity) for activity in ALL_ACTIVITIES}
     missing = sorted(n for pair in RENAMED.items() for n in pair if n not in names)
     assert not missing, f"not registered on the worker: {missing}"
 

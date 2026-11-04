@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Interfaces des adaptateurs (docs/plan/01 §1.9).
+"""Adapter interfaces (docs/plan/01 §1.9).
 
-Chaque `Protocol` a une implémentation réelle et un `Fake*` en mémoire. Les flux
-travaillent contre les fakes tant que le connecteur réel n'existe pas : c'est ce qui
-permet aux treize flux d'avancer en parallèle sans se bloquer.
+Every `Protocol` has a real implementation and an in-memory `Fake*`. The streams work against
+the fakes until the real connector exists: that is what lets the thirteen streams move in
+parallel without blocking each other.
 """
 
 from __future__ import annotations
@@ -46,20 +46,20 @@ from .oci.signatures import SignatureVerdict
 
 @runtime_checkable
 class TrackerAdapter(Protocol):
-    """Le tracker est l'interface humaine : Choregos y reflète l'état, le coût et les preuves.
+    """The tracker is the human interface: Choregos reflects the state, the cost and the proofs in it.
 
-    `owns_items` dit **qui tient le ticket**. Chez GitHub ou Jira, le ticket existe dehors :
-    Choregos le relit, le reflète, et découvre par `list_candidates` ce qui lui est confié.
-    Avec le tracker interne, il n'y a pas de dehors — la base de Choregos EST le tracker.
-    Sans cette distinction, un ticket créé par la plateforme (un finding promu, une demande
-    saisie dans le front) n'était jamais découvert : `list_candidates` rendait une liste
-    vide, et le ticket restait en `inbox` pour toujours. Vu sur le banc du 2026-09-23.
+    `owns_items` says **who holds the ticket**. With GitHub or Jira, the ticket lives outside:
+    Choregos reads it back, reflects it, and discovers through `list_candidates` what is assigned
+    to it. With the internal tracker there is no outside: Choregos' database IS the tracker.
+    Without this distinction, a ticket created by the platform (a promoted finding, a request
+    typed in the front end) was never discovered: `list_candidates` returned an empty list, and
+    the ticket stayed in `inbox` forever. Seen on the bench of 2026-09-23.
 
     `create_item` is also what files a person's request from the board or MCP in an external
     tracker (ADR 0059): the work item is then recorded under the key it returns.
     """
 
-    #: Faux quand la base de Choregos est la source (cf. `tracker: internal`).
+    #: False when Choregos' database is the source (see `tracker: internal`).
     owns_items: bool
 
     async def fetch_item(self, key: str) -> WorkItemData: ...
@@ -78,7 +78,7 @@ class TrackerAdapter(Protocol):
 
 @runtime_checkable
 class ScmAdapter(Protocol):
-    """Le SCM : branches, PR, checks, merge queue. Les tokens sont mintés par run."""
+    """The SCM: branches, PRs, checks, merge queue. The tokens are minted per run."""
 
     async def mint_token(self, repo: str, ttl_s: int, scopes: list[str]) -> str: ...
     async def ensure_branch(self, repo: str, name: str, base: str) -> None: ...
@@ -113,34 +113,35 @@ class CdAdapter(Protocol):
     async def set_sync_window(self, app: str, windows: list[Window]) -> None: ...
 
 
-#: Ce qu'un exécuteur peut savoir faire en plus de démarrer, observer et arrêter.
+#: What an executor may be able to do besides starting, observing and stopping.
 #:
-#: Ce vocabulaire est la **couture** par laquelle un bac à sable plus capable entrera un
-#: jour — celui de Google (Agent Substrate, gVisor) ou un autre. Il est posé maintenant,
-#: alors qu'un seul exécuteur en remplit un seul, pour que ce jour-là rien d'autre ne
-#: bouge : l'orchestrateur demandera ce que le runtime sait faire au lieu de le supposer.
+#: This vocabulary is the **seam** through which a more capable sandbox will enter one day, such
+#: as Google's (Agent Substrate, gVisor) or another. It is laid down now, while a single executor
+#: fills a single one of them, so that nothing else moves on that day: the orchestrator will ask
+#: what the runtime can do instead of assuming it.
 #:
-#: - `queue`    : sait faire attendre un run SANS pod (plafond de simultanéité).
-#: - `suspend`  : sait arrêter un run EN COURS sans perdre son travail.
-#: - `resume`   : sait le reprendre là où il s'était arrêté.
-#: - `renew`    : sait remplacer le jeton d'un run QUI N'A PAS ENCORE DÉMARRÉ. Indispensable
-#:                dès qu'il y a une file : un jeton minté à la mise en file expire pendant
-#:                l'attente, et l'agent démarre pour recevoir « Signature has expired ».
+#: - `queue`    : can make a run wait WITHOUT a pod (concurrency ceiling).
+#: - `suspend`  : can stop a RUNNING run without losing its work.
+#: - `resume`   : can resume it where it stopped.
+#: - `renew`    : can replace the token of a run THAT HAS NOT STARTED YET. Indispensable as soon
+#:                as there is a queue: a token minted when queued expires during the wait, and
+#:                the agent starts only to receive "Signature has expired".
 #: - `snapshot` : every run gets a sandbox made from a clean template and never used before
 #:                (ADR 0016, ADR 0053) — what makes a pool of warm runners acceptable
 #:                (ADR 0013), because no run inherits another's filesystem or credentials.
 #:                A property of `start`, like `queue`: no method. Freezing a RUNNING sandbox
 #:                and restoring it is not what this word promises.
-CAPACITES_EXECUTEUR: frozenset[str] = frozenset({"queue", "renew", "suspend", "resume", "snapshot"})
+EXECUTOR_CAPABILITIES: frozenset[str] = frozenset({"queue", "renew", "suspend", "resume", "snapshot"})
+CAPACITES_EXECUTEUR = EXECUTOR_CAPABILITIES  # lang: fr-ok alias:internal
 
 
 @runtime_checkable
 class Executor(Protocol):
-    """Ce qui fait tourner un run : PipelineRun Tekton, Job K8s, conteneur local, ACA Job."""
+    """What runs a run: a Tekton PipelineRun, a K8s Job, a local container, an ACA Job."""
 
-    #: Ce que CET exécuteur sait faire, pris dans `CAPACITES_EXECUTEUR`. Déclarer une
-    #: capacité qu'on n'implémente pas est refusé par la conformité : une capacité
-    #: annoncée et absente est pire qu'absente, l'appelant s'y fie.
+    #: What THIS executor can do, taken from `EXECUTOR_CAPABILITIES`. Declaring a capability that
+    #: is not implemented is refused by conformance: a capability announced and absent is worse
+    #: than absent, the caller relies on it.
     capabilities: frozenset[str]
 
     async def start(self, spec: StageJobSpec) -> ExecRef: ...
@@ -174,7 +175,7 @@ class ImageBuilder(Protocol):
 
 @runtime_checkable
 class AgentBackend(Protocol):
-    """Un backend ACP : comment le lancer et comment lui donner son modèle."""
+    """An ACP backend: how to launch it and how to give it its model."""
 
     name: str
     capabilities: frozenset[str]
@@ -324,6 +325,7 @@ class Notifier(Protocol):
 
 
 __all__ = [
+    "EXECUTOR_CAPABILITIES",
     "GATEWAY_CAPABILITIES",
     "AgentBackend",
     "CdAdapter",

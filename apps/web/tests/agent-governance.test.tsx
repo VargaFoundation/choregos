@@ -4,7 +4,7 @@ import { Suspense, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import AgentPage from "@/app/agents/[slug]/page";
 import ProjectAgentsPage from "@/app/p/[slug]/agents/page";
-import { creatableScopes, forkSlug, makeScopes, scopeLabel } from "@/components/agents/registre";
+import { creatableScopes, forkSlug, makeScopes, scopeLabel } from "@/components/agents/registry";
 import { api } from "@/lib/api";
 import type { Agent } from "@/lib/types";
 

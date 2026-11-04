@@ -1,4 +1,4 @@
-"""`FindingsTriage` et `ProjectProvisioning` : dédup, ticket lié, reprise après échec."""
+"""`FindingsTriage` and `ProjectProvisioning`: dedup, linked work item, resume after failure."""
 
 from __future__ import annotations
 
@@ -39,12 +39,12 @@ async def _wait(handle: Any, predicate: Any, timeout: float = 30.0) -> dict[str,
         if predicate(status):
             return status
         await asyncio.sleep(0.1)
-    raise AssertionError(f"condition jamais atteinte : {await handle.query('status')}")
+    raise AssertionError(f"condition never reached: {await handle.query('status')}")
 
 
 async def test_finding_creates_linked_ticket(setup: Fixture, temporal_env: Any, worker_factory: Any) -> None:
     finding_id = await _add_finding(
-        setup, "Requête N+1 sur les lignes", "src/orders/repository.py:88 — 1 + N requêtes"
+        setup, "N+1 query on the lines", "src/orders/repository.py:88 — 1 + N queries"
     )
     async with worker_factory():
         handle = await temporal_env.client.start_workflow(
@@ -55,7 +55,7 @@ async def test_finding_creates_linked_ticket(setup: Fixture, temporal_env: Any, 
         )
         await handle.signal("finding", {"finding_id": finding_id, "project_id": setup.project_id})
         status = await _wait(handle, lambda s: s["processed"] >= 1)
-        assert status["created"], "un ticket a été créé pour le finding"
+        assert status["created"], "a work item was created for the finding"
         await handle.signal("stop", {})
         await handle.result()
 
@@ -68,17 +68,15 @@ async def test_finding_creates_linked_ticket(setup: Fixture, temporal_env: Any, 
         assert row.created_work_item_id is not None
     created = setup.adapters.tracker.items
     assert any("[perf]" in item.title for item in created.values())
-    assert setup.adapters.tracker.links, "le ticket créé est lié à son origine"
+    assert setup.adapters.tracker.links, "the created work item is linked to its origin"
 
 
 async def test_duplicate_finding_is_commented_not_recreated(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    """Un finding quasi identique ne crée pas un second ticket : il incrémente l'occurrence."""
-    first = await _add_finding(setup, "Requête N+1 sur les lignes de commande", "src/orders/repository.py:88")
-    second = await _add_finding(
-        setup, "Requête N+1 sur les lignes de commande", "src/orders/repository.py:88"
-    )
+    """An almost identical finding does not create a second work item: it increments the occurrence."""
+    first = await _add_finding(setup, "N+1 query on the order lines", "src/orders/repository.py:88")
+    second = await _add_finding(setup, "N+1 query on the order lines", "src/orders/repository.py:88")
     async with worker_factory():
         handle = await temporal_env.client.start_workflow(
             "FindingsTriage",
@@ -99,7 +97,7 @@ async def test_duplicate_finding_is_commented_not_recreated(
 async def test_provisioning_runs_steps_and_resumes(
     setup: Fixture, temporal_env: Any, worker_factory: Any
 ) -> None:
-    """Le provisioning exécute les étapes du template, et une reprise ne rejoue pas l'existant."""
+    """Provisioning runs the template's steps, and a resume does not replay what exists."""
     async with worker_factory():
         handle = await temporal_env.client.start_workflow(
             "ProjectProvisioning",
@@ -115,7 +113,7 @@ async def test_provisioning_runs_steps_and_resumes(
         result = await handle.result()
 
     assert result["status"] in {"succeeded", "failed"}
-    assert result["completed"], "au moins une étape exécutée"
+    assert result["completed"], "at least one step executed"
 
     from choregos_api.db.models import Project
     from choregos_api.db.session import session_scope
@@ -126,7 +124,7 @@ async def test_provisioning_runs_steps_and_resumes(
         steps = project.provision_state["steps"]
         assert all(step["status"] in {"succeeded", "failed", "skipped"} for step in steps)
 
-    # Relance : les étapes déjà réussies sont sautées
+    # Relaunch: the steps that already succeeded are skipped
     async with worker_factory():
         handle = await temporal_env.client.start_workflow(
             "ProjectProvisioning",

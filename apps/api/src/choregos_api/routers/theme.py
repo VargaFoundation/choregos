@@ -16,7 +16,7 @@ from fastapi import APIRouter, Header, Query, Response
 from fastapi.responses import JSONResponse
 
 from ..db.session import TOUT, get_sessionmaker, limiter_aux_organisations
-from ..greffons import theme_provider
+from ..extensions import theme_provider
 from ..theme import DEFAULT_THEME, ORG_SLUG, resolve_theme
 
 router = APIRouter(tags=["session"])

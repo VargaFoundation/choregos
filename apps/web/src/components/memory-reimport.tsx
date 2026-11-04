@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import { GesteConfirme } from "@/components/geste-confirme";
+import { ConfirmedGesture } from "@/components/confirmed-gesture";
 import { api } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 
@@ -16,7 +16,7 @@ export function MemoryReimport({ slug }: { slug: string }) {
   const [scheduledAt, setScheduledAt] = useState<string | null>(null);
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <GesteConfirme
+      <ConfirmedGesture
         question="Re-import the project memory? Its ingestion reads the project's sources again now rather than at its next cycle; what it learns arrives in the memory as it runs."
         confirmer="Re-import"
         ton="accent"
@@ -24,7 +24,7 @@ export function MemoryReimport({ slug }: { slug: string }) {
         onFait={() => setScheduledAt(new Date().toISOString())}
       >
         Re-import the project memory
-      </GesteConfirme>
+      </ConfirmedGesture>
       {scheduledAt && (
         <p role="status" className="text-xs text-ink-muted">
           Re-import scheduled {shortDate(scheduledAt)}. New facts appear in the search as the ingestion reads them.

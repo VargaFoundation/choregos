@@ -3,7 +3,7 @@
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { GesteConfirme } from "@/components/geste-confirme";
+import { ConfirmedGesture } from "@/components/confirmed-gesture";
 import { Badge, Button, ErrorNote, Field, Input, type Tone } from "@/components/ui";
 import { ApiError, api } from "@/lib/api";
 import { relative } from "@/lib/format";
@@ -193,7 +193,7 @@ export function DeleteAgent({ org, agent, onDeleted }: { org: string; agent: Age
   if (agent.can?.manage !== true || agent.scope === "platform") return null;
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm" data-testid="delete-agent">
-      <GesteConfirme
+      <ConfirmedGesture
         tonDuBouton="danger"
         question={`Delete ${agent.slug}? Its versions and credentials go with it, and the slug becomes free. Only an agent that never served can be deleted: one that is pinned, has run, or that a workflow names is retired instead.`}
         confirmer={`Delete ${agent.slug}`}
@@ -205,7 +205,7 @@ export function DeleteAgent({ org, agent, onDeleted }: { org: string; agent: Age
         }}
       >
         Delete…
-      </GesteConfirme>
+      </ConfirmedGesture>
     </div>
   );
 }

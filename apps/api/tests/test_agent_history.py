@@ -162,7 +162,7 @@ async def test_pinned_by_lists_the_projects_the_caller_may_see(client: AsyncClie
     from choregos_api.db.models import Agent
     from choregos_api.db.session import session_scope
     from choregos_api.rbac import Principal, Role
-    from choregos_api.routers.agents import _pins
+    from choregos_api.services.agent_views import agent_pins
 
     dev = await make_project(client, "dev")
     ops = await make_project(client, "ops")
@@ -185,7 +185,7 @@ async def test_pinned_by_lists_the_projects_the_caller_may_see(client: AsyncClie
         from sqlalchemy import select
 
         agent = (await session.execute(select(Agent).where(Agent.slug == "helper"))).scalar_one()
-        assert await _pins(session, member, "varga", agent) == {1: ["dev"]}  # type: ignore[arg-type]
+        assert await agent_pins(session, member, "varga", agent) == {1: ["dev"]}  # type: ignore[arg-type]
 
 
 async def test_platform_written_versions_have_a_message(

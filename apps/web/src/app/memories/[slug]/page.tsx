@@ -4,8 +4,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { use, useState } from "react";
-import { Breadcrumbs, Button, Card, Empty, ErrorNote, EtatDeLecture, Input, LEGENDE, Select } from "@/components/ui";
-import { OrgPageHeader } from "@/components/coquille/org-page-header";
+import { Breadcrumbs, Button, Card, Empty, ErrorNote, ReadState, Input, LEGENDE, Select } from "@/components/ui";
+import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import { reachLabel } from "@/lib/memories";
@@ -106,7 +106,7 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
               </li>
             ))}
           </ul>
-          <EtatDeLecture lecture={results} quoi="the memory" />
+          <ReadState lecture={results} quoi="the memory" />
           {submitted && results.data?.length === 0 && <Empty>No fact for “{submitted}”</Empty>}
         </Card>
         <Card title="Proposed by agents">
@@ -133,7 +133,7 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
                     </li>
                   ))}
               </ul>
-              <EtatDeLecture lecture={pending} quoi="the proposals" />
+              <ReadState lecture={pending} quoi="the proposals" />
               {pending.data?.length === 0 && <Empty>Nothing waits for a decision</Empty>}
             </>
           )}

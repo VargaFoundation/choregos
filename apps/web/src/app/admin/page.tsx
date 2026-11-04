@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Button, Card, Empty, ErrorNote, EtatDeLecture, Input } from "@/components/ui";
+import { Button, Card, Empty, ErrorNote, ReadState, Input } from "@/components/ui";
 import { api } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import { useSession } from "@/lib/session";
@@ -12,11 +12,11 @@ import { ROLE_LABELS } from "@/components/members";
 import { isMultiOrg, membershipGroups } from "@/lib/memberships";
 import { OrganisationCard } from "@/components/admin/organisation-card";
 import { PolicyCeilingCard } from "@/components/admin/policy-ceiling";
-import { GesteConfirme } from "@/components/geste-confirme";
+import { ConfirmedGesture } from "@/components/confirmed-gesture";
 
 /**
- * L'administration, vue d'ensemble : la session et mes jetons d'API. Les membres, l'audit, la
- * plateforme, l'édition et les sections des greffons ont leur sous-page (ADR 0032).
+ * The administration overview: the session and my API tokens. Members, the audit, the
+ * platform, the edition and the sections of the extensions have their own sub-page (ADR 0032).
  */
 export default function AdminPage() {
   const { me, org } = useSession();
@@ -75,16 +75,16 @@ export default function AdminPage() {
           ))}
         </Card>
 
-        {/* Un jeton, un nom, un endroit (S23-14) : « API token » ici, « token for Claude Code » dans les
-            clients, « MCP client » dans les agents — trois noms pour le même objet, sous deux clés de
-            cache. Ici la liste de TOUS les jetons de la personne, et leur révocation ; les deux autres
-            pages renvoient ici. */}
+        {/* One token, one name, one place (S23-14): "API token" here, "token for Claude Code" in the
+                clients, "MCP client" in the agents: three names for the same object, under two cache
+                keys. Here, the list of ALL the person's tokens, and their revocation; the other two
+                pages point here. */}
         <Card title="My access tokens">
           <p className="mb-3 text-xs text-ink-muted" id="jetons">
             Every token you hold: for the API and the CLI, or for an AI client at the MCP door (created from{" "}
             <Link href="/integrations">Integrations</Link> or <Link href="/agents">Agents</Link>).
           </p>
-          {/* Le clair n'existe qu'ici, une fois : il n'est jamais stocké ni réaffiché. */}
+          {/* The clear text exists only here, once: it is never stored or shown again. */}
           {tokenClair && (
             <div className="mb-3 border border-line border-l-2 border-l-accent bg-surface p-3 text-sm">
               <p className="text-xs text-ink-muted">Copy it now — it will not be shown again</p>
@@ -120,11 +120,11 @@ export default function AdminPage() {
                   </span>
                   <span className="text-ink-muted">
                     {" "}
-                    · {porteeDuJeton(token.scopes)} · expires {token.expires_at ? shortDate(token.expires_at) : "never"} · last used{" "}
+                    · {tokenScopeSentence(token.scopes)} · expires {token.expires_at ? shortDate(token.expires_at) : "never"} · last used{" "}
                     {token.last_used_at ? shortDate(token.last_used_at) : "—"}
                   </span>
                 </span>
-                <GesteConfirme
+                <ConfirmedGesture
                   tonDuBouton="danger"
                   question={`Revoke ${token.name}? Every client using it is refused from its next call — a token does not come back.`}
                   confirmer={`Revoke ${token.name}`}
@@ -134,11 +134,11 @@ export default function AdminPage() {
                   }}
                 >
                   Revoke
-                </GesteConfirme>
+                </ConfirmedGesture>
               </li>
             ))}
           </ul>
-          <EtatDeLecture lecture={tokens} quoi="your access tokens" />
+          <ReadState lecture={tokens} quoi="your access tokens" />
           {tokens.data?.length === 0 && <Empty>No token</Empty>}
         </Card>
         <PolicyCeilingCard org={org} canEdit={orgAdmin} />
@@ -147,10 +147,10 @@ export default function AdminPage() {
   );
 }
 
-/** Ce qu'un jeton ouvre, en mots : l'API (et la CLI), ou la porte MCP d'un client d'IA. */
-function porteeDuJeton(scopes: string[] | null | undefined): string {
-  const liste = scopes ?? [];
-  if (liste.length > 0 && liste.every((s) => s.startsWith("mcp:")))
-    return liste.includes("mcp:write") ? "AI client, can open work items" : "AI client, read-only";
+/** What a token opens, in words: the API (and the CLI), or an AI client's MCP door. */
+function tokenScopeSentence(scopes: string[] | null | undefined): string {
+  const scopeList = scopes ?? [];
+  if (scopeList.length > 0 && scopeList.every((s) => s.startsWith("mcp:")))
+    return scopeList.includes("mcp:write") ? "AI client, can open work items" : "AI client, read-only";
   return "API and CLI";
 }

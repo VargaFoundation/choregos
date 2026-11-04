@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Administration plateforme : backends agents, exécuteurs, clés gateway, membres, audit."""
+"""Platform administration: agent backends, executors, gateway keys, members, audit."""
 
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from ..db.models import (
     User,
 )
 from ..db.session import en_portee_de_plateforme
-from ..deps import Config, Db, Me, Pagination, exiger_admin_de_plateforme
+from ..deps import Config, Db, Me, Pagination, require_platform_admin
 from ..errors import conflict, forbidden, not_found, unprocessable
 from ..schemas import (
     AgentBackendInfo,
@@ -56,7 +56,7 @@ async def rewrap_secrets(session: Db, principal: Me) -> SecretsRewrap:
     secret's data key under the active key. The values are never read out nor changed (ADR 0058)."""
     from ..secret_store import SealedDbSecretStore, SecretStoreUnavailable
 
-    await exiger_admin_de_plateforme(session, principal)
+    await require_platform_admin(session, principal)
     try:
         async with en_portee_de_plateforme(session):
             rewrapped = await SealedDbSecretStore().rewrap(session)
@@ -91,7 +91,7 @@ async def list_backends(session: Db, principal: Me) -> list[AgentBackendInfo]:
 
 @router.put("/platform/backends", response_model=AgentBackendInfo, operation_id="putBackend")
 async def put_backend(body: AgentBackendUpdate, session: Db, principal: Me) -> AgentBackendInfo:
-    await exiger_admin_de_plateforme(session, principal)
+    await require_platform_admin(session, principal)
     row = (
         await session.execute(select(BackendRegistryRow).where(BackendRegistryRow.name == body.name))
     ).scalar_one_or_none()
@@ -105,7 +105,7 @@ async def put_backend(body: AgentBackendUpdate, session: Db, principal: Me) -> A
         session,
         principal,
         "backend.update",
-        org_id=None,  # le catalogue de backends est de plateforme
+        org_id=None,  # the backend catalogue belongs to the platform
         target_type="backend",
         target_id=row.name,
         enabled=body.enabled,
@@ -157,7 +157,7 @@ async def list_executors(principal: Me) -> list[ExecutorInfo]:
 
 @router.get("/platform/gateway/keys", response_model=list[GatewayKeyInfo], operation_id="listGatewayKeys")
 async def list_gateway_keys(session: Db, principal: Me) -> list[GatewayKeyInfo]:
-    await exiger_admin_de_plateforme(session, principal)
+    await require_platform_admin(session, principal)
     rows = (
         (await session.execute(select(GatewayKeyRow).order_by(GatewayKeyRow.created_at.desc()).limit(200)))
         .scalars()
@@ -251,8 +251,8 @@ async def add_member(org: str, body: MembershipUpsert, session: Db, principal: M
     # read as a project-scoped administrator, which RBAC does not have (S30-06).
     if body.project_slug and body.role == Role.ORG_ADMIN:
         raise unprocessable("`org_admin` is a role of the organisation, not of a project")
-    # L'e-mail est unique à l'échelle de l'INSTANCE : un utilisateur déjà membre d'une autre
-    # organisation est invisible sous la RLS de `users`, et la route tentait un doublon.
+    # The e-mail is unique across the whole INSTANCE: a user who already belongs to another
+    # organisation is invisible under the RLS of `users`, and the route tried a duplicate.
     async with en_portee_de_plateforme(session):
         user = (await session.execute(select(User).where(User.email == body.email))).scalar_one_or_none()
     if user is None:
@@ -261,8 +261,8 @@ async def add_member(org: str, body: MembershipUpsert, session: Db, principal: M
         await session.flush()
     project = None
     if body.project_slug:
-        # Dans CETTE organisation : un slug existe dans plusieurs, et chercher par slug seul
-        # rattachait le membre au premier venu — trouvé par le test de franchissement.
+        # In THIS organisation: a slug exists in several, and looking it up by slug alone
+        # attached the member to the first match — found by the boundary-crossing test.
         project = (
             await session.execute(
                 select(Project).where(Project.slug == body.project_slug, Project.org_id == organization.id)
@@ -311,10 +311,10 @@ async def add_member(org: str, body: MembershipUpsert, session: Db, principal: M
 async def remove_member(
     org: str, user_id: str, session: Db, principal: Me, project: Annotated[str | None, Query()] = None
 ) -> Response:
-    """Retire une appartenance — à l'organisation, ou au seul projet nommé.
+    """Remove a membership — from the organisation, or from the one named project.
 
-    Le dernier `org_admin` ne se retire pas : une organisation sans administrateur ne se gère plus
-    que par la base. Un administrateur qui se retire lui-même le peut, s'il en reste un autre.
+    The last `org_admin` cannot be removed: an organisation without an administrator can then
+    only be managed through the database. An administrator may remove themselves if another remains.
     """
     from ..rbac import Permission
 
@@ -325,28 +325,28 @@ async def remove_member(
         raise not_found("Organisation", org)
     if not principal.can(Permission.MEMBER_MANAGE, org, project):
         raise forbidden("managing members needs the project_owner or org_admin role")
-    projet_id = None
+    project_id = None
     if project:
-        projet = (
+        project_row = (
             await session.execute(
                 select(Project).where(Project.slug == project, Project.org_id == organization.id)
             )
         ).scalar_one_or_none()
-        if projet is None:
+        if project_row is None:
             raise not_found("Project", f"{org}/{project}")
-        projet_id = projet.id
-    appartenance = (
+        project_id = project_row.id
+    membership = (
         await session.execute(
             select(Membership).where(
                 Membership.user_id == user_id,
                 Membership.org_id == organization.id,
-                Membership.project_id == projet_id if projet_id else Membership.project_id.is_(None),
+                Membership.project_id == project_id if project_id else Membership.project_id.is_(None),
             )
         )
     ).scalar_one_or_none()
-    if appartenance is None:
+    if membership is None:
         raise not_found("Membership", f"{user_id} in {org}" + (f"/{project}" if project else ""))
-    if appartenance.role == str(Role.ORG_ADMIN) and projet_id is None:
+    if membership.role == str(Role.ORG_ADMIN) and project_id is None:
         administrateurs = (
             await session.execute(
                 select(func.count())
@@ -360,7 +360,7 @@ async def remove_member(
         ).scalar_one()
         if administrateurs <= 1:
             raise conflict(f"the last administrator of {org} cannot be removed: appoint another one first")
-    await session.delete(appartenance)
+    await session.delete(membership)
     await record(
         session,
         principal,
@@ -383,31 +383,30 @@ async def list_audit(
 ) -> AuditPage:
     from ..rbac import Permission
 
-    # Les organisations où le principal a VRAIMENT le droit de lire l'audit — pas celles où il
-    # est simplement membre. La RLS borne déjà la session à ses organisations, mais elle ne sait
-    # pas distinguer « membre de b » de « autorisé à lire l'audit de b » : ce filtre-ci est plus
-    # fin, et c'est lui qui manquait. Jusqu'au 2026-09-26 la requête n'avait aucun `where`.
-    lisibles = [org for org in principal.org_roles if principal.can(Permission.AUDIT_READ, org)]
-    if not lisibles:
+    # The organisations where the principal REALLY may read the audit — not those where they
+    # are merely a member. The RLS already bounds the session to their organisations, but it cannot
+    # tell "member of b" from "allowed to read the audit of b": this filter is finer, and it is
+    # the one that was missing. Until 2026-09-26 the query had no `where` at all.
+    readable = [org for org in principal.org_roles if principal.can(Permission.AUDIT_READ, org)]
+    if not readable:
         raise forbidden("reading the audit log is reserved for owners and administrators")
 
-    # Volontairement SANS `is_platform_admin()` : ce prédicat rend vrai pour TOUT `org_admin`
-    # de N'IMPORTE QUELLE organisation (`rbac.py:112`), donc s'en servir ici rouvrirait la fuite
-    # pour le rôle le plus répandu. Les lignes de plateforme (`org_id IS NULL` : connexions,
-    # jetons) ne sortent que si le droit couvre TOUTES les organisations de l'instance — ce qui
-    # est le cas normal d'une installation à une seule organisation, et n'est jamais vrai chez
-    # un locataire parmi d'autres.
-    # Sous la RLS de `organizations` (0.11), ce compte vaut le nombre d'organisations LISIBLES, et
-    # l'administrateur d'une organisation sur deux passerait pour couvrir l'instance. Sans effet :
-    # la RLS d'`audit_log` ne montre les lignes `org_id IS NULL` qu'en portée `*`. Le filtre ci-dessous
-    # reste utile sans RLS (SQLite, développement).
+    # Deliberately WITHOUT `is_platform_admin()`: that predicate is true for EVERY `org_admin`
+    # of ANY organisation (`rbac.py:112`), so using it here would reopen the leak for the most
+    # common role. Platform rows (`org_id IS NULL`: connections, tokens) only come out if the
+    # right covers ALL the organisations of the instance — the normal case of a single-organisation
+    # installation, and never true for one tenant among others.
+    # Under the RLS of `organizations` (0.11), this count is the number of READABLE organisations, and
+    # the administrator of every second organisation would pass for covering the instance. No effect:
+    # the RLS of `audit_log` only shows `org_id IS NULL` rows in the `*` scope. The filter below
+    # is still useful without RLS (SQLite, development).
     total = (await session.execute(select(func.count()).select_from(Organization))).scalar_one()
-    toute_l_instance = len(lisibles) >= int(total)
+    whole_instance = len(readable) >= int(total)
 
     query = select(AuditLog).order_by(AuditLog.ts.desc())
-    ids = select(Organization.id).where(Organization.slug.in_(lisibles))
-    portee = AuditLog.org_id.in_(ids)
-    query = query.where(or_(portee, AuditLog.org_id.is_(None)) if toute_l_instance else portee)
+    ids = select(Organization.id).where(Organization.slug.in_(readable))
+    scope = AuditLog.org_id.in_(ids)
+    query = query.where(or_(scope, AuditLog.org_id.is_(None)) if whole_instance else scope)
     if actor:
         query = query.where(AuditLog.actor_id == actor)
     if target_type:

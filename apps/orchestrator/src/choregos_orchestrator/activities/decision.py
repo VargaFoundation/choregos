@@ -49,8 +49,8 @@ from temporalio.exceptions import ApplicationError
 
 from ..config import get_settings
 from .base import db, load_work_item, project_bundle, workflow_du_ticket
-from .bilan import book_spend, ticket_view
-from .garde import guard_sources
+from .injection_guard import guard_sources
+from .outcome import book_spend, ticket_view
 from .run_key import mint_key, record_step_key, revoke
 
 logger = structlog.get_logger("choregos.decision")

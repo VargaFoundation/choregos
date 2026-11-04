@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Modèles : catalogue plateforme, profils projet, matrice backend × modèle."""
+"""Models: platform catalogue, project profiles, backend × model matrix."""
 
 from __future__ import annotations
 
@@ -59,7 +59,7 @@ async def get_models(ctx: ProjectCtx) -> ProjectModels:
 
 @router.put("/projects/{id}/models", response_model=ProjectModels, operation_id="putProjectModels")
 async def put_models(ctx: ProjectCtx, body: ProjectModels, session: Db) -> ProjectModels:
-    """Refuse une combinaison backend × modèle non validée, sauf `allow_unvalidated`."""
+    """Refuse a backend × model combination that is not validated, unless `allow_unvalidated`."""
     ctx.require(Permission.MODELS_WRITE)
     # The same row lock as `PATCH /projects/{id}`: the profiles are merged into the configuration as it
     # is NOW, so a concurrent write of another section is not undone (S47-06).
@@ -113,7 +113,7 @@ async def put_models(ctx: ProjectCtx, body: ProjectModels, session: Db) -> Proje
 
 @router.get("/projects/{id}/models/matrix", response_model=ModelMatrix, operation_id="getModelMatrix")
 async def matrix(ctx: ProjectCtx, session: Db) -> ModelMatrix:
-    """Matrice publiée par `EvalMatrix` : ce qui a été prouvé, pas ce qui est espéré."""
+    """Matrix published by `EvalMatrix`: what has been proven, not what is hoped for."""
     rows = (await session.execute(select(ModelProfileRow))).scalars().all()
     entries: list[ModelMatrixEntry] = []
     generated_at = None

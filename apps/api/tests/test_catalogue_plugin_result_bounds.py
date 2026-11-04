@@ -17,8 +17,8 @@ import httpx
 import pytest
 from httpx import AsyncClient
 
-from .test_catalogue_outils import _intercepter, _run_avec_catalogue
-from .test_greffons_outils import _run
+from .kits.extension_tools import run_extension_tool
+from .kits.tool_catalogue import intercept, run_with_catalogue
 
 pytestmark = pytest.mark.asyncio
 
@@ -86,9 +86,9 @@ async def _catalogue_call(
     monkeypatch: pytest.MonkeyPatch,
     answer: dict[str, Any],
 ) -> httpx.Response:
-    run_id, headers = await _run_avec_catalogue(project, tmp_path, monkeypatch)
+    run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch)
     request = httpx.Request("GET", "https://api.annuaire.example/v1/search")
-    _intercepter(monkeypatch, httpx.Response(200, json=answer, request=request), [])
+    intercept(monkeypatch, httpx.Response(200, json=answer, request=request), [])
     return await client.post(
         f"/api/v1/internal/runs/{run_id}/tools/recherche_profils", headers=headers, json={"metier": "x"}
     )
@@ -131,7 +131,7 @@ async def test_a_plugin_answer_is_masked_and_cut_to_the_cap(
 ) -> None:
     from choregos_api.config import get_settings
 
-    run_id, headers = await _run(project["id"])
+    run_id, headers = await run_extension_tool(project["id"])
     url = f"/api/v1/internal/runs/{run_id}/tools/verbose_log"
 
     small = await client.post(url, headers=headers, json={"lines": 1})
@@ -153,7 +153,7 @@ async def test_a_plugin_tool_declares_its_own_cap_bounded_by_the_ceiling(
     """S40-17b: a plugin's tool says how much of its answer the agent reads, as a catalogue entry does."""
     from choregos_api.config import get_settings
 
-    run_id, headers = await _run(project["id"])
+    run_id, headers = await run_extension_tool(project["id"])
     listed = await client.get(f"/api/v1/internal/runs/{run_id}/tools", headers=headers)
     assert listed.status_code == 200, listed.text
     assert all("result_max_bytes" not in t for t in listed.json()["tools"]), "the agent is not told the cap"
@@ -181,7 +181,7 @@ async def test_a_plugin_tool_with_a_bad_cap_is_refused_not_defaulted(
     import plugin_verbose  # type: ignore[import-not-found]
 
     plugin_verbose.TOOLS.append({**plugin_verbose.TOOL, "name": "bad_log", "result_max_bytes": declared})
-    run_id, headers = await _run(project["id"])
+    run_id, headers = await run_extension_tool(project["id"])
     listed = await client.get(f"/api/v1/internal/runs/{run_id}/tools", headers=headers)
     assert listed.status_code == 500, listed.text
     assert "bad_log" in listed.text and "plugin_verbose" in listed.text

@@ -12,7 +12,7 @@ from choregos_adapters.http.egress import GuardedTransport, guarded
 from choregos_adapters.mcp import ClientMcp
 from choregos_core.egress import AllowedRule, EgressPolicy, EgressRefusedError, use_policy
 
-OUTILS = [{"name": "lire", "inputSchema": {"type": "object"}, "annotations": {"readOnlyHint": True}}]
+TOOLS = [{"name": "read", "inputSchema": {"type": "object"}, "annotations": {"readOnlyHint": True}}]
 
 
 class Recorder(httpx.AsyncBaseTransport):
@@ -110,13 +110,13 @@ async def test_warn_mode_in_the_policy_logs_and_passes() -> None:
 
 
 async def test_the_mcp_client_is_guarded() -> None:
-    server = FakeMcpServer(outils=OUTILS)
+    server = FakeMcpServer(outils=TOOLS)
     client = ClientMcp("https://vendor.test/mcp", transport=server.transport())
     with use_policy(_policy()), pytest.raises(EgressRefusedError):
         await client.list_tools()
     assert server.recues == [], "the vendor received nothing"
     with use_policy(_policy("vendor.test")):
-        assert [o.name for o in await client.list_tools()] == ["lire"]
+        assert [o.name for o in await client.list_tools()] == ["read"]
 
 
 def test_guarded_wraps_the_real_transport_when_given_none() -> None:

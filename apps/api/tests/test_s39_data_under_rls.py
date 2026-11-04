@@ -24,7 +24,7 @@ from choregos_api.config import get_settings
 from choregos_core.catalogue_d_agents import entrees
 from sqlalchemy import create_engine, text
 
-from .conftest import PG_URL, _preparer_postgres, _url_app, sans_postgres
+from .conftest import PG_URL, _app_url, _prepare_postgres, without_postgres
 
 API = pathlib.Path(__file__).resolve().parents[1]
 VERSIONS = API / "src/choregos_api/migrations/versions"
@@ -174,15 +174,15 @@ def test_the_replay_repairs_what_the_three_migrations_left_on_sqlite(
     assert again == (scopes, author, hosts)
 
 
-@sans_postgres
+@without_postgres
 def test_the_replay_sees_the_rows_as_the_application_role_under_forced_rls(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The case of the dev tenant: the job runs as the application role, not a superuser."""
     from sqlalchemy.ext.asyncio import create_async_engine
 
-    asyncio.run(_preparer_postgres())
-    url = _url_app(PG_URL)
+    asyncio.run(_prepare_postgres())
+    url = _app_url(PG_URL)
     monkeypatch.setenv("CHOREGOS_DATABASE_URL", url)
     get_settings.cache_clear()
 

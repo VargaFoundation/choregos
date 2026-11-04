@@ -6,13 +6,13 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { slugFromName } from "@/components/agents/builder";
-import { creatableScopes, makeScopes } from "@/components/agents/registre";
+import { creatableScopes, makeScopes } from "@/components/agents/registry";
 import { useQuery } from "@tanstack/react-query";
 import { useSession } from "@/lib/session";
 import { api, ApiError } from "@/lib/api";
 import type { AgentDraft } from "@/lib/types";
 import { Alert, Breadcrumbs, Button, Card, Empty, ErrorNote, Input, Textarea, buttonClasses } from "@/components/ui";
-import { OrgPageHeader } from "@/components/coquille/org-page-header";
+import { OrgPageHeader } from "@/components/org-page-header";
 
 // The builder is the heaviest form of the console: the first step does not need it (S32-01).
 const AgentBuilder = dynamic(() => import("@/components/agents/builder").then((m) => m.AgentBuilder), {

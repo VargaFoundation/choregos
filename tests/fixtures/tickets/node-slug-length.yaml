@@ -1,0 +1,57 @@
+# Reference ticket on the Node toy repository: the cell is skipped if Node is missing.
+id: node-slug-length
+title: "Truncate slugs to 40 characters without cutting a word"
+repo: node-toy
+role: implement
+prompt: |
+  `slugify` must return at most 40 characters, without cutting a word in two and without
+  leaving a trailing dash. Add the matching tests.
+allowed_paths:
+  - "src/**"
+  - "test/**"
+expected_duration_s: 160
+# Scripted, not measured: what a fake gateway is billed per context reduction (S37-09),
+# so the matrix's tokens come from the ledger in CI. The real numbers are S37-10's.
+scripted_usage:
+  "none": { tokens_in: 180000, tokens_cached: 120000, tokens_out: 6000, turns: 14 }
+  "rtk": { tokens_in: 152000, tokens_cached: 102000, tokens_out: 6000, turns: 14 }
+  "headroom": { tokens_in: 141000, tokens_cached: 95000, tokens_out: 6200, turns: 15 }
+  "rtk+headroom": { tokens_in: 118000, tokens_cached: 79000, tokens_out: 6200, turns: 15 }
+assertions:
+  - { kind: file_matches, path: src/slug.js, pattern: "MAX_LENGTH", absent: false }
+  - { kind: command, run: "npm test --silent", requires: npm }
+scripted:
+  with_memory:
+    files:
+      src/slug.js: |
+        const MAX_LENGTH = 40;
+
+        /** Turns a title into a URL identifier, truncated without cutting a word. */
+        export function slugify(title) {
+          const base = String(title)
+            .normalize('NFD')
+            .replace(/[̀-ͯ]/g, '')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+          if (base.length <= MAX_LENGTH) return base;
+          const cut = base.slice(0, MAX_LENGTH + 1);
+          const last = cut.lastIndexOf('-');
+          return (last > 0 ? cut.slice(0, last) : base.slice(0, MAX_LENGTH)).replace(/-+$/, '');
+        }
+      test/length.test.js: |
+        import assert from 'node:assert/strict';
+        import { test } from 'node:test';
+
+        import { slugify } from '../src/slug.js';
+
+        test('a short title passes as is', () => {
+          assert.equal(slugify('Caf\u00e9 \u00c9clair'), 'cafe-eclair');
+        });
+
+        test('a long title is truncated on a whole word', () => {
+          const slug = slugify('How to prepare an excellent filter coffee at home in ten steps');
+          assert.ok(slug.length <= 40, slug);
+          assert.ok(!slug.endsWith('-'), slug);
+          assert.ok('how-to-prepare-an-excellent-filter'.startsWith(slug) || slug.startsWith('how-to-prepare'), slug);
+        });

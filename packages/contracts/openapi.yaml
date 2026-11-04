@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Choregos API
-  version: 0.22.0
+  version: 0.22.2
   description: |
     The Choregos platform API. The console and the CLI use this API and nothing else.
     Auth: an OIDC session (cookie) or `Authorization: Bearer <api_token>`.
@@ -5328,6 +5328,15 @@ components:
           description: >-
             What the model reads about each workflow beside its description, by workflow name. Absent
             from a PUT, unchanged; an empty hint is dropped.
+        min_confidence:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 1
+          description: >-
+            ADR 0121: when the router is a decision model (a catalogue entry enabled for `route` and
+            `decide`), a choice below this probability is not taken and the default takes the item. A
+            chat model answers no probability and is never held to it. Absent from a PUT, unchanged;
+            `null`, every answer is taken.
     RoutingPreviewRequest:
       type: object
       required: [title]
@@ -5344,6 +5353,9 @@ components:
         by: { type: string, enum: [explicit, rule, llm, default] }
         reason: { type: [string, "null"] }
         model: { type: [string, "null"] }
+        confidence:
+          type: [number, "null"]
+          description: "The decision model's probability for its choice; null from a chat model or without a model."
     WorkflowValidateRequest:
       type: object
       properties:

@@ -65,19 +65,19 @@ spec:
                     type: "RuntimeDefault | Localhost"
                   =(appArmorProfile):
                     type: "RuntimeDefault | Localhost"
-    - name: pas-de-hostpath
+    - name: no-hostpath
       match:
         any:
           - resources:
               kinds: [Pod]
               namespaces: ["choregos", "choregos-*", "proj-*"]
       validate:
-        message: "hostPath est interdit : un runner ne touche pas le nœud"
+        message: "hostPath is forbidden: a runner never touches the node"
         pattern:
           spec:
             =(volumes):
               - X(hostPath): "null"
-    - name: labels-obligatoires
+    - name: required-labels
       match:
         any:
           - resources:
@@ -86,7 +86,7 @@ spec:
               kinds: [Pod, Job]
               namespaces: ["proj-*"]
       validate:
-        message: "tout objet d'un namespace projet porte le label `choregos/project`"
+        message: "every object of a project namespace carries the `choregos/project` label"
         pattern:
           metadata:
             labels:

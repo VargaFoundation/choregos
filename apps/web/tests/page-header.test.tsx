@@ -7,7 +7,7 @@ import {
   GROUP_HUES,
   projectSection,
   projectTrail,
-} from "@/components/coquille/navigation";
+} from "@/components/shell/navigation";
 import { PageHeader } from "@/components/page-header";
 import { WorkflowChip } from "@/components/workflow-chip";
 import { workflowHue } from "@/lib/workflow-hue";

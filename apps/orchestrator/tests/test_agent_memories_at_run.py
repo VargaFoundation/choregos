@@ -248,7 +248,7 @@ async def test_the_legacy_single_memory_is_unchanged(setup: Fixture) -> None:
 def test_the_memory_server_is_announced_only_for_the_legacy_shared_memory() -> None:
     from choregos_orchestrator.activities.stage import _serveurs_mcp
 
-    settings = SimpleNamespace(url_du_sidecar_d_outils="", memory_url="http://ecphoria:8432")
+    settings = SimpleNamespace(tools_sidecar_url="", memory_url="http://ecphoria:8432")
     assert "memory" in _serveurs_mcp(settings, "project")
     assert "memory" not in _serveurs_mcp(settings, "none"), "several, global or own: not the project's server"
     assert "memory" not in _serveurs_mcp(settings, "agent")

@@ -33,6 +33,7 @@ organisations must assume **a member of one will try to read another**.
 | prompt injection through what the agent reads | lexical detection over the ticket, its documents and the memory pack **before** the run: `sandbox.prompt_injection: warn` journals a security event on the ticket, `block` (the `regulated` preset) stops the stage before any run with the reason — a net against the crude cases, not an understanding; the walls remain the ones below | `choregos_core/injection.py`, `activities/stage.py` |
 | a secret the agent read leaving for the model provider | with `sandbox.llm_security_analyzer` (the `team` and `regulated` presets) the run's and the hosted session's gateway key are minted marked, and LiteLLM's `pre_call` guardrail masks known token shapes, long bearer/basic credentials and URL user-info in the request **before** the provider call, and its `post_call` guardrail masks them in the model's answer (text, tool arguments and reasoning, streamed or not, on `/chat/completions`, `/v1/messages` and `/v1/responses`; a signature or encrypted reasoning left as is) before the agent or the record sees it, and withholds an answer it fails on; never in the agent's process, never turned on or off by the request. Only the LiteLLM gateway enforces it: with `direct` or `openai-compatible` the flag refuses the stage and the session; a filter, not a scanner (ADR 0084) | `choregos_core/llm_guardrail.py`, `charts/choregos/charts/litellm`, `activities/run_key.py` |
 | a tool server flooding or steering the agent through its answer | every broker result is checked against the `outputSchema` its server declared (422 without the payload), its secrets masked with `redact`, and cut with a marker to its operation's cap (`CHOREGOS_BROKER_RESULT_MAX_BYTES` unless an organisation administrator set one), never above `CHOREGOS_BROKER_RESULT_CEILING_BYTES`; the injection guard then reads what is left (#755, S40-17). A catalogue or plugin tool's answer is masked and cut the same way, to the cap its catalogue entry declares or the default, without a schema (#759), then read by the same injection guard (S40-18), which reads an MCP answer's `structuredContent` as well as its text, and a hosted session's tool answers as a run's (S40-18b); a session's model reads a `structuredContent` its text does not serialize, masked, capped and guarded with it (S40-18c) | `services/broker.py` (former name `services/courtier.py`), `tests/test_broker_result_bounds.py`, `tests/test_catalogue_plugin_result_bounds.py`, `tests/test_operation_result_cap.py`, `tests/test_catalogue_plugin_injection_guard.py`, `tests/test_guard_structured_content.py` |
+| an MCP gateway widening what an agent may do, or an agent reaching it | the organisation's gateway is consumed, never run by Choregos: it holds the upstream credential, Choregos holds a sealed gateway credential and signs a 60-second ES256 assertion per call; the internal-hosts rule refuses an endpoint inside the cluster; its host is denied to runs and refused for the runners family; a connector's approvals, result bounds and injection guard are unchanged; mode `required` refuses direct connectors before any action exists (ADR 0105) | `services/mcp_gateway.py`, `services/mcp_gateway_identity.py`, `tests/licences/test_mcp_gateway_boundary.py` |
 | lying about evidence | the runner **runs** the tests and overwrites declared evidence; gates read the diff, not the prose | `dod.py`, `result.py`, `gates/` |
 | reading another organisation | PostgreSQL row-level security, **fail-closed**: every session declares the organisations it may see, an undeclared session sees nothing | `db/session.py`, `deps.py`, migrations `b2d4f6a8c0e1` and `c3e5a7f9b1d4` |
 | reading another organisation's audit trail | `audit_log` carries an organisation and is under the same policy; `GET /audit` additionally restricts to the organisations where the caller really holds `audit:read` — being a member is not enough. Platform-level rows (`org_id IS NULL`: logins, API tokens) are returned only when that right covers every organisation of the instance | `routers/admin.py`, `audit.py`, migration `c3e5a7f9b1d4` |
@@ -277,6 +278,57 @@ username, a plugin's server; `null` when the configuration names none. Not yet: 
 who started the work (on-behalf-of, ADR 0107 stories 2 and 3, #756); every write above is the
 connector's account.
 
+## MCP gateway
+
+An organisation may put its MCP servers behind a gateway it runs
+([ADR 0105](adr/0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md)); how to use it is in
+[Integrations](integrations.md#your-organisations-mcp-gateway-adr-0105). This is what it changes for
+security.
+
+**Trust boundaries.** There are two policy points, and neither replaces the other: Choregos (the
+broker, approvals, per-tool permissions, result bounds, egress) and the gateway (its own access rules
+and the upstream's). A call is allowed only if both allow it. Choregos never routes, aggregates or
+re-serves third-party servers. A plugin's server (ADR 0096, `services/plugin_servers.py`) is not an
+upstream: it is never reached through the gateway and `required` mode does not refuse it; the boundary
+test whitelists exactly those two modules and `choregos_adapters.plugin_servers`
+(`tests/licences/test_mcp_gateway_boundary.py`).
+
+**Credentials.** The upstream credential is held by the gateway only, and never enters Choregos. The
+gateway credential (bearer, header, OAuth client secret) is sealed in the organisation's secret store
+and never shown again; a `jwt_assertion` sign-in has none (`services/mcp_gateway.py`).
+
+**The assertion** (`services/mcp_gateway_identity.py`). Each call carries a JWT signed ES256 with the
+organisation's own key (never the run-token key), with a `kid` and a unique `jti`; `exp - iat` is 60
+seconds. Its claims: `org`, `project`, `run`, `work_item`, `agent`, `initiator`, `action`,
+`approved_by`, `connector`, `server`, `tool`, `purpose` (and `org_id`, `sub`, `aud`). **Personal data**:
+`initiator` and `approved_by` are people's emails; they leave the platform for the gateway. The issuer
+is `{public_url}/api/v1/orgs/{org}/mcp-gateway`, stored on the first key so that an organisation rename
+does not change it; the keys are at `/jwks.json` there, public, `Cache-Control: public, max-age=300`,
+with the same 404 for an unknown organisation and for one without a key. **Rotation** signs with a new
+key and keeps the previous one published, older ones are dropped with their private key. A gateway
+that caches the JWKS may refuse new assertions until it refetches, up to the cache time.
+
+**What the gateway sees.** The arguments and the results of every call routed to it, and the identity
+above. Choose a gateway you would trust with that data. The token cache of an OAuth sign-in is per
+process (API, workers): nothing is shared.
+
+**Threats and mitigations.**
+
+- *A tenant aiming the platform at internals.* The endpoint and the token URL are refused when they
+  name an IP address, a name without a domain, or a private name, unless an operator lists the host in
+  `CHOREGOS_MCP_GATEWAY_INTERNAL_HOSTS`; plain http is only for a listed host (`services/mcp_gateway.py`).
+- *A compromised gateway.* Its results are still capped, checked, masked and read by the injection
+  guard, and a write still needs its approval, decided in Choregos (`services/broker.py`). It cannot
+  widen what an agent may call.
+- *Replay of an assertion.* `exp` is 60 seconds and `jti` is unique: a gateway that remembers `jti`
+  refuses a second use.
+- *An agent reaching the gateway.* A run has no egress to it: the API refuses a rule that opens the
+  gateway to `runners` and denies its host to every run, even under a wildcard
+  (`services/egress.py`, `services/network.py`); the chart opens it to the API and the workers only
+  ([Deployment](deployment.md#an-mcp-gateway-adr-0105)). The gateway's own egress rules (origin
+  `mcp-gateway`) are revoked when it moves or is deleted; a rule merged with another origin keeps its
+  other families.
+
 ## Secrets
 
 - Never in Git, never in an image, never in a workspace.
@@ -358,7 +410,7 @@ connector's account.
   `state` is HMAC-signed, short-lived and bound to the signed-in person.
 - Webhook secrets: injected by the chart from the vault (or generated on a bench); an
   unconfigured GitHub webhook is refused in `staging`/`prod`.
-- Rotations: [`runbooks/rotation-secrets.md`](runbooks/rotation-secrets.md).
+- Rotations: [`runbooks/secret-rotation.md`](runbooks/secret-rotation.md).
 
 ## Supply chain
 

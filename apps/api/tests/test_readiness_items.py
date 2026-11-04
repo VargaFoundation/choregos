@@ -20,6 +20,7 @@ from choregos_api.services.readiness import (
     item_connectors,
     item_first_work_item,
     item_github_app,
+    item_mcp_gateway,
     item_models,
     item_notifications,
     item_object_store,
@@ -145,6 +146,24 @@ def test_a_missing_secret_is_to_do_and_a_set_one_is_done() -> None:
         "connector-notify-secrets": "done"
     }
     assert item_connector_secrets(facts(connectors={"scm": connector("scm", "github")})) == []
+
+
+def test_a_required_gateway_lists_the_direct_mcp_connectors() -> None:
+    items = item_mcp_gateway(facts(mcp_gateway_mode="required", direct_mcp_connectors=("crm", "wiki")))
+    [item] = items
+    assert (item.id, item.section, item.state) == ("mcp_gateway", "connections", "todo")
+    assert "crm" in item.detail and "wiki" in item.detail
+    assert item.fix.href == "/admin/connectors" and item.fix.by == "org_admin"
+    assert states(item_mcp_gateway(facts(mcp_gateway_mode="required"))) == {"mcp_gateway": "done"}
+
+
+def test_an_off_gateway_is_a_check() -> None:
+    assert states(item_mcp_gateway(facts(mcp_gateway_mode="off"))) == {"mcp_gateway": "check"}
+
+
+def test_no_gateway_no_item() -> None:
+    assert item_mcp_gateway(facts(direct_mcp_connectors=("crm",))) == []
+    assert "mcp_gateway" not in states(evaluate(facts()).items)
 
 
 def test_stale_test_is_to_check() -> None:

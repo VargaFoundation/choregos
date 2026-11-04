@@ -3,8 +3,8 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { GesteConfirme } from "@/components/geste-confirme";
-import { Alert, Badge, Button, Card, Empty, ErrorNote, EtatDeLecture, Field, Input, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
+import { ConfirmedGesture } from "@/components/confirmed-gesture";
+import { Alert, Badge, Button, Card, Empty, ErrorNote, ReadState, Field, Input, Select, Table, TBody, TD, TH, THead, TR } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
 import type { RemoteCredential, RemoteCredentialCreate } from "@/lib/types";
@@ -71,7 +71,7 @@ export function RemoteCredentials({
           A remote agent runs elsewhere and acts with the rights of whoever authorised its credential. Use a dedicated account with only the
           access the agent should have.
         </p>
-        <EtatDeLecture lecture={credentials} quoi="the remote credentials" />
+        <ReadState lecture={credentials} quoi="the remote credentials" />
         {credentials.data?.length === 0 && (
           <Empty title="No credential yet">Add one below, then register the agent from Agents, New, Remote agent.</Empty>
         )}
@@ -118,7 +118,7 @@ export function RemoteCredentials({
                         </Button>
                       )}
                       {credential.status !== "revoked" && (
-                        <GesteConfirme
+                        <ConfirmedGesture
                           ton="danger"
                           question={`Revoke ${credential.name}? Its sealed secrets are deleted and no run can use it again. Agents that name it stop until another credential is set.`}
                           confirmer="Revoke the credential"
@@ -126,7 +126,7 @@ export function RemoteCredentials({
                           onFait={() => void refresh()}
                         >
                           Revoke
-                        </GesteConfirme>
+                        </ConfirmedGesture>
                       )}
                     </span>
                   </TD>

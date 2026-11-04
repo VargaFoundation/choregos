@@ -82,7 +82,7 @@ tests:
           path: spec.template.spec.containers[0].env
           content:
             name: CHOREGOS_TOOL_CATALOG
-            value: /etc/choregos/outils/catalogue.yaml
+            value: /etc/choregos/tools/catalogue.yaml
 
   - it: never enables the development login by default
     template: charts/choregos-api/templates/deployment.yaml

@@ -10,7 +10,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
   return { ...reel, api: { ...reel.api, integrations: vi.fn() } };
 });
 
-const AVEC_OAUTH: Integrations = {
+const WITH_OAUTH: Integrations = {
   mcp_url: "http://choregos.internal.example/mcp",
   protocol_versions: ["2025-06-18"],
   oauth: {
@@ -21,7 +21,7 @@ const AVEC_OAUTH: Integrations = {
   version: "0.16.3",
 };
 
-function rendre(client: "claude-code" | "cursor") {
+function mount(client: "claude-code" | "cursor") {
   render(
     <QueryClientProvider client={new QueryClient()}>
       <IntegrationsPanel client={client} base="/integrations" />
@@ -29,10 +29,10 @@ function rendre(client: "claude-code" | "cursor") {
   );
 }
 
-describe("la page Integrations propose l'authentification unique (S15-09)", () => {
-  it("Claude Code : la commande OAuth d'abord, le jeton sur demande", async () => {
-    vi.mocked(api.integrations).mockResolvedValue(AVEC_OAUTH);
-    rendre("claude-code");
+describe("the Integrations page offers single sign-on (S15-09)", () => {
+  it("Claude Code: the OAuth command first, the token on request", async () => {
+    vi.mocked(api.integrations).mockResolvedValue(WITH_OAUTH);
+    mount("claude-code");
     const extrait = await screen.findByText(/--client-id choregos-claude-code --callback-port 33418/);
     expect(extrait).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Create an access token/ })).not.toBeInTheDocument();
@@ -45,9 +45,9 @@ describe("la page Integrations propose l'authentification unique (S15-09)", () =
     expect(await screen.findByText(/--client-id choregos-claude-code/)).toBeInTheDocument();
   });
 
-  it("un client que l'IdP ne connaît pas garde son jeton, sans proposer l'authentification unique", async () => {
-    vi.mocked(api.integrations).mockResolvedValue(AVEC_OAUTH);
-    rendre("cursor");
+  it("a client the IdP does not know keeps its token, without offering single sign-on", async () => {
+    vi.mocked(api.integrations).mockResolvedValue(WITH_OAUTH);
+    mount("cursor");
     expect(await screen.findByRole("button", { name: /Create an access token/ })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Use an MCP token instead" })).not.toBeInTheDocument();
   });

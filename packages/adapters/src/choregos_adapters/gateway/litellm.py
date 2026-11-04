@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
-"""GatewayAdapter LiteLLM : une clé virtuelle par run, le coût compté à la source.
+"""The LiteLLM GatewayAdapter: one virtual key per run, the cost counted at the source.
 
-Le budget est un **plafond dur** posé sur la clé : quand il est atteint, LiteLLM refuse,
-l'agent reçoit une erreur, et le runner termine `failed(reason=budget)`. Personne n'a
-besoin de faire confiance à l'agent sur sa consommation.
+The budget is a **hard cap** set on the key: when it is reached, LiteLLM refuses, the agent
+receives an error, and the runner ends `failed(reason=budget)`. Nobody needs to trust the agent
+about its consumption.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ logger = structlog.get_logger("choregos.gateway.litellm")
 
 
 class LiteLlmGateway:
-    """Client du proxy LiteLLM (clés, dépenses, catalogue de modèles)."""
+    """Client of the LiteLLM proxy (keys, spend, model catalogue)."""
 
     capabilities: frozenset[str] = GATEWAY_CAPABILITIES
 
@@ -41,11 +41,11 @@ class LiteLlmGateway:
         self.base_url = base_url.rstrip("/")
         self.master_key = master_key
         self.team_id = team_id
-        # Les `tags` de clé sont une fonction LiteLLM **Enterprise** : envoyées à un proxy
-        # open-source, elles font échouer le mint en 403. L'attribution ne dépend pas d'elles —
-        # `metadata` porte déjà le projet et le run — donc elles restent optionnelles.
+        # Key `tags` are a LiteLLM **Enterprise** feature: sent to an open-source proxy, they make
+        # the mint fail with a 403. Attribution does not depend on them (`metadata` already carries
+        # the project and the run), so they stay optional.
         self.enterprise_tags = enterprise_tags
-        # Prix internes (€/M tokens) des modèles locaux, pour rester comparable (§4.2).
+        # Internal prices (EUR per M tokens) of the local models, to stay comparable (§4.2).
         self.internal_prices = internal_prices or {}
         self._client = client or httpx.AsyncClient(timeout=timeout)
 
@@ -101,12 +101,13 @@ class LiteLlmGateway:
         )
 
     async def _mint(self, payload: dict[str, Any]) -> Any:
-        """Mint une clé, en survivant à un alias déjà pris.
+        """Mints a key, surviving an alias that is already taken.
 
-        LiteLLM exige des `key_alias` uniques **à vie**. Or un `run_id` est déterministe : si
-        une tentative a minté sa clé puis échoué avant de l'enregistrer, la reprise du même run
-        se verrait refuser sa clé en 400 et le ticket resterait bloqué. L'alias n'est qu'un
-        confort d'exploitation — on repart sans lui plutôt que d'immobiliser un run.
+        LiteLLM requires `key_alias` values that are unique **for life**. A `run_id` is
+        deterministic: if an attempt minted its key and then failed before recording it, the
+        retry of the same run would see its key refused with a 400 and the ticket would stay
+        blocked. The alias is only an operating convenience: the call starts again without it
+        rather than immobilise a run.
         """
         try:
             return await self._request("POST", "/key/generate", json=payload)
@@ -114,13 +115,13 @@ class LiteLlmGateway:
             taken = exc.status_code == 400 and "alias" in str(exc).lower()
             if not taken:
                 raise
-            logger.warning("alias de clé déjà pris, mint sans alias", alias=payload.get("key_alias"))
+            logger.warning("key alias already taken, minting without alias", alias=payload.get("key_alias"))
             return await self._request(
                 "POST", "/key/generate", json={k: v for k, v in payload.items() if k != "key_alias"}
             )
 
     async def spend(self, key_id: str) -> Spend:
-        """Dépense réelle de la clé : c'est **la** source de vérité du coût d'un run."""
+        """The key's real spend: **the** source of truth for a run's cost."""
         info = await self._request("GET", "/key/info", params={"key": key_id})
         details = info.get("info", info)
         total = float(details.get("spend", 0.0))
@@ -148,7 +149,7 @@ class LiteLlmGateway:
         try:
             await self._request("POST", "/key/delete", json={"keys": [key_id]})
         except UpstreamError as exc:
-            if exc.status_code not in {404, 400}:  # déjà expirée : c'est le résultat voulu
+            if exc.status_code not in {404, 400}:  # already expired: that is the wanted result
                 raise
 
     async def list_models(self) -> list[GatewayModel]:
@@ -215,7 +216,7 @@ class LiteLlmGateway:
         return team_id
 
     async def create_team(self, name: str, budget_usd: float) -> str:
-        """Équipe LiteLLM d'un projet, avec son budget (étape de provisioning)."""
+        """A project's LiteLLM team, with its budget (provisioning step)."""
         data = await self._request(
             "POST", "/team/new", json={"team_alias": name, "max_budget": budget_usd, "budget_duration": "30d"}
         )

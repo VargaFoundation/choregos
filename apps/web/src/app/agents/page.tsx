@@ -9,11 +9,11 @@ import { AgentCatalogue } from "@/components/agents/catalogue";
 import { ChannelBadges } from "@/components/agents/channels";
 import { LifecycleBadges } from "@/components/agents/lifecycle";
 import { ScopeBadge, ScopeFilter } from "@/components/agents/governance";
-import { resumeDeLaVersion, scopeLabel, type AgentScope } from "@/components/agents/registre";
+import { versionSummary, scopeLabel, type AgentScope } from "@/components/agents/registry";
 import { TagFilter, TagList, withTags } from "@/components/agents/tags";
-import { Glossaire } from "@/components/glossaire";
+import { Glossary } from "@/components/glossary";
 import { Badge, Button, Card, Drawer, Empty, ErrorNote, Table, TBody, TD, TH, THead, TR, buttonClasses } from "@/components/ui";
-import { OrgPageHeader } from "@/components/coquille/org-page-header";
+import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
 import { percent, usd } from "@/lib/format";
 import { useSession } from "@/lib/session";
@@ -84,7 +84,7 @@ function Agents() {
           </>
         }
       />
-      <Glossaire ici="agents" />
+      <Glossary ici="agents" />
       {agents.data && agents.data.length > 0 && (
         <div className="flex flex-wrap items-center gap-3">
           <ScopeFilter agents={agents.data} value={scope} onChange={setScope} />
@@ -183,7 +183,7 @@ function Agents() {
                     <TD className="font-mono">
                       v{agent.latest_version}
                       <span className="ml-2 font-sans text-xs text-ink-muted">
-                        {resumeDeLaVersion(agent.versions?.find((v) => v.version === agent.latest_version)?.spec)}
+                        {versionSummary(agent.versions?.find((v) => v.version === agent.latest_version)?.spec)}
                       </span>
                     </TD>
                     <TD>

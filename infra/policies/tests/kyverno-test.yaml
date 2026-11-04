@@ -15,85 +15,85 @@ exceptions:
 - exception.yaml
 results:
 - policy: choregos-image-tags
-  rule: interdire-latest
+  rule: forbid-latest-tag
   resources:
   - explicit-latest
   kind: Pod
   result: fail
 - policy: choregos-image-tags
-  rule: interdire-latest
+  rule: forbid-latest-tag
   resources:
   - no-tag
   kind: Pod
   result: fail
 - policy: choregos-image-tags
-  rule: interdire-latest
+  rule: forbid-latest-tag
   resources:
   - bare-name
   kind: Pod
   result: fail
 - policy: choregos-image-tags
-  rule: interdire-latest
+  rule: forbid-latest-tag
   resources:
   - port-no-tag
   kind: Pod
   result: fail
 - policy: choregos-image-tags
-  rule: interdire-latest
+  rule: forbid-latest-tag
   resources:
   - sidecar-latest
   kind: Pod
   result: fail
 - policy: choregos-image-tags
-  rule: interdire-latest
+  rule: forbid-latest-tag
   resources:
   - sidecar-no-tag
   kind: Pod
   result: fail
 - policy: choregos-image-tags
-  rule: interdire-latest
+  rule: forbid-latest-tag
   resources:
   - tagged
   kind: Pod
   result: pass
 - policy: choregos-image-tags
-  rule: interdire-latest
+  rule: forbid-latest-tag
   resources:
   - digest
   kind: Pod
   result: pass
 - policy: choregos-image-tags
-  rule: interdire-latest
+  rule: forbid-latest-tag
   resources:
   - tag-and-digest
   kind: Pod
   result: pass
 - policy: choregos-image-tags
-  rule: interdire-latest
+  rule: forbid-latest-tag
   resources:
   - port-and-tag
   kind: Pod
   result: pass
 - policy: choregos-image-tags
-  rule: interdire-latest
+  rule: forbid-latest-tag
   resources:
   - sidecar-tagged
   kind: Pod
   result: pass
 - policy: choregos-image-tags
-  rule: interdire-latest
+  rule: forbid-latest-tag
   resources:
   - sidecar-privileged
   kind: Pod
   result: pass
 - policy: choregos-image-tags
-  rule: interdire-latest
+  rule: forbid-latest-tag
   resources:
   - no-pod-context
   kind: Pod
   result: pass
 - policy: choregos-image-tags
-  rule: interdire-latest
+  rule: forbid-latest-tag
   resources:
   - host-path
   kind: Pod
@@ -183,13 +183,13 @@ results:
   kind: Pod
   result: pass
 - policy: choregos-pod-security
-  rule: pas-de-hostpath
+  rule: no-hostpath
   resources:
   - host-path
   kind: Pod
   result: fail
 - policy: choregos-pod-security
-  rule: pas-de-hostpath
+  rule: no-hostpath
   resources:
   - tagged
   kind: Pod
@@ -265,13 +265,13 @@ results:
   kind: Pod
   result: pass
 - policy: choregos-pod-security
-  rule: pas-de-hostpath
+  rule: no-hostpath
   resources:
   - platform-host-path
   kind: Pod
   result: fail
 - policy: choregos-image-tags
-  rule: interdire-latest
+  rule: forbid-latest-tag
   resources:
   - platform-latest
   kind: Pod

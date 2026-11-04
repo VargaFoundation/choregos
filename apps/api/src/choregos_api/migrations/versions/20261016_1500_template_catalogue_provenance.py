@@ -36,13 +36,13 @@ def upgrade() -> None:
     # Imported here: the migration reads the catalogue of the release that runs it.
     from choregos_api.schemas import AgentSpec
     from choregos_api.services.agents import empreinte
-    from choregos_core.catalogue_d_agents import entrees
+    from choregos_core.agent_catalogue import entries
 
     connection = op.get_bind()
     if connection.dialect.name == "postgresql":
         # Forced RLS: the application role sees no row without this (S39-27).
         connection.execute(sa.text("SELECT set_config('app.current_orgs', '*', true)"))
-    for entry in entrees():
+    for entry in entries():
         checksum = empreinte(AgentSpec.model_validate(entry.document.get("spec") or {}))
         rows = connection.execute(
             sa.text(

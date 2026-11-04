@@ -1,0 +1,52 @@
+# Reference ticket: `verify` role — write the missing test, without touching the code.
+id: py-missing-test
+title: "Cover the empty cart and the zero quantity"
+repo: python-toy
+role: verify
+prompt: |
+  Add `tests/test_edges.py` covering the empty cart, a zero quantity and a single
+  line. Write only in `tests/`: the production code does not change.
+allowed_paths:
+  - "tests/**"
+expected_duration_s: 95
+# Scripted, not measured: what a fake gateway is billed per context reduction (S37-09),
+# so the matrix's tokens come from the ledger in CI. The real numbers are S37-10's.
+scripted_usage:
+  "none": { tokens_in: 162000, tokens_cached: 108000, tokens_out: 5400, turns: 14 }
+  "rtk": { tokens_in: 136800, tokens_cached: 91800, tokens_out: 5400, turns: 14 }
+  "headroom": { tokens_in: 126900, tokens_cached: 85500, tokens_out: 5600, turns: 15 }
+  "rtk+headroom": { tokens_in: 106200, tokens_cached: 71100, tokens_out: 5600, turns: 15 }
+assertions:
+  - { kind: file_exists, path: tests/test_edges.py }
+  - { kind: file_unchanged, path: src/cart/cart.py }
+  - { kind: command, run: "make test" }
+scripted:
+  with_memory:
+    files:
+      tests/test_edges.py: |
+        """Edge cases of the cart."""
+
+        from __future__ import annotations
+
+        import sys
+        from pathlib import Path
+
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+        from cart import Cart, Line, total_with_tax  # noqa: E402
+
+
+        def test_zero_quantity_does_not_count() -> None:
+            cart = Cart()
+            cart.add(Line("coffee", 349, 0))
+            assert cart.subtotal_cents() == 0
+
+
+        def test_single_line() -> None:
+            cart = Cart()
+            cart.add(Line("coffee", 100))
+            assert total_with_tax(cart) == 120
+
+
+        def test_empty_cart_stays_at_zero() -> None:
+            assert total_with_tax(Cart()) == 0

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Sécurité : jetons de run (ES256), jetons d'API, sessions signées, vérification de webhooks."""
+"""Security: run tokens (ES256), API tokens, signed sessions, webhook verification."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ RUN_TOKEN_ALGORITHM = "ES256"
 
 @dataclass(slots=True, frozen=True)
 class RunClaims:
-    """Portée d'un jeton de run : un run, rien d'autre."""
+    """Scope of a run token: one run, nothing else."""
 
     run_id: str
     project_slug: str
@@ -38,7 +38,7 @@ class RunClaims:
 
 @lru_cache(maxsize=1)
 def _dev_keypair() -> tuple[str, str]:
-    """Paire ES256 éphémère pour le développement (jamais en production)."""
+    """Ephemeral ES256 pair for development (never in production)."""
     key = ec.generate_private_key(ec.SECP256R1())
     private_pem = key.private_bytes(
         encoding=serialization.Encoding.PEM,
@@ -56,7 +56,7 @@ def _dev_keypair() -> tuple[str, str]:
 
 
 def public_from_private(private_pem: str) -> str:
-    """La clé publique se DÉDUIT de la privée : il n'y a donc rien à tenir en double."""
+    """The public key is DERIVED from the private one: there is nothing to keep twice."""
     key = serialization.load_pem_private_key(private_pem.encode(), password=None)
     return (
         key.public_key()
@@ -68,13 +68,13 @@ def public_from_private(private_pem: str) -> str:
 
 
 def run_token_keys(settings: Settings | None = None) -> tuple[str, str]:
-    """Les clés des jetons de run, et pourquoi la privée suffit.
+    """The keys of the run tokens, and why the private one is enough.
 
-    Ces jetons sont émis par l'orchestrateur et vérifiés par l'API : les deux processus
-    doivent partager la MÊME paire. Exiger les deux moitiés comme avant laissait une
-    troisième possibilité — n'en fournir qu'une — où chaque processus repartait sur une
-    paire éphémère de son côté. Tout paraissait configuré, et l'agent recevait
-    « Signature verification failed », un message qui accuse le jeton, pas le déploiement.
+    These tokens are issued by the orchestrator and verified by the API: the two processes must
+    share the SAME pair. Demanding both halves, as before, left a third possibility, supplying only
+    one, where each process started over on an ephemeral pair of its own. Everything looked
+    configured, and the agent received "Signature verification failed", a message that accuses the
+    token, not the deployment.
     """
     settings = settings or get_settings()
     if settings.run_token_private_key:
@@ -82,14 +82,14 @@ def run_token_keys(settings: Settings | None = None) -> tuple[str, str]:
             settings.run_token_public_key or public_from_private(settings.run_token_private_key)
         )
     if settings.run_token_public_key:
-        # Une publique seule ne permet pas de signer : il manque l'essentiel, et le dire
-        # vaut mieux que de vérifier des jetons qu'on ne saura jamais émettre.
+        # A public key alone cannot sign: the essential is missing, and saying so is better than
+        # verifying tokens that we will never be able to issue.
         raise RuntimeError(
-            "CHOREGOS_RUN_TOKEN_PUBLIC_KEY est fournie sans sa clé privée : "
-            "l'orchestrateur ne peut pas signer les jetons de run."
+            "CHOREGOS_RUN_TOKEN_PUBLIC_KEY est fournie sans sa clé privée : "  # lang: fr-ok pinned by a test
+            "l'orchestrateur ne peut pas signer les jetons de run."  # lang: fr-ok pinned by a test
         )
-    # Aucune clé : paire éphémère, valable tant qu'un SEUL processus émet et vérifie
-    # (développement, tests). En cluster, l'API et l'orchestrateur sont deux processus.
+    # No key: an ephemeral pair, valid as long as a SINGLE process issues and verifies
+    # (development, tests). In a cluster, the API and the orchestrator are two processes.
     return _dev_keypair()
 
 
@@ -118,7 +118,7 @@ def mint_run_token(
 
 
 def verify_run_token(token: str, settings: Settings | None = None) -> RunClaims:
-    """Vérifie un jeton de run. Lève `jwt.PyJWTError` si invalide, expiré ou d'un autre run."""
+    """Verifies a run token. Raises `jwt.PyJWTError` if invalid, expired or from another run."""
     settings = settings or get_settings()
     _, public_key = run_token_keys(settings)
     payload: dict[str, Any] = jwt.decode(
@@ -223,11 +223,11 @@ def verify_egress_token(token: str, settings: Settings | None = None) -> RunClai
     )
 
 
-# ───────────────────────────── jetons d'API ─────────────────────────────
+# ───────────────────────────── API tokens ─────────────────────────────
 
 
 def generate_api_token() -> tuple[str, str]:
-    """Rend (jeton en clair, empreinte stockée). Le clair n'est jamais persisté."""
+    """Returns (token in clear, stored digest). The clear text is never persisted."""
     raw = "chg_" + secrets.token_urlsafe(32)
     return raw, hash_api_token(raw)
 
@@ -333,7 +333,7 @@ def read_session(
 
 
 def verify_github_signature(secret: str, body: bytes, signature_header: str) -> bool:
-    """HMAC SHA-256 comparé en temps constant (§1.10)."""
+    """HMAC SHA-256 compared in constant time (§1.10)."""
     if not signature_header.startswith("sha256="):
         return False
     expected = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()

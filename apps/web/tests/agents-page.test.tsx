@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import AgentsPage from "@/app/agents/page";
-import { ClientsMcp } from "@/components/agents/clients-mcp";
+import { McpClients } from "@/components/agents/mcp-clients";
 import { api } from "@/lib/api";
 import type { Agent, ApiToken } from "@/lib/types";
 
@@ -63,10 +63,10 @@ describe("the agents' page", () => {
       { agent: "relecteur", days: 30, runs: 0, success_rate: null, cost_usd: 0 },
     ]);
     wrap(<AgentsPage />);
-    const ligne = await screen.findByTestId("agent-redacteur");
-    await waitFor(() => expect(ligne).toHaveTextContent("14"));
-    expect(ligne).toHaveTextContent("US$6.42");
-    expect(ligne).toHaveTextContent("86 %");
+    const row = await screen.findByTestId("agent-redacteur");
+    await waitFor(() => expect(row).toHaveTextContent("14"));
+    expect(row).toHaveTextContent("US$6.42");
+    expect(row).toHaveTextContent("86 %");
     expect(screen.getByTestId("agent-claude-de-lea")).toHaveTextContent("External");
     expect(api.agents).toHaveBeenCalledTimes(1);
     expect(api.agentMetricsList).toHaveBeenCalledTimes(1);
@@ -134,11 +134,11 @@ describe("the AI clients' list", () => {
     vi.mocked(api.orgAgentCredentials).mockResolvedValue([
       { id: "c1", kind: "token", token_id: "tok-2", agent: "cursor-de-marc" },
     ]);
-    const jeton = (id: string, name: string): ApiToken => ({ id, name, scopes: ["mcp:read"], created_at: "2026-10-10T10:00:00Z" }) as ApiToken;
+    const token = (id: string, name: string): ApiToken => ({ id, name, scopes: ["mcp:read"], created_at: "2026-10-10T10:00:00Z" }) as ApiToken;
     wrap(
-      <ClientsMcp
+      <McpClients
         org="acme"
-        clients={[jeton("tok-1", "claude-code"), jeton("tok-2", "cursor")]}
+        clients={[token("tok-1", "claude-code"), token("tok-2", "cursor")]}
         agents={[agent("claude-de-lea", "external"), agent("cursor-de-marc", "external"), agent("autre", "external")]}
       />,
     );

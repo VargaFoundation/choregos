@@ -49,6 +49,35 @@ names who becomes `org_admin`; everyone else is `developer`. The API refuses dev
 login in `staging` and `prod`. The front shows the development form when
 `NEXT_PUBLIC_DEV_LOGIN=true`.
 
+## An MCP gateway in the local install (ADR 0105)
+
+To try the organisation's MCP gateway (ADR 0105) without a real one, add the profile:
+
+```bash
+docker compose --profile mcp-gateway up
+```
+
+It starts the demo fakes server (`demo-fakes`) and a fake MCP gateway (`mcp-gateway`) in front of it.
+Neither publishes a port on the host; the API reaches the gateway by name (the compose lists
+`mcp-gateway` in `CHOREGOS_MCP_GATEWAY_INTERNAL_HOSTS`). Without the profile, `docker compose up` is
+unchanged.
+
+In the console, signed in as an administrator:
+
+1. Administration, MCP gateway: endpoint `http://mcp-gateway:8091/{server}/mcp`, bearer token
+   `local-gateway-only`, allow the host `mcp-gateway`.
+2. Connectors: add a connector of type "MCP server through the organisation's MCP gateway", server
+   `supplier` (also `mdm`, `shipping`, `access_control`), then Discover.
+
+The upstream token (`local-upstream-only`) lives only in the gateway container: it never enters
+Choregos, which holds the gateway credential alone.
+
+For `jwt_assertion`, set `CHOREGOS_FAKE_GATEWAY_AUTH=jwt_assertion`,
+`CHOREGOS_FAKE_GATEWAY_JWKS_URL=http://api:8000/api/v1/orgs/demo/mcp-gateway/jwks.json` and
+`CHOREGOS_FAKE_GATEWAY_ISSUER=http://localhost:3000/api/v1/orgs/demo/mcp-gateway` on `mcp-gateway`
+(the issuer stays the public URL, which the gateway container cannot fetch: hence the explicit JWKS
+URL on the internal network).
+
 ## Development cluster
 
 ```bash
@@ -322,7 +351,7 @@ an `array` of strings (comma separated) and an `object` of strings (one `key = v
 
 This is how the enterprise edition attaches ([ADR 0024](adr/0024-two-editions.md)), and it is
 the second seam of this kind after playbooks (`CHOREGOS_PLAYBOOKS_DIR`), which was the model.
-`packages/adapters/tests/test_greffons.py` proves it by writing a real `.dist-info` on disk
+`packages/adapters/tests/test_extensions.py` proves it by writing a real `.dist-info` on disk
 rather than stubbing the discovery.
 
 An extension also brings the **effects** a governed action can run
@@ -463,15 +492,15 @@ with an extension installed for real.
 
 Three hooks in `choregos_api.edition`, next to the group mapper:
 
-- **`declarer_une_validation_de_session(fn)`** — `fn(session_db, user, payload)`, sync or async,
-  runs on every cookie-authenticated request; raise `SessionRefusee(reason)` to answer 401 with
+- **`declare_session_validation(fn)`** — `fn(session_db, user, payload)`, sync or async,
+  runs on every cookie-authenticated request; raise `SessionRefused(reason)` to answer 401 with
   that reason. A signed session is otherwise valid until `exp`: this is how server-side revocation
   and SCIM deprovisioning cut access at the next request. Any other exception propagates — a
   validation that is down is not an acceptance.
-- **`declarer_un_administrateur_de_plateforme(fn)`** — `fn(session_db, principal) -> bool`. The
+- **`declare_platform_administrator(fn)`** — `fn(session_db, principal) -> bool`. The
   core's rule (org admin of *every* organisation) still applies; an extension can only **grant** on top
   of it, never take away.
-- The session now carries **`iat`**, surfaced as `Principal.authentifie_le`, and
+- The session now carries **`iat`**, surfaced as `Principal.authenticated_at`, and
   `/api/v1/auth/login?reauth=1` asks the IdP to authenticate again (`prompt=login`, `max_age=0`) —
   the path for a gate that requires a fresh authentication. Sessions issued before 0.10.0 have no
   `iat` and read as too old.
@@ -487,7 +516,7 @@ Three routes consult extension checks **after** the core's rights and **before**
 from choregos_api.extensions import GestureRefused, declare_gesture_check
 
 def freshness(session, request):           # GestureRequest: gesture, org, principal, target
-    when = request.principal.authentifie_le
+    when = request.principal.authenticated_at
     if when is None or time.time() - when > 300:
         raise GestureRefused("approving needs a login less than 5 minutes old", "reauth")
 
@@ -570,8 +599,21 @@ objects as `choregos_api.extensions` and `choregos_api.effects`.
 A `GestureRequest` also reads `geste` and `cible`, a `GestureRefused` reads `raison`, and a `Quota`
 reads `memoire`, under the same warning. Not renamed here: the DSL value `verifier` of an action
 (a workflow written with it keeps running), the persisted `greffon:` prefixes and the entry-point
-group `choregos.plugins`. `edition.py` and the `Principal` follow in S45-12, `load_extensions` in
-S45-10; until then their examples above keep their French names.
+group `choregos.plugins`. `load_extensions` follows in S45-10.
+
+The edition API (`choregos_api.edition`) and the `Principal` followed in 0.21 (S45-12):
+
+| Former | New |
+| :-- | :-- |
+| `COMMUNAUTAIRE`, `ENTREPRISE` | `COMMUNITY`, `ENTERPRISE` <!-- lang: fr-ok --> |
+| `declarer(nom, fonctions=, ...)` | `declare(name, features=, ...)` (`publisher=`, `version=`, `licence=` unchanged) <!-- lang: fr-ok --> |
+| `declarer_le_mappeur_de_groupes`, `mappeur_de_groupes` | `declare_group_mapper`, `group_mapper` <!-- lang: fr-ok --> |
+| `courante`, `fonctions`, `est_entreprise` | `current`, `features`, `is_enterprise` <!-- lang: fr-ok --> |
+| `SessionRefusee`, `declarer_une_validation_de_session`, `validations_de_session` | `SessionRefused`, `declare_session_validation`, `session_validations` <!-- lang: fr-ok --> |
+| `declarer_un_administrateur_de_plateforme`, `administrateurs_de_plateforme` | `declare_platform_administrator`, `platform_administrators` <!-- lang: fr-ok --> |
+| `reinitialiser` | `reset` <!-- lang: fr-ok --> |
+| `Principal.authentifie_le` (read and write) | `Principal.authenticated_at` <!-- lang: fr-ok --> |
+
 ## The English ratchet
 
 Everything new is English ([ADR 0046](adr/0046-english-everywhere.md)), and what is still French

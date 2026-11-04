@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""API interne : le seul canal d'écriture d'un runner (JWT de run, portée = un run).
+"""Internal API: a runner's only write channel (run JWT, scope = one run).
 
-Aucune de ces routes n'accepte une session humaine ; aucun token GitHub large ne
-descend dans le workspace : tout passe ici (§1.10, §2.2).
+None of these routes accepts a human session; no broad GitHub token goes down into the
+workspace: everything passes through here (§1.10, §2.2).
 """
 
 from __future__ import annotations
@@ -26,12 +26,13 @@ from choregos_contracts import (
     artifact_digest,
 )
 from choregos_core import PolicyEngine, matches_any, telemetry, utcnow
+from choregos_core.compat import alias_names
 from choregos_core.workspace import is_read_only_scope
 from fastapi import APIRouter, Query, Request, Response, status
 from sqlalchemy import func, select
 
-from ..catalogue import appeler as appeler_outil
-from ..catalogue import outils_du_projet
+from ..catalogue import call as call_catalogue_tool
+from ..catalogue import project_tools
 from ..config import get_settings
 from ..db.models import (
     AgentSessionRecord,
@@ -114,7 +115,7 @@ async def _run_and_item(session: Any, run_id: str) -> tuple[Run, WorkItem, Proje
 
 @router.get("/runs/{id}/input", response_model=StageInput, operation_id="getRunInput")
 async def get_input(id: str, session: Db, claims: RunAuth) -> StageInput:
-    """Le `StageInput` du run. Si le résultat est déjà posté, 409 : le runner sort en 0."""
+    """The run's `StageInput`. If the result is already posted, 409: the runner exits with 0."""
     run, _, _ = await _run_and_item(session, id)
     if run.result is not None:
         raise conflict("result already posted for this run")
@@ -125,7 +126,7 @@ async def get_input(id: str, session: Db, claims: RunAuth) -> StageInput:
 
 @router.post("/runs/{id}/events", status_code=status.HTTP_202_ACCEPTED, operation_id="postRunEvents")
 async def post_events(id: str, body: RunEventsBatch, session: Db, claims: RunAuth) -> dict[str, int]:
-    """Journal ACP en lot, idempotent par `seq` (un rejeu n'écrit pas deux fois)."""
+    """ACP log in a batch, idempotent by `seq` (a replay does not write twice)."""
     run, _, project = await _run_and_item(session, id)
     known = set(
         (await session.execute(select(RunEvent.seq).where(RunEvent.run_id == run.id))).scalars().all()
@@ -204,7 +205,7 @@ async def post_egress_token(id: str, claims: RunAuth) -> EgressToken:
 
 @router.post("/runs/{id}/result", operation_id="postRunResult")
 async def post_result(id: str, body: StageResult, session: Db, claims: RunAuth) -> dict[str, str]:
-    """Dépôt du `StageResult`. Idempotent : un second appel identique répond 200 sans rien changer."""
+    """Post the `StageResult`. Idempotent: an identical second call answers 200 and changes nothing."""
     run, item, project = await _run_and_item(session, id)
     payload = body.model_dump(mode="json", by_alias=True)
     if run.result is not None:
@@ -223,16 +224,16 @@ async def post_result(id: str, body: StageResult, session: Db, claims: RunAuth) 
         item.risk = str(outputs.risk)
     if outputs.allowed_paths:
         item.allowed_paths = list(outputs.allowed_paths)
-    declarees = list(((run.stage_input or {}).get("transition") or {}).get("outputs") or [])
-    ranger_les_sorties(item, outputs, declarees)
-    # Chaque sortie rangée reçoit son reçu « produite », sous son empreinte (S25-04).
+    declared_outputs = list(((run.stage_input or {}).get("transition") or {}).get("outputs") or [])
+    ranger_les_sorties(item, outputs, declared_outputs)
+    # Each stored output receives its "produced" receipt, under its fingerprint (S25-04).
     await consigner(
         session,
         org_id=project.org_id,
         work_item_id=item.id,
         run_id=run.id,
         stage=run.stage_role,
-        sorties=sorties_a_ranger(outputs, declarees),
+        sorties=sorties_a_ranger(outputs, declared_outputs),
         genre=PRODUITE,
     )
     # And each becomes a typed artifact revision, traced to this run (S31-01, ADR 0049).
@@ -241,7 +242,7 @@ async def post_result(id: str, body: StageResult, session: Db, claims: RunAuth) 
         org_id=project.org_id,
         item=item,
         run=run,
-        outputs=sorties_a_ranger(outputs, declarees),
+        outputs=sorties_a_ranger(outputs, declared_outputs),
         types=dict(((run.stage_input or {}).get("transition") or {}).get("output_types") or {}),
     )
 
@@ -266,7 +267,7 @@ async def post_result(id: str, body: StageResult, session: Db, claims: RunAuth) 
     operation_id="postRunFinding",
 )
 async def post_finding(id: str, body: Finding, session: Db, claims: RunAuth) -> FindingAck:
-    """Dépôt d'un finding, plafonné par `policy.findings.max_per_run`."""
+    """Post a finding, capped by `policy.findings.max_per_run`."""
     run, item, project = await _run_and_item(session, id)
     engine = PolicyEngine(await effective_policy(session, project.id))
     cap = engine.max_findings_per_run()
@@ -327,7 +328,7 @@ async def post_finding(id: str, body: Finding, session: Db, claims: RunAuth) -> 
 async def post_scope_change(
     id: str, body: ScopeChangeRequestIn, session: Db, claims: RunAuth
 ) -> ScopeChangeDecision:
-    """Élargissement de périmètre : accordé automatiquement sous seuil, sinon soumis à un humain."""
+    """Scope widening: granted automatically under a threshold, otherwise submitted to a human."""
     run, item, project = await _run_and_item(session, id)
     engine = PolicyEngine(await effective_policy(session, project.id))
     current = list(run.allowed_paths or item.allowed_paths or [])
@@ -381,7 +382,7 @@ async def post_scope_change(
 
 @router.post("/runs/{id}/question", status_code=status.HTTP_202_ACCEPTED, operation_id="postRunQuestion")
 async def post_question(id: str, body: QuestionIn, session: Db, claims: RunAuth) -> dict[str, str]:
-    """L'agent demande un arbitrage : le run devra se terminer en `needs_human`."""
+    """The agent asks for an arbitration: the run will have to end in `needs_human`."""
     run, item, project = await _run_and_item(session, id)
     request_row = new_human_request(
         work_item_id=item.id,
@@ -420,18 +421,18 @@ async def get_context(id: str, session: Db, claims: RunAuth) -> ContextPack:
 
 @router.get("/runs/{id}/skills", response_model=list[dict[str, Any]], operation_id="getRunSkills")
 async def get_skills(id: str, session: Db, claims: RunAuth) -> list[dict[str, Any]]:
-    """Les fichiers des skills que le `StageInput` du run nomme (ADR 0033).
+    """The files of the skills that the run's `StageInput` names (ADR 0033).
 
-    Le runner les lit ici, avec son jeton de run, puis recalcule leur empreinte : celle du
-    `StageInput`, posée quand le run a été préparé, fait foi. Une skill de l'organisation du projet,
-    et d'elle seule.
+    The runner reads them here, with its run token, then recomputes their fingerprint: the one in
+    the `StageInput`, set when the run was prepared, is authoritative. A skill of the project's
+    organisation, and of that one only.
     """
     from ..db.models import Skill, SkillVersion
 
     run, _, project = await _run_and_item(session, id)
-    rendues: list[dict[str, Any]] = []
+    rendered: list[dict[str, Any]] = []
     for ref in (run.stage_input or {}).get("skills", []):
-        ligne = (
+        version_row = (
             await session.execute(
                 select(SkillVersion)
                 .join(Skill, Skill.id == SkillVersion.skill_id)
@@ -442,15 +443,20 @@ async def get_skills(id: str, session: Db, claims: RunAuth) -> list[dict[str, An
                 )
             )
         ).scalar_one_or_none()
-        if ligne is None:
+        if version_row is None:
             raise not_found("Skill of the run", f"{ref['slug']}@{ref['version']}")
-        if ligne.review_status != "approved":
+        if version_row.review_status != "approved":
             # Defence in depth (S32-06): prepare_stage never names a version waiting for review.
-            raise conflict(f"skill `{ref['slug']}` v{ligne.version} waits for its second reviewer")
-        rendues.append(
-            {"slug": ref["slug"], "version": ligne.version, "digest": ligne.digest, "files": ligne.files}
+            raise conflict(f"skill `{ref['slug']}` v{version_row.version} waits for its second reviewer")
+        rendered.append(
+            {
+                "slug": ref["slug"],
+                "version": version_row.version,
+                "digest": version_row.digest,
+                "files": version_row.files,
+            }
         )
-    return rendues
+    return rendered
 
 
 def _declared_inputs(run: Run) -> list[str]:
@@ -686,7 +692,7 @@ async def get_ticket(id: str, session: Db, claims: RunAuth) -> RunTicket:
     documents = item.documents or {}
     declared = set(_declared_inputs(run))
     served = {name: documents.get(name) for name in DOCUMENTS_DU_PROMPT if name in declared}
-    # Ce que le run lit ici, sous l'empreinte de ce qu'il lit (S25-04) : la révision exacte.
+    # What the run reads here, under the fingerprint of what it reads (S25-04): the exact revision.
     await consigner(
         session,
         org_id=project.org_id,
@@ -711,22 +717,23 @@ async def get_ticket(id: str, session: Db, claims: RunAuth) -> RunTicket:
     )
 
 
-def depot_github(url: str) -> str | None:
-    """`owner/name` d'une URL GitHub en https, `None` sinon (un dépôt ailleurs n'a pas d'App)."""
+def github_repository(url: str) -> str | None:
+    """`owner/name` of an https GitHub URL, `None` otherwise (a repository elsewhere has no App)."""
     import re
 
-    trouve = re.fullmatch(r"https://github\.com/([\w.-]+)/([\w.-]+?)(?:\.git)?/?", url.strip())
-    return f"{trouve.group(1)}/{trouve.group(2)}" if trouve else None
+    found_match = re.fullmatch(r"https://github\.com/([\w.-]+)/([\w.-]+?)(?:\.git)?/?", url.strip())
+    return f"{found_match.group(1)}/{found_match.group(2)}" if found_match else None
 
 
 @router.post("/runs/{id}/git-token", response_model=GitToken, operation_id="postRunGitToken")
 async def post_git_token(id: str, session: Db, claims: RunAuth) -> GitToken:
-    """Le jeton git du run (docs/security.md : « émis par run, portée du dépôt, 1 h, en mémoire »).
+    """The run's git token (docs/security.md: "issued per run, repository scope, 1 h, in memory").
 
-    La page le promettait, le code ne le faisait pas : le runner clonait sans identifiant, et un dépôt
-    privé — le bac à sable du locataire dev, le 08/10 — rendait « Repository not found » à chaque run
-    (S22-07). Le jeton est un jeton d'installation de l'App, restreint au SEUL dépôt du run et à
-    `contents: write` ; sans App, ou hors de GitHub, il est nul et le run clone sans.
+    The page promised it, the code did not do it: the runner cloned without credentials, and a
+    private repository (the dev tenant's sandbox, on 08/10) answered "Repository not found" on every
+    run (S22-07). The token is an installation token of the App, restricted to the run's ONLY
+    repository and to `contents: write`; without an App, or outside GitHub, it is null and the run
+    clones without.
     """
     import os
     from datetime import UTC, datetime
@@ -740,29 +747,33 @@ async def post_git_token(id: str, session: Db, claims: RunAuth) -> GitToken:
     if run.result is not None:
         raise conflict("result already posted for this run")
     url = str(((run.stage_input or {}).get("repo") or {}).get("url") or "")
-    depot = depot_github(url)
+    repository = github_repository(url)
     app_id = os.environ.get("CHOREGOS_GITHUB_APP_ID", "")
-    cle = os.environ.get("CHOREGOS_GITHUB_APP_PRIVATE_KEY", "")
-    if depot is None or not app_id or not cle:
-        return GitToken(token=None, repository=depot)
+    private_key = os.environ.get("CHOREGOS_GITHUB_APP_PRIVATE_KEY", "")
+    if repository is None or not app_id or not private_key:
+        return GitToken(token=None, repository=repository)
     # The installation THIS organisation claimed on the repository's owner, never another's (ADR 0073).
     # Without a claim, a single-organisation instance still discovers it from the repository; with
     # several organisations a repository outside the claims gets no token.
-    owner = depot.split("/", 1)[0]
+    owner = repository.split("/", 1)[0]
     claimed = await claimed_installation_for(session, project_row.org_id, owner)
     if claimed is None and not await implicit_claim_enabled(session):
-        return GitToken(token=None, repository=depot)
+        return GitToken(token=None, repository=repository)
     auth = GitHubAppAuth(
         app_id=app_id,
-        private_key=cle,
+        private_key=private_key,
         pinned_installation=claimed.id if claimed else None,
         pinned_account=owner if claimed else None,
     )
     async with httpx.AsyncClient(timeout=20) as client:
-        # Cloner et pousser sa branche : `contents: write`, rien d'autre — la PR, la plateforme l'ouvre.
-        jeton = await auth.token_for(client, depot, permissions=RUNNER_PERMISSIONS, ttl_s=3600)
+        # Clone and push its branch: `contents: write`, nothing else; the platform opens the PR.
+        installation_token = await auth.token_for(
+            client, repository, permissions=RUNNER_PERMISSIONS, ttl_s=3600
+        )
     return GitToken(
-        token=jeton.token, expires_at=datetime.fromtimestamp(jeton.expires_at, tz=UTC), repository=depot
+        token=installation_token.token,
+        expires_at=datetime.fromtimestamp(installation_token.expires_at, tz=UTC),
+        repository=repository,
     )
 
 
@@ -770,60 +781,60 @@ async def post_git_token(id: str, session: Db, claims: RunAuth) -> GitToken:
 async def get_ci_logs(
     id: str, session: Db, claims: RunAuth, tail: int = Query(default=500, le=5000)
 ) -> CiLogs:
-    """Logs du dernier échec CI, pour le rôle `fix_ci`."""
+    """Logs of the last CI failure, for the `fix_ci` role."""
     _run, item, _project = await _run_and_item(session, id)
     documents = item.documents or {}
     logs = str(documents.get("ci_logs", ""))
     return CiLogs(logs="\n".join(logs.splitlines()[-tail:]), ref=documents.get("ci_ref"))
 
 
-# ───────────────────────── catalogue d'outils ─────────────────────────
+# ───────────────────────── tool catalogue ─────────────────────────
 #
-# Un agent qui instruit un dossier a besoin d'API tierces, et ces API ont des clés. Les lui
-# donner serait lui donner de quoi dépenser sans plafond, exfiltrer dans un commit, ou
-# garder. Il nomme donc un outil ; la plateforme fabrique la requête, injecte la clé, et
-# compte l'appel. Son egress à lui reste fermé.
+# An agent that works a case needs third-party APIs, and those APIs have keys. Giving them to it
+# would give it the means to spend without a cap, to exfiltrate in a commit, or to keep them.
+# So it names a tool; the platform builds the request, injects the key, and counts the call.
+# Its own egress stays closed.
 
 
-def _outils_autorises(project: Project) -> list[str]:
-    """Ce que le projet déclare pouvoir appeler (`tools` de sa configuration)."""
+def _allowed_tools(project: Project) -> list[str]:
+    """What the project declares it can call (`tools` of its configuration)."""
     return [str(t) for t in ((project.config or {}).get("tools") or [])]
 
 
-def _groupes_du_projet(project: Project) -> list[str]:
-    """Les groupes auxquels il appartient — ce que le déploiement lui ouvre."""
+def _project_groups(project: Project) -> list[str]:
+    """The groups it belongs to: what the deployment opens to it."""
     return [str(g) for g in ((project.config or {}).get("groups") or [])]
 
 
-async def _outils_des_greffons(
-    session: Any, run: Run, project: Project, deja: set[str]
+async def _extension_tools(
+    session: Any, run: Run, project: Project, taken: set[str]
 ) -> dict[str, tuple[str, dict[str, Any]]]:
-    """{nom: (greffon, outil MCP)} des fournisseurs déclarés par les greffons (`greffons.py`).
+    """{name: (extension, MCP tool)} of the providers declared by the extensions (`extensions.py`).
 
-    Un nom déjà pris — par le catalogue ou par un autre greffon — est refusé en 409 plutôt que
-    servi par l'un des deux : un outil masqué en silence, c'est un agent qui croit appeler l'un et
-    appelle l'autre.
+    A name already taken, by the catalogue or by another extension, is refused with a 409 rather
+    than served by one of the two: a tool masked in silence is an agent that believes it calls one
+    and calls the other.
     """
-    from ..greffons import fournisseurs_d_outils
+    from ..extensions import tool_providers
 
-    trouves: dict[str, tuple[str, dict[str, Any]]] = {}
-    for greffon, fournisseur in fournisseurs_d_outils().items():
-        for outil in await fournisseur.lister(session, run, project):
-            nom = str(outil["name"])
-            if nom in deja or nom in trouves:
-                autre = trouves[nom][0] if nom in trouves else "the catalogue"
-                raise conflict(f"tool `{nom}` declared by {autre} and by the plugin `{greffon}`")
-            _plugin_result_cap(greffon, outil)
-            trouves[nom] = (greffon, outil)
-    return trouves
+    found: dict[str, tuple[str, dict[str, Any]]] = {}
+    for extension, provider in tool_providers().items():
+        for tool in await provider.list_tools(session, run, project):
+            tool_name = str(tool["name"])
+            if tool_name in taken or tool_name in found:
+                other = found[tool_name][0] if tool_name in found else "the catalogue"
+                raise conflict(f"tool `{tool_name}` declared by {other} and by the plugin `{extension}`")
+            _extension_result_cap(extension, tool)
+            found[tool_name] = (extension, tool)
+    return found
 
 
-def _plugin_result_cap(plugin: str, tool: dict[str, Any]) -> int | None:
-    """The result cap a plugin's tool declares (S40-17b), as a catalogue entry does, or None.
+def _extension_result_cap(plugin: str, tool: dict[str, Any]) -> int | None:
+    """The result cap an extension's tool declares (S40-17b), as a catalogue entry does, or None.
 
-    `result_max_bytes` beside `name` in what the plugin lists: an integer of at least 1024, bounded
-    by `CHOREGOS_BROKER_RESULT_CEILING_BYTES` like every cap. Anything else is a plugin bug, refused
-    when the tools are listed rather than read as the default.
+    `result_max_bytes` beside `name` in what the extension lists: an integer of at least 1024,
+    bounded by `CHOREGOS_BROKER_RESULT_CEILING_BYTES` like every cap. Anything else is an extension
+    bug, refused when the tools are listed rather than read as the default.
     """
     declared = tool.get("result_max_bytes")
     if declared is None:
@@ -839,28 +850,28 @@ def _plugin_result_cap(plugin: str, tool: dict[str, Any]) -> int | None:
 
 
 def _announced(tool: dict[str, Any]) -> dict[str, Any]:
-    """A plugin's tool as the agent sees it: the platform's own keys are not the agent's business."""
+    """An extension's tool as the agent sees it: the platform's own keys are not the agent's business."""
     return {k: v for k, v in tool.items() if k != "result_max_bytes"}
 
 
-def json_sha256(valeur: Any) -> str:
+def json_sha256(value: Any) -> str:
     """The SHA-256 of the canonical JSON of a value: sorted keys, compact separators, UTF-8."""
-    canonique = json.dumps(valeur, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str)
-    return hashlib.sha256(canonique.encode("utf-8")).hexdigest()
+    canonical = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 @router.get("/runs/{id}/tools", operation_id="getRunTools")
 async def get_tools(id: str, session: Db, claims: RunAuth) -> dict[str, Any]:
-    """Les outils que CE run peut appeler, au format MCP (`name`, `description`, `inputSchema`)."""
-    from ..services.courtier import outils_du_courtier
+    """The tools THIS run can call, in MCP format (`name`, `description`, `inputSchema`)."""
+    from ..services.broker import broker_tools
 
     run, _item, project = await _run_and_item(session, id)
-    outils = outils_du_projet(_outils_autorises(project), _groupes_du_projet(project))
-    des_greffons = await _outils_des_greffons(session, run, project, {o.name for o in outils})
-    # Le courtier (ADR 0034) : les opérations des connecteurs de l'organisation que l'agent du run
-    # sélectionne et que la politique permet. Leur nom (`connecteur__opération`) ne peut pas
-    # rencontrer celui d'un outil du catalogue.
-    du_courtier = await outils_du_courtier(session, run, project)
+    catalogue_tools = project_tools(_allowed_tools(project), _project_groups(project))
+    from_extensions = await _extension_tools(session, run, project, {o.name for o in catalogue_tools})
+    # The broker (ADR 0034): the operations of the organisation's connectors that the run's agent
+    # selects and that the policy allows. Their name (`connector__operation`) cannot meet that of
+    # a catalogue tool.
+    brokered = await broker_tools(session, run, project)
     # The governed way to read the web (S40-01f, ADR 0070): offered when the run's network allows a host.
     # Its name cannot be taken by another tool: a masked tool is an agent calling the wrong one.
     web = [web_fetch.announcement()] if await web_fetch.offered(session, run) else []
@@ -870,13 +881,16 @@ async def get_tools(id: str, session: Db, claims: RunAuth) -> dict[str, Any]:
         web.append(web_search.announcement())
     for builtin in web:
         taken = str(builtin["name"])
-        if taken in du_courtier or taken in des_greffons or any(o.name == taken for o in outils):
+        if taken in brokered or taken in from_extensions or any(o.name == taken for o in catalogue_tools):
             raise conflict(f"tool `{taken}` is built in: another tool cannot take its name")
     return {
         "tools": [
-            *({"name": o.name, "description": o.description, "inputSchema": o.input_schema} for o in outils),
-            *(_announced(outil) for _, outil in des_greffons.values()),
-            *(outil.annonce() for outil in du_courtier.values()),
+            *(
+                {"name": o.name, "description": o.description, "inputSchema": o.input_schema}
+                for o in catalogue_tools
+            ),
+            *(_announced(tool) for _, tool in from_extensions.values()),
+            *(tool.announcement() for tool in brokered.values()),
             *web,
         ]
     }
@@ -903,61 +917,66 @@ def _traced_tool_call(
 @router.post("/runs/{id}/tools/{name}", operation_id="callRunTool")
 @_traced_tool_call
 async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claims: RunAuth) -> dict[str, Any]:
-    """Appelle un outil du catalogue ou d'un greffon pour le run, et l'inscrit au registre de coûts."""
+    """Call a tool of the catalogue or of an extension for the run, and record it in the cost ledger."""
     run, item, project = await _run_and_item(session, id)
     if run.result is not None:
         raise conflict("result already posted for this run")
-    from ..services.courtier import outils_du_courtier
+    from ..services.broker import broker_tools
 
-    du_catalogue = outils_du_projet(
-        _outils_autorises(project), _groupes_du_projet(project), include_writers=True
-    )
-    outil = next((o for o in du_catalogue if o.name == name), None)
-    des_greffons = await _outils_des_greffons(session, run, project, {o.name for o in du_catalogue})
-    du_courtier = await outils_du_courtier(session, run, project)
+    from_catalogue = project_tools(_allowed_tools(project), _project_groups(project), include_writers=True)
+    catalogue_tool = next((o for o in from_catalogue if o.name == name), None)
+    from_extensions = await _extension_tools(session, run, project, {o.name for o in from_catalogue})
+    brokered = await broker_tools(session, run, project)
     is_web = name == web_fetch.TOOL_NAME and await web_fetch.offered(session, run)
     is_search = name == web_search.TOOL_NAME and await web_search.offered(session, project)
-    if (is_web or is_search) and (outil is not None or name in des_greffons or name in du_courtier):
+    if (is_web or is_search) and (catalogue_tool is not None or name in from_extensions or name in brokered):
         raise conflict(f"tool `{name}` is built in: another tool cannot take its name")
-    if outil is None and name not in des_greffons and name not in du_courtier and not (is_web or is_search):
-        # Ne pas distinguer « inconnu » de « non autorisé » : un agent n'a pas à découvrir
-        # le catalogue du déploiement en essayant des noms.
+    if (
+        catalogue_tool is None
+        and name not in from_extensions
+        and name not in brokered
+        and not (is_web or is_search)
+    ):
+        # Do not tell "unknown" from "not allowed": an agent has no business discovering the
+        # deployment's catalogue by trying names.
         raise not_found("Tool", name)
 
     engine = PolicyEngine(await effective_policy(session, project.id))
-    plafond = engine.max_tool_calls_per_run()
-    deja = (
+    cap = engine.max_tool_calls_per_run()
+    already_called = (
         await session.execute(
             select(func.count())
             .select_from(CostLedger)
             .where(CostLedger.run_id == run.id, CostLedger.kind == "tool")
         )
     ).scalar_one()
-    if plafond and deja >= plafond:
+    if cap and already_called >= cap:
         raise ApiError(
             status.HTTP_429_TOO_MANY_REQUESTS,
             "Tool call cap reached",
-            f"this run has already called {deja} tools (cap {plafond})",
+            f"this run has already called {already_called} tools (cap {cap})",
         )
 
     suspicions: list[dict[str, str]] = []
-    prix_usd = 0.0
+    price_usd = 0.0
     #: What the event says of a search query: its fingerprint and its length, never its text (ADR 0015).
     about_query: dict[str, Any] = {}
     if is_search:
-        code, corps, fournisseur, prix_usd, about_query = await _web_search(session, run, project, body or {})
-        prix = 0.0
-        code, corps, suspicions = await _garde_contre_l_injection(
-            session, run, project, SimpleNamespace(nom=name), code, corps
+        code, result_body, provider, price_usd, about_query = await _web_search(
+            session, run, project, body or {}
+        )
+        price_eur = 0.0
+        code, result_body, suspicions = await _injection_guard(
+            session, run, project, SimpleNamespace(name=name), code, result_body
         )
     elif is_web:
-        code, corps, fournisseur = await _web_fetch(session, run, project, body or {})
-        prix = 0.0
-        code, corps, suspicions = await _garde_contre_l_injection(
-            session, run, project, SimpleNamespace(nom=name), code, corps
+        code, result_body, provider = await _web_fetch(session, run, project, body or {})
+        price_eur = 0.0
+        code, result_body, suspicions = await _injection_guard(
+            session, run, project, SimpleNamespace(name=name), code, result_body
         )
-    elif outil is not None:
-        if outil.may_write:
+    elif catalogue_tool is not None:
+        if catalogue_tool.may_write:
             detail = (
                 f"catalogue tool `{name}` may write (an http POST or a remote MCP tool) and catalogue "
                 "calls are not governed actions: the deployment marks it `read_only: true` if it only "
@@ -970,54 +989,58 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
                 detail,
                 errors=[{"code": "catalogue_write_refused", "msg": detail}],
             )
-        from ..services.courtier import bounded_payload
+        from ..services.broker import bounded_payload
 
-        code, corps = await appeler_outil(outil, body or {})
+        code, result_body = await call_catalogue_tool(catalogue_tool, body or {})
         # A catalogue provider writes what the agent reads, as the broker's servers do (#759).
-        corps = bounded_payload(corps, outil.result_max_bytes)
+        result_body = bounded_payload(result_body, catalogue_tool.result_max_bytes)
         # ... and what it writes may be an injection, read by the same guard (S40-18).
-        code, corps, suspicions = await _garde_contre_l_injection(
-            session, run, project, SimpleNamespace(nom=name), code, corps
+        code, result_body, suspicions = await _injection_guard(
+            session, run, project, SimpleNamespace(name=name), code, result_body
         )
-        fournisseur, prix = outil.provider, outil.price_eur
-    elif name in du_courtier and du_courtier[name].sous_validation:
-        # Sous validation (ADR 0035) : l'appel PROPOSE l'action ; rien ne part vers le serveur. La
-        # proposition compte dans le plafond du run, pour qu'une boucle ne remplisse pas la boîte.
-        from ..services.courtier import ArgumentsRefuses, proposer_l_appel, verifier_les_arguments
+        provider, price_eur = catalogue_tool.provider, catalogue_tool.price_eur
+    elif name in brokered and brokered[name].needs_approval:
+        # Under approval (ADR 0035): the call PROPOSES the action; nothing goes to the server. The
+        # proposal counts against the run's cap, so that a loop does not fill the inbox.
+        from ..services.broker import ArgumentsRefused, check_arguments, propose_call
 
         try:
-            verifier_les_arguments(du_courtier[name], body or {})
-        except ArgumentsRefuses as refus:
-            raise ApiError(status.HTTP_400_BAD_REQUEST, "Arguments refused", str(refus)) from refus
-        code, corps = 202, await proposer_l_appel(session, run, project, du_courtier[name], body or {})
-        fournisseur, prix = f"mcp:{du_courtier[name].connecteur.name}", 0.0
-    elif name in du_courtier and du_courtier[name].ecriture:
-        # Une écriture, même permise, est une action gouvernée (#241) : faite une fois, consignée,
-        # compensable — jouée par l'`ActionWorkflow`. Son prix se compte quand elle naît.
-        code, corps, suspicions, nouvelle = await _ecriture_par_le_courtier(
-            session, run, project, du_courtier[name], body or {}
+            check_arguments(brokered[name], body or {})
+        except ArgumentsRefused as refusal:
+            raise ApiError(status.HTTP_400_BAD_REQUEST, "Arguments refused", str(refusal)) from refusal
+        code, result_body = 202, await propose_call(session, run, project, brokered[name], body or {})
+        provider, price_eur = f"mcp:{brokered[name].connector.name}", 0.0
+    elif name in brokered and brokered[name].is_write:
+        # A write, even an allowed one, is a governed action (#241): done once, journaled,
+        # compensable, played by the `ActionWorkflow`. Its price is counted when it is born.
+        code, result_body, suspicions, created = await _write_by_the_broker(
+            session, run, project, brokered[name], body or {}
         )
-        fournisseur, prix = f"mcp:{du_courtier[name].connecteur.name}", 0.0
-        prix_usd = (du_courtier[name].operation.price_usd or 0.0) if nouvelle else 0.0
-    elif name in du_courtier:
-        code, corps, suspicions = await _par_le_courtier(session, run, project, du_courtier[name], body or {})
-        fournisseur, prix = f"mcp:{du_courtier[name].connecteur.name}", 0.0
-        prix_usd = du_courtier[name].operation.price_usd or 0.0
+        provider, price_eur = f"mcp:{brokered[name].connector.name}", 0.0
+        price_usd = (brokered[name].operation.price_usd or 0.0) if created else 0.0
+    elif name in brokered:
+        code, result_body, suspicions = await _read_by_the_broker(
+            session, run, project, brokered[name], body or {}
+        )
+        provider, price_eur = f"mcp:{brokered[name].connector.name}", 0.0
+        price_usd = brokered[name].operation.price_usd or 0.0
     else:
-        from ..greffons import fournisseurs_d_outils
-        from ..services.courtier import bounded_payload
+        from ..extensions import tool_providers
+        from ..services.broker import bounded_payload
 
-        greffon, plugin_tool = des_greffons[name]
-        code, corps = await fournisseurs_d_outils()[greffon].appeler(session, run, project, name, body or {})
-        corps = bounded_payload(corps, _plugin_result_cap(greffon, plugin_tool))
-        code, corps, suspicions = await _garde_contre_l_injection(
-            session, run, project, SimpleNamespace(nom=name), code, corps
+        extension, extension_tool = from_extensions[name]
+        code, result_body = await tool_providers()[extension].call_tool(
+            session, run, project, name, body or {}
         )
-        fournisseur, prix = f"greffon:{greffon}", 0.0
+        result_body = bounded_payload(result_body, _extension_result_cap(extension, extension_tool))
+        code, result_body, suspicions = await _injection_guard(
+            session, run, project, SimpleNamespace(name=name), code, result_body
+        )
+        provider, price_eur = f"greffon:{extension}", 0.0  # lang: fr-ok — persisted cost provider, S45-39
     # A call the organisation's network policy stopped never reached the server: it is not counted
     # against the per-host rate either, or an agent that keeps retrying would never recover (ADR 0070).
     # A search query or a fetch address refused for what it holds was not sent either (ADR 0083 §5).
-    refused_by_network = isinstance(corps, dict) and corps.get("type") in {
+    refused_by_network = isinstance(result_body, dict) and result_body.get("type") in {
         "network_policy",
         "rate_limited",
         "query_redacted",
@@ -1033,10 +1056,10 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
                 # fails the INSERT, not the read.
                 ts=utcnow(),
                 kind="tool",
-                provider=fournisseur,
+                provider=provider,
                 model=name,
-                cost_eur=prix,
-                cost_usd=prix_usd,
+                cost_eur=price_eur,
+                cost_usd=price_usd,
                 stage_role=run.stage_role,
                 **await dimensions_of(session, run.id),
             )
@@ -1050,25 +1073,25 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
         project_slug=project.slug,
         subject=run.id,
         tool=name,
-        provider=fournisseur,
+        provider=provider,
         status_code=code,
         # Provenance: WHAT went in and WHAT came back, as digests of the canonical JSON — the event
         # keeps no payload, but a result that is later disputed can be matched to the bytes served.
         request_sha256=json_sha256(body or {}),
-        response_sha256=json_sha256(corps),
+        response_sha256=json_sha256(result_body),
         **about_query,
     )
     telemetry.record_tool_call(
         status_code=code,
-        provider=fournisseur,
+        provider=provider,
         project=project.slug,
         work_item=item.tracker_key,
         stage=run.stage_role,
     )
     return {
         "status_code": code,
-        "result": corps,
-        "remaining": max(0, plafond - deja - 1) if plafond else None,
+        "result": result_body,
+        "remaining": max(0, cap - already_called - 1) if cap else None,
         **({"suspicions": suspicions} if suspicions else {}),
     }
 
@@ -1111,57 +1134,59 @@ async def _web_search(
         ) from exc
     query = str(arguments["query"])
     about = {"query_sha256": web_search.fingerprint(query), "query_length": len(query)}
-    code, corps, backend = await web_search.search(session, run, project, arguments)
+    code, result_body, backend = await web_search.search(session, run, project, arguments)
     if backend is None:
         raise not_found("Tool", web_search.TOOL_NAME)
     price = web_search.price_usd(backend) if code == 200 else 0.0
-    return code, corps, backend.provider, price, about
+    return code, result_body, backend.provider, price, about
 
 
-async def _par_le_courtier(
-    session: Any, run: Run, project: Project, outil: Any, arguments: dict[str, Any]
+async def _read_by_the_broker(
+    session: Any, run: Run, project: Project, tool: Any, arguments: dict[str, Any]
 ) -> tuple[int, Any, list[dict[str, str]]]:
-    """Un appel par le courtier — une LECTURE : arguments vérifiés AVANT (400, rien de compté), clé
-    du connecteur résolue ICI, et ce que le serveur rend passé à la garde contre l'injection — un
-    serveur tiers écrit ce que l'agent lira."""
-    from ..services.courtier import ArgumentsRefuses, appeler, verifier_les_arguments
+    """A call through the broker, a READ: arguments checked BEFORE (400, nothing counted), the
+    connector's key resolved HERE, and what the server returns passed to the injection guard: a
+    third-party server writes what the agent will read."""
+    from ..services.broker import ArgumentsRefused, call, check_arguments
 
     try:
-        verifier_les_arguments(outil, arguments)
-    except ArgumentsRefuses as refus:
-        raise ApiError(status.HTTP_400_BAD_REQUEST, "Arguments refused", str(refus)) from refus
-    code, corps = await appeler(session, outil, arguments, run=run, project=project)
-    return await _garde_contre_l_injection(session, run, project, outil, code, corps)
+        check_arguments(tool, arguments)
+    except ArgumentsRefused as refusal:
+        raise ApiError(status.HTTP_400_BAD_REQUEST, "Arguments refused", str(refusal)) from refusal
+    code, result_body = await call(session, tool, arguments, run=run, project=project)
+    return await _injection_guard(session, run, project, tool, code, result_body)
 
 
-async def _ecriture_par_le_courtier(
-    session: Any, run: Run, project: Project, outil: Any, arguments: dict[str, Any]
+async def _write_by_the_broker(
+    session: Any, run: Run, project: Project, tool: Any, arguments: dict[str, Any]
 ) -> tuple[int, Any, list[dict[str, str]], bool]:
-    """Une écriture appelée par un run : arguments vérifiés AVANT (400, rien de proposé), puis une
-    action gouvernée dont le courtier attend l'issue ; ce qu'elle rend passe la même garde."""
-    from ..services.courtier import ArgumentsRefuses, ecrire_par_une_action, verifier_les_arguments
+    """A write called by a run: arguments checked BEFORE (400, nothing proposed), then a
+    governed action whose outcome the broker waits for; what it returns goes through the same guard."""
+    from ..services.broker import ArgumentsRefused, check_arguments, write_through_action
 
     try:
-        verifier_les_arguments(outil, arguments)
-    except ArgumentsRefuses as refus:
-        raise ApiError(status.HTTP_400_BAD_REQUEST, "Arguments refused", str(refus)) from refus
-    code, corps, nouvelle = await ecrire_par_une_action(session, run, project, outil, arguments)
-    code, corps, suspicions = await _garde_contre_l_injection(session, run, project, outil, code, corps)
-    return code, corps, suspicions, nouvelle
+        check_arguments(tool, arguments)
+    except ArgumentsRefused as refusal:
+        raise ApiError(status.HTTP_400_BAD_REQUEST, "Arguments refused", str(refusal)) from refusal
+    code, result_body, created = await write_through_action(session, run, project, tool, arguments)
+    code, result_body, suspicions = await _injection_guard(session, run, project, tool, code, result_body)
+    return code, result_body, suspicions, created
 
 
-async def _garde_contre_l_injection(
-    session: Any, run: Run, project: Project, outil: Any, code: int, corps: Any
+async def _injection_guard(
+    session: Any, run: Run, project: Project, tool: Any, code: int, result_body: Any
 ) -> tuple[int, Any, list[dict[str, str]]]:
-    """Ce qu'un serveur tiers rend, l'agent le lira : `warn` le dit, `block` le retient."""
-    from choregos_core.injection import suspicions as chercher
+    """What a third-party server returns, the agent will read: `warn` says so, `block` withholds it."""
+    from choregos_core.injection import suspicions as find_suspicions
 
-    from ..services.courtier import readable_text
+    from ..services.broker import readable_text
 
     mode = PolicyEngine(await effective_policy(session, project.id)).policy.sandbox.prompt_injection
-    trouvees = [] if mode == "ignore" else chercher(readable_text(corps), source=f"tool.{outil.nom}")
-    if not trouvees:
-        return code, corps, []
+    suspected = (
+        [] if mode == "ignore" else find_suspicions(readable_text(result_body), source=f"tool.{tool.name}")
+    )
+    if not suspected:
+        return code, result_body, []
     await persist_event(
         session,
         EventType.SECURITY_INJECTION_SUSPECTED,
@@ -1170,10 +1195,20 @@ async def _garde_contre_l_injection(
         project_slug=project.slug,
         subject=run.id,
         run_id=run.id,
-        tool=outil.nom,
-        suspicions=[s.to_dict() for s in trouvees],
+        tool=tool.name,
+        suspicions=[s.to_dict() for s in suspected],
     )
     if mode == "block":
-        retenu = {"error": f"result of {outil.nom} withheld: suspected injection — a human reviews it"}
-        return 451, retenu, [s.to_dict() for s in trouvees]
-    return code, corps, [s.to_dict() for s in trouvees]
+        withheld = {"error": f"result of {tool.name} withheld: suspected injection — a human reviews it"}
+        return 451, withheld, [s.to_dict() for s in suspected]
+    return code, result_body, [s.to_dict() for s in suspected]
+
+
+# The former private name of `_extension_tools`: a patch on it (a test, an edition package) is seen by
+# `get_tools` and `call_tool` (S45-16).
+_outils_des_greffons = _extension_tools  # lang: fr-ok alias:internal
+
+alias_names(
+    __name__,
+    {"_outils_des_greffons": "_extension_tools"},  # lang: fr-ok alias:internal
+)

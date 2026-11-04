@@ -13,7 +13,7 @@ import pytest
 from httpx import AsyncClient
 
 from .github_app_kit import add_organisation, claim_for
-from .test_jeton_git_du_run import _jeton_de_run, _run_avec_depot
+from .kits.run_git_token import run_token_for, run_with_repository
 
 
 @pytest.fixture
@@ -35,8 +35,8 @@ def minted(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
 
 
 async def _token(client: AsyncClient, project: dict[str, Any], url: str) -> dict[str, Any]:
-    run_id = await _run_avec_depot(project, url)
-    reply = await client.post(f"/api/v1/internal/runs/{run_id}/git-token", headers=_jeton_de_run(run_id))
+    run_id = await run_with_repository(project, url)
+    reply = await client.post(f"/api/v1/internal/runs/{run_id}/git-token", headers=run_token_for(run_id))
     assert reply.status_code == 200, reply.text
     return dict(reply.json())
 

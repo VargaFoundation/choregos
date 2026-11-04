@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Markdown ↔ Atlassian Document Format, juste ce qu'il faut pour Choregos.
+"""Markdown <-> Atlassian Document Format, just what Choregos needs.
 
-Jira Cloud n'accepte plus de markdown dans ses commentaires : il veut de l'ADF. Le
-commentaire de suivi (§4.3) est un titre, quelques paragraphes, une liste et un tableau —
-c'est ce sous-ensemble qui est traduit, et rien de plus. Ce qui n'est pas reconnu part en
-paragraphe littéral : un commentaire un peu moins joli vaut mieux qu'un commentaire perdu.
+Jira Cloud no longer accepts markdown in its comments: it wants ADF. The status comment (§4.3)
+is a heading, a few paragraphs, a list and a table, and that subset is what gets translated,
+nothing more. What is not recognised goes into a literal paragraph: a slightly less pretty
+comment beats a lost one.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ TABLE_SEPARATOR = re.compile(r"^\s*\|?[\s:|-]+\|[\s:|-]*$")
 
 
 def markdown_to_adf(markdown: str) -> dict[str, Any]:
-    """Traduit un markdown simple en document ADF."""
+    """Translates simple markdown into an ADF document."""
     lines = (markdown or "").splitlines()
     content: list[dict[str, Any]] = []
     index = 0
@@ -68,7 +68,7 @@ def markdown_to_adf(markdown: str) -> dict[str, Any]:
 
 
 def text_of_adf(document: Any) -> str:
-    """Rend le texte d'un document ADF — ce que Choregos relit pour trouver son marqueur."""
+    """Renders the text of an ADF document: what Choregos reads back to find its marker."""
     if document is None:
         return ""
     if isinstance(document, str):
@@ -105,7 +105,7 @@ def _cells(line: str) -> list[str]:
 def _table(lines: list[str], index: int) -> tuple[dict[str, Any], int]:
     header = _cells(lines[index])
     rows: list[dict[str, Any]] = [_row(header, header=True)]
-    index += 2  # l'en-tête et sa ligne de séparation
+    index += 2  # the header and its separator line
     while index < len(lines) and _is_table_row(lines[index]):
         rows.append(_row(_cells(lines[index])))
         index += 1
@@ -124,7 +124,7 @@ def _row(cells: list[str], *, header: bool = False) -> dict[str, Any]:
 
 
 def _inline(text: str) -> list[dict[str, Any]]:
-    """Gras, code et liens ; le reste passe en texte brut."""
+    """Bold, code and links; the rest goes through as plain text."""
     if not text:
         return []
     nodes: list[dict[str, Any]] = []

@@ -4,7 +4,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { RUNTIME_LABEL, RuntimeAgentForm, type RuntimeKind } from "@/components/agents/runtime-agent-form";
 import { Breadcrumbs, Empty } from "@/components/ui";
-import { OrgPageHeader } from "@/components/coquille/org-page-header";
+import { OrgPageHeader } from "@/components/org-page-header";
 import { useSession } from "@/lib/session";
 
 const LEAD: Record<RuntimeKind, string> = {

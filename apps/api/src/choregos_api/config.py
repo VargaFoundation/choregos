@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Configuration de l'API (12-factor, préfixe `CHOREGOS_`)."""
+"""API configuration (12-factor, `CHOREGOS_` prefix)."""
 
 from __future__ import annotations
 
@@ -11,9 +11,9 @@ from choregos_core.images import check_image_map
 from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-#: Ce qu'un moteur de gabarit Go écrit quand la variable n'existe pas : il rend littéralement
-#: cette chaîne au lieu d'échouer. Helm et l'opérateur Infisical le font tous les deux.
-GABARIT_NON_RESOLU = ("<no value>", "<nil>")
+#: What a Go template engine writes when the variable does not exist: it renders this string
+#: literally instead of failing. Helm and the Infisical operator both do it.
+UNRESOLVED_TEMPLATE = ("<no value>", "<nil>")
 
 #: The session secret the code ships with. It is published in the repository, so no deployed
 #: instance may sign with it (`security.check_session_secret`).
@@ -22,18 +22,18 @@ DEFAULT_SESSION_SECRET = "dev-session-secret-change-me"
 MIN_SESSION_SECRET_BYTES = 32
 
 
-#: Les clients de la page Integrations qu'un client OAuth pré-enregistré peut servir (ADR 0030).
-CLIENTS_OAUTH = frozenset(
+#: The clients of the Integrations page that a pre-registered OAuth client can serve (ADR 0030).
+OAUTH_CLIENTS = frozenset(
     {"claude-code", "claude-desktop", "claude-ai", "cursor", "vscode", "chatgpt", "other"}
 )
 
 
-class ClientOAuth(BaseModel):
-    """Un client que l'IdP a enregistré pour la porte MCP : la page Integrations en tire la commande."""
+class OAuthClient(BaseModel):
+    """A client that the IdP registered for the MCP door: the Integrations page derives its command."""
 
     client_id: str = Field(min_length=1)
-    #: Le port de la redirection locale (`http://localhost:PORT/callback`) que l'IdP a enregistré —
-    #: pour un client qui reçoit le code sur le poste (Claude Code).
+    #: The port of the local redirect (`http://localhost:PORT/callback`) that the IdP registered,
+    #: for a client that receives the code on the workstation (Claude Code).
     callback_port: int | None = Field(default=None, ge=1024, le=65535)
 
 
@@ -41,33 +41,32 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CHOREGOS_", env_file=".env", extra="ignore")
 
     env: Literal["dev", "staging", "prod", "test"] = "dev"
-    # Port d'écoute. En conteneur, 8000 ; sur une machine de développement, 8000 est
-    # souvent déjà pris, et `choregos-api` sortait sur « Address already in use » sans
-    # qu'on puisse en changer autrement qu'en éditant le code.
+    # Listening port. In a container, 8000; on a development machine, 8000 is often already taken,
+    # and `choregos-api` exited on "Address already in use" with no way to change it other than
+    # editing the code.
     port: int = 8000
     debug: bool = False
     fakes: bool = Field(default=False, validation_alias="CHOREGOS_FAKES")
-    #: L'édition que le DÉPLOIEMENT annonce (ADR 0024). Ce n'est pas la même chose que l'édition
-    #: qui tourne : celle-là, c'est le greffon entreprise qui la déclare en se chargeant. Les deux
-    #: sont comparées au démarrage, parce qu'un écart est silencieux autrement — le chart
-    #: annoncerait `enterprise`, l'image serait communautaire, tout démarrerait, et la première
-    #: seconde organisation serait refusée sans que personne comprenne pourquoi.
+    #: The edition that the DEPLOYMENT announces (ADR 0024). It is not the same thing as the edition
+    #: that runs: that one is declared by the enterprise extension when it loads. The two are
+    #: compared at startup, because a gap is silent otherwise: the chart would announce
+    #: `enterprise`, the image would be community, everything would start, and the first second
+    #: organisation would be refused without anyone understanding why.
     edition: Literal["community", "enterprise"] = "community"
 
-    # Base de données
+    # Database
     database_url: str = "sqlite+aiosqlite:///./choregos.db"
     db_echo: bool = False
-    #: Pool de connexions, BORNÉ. `pool_size` seul laissait SQLAlchemy ouvrir dix
-    #: connexions de débordement de plus, et attendre trente secondes une connexion
-    #: libre (état des lieux du 2026-09-24). Chaque processus tient au plus
-    #: `db_pool_size + db_max_overflow` connexions ; `db_pool_recycle_s` ferme celles
-    #: qu'un pare-feu ou PgBouncer aurait coupées en silence.
+    #: Connection pool, BOUNDED. `pool_size` alone let SQLAlchemy open ten more overflow
+    #: connections, and wait thirty seconds for a free one (inventory of 2026-09-24). Each process
+    #: holds at most `db_pool_size + db_max_overflow` connections; `db_pool_recycle_s` closes those
+    #: that a firewall or PgBouncer would have cut silently.
     db_pool_size: int = 10
     db_max_overflow: int = 5
     db_pool_timeout_s: int = 10
     db_pool_recycle_s: int = 1800
 
-    # Identité
+    # Identity
     oidc_issuer: str = "http://localhost:8080/realms/choregos"
     oidc_client_id: str = "choregos"
     oidc_client_secret: str = ""
@@ -82,49 +81,46 @@ class Settings(BaseSettings):
     #: Temporary switch for an identity provider MIGRATION (ADR 0100): an account bound to another
     #: subject is re-linked when the provider asserts `email_verified: true`. Off: it is refused.
     oidc_relink_verified_email: bool = False
-    #: La porte MCP accepte aussi les jetons OAuth émis par l'IdP (ADR 0030, RFC 9728) : claude.ai et
-    #: les clients hébergés ne savent pas présenter un jeton `chg_`. Éteint par défaut.
+    #: The MCP door also accepts OAuth tokens issued by the IdP (ADR 0030, RFC 9728): claude.ai and
+    #: hosted clients cannot present a `chg_` token. Off by default.
     mcp_oauth_enabled: bool = False
-    #: L'émetteur des jetons de la porte ; vide : celui de la connexion OIDC de la console.
+    #: The issuer of the door's tokens; empty: that of the console's OIDC sign-in.
     mcp_oauth_issuer: str = ""
-    #: L'audience OBLIGATOIRE d'un jeton de la porte : sur un realm partagé, un jeton obtenu par une
-    #: autre application ne doit pas l'ouvrir.
+    #: The MANDATORY audience of a door token: on a shared realm, a token obtained by another
+    #: application must not open it.
     mcp_oauth_audience: str = "choregos-mcp"
-    #: Les clients OAuth que l'IdP a enregistrés pour la porte, par client de la page Integrations
-    #: (`claude-code`, `claude-ai`…), en JSON : `{"claude-code": {"client_id": "…", "callback_port":
-    #: 33418}}`. La page en tire la commande exacte ; sans eux, elle ne propose que les jetons.
-    mcp_oauth_clients: dict[str, ClientOAuth] = Field(default_factory=dict)
+    #: The OAuth clients that the IdP registered for the door, by client of the Integrations page
+    #: (`claude-code`, `claude-ai`...), as JSON: `{"claude-code": {"client_id": "...",
+    #: "callback_port": 33418}}`. The page derives the exact command from them; without them, it
+    #: offers only tokens.
+    mcp_oauth_clients: dict[str, OAuthClient] = Field(default_factory=dict)
     session_secret: str = DEFAULT_SESSION_SECRET
     #: A verification-only key during a rotation (`CHOREGOS_SESSION_SECRET_PREVIOUS`): a value signed
     #: with it still reads, and nothing is signed with it.
     session_secret_previous: str = ""
     session_cookie: str = "choregos_session"
     session_max_age_s: int = 8 * 3600
-    #: Connexion de développement (`/auth/login?as=<email>`) : ÉTEINTE par défaut. Elle
-    #: était allumée par défaut et jamais posée par le chart : une installation de
-    #: production acceptait `?code=dev:admin@x` et rendait ORG_ADMIN sur toutes les
-    #: organisations (état des lieux du 2026-09-24). Le validateur ci-dessous la refuse
-    #: en staging et en prod quoi qu'on lui dise.
+    #: Development sign-in (`/auth/login?as=<email>`): OFF by default. It used to be on by default
+    #: and never set by the chart: a production installation accepted `?code=dev:admin@x` and
+    #: returned ORG_ADMIN on all organisations (inventory of 2026-09-24). The validator below
+    #: refuses it in staging and prod whatever it is told.
     dev_login_enabled: bool = False
-    #: Les e-mails qui, en connexion de développement, reçoivent ORG_ADMIN. Les autres
-    #: sont `developers`. Avant : tout e-mail commençant par `admin` — une escalade par
-    #: convention de nommage.
+    #: The e-mails that, in development sign-in, receive ORG_ADMIN. The others are `developers`.
+    #: Before: any e-mail starting with `admin`, an escalation by naming convention.
     dev_admin_emails: str = ""
-    #: Amorçage : l'organisation créée au premier démarrage si elle n'existe pas, et les
-    #: e-mails qui y reçoivent ORG_ADMIN. Sans cela, une installation neuve n'avait AUCUN
-    #: moyen de créer une organisation (seuls les scripts de seed le faisaient) — donc aucun
-    #: projet, donc rien (état des lieux du 2026-09-24). Idempotent : rejoué à chaque
-    #: démarrage, il ne touche pas à ce qui existe.
+    #: Bootstrap: the organisation created at the first start if it does not exist, and the e-mails
+    #: that receive ORG_ADMIN in it. Without it, a new installation had NO way to create an
+    #: organisation (only the seed scripts did), hence no project, hence nothing (inventory of
+    #: 2026-09-24). Idempotent: replayed at every start, it does not touch what exists.
     bootstrap_org: str = ""
     bootstrap_org_name: str = ""
     bootstrap_admins: str = ""
-    #: Organisation à laquelle rattacher les groupes OIDC NON préfixés (`developers`,
-    #: `org-admins`…). Vide : ces groupes sont ignorés, seuls les groupes
-    #: `choregos:<org>:<groupe>` donnent un rôle. Avant : tout groupe donnait le rôle sur
-    #: TOUTES les organisations de l'instance.
+    #: Organisation to which the NON-prefixed OIDC groups (`developers`, `org-admins`...) attach.
+    #: Empty: those groups are ignored, only the `choregos:<org>:<group>` groups give a role.
+    #: Before: any group gave the role on ALL the organisations of the instance.
     oidc_default_org: str = ""
 
-    # JWT de run (ES256) — clés PEM ; générées à la volée en dev
+    # Run JWT (ES256): PEM keys; generated on the fly in dev
     run_token_private_key: str = ""
     run_token_public_key: str = ""
     run_token_issuer: str = "choregos-api"
@@ -151,15 +147,16 @@ class Settings(BaseSettings):
     #: The model a voice session has the gateway transcribe the caller's speech with (ADR 0080 §10):
     #: the transcript is what is kept of it, never the audio. Empty: the caller's words are not kept.
     realtime_transcription_model: str = "gpt-4o-mini-transcribe"
-    # Ce que CE déploiement sait faire tourner (#245) : un projet neuf en hérite quand sa demande
-    # n'en dit rien. Sans eux, il part sur `claude-code` et aucun profil de modèle — sur le dev, qui
-    # sert opencode derrière la passerelle, le premier agent du gabarit RH n'a jamais atteint le
-    # modèle. Listes et tables en JSON : `CHOREGOS_ALLOWED_AGENT_BACKENDS='["opencode"]'`,
+    # What THIS deployment can run (#245): a new project inherits it when its request says nothing.
+    # Without them, it starts on `claude-code` and no model profile; on the dev tenant, which serves
+    # opencode behind the gateway, the first agent of the HR template never reached the model. Lists
+    # and tables as JSON: `CHOREGOS_ALLOWED_AGENT_BACKENDS='["opencode"]'`,
     # `CHOREGOS_DEFAULT_MODEL_PROFILES='{"standard": "platform/standard"}'`.
     default_agent_backend: str | None = None
-    # Combien de temps le courtier attend l'issue d'une écriture appelée par un run, jouée en action
-    # gouvernée (#241), avant de rendre 202 et l'identifiant de l'action.
-    courtier_attente_ecriture_s: float = 30.0
+    # How long the broker waits for the outcome of a write called by a run, played as a governed
+    # action (#241), before returning 202 and the action's identifier. The field keeps its French
+    # name: it is an environment variable, `CHOREGOS_COURTIER_ATTENTE_ECRITURE_S`.
+    courtier_attente_ecriture_s: float = 30.0  # lang: fr-ok environment variable name
     #: The most a broker tool result may weigh, as JSON bytes, when it reaches the agent (#755): a
     #: larger one is cut to its text with a marker that says so. A third-party server does not decide
     #: how much of the agent's context, and of its token budget, it fills.
@@ -328,15 +325,15 @@ class Settings(BaseSettings):
     #: organisations, that the person who installs the App manages that installation (ADR 0073).
     github_app_client_id: str = ""
     github_app_client_secret: str = ""
-    #: Secret partagé des webhooks non signés (ArgoCD, Alertmanager, Jira, GitLab). VIDE par
-    #: défaut : `verify_shared_secret` refuse alors tout, et c'est voulu — la valeur par
-    #: défaut d'avant était publiée dans ce dépôt, et le chart ne l'injectait pas.
+    #: Shared secret of the unsigned webhooks (ArgoCD, Alertmanager, Jira, GitLab). EMPTY by
+    #: default: `verify_shared_secret` then refuses everything, and that is intended: the former
+    #: default value was published in this repository, and the chart did not inject it.
     generic_webhook_secret: str = ""
 
-    # Divers
+    # Miscellaneous
     cors_origins: str = "http://localhost:3000"
-    #: Requêtes par minute et par adresse sur les routes sans principal (`/auth/*`,
-    #: `/webhooks/*`), par réplique. 0 désactive. Voir `limiteur.py`.
+    #: Requests per minute and per address on the routes without a principal (`/auth/*`,
+    #: `/webhooks/*`), per replica. 0 disables. See `rate_limit.py`.
     rate_limit_per_minute: int = 600
     #: The networks of the proxies in front of the API, as a JSON list
     #: (`CHOREGOS_TRUSTED_PROXY_CIDRS='["10.0.0.0/8"]'`): the rate limit keys on the address the
@@ -346,7 +343,7 @@ class Settings(BaseSettings):
     #: Used only without `trusted_proxy_cidrs`: the number of proxies in front of the API that each
     #: append one `X-Forwarded-For` entry. 0: the TCP peer is the client.
     trusted_proxy_hops: int = Field(default=0, ge=0, le=10)
-    #: Période de recalcul des métriques Prometheus depuis la base (voir `metriques.py`).
+    #: Period of the recomputation of the Prometheus metrics from the database (see `metrics.py`).
     metrics_refresh_seconds: float = 15.0
     #: Seconds between two passes of the approved-actions relay, in every replica (ADR 0085).
     action_relay_interval_s: float = 30.0
@@ -381,11 +378,11 @@ class Settings(BaseSettings):
         return self.cookies_secure
 
     @model_validator(mode="after")
-    def _pas_de_porte_derobee_en_production(self) -> Settings:
+    def _no_back_door_in_production(self) -> Settings:
         if self.dev_login_enabled and self.env in {"staging", "prod"}:
             raise ValueError(
-                "CHOREGOS_DEV_LOGIN_ENABLED=true en staging/prod : la connexion de développement "
-                "ouvre l'API à quiconque atteint /auth/callback. Refusé."
+                "CHOREGOS_DEV_LOGIN_ENABLED=true in staging/prod: the development sign-in "
+                "opens the API to anyone who reaches /auth/callback. Refused."
             )
         return self
 
@@ -421,41 +418,43 @@ class Settings(BaseSettings):
         return self
 
     @model_validator(mode="after")
-    def _des_clients_oauth_que_la_page_connait(self) -> Settings:
-        """Une clé mal écrite (`claude_code`) ne montrerait rien, sans rien dire : on refuse."""
-        inconnus = sorted(set(self.mcp_oauth_clients) - CLIENTS_OAUTH)
-        if inconnus:
+    def _oauth_clients_the_page_knows(self) -> Settings:
+        """A misspelt key (`claude_code`) would show nothing, silently: we refuse."""
+        unknown = sorted(set(self.mcp_oauth_clients) - OAUTH_CLIENTS)
+        if unknown:
             raise ValueError(
-                f"CHOREGOS_MCP_OAUTH_CLIENTS : clients inconnus {inconnus} ; la page Integrations "
-                f"connaît {sorted(CLIENTS_OAUTH)}"
+                f"CHOREGOS_MCP_OAUTH_CLIENTS: unknown clients {unknown}; the Integrations page "
+                f"knows {sorted(OAUTH_CLIENTS)}"
             )
         return self
 
     @model_validator(mode="after")
-    def _aucun_gabarit_non_resolu(self) -> Settings:
-        """Un réglage qui vaut `<no value>` n'est pas une valeur : c'est un gabarit qui a raté.
+    def _no_unresolved_template(self) -> Settings:
+        """A setting whose value is `<no value>` is not a value: it is a template that failed.
 
-        Le 2026-09-26, sur le locataire dev, `GATEWAY_MASTER_KEY` et `PLATFORM_LLM_KEY`
-        contenaient tous deux la chaîne `<no value>` — dix caractères, l'air d'une valeur. Le
-        pod LiteLLM était `1/1 Running`, le locataire paraissait sain, et la passerelle
-        répondait 401 au premier appel de modèle : « LiteLLM Virtual Key expected.
-        Received=<no value> ». Rien, nulle part, ne disait que la clé n'avait jamais été
-        résolue.
+        On 2026-09-26, on the dev tenant, `GATEWAY_MASTER_KEY` and `PLATFORM_LLM_KEY` both held the
+        string `<no value>`: ten characters, looking like a value. The LiteLLM pod was `1/1
+        Running`, the tenant looked healthy, and the gateway answered 401 at the first model call:
+        "LiteLLM Virtual Key expected. Received=<no value>". Nothing, anywhere, said that the key
+        had never been resolved.
 
-        C'est un mode de panne de tout secret rendu par un gabarit Go — Helm comme l'opérateur
-        Infisical — et il touche aussi bien le secret de session que les clés de jetons. On
-        refuse de démarrer, dans TOUS les environnements : personne n'écrit `<no value>` exprès.
+        It is a failure mode of every secret rendered by a Go template, Helm as well as the
+        Infisical operator, and it touches the session secret as much as the token keys. We refuse
+        to start, in ALL environments: nobody writes `<no value>` on purpose.
         """
-        fautifs = sorted(
-            nom
-            for nom, valeur in self.__dict__.items()
-            if isinstance(valeur, str) and valeur.strip() in GABARIT_NON_RESOLU
+        faulty = sorted(
+            name
+            for name, value in self.__dict__.items()
+            if isinstance(value, str) and value.strip() in UNRESOLVED_TEMPLATE
         )
-        if fautifs:
+        if faulty:
+            # The message stays French: docs/deployment.md tells the operator to look for it.
             raise ValueError(
-                f"réglages non résolus : {fautifs}. Leur valeur est littéralement « <no value> », "
-                "ce qu'un gabarit Go écrit quand la variable n'existe pas — la clé n'a jamais été "
-                "posée. Vérifier la source du secret (Infisical, Helm) avant de redémarrer."
+                f"réglages non résolus : {faulty}. "  # lang: fr-ok
+                "Leur valeur est littéralement « <no value> », "  # lang: fr-ok
+                "ce qu'un gabarit Go écrit quand la variable n'existe pas — "  # lang: fr-ok
+                "la clé n'a jamais été posée. "  # lang: fr-ok
+                "Vérifier la source du secret (Infisical, Helm) avant de redémarrer."  # lang: fr-ok
             )
         return self
 

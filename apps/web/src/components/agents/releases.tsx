@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { ChannelBadges, RevisionChannels } from "@/components/agents/channels";
-import { GesteConfirme } from "@/components/geste-confirme";
+import { ConfirmedGesture } from "@/components/confirmed-gesture";
 import {
   Alert,
   Badge,
@@ -463,7 +463,7 @@ export function ReleasePipeline({ org, agent, history }: { org: string; agent: A
                     <Button size="sm" disabled={locked} aria-describedby={locked ? whyId : undefined} onClick={() => setNewShare(agent.candidate_percent ?? 0)}>
                       Change share
                     </Button>
-                    <GesteConfirme
+                    <ConfirmedGesture
                       question={`Withdraw v${candidate} from testing? Projects that follow testing go back to production.`}
                       confirmer="Withdraw"
                       disabled={locked}
@@ -473,7 +473,7 @@ export function ReleasePipeline({ org, agent, history }: { org: string; agent: A
                       }}
                     >
                       Withdraw
-                    </GesteConfirme>
+                    </ConfirmedGesture>
                     {pending == null && (
                       <Button size="sm" tone="primary" disabled={locked} aria-describedby={locked ? whyId : undefined} onClick={() => setPromoting(candidate)}>
                         Promote to production…
@@ -617,7 +617,7 @@ export function PendingRelease({ org, agent }: { org: string; agent: Agent }) {
           <Button tone="primary" size="sm" disabled={reason != null} aria-describedby="why-no-approve" onClick={() => void decide("approve")().catch(() => undefined)}>
             Approve
           </Button>
-          <GesteConfirme
+          <ConfirmedGesture
             question={`Reject v${pending.version}? The request closes; ask again after a change.`}
             confirmer="Reject"
             raison={{ label: "Why", requise: true }}
@@ -625,8 +625,8 @@ export function PendingRelease({ org, agent }: { org: string; agent: Agent }) {
             action={decide("reject")}
           >
             Reject
-          </GesteConfirme>
-          <GesteConfirme
+          </ConfirmedGesture>
+          <ConfirmedGesture
             question="Cancel this request?"
             confirmer="Cancel request"
             tonDuBouton="default"
@@ -634,7 +634,7 @@ export function PendingRelease({ org, agent }: { org: string; agent: Agent }) {
             action={decide("cancel")}
           >
             Cancel request
-          </GesteConfirme>
+          </ConfirmedGesture>
         </div>
         {reason && (
           <p id="why-no-approve" className="text-xs text-ink-muted" data-testid="approve-reason">

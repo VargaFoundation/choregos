@@ -49,10 +49,10 @@ def test_un_seul_pod_que_l_api_et_l_orchestrateur_joignent() -> None:
     deploiement, service = servis["Deployment"], servis["Service"]
     assert deploiement["spec"]["replicas"] == 1 and deploiement["spec"]["strategy"]["type"] == "Recreate"
     (conteneur,) = deploiement["spec"]["template"]["spec"]["containers"]
-    assert conteneur["command"] == ["python", "-m", "choregos_adapters.fakes.serveur"]
+    assert conteneur["command"] == ["python", "-m", "choregos_adapters.fakes.server"]
     assert conteneur["image"].split("/")[-1].startswith("choregos-api:"), "the API image carries the fakes"
-    jeton = next(e for e in conteneur["env"] if e["name"] == "CONNECTOR_DEMO_JETON")
-    assert jeton["valueFrom"]["secretKeyRef"] == {"name": "demo", "key": "jeton"}, "by reference"
+    token = next(e for e in conteneur["env"] if e["name"] == "CONNECTOR_DEMO_TOKEN")
+    assert token["valueFrom"]["secretKeyRef"] == {"name": "demo", "key": "jeton"}, "by reference"
     assert service["spec"]["ports"][0]["port"] == 8090
     sortie = next(
         d

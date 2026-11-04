@@ -1,14 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
-"""API Choregos : REST, webhooks, SSE, API interne, OIDC, RLS."""
+"""Choregos API: REST, webhooks, SSE, internal API, OIDC, RLS."""
 
 from __future__ import annotations
 
 from importlib import metadata as _metadata
 
-#: Lue des métadonnées du paquet installé, jamais recopiée : la constante disait `0.1.0` alors
-#: que le dépôt était en 0.4.1, et l'API s'annonçait `1.0.0` par-dessus. Trois versions, dont
-#: deux fausses. `tools/bump_version.py` n'a désormais rien à toucher ici.
+#: Read from the installed package's metadata, never copied: the constant said `0.1.0` while the
+#: repository was at 0.4.1, and the API announced itself as `1.0.0` on top of that. Three versions,
+#: two of them wrong. `tools/bump_version.py` now has nothing to touch here.
 try:
     __version__ = _metadata.version("choregos-api")
-except _metadata.PackageNotFoundError:  # arbre non installé (build, outillage)
-    __version__ = "0.0.0+inconnue"
+except _metadata.PackageNotFoundError:  # tree not installed (build, tooling)
+    __version__ = "0.0.0+unknown"

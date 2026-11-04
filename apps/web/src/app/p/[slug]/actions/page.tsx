@@ -4,12 +4,12 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { use } from "react";
-import { Statut, propose } from "@/components/actions/statut";
+import { Status, propose } from "@/components/actions/status";
 import { Card, Empty, ErrorNote } from "@/components/ui";
 import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
 
-/** Les actions gouvernées du projet : proposées, décidées, exécutées — et ce qui a été défait. */
+/** The project's governed actions: proposed, decided, executed, and what has been undone. */
 export default function ProjectActionsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
   const actions = useQuery({ queryKey: ["actions", slug], queryFn: () => api.projectActions(slug) });
@@ -43,7 +43,7 @@ export default function ProjectActionsPage({ params }: { params: Promise<{ slug:
                     </span>
                   </td>
                   <td>
-                    <Statut statut={action.status} />
+                    <Status statut={action.status} />
                   </td>
                   <td className="text-xs">{propose(action.proposed_by)}</td>
                   <td className="text-xs text-ink-muted">

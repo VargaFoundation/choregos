@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""RBAC : cinq rôles, une matrice de permissions explicite."""
+"""RBAC: five roles, an explicit permission matrix."""
 
 from __future__ import annotations
 
@@ -28,14 +28,14 @@ class Permission(StrEnum):
     MEMBER_MANAGE = "member:manage"
     #: List who belongs to the organisation (S26-04): every role, but only where it holds.
     MEMBER_READ = "member:read"
-    #: Changer les groupes d'un projet, donc ce que le catalogue lui ouvre (ADR 0014, second
-    #: verrou). L'administrateur de l'organisation seul : un projet choisit ce dont il se sert,
-    #: il ne choisit pas ce à quoi il a droit.
+    #: Change the groups of a project, hence what the catalogue opens to it (ADR 0014, second
+    #: lock). The organisation administrator alone: a project chooses what it uses, it does not
+    #: choose what it is entitled to.
     TOOLS_GRANT = "tools:grant"
     PLATFORM_ADMIN = "platform:admin"
     AUDIT_READ = "audit:read"
-    #: Créer un agent, publier ses versions, le suspendre ou le révoquer (ADR 0033) :
-    #: l'administrateur de l'organisation. Un projet n'épingle qu'une version existante.
+    #: Create an agent, publish its versions, suspend or revoke it (ADR 0033): the organisation
+    #: administrator. A project only pins an existing version.
     AGENT_MANAGE = "agent:manage"
     #: Import a skill from a repository of the organisation's allowlist (S32-05, ADR 0050): a project
     #: owner may, since the allowlist is what the administrator decided to trust. Another source,
@@ -106,23 +106,31 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
 
 @dataclass(slots=True)
 class Principal:
-    """L'identité qui agit : un humain, un jeton d'API, ou le système."""
+    """The identity that acts: a human, an API token, or the system."""
 
     user_id: str
     email: str
     display_name: str = ""
     kind: str = "user"
     org_roles: dict[str, Role] = field(default_factory=dict)
-    #: Indexés par `org/slug`, JAMAIS par slug seul : deux organisations peuvent avoir un
-    #: projet du même nom (`UniqueConstraint(org_id, slug)`), et un rôle sur `a/billing`
-    #: donnait le même rôle sur `b/billing` — franchissement de locataire, état des lieux
-    #: du 2026-09-24.
+    #: Keyed by `org/slug`, NEVER by slug alone: two organisations may have a project of the same
+    #: name (`UniqueConstraint(org_id, slug)`), and a role on `a/billing` gave the same role on
+    #: `b/billing`, a tenant crossing (inventory of 2026-09-24).
     project_roles: dict[str, Role] = field(default_factory=dict)
     groups: list[str] = field(default_factory=list)
-    #: Quand l'humain s'est authentifié (secondes epoch), lu dans la session. `None` pour un jeton
-    #: d'API ou une session antérieure à la 0.10.0 : une porte qui exige une authentification
-    #: récente les traite comme trop anciennes.
-    authentifie_le: int | None = None
+    #: When the human authenticated (epoch seconds), read from the session. `None` for an API token
+    #: or a session older than 0.10.0: a gate that demands a recent authentication treats them as
+    #: too old.
+    authenticated_at: int | None = None
+
+    @property
+    def authentifie_le(self) -> int | None:  # lang: fr-ok alias:external
+        """Former name of `authenticated_at` (removed in 0.22.0): read and written like it."""
+        return self.authenticated_at
+
+    @authentifie_le.setter
+    def authentifie_le(self, value: int | None) -> None:  # lang: fr-ok alias:external
+        self.authenticated_at = value
 
     def role_for(self, org: str, project_slug: str | None = None) -> Role | None:
         if project_slug:

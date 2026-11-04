@@ -2,7 +2,7 @@
 
 ## How to know it is this
 
-The `ChoregosApiErreurs5xx` alert (more than 1 % of 5xx over 10 minutes), or the front
+The `ChoregosApi5xxErrors` alert (more than 1 % of 5xx over 10 minutes), or the front
 showing errors on every page.
 
 ## Understand
@@ -17,8 +17,8 @@ Three causes cover almost every case:
 
 | Symptom in the logs | Cause | Action |
 | :-- | :-- | :-- |
-| `connection refused` to Postgres | database down or saturated | see `restauration-postgres.md`, check PgBouncer |
-| `temporal` / `RPCError` | Temporal frontend unreachable | check `choregos-temporal`, see `montee-temporal.md` |
+| `connection refused` to Postgres | database down or saturated | see `postgres-restore.md`, check PgBouncer |
+| `temporal` / `RPCError` | Temporal frontend unreachable | check `choregos-temporal`, see `temporal-upgrade.md` |
 | `alembic` / unknown column | migration not applied | rerun the migrations Job |
 
 ## Act

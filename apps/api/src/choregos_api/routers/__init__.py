@@ -1,2 +1,2 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Routeurs de l'API Choregos (un module par ressource de §1.8)."""
+"""The API routers of Choregos (one module per resource of §1.8)."""

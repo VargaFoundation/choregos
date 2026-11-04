@@ -2,31 +2,34 @@
 import type { WorkflowOperation } from "@/lib/types";
 
 /**
- * Les gestes de la carte et de la vue processus, en opérations typées (S16-11). La console ne
- * réécrit jamais le YAML : elle demande une greffe à l'API, qui rend le texte, le diff et l'inverse.
+ * The gestures of the map and of the process view, as typed operations (S16-11). The console never
+ * rewrites the YAML: it asks the API for a graft, which returns the text, the diff and the inverse.
  */
+// The keys below are the console's gesture names, shared with the fixture
+// `tests/fixtures/gestes-de-la-console.json` that `packages/core/tests/test_edition.py` reads too:
+// they are renamed together with that file (S45-29). // lang: fr-ok alias:external
 export const operations = {
-  libelle: (etat: string, libelle: string): WorkflowOperation => ({ op: "set_state", name: etat, field: "display", value: libelle }),
-  genre: (etat: string, genre: string): WorkflowOperation => ({ op: "set_state", name: etat, field: "kind", value: genre }),
-  renommer: (de: string, vers: string): WorkflowOperation => ({ op: "rename_state", from: de, to: vers }),
-  retirerLEtat: (etat: string): WorkflowOperation => ({ op: "remove_state", name: etat }),
-  ajouterUnEtat: (nom: string, libelle: string, genre?: string): WorkflowOperation => ({
+  libelle: (state: string, label: string): WorkflowOperation => ({ op: "set_state", name: state, field: "display", value: label }),
+  genre: (state: string, kind: string): WorkflowOperation => ({ op: "set_state", name: state, field: "kind", value: kind }),
+  renommer: (from: string, to: string): WorkflowOperation => ({ op: "rename_state", from, to }),
+  retirerLEtat: (state: string): WorkflowOperation => ({ op: "remove_state", name: state }),
+  ajouterUnEtat: (name: string, label: string, kind?: string): WorkflowOperation => ({
     op: "add_state",
-    name: nom,
-    spec: genre ? { display: libelle, kind: genre } : { display: libelle },
+    name: name,
+    spec: kind ? { display: label, kind: kind } : { display: label },
   }),
-  ajouterUneTransition: (de: string, vers: string, par: string, id?: string): WorkflowOperation => ({
+  ajouterUneTransition: (from: string, to: string, by: string, id?: string): WorkflowOperation => ({
     op: "add_transition",
-    transition: { ...(id ? { id } : {}), from: de, to: vers, by: par },
+    transition: { ...(id ? { id } : {}), from: from, to: to, by: by },
   }),
   retirerLaTransition: (id: string): WorkflowOperation => ({ op: "remove_transition", id }),
-  acteur: (transition: string, acteur: string): WorkflowOperation => ({ op: "set_transition", id: transition, field: "by", value: acteur }),
-  delai: (transition: string, heures: number | null): WorkflowOperation =>
-    heures === null
+  acteur: (transition: string, actor: string): WorkflowOperation => ({ op: "set_transition", id: transition, field: "by", value: actor }),
+  delai: (transition: string, hours: number | null): WorkflowOperation =>
+    hours === null
       ? { op: "set_transition", id: transition, field: "timeout_hours", unset: true }
-      : { op: "set_transition", id: transition, field: "timeout_hours", value: heures },
-  ajouterUneGarantie: (transition: string, garantie: string): WorkflowOperation => ({ op: "add_gate", transition, gate: garantie }),
-  retirerUneGarantie: (transition: string, garantie: string): WorkflowOperation => ({ op: "remove_gate", transition, name: garantie }),
+      : { op: "set_transition", id: transition, field: "timeout_hours", value: hours },
+  ajouterUneGarantie: (transition: string, gate: string): WorkflowOperation => ({ op: "add_gate", transition, gate: gate }),
+  retirerUneGarantie: (transition: string, gate: string): WorkflowOperation => ({ op: "remove_gate", transition, name: gate }),
   // ADR 0112: actors, every transition field, the workflow's own fields.
   addActor: (name: string, spec: Record<string, unknown>): WorkflowOperation => ({ op: "add_actor", name, spec }),
   removeActor: (name: string): WorkflowOperation => ({ op: "remove_actor", name }),
@@ -52,8 +55,8 @@ function nested(value: unknown): boolean {
   return value !== null && typeof value === "object";
 }
 
-/** Des suggestions, pas une liste fermée : l'API valide, et dit une garantie inconnue. */
-export const GARANTIES_COURANTES = [
+/** Suggestions, not a closed list: the API validates, and reports an unknown gate. */
+export const COMMON_GATES = [
   "ci_green",
   "scope_respected",
   "review_approved",

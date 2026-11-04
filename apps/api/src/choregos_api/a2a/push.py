@@ -35,9 +35,9 @@ from sqlalchemy import exists, func, or_, select
 
 from ..config import get_settings
 from ..db.models import A2aPushConfig, ApiToken, Event, Organization
-from ..db.session import TOUT, session_scope
+from ..db.session import ALL_ORGS, session_scope
 from ..logging import get_logger
-from ..mcp.appelant import SCOPES_A2A, Refus, caller_of_token
+from ..mcp.caller import SCOPES_A2A, Refusal, caller_of_token
 from ..secret_store import SecretStoreUnavailable, get_secret_store
 from .door import PUSH_NOT_SUPPORTED, TASK_NOT_FOUND, Door, Fault, _task, task_of
 
@@ -73,7 +73,7 @@ def sign(secret: str, stamp: str, body: bytes) -> str:
 
 
 async def configure(door: Door, method: str, params: dict[str, Any]) -> Any:
-    if door.caller.jeton is None:
+    if door.caller.token is None:
         # An OAuth access token cannot be read again at delivery: nothing would stop the calls.
         raise Fault(PUSH_NOT_SUPPORTED, "push notifications need a `chg_` token with the a2a scope")
     action = method.removeprefix("tasks/pushNotificationConfig/")
@@ -117,12 +117,12 @@ async def _set(door: Door, params: dict[str, Any]) -> dict[str, Any]:
     if config is None:
         if len(known) >= MAX_CONFIGS:
             raise Fault(PARAMETRES_INVALIDES, f"{MAX_CONFIGS} push notification configs per task at most")
-        assert door.caller.jeton is not None
+        assert door.caller.token is not None
         config = A2aPushConfig(
             org_id=door.org.id,
             work_item_id=item.id,
-            api_token_id=door.caller.jeton.id,
-            client=door.caller.cle,
+            api_token_id=door.caller.token.id,
+            client=door.caller.key,
             config_id=config_id,
             url=url,
             attempts=0,
@@ -136,7 +136,7 @@ async def _set(door: Door, params: dict[str, Any]) -> dict[str, Any]:
     signing = secrets.token_urlsafe(32)
     sealed = json.dumps({"secret": signing, "token": token})
     try:
-        await get_secret_store().put(door.session, door.org.id, secret_name(config), sealed, door.caller.cle)
+        await get_secret_store().put(door.session, door.org.id, secret_name(config), sealed, door.caller.key)
     except SecretStoreUnavailable as missing:
         raise Fault(
             PUSH_NOT_SUPPORTED, f"push notifications need the deployment's secrets key: {missing}"
@@ -169,7 +169,7 @@ async def _configs(door: Door, item_id: str) -> list[A2aPushConfig]:
         (
             await door.session.execute(
                 select(A2aPushConfig)
-                .where(A2aPushConfig.work_item_id == item_id, A2aPushConfig.client == door.caller.cle)
+                .where(A2aPushConfig.work_item_id == item_id, A2aPushConfig.client == door.caller.key)
                 .order_by(A2aPushConfig.created_at)
             )
         ).scalars()
@@ -217,7 +217,7 @@ async def deliver_pending(*, batch: int = BATCH) -> list[str]:
         Event.work_item_id == A2aPushConfig.work_item_id,
         or_(A2aPushConfig.cursor_ts.is_(None), Event.ts > A2aPushConfig.cursor_ts),
     )
-    async with session_scope(orgs=TOUT) as session:
+    async with session_scope(orgs=ALL_ORGS) as session:
         due = list(
             (
                 await session.execute(
@@ -234,7 +234,7 @@ async def deliver_pending(*, batch: int = BATCH) -> list[str]:
         )
     delivered: list[str] = []
     for config_id in due:
-        async with session_scope(orgs=TOUT) as session:
+        async with session_scope(orgs=ALL_ORGS) as session:
             config = (
                 await session.execute(
                     select(A2aPushConfig)
@@ -262,11 +262,11 @@ async def _deliver(session: Any, config: A2aPushConfig) -> bool:
     token = await session.get(ApiToken, config.api_token_id)
     try:
         if org is None or token is None:
-            raise Refus(401, "unknown or revoked token")
+            raise Refusal(401, "unknown or revoked token")
         caller = await caller_of_token(session, token, scopes=SCOPES_A2A, door="A2A")
         door = Door(session, caller, org, get_settings().public_url.rstrip("/"), None)
         task = await task_of(door, *await _task(door, config.work_item_id))
-    except (Refus, Fault) as gone:
+    except (Refusal, Fault) as gone:
         _end(config, f"the registration's token no longer reads the task: {gone}")
         return False
     view = json.dumps(

@@ -167,7 +167,63 @@ describe("the routing strategy (ADR 0116)", () => {
     await act(async () => fireEvent.click(within(form).getByRole("button", { name: "Try" })));
     expect(api.previewWorkflowRouting).toHaveBeenCalledWith("fon", { title: "Bob leaves on Friday", body: null, labels: ["hr"] });
     expect(await screen.findByTestId("routing-preview")).toHaveTextContent(
-      "→ offboarding (chosen by the model): an employee leaves",
+      "→ offboarding (chosen by the model): an employee leaves — platform/cheap",
     );
+    expect(screen.getByTestId("routing-preview")).not.toHaveTextContent("confidence");
+  });
+
+  it("a decision model's answer shows its confidence (ADR 0121)", async () => {
+    vi.mocked(api.previewWorkflowRouting).mockResolvedValue({
+      workflow: "onboarding",
+      by: "default",
+      reason: "the decision model chose `offboarding` with a confidence of 0.42, below the project's minimum of 0.50",
+      model: "platform/decide",
+      confidence: 0.42,
+    });
+    await open({ default: "onboarding", rules: [], strategy: "llm", hints: {}, min_confidence: 0.5 });
+    const form = screen.getByRole("form", { name: "Try the routing" });
+    fireEvent.change(within(form).getByLabelText("Title"), { target: { value: "Grafana access" } });
+    await act(async () => fireEvent.click(within(form).getByRole("button", { name: "Try" })));
+    expect(await screen.findByTestId("routing-preview")).toHaveTextContent(
+      "(the default): the decision model chose `offboarding` with a confidence of 0.42, below the project's minimum of 0.50 — platform/decide, confidence 0.42",
+    );
+  });
+});
+
+describe("the minimum confidence (ADR 0121)", () => {
+  beforeEach(() => {
+    vi.mocked(api.putWorkflowRouting).mockClear();
+  });
+
+  it("is shown with a model strategy, and absent from a PUT that did not change it", async () => {
+    await open({ default: "onboarding", rules: [], strategy: "labels", hints: {}, min_confidence: null });
+    expect(screen.queryByLabelText("Minimum confidence")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Strategy"), { target: { value: "llm" } });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save the routing" })));
+    expect(api.putWorkflowRouting).toHaveBeenLastCalledWith("fon", {
+      default: "onboarding",
+      rules: [],
+      strategy: "llm",
+      hints: {},
+    });
+  });
+
+  it("sends the minimum once it is changed", async () => {
+    await open({ default: "onboarding", rules: [], strategy: "llm", hints: {}, min_confidence: null });
+    fireEvent.change(screen.getByLabelText("Minimum confidence"), { target: { value: "0.6" } });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save the routing" })));
+    expect(api.putWorkflowRouting).toHaveBeenLastCalledWith("fon", expect.objectContaining({ min_confidence: 0.6 }));
+  });
+
+  it("refuses what is not a probability, and empties to null", async () => {
+    await open({ default: "onboarding", rules: [], strategy: "llm", hints: {}, min_confidence: 0.7 });
+    const field = screen.getByLabelText("Minimum confidence");
+    expect(field).toHaveValue(0.7);
+    fireEvent.change(field, { target: { value: "1.5" } });
+    expect(screen.getByText("A probability between 0 and 1")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save the routing" })).toBeDisabled();
+    fireEvent.change(field, { target: { value: "" } });
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Save the routing" })));
+    expect(api.putWorkflowRouting).toHaveBeenLastCalledWith("fon", expect.objectContaining({ min_confidence: null }));
   });
 });

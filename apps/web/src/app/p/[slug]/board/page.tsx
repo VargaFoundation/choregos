@@ -31,7 +31,7 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
   const search = useSearchParams();
   const items = useQuery({ queryKey: ["items", slug], queryFn: () => api.allWorkItems(slug) });
   const workflows = useQuery({ queryKey: ["workflows", slug], queryFn: () => api.workflows(slug) });
-  const defaut = workflows.data?.find((w) => w.is_default)?.name ?? workflows.data?.[0]?.name ?? "";
+  const defaultWorkflow = workflows.data?.find((w) => w.is_default)?.name ?? workflows.data?.[0]?.name ?? "";
   const chosen = search.get("workflow");
   const shown = boardWorkflows(workflows.data ?? [], chosen);
   // The same query keys as `useWorkflow`: a definition read here is not read again on its pages.
@@ -62,7 +62,7 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
   if (items.error) return <ErrorNote>{(items.error as Error).message}</ErrorNote>;
 
   const sections: BoardSectionModel[] = shown.map((w, index) => {
-    const all = columnsFromGraph(validations[index]?.data?.graph, itemsOf(items.data?.items ?? [], w.name, w.name === defaut));
+    const all = columnsFromGraph(validations[index]?.data?.graph, itemsOf(items.data?.items ?? [], w.name, w.name === defaultWorkflow));
     const { shown: columns, hidden } = visibleColumns(all, showEmpty);
     const tickets = all.flatMap((column) => column.items);
     return {
@@ -113,7 +113,7 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
           <NewWorkItemForm
             slug={slug}
             workflows={workflows.data?.map((w) => w.name) ?? []}
-            initial={chosen ?? defaut}
+            initial={chosen ?? defaultWorkflow}
             tracker={tracker}
             onDone={(item) => {
               setNouvelle(false);

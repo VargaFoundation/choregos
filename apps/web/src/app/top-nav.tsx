@@ -6,8 +6,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChoixDuTheme } from "@/components/choix-du-theme";
-import { Compte, ListeDeNavigation } from "@/components/coquille/navigation";
+import { ThemePicker } from "@/components/theme-picker";
+import { Count, NavigationList } from "@/components/shell/navigation";
 import { AboutEntry, EditionBadge } from "@/components/edition";
 import { Select } from "@/components/ui";
 import { useADecider, useInboxCount } from "@/lib/a-decider";
@@ -15,33 +15,33 @@ import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
 /**
- * L'en-tête : organisation courante, qui est connecté, le thème — et, sous 1280 px, la navigation.
+ * The header: current organisation, who is signed in, the theme, and, below 1280 px, the navigation.
  *
- * À partir de 1280 px, la navigation vit dans la barre latérale (`components/coquille`, ADR 0043) et
- * l'en-tête ne garde que ce qui concerne la session. En dessous, la navigation se replie derrière un
- * bouton « menu » qui ouvre un panneau sous l'en-tête (S23-01 : sans repli, TOUTES les pages
- * défilaient en largeur) ; il se referme sur Échap et quand on change de page.
+ * From 1280 px, the navigation lives in the sidebar (`components/shell`, ADR 0043) and
+ * the header keeps only what concerns the session. Below that, the navigation folds behind a
+ * "menu" button that opens a panel under the header (S23-01: without the fold, ALL the pages
+ * scrolled sideways); it closes on Escape and when the page changes.
  */
 export function TopNav({ demo = false }: { demo?: boolean }) {
   const pathname = usePathname();
   const { me, orgs, org, choisirOrg, deconnecter } = useSession();
-  // L'édition ne change pas pendant une session : une seule lecture suffit.
+  // The edition does not change during a session: a single read is enough.
   const edition = useQuery({ queryKey: ["edition"], queryFn: () => api.edition(), staleTime: Infinity, retry: false });
-  // Ce qui attend une personne se compte dans l'en-tête, sur chaque page (S23-02).
+  // What waits for a person is counted in the header, on every page (S23-02).
   const aDecider = useADecider(org).total;
   // The panel lists the current scope's entries: inside a project, its Inbox counts the project only.
   const scopedCount = useInboxCount(org, pathname);
   const [ouvert, setOuvert] = useState(false);
   const bouton = useRef<HTMLButtonElement>(null);
-  // Changer de page referme le menu — ajusté pendant le rendu, comme la session : un effet le
-  // refermerait un rendu trop tard.
+  // Changing page closes the menu, adjusted during the render like the session: an effect would
+  // close it one render too late.
   const [cheminVu, setCheminVu] = useState(pathname);
   if (pathname !== cheminVu) {
     setCheminVu(pathname);
     setOuvert(false);
   }
 
-  // Échap referme le menu d'où que soit le focus, et le rend au bouton.
+  // Escape closes the menu wherever the focus is, and gives it back to the button.
   useEffect(() => {
     if (!ouvert) return;
     function surTouche(event: KeyboardEvent) {
@@ -53,7 +53,7 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
     return () => window.removeEventListener("keydown", surTouche);
   }, [ouvert]);
 
-  const choixOrg =
+  const orgChoice =
     orgs.length > 1 ? (
       <label className="flex items-center gap-2">
         <span className="text-ink-muted">Organisation</span>
@@ -97,13 +97,13 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
 
   return (
     <>
-      {/* À partir de 1280 px : l'organisation à gauche, la session à droite. */}
-      <div className="hidden items-center text-xs xl:flex">{choixOrg}</div>
+      {/* From 1280 px: the organisation on the left, the session on the right. */}
+      <div className="hidden items-center text-xs xl:flex">{orgChoice}</div>
       <div className="ml-auto hidden items-center gap-4 whitespace-nowrap text-xs xl:flex">
         {edition.data && <EditionBadge edition={edition.data.edition} publisher={edition.data.publisher} />}
         {session}
         {badgeDemo}
-        <ChoixDuTheme />
+        <ThemePicker />
       </div>
       <nav className="ml-auto flex items-center xl:hidden" aria-label="Main navigation">
         <button
@@ -120,20 +120,20 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
             <Menu aria-hidden className="size-4" strokeWidth={1.75} />
           )}
           Menu
-          {aDecider > 0 && <Compte n={aDecider} />}
+          {aDecider > 0 && <Count n={aDecider} />}
         </button>
         {ouvert && (
           <div
             id="menu-principal"
             className="raised absolute inset-x-0 top-full max-h-[calc(100dvh-3rem)] overflow-y-auto border-b border-line px-4 pb-6 sm:px-6"
           >
-            <ListeDeNavigation pathname={pathname} aDecider={scopedCount} variante="panneau" />
+            <NavigationList pathname={pathname} aDecider={scopedCount} variante="panneau" />
             <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-line pt-4 text-xs">
               {edition.data && <EditionBadge edition={edition.data.edition} publisher={edition.data.publisher} />}
-              {choixOrg}
+              {orgChoice}
               {session}
               {badgeDemo}
-              <ChoixDuTheme />
+              <ThemePicker />
               <AboutEntry className="inline-flex min-h-11 items-center gap-2 rounded px-1 text-ink-muted hover:text-ink" />
             </div>
           </div>

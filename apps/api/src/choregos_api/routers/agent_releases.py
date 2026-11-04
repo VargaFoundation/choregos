@@ -14,7 +14,7 @@ from ..db.models import Agent, AgentVersion, Organization, Project
 from ..db.models import AgentEvaluation as AgentEvaluationRow
 from ..deps import Db, Me, ProjectCtx
 from ..errors import forbidden, not_found
-from ..fraicheur import exiger_une_authentification_fraiche
+from ..freshness import require_fresh_authentication
 from ..rbac import Permission
 from ..schemas import (
     AgentDto,
@@ -30,9 +30,11 @@ from ..schemas import (
     ProjectAgentChannel,
 )
 from ..services import agent_live_evals, agent_releases
+from ..services.agent_access import enforce_decision, load_visible_agent, require_agent_reader
 from ..services.agent_governance import PERSONAL, Action, decide, visible_clause
+from ..services.agent_views import agent_dto
 from ..services.organisations import organisation_by_slug
-from .agents import Slug, _charger, _dto, _exiger, _lire
+from .agents import Slug
 
 router = APIRouter(tags=["agents"])
 
@@ -50,7 +52,7 @@ async def list_agent_releases(
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> list[AgentReleaseDto]:
     """Every move of the agent's channels, newest first: the release history."""
-    _, agent, _ = await _charger(session, principal, org, slug)
+    _, agent, _ = await load_visible_agent(session, principal, org, slug)
     rows = await agent_releases.history(session, agent, limit)
     return [agent_releases.release_dto(row, agent.slug) for row in rows]
 
@@ -67,8 +69,8 @@ async def release_agent_version(
     """Point a channel at a revision: testing (with a canary share), or production — which checks the
     eval suite again, the candidate's record, needs a person with a fresh sign-in, and the plugin's
     `agent.release` gesture check. Rolling back to a revision that was in production skips the gates."""
-    organisation, agent, subject = await _charger(session, principal, org, slug)
-    _exiger(decide(principal, org, subject, Action.RELEASE))
+    organisation, agent, subject = await load_visible_agent(session, principal, org, slug)
+    enforce_decision(decide(principal, org, subject, Action.RELEASE))
     row = await agent_releases.release(session, principal, organisation, agent, body)
     return agent_releases.release_dto(row, agent.slug)
 
@@ -85,8 +87,8 @@ async def decide_agent_release(
     a human session with a fresh sign-in, and — with `separation_of_duties` — to be neither the requester
     nor the revision's author; the last approval moves production. Rejecting needs a reason; the requester
     or an org_admin cancels."""
-    organisation, agent, subject = await _charger(session, principal, org, slug)
-    _exiger(decide(principal, org, subject, Action.RELEASE))
+    organisation, agent, subject = await load_visible_agent(session, principal, org, slug)
+    enforce_decision(decide(principal, org, subject, Action.RELEASE))
     row = await agent_releases.decide_release(session, principal, organisation, agent, release_id, body)
     return agent_releases.release_dto(row, agent.slug)
 
@@ -108,7 +110,7 @@ async def list_org_agent_releases(
 ) -> list[AgentReleaseDto]:
     """Releases of the agents the caller may see, newest first; `status=pending_approval` is the
     approver's inbox."""
-    _lire(principal, org)
+    require_agent_reader(principal, org)
     organisation = await organisation_by_slug(session, org)
     visible = Agent.org_id == organisation.id
     visible = visible & await visible_clause(session, principal, organisation)
@@ -130,7 +132,7 @@ async def get_agent_release_readiness(
     channel: Annotated[Literal["stable", "candidate"], Query()] = "stable",
 ) -> AgentReleaseReadiness:
     """What releasing this revision to a channel would check, without doing it."""
-    _, agent, _ = await _charger(session, principal, org, slug)
+    _, agent, _ = await load_visible_agent(session, principal, org, slug)
     return await agent_releases.readiness(session, principal, agent, version, channel)
 
 
@@ -144,13 +146,13 @@ async def set_agent_release_policy(
 ) -> AgentDto:
     """What saving a revision does, and the gates of production. Loosening them (publish straight to
     production, a lower threshold, a longer sign-in age) needs a person with a fresh sign-in."""
-    organisation, agent, subject = await _charger(session, principal, org, slug)
-    _exiger(decide(principal, org, subject, Action.RELEASE))
+    organisation, agent, subject = await load_visible_agent(session, principal, org, slug)
+    enforce_decision(decide(principal, org, subject, Action.RELEASE))
     before = agent_releases.policy_of(agent)
     if agent.scope != PERSONAL and agent_releases.loosens(before, body):
         if not agent_releases.is_human_session(principal):
             raise forbidden("loosening a release policy is done in a human session, not with an API token")
-        exiger_une_authentification_fraiche(principal, before.stable.step_up_minutes)
+        require_fresh_authentication(principal, before.stable.step_up_minutes)
     agent.release_policy = body.model_dump(mode="json")
     await session.flush()
     await record(
@@ -163,7 +165,7 @@ async def set_agent_release_policy(
         before=before.model_dump(mode="json"),
         after=body.model_dump(mode="json"),
     )
-    return await _dto(session, agent, principal, org, avec_versions=True)
+    return await agent_dto(session, agent, principal, org, with_versions=True)
 
 
 @router.get(
@@ -171,7 +173,7 @@ async def set_agent_release_policy(
 )
 async def get_agent_exposure(org: str, slug: Slug, session: Db, principal: Me) -> AgentExposure:
     """Production, testing, and the projects (among those the caller may read) that chose their own."""
-    organisation, agent, _ = await _charger(session, principal, org, slug)
+    organisation, agent, _ = await load_visible_agent(session, principal, org, slug)
     return await agent_releases.exposure(session, principal, organisation, agent)
 
 
@@ -238,8 +240,8 @@ async def start_agent_evaluation(
     """Run the revision's `live` eval cases as capped trials in a project (needs the right to try the
     agent there). The policy's `max_eval_usd` bounds the total; refused (409) above it. The score is read
     from the runs: `GET` the evaluations to follow it."""
-    organisation, agent, subject = await _charger(session, principal, org, slug)
-    _exiger(decide(principal, org, subject, Action.TRIAL, project_slug=body.project))
+    organisation, agent, subject = await load_visible_agent(session, principal, org, slug)
+    enforce_decision(decide(principal, org, subject, Action.TRIAL, project_slug=body.project))
     project = (
         await session.execute(
             select(Project).where(Project.org_id == organisation.id, Project.slug == body.project)
@@ -281,7 +283,7 @@ async def list_agent_evaluations(
     org: str, slug: Slug, version: int, session: Db, principal: Me
 ) -> list[AgentEvaluation]:
     """The live evaluations of the revision, newest first, each judged from its runs as they stand."""
-    _, agent, _ = await _charger(session, principal, org, slug)
+    _, agent, _ = await load_visible_agent(session, principal, org, slug)
     spec = await _spec_of(session, agent, version)
     policy = agent_releases.policy_of(agent)
     floor = (

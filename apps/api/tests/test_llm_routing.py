@@ -246,7 +246,13 @@ async def test_preview_says_where_an_item_would_be_born_and_creates_nothing(
     await _routing(client, pid, "rules_then_llm")
     url = f"/api/v1/projects/{pid}/workflow-routing/preview"
     rule = (await client.post(url, json={"title": "x", "labels": ["leaver"]})).json()
-    assert rule == {"workflow": "offboarding", "by": "rule", "reason": "routing rule 1", "model": None}
+    assert rule == {
+        "workflow": "offboarding",
+        "by": "rule",
+        "reason": "routing rule 1",
+        "model": None,
+        "confidence": None,
+    }
     model = (await client.post(url, json={"title": "A new hire arrives Monday"})).json()
     assert (model["workflow"], model["by"], model["model"]) == ("onboarding", "llm", "fake/router")
     items = (await client.get(f"/api/v1/projects/{pid}/work-items")).json()
@@ -273,3 +279,198 @@ async def test_a_put_that_says_nothing_of_the_strategy_keeps_it(
         "rules_then_llm",
         {"offboarding": "leavers"},
     )
+
+
+# A decision model (ADR 0121): a catalogue entry enabled for `route` and `decide` is asked one choice
+# question on `/v1/systemone`, and answers a workflow with its probability.
+
+DECIDER = "platform/decide"
+
+
+async def _decider(client: AsyncClient, *usages: str) -> None:
+    """The catalogue entry of the decision model, created or changed to these usages."""
+    base = "/api/v1/orgs/varga/models"
+    entry = await client.post(base, json={"model_name": DECIDER, "usages": list(usages)})
+    if entry.status_code == 409:
+        listed = (await client.get(base)).json()
+        (row,) = [r for r in listed["entries"] if r["model_name"] == DECIDER]
+        entry = await client.patch(f"{base}/{row['id']}", json={"usages": list(usages)})
+    assert entry.status_code in (200, 201), entry.text
+
+
+async def test_a_catalogue_entry_for_route_and_decide_routes_as_a_decision_model(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    pid = project["id"]
+    await _two_workflows(client, pid)
+    await _routing(client, pid, "llm")
+    await _decider(client, "decide")
+    alone = await _born(client, pid, "Bob leaves on Friday")
+    assert (await _documents(alone["id"]))["routing"]["model"] == "fake/router", (
+        "`decide` without `route`: the chat model still routes"
+    )
+
+    await _decider(client, "route", "decide")
+    item = await _born(client, pid, "Bob leaves on Friday")
+    assert item["workflow_name"] == "offboarding"
+    routing = (await _documents(item["id"]))["routing"]
+    assert (routing["by"], routing["model"]) == ("llm", "fake/decide")
+    assert routing["confidence"] == pytest.approx(0.6), "one shared word: 0.5 + 0.1"
+    preview = (
+        await client.post(
+            f"/api/v1/projects/{pid}/workflow-routing/preview", json={"title": "Bob leaves on Friday"}
+        )
+    ).json()
+    assert (preview["model"], preview["confidence"]) == ("fake/decide", pytest.approx(0.6))
+
+
+async def test_below_the_minimum_confidence_the_default_takes_the_item(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    pid = project["id"]
+    await _two_workflows(client, pid)
+    await _decider(client, "route", "decide")
+    put = await _routing(client, pid, "llm", min_confidence=0.7)
+    assert (put.status_code, put.json()["min_confidence"]) == (200, 0.7), put.text
+    assert (await client.get(f"/api/v1/projects/{pid}/workflow-routing")).json()["min_confidence"] == 0.7
+
+    held = await _born(client, pid, "Bob leaves on Friday")
+    assert held["workflow_name"] == "onboarding", "0.6 < 0.7: the default"
+    routing = (await _documents(held["id"]))["routing"]
+    assert routing["by"] == "default" and "below the project's minimum of 0.70" in routing["reason"]
+    assert routing["confidence"] == pytest.approx(0.6)
+    assert len(await _route_lines()) == 1, "the model was asked: its spend is booked"
+
+    sure = await _born(client, pid, "An employee leaves: close the accounts")
+    assert sure["workflow_name"] == "offboarding", "four shared words: 0.9, above the minimum"
+
+    kept = await _routing(client, pid, "llm")
+    assert kept.json()["min_confidence"] == 0.7, "absent from a PUT: unchanged"
+    cleared = await _routing(client, pid, "llm", min_confidence=None)
+    assert cleared.json()["min_confidence"] is None
+    taken = await _born(client, pid, "Bob leaves on Friday")
+    assert taken["workflow_name"] == "offboarding", "no minimum: the choice is taken"
+
+
+async def test_a_chat_model_is_never_held_to_the_minimum_confidence(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    pid = project["id"]
+    await _two_workflows(client, pid)
+    await _routing(client, pid, "llm", min_confidence=0.99)
+    item = await _born(client, pid, "Bob's departure: the employee leaves on Friday")
+    assert item["workflow_name"] == "offboarding", "a chat model answers no probability"
+    assert (await _documents(item["id"]))["routing"]["confidence"] is None
+
+
+@pytest.mark.parametrize("value", [-0.1, 1.5, "high"])
+async def test_the_minimum_confidence_is_a_probability(
+    client: AsyncClient, project: dict[str, Any], value: Any
+) -> None:
+    pid = project["id"]
+    await _two_workflows(client, pid)
+    assert (await _routing(client, pid, "llm", min_confidence=value)).status_code == 422
+
+
+def _systemone(answer: dict[str, Any] | None, status: int = 200) -> tuple[Any, list[Any]]:
+    import json
+
+    import httpx
+
+    sent: list[Any] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        sent.append((str(request.url), json.loads(request.content)))
+        if answer is None:
+            return httpx.Response(status, json={"error": {"message": "down"}})
+        return httpx.Response(
+            status,
+            json={
+                "model": "gpt-6-luna",
+                "answers": {"workflow": answer},
+                "usage": {"input_tokens": 157, "output_tokens": 0},
+            },
+        )
+
+    return httpx.MockTransport(handle), sent
+
+
+def _scripted_decider(monkeypatch: pytest.MonkeyPatch, transport: Any) -> None:
+    from choregos_api.services import llm_routing
+
+    def router(model: str, settings: Any = None) -> llm_routing.WorkflowRouter:
+        return llm_routing.DecisionWorkflowRouter("http://gateway/v1", "key", model, transport=transport)
+
+    monkeypatch.setattr(llm_routing, "get_decision_router", router)
+
+
+async def test_the_decision_client_asks_one_choice_question_on_systemone(
+    client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pid = project["id"]
+    await _two_workflows(client, pid)
+    await _routing(client, pid, "llm", hints={"offboarding": "a leaver"}, min_confidence=0.5)
+    await _decider(client, "route", "decide")
+    transport, sent = _systemone(
+        {
+            "type": "choice",
+            "choice": "offboarding",
+            "confidence": 0.93,
+            "probabilities": {"offboarding": 0.93, "onboarding": 0.07},
+        }
+    )
+    _scripted_decider(monkeypatch, transport)
+    item = await _born(client, pid, "Bob leaves", body="Last day on Friday", labels=["hr"])
+    assert item["workflow_name"] == "offboarding"
+    ((url, body),) = sent
+    assert url == "http://gateway/v1/systemone", "the base's `/v1` is not doubled"
+    assert body["model"] == DECIDER
+    assert body["state"] == {
+        "title": "Bob leaves",
+        "description": "Last day on Friday",
+        "labels": ["hr"],
+        "type": None,
+    }
+    question = body["questions"]["workflow"]
+    assert question["type"] == "choice"
+    criteria = question["criteria"]
+    assert criteria["offboarding"] == "Close the accounts of an employee who leaves a leaver", (
+        "description, hint"
+    )
+    assert criteria["onboarding"] == "Welcome a new hire before their first day"
+    routing = (await _documents(item["id"]))["routing"]
+    assert (routing["model"], routing["confidence"]) == (DECIDER, 0.93)
+    assert "confidence of 0.93" in routing["reason"]
+    (line,) = await _route_lines()
+    assert (line.model, line.tokens_in, line.tokens_out) == (DECIDER, 157, 0)
+
+
+@pytest.mark.parametrize(
+    ("answer", "status", "reason"),
+    [
+        (
+            {"type": "choice", "choice": "payroll", "confidence": 1.0},
+            200,
+            "`payroll`, which is not an active",
+        ),
+        ({"type": "noul", "noul": 0.9}, 200, "did not answer the question"),
+        (None, 500, "the gateway answered 500"),
+    ],
+)
+async def test_a_wrong_or_failed_decision_leaves_the_item_to_the_default(
+    client: AsyncClient,
+    project: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+    answer: Any,
+    status: int,
+    reason: str,
+) -> None:
+    pid = project["id"]
+    await _two_workflows(client, pid)
+    await _routing(client, pid, "llm")
+    await _decider(client, "route", "decide")
+    transport, _ = _systemone(answer, status)
+    _scripted_decider(monkeypatch, transport)
+    item = await _born(client, pid, "Bob leaves")
+    assert item["workflow_name"] == "onboarding"
+    assert reason in (await _documents(item["id"]))["routing"]["reason"]

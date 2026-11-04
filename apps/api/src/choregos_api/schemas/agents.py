@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Le registre d'agents (ADR 0033) : un agent, ses versions immuables, l'épingle d'un projet."""
+"""The agent registry (ADR 0033): an agent, its immutable versions, a project's pin."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from pydantic import (
 )
 
 from .base import Dto
-from .identite import ApiTokenCreated
+from .identity import ApiTokenCreated
 
 SLUG = r"^[a-z][a-z0-9-]{1,62}$"
 
@@ -55,7 +55,7 @@ class AgentLimits(Dto):
 
 
 class AgentBudget(Dto):
-    #: Plafond d'un run, et de toute une journée de l'agent, en dollars.
+    #: Ceiling of one run, and of a whole day of the agent, in dollars.
     run_usd: float | None = Field(default=None, gt=0)
     daily_usd: float | None = Field(default=None, gt=0)
     #: A calendar month (UTC). At 100 % the agent is suspended (S27-09).
@@ -64,14 +64,14 @@ class AgentBudget(Dto):
 
 class AgentSkillRef(Dto):
     slug: str = Field(pattern=SLUG)
-    #: Absente : la dernière version, lue au moment du run.
+    #: Absent: the latest version, read at run time.
     version: int | None = Field(default=None, ge=1)
 
 
 class AgentMcpServer(Dto):
-    #: Le connecteur `mcp` du projet ou de l'organisation (ADR 0034).
+    #: The `mcp` connector of the project or of the organisation (ADR 0034).
     connector: str
-    #: Les outils que l'agent peut appeler : des noms, ou des motifs `prefixe_*`.
+    #: The tools the agent may call: names, or `prefix_*` patterns.
     tools: list[str] = Field(default_factory=list)
 
 
@@ -412,7 +412,7 @@ class AgentNetwork(Dto):
 
 
 class AgentSpec(Dto):
-    """Ce qu'une version d'agent EST. Elle ne se modifie jamais : un changement publie la suivante."""
+    """What an agent version IS. It never changes: a change publishes the next one."""
 
     instructions: str = Field(default="", max_length=65_536)
     model: str | None = None
@@ -870,44 +870,44 @@ class AgentDraft(Dto):
 
 
 class AgentCatalogueEntry(Dto):
-    """Un agent que le catalogue propose (ADR 0040), et ce qu'il en est dans l'organisation."""
+    """An agent the catalogue offers (ADR 0040), and where it stands in the organisation."""
 
     slug: str
     kind: Literal["internal", "external", "remote"]
     display_name: str
     description: str | None = None
-    #: Le rôle du paquet qu'il tient (`implement`, `review`…), ou `external` pour un client.
+    #: The role of the package it holds (`implement`, `review`...), or `external` for a client.
     role: str
     summary: str
     version: int
     skills: list[str] = Field(default_factory=list)
     #: Labels the entry carries (S40-10): installed with the agent, added on upgrade, never removed.
     tags: list[str] = Field(default_factory=list)
-    #: Pour un client externe : son identifiant sur la page des clients, et d'où il appelle.
+    #: For an external client: its identifier on the clients page, and where it calls from.
     client: str | None = None
     reach: Literal["always", "cloud"] | None = None
     installed: bool
     installed_version: int | None = None
-    #: Un agent du même nom existe, mais l'organisation l'a créé elle-même : le catalogue n'y touche pas.
+    #: An agent of the same name exists, but the organisation created it itself: the catalogue leaves it.
     own_agent: bool = False
     #: The scope of the agent of this name in the organisation, if any (ADR 0061).
     scope: AgentScope | None = None
     update_available: bool = False
-    #: Faux pour un client qui appelle depuis le cloud de son éditeur quand la porte ne l'accepte pas
-    #: encore (OAuth, client enregistré, https) : la page le dit, et ne le propose pas.
+    #: False for a client that calls from its vendor's cloud when the door does not accept it
+    #: yet (OAuth, registered client, https): the page says so, and does not offer it.
     offered: bool = True
     unavailable_reason: str | None = None
 
 
 class AgentCatalogueConnect(Dto):
-    #: Un jeton `mcp:read` au lieu de `mcp:write` : le client lit, il n'ouvre ni ne propose rien.
+    #: An `mcp:read` token instead of `mcp:write`: the client reads, it opens and proposes nothing.
     read_only: bool = False
     expires_in_days: int | None = Field(default=30, ge=1, le=365)
 
 
 class AgentCatalogueConnection(Dto):
-    """Un client connecté : son agent externe, et de quoi le configurer — un jeton rendu UNE fois,
-    ou le client OAuth que l'IdP a enregistré (claude.ai, ChatGPT)."""
+    """A connected client: its external agent, and what to configure it with: a token returned ONCE,
+    or the OAuth client the IdP registered (claude.ai, ChatGPT)."""
 
     agent: AgentDto
     token: ApiTokenCreated | None = None
@@ -915,14 +915,14 @@ class AgentCatalogueConnection(Dto):
 
 
 class AgentCatalogueInstall(Dto):
-    #: Déjà installé : publier la version suivante depuis le catalogue (rien si le texte n'a pas changé).
+    #: Already installed: publish the next version from the catalogue (nothing if the text did not change).
     upgrade: bool = False
 
 
 class AgentPatch(Dto):
     display_name: str | None = Field(default=None, min_length=1, max_length=200)
     description: str | None = None
-    #: `revoked` est définitif ; `suspended` se lève.
+    #: `revoked` is final; `suspended` can be lifted.
     status: Literal["active", "suspended", "revoked"] | None = None
     expires_at: datetime | None = None
     #: Replaces the agent's tags; absent or null leaves them as they are (S40-10).
@@ -1023,11 +1023,11 @@ class AgentDto(Dto):
 
 
 class AgentOverrides(Dto):
-    """Ce qu'un projet peut changer d'une version : seulement resserrer."""
+    """What a project may change on a version: only tighten."""
 
     limits: AgentLimits = Field(default_factory=AgentLimits)
     budget: AgentBudget = Field(default_factory=AgentBudget)
-    #: Un sous-ensemble des outils de la version ; absent, tous.
+    #: A subset of the version's tools; absent, all of them.
     tools: list[str] | None = None
 
 
@@ -1051,14 +1051,14 @@ class ProjectAgentDto(Dto):
     #: Set when the pin follows a channel; `None` for a fixed revision.
     channel: Channel | None = None
     overrides: AgentOverrides
-    #: La version épinglée, surcharges appliquées : ce qui tournera.
+    #: The pinned version, overrides applied: what will run.
     effective: AgentSpec
     #: Said when the agent is deprecated: the pin holds, but the agent is on its way out.
     warning: str | None = None
 
 
 class SkillFiles(Dto):
-    """Les fichiers d'une version de skill : chemin relatif → texte."""
+    """The files of a skill version: relative path -> text."""
 
     files: dict[str, str]
 
@@ -1094,7 +1094,7 @@ class SkillVersionDto(Dto):
     digest: str
     created_by: str | None = None
     created_at: datetime | None = None
-    #: Rendus par la lecture d'UNE version ; la liste n'en porte pas.
+    #: Returned by the read of ONE version; the list does not carry them.
     files: dict[str, str] | None = None
     source: SkillSourceDto | None = None
     #: `low`, `medium`, `high`; `None` before the gate existed.
@@ -1186,7 +1186,7 @@ class SkillDto(Dto):
     description: str | None = None
     status: str
     latest_version: int
-    #: Les agents dont une version porte la skill : `agent@version`.
+    #: The agents of which a version carries the skill: `agent@version`.
     used_by: list[str] = Field(default_factory=list)
     versions: list[SkillVersionDto] | None = None
     #: The gate of the latest version.
@@ -1210,17 +1210,17 @@ class AgentVersionMetrics(Dto):
 
 
 class AgentMetrics(Dto):
-    """Ce qu'un agent a fait sur la période : ses runs, leur issue, ce qu'ils ont coûté."""
+    """What an agent did over the period: its runs, their outcome, what they cost."""
 
     agent: str
     days: int
     runs: int
     succeeded: int
     failed: int
-    #: Réussis / terminés ; vide tant qu'aucun run n'est terminé.
+    #: Succeeded / finished; empty while no run has finished.
     success_rate: float | None = None
     cost_usd: float = 0.0
-    #: `model` et `tool` : un appel d'outil compte dans le coût d'un agent.
+    #: `model` and `tool`: a tool call counts in an agent's cost.
     cost_by_kind: dict[str, float] = Field(default_factory=dict)
     by_project: list[AgentProjectMetrics] = Field(default_factory=list)
     spent_today_usd: float = 0.0
@@ -1351,7 +1351,7 @@ class GroupMembers(Dto):
 
 
 class AgentCredentialCreate(Dto):
-    """Un jeton `mcp:*` de la porte (son id), ou un client OAuth (son `client_id`, l'`azp` du jeton)."""
+    """An `mcp:*` token of the door (its id), or an OAuth client (its `client_id`, the token's `azp`)."""
 
     kind: Literal["token", "oauth_client"]
     token_id: str | None = None
@@ -1366,7 +1366,7 @@ class AgentCredentialDto(Dto):
     created_by: str | None = None
     created_at: datetime | None = None
     revoked_at: datetime | None = None
-    #: Ce que le jeton rattaché dit de son dernier appel : la console montre un client « connecté ».
+    #: What the attached token says about its last call: the console shows a "connected" client.
     token_name: str | None = None
     last_used_at: datetime | None = None
     last_client: str | None = None

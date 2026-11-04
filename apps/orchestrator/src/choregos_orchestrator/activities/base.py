@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Socle des activités : accès base, adaptateurs par projet, idempotence.
+"""The base of the activities: database access, per-project adapters, idempotence.
 
-Toutes les activités sont **idempotentes** par `(run_id | work_item_id, step)` : Temporal
-peut les rejouer sans effet double — c'est la règle qui protège du double coût.
+Every activity is **idempotent** by `(run_id | work_item_id, step)`: Temporal can replay them
+without a double effect. That is the rule that protects from a double cost.
 """
 
 from __future__ import annotations
@@ -12,8 +12,8 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
 
-from choregos_adapters import AdapterSet, account_of, charger_les_greffons
-from choregos_api.adaptateurs import brancher_memoire_lexicale
+from choregos_adapters import AdapterSet, account_of, load_extensions
+from choregos_api.adapter_wiring import attach_lexical_memory
 from choregos_api.db.models import Connector, Organization, OrgConnector, PolicyDef, Project, WorkItem
 from choregos_api.db.session import TOUT, session_scope
 from choregos_api.services import default_workflow, policy_model, workflow_model
@@ -29,25 +29,25 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from temporalio import activity
 
-# L'orchestrateur possède les mêmes tables que l'API : il branche le repli lexical pareil.
-brancher_memoire_lexicale()
-# … et les greffons déclarés hors de l'arbre, comme l'API.
-charger_les_greffons()
+# The orchestrator owns the same tables as the API: it plugs in the same lexical fallback.
+attach_lexical_memory()
+# ... and the extensions declared outside the tree, as the API does.
+load_extensions()
 
 
 @dataclass(slots=True)
 class ProjectBundle:
-    """Tout ce qu'une activité doit connaître d'un projet, chargé en une fois."""
+    """Everything an activity must know of a project, loaded at once."""
 
     project: Project
     org_slug: str
     config: ProjectConfig
-    #: Le workflow PAR DÉFAUT du projet (ADR 0031) : celui où naît un ticket qui ne dit pas le sien.
-    #: Pour un ticket existant, c'est `workflow_du_ticket` qui fait foi — jamais celui-ci.
+    #: The project's DEFAULT workflow (ADR 0031): the one a work item that names none is born in.
+    #: For an existing work item, `work_item_workflow` is authoritative, never this one.
     workflow: Workflow
     policy: Policy
     adapters: AdapterSet
-    #: La version de ce défaut, pour épingler un ticket à sa naissance.
+    #: The version of that default, to pin a work item at its birth.
     workflow_def_id: str | None = None
     #: The key the organisation's global memories live under (S40-24): its first slug, which a later
     #: rename does not move. Empty when the bundle has no organisation.
@@ -76,11 +76,11 @@ class ProjectBundle:
 
 @asynccontextmanager
 async def db() -> AsyncIterator[AsyncSession]:
-    """Une activité agit pour la plateforme : elle voit toutes les organisations.
+    """An activity acts for the platform: it sees every organisation.
 
-    C'est un choix dit, pas un oubli : la RLS est fail-closed, et une session qui ne se
-    nomme pas ne voit rien. L'orchestrateur reçoit des identifiants de projet (UUID) des
-    workflows, pas des slugs devinés.
+    That is a stated choice, not an oversight: RLS is fail-closed, and a session that names no
+    organisation sees nothing. The orchestrator receives project ids (UUIDs) from the workflows,
+    not guessed slugs.
     """
     async with session_scope(orgs="*") as session:
         yield session
@@ -91,11 +91,11 @@ async def load_project(session: AsyncSession, project_id: str) -> ProjectBundle:
     if project is None:
         rows = (await session.execute(select(Project).where(Project.slug == project_id))).scalars().all()
         if len(rows) > 1:
-            # Un slug dans deux organisations : « le premier » serait celui d'un autre locataire.
+            # A slug in two organisations: "the first" would be another tenant's.
             raise ValueError(f"ambiguous project: {project_id} exists in several organisations")
         project = rows[0] if rows else None
     if project is None:
-        raise ValueError(f"projet inconnu : {project_id}")
+        raise ValueError(f"unknown project: {project_id}")
     org = await session.get(Organization, project.org_id)
     workflow_row = await default_workflow(session, project.id)
     policy_row = (
@@ -222,25 +222,24 @@ async def _sealed_values(session: AsyncSession, org_id: str, connector: Connecto
         return {}
 
 
-def tracker_possede_les_tickets(adapter: object) -> bool:
-    """Le connecteur tient-il les tickets ailleurs ? Un connecteur muet est supposé oui.
+def tracker_owns_items(adapter: object) -> bool:
+    """Does the connector keep the work items elsewhere? A mute connector is assumed to.
 
-    Un adaptateur tiers, écrit avant que la question se pose, n'a pas cet attribut : le
-    supposer externe est le choix sûr, puisque c'est le cas de tous les connecteurs livrés
-    sauf `internal`.
+    A third-party adapter, written before the question arose, has no such attribute: assuming it
+    external is the safe choice, since that is the case of every shipped connector but `internal`.
     """
     return bool(getattr(adapter, "owns_items", True))
 
 
-async def cle_de_ticket_interne(session: AsyncSession, bundle: ProjectBundle) -> str:
-    """Voir `choregos_api.services.cle_de_ticket_interne` : un seul endroit attribue les clés."""
-    from choregos_api.services import cle_de_ticket_interne as attribuer
+async def internal_ticket_key(session: AsyncSession, bundle: ProjectBundle) -> str:
+    """See `choregos_api.services.cle_de_ticket_interne`: a single place assigns the keys."""
+    from choregos_api.services import cle_de_ticket_interne as assign
 
-    return await attribuer(session, bundle.project)
+    return await assign(session, bundle.project)
 
 
-async def workflow_du_ticket(session: AsyncSession, item: WorkItem) -> Workflow:
-    """Le workflow où le ticket est né, à sa version (ADR 0031) — à défaut, celui du projet."""
+async def work_item_workflow(session: AsyncSession, item: WorkItem) -> Workflow:
+    """The workflow the work item was born in, at its version (ADR 0031); failing that, the project's."""
     return workflow_model(await _workflow_du_ticket(session, item))
 
 
@@ -259,7 +258,7 @@ _ADAPTERS_OVERRIDE: AdapterSet | None = None
 
 
 def set_adapters_override(adapters: AdapterSet | None) -> None:
-    """Injection utilisée par les tests et par `make demo` : un seul jeu d'adaptateurs partagé."""
+    """Injection used by the tests and by `make demo`: a single shared set of adapters."""
     global _ADAPTERS_OVERRIDE
     _ADAPTERS_OVERRIDE = adapters
 
@@ -285,8 +284,8 @@ async def org_memory(session: AsyncSession, bundle: ProjectBundle) -> Any:
     """
     if bundle.org_memory_adapter is not None:
         return bundle.org_memory_adapter
-    from choregos_adapters import build, configuration_resolue, fakes_enabled
-    from choregos_adapters.registry import TYPES_PAR_DEFAUT
+    from choregos_adapters import build, fakes_enabled, resolved_configuration
+    from choregos_adapters.registry import DEFAULT_TYPES
     from choregos_api.db.models import OrgConnector
 
     if fakes_enabled() or adapters_override() is not None:
@@ -303,12 +302,12 @@ async def org_memory(session: AsyncSession, bundle: ProjectBundle) -> Any:
         .scalars()
         .first()
     )
-    type_name = row.type if row is not None else TYPES_PAR_DEFAUT["memory"]
+    type_name = row.type if row is not None else DEFAULT_TYPES["memory"]
     config = dict(row.config or {}) if row is not None else {}
     # As the project's own memory: a platform process, seen from every organisation (`*`).
     config = {**config, "org": TOUT}
     sealed = await _sealed_org_values(session, bundle.project.org_id, row) if row is not None else {}
-    resolved = configuration_resolue(
+    resolved = resolved_configuration(
         "memory", type_name, config, row.secret_refs if row is not None else None, None, preresolved=sealed
     )
     bundle.org_memory_adapter = build("memory", type_name, resolved)
@@ -328,7 +327,7 @@ async def _sealed_org_values(session: AsyncSession, org_id: str, connector: Any)
 
 
 def as_dict(value: Any) -> dict[str, Any]:
-    """Sérialise un modèle pydantic ou un dict pour traverser une frontière d'activité."""
+    """Serialise a pydantic model or a dict to cross an activity boundary."""
     if hasattr(value, "model_dump"):
         return dict(value.model_dump(mode="json", by_alias=True))
     return dict(value or {})
@@ -351,6 +350,14 @@ async def send_courtesy(notify: Any, channel: str, message: Message) -> bool:
     return True
 
 
+def notification_target(bundle: Any) -> str:
+    """Where notifications go: the e-mail addresses for an e-mail notifier, else the Slack channel."""
+    emails = list(bundle.config.notify.emails)
+    if emails and getattr(bundle.adapters.notify, "channel_kind", "") == "email":
+        return ",".join(emails)
+    return str(bundle.config.notify.slack_channel or "#choregos")
+
+
 def without_secrets(stage_input: dict[str, Any] | None, *, keep_gateway_key: bool) -> dict[str, Any]:
     """A `StageInput` payload with no run token, and with no gateway key unless asked (#519).
 
@@ -366,3 +373,7 @@ def without_secrets(stage_input: dict[str, Any] | None, *, keep_gateway_key: boo
     if not keep_gateway_key and cleaned.get("gateway_key") is not None:
         cleaned["gateway_key"] = None
     return cleaned
+
+
+workflow_du_ticket = work_item_workflow  # lang: fr-ok alias:internal
+cle_de_ticket_interne = internal_ticket_key  # lang: fr-ok alias:internal

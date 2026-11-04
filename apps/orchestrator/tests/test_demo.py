@@ -1,4 +1,4 @@
-"""La démonstration hors ligne : le scénario M1 doit passer en entier, sans cluster."""
+"""The offline demo: the M1 scenario must pass in full, without a cluster."""
 
 from __future__ import annotations
 
@@ -31,9 +31,9 @@ async def test_demo_runs_end_to_end(tmp_path: Path, monkeypatch: Any, capsys: An
     assert code == 0
     output = capsys.readouterr().out
     assert "final state          : deployed_prod" in output
-    assert "Choregos — progress" in output, "le commentaire de suivi est écrit dans le ticket"
+    assert "Choregos — progress" in output, "the status comment is written in the work item"
     assert "agent refine" in output and "agent implement" in output and "agent verify" in output
-    assert "| Approval |" in output, "l'étape humaine apparaît dans le tableau"
+    assert "| Approval |" in output, "the human step appears in the table"
     assert "findings filed       : 1" in output
     assert "pull request         : https://" in output
     assert os.environ["CHOREGOS_FAKES"] == "1"

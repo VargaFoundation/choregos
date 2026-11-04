@@ -1,7 +1,7 @@
 """Executor Azure Container Apps : idempotence, secret de run, statut, annulation, logs.
 
-Comme pour Jira et GitLab, les tests parlent au protocole ARM documenté via un transport
-simulé : ils prouvent la forme des appels, pas qu'un abonnement Azure les accepte.
+As for Jira and GitLab, the tests speak the documented ARM protocol through a simulated
+transport: they prove the shape of the calls, not that an Azure subscription accepts them.
 """
 
 from __future__ import annotations
@@ -46,17 +46,17 @@ def spec(run_id: str = "run-42") -> StageJobSpec:
     )
 
 
-def test_un_environnement_absent_est_refuse() -> None:
+def test_a_missing_environment_is_refused() -> None:
     with pytest.raises(ConfigurationError):
         AcaExecutor(AzureArmClient(token="x"), environment_id="")
 
 
-async def test_le_job_est_cree_puis_declenche() -> None:
-    appels: list[tuple[str, str]] = []
+async def test_the_job_is_created_then_triggered() -> None:
+    calls: list[tuple[str, str]] = []
     definition: dict[str, Any] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
-        appels.append((request.method, request.url.path))
+        calls.append((request.method, request.url.path))
         assert request.headers["authorization"] == "Bearer jeton-arm"
         assert request.url.params["api-version"] == "2024-03-01"
         if request.method == "GET" and request.url.path.endswith("/executions"):
@@ -72,17 +72,17 @@ async def test_le_job_est_cree_puis_declenche() -> None:
 
     assert ref.kind is ExecutorKind.ACA
     assert ref.name == "run-run-42"
-    assert ("PUT", f"{JOBS}/run-run-42") in appels
-    assert ("POST", f"{JOBS}/run-run-42/start") in appels
+    assert ("PUT", f"{JOBS}/run-run-42") in calls
+    assert ("POST", f"{JOBS}/run-run-42/start") in calls
 
     properties = definition["properties"]
     assert properties["environmentId"] == ENV
     assert properties["configuration"]["triggerType"] == "Manual"
     assert properties["configuration"]["replicaTimeout"] == 90 * 60
-    assert properties["configuration"]["replicaRetryLimit"] == 0, "la reprise est à l'orchestrateur"
+    assert properties["configuration"]["replicaRetryLimit"] == 0, "the retry is the orchestrator's"
 
 
-async def test_le_jeton_du_run_passe_par_un_secret() -> None:
+async def test_the_runs_token_goes_through_a_secret() -> None:
     definition: dict[str, Any] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -104,22 +104,22 @@ async def test_le_jeton_du_run_passe_par_un_secret() -> None:
     assert secrets == [{"name": "run-token", "value": "jeton-du-run"}]
 
 
-async def test_redemarrer_un_run_ne_le_joue_pas_deux_fois() -> None:
-    """Rejouer l'activité `start_run` ne doit pas déclencher une seconde exécution."""
-    appels: list[tuple[str, str]] = []
+async def test_restarting_a_run_does_not_play_it_twice() -> None:
+    """Replaying the `start_run` activity must not trigger a second execution."""
+    calls: list[tuple[str, str]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        appels.append((request.method, request.url.path))
+        calls.append((request.method, request.url.path))
         if request.url.path.endswith("/executions"):
             return httpx.Response(200, json={"value": [{"name": "run-42-xyz", "properties": {}}]})
         return httpx.Response(200, json={"name": "run-run-42"})
 
     await executor(handler).start(spec())
 
-    assert not any(path.endswith("/start") for _, path in appels), "aucun second déclenchement"
+    assert not any(path.endswith("/start") for _, path in calls), "no second trigger"
 
 
-async def test_l_identite_et_le_registre_ne_sont_poses_que_si_configures() -> None:
+async def test_the_identity_and_the_registry_are_set_only_if_configured() -> None:
     definitions: list[dict[str, Any]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -141,7 +141,7 @@ async def test_l_identite_et_le_registre_ne_sont_poses_que_si_configures() -> No
 
 
 @pytest.mark.parametrize(
-    ("azure", "attendu"),
+    ("azure", "expected"),
     [
         ("Succeeded", "succeeded"),
         ("Failed", "failed"),
@@ -151,7 +151,7 @@ async def test_l_identite_et_le_registre_ne_sont_poses_que_si_configures() -> No
         ("Inconnu", "pending"),
     ],
 )
-async def test_traduction_des_statuts(azure: str, attendu: str) -> None:
+async def test_status_translation(azure: str, expected: str) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
@@ -172,11 +172,11 @@ async def test_traduction_des_statuts(azure: str, attendu: str) -> None:
     ref = ExecRef(kind=ExecutorKind.ACA, name="run-run-42", namespace=RG, run_id="run-42")
     status = await executor(handler).status(ref)
 
-    assert status.state == attendu
+    assert status.state == expected
     assert status.started_at is not None and status.ended_at is not None
 
 
-async def test_un_job_sans_execution_est_inconnu_pas_en_echec() -> None:
+async def test_a_job_without_an_execution_is_unknown_not_failed() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"value": []})
 
@@ -185,11 +185,11 @@ async def test_un_job_sans_execution_est_inconnu_pas_en_echec() -> None:
     assert status.state == "unknown"
 
 
-async def test_l_annulation_arrete_l_execution_en_cours() -> None:
-    appels: list[tuple[str, str]] = []
+async def test_cancellation_stops_the_running_execution() -> None:
+    calls: list[tuple[str, str]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        appels.append((request.method, request.url.path))
+        calls.append((request.method, request.url.path))
         if request.url.path.endswith("/executions"):
             return httpx.Response(200, json={"value": [{"name": "run-42-xyz", "properties": {}}]})
         return httpx.Response(200, json={})
@@ -197,38 +197,38 @@ async def test_l_annulation_arrete_l_execution_en_cours() -> None:
     ref = ExecRef(kind=ExecutorKind.ACA, name="run-run-42", namespace=RG, run_id="run-42")
     await executor(handler).cancel(ref)
 
-    assert ("POST", f"{JOBS}/run-run-42/executions/run-42-xyz/stop") in appels
+    assert ("POST", f"{JOBS}/run-run-42/executions/run-42-xyz/stop") in calls
 
 
-async def test_sans_log_analytics_les_logs_disent_ou_regarder() -> None:
+async def test_without_log_analytics_the_logs_say_where_to_look() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={})
 
     ref = ExecRef(kind=ExecutorKind.ACA, name="run-run-42", namespace=RG, run_id="run-42")
-    lignes = [line async for line in executor(handler).logs(ref)]
+    lines = [line async for line in executor(handler).logs(ref)]
 
-    assert len(lignes) == 1
-    assert "ContainerAppConsoleLogs_CL" in lignes[0], "la piste est donnée, pas le silence"
+    assert len(lines) == 1
+    assert "ContainerAppConsoleLogs_CL" in lines[0], "the lead is given, not silence"
 
 
-async def test_avec_log_analytics_les_lignes_arrivent() -> None:
+async def test_with_log_analytics_the_lines_arrive() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert "api.loganalytics.io" in str(request.url)
         assert "ContainerAppConsoleLogs_CL" in jsonlib.loads(request.content)["query"]
         return httpx.Response(
             200,
             json={
-                "tables": [{"rows": [["2026-09-19T08:00:00Z", "runner: démarrage"], ["…", "runner: fini"]]}]
+                "tables": [{"rows": [["2026-09-19T08:00:00Z", "runner: starting"], ["…", "runner: fini"]]}]
             },
         )
 
     ref = ExecRef(kind=ExecutorKind.ACA, name="run-run-42", namespace=RG, run_id="run-42")
-    lignes = [line async for line in executor(handler, log_analytics_workspace_id="ws-1").logs(ref)]
+    lines = [line async for line in executor(handler, log_analytics_workspace_id="ws-1").logs(ref)]
 
-    assert lignes == ["runner: démarrage", "runner: fini"]
+    assert lines == ["runner: starting", "runner: fini"]
 
 
-async def test_une_erreur_arm_est_nommee() -> None:
+async def test_an_arm_error_is_named() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(403, text="AuthorizationFailed")
 
@@ -239,11 +239,11 @@ async def test_une_erreur_arm_est_nommee() -> None:
     assert error.value.status_code == 403
 
 
-async def test_le_jeton_aad_est_demande_puis_mis_en_cache() -> None:
-    appels: list[str] = []
+async def test_the_aad_token_is_requested_then_cached() -> None:
+    calls: list[str] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
-        appels.append(str(request.url))
+        calls.append(str(request.url))
         if "oauth2" in str(request.url):
             return httpx.Response(200, json={"access_token": "jeton-frais", "expires_in": 3600})
         return httpx.Response(200, json={"value": []})
@@ -261,24 +261,24 @@ async def test_le_jeton_aad_est_demande_puis_mis_en_cache() -> None:
     await aca.status(ref)
     await aca.status(ref)
 
-    assert sum(1 for url in appels if "oauth2" in url) == 1, "le jeton n'est demandé qu'une fois"
+    assert sum(1 for url in calls if "oauth2" in url) == 1, "the token is asked for only once"
 
 
-async def test_une_identite_incomplete_est_refusee_clairement() -> None:
+async def test_an_incomplete_identity_is_refused_clearly() -> None:
     client = AzureArmClient(subscription_id=SUB, resource_group=RG)
     with pytest.raises(ConfigurationError) as error:
         await client.token()
     assert "tenant_id" in str(error.value)
 
 
-async def test_aucun_nom_de_tag_ne_porte_de_caractere_refuse_par_arm() -> None:
-    """La régression qui a coûté S13-05 : ARM refuse `< > % & \\ ? /` dans un *nom* de tag.
+async def test_no_tag_name_carries_a_character_refused_by_arm() -> None:
+    """The regression that cost S13-05: ARM refuses `< > % & \\ ? /` in a tag *name*.
 
-    Nos étiquettes sont écrites à la mode Kubernetes (`choregos/run-id`) — exactement la forme
-    interdite. Le transport simulé ne valide pas les noms, donc les dix-huit tests d'à côté
-    passaient pendant qu'aucun job n'aurait pu être créé. Ce test refait la validation ici.
+    Our labels are written Kubernetes-style (`choregos/run-id`), exactly the forbidden
+    shape. The simulated transport does not validate names, so the eighteen tests next to it
+    passed while no job could have been created. This test redoes the validation here.
     """
-    envoye: dict[str, Any] = {}
+    sent_body: dict[str, Any] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.method == "GET" and request.url.path.endswith("/executions"):
@@ -286,39 +286,39 @@ async def test_aucun_nom_de_tag_ne_porte_de_caractere_refuse_par_arm() -> None:
         if request.method == "GET":
             return httpx.Response(404)
         if request.method == "PUT":
-            envoye.update(jsonlib.loads(request.content))
+            sent_body.update(jsonlib.loads(request.content))
         return httpx.Response(200, json={})
 
     aca = executor(handler)
     job = spec()
-    # Des étiquettes d'appelant dans le style k8s : elles aussi doivent être traduites.
+    # Caller labels in the k8s style: they too must be translated.
     job.labels = {
         "app.kubernetes.io/name": "choregos",
         "choregos/stage": "implement",
-        "sans-souci": "ok",
+        "carefree": "ok",
     }
     await aca.start(job)
 
-    interdits = set("<>%&\\?/")
-    for nom in envoye.get("tags", {}):
-        assert not (set(nom) & interdits), f"nom de tag refusé par ARM : {nom!r}"
+    forbidden = set("<>%&\\?/")
+    for tag_name in sent_body.get("tags", {}):
+        assert not (set(tag_name) & forbidden), f"tag name refused by ARM: {tag_name!r}"
 
-    tags = envoye["tags"]
-    # La traduction garde le sens : un `/` devient `_`, le reste est intact.
+    tags = sent_body["tags"]
+    # The translation keeps the meaning: a `/` becomes `_`, the rest is intact.
     assert tags["choregos_run-id"] == job.run_id
     assert tags["choregos_project"] == job.project_slug
     assert tags["app.kubernetes.io_name"] == "choregos"
     assert tags["choregos_stage"] == "implement"
-    assert tags["sans-souci"] == "ok"
+    assert tags["carefree"] == "ok"
 
 
-async def test_les_ressources_de_l_etape_sont_honorees() -> None:
-    """Le même workflow doit demander les mêmes ressources quel que soit l'exécuteur.
+async def test_the_steps_resources_are_honoured() -> None:
+    """The same workflow must ask for the same resources whatever the executor.
 
-    `k8s_job` honore `spec.cpu`/`spec.memory` ; ACA les ignorait et imposait les siennes, donc une
-    étape qui demandait 2 vCPU en obtenait 1 selon le backend, sans rien dire.
+    `k8s_job` honours `spec.cpu`/`spec.memory`; ACA ignored them and imposed its own, so a
+    step that asked for 2 vCPU got 1 depending on the backend, without a word.
     """
-    envoye: dict[str, Any] = {}
+    sent_body: dict[str, Any] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.method == "GET" and request.url.path.endswith("/executions"):
@@ -326,7 +326,7 @@ async def test_les_ressources_de_l_etape_sont_honorees() -> None:
         if request.method == "GET":
             return httpx.Response(404)
         if request.method == "PUT":
-            envoye.update(jsonlib.loads(request.content))
+            sent_body.update(jsonlib.loads(request.content))
         return httpx.Response(200, json={})
 
     aca = executor(handler, cpu=0.5, memory="1Gi")
@@ -334,13 +334,13 @@ async def test_les_ressources_de_l_etape_sont_honorees() -> None:
     job.cpu = "2"
     job.memory = "4Gi"
     await aca.start(job)
-    resources = envoye["properties"]["template"]["containers"][0]["resources"]
+    resources = sent_body["properties"]["template"]["containers"][0]["resources"]
     assert resources == {"cpu": 2.0, "memory": "4Gi"}
 
-    # Une valeur illisible retombe sur celle de l'exécuteur : un run ne doit pas échouer pour ça.
-    envoye.clear()
+    # An unreadable value falls back to the executor's: a run must not fail for that.
+    sent_body.clear()
     aca2 = executor(handler, cpu=0.5, memory="1Gi")
     bancal = spec("run-43")
     bancal.cpu = "beaucoup"
     await aca2.start(bancal)
-    assert envoye["properties"]["template"]["containers"][0]["resources"]["cpu"] == 0.5
+    assert sent_body["properties"]["template"]["containers"][0]["resources"]["cpu"] == 0.5

@@ -2,10 +2,10 @@
 import { redirect } from "next/navigation";
 
 /**
- * L'ancienne page « le workflow du projet » : un projet en porte désormais plusieurs (ADR 0031).
- * Les liens qui y menaient — marque-pages, docs — arrivent sur la liste.
+ * The former "the project's workflow" page: a project now carries several (ADR 0031).
+ * The links that led to it (bookmarks, docs) land on the list.
  */
-export default async function AncienWorkflow({
+export default async function FormerWorkflow({
   params,
 }: {
   params: Promise<{ slug: string }>;

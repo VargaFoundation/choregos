@@ -248,7 +248,7 @@ def test_un_noeud_perdu_est_remarque_puis_le_travail_repart(stack: None) -> None
     assert replacement is not None, (
         f"the worker did not restart within {total:.0f}s. With the default tolerations "
         "(`node.kubernetes.io/unreachable`, 300 s) that is expected — and that is the problem: "
-        "see `docs/runbooks/perte-de-noeud.md`."
+        "see `docs/runbooks/node-loss.md`."
     )
     assert replacement != original
 
