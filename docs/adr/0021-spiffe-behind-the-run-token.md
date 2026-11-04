@@ -42,7 +42,7 @@ X.509 or JWT SVIDs, rotates them, and stops issuing the moment the workload is g
   it, a tenant of a shared cluster cannot. Same posture as ADR 0016: an option, not a
   default. `tekton` and `local_docker` executors keep the JWT.
 - The chart gains `global.spiffe.trustDomain`; when unset, nothing in this ADR is rendered
-  and the JWT path is the only one. `garde.yaml` refuses `spiffe` with an executor that
+  and the JWT path is the only one. `guard.yaml` refuses `spiffe` with an executor that
   cannot attest.
 - The conformance suite (`tests/cluster`) proves that a deleted Job's identity stops
   authenticating within the rotation window before the capability is announced.

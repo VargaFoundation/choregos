@@ -3,9 +3,9 @@
 - **Status**: accepted, 2026-10-17
 - **Concerns**: the `agents` table (`stable_version`, `candidate_version`, `candidate_percent`,
   `candidate_since`, `release_policy`), the new `agent_releases` table, `projects.agent_channel`,
-  `project_agents.channel`, the agent resolver (`services/agents.resoudre_l_agent`), the release
+  `project_agents.channel`, the agent resolver (`services/agents.resolve_agent`), the release
   endpoints (`releaseAgentVersion` and five others), the governance action `RELEASE`
-  (`services/agent_governance.py`), the plugin gesture `agent.release` (`greffons.GESTES`); amends
+  (`services/agent_governance.py`), the plugin gesture `agent.release` (`extensions.GESTURES`); amends
   [ADR 0033](0033-agent-registry-and-skill-library.md) (§2-3: "else the latest version" becomes "else
   production") and [ADR 0061](0061-agent-ownership-scopes-and-forks.md) (one more action in the
   permission matrix)

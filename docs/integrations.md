@@ -402,7 +402,7 @@ Not built: Choregos **as** a Rovo agent inside Jira (it needs a Forge app and an
 answering `input-required` from the console and resuming; push notifications; verification of signed
 cards (A2A 1.0). The A2A 1.0 spelling is implemented from secondary sources and exercised against a
 fake only; so is the Dynamic Client Registration exchange with Atlassian: neither has run against the
-real service yet (`tests/live/test_rovo_a2a.py`, run by hand once the consent is given).
+real service yet (`tests/live/test_rovo_a2a_live.py`, run by hand once the consent is given).
 
 ## Your organisation's MCP gateway (ADR 0105)
 

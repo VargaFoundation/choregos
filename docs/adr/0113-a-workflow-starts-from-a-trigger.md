@@ -22,7 +22,7 @@ What the code held that day:
 | A person (console, REST, MCP door, A2A door) | a work item | the one chosen, else routing | the audit log (`workitem.create`) |
 | Any other system over HTTP | — | — | — |
 
-Every door already goes through the one birth path, `services/routage.nouveau_ticket`: an explicit workflow,
+Every door already goes through the one birth path, `services/routing.new_work_item`: an explicit workflow,
 else the first routing rule that matches the labels, else the default. What was missing is a door for a
 system that is not a tracker — a monitoring tool, a form, a CRM, a ServiceNow Flow that only needs to
 *start* something — and a single place that answers "what came in, and what did it start?".

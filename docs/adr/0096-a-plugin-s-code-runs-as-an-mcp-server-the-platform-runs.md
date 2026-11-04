@@ -5,7 +5,7 @@
   tracker half of the plan's ADR (Decision 3) is S43-07's
 - **Concerns**: `packages/contracts/schemas/plugin-server.schema.json` (contract change: `paths`,
   `compensation` as an object, `platform_arguments`), `choregos_adapters.plugin_servers`, the API
-  (`services/plugin_servers.py`, the installer, `services/connecteurs.py`, the broker, the
+  (`services/plugin_servers.py`, the installer, `services/connectors.py`, the broker, the
   `connector.call` effect, the organisation connector routes, `org_connectors.plugin_server`), the
   chart's `global.plugins.servers`, `infra/policies/plugin-servers.yaml`; amends
   [ADR 0034](0034-connectors-by-capability.md) (an organisation connector may be a plugin's server, whose

@@ -20,7 +20,7 @@ what happened next to the thing that happened.
   the response is sent (`scope="function"`). An audited change and its audit row are one
   transaction: both are kept or neither. A refusal the platform audits (an MCP call refused,
   `mcp/transport.py`) is answered with a 200, so its transaction commits.
-- **Events** (`services/evenements.py::persist_event`) write the `events` row in the same session, and
+- **Events** (`services/events.py::persist_event`) write the `events` row in the same session, and
   their publication goes through `pg_notify`, which PostgreSQL delivers at commit and drops on
   rollback. The `events` table is already the outbox of the live stream; every replica relays it
   (`RelaisPostgres`).

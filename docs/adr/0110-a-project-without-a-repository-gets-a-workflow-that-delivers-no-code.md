@@ -3,7 +3,7 @@
 - **Status**: accepted, 2026-10-28, by the product owner (the names `default-request` and `assistant`;
   existing projects switch by one gesture, never by a database edit) — implemented by S49-01 to S49-03
 - **Concerns**: `choregos_core/dsl/templates/` (a fourth core workflow, `default-request`),
-  `services/definitions.ensure_defaults` and `services/gabarits.livraison` (which workflow a project
+  `services/definitions.ensure_defaults` and `services/templates.delivery` (which workflow a project
   without a template receives), the readiness items of S40-06, the project wizard; amends decision
   **D14** of `docs/plan/00-index.md`; follows [ADR 0012](0012-the-engine-is-not-tied-to-software.md)
   and [ADR 0029](0029-a-platform-for-governed-agents.md)

@@ -118,7 +118,7 @@ Order: E-01 → E-02 → E-06/E-08 (unblockers) → E-03/E-04/E-05 (core) → E-
 
 | Component | Detail |
 | :-- | :-- |
-| `packages/adapters/memory/ecphoria.py` | `MemoryAdapter` via REST + MCP; tenant = `project.slug`; short timeouts (300 ms read, 2 s write); circuit breaker → empty context pack rather than a blocked stage |
+| `packages/adapters/src/choregos_adapters/memory/ecphoria.py` | `MemoryAdapter` via REST + MCP; tenant = `project.slug`; short timeouts (300 ms read, 2 s write); circuit breaker → empty context pack rather than a blocked stage |
 | `MemoryIngestion` (Temporal, 15 min cron + events) | tracker: closed tickets, merged PRs (title, description, review summary) → `ticket_summary`; SCM: `docs/adr/*.md`, `docs/**` → `decision`/`convention`; CD: deployments, rollbacks → `incident`; Alertmanager → `incident`; orchestrator: end of run → `run_lesson` (recurring CI failure, flaky test, time per stage); created findings → `finding` |
 | `build_context_pack` (activity) | Query = title + spec; `paths` = `allowed_paths`; `kinds` per role (`refine`: decision, incident, ticket_summary; `implement`: convention, run_lesson, hotspot; `review`: incident, hotspot, decision); budget per role (2 k / 4 k / 3 k tokens); stored with the run |
 | Memory MCP in the workspace | Ecphoria MCP server mounted read-only (`search_memory`, `get_memory_history`) + `propose_fact` via `choregos-tools` |

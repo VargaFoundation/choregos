@@ -1,7 +1,7 @@
 # 0032 — Administration sections are declared by manifest; the console renders them, no plugin code runs in it
 
 - **Status**: accepted, 2026-10-05
-- **Concerns**: `greffons.py` (a new seam), `GET /api/v1/ui/admin-sections`, the contract
+- **Concerns**: `extensions.py` (a new seam), `GET /api/v1/ui/admin-sections`, the contract
   `ui-manifest.schema.json`, the console's `/admin`, the enterprise edition; follows
   [ADR 0024](0024-two-editions.md) and [ADR 0029](0029-a-platform-for-governed-agents.md);
   the `ui` seam of the specification (R-SOC-UI-01, SOC-131)
@@ -76,7 +76,7 @@ every block kind gains an optional `permission`, same vocabulary as the section'
   organisations in scope) and lists the section only if at least one block remains.
 - Start-up refuses an unknown block permission, like a section's.
 - Nested `row_actions` are not filtered: they belong to their table.
-- `choregos_api.greffons.SECTION_FEATURES` (`frozenset({"block_permission", "asset_upload", "section_icon"})`) lets a plugin detect
+- `choregos_api.extensions.SECTION_FEATURES` (`frozenset({"block_permission", "asset_upload", "section_icon"})`) lets a plugin detect
   the feature without parsing versions. Hiding is a courtesy: the routes a block calls still enforce
   their own permission.
 - Not decided here: resetting a form to inherited values; plugins use `action` (DELETE) and `table`

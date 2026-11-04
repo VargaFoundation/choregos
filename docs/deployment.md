@@ -515,7 +515,7 @@ That local address is always announced, and somebody always serves it:
 | Executor | Who serves `localhost:7777` |
 |---|---|
 | `tekton` | a `sidecar:` in the Task |
-| everything else | **the runner itself** (`runner/outils_locaux.py`), which starts the server when the announced address is local and nothing answers |
+| everything else | **the runner itself** (`runner/local_tools.py`), which starts the server when the announced address is local and nothing answers |
 
 A sidecar, where one exists, keeps the port: the runner probes first and stands aside. A **non**-local
 address is served by nobody automatically — that is a deployment providing its own server, and the
@@ -1223,12 +1223,12 @@ choregos-orchestrator:
 
 The migration job follows the API's image. An image from another registry is another image:
 `global.imageDigest` does not apply to it — pin it with its own `image.digest`.
-`tests/charts/test_image_par_composant.py` renders both.
+`tests/charts/test_image_per_component.py` renders both.
 
 ### Demonstration fakes (`demoFakes`)
 
 `demoFakes.enabled: true` deploys **one** pod — the API image, `python -m
-choregos_adapters.fakes.serveur` — serving the fakes of the HR scenario: MCP endpoints for the device
+choregos_adapters.fakes.server` — serving the fakes of the HR scenario: MCP endpoints for the device
 manager, the carrier, the badge readers and the supplier's agent
 (`http://choregos-demo-fakes:8090/{mdm,shipping,access_control,supplier}/mcp`), and a fake
 Microsoft Graph (`…/graph/v1.0`, `…/login`). One replica is the point: the API runs two and the
@@ -1255,7 +1255,7 @@ it too):
 | Field | Meaning |
 |---|---|
 | `licence` | the licence of the core (`Apache-2.0`) |
-| `edition_licence` | the licence the edition's plugin announces through `declarer(..., licence=...)`; `null` on the community edition |
+| `edition_licence` | the licence the edition's extension announces through `declare(..., licence=...)`; `null` on the community edition |
 | `build.revision` | the source commit the running image was built from, or `null` |
 
 `build.revision` comes from the `CHOREGOS_BUILD_REVISION` environment variable, which the API and
@@ -1296,7 +1296,7 @@ with no visible connection to its cause. Two guards now close that gap:
 | Where | What it refuses | Why there |
 |---|---|---|
 | `helm template` | `edition: enterprise` with no `global.imagePullSecrets` | the enterprise images live in a private registry; that pull secret **is** the access control in phase 1 ([ADR 0024](adr/0024-two-editions.md), decision 5). Without it the pods sit in `ImagePullBackOff`, which never names the cause |
-| API start-up | `CHOREGOS_EDITION=enterprise` while no plugin declared itself | the image is the community one, or `choregos-ee` is not installed, or its `choregos.plugins` entry point does not call `declarer`. The refusal names all three |
+| API start-up | `CHOREGOS_EDITION=enterprise` while no extension declared itself | the image is the community one, or `choregos-ee` is not installed, or its `choregos.plugins` entry point does not call `declare`. The refusal names all three |
 
 The reverse is **not** refused: a deployment that announces nothing and loads the enterprise
 plugin is simply one that forgot to say so, and denying it start-up would help no one. `/edition`
@@ -1608,7 +1608,7 @@ global:
   gateway:
     embedded: true                  # required: only the embedded LiteLLM serves it
   decisions:
-    embedded: true                  # deploys `charts/laya` and adds `platform/decide` to LiteLLM
+    embedded: true                  # deploys `charts/choregos/charts/laya` and adds `platform/decide` to LiteLLM
     apiKeySecret: ""                # key `api-key`; empty: the chart generates one and keeps it
     inputCostPerToken: 0.00000002   # USD per token read: the internal price (ADR 0004)
 ```
@@ -1750,3 +1750,848 @@ must match the rule name instead.
 | `python -m choregos_adapters.fakes.serveur` | `python -m choregos_adapters.fakes.server` | The chart switches the demo fakes' command; change your own container command; the former one still serves until 0.23.0. <!-- lang: fr-ok --> |
 | `python -m choregos_api.migrer` | `python -m choregos_api.migrate` | Change a custom migration command; the former one still works until 0.23.0. <!-- lang: fr-ok --> |
 | `python -m choregos_core.catalogue_d_agents.evals` | `python -m choregos_core.agent_catalogue.evals` | Same. <!-- lang: fr-ok --> |
+
+### Operator-facing names
+
+Variables, commands, catalogue keys, files and the trial scripts a person runs or edits by hand.
+
+#### Entry points and variables (S45-05)
+
+| Former | New |
+| :-- | :-- |
+| `python -m choregos_api.migrer` | `python -m choregos_api.migrate` <!-- lang: fr-ok --> |
+| `choregos-admin = choregos_api.outils:main` | `choregos-admin = choregos_api.admin_cli:main` (`choregos_api.outils.app` and `.main` are the same objects) <!-- lang: fr-ok --> |
+| `CHOREGOS_ESSAI_ONTOLOGIE=1` (logs a deprecation warning when it is the only one set) | `CHOREGOS_ONTOLOGY_TRIAL=1` <!-- lang: fr-ok --> |
+| `CHOREGOS_TEST_SUITE_SUR_POSTGRES` (CI sets both; the conftest switches in S45-42) | `CHOREGOS_TEST_SUITE_ON_POSTGRES` <!-- lang: fr-ok --> |
+| `python -m choregos_core.catalogue_d_agents.evals` | `python -m choregos_core.agent_catalogue.evals` <!-- lang: fr-ok --> |
+
+#### S45-08: the rest of the core in English
+
+<!-- lang: fr-ok -->
+
+#### The tool catalogue key: `outils:` becomes `tools:` (S45-08)
+
+The YAML catalogue of tools (`CHOREGOS_CATALOGUE_PATH`, `demo/tools/catalogue.yaml`) is read
+under the new key `tools:`. The former key `outils:` keeps loading until 0.23.0 and logs one
+deprecation warning per process. A catalogue that declares both keys is refused. A bare YAML list
+still maps to the tools.
+
+| Former | New | What an operator does |
+| :-- | :-- | :-- |
+| `outils:` (top-level key of the catalogue) | `tools:` | Rename the key before 0.23.0. Nothing else in a tool entry changes. |
+
+#### S45-32: `essai/` becomes `trials/`, in English
+
+The trials moved and were translated; no trial was re-run and no result changed. Nothing is kept
+under the former names: they were scripts, compose files and pages, not an API. A person who ran a
+trial by hand uses the new paths, environment variables and names below.
+
+#### Folders and files (S45-32)
+
+| Former | New |
+| :-- | :-- |
+| `essai/` | `trials/` |
+| `tests/essai/` | `tests/trials/` |
+| `essai/demarrage-local/` | `trials/local-start/` |
+| `essai/integration-claude/` | `trials/claude-integration/` |
+| `essai/investissement/` | `trials/investment/` |
+| `essai/ontologie/` | `trials/ontology/` |
+| `essai/plateforme-dev/` | `trials/dev-platform/` |
+| `essai/projet-dev/` | `trials/dev-project/` |
+| `essai/rh/` | `trials/hr/` |
+| `essai/sans-secret/` | `trials/no-secret/` |
+| `RESULTATS.md` | `RESULTS.md` |
+| `decor.py` | `scenery.py` |
+| `preparer_la_demo.py` | `prepare_the_demo.py` |
+| `portee.py` | `scope.py` |
+| `essai.py` (lakehouse) | `trial.py` |
+| `scenario_rh.py` | `scenario_hr.py` |
+| `analyse_infra.md` | `infra_analysis.md` (the playbook of the role `infra_analysis`) |
+| `greffon.Dockerfile` | `extension.Dockerfile` |
+| `01-role-applicatif.sql` | `01-application-role.sql` |
+| `.etat.json` (dev-platform, git-ignored) | `.state.json` |
+
+`demo`, `knowledge`, `lakehouse`, `python` and `graphify` keep their names. The recorded data files
+(`graphify/*.json`, `graphify/questions.sha256`, `no-secret/runtime/Cargo.lock`,
+`investment/sources-2026-10-14.json`) keep their bytes.
+
+#### Script commands (S45-32)
+
+| Former | New |
+| :-- | :-- |
+| `scenario_rh.py preparer / arrivee [--dans N] / suivre / deplacer / depart / verifier` | `scenario_hr.py prepare / arrival [--in N] / follow / move / departure / verify` |
+| `scenario_dev.py preparer / exigences / ouvrir / suivre / verifier` (dev-project) | `scenario_dev.py prepare / requirements / open / follow / verify` |
+| `scenario_dev.py preparer / verifier` (dev-platform) | `scenario_dev.py prepare / verify` |
+
+#### Environment variables (S45-32)
+
+| Former | New |
+| :-- | :-- |
+| `ESSAI_FAUX_URL` | `TRIAL_FAKES_URL` |
+| `ESSAI_JETON_REF` | `TRIAL_TOKEN_REF` |
+| `ESSAI_BACKEND` | `TRIAL_BACKEND` |
+| `ESSAI_MODELE` / `ESSAI_MODELES` | `TRIAL_MODEL` / `TRIAL_MODELS` |
+| `ESSAI_RH_PROJET` | `TRIAL_HR_PROJECT` |
+| `ESSAI_DEMO_ORG` | `TRIAL_DEMO_ORG` |
+| `ESSAI_INSTALLATION` | `TRIAL_INSTALLATION` |
+| `ESSAI_DEPOT` | `TRIAL_REPOSITORY` |
+| `ESSAI_PROJET` | `TRIAL_PROJECT` (the default value `essai-it4it` is kept: it is the slug of a project that exists on the dev tenant) |
+| `ESSAI_PORT_API` | `TRIAL_API_PORT` |
+| `GARDER=1` (local-start `run.sh`) | `KEEP=1` |
+| `CHOREGOS_ESSAI_ONTOLOGIE=1` in `trials/local-start/compose.yaml` | `CHOREGOS_ONTOLOGY_TRIAL=1` (see S45-05) |
+
+#### Names inside the trials (S45-32)
+
+| Former | New |
+| :-- | :-- |
+| Kubernetes namespaces, images and secret `essai-control`, `essai-run`, `essai-api`, `essai-orchestrator`, `essai-internal` (`trials/no-secret`) | `trial-control`, `trial-run`, `trial-api`, `trial-orchestrator`, `trial-internal` |
+| kind cluster `essai-sans-secret`, variable `ESSAI_INTERNAL_TOKEN` | `trial-no-secret`, `TRIAL_INTERNAL_TOKEN` |
+| Compose projects `essai-socle`, `essai-lakehouse`; images `choregos-api:essai`, `choregos-orchestrator:essai` | `trial-foundation`, `trial-lakehouse`; `choregos-api:trial`, `choregos-orchestrator:trial` |
+| Development credentials `essai-dev-only` and the S3 key `essai` | `trial-dev-only` and `trial` |
+| Agent role `analyse_infra` and the workflow actors and transitions of `workflow-it4it.yaml` (`analyste`, `exploitant`, `t-instruire`, `t-clore`, outputs `proposition` and `constat`) | `infra_analysis`, `analyst`, `operator`, `t-investigate`, `t-close`, outputs `proposal` and `finding` |
+| `python -m choregos_api.migrer` in the local-start compose file | `python -m choregos_api.migrate` |
+
+The Rust crate keeps its name `choregos-runtime-essai`, because `Cargo.lock` is recorded data.
+
+#### S45-43: the history-recording switch has an English name
+
+| Former | New | What an operator does |
+| :-- | :-- | :-- |
+| `CHOREGOS_ARCHIVER_HISTORIQUE` | `CHOREGOS_RECORD_HISTORY` | Nothing for CI: the former name still works (the English one is read first). A developer re-recording histories may use either. <!-- lang: fr-ok --> |
+
+The orchestrator test helpers that other test modules imported moved to `apps/orchestrator/tests/kits/`
+(`_jusqu_a` -> `wait_until_state`, `_demandes` -> `requests_of` / `requests_of_item`,
+`_worker_avec` -> `worker_with`, `DEPOT` -> `REPOSITORY`, and so on). They are test-internal: nothing
+to do. <!-- lang: fr-ok -->
+
+### Extension and edition API (external, until 0.23.0)
+
+Names an extension package or an edition imports. The former ones keep working, warn with a `DeprecationWarning` that names the replacement, and go in 0.23.0.
+
+#### S45-03: French keys read under both names
+
+| Former | New | What an operator does |
+| :-- | :-- | :-- |
+| `ecriture: true` in a tool an extension announces to the MCP door (`declarer_des_outils_pour_les_humains`) | `write: true` | Nothing today. An extension may declare `write`; `ecriture` is still read (`alias:external`, ADR 0098 §3 (f)). <!-- lang: fr-ok --> |
+| `TrainInput.seuil()` | `TrainInput.threshold()` | Nothing: an internal name, an alias keeps working. <!-- lang: fr-ok --> |
+
+The payload keys, error types and persisted values listed in ADR 0098 §4 (`effets`, `jusqu_a`,
+`cle`, `refus`, `AgentIndisponible`, `ontology.effet`, `params.ontologie`, the audit key
+`ecriture`, `TrainInput.seuil_de_relais` and the others) are not renamed: since S45-03 every reader
+also accepts the English spelling, nothing writes it yet (S45-39), and no row or history is
+rewritten. <!-- lang: fr-ok -->
+
+#### S45-04: the extension API in English, French names warned until 0.23.0
+
+An **extension** is a package loaded through the `choregos.plugins` entry point (a "plugin" is the
+ADR 0093 package). Every French name of the extension API below keeps working until 0.23.0 and
+raises a `DeprecationWarning` naming its English replacement. The two former modules
+`choregos_api.greffons` and `choregos_api.effets` are the same module objects as
+`choregos_api.extensions` and `choregos_api.effects`, so a patch on one is a patch on the other.
+<!-- lang: fr-ok -->
+
+#### `choregos_api.extensions` (was `choregos_api.greffons`) (S45-04)
+
+| Former | New |
+| :-- | :-- |
+| `declarer_un_routeur` | `declare_router` <!-- lang: fr-ok --> |
+| `routeurs_declares` | `declared_routers` <!-- lang: fr-ok --> |
+| `reinitialiser` | `reset` <!-- lang: fr-ok --> |
+| `declarer_une_section_d_administration` | `declare_admin_section` <!-- lang: fr-ok --> |
+| `sections_declarees` | `declared_sections` <!-- lang: fr-ok --> |
+| `chemins_d_une_section` | `section_paths` <!-- lang: fr-ok --> |
+| `FournisseurDOutils(lister, appeler)` | `ToolProvider(list_tools, call_tool)` <!-- lang: fr-ok --> |
+| `declarer_un_fournisseur_d_outils(nom, lister, appeler)` | `declare_tool_provider(name, list_tools, call_tool)` <!-- lang: fr-ok --> |
+| `fournisseurs_d_outils` | `tool_providers` <!-- lang: fr-ok --> |
+| `FournisseurHumain(lister, appeler, en_attente)` | `HumanToolProvider(list_tools, call_tool, pending)` <!-- lang: fr-ok --> |
+| `declarer_des_outils_pour_les_humains(nom, lister, appeler, en_attente)` | `declare_human_tools(name, list_tools, call_tool, pending)` <!-- lang: fr-ok --> |
+| `fournisseurs_humains` | `human_tool_providers` <!-- lang: fr-ok --> |
+| keywords `lister=`, `appeler=`, `en_attente=` (warn) | `list_tools=`, `call_tool=`, `pending=` <!-- lang: fr-ok --> |
+| `.lister`, `.appeler`, `.en_attente` of a provider | `.list_tools`, `.call_tool`, `.pending` <!-- lang: fr-ok --> |
+| `declarer_un_installateur_de_gabarit` | `declare_template_installer` <!-- lang: fr-ok --> |
+| `installateurs_de_gabarit` | `template_installers` <!-- lang: fr-ok --> |
+| `GESTES` | `GESTURES` <!-- lang: fr-ok --> |
+| `DemandeDeGeste(geste, org, principal, cible)` | `GestureRequest(gesture, org, principal, target)` <!-- lang: fr-ok --> |
+| `.geste`, `.cible` of a request | `.gesture`, `.target` <!-- lang: fr-ok --> |
+| `GesteRefuse(raison, nature)` | `GestureRefused(reason, nature)` <!-- lang: fr-ok --> |
+| nature `interdit`, `conflit` (warn; `.nature` always reads the English one) | `forbidden`, `conflict` <!-- lang: fr-ok --> |
+| `declarer_un_controle_de_geste` | `declare_gesture_check` <!-- lang: fr-ok --> |
+| `controler` | `check_gesture` <!-- lang: fr-ok --> |
+| `reinitialiser_les_controles` | `reset_gesture_checks` <!-- lang: fr-ok --> |
+| `_ROUTEURS`, `_FOURNISSEURS_D_OUTILS`, `_FOURNISSEURS_HUMAINS`, `_INSTALLATEURS`, `_CONTROLES`, `_televersements` (private, no warning) | `_ROUTERS`, `_TOOL_PROVIDERS`, `_HUMAN_TOOL_PROVIDERS`, `_INSTALLERS`, `_GESTURE_CHECKS`, `_uploads` <!-- lang: fr-ok --> |
+
+Unchanged: `signatures`, `SECTION_FEATURES` (its three values `block_permission`, `asset_upload`,
+`section_icon`), `declare_theme_provider`, `theme_provider`.
+
+#### `choregos_api.effects` (was `choregos_api.effets`) (S45-04)
+
+| Former | New |
+| :-- | :-- |
+| `EffetRefuse` | `EffectRefused` <!-- lang: fr-ok --> |
+| `ContexteEffet` | `EffectContext` <!-- lang: fr-ok --> |
+| `Executer` | `Execute` <!-- lang: fr-ok --> |
+| `declarer_un_effet(nom, executer, politique=)` (`politique=` warns) | `declare_effect(name, execute, policy=)` <!-- lang: fr-ok --> |
+| `politique_de_l_effet` | `effect_policy` <!-- lang: fr-ok --> |
+| `effet` | `effect` <!-- lang: fr-ok --> |
+| `effets_declares` | `declared_effects` <!-- lang: fr-ok --> |
+| `rendre` | `render` <!-- lang: fr-ok --> |
+| `reinitialiser` | `reset` <!-- lang: fr-ok --> |
+| `_EFFETS`, `_POLITIQUES`, `_appel_de_connecteur`, `_appeler_le_connecteur`, `_arguments_de_la_plateforme` (private, no warning) | `_EFFECTS`, `_POLICIES`, `_connector_call`, `_call_the_connector`, `_platform_arguments` <!-- lang: fr-ok --> |
+
+The DSL value `verifier` (and `motif`, `oui`) of the `check` effect is a recorded value, not renamed.
+The Temporal error type string `EffetRefuse` is not renamed either.
+<!-- lang: fr-ok -->
+
+#### What an operator does (S45-04)
+
+Nothing today: no deployment setting, row or workflow history changes. A package that imports these
+names (choregos-ee) switches to the English ones before 0.23.0, which removes the former names.
+
+#### `choregos_api.edition` (external, removed in 0.23.0) (S45-12)
+
+An extension that calls the edition API reads the new names; the former ones warn.
+
+| Former | New | What an operator does |
+| :-- | :-- | :-- |
+| `COMMUNAUTAIRE`, `ENTREPRISE` | `COMMUNITY`, `ENTERPRISE` | Rename them in your extension before 0.23.0. <!-- lang: fr-ok --> |
+| `declarer(nom, *, fonctions=...)` | `declare(name, *, features=...)` (`publisher=`, `version=`, `licence=` unchanged; `fonctions=` still works and warns) | Rename the call and the keyword before 0.23.0. <!-- lang: fr-ok --> |
+| `declarer_le_mappeur_de_groupes`, `mappeur_de_groupes` | `declare_group_mapper`, `group_mapper` | Rename before 0.23.0. <!-- lang: fr-ok --> |
+| `courante`, `fonctions`, `est_entreprise` | `current`, `features`, `is_enterprise` | Rename before 0.23.0. <!-- lang: fr-ok --> |
+| `SessionRefusee`, `declarer_une_validation_de_session`, `validations_de_session` | `SessionRefused`, `declare_session_validation`, `session_validations` | Rename before 0.23.0. <!-- lang: fr-ok --> |
+| `declarer_un_administrateur_de_plateforme`, `administrateurs_de_plateforme` | `declare_platform_administrator`, `platform_administrators` | Rename before 0.23.0. <!-- lang: fr-ok --> |
+| `reinitialiser` | `reset` | Rename before 0.23.0. <!-- lang: fr-ok --> |
+| `Principal.authentifie_le` (read and write) | `Principal.authenticated_at` | Read the new field before 0.23.0; the former one is a property with a getter and a setter. <!-- lang: fr-ok --> |
+
+`Principal(authentifie_le=...)` as a constructor keyword is not kept: no code in the repository builds
+a `Principal` that way, and an extension builds one from a session, not from a literal.
+<!-- lang: fr-ok -->
+
+### Python modules and names (aliases)
+
+Internal names. A former module path is a shim that is the same module object as the new one; a former name is an alias. An operator has nothing to change unless a row says so.
+
+#### `choregos_core` (S45-04)
+
+| Former | New |
+| :-- | :-- |
+| `quotas.Quota(cpu, memoire, pods)`, `.memoire` (the keyword warns) | `Quota(cpu, memory, pods)`, `.memory` <!-- lang: fr-ok --> |
+| `quotas.DEFAUT`, `Fournisseur`, `declarer_un_quota`, `quota_pour`, `reinitialiser` | `DEFAULT`, `QuotaProvider`, `declare_quota`, `quota_for`, `reset` <!-- lang: fr-ok --> |
+| `admission.DemandeDeRun`, `AdmissionRefusee`, `Controle` | `RunRequest`, `AdmissionRefused`, `AdmissionCheck` <!-- lang: fr-ok --> |
+| `admission.declarer_une_admission`, `admissions_declarees`, `verifier`, `reinitialiser` | `declare_admission`, `declared_admissions`, `check`, `reset` <!-- lang: fr-ok --> |
+| `secrets.SecretIntrouvable`, `declarer_un_resolveur` | `SecretNotFound`, `declare_resolver` <!-- lang: fr-ok --> |
+
+#### S45-05: English entry points, ontology activation variable and agent catalogue, French names kept until 0.23.0
+
+Every former name below keeps working until 0.23.0. The former modules `choregos_api.migrer`,
+`choregos_api.outils` and `choregos_core.catalogue_d_agents` are shims; the former package is the
+same module object as `choregos_core.agent_catalogue`, so a patch on one is a patch on the other.
+<!-- lang: fr-ok -->
+
+#### `choregos_api.migrate` (was `choregos_api.migrer`) (S45-05)
+
+| Former | New |
+| :-- | :-- |
+| `emplacements_des_greffons` | `extension_locations` <!-- lang: fr-ok --> |
+| `GROUPE_DE_MIGRATIONS` | `MIGRATIONS_GROUP` <!-- lang: fr-ok --> |
+| `configuration(avec_les_greffons=...)` (wins when given) | `configuration(with_extensions=...)` <!-- lang: fr-ok --> |
+
+`choregos-admin orgs bootstrap` now prints `organisations created: ...; admins: ...` (`none` when
+nothing was created) instead of the French sentence; scripts that matched `aucune` match `none`.
+
+#### `choregos_core.agent_catalogue` (was `choregos_core.catalogue_d_agents`) (S45-05)
+
+| Former | New |
+| :-- | :-- |
+| `DOSSIER` | `FOLDER` <!-- lang: fr-ok --> |
+| `EntreeDuCatalogue(genre, resume, portee, ...)` | `CatalogueEntry(kind, summary, reach, ...)` <!-- lang: fr-ok --> |
+| `.genre`, `.resume`, `.portee` of an entry (read-only) | `.kind`, `.summary`, `.reach` <!-- lang: fr-ok --> |
+| `.empreinte` of an entry | `.digest` <!-- lang: fr-ok --> |
+| `entrees()` | `entries()` <!-- lang: fr-ok --> |
+| `entree(slug)` | `entry(slug)` (reads `entries()`, so a patch of `entries` or `entrees` is seen) <!-- lang: fr-ok --> |
+| `skills_du_catalogue()` | `catalogue_skills()` <!-- lang: fr-ok --> |
+| `fichiers_de_la_skill(nom)` | `skill_files(name)` <!-- lang: fr-ok --> |
+| `_contexte()` (private) | `_context()` <!-- lang: fr-ok --> |
+| `_contexte.md` | `_context.md` (content unchanged: every digest is the same) <!-- lang: fr-ok --> |
+
+Unchanged: `Catalogue`, `CatalogueSkill`, `EvalCase`, `catalogue`, `entry_of`, `load`, `of_plugin`,
+`offline_directory`, `evaluate`, `cases`, `AgentEvalResult`.
+
+The catalogue is now only the loader and `_context.md`: the 23 agents and 6 clients left the core in
+S43-09, so there is no YAML left to translate in this package.
+
+#### S45-07: the workflow DSL, gates, policy, instructions and presets in English
+
+| Former | New | What an operator does |
+| :-- | :-- | :-- |
+| `choregos_core.dsl.exigences` (`Exigence`, `exigences`, `ORDRE`, `ROLES_DANS_UN_DEPOT`, `ROLES_EN_PRODUCTION`) | `choregos_core.dsl.requirements` (`Requirement`, `requirements`, `ORDER`, `ROLES_IN_A_REPOSITORY`, `ROLES_IN_PRODUCTION`) | Nothing: an internal module path, a shim keeps it importable. <!-- lang: fr-ok --> |
+| `Exigence.capacite`, `Exigence.raisons` | `Requirement.capability`, `Requirement.reasons` | Nothing: internal attributes, read-only aliases keep working. <!-- lang: fr-ok --> |
+| `choregos_core.dsl.trains`: `approbation_du_train`, `env_du_train`, `train_apres_fusion`, `prend_le_train`, `ApprobationDuTrain` | `train_approval`, `train_env`, `train_after_merge`, `takes_the_train`, `TrainApproval` | Nothing: internal names, aliases keep working. <!-- lang: fr-ok --> |
+| `choregos_core.dsl.dates`: `DateIllisible`, `champ_de`, `echeance` | `UnreadableDate`, `field_of`, `due_date` | Nothing: internal names, aliases keep working. <!-- lang: fr-ok --> |
+| `choregos_core.dsl.edition`: `EditionRefusee`, `editer`, `PREFIXES_A_EFFET`, `Edition.avertissements` | `EditRefused`, `edit`, `PREFIXES_WITH_EFFECT`, `Edition.warnings` | Nothing: internal names, aliases keep working. <!-- lang: fr-ok --> |
+| `choregos_core.gates`: `ACTION_REGLEE`, `MOTIF_ADR` | `ACTION_SETTLED`, `ADR_PATTERN` | Nothing: internal names, aliases keep working. <!-- lang: fr-ok --> |
+| `choregos_core.instructions`: `rendre_les_instructions`, `erreurs_des_instructions`, `VARIABLES_D_EXEMPLE` | `render_instructions`, `instruction_errors`, `SAMPLE_VARIABLES` | Nothing: internal names, aliases keep working. <!-- lang: fr-ok --> |
+| `choregos_core.dsl.oublier_les_templates`, `validator.GATES_A_MATIERE`, `policy.CLES_D_APPROBATION` | `forget_templates`, `GATES_NEEDING_PARAMS`, `APPROVAL_KEYS` | Nothing: no importer outside core, renamed without an alias. <!-- lang: fr-ok --> |
+
+Three messages are now English: the unknown-template error of `template_path`
+(`unknown workflow template: <name> (known: ...)`), the unknown-preset error of `load_preset`
+(`unknown policy preset: <name> (known: ...)`) and the unreadable-date error of
+`choregos_core.dsl.dates` (`unreadable date expression: ...`). Nothing in the platform matches
+them; a script that matched the French text must read the English one. Issue codes, DSL keywords
+and JSON keys are unchanged.
+
+The comments of the shipped templates and presets are English; their parsed content (and so the
+workflow fingerprint) is unchanged.
+
+#### Python names (internal: aliases keep working, nothing to do) (S45-08)
+
+| Former | New |
+| :-- | :-- |
+| `choregos_core.acces` (`Acces`, `RapportAcces`, `rapport_d_acces`) | `choregos_core.access` (`AccessLine`, `AccessReport`, `access_report`) |
+| `Acces.cible`, `.demandes`, `.refus`, `.motifs`, `.refuse` | `AccessLine.target`, `.requests`, `.refusals`, `.reasons`, `.refused` |
+| `RapportAcces.acces`, `.evenements`, `.deduites`, `.refuses`, `.par_nature()` | `AccessReport.lines`, `.events`, `.inferred`, `.refused_lines`, `.by_nature()` |
+| `choregos_core.sorties.explication` | `choregos_core.exit_codes.explanation` |
+| `mcp.ERREUR_DE_SYNTAXE`, `REQUETE_INVALIDE`, `METHODE_INCONNUE`, `PARAMETRES_INVALIDES`, `ERREUR_INTERNE` | `PARSE_ERROR`, `INVALID_REQUEST`, `METHOD_NOT_FOUND`, `INVALID_PARAMS`, `INTERNAL_ERROR` (codes unchanged) |
+| `mcp.negocier`, `version_acceptable`, `erreur`, `resultat_texte`, `est_notification`, `defaut_du_message` | `negotiate`, `acceptable_version`, `error`, `text_result`, `is_notification`, `message_defect` |
+| `resultat_texte(en_erreur=, structure=)` | `text_result(is_error=, structured=)` (the former keywords are still accepted) |
+| `catalogue.AppelHttp`, `AppelMcp`, `OutilCatalogue` | `HttpCall`, `McpCall`, `CatalogueTool` |
+| `OutilCatalogue.ouvert_a`, `Catalogue.outils`, `Catalogue.par_nom` | `CatalogueTool.open_to`, `Catalogue.tools`, `Catalogue.by_name` |
+| `catalogue.OutilInconnuError`, `ArgumentRefuseError`, `valider_les_arguments`, `construire_requete`, `charger_catalogue`, `GABARIT` | `UnknownToolError`, `ArgumentRefusedError`, `validate_arguments`, `build_request`, `load_catalogue`, `PLACEHOLDER` |
+| `secrets.est_une_reference_du_magasin`, `ReferenceInvalide`, `VariableRefusee`, `PATTERN_PAR_DEFAUT`, `verifier`, `resoudre`, `reinitialiser` | `is_store_reference`, `InvalidReference`, `RefusedVariable`, `DEFAULT_PATTERN`, `check`, `resolve`, `reset` |
+
+`choregos_core` re-exports `Acces`, `RapportAcces`, `rapport_d_acces`, `OutilCatalogue`,
+`charger_catalogue` and `construire_requete` as aliases of the English objects.
+
+#### S45-09: the fakes, families, memory, market data, identity, documents and storage adapters in English
+
+| Former | New | What an operator does |
+| :-- | :-- | :-- |
+| `python -m choregos_adapters.fakes.serveur` | `python -m choregos_adapters.fakes.server` | Change the container command of the demo fakes when you next edit it (the chart switches in S45-33); the former command still serves (`alias:external`, removed in 0.23.0). <!-- lang: fr-ok --> |
+| `CONNECTOR_DEMO_JETON` | `CONNECTOR_DEMO_TOKEN` | Rename it in your values or `.env`; the former variable is still read when the new one is unset, and warns (`alias:external`, removed in 0.23.0). <!-- lang: fr-ok --> |
+| `choregos_adapters.fakes.rh` | `choregos_adapters.fakes.hr` | Nothing: an internal module path, a shim keeps it importable. <!-- lang: fr-ok --> |
+| `choregos_adapters.fakes.serveur` | `choregos_adapters.fakes.server` | Nothing: a shim keeps it importable. <!-- lang: fr-ok --> |
+| `choregos_adapters.fakes.cd_de_demo` | `choregos_adapters.fakes.demo_cd` | Nothing: a shim keeps it importable. <!-- lang: fr-ok --> |
+| `choregos_adapters.familles` | `choregos_adapters.families` | Nothing: a shim keeps it importable. <!-- lang: fr-ok --> |
+| `choregos_adapters.memory.lexicale` | `choregos_adapters.memory.lexical` | Nothing: a shim keeps it importable. <!-- lang: fr-ok --> |
+| `FakeFournisseur`, `FakeTransporteur`, `FauxMetier` | `FakeSupplier`, `FakeCarrier`, `BusinessFake` | Nothing: internal names, aliases keep working. <!-- lang: fr-ok --> |
+| `Guichet`, `GuichetDistant`, `serveur_mcp(faux, jeton=)` | `Desk`, `RemoteDesk`, `mcp_server(fake, token=)` | Nothing: internal names, aliases (and the former `jeton=` keyword) keep working. <!-- lang: fr-ok --> |
+| `FAUX_PAR_FAMILLE`, `OUTILS_DU_FOURNISSEUR`, `ANCIENS_OUTILS_DU_FOURNISSEUR` | `FAKES_BY_FAMILY`, `SUPPLIER_TOOLS`, `FORMER_SUPPLIER_TOOLS` | Nothing: internal names, aliases keep working. <!-- lang: fr-ok --> |
+| `FakeMdm(cle_attendue=)`, `.postes`, `.etat()`; `FakeSupplier.commandes`; `FakeCarrier.envois` | `expected_key=`, `.devices`, `.state()`; `.orders`; `.shipments` | Nothing: internal names, the former keyword and attributes keep working. <!-- lang: fr-ok --> |
+| `ApplicationDeDemo(jeton=)`, `.faux`, `.annuaire`, `.serveurs` | `DemoApplication(token=)`, `.fakes`, `.directory`, `.servers` | Nothing: internal names, aliases keep working. <!-- lang: fr-ok --> |
+| `CdDeDemo`, `FakeCdDeDemo`, `OPERATIONS_CD_DE_DEMO` | `DemoCd`, `FakeDemoCd`, `DEMO_CD_OPERATIONS` | Nothing: internal names, aliases keep working. <!-- lang: fr-ok --> |
+| `FakeEntra(secret_attendu=)`, `.unite`, `.comptes`, `.groupes`, `.ajouter_compte(dans_l_unite=)` | `expected_secret=`, `.unit`, `.accounts`, `.groups`, `.add_account(in_unit=)` | Nothing: internal names, aliases keep working. <!-- lang: fr-ok --> |
+| `FakeNotifier.panne` | `FakeNotifier.failure` | Nothing: internal name, an alias keeps working. <!-- lang: fr-ok --> |
+| `EntraIdentity.unite`, `HorsDeLUnite` | `EntraIdentity.unit`, `OutsideUnit` | Nothing: internal names, aliases keep working. <!-- lang: fr-ok --> |
+| `ModelesMemoire`, `LexicalMemory.modeles` | `MemoryModels`, `LexicalMemory.models` | Nothing: internal names, aliases keep working. <!-- lang: fr-ok --> |
+| `OPERATIONS_MDM`, `OPERATIONS_EXPEDITION`, `OPERATIONS_CONTROLE_D_ACCES`, `FAMILLES` | `MDM_OPERATIONS`, `SHIPPING_OPERATIONS`, `ACCESS_CONTROL_OPERATIONS`, `FAMILIES` | Nothing: internal names, aliases keep working. <!-- lang: fr-ok --> |
+| `executer(operation, params)` of the demo desks, `EntraIdentity`, the market data providers and the netops adapters | `execute(operation, params)` | Nothing: the connector seam still calls `executer`, which is kept as a class alias until S45-10 switches its callers. <!-- lang: fr-ok --> |
+| The Slack button "Ouvrir dans Choregos" and the error "ni `bot_token` ni `webhook_url` configurés" | "Open in Choregos" and "neither `bot_token` nor `webhook_url` is configured" | Nothing; a message you matched on, if any, now reads in English. <!-- lang: fr-ok --> |
+
+The HR fake keeps answering the former tenant tool names (`commander_poste`, `suivi_commande`, the
+`modele` parameter): they are tenant names, not renamed here. Two messages of the fakes stay French
+because tests outside this story pin them (`clé refusée`, `inscrit pour un autre utilisateur`; and
+`projet inconnu pour la mémoire` of the lexical memory); they are translated with the tests that
+match them. <!-- lang: fr-ok -->
+
+#### S45-10: the connector registry, the extension loader, trackers, executors, gateways and SCM in English
+
+Every former name below keeps working: a module path through a shim, a name through a typed alias,
+and the names that tests patch (`FAUX_ENTRA`, `FAUX_MARKETDATA`, `FAUX_WEB_SEARCH`,
+`charger_les_greffons`, `GROUPE_DE_GREFFONS`) through `choregos_core.compat.alias_names`: reading,
+patching and undoing the former name reach the English one. The aliases are internal
+(`alias:internal`); an operator has nothing to change. <!-- lang: fr-ok -->
+
+| Former | New | What an operator does |
+| :-- | :-- | :-- |
+| `choregos_adapters.charger_les_greffons()` | `choregos_adapters.load_extensions()` | Nothing: the former name still loads the extensions (`apps/api` and the orchestrator worker keep calling it until their own stories switch). <!-- lang: fr-ok --> |
+| `choregos_adapters.GROUPE_DE_GREFFONS` | `choregos_adapters.EXTENSION_GROUP` | Nothing. Its value is still `choregos.plugins`: the entry-point group never changes (ADR 0093, ADR 0098 §7). <!-- lang: fr-ok --> |
+| `choregos_adapters.FAUX_ENTRA`, `FAUX_MARKETDATA`, `FAUX_WEB_SEARCH` | `FAKE_ENTRA`, `FAKE_MARKETDATA`, `FAKE_WEB_SEARCH` | Nothing: the process-wide fakes; patching a former name patches the English one. <!-- lang: fr-ok --> |
+| `choregos_adapters.POLITIQUES`, `registry.TYPES_PAR_DEFAUT`, `type_par_defaut`, `configuration_resolue`, `references_de_secret`, `schema_d_entree` | `POLICIES`, `DEFAULT_TYPES`, `default_type`, `resolved_configuration`, `secret_references`, `build_input_schema` | Nothing: internal names, typed aliases keep working. <!-- lang: fr-ok --> |
+| `choregos_adapters.base.CAPACITES_EXECUTEUR` | `EXECUTOR_CAPABILITIES` | Nothing: an internal name, an alias keeps working. <!-- lang: fr-ok --> |
+| `choregos_adapters.tracker.interne` | `choregos_adapters.tracker.internal` | Nothing: a shim keeps the former path importable. <!-- lang: fr-ok --> |
+| `choregos_adapters.tracker.champs` (`COUT`, `TAILLE`, `RISQUE`, `ANCIENS_NOMS`, `NOMS_ACTUELS`, `nom_actuel`, `nom_present`) | `choregos_adapters.tracker.fields` (`COST`, `SIZE`, `RISK`, `FORMER_NAMES`, `CURRENT_NAMES`, `current_name`, `present_name`) | Nothing: a shim keeps the former path importable, with `nom_actuel` and `nom_present`. The French board field names (`Coût (€)`, `Taille`, `Risque`) stay in `FORMER_NAMES`, as data: they are names a tracker still carries. <!-- lang: fr-ok --> |
+| `tests`: `Fil`, `sans_attente`, `.requetes`, `.corps()`, `.envoyees()` of `packages/adapters/tests/_transport.py` | `Wire`, `no_wait`, `.requests`, `.body()`, `.sent()` | Nothing: test helpers; the former names are kept for the tests of other stories (`test_ecphoria.py`). <!-- lang: fr-ok --> |
+
+Messages that were French and are now English (an operator who matched one now reads English):
+
+| Former | New |
+| :-- | :-- |
+| `en attente d'une place (plafond N par namespace)` (a queued Job's status message) | `waiting for a slot (cap N per namespace)` (as ADR 0013 already documents) <!-- lang: fr-ok --> |
+| `runner sorti en N (...)`, `runner jamais démarré : ...`, `aucun pod du run : ...` | `runner exited with N (...)`, `runner never started: ...`, `no pod for the run: ...` <!-- lang: fr-ok --> |
+| `connecteur `gateway: direct` refusé en prod : ...`, `connecteur `<famille>: demo` refusé en ...` | `connector `gateway: direct` refused in prod: ...`, `connector `<family>: demo` refused in ...` <!-- lang: fr-ok --> |
+| `aucun adaptateur `x` pour `kind` (disponibles : ...)` | `no adapter `x` for `kind` (available: ...)` <!-- lang: fr-ok --> |
+| `greffon « x » (...) : chargement impossible` | `extension "x" (...): cannot load` <!-- lang: fr-ok --> |
+| the GitOps promotion PR body (`Promotion du lot ... vers ...`) | `Promotion of the batch ... to ...` <!-- lang: fr-ok --> |
+
+What does not change, because it is stored or wired: the connector type ids (`plugin`, `github-issues`,
+`jira`, ...), the config and secret field names, the `choregos.plugins` entry-point group, the
+`greffon:` cost-ledger prefix and the `ecriture` extension tool key. <!-- lang: fr-ok -->
+
+#### S45-11: the runner in English
+
+The runner (`packages/runner`) is English. Every name below is internal: the former module keeps
+importing and nothing changes for an operator. No environment variable, ACP method or persisted
+key was renamed.
+<!-- lang: fr-ok -->
+
+| Former | New | What an operator does |
+| :-- | :-- | :-- |
+| `choregos_runner.outils_locaux` | `choregos_runner.local_tools` | Nothing: the former module is a shim. <!-- lang: fr-ok --> |
+| `outils_locaux.demarrer_si_absent`, `arreter` | `local_tools.start_if_absent`, `stop` | Nothing: the former names are aliases. <!-- lang: fr-ok --> |
+| `choregos_runner.skills.poser`, `SkillInvalide`, `REPLI` | `place_skills`, `InvalidSkill`, `FALLBACK_DIR` | Nothing: used only inside the runner. <!-- lang: fr-ok --> |
+| `choregos_runner.runner.RAPPORT_DEPART`, `ARBRE_VIDE` | `REPORT_START_COMMIT`, `EMPTY_TREE` | Nothing: used only inside the runner. <!-- lang: fr-ok --> |
+| `choregos_runner.exits` (read `choregos_core.sorties`) | reads `choregos_core.exit_codes` | Nothing. <!-- lang: fr-ok --> |
+
+The run-event key `demarre` of the `tools.local` journal event is persisted and stays until S45-39.
+<!-- lang: fr-ok -->
+
+#### S45-12: API root modules, edition extension API, Principal and configuration in English
+
+The API root modules are English. The five renamed modules keep their former dotted path: each
+former module is the same module object as the new one (`importlib.import_module("choregos_api.fraicheur")
+is choregos_api.freshness`), so a patch on one is a patch on the other. The edition extension API
+(`choregos_api.edition`) is an `alias:external` window: every former name keeps working until 0.23.0
+and warns with a `DeprecationWarning` that names its replacement. The other former names below are
+internal and do not warn. Settings fields and environment variables did not change.
+<!-- lang: fr-ok -->
+
+#### Modules (S45-12)
+
+| Former | New | What an operator does |
+| :-- | :-- | :-- |
+| `choregos_api.adaptateurs` | `choregos_api.adapter_wiring` | Nothing: the former module is a shim. <!-- lang: fr-ok --> |
+| `choregos_api.amorcage` | `choregos_api.bootstrap` | Nothing: the former module is a shim. <!-- lang: fr-ok --> |
+| `choregos_api.fraicheur` | `choregos_api.freshness` | Nothing: the former module is a shim. <!-- lang: fr-ok --> |
+| `choregos_api.limiteur` | `choregos_api.rate_limit` | Nothing: the former module is a shim. <!-- lang: fr-ok --> |
+| `choregos_api.metriques` | `choregos_api.metrics` | Nothing: the former module is a shim. <!-- lang: fr-ok --> |
+
+#### Names inside the root modules (internal, no warning) (S45-12)
+
+| Former | New |
+| :-- | :-- |
+| `adaptateurs.brancher_memoire_lexicale` | `adapter_wiring.attach_lexical_memory` <!-- lang: fr-ok --> |
+| `amorcage.amorcer` | `bootstrap.bootstrap_installation` (the returned keys are unchanged: `organisations`, `administrateurs`) <!-- lang: fr-ok --> |
+| `fraicheur.age_de_l_authentification`, `exiger_une_authentification_fraiche` | `freshness.authentication_age`, `require_fresh_authentication` <!-- lang: fr-ok --> |
+| `limiteur.Limiteur(par_minute)`, `.admet`, `installer`, `FENETRE_S` | `rate_limit.RateLimiter(per_minute)`, `.admits`, `install`, `WINDOW_S` (the keyword `par_minute=` still works) <!-- lang: fr-ok --> |
+| `metriques.NOMS`, `ETATS_TRAIN`, `SECONDES_DEMARRAGE`, `SECONDES_LIVRAISON`, `ENVIRONNEMENTS` | `metrics.NAMES`, `TRAIN_STATES`, `START_SECONDS`, `DELIVERY_SECONDS`, `ENVIRONMENTS` <!-- lang: fr-ok --> |
+| `metriques.registre`, `requetes_http`, `Instantane`, `CollecteurPlateforme` | `metrics.registry`, `http_requests`, `Snapshot`, `PlatformCollector` <!-- lang: fr-ok --> |
+| `metriques.exposer`, `rafraichir`, `boucle_de_rafraichissement` | `metrics.expose`, `refresh`, `refresh_loop` <!-- lang: fr-ok --> |
+| `catalogue.outils_du_projet`, `appeler`, `vider_cache` | `catalogue.project_tools`, `call`, `clear_cache` <!-- lang: fr-ok --> |
+| `deps.get_db_plateforme`, `DbPlateforme` | `deps.get_platform_db`, `PlatformDb` <!-- lang: fr-ok --> |
+| `deps.jeton_rest`, `noter_l_usage` | `deps.is_rest_token`, `record_usage` <!-- lang: fr-ok --> |
+| `deps.exiger_admin_de_plateforme`, `_valider_la_session` | `deps.require_platform_admin`, `_validate_session` <!-- lang: fr-ok --> |
+| `events.diffuser`, `CANAL`, `TAILLE_MAX` | `events.broadcast`, `CHANNEL`, `MAX_PAYLOAD_BYTES` (the PostgreSQL channel value `choregos_events` is unchanged) <!-- lang: fr-ok --> |
+| `events.RelaisPostgres` with `.demarrer()`, `.arreter()`, `.recus` | `events.PostgresRelay` with `.start()`, `.stop()`, `.received` <!-- lang: fr-ok --> |
+| `temporal._cause_lisible` | `temporal._readable_cause` <!-- lang: fr-ok --> |
+| `main._verifier_l_edition` | `main._check_the_edition` <!-- lang: fr-ok --> |
+
+#### S45-14: the inbound MCP door in English
+
+`choregos_api.mcp` (ADR 0030) is English. The three renamed modules keep their former dotted path:
+each former module is the same module object as the new one, so a patch on one is a patch on the
+other. Every name the A2A door and the tests of other stories import keeps a typed alias. MCP tool
+names, scopes, JSON-RPC errors, HTTP statuses and the persisted audit keys (`jeton`, `ecriture`, the
+value `refus`) did not change. The two log keys of the `mcp.call` event are now `tool` and `caller`
+(they were `outil` and `appelant`). Nothing here is an operator setting.
+<!-- lang: fr-ok -->
+
+#### Modules (S45-14)
+
+| Former | New | What an operator does |
+| :-- | :-- | :-- |
+| `choregos_api.mcp.appelant` | `choregos_api.mcp.caller` | Nothing: the former module is a shim. <!-- lang: fr-ok --> |
+| `choregos_api.mcp.garde_fous` | `choregos_api.mcp.limits` | Nothing: the former module is a shim. <!-- lang: fr-ok --> |
+| `choregos_api.mcp.outils` | `choregos_api.mcp.tools` | Nothing: the former module is a shim. <!-- lang: fr-ok --> |
+
+#### Names (internal, no warning) (S45-14)
+
+| Former | New |
+| :-- | :-- |
+| `Appelant(jeton, portees, cle, projet_lie, org_du_projet_lie, motifs)`, `.ecrit` | `Caller(token, scopes, key, bound_project, bound_project_org, reasons)`, `.writes` (the former keywords and attributes still work) <!-- lang: fr-ok --> |
+| `Refus(statut, message, erreur=)`, `.statut`, `.erreur` | `Refusal(status, message, error=)`, `.status`, `.error` (the former ones still work) <!-- lang: fr-ok --> |
+| `PORTEES_MCP`, `identifier`, `incarner_l_agent` | `MCP_SCOPES`, `identify`, `act_as_agent` <!-- lang: fr-ok --> |
+| `APPELS_PAR_MINUTE`, `ECRITURES_PAR_JOUR`, `TAILLE_MAX`, `LIMITEUR`, `tronquer`, `ecritures_du_jour` | `CALLS_PER_MINUTE`, `WRITES_PER_DAY`, `MAX_SIZE`, `RATE_LIMITER`, `truncate`, `writes_today` <!-- lang: fr-ok --> |
+| `Outil(nom, titre, ..., ecriture, executer)`, `OutilRefuse`, `Contexte`, `Executeur`, `annonces`, `outils` | `Tool(name, title, ..., write, execute)`, `ToolRefused`, `Context`, `Executor`, `announced_tools`, `core_tools` <!-- lang: fr-ok --> |
+| `_outils_des_greffons`, `_executeur_de_greffon` | `_extension_tools`, `_extension_executor` (private) <!-- lang: fr-ok --> |
+| `oauth.emetteur`, `metadonnees`, `valider`, `JetonRefuse`, `CLES`, `ALGORITHMES`, `DUREE_DU_CACHE` | `oauth.issuer_of`, `metadata`, `validate`, `TokenRefused`, `KEYS`, `ALGORITHMS`, `CACHE_TTL_S` (only `emetteur` keeps an alias) <!-- lang: fr-ok --> |
+| `transport.TAILLE_MAX_DU_CORPS`, `_origines_admises`, `_refus_http(erreur_oauth=, chemin=)` | `MAX_BODY_SIZE`, `_allowed_origins`, `_http_refusal(oauth_error=, path=)` (the former keywords still work) <!-- lang: fr-ok --> |
+
+Unchanged: `SCOPES_A2A`, `caller_of_token`, the audit keys `jeton` and `ecriture` and the audit value
+`refus` (ADR 0098 §4, S45-39 switches them), the entry-point group value `choregos.plugins`.
+<!-- lang: fr-ok -->
+
+#### S45-15: the agent, skill, auth, project and work-item routers are English
+
+Routes, operation ids, request and response fields, error codes and persisted audit keys did not
+change. The OpenAPI descriptions that FastAPI takes from the routers' docstrings are now English.
+
+#### Names (internal, no warning) (S45-15)
+
+| Former | New | What an operator does |
+| :-- | :-- | :-- |
+| `routers.auth.oublier_la_decouverte` | `forget_discovery` | Nothing: the former name is an alias. <!-- lang: fr-ok --> |
+| `routers.auth.roles_des_groupes` | `roles_from_groups` | Nothing: the former name is an alias (an edition's group mapper receives the same function). <!-- lang: fr-ok --> |
+| the routers' imports of `exiger_admin_de_plateforme`, `DbPlateforme`, `mappeur_de_groupes`, `est_entreprise`, `exiger_une_authentification_fraiche`, `outils_du_projet`, `choregos_api.greffons`, `DemandeDeGeste`, `controler`, `sections_declarees` | `require_platform_admin`, `PlatformDb`, `group_mapper`, `is_enterprise`, `require_fresh_authentication`, `project_tools`, `choregos_api.extensions`, `GestureRequest`, `check_gesture`, `declared_sections` | Nothing: the routers read the English names that S45-04 and S45-12 introduced. <!-- lang: fr-ok --> |
+
+#### S45-17: the action, agent, definition, template and installation services are English
+
+Routes, operation ids, response fields, error codes and every persisted value did not change.
+Every former name below keeps working: it is an alias in the module that defines the new name, and
+the seven renamed modules leave a shim at their former path that is the same module object, so a
+patch on one is a patch on the other. Nothing here needs an operator action. Importers (the
+orchestrator, the ontology, migrations, the broker, `services/__init__.py`, tests) were not switched:
+they still use the former names.
+
+#### Modules (`choregos_api.services`) (S45-17)
+
+| Former | New | What an operator does |
+| :-- | :-- | :-- |
+| `couts` | `costs` | Nothing: the former path is a shim. <!-- lang: fr-ok --> |
+| `evenements` | `events` | Nothing: the former path is a shim. <!-- lang: fr-ok --> |
+| `memoire` | `memory` | Nothing: the former path is a shim. <!-- lang: fr-ok --> |
+| `projets` | `projects` | Nothing: the former path is a shim. <!-- lang: fr-ok --> |
+| `gabarits` | `templates` | Nothing: the former path is a shim. <!-- lang: fr-ok --> |
+| `catalogue_d_agents` | `agent_catalogue` | Nothing: the former path is a shim (it re-exports `DIVERGE`). <!-- lang: fr-ok --> |
+| `connecteurs` | `connectors` | Nothing: the former path is a shim. <!-- lang: fr-ok --> |
+
+#### Names (S45-17)
+
+| Former | New | What an operator does |
+| :-- | :-- | :-- |
+| `agents.AgentIndisponible` | `AgentUnavailable` (the Temporal error type string stays `AgentIndisponible` until S45-39) | Nothing: alias. <!-- lang: fr-ok --> |
+| `agents.AgentResolu` | `ResolvedAgent` | Nothing: alias. <!-- lang: fr-ok --> |
+| `agents.empreinte` | `digest` (algorithm and output unchanged: it computes `agent_versions.checksum`) | Nothing: alias, migration `20261016_1500` still imports the former name. <!-- lang: fr-ok --> |
+| `agents.erreurs_d_une_version` | `version_errors` | Nothing: alias. <!-- lang: fr-ok --> |
+| `agents.elargissements` | `widenings` | Nothing: alias. <!-- lang: fr-ok --> |
+| `agents.resoudre_l_agent` | `resolve_agent` | Nothing: alias. <!-- lang: fr-ok --> |
+| `agents.depense_depuis`, `depense_du_jour`, `depense_du_mois` | `spend_since`, `spend_today`, `spend_this_month` | Nothing: aliases. <!-- lang: fr-ok --> |
+| `actions.rang`, `RANGS` | `rank`, `RANKS` | Nothing: aliases (the ontology imports them). <!-- lang: fr-ok --> |
+| `actions.politique_de_l_action` | `action_policy` | Nothing: alias. <!-- lang: fr-ok --> |
+| `actions.proposer(origine=, propose_par=)` | `propose(origin=, proposed_by=)` | Nothing: the former function is a wrapper that keeps the former keywords. <!-- lang: fr-ok --> |
+| `actions.proposer_pour_une_transition(tentative=)` | `propose_for_transition(attempt=)` | Nothing: the former function is a wrapper that keeps the former keyword (the orchestrator's activity calls it so). <!-- lang: fr-ok --> |
+| `actions.approuvee_par_la_politique` | `approved_by_policy` | Nothing: alias. <!-- lang: fr-ok --> |
+| `actions.signaler_une_preuve` | `signal_evidence` | Nothing: alias. <!-- lang: fr-ok --> |
+| `actions.decider` | `decide` | Nothing: alias. <!-- lang: fr-ok --> |
+| `definitions.publier_workflow(nom_attendu=, devient_le_defaut=, creation_seule=)` | `publish_workflow(expected_name=, becomes_default=, create_only=)` | Nothing: the former function is a wrapper that keeps the former keywords. <!-- lang: fr-ok --> |
+| `definitions.workflow_actif` | `active_workflow_named` (`active_workflow` is another function and stays) | Nothing: alias. <!-- lang: fr-ok --> |
+| `definitions.workflow_du_ticket` | `work_item_workflow` | Nothing: alias. <!-- lang: fr-ok --> |
+| `definitions.derniere_version` | `latest_version` | Nothing: alias that forwards a patch. <!-- lang: fr-ok --> |
+| `definitions.signaler_ce_que_la_politique_n_applique_pas` | `report_unenforced_policy` | Nothing: alias. <!-- lang: fr-ok --> |
+| `installation.installer_ce_que_livre_le_gabarit` | `install_what_template_delivers` | Nothing: alias. <!-- lang: fr-ok --> |
+| `installation.installer_skills_et_agents(quoi=, du_catalogue=)` | `install_skills_and_agents(what=, catalogue_provenance=)` | Nothing: the former function is a wrapper that keeps the former keywords (`plugin_installer` calls it so). <!-- lang: fr-ok --> |
+| `templates.Livraison`, fields `politique`, `defaut`, `routage`, `agents_du_catalogue` | `Delivery`, fields `policy`, `default`, `routing`, `catalogue_agents` | Nothing for the class and the functions (aliases); the renamed fields have no alias (internal dataclass). <!-- lang: fr-ok --> |
+| `templates.livraison` | `delivery` | Nothing: alias that forwards a patch. <!-- lang: fr-ok --> |
+| `templates.manifeste_du_gabarit` | `template_manifest` | Nothing: alias. <!-- lang: fr-ok --> |
+| `templates.repertoire_des_gabarits` | `templates_directory` | Nothing: alias. <!-- lang: fr-ok --> |
+| `templates.WORKFLOW_SANS_GABARIT`, `POLITIQUE_SANS_GABARIT`, `PREFIXE_CATALOGUE` | `WORKFLOW_WITHOUT_TEMPLATE`, `POLICY_WITHOUT_TEMPLATE`, `CATALOGUE_PREFIX` | Nothing: aliases. <!-- lang: fr-ok --> |
+| `agent_catalogue.EtatDansLOrganisation` (fields `installe`, `version_installee`, `du_catalogue`, `mise_a_jour`) | `OrgState` (fields `installed`, `installed_version`, `catalogue_agent`, `update_available`) | Nothing for the class (alias); the fields have no alias, `routers/agents.py` reads the new ones. <!-- lang: fr-ok --> |
+| `agent_catalogue.etat`, `offre`, `installer`, `mettre_a_jour`, `auteur`, `spec_de`, `PREFIXE` | `state`, `offer`, `install`, `upgrade`, `author_of`, `spec_of`, `PREFIX` | Nothing: aliases. <!-- lang: fr-ok --> |
+| `agent_catalogue.agents_nommes`, `installer_les_agents_nommes` | `named_agents`, `install_named_agents` | Nothing: aliases. <!-- lang: fr-ok --> |
+| `connectors.RANG`, `plus_stricte`, `spec_du_type`, `verifier_les_secrets` | `RANK`, `stricter`, `type_spec`, `verify_secrets` | Nothing: aliases. <!-- lang: fr-ok --> |
+| `connectors.politique_pour_le_projet` | `policy_for_project` | Nothing: alias. <!-- lang: fr-ok --> |
+| `memory.MIN_TICKETS_PAR_GROUPE` | `MIN_WORK_ITEMS_PER_GROUP` | Nothing: alias. <!-- lang: fr-ok --> |
+| `agent_lifecycle.unused(agent, dernier, ...)` | `unused(agent, last, ...)` | Nothing for a positional call. <!-- lang: fr-ok --> |
+
+#### S45-18: the work item, journey, receipt, routing and skill services are English
+
+Routes, operation ids, response fields, error codes, timeline sentences and every persisted value
+did not change. Every former name below keeps working: it is an alias in the module that defines the
+new name (and in `choregos_api.services`), and the three renamed modules leave a shim at their former
+path that is the same module object, so a patch on one is a patch on the other. Nothing here needs an
+operator action. Importers (the orchestrator, the routers, the MCP door, the knowledge distiller,
+`plugin_installer`, tools, tests) were not switched: they still use the former names.
+
+#### Modules (`choregos_api.services`) (S45-18)
+
+| Former | New | What an operator does |
+| :-- | :-- | :-- |
+| `routage` | `routing` | Nothing: the former path is a shim. <!-- lang: fr-ok --> |
+| `recus` | `receipts` | Nothing: the former path is a shim. <!-- lang: fr-ok --> |
+| `parcours` | `journey` | Nothing: the former path is a shim. <!-- lang: fr-ok --> |
+
+#### Names (S45-18)
+
+| Former | New | What an operator does |
+| :-- | :-- | :-- |
+| `routing.Naissance` | `WorkItemBirth` | Nothing: alias. <!-- lang: fr-ok --> |
+| `routing.nouveau_ticket` | `new_work_item` | Nothing: alias that forwards a patch. <!-- lang: fr-ok --> |
+| `routing.nouveau_ticket_d_essai` | `new_trial_work_item` | Nothing: alias. <!-- lang: fr-ok --> |
+| `routing.verifier_la_naissance` | `verify_birth` | Nothing: alias. <!-- lang: fr-ok --> |
+| `routing.valider_les_champs` | `validate_fields` | Nothing: alias. <!-- lang: fr-ok --> |
+| `routing.choisir_workflow` | `choose_workflow` | Nothing: alias. <!-- lang: fr-ok --> |
+| `routing.noter_les_etiquettes` | `record_labels` | Nothing: alias. <!-- lang: fr-ok --> |
+| `receipts.PRODUITE`, `LUE` | `PRODUCED`, `READ` (the values `produced` and `read` are persisted and unchanged) | Nothing: aliases. <!-- lang: fr-ok --> |
+| `receipts.DOCUMENTS_DU_PROMPT` | `PROMPT_DOCUMENTS` | Nothing: alias. <!-- lang: fr-ok --> |
+| `receipts.empreinte` | `digest` (algorithm and output unchanged: `sha256:` of the canonical JSON) | Nothing: alias. <!-- lang: fr-ok --> |
+| `receipts.consigner(sorties=)` | `record(outputs=)` | Nothing: the same function also accepts the former keyword `sorties`. <!-- lang: fr-ok --> |
+| `receipts.lu_par_le_prompt` | `read_by_the_prompt` | Nothing: alias. <!-- lang: fr-ok --> |
+| `receipts.passages_du_ticket` | `work_item_handoffs` | Nothing: alias. <!-- lang: fr-ok --> |
+| `journey.parcours` | `journey` | Nothing: alias (`services.parcours` is still the function). <!-- lang: fr-ok --> |
+| `journey.arete_du_deplacement` | `move_edge` | Nothing: alias. <!-- lang: fr-ok --> |
+| `tickets.cle_de_ticket_interne` | `internal_work_item_key` | Nothing: alias that forwards a patch. <!-- lang: fr-ok --> |
+| `tickets.le_tracker_est_interne` | `tracker_is_internal` | Nothing: alias that forwards a patch. <!-- lang: fr-ok --> |
+| `tickets.tracker_du_projet` | `project_tracker` | Nothing: alias that forwards a patch (the tests that put a `FakeTracker` in its place keep working). <!-- lang: fr-ok --> |
+| `tickets.sorties_a_ranger` | `outputs_to_store` | Nothing: alias. <!-- lang: fr-ok --> |
+| `tickets.ranger_les_sorties` | `store_outputs` | Nothing: alias. <!-- lang: fr-ok --> |
+| `tickets.creer_un_ticket(cle=)` | `create_work_item(key=)` | Nothing: alias, and the same function also accepts the former keyword `cle`. <!-- lang: fr-ok --> |
+| `tickets.chronologie` | `timeline` | Nothing: alias. <!-- lang: fr-ok --> |
+| `tickets.DOCUMENTS_LOGICIELS` | `SOFTWARE_DOCUMENTS` | Nothing: alias. <!-- lang: fr-ok --> |
+| `tickets._statut_temporal` | `_temporal_status` | Nothing: alias. <!-- lang: fr-ok --> |
+| `skills.SkillRefusee` | `SkillRefused` | Nothing: alias (the same class: `except SkillRefusee` still catches it). <!-- lang: fr-ok --> |
+| `skills.valider` | `validate` | Nothing: alias. <!-- lang: fr-ok --> |
+| `skills.empreinte` | `digest` (algorithm unchanged: the runner recomputes it) | Nothing: alias. <!-- lang: fr-ok --> |
+| `skills.entete` | `front_matter` | Nothing: alias. <!-- lang: fr-ok --> |
+| `skills.chemin_sur` | `safe_path` | Nothing: alias. <!-- lang: fr-ok --> |
+| `skills.lire_le_zip` | `read_zip_files` | Nothing: alias. <!-- lang: fr-ok --> |
+| `skills.Entete` | `FrontMatter` | Nothing: alias. <!-- lang: fr-ok --> |
+| `skills.MAX_FICHIERS`, `MAX_OCTETS`, `NOM` | `MAX_FILES`, `MAX_BYTES`, `NAME` | Nothing: aliases. <!-- lang: fr-ok --> |
+
+`choregos_api.services` re-exports the English names first, and keeps every former name in
+`__all__` as an alias. `agent_releases` now imports the extension API by its English names
+(`choregos_api.extensions`: `GestureRequest`, `check_gesture`). The `courtier` shim and the broker
+were not touched.
+
+#### S45-22: the orchestrator's workflows, queue routing, worker and configuration are English
+
+| Former | New | What an operator does |
+| :-- | :-- | :-- |
+| `choregos_orchestrator.repartition` | `choregos_orchestrator.queues` | Nothing: the former module path is a shim. <!-- lang: fr-ok --> |
+| `ACTIVITES_PAR_FILE`, `FILE_PAR_ACTIVITE`, `nom_de_l_activite`, `file_de` | `ACTIVITIES_BY_QUEUE`, `QUEUE_BY_ACTIVITY`, `activity_name`, `queue_of` | Nothing: the former names still work. The routing table itself did not change. <!-- lang: fr-ok --> |
+| `choregos_orchestrator.workflows.planification` | `choregos_orchestrator.workflows.scheduling` | Nothing: the former module path is a shim. <!-- lang: fr-ok --> |
+| `executer_activite`, `demarrer_activite` | `execute_on_its_queue`, `start_on_its_queue` | Nothing: the former names still work. <!-- lang: fr-ok --> |
+| `OrchestratorSettings.url_du_sidecar_d_outils` | `OrchestratorSettings.tools_sidecar_url` | Nothing: a property, the former name still works. No environment variable changed. <!-- lang: fr-ok --> |
+| `testing.workers_repartis`, `avec_doublures`, `repartir` | `workers_by_queue`, `with_doubles`, `group_by_queue` | Nothing: the former names still work, and `workers_by_queue` also accepts the former keywords `activites`, `file_du_workflow` and `remplacements`. <!-- lang: fr-ok --> |
+| `gitops.PLAGES_PRIVEES` | `gitops.PRIVATE_RANGES` | Nothing: the former name still works. <!-- lang: fr-ok --> |
+| `workflows.train.SEUIL_DE_RELAIS`, `SEUIL_DE_RELAIS_D_AVANT` | `RELAY_THRESHOLD`, `FORMER_RELAY_THRESHOLD` | Nothing. A test that patches the threshold patches the English name (the former `SEUIL_DE_RELAIS` stays readable only). <!-- lang: fr-ok --> |
+| `TrainInput.seuil_au_repos_d_avant()` | `TrainInput.former_idle_threshold()` | Nothing: an internal name, an alias keeps working. <!-- lang: fr-ok --> |
+| `workflows.train.LE_TRAIN_SE_RELAIE_TOT`, `LE_TRAIN_AU_REPOS_SE_RELAIE` | `TRAIN_CONTINUES_AS_NEW_EARLY`, `IDLE_TRAIN_CONTINUES_AS_NEW` | Nothing: Python names of two patch markers whose ids are unchanged; the former names still work. <!-- lang: fr-ok --> |
+| `workflows.action.PreuveManquante`, `EFFET`, `LECTURE` | `MissingEvidence`, `EFFECT`, `READ` | Nothing: internal names (`EFFET` keeps an alias). <!-- lang: fr-ok --> |
+| `workflows.interpreter.REPRISE_APRES_ESCALADE` | `RESUME_AFTER_ESCALATION` | Nothing: the former name still works; the patch id is unchanged. <!-- lang: fr-ok --> |
+
+Nothing a running workflow or a recorded history names moved: the six `workflow.patched` ids
+(`preuve-attendue`, `migration-par-definition`, `actions-de-transition`, `taches-humaines`,
+`train-par-environnement`, `auto-sync-previent`), the workflow type names, the signal and query wire
+names (including the French signal `preuve` of `ActionWorkflow`), the activity names, the task
+queues, the workflow-id prefixes, the payload keys of ADR 0098 §4 (`cle`, `refus`, `conclure`,
+`en_attente`, `jusqu_a`, `preuve`) and `TrainInput.seuil_de_relais`. Every history of
+`tests/replay/histories` replays unchanged. The workflows' Python attributes (`self.state`,
+`self.done`, `self.evidence_by_position`, `self.fields`, ...) are not serialized, and the query
+outputs keep their keys. <!-- lang: fr-ok -->
+
+The activities (`apps/orchestrator/src/choregos_orchestrator/activities/`) are not part of this
+story: they are still partly French until S45-23.
+
+#### S45-23: the orchestrator's activities are English, wire names unchanged
+
+Every former name below keeps working: a module path through a shim (`replace_module`), a name
+through a typed alias in the module that defined it. The aliases are internal (`alias:internal`);
+an operator has nothing to change. <!-- lang: fr-ok -->
+
+| Former | New | What an operator does |
+| :-- | :-- | :-- |
+| `choregos_orchestrator.activities.bilan` | `choregos_orchestrator.activities.outcome` | Nothing: the former module path is a shim, the same module answers to both dotted names. <!-- lang: fr-ok --> |
+| `choregos_orchestrator.activities.garde` (`garde_contre_l_injection`) | `choregos_orchestrator.activities.injection_guard` (`guard_against_injection`) | Nothing: the former module path is a shim. <!-- lang: fr-ok --> |
+| `activities.base.workflow_du_ticket`, `tracker_possede_les_tickets`, `cle_de_ticket_interne` | `work_item_workflow`, `tracker_owns_items`, `internal_ticket_key` | Nothing: `workflow_du_ticket` keeps an alias; the two others were used only inside the activities. <!-- lang: fr-ok --> |
+| `activities.execution.hotes_a_joindre_en_direct`, `env_du_runner`, `classe_d_execution`, `FILE_MAX_MINUTES` | `hosts_to_reach_directly`, `runner_environment`, `runtime_class`, `QUEUE_MAX_MINUTES` | Nothing: the former names still work, also through `activities.stage`. <!-- lang: fr-ok --> |
+| `activities.gates.texte_ajoute` | `added_text_of` | Nothing: the former name still works. <!-- lang: fr-ok --> |
+| `activities.interpretation.message_de`, `activite_de`, `BOUCHE_TROU_TEMPORAL` | `message_of`, `activity_of`, `TEMPORAL_PLACEHOLDERS` | Nothing: the two functions keep an alias (the workflows import them until their own story switches). <!-- lang: fr-ok --> |
+| `activities.provisioning.repertoire_templates`, `etiquettes_du_pas`, `COULEUR_PAR_DEFAUT`, `CHAMPS_DU_BOARD` | `templates_dir`, `step_labels`, `DEFAULT_COLOUR`, `BOARD_FIELDS` | Nothing: the first two keep an alias. <!-- lang: fr-ok --> |
+| `activities.stage._serveurs_mcp` | `_mcp_servers` | Nothing: an internal name, an alias keeps working. <!-- lang: fr-ok --> |
+| `activities.stage` reads `settings.url_du_sidecar_d_outils` | `settings.tools_sidecar_url` (S45-22) | Nothing: no environment variable changed. <!-- lang: fr-ok --> |
+| `choregos_adapters.charger_les_greffons`, `choregos_api.effets` names, `choregos_core.quotas.quota_pour` | `load_extensions`, `choregos_api.effects` (`EffectContext`, `EffectRefused`, `effect`, `render`), `quota_for` | Nothing: the activities now call the English names that already exist on main (S45-10, the effects module, S45-08). <!-- lang: fr-ok --> |
+
+Messages that were French and are now English (an operator who matched one now reads English):
+
+| Former | New |
+| :-- | :-- |
+| `projet inconnu : x`, `projet introuvable : x`, `action introuvable : x` (activity errors) | `unknown project: x`, `project not found: x`, `action not found: x` <!-- lang: fr-ok --> |
+| `ticket non prévenu` and `demande humaine ... créée mais NON notifiée` (orchestrator log lines) | `work item not notified` and `human request ... created but NOT notified` <!-- lang: fr-ok --> |
+| `revue croisée`, `revue croisée impossible` (log events, with the key `raison`) | `cross review`, `cross review impossible` (key `reason`) <!-- lang: fr-ok --> |
+| The details of an eval assertion (`fichier attendu absent`, `motif présent : ...`, `outil absent sur ce runner`, `délai dépassé`, `dépôt jouet absent`, `aucune modification scriptée pour ...`) | `expected file absent`, `pattern present: ...`, `tool absent on this runner`, `timed out`, `toy repository absent`, `no scripted change for ...` <!-- lang: fr-ok --> |
+
+What does not change, because it is recorded or wired (each such line carries `lang: fr-ok` and
+`S45-39`): the 84 registered activity names (including the seven French aliases of `ActionWorkflow`
+and `confirmer_auto_sync`), the raised error types `AgentIndisponible`, `InstructionsInvalides`,
+`SkillAbsente`, `EffetRefuse`, `ActionIntrouvable` and `ActionPasEncoreVisible`, the written keys
+`effets`, `statut`, `etats`, `cle` and `refus` (the result of `propose_transition_action` included)
+and the `actions.result` keys `attente`, `preuves` and `jusqu_a`. Every history of
+`tests/replay/histories` replays unchanged. <!-- lang: fr-ok -->
+
+#### S45-48: the database layer, the A2A door, egress and knowledge in English
+
+`choregos_api.db`, `a2a`, `egress` and `knowledge` are English. Tables, columns, indexes and
+constraints did not change, and neither did the persisted audit keys of the A2A door (`jeton`,
+`ecriture`, the value `refus`; S45-39 switches them). Every former name that another module imports
+keeps a typed alias. Nothing here is an operator setting.
+<!-- lang: fr-ok -->
+
+#### Names (internal, no warning) (S45-48)
+
+| Former | New | What an operator does |
+| :-- | :-- | :-- |
+| `db.session.TOUT` | `ALL_ORGS` | Nothing: the former name is an alias. <!-- lang: fr-ok --> |
+| `db.session.limiter_aux_organisations` | `limit_to_organisations` | Nothing: the former name is an alias. <!-- lang: fr-ok --> |
+| `db.session.nommer_l_utilisateur`, `en_portee_de_plateforme` | `name_the_user`, `in_platform_scope` | Nothing: the former names are aliases. <!-- lang: fr-ok --> |
+| `db.models.objet_du_coeur` | `is_core_object` | Nothing: the former name is an alias (Alembic `include_object`). <!-- lang: fr-ok --> |
+
+### Log events, log keys and messages
+
+Not aliased: a log filter, an alert on a log line or a saved query that matches the former text has to be updated. These changes do not prove that any ops log filter was updated.
+
+#### Messages now in English (S45-08)
+
+The JSON-RPC defect messages of `mcp.message_defect` ("a JSON-RPC message is an object",
+"`jsonrpc` must be "2.0"", "`method` is missing"), the missing-argument error of a catalogue call
+("missing argument: <key>") and the no-HTTP-source error of `build_request`. The access report keys,
+the JSON-RPC codes and the catalogue's English fields are unchanged.
+
+#### Logger names, log events and keys (ops log filters) (S45-12)
+
+These are not aliased: a log filter, an alert on a log line or a saved query that matches them has
+to be updated. This change does not prove that any ops log filter was updated.
+
+| Former | New |
+| :-- | :-- |
+| logger `choregos.amorcage` | `choregos.bootstrap` <!-- lang: fr-ok --> |
+| logger `choregos.metriques` | `choregos.metrics` <!-- lang: fr-ok --> |
+| event `installation amorcée` (logger `choregos.amorcage`) | `installation bootstrapped` <!-- lang: fr-ok --> |
+| event `démarrage de l'API`, `arrêt de l'API` | `API starting`, `API stopping` <!-- lang: fr-ok --> |
+| event `requête` (one per HTTP request, logger `choregos.api`) | `request` <!-- lang: fr-ok --> |
+| event `relais d'événements PostgreSQL branché`, key `canal` | `PostgreSQL event relay attached`, key `channel` <!-- lang: fr-ok --> |
+| event `relais d'événements PostgreSQL perdu, reconnexion`, key `dans_s` | `PostgreSQL event relay lost, reconnecting`, key `retry_in_s` <!-- lang: fr-ok --> |
+| event `notification illisible` | `unreadable notification` <!-- lang: fr-ok --> |
+| event `train sans état`, key `projet` | `train without state`, key `project` <!-- lang: fr-ok --> |
+| event `rafraîchissement des métriques raté` | `metrics refresh failed` <!-- lang: fr-ok --> |
+| event `workflow déjà démarré` | `workflow already started` <!-- lang: fr-ok --> |
+
+#### Texts that changed (no alias) (S45-12)
+
+| Former | New |
+| :-- | :-- |
+| the `# HELP` lines of the Prometheus series (`/metrics`) were French | English; the series names, labels and types are unchanged <!-- lang: fr-ok --> |
+| `choregos_api.__version__` of a tree that is not installed: `0.0.0+inconnue` | `0.0.0+unknown` <!-- lang: fr-ok --> |
+| start-up refusals: the edition mismatch, the PostgreSQL superuser, `CHOREGOS_DEV_LOGIN_ENABLED` in staging or prod, the unknown `CHOREGOS_MCP_OAUTH_CLIENTS` clients | English (the message still names the setting and the fix) <!-- lang: fr-ok --> |
+
+Still French on purpose, because a test or a page of `docs/deployment.md` matches them (the stories
+of those tests and pages translate both sides):
+
+- the refusal `réglages non résolus : [...]` (a setting whose value is `<no value>`); <!-- lang: fr-ok -->
+- the refusal `CHOREGOS_RUN_TOKEN_PUBLIC_KEY est fournie sans sa clé privée`; <!-- lang: fr-ok -->
+- the administration-section refusals `section d'administration ... invalide`, <!-- lang: fr-ok -->
+  `permission inconnue` and `n'est servi par aucune route`; <!-- lang: fr-ok -->
+- the extension-route overlap `un greffon déclare des routes déjà servies : ...`. <!-- lang: fr-ok -->
+
+The settings field `courtier_attente_ecriture_s` (environment variable
+`CHOREGOS_COURTIER_ATTENTE_ECRITURE_S`) keeps its French name: an environment variable is renamed
+through `AliasChoices`, which is the broker story's. <!-- lang: fr-ok -->
+
+#### Log events and keys (ops log filters) (S45-15)
+
+These are not aliased: a log filter or an alert that matches them has to be updated. This change
+does not prove that any ops log filter was updated.
+
+| Former | New |
+| :-- | :-- |
+| event `champs non transmis à l'interpréteur`, key `erreur` (logger of `routers.workitems`) | `fields not sent to the interpreter`, key `error` <!-- lang: fr-ok --> |
+| event `redirection refusée` (logger `choregos.auth`) | `redirect refused` <!-- lang: fr-ok --> |
+
+#### Log events (ops log filters) (S45-17)
+
+These are not aliased: a log filter or an alert that matches them has to be updated. This change does
+not prove that any ops log filter was updated.
+
+| Former | New |
+| :-- | :-- |
+| event `gabarit.extension_sans_greffon` (logger `choregos.gabarits`) | `template.extension_without_installer` (logger `choregos.templates`) <!-- lang: fr-ok --> |
+
+The audit `reason` of `template.extension.skip` is now `no active extension installs it` (display
+text, was `aucun greffon actif ne l'installe`).
+
+#### Log keys (S45-48)
+
+| Former | New | What an operator does |
+| :-- | :-- | :-- |
+| `a2a.call` log key `appelant` | `caller` | Update a log query that reads the key. <!-- lang: fr-ok --> |
+
+Unchanged: the audit keys `ecriture` and `jeton`, the audit value `refus`, the `a2a.call` event name.
+<!-- lang: fr-ok -->
+
+### Tests, histories and fixtures
+
+Test modules, archived histories and eval fixtures. Nothing an operator runs changes except where a row says so.
+
+#### S45-24: the orchestrator's tests a-h, the eval fixtures and the toy repository are English
+
+Nothing an operator runs changes except the names of the eval fixtures, and every former name keeps
+working: a stored matrix or a schedule that names one plays the ticket that replaced it
+(`FORMER_FIXTURE_NAMES`, an external alias, removed in 0.23.0).
+
+| Former | New | What an operator does |
+| :-- | :-- | :-- |
+| Eval fixtures `node-slug-longueur`, `py-bug-arrondi`, `py-hors-perimetre`, `py-refactor-sans-regression`, `py-remise-volume`, `py-test-manquant` <!-- lang: fr-ok --> | `node-slug-length`, `py-rounding-bug`, `py-out-of-scope`, `py-refactor-without-regression`, `py-volume-discount`, `py-missing-test` | Nothing: a matrix naming a former name still runs the renamed ticket. A live cell files its work item with the label `eval:<new name>`; an eval work item filed earlier keeps its former label. |
+| `tests/fixtures/repos/python-toy/src/panier/` (`panier.py`, `Ligne`, `Panier`, `total_ttc`) and `tests/test_panier.py` <!-- lang: fr-ok --> | `src/cart/` (`cart.py`, `Line`, `Cart`, `total_with_tax`) and `tests/fixtures/repos/python-toy/tests/test_cart.py` | Nothing: the toy repository is committed to the eval project's branch by digest (`choregos-evals/python-toy-<digest>`), so the next live matrix commits the new tree on a new branch. |
+| (new) | `tests/fixtures/tickets/py-rounding-bug-fr.yaml` | One reference ticket stays French on purpose: the agent answers in English (S22-03). It is played like the others. |
+| `tests/replay/histories/wi-action-a-date-S20-05.json` <!-- lang: fr-ok --> | `wi-dated-action-S20-05.json` | Nothing: the file is renamed, its content is untouched, and it replays. |
+
+The nine French-named test modules of the orchestrator are renamed with `git mv` and no redirect
+(ADR 0098 §3 (g)): `test_action_a_date` to `test_dated_action`, `test_agent_du_registre` to
+`test_registry_agent`, `test_besoins_du_gabarit` to `test_template_requirements`,
+`test_board_en_anglais` to `test_board_in_english`, `test_effets_ecrits` to `test_written_effects`,
+`test_epingle` to `test_pinned_definition`, `test_file_d_attente` to `test_queue_wait`,
+`test_gabarit_livraison_logicielle` to `test_software_delivery_template` and `test_gabarits_du_coeur`
+to `test_core_templates`. <!-- lang: fr-ok -->
+
+#### S45-25: the orchestrator's tests i-z, the replay helpers and their histories are English
+
+Nothing an operator runs changes: only test modules and archived histories are renamed. Every
+history file is renamed with `git mv` and its content is untouched, so each one still replays.
+
+| Former | New | What an operator does |
+| :-- | :-- | :-- |
+| `tests/replay/histories/action-preuve-S20-08.json` <!-- lang: fr-ok --> | `action-evidence-S20-08.json` | Nothing |
+| `train-approbation-S21-21.json` <!-- lang: fr-ok --> | `train-approval-S21-21.json` | Nothing |
+| `train-au-repos-S22-24.json` <!-- lang: fr-ok --> | `train-at-rest-S22-24.json` | Nothing |
+| `train-ecoute-le-cd-S22-18.json` <!-- lang: fr-ok --> | `train-listens-to-cd-S22-18.json` | Nothing |
+| `train-se-relaie-tot-S22-27.json` <!-- lang: fr-ok --> | `train-relays-early-S22-27.json` | Nothing |
+| `wi-tache-badge-S20-06.json` <!-- lang: fr-ok --> | `wi-human-task-badge-S20-06.json` | Nothing |
+| `train-express-ancien-code.json` <!-- lang: fr-ok --> | `train-express-old-code.json` | Nothing |
+| `wi-migration-ancien-code.json` <!-- lang: fr-ok --> | `wi-migration-old-code.json` | Nothing |
+| `wi-train-ancien-code.json` <!-- lang: fr-ok --> | `wi-train-old-code.json` | Nothing |
+
+The four histories whose French stem is a recorded workflow id (`wi-panier-DEMO-1e`,
+`wi-panier-DEMO-2d`, `wi-staffing-RH-1d`, `wi-staffing-RH-1f`) keep their name (ADR 0098 §4).
+
+The fifteen French-named test modules of the orchestrator are renamed with `git mv` and no redirect
+(ADR 0098 §3 (g)): `test_perimetre_du_run` to `test_run_perimeter`, `test_preuve_attendue` to
+`test_awaited_evidence`, `test_rbac_du_projet` to `test_project_rbac`, `test_recus_du_prompt` to
+`test_prompt_receipts`, `test_repartition_des_files` to `test_queue_routing`,
+`test_reprise_apres_escalade` to `test_resume_after_escalation`, `test_sorties_d_etape` to
+`test_step_outputs`, `test_tache_humaine` to `test_human_task`, `test_templates_livres` to
+`test_shipped_templates`, `test_train_au_repos` to `test_train_at_rest`, `test_train_cd_de_demo` to
+`test_train_demo_cd`, `test_train_ecoute_le_cd` to `test_train_listens_to_cd`, `test_train_et_ticket`
+to `test_train_and_work_item`, `test_train_se_relaie_tot` to `test_train_relays_early` and
+`test_worker_greffons` to `test_worker_extensions` (an entry-point package is an extension, ADR 0093).
+<!-- lang: fr-ok -->
+
+### Kept on purpose
+
+Names that are recorded, persisted or wired, so they were not renamed here.
+
+#### Kept on purpose (S45-15)
+
+- The audit payload keys `avant` and `apres` of `org.update` (ADR 0098 §4, renamed by S45-39).
+- The audit key `canal` of `auth.login` and the keyword `canal` of `ouvrir_la_session`: persisted
+  and shared with `services/tickets.py`.
+- `routers.auth.terminer_la_connexion(nom=, sujet=, groupes=, cible=, canal=)`: the public API that
+  an edition's SAML protocol calls (`alias:external`). Its keywords keep their French names until
+  the story that gives the extension API a window renames them.
+- The CSV header `budget_quotidien_usd` of the cost export.
+
+#### Kept on purpose (S45-17)
+
+- The key `sans_greffon` of the installation result, which is persisted in audit details (S45-39).
+- The Temporal error type string `AgentIndisponible` (S45-39).
+- The `plugin:` provenance prefix and the `source == "plugin"` label of ADR 0093.
+- The verdict `organisation inconnue` of the memory A/B comparison (a returned value, S45-39).
+- The French imports from other packages (`POLITIQUES`, `ReferenceInvalide`,
+  `est_une_reference_du_magasin`, `verifier`, `erreurs_des_instructions`, `skills.empreinte`): their
+  owners rename them.

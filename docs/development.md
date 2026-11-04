@@ -221,7 +221,7 @@ name, no reuse, and no way for two projects to start from the same model.
 
 ## Shipping a gate from outside this tree
 
-A plugin can register a gate the same way it registers a connector, and nothing else is needed:
+An extension can register a gate the same way it registers a connector, and nothing else is needed:
 
 ```python
 from choregos_core.gates import GateContext, GateOutcome, gate
@@ -236,8 +236,8 @@ def _collecteur_propre(ctx: GateContext, params: dict) -> GateOutcome:
 The property that decides everything is that the **DSL validator accepts it**: an unknown gate is a
 blocking error (`gate.unknown`), so a gate registered at start-up must become known to the
 validator, or no workflow using it would ever be valid. It does, and
-`packages/core/tests/test_gate_hors_de_l_arbre.py` proves it — including that the gate really is
-missing before the plugin loads, so the test cannot lie to itself.
+`packages/core/tests/test_gate_outside_the_tree.py` proves it — including that the gate really is
+missing before the extension loads, so the test cannot lie to itself.
 
 No field needs to be added to `GateContext`: `ctx.result` already carries the step's outputs and
 `evidence.facts`. That is enough for any gate that judges what the step produced — which is most of
@@ -271,7 +271,7 @@ def register_extension() -> None:
 
 The API and the orchestrator load the group at start-up. A declared extension that fails to load
 **stops the process**, naming it: someone installed it so that it would serve, and a silently
-missing extension leaves a platform that looks complete and is not. Same rule as `garde.yaml`.
+missing extension leaves a platform that looks complete and is not. Same rule as the chart's `guard.yaml`.
 
 An extension can also **serve routes**. It builds an ordinary `APIRouter`, with the core's own
 dependencies for authentication and rights (`Me`, `Db`…), and declares it:
@@ -395,16 +395,16 @@ exception is retried with backoff. Declaring the same function twice is harmless
 the same name stops start-up.
 
 A connector of a **business family** — `mdm`, `shipping`, `access_control` — declares that
-family's operations (`choregos_adapters.familles`) and enters the shared conformance suite,
-`tests/conformance/connecteurs/`, with the fake of its API: a case of a few lines, and it is judged
+family's operations (`choregos_adapters.families`) and enters the shared conformance suite,
+`tests/conformance/connectors/`, with the fake of its API: a case of a few lines, and it is judged
 like the demo fakes, the Entra directory and the supplier's MCP server. Each operation declares a
 **closed** input schema that the implementation follows — same parameters, same types, required
 exactly when they have no default; a **write replayed changes nothing**, and a read writes nothing,
 not even for an object it does not know; the key **serves** — a wrong one is refused — and
 **appears nowhere**: not in the log (stdlib or structlog), not in a result, not in a refusal, not
-in the client's `repr`. The fakes of the HR scenario (`choregos_adapters.fakes.rh`) can be reached
-typed, through a `demo` connector, or served as an MCP server (`serveur_mcp`), on the same state —
-and all of them by one process, `choregos_adapters.fakes.serveur` (an ASGI app with no framework),
+in the client's `repr`. The fakes of the HR scenario (`choregos_adapters.fakes.hr`) can be reached
+typed, through a `demo` connector, or served as an MCP server (`mcp_server`), on the same state —
+and all of them by one process, `choregos_adapters.fakes.server` (an ASGI app with no framework),
 for a deployment where the API and the orchestrator would otherwise each see their own fakes: the
 chart deploys it with `demoFakes.enabled` (refused in staging and prod), and `trials/hr/` plays the
 HR scenario against it.
@@ -426,7 +426,7 @@ That obvious gesture is correct **only since the images set `PIP_PYTHON`**. The 
 `choregos-api:0.8.3` and earlier the build succeeds, the wheel lands in `~/.local`, outside the
 virtualenv, and the platform runs as `community` without a word — only the start-up guard catches
 it, and only if `global.edition: enterprise` was set. On those images, write
-`pip --python /app/.venv/bin/python install …`. `tests/paquets/test_image_ee.py` builds a real
+`pip --python /app/.venv/bin/python install …`. `tests/packaging/test_image_ee.py` builds a real
 image FROM a community one and checks the edition the platform reports
 (`CHOREGOS_IMAGES_CE=choregos-api:local,choregos-orchestrator:local`).
 ## Shipping a schema from an extension
@@ -667,7 +667,7 @@ The longest matching prefix wins; each area is one baseline file.
 | `web` | `apps/web/` |
 | `core`, `adapters`, `runner`, `contracts` | `packages/core/`, `packages/adapters/`, `packages/runner/`, `packages/contracts/` |
 | `packages-other` | the other `packages/` |
-| `tests-language` | `tests/langue/`, `tests/language/`, `tests/docs/`, `tests/ci/`, `tests/dev/`, `tests/licences/`, `tests/integrations/`, `tests/charts/` |
+| `tests-language` | `tests/language/`, `tests/docs/`, `tests/ci/`, `tests/dev/`, `tests/licences/`, `tests/integrations/`, `tests/charts/` |
 | `tests` | the rest of `tests/` |
 | `docs-plan`, `docs` | `docs/plan/`, then the rest of `docs/` |
 | `trials` | `trials/` |

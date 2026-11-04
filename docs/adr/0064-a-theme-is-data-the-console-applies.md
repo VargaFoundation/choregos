@@ -32,7 +32,7 @@ Constraints that shape the answer:
    `/api/v1/` (same origin, CSP unchanged). The mono font, the layout and the attribution line
    ("built on Choregos by Varga Foundation", ADR 0048) are **not** themable.
 2. **The community edition serves its default and nothing else.** A plugin customises the look by
-   `choregos_api.greffons.declare_theme_provider(fn)`: one provider (a second declaration stops the
+   `choregos_api.extensions.declare_theme_provider(fn)`: one provider (a second declaration stops the
    start), `fn(session, org) -> dict | None`, sync or async. Customising is an enterprise feature;
    the CE contains no brand content.
 3. **The API validates, the console never has to.** The route validates what the provider returns:

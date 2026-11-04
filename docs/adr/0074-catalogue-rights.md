@@ -4,7 +4,7 @@
 - **Concerns**: `services/catalogue_rights.py`, `services/connector_catalogue.py`, the routes
   `GET /orgs/{org}/mcp-catalogue`, `GET /orgs/{org}/connector-catalogue` and
   `/projects/{id}/org-connectors`, the broker (`services/courtier.py`), the project policy
-  (`services/connecteurs.py`), the tables `org_connectors.availability` and `org_connector_projects`;
+  (`services/connectors.py`), the tables `org_connectors.availability` and `org_connector_projects`;
   amends [ADR 0034](0034-connectors-by-capability.md) (section 4, who changes groups; section 6, the
   intersection gains a term), [ADR 0065](0065-catalogues-of-mcp-servers-and-skills.md) (section 4,
   "available is not enabled" gains a per-project step) and

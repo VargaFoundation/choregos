@@ -3,7 +3,7 @@
 - **Status**: accepted, 2026-11-02 — S51-04. Extends [ADR 0031](0031-several-workflows-per-project.md)
   (a work item's fields, validated by its workflow's `metadata.inputs`)
 - **Concerns**: `WorkItem.fields`, `choregos_core.domain.TRACKER_FIELD`,
-  `choregos_adapters.tracker.ticket_fields`, the Jira and plugin tracker adapters, `services/routage.py`
+  `choregos_adapters.tracker.ticket_fields`, the Jira and plugin tracker adapters, `services/routing.py`
   (`Naissance.tracker`, `refuse_reserved_fields`, `valider_les_champs`), `routers/webhooks.py`
   (`_dispatch(tracker_of=…)`), `activities/tracker.py` (`reconcile_tracker`), `AgentSampleInput.fields`
 

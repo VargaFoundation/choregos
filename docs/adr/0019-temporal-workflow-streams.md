@@ -33,7 +33,7 @@ for a run — held by the system that already owns the run's lifecycle.
 
 ## Conditions
 
-- One more thing the operator's Temporal must be new enough for; the chart's `garde.yaml`
+- One more thing the operator's Temporal must be new enough for; the chart's `guard.yaml`
   refuses the stream route on an older server rather than serving an empty log.
 - A stream's retention is the workflow's retention. Long-lived evidence needs the table.
 
