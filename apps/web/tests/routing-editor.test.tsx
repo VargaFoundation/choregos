@@ -176,7 +176,7 @@ describe("the routing strategy (ADR 0116)", () => {
     vi.mocked(api.previewWorkflowRouting).mockResolvedValue({
       workflow: "onboarding",
       by: "default",
-      reason: "the decision model chose `offboarding` with a confidence of 0.42, below the project's minimum of 0.50",
+      reason: "the decision model chose `offboarding` with a probability of 0.42, below the project's minimum of 0.50",
       model: "platform/decide",
       confidence: 0.42,
     });
@@ -185,7 +185,7 @@ describe("the routing strategy (ADR 0116)", () => {
     fireEvent.change(within(form).getByLabelText("Title"), { target: { value: "Grafana access" } });
     await act(async () => fireEvent.click(within(form).getByRole("button", { name: "Try" })));
     expect(await screen.findByTestId("routing-preview")).toHaveTextContent(
-      "(the default): the decision model chose `offboarding` with a confidence of 0.42, below the project's minimum of 0.50 — platform/decide, confidence 0.42",
+      "(the default): the decision model chose `offboarding` with a probability of 0.42, below the project's minimum of 0.50 — platform/decide, confidence 0.42",
     );
   });
 });

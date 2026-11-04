@@ -84,6 +84,10 @@ reached 16/18 at best and was confident when wrong. Hence:
 - A project may set `min_confidence`: below it, the model's choice is not taken and the default takes
   the item, the reason saying so. A chat model's answer carries no probability and is never held to
   it.
+- The minimum is compared with the probability of the choice, `probabilities[choice]`, as a decision
+  step reads it (ADR 0121 §2), never with the answer's `confidence`: LiteLLM's gpt-6-luna reports the
+  margin over the runner-up there, Laya a normalised entropy (#1303). With two workflows the choice is
+  always at least 0.5, so a useful minimum sits above it (0.75 keeps a margin of 0.5).
 - `documents.routing` and the preview gain `confidence`.
 
 Unchanged: the order (explicit, rules, model, default), asked once per birth, one `route` line in the

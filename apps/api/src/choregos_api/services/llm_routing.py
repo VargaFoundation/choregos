@@ -267,14 +267,21 @@ class DecisionWorkflowRouter:
         try:
             body = response.json()
             answer = body["answers"]["workflow"]
-            choice, confidence = str(answer["choice"]), float(answer["confidence"])
+            choice = str(answer["choice"])
+            # The probability of the answer is `probabilities[choice]`, as a decision step reads it
+            # (`choregos_adapters.decisions`). The answer's `confidence` is not: LiteLLM's gpt-6-luna
+            # reports the margin over the runner-up there (0.93 against 0.07 gives 0.86, recorded in
+            # prod on 2026-11-04), Laya a normalised entropy (#1303).
+            confidence = float(answer["probabilities"][choice])
+            if not 0.0 <= confidence <= 1.0:
+                raise ValueError(f"a probability outside [0, 1]: {confidence}")
         except (ValueError, KeyError, TypeError) as exc:
             raise RoutingError("the decision model did not answer the question") from exc
         used = body.get("usage") or {}
         sent = len(json.dumps(state) + json.dumps(question))
         return Answer(
             workflow=choice or None,
-            reason=f"the decision model chose `{choice}` with a confidence of {confidence:.2f}",
+            reason=f"the decision model chose `{choice}` with a probability of {confidence:.2f}",
             input_tokens=int(used.get("input_tokens") or sent // CHARS_PER_TOKEN),
             output_tokens=int(used.get("output_tokens") or 0),
             confidence=confidence,
@@ -426,7 +433,7 @@ async def _ask(
         decision.reason = f"the model answered `{answer.workflow}`, which is not an active workflow"
     elif threshold is not None and answer.confidence is not None and answer.confidence < threshold:
         decision.reason = (
-            f"the decision model chose `{answer.workflow}` with a confidence of {answer.confidence:.2f}, "
+            f"the decision model chose `{answer.workflow}` with a probability of {answer.confidence:.2f}, "
             f"below the project's minimum of {threshold:.2f}"
         )
     else:
