@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Backends ACP : comment lancer un agent, et comment lui passer son modèle.
+"""ACP backends: how to start an agent, and how to give it its model.
 
-Un backend ne contient **aucune** logique métier : il traduit un `StageInput` en
-ligne de commande, variables d'environnement et fichiers de configuration.
+A backend contains **no** business logic: it translates a `StageInput` into a
+command line, environment variables and configuration files.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from choregos_contracts import ApiFormat, ModelRef, StageInput
 
 @dataclass(slots=True)
 class LaunchPlan:
-    """Ce que le runner doit faire pour démarrer l'agent."""
+    """What the runner must do to start the agent."""
 
     command: list[str]
     env: dict[str, str] = field(default_factory=dict)
@@ -33,10 +33,10 @@ class LaunchPlan:
         return LaunchPlan(command=[], files=self.home_files).materialize(home, overwrite=True)
 
     def materialize(self, workspace: Path, *, overwrite: bool = False) -> list[str]:
-        """Écrit la configuration du backend sans jamais écraser un fichier du dépôt.
+        """Write the backend's configuration without ever overwriting a file of the repository.
 
-        Un `CLAUDE.md` ou un `.mcp.json` déjà présents appartiennent au projet : ils font
-        autorité. Rend la liste des fichiers effectivement écrits, pour les exclure de git.
+        A `CLAUDE.md` or a `.mcp.json` already present belongs to the project: it is
+        authoritative. Returns the list of the files actually written, to exclude them from git.
         """
         written: list[str] = []
         for relative, content in self.files.items():
@@ -52,13 +52,13 @@ class LaunchPlan:
 
 
 class Backend:
-    """Contrat d'un backend ACP."""
+    """Contract of an ACP backend."""
 
     name: ClassVar[str] = "base"
     capabilities: ClassVar[frozenset[str]] = frozenset({"acp"})
     model_constraint: ClassVar[tuple[str, ...]] = ()
-    #: Où le backend lit les skills d'un agent (ADR 0033) ; `None` : il n'en lit pas, et le runner
-    #: les pose sous `.choregos/skills` avec leur index dans le prompt.
+    #: Where the backend reads an agent's skills (ADR 0033); `None`: it reads none, and the runner
+    #: puts them under `.choregos/skills` with their index in the prompt.
     skills_dir: ClassVar[str | None] = None
     #: The shell filters its launch plan wires (ADR 0055). Another one asked of it is not applied,
     #: and the run says so.
@@ -70,19 +70,19 @@ class Backend:
     def model_env(self, model: ModelRef, key: str | None) -> dict[str, str]:
         raise NotImplementedError
 
-    # ───────────────────────── outils partagés ─────────────────────────
+    # ───────────────────────── shared tools ─────────────────────────
 
     @staticmethod
     def mcp_servers(stage_input: StageInput) -> list[dict[str, Any]]:
-        """Serveurs MCP montés dans la session : `choregos-tools` et la mémoire."""
+        """MCP servers mounted in the session: `choregos-tools` and the memory."""
         servers: list[dict[str, Any]] = []
         for name, server in stage_input.tools.mcp.items():
             if server.url:
-                # `headers` est EXIGÉ par le schéma ACP pour un serveur HTTP, même vide :
-                # l'omettre faisait refuser `session/new` avec « Invalid params » et une
-                # arborescence d'erreurs zod où le champ manquant est difficile à lire.
-                # Un serveur MCP HTTP porte son authentification par en-têtes ; ici, ce qui
-                # est déclaré dans `env` en tient lieu.
+                # `headers` is REQUIRED by the ACP schema for an HTTP server, even empty:
+                # omitting it made `session/new` refuse with "Invalid params" and a
+                # tree of zod errors where the missing field is hard to read.
+                # An HTTP MCP server carries its authentication in headers; here, what
+                # is declared in `env` stands in for it.
                 servers.append(
                     {
                         "name": name,
@@ -105,7 +105,7 @@ class Backend:
 
     @staticmethod
     def mcp_config_json(stage_input: StageInput) -> str:
-        """Configuration MCP au format le plus répandu (`mcpServers`)."""
+        """MCP configuration in the most common format (`mcpServers`)."""
         servers: dict[str, Any] = {}
         for name, server in stage_input.tools.mcp.items():
             if server.url:
@@ -121,10 +121,10 @@ class Backend:
     @staticmethod
     def openai_env(model: ModelRef, key: str | None) -> dict[str, str]:
         if not key:
-            # Aucune clé de run : le déploiement n'a pas de passerelle et l'agent apporte
-            # ses propres identifiants (abonnement, clé fournisseur posée dans le pod).
-            # Écrire ici une clé vide les ÉCRASERAIT — le backend parlerait au bon modèle
-            # sans pouvoir s'authentifier, et l'erreur dirait « 401 », pas « clé effacée ».
+            # No run key: the deployment has no gateway and the agent brings
+            # its own credentials (subscription, provider key placed in the pod).
+            # Writing an empty key here would OVERWRITE them: the backend would talk to the right model
+            # without being able to authenticate, and the error would say "401", not "key erased".
             return {"OPENAI_MODEL": model.litellm_model}
         return {
             "OPENAI_BASE_URL": model.base_url,
@@ -135,8 +135,8 @@ class Backend:
     @staticmethod
     def anthropic_env(model: ModelRef, key: str | None) -> dict[str, str]:
         if not key:
-            # Même raison que `openai_env` : sans clé de run, on ne touche pas aux variables
-            # d'authentification du pod.
+            # Same reason as `openai_env`: without a run key, we do not touch the pod's
+            # authentication variables.
             return {"ANTHROPIC_MODEL": model.litellm_model}
         return {
             "ANTHROPIC_BASE_URL": model.base_url,
@@ -146,12 +146,12 @@ class Backend:
         }
 
     def validate_model(self, model: ModelRef) -> None:
-        """Contrainte dure du backend, vérifiée sur le modèle **réel**.
+        """Hard constraint of the backend, checked on the **real** model.
 
-        Un alias de plateforme (`platform/standard`) ne dit rien de la famille du modèle : c'est
-        `provider_model`, rempli par le resolver depuis le catalogue du gateway, qui la porte. À
-        défaut, on retombe sur le nom appelé — un identifiant direct (`anthropic/claude-sonnet-5`)
-        se vérifie tel quel.
+        A platform alias (`platform/standard`) says nothing about the model's family: it is
+        `provider_model`, filled in by the resolver from the gateway's catalogue, that carries it.
+        Failing that, we fall back on the name called: a direct identifier
+        (`anthropic/claude-sonnet-5`) is checked as is.
         """
         effective = (model.provider_model or model.litellm_model).lower()
         if self.model_constraint and not any(token in effective for token in self.model_constraint):

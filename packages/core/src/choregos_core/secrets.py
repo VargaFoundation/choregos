@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Les références de secret (ADR 0034) — la couture `SecretResolver`.
+"""Secret references (ADR 0034): the `SecretResolver` seam.
 
 A connector never carries a secret in clear: its configuration names a REFERENCE
 (`env:CONNECTOR_JIRA_TOKEN`), which the platform resolves when it builds the adapter, in the process
@@ -7,8 +7,8 @@ that needs it, never in the database, never in an API response. The core reads t
 (`env:`); a plugin declares the other schemes (a vault: `vault:`, `infisical:`) with
 `declare_resolver`.
 
-`connectors.secret_ref` existait depuis le schéma initial, stocké et jamais lu : un secret
-« configuré » n'atteignait aucun adaptateur, qui retombait en silence sur sa valeur par défaut.
+`connectors.secret_ref` existed since the initial schema, stored and never read: a "configured"
+secret reached no adapter, which silently fell back on its default value.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from collections.abc import Callable
 
 from .compat import EXTERNAL_ALIAS_REMOVAL, alias_names
 
-#: `schéma:reste` — un schéma en minuscules, puis ce que son résolveur sait lire.
+#: `scheme:rest`: a lowercase scheme, then whatever its resolver can read.
 _REFERENCE = re.compile(r"^([a-z][a-z0-9-]{1,31}):(.+)$")
 
 
@@ -27,11 +27,11 @@ class SecretNotFound(LookupError):  # noqa: N818 - a named absence, answered as 
     """The reference is well formed, but nothing resolves it here."""
 
 
-class ReferenceInvalide(ValueError):  # noqa: N818 - un refus motivé, rendu en 422
-    """Ce n'est pas une référence de secret qu'un résolveur déclaré sait lire."""
+class InvalidReference(ValueError):  # noqa: N818 - a reasoned refusal, answered as 422
+    """Not a secret reference that a declared resolver can read."""
 
 
-class VariableRefusee(ReferenceInvalide):
+class RefusedVariable(InvalidReference):
     """`env:NAME` names a variable outside the allowlist (S39-06b)."""
 
 
@@ -40,34 +40,34 @@ class VariableRefusee(ReferenceInvalide):
 #: secrets (session key, gateway master key, database password): a name outside this pattern is
 #: refused at write and again at resolution. A deployment widens it with this variable.
 PATTERN_ENV = "CHOREGOS_SECRET_ENV_PATTERN"
-PATTERN_PAR_DEFAUT = r"^CONNECTOR_[A-Z0-9_]+$"
+DEFAULT_PATTERN = r"^CONNECTOR_[A-Z0-9_]+$"
 
 #: Never readable through a reference, whatever the pattern says: the platform's own variables.
-_TOUJOURS_REFUSEES = re.compile(r"^(CHOREGOS_|DATABASE_|PG|AWS_|KUBERNETES_|TEMPORAL_)")
+_ALWAYS_REFUSED = re.compile(r"^(CHOREGOS_|DATABASE_|PG|AWS_|KUBERNETES_|TEMPORAL_)")
 
 
 def _pattern() -> str:
-    return os.environ.get(PATTERN_ENV) or PATTERN_PAR_DEFAUT
+    return os.environ.get(PATTERN_ENV) or DEFAULT_PATTERN
 
 
-def _verifier_le_nom(nom: str) -> None:
-    if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", nom):
-        raise ReferenceInvalide(f"`env:{nom}`: an UPPERCASE variable name is expected")
+def _check_the_name(name: str) -> None:
+    if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", name):
+        raise InvalidReference(f"`env:{name}`: an UPPERCASE variable name is expected")
     pattern = _pattern()
     try:
-        allowed = re.search(pattern, nom) is not None
-    except re.error as erreur:
-        raise ReferenceInvalide(f"{PATTERN_ENV} is not a valid pattern: {erreur}") from erreur
-    if _TOUJOURS_REFUSEES.match(nom) or not allowed:
-        raise VariableRefusee(f"env:NAME: only variables matching {pattern} can be referenced")
+        allowed = re.search(pattern, name) is not None
+    except re.error as error:
+        raise InvalidReference(f"{PATTERN_ENV} is not a valid pattern: {error}") from error
+    if _ALWAYS_REFUSED.match(name) or not allowed:
+        raise RefusedVariable(f"env:NAME: only variables matching {pattern} can be referenced")
 
 
-def _environnement(nom: str) -> str:
-    _verifier_le_nom(nom)
-    valeur = os.environ.get(nom)
-    if not valeur:
-        raise SecretNotFound(f"`env:{nom}`: the variable is not set in this process")
-    return valeur
+def _environment(name: str) -> str:
+    _check_the_name(name)
+    value = os.environ.get(name)
+    if not value:
+        raise SecretNotFound(f"`env:{name}`: the variable is not set in this process")
+    return value
 
 
 #: The scheme of a value typed in the console and sealed in the database (ADR 0058).
@@ -83,13 +83,13 @@ def _store_is_resolved_by_the_platform(name: str) -> str:
     )
 
 
-def est_une_reference_du_magasin(reference: str | None) -> bool:
+def is_store_reference(reference: str | None) -> bool:
     """Is this a reference to a sealed value (`store:connector/jira/api_token`)?"""
     return bool(reference) and str(reference).startswith(f"{STORE_SCHEME}:")
 
 
-_RESOLVEURS: dict[str, Callable[[str], str]] = {
-    "env": _environnement,
+_RESOLVERS: dict[str, Callable[[str], str]] = {
+    "env": _environment,
     STORE_SCHEME: _store_is_resolved_by_the_platform,
 }
 
@@ -98,63 +98,70 @@ def declare_resolver(schema: str, resolve_: Callable[[str], str]) -> None:
     """Called by an extension when it loads: `schema` (`vault`, `infisical`...) and its reader."""
     if not re.fullmatch(r"[a-z][a-z0-9-]{1,31}", schema):
         raise ValueError(f"invalid secret scheme: {schema!r}")
-    if schema in _RESOLVEURS and _RESOLVEURS[schema] is not resolve_:
+    if schema in _RESOLVERS and _RESOLVERS[schema] is not resolve_:
         raise ValueError(f"secret scheme already declared: {schema}")
-    _RESOLVEURS[schema] = resolve_
+    _RESOLVERS[schema] = resolve_
 
 
 def schemas() -> frozenset[str]:
-    return frozenset(_RESOLVEURS)
+    return frozenset(_RESOLVERS)
 
 
-def verifier(reference: str) -> None:
-    """Refuse ce qui n'est pas une référence lisible ici — sans la résoudre : l'API qui
-    l'enregistre n'a pas forcément le secret, l'orchestrateur qui s'en sert, si."""
+def check(reference: str) -> None:
+    """Refuse what is not a reference readable here, without resolving it: the API that
+    records it does not necessarily hold the secret, the orchestrator that uses it does."""
     m = _REFERENCE.match(reference or "")
     if m is None:
-        raise ReferenceInvalide(
+        raise InvalidReference(
             "a secret reference is expected (`env:NAME`), not a value: a secret is never written in clear"
         )
-    if m.group(1) not in _RESOLVEURS:
-        raise ReferenceInvalide(
-            f"unknown secret scheme: `{m.group(1)}` (known: {', '.join(sorted(_RESOLVEURS))})"
+    if m.group(1) not in _RESOLVERS:
+        raise InvalidReference(
+            f"unknown secret scheme: `{m.group(1)}` (known: {', '.join(sorted(_RESOLVERS))})"
         )
     if m.group(1) == "env":
-        _verifier_le_nom(m.group(2))
+        _check_the_name(m.group(2))
 
 
-def resoudre(reference: str) -> str:
+def resolve(reference: str) -> str:
     try:
-        verifier(reference)
-    except VariableRefusee as refus:
+        check(reference)
+    except RefusedVariable as refused:
         # A reference written before the allowlist (or by hand in the database) puts its connector
         # in error, like any reference nothing resolves: it never reads the variable.
-        raise SecretNotFound(str(refus)) from refus
+        raise SecretNotFound(str(refused)) from refused
     m = _REFERENCE.match(reference)
     assert m is not None
-    return _RESOLVEURS[m.group(1)](m.group(2))
+    return _RESOLVERS[m.group(1)](m.group(2))
 
 
-def reinitialiser() -> None:
-    """Pour les tests : seul le résolveur du cœur reste."""
-    _RESOLVEURS.clear()
-    _RESOLVEURS["env"] = _environnement
-    _RESOLVEURS[STORE_SCHEME] = _store_is_resolved_by_the_platform
+def reset() -> None:
+    """For tests: only the core's resolvers remain."""
+    _RESOLVERS.clear()
+    _RESOLVERS["env"] = _environment
+    _RESOLVERS[STORE_SCHEME] = _store_is_resolved_by_the_platform
 
 
 __all__ = [
     "STORE_SCHEME",
-    "ReferenceInvalide",
+    "InvalidReference",
+    "RefusedVariable",
     "SecretNotFound",
-    "VariableRefusee",
+    "check",
     "declare_resolver",
-    "est_une_reference_du_magasin",
-    "reinitialiser",
-    "resoudre",
+    "is_store_reference",
+    "reset",
+    "resolve",
     "schemas",
-    "verifier",
 ]
 
+ReferenceInvalide = InvalidReference  # lang: fr-ok alias:internal
+VariableRefusee = RefusedVariable  # lang: fr-ok alias:internal
+PATTERN_PAR_DEFAUT = DEFAULT_PATTERN  # lang: fr-ok alias:internal
+est_une_reference_du_magasin = is_store_reference  # lang: fr-ok alias:internal
+verifier = check  # lang: fr-ok alias:internal
+resoudre = resolve  # lang: fr-ok alias:internal
+reinitialiser = reset  # lang: fr-ok alias:internal
 SecretIntrouvable = SecretNotFound  # lang: fr-ok alias:external
 declarer_un_resolveur = declare_resolver  # lang: fr-ok alias:external
 

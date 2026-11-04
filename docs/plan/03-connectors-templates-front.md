@@ -1,25 +1,25 @@
-# 3. Connecteurs, templates, front
+# 3. Connectors, templates, front end
 
-## 3.1 Connecteurs (`packages/adapters`)
+## 3.1 Connectors (`packages/adapters`)
 
-| Kind | Jour 1 | Phase 5–6 | Notes d'implémentation |
+| Kind | Day 1 | Phase 5–6 | Implementation notes |
 | :-- | :-- | :-- | :-- |
-| `tracker` | **GitHub Issues + Projects v2** | Jira Cloud, GitLab Issues, Azure Boards | GitHub : GraphQL pour Projects v2 (`updateProjectV2ItemFieldValue`), REST pour issues/commentaires ; champs *Status*, *Cost (€)*, *Size*, *Risk*, *Run* (noms français d'avant S22-21 renommés au provisioning) ; webhooks `issues`, `issue_comment`, `projects_v2_item`, `label`. Polling de secours toutes les 60 s (`list_candidates`) pour rattraper les webhooks perdus |
-| `scm` | **GitHub** (App) | GitLab, Azure Repos | App GitHub `choregos-bot` : permissions Contents/Issues/Pull requests/Checks RW, Metadata R ; tokens d'installation par dépôt ; merge queue via `enablePullRequestAutoMerge` ; check-runs `choregos/scope`, `choregos/evidence` |
-| `ci` | **Tekton** | Jenkins, GitHub Actions, GitLab CI, Azure Pipelines | Tekton : `PipelineRun` déclenché par Triggers (`EventListener` GitHub) ; état via CloudEvents `dev.tekton.event.pipelinerun.{successful,failed}.v1` postés sur `/webhooks/tekton` ; logs via Tekton Results |
-| `cd` | **Argo CD + Argo Rollouts** | Azure Container Apps, Azure DevOps Releases, Flux | Argo : `Application` par env ; promotion = PR sur le repo GitOps ; santé via API Argo + webhooks de notification ; Rollouts : `AnalysisTemplate`, `abort`, `promote` via API |
-| `runtime` (executor) | **Tekton PipelineRun**, Job K8s | Azure Container Apps Jobs, ACI | Section 2.3 |
-| `memory` | **Ecphoria** | pgvector (repli) | Section 4 |
+| `tracker` | **GitHub Issues + Projects v2** | Jira Cloud, GitLab Issues, Azure Boards | GitHub: GraphQL for Projects v2 (`updateProjectV2ItemFieldValue`), REST for issues/comments; fields *Status*, *Cost (€)*, *Size*, *Risk*, *Run* (French names from before S22-21, renamed at provisioning); webhooks `issues`, `issue_comment`, `projects_v2_item`, `label`. Fallback polling every 60 s (`list_candidates`) to catch up on lost webhooks |
+| `scm` | **GitHub** (App) | GitLab, Azure Repos | GitHub App `choregos-bot`: Contents/Issues/Pull requests/Checks RW, Metadata R permissions; installation tokens per repository; merge queue via `enablePullRequestAutoMerge`; check-runs `choregos/scope`, `choregos/evidence` |
+| `ci` | **Tekton** | Jenkins, GitHub Actions, GitLab CI, Azure Pipelines | Tekton: `PipelineRun` triggered by Triggers (GitHub `EventListener`); state via CloudEvents `dev.tekton.event.pipelinerun.{successful,failed}.v1` posted to `/webhooks/tekton`; logs via Tekton Results |
+| `cd` | **Argo CD + Argo Rollouts** | Azure Container Apps, Azure DevOps Releases, Flux | Argo: one `Application` per env; promotion = PR on the GitOps repo; health via the Argo API + notification webhooks; Rollouts: `AnalysisTemplate`, `abort`, `promote` via the API |
+| `runtime` (executor) | **Tekton PipelineRun**, K8s Job | Azure Container Apps Jobs, ACI | Section 2.3 |
+| `memory` | **Ecphoria** | pgvector (fallback) | Section 4 |
 | `gateway` | **LiteLLM** | — | Section 4 |
-| `notify` | **Slack** | Teams, e-mail | Blocks Slack avec boutons *Approuver / Renvoyer* → `POST /decisions` |
+| `notify` | **Slack** | Teams, email | Slack Blocks with *Approve / Send back* buttons → `POST /decisions` |
 
-Chaque connecteur : `config` (schéma JSON par type), `secret_ref` (référence External Secrets), `test()` (connexion, permissions), `health()` périodique, quotas et backoff (429 GitHub : file par installation).
+Each connector: `config` (JSON schema per type), `secret_ref` (External Secrets reference), `test()` (connection, permissions), periodic `health()`, quotas and backoff (GitHub 429: one queue per installation).
 
-Mapping des états DSL → tracker (`TrackerStateMapping`) : GitHub Projects v2 *Status* (option créée si absente) + label `choregos:<state>` ; Jira : transition de workflow par nom ; GitLab : labels scopés `choregos::state`.
+DSL states → tracker mapping (`TrackerStateMapping`): GitHub Projects v2 *Status* (option created if absent) + label `choregos:<state>`; Jira: workflow transition by name; GitLab: scoped labels `choregos::state`.
 
 ## 3.2 Templates (`templates/`)
 
-`manifest.yaml` d'un template :
+A template's `manifest.yaml`:
 
 ```yaml
 apiVersion: choregos/v1
@@ -32,14 +32,14 @@ defaults:
   workflow: template:default-simple@1
   policy: preset:solo
   models: platform-defaults
-  agent: claude-code         # OpenHands retiré, ADR 0011
-inputs:                      # questions du wizard
+  agent: claude-code         # OpenHands removed, ADR 0011
+inputs:                      # wizard questions
   - { name: repo, type: github-repo, required: true }
   - { name: default_branch, type: string, default: main }
   - { name: language, type: enum, values: [python, node, go, java, dotnet, other] }
   - { name: envs, type: list, default: [dev, staging, prod] }
   - { name: cluster, type: cluster-ref }
-steps:                       # exécutés par ProjectProvisioning, idempotents
+steps:                       # run by ProjectProvisioning, idempotent
   - github.install_app
   - github.ensure_labels
   - github.ensure_project_board: { fields: [Status, Cost, Size, Risk, Run] }
@@ -56,45 +56,45 @@ steps:                       # exécutés par ProjectProvisioning, idempotents
 scaffold: ./scaffold         # Jinja2
 ```
 
-Templates planifiés : `github-actions-argo-k8s` (phase 5), `gitlab-ci-argo-k8s`, `jira-github-jenkins-k8s`, `azure-devops-aca`, `github-azure-aci` (phase 6). Un template est **testé** par `tests/conformance/templates/` : provisioning sur kind, ticket S de bout en bout.
+Planned templates: `github-actions-argo-k8s` (phase 5), `gitlab-ci-argo-k8s`, `jira-github-jenkins-k8s`, `azure-devops-aca`, `github-azure-aci` (phase 6). A template is **tested** by `tests/conformance/templates/`: provisioning on kind, a size-S ticket end to end.
 
 ## 3.3 Provisioning (`ProjectProvisioning`)
 
-Workflow Temporal : une activité par `step`, idempotente, avec `provision.status` renvoyé au front en SSE (étape courante, log, erreur, action corrective proposée). Les ressources Kubernetes d'un projet ne sont **pas** créées par appel direct : l'activité `gitops.write_project_manifests` écrit dans `choregos-infra/projects/<slug>/` (Kustomize) et Argo CD applique (`ApplicationSet` par répertoire). Avantages : auditable, réversible, aucun droit cluster-admin dans l'API. La suppression d'un projet = suppression du répertoire + `prune`.
+Temporal workflow: one activity per `step`, idempotent, with `provision.status` sent back to the front end over SSE (current step, log, error, suggested corrective action). A project's Kubernetes resources are **not** created by a direct call: the `gitops.write_project_manifests` activity writes into `choregos-infra/projects/<slug>/` (Kustomize) and Argo CD applies it (one `ApplicationSet` per directory). Advantages: auditable, reversible, no cluster-admin right in the API. Deleting a project = deleting the directory + `prune`.
 
-## 3.4 Front (`apps/web`)
+## 3.4 Front end (`apps/web`)
 
-Stack : Next.js 15 (App Router, RSC pour les listes, client components pour le temps réel), TypeScript strict, Tailwind + shadcn/ui, TanStack Query, React Flow (éditeur de workflow), Monaco (YAML avec schéma), `eventsource` pour SSE, next-intl (FR/EN), Auth.js (OIDC), tests Playwright.
+Stack: Next.js 15 (App Router, RSC for lists, client components for real time), strict TypeScript, Tailwind + shadcn/ui, TanStack Query, React Flow (workflow editor), Monaco (YAML with schema), `eventsource` for SSE, next-intl (FR/EN), Auth.js (OIDC), Playwright tests.
 
-Design : sobre, dense, orienté opérateur ; thème clair/sombre ; les états du DSL utilisent les libellés du projet (`display`) partout.
+Design: sober, dense, operator-oriented; light/dark theme; the DSL states use the project's labels (`display`) everywhere.
 
-### Écrans
+### Screens
 
-| Route | Contenu | API |
+| Route | Content | API |
 | :-- | :-- | :-- |
-| `/` | Projets (cartes : état, coût du mois, tickets actifs, trains) | `GET /orgs/{org}/projects` |
-| `/projects/new` | Wizard : template → inputs → connecteurs (OAuth GitHub App, cluster) → workflow (template ou YAML) → modèles/budgets → politique → récapitulatif → provisioning (SSE) | `POST /projects`, `PUT connectors`, `POST provision`, `GET provision` (SSE) |
-| `/p/{slug}` | Vue d'ensemble : débit, cycle time, coût vs budget, taux de PR au premier passage, trains, alertes | `GET costs`, `GET work-items?stats` |
-| `/p/{slug}/board` | Kanban = états du workflow ; carte : activité agent en direct (étape, tentative, coût courant), boutons *Approuver / Renvoyer / Répondre*, lien tracker | `GET work-items`, `POST decisions`, SSE events |
-| `/p/{slug}/items/{id}` | Ticket : timeline (états, runs, décisions), tableau de coûts par étape, findings déposés, PR, transcripts | `GET work-items/{id}`, `GET timeline`, `GET runs` |
-| `/p/{slug}/runs/{id}` | Run : journal ACP (messages, appels d'outils, permissions accordées/refusées), diff, tests, coût, *Rejouer l'étape* | `GET runs/{id}`, `GET events` (SSE), `GET diff` |
-| `/p/{slug}/trains` | Par env : batch en attente, départ prévu, verrou, freeze, approbation, canary, historique | `GET releases`, `POST depart/freeze/approve` |
-| `/p/{slug}/findings` | Triage : dédup, sévérité, *Rendre agent-ready*, *Doublon*, *Ignorer* | `GET findings`, `POST actions` |
-| `/p/{slug}/memory` | Recherche hybride, faits en attente (proposés par agents), historique bi-temporel d'un fait, réimport | `GET memory/search`, `GET/POST pending` |
-| `/p/{slug}/workflow` | Éditeur YAML (Monaco + schéma) + rendu React Flow (colonnes = états, icônes = acteurs, gates sur les arêtes) ; *Valider* ; *Ouvrir une PR* | `POST workflows/validate`, `PUT workflow` |
-| `/p/{slug}/settings/*` | Connecteurs (test, rotation), modèles (profils, matrice d'évals), politique, membres et rôles, notifications, danger zone | `PUT connectors/models/policy`, `members` |
-| `/admin/*` | Templates, backends agent (activer/désactiver, résultats de conformité), exécuteurs/clusters, gateway (clés, budgets), utilisateurs, audit | `platform/*`, `audit` |
+| `/` | Projects (cards: state, cost of the month, active tickets, trains) | `GET /orgs/{org}/projects` |
+| `/projects/new` | Wizard: template → inputs → connectors (GitHub App OAuth, cluster) → workflow (template or YAML) → models/budgets → policy → summary → provisioning (SSE) | `POST /projects`, `PUT connectors`, `POST provision`, `GET provision` (SSE) |
+| `/p/{slug}` | Overview: throughput, cycle time, cost vs budget, first-pass PR rate, trains, alerts | `GET costs`, `GET work-items?stats` |
+| `/p/{slug}/board` | Kanban = workflow states; card: live agent activity (stage, attempt, current cost), buttons *Approve / Send back / Answer*, tracker link | `GET work-items`, `POST decisions`, SSE events |
+| `/p/{slug}/items/{id}` | Ticket: timeline (states, runs, decisions), cost table per stage, filed findings, PR, transcripts | `GET work-items/{id}`, `GET timeline`, `GET runs` |
+| `/p/{slug}/runs/{id}` | Run: ACP log (messages, tool calls, permissions granted/refused), diff, tests, cost, *Replay the stage* | `GET runs/{id}`, `GET events` (SSE), `GET diff` |
+| `/p/{slug}/trains` | Per env: pending batch, planned departure, lock, freeze, approval, canary, history | `GET releases`, `POST depart/freeze/approve` |
+| `/p/{slug}/findings` | Triage: dedup, severity, *Make agent-ready*, *Duplicate*, *Ignore* | `GET findings`, `POST actions` |
+| `/p/{slug}/memory` | Hybrid search, pending facts (proposed by agents), bi-temporal history of a fact, reimport | `GET memory/search`, `GET/POST pending` |
+| `/p/{slug}/workflow` | YAML editor (Monaco + schema) + React Flow rendering (columns = states, icons = actors, gates on the edges); *Validate*; *Open a PR* | `POST workflows/validate`, `PUT workflow` |
+| `/p/{slug}/settings/*` | Connectors (test, rotation), models (profiles, eval matrix), policy, members and roles, notifications, danger zone | `PUT connectors/models/policy`, `members` |
+| `/admin/*` | Templates, agent backends (enable/disable, conformance results), executors/clusters, gateway (keys, budgets), users, audit | `platform/*`, `audit` |
 
-Composants transverses : `StateBadge` (couleur par kind), `CostChip` (€, tooltip tokens), `ActorIcon` (agent/humain/système), `LiveLog` (virtualisé), `DecisionBar`.
+Cross-cutting components: `StateBadge` (colour per kind), `CostChip` (€, token tooltip), `ActorIcon` (agent/human/system), `LiveLog` (virtualised), `DecisionBar`.
 
-Mode démo : `NEXT_PUBLIC_API_MODE=mock` sert des fixtures générées depuis l'OpenAPI (Prism) — le flux front avance sans l'API.
+Demo mode: `NEXT_PUBLIC_API_MODE=mock` serves fixtures generated from the OpenAPI (Prism) — the front-end stream moves forward without the API.
 
 ## 3.5 API (`apps/api`)
 
-FastAPI + pydantic v2 (modèles générés depuis `packages/contracts`), SQLAlchemy 2 async + Alembic, `authlib` OIDC, RLS Postgres par organisation, rate limiting (slowapi), SSE (`sse-starlette`), OTel auto-instrumentation, structlog JSON.
+FastAPI + pydantic v2 (models generated from `packages/contracts`), SQLAlchemy 2 async + Alembic, `authlib` OIDC, Postgres RLS per organisation, rate limiting (slowapi), SSE (`sse-starlette`), OTel auto-instrumentation, structlog JSON.
 
-Modules : `auth/`, `projects/`, `connectors/`, `workflows/`, `workitems/`, `runs/`, `releases/`, `findings/`, `memory/`, `costs/`, `templates/`, `admin/`, `webhooks/` (un routeur par source, vérification de signature, normalisation → `InboundEvent` → signal Temporal ou création de `WorkflowInterpreter`), `internal/` (JWT de run).
+Modules: `auth/`, `projects/`, `connectors/`, `workflows/`, `workitems/`, `runs/`, `releases/`, `findings/`, `memory/`, `costs/`, `templates/`, `admin/`, `webhooks/` (one router per source, signature verification, normalisation → `InboundEvent` → Temporal signal or creation of a `WorkflowInterpreter`), `internal/` (run JWT).
 
-Règles : toute mutation écrit dans `audit_log` ; toute erreur externe (GitHub, Argo) est encapsulée avec `retry_after` ; les webhooks répondent en < 500 ms (traitement asynchrone via Temporal ou tâche de fond).
+Rules: every mutation writes to `audit_log`; every external error (GitHub, Argo) is wrapped with `retry_after`; webhooks answer in < 500 ms (asynchronous processing via Temporal or a background task).
 
-CLI (`packages/cli`) : `choregos login`, `projects list|create --template`, `items list|approve|reject|answer`, `runs tail <id>`, `trains status|depart|freeze`, `findings list`, `dev up|down|seed` (kind + Tilt), `workflow validate`.
+CLI (`packages/cli`): `choregos login`, `projects list|create --template`, `items list|approve|reject|answer`, `runs tail <id>`, `trains status|depart|freeze`, `findings list`, `dev up|down|seed` (kind + Tilt), `workflow validate`.

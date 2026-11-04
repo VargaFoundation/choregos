@@ -303,7 +303,7 @@ async def _supplier(client: AsyncClient) -> None:
         assert opened.status_code == 200, opened.text
 
 
-async def test_a_session_reads_through_the_courtier_and_is_offered_no_write(
+async def test_a_session_reads_through_the_broker_and_is_offered_no_write(
     client: AsyncClient, project: dict[str, Any], upstream: Upstream, supplier: Any
 ) -> None:
     await _supplier(client)

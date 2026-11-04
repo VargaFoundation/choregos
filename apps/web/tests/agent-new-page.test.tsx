@@ -135,10 +135,10 @@ describe("the new agent's page", () => {
     const builder = await toTheForm();
     const tabs = within(builder).getAllByRole("tab");
     expect(tabs.map((t) => t.textContent)).toEqual(["Try it", "What it costs and allows"]);
-    expect(within(builder).getByTestId("banc-d-essai").closest("[role=tabpanel]")).not.toHaveAttribute("hidden");
-    expect(within(builder).getByTestId("ce-que-ca-permet").closest("[role=tabpanel]")).toHaveAttribute("hidden");
+    expect(within(builder).getByTestId("trial-bench").closest("[role=tabpanel]")).not.toHaveAttribute("hidden");
+    expect(within(builder).getByTestId("what-it-allows").closest("[role=tabpanel]")).toHaveAttribute("hidden");
     fireEvent.click(tabs[1]!);
-    expect(within(builder).getByTestId("ce-que-ca-permet").closest("[role=tabpanel]")).not.toHaveAttribute("hidden");
+    expect(within(builder).getByTestId("what-it-allows").closest("[role=tabpanel]")).not.toHaveAttribute("hidden");
   });
 
   describe("'Draft it for me'", () => {

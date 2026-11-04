@@ -59,7 +59,7 @@ export function TrackerCard({
         {reporter && (
           <p className="text-ink-muted">
             Filed by{" "}
-            <span className="text-ink" data-donnee data-testid="tracker-reporter">
+            <span className="text-ink" data-verbatim data-testid="tracker-reporter">
               {reporter}
             </span>
           </p>
@@ -67,7 +67,7 @@ export function TrackerCard({
         {startedBy && (
           <p className="text-ink-muted">
             Started by{" "}
-            <span className="text-ink" data-donnee>
+            <span className="text-ink" data-verbatim>
               {startedBy}
             </span>
           </p>
@@ -75,7 +75,7 @@ export function TrackerCard({
         {filed?.reporter && (
           <p className="text-ink-muted" data-testid="filed-by">
             Filed by{" "}
-            <span className="text-ink" data-donnee>
+            <span className="text-ink" data-verbatim>
               {filed.reporter}
             </span>
           </p>
@@ -83,7 +83,7 @@ export function TrackerCard({
         {filed?.creator && filed.creator !== filed.reporter && (
           <p className="text-ink-muted" data-testid="created-by">
             Created in the tracker by{" "}
-            <span className="text-ink" data-donnee>
+            <span className="text-ink" data-verbatim>
               {filed.creator}
             </span>
           </p>
@@ -116,7 +116,7 @@ export function RunIdentity({ run, chain }: { run: Run; chain?: RunChain }) {
           <dt className="text-ink-muted">Agent</dt>
           <dd>{run.agent_slug ? `${run.agent_slug} v${run.agent_version ?? "?"}` : "none from the registry"}</dd>
           <dt className="text-ink-muted">Started by</dt>
-          <dd data-donnee>{startedBy ?? "not recorded"}</dd>
+          <dd data-verbatim>{startedBy ?? "not recorded"}</dd>
           {chain && chain.runs.length > 1 && (
             <>
               <dt className="text-ink-muted">Chain</dt>

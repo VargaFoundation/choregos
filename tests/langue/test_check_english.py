@@ -195,7 +195,7 @@ def test_makefile_reads_comments_only() -> None:
         ("charts/choregos/templates/_helpers.tpl", True),
         ("charts/choregos/templates/NOTES.txt", True),
         ("charts/choregos/dashboards/runs.json", False),
-        ("essai/rh/README.md", True),
+        ("trials/hr/README.md", True),
         ("infra/policies/images.yaml", True),
         ("docker/api.Dockerfile", True),
         ("examples/agents/plain/x.py", True),

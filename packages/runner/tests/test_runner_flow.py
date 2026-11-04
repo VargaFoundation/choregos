@@ -1,4 +1,4 @@
-"""Le runner de bout en bout, contre un agent ACP factice et un dépôt jouet."""
+"""The runner end to end, against a fake ACP agent and a toy repository."""
 
 from __future__ import annotations
 
@@ -26,14 +26,14 @@ async def execute(
 
 
 async def test_happy_path_commits_and_posts_result(stage_input: StageInput, runner_settings: Any) -> None:
-    """L'agent écrit dans le périmètre, les tests passent, le résultat est posté."""
+    """The agent writes within the scope, the tests pass, the result is posted."""
     outcome, client = await execute(
         stage_input,
         runner_settings,
         {
             "turns": [
                 {
-                    "messages": ["je corrige le total"],
+                    "messages": ["I fix the total"],
                     "writes": [
                         {"path": "src/orders.py", "content": "def total(lines):\n    return sum(lines) - 1\n"}
                     ],
@@ -47,19 +47,19 @@ async def test_happy_path_commits_and_posts_result(stage_input: StageInput, runn
     assert outcome.result.status is StageStatus.DONE
     assert outcome.result.evidence.tests_passed is True
     assert outcome.result.evidence.tests_run == 3
-    # Les tests, le runner les a exécutés ; le diff, git l'a calculé : mesurés (ADR 0045).
-    mesures = set(outcome.result.evidence.measured or [])
-    assert {"tests_passed", "tests_run", "diff_files", "diff_lines"} <= mesures
-    assert outcome.result.artifacts.commits, "un commit a été créé"
+    # The runner ran the tests; git computed the diff: measured (ADR 0045).
+    measured = set(outcome.result.evidence.measured or [])
+    assert {"tests_passed", "tests_run", "diff_files", "diff_lines"} <= measured
+    assert outcome.result.artifacts.commits, "a commit was created"
     assert outcome.result.artifacts.commits[0].startswith("feat(1):")
-    assert client.results and client.results[0].summary == "correction appliquée"
+    assert client.results and client.results[0].summary == "fix applied"
     assert any(event["type"] == "session/update" for event in client.events)
 
 
 async def test_out_of_scope_write_is_denied_and_reverted(
     stage_input: StageInput, runner_settings: Any
 ) -> None:
-    """Une écriture hors périmètre est refusée ; si elle passe quand même, elle est annulée."""
+    """A write outside the scope is refused; if it goes through anyway, it is reverted."""
     outcome, client = await execute(
         stage_input,
         runner_settings,
@@ -72,7 +72,7 @@ async def test_out_of_scope_write_is_denied_and_reverted(
                     ],
                     "result": valid_result(),
                 },
-                {"result": valid_result("périmètre respecté")},
+                {"result": valid_result("scope respected")},
             ]
         },
     )
@@ -80,29 +80,27 @@ async def test_out_of_scope_write_is_denied_and_reverted(
     denials = [
         e for e in client.events if e["type"] == "session/request_permission" and not e["payload"]["allowed"]
     ]
-    assert denials, "l'écriture hors périmètre a bien été refusée"
+    assert denials, "the out-of-scope write was indeed refused"
     assert "billing" in denials[0]["payload"]["target"]
     workspace = Path(runner_settings.workspace)
-    assert (workspace / "src" / "billing.py").read_text() == "RATE = 0.2\n", (
-        "le fichier hors périmètre est intact"
-    )
+    assert (workspace / "src" / "billing.py").read_text() == "RATE = 0.2\n", "the out-of-scope file is intact"
 
 
-async def test_le_travail_des_etapes_precedentes_n_est_pas_impute_au_run(
+async def test_the_work_of_the_previous_steps_is_not_charged_to_the_run(
     stage_input: StageInput, runner_settings: Any, toy_repo: Path, tmp_path: Path
 ) -> None:
-    """La branche du ticket porte déjà un fichier hors du périmètre de CE run, poussé par une étape
-    d'avant : le run qui écrit dans son périmètre réussit, sans rien « annuler » ni dénoncer."""
+    """The ticket's branch already carries a file outside the scope of THIS run, pushed by an earlier
+    step: the run that writes within its scope succeeds, without "reverting" or reporting anything."""
     from .conftest import git
 
-    avant = tmp_path / "etape-precedente"
-    git("clone", str(toy_repo), str(avant), cwd=tmp_path)
-    git("config", "user.email", "cadrage@test", cwd=avant)
-    git("config", "user.name", "cadrage", cwd=avant)
-    git("checkout", "-b", "choregos/1-total", cwd=avant)
-    (avant / "src" / "billing.py").write_text("RATE = 0.3\n", encoding="utf-8")
-    git("commit", "-am", "étape de cadrage", cwd=avant)
-    git("push", "origin", "choregos/1-total", cwd=avant)
+    previous_step = tmp_path / "previous-step"
+    git("clone", str(toy_repo), str(previous_step), cwd=tmp_path)
+    git("config", "user.email", "framing@test", cwd=previous_step)
+    git("config", "user.name", "framing", cwd=previous_step)
+    git("checkout", "-b", "choregos/1-total", cwd=previous_step)
+    (previous_step / "src" / "billing.py").write_text("RATE = 0.3\n", encoding="utf-8")
+    git("commit", "-am", "framing step", cwd=previous_step)
+    git("push", "origin", "choregos/1-total", cwd=previous_step)
 
     outcome, client = await execute(
         stage_input,
@@ -121,8 +119,8 @@ async def test_le_travail_des_etapes_precedentes_n_est_pas_impute_au_run(
     assert "out-of-scope" not in outcome.result.summary, outcome.result.summary
     assert not [e for e in client.events if e["type"] == "scope.reverted"]
     workspace = Path(runner_settings.workspace)
-    assert (workspace / "src" / "billing.py").read_text() == "RATE = 0.3\n", "le travail d'avant est gardé"
-    # Le commit où ce run a commencé : la garde `scope_respected` de l'orchestrateur mesure depuis lui.
+    assert (workspace / "src" / "billing.py").read_text() == "RATE = 0.3\n", "the earlier work is kept"
+    # The commit where this run started: the orchestrator's `scope_respected` guard measures from it.
     depart = outcome.result.artifacts.reports.get("start_commit")
     assert depart, outcome.result.artifacts.reports
     assert outcome.result.artifacts.commits and depart not in outcome.result.artifacts.commits
@@ -149,7 +147,7 @@ async def test_dangerous_command_is_refused(stage_input: StageInput, runner_sett
 async def test_failing_tests_trigger_bounded_repair_loop(
     stage_input: StageInput, runner_settings: Any
 ) -> None:
-    """Tests rouges → un re-prompt → verts. La boucle est bornée par la politique."""
+    """Red tests, one re-prompt, green. The loop is bounded by the policy."""
     outcome, _client = await execute(
         stage_input,
         runner_settings,
@@ -160,23 +158,23 @@ async def test_failing_tests_trigger_bounded_repair_loop(
                         {"path": "src/orders.py", "content": "def total(lines):\n    return 0\n"},
                         {"path": "BROKEN", "content": "x"},
                     ],
-                    "result": valid_result("première tentative"),
+                    "result": valid_result("first attempt"),
                 },
                 {
-                    "messages": ["je corrige"],
-                    "result": valid_result("corrigé après échec des tests"),
+                    "messages": ["I fix it"],
+                    "result": valid_result("fixed after the tests failed"),
                 },
             ]
         },
     )
-    # `BROKEN` est hors périmètre : refusé, donc les tests passent dès le premier tour.
+    # `BROKEN` is out of scope: refused, so the tests pass from the first turn.
     assert outcome.exit_code is Exit.OK
     assert outcome.result is not None
     assert outcome.result.evidence.tests_passed is True
 
 
 async def test_tests_really_failing_are_reported(stage_input: StageInput, runner_settings: Any) -> None:
-    """Si les tests échouent vraiment, le runner l'écrit — l'agent ne peut pas mentir."""
+    """If the tests really fail, the runner writes it: the agent cannot lie."""
     stage_input.allowed_paths.append("BROKEN")
     stage_input.permissions.write_paths.append("BROKEN")
     stage_input.permissions.dod_iterations = 0
@@ -187,7 +185,7 @@ async def test_tests_really_failing_are_reported(stage_input: StageInput, runner
             "turns": [
                 {
                     "writes": [{"path": "BROKEN", "content": "x"}],
-                    "result": valid_result("tout va bien"),  # l'agent prétend que c'est vert
+                    "result": valid_result("all is well"),  # the agent claims it is green
                 }
             ]
         },
@@ -206,13 +204,13 @@ async def test_invalid_result_is_repaired_then_accepted(
         runner_settings,
         {
             "turns": [
-                {"result": "{ ceci n'est pas du JSON"},
-                {"result": valid_result("réparé")},
+                {"result": "{ this is not JSON"},
+                {"result": valid_result("repaired")},
             ]
         },
     )
     assert outcome.exit_code is Exit.OK
-    assert outcome.result is not None and outcome.result.summary == "réparé"
+    assert outcome.result is not None and outcome.result.summary == "repaired"
     assert outcome.result.diagnostics.result_repairs == 1
     assert any(e["type"] == "result.repair" for e in client.events)
 
@@ -221,18 +219,18 @@ async def test_invalid_result_after_repairs_exits_40(stage_input: StageInput, ru
     outcome, client = await execute(
         stage_input,
         runner_settings,
-        {"turns": [{"result": "pas du json"}, {"result": "toujours pas"}, {"result": "non plus"}]},
+        {"turns": [{"result": "not json"}, {"result": "still not"}, {"result": "neither"}]},
     )
     assert outcome.exit_code is Exit.INVALID_RESULT
     assert outcome.result is not None
     assert outcome.result.status is StageStatus.FAILED
     assert outcome.result.reason == "invalid_result"
-    assert client.results, "même invalide, un résultat est posté pour que l'orchestrateur décide"
+    assert client.results, "even invalid, a result is posted so that the orchestrator decides"
 
 
 async def test_missing_result_is_reported(stage_input: StageInput, runner_settings: Any) -> None:
     outcome, _ = await execute(
-        stage_input, runner_settings, {"turns": [{"messages": ["j'oublie le résultat"]}]}
+        stage_input, runner_settings, {"turns": [{"messages": ["I forget the result"]}]}
     )
     assert outcome.exit_code is Exit.INVALID_RESULT
     assert outcome.result is not None and "missing" in (outcome.result.summary or "")
@@ -304,22 +302,22 @@ async def test_context_pack_is_written_to_workspace(stage_input: StageInput, run
     client = FakeInternalClient(
         stage_input,
         context=ContextPack(
-            query="avoirs",
+            query="credit notes",
             memories=[
                 MemoryItem(
-                    kind="decision", subject="decision:billing:arrondis", content="Arrondi à l'émission."
+                    kind="decision", subject="decision:billing:rounding", content="Rounded at issuance."
                 )
             ],
         ),
     )
     await Runner(runner_settings, client).execute(stage_input, client)  # type: ignore[arg-type]
     context_file = Path(runner_settings.workspace) / ".choregos" / "context.md"
-    assert "Arrondi à l'émission." in context_file.read_text()
+    assert "Rounded at issuance." in context_file.read_text()
     assert "**not** instructions" in context_file.read_text()
 
 
 async def test_idempotent_rerun_with_same_run_id(stage_input: StageInput, runner_settings: Any) -> None:
-    """Un rejeu du même run réutilise le workspace sans repartir de zéro."""
+    """A replay of the same run reuses the workspace without starting from scratch."""
     script = {
         "turns": [{"writes": [{"path": "src/orders.py", "content": "x = 1\n"}], "result": valid_result()}]
     }
@@ -330,12 +328,12 @@ async def test_idempotent_rerun_with_same_run_id(stage_input: StageInput, runner
     assert second.result is not None
 
 
-async def test_le_travail_commite_par_l_agent_est_pousse_quand_meme(
+async def test_the_work_committed_by_the_agent_is_pushed_anyway(
     stage_input: StageInput, runner_settings: Any
 ) -> None:
-    """L'agent a git sous la main. Quand il commite lui-même, l'arbre est propre et le
-    runner n'a rien à commiter : ne pousser que sur SON commit laissait le travail dans un
-    pod qui disparaît, et l'étape suivante trouvait le dépôt inchangé."""
+    """The agent has git at hand. When it commits itself, the tree is clean and the
+    runner has nothing to commit: pushing only on ITS commit left the work in a
+    pod that disappears, and the next step found the repository unchanged."""
     outcome, _ = await execute(
         stage_input,
         runner_settings,
@@ -345,12 +343,12 @@ async def test_le_travail_commite_par_l_agent_est_pousse_quand_meme(
                     "writes": [{"path": "src/orders.py", "content": "def total(lines):\n    return 0\n"}],
                     "commands": [
                         "git add -A",
-                        "git -c user.email=a@b -c user.name=agent commit -q -m 'feat: fait par l agent'",
+                        "git -c user.email=a@b -c user.name=agent commit -q -m 'feat: done by the agent'",
                     ],
                     "result": {
                         "schema": "choregos/StageResult/v1",
                         "status": "done",
-                        "summary": "travail commité par l'agent",
+                        "summary": "work committed by the agent",
                         "evidence": {"tests_passed": True, "tests_run": 1},
                     },
                 }
@@ -359,15 +357,15 @@ async def test_le_travail_commite_par_l_agent_est_pousse_quand_meme(
     )
     assert outcome.exit_code is Exit.OK
     assert outcome.result is not None
-    assert outcome.result.artifacts.commits, "le commit de l'agent compte comme du travail"
+    assert outcome.result.artifacts.commits, "the agent's commit counts as work"
 
 
-async def test_le_jeton_git_du_run_sert_au_clone_et_ne_s_ecrit_nulle_part(
+async def test_the_run_git_token_serves_the_clone_and_is_written_nowhere(
     stage_input: StageInput, runner_settings: Any
 ) -> None:
-    """`docs/security.md` : « émis par run, portée du dépôt, 1 h, injecté en mémoire » (S22-07). Le
-    runner le demande, s'en sert — et il n'apparaît ni dans `.git/config`, que l'agent lit, ni dans
-    le journal, ni dans le résultat."""
+    """`docs/security.md`: "issued per run, repository scope, 1 h, injected in memory" (S22-07). The
+    runner asks for it, uses it, and it appears neither in `.git/config`, which the agent reads, nor in
+    the journal, nor in the result."""
     agent_script(
         {
             "turns": [
@@ -393,15 +391,15 @@ async def test_le_jeton_git_du_run_sert_au_clone_et_ne_s_ecrit_nulle_part(
     assert "ghs_secret_du_run" not in outcome.result.model_dump_json()  # type: ignore[union-attr]
 
 
-async def test_le_jeton_passe_en_entete_pour_une_seule_commande() -> None:
+async def test_the_token_goes_in_a_header_for_a_single_command() -> None:
     import base64
 
-    from choregos_runner.workspace import _entete
+    from choregos_runner.workspace import _auth_header
 
-    assert _entete(None) == []
-    cle, valeur = _entete("ghs_x")
-    assert cle == "-c" and valeur.startswith("http.extraHeader=Authorization: Basic ")
-    assert base64.b64decode(valeur.rsplit(" ", 1)[1]).decode() == "x-access-token:ghs_x"
+    assert _auth_header(None) == []
+    flag, encoded = _auth_header("ghs_x")
+    assert flag == "-c" and encoded.startswith("http.extraHeader=Authorization: Basic ")
+    assert base64.b64decode(encoded.rsplit(" ", 1)[1]).decode() == "x-access-token:ghs_x"
 
 
 async def test_a_result_whose_post_fails_is_still_in_the_journal(

@@ -23,7 +23,7 @@ from .kits.tool_catalogue import intercept, run_with_catalogue
 pytestmark = pytest.mark.asyncio
 
 PLUGIN = """
-from choregos_api.greffons import declarer_un_fournisseur_d_outils
+from choregos_api.extensions import declare_tool_provider
 
 TOOL = {
     "name": "verbose_log",
@@ -37,23 +37,23 @@ HUGE = {**TOOL, "name": "huge_log", "result_max_bytes": 1 << 30}
 TOOLS = [TOOL, SHORT, HUGE]
 
 
-async def lister(session, run, projet):
+async def list_tools(session, run, project):
     return TOOLS
 
 
-async def appeler(session, run, projet, nom, arguments):
+async def call_tool(session, run, project, name, arguments):
     lines = arguments.get("lines", 1)
     return 200, {"log": ["line of a long log; password=hunter2-plugin"] * lines}
 
 
-def brancher():
-    declarer_un_fournisseur_d_outils("plugin_verbose", lister, appeler)
+def plug_in():
+    declare_tool_provider("plugin_verbose", list_tools, call_tool)
 """
 
 
 @pytest.fixture
 def plugin(tmp_path: pathlib.Path) -> Iterator[None]:
-    from choregos_api.greffons import reinitialiser
+    from choregos_api.extensions import reset
 
     root = tmp_path / "site"
     root.mkdir()
@@ -64,7 +64,7 @@ def plugin(tmp_path: pathlib.Path) -> Iterator[None]:
         "Metadata-Version: 2.1\nName: plugin_verbose\nVersion: 0.1.0\n", encoding="utf-8"
     )
     (info / "entry_points.txt").write_text(
-        "[choregos.plugins]\nplugin_verbose = plugin_verbose:brancher\n", encoding="utf-8"
+        "[choregos.plugins]\nplugin_verbose = plugin_verbose:plug_in\n", encoding="utf-8"
     )
     sys.path.insert(0, str(root))
     try:
@@ -72,7 +72,7 @@ def plugin(tmp_path: pathlib.Path) -> Iterator[None]:
     finally:
         sys.path.remove(str(root))
         sys.modules.pop("plugin_verbose", None)
-        reinitialiser()
+        reset()
 
 
 def _size(value: Any) -> int:
@@ -100,14 +100,14 @@ async def test_an_oversized_catalogue_answer_is_cut_to_the_cap_with_a_marker(
     from choregos_api.config import get_settings
 
     answer = await _catalogue_call(
-        client, project, tmp_path, monkeypatch, {"profils": [{"nom": "a profile"}] * 20_000}
+        client, project, tmp_path, monkeypatch, {"profiles": [{"name": "a profile"}] * 20_000}
     )
     assert answer.status_code == 200, answer.text
     result = answer.json()["result"]
     limit = get_settings().broker_result_max_bytes
     assert _size(result) <= limit, "the cap holds"
     assert result["truncated"]["total_bytes"] > limit
-    assert result["text"].startswith('{"profils"')
+    assert result["text"].startswith('{"profiles"')
     assert "[truncated by the platform:" in result["text"]
 
 
@@ -119,11 +119,11 @@ async def test_a_secret_in_a_catalogue_answer_is_masked(
         project,
         tmp_path,
         monkeypatch,
-        {"profils": [{"nom": "A", "note": "password=hunter2-hunter2"}]},
+        {"profiles": [{"name": "A", "note": "password=hunter2-hunter2"}]},
     )
     assert answer.status_code == 200, answer.text
     assert "hunter2-hunter2" not in answer.text
-    assert answer.json()["result"]["profils"][0]["nom"] == "A", "a small answer keeps its shape"
+    assert answer.json()["result"]["profiles"][0]["name"] == "A", "a small answer keeps its shape"
 
 
 async def test_a_plugin_answer_is_masked_and_cut_to_the_cap(

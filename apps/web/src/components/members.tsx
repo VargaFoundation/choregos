@@ -52,7 +52,7 @@ export function peopleOf(memberships: Membership[]): Person[] {
  */
 export function AdditiveRolesNote() {
   return (
-    <p className="max-w-3xl text-sm text-ink-muted" data-testid="roles-additifs">
+    <p className="max-w-3xl text-sm text-ink-muted" data-testid="additive-roles">
       A project role adds to the person&apos;s organisation role on that project; it cannot take anything away. Someone
       who is a developer of the organisation stays at least a developer on every project.
     </p>

@@ -69,6 +69,28 @@ every phrasing is not a fix; reading the request is.
 - **The organisation's own gateway (ADR 0109).** Right in the end, but the distiller and the drafter
   call the deployment's; S39-07 moves the three together.
 
+## Amendment (2026-11-03, S52-08): a decision model may route
+
+Measured on 18 of the Fondation's own requests (project `fon`; the numbers are in a comment on PR #1183): `gpt-6-luna`
+asked as a decision model was as right as the chat model (18/18). Its probabilities were low exactly
+on the ambiguous requests (0.20) and high on the clear ones (0.96 to 1.00). The self-hosted Laya
+reached 16/18 at best and was confident when wrong. Hence:
+
+- When the catalogue enables an entry for both `route` and `decide` (ADR 0121 §3), the router asks
+  it on `/v1/systemone` instead of asking the `cheap` tier on `/v1/chat/completions`. If several
+  entries qualify, the first by name is asked. The question is one `choice`; its options are the
+  active workflows, each with its description and hint. The same route carries a self-hosted model
+  and an OpenAI one, because LiteLLM translates it.
+- A project may set `min_confidence`: below it, the model's choice is not taken and the default takes
+  the item, the reason saying so. A chat model's answer carries no probability and is never held to
+  it.
+- `documents.routing` and the preview gain `confidence`.
+
+Unchanged: the order (explicit, rules, model, default), asked once per birth, one `route` line in the
+costs, an unknown name, an error or a timeout leaves the item to the default. The decisions are not
+in ADR 0121's ledger yet (S52-05): until then the minimum is set from samples like this one, not from
+measured calibration.
+
 ## What would make us change our mind
 
 Measured misroutes: if a project's requests are often moved by hand to another workflow after a

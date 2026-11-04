@@ -65,7 +65,7 @@ test("at 1280 px the trial and the costs sit beside the form, and the advanced s
   await page.setViewportSize({ width: 1280, height: 900 });
   const builder = await toTheForm(page);
   const form = await box(builder.getByRole("form", { name: "New agent" }));
-  const panel = await box(page.getByTestId("panneau-lateral"));
+  const panel = await box(page.getByTestId("side-panel"));
   expect(panel.x).toBeGreaterThanOrEqual(form.x + form.width);
   // The form is not the 350 px of the drawer.
   expect(form.width).toBeGreaterThanOrEqual(480);
@@ -83,7 +83,7 @@ test("at 390 px the page does not scroll sideways and the panel falls under the 
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   const builder = await toTheForm(page);
   const form = await box(builder.getByRole("form", { name: "New agent" }));
-  const panel = await box(page.getByTestId("panneau-lateral"));
+  const panel = await box(page.getByTestId("side-panel"));
   expect(form.width).toBeGreaterThanOrEqual(300);
   expect(panel.y).toBeGreaterThanOrEqual(form.y + form.height - 1);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
@@ -104,7 +104,7 @@ test("'Draft it for me' pre-fills the form, then 'Create and activate' sends the
   await expect(builder).toBeVisible();
   await expect(builder.getByLabel("Instructions")).not.toHaveValue("");
   await expect(page.getByText("dropped skill `ghost`")).toBeVisible();
-  await expect(builder.getByTestId("banc-d-essai").getByLabel("Sample title", { exact: true })).toHaveValue("Release notes for 1.2");
+  await expect(builder.getByTestId("trial-bench").getByLabel("Sample title", { exact: true })).toHaveValue("Release notes for 1.2");
   expect((await writes(page, /\/agents$/)).length).toBe(0);
   await builder.getByRole("button", { name: "Create and activate" }).click();
   await expect(page).toHaveURL(/\/agents\/release-notes-writer$/);

@@ -132,7 +132,7 @@ async def test_a_governed_write_result_is_masked_too(
     """A write runs as an action (#241): the broker returns what the action's effect recorded. It is
     masked like a read's result — and never refused, since the effect already happened."""
     from choregos_api.db.models import Action, ActionEffect
-    from choregos_api.db.session import TOUT, session_scope
+    from choregos_api.db.session import ALL_ORGS, session_scope
     from sqlalchemy import select
 
     base, headers = await _preparer(client, project, ["*"])
@@ -148,7 +148,7 @@ async def test_a_governed_write_result_is_masked_too(
 
     # What the ActionWorkflow would have recorded: the server's answer, carrying a secret.
     recorded = {"content": [{"type": "text", "text": "ordered; token=ghost-token-123456"}]}
-    async with session_scope(orgs=TOUT) as session:
+    async with session_scope(orgs=ALL_ORGS) as session:
         action = await session.get(Action, action_id)
         assert action is not None
         action.status = "succeeded"

@@ -108,10 +108,10 @@ def test_the_backfill_gives_template_installed_catalogue_agents_their_provenance
     import json
 
     from choregos_api.schemas import AgentSpec
-    from choregos_api.services.agents import empreinte
-    from choregos_core.catalogue_d_agents import entree
+    from choregos_api.services.agents import digest
+    from choregos_core.agent_catalogue import entry
 
-    reviewer, triager = entree("reviewer"), entree("triager")
+    reviewer, triager = entry("reviewer"), entry("triager")
     assert reviewer is not None and triager is not None
     spec = AgentSpec.model_validate(reviewer.document["spec"])
     database = tmp_path / "backfill.db"
@@ -148,11 +148,11 @@ def test_the_backfill_gives_template_installed_catalogue_agents_their_provenance
                 connection,
                 "a-sync",
                 "reviewer",
-                [("template:github-software-delivery@1.0.0", empreinte(spec), same)],
+                [("template:github-software-delivery@1.0.0", digest(spec), same)],
             )
             # a hand-published v2 on top of the catalogue's text
             agent(connection, "a-edited", "triager",
-                  [("template:x@1", empreinte(AgentSpec.model_validate(triager.document["spec"])), "{}"),
+                  [("template:x@1", digest(AgentSpec.model_validate(triager.document["spec"])), "{}"),
                    ("alice@varga.dev", "sha256:by-hand", "{}")])  # fmt: skip
             # an agent outside the catalogue, and a catalogue name that a person wrote
             agent(connection, "a-own", "my-own", [("template:x@1", "sha256:x", "{}")])

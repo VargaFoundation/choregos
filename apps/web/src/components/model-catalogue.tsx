@@ -93,7 +93,7 @@ export function ModelCataloguePanel() {
             {own ? (
               <>
                 Models are routed by your organisation&apos;s gateway{" "}
-                <span className="font-mono" data-donnee>
+                <span className="font-mono" data-verbatim>
                   {own.name}
                 </span>{" "}
                 (<span className="font-mono">{data.gateway.type}</span>): this catalogue and your agents&apos; runs use
@@ -109,7 +109,7 @@ export function ModelCataloguePanel() {
           {/* Owner review of 2026-11-03: which gateway, and where it is set, were not on the page. */}
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1" data-testid="gateway-facts">
             <dt className="text-xs text-ink-muted">Address</dt>
-            <dd className="min-w-0 break-all font-mono" data-donnee>
+            <dd className="min-w-0 break-all font-mono" data-verbatim>
               {data.gateway.base_url ?? (
                 <span className="font-sans text-ink-muted">Known to the platform administrators</span>
               )}
@@ -331,7 +331,7 @@ function ListedByTheGateway({
             <ul className="space-y-1" data-testid="gateway-listed">
               {listed.map((m) => (
                 <li key={m.model_name} className="flex flex-wrap items-baseline gap-2">
-                  <span className="font-mono text-xs" data-donnee>
+                  <span className="font-mono text-xs" data-verbatim>
                     {m.model_name}
                   </span>
                   {m.provider && <span className="text-xs text-ink-muted">via {m.provider}</span>}

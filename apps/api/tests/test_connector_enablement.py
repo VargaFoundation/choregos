@@ -18,7 +18,7 @@ from .agent_scopes_kit import add_member, as_user, make_project
 from .catalogue_kit import project_only
 
 ORG = "/api/v1/orgs/varga"
-OUTILS: list[dict[str, Any]] = [
+TOOLS: list[dict[str, Any]] = [
     {"name": "lookup", "description": "read", "annotations": {"readOnlyHint": True},
      "inputSchema": {"type": "object"}},
     {"name": "order", "description": "write", "inputSchema": {"type": "object"}},
@@ -30,7 +30,7 @@ def vendor(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     import choregos_adapters
     from choregos_adapters.fakes.mcp import FakeMcpServer
 
-    server = FakeMcpServer(outils=[dict(o) for o in OUTILS], jeton="vendor-key")
+    server = FakeMcpServer(outils=[dict(o) for o in TOOLS], jeton="vendor-key")
     monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_ENABLEMENT_TEST", "vendor-key")
     yield server
@@ -133,7 +133,7 @@ async def test_an_action_on_a_connector_not_enabled_for_the_project_is_refused(
 ) -> None:
     """The project policy behind governed actions agrees with the broker."""
     from choregos_api.db.session import session_scope
-    from choregos_api.services.connecteurs import politique_pour_le_projet
+    from choregos_api.services.connectors import policy_for_project
 
     await _prepare(client, project, availability="selected_projects")
     await client.patch(f"{ORG}/connectors/vendor/operations/order", json={"policy": "approval"})
@@ -143,7 +143,7 @@ async def test_an_action_on_a_connector_not_enabled_for_the_project_is_refused(
         async with session_scope() as session:
             row = await session.get(Project, project["id"])
             assert row is not None
-            return await politique_pour_le_projet(session, row, "vendor", operation)
+            return await policy_for_project(session, row, "vendor", operation)
 
     assert await policy("order") == "forbidden", "not enabled: not even an approved action reaches it"
     assert await policy("lookup") == "forbidden"

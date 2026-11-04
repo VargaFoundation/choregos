@@ -15,13 +15,13 @@ test("the connections group lists each connector with its icon", async ({ page }
   await page.goto("/p/dev/settings/connections");
   const headings = await page.getByRole("heading", { level: 2 }).allTextContents();
   expect(headings.filter((h) => ["Connections", "Notifications"].includes(h))).toEqual(["Connections", "Notifications"]);
-  await expect(page.getByTestId("connecteur-scm").locator('[data-icon="brand:github"]')).toBeVisible();
-  await expect(page.getByTestId("connecteur-tracker").locator('[data-icon="brand:github"]')).toBeVisible();
-  await expect(page.getByTestId("connecteur-cd").locator('[data-icon="lucide:cd/demo"]')).toBeVisible();
-  await expect(page.getByTestId("connecteur-cd")).toContainText("Demo stand-in");
-  await expect(page.getByTestId("connecteur-cd")).toContainText("Not tested yet");
-  await expect(page.getByTestId("connecteur-runtime")).toContainText("Provided by the platform");
-  await expect(page.getByTestId("connecteur-runtime")).toContainText("agent-sandbox");
+  await expect(page.getByTestId("connector-kind-scm").locator('[data-icon="brand:github"]')).toBeVisible();
+  await expect(page.getByTestId("connector-kind-tracker").locator('[data-icon="brand:github"]')).toBeVisible();
+  await expect(page.getByTestId("connector-kind-cd").locator('[data-icon="lucide:cd/demo"]')).toBeVisible();
+  await expect(page.getByTestId("connector-kind-cd")).toContainText("Demo stand-in");
+  await expect(page.getByTestId("connector-kind-cd")).toContainText("Not tested yet");
+  await expect(page.getByTestId("connector-kind-runtime")).toContainText("Provided by the platform");
+  await expect(page.getByTestId("connector-kind-runtime")).toContainText("agent-sandbox");
   expect(await page.content()).not.toContain("Unknown");
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/after-settings-dev.png`, fullPage: true });
 });
@@ -38,18 +38,18 @@ test("the groups' nav opens a group, and an old anchor lands on its group", asyn
 
 test("Configure opens a drawer and Save closes it, the card then reads Connected", async ({ page }) => {
   await page.goto("/p/dev/settings/connections");
-  const cd = page.getByTestId("connecteur-cd");
+  const cd = page.getByTestId("connector-kind-cd");
   await cd.getByRole("button", { name: "Edit" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/after-settings-drawer.png` });
   await page.getByRole("dialog").getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(cd.getByTestId("etat-cd")).toHaveText("Connected");
+  await expect(cd.getByTestId("state-cd")).toHaveText("Connected");
 });
 
 test("the runtime lists only what the deployment runs", async ({ page }) => {
   await page.goto("/p/dev/settings/connections");
-  const runtime = page.getByTestId("connecteur-runtime");
+  const runtime = page.getByTestId("connector-kind-runtime");
   await runtime.getByRole("button", { name: "Configure" }).click();
   const options = await page.getByRole("dialog").getByLabel("Implementation").locator("option").allTextContents();
   expect(options).toEqual(["Kubernetes · agent-sandbox (warm pool)", "Kubernetes Job"]);
@@ -112,7 +112,7 @@ test("the tools, backend and danger zone sections work on the mock", async ({ pa
 test("no serious accessibility violation and no horizontal scroll at 390 px", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 });
   await page.goto("/p/dev/settings/connections");
-  await expect(page.getByTestId("connecteur-cd")).toBeVisible();
+  await expect(page.getByTestId("connector-kind-cd")).toBeVisible();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/after-settings-390.png`, fullPage: true });

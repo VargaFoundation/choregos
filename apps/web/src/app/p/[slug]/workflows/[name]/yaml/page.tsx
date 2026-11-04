@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import { useRef } from "react";
 import { Card, Empty, ErrorNote } from "@/components/ui";
 import type { EditorHandle } from "@/components/yaml-editor";
-import { useBrouillon } from "@/components/workflows/brouillon";
+import { useDraft } from "@/components/workflows/draft";
 
 // The editor (CodeMirror) is loaded only when the tab opens: the page does not pay for its weight before.
 const YamlEditor = dynamic(() => import("@/components/yaml-editor").then((m) => m.YamlEditor), {
@@ -19,7 +19,7 @@ const YamlEditor = dynamic(() => import("@/components/yaml-editor").then((m) => 
  * views. Validation follows the typing; it is the server's, the orchestrator's code.
  */
 export default function YamlPage() {
-  const draft = useBrouillon();
+  const draft = useDraft();
   const editor = useRef<EditorHandle>(null);
   const { definition, validation } = draft;
   if (definition.error) return <ErrorNote>{String(definition.error)}</ErrorNote>;
@@ -32,10 +32,10 @@ export default function YamlPage() {
           ref={editor}
           label={`YAML of ${name}`}
           value={draft.yaml}
-          onChange={draft.ecrire}
-          readOnly={draft.occupe}
-          issues={draft.erreurs}
-          warnings={draft.avertissements}
+          onChange={draft.write}
+          readOnly={draft.busy}
+          issues={draft.errors}
+          warnings={draft.warnings}
         />
         <p className="mt-2 text-xs text-ink-muted">
           Changes typed here, on the map or in the process view are one draft: the bar above publishes it.
@@ -43,19 +43,19 @@ export default function YamlPage() {
       </Card>
       <Card title="Validation" className="self-start">
         <div data-testid="validation-yaml" className="space-y-2 text-sm">
-          {validation.etat === "en_cours" ? (
+          {validation.state === "running" ? (
             <p className="text-ink-muted">Validating…</p>
-          ) : validation.etat === "injoignable" ? (
+          ) : validation.state === "unreachable" ? (
             <ErrorNote>
               Could not validate: {validation.message}.{" "}
-              <button type="button" className="underline" onClick={draft.revalider}>
+              <button type="button" className="underline" onClick={draft.revalidate}>
                 Retry
               </button>
             </ErrorNote>
-          ) : draft.erreurs.length === 0 ? (
+          ) : draft.errors.length === 0 ? (
             <p className="text-ok">✓ valid workflow</p>
           ) : null}
-          {draft.erreurs.map((issue, index) => (
+          {draft.errors.map((issue, index) => (
             <ErrorNote key={index}>
               {issue.line ? (
                 <button type="button" className="underline" onClick={() => editor.current?.allerALaLigne(issue.line!)}>
@@ -67,7 +67,7 @@ export default function YamlPage() {
               {issue.path ? ` (${issue.path})` : ""}
             </ErrorNote>
           ))}
-          {draft.avertissements.map((issue, index) => (
+          {draft.warnings.map((issue, index) => (
             <p key={index} className="rounded border border-line border-l-2 border-l-warn bg-surface px-3 py-2 text-warn">
               {issue.message}
             </p>

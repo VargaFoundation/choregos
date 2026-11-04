@@ -52,14 +52,14 @@ export function Passages({ passages }: { passages: HandOff[] }) {
   return (
     <ul aria-label="Hand-offs" className="space-y-4" data-testid="passages">
       {passages.map((passage) => (
-        <li key={passage.output} data-sortie={passage.output} className="space-y-1.5">
+        <li key={passage.output} data-output={passage.output} className="space-y-1.5">
           <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm">
             <span className="font-medium text-ink">{NAMES[passage.output] ?? passage.output.replace(/_/g, " ")}</span>{" "}
             <code className="font-mono text-xs text-ink-muted" title={passage.current_digest ?? undefined}>
               {courte(passage.current_digest)}
             </code>{" "}
             {editedAfterTheFact(passage) && (
-              <Badge tone="waiting" data-testid="modifiee-apres-coup">
+              <Badge tone="waiting" data-testid="modified-afterwards">
                 {passage.current_digest ? "Modified after it was produced" : "Removed after it was produced"}
               </Badge>
             )}
@@ -82,7 +82,7 @@ function Row({ evenement, children }: { evenement: HandOffEvent; children?: Reac
     .filter(Boolean)
     .join(" · ");
   return (
-    <li className="flex flex-wrap items-center gap-x-2 gap-y-1" data-genre={evenement.kind}>
+    <li className="flex flex-wrap items-center gap-x-2 gap-y-1" data-kind={evenement.kind}>
       <Dot tone={evenement.kind === "produced" ? "agent" : "neutral"} />
       {/* Spaces in the text, not only the flex gap: a screen reader reads the text. */}
       <span className="text-ink-muted">{evenement.kind === "produced" ? "Produced by" : "Read by"}</span>{" "}
@@ -98,7 +98,7 @@ function Row({ evenement, children }: { evenement: HandOffEvent; children?: Reac
 function Verdict({ lecture: genre }: { lecture: Lecture }) {
   const [ton, libelle] = LECTURES[genre];
   return (
-    <Badge tone={ton} data-lecture={genre}>
+    <Badge tone={ton} data-reading={genre}>
       {libelle}
     </Badge>
   );

@@ -32,7 +32,7 @@ from urllib.parse import quote, urlsplit
 
 from choregos_adapters.http.egress import guarded
 
-from .skills import MAX_FICHIERS, MAX_OCTETS, SkillRefusee, chemin_sur, entete, file_value, valider
+from .skills import MAX_BYTES, MAX_FILES, SkillRefused, file_value, front_matter, safe_path, validate
 
 SHA = re.compile(r"^[0-9a-f]{40}$")
 HOSTS = ("github.com", "gitlab.com")
@@ -49,7 +49,7 @@ MAX_TARBALL = 32 * 1024 * 1024
 #: must not hold a worker.
 MAX_ENTRIES = 50_000
 #: Bytes read from the tarball's files under the requested path, all skills together.
-MAX_READ = 8 * MAX_OCTETS
+MAX_READ = 8 * MAX_BYTES
 TIMEOUT_S = 15.0
 LICENCE_FILES = ("LICENSE", "LICENSE.txt", "LICENSE.md", "LICENCE", "LICENCE.txt", "LICENCE.md", "COPYING")
 
@@ -106,13 +106,13 @@ def allowed(source: GitSource, sources: list[str]) -> bool:
 
 def folder(path: str) -> str:
     """The folder of the repository a request names, normalised; the root is ``""``."""
-    texte = path.strip().strip("/")
-    if texte in {"", "."}:
+    text = path.strip().strip("/")
+    if text in {"", "."}:
         return ""
     try:
-        return chemin_sur(texte)
-    except SkillRefusee as refus:
-        raise SourceRefused(str(refus)) from refus
+        return safe_path(text)
+    except SkillRefused as refusal:
+        raise SourceRefused(str(refusal)) from refusal
 
 
 # ───────────────────────────── what a tarball holds ─────────────────────────────
@@ -139,106 +139,112 @@ class Snapshot:
     licences: dict[str, str] = field(default_factory=dict)
 
 
-def _skill_folder(chemin: str, dossiers: list[str]) -> str | None:
+def _skill_folder(path: str, folders: list[str]) -> str | None:
     """The deepest skill folder that holds a file — nested skills belong to their own folder."""
-    meilleur: str | None = None
-    for dossier in dossiers:
-        if (dossier == "" or chemin.startswith(dossier + "/")) and (
-            meilleur is None or len(dossier) > len(meilleur)
+    best: str | None = None
+    for candidate in folders:
+        if (candidate == "" or path.startswith(candidate + "/")) and (
+            best is None or len(candidate) > len(best)
         ):
-            meilleur = dossier
-    return meilleur
+            best = candidate
+    return best
 
 
 def _members(archive: tarfile.TarFile) -> list[tuple[str, tarfile.TarInfo]]:
     """The entries of the tarball, its top folder dropped; one that leaves the repository refuses
     the whole tarball."""
-    membres: list[tuple[str, tarfile.TarInfo]] = []
-    for compte, info in enumerate(archive):
-        if compte >= MAX_ENTRIES:
+    members: list[tuple[str, tarfile.TarInfo]] = []
+    for index, info in enumerate(archive):
+        if index >= MAX_ENTRIES:
             raise SourceRefused(f"more than {MAX_ENTRIES} entries in the repository: refused")
-        nom = info.name.split("/", 1)[1] if "/" in info.name else ""
-        if not nom or info.isdir():
+        name = info.name.split("/", 1)[1] if "/" in info.name else ""
+        if not name or info.isdir():
             continue
-        normalise = posixpath.normpath(nom)
-        if normalise.startswith(("../", "/")) or normalise == "..":
-            raise SourceRefused(f"`{nom}` goes outside the repository: refused")
-        membres.append((normalise, info))
-    return membres
+        normalised = posixpath.normpath(name)
+        if normalised.startswith(("../", "/")) or normalised == "..":
+            raise SourceRefused(f"`{name}` goes outside the repository: refused")
+        members.append((normalised, info))
+    return members
 
 
-def _add_file(archive: tarfile.TarFile, skill: FoundSkill, relatif: str, info: tarfile.TarInfo) -> None:
+def _add_file(archive: tarfile.TarFile, skill: FoundSkill, relative: str, info: tarfile.TarInfo) -> None:
     """One file of a skill, or the reason the skill is refused."""
     if not info.isfile():
-        skill.problem = f"`{relatif}` is a link or a special file: refused"
+        skill.problem = f"`{relative}` is a link or a special file: refused"
         return
-    if len(skill.files) >= MAX_FICHIERS:
-        skill.problem = f"more than {MAX_FICHIERS} files"
+    if len(skill.files) >= MAX_FILES:
+        skill.problem = f"more than {MAX_FILES} files"
         return
-    donnees = archive.extractfile(info)
-    if donnees is None:
-        skill.problem = f"`{relatif}` cannot be read"
+    data = archive.extractfile(info)
+    if data is None:
+        skill.problem = f"`{relative}` cannot be read"
         return
     try:
-        skill.files[relatif] = file_value(relatif, donnees.read())
-    except SkillRefusee as refus:
-        skill.problem = str(refus)
+        skill.files[relative] = file_value(relative, data.read())
+    except SkillRefused as refusal:
+        skill.problem = str(refusal)
         return
     if info.mode & 0o111:
-        skill.executables.append(relatif)
+        skill.executables.append(relative)
 
 
 def _check(skill: FoundSkill) -> None:
     """What a zip import checks; a refused skill still says its name when its header has one."""
     if skill.problem is None:
         try:
-            tete = valider(skill.files)
-            skill.name, skill.description = tete.name, tete.description
+            head = validate(skill.files)
+            skill.name, skill.description = head.name, head.description
             return
-        except SkillRefusee as refus:
-            skill.problem = str(refus)
+        except SkillRefused as refusal:
+            skill.problem = str(refusal)
     try:
-        nom = entete(skill.files.get("SKILL.md", "")).get("name")
-    except SkillRefusee:
+        name = front_matter(skill.files.get("SKILL.md", "")).get("name")
+    except SkillRefused:
         return
-    skill.name = nom if isinstance(nom, str) else None
+    skill.name = name if isinstance(name, str) else None
 
 
-def read_tarball(contenu: bytes, path: str) -> Snapshot:
+def read_tarball(content: bytes, path: str) -> Snapshot:
     """The skills a commit's tarball holds under `path`, each checked like a zip import.
 
     The tarball's top folder (`owner-repo-sha/`) is dropped. Nothing is extracted to disk.
     """
     base = folder(path)
     try:
-        archive = tarfile.open(fileobj=io.BytesIO(contenu), mode="r:*")  # noqa: SIM115 - closed below
-    except (tarfile.TarError, EOFError, OSError) as erreur:
-        raise SourceUnavailable("the repository tarball could not be read") from erreur
+        archive = tarfile.open(fileobj=io.BytesIO(content), mode="r:*")  # noqa: SIM115 - closed below
+    except (tarfile.TarError, EOFError, OSError) as error:
+        raise SourceUnavailable("the repository tarball could not be read") from error
     with archive:
-        membres = _members(archive)
+        members = _members(archive)
         licences: dict[str, str] = {}
-        for nom, info in membres:
-            if nom in LICENCE_FILES and info.isfile() and info.size <= 256 * 1024:
-                donnees = archive.extractfile(info)
-                if donnees is not None:
-                    licences[nom] = donnees.read().decode("utf-8", errors="replace")
-        sous = [(n, i) for n, i in membres if base in {"", n} or n.startswith(base + "/")]
-        dossiers = sorted(
-            {posixpath.dirname(n) for n, i in sous if posixpath.basename(n) == "SKILL.md" and i.isfile()}
+        for name, info in members:
+            if name in LICENCE_FILES and info.isfile() and info.size <= 256 * 1024:
+                data = archive.extractfile(info)
+                if data is not None:
+                    licences[name] = data.read().decode("utf-8", errors="replace")
+        under_base = [(n, i) for n, i in members if base in {"", n} or n.startswith(base + "/")]
+        folders = sorted(
+            {
+                posixpath.dirname(n)
+                for n, i in under_base
+                if posixpath.basename(n) == "SKILL.md" and i.isfile()
+            }
         )
-        trouvees = {d: FoundSkill(path=d) for d in dossiers}
-        lus = 0
-        for nom, info in sous:
-            dossier = _skill_folder(nom, dossiers)
-            if dossier is None or trouvees[dossier].problem:
+        found_skills = {d: FoundSkill(path=d) for d in folders}
+        bytes_read = 0
+        for name, info in under_base:
+            candidate = _skill_folder(name, folders)
+            if candidate is None or found_skills[candidate].problem:
                 continue
-            lus += info.size
-            if lus > MAX_READ:
+            bytes_read += info.size
+            if bytes_read > MAX_READ:
                 raise SourceRefused("the skills under this path are too large to be read")
-            _add_file(archive, trouvees[dossier], nom[len(dossier) + 1 :] if dossier else nom, info)
-    for skill in trouvees.values():
+            _add_file(
+                archive, found_skills[candidate], name[len(candidate) + 1 :] if candidate else name, info
+            )
+    for skill in found_skills.values():
         _check(skill)
-    return Snapshot(skills=list(trouvees.values()), licences=licences)
+    return Snapshot(skills=list(found_skills.values()), licences=licences)
 
 
 # ───────────────────────────── licence ─────────────────────────────
@@ -268,22 +274,22 @@ _PROPRIETARY = re.compile(
 def detect_licence(skill_files: dict[str, str], repo_licences: dict[str, str] | None = None) -> str | None:
     """The licence of a skill: an SPDX identifier, `LicenseRef-proprietary`, or `None` when no
     licence is found. The skill's own licence file wins over the repository's."""
-    for fichiers in (skill_files, repo_licences or {}):
-        for nom in LICENCE_FILES:
-            texte = fichiers.get(nom)
-            if texte is None:
+    for files_by_name in (skill_files, repo_licences or {}):
+        for name in LICENCE_FILES:
+            text = files_by_name.get(name)
+            if text is None:
                 continue
-            if trouve := _SPDX.search(texte):
-                return trouve.group(1)
-            for motif, spdx in _LICENCES:
-                if re.search(motif, texte, re.IGNORECASE):
+            if hit := _SPDX.search(text):
+                return hit.group(1)
+            for needle, spdx in _LICENCES:
+                if re.search(needle, text, re.IGNORECASE):
                     return spdx
-            if _PROPRIETARY.search(texte):
+            if _PROPRIETARY.search(text):
                 return "LicenseRef-proprietary"
             return "LicenseRef-unknown"
     skill_md = skill_files.get("SKILL.md", "")
-    if trouve := _SPDX.search(skill_md):
-        return trouve.group(1)
+    if hit := _SPDX.search(skill_md):
+        return hit.group(1)
     return None
 
 
@@ -329,27 +335,27 @@ class HttpsSourceFetcher:
                 {"Accept": "application/vnd.github.sha"},
                 f"https://codeload.github.com/{source.path}/tar.gz/{ref}",
             )
-        projet = quote(source.path, safe="")
+        project = quote(source.path, safe="")
         return (
-            f"https://gitlab.com/api/v4/projects/{projet}/repository/commits/{quote(ref, safe='')}",
+            f"https://gitlab.com/api/v4/projects/{project}/repository/commits/{quote(ref, safe='')}",
             {"Accept": "application/json"},
-            f"https://gitlab.com/api/v4/projects/{projet}/repository/archive.tar.gz?sha={ref}",
+            f"https://gitlab.com/api/v4/projects/{project}/repository/archive.tar.gz?sha={ref}",
         )
 
     async def resolve(self, source: GitSource, ref: str, *, user_agent: str = "") -> str:
         import httpx
 
-        url, entetes, _ = self._urls(source, ref)
+        url, headers, _ = self._urls(source, ref)
         try:
             async with self._client(user_agent) as client:
-                reponse = await client.get(url, headers=entetes)
-        except httpx.HTTPError as panne:
-            raise SourceUnavailable(f"{source.host} did not answer: {panne}") from panne
-        if reponse.status_code in {404, 422}:
+                response = await client.get(url, headers=headers)
+        except httpx.HTTPError as failure:
+            raise SourceUnavailable(f"{source.host} did not answer: {failure}") from failure
+        if response.status_code in {404, 422}:
             raise SourceRefused(f"`{ref}` is not a branch, tag or commit of {source.url}")
-        if reponse.status_code != 200:
-            raise SourceUnavailable(f"{source.host} answered {reponse.status_code}")
-        sha = reponse.text.strip() if source.host == "github.com" else str(reponse.json().get("id", ""))
+        if response.status_code != 200:
+            raise SourceUnavailable(f"{source.host} answered {response.status_code}")
+        sha = response.text.strip() if source.host == "github.com" else str(response.json().get("id", ""))
         if not SHA.match(sha):
             raise SourceUnavailable(f"{source.host} did not give a commit SHA for `{ref}`")
         return sha
@@ -358,25 +364,25 @@ class HttpsSourceFetcher:
         import httpx
 
         _, _, url = self._urls(source, sha)
-        morceaux: list[bytes] = []
-        recus = 0
+        chunks: list[bytes] = []
+        received = 0
         try:
             async with (
                 self._client(user_agent) as client,
-                client.stream("GET", url) as reponse,
+                client.stream("GET", url) as response,
             ):
-                if reponse.status_code != 200:
-                    raise SourceUnavailable(f"{source.host} answered {reponse.status_code} for the tarball")
-                async for morceau in reponse.aiter_bytes():
-                    recus += len(morceau)
-                    if recus > self.max_bytes:
+                if response.status_code != 200:
+                    raise SourceUnavailable(f"{source.host} answered {response.status_code} for the tarball")
+                async for chunk in response.aiter_bytes():
+                    received += len(chunk)
+                    if received > self.max_bytes:
                         raise SourceRefused(
                             f"the repository tarball is larger than {self.max_bytes // (1024 * 1024)} MiB"
                         )
-                    morceaux.append(morceau)
-        except httpx.HTTPError as panne:
-            raise SourceUnavailable(f"{source.host} did not answer: {panne}") from panne
-        return b"".join(morceaux)
+                    chunks.append(chunk)
+        except httpx.HTTPError as failure:
+            raise SourceUnavailable(f"{source.host} did not answer: {failure}") from failure
+        return b"".join(chunks)
 
 
 class FakeSourceFetcher:
@@ -390,11 +396,11 @@ class FakeSourceFetcher:
         self.user_agents: list[str] = []
 
     def add(self, repo_url: str, sha: str, tarball: bytes, refs: dict[str, str] | None = None) -> None:
-        cle = parse_repo_url(repo_url).key
-        self.tarballs[(cle, sha)] = tarball
-        self.refs.setdefault(cle, {})[sha] = sha
-        for nom in refs or {}:
-            self.refs[cle][nom] = (refs or {})[nom]
+        key = parse_repo_url(repo_url).key
+        self.tarballs[(key, sha)] = tarball
+        self.refs.setdefault(key, {})[sha] = sha
+        for name in refs or {}:
+            self.refs[key][name] = (refs or {})[name]
 
     def load_recordings(self, directory: Path) -> None:
         """Serves the reduced tarballs the skills catalogue was generated from (`meta.json` and the
@@ -419,10 +425,10 @@ class FakeSourceFetcher:
     async def tarball(self, source: GitSource, sha: str, *, user_agent: str = "") -> bytes:
         self.calls.append(("tarball", source.key, sha))
         self.user_agents.append(user_agent)
-        contenu = self.tarballs.get((source.key, sha))
-        if contenu is None:
+        content = self.tarballs.get((source.key, sha))
+        if content is None:
             raise SourceUnavailable(f"no recorded tarball for {source.url}@{sha}")
-        return contenu
+        return content
 
 
 _FETCHER: dict[str, SourceFetcher] = {}

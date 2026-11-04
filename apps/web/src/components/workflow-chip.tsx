@@ -5,7 +5,7 @@ import { workflowHueClasses } from "@/lib/workflow-hue";
 
 /**
  * A workflow, named in its own colour (ADR 0120): the same hue on the board, a ticket, the workflow
- * list and the map. The name is data (`data-donnee`), shown as written; the colour never speaks alone.
+ * list and the map. The name is data (`data-verbatim`), shown as written; the colour never speaks alone.
  */
 export function WorkflowChip({
   name,
@@ -32,7 +32,7 @@ export function WorkflowChip({
           size === "md" ? "size-2.5" : "size-2",
         )}
       />
-      <span data-donnee className="truncate">
+      <span data-verbatim className="truncate">
         {name}
       </span>
       {version != null && (

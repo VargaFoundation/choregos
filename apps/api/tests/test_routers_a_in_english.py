@@ -67,17 +67,32 @@ def _checker() -> ModuleType:
     return module
 
 
+def _sources() -> list[str]:
+    """Each owned router's file, or every module of it once it is a package."""
+    sources: list[str] = []
+    for name in OWNED:
+        package = ROOT / SRC / name
+        if package.is_dir():
+            sources += sorted(f"{SRC}{name}/{path.name}" for path in package.glob("*.py"))
+        else:
+            sources.append(f"{SRC}{name}.py")
+    return sources
+
+
 def test_owned_routers_have_no_french() -> None:
     checker = _checker()
     try:
-        found = checker.scan_tree([f"{SRC}{name}.py" for name in OWNED])
+        found = checker.scan_tree(_sources())
     except RuntimeError:  # an exported tree without .git: nothing to scan
         pytest.skip("not a git checkout")
     assert [str(f) for f in found] == []
 
 
 def test_every_owned_router_exists() -> None:
-    present = {path.stem for path in (ROOT / SRC).glob("*.py")}
+    # A router split into a package (routers/knowledge/, #1271) is still the router of its name.
+    present = {path.stem for path in (ROOT / SRC).glob("*.py")} | {
+        path.parent.name for path in (ROOT / SRC).glob("*/__init__.py")
+    }
     assert set(OWNED) <= present, sorted(set(OWNED) - present)
 
 

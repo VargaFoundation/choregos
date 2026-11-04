@@ -7,13 +7,13 @@ import { expect, test } from "@playwright/test";
  */
 test("the process view names the registry agent of a step and links to it", async ({ page }) => {
   await page.goto("/p/billing-api/workflows/dev-complex/steps");
-  const etape = page.getByTestId("process-step-t-implement");
-  const lien = etape.getByRole("link", { name: "Developer" });
-  await expect(lien).toBeVisible();
-  await expect(etape).toContainText("v1 · latest");
-  await expect(etape).toContainText("changes on the work item's branch");
-  await expect(etape).toContainText("test_report — from Tested (t-test)");
-  await lien.click();
+  const step = page.getByTestId("process-step-t-implement");
+  const link = step.getByRole("link", { name: "Developer" });
+  await expect(link).toBeVisible();
+  await expect(step).toContainText("v1 · latest");
+  await expect(step).toContainText("changes on the work item's branch");
+  await expect(step).toContainText("test_report — from Tested (t-test)");
+  await link.click();
   await expect(page).toHaveURL(/\/agents\/developer$/);
 });
 
@@ -24,14 +24,14 @@ test("the map says what each box produces and lists the artifacts, highlighting 
   await page.goto("/p/billing-api/workflows/dev-complex");
   await expect(page.getByText("→ spec_markdown, allowed_paths")).toBeVisible();
   const table = page.getByRole("table", { name: "Artifacts" });
-  const ligne = table.getByTestId("artefact-test_report");
-  await expect(ligne).toBeVisible();
-  await ligne.hover();
-  await expect(page.getByTestId("etape-t-test")).toHaveAttribute("data-flow", "produces");
-  await expect(page.getByTestId("etape-t-implement")).toHaveAttribute("data-flow", "reads");
+  const row = table.getByTestId("artifact-row-test_report");
+  await expect(row).toBeVisible();
+  await row.hover();
+  await expect(page.getByTestId("step-t-test")).toHaveAttribute("data-flow", "produces");
+  await expect(page.getByTestId("step-t-implement")).toHaveAttribute("data-flow", "reads");
   await page.mouse.move(0, 0);
-  await expect(page.getByTestId("etape-t-test")).not.toHaveAttribute("data-flow", /.+/);
+  await expect(page.getByTestId("step-t-test")).not.toHaveAttribute("data-flow", /.+/);
   // A chosen box opens its card above the editor.
-  await page.getByTestId("etape-t-specify").click();
+  await page.getByTestId("step-t-specify").click();
   await expect(page.getByTestId("details-t-specify")).toContainText("Spec writer");
 });

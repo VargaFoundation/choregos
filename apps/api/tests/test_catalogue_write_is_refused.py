@@ -67,7 +67,7 @@ async def _run(
     path = tmp_path / "catalogue.yaml"
     path.write_text(_catalogue(read_only=read_only), encoding="utf-8")
     monkeypatch.setenv("CHOREGOS_TOOL_CATALOG", str(path))
-    service_catalogue.vider_cache()
+    service_catalogue.clear_cache()
 
     async with session_scope() as session:
         row = await session.get(Project, project["id"])
@@ -140,7 +140,7 @@ async def test_a_tool_marked_read_only_is_called(
 async def test_a_writing_tool_is_not_listed_anywhere(
     client: AsyncClient, project: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.catalogue import outils_du_projet
+    from choregos_api.catalogue import project_tools
 
     run_id, headers = await _run(project, tmp_path, monkeypatch, read_only=False)
 
@@ -155,8 +155,8 @@ async def test_a_writing_tool_is_not_listed_anywhere(
     assert by_name["create_ticket"]["allowed"] is False
     assert by_name["list_tickets"]["allowed"] is True
 
-    assert {o.name for o in outils_du_projet(["*"])} == {"list_tickets"}
-    assert {o.name for o in outils_du_projet(["*"], include_writers=True)} == {
+    assert {o.name for o in project_tools(["*"])} == {"list_tickets"}
+    assert {o.name for o in project_tools(["*"], include_writers=True)} == {
         "create_ticket",
         "list_tickets",
     }

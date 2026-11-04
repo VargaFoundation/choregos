@@ -143,7 +143,7 @@ async def test_the_checksum_of_a_version_without_memories_is_unchanged(
     """Computed by hand over the keys that existed before the field: a `memories: null` leaking into the
     digest would move every checksum in the registry."""
     from choregos_api.schemas import AgentSpec
-    from choregos_api.services.agents import empreinte
+    from choregos_api.services.agents import digest
 
     before = {
         "instructions": "",
@@ -155,11 +155,11 @@ async def test_the_checksum_of_a_version_without_memories_is_unchanged(
         "mcp_servers": [],
         "evals": [],
     }
-    assert empreinte(AgentSpec()) == _old_digest(before)
+    assert digest(AgentSpec()) == _old_digest(before)
     explicit = AgentSpec.model_validate(
         {"memories": [{"scope": "project", "slug": "shared", "mode": "write"}]}
     )
-    assert empreinte(explicit) != _old_digest(before), "an explicit list is a real change"
+    assert digest(explicit) != _old_digest(before), "an explicit list is a real change"
     created = await create_agent(client, "old-one", spec={"instructions": "Say hello to everyone."})
     assert created.status_code == 201
     stored = (await client.get(f"{ORG}/agents/old-one/versions/1")).json()

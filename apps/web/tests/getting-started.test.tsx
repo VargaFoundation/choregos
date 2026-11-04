@@ -44,9 +44,9 @@ describe("the getting-started card of the overview (S40-06c)", () => {
       readiness([item("provisioned", "done"), item("connector-cd", "todo", "/p/dev/settings#connections"), item("connector-ci", "not_needed")]),
     );
     renderCard();
-    expect((await screen.findByTestId("etape-connector-cd")).getAttribute("data-state")).toBe("todo");
+    expect((await screen.findByTestId("step-connector-cd")).getAttribute("data-state")).toBe("todo");
     expect(screen.getByText("1 of 2 done")).toBeTruthy();
-    expect(screen.queryByTestId("etape-connector-ci")).toBeNull();
+    expect(screen.queryByTestId("step-connector-ci")).toBeNull();
     expect(screen.getByText("Fix").getAttribute("href")).toBe("/p/dev/settings/connections#connections");
   });
 
@@ -54,6 +54,6 @@ describe("the getting-started card of the overview (S40-06c)", () => {
     api.projectReadiness.mockResolvedValue(readiness([item("provisioned", "done"), item("connector-cd", "check")]));
     renderCard();
     await vi.waitFor(() => expect(api.projectReadiness).toHaveBeenCalledWith("dev"));
-    expect(screen.queryByTestId("mise-en-route")).toBeNull();
+    expect(screen.queryByTestId("getting-started")).toBeNull();
   });
 });

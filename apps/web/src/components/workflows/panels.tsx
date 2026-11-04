@@ -31,12 +31,12 @@ export function StatePanel({ node, states, actors }: { node: Node; states: Node[
   const [name, setName] = useState(node.id);
   return (
     <Card title={`State ${node.id}`}>
-      <div className="space-y-3 text-sm" data-testid="panneau-etat">
+      <div className="space-y-3 text-sm" data-testid="state-panel">
         <form
           className="flex items-end gap-2"
           onSubmit={(event) => {
             event.preventDefault();
-            void draft.apply(operations.libelle(node.id, label));
+            void draft.apply(operations.stateLabel(node.id, label));
           }}
         >
           <label className="flex-1 space-y-1">
@@ -51,7 +51,7 @@ export function StatePanel({ node, states, actors }: { node: Node; states: Node[
           className="flex items-end gap-2"
           onSubmit={(event) => {
             event.preventDefault();
-            void draft.apply(operations.renommer(node.id, name));
+            void draft.apply(operations.renameState(node.id, name));
           }}
         >
           <label className="flex-1 space-y-1">
@@ -63,7 +63,7 @@ export function StatePanel({ node, states, actors }: { node: Node; states: Node[
           </Button>
         </form>
         {!node.terminal && <StepForm from={node.id} states={states} actors={actors} />}
-        <Button size="sm" tone="danger" onClick={() => void draft.apply(operations.retirerLEtat(node.id))}>
+        <Button size="sm" tone="danger" onClick={() => void draft.apply(operations.removeState(node.id))}>
           Remove this state
         </Button>
       </div>
@@ -102,8 +102,8 @@ export function StepForm({
       aria-label={from ? `New transition from ${from}` : "New step"}
       onSubmit={(event) => {
         event.preventDefault();
-        const transition = operations.ajouterUneTransition(origin, target, by);
-        const gestures = to === NEW_STATE ? [operations.ajouterUnEtat(target, target), transition] : [transition];
+        const transition = operations.addTransition(origin, target, by);
+        const gestures = to === NEW_STATE ? [operations.addState(target, target), transition] : [transition];
         void draft.apply(...gestures).then((ok) => {
           if (!ok) return;
           setTo("");
@@ -216,12 +216,12 @@ export function TransitionPanel({
   const id = edge.id;
   return (
     <Card title={`Transition ${id}`}>
-      <div className="space-y-3 text-sm" data-testid="panneau-transition">
+      <div className="space-y-3 text-sm" data-testid="transition-panel">
         <form
           className="flex items-end gap-2"
           onSubmit={(event) => {
             event.preventDefault();
-            void draft.apply(operations.acteur(id, by));
+            void draft.apply(operations.transitionActor(id, by));
           }}
         >
           <label className="flex-1 space-y-1">
@@ -240,7 +240,7 @@ export function TransitionPanel({
         </form>
         <div className="space-y-1">
           <p className="text-xs text-ink-muted">Only if</p>
-          <ul className="space-y-1.5" data-testid="garanties-de-la-transition">
+          <ul className="space-y-1.5" data-testid="transition-guarantees">
             {(edge.gates ?? []).map((name) => (
               <li key={name} className="flex items-start gap-2 rounded border border-line px-2 py-1 text-xs">
                 <span className="min-w-0 flex-1">
@@ -254,7 +254,7 @@ export function TransitionPanel({
                   type="button"
                   aria-label={`Remove the guarantee ${name}`}
                   className="text-ink-muted hover:text-danger"
-                  onClick={() => void draft.apply(operations.retirerUneGarantie(id, name))}
+                  onClick={() => void draft.apply(operations.removeGate(id, name))}
                 >
                   ×
                 </button>
@@ -265,7 +265,7 @@ export function TransitionPanel({
             className="flex items-end gap-2"
             onSubmit={(event) => {
               event.preventDefault();
-              void draft.apply(operations.ajouterUneGarantie(id, gate)).then((ok) => ok && setGate(""));
+              void draft.apply(operations.addGate(id, gate)).then((ok) => ok && setGate(""));
             }}
           >
             <Input
@@ -288,7 +288,7 @@ export function TransitionPanel({
           className="flex items-end gap-2"
           onSubmit={(event) => {
             event.preventDefault();
-            void draft.apply(operations.delai(id, hours === "" ? null : Number(hours)));
+            void draft.apply(operations.transitionTimeout(id, hours === "" ? null : Number(hours)));
           }}
         >
           <label className="flex-1 space-y-1">
@@ -300,12 +300,12 @@ export function TransitionPanel({
           </Button>
         </form>
         {timing && (
-          <p className="text-xs text-ink-muted" data-testid="delai-en-clair">
+          <p className="text-xs text-ink-muted" data-testid="plain-delay">
             {timing}
           </p>
         )}
         <TransitionFields id={id} states={states} actors={actors} workflows={workflows} />
-        <Button size="sm" tone="danger" onClick={() => void draft.apply(operations.retirerLaTransition(id))}>
+        <Button size="sm" tone="danger" onClick={() => void draft.apply(operations.removeTransition(id))}>
           Remove this transition
         </Button>
       </div>

@@ -63,7 +63,6 @@ SCANNED_DIRS = (
     "dev/",
     "demo/",
     "templates/",  # S39-11: a shipped template is read by every user
-    "essai/",  # ADR 0098: the trials, French until S45 renames them
     "trials/",
     "infra/",
     "docker/",
@@ -806,7 +805,7 @@ AREAS: dict[str, tuple[str, ...]] = {
     "tests": ("tests/",),
     "docs-plan": ("docs/plan/",),
     "docs": ("docs/",),
-    "trials": ("essai/", "trials/"),
+    "trials": ("trials/",),
     "ops": ("charts/", "infra/", "docker/"),
     "repo": ("",),
 }

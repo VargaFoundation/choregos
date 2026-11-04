@@ -3,28 +3,28 @@ import { NextRequest } from "next/server";
 import { describe, expect, it } from "vitest";
 import { proxy } from "@/proxy";
 
-/** La CSP que la console envoie, directive par directive. */
+/** The CSP the console sends, directive by directive. */
 function directives(): Map<string, string[]> {
   const csp = proxy(new NextRequest("https://choregos.example/p/billing-api")).headers.get("Content-Security-Policy") ?? "";
   return new Map(
     csp
       .split(";")
       .map((d) => d.trim().split(/\s+/))
-      .filter((morceaux) => morceaux[0])
-      .map(([nom, ...valeurs]) => [nom!, valeurs]),
+      .filter((pieces) => pieces[0])
+      .map(([name, ...values]) => [name!, values]),
   );
 }
 
-describe("la politique de sécurité du contenu (S21-05)", () => {
-  it("n'ouvre aucune origine tierce aux scripts, styles et polices : tout ce que la console charge vient d'elle", () => {
+describe("the content security policy (S21-05)", () => {
+  it("opens no third-party origin to scripts, styles and fonts: everything the console loads comes from itself", () => {
     const csp = directives();
-    for (const nom of ["script-src", "style-src", "font-src", "worker-src", "default-src"]) {
-      const tiers = (csp.get(nom) ?? []).filter((v) => /^(https?:|\*|[a-z0-9.-]+\.[a-z]{2,})/i.test(v));
-      expect(tiers, nom).toEqual([]);
+    for (const name of ["script-src", "style-src", "font-src", "worker-src", "default-src"]) {
+      const foreign = (csp.get(name) ?? []).filter((v) => /^(https?:|\*|[a-z0-9.-]+\.[a-z]{2,})/i.test(v));
+      expect(foreign, name).toEqual([]);
     }
   });
 
-  it("garde les scripts sous nonce, sans unsafe-inline", () => {
+  it("keeps scripts under a nonce, without unsafe-inline", () => {
     const scripts = directives().get("script-src") ?? [];
     expect(scripts.some((v) => v.startsWith("'nonce-"))).toBe(true);
     expect(scripts).not.toContain("'unsafe-inline'");
@@ -35,6 +35,6 @@ describe("la politique de sécurité du contenu (S21-05)", () => {
     expect(csp.get("img-src")).toContain("blob:");
     expect(csp.get("media-src")).toContain("blob:");
     expect(csp.get("frame-src")).toContain("blob:");
-    for (const nom of ["script-src", "default-src", "object-src"]) expect(csp.get(nom) ?? [], nom).not.toContain("blob:");
+    for (const name of ["script-src", "default-src", "object-src"]) expect(csp.get(name) ?? [], name).not.toContain("blob:");
   });
 });

@@ -43,7 +43,7 @@ export function Glossary({ ici, ouvert = false }: { ici: NotionDuGlossaire; ouve
   return (
     <details
       open={ouvert}
-      data-testid="glossaire"
+      data-testid="glossary"
       className="max-w-3xl rounded border border-line bg-surface px-3 py-2 text-sm"
     >
       <summary className="cursor-pointer text-ink-muted">How agents, skills, connectors and clients fit together</summary>

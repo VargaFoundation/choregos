@@ -34,7 +34,7 @@ test("registering a code agent: pick an image, give the command, read it back", 
   ).toBeAttached();
   await image.selectOption("ticket-triager");
   await builder.getByLabel("Command").fill("python\n-m\nticket_triager");
-  await expect(page.getByTestId("runtime-resolu")).toContainText(
+  await expect(page.getByTestId("runtime-resolved")).toContainText(
     "Your code runs in the image ticket-triager",
   );
 

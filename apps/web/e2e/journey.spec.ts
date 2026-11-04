@@ -60,32 +60,32 @@ test("work item: costs per step and timeline", async ({ page }) => {
 test("work item: the journey is followed live, replayed, and every agent shows what it did (S22-02)", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/p/billing-api/items/w1");
-  const journey = page.getByTestId("parcours");
-  await expect(journey.getByTestId("parcours-maintenant")).toContainText("Now in Reviewed by an agent");
-  await expect(journey.getByTestId("etape-t-security-review")).toHaveAttribute("data-statut", "en_cours");
+  const journey = page.getByTestId("journey");
+  await expect(journey.getByTestId("journey-now")).toContainText("Now in Reviewed by an agent");
+  await expect(journey.getByTestId("step-t-security-review")).toHaveAttribute("data-status", "running");
   await expect(journey.getByTestId("tour-t-test")).toHaveText("Passed in round 3");
   // The map fits in the page: it grows longer, it does not overflow.
   const debord = await page.evaluate(() => {
-    const mapBox = document.querySelector('[data-testid="parcours"]')!.getBoundingClientRect();
+    const mapBox = document.querySelector('[data-testid="journey"]')!.getBoundingClientRect();
     return { droite: mapBox.right, fenetre: document.documentElement.clientWidth };
   });
   expect(debord.droite).toBeLessThanOrEqual(debord.fenetre);
 
   await journey.getByRole("button", { name: "2×" }).click();
   await journey.getByRole("button", { name: "Replay the journey" }).click();
-  await expect(journey.getByTestId("parcours-moment")).toContainText("/ 34");
-  await expect(journey.getByTestId("etape-t-triage")).toHaveAttribute("data-statut", "fait", { timeout: 5000 });
+  await expect(journey.getByTestId("journey-moment")).toContainText("/ 34");
+  await expect(journey.getByTestId("step-t-triage")).toHaveAttribute("data-status", "done", { timeout: 5000 });
   await journey.getByRole("button", { name: "Pause the replay" }).click();
   await journey.getByRole("navigation", { name: "Stages of the journey" }).getByRole("button", { name: /In progress/ }).click();
-  await expect(journey.getByTestId("etape-t-implement")).toHaveAttribute("data-statut", "en_cours");
+  await expect(journey.getByTestId("step-t-implement")).toHaveAttribute("data-status", "running");
   await journey.getByRole("button", { name: /^Live/ }).click();
 
-  await journey.getByTestId("etape-t-test").click();
-  const panel = page.getByTestId("panneau-parcours");
+  await journey.getByTestId("step-t-test").click();
+  const panel = page.getByTestId("journey-panel");
   await expect(panel).toBeVisible();
-  await panel.getByTestId("tentative-r-test-1").click();
+  await panel.getByTestId("attempt-r-test-1").click();
   await expect(panel).toContainText("2 tests fail: rounding of partial credit notes.");
-  await expect(panel.getByTestId("ce-qu-il-a-fait")).toContainText("src/billing/rates.py");
+  await expect(panel.getByTestId("what-it-did")).toContainText("src/billing/rates.py");
   await panel.getByRole("tab", { name: "Log" }).click();
   await expect(panel.getByTestId("live-log")).toContainText("session/request_permission");
 });
@@ -141,10 +141,10 @@ test("the administration lists my roles by scope (S40-07)", async ({ page }) => 
 
 test("members: a person appears once; a project has its members; org_admin is not a project role (S30-06)", async ({ page }) => {
   await page.goto("/admin/members");
-  const membres = page.getByTestId("membres");
-  await expect(membres.getByTestId("membre-marc@acme.dev")).toHaveCount(1);
-  await expect(membres.getByTestId("membre-marc@acme.dev")).toContainText("checkout-web · Release captain");
-  await expect(page.getByTestId("roles-additifs")).toContainText("cannot take anything away");
+  const membres = page.getByTestId("members");
+  await expect(membres.getByTestId("member-marc@acme.dev")).toHaveCount(1);
+  await expect(membres.getByTestId("member-marc@acme.dev")).toContainText("checkout-web · Release captain");
+  await expect(page.getByTestId("additive-roles")).toContainText("cannot take anything away");
   // The scope of an invitation is picked among the projects; a project leaves org_admin out.
   await page.getByLabel("Scope").selectOption("billing-api");
   await expect(page.getByLabel("Role", { exact: true }).locator("option[value=org_admin]")).toHaveCount(0);
@@ -152,7 +152,7 @@ test("members: a person appears once; a project has its members; org_admin is no
   await page.goto("/p/billing-api/members");
   const barre = page.getByRole("complementary", { name: "Sidebar" });
   await expect(barre.getByRole("link", { name: "Members" })).toHaveAttribute("aria-current", "page");
-  await expect(page.getByTestId("membres").getByRole("row")).toHaveCount(3);
+  await expect(page.getByTestId("members").getByRole("row")).toHaveCount(3);
   const role = page.getByRole("combobox", { name: "Role of lea@acme.dev on billing-api" });
   await expect(role).toHaveValue("project_owner");
   await expect(role.locator("option[value=org_admin]")).toHaveCount(0);
@@ -208,10 +208,10 @@ test("an ontology proposal is an action: a former link leads there, and says wha
   // A decision link issued before S20-10 (MCP door, email): same identifier, actions page.
   await page.goto("/p/billing-api/proposals/pr1");
   await expect(page).toHaveURL(/\/p\/billing-api\/actions\/pr1$/);
-  const ontology = page.getByTestId("ontologie");
+  const ontology = page.getByTestId("ontology");
   await expect(ontology).toContainText("open_infra_pr");
   await expect(ontology).toContainText("os-reboot-required");
-  await expect(page.getByTestId("regles-de-decision")).toContainText("within 10 min");
+  await expect(page.getByTestId("decision-rules")).toContainText("within 10 min");
   await expect(page.getByRole("button", { name: "Reject" })).toBeDisabled();
   await page.getByLabel("Reason to reject").fill("the maintenance window is frozen");
   await expect(page.getByRole("button", { name: "Reject" })).toBeEnabled();
@@ -227,41 +227,41 @@ test("workflows: a project carries several, each reads as a process and as a map
   await page.getByRole("link", { name: "default-simple" }).click();
   await expect(page).toHaveURL(/\/p\/billing-api\/workflows\/default-simple$/);
   // A workflow opens on its graph (S55-06); its steps in words are one tab away.
-  await expect(page.getByTestId("carte-en-serpentin")).toBeVisible();
+  await expect(page.getByTestId("serpentine-map")).toBeVisible();
   await page.getByRole("link", { name: "Steps" }).click();
   await expect(page.getByTestId("process-step-t-implement")).toContainText("the agent stayed within its allowed paths");
   await page.getByRole("link", { name: "Graph" }).click();
   // The map opens as a snake (S22-05); the flat list is one tab away.
-  await expect(page.getByTestId("carte-en-serpentin")).toBeVisible();
+  await expect(page.getByTestId("serpentine-map")).toBeVisible();
   await page.getByRole("button", { name: "List" }).click();
   // The defaults leave every agent state: the legend says them once, the map does not draw them.
   await expect(page.getByTestId("workflow-defaults").getByRole("listitem")).toHaveCount(2);
   // The nominal path reads alone: an escalation shows around its state, or all of them on request.
   const mapBox = page.getByTestId("workflow-graph");
   await expect(mapBox.getByRole("list", { name: "Nominal path" }).locator(":scope > li")).toHaveCount(3);
-  await expect(mapBox.getByTestId("secondaires-ready")).toHaveCount(0);
-  await mapBox.getByTestId("etat-ready").hover();
-  await expect(mapBox.getByTestId("secondaires-ready")).toContainText("When retries run out → Needs a human");
+  await expect(mapBox.getByTestId("secondary-ready")).toHaveCount(0);
+  await mapBox.getByTestId("state-ready").hover();
+  await expect(mapBox.getByTestId("secondary-ready")).toContainText("When retries run out → Needs a human");
   await page.mouse.move(0, 0);
-  await expect(mapBox.getByTestId("secondaires-ready")).toHaveCount(0);
+  await expect(mapBox.getByTestId("secondary-ready")).toHaveCount(0);
   await page.getByLabel(/Show every retry, rejection and escalation/).check();
-  await expect(mapBox.getByTestId("secondaires-ready")).toBeVisible();
+  await expect(mapBox.getByTestId("secondary-ready")).toBeVisible();
 });
 
 test("workflows: a label changed on the map reads in the process view, then is published", async ({ page }) => {
   await page.goto("/p/billing-api/workflows/default-simple?view=list");
   const mapBox = page.getByTestId("workflow-graph");
-  await mapBox.getByTestId("etat-inbox").click();
-  const panel = page.getByTestId("panneau-etat");
+  await mapBox.getByTestId("state-inbox").click();
+  const panel = page.getByTestId("state-panel");
   await panel.getByLabel("Label").fill("Nouvelles demandes");
   await panel.getByRole("button", { name: "Set label" }).click();
 
   // Nothing is published: the draft says the gesture, its diff, and the map is redrawn from it.
-  const draft = page.getByTestId("brouillon");
+  const draft = page.getByTestId("draft");
   await expect(draft).toContainText("1 change not published yet");
   await draft.getByText("Last change").click();
-  await expect(page.getByTestId("dernier-diff")).toContainText("+  inbox: { display: Nouvelles demandes, kind: wait }");
-  await expect(mapBox.getByTestId("etat-inbox")).toContainText("Nouvelles demandes");
+  await expect(page.getByTestId("last-diff")).toContainText("+  inbox: { display: Nouvelles demandes, kind: wait }");
+  await expect(mapBox.getByTestId("state-inbox")).toContainText("Nouvelles demandes");
 
   // The process view reads the same draft; publishing creates the version following the one that was read.
   await page.getByRole("link", { name: "Steps" }).click();
@@ -273,13 +273,13 @@ test("workflows: a label changed on the map reads in the process view, then is p
 test("workflows: the process view opens a step's panel, its time limit prefilled", async ({ page }) => {
   await page.goto("/p/billing-api/workflows/default-simple/steps");
   await page.getByRole("button", { name: "Edit t-refine" }).click();
-  const panel = page.getByTestId("panneau-transition");
+  const panel = page.getByTestId("transition-panel");
   await expect(panel).toBeVisible();
   // The time limit read is prefilled: t-implement has one, t-refine does not.
   await expect(panel.getByLabel("At most (hours, empty: the default)")).toHaveValue("");
   await page.getByRole("button", { name: "Close" }).click();
   await page.getByRole("button", { name: "Edit t-implement" }).click();
-  await expect(page.getByTestId("panneau-transition").getByLabel("At most (hours, empty: the default)")).toHaveValue("72");
+  await expect(page.getByTestId("transition-panel").getByLabel("At most (hours, empty: the default)")).toHaveValue("72");
 });
 
 test("the former workflow page leads to the list", async ({ page }) => {
@@ -333,12 +333,12 @@ test("agents: the registry, and a connected Claude Code that acts as an external
 
   await page.goto("/agents");
   await page.getByRole("link", { name: "Onboarding coordinator" }).click();
-  await expect(page.getByTestId("mesures")).toContainText("14 (12 succeeded, 2 failed)");
+  await expect(page.getByTestId("measures")).toContainText("14 (12 succeeded, 2 failed)");
   await page.getByRole("link", { name: "Definition" }).click();
   await expect(page.getByTestId("definition-groups")).toContainText("onboarding-procedure@1");
   await page.locator("summary", { hasText: "Capabilities" }).click();
   await page.getByRole("link", { name: "onboarding-procedure@1" }).click();
-  await expect(page.getByTestId("fichiers")).toContainText("Entra accounts ten days before the start date");
+  await expect(page.getByTestId("files")).toContainText("Entra accounts ten days before the start date");
 });
 
 /** A new agent's page (S39-05): the short first step, then the builder; a folded section is opened by its summary. */
@@ -371,10 +371,10 @@ test("an agent is created from the builder alone, every field of its version set
   await builder.getByRole("button", { name: "Add", exact: true }).click();
   await builder.getByLabel("Tool patterns of supplier-agent").fill("track_*");
   await page.getByRole("tab", { name: "What it costs and allows" }).click();
-  const allows = page.getByTestId("ce-que-ca-permet");
+  const allows = page.getByTestId("what-it-allows");
   await expect(allows).toContainText("A run stops at US$0.50");
-  await expect(allows.getByTestId("outils-resolus")).toContainText("track_order — called freely");
-  await expect(allows.getByTestId("outils-resolus")).not.toContainText("order_laptop");
+  await expect(allows.getByTestId("resolved-tools")).toContainText("track_order — called freely");
+  await expect(allows.getByTestId("resolved-tools")).not.toContainText("order_laptop");
   await builder.getByRole("button", { name: "Create and activate" }).click();
   await expect(page).toHaveURL(/\/agents\/triage$/);
   await page.getByRole("link", { name: "Definition" }).click();
@@ -392,7 +392,7 @@ test("the builder sets which knowledge bases an agent reads and whose memory it 
   await builder.getByLabel("Instructions").fill("Review {{ ticket.title }} against the zoning principles.");
   await unfold(builder, "Knowledge");
   await unfold(builder, "Memory");
-  const bases = builder.getByTestId("bases-de-la-version");
+  const bases = builder.getByTestId("version-bases");
   await expect(bases).toContainText("None — it reads no knowledge base.");
   await expect(builder.getByRole("button", { name: "Read it" })).toBeDisabled();
   await builder.getByLabel("Add a knowledge base").selectOption("architecture-framework");
@@ -408,11 +408,11 @@ test("the builder sets which knowledge bases an agent reads and whose memory it 
   await builder.getByRole("button", { name: "Add it" }).click();
   await builder.getByTestId("memory-binding").getByLabel("Read and write").check();
   await page.getByRole("tab", { name: "What it costs and allows" }).click();
-  const allows = page.getByTestId("ce-que-ca-permet");
-  await expect(allows.getByTestId("connaissances-resolues")).toContainText(
+  const allows = page.getByTestId("what-it-allows");
+  await expect(allows.getByTestId("resolved-knowledge")).toContainText(
     "architecture-framework — laid read-only in the workspace; served to every project of the organisation.",
   );
-  await expect(allows.getByTestId("memoire-resolue")).toContainText("Its own memory in the project — read and written");
+  await expect(allows.getByTestId("resolved-memory")).toContainText("Its own memory in the project — read and written");
   await builder.getByRole("button", { name: "Create and activate" }).click();
   await expect(page).toHaveURL(/\/agents\/zoning-reviewer$/);
 
@@ -421,13 +421,13 @@ test("the builder sets which knowledge bases an agent reads and whose memory it 
   await expect(page.getByTestId("definition-groups")).toContainText("architecture-framework");
   await page.getByRole("link", { name: "Edit", exact: true }).click();
   const suivante = page.getByTestId("agent-builder");
-  await expect(suivante.getByTestId("bases-de-la-version")).toContainText("architecture-framework");
+  await expect(suivante.getByTestId("version-bases")).toContainText("architecture-framework");
   await expect(suivante.getByTestId("memory-binding")).toHaveCount(1);
   await expect(suivante.getByTestId("memory-binding")).toContainText("project:own");
   await suivante.getByRole("button", { name: "Remove architecture-framework" }).click();
   await suivante.getByRole("button", { name: "Remove project:own" }).click();
-  await expect(page.getByTestId("connaissances-resolues")).toContainText("None.");
-  await expect(page.getByTestId("memoire-resolue")).toContainText("No memory: a run neither reads nor writes");
+  await expect(page.getByTestId("resolved-knowledge")).toContainText("None.");
+  await expect(page.getByTestId("resolved-memory")).toContainText("No memory: a run neither reads nor writes");
 });
 
 test("an agent made from the form runs on a sample under a capped budget, and a failing eval blocks its next version (S32-03)", async ({ page }) => {
@@ -443,11 +443,11 @@ test("an agent made from the form runs on a sample under a capped budget, and a 
   await builder.getByLabel("Case sample title").fill("VIP outage");
   await builder.getByLabel("Must contain (one per line)").fill("Escalate VIP outage");
   // Try it before creating: a project, a sample, a budget of 0.50 $ at most.
-  const banc = page.getByTestId("banc-d-essai");
+  const banc = page.getByTestId("trial-bench");
   await banc.getByLabel("Sample title").fill("Checkout down for every customer");
   await banc.getByLabel("Trial budget (USD, 0.50 at most)").fill("2");
   await banc.getByRole("button", { name: "Try it" }).click();
-  const result = banc.getByTestId("resultat-d-essai");
+  const result = banc.getByTestId("trial-result");
   await expect(result).toContainText("capped at US$0.50");
   await expect(result).toContainText("succeeded");
   await expect(result).toContainText("Sorted: urgent");
@@ -462,7 +462,7 @@ test("an agent made from the form runs on a sample under a capped budget, and a 
   await suivante.getByRole("textbox", { name: "Instructions" }).fill("Handle {{ ticket.title }} calmly.");
   await suivante.getByLabel("What changed and why").fill("Calmer wording");
   await suivante.getByRole("button", { name: "Publish v2" }).click();
-  await expect(suivante.getByTestId("evals-en-echec")).toContainText("vip: missing “Escalate VIP outage”");
+  await expect(suivante.getByTestId("failing-evals")).toContainText("vip: missing “Escalate VIP outage”");
   await page.getByRole("link", { name: "History" }).click();
   await expect(page.getByTestId("history").getByRole("listitem")).toHaveCount(1);
 });
@@ -472,16 +472,16 @@ test("an agent's page is in tabs: overview, definition, history, lifecycle, runs
   const tabs = page.getByRole("navigation", { name: "Sections of Onboarding coordinator" });
   await expect(tabs.getByRole("link")).toHaveText(["Overview", "Definition", "History", "Lifecycle", "Runs", "Access"]);
   await expect(tabs.getByRole("link", { name: "Overview" })).toHaveAttribute("aria-current", "page");
-  await expect(page.getByTestId("mesures")).toBeVisible();
+  await expect(page.getByTestId("measures")).toBeVisible();
   await expect(page.getByTestId("version")).toHaveCount(0);
 
   await tabs.getByRole("link", { name: "History" }).click();
   await expect(page).toHaveURL(/tab=history/);
   await expect(page.getByTestId("history").getByRole("listitem")).not.toHaveCount(1);
-  await expect(page.getByTestId("mesures")).toHaveCount(0);
+  await expect(page.getByTestId("measures")).toHaveCount(0);
 
   await tabs.getByRole("link", { name: "Runs" }).click();
-  const runs = page.getByTestId("runs-de-l-agent");
+  const runs = page.getByTestId("agent-runs");
   await expect(runs).toContainText("billing-api");
   await runs.getByRole("link").first().click();
   await expect(page).toHaveURL(/\/p\/billing-api\/runs\//);
@@ -492,37 +492,37 @@ test("an agent's page is in tabs: overview, definition, history, lifecycle, runs
 
 test("agents: an external agent shows its client, and a project its implicit agents", async ({ page }) => {
   await page.goto("/agents/leas-claude-code?tab=access");
-  await expect(page.getByTestId("clients-de-l-agent")).toContainText("claude-code/2.1.0");
+  await expect(page.getByTestId("agent-clients")).toContainText("claude-code/2.1.0");
   await page.goto("/p/billing-api/agents");
-  await expect(page.getByTestId("epingles")).toContainText("onboarding-coordinator");
-  await expect(page.getByTestId("epingles")).toContainText("Tightened");
-  await expect(page.getByTestId("implicites")).toContainText("refiner");
-  await expect(page.getByTestId("implicites")).toContainText("dev");
-  await page.getByTestId("implicites").getByRole("button", { name: "Register" }).first().click();
-  await expect(page.getByTestId("implicites").getByRole("status")).toContainText("actors.refiner.agent: refiner");
+  await expect(page.getByTestId("pins")).toContainText("onboarding-coordinator");
+  await expect(page.getByTestId("pins")).toContainText("Tightened");
+  await expect(page.getByTestId("implicit")).toContainText("refiner");
+  await expect(page.getByTestId("implicit")).toContainText("dev");
+  await page.getByTestId("implicit").getByRole("button", { name: "Register" }).first().click();
+  await expect(page.getByTestId("implicit").getByRole("status")).toContainText("actors.refiner.agent: refiner");
 });
 
 test("settings: the connectors the workflows require, and why; a secret by reference", async ({ page }) => {
   await page.goto("/p/billing-api/settings/connections");
-  const connectors = page.getByTestId("connecteurs");
+  const connectors = page.getByTestId("connectors");
   // Billing API ships software: a repository and a CI, each with its reason.
-  await expect(page.getByTestId("connecteur-scm")).toContainText("Not connected");
-  await expect(page.getByTestId("connecteur-scm")).toContainText("the guarantee scope_respected on t-implement");
+  await expect(page.getByTestId("connector-kind-scm")).toContainText("Not connected");
+  await expect(page.getByTestId("connector-kind-scm")).toContainText("the guarantee scope_respected on t-implement");
   // Nothing requires a notification: the row does not exist until it is added.
-  await expect(page.getByTestId("connecteur-notify")).toHaveCount(0);
+  await expect(page.getByTestId("connector-kind-notify")).toHaveCount(0);
   await page.getByLabel("Add a connector").selectOption("notify");
   await page.getByRole("button", { name: "Add", exact: true }).click();
-  await expect(page.getByTestId("connecteur-notify")).toBeVisible();
+  await expect(page.getByTestId("connector-kind-notify")).toBeVisible();
   // Jira: the form comes from its schema; a secret is typed (a password, sealed by the platform,
   // ADR 0058) or, for an operator, named by reference.
-  await page.getByTestId("connecteur-tracker").getByRole("button", { name: "Edit" }).click();
-  await page.getByTestId("connecteur-tracker").getByRole("combobox").first().selectOption("jira");
+  await page.getByTestId("connector-kind-tracker").getByRole("button", { name: "Edit" }).click();
+  await page.getByTestId("connector-kind-tracker").getByRole("combobox").first().selectOption("jira");
   await expect(page.getByLabel("api token value")).toHaveAttribute("type", "password");
   await page.getByRole("button", { name: "Use a reference instead" }).first().click();
   await page.getByLabel("api token reference").fill("s3cr3t");
-  await expect(page.getByTestId("connecteur-tracker").getByRole("alert")).toContainText("A reference is expected");
+  await expect(page.getByTestId("connector-kind-tracker").getByRole("alert")).toContainText("A reference is expected");
   await page.getByLabel("api token reference").fill("env:CONNECTOR_JIRA_TOKEN");
-  await expect(page.getByTestId("connecteur-tracker").getByRole("alert")).toHaveCount(0);
+  await expect(page.getByTestId("connector-kind-tracker").getByRole("alert")).toHaveCount(0);
   await expect(connectors).toBeVisible();
 });
 
@@ -534,7 +534,7 @@ test("organisation connectors: every operation carries its policy; a project can
   await expect(page.getByLabel("Project groups of create_account")).toHaveValue("hr");
 
   await page.goto("/p/billing-api/settings/security");
-  const projectBox = page.getByTestId("operations-du-projet");
+  const projectBox = page.getByTestId("project-operations");
   await expect(projectBox).toContainText("read_user");
   // `create_account` est `approval` dans l'organisation : le choice ne propose pas `allowed`.
   const choice = page.getByLabel("This project's policy for create_account");
@@ -545,14 +545,14 @@ test("connectors: business systems, MCP servers and delivery tools of the projec
   page,
 }) => {
   await page.goto("/admin/connectors");
-  await expect(page.getByTestId("glossaire")).toHaveAttribute("open", "");
-  await expect(page.getByTestId("section-metier")).toContainText("entra-acme");
-  await expect(page.getByTestId("section-metier")).toContainText("directory (identity)");
+  await expect(page.getByTestId("glossary")).toHaveAttribute("open", "");
+  await expect(page.getByTestId("business-section")).toContainText("entra-acme");
+  await expect(page.getByTestId("business-section")).toContainText("directory (identity)");
   await expect(page.getByTestId("section-mcp")).toContainText("supplier-agent");
-  await expect(page.getByTestId("section-metier")).not.toContainText("supplier-agent");
-  await expect(page.getByTestId("livraison-checkout-web")).toContainText("Work tracker: jira");
-  await expect(page.getByTestId("livraison-checkout-web")).toContainText("Deployment (CD): argocd");
-  await page.getByTestId("livraison-checkout-web").getByRole("link", { name: "Settings" }).click();
+  await expect(page.getByTestId("business-section")).not.toContainText("supplier-agent");
+  await expect(page.getByTestId("delivery-checkout-web")).toContainText("Work tracker: jira");
+  await expect(page.getByTestId("delivery-checkout-web")).toContainText("Deployment (CD): argocd");
+  await page.getByTestId("delivery-checkout-web").getByRole("link", { name: "Settings" }).click();
   await expect(page).toHaveURL(/\/p\/checkout-web\/settings$/);
 });
 
@@ -570,7 +570,7 @@ test("the decision inbox: an action proposed by an agent waits for a person", as
   // The former address leads to the inbox (S23-02).
   await page.goto("/approvals");
   await expect(page).toHaveURL(/\/inbox$/);
-  const inbox = page.getByTestId("boite");
+  const inbox = page.getByTestId("inbox");
   await expect(inbox).toContainText("Order Léa's laptop");
   await expect(inbox).toContainText("proposed by the agent onboarding-coordinator");
   await inbox.getByRole("link", { name: /Order Léa's laptop/ }).click();
@@ -580,7 +580,7 @@ test("the decision inbox: an action proposed by an agent waits for a person", as
   // An already decided action shows its decisions and the log of its effects, key by key.
   await page.goto("/p/billing-api/actions/act-comptes");
   await expect(page.getByTestId("decisions")).toContainText("approve by lea@acme.dev");
-  await expect(page.getByTestId("effet-1")).toContainText("Key act-comptes:1 · 2 attempt(s)");
+  await expect(page.getByTestId("effect-1")).toContainText("Key act-comptes:1 · 2 attempt(s)");
 });
 
 test("agents: the catalogue installs, and Claude Code connects in one click", async ({ page }) => {
@@ -605,7 +605,7 @@ test("inbox: a work item stopped on a human request is decided there, and the he
   await expect(page.getByRole("link", { name: /^Inbox/ })).toContainText("7");
   await page.getByRole("link", { name: /^Inbox/ }).click();
   await expect(page).toHaveURL(/\/inbox$/);
-  const ticket = page.getByTestId("attente-w2");
+  const ticket = page.getByTestId("waiting-w2");
   await expect(ticket).toContainText("Export invoices as PDF");
   await expect(ticket).toContainText("Approval of the specification requested");
   await expect(ticket).toContainText("billing-api · acme/billing-api#124 · Spec to approve · asked");
@@ -618,24 +618,24 @@ test("inbox: a work item stopped on a human request is decided there, and the he
 
 test("getting started: a new project says what it lacks; a running project says nothing (S23-03)", async ({ page }) => {
   await page.goto("/p/checkout-web");
-  const checklist = page.getByTestId("mise-en-route");
+  const checklist = page.getByTestId("getting-started");
   await expect(checklist).toBeVisible();
-  await expect(page.getByTestId("etape-provisioned")).toContainText("Project provisioned");
-  await expect(page.getByTestId("etape-connector-cd")).toContainText("demo is a stand-in");
-  await expect(page.getByTestId("etape-people-release-captain")).toContainText("(to do)");
-  await page.getByTestId("etape-connector-cd").getByRole("link", { name: "Fix" }).click();
+  await expect(page.getByTestId("step-provisioned")).toContainText("Project provisioned");
+  await expect(page.getByTestId("step-connector-cd")).toContainText("demo is a stand-in");
+  await expect(page.getByTestId("step-people-release-captain")).toContainText("(to do)");
+  await page.getByTestId("step-connector-cd").getByRole("link", { name: "Fix" }).click();
   await expect(page).toHaveURL(/\/p\/checkout-web\/settings\/connections#connections$/);
 
   await page.goto("/p/billing-api");
   await expect(page.getByText("PRs merged on first pass")).toBeVisible();
-  await expect(page.getByTestId("mise-en-route")).toHaveCount(0);
+  await expect(page.getByTestId("getting-started")).toHaveCount(0);
 });
 
 
 test("board: what waits for a person is said at the top, and leads there even off-screen (S23-09)", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/p/billing-api/board");
-  const attentes = page.getByTestId("attentes-du-board");
+  const attentes = page.getByTestId("board-waiting");
   await expect(attentes).toContainText("1 ticket waits for a person");
   const mapBox = page.locator("#carte-w2");
   // The banner still leads to the card; since 2026-11-02 the board hides its empty columns and uses
@@ -659,7 +659,7 @@ test("costs: a screen, a currency, and a graph that reads (S23-10)", async ({ pa
     await expect(page.locator("main")).not.toContainText("€");
   }
   await page.goto("/p/billing-api");
-  const graph = page.getByTestId("graphe-des-couts");
+  const graph = page.getByTestId("cost-graph");
   await expect(graph.getByRole("img")).toHaveAttribute("aria-label", /^Cost per day, 14 days: highest US\$/);
   await expect(page.getByText("Daily budget")).toBeVisible();
   await graph.getByText("As a table").click();

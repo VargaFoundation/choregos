@@ -13,33 +13,33 @@ async def test_an_agent_s_runs_are_listed_newest_first(client: AsyncClient, proj
     from choregos_api.db.session import session_scope
     from choregos_core import utcnow
 
-    cree = await client.post(
-        "/api/v1/orgs/varga/agents", json={"slug": "redacteur", "display_name": "Rédacteur", "spec": {}}
+    created = await client.post(
+        "/api/v1/orgs/varga/agents", json={"slug": "writer", "display_name": "Writer", "spec": {}}
     )
-    assert cree.status_code == 201, cree.text
+    assert created.status_code == 201, created.text
     async with session_scope() as session:
         item = WorkItem(project_id=project["id"], tracker_key="BILLING-7", title="T", state="ready")
         session.add(item)
         await session.flush()
-        maintenant = utcnow()
-        for rang, (agent, statut) in enumerate(
-            (("redacteur", "succeeded"), ("redacteur", "failed"), ("autre", "succeeded"))
+        now = utcnow()
+        for rank, (agent, status) in enumerate(
+            (("writer", "succeeded"), ("writer", "failed"), ("other", "succeeded"))
         ):
             session.add(
                 Run(
-                    id=f"run-a{rang}",
+                    id=f"run-a{rank}",
                     work_item_id=item.id,
                     project_id=project["id"],
                     stage_role="refine",
-                    status=statut,
+                    status=status,
                     agent_slug=agent,
                     agent_version=1,
-                    created_at=maintenant - timedelta(minutes=10 - rang),
+                    created_at=now - timedelta(minutes=10 - rank),
                 )
             )
-    reponse = await client.get("/api/v1/orgs/varga/agents/redacteur/runs")
-    assert reponse.status_code == 200, reponse.text
-    assert [(r["id"], r["status"], r["project_slug"]) for r in reponse.json()] == [
+    response = await client.get("/api/v1/orgs/varga/agents/writer/runs")
+    assert response.status_code == 200, response.text
+    assert [(r["id"], r["status"], r["project_slug"]) for r in response.json()] == [
         ("run-a1", "failed", "billing-api"),
         ("run-a0", "succeeded", "billing-api"),
     ]

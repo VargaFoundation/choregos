@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Backends secondaires : Codex, Gemini CLI, Goose, OpenCode, Copilot CLI (S13-02).
 
-Tous parlent ACP ; ce qui change est la façon de leur donner le modèle et la configuration
-MCP. Chacun doit passer la suite de conformité avant d'être activé en production.
+All of them speak ACP; what changes is the way to give them the model and the MCP
+configuration. Each must pass the conformance suite before being enabled in production.
 """
 
 from __future__ import annotations
@@ -54,8 +54,8 @@ class GeminiCliBackend(Backend):
     capabilities: ClassVar[frozenset[str]] = frozenset({"acp", "mcp"})
 
     def launch_plan(self, stage_input: StageInput, workspace: Path) -> LaunchPlan:
-        # `--acp` depuis gemini-cli 0.39 ; `--experimental-acp` est déprécié et affiche un
-        # avertissement dans le flux stdio que l'ACP utilise.
+        # `--acp` since gemini-cli 0.39; `--experimental-acp` is deprecated and prints a
+        # warning in the stdio stream that ACP uses.
         command = list(stage_input.agent.launch.command) or ["gemini", "--acp"]
         settings = {
             "selectedAuthType": "api-key",
@@ -168,23 +168,23 @@ class OpenCodeBackend(Backend):
                     "npm": "@ai-sdk/openai-compatible",
                     "options": {
                         "baseURL": stage_input.model.base_url,
-                        # Le NOM de la variable, jamais la clé : ce fichier est écrit dans
-                        # l'espace de travail de l'agent, donc potentiellement lu dans un diff.
-                        # `{env:…}` est la forme qu'opencode résout à l'exécution.
+                        # The NAME of the variable, never the key: this file is written in
+                        # the agent's workspace, so potentially read in a diff.
+                        # `{env:…}` is the form opencode resolves at run time.
                         #
-                        # Sans cette ligne, le fournisseur `choregos` n'a AUCUNE clé et la
-                        # passerelle répond « Authentication Error, No api key passed in » —
-                        # `OPENAI_API_KEY` de l'environnement ne sert qu'au fournisseur `openai`
-                        # intégré, pas à un fournisseur déclaré par la configuration. Mesuré le
-                        # 2026-09-27 dans le locataire dev : `opencode run` échoue sans elle et
-                        # rend `pong` avec, sur le même modèle et la même passerelle.
+                        # Without this line, the `choregos` provider has NO key and the
+                        # gateway answers "Authentication Error, No api key passed in":
+                        # the environment's `OPENAI_API_KEY` only serves the built-in `openai`
+                        # provider, not a provider declared by the configuration. Measured on
+                        # 2026-09-27 in the dev tenant: `opencode run` fails without it and
+                        # returns `pong` with it, on the same model and the same gateway.
                         "apiKey": "{env:OPENAI_API_KEY}",
                     },
                     "models": {stage_input.model.litellm_model: {"name": stage_input.model.litellm_model}},
                 }
             },
             "model": f"choregos/{stage_input.model.litellm_model}",
-            "mcp": self._mcp_pour_opencode(stage_input),
+            "mcp": self._mcp_for_opencode(stage_input),
         }
         return LaunchPlan(
             command=command,
@@ -199,41 +199,41 @@ class OpenCodeBackend(Backend):
         )
 
     @staticmethod
-    def _mcp_pour_opencode(stage_input: StageInput) -> dict[str, Any]:
-        """Les serveurs MCP au format d'**opencode**, qui n'est pas le format répandu.
+    def _mcp_for_opencode(stage_input: StageInput) -> dict[str, Any]:
+        """The MCP servers in the format of **opencode**, which is not the common format.
 
-        `mcp_config_json` rend la forme `mcpServers` que Claude Code, Codex et Gemini lisent :
-        `{"type": "http", "url": …}`. Opencode attend autre chose, et il ne s'en accommode pas —
-        il refuse TOUTE la configuration et s'arrête :
+        `mcp_config_json` returns the `mcpServers` form that Claude Code, Codex and Gemini read:
+        `{"type": "http", "url": …}`. Opencode expects something else, and does not put up with
+        it: it refuses the WHOLE configuration and stops:
 
             Configuration is invalid at /tmp/ws/opencode.json
             ↳ Expected { readonly "type": "local", … } | { readonly "type": "remote", … },
               got {"type":"http","url":"http://localhost:7777/mcp"} mcp.choregos
             ↳ Missing key mcp.choregos.enabled
 
-        Relevé le 2026-09-27 en lançant `opencode acp` à la main dans le locataire dev, avec la
-        configuration que ce backend écrit. C'est la raison pour laquelle aucun agent n'avait
-        jamais tourné sur ce locataire : le refus partait sur la sortie d'erreur, que le runner
-        ne lisait pas, et l'étape mourait sur un `TimeoutError` d'`initialize`.
+        Found on 2026-09-27 by running `opencode acp` by hand in the dev tenant, with the
+        configuration this backend writes. That is why no agent had ever run on this tenant:
+        the refusal went to the error output, which the runner did not read, and the step died
+        on an `initialize` `TimeoutError`.
 
-        La leçon de fond : une configuration d'agent n'est pas un format commun. La réutiliser
-        d'un backend à l'autre était une économie, et elle a coûté un silence.
+        The deeper lesson: an agent configuration is not a common format. Reusing it from one
+        backend to another was a saving, and it cost a silence.
         """
-        serveurs: dict[str, Any] = {}
-        for nom, serveur in stage_input.tools.mcp.items():
-            if serveur.url:
-                serveurs[nom] = {"type": "remote", "url": serveur.url, "enabled": True}
-                if serveur.env:
-                    serveurs[nom]["headers"] = dict(serveur.env)
-            elif serveur.command:
-                serveurs[nom] = {
+        servers: dict[str, Any] = {}
+        for name, server in stage_input.tools.mcp.items():
+            if server.url:
+                servers[name] = {"type": "remote", "url": server.url, "enabled": True}
+                if server.env:
+                    servers[name]["headers"] = dict(server.env)
+            elif server.command:
+                servers[name] = {
                     "type": "local",
-                    "command": list(serveur.command),
+                    "command": list(server.command),
                     "enabled": True,
                 }
-                if serveur.env:
-                    serveurs[nom]["environment"] = dict(serveur.env)
-        return serveurs
+                if server.env:
+                    servers[name]["environment"] = dict(server.env)
+        return servers
 
     def model_env(self, model: ModelRef, key: str | None) -> dict[str, str]:
         return self.openai_env(model, key)

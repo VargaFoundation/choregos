@@ -25,7 +25,6 @@ OTHER_STORIES = (
     "apps/web/src/components/journey/",
     "apps/web/src/components/workflows/",
 )
-#: Compatibility shims keep their old path and French name on purpose (`lang: fr-ok-file`).
 E2E_SPECS = (
     "activity.spec.ts",
     "shell.spec.ts",

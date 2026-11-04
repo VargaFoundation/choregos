@@ -65,7 +65,7 @@ theme the person chooses.
 
 - The design system can move on without the console following blindly: a new colour role in its
   dark tokens turns `theme-provenance` red until the console declares it.
-- `e2e/accessibilite.spec.ts` runs axe on every page in both themes, and `e2e/theme.spec.ts` proves
+- `e2e/accessibility.spec.ts` runs axe on every page in both themes, and `e2e/theme.spec.ts` proves
   the default, the persistence of a choice, and that the head script alone applies it;
   `e2e/shell.spec.ts` proves the same for the folded sidebar, and the 48 px top bar at every
   width.

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// Budget de bundle : ce que le navigateur télécharge ne grossit pas sans qu'on le voie.
-// Lu après `next build` : la taille totale des chunks JS servis et celle du plus gros.
-// Les seuils sont larges (le mesuré du 2026-09-25 : ~1,2 Mo au total) — ils attrapent
-// une dépendance qu'on aurait embarquée par mégarde, pas dix kilo-octets.
+// Bundle budget: what the browser downloads does not grow without anyone seeing it.
+// Read after `next build`: the total size of the JS chunks served and the size of the biggest one.
+// The thresholds are wide (measured on 2026-09-25: ~1.2 MB in total) — they catch a dependency
+// bundled by mistake, not ten kilobytes.
 // 2026-10-16 (S40 integration, batch 1): 1600 -> 1800 kB. The S39 base measured 1599 kB; S40 adds about
 // 100 kB of console (vendored CC0 brand icons, memories, agent history and diff, project settings).
 import { readdirSync, statSync } from "node:fs";
@@ -27,26 +27,28 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // and the regenerated API types tip the total over it by a fraction of a kilobyte.
 // 2026-11-03 (S52-06b, on S52-05 and S52-06): 2075 -> 2100 kB. The decision step on the map (S52-06) and its
 // calibration card with the demo mode's calibration (S52-06b) measure 2076 kB, 1 kB over the line.
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2100);
+// 2026-11-03 (S52-08): 2100 -> 2150 kB. #1237 put S55-08's icon tiles back, which S52-06b had taken out to fit
+// under 2100: main measures 2125 kB, and the routing card's minimum confidence adds 1 kB.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2150);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
-function* fichiers(dir) {
+function* files(dir) {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const chemin = join(dir, entry.name);
-    if (entry.isDirectory()) yield* fichiers(chemin);
-    else if (entry.name.endsWith(".js")) yield chemin;
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) yield* files(path);
+    else if (entry.name.endsWith(".js")) yield path;
   }
 }
 
 let total = 0;
-let plusGros = { chemin: "", kb: 0 };
-for (const chemin of fichiers(CHUNKS)) {
-  const kb = statSync(chemin).size / 1024;
+let biggest = { path: "", kb: 0 };
+for (const path of files(CHUNKS)) {
+  const kb = statSync(path).size / 1024;
   total += kb;
-  if (kb > plusGros.kb) plusGros = { chemin, kb };
+  if (kb > biggest.kb) biggest = { path, kb };
 }
-console.log(`chunks JS : ${total.toFixed(0)} kB au total (budget ${TOTAL_MAX_KB}), le plus gros ${plusGros.kb.toFixed(0)} kB (budget ${CHUNK_MAX_KB}) — ${plusGros.chemin.replace(process.cwd() + "/", "")}`);
-let ko = false;
-if (total > TOTAL_MAX_KB) { console.error(`budget dépassé : ${total.toFixed(0)} kB > ${TOTAL_MAX_KB} kB`); ko = true; }
-if (plusGros.kb > CHUNK_MAX_KB) { console.error(`chunk trop gros : ${plusGros.kb.toFixed(0)} kB > ${CHUNK_MAX_KB} kB`); ko = true; }
-process.exit(ko ? 1 : 0);
+console.log(`JS chunks: ${total.toFixed(0)} kB in total (budget ${TOTAL_MAX_KB}), the biggest ${biggest.kb.toFixed(0)} kB (budget ${CHUNK_MAX_KB}) — ${biggest.path.replace(process.cwd() + "/", "")}`);
+let failed = false;
+if (total > TOTAL_MAX_KB) { console.error(`budget exceeded: ${total.toFixed(0)} kB > ${TOTAL_MAX_KB} kB`); failed = true; }
+if (biggest.kb > CHUNK_MAX_KB) { console.error(`chunk too big: ${biggest.kb.toFixed(0)} kB > ${CHUNK_MAX_KB} kB`); failed = true; }
+process.exit(failed ? 1 : 0);

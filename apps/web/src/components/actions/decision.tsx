@@ -50,7 +50,7 @@ export function DecisionDAction({ projet, action }: { projet: string; action: Ac
           Reject
         </Button>
       </div>
-      <p className="text-xs text-ink-muted" data-testid="regles-de-decision">
+      <p className="text-xs text-ink-muted" data-testid="decision-rules">
         {/* Without `step_up_minutes`, the rule does not require a recent authentication (S20-08): do not
                 promise a detour through the IdP that will not happen. */}
         {action.approval?.step_up_minutes != null

@@ -1,0 +1,470 @@
+{
+  "_": "The console's gestures (S16-12) and the operation each one sends to POST /workflows/edit. The console checks that it emits them (tests/workflow-edition.test.tsx); the core, that it grafts them into this workflow (packages/core/tests/test_edition.py). A field renamed on one side turns the other red.",
+  "workflow": "apiVersion: choregos/v1\nkind: Workflow\nmetadata: { name: default-simple, version: 1 }\nactors:\n  refiner: { type: agent, role: refine, model: \"profile:standard\" }\n  owner: { type: human, group: product-owners, sla_hours: 24 }\n  dev: { type: agent, role: implement, model: \"profile:by_size\" }\nstates:\n  inbox: { display: To triage, kind: wait }\n  ready: { display: Ready }\n  archive: { display: Archived }\n  done: { display: Done, terminal: true }\ntransitions:\n  - { id: t-refine, from: inbox, to: ready, by: refiner }\n  - { id: t-implement, from: ready, to: done, by: dev, gates: [scope_respected], timeout_hours: 72 }\n",
+  "gestures": [
+    {
+      "gesture": "stateLabel",
+      "args": [
+        "inbox",
+        "New requests"
+      ],
+      "operation": {
+        "op": "set_state",
+        "name": "inbox",
+        "field": "display",
+        "value": "New requests"
+      }
+    },
+    {
+      "gesture": "stateKind",
+      "args": [
+        "ready",
+        "wait"
+      ],
+      "operation": {
+        "op": "set_state",
+        "name": "ready",
+        "field": "kind",
+        "value": "wait"
+      }
+    },
+    {
+      "gesture": "renameState",
+      "args": [
+        "ready",
+        "prepared"
+      ],
+      "operation": {
+        "op": "rename_state",
+        "from": "ready",
+        "to": "prepared"
+      }
+    },
+    {
+      "gesture": "removeState",
+      "args": [
+        "archive"
+      ],
+      "operation": {
+        "op": "remove_state",
+        "name": "archive"
+      }
+    },
+    {
+      "gesture": "addState",
+      "args": [
+        "review",
+        "In review"
+      ],
+      "operation": {
+        "op": "add_state",
+        "name": "review",
+        "spec": {
+          "display": "In review"
+        }
+      }
+    },
+    {
+      "gesture": "addState",
+      "args": [
+        "review",
+        "In review",
+        "wait"
+      ],
+      "operation": {
+        "op": "add_state",
+        "name": "review",
+        "spec": {
+          "display": "In review",
+          "kind": "wait"
+        }
+      }
+    },
+    {
+      "gesture": "addTransition",
+      "args": [
+        "ready",
+        "archive",
+        "owner"
+      ],
+      "operation": {
+        "op": "add_transition",
+        "transition": {
+          "from": "ready",
+          "to": "archive",
+          "by": "owner"
+        }
+      }
+    },
+    {
+      "gesture": "addTransition",
+      "args": [
+        "ready",
+        "archive",
+        "owner",
+        "t-archive"
+      ],
+      "operation": {
+        "op": "add_transition",
+        "transition": {
+          "id": "t-archive",
+          "from": "ready",
+          "to": "archive",
+          "by": "owner"
+        }
+      }
+    },
+    {
+      "gesture": "removeTransition",
+      "args": [
+        "t-refine"
+      ],
+      "operation": {
+        "op": "remove_transition",
+        "id": "t-refine"
+      }
+    },
+    {
+      "gesture": "transitionActor",
+      "args": [
+        "t-implement",
+        "owner"
+      ],
+      "operation": {
+        "op": "set_transition",
+        "id": "t-implement",
+        "field": "by",
+        "value": "owner"
+      }
+    },
+    {
+      "gesture": "transitionTimeout",
+      "args": [
+        "t-implement",
+        48
+      ],
+      "operation": {
+        "op": "set_transition",
+        "id": "t-implement",
+        "field": "timeout_hours",
+        "value": 48
+      }
+    },
+    {
+      "gesture": "transitionTimeout",
+      "args": [
+        "t-implement",
+        null
+      ],
+      "operation": {
+        "op": "set_transition",
+        "id": "t-implement",
+        "field": "timeout_hours",
+        "unset": true
+      }
+    },
+    {
+      "gesture": "addGate",
+      "args": [
+        "t-refine",
+        "outputs_present"
+      ],
+      "operation": {
+        "op": "add_gate",
+        "transition": "t-refine",
+        "gate": "outputs_present"
+      }
+    },
+    {
+      "gesture": "addGate",
+      "args": [
+        "t-implement",
+        "ci_green"
+      ],
+      "operation": {
+        "op": "add_gate",
+        "transition": "t-implement",
+        "gate": "ci_green"
+      }
+    },
+    {
+      "gesture": "removeGate",
+      "args": [
+        "t-implement",
+        "scope_respected"
+      ],
+      "operation": {
+        "op": "remove_gate",
+        "transition": "t-implement",
+        "name": "scope_respected"
+      }
+    },
+    {
+      "gesture": "addActor",
+      "args": [
+        "reviewer",
+        {
+          "type": "human",
+          "group": "reviewers",
+          "sla_hours": 8
+        }
+      ],
+      "operation": {
+        "op": "add_actor",
+        "name": "reviewer",
+        "spec": {
+          "type": "human",
+          "group": "reviewers",
+          "sla_hours": 8
+        }
+      }
+    },
+    {
+      "gesture": "removeActor",
+      "args": [
+        "owner"
+      ],
+      "operation": {
+        "op": "remove_actor",
+        "name": "owner"
+      }
+    },
+    {
+      "gesture": "addActor",
+      "args": [
+        "router",
+        {
+          "type": "decision",
+          "role": "route_ticket",
+          "model": "platform/decide",
+          "state": [
+            "title",
+            "description"
+          ],
+          "questions": {
+            "route": {
+              "type": "choice",
+              "instructions": "Which team handles this request?",
+              "options": [
+                "billing",
+                "tech"
+              ]
+            },
+            "urgent": {
+              "type": "yes_no",
+              "instructions": "Must it be handled today?"
+            }
+          },
+          "timeout_seconds": 15
+        }
+      ],
+      "operation": {
+        "op": "add_actor",
+        "name": "router",
+        "spec": {
+          "type": "decision",
+          "role": "route_ticket",
+          "model": "platform/decide",
+          "state": [
+            "title",
+            "description"
+          ],
+          "questions": {
+            "route": {
+              "type": "choice",
+              "instructions": "Which team handles this request?",
+              "options": [
+                "billing",
+                "tech"
+              ]
+            },
+            "urgent": {
+              "type": "yes_no",
+              "instructions": "Must it be handled today?"
+            }
+          },
+          "timeout_seconds": 15
+        }
+      }
+    },
+    {
+      "gesture": "actorField",
+      "args": [
+        "owner",
+        "sla_hours",
+        12
+      ],
+      "operation": {
+        "op": "set_actor",
+        "name": "owner",
+        "field": "sla_hours",
+        "value": 12,
+        "style": "flow"
+      }
+    },
+    {
+      "gesture": "actorField",
+      "args": [
+        "owner",
+        "state",
+        [
+          "title",
+          "fields.customer"
+        ]
+      ],
+      "operation": {
+        "op": "set_actor",
+        "name": "owner",
+        "field": "state",
+        "value": [
+          "title",
+          "fields.customer"
+        ],
+        "style": "flow"
+      }
+    },
+    {
+      "gesture": "actorField",
+      "args": [
+        "owner",
+        "questions",
+        {
+          "route": {
+            "type": "score",
+            "instructions": "How urgent is it?",
+            "levels": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        }
+      ],
+      "operation": {
+        "op": "set_actor",
+        "name": "owner",
+        "field": "questions",
+        "value": {
+          "route": {
+            "type": "score",
+            "instructions": "How urgent is it?",
+            "levels": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
+        "style": "block"
+      }
+    },
+    {
+      "gesture": "actorField",
+      "args": [
+        "owner",
+        "sla_hours",
+        null
+      ],
+      "operation": {
+        "op": "set_actor",
+        "name": "owner",
+        "field": "sla_hours",
+        "unset": true
+      }
+    },
+    {
+      "gesture": "transitionField",
+      "args": [
+        "t-implement",
+        "task",
+        {
+          "title": "Hand over the badge",
+          "form": {
+            "type": "object",
+            "properties": {
+              "badge": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ],
+      "operation": {
+        "op": "set_transition",
+        "id": "t-implement",
+        "field": "task",
+        "value": {
+          "title": "Hand over the badge",
+          "form": {
+            "type": "object",
+            "properties": {
+              "badge": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "style": "block"
+      }
+    },
+    {
+      "gesture": "transitionField",
+      "args": [
+        "t-refine",
+        "outputs",
+        [
+          "spec_markdown"
+        ]
+      ],
+      "operation": {
+        "op": "set_transition",
+        "id": "t-refine",
+        "field": "outputs",
+        "value": [
+          "spec_markdown"
+        ],
+        "style": "flow"
+      }
+    },
+    {
+      "gesture": "transitionField",
+      "args": [
+        "t-implement",
+        "timeout_hours",
+        null
+      ],
+      "operation": {
+        "op": "set_transition",
+        "id": "t-implement",
+        "field": "timeout_hours",
+        "unset": true
+      }
+    },
+    {
+      "gesture": "workflowField",
+      "args": [
+        "description",
+        "Requests of the HR desk."
+      ],
+      "operation": {
+        "op": "set_workflow",
+        "field": "description",
+        "value": "Requests of the HR desk.",
+        "style": "flow"
+      }
+    },
+    {
+      "gesture": "workflowField",
+      "args": [
+        "initial",
+        "inbox"
+      ],
+      "operation": {
+        "op": "set_workflow",
+        "field": "initial",
+        "value": "inbox",
+        "style": "flow"
+      }
+    }
+  ]
+}

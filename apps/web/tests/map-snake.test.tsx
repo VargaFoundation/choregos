@@ -10,13 +10,13 @@ const { graph, process, initial } = journeyInProgress(Date.parse("2026-10-08T12:
 describe("a workflow's snake map (S22-05)", () => {
   it("draws every step coloured by who carries it, with no reader and no status", () => {
     render(<SnakeMap graph={graph} process={process} initial={initial} />);
-    const diagram = screen.getByTestId("carte-en-serpentin");
-    expect(diagram.querySelectorAll("[data-etape]")).toHaveLength(18); // sixteen steps and two detours
+    const diagram = screen.getByTestId("serpentine-map");
+    expect(diagram.querySelectorAll("[data-step]")).toHaveLength(18); // sixteen steps and two detours
     expect(screen.queryByRole("toolbar", { name: "Replay the journey" })).not.toBeInTheDocument();
     // The visible text names the box, in its order (axe `label-content-name-mismatch`); the rest describes it.
-    expect(screen.getByTestId("etape-t-implement")).toHaveAccessibleName(/^Developer\s*writes the change\s*→ branch$/);
-    expect(screen.getByTestId("etape-t-implement")).toHaveAccessibleDescription("agent — 0 attempts");
-    const forme = (id: string) => diagram.querySelector(`[data-etape="${id}"] .parcours-forme`)!.getAttribute("stroke");
+    expect(screen.getByTestId("step-t-implement")).toHaveAccessibleName(/^Developer\s*writes the change\s*→ branch$/);
+    expect(screen.getByTestId("step-t-implement")).toHaveAccessibleDescription("agent — 0 attempts");
+    const forme = (id: string) => diagram.querySelector(`[data-step="${id}"] .journey-shape`)!.getAttribute("stroke");
     // Plum for the agent, blue for the person, slate for the platform, green for the train (S24-04): the colours
     // of the list-view map, so that a workflow's two views say the same thing.
     expect(forme("t-implement")).toBe("var(--choregos-agent-ink)");
@@ -32,15 +32,15 @@ describe("a workflow's snake map (S22-05)", () => {
 
   it("in the workflow map, each box says what it produces (S39-13)", () => {
     render(<SnakeMap graph={graph} process={process} initial={initial} />);
-    expect(screen.getByTestId("sorties-t-specify")).toHaveTextContent("→ spec_markdown, allowed_paths");
-    expect(screen.getByTestId("sorties-t-implement")).toHaveTextContent(/^→ branch$/);
-    expect(screen.queryByTestId("sorties-t-approve-spec")).not.toBeInTheDocument();
-    expect(screen.getByTestId("etape-t-specify")).toHaveAccessibleName(/→ spec_markdown, allowed_paths$/);
+    expect(screen.getByTestId("outputs-t-specify")).toHaveTextContent("→ spec_markdown, allowed_paths");
+    expect(screen.getByTestId("outputs-t-implement")).toHaveTextContent(/^→ branch$/);
+    expect(screen.queryByTestId("outputs-t-approve-spec")).not.toBeInTheDocument();
+    expect(screen.getByTestId("step-t-specify")).toHaveAccessibleName(/→ spec_markdown, allowed_paths$/);
   });
 
   it("without a work item, a platform box says what it waits for, not empty boxes, and every detour says why", () => {
     render(<SnakeMap graph={graph} process={process} initial={initial} />);
-    const map = screen.getByTestId("carte-en-serpentin");
+    const map = screen.getByTestId("serpentine-map");
     expect(map.textContent).not.toContain("☐");
     expect(map.textContent).toMatch(/waits for: [a-z ,]+/);
     const labels = [...map.querySelectorAll("[data-testid^='arc-label-']")].map((e) => e.textContent);
@@ -51,21 +51,21 @@ describe("a workflow's snake map (S22-05)", () => {
     const { container } = render(<SnakeMap graph={graph} process={process} initial={initial} />);
     const state = container.querySelector("[data-segment]")!.getAttribute("data-segment")!;
     render(<SnakeMap graph={graph} process={process} initial={initial} openItems={new Map([[state, 3]])} />);
-    expect(screen.getAllByTestId("carte-en-serpentin")[1]!.textContent).toContain("3 open · ");
+    expect(screen.getAllByTestId("serpentine-map")[1]!.textContent).toContain("3 open · ");
   });
 
   it("a highlight puts data-flow on the boxes it names", () => {
     const highlight = new Map<string, "produces" | "reads">([["t-test", "produces"], ["t-implement", "reads"]]);
     render(<SnakeMap graph={graph} process={process} initial={initial} highlight={highlight} />);
-    expect(screen.getByTestId("etape-t-test")).toHaveAttribute("data-flow", "produces");
-    expect(screen.getByTestId("etape-t-implement")).toHaveAttribute("data-flow", "reads");
-    expect(screen.getByTestId("etape-t-review")).not.toHaveAttribute("data-flow");
+    expect(screen.getByTestId("step-t-test")).toHaveAttribute("data-flow", "produces");
+    expect(screen.getByTestId("step-t-implement")).toHaveAttribute("data-flow", "reads");
+    expect(screen.getByTestId("step-t-review")).not.toHaveAttribute("data-flow");
   });
 
   it("clicking a step returns its transition, for the editing panel", () => {
     const onSelect = vi.fn();
     render(<SnakeMap graph={graph} process={process} initial={initial} onSelect={onSelect} />);
-    fireEvent.click(screen.getByTestId("etape-t-review"));
+    fireEvent.click(screen.getByTestId("step-t-review"));
     expect(onSelect).toHaveBeenCalledWith("t-review");
   });
 
@@ -77,8 +77,8 @@ describe("a workflow's snake map (S22-05)", () => {
       edges: [e("t-a", "a", "b"), e("t-b", "b", "c"), e("t-c", "c", "d")],
     };
     render(<SnakeMap graph={raw} process={[]} initial="a" />);
-    expect(screen.getByTestId("etape-t-a")).toHaveAccessibleDescription(/^agent —/);
-    expect(screen.getByTestId("etape-t-b")).toHaveAccessibleDescription(/^person —/);
-    expect(screen.getByTestId("etape-t-c")).toHaveAccessibleDescription(/^release train —/);
+    expect(screen.getByTestId("step-t-a")).toHaveAccessibleDescription(/^agent —/);
+    expect(screen.getByTestId("step-t-b")).toHaveAccessibleDescription(/^person —/);
+    expect(screen.getByTestId("step-t-c")).toHaveAccessibleDescription(/^release train —/);
   });
 });

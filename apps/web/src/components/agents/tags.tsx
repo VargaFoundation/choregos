@@ -46,11 +46,11 @@ export function TagList({ tags, link = false }: { tags?: readonly string[] | nul
       {tags.map((tag) => (
         <li key={tag}>
           {link ? (
-            <Link href={`/agents?tag=${encodeURIComponent(tag)}`} className={`${CHIP} hover:bg-accent-soft hover:text-accent-strong`} data-donnee>
+            <Link href={`/agents?tag=${encodeURIComponent(tag)}`} className={`${CHIP} hover:bg-accent-soft hover:text-accent-strong`} data-verbatim>
               {tag}
             </Link>
           ) : (
-            <span className={CHIP} data-donnee>
+            <span className={CHIP} data-verbatim>
               {tag}
             </span>
           )}
@@ -96,7 +96,7 @@ export function TagEditor({
       {value.length > 0 && (
         <ul className="flex flex-wrap gap-1.5" aria-label="Tags on this agent">
           {value.map((tag) => (
-            <li key={tag} className={CHIP} data-donnee>
+            <li key={tag} className={CHIP} data-verbatim>
               {tag}
               <button type="button" className="rounded-full px-1 hover:bg-line" onClick={() => onChange(value.filter((t) => t !== tag))}>
                 <span aria-hidden="true">×</span>
@@ -170,7 +170,7 @@ export function TagFilter({
             type="button"
             className={chip(active)}
             aria-pressed={active}
-            data-donnee
+            data-verbatim
             onClick={() => onChange(active ? value.filter((t) => t !== tag) : [...value, tag])}
           >
             {tag} ({counts.get(tag) ?? 0})

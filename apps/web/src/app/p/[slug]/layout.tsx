@@ -32,7 +32,7 @@ export default function ProjectLayout({
   // No tab row any more (S30-03): the sidebar lists the project's sections, the trail says where one is.
   const base: BreadcrumbStep[] = [
     { href: "/", label: "Projects" },
-    { href: `/p/${slug}`, label: <span data-donnee>{name}</span> },
+    { href: `/p/${slug}`, label: <span data-verbatim>{name}</span> },
   ];
   const trail = projectTrail(slug, pathname);
   // The header names the section one is in, in its family's colour, under the project's name (S55-02):
@@ -50,9 +50,9 @@ export default function ProjectLayout({
           <PageHeader
             icon={section?.entry.icon}
             hue={section?.hue}
-            eyebrow={overview ? undefined : <span data-donnee>{name}</span>}
+            eyebrow={overview ? undefined : <span data-verbatim>{name}</span>}
             title={
-              overview ? <span data-donnee>{name}</span> : section.entry.label
+              overview ? <span data-verbatim>{name}</span> : section.entry.label
             }
           />
         )}

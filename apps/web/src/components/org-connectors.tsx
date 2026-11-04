@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Badge, Card, ErrorNote } from "@/components/ui";
 import { api, ApiError } from "@/lib/api";
 import { toSentenceCase } from "@/lib/format";
-import { estUneSorteDuProjet, libelleDeSorte, SORTES_DU_PROJET } from "@/lib/sortes-de-connecteurs";
+import { isProjectKind, kindLabel, PROJECT_KINDS } from "@/lib/connector-kinds";
 import type { ConnectorDto, OrgConnector, ProjectDto } from "@/lib/types";
 
 /**
@@ -42,8 +42,8 @@ export function deliveryRows(
     }
     if (!lecture.data) return { slug: projet.slug, nom: projet.name, outils: null, refus: null };
     const tools = lecture.data
-      .filter((connecteur) => estUneSorteDuProjet(connecteur.kind))
-      .sort((a, b) => SORTES_DU_PROJET.indexOf(a.kind as never) - SORTES_DU_PROJET.indexOf(b.kind as never))
+      .filter((connecteur) => isProjectKind(connecteur.kind))
+      .sort((a, b) => PROJECT_KINDS.indexOf(a.kind as never) - PROJECT_KINDS.indexOf(b.kind as never))
       .map((connecteur) => ({ kind: connecteur.kind, type: connecteur.type, status: connecteur.status ?? "unknown" }));
     return { slug: projet.slug, nom: projet.name, outils: tools, refus: null };
   });
@@ -76,7 +76,7 @@ export function DeliveryTools({ org }: { org: string }) {
           <p className="text-ink-muted">No project yet.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full" data-testid="outils-de-livraison">
+            <table className="w-full" data-testid="delivery-tools">
               <thead className="text-left text-xs text-ink-muted">
                 <tr>
                   <th className="py-1 font-normal">Project</th>
@@ -88,7 +88,7 @@ export function DeliveryTools({ org }: { org: string }) {
               </thead>
               <tbody>
                 {rows.map((ligne) => (
-                  <tr key={ligne.slug} className="border-t border-line" data-testid={`livraison-${ligne.slug}`}>
+                  <tr key={ligne.slug} className="border-t border-line" data-testid={`delivery-${ligne.slug}`}>
                     <td className="py-2 font-medium">{ligne.nom}</td>
                     <td className="py-2">
                       {ligne.refus ? (
@@ -102,7 +102,7 @@ export function DeliveryTools({ org }: { org: string }) {
                           {ligne.outils.map((outil) => (
                             <span key={outil.kind} title={`Status: ${outil.status}`}>
                               <Badge tone={outil.status === "error" ? "danger" : "neutral"}>
-                                {toSentenceCase(libelleDeSorte(outil.kind))}: {outil.type}
+                                {toSentenceCase(kindLabel(outil.kind))}: {outil.type}
                               </Badge>
                             </span>
                           ))}

@@ -158,95 +158,93 @@ class Assessment:
         return [finding.as_dict() for finding in self.findings]
 
 
-def _line(texte: str, position: int) -> int:
-    return texte.count("\n", 0, position) + 1
+def _line(text: str, position: int) -> int:
+    return text.count("\n", 0, position) + 1
 
 
-def _is_script(chemin: str, texte: str) -> bool:
-    _, extension = posixpath.splitext(chemin.lower())
-    return extension in SCRIPT_EXTENSIONS or texte.startswith("#!") or "scripts" in chemin.split("/")[:-1]
+def _is_script(path: str, text: str) -> bool:
+    _, extension = posixpath.splitext(path.lower())
+    return extension in SCRIPT_EXTENSIONS or text.startswith("#!") or "scripts" in path.split("/")[:-1]
 
 
-def _scan_file(chemin: str, texte: str) -> list[Finding]:
+def _scan_file(path: str, text: str) -> list[Finding]:
     """What a single file says that a reviewer must read."""
-    trouves: list[Finding] = []
-    if _is_script(chemin, texte):
-        trouves.append(Finding("script", "warning", "an executable script ships with the skill", chemin))
-    hotes: set[str] = set()
-    for lien in URL.finditer(texte):
-        hote = re.sub(r"^https?://", "", lien.group(0), flags=re.I).split("/", 1)[0].lower()
-        if hote not in hotes:
-            hotes.add(hote)
-            trouves.append(
+    found: list[Finding] = []
+    if _is_script(path, text):
+        found.append(Finding("script", "warning", "an executable script ships with the skill", path))
+    hosts: set[str] = set()
+    for link in URL.finditer(text):
+        host = re.sub(r"^https?://", "", link.group(0), flags=re.I).split("/", 1)[0].lower()
+        if host not in hosts:
+            hosts.add(host)
+            found.append(
                 Finding(
                     "outbound_url",
                     "warning",
-                    f"an outbound URL to {hote}",
-                    chemin,
-                    _line(texte, lien.start()),
+                    f"an outbound URL to {host}",
+                    path,
+                    _line(text, link.start()),
                 )
             )
-    for quoi, motif in _CREDENTIALS:
-        if trouve := motif.search(texte):
-            trouves.append(
-                Finding(
-                    "credential", "critical", f"what looks like {quoi}", chemin, _line(texte, trouve.start())
-                )
+    for what, pattern in _CREDENTIALS:
+        if hit := pattern.search(text):
+            found.append(
+                Finding("credential", "critical", f"what looks like {what}", path, _line(text, hit.start()))
             )
-    if trouve := MCP.search(texte):
-        trouves.append(
+    if hit := MCP.search(text):
+        found.append(
             Finding(
                 "mcp_reference",
                 "warning",
-                f"an MCP reference: `{trouve.group(0)}`",
-                chemin,
-                _line(texte, trouve.start()),
+                f"an MCP reference: `{hit.group(0)}`",
+                path,
+                _line(text, hit.start()),
             )
         )
-    if trouve := _INJECTIONS.search(texte):
-        trouves.append(
+    if hit := _INJECTIONS.search(text):
+        found.append(
             Finding(
                 "prompt_injection",
                 "critical",
-                f"a prompt-injection phrase: “{trouve.group(0)}”",
-                chemin,
-                _line(texte, trouve.start()),
+                f"a prompt-injection phrase: “{hit.group(0)}”",
+                path,
+                _line(text, hit.start()),
             )
         )
-    cache = _HIDDEN.search(texte[1:] if texte.startswith(BOM) else texte)
+    cache = _HIDDEN.search(text[1:] if text.startswith(BOM) else text)
     if cache:
-        trouves.append(
+        found.append(
             Finding(
                 "hidden_unicode",
                 "critical",
                 f"an invisible or bidirectional character U+{ord(cache.group(0)):04X}",
-                chemin,
-                _line(texte, cache.start()),
+                path,
+                _line(text, cache.start()),
             )
         )
-    for motif in (_BASE64, _HEX, _DECODE_EXEC):
-        if trouve := motif.search(texte):
-            trouves.append(
+    for pattern in (_BASE64, _HEX, _DECODE_EXEC):
+        if hit := pattern.search(text):
+            found.append(
                 Finding(
                     "obfuscated",
                     "critical",
                     "an encoded blob, or code that decodes then runs it",
-                    chemin,
-                    _line(texte, trouve.start()),
+                    path,
+                    _line(text, hit.start()),
                 )
             )
             break
-    if trouve := _PIPE_TO_SHELL.search(texte):
-        trouves.append(
+    if hit := _PIPE_TO_SHELL.search(text):
+        found.append(
             Finding(
                 "pipe_to_shell",
                 "critical",
                 "a download piped into a shell",
-                chemin,
-                _line(texte, trouve.start()),
+                path,
+                _line(text, hit.start()),
             )
         )
-    return trouves
+    return found
 
 
 def _licence_findings(licence: str | None) -> list[Finding]:
@@ -272,19 +270,19 @@ def assess(
     repo_licences: dict[str, str] | None = None,
 ) -> Assessment:
     """The risk tier, the scan's findings and the licence of a version's files."""
-    trouves: list[Finding] = []
-    for chemin in sorted(files):
-        if is_inert_binary_path(chemin):
+    found: list[Finding] = []
+    for path in sorted(files):
+        if is_inert_binary_path(path):
             continue  # base64 of a font or an image: nothing a text scan could read
-        trouves.extend(_scan_file(chemin, files[chemin]))
-    for chemin in sorted(set(executables)):
-        trouves.append(Finding("executable", "warning", "a file with an executable bit", chemin))
-    risque: Risk = "medium" if set(files) - {"SKILL.md"} else "low"
-    if any(raises_to_high(f) for f in trouves):
-        risque = "high"
+        found.extend(_scan_file(path, files[path]))
+    for path in sorted(set(executables)):
+        found.append(Finding("executable", "warning", "a file with an executable bit", path))
+    risk_tier: Risk = "medium" if set(files) - {"SKILL.md"} else "low"
+    if any(raises_to_high(f) for f in found):
+        risk_tier = "high"
     licence = detect_licence(files, repo_licences)
-    trouves.extend(_licence_findings(licence))
-    return Assessment(risk=risque, findings=trouves, licence=licence)
+    found.extend(_licence_findings(licence))
+    return Assessment(risk=risk_tier, findings=found, licence=licence)
 
 
 #: Who approved a version shipped by the platform itself (its agent catalogue, a template).

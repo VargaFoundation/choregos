@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Lecture, validation et réparation de `.choregos/result.json`.
+"""Read, validate and repair `.choregos/result.json`.
 
-L'agent écrit ce fichier ; le runner le valide contre le contrat, demande une réparation
-si besoin, puis le complète avec ce qu'il a **mesuré** (preuves, artefacts, diagnostics).
+The agent writes this file; the runner validates it against the contract, asks for a repair
+if needed, then completes it with what it **measured** (evidence, artifacts, diagnostics).
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from .dod import merge_evidence
 
 @dataclass(slots=True)
 class ResultLoad:
-    """Issue d'une tentative de lecture du résultat."""
+    """Outcome of an attempt to read the result."""
 
     result: StageResult | None
     error: str | None = None
@@ -37,13 +37,13 @@ class ResultLoad:
         return self.result is not None
 
 
-def load_result(path: Path, declarees: list[str] | None = None, files: list[str] | None = None) -> ResultLoad:
-    """Lit et valide le fichier. Toute erreur est formulée pour être renvoyée à l'agent.
+def load_result(path: Path, declared: list[str] | None = None, files: list[str] | None = None) -> ResultLoad:
+    """Read and validate the file. Every error is worded to be sent back to the agent.
 
-    `declarees` : les sorties que la transition déclare. Un résultat `done` qui en omet une
-    repart en réparation (S22-12) — sur le locataire dev, le 09/10, un triage rendait
-    une sortie `triage` (du JSON en texte) au lieu de `size` et `risk`, et la garde `outputs_in`
-    escaladait un ticket qui était, en fait, triable."""
+    `declared`: the outputs the transition declares. A `done` result that omits one
+    goes back to repair (S22-12): on the dev tenant, on 09/10, a triage returned
+    a `triage` output (JSON as text) instead of `size` and `risk`, and the `outputs_in` guard
+    escalated a ticket that was, in fact, triageable."""
     if not path.exists():
         return ResultLoad(None, error=f"`{path.name}` is missing: write it before you finish.")
     raw = path.read_text(encoding="utf-8")
@@ -59,42 +59,42 @@ def load_result(path: Path, declarees: list[str] | None = None, files: list[str]
         return ResultLoad(None, error="the document must be a JSON object.", raw=raw)
     payload.setdefault("schema", "choregos/StageResult/v1")
     try:
-        resultat = StageResult.model_validate(payload)
+        parsed = StageResult.model_validate(payload)
     except ValidationError as exc:
         return ResultLoad(None, error=_explain(exc), raw=raw)
-    manquantes = _sorties_manquantes(resultat, declarees or [])
-    if manquantes:
-        attendues = ", ".join(f"`{nom}`" for nom in declarees or [])
+    missing = _missing_outputs(parsed, declared or [])
+    if missing:
+        expected = ", ".join(f"`{name}`" for name in declared or [])
         return ResultLoad(
             None,
             error=(
-                f"`outputs` lacks {', '.join(f'`{nom}`' for nom in manquantes)}: this step declares "
-                f"{attendues}, each a key of `outputs` of its own — not nested in another output."
+                f"`outputs` lacks {', '.join(f'`{name}`' for name in missing)}: this step declares "
+                f"{expected}, each a key of `outputs` of its own — not nested in another output."
             ),
             raw=raw,
         )
     # `files`: the deliverables a `done` step declares (ADR 0049), expected beside this file in
     # `.choregos/outputs/`. A missing one goes back to the agent like a missing output.
-    absents = [name for name in files or [] if not (path.parent / "outputs" / name).is_file()]
-    if absents and resultat.status is StageStatus.DONE:
+    absent = [name for name in files or [] if not (path.parent / "outputs" / name).is_file()]
+    if absent and parsed.status is StageStatus.DONE:
         return ResultLoad(
             None,
             error=(
-                f"missing file(s) in `.choregos/outputs/`: {', '.join(f'`{name}`' for name in absents)}. "
+                f"missing file(s) in `.choregos/outputs/`: {', '.join(f'`{name}`' for name in absent)}. "
                 "This step declares them as deliverables: write each file there, then rewrite the result."
             ),
             raw=raw,
         )
-    return ResultLoad(resultat, raw=raw)
+    return ResultLoad(parsed, raw=raw)
 
 
-def _sorties_manquantes(resultat: StageResult, declarees: list[str]) -> list[str]:
-    """Les sorties déclarées qu'un résultat `done` n'écrit pas. Une étape qui ne finit pas —
-    une question, un échec — n'a pas à les rendre."""
-    if resultat.status is not StageStatus.DONE:
+def _missing_outputs(parsed: StageResult, declared: list[str]) -> list[str]:
+    """The declared outputs that a `done` result does not write. A step that does not finish,
+    a question or a failure, does not have to return them."""
+    if parsed.status is not StageStatus.DONE:
         return []
-    ecrites = resultat.outputs.model_dump(exclude_none=True)
-    return [nom for nom in declarees if ecrites.get(nom) in (None, "", [], {})]
+    written = parsed.outputs.model_dump(exclude_none=True)
+    return [name for name in declared if written.get(name) in (None, "", [], {})]
 
 
 def _explain(exc: ValidationError) -> str:
@@ -106,7 +106,7 @@ def _explain(exc: ValidationError) -> str:
 
 
 def repair_prompt(load: ResultLoad, path: Path) -> str:
-    """Message envoyé à l'agent pour qu'il corrige son résultat."""
+    """Message sent to the agent so that it fixes its result."""
     return "\n".join(
         [
             f"Your file `{path.name}` cannot be used.",
@@ -131,7 +131,7 @@ def repair_prompt(load: ResultLoad, path: Path) -> str:
 
 
 def fallback_result(reason: str, summary: str) -> StageResult:
-    """Résultat produit par le runner quand l'agent n'a pas pu en produire un valide."""
+    """Result produced by the runner when the agent could not produce a valid one."""
     return StageResult(status=StageStatus.FAILED, summary=summary, reason=reason)
 
 
@@ -143,10 +143,10 @@ def complete_result(
     diagnostics: Diagnostics,
     scope_blocked: list[str] | None = None,
 ) -> StageResult:
-    """Complète le résultat de l'agent avec ce que le runner a observé.
+    """Complete the agent's result with what the runner observed.
 
-    Les preuves mesurées écrasent les preuves déclarées : c'est le mécanisme qui empêche
-    un agent d'affirmer que les tests passent alors qu'ils échouent.
+    Measured evidence overrides declared evidence: this is the mechanism that prevents
+    an agent from claiming the tests pass when they fail.
     """
     data: dict[str, Any] = result.model_dump(by_alias=True)
     data["evidence"] = merge_evidence(result.evidence, measured).model_dump()

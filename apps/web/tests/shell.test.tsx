@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TopNav } from "@/app/top-nav";
 import { Sidebar } from "@/components/shell/sidebar";
-import { CLE_DE_LA_BARRE } from "@/lib/preferences";
+import { SIDEBAR_KEY } from "@/lib/preferences";
 import { ThemeProvider } from "@/lib/theme";
 
 const route = { current: "/" };
@@ -83,12 +83,12 @@ describe("the sidebar (S24-03, ADR 0043)", () => {
     expect(skills).not.toHaveAttribute("title");
 
     fireEvent.click(within(barre).getByRole("button", { name: /Collapse sidebar/ }));
-    expect(window.localStorage.getItem(CLE_DE_LA_BARRE)).toBe("rail");
+    expect(window.localStorage.getItem(SIDEBAR_KEY)).toBe("rail");
     expect(document.documentElement.dataset.sidebar).toBe("rail");
     expect(skills).toHaveAttribute("title", "Skills");
 
     fireEvent.click(within(barre).getByRole("button", { name: /Expand sidebar/ }));
-    expect(window.localStorage.getItem(CLE_DE_LA_BARRE)).toBe("full");
+    expect(window.localStorage.getItem(SIDEBAR_KEY)).toBe("full");
     expect(document.documentElement.dataset.sidebar).toBeUndefined();
     expect(skills).not.toHaveAttribute("title");
   });
@@ -105,8 +105,8 @@ describe("the sidebar (S24-03, ADR 0043)", () => {
   it("a fold made in another tab applies here too", () => {
     const barre = mount("/");
     act(() => {
-      window.localStorage.setItem(CLE_DE_LA_BARRE, "rail");
-      window.dispatchEvent(new StorageEvent("storage", { key: CLE_DE_LA_BARRE }));
+      window.localStorage.setItem(SIDEBAR_KEY, "rail");
+      window.dispatchEvent(new StorageEvent("storage", { key: SIDEBAR_KEY }));
     });
     expect(document.documentElement.dataset.sidebar).toBe("rail");
     expect(within(barre).getByRole("link", { name: "Skills" })).toHaveAttribute("title", "Skills");

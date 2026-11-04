@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Le runner : l'algorithme en douze étapes de docs/plan/02 §2.2.
+"""The runner: the twelve-step algorithm of docs/plan/02 §2.2.
 
-Il est jetable et sans mémoire : tout ce qu'il produit part dans l'API interne et
-l'object store. S'il meurt, l'orchestrateur le rejoue avec le même `run_id` — et
-l'idempotence de l'API fait que rien n'est compté deux fois.
+It is disposable and memoryless: everything it produces goes to the internal API and
+the object store. If it dies, the orchestrator replays it with the same `run_id`, and
+the API's idempotence means nothing is counted twice.
 """
 
 from __future__ import annotations
@@ -52,12 +52,12 @@ from .hosted_workspace import HostedWorkspaceError, export_tree, import_tree
 from .inputs import INPUTS_DIR, InputInvalidError, inputs_markdown, mount_inputs
 from .job import REPORT_COMMAND, REPORT_IMAGE, command_digest, job_result, run_job, write_fields
 from .knowledge import KnowledgeInvalidError, lay_out
+from .local_tools import start_if_absent
+from .local_tools import stop as stop_tools
 from .loopback import Loopback
 from .loopback.connect import ConnectProxy, upstream_proxy
 from .loopback.mcp import McpProxy
 from .loopback.model import ModelProxy
-from .outils_locaux import arreter as arreter_outils
-from .outils_locaux import demarrer_si_absent
 from .outputs import OUTPUTS_DIR, expected_files, outputs_markdown, store_outputs
 from .prompt import run_prompt
 from .remote import (
@@ -69,7 +69,7 @@ from .remote import (
 )
 from .result import complete_result, fallback_result, load_result, repair_prompt, write_result
 from .scope import check_scope
-from .skills import SkillInvalide, poser
+from .skills import InvalidSkill, place_skills
 from .workspace import Workspace, agent_git_env, agent_home, inline_outputs, workspace_env
 
 MAX_RESULT_REPAIRS = 2
@@ -77,13 +77,13 @@ MAX_RESULT_REPAIRS = 2
 JOB_LOG_TAIL = 4000
 MAX_SCOPE_REMINDERS = 1
 
-#: La clé, dans `artifacts.reports`, du commit où le run commence (S22-11).
-RAPPORT_DEPART = "start_commit"
+#: The key, in `artifacts.reports`, of the commit where the run starts (S22-11).
+REPORT_START_COMMIT = "start_commit"
 
 
 @dataclass
 class RunOutcome:
-    """Ce que rend un run : un code de sortie et le résultat posté."""
+    """What a run returns: an exit code and the posted result."""
 
     exit_code: Exit
     result: StageResult | None = None
@@ -91,22 +91,23 @@ class RunOutcome:
     detail: str = ""
 
 
-#: Les mises à jour ACP que la console montre en direct (S25-01) : elles partent tout de suite,
-#: avec ce qui attendait, au lieu d'attendre qu'un lot de 25 événements se remplisse. Un plan révisé
-#: resterait sinon dans le tampon tant que l'agent ne parle pas — le plan affiché serait l'ancien.
-SANS_ATTENDRE = frozenset({"plan"})
+#: The ACP updates that the console shows live (S25-01): they leave at once,
+#: with what was waiting, instead of waiting for a batch of 25 events to fill up. A revised plan
+#: would otherwise stay in the buffer as long as the agent does not speak: the plan shown would be the
+#: old one.
+NO_WAIT = frozenset({"plan"})
 
 
-def _sans_attendre(type_: str, payload: dict[str, Any]) -> bool:
+def _no_wait(type_: str, payload: dict[str, Any]) -> bool:
     if type_ != "session/update":
         return False
     update = payload.get("update", payload)
-    return isinstance(update, dict) and update.get("sessionUpdate") in SANS_ATTENDRE
+    return isinstance(update, dict) and update.get("sessionUpdate") in NO_WAIT
 
 
 @dataclass
 class EventJournal:
-    """Journal ACP : envoyé par lots à l'API, écrit en JSONL pour le transcript."""
+    """ACP journal: sent in batches to the API, written as JSONL for the transcript."""
 
     client: InternalClient | None
     path: Path
@@ -121,22 +122,22 @@ class EventJournal:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(event, ensure_ascii=False) + "\n")
-        if len(self.buffer) >= self.batch_size or _sans_attendre(type_, payload):
+        if len(self.buffer) >= self.batch_size or _no_wait(type_, payload):
             await self.flush()
 
     async def flush(self) -> None:
         if not self.buffer or self.client is None:
             self.buffer.clear()
             return
-        # Un journal perdu ne doit jamais faire échouer un run : le résultat prime.
+        # A lost journal must never make a run fail: the result takes precedence.
         with contextlib.suppress(Exception):
             await self.client.post_events(self.buffer)
         self.buffer.clear()
 
 
-#: L'objet « arbre vide » de git : la référence quand il n'y a pas d'historique d'avant.
-#: `git diff $ARBRE_VIDE..HEAD` rend donc tout le contenu comme ajouté.
-ARBRE_VIDE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+#: Git's "empty tree" object: the reference when there is no earlier history.
+#: `git diff $EMPTY_TREE..HEAD` therefore returns all the content as added.
+EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 
 def with_gateway_key(stage_input: StageInput, gateway_key: str) -> StageInput:
@@ -152,7 +153,7 @@ def with_gateway_key(stage_input: StageInput, gateway_key: str) -> StageInput:
 
 
 class Runner:
-    """Exécute une étape d'agent de bout en bout."""
+    """Run an agent step from end to end."""
 
     def __init__(self, settings: RunnerSettings | None = None, client: InternalClient | None = None) -> None:
         self.settings = settings or get_settings()
@@ -168,12 +169,12 @@ class Runner:
         self.loopback_ports: tuple[int, int, int] = (MODEL_PORT, MCP_PORT, CONNECT_PORT)
         self.readiness_interval = 1.0
         self.started = time.monotonic()
-        #: L'index des skills qu'un backend ne lit pas lui-même, ajouté au prompt.
-        self.index_des_skills = ""
+        #: The skills index that a backend does not read itself, added to the prompt.
+        self.skills_index = ""
         #: Where the knowledge bases lie in the workspace (ADR 0051), added to the prompt.
         self.knowledge_index = ""
-        #: Le jeton git du run (S22-07) : en mémoire seulement, pour le clone et le push.
-        self.jeton_git: str | None = None
+        #: The run's git token (S22-07): in memory only, for the clone and the push.
+        self.git_token: str | None = None
         #: The run's compression proxy (ADR 0055), when it runs one.
         self.compressor: compression.Compressor | None = None
         #: The platform's tool server, when the run serves it itself (no sidecar).
@@ -200,7 +201,7 @@ class Runner:
                 stage_input = await client.fetch_input()
             except Exception as exc:
                 detail = str(exc)
-                if "409" in detail:  # résultat déjà posté : rejeu, on sort proprement
+                if "409" in detail:  # result already posted: replay, we exit cleanly
                     return RunOutcome(Exit.OK, detail="result already posted")
                 return RunOutcome(Exit.INPUT_NOT_FOUND, detail=detail)
             return await self.execute(with_gateway_key(stage_input, self.settings.gateway_key), client)
@@ -244,7 +245,7 @@ class Runner:
                 return outcome
         finally:
             await compression.stop(self.compressor)
-            await arreter_outils(self.tools)
+            await stop_tools(self.tools)
 
     async def _execute(
         self, stage_input: StageInput, client: InternalClient, workspace: Workspace, journal: EventJournal
@@ -255,30 +256,32 @@ class Runner:
 
         self.tools = await self._start_tools(client, journal, stage_input)
 
-        # 2. clone et branche — avec le jeton git du run (S22-07) : sans lui, un dépôt privé rendait
-        # « Repository not found ». Il reste en mémoire, jamais dans le workspace ni dans le journal.
-        await self._demander_le_jeton_git(client, journal, stage_input)
+        # 2. clone and branch, with the run's git token (S22-07): without it, a private repository returned
+        # "Repository not found". It stays in memory, never in the workspace nor in the journal.
+        await self._ask_for_git_token(client, journal, stage_input)
         try:
-            await workspace.prepare(stage_input, token=self.jeton_git)
+            await workspace.prepare(stage_input, token=self.git_token)
         except Exception as exc:
             await journal.record("run.failed", {"phase": "clone", "error": str(exc)[:500]})
             await journal.flush()
             return RunOutcome(Exit.CLONE_FAILED, detail=str(exc))
-        # Sans dépôt, la référence est l'arbre vide de git : tout ce que l'agent écrit est
-        # donc « ajouté », ce qui est exactement la vérité pour un répertoire qui n'avait rien.
-        base = await workspace.base_sha(stage_input.repo.base_branch) if stage_input.repo else ARBRE_VIDE
-        # Le périmètre se juge sur ce que CE run écrit : la branche du ticket porte déjà le travail
-        # des étapes d'avant, que l'agent n'a pas fait et ne peut pas défaire. Mesuré depuis la
-        # base, il était imputé au chercheur d'une étude (locataire dev, 08/10), deux fois en échec
-        # sur trois fichiers qu'avait poussés l'étape de cadrage.
-        depart = await workspace.head_sha() if stage_input.repo else ARBRE_VIDE
+        # Without a repository, the reference is git's empty tree: everything the agent writes is
+        # therefore "added", which is exactly the truth for a directory that had nothing.
+        base = await workspace.base_sha(stage_input.repo.base_branch) if stage_input.repo else EMPTY_TREE
+        # The scope is judged on what THIS run writes: the ticket's branch already carries the work
+        # of the earlier steps, which the agent did not do and cannot undo. Measured from the
+        # base, it was charged to the researcher of a study (dev tenant, 08/10), failing twice
+        # on three files that the framing step had pushed.
+        start_ref = await workspace.head_sha() if stage_input.repo else EMPTY_TREE
 
         # 3. contexte
         context = await self._context(client)
-        if (refus := await self._write_context(client, journal, stage_input, workspace, context)) is not None:
-            return refus
         if (
-            carried := await self._carried(client, journal, stage_input, workspace, base, depart)
+            refusal := await self._write_context(client, journal, stage_input, workspace, context)
+        ) is not None:
+            return refusal
+        if (
+            carried := await self._carried(client, journal, stage_input, workspace, base, start_ref)
         ) is not None:
             return carried
 
@@ -295,10 +298,10 @@ class Runner:
         plan.materialize_home(agent_home(stage_input))
         # Skills, then knowledge bases: the first refusal stops the run before the agent starts.
         if (
-            refus := await self._poser_les_skills(client, journal, stage_input, backend, workspace)
+            refusal := await self._place_skills(client, journal, stage_input, backend, workspace)
             or await self._lay_out_knowledge(client, journal, stage_input, workspace)
         ) is not None:
-            return refus
+            return refusal
         guards = GuardRails(
             stage_input.permissions, list(stage_input.allowed_paths), workspace=str(workspace.path)
         )
@@ -369,17 +372,17 @@ class Runner:
                     refused = await _turn(agent, report.prompt_for_repair(), self._remaining(budget_seconds))
                     report = await run_checks(stage_input, workspace.path)
 
-                # 9. périmètre
-                scope_result = await check_scope(workspace, depart, guards.allowed_paths)
+                # 9. scope
+                scope_result = await check_scope(workspace, start_ref, guards.allowed_paths)
                 if scope_result.reverted and not refused and agent.outcome.guard is None:
                     await journal.record("scope.reverted", {"paths": scope_result.reverted})
                     refused = await _turn(agent, scope_result.prompt(), self._remaining(budget_seconds))
-                    scope_result = await check_scope(workspace, depart, guards.allowed_paths)
+                    scope_result = await check_scope(workspace, start_ref, guards.allowed_paths)
 
                 # 10. result — or the runner's own, when it stopped the agent (S27-07)
                 if agent.outcome.guard is not None:
                     return await self._stopped_by_the_guard(
-                        client, journal, workspace, stage_input, agent, report, (base, depart)
+                        client, journal, workspace, stage_input, agent, report, (base, start_ref)
                     )
                 load = load_result(workspace.result_path(), inline_outputs(stage_input), _files(stage_input))
                 while not load.ok and repairs < MAX_RESULT_REPAIRS and not refused:
@@ -403,16 +406,16 @@ class Runner:
                 )
                 stop = _stop(agent, refused, agent_result, load.error, workspace.result_path())
                 if stop is not None:
-                    code, raison, detail = stop
+                    code, reason, detail = stop
                     final = complete_result(
-                        fallback_result(raison, detail),
+                        fallback_result(reason, detail),
                         measured=report.evidence(),
                         artifacts=Artifacts(
                             branch=stage_input.repo.work_branch if stage_input.repo else None
                         ),
                         diagnostics=diagnostics,
                     )
-                    await self._publish(client, journal, workspace, stage_input, final, base, depart)
+                    await self._publish(client, journal, workspace, stage_input, final, base, start_ref)
                     return RunOutcome(code, final, detail=detail)
         except AgentUnreachableError as exc:
             await journal.record("agent.unreachable", {"error": str(exc)[:500]})
@@ -427,10 +430,10 @@ class Runner:
             diagnostics=diagnostics,
             scope_blocked=scope_result.remaining if scope_result else None,
         )
-        final = await self._publish(client, journal, workspace, stage_input, final, base, depart)
+        final = await self._publish(client, journal, workspace, stage_input, final, base, start_ref)
         return RunOutcome(Exit.OK, final, transcript_path=journal.path)
 
-    # ───────────────────────── étapes internes ─────────────────────────
+    # ───────────────────────── internal steps ─────────────────────────
 
     async def _compress(self, stage_input: StageInput, journal: Any) -> RunOutcome | None:
         """Says which context reduction the run was given, then starts headroom when it asks for it
@@ -479,13 +482,19 @@ class Runner:
             return None
         announced = stage_input.tools.mcp.get("choregos")
         try:
-            tools = await demarrer_si_absent(
+            tools = await start_if_absent(
                 (announced.url if announced else "") or self.settings.tools_url, client
             )
-            await journal.record("tools.local", {"demarre": tools is not None})
+            await journal.record(
+                "tools.local",
+                {"demarre": tools is not None},  # lang: fr-ok — persisted run-event key, S45-39
+            )
             return tools
         except Exception as exc:  # losing its tools must not stop the step
-            await journal.record("tools.local", {"demarre": False, "error": str(exc)[:300]})
+            await journal.record(
+                "tools.local",
+                {"demarre": False, "error": str(exc)[:300]},  # lang: fr-ok — persisted run-event key, S45-39
+            )
             return None
 
     async def _execute_job(
@@ -495,7 +504,7 @@ class Runner:
         stage_input: StageInput,
         workspace: Workspace,
         base: str,
-        depart: str,
+        start_ref: str,
     ) -> RunOutcome:
         """A job step (ADR 0056): the command instead of an agent, then the same publication.
 
@@ -553,7 +562,7 @@ class Runner:
                 agent_exit="timeout" if ran.timed_out else ("normal" if ran.exit_code == 0 else "crashed"),
             ),
         )
-        final = await self._publish(client, journal, workspace, stage_input, final, base, depart)
+        final = await self._publish(client, journal, workspace, stage_input, final, base, start_ref)
         return RunOutcome(Exit.OK, final, transcript_path=journal.path)
 
     async def _egress_credential(self, client: Any) -> str:
@@ -634,18 +643,18 @@ class Runner:
         stage_input: StageInput,
         workspace: Workspace,
         base: str,
-        depart: str,
+        start_ref: str,
     ) -> RunOutcome | None:
         """A step no ACP agent carries — a job, a remote agent, a prompt agent, a hosted agent — run
         its own way; `None` for an ACP step."""
         if stage_input.job is not None:
-            return await self._execute_job(client, journal, stage_input, workspace, base, depart)
+            return await self._execute_job(client, journal, stage_input, workspace, base, start_ref)
         if stage_input.remote is not None:
-            return await self._execute_remote(client, journal, stage_input, workspace, base, depart)
+            return await self._execute_remote(client, journal, stage_input, workspace, base, start_ref)
         if stage_input.prompt is not None:
-            return await self._execute_prompt(client, journal, stage_input, workspace, base, depart)
+            return await self._execute_prompt(client, journal, stage_input, workspace, base, start_ref)
         if stage_input.hosted is not None:
-            return await self._execute_hosted(client, journal, stage_input, workspace, base, depart)
+            return await self._execute_hosted(client, journal, stage_input, workspace, base, start_ref)
         return None
 
     async def _execute_remote(
@@ -655,7 +664,7 @@ class Runner:
         stage_input: StageInput,
         workspace: Workspace,
         base: str,
-        depart: str,
+        start_ref: str,
     ) -> RunOutcome:
         """A step a remote agent carries over A2A (ADR 0062): the call instead of an agent, then the
         same publication. No local agent, no gateway key; the result goes through the same gates."""
@@ -712,7 +721,7 @@ class Runner:
                 else ("normal" if outcome.status is StageStatus.DONE else "crashed"),
             ),
         )
-        final = await self._publish(client, journal, workspace, stage_input, final, base, depart)
+        final = await self._publish(client, journal, workspace, stage_input, final, base, start_ref)
         return RunOutcome(Exit.OK, final, transcript_path=journal.path)
 
     async def _execute_prompt(
@@ -722,17 +731,17 @@ class Runner:
         stage_input: StageInput,
         workspace: Workspace,
         base: str,
-        depart: str,
+        start_ref: str,
     ) -> RunOutcome:
         """A step a prompt agent carries (ADR 0080): the runner's tool loop instead of an ACP agent,
         with the same skills, knowledge, checks and publication. Stopped at `max_turns` model calls."""
         if (
-            refus := await self._poser_les_skills(
+            refusal := await self._place_skills(
                 client, journal, stage_input, get_backend("prompt"), workspace
             )
             or await self._lay_out_knowledge(client, journal, stage_input, workspace)
         ) is not None:
-            return refus
+            return refusal
         guards = GuardRails(
             stage_input.permissions, list(stage_input.allowed_paths), workspace=str(workspace.path)
         )
@@ -774,7 +783,7 @@ class Runner:
             artifacts=Artifacts(branch=stage_input.repo.work_branch if stage_input.repo else None),
             diagnostics=diagnostics,
         )
-        final = await self._publish(client, journal, workspace, stage_input, final, base, depart)
+        final = await self._publish(client, journal, workspace, stage_input, final, base, start_ref)
         return RunOutcome(code, final, transcript_path=journal.path, detail=step.error or "")
 
     async def _execute_hosted(
@@ -784,7 +793,7 @@ class Runner:
         stage_input: StageInput,
         workspace: Workspace,
         base: str,
-        depart: str,
+        start_ref: str,
     ) -> RunOutcome:
         """A step a hosted agent carries (ADR 0080): the agent's container, beside the runner, gets
         the step over Foundry's contract and reaches the platform only through the runner's loopback
@@ -837,7 +846,7 @@ class Runner:
                 "hosted.workspace.imported", {"written": imported.written, "deleted": imported.deleted}
             )
             # The net behind the guard rails, as for an ACP agent: what is out of scope is reverted.
-            scope = await check_scope(workspace, depart, guards.allowed_paths)
+            scope = await check_scope(workspace, start_ref, guards.allowed_paths)
             if scope.reverted:
                 await journal.record("scope.reverted", {"paths": scope.reverted})
             scope_blocked = scope.remaining
@@ -889,7 +898,7 @@ class Runner:
             ),
             scope_blocked=scope_blocked,
         )
-        final = await self._publish(client, journal, workspace, stage_input, final, base, depart)
+        final = await self._publish(client, journal, workspace, stage_input, final, base, start_ref)
         return RunOutcome(code, final, transcript_path=journal.path, detail=step.error or "")
 
     async def _hosted_checks(
@@ -919,18 +928,18 @@ class Runner:
         )
         return await run_checks(stage_input.model_copy(update={"project": no_repo}), workspace.path)
 
-    async def _poser_les_skills(
+    async def _place_skills(
         self, client: Any, journal: Any, stage_input: StageInput, backend: Any, workspace: Any
     ) -> RunOutcome | None:
-        """Les skills de l'agent du registre (ADR 0033) : vérifiées par leur empreinte, puis posées
-        là où le backend les lit — hors du diff. Une skill manquante ou altérée arrête le run."""
+        """The agent's registry skills (ADR 0033): verified by their digest, then placed
+        where the backend reads them, out of the diff. A missing or altered skill stops the run."""
         if not stage_input.skills:
             return None
         try:
-            ecrites, self.index_des_skills = poser(
+            ecrites, self.skills_index = place_skills(
                 await client.fetch_skills(), stage_input.skills, workspace.path, backend.skills_dir
             )
-        except SkillInvalide as exc:
+        except InvalidSkill as exc:
             await journal.record("run.failed", {"phase": "skills", "error": str(exc)[:500]})
             await journal.flush()
             return RunOutcome(Exit.SKILLS_INVALID, detail=str(exc))
@@ -1024,8 +1033,8 @@ class Runner:
                 agent_exit="limit",
             ),
         )
-        base, depart = shas
-        final = await self._publish(client, journal, workspace, stage_input, final, base, depart)
+        base, start_ref = shas
+        final = await self._publish(client, journal, workspace, stage_input, final, base, start_ref)
         return RunOutcome(Exit.OK, final, transcript_path=journal.path)
 
     @staticmethod
@@ -1037,13 +1046,13 @@ class Runner:
             return None
 
     def _prompt(self, stage_input: StageInput, workspace: Path) -> str:
-        """Playbook rendu + tâche. Le playbook vient de l'orchestrateur, jamais du dépôt."""
+        """Rendered playbook + task. The playbook comes from the orchestrator, never from the repository."""
         playbook = stage_input.playbook.prompt or ""
         if not playbook and stage_input.playbook.prompt_url:
             playbook = f"(playbook: {stage_input.playbook.ref})"
         task = (workspace / ".choregos" / "task.md").read_text(encoding="utf-8")
-        if self.index_des_skills:
-            playbook = f"{playbook}\n\n{self.index_des_skills}"
+        if self.skills_index:
+            playbook = f"{playbook}\n\n{self.skills_index}"
         if self.knowledge_index:
             playbook = f"{playbook}\n\n{self.knowledge_index}"
         return f"{playbook}\n\n---\n\n{task}"
@@ -1052,14 +1061,14 @@ class Runner:
         elapsed = time.monotonic() - self.started
         return max(30.0, budget_seconds - elapsed)
 
-    async def _demander_le_jeton_git(
+    async def _ask_for_git_token(
         self, client: InternalClient, journal: EventJournal, stage_input: StageInput
     ) -> None:
-        """Le jeton git du run, gardé en mémoire (S22-07). Sans lui, un dépôt public se clone encore."""
+        """The run's git token, kept in memory (S22-07). Without it, a public repo still clones."""
         if stage_input.repo is None:
             return
         try:
-            self.jeton_git = await client.fetch_git_token()
+            self.git_token = await client.fetch_git_token()
         except Exception as exc:
             await journal.record("git.token", {"ok": False, "error": str(exc)[:300]})
 
@@ -1071,9 +1080,9 @@ class Runner:
         stage_input: StageInput,
         result: StageResult,
         base: str,
-        depart: str = "",
+        start_ref: str = "",
     ) -> StageResult:
-        """Commit, push, transcript, puis dépôt du résultat (étapes 11 et 12)."""
+        """Commit, push, transcript, then deposit of the result (steps 11 and 12)."""
         await self._record_savings(journal)
         await self._deliver(client, journal, workspace, stage_input, result)
         commit_message = _commit_message(stage_input, result)
@@ -1083,26 +1092,26 @@ class Runner:
         result.artifacts.commits = commits or result.artifacts.commits
         if stage_input.repo:
             result.artifacts.branch = stage_input.repo.work_branch
-            if depart:
-                # Le commit où ce run a commencé : la garde de périmètre mesure depuis lui (S22-11),
-                # pas depuis la base, qui compterait le travail des étapes d'avant.
-                result.artifacts.reports[RAPPORT_DEPART] = depart
+            if start_ref:
+                # The commit where this run started: the scope guard measures from it (S22-11),
+                # not from the base, which would count the work of the earlier steps.
+                result.artifacts.reports[REPORT_START_COMMIT] = start_ref
         result.evidence.diff_lines = additions + deletions
         result.evidence.diff_files = len(await workspace.changed_files(base))
-        # Le diff, c'est git qui le dit, pas l'agent : mesuré (ADR 0045).
+        # The diff is what git says, not the agent: measured (ADR 0045).
         result.evidence.measured = sorted({*(result.evidence.measured or []), "diff_files", "diff_lines"})
 
-        # On pousse dès qu'il y a QUELQUE CHOSE à pousser, pas seulement quand c'est nous
-        # qui avons commité. L'agent a git sous la main : quand il commite lui-même, l'arbre
-        # est propre, `commit()` ne rend rien, et le travail restait dans un pod qui
-        # disparaît — l'étape suivante trouvait alors le dépôt inchangé et concluait que
-        # rien n'avait été fait.
+        # We push as soon as there is SOMETHING to push, not only when we are the ones
+        # who committed. The agent has git at hand: when it commits itself, the tree
+        # is clean, `commit()` returns nothing, and the work stayed in a pod that
+        # disappears; the next step then found the repository unchanged and concluded that
+        # nothing had been done.
         if (sha or commits) and stage_input.repo and not self.settings.dry_run:
-            push = await workspace.push(stage_input.repo.work_branch, token=self.jeton_git)
+            push = await workspace.push(stage_input.repo.work_branch, token=self.git_token)
             await journal.record("git.push", {"ok": push.ok, "output": push.output[-500:]})
             if not push.ok:
-                # Une poussée ratée est la fin silencieuse la plus coûteuse : le résultat dit
-                # « fait », et l'étape suivante ne trouve rien.
+                # A failed push is the costliest silent ending: the result says
+                # "done", and the next step finds nothing.
                 result.summary = f"{result.summary} (push refused: {push.output[-200:]})"
 
         result.artifacts.context_pack_url = stage_input.context_pack_url
@@ -1138,7 +1147,7 @@ def _files(stage_input: StageInput) -> list[str]:
 
 
 def _commit_message(stage_input: StageInput, result: StageResult) -> str:
-    """Commit conventionnel, préfixé par le rôle : l'historique dit qui a fait quoi."""
+    """Conventional commit, prefixed by the role: the history says who did what."""
     prefix = {
         "implement": "feat",
         "fix_ci": "fix",
@@ -1154,21 +1163,21 @@ def _commit_message(stage_input: StageInput, result: StageResult) -> str:
     return f"{prefix}({scope}): {summary}"
 
 
-def _diagnostic_sans_resultat(agent: Any, erreur: str | None, result_path: Path) -> tuple[str, str]:
-    """Deux échecs qui se ressemblent et ne se soignent pas pareil : un agent qui a travaillé
-    mais n'a pas écrit son résultat, et un agent dont le tour revient VIDE — clé refusée,
-    quota atteint, fournisseur en panne. Le second accusé d'un oubli envoie l'enquête du
-    mauvais côté."""
-    if _agent_muet(agent.outcome) and not result_path.exists():
-        # Ce que l'agent a écrit sur sa sortie d'erreur vaut mieux que toute reformulation :
-        # c'est là que le fournisseur dit « quota atteint » ou « clé refusée ».
-        bruit = " | ".join(agent.outcome.errors[-2:] or agent.stderr_tail[-2:])
+def _diagnosis_without_result(agent: Any, error: str | None, result_path: Path) -> tuple[str, str]:
+    """Two failures that look alike and are not cured the same way: an agent that worked
+    but did not write its result, and an agent whose turn comes back EMPTY: key refused,
+    quota reached, provider down. Blaming the second on an oversight sends the investigation
+    the wrong way."""
+    if _agent_silent(agent.outcome) and not result_path.exists():
+        # What the agent wrote on its error output is worth more than any rewording:
+        # that is where the provider says "quota reached" or "key refused".
+        noise = " | ".join(agent.outcome.errors[-2:] or agent.stderr_tail[-2:])
         detail = (
             "the agent produced neither text nor a tool call: check its access to the model "
-            f"(end of turn: {agent.outcome.stop_reason})" + (f" — {bruit[:300]}" if bruit else "")
+            f"(end of turn: {agent.outcome.stop_reason})" + (f" — {noise[:300]}" if noise else "")
         )
         return "agent_silencieux", detail
-    return "invalid_result", (erreur or "unreadable result")
+    return "invalid_result", (error or "unreadable result")
 
 
 async def _turn(agent: Any, text: str, timeout: float) -> str | None:
@@ -1193,20 +1202,20 @@ def _stop(
     if refused and (result is None or result.status is StageStatus.FAILED):
         return Exit.BUDGET_EXCEEDED, BUDGET_REASON, f"the gateway refused the run's key: {refused}"
     if result is None:
-        raison, detail = _diagnostic_sans_resultat(agent, error, result_path)
-        return Exit.INVALID_RESULT, raison, detail
+        reason, detail = _diagnosis_without_result(agent, error, result_path)
+        return Exit.INVALID_RESULT, reason, detail
     return None
 
 
-def _agent_muet(outcome: PromptOutcome) -> bool:
-    """Ni un mot, ni un outil : le modèle n'a pas répondu.
+def _agent_silent(outcome: PromptOutcome) -> bool:
+    """Neither a word nor a tool: the model did not answer.
 
-    Un agent qui a parlé sans écrire son résultat est un agent distrait — on le lui
-    rappelle. Un agent dont le tour revient VIDE n'a rien à se faire rappeler : sa clé est
-    refusée, son quota est atteint, ou son fournisseur est en panne.
+    An agent that spoke without writing its result is a distracted agent, and we
+    remind it. An agent whose turn comes back EMPTY has nothing to be reminded of: its key is
+    refused, its quota is reached, or its provider is down.
 
-    L'appelant y ajoute l'absence de tout fichier de résultat : un agent qui en a écrit un,
-    même illisible, a agi — le lui rappeler a du sens.
+    The caller adds the absence of any result file: an agent that wrote one,
+    even unreadable, acted, so reminding it makes sense.
     """
     return outcome.messages == 0 and outcome.tool_calls == 0
 
@@ -1289,7 +1298,7 @@ def _events_already_journaled(path: Path) -> int:
 
 
 async def run_stage(settings: RunnerSettings | None = None) -> RunOutcome:
-    """Point d'entrée programmatique (utilisé par la CLI et les tests)."""
+    """Programmatic entry point (used by the CLI and the tests)."""
     return await Runner(settings).run()
 
 

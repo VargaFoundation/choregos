@@ -101,11 +101,11 @@ describe("a journey's model (S22-02)", () => {
     const live = atInstant(running, model, Infinity);
     const status = (id: string) => live.steps.get(id)!.status;
     expect(live.state).toBe("reviewed");
-    expect(status("t-security-review")).toBe("en_cours");
+    expect(status("t-security-review")).toBe("running");
     expect(["t-triage", "t-specify", "t-approve-spec", "t-plan", "t-implement", "t-test", "t-document", "t-review"].map(status)).toEqual(
-      Array(8).fill("fait"),
+      Array(8).fill("done"),
     );
-    expect(["t-release-notes", "t-open-pr", "t-merge", "t-release"].map(status)).toEqual(Array(4).fill("a_venir"));
+    expect(["t-release-notes", "t-open-pr", "t-merge", "t-release"].map(status)).toEqual(Array(4).fill("upcoming"));
     expect(live.steps.get("t-test")!.rounds).toBe(3);
     expect(live.steps.get("t-review")!.verdict).toBe("approve");
     expect(live.steps.get("t-approve-spec")!.rounds).toBe(2);
@@ -124,26 +124,26 @@ describe("a journey's model (S22-02)", () => {
     const refusal = Date.parse(running.moves.find((m) => m.kind === "reject")!.at);
     const afterRefusal = atInstant(running, model, refusal);
     expect(afterRefusal.state).toBe("triaged");
-    expect(afterRefusal.steps.get("t-approve-spec")!.status).toBe("renvoye");
-    expect(afterRefusal.steps.get("t-specify")!.status).toBe("en_cours");
+    expect(afterRefusal.steps.get("t-approve-spec")!.status).toBe("sent_back");
+    expect(afterRefusal.steps.get("t-specify")!.status).toBe("running");
     expect(afterRefusal.arcs.get("awaiting_spec_approval->triaged")).toEqual({ times: 1, latest: true });
     expect(narrate(model, afterRefusal.latest)).toBe("Product owners sent it back to Triaged.");
     // During the request for changes: the tests will run again after the detour.
     const request = Date.parse(running.moves.find((m) => m.kind === "changes_requested")!.at);
     const duringDetour = atInstant(running, model, request);
-    expect(duringDetour.steps.get("t-review")!.status).toBe("renvoye");
-    expect(duringDetour.steps.get("t-address-review")!.status).toBe("en_cours");
+    expect(duringDetour.steps.get("t-review")!.status).toBe("sent_back");
+    expect(duringDetour.steps.get("t-address-review")!.status).toBe("running");
     expect(narrate(model, duringDetour.latest)).toBe("Reviewer asked for changes: back to Addressing the review.");
     const back = atInstant(running, model, request + 10 * 60_000);
     expect(back.state).toBe("implemented");
-    expect(back.steps.get("t-test")!.status).toBe("en_cours");
+    expect(back.steps.get("t-test")!.status).toBe("running");
   });
 
   it("a person who is awaited shows, a finished work item has nothing next", () => {
     const waiting = atInstant(journeyWaiting(NOW), model, Infinity);
-    expect(waiting.steps.get("t-approve-spec")!.status).toBe("attend");
+    expect(waiting.steps.get("t-approve-spec")!.status).toBe("waiting");
     const ended = atInstant(finished, buildModel(finished), Infinity);
-    expect([...ended.steps.values()].filter((e) => e.status !== "fait").length).toBe(0);
+    expect([...ended.steps.values()].filter((e) => e.status !== "done").length).toBe(0);
     expect(ended.arcs.get("pr_approved->fixing_ci")!.times).toBe(1);
     expect(ended.steps.get("t-approve-pr")!.rounds).toBe(2);
     expect(ended.steps.get("t-release")!.attempts[0]!.decided_by).toBe("leo@acme.dev");

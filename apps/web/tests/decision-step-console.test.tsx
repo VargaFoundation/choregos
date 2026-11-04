@@ -149,23 +149,23 @@ describe("a decision step is told apart from the platform (ADR 0121)", () => {
       text: `var(--choregos-cat-${DECISION_HUE}-ink)`,
     });
     render(<WorkflowMap graph={GRAPH} initial="inbox" actors={{ router: { type: "decision", role: "route_ticket" }, owner: { type: "human", group: "support" } }} />);
-    const box = screen.getByTestId("etat-inbox");
-    expect(box.closest("[data-genre]")).toHaveAttribute("data-genre", "decision");
+    const box = screen.getByTestId("state-inbox");
+    expect(box.closest("[data-kind]")).toHaveAttribute("data-kind", "decision");
     expect(box).toHaveTextContent("Decision · router");
     expect(box).toHaveTextContent("route_ticket");
     expect(within(box).getByTestId("decision-inbox")).toBeInTheDocument();
-    expect(screen.getByTestId("etat-review").closest("[data-genre]")).toHaveAttribute("data-genre", "human");
+    expect(screen.getByTestId("state-review").closest("[data-kind]")).toHaveAttribute("data-kind", "human");
     expect(screen.getByRole("list", { name: "Who moves the work item" })).toHaveTextContent("Decision · 1");
   });
 
   it("is a teal diamond on the diagram, named in the legend only where the workflow has one", () => {
     const { unmount } = render(<SnakeMap graph={GRAPH} process={[STEP]} initial="inbox" />);
-    const diagram = screen.getByTestId("carte-en-serpentin");
-    const shape = diagram.querySelector('[data-etape="t-route"] .parcours-forme')!;
+    const diagram = screen.getByTestId("serpentine-map");
+    const shape = diagram.querySelector('[data-step="t-route"] .journey-shape')!;
     expect(shape.tagName.toLowerCase()).toBe("polygon");
     expect(shape.getAttribute("stroke")).toBe(KIND_COLOURS.decision.border);
-    expect(screen.getByTestId("etape-t-route")).toHaveAccessibleName(/^Router\s*decides: route ticket/);
-    expect(screen.getByTestId("etape-t-route")).toHaveAccessibleDescription("decision — 0 attempts");
+    expect(screen.getByTestId("step-t-route")).toHaveAccessibleName(/^Router\s*decides: route ticket/);
+    expect(screen.getByTestId("step-t-route")).toHaveAccessibleDescription("decision — 0 attempts");
     expect(screen.getByRole("list", { name: "Who carries each step" })).toHaveTextContent("Decision");
     unmount();
     const { graph, process, initial } = journeyInProgress(Date.parse("2026-10-08T12:00:00Z"));

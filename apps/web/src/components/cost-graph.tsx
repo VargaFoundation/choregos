@@ -26,7 +26,7 @@ export function CostGraph({ rows, currency }: { rows: CostRow[]; currency?: Curr
   const premier = rows[0];
   const last = rows.at(-1);
   return (
-    <div data-testid="graphe-des-couts">
+    <div data-testid="cost-graph">
       <p className="mb-1 text-xs tabular-nums text-ink-muted" aria-hidden>
         {usd(max)}
       </p>

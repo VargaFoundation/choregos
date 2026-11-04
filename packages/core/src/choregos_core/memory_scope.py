@@ -110,8 +110,8 @@ def split_namespace(namespace: str) -> tuple[str, str | None]:
     """
     if namespace.startswith(ORG_PREFIX) or STORE_SEPARATOR in namespace:
         raise ValueError(f"not a project or agent namespace (use parse_namespace): {namespace!r}")
-    projet, _, agent = namespace.partition(SEPARATOR)
-    return projet, agent or None
+    project, _, agent = namespace.partition(SEPARATOR)
+    return project, agent or None
 
 
 __all__ = [

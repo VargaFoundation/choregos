@@ -1,8 +1,8 @@
-"""Ce que la plateforme a mesuré, et ce que l'agent a déclaré (ADR 0045, S25-03).
+"""What the platform measured, and what the agent declared (ADR 0045, S25-03).
 
-Les preuves mesurées écrasent les déclarées (`merge_evidence`) — mais le résultat fusionné ne disait
-plus lesquelles l'étaient : la console affichait « tests : ✓ 412 » de la même façon, que le runner
-les ait exécutés ou que l'agent l'ait écrit. `Evidence.measured` le dit, champ par champ.
+Measured evidence overrides declared evidence (`merge_evidence`), but the merged result no longer said
+which ones were: the console displayed "tests: ✓ 412" the same way, whether the runner
+executed them or the agent wrote it. `Evidence.measured` says it, field by field.
 """
 
 from __future__ import annotations
@@ -11,26 +11,26 @@ from choregos_contracts import Evidence
 from choregos_runner.dod import merge_evidence
 
 
-def test_la_fusion_dit_ce_qui_est_mesure_champ_par_champ() -> None:
-    declaree = Evidence(
+def test_the_merge_says_what_is_measured_field_by_field() -> None:
+    declared = Evidence(
         tests_passed=True,
         tests_run=12,
         coverage_delta=1.5,
-        facts={"rapport_joint": True, "constat_resolu": True},
+        facts={"report_attached": True, "finding_resolved": True},
     )
-    mesuree = Evidence(tests_passed=False, tests_run=3, lint="ok", facts={"constat_resolu": False})
-    fusion = merge_evidence(declaree, mesuree)
-    assert fusion.measured == ["facts.constat_resolu", "lint", "tests_passed", "tests_run"]
-    # La couverture et le rapport joint viennent du récit de l'agent : ils restent, non mesurés.
-    assert fusion.coverage_delta == 1.5
-    assert fusion.facts == {"rapport_joint": True, "constat_resolu": False}
+    measured = Evidence(tests_passed=False, tests_run=3, lint="ok", facts={"finding_resolved": False})
+    merged = merge_evidence(declared, measured)
+    assert merged.measured == ["facts.finding_resolved", "lint", "tests_passed", "tests_run"]
+    # Coverage and the attached report come from the agent's account: they stay, unmeasured.
+    assert merged.coverage_delta == 1.5
+    assert merged.facts == {"report_attached": True, "finding_resolved": False}
 
 
-def test_un_agent_ne_peut_pas_se_dire_mesure() -> None:
-    declaree = Evidence(tests_passed=True, tests_run=40, measured=["tests_passed", "tests_run"])
-    assert merge_evidence(declaree, Evidence()).measured == []
+def test_an_agent_cannot_call_itself_measured() -> None:
+    declared = Evidence(tests_passed=True, tests_run=40, measured=["tests_passed", "tests_run"])
+    assert merge_evidence(declared, Evidence()).measured == []
 
 
-def test_rien_de_mesure_tout_est_declare() -> None:
-    """Une liste vide, pas `None` : `None` voudrait dire « un runner trop ancien pour le dire »."""
+def test_nothing_measured_everything_is_declared() -> None:
+    """An empty list, not `None`: `None` would mean "a runner too old to say so"."""
     assert merge_evidence(Evidence(tests_run=3), Evidence()).measured == []

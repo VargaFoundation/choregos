@@ -268,6 +268,13 @@ function Routing({
   const currentStrategy: Strategy = strategyDraft ?? routing.strategy ?? "labels";
   const [hintsDraft, setHintsDraft] = useState<Record<string, string> | null>(null);
   const currentHints = hintsDraft ?? routing.hints ?? {};
+  // The minimum confidence as typed: "" keeps every answer (ADR 0121).
+  const [confidenceDraft, setConfidenceDraft] = useState<string | null>(null);
+  const savedConfidence = routing.min_confidence == null ? "" : String(routing.min_confidence);
+  const currentConfidence = confidenceDraft ?? savedConfidence;
+  const parsedConfidence = currentConfidence.trim() === "" ? null : Number(currentConfidence);
+  const confidenceValid =
+    parsedConfidence === null || (Number.isFinite(parsedConfidence) && parsedConfidence >= 0 && parsedConfidence <= 1);
   const [labels, setLabels] = useState("");
   const [labelsAll, setLabelsAll] = useState("");
   const [type, setType] = useState("");
@@ -284,7 +291,8 @@ function Routing({
   const ajoutable =
     Boolean(chosenTarget) &&
     (newRule.when.labels_any!.length > 0 || newRule.when.labels_all!.length > 0 || Boolean(newRule.when.item_type));
-  const dirty = regles !== null || defaultDraft !== null || strategyDraft !== null || hintsDraft !== null;
+  const dirty =
+    regles !== null || defaultDraft !== null || strategyDraft !== null || hintsDraft !== null || confidenceDraft !== null;
 
   function changer(suivantes: Rule[]) {
     setMessage(null);
@@ -316,11 +324,12 @@ function Routing({
     setDefaultDraft(null);
     setStrategyDraft(null);
     setHintsDraft(null);
+    setConfidenceDraft(null);
     resetForm();
   }
 
   async function enregistrer() {
-    if (!dirty || !currentDefault) return;
+    if (!dirty || !currentDefault || !confidenceValid) return;
     setOccupe(true);
     setErreur(null);
     try {
@@ -329,11 +338,14 @@ function Routing({
         rules: courantes,
         strategy: currentStrategy,
         hints: currentHints,
+        // Absent: unchanged. Sent only once it was changed here.
+        ...(confidenceDraft !== null ? { min_confidence: parsedConfidence } : {}),
       });
       setRegles(null);
       setDefaultDraft(null);
       setStrategyDraft(null);
       setHintsDraft(null);
+      setConfidenceDraft(null);
       setMessage("Routing saved — it applies to the next request that comes in");
       await onChange();
     } catch (cause) {
@@ -391,7 +403,7 @@ function Routing({
       {courantes.length === 0 ? (
         <p className="text-ink-muted">No rule — every request that names no workflow goes to the default.</p>
       ) : (
-        <ol className="divide-y divide-line border-y border-line" aria-label="Routing rules" data-testid="regles">
+        <ol className="divide-y divide-line border-y border-line" aria-label="Routing rules" data-testid="rules">
           {courantes.map((regle, index) => (
             <li
               key={`${index}-${regle.workflow}`}
@@ -531,6 +543,32 @@ function Routing({
               />
             </label>
           ))}
+          <label className="block space-y-1">
+            <span className="font-medium">Minimum confidence</span>
+            <span id="min-confidence-says" className="block text-xs text-ink-muted">
+              A decision model (a catalogue entry enabled for route and decide) answers with a probability; below this
+              one, the default takes the request. Empty: every answer is taken. A chat model gives no probability and is
+              never held to it.
+            </span>
+            <Input
+              type="number"
+              inputMode="decimal"
+              min={0}
+              max={1}
+              step={0.05}
+              aria-label="Minimum confidence"
+              aria-describedby="min-confidence-says"
+              aria-invalid={!confidenceValid}
+              value={currentConfidence}
+              placeholder="0.5"
+              onChange={(event) => {
+                setMessage(null);
+                setConfidenceDraft(event.target.value === savedConfidence ? null : event.target.value);
+              }}
+              className="w-32"
+            />
+            {!confidenceValid && <span className="block text-xs text-danger">A probability between 0 and 1</span>}
+          </label>
         </fieldset>
       )}
 
@@ -546,7 +584,7 @@ function Routing({
             size="sm"
             tone="primary"
             onClick={() => void enregistrer()}
-            disabled={occupe || !currentDefault || editing !== null}
+            disabled={occupe || !currentDefault || editing !== null || !confidenceValid}
           >
             Save the routing
           </Button>
@@ -623,6 +661,8 @@ function TryRouting({ slug }: { slug: string }) {
         <p role="status" data-testid="routing-preview">
           → <strong>{answer.workflow ?? "no workflow"}</strong> ({BY[answer.by]})
           {answer.reason ? `: ${answer.reason}` : ""}
+          {answer.model ? ` — ${answer.model}` : ""}
+          {answer.confidence != null ? `, confidence ${answer.confidence.toFixed(2)}` : ""}
         </p>
       )}
       {erreur && (

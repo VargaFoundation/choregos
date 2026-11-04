@@ -629,6 +629,22 @@ curl         $API/projects/acme:hr/workflows                                    
   `POST /projects/{id}/workflow-routing/preview {"title": …, "body": …, "labels": […]}` says where an
   item would be born and why, without creating it. A `PUT` that leaves out `strategy` or `hints`
   keeps them.
+- **A decision model may choose instead** ([ADR 0121](adr/0121-a-decision-is-a-step-recorded-and-measured.md),
+  S52-08). When the organisation's catalogue enables an entry for **both** `route` and `decide`
+  (the first by name when there are several), that model routes in place of the `cheap` tier. It is
+  asked one `choice` question on the gateway's `/v1/systemone`: the item is the state, and each
+  active workflow is an option with its description and hint. It always answers one workflow and the
+  probability of that answer. `min_confidence` (0 to 1, `null` by default) sets how sure it must be:
+  below it, the default takes the item and the reason says so (`the decision model chose … with a
+  confidence of 0.42, below the project's minimum of 0.50`). A chat model answers no probability
+  and is never held to the minimum. `documents.routing` and the preview carry `confidence`. A `PUT`
+  that leaves out `min_confidence` keeps it; `null` clears it.
+
+  ```bash
+  curl -X POST $API/orgs/acme/models -d '{"model_name": "platform/decide", "usages": ["route", "decide"]}'
+  curl -X PUT $API/projects/acme:hr/workflow-routing -d '{"default": "onboarding", "rules": [],
+    "strategy": "rules_then_llm", "min_confidence": 0.5}'
+  ```
 
   ```bash
   curl -X PUT $API/projects/acme:hr/workflow-routing -d '{"default": "onboarding", "rules": [],
@@ -658,8 +674,9 @@ curl         $API/projects/acme:hr/workflows                                    
   **deactivate** on each workflow (both confirmed; deactivate is offered only when the workflow is
   neither the default nor a routing target, and says why otherwise), and a **routing** card that
   chooses the default and the strategy, adds, edits in place, orders and removes rules (any of
-  these labels, all of these labels, a type), writes each workflow's hint for the model, as a draft
-  saved in one gesture; **Try the routing** shows where a request would land. A new workflow cannot take the
+  these labels, all of these labels, a type), writes each workflow's hint for the model and the
+  minimum confidence of a decision model, as a draft saved in one gesture; **Try the routing**
+  shows where a request would land, which model chose and how sure it was. A new workflow cannot take the
   name of an existing one: publishing it would replace that workflow's active version.
 - **Moving a running item to another version** is explicit:
 
@@ -2184,7 +2201,7 @@ changes anything. Uploads are local globs relative to the manifest, or `url:` en
 over https (at most 20 MiB); a file whose bytes changed replaces the previous document of the same
 name. Without `--prune`, sources and uploads the manifest does not declare are left alone (the plan
 says so). `--dry-run` reads and prints, changes nothing. An example about a fictitious company is in
-`essai/knowledge/`. `choregos knowledge sync <slug>` syncs every source now, and
+`trials/knowledge/`. `choregos knowledge sync <slug>` syncs every source now, and
 `choregos knowledge eval <slug>` runs the eval set and prints recall@5. The command needs an
 organisation administrator's token (`agent:manage`). Refresh schedules in the manifest are the
 source's `interval_minutes` today.

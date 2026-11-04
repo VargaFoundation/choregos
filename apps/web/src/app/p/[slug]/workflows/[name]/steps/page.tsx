@@ -4,12 +4,12 @@
 import { useParams } from "next/navigation";
 import { useState } from "react";
 import { Button, Card, Empty, ErrorNote, EngineSentence, StateBadge } from "@/components/ui";
-import { useBrouillon } from "@/components/workflows/brouillon";
-import { FormulaireDEtape, PanneauDeTransition } from "@/components/workflows/panneaux";
+import { useDraft } from "@/components/workflows/draft";
+import { StepForm, TransitionPanel } from "@/components/workflows/panels";
 import { StepDetails } from "@/components/workflows/step-details";
 import { decisionActorOf } from "@/components/workflows/document";
 import { workflowThresholds } from "@/components/workflows/decision-calibration";
-import { TexteIllisible } from "@/components/workflows/texte-illisible";
+import { UnreadableText } from "@/components/workflows/unreadable-text";
 import { useAgentResolution } from "@/components/workflows/use-agent-resolution";
 import { timingOfStep } from "@/components/workflows/timing";
 
@@ -19,7 +19,7 @@ import { timingOfStep } from "@/components/workflows/timing";
  * happens when it fails. It is what a trade reads; the graph shows its shape.
  */
 export default function StepsPage() {
-  const draft = useBrouillon();
+  const draft = useDraft();
   const { slug, name } = useParams<{ slug: string; name: string }>();
   const resolutions = useAgentResolution(slug, draft.process);
   const [opened, setOpened] = useState<string | null>(null);
@@ -35,9 +35,9 @@ export default function StepsPage() {
   if (!steps) return <Empty>Reading the workflow…</Empty>;
   const addStep = (
     <Card title="Add a step">
-      <FormulaireDEtape
-        etats={(draft.graph?.nodes ?? []) as { id: string; display: string; terminal?: boolean }[]}
-        acteurs={actorNames}
+      <StepForm
+        states={(draft.graph?.nodes ?? []) as { id: string; display: string; terminal?: boolean }[]}
+        actors={actorNames}
       />
     </Card>
   );
@@ -50,8 +50,8 @@ export default function StepsPage() {
     );
   return (
     <div className="space-y-3">
-      {draft.grapheObsolete && <TexteIllisible />}
-      <ol className={draft.grapheObsolete ? "space-y-3 opacity-60" : "space-y-3"} aria-label="Steps of the process">
+      {draft.graphStale && <UnreadableText />}
+      <ol className={draft.graphStale ? "space-y-3 opacity-60" : "space-y-3"} aria-label="Steps of the process">
         {steps.map((step, index) => (
           <li key={step.id}>
             <Card>
@@ -115,8 +115,8 @@ export default function StepsPage() {
                   )}
                 </dl>
                 {opened === step.id && (
-                  <PanneauDeTransition
-                    arete={{
+                  <TransitionPanel
+                    edge={{
                       id: step.id,
                       from: step.from,
                       to: step.to,
@@ -125,7 +125,7 @@ export default function StepsPage() {
                       gates: (step.gates ?? []).map((g) => g.name ?? "").filter(Boolean),
                       timeout_hours: step.timeout_hours,
                     }}
-                    acteurs={actorNames}
+                    actors={actorNames}
                     definitions={definitions}
                     gates={step.gates}
                     timing={timingOfStep(step, {

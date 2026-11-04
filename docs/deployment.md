@@ -1231,7 +1231,7 @@ manager, the carrier, the badge readers and the supplier's agent
 Microsoft Graph (`…/graph/v1.0`, `…/login`). One replica is the point: the API runs two and the
 orchestrator is apart, and in-memory fakes would show each process its own directory. The network
 policy opens that pod to the platform; `demoFakes.tokenSecret` (a secret reference) protects it
-further. A demonstration: the chart refuses it in `staging` and `prod`. `essai/rh/` plays the HR
+further. A demonstration: the chart refuses it in `staging` and `prod`. `trials/hr/` plays the HR
 scenario against it.
 
 ### Which edition am I running?

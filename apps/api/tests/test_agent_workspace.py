@@ -22,15 +22,15 @@ REPO = {"url": "https://github.com/varga/billing-api.git", "base_branch": "main"
 def test_a_version_that_declares_no_workspace_keeps_its_digest_and_writes() -> None:
     """Absent, `workspace` is left out of the stored spec: no published version's digest moves."""
     from choregos_api.schemas.agents import AgentSpec
-    from choregos_api.services.agents import empreinte
+    from choregos_api.services.agents import digest
 
     legacy = AgentSpec.model_validate(LEGACY_SPEC)
     assert "workspace" not in legacy.model_dump(mode="json")
-    assert empreinte(legacy) == LEGACY_DIGEST
+    assert digest(legacy) == LEGACY_DIGEST
     assert legacy.effective_workspace() == "write", "today's behaviour"
     declared = AgentSpec.model_validate({**LEGACY_SPEC, "workspace": "none"})
     assert declared.model_dump(mode="json")["workspace"] == "none"
-    assert empreinte(declared) != LEGACY_DIGEST, "a declared workspace is part of what the version IS"
+    assert digest(declared) != LEGACY_DIGEST, "a declared workspace is part of what the version IS"
     assert declared.effective_workspace() == "none"
 
 

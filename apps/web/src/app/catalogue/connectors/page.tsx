@@ -144,7 +144,7 @@ function Entry({ entry, onProjects }: { entry: ConnectorCatalogueEntry; onProjec
           {entry.configured_in.length > 0 && <p>Configured in {entry.configured_in.join(", ")}</p>}
           {entry.enablement.map((item) => (
             <p key={item.connector} data-testid={`enablement-${item.connector}`}>
-              Installed as <strong data-donnee>{item.connector}</strong> — {where(item)}
+              Installed as <strong data-verbatim>{item.connector}</strong> — {where(item)}
             </p>
           ))}
         </>
@@ -167,7 +167,7 @@ function Entry({ entry, onProjects }: { entry: ConnectorCatalogueEntry; onProjec
                   href={`/p/${slug}/settings`}
                   className="inline-flex items-center rounded border border-line px-2 py-1 text-sm underline pointer-coarse:min-h-11"
                 >
-                  Configure in <span data-donnee>&nbsp;{slug}</span>
+                  Configure in <span data-verbatim>&nbsp;{slug}</span>
                 </Link>
               ))}
             {canEnable &&

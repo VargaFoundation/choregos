@@ -32,7 +32,7 @@ async def _set_daily_budget(client: AsyncClient, project: dict[str, Any], usd: f
 async def _spend(project_id: str, usd: float, *, agent: str | None = None, run_id: str = "r-budget") -> None:
     from choregos_api.db.models import Run, WorkItem
     from choregos_api.db.session import session_scope
-    from choregos_api.services.couts import record_cost
+    from choregos_api.services.costs import record_cost
     from sqlalchemy import select
 
     async with session_scope() as session:

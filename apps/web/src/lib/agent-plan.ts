@@ -19,14 +19,10 @@ import type { RunEventDto } from "./types";
 
 export type TaskStatus = "pending" | "in_progress" | "completed";
 export type TaskPriority = "high" | "medium" | "low";
-export type StatutDeTache = TaskStatus; // lang: fr-ok alias:internal
-export type PrioriteDeTache = TaskPriority; // lang: fr-ok alias:internal
 
 export type Task = { contenu: string; priorite: TaskPriority; statut: TaskStatus };
-export type Tache = Task; // lang: fr-ok alias:internal
 
 export type PlanRevision = { seq: number; ts: string; taches: Task[] };
-export type RevisionDuPlan = PlanRevision; // lang: fr-ok alias:internal
 
 export type PlanTask =
   | (Task & { retiree: false })
@@ -39,7 +35,6 @@ export type PlanTask =
       /** The revision (counted from 1) it disappeared from. */
       revision: number;
     };
-export type TacheDuPlan = PlanTask; // lang: fr-ok alias:internal
 
 export type AgentPlan = {
   revisions: PlanRevision[];
@@ -50,7 +45,6 @@ export type AgentPlan = {
   /** The tasks of the current plan. */
   total: number;
 };
-export type PlanDeLAgent = AgentPlan; // lang: fr-ok alias:internal
 
 const STATUSES = new Set<TaskStatus>(["pending", "in_progress", "completed"]);
 const PRIORITIES = new Set<TaskPriority>(["high", "medium", "low"]);
@@ -134,4 +128,3 @@ export function agentPlan(events: RunEventDto[]): AgentPlan | null {
     total: current.taches.length,
   };
 }
-export const planDeLAgent = agentPlan; // lang: fr-ok alias:internal

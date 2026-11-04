@@ -1,11 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Le client de l'API interne vit dans `choregos_tools_mcp.client` ; ce module le réexporte.
+"""The internal API client lives in `choregos_tools_mcp.client`; this module re-exports it.
 
-Le runner importe le serveur d'outils (pour le démarrer dans son pod) et le serveur
-d'outils importait le client du runner : un cycle de paquets, résolu seulement parce que uv
-travaille en espace de travail — hors de lui, aucun des deux wheels ne s'installait (état
-des lieux du 2026-09-24). Le client est parti chez celui qui en a le plus besoin ; le
-runner en dépend, plus l'inverse.
+The runner imports the tools server (to start it in its pod) and the tools server
+used to import the runner's client: a package cycle, resolved only because uv works in a
+workspace; outside it, neither wheel installed (state of play of 2026-09-24). The client
+moved to the one that needs it most; the runner depends on it, not the other way round.
 """
 
 from __future__ import annotations

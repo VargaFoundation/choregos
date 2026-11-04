@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Protocole ACP : JSON-RPC 2.0 sur stdio (docs/plan/02 §2.2).
+"""ACP protocol: JSON-RPC 2.0 over stdio (docs/plan/02 §2.2).
 
-Le runner est le **client** : il lance l'agent, l'initialise, ouvre une session,
-lui envoie le prompt, et arbitre chaque demande de permission.
+The runner is the **client**: it starts the agent, initializes it, opens a session,
+sends it the prompt, and arbitrates each permission request.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from typing import Any
 PROTOCOL_VERSION = 1
 ACP_VERSION = "0.11"
 
-# Méthodes émises par le client (le runner) vers l'agent.
+# Methods sent by the client (the runner) to the agent.
 INITIALIZE = "initialize"
 AUTHENTICATE = "authenticate"
 SESSION_NEW = "session/new"
@@ -22,7 +22,7 @@ SESSION_LOAD = "session/load"
 SESSION_PROMPT = "session/prompt"
 SESSION_CANCEL = "session/cancel"
 
-# Méthodes émises par l'agent vers le client.
+# Methods sent by the agent to the client.
 SESSION_UPDATE = "session/update"
 SESSION_REQUEST_PERMISSION = "session/request_permission"
 FS_READ_TEXT_FILE = "fs/read_text_file"
@@ -70,12 +70,12 @@ class Response:
 
 
 def _encode(payload: dict[str, Any]) -> bytes:
-    """Un message par ligne (JSON Lines), encodage UTF-8."""
+    """One message per line (JSON Lines), UTF-8 encoding."""
     return (json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + "\n").encode("utf-8")
 
 
 def decode(line: bytes | str) -> Request | Response | Notification | None:
-    """Décode une ligne JSON-RPC. Une ligne vide ou du bruit rend `None`."""
+    """Decode a JSON-RPC line. An empty line or noise returns `None`."""
     text = line.decode("utf-8") if isinstance(line, bytes) else line
     text = text.strip()
     if not text or not text.startswith("{"):
@@ -101,7 +101,7 @@ def error_response(request_id: int, code: int, message: str) -> Response:
     return Response(id=request_id, error={"code": code, "message": message})
 
 
-# Codes d'erreur JSON-RPC utilisés par le runner.
+# JSON-RPC error codes used by the runner.
 METHOD_NOT_FOUND = -32601
 INVALID_PARAMS = -32602
 PERMISSION_DENIED = -32003

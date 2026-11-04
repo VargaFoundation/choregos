@@ -1,18 +1,19 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Ce qu'un gabarit INSTALLE dans l'organisation d'un projet qui naît de lui (S20-07) : ses skills,
-puis ses agents — en version 1 quand ils n'y sont pas, JAMAIS réécrits quand ils y sont.
+"""What a template INSTALLS into the organisation of a project born of it (S20-07): its skills, then
+its agents, as version 1 when they are absent and NEVER rewritten when they are there.
 
-L'organisation a pu les faire évoluer depuis le premier projet : un projet de plus ne défait pas ce
-travail. Un agent nomme ses skills par leur nom ; elles s'installent donc d'abord.
+The organisation may have evolved them since the first project: one more project does not undo that
+work. An agent names its skills by name, so they are installed first.
 
-Puis ce que des greffons installent dans le PROJET (S20-09) : chaque extension va à l'installateur
-déclaré sous son nom ; sans lui, le projet naît sans, et l'audit le dit.
+Then what extensions install into the PROJECT (S20-09): each extension goes to the installer declared
+under its name; without one, the project is born without it, and the audit says so.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
+from choregos_core.compat import alias_names
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,85 +24,87 @@ from ..logging import get_logger
 from ..rbac import SYSTEM
 from ..schemas.agents import AgentCreate
 from .agent_releases import after_publish
-from .agents import empreinte as empreinte_de_l_agent
-from .agents import erreurs_d_une_version
+from .agents import digest as agent_digest
+from .agents import version_errors
 from .hosted_images import pin_hosted_runtime
 from .network import check_agent_network
 from .skill_gate import platform_columns
 from .skills import SkillRefusee, empreinte, valider
 
-logger = get_logger("choregos.gabarits")
+logger = get_logger("choregos.templates")
 
 
-async def installer_ce_que_livre_le_gabarit(
-    session: AsyncSession, projet: Project, livree: Any, gabarit: str
+async def install_what_template_delivers(
+    session: AsyncSession, project: Project, delivered: Any, template: str
 ) -> dict[str, list[str]]:
-    """Rend ce qui a été installé : les noms des skills et des agents nés ici, des extensions
-    installées et de celles qu'aucun greffon n'installe."""
-    auteur = f"template:{gabarit}"
-    installes = await installer_skills_et_agents(
+    """Returns what was installed: the names of the skills and agents born here, of the extensions
+    installed and of those that no extension installs."""
+    author = f"template:{template}"
+    installed = await install_skills_and_agents(
         session,
-        projet.org_id,
-        livree.skills,
-        livree.agents,
-        auteur,
-        quoi=f"le gabarit `{gabarit}`",
-        du_catalogue=getattr(livree, "agents_du_catalogue", None),
+        project.org_id,
+        delivered.skills,
+        delivered.agents,
+        author,
+        what=f"the template `{template}`",
+        catalogue_provenance=getattr(delivered, "catalogue_agents", None),
     )
-    installes |= {"extensions": [], "sans_greffon": []}
-    await _installer_les_extensions(session, projet, livree, auteur, installes)
-    if livree.knowledge:
+    installed |= {"extensions": [], "sans_greffon": []}  # lang: fr-ok — persisted, S45-39
+    await _install_extensions(session, project, delivered, author, installed)
+    if delivered.knowledge:
         # The bases its agents read (S51-06, ADR 0117): created for the project, or reused.
         from .template_knowledge import install_template_knowledge
 
-        done = await install_template_knowledge(session, projet, livree.knowledge, livree.inputs, auteur)
-        installes["knowledge"] = done["created"] + done["completed"] + done["reused"] + done["served"]
-        installes["knowledge_skipped"] = done["skipped"]
-    return installes
+        done = await install_template_knowledge(
+            session, project, delivered.knowledge, delivered.inputs, author
+        )
+        installed["knowledge"] = done["created"] + done["completed"] + done["reused"] + done["served"]
+        installed["knowledge_skipped"] = done["skipped"]
+    return installed
 
 
-def _install_message(auteur: str) -> str:
+def _install_message(author: str) -> str:
     """The message of the version 1 the platform writes when it installs an agent (S40-12)."""
-    source, _, name = auteur.partition(":")
+    source, _, name = author.partition(":")
     if source == "catalogue":
         return f"Installed from the catalogue ({name})"
     if source == "template":
         return f"Installed from the template {name}"
     if source == "plugin":
         return f"Installed from the plugin {name.partition('/')[0]} ({name.partition('/')[2]})"
-    return f"Installed by {auteur}"
+    return f"Installed by {author}"
 
 
-async def installer_skills_et_agents(
+async def install_skills_and_agents(
     session: AsyncSession,
     org_id: Any,
     skills: list[dict[str, str]],
     agents: list[dict[str, Any]],
-    auteur: str,
+    author: str,
     *,
-    quoi: str,
-    du_catalogue: dict[str, str] | None = None,
+    what: str,
+    catalogue_provenance: dict[str, str] | None = None,
 ) -> dict[str, list[str]]:
     """Skills then agents into an organisation, as version 1 when absent and NEVER rewritten when present
     — the path shared by a template (S20-07) and the catalogue (ADR 0040). An agent names its skills, so
     they are installed first.
 
-    `du_catalogue`: slug -> `catalogue:<slug>@<version>` for the agents a template takes from the catalogue
-    (`catalogue:<slug>`). They carry the SAME provenance as a direct install (author of version 1, scope
-    `platform`) so the catalogue's upgrade recognises them (S39-25); the template stays in the audit
-    trail (`via`).
+    `catalogue_provenance`: slug -> `catalogue:<slug>@<version>` for the agents a template takes from the
+    catalogue (`catalogue:<slug>`). They carry the SAME provenance as a direct install (author of version
+    1, scope `platform`) so the catalogue's upgrade recognises them (S39-25); the template stays in the
+    audit trail (`via`).
     """
-    installes: dict[str, list[str]] = {"skills": [], "agents": []}
-    for fichiers in skills:
+    installed: dict[str, list[str]] = {"skills": [], "agents": []}
+    for files in skills:
         try:
-            tete = valider(fichiers)
-        except SkillRefusee as refus:
-            raise unprocessable(f"{quoi} delivers a refused skill: {refus}") from refus
+            head = valider(files)
+        except SkillRefusee as refusal:
+            raise unprocessable(f"{what} delivers a refused skill: {refusal}") from refusal
         if (
-            await session.execute(select(Skill.id).where(Skill.org_id == org_id, Skill.slug == tete.name))
+            await session.execute(select(Skill.id).where(Skill.org_id == org_id, Skill.slug == head.name))
         ).first():
             continue
-        skill = Skill(org_id=org_id, slug=tete.name, description=tete.description, status="active")
+        skill = Skill(org_id=org_id, slug=head.name, description=head.description, status="active")
         session.add(skill)
         await session.flush()
         session.add(
@@ -109,32 +112,32 @@ async def installer_skills_et_agents(
                 skill_id=skill.id,
                 org_id=org_id,
                 version=1,
-                files=dict(fichiers),
-                digest=empreinte(fichiers),
-                created_by=auteur,
-                **platform_columns(fichiers),
+                files=dict(files),
+                digest=empreinte(files),
+                created_by=author,
+                **platform_columns(files),
             )
         )
         await record(session, SYSTEM, "skill.publish", org_id=org_id, target_type="skill",
-                     target_id=skill.id, version=1, via=auteur)  # fmt: skip
-        installes["skills"].append(tete.name)
+                     target_id=skill.id, version=1, via=author)  # fmt: skip
+        installed["skills"].append(head.name)
     for document in agents:
-        corps = AgentCreate.model_validate(document)
-        erreurs_d_une_version(corps.spec)
-        await check_agent_network(session, org_id, corps.spec)
+        body = AgentCreate.model_validate(document)
+        version_errors(body.spec)
+        await check_agent_network(session, org_id, body.spec)
         if (
-            await session.execute(select(Agent.id).where(Agent.org_id == org_id, Agent.slug == corps.slug))
+            await session.execute(select(Agent.id).where(Agent.org_id == org_id, Agent.slug == body.slug))
         ).first():
             continue
-        corps.spec = await pin_hosted_runtime(session, org_id, corps.spec)
-        provenance = (du_catalogue or {}).get(corps.slug, auteur)
+        body.spec = await pin_hosted_runtime(session, org_id, body.spec)
+        provenance = (catalogue_provenance or {}).get(body.slug, author)
         agent = Agent(
             org_id=org_id,
-            slug=corps.slug,
-            kind=corps.kind,
-            display_name=corps.display_name,
-            description=corps.description,
-            tags=list(corps.tags),
+            slug=body.slug,
+            kind=body.kind,
+            display_name=body.display_name,
+            description=body.description,
+            tags=list(body.tags),
             owner_id=None,
             status="active",
             # What the built-in catalogue or a plugin installs is common to everyone (ADR 0061, ADR
@@ -148,39 +151,72 @@ async def installer_skills_et_agents(
                 agent_id=agent.id,
                 org_id=org_id,
                 version=1,
-                spec=corps.spec.model_dump(mode="json"),
-                checksum=empreinte_de_l_agent(corps.spec),
+                spec=body.spec.model_dump(mode="json"),
+                checksum=agent_digest(body.spec),
                 created_by=provenance,
                 message=_install_message(provenance),
             )
         )
         await session.flush()
-        await after_publish(session, None, agent, 1, auteur)
+        await after_publish(session, None, agent, 1, author)
         await record(session, SYSTEM, "agent.create", org_id=org_id, target_type="agent",
-                     target_id=agent.id, via=auteur)  # fmt: skip
-        installes["agents"].append(corps.slug)
+                     target_id=agent.id, via=author)  # fmt: skip
+        installed["agents"].append(body.slug)
     await session.flush()
-    return installes
+    return installed
 
 
-async def _installer_les_extensions(
-    session: AsyncSession, projet: Project, livree: Any, auteur: str, installes: dict[str, list[str]]
+async def installer_skills_et_agents(  # lang: fr-ok alias:internal
+    session: AsyncSession,
+    org_id: Any,
+    skills: list[dict[str, str]],
+    agents: list[dict[str, Any]],
+    author: str,
+    *,
+    quoi: str,  # lang: fr-ok alias:internal
+    du_catalogue: dict[str, str] | None = None,  # lang: fr-ok alias:internal
+) -> dict[str, list[str]]:
+    """The former name of `install_skills_and_agents`, with its former keywords: the plugin installer
+    still calls it that way."""
+    return await install_skills_and_agents(
+        session,
+        org_id,
+        skills,
+        agents,
+        author,
+        what=quoi,
+        catalogue_provenance=du_catalogue,  # lang: fr-ok
+    )
+
+
+async def _install_extensions(
+    session: AsyncSession, project: Project, delivered: Any, author: str, installed: dict[str, list[str]]
 ) -> None:
-    from ..greffons import installateurs_de_gabarit
+    from ..extensions import template_installers
 
-    installateurs = installateurs_de_gabarit()
-    for nom, fichiers in sorted(livree.extensions.items()):
-        installer = installateurs.get(nom)
+    installers = template_installers()
+    for name, files in sorted(delivered.extensions.items()):
+        installer = installers.get(name)
         if installer is None:
-            logger.warning("gabarit.extension_sans_greffon", project=projet.id, extension=nom, via=auteur)
-            await record(session, SYSTEM, "template.extension.skip", org_id=projet.org_id,
-                         target_type="project", target_id=projet.id, extension=nom, via=auteur,
-                         reason="aucun greffon actif ne l'installe")  # fmt: skip
-            installes["sans_greffon"].append(nom)
+            logger.warning(
+                "template.extension_without_installer", project=project.id, extension=name, via=author
+            )
+            await record(session, SYSTEM, "template.extension.skip", org_id=project.org_id,
+                         target_type="project", target_id=project.id, extension=name, via=author,
+                         reason="no active extension installs it")  # fmt: skip
+            installed["sans_greffon"].append(name)  # lang: fr-ok — persisted, S45-39
             continue
-        resultat = await installer(session, projet, dict(fichiers), auteur)
-        await record(session, SYSTEM, "template.extension.install", org_id=projet.org_id,
-                     target_type="project", target_id=projet.id, extension=nom, via=auteur,
-                     result=resultat)  # fmt: skip
-        installes["extensions"].append(nom)
+        result = await installer(session, project, dict(files), author)
+        await record(session, SYSTEM, "template.extension.install", org_id=project.org_id,
+                     target_type="project", target_id=project.id, extension=name, via=author,
+                     result=result)  # fmt: skip
+        installed["extensions"].append(name)
     await session.flush()
+
+
+installer_ce_que_livre_le_gabarit = install_what_template_delivers  # lang: fr-ok alias:internal
+
+alias_names(
+    __name__,
+    {"installer_ce_que_livre_le_gabarit": "install_what_template_delivers"},  # lang: fr-ok alias:internal
+)

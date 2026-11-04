@@ -15,12 +15,12 @@ import { Badge, Breadcrumbs, Card, Empty, ErrorNote, Heading, StateBadge, tabCla
 import { PodLogs } from "@/components/pod-logs";
 import { api } from "@/lib/api";
 import { duration, tokens, usd } from "@/lib/format";
-import { activiteDuRun } from "@/lib/activite-du-run";
+import { runActivity } from "@/lib/run-activity";
 import { contextReductionOf } from "@/lib/context-reduction";
 import { RemoteTaskCard } from "@/components/remote/remote-task";
 import { remoteTask } from "@/lib/remote-run";
-import { planDeLAgent } from "@/lib/plan-de-l-agent";
-import { finDeclaree } from "@/lib/provenance";
+import { agentPlan } from "@/lib/agent-plan";
+import { declaredEnd } from "@/lib/provenance";
 import { useEventStream } from "@/lib/sse";
 import type { RunEventDto } from "@/lib/types";
 import { ConfirmedGesture } from "@/components/confirmed-gesture";
@@ -69,13 +69,13 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
   const events = dedupe([...(stored.data ?? []), ...live.events]);
   const evidence = run.data.result?.evidence;
   // The plan the agent publishes over ACP, revision after revision (S25-01); nothing if it publishes none.
-  const plan = planDeLAgent(events);
+  const plan = agentPlan(events);
   // What the agent called, re-read from the same journal (S25-02): readable, above the raw journal.
-  const activity = activiteDuRun(events);
+  const activity = runActivity(events);
   // What the remote agent did, when the step called one (ADR 0062).
   const remote = remoteTask(events);
   // The agent says it is done; did the platform verify it (ADR 0045)?
-  const declaredEnd = finDeclaree(run.data.result?.status, verdictsDe(events));
+  const end = declaredEnd(run.data.result?.status, verdictsDe(events));
 
   return (
     <div className="space-y-4">
@@ -93,14 +93,14 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
           <Heading as="h1" size="xl">
             Run {run.data.stage_role} · attempt {run.data.attempt}
           </Heading>
-          <p className="font-mono text-xs text-ink-muted" data-donnee>
+          <p className="font-mono text-xs text-ink-muted" data-verbatim>
             {run.data.backend} · {run.data.model} · executor {run.data.executor_kind ?? "—"}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {declaredEnd && (
-            <Badge tone="waiting" data-testid="fin-declaree" title="The agent says it is done; the platform has not observed it">
-              {declaredEnd}
+          {end && (
+            <Badge tone="waiting" data-testid="declared-end" title="The agent says it is done; the platform has not observed it">
+              {end}
             </Badge>
           )}
           <StateBadge

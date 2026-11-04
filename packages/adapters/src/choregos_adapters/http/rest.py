@@ -44,13 +44,14 @@ class RestClient:
     async def request(self, method: str, path: str, **kwargs: Any) -> Any:
         url = path if path.startswith("http") else f"{self.base_url}{path}"
         headers = {**self._headers, **(kwargs.pop("headers", None) or {})}
+        as_text = bool(kwargs.pop("as_text", False))  # a plain-text body (a job trace), not JSON
         last: httpx.Response | None = None
         for attempt in range(MAX_RETRIES):
             response = await self._client.request(method, url, headers=headers, auth=self._auth, **kwargs)
             if response.status_code < 400:
                 if response.status_code == 204 or not response.content:
                     return {}
-                return response.json()
+                return response.text if as_text else response.json()
             last = response
             if response.status_code not in {429, 500, 502, 503, 504}:
                 break

@@ -8,7 +8,7 @@ import { useCallback, useSyncExternalStore } from "react";
 import { AboutEntry } from "@/components/edition";
 import { Wordmark } from "@/components/ui";
 import { useInboxCount } from "@/lib/a-decider";
-import { appliquerLaBarre, choisirLaBarre, CLE_DE_LA_BARRE, lireLaBarre, type Barre } from "@/lib/preferences";
+import { appliquerLaBarre, chooseSidebar, SIDEBAR_KEY, readSidebar, type Barre } from "@/lib/preferences";
 import { useSession } from "@/lib/session";
 import { NavigationList } from "./navigation";
 
@@ -17,8 +17,8 @@ const LOCAL_EVENT = "choregos:sidebar";
 
 function abonner(rappel: () => void): () => void {
   const surStockage = (evenement: StorageEvent) => {
-    if (evenement.key !== CLE_DE_LA_BARRE) return;
-    appliquerLaBarre(lireLaBarre());
+    if (evenement.key !== SIDEBAR_KEY) return;
+    appliquerLaBarre(readSidebar());
     rappel();
   };
   window.addEventListener("storage", surStockage);
@@ -38,7 +38,7 @@ function barreAffichee(): Barre {
 export function useBarre(): [Barre, () => void] {
   const barre = useSyncExternalStore(abonner, barreAffichee, (): Barre => "full");
   const basculer = useCallback(() => {
-    choisirLaBarre(barreAffichee() === "rail" ? "full" : "rail");
+    chooseSidebar(barreAffichee() === "rail" ? "full" : "rail");
     window.dispatchEvent(new Event(LOCAL_EVENT));
   }, []);
   return [barre, basculer];

@@ -130,15 +130,15 @@ def _rtk_config(stage_input: StageInput) -> str:
 
 
 def _scope_hook() -> str:
-    """Filet de sécurité local : le vrai contrôle reste la vérification du diff.
+    """Local safety net: the real check remains the diff verification.
 
-    Le script est déposé dans l'espace de travail de l'agent, qui peut le lire : ses commentaires
-    sont en anglais (ADR 0039). L'histoire de l'exception `.choregos/**` est ici : elle appartient
-    à la PLATEFORME, pas au périmètre du ticket — c'est là que l'agent doit écrire son
-    `result.json`, exigé par le contrat de sortie. Le refuser mettait l'agent devant une
-    contradiction ; il l'a écrit noir sur blanc dans sa transcription — « il y a une contradiction
-    entre le périmètre autorisé et l'obligation d'écrire result.json » —, puis il abandonnait, et
-    l'étape échouait sur un résultat absent.
+    The script is dropped into the agent's workspace, which can read it: its comments
+    are in English (ADR 0039). The history of the `.choregos/**` exception is here: it belongs
+    to the PLATFORM, not to the ticket's scope. That is where the agent must write its
+    `result.json`, required by the output contract. Refusing it put the agent in front of a
+    contradiction; it wrote it in black and white in its transcript ("there is a contradiction
+    between the allowed scope and the obligation to write result.json"), then it gave up, and
+    the step failed on a missing result.
     """
     return """#!/usr/bin/env bash
 # Fallback hook: refuses a write outside the allowed paths.

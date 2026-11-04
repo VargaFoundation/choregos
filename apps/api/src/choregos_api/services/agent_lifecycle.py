@@ -63,7 +63,7 @@ def check_transition(current: str, target: str) -> None:
 
 async def running_work_items(session: AsyncSession, org_id: str, slug: str) -> list[str]:
     """The work items with a run of this agent still in flight, by tracker key."""
-    lignes = await session.execute(
+    rows = await session.execute(
         select(WorkItem.tracker_key)
         .join(Run, Run.work_item_id == WorkItem.id)
         .join(Project, Project.id == Run.project_id)
@@ -71,7 +71,7 @@ async def running_work_items(session: AsyncSession, org_id: str, slug: str) -> l
         .distinct()
         .order_by(WorkItem.tracker_key)
     )
-    return [str(cle) for (cle,) in lignes.tuples()]
+    return [str(key) for (key,) in rows.tuples()]
 
 
 async def last_run_at(session: AsyncSession, org_id: str, slug: str) -> datetime | None:
@@ -84,14 +84,14 @@ async def last_run_at(session: AsyncSession, org_id: str, slug: str) -> datetime
     ).scalar()
 
 
-def unused(agent: Agent, dernier: datetime | None, now: datetime | None = None) -> bool:
+def unused(agent: Agent, last: datetime | None, now: datetime | None = None) -> bool:
     """No run for `UNUSED_DAYS` — counted from its creation when it never ran. A retired agent is
     not "unused": it is gone."""
     if agent.lifecycle == "retired":
         return False
-    seuil = (now or utcnow()) - timedelta(days=UNUSED_DAYS)
-    reference = dernier or agent.created_at
-    return reference is not None and _aware(reference) < seuil
+    threshold = (now or utcnow()) - timedelta(days=UNUSED_DAYS)
+    reference = last or agent.created_at
+    return reference is not None and _aware(reference) < threshold
 
 
 async def retire(session: AsyncSession, agent: Agent) -> dict[str, Any]:
@@ -109,7 +109,7 @@ async def retire(session: AsyncSession, agent: Agent) -> dict[str, Any]:
     )
     for accreditation in accreditations:
         accreditation.revoked_at = maintenant
-    epingles = (
+    pins = (
         await session.execute(
             select(ProjectAgent, Project.slug)
             .join(Project, Project.id == ProjectAgent.project_id)
@@ -117,10 +117,10 @@ async def retire(session: AsyncSession, agent: Agent) -> dict[str, Any]:
             .order_by(Project.slug)
         )
     ).tuples()
-    projets: list[str] = []
-    for epingle, projet in epingles.all():
-        projets.append(str(projet))
-        await session.delete(epingle)
+    projects: list[str] = []
+    for pin, project in pins.all():
+        projects.append(str(project))
+        await session.delete(pin)
     agent.lifecycle = "retired"
     agent.retired_at = maintenant
     # Nothing stays in testing for an agent that will never run again (ADR 0071).
@@ -135,7 +135,7 @@ async def retire(session: AsyncSession, agent: Agent) -> dict[str, Any]:
     ).scalars():
         waiting.status = "cancelled"
     await session.flush()
-    return {"revoked_credentials": len(accreditations), "unpinned_projects": projets}
+    return {"revoked_credentials": len(accreditations), "unpinned_projects": projects}
 
 
 #: The state of the work item an agent trial runs on (`routage.nouveau_ticket_d_essai`): a trial is

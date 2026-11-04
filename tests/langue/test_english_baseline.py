@@ -174,7 +174,7 @@ def test_path_components_are_judged_whole() -> None:
 
 def test_a_directory_of_a_path_counts_for_its_files() -> None:
     assert ce.path_reason("tests/paquets/test_x.py")  # lang: fr-ok
-    assert [f.kind for f in ce.file_findings("essai/lakehouse/README.md", "# A title\n")] == [
+    assert [f.kind for f in ce.file_findings("trials/lakehouse/portee.py", "# A title\n")] == [
         "path"
     ]  # lang: fr-ok
 
@@ -263,7 +263,7 @@ def test_markup_is_not_read_as_prose() -> None:
 
 def test_new_directories_are_scanned() -> None:
     for path in (
-        "essai/rh/README.md",
+        "trials/hr/README.md",
         "infra/policies/images.yaml",
         "docker/api.Dockerfile",
         "examples/agents/plain/x.py",
@@ -320,7 +320,7 @@ def test_there_are_23_areas_and_the_longest_prefix_wins() -> None:
         "tests/replay/test_x.py": "tests",
         "docs/plan/STATUS.md": "docs-plan",
         "docs/usage.md": "docs",
-        "essai/lakehouse/README.md": "trials",
+        "trials/lakehouse/README.md": "trials",
         "charts/choregos/values.yaml": "ops",
         "infra/policies/x.yaml": "ops",
         "docker/api.Dockerfile": "ops",

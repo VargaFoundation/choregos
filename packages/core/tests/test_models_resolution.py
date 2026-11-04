@@ -1,4 +1,4 @@
-"""Résolution des profils de modèles (§4.2)."""
+"""Resolution of the model profiles (§4.2)."""
 
 from __future__ import annotations
 
@@ -85,7 +85,7 @@ def test_backend_constraint_is_not_bypassable() -> None:
 
 
 def test_backend_constraint_on_unresolved_alias_warns() -> None:
-    """Sans catalogue du gateway, l'alias cache le modèle : on avertit, on ne refuse pas."""
+    """Without the gateway's catalogue, the alias hides the model: we warn, we do not refuse."""
     blind = ModelResolver(gateway_url="http://litellm:4000")
     resolved = blind.resolve("profile:standard", backend="claude-code")
     assert resolved.validated

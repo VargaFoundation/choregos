@@ -127,6 +127,9 @@ class WorkflowRoutingDto(Dto):
     #: What the model reads about each workflow, beside its description: workflow name → hint.
     #: Absent from a PUT: unchanged.
     hints: dict[str, Annotated[str, Field(max_length=500)]] | None = None
+    #: Below it, a decision model's choice is not taken and the default takes the item (ADR 0121).
+    #: Absent from a PUT: unchanged; `null`: every answer is taken.
+    min_confidence: float | None = Field(default=None, ge=0, le=1)
 
 
 class RoutingPreviewRequest(Dto):
@@ -143,6 +146,8 @@ class RoutingPreviewDto(Dto):
     by: Literal["explicit", "rule", "llm", "default"]
     reason: str | None = None
     model: str | None = None
+    #: The decision model's probability for its choice; `None` from a chat model or without a model.
+    confidence: float | None = None
 
 
 class WorkflowValidateRequest(Dto):

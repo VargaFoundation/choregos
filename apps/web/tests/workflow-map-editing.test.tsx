@@ -223,13 +223,13 @@ describe("drawing a transition (ADR 0112 §4)", () => {
         return [...data.keys()];
       },
     };
-    expect(screen.getByTestId("etat-inbox")).toHaveAttribute("draggable", "true");
-    expect(screen.getByTestId("etat-done")).toHaveAttribute("draggable", "false");
-    fireEvent.dragStart(screen.getByTestId("etat-inbox"), { dataTransfer });
-    fireEvent.dragOver(screen.getByTestId("etat-done"), { dataTransfer });
-    fireEvent.drop(screen.getByTestId("etat-done"), { dataTransfer });
+    expect(screen.getByTestId("state-inbox")).toHaveAttribute("draggable", "true");
+    expect(screen.getByTestId("state-done")).toHaveAttribute("draggable", "false");
+    fireEvent.dragStart(screen.getByTestId("state-inbox"), { dataTransfer });
+    fireEvent.dragOver(screen.getByTestId("state-done"), { dataTransfer });
+    fireEvent.drop(screen.getByTestId("state-done"), { dataTransfer });
     expect(onDraw).toHaveBeenCalledWith("inbox", "done");
-    fireEvent.drop(screen.getByTestId("etat-inbox"), { dataTransfer });
+    fireEvent.drop(screen.getByTestId("state-inbox"), { dataTransfer });
     expect(onDraw).toHaveBeenCalledTimes(1);
   });
 });

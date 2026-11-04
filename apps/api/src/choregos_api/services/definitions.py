@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Le workflow et la politique actifs d'un projet, leurs modèles, et les défauts d'un projet neuf."""
+"""The active workflow and policy of a project, their models, and the defaults of a new project."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ from choregos_core import (
     parse_workflow,
     policy_warnings,
 )
+from choregos_core.compat import alias_names
 from choregos_core.dsl import dump_workflow
 from choregos_core.policy import unenforced_governance
 from choregos_core.policy_ceiling import PolicyCeiling, clamp
@@ -38,82 +39,84 @@ DEFAULT_POLICY_PRESET = "solo"
 
 
 async def default_workflow(session: AsyncSession, project_id: str) -> WorkflowDef | None:
-    """La version active du workflow PAR DÉFAUT du projet (ADR 0031).
+    """The active version of the project's DEFAULT workflow (ADR 0031).
 
-    Avant, « le workflow du projet » était la version active la plus haute, quel que soit son nom :
-    avec deux workflows actifs, un ticket d'offboarding aurait tourné sous onboarding. Sans défaut
-    nommé (un projet d'avant la 0.14 non migré), on garde l'ancienne règle.
+    Before, "the project's workflow" was the highest active version, whatever its name: with two
+    active workflows, an offboarding work item would have run under onboarding. Without a named
+    default (a project from before 0.14 not migrated), the former rule is kept.
     """
     project = await session.get(Project, project_id)
-    requete = select(WorkflowDef).where(WorkflowDef.project_id == project_id, WorkflowDef.is_active.is_(True))
+    query = select(WorkflowDef).where(WorkflowDef.project_id == project_id, WorkflowDef.is_active.is_(True))
     if project is not None and project.default_workflow:
-        requete = requete.where(WorkflowDef.name == project.default_workflow)
-    return (await session.execute(requete.order_by(WorkflowDef.version.desc()).limit(1))).scalar_one_or_none()
+        query = query.where(WorkflowDef.name == project.default_workflow)
+    return (await session.execute(query.order_by(WorkflowDef.version.desc()).limit(1))).scalar_one_or_none()
 
 
 async def active_workflow(session: AsyncSession, project_id: str) -> WorkflowDef | None:
-    """Déprécié : `default_workflow`, ou `workflow_du_ticket` pour un ticket. Gardé une mineure, pour
-    l'édition entreprise et les greffons qui l'appellent."""
+    """Deprecated: `default_workflow`, or `work_item_workflow` for a work item. Kept for one minor
+    release, for the enterprise edition and the extensions that call it."""
     return await default_workflow(session, project_id)
 
 
-async def workflow_du_ticket(session: AsyncSession, item: WorkItem) -> WorkflowDef | None:
-    """La version où le ticket est né — jamais celle d'un autre projet ; à défaut, le défaut."""
+async def work_item_workflow(session: AsyncSession, item: WorkItem) -> WorkflowDef | None:
+    """The version the work item was born in, never another project's; failing that, the default."""
     if item.workflow_def_id:
-        epingle = await session.get(WorkflowDef, item.workflow_def_id)
-        if epingle is not None and epingle.project_id == item.project_id:
-            return epingle
+        pinned = await session.get(WorkflowDef, item.workflow_def_id)
+        if pinned is not None and pinned.project_id == item.project_id:
+            return pinned
     return await default_workflow(session, item.project_id)
 
 
-async def workflow_actif(session: AsyncSession, project_id: str, nom: str) -> WorkflowDef | None:
-    """La version active du workflow `nom` du projet (une seule par nom, ADR 0031)."""
+async def active_workflow_named(session: AsyncSession, project_id: str, name: str) -> WorkflowDef | None:
+    """The active version of the project's workflow `name` (only one per name, ADR 0031)."""
     return (
         await session.execute(
             select(WorkflowDef).where(
-                WorkflowDef.project_id == project_id, WorkflowDef.name == nom, WorkflowDef.is_active.is_(True)
+                WorkflowDef.project_id == project_id,
+                WorkflowDef.name == name,
+                WorkflowDef.is_active.is_(True),
             )
         )
     ).scalar_one_or_none()
 
 
-def _verifier_les_effets(workflow: Any) -> None:
-    """Un effet que la plateforme ne connaît pas se refuse À LA PUBLICATION (S20-05) : une faute de
-    frappe ne doit pas attendre la date d'arrivée d'un ticket pour se découvrir. Les effets sont une
-    couture de l'API (`declarer_un_effet`), le validateur du cœur ne les voit pas."""
-    from ..effets import effets_declares
+def _check_effects(workflow: Any) -> None:
+    """An effect the platform does not know is refused AT PUBLICATION (S20-05): a typo must not wait
+    for the arrival date of a work item to be discovered. Effects are a seam of the API
+    (`declare_effect`), the core's validator does not see them."""
+    from ..effects import declared_effects
 
-    connus = effets_declares()
-    erreurs = []
+    known = declared_effects()
+    errors = []
     for index, transition in enumerate(workflow.transitions):
         if transition.action is None:
             continue
-        for position, effet in enumerate(transition.action.effects):
-            noms = [effet.effect, *([str(effet.compensate.get("effect"))] if effet.compensate else [])]
-            for nom in noms:
-                if nom not in connus:
-                    erreurs.append(
+        for position, effect in enumerate(transition.action.effects):
+            names = [effect.effect, *([str(effect.compensate.get("effect"))] if effect.compensate else [])]
+            for name in names:
+                if name not in known:
+                    errors.append(
                         {
                             "loc": [f"/transitions/{index}/action/effects/{position}"],
-                            "msg": f"unknown effect: {nom} (known: {', '.join(sorted(connus))})",
+                            "msg": f"unknown effect: {name} (known: {', '.join(sorted(known))})",
                             "code": "action.effect_unknown",
                         }
                     )
-    if erreurs:
-        raise unprocessable("invalid workflow", erreurs)
+    if errors:
+        raise unprocessable("invalid workflow", errors)
 
 
-async def _verifier_les_agents_nommes(session: AsyncSession, project: Project, workflow: Workflow) -> None:
+async def _check_named_agents(session: AsyncSession, project: Project, workflow: Workflow) -> None:
     """A workflow may not name a personal agent, nor another project's agent (ADR 0061): 422, and the
     message names the agent, its scope and the fix."""
+    from .agent_catalogue import named_agents
     from .agent_governance import refusals_for_named_agents
-    from .catalogue_d_agents import agents_nommes
 
-    refus = await refusals_for_named_agents(session, project.org_id, project.id, agents_nommes(workflow))
-    if refus:
+    refusals = await refusals_for_named_agents(session, project.org_id, project.id, named_agents(workflow))
+    if refusals:
         raise unprocessable(
-            "the workflow names an agent that cannot run in this project: " + "; ".join(refus),
-            [{"loc": ["actors"], "msg": message} for message in refus],
+            "the workflow names an agent that cannot run in this project: " + "; ".join(refusals),
+            [{"loc": ["actors"], "msg": message} for message in refusals],
         )
 
 
@@ -174,18 +177,18 @@ async def _warn_about_memory_the_policy_disables(
     log_memory_disabled_warnings(issues, project.slug)
 
 
-async def derniere_version(session: AsyncSession, project_id: Any, nom: str) -> int | None:
-    """La plus haute version d'un workflow de ce nom, active ou non ; `None` s'il n'a jamais existé."""
+async def latest_version(session: AsyncSession, project_id: Any, name: str) -> int | None:
+    """The highest version of a workflow of this name, active or not; `None` if it never existed."""
     return (
         await session.execute(
             select(func.max(WorkflowDef.version)).where(
-                WorkflowDef.project_id == project_id, WorkflowDef.name == nom
+                WorkflowDef.project_id == project_id, WorkflowDef.name == name
             )
         )
     ).scalar()
 
 
-async def _verifier_le_budget(session: AsyncSession, project: Project, workflow: Workflow) -> None:
+async def _check_budget(session: AsyncSession, project: Project, workflow: Workflow) -> None:
     """Refuses (422) a `budget.ticket_usd` wider than every ticket budget the policy gives (S27-12).
 
     A workflow's budget only tightens the policy's (S27-06, ADR 0047). The size of a work item is not
@@ -204,7 +207,7 @@ async def _verifier_le_budget(session: AsyncSession, project: Project, workflow:
         )
 
 
-async def publier_workflow(  # noqa: PLR0913 - le seul chemin d'écriture : ses options sont nommées
+async def publish_workflow(  # noqa: PLR0913 - the only write path: its options are named
     session: AsyncSession,
     principal: Any,
     project: Project,
@@ -213,16 +216,16 @@ async def publier_workflow(  # noqa: PLR0913 - le seul chemin d'écriture : ses 
     source: str = "platform",
     activate: bool = True,
     base_version: int | None = None,
-    nom_attendu: str | None = None,
-    devient_le_defaut: bool = False,
-    creation_seule: bool = False,
+    expected_name: str | None = None,
+    becomes_default: bool = False,
+    create_only: bool = False,
     origin: str | None = None,
 ) -> WorkflowDef:
-    """Le SEUL chemin d'écriture d'un workflow (ADR 0031) : l'alias, le PUT par nom, la restauration.
+    """The ONLY write path of a workflow (ADR 0031): the alias, the PUT by name, the restoration.
 
-    Chaque publication ajoute une version — aucune n'est écrasée — et ne désactive que la version
-    active du MÊME nom : publier `offboarding` ne touche pas à `onboarding`. Un ticket épinglé finit
-    sur sa version.
+    Each publication adds a version, none is overwritten, and it deactivates only the active
+    version of the SAME name: publishing `offboarding` does not touch `onboarding`. A pinned work
+    item ends on its version.
     """
     workflow, report = parse_workflow(source_yaml, strict=False)
     if not report.valid:
@@ -240,35 +243,39 @@ async def publier_workflow(  # noqa: PLR0913 - le seul chemin d'écriture : ses 
                 for i in report.errors
             ],
         )
-    nom = workflow.metadata.name
-    if nom_attendu is not None and nom != nom_attendu:
+    name = workflow.metadata.name
+    if expected_name is not None and name != expected_name:
         raise unprocessable(
-            f"the YAML is named `{nom}`, the route `{nom_attendu}`: `metadata.name` must match"
+            f"the YAML is named `{name}`, the route `{expected_name}`: `metadata.name` must match"
         )
-    _verifier_les_effets(workflow)
-    await _verifier_les_agents_nommes(session, project, workflow)
-    await _verifier_le_budget(session, project, workflow)
+    _check_effects(workflow)
+    await _check_named_agents(session, project, workflow)
+    await _check_budget(session, project, workflow)
     await _check_decision_steps(session, project, workflow)
     await _warn_about_memory_the_policy_disables(session, project, workflow)
-    actuelle = await workflow_actif(session, project.id, nom)
-    if base_version is not None and (actuelle is None or actuelle.version != base_version):
-        lue = actuelle.version if actuelle is not None else "none"
+    current = await active_workflow_named(session, project.id, name)
+    if base_version is not None and (current is None or current.version != base_version):
+        read_version = current.version if current is not None else "none"
         raise conflict(
-            f"`{nom}` has changed: you were editing version {base_version}, the active one is {lue}"
+            f"`{name}` has changed: you were editing version {base_version}, the active one is {read_version}"
         )
-    deja = await derniere_version(session, project.id, nom)
-    # Créer n'écrase rien (#336) : sans ce garde, nommer un nouveau workflow comme un ancien publiait
-    # le texte comme version suivante de l'ancien, et la vérification de la console ne fermait pas
-    # la course entre deux créations à la même seconde.
-    if creation_seule and deja is not None:
-        raise conflict(f"`{nom}` already exists: open it to publish its next version, or choose another name")
-    version = workflow.metadata.version if deja is None or deja < workflow.metadata.version else deja + 1
-    if activate and actuelle is not None:
-        actuelle.is_active = False
+    already = await latest_version(session, project.id, name)
+    # Creating overwrites nothing (#336): without this guard, naming a new workflow like an old one
+    # published the text as the old one's next version, and the console's check did not close the
+    # race between two creations in the same second.
+    if create_only and already is not None:
+        raise conflict(
+            f"`{name}` already exists: open it to publish its next version, or choose another name"
+        )
+    version = (
+        workflow.metadata.version if already is None or already < workflow.metadata.version else already + 1
+    )
+    if activate and current is not None:
+        current.is_active = False
         await session.flush()
     row = WorkflowDef(
         project_id=project.id,
-        name=nom,
+        name=name,
         version=version,
         source=source,
         origin=origin,
@@ -278,27 +285,27 @@ async def publier_workflow(  # noqa: PLR0913 - le seul chemin d'écriture : ses 
         is_active=activate,
         created_by=getattr(principal, "email", None),
     )
-    if creation_seule:
-        # Deux créations du même nom à la même seconde passent toutes deux le garde ci-dessus : la
-        # contrainte (projet, nom, version) départage, et la seconde reçoit le même 409.
+    if create_only:
+        # Two creations of the same name in the same second both pass the guard above: the
+        # (project, name, version) constraint tells them apart, and the second gets the same 409.
         try:
             async with session.begin_nested():
                 session.add(row)
                 await session.flush()
-        except IntegrityError as erreur:
+        except IntegrityError as failure:
             raise conflict(
-                f"`{nom}` already exists: open it to publish its next version, or choose another name"
-            ) from erreur
+                f"`{name}` already exists: open it to publish its next version, or choose another name"
+            ) from failure
     else:
         session.add(row)
-    if activate and (devient_le_defaut or not project.default_workflow):
-        project.default_workflow = nom
+    if activate and (becomes_default or not project.default_workflow):
+        project.default_workflow = name
     await session.flush()
-    # Un agent du catalogue que ce workflow nomme, absent de l'organisation, s'installe (ADR 0040) :
-    # sinon le ticket mourrait au premier run (`AgentIndisponible`).
-    from .catalogue_d_agents import installer_les_agents_nommes
+    # A catalogue agent this workflow names, absent from the organisation, is installed (ADR 0040):
+    # otherwise the work item would die at its first run (`AgentUnavailable`).
+    from .agent_catalogue import install_named_agents
 
-    await installer_les_agents_nommes(session, project.org_id, [workflow], principal)
+    await install_named_agents(session, project.org_id, [workflow], principal)
     await record(
         session,
         principal,
@@ -326,47 +333,47 @@ async def active_policy(session: AsyncSession, project_id: str) -> PolicyDef | N
 async def ensure_defaults(
     session: AsyncSession, project: Project, *, refuse_unenforced: bool = False
 ) -> tuple[WorkflowDef, PolicyDef]:
-    """Un projet neuf reçoit ce que livre son gabarit (ADR 0031) : ses workflows, le défaut, le routage
-    et la politique — sans gabarit, `default-simple` et le preset `solo` (D14) ; ses skills et ses
-    agents entrent dans l'organisation quand ils n'y sont pas (S20-07) ; ses extensions vont aux
-    greffons qui les installent (S20-09).
+    """A new project receives what its template delivers (ADR 0031): its workflows, the default, the
+    routing and the policy; without a template, `default-simple` and the `solo` preset (D14); its
+    skills and agents enter the organisation when they are not there (S20-07); its extensions go to
+    the extensions that install them (S20-09).
 
-    Rien n'est réécrit chez un projet qui a déjà un workflow actif ou une politique.
+    Nothing is rewritten for a project that already has an active workflow or a policy.
 
     `refuse_unenforced` (project creation only) refuses a template whose policy promises guards
     Choregos does not enforce (ADR 0101). Lazy provisioning from read paths leaves it off, so a
     GET never answers 422.
     """
-    from .gabarits import livraison, manifeste_du_gabarit
+    from .templates import delivery, template_manifest
 
     workflow = await active_workflow(session, project.id)
     policy = await active_policy(session, project.id)
-    livree = None
+    delivered = None
     if workflow is None or policy is None:
         repo = (project.config or {}).get("repo") or {}
-        livree = livraison(
-            *await manifeste_du_gabarit(session, project.template_ref, project.org_id),
+        delivered = delivery(
+            *await template_manifest(session, project.template_ref, project.org_id),
             has_repository=bool(repo.get("url")),
         )
     if workflow is None:
-        assert livree is not None
-        workflow = await _publier_ce_que_livre_le_gabarit(session, project, livree)
-        if livree.agents or livree.skills or livree.extensions or livree.knowledge:
-            from .installation import installer_ce_que_livre_le_gabarit
+        assert delivered is not None
+        workflow = await _publish_what_template_delivers(session, project, delivered)
+        if delivered.agents or delivered.skills or delivered.extensions or delivered.knowledge:
+            from .installation import install_what_template_delivers
 
-            await installer_ce_que_livre_le_gabarit(session, project, livree, str(project.template_ref))
-        # APRÈS le gabarit : son propre agent du même nom l'emporte sur celui du catalogue (ADR 0040).
+            await install_what_template_delivers(session, project, delivered, str(project.template_ref))
+        # AFTER the template: its own agent of the same name wins over the catalogue's (ADR 0040).
         from ..rbac import SYSTEM
-        from .catalogue_d_agents import installer_les_agents_nommes
+        from .agent_catalogue import install_named_agents
 
-        await installer_les_agents_nommes(
-            session, project.org_id, [parse_workflow(s, strict=False)[0] for s in livree.workflows], SYSTEM
+        await install_named_agents(
+            session, project.org_id, [parse_workflow(s, strict=False)[0] for s in delivered.workflows], SYSTEM
         )
     if not project.default_workflow:
         project.default_workflow = workflow.name
     if policy is None:
-        assert livree is not None
-        parsed_policy = parse_policy(livree.politique)
+        assert delivered is not None
+        parsed_policy = parse_policy(delivered.policy)
         refused = unenforced_governance(parsed_policy) if refuse_unenforced else []
         if refused:
             raise unprocessable(
@@ -377,12 +384,12 @@ async def ensure_defaults(
                     for i in refused
                 ],
             )
-        signaler_ce_que_la_politique_n_applique_pas(parsed_policy, project.slug)
+        report_unenforced_policy(parsed_policy, project.slug)
         policy = PolicyDef(
             project_id=project.id,
             name=parsed_policy.metadata.name,
             version=parsed_policy.metadata.version,
-            yaml=livree.politique,
+            yaml=delivered.policy,
             json_doc=parsed_policy.model_dump(mode="json", exclude_none=True),
             is_active=True,
         )
@@ -391,12 +398,12 @@ async def ensure_defaults(
     return workflow, policy
 
 
-async def _publier_ce_que_livre_le_gabarit(
-    session: AsyncSession, project: Project, livree: Any
+async def _publish_what_template_delivers(
+    session: AsyncSession, project: Project, delivered: Any
 ) -> WorkflowDef:
-    """Les workflows du gabarit, actifs ensemble ; rend celui du défaut."""
-    lignes: dict[str, WorkflowDef] = {}
-    for source in livree.workflows:
+    """The template's workflows, active together; returns the default's."""
+    rows: dict[str, WorkflowDef] = {}
+    for source in delivered.workflows:
         parsed, report = parse_workflow(source, strict=False)
         if not report.valid:
             raise unprocessable(
@@ -406,12 +413,12 @@ async def _publier_ce_que_livre_le_gabarit(
                     for i in report.errors
                 ],
             )
-        nom = parsed.metadata.name
-        if nom in lignes:
-            raise unprocessable(f"template `{project.template_ref}` ships workflow `{nom}` twice")
-        lignes[nom] = WorkflowDef(
+        name = parsed.metadata.name
+        if name in rows:
+            raise unprocessable(f"template `{project.template_ref}` ships workflow `{name}` twice")
+        rows[name] = WorkflowDef(
             project_id=project.id,
-            name=nom,
+            name=name,
             version=parsed.metadata.version,
             source="template",
             yaml=source,
@@ -419,28 +426,30 @@ async def _publier_ce_que_livre_le_gabarit(
             checksum=checksum(parsed),
             is_active=True,
         )
-    defaut = livree.defaut or next(iter(lignes))
-    inconnus = ({defaut} | {str(r.get("workflow")) for r in livree.routage}) - set(lignes)
-    if inconnus:
-        gabarit = project.template_ref
-        raise unprocessable(f"template `{gabarit}` names workflows it does not ship: {sorted(inconnus)}")
-    session.add_all(lignes.values())
+    default = delivered.default or next(iter(rows))
+    unknown = ({default} | {str(r.get("workflow")) for r in delivered.routing}) - set(rows)
+    if unknown:
+        template = project.template_ref
+        raise unprocessable(f"template `{template}` names workflows it does not ship: {sorted(unknown)}")
+    session.add_all(rows.values())
     if not project.default_workflow:
-        project.default_workflow = defaut
-    # La forme que stocke `PUT /workflow-routing` : un manifeste ne passe pas par une autre porte.
+        project.default_workflow = default
+    # The shape `PUT /workflow-routing` stores: a manifest does not go through another door.
     from ..schemas import RoutingRule
 
-    project.workflow_routing = [RoutingRule.model_validate(r).model_dump(mode="json") for r in livree.routage]
-    return lignes[defaut]
+    project.workflow_routing = [
+        RoutingRule.model_validate(r).model_dump(mode="json") for r in delivered.routing
+    ]
+    return rows[default]
 
 
 def workflow_model(row: WorkflowDef | None) -> Workflow:
     if row is None:
         return load_template(DEFAULT_WORKFLOW)
-    # Un document JSON qui ne dit pas OÙ il commence ne peut pas être cru sur l'ordre de ses
-    # clés : la colonne est un `jsonb`, qui les range par longueur puis par octets. On relit alors
-    # le YAML, seul endroit où l'ordre de déclaration a survécu. Les documents écrits depuis que
-    # le champ existe portent `initial` et passent par le chemin rapide.
+    # A JSON document that does not say WHERE it starts cannot be trusted on the order of its
+    # keys: the column is a `jsonb`, which sorts them by length then by bytes. The YAML is then
+    # re-read, the only place where the declaration order survived. Documents written since the
+    # field exists carry `initial` and take the fast path.
     if row.json_doc and row.json_doc.get("initial"):
         return Workflow.model_validate(row.json_doc)
     # A stored definition passed the rules of its day and must keep loading when a rule is added.
@@ -448,16 +457,15 @@ def workflow_model(row: WorkflowDef | None) -> Workflow:
     return parsed
 
 
-def signaler_ce_que_la_politique_n_applique_pas(policy: Policy, project: str) -> list[str]:
-    """Journalise, une ligne par clé, ce que la politique écrit et que personne n'applique (ADR 0044).
+def report_unenforced_policy(policy: Policy, project: str) -> list[str]:
+    """Log, one line per key, what the policy writes and nobody enforces (ADR 0044).
 
-    Le contrat de `PolicyDto` n'a pas de champ d'avertissements : le journal est l'endroit où la
-    plateforme le dit, à l'enregistrement d'une politique et à la naissance d'un projet. Rend les
-    chemins signalés.
+    The `PolicyDto` contract has no warnings field: the log is where the platform says it, when a
+    policy is saved and when a project is born. Returns the paths reported.
     """
-    chemins: list[str] = []
-    # Un journaliseur par appel : celui d'un module, mis en cache au premier usage, ne verrait pas
-    # une configuration posée après lui (`structlog.testing.capture_logs`).
+    paths: list[str] = []
+    # One logger per call: a module's, cached at first use, would not see a configuration set
+    # after it (`structlog.testing.capture_logs`).
     logger = get_logger("choregos.policy")
     for issue in policy_warnings(policy):
         logger.warning(
@@ -468,8 +476,8 @@ def signaler_ce_que_la_politique_n_applique_pas(policy: Policy, project: str) ->
             path=issue.path,
             message=issue.message,
         )
-        chemins.append(issue.path or "")
-    return chemins
+        paths.append(issue.path or "")
+    return paths
 
 
 def policy_model(row: PolicyDef | None) -> Policy:
@@ -515,3 +523,50 @@ def project_config(project: Project) -> ProjectConfig:
 
 def workflow_yaml(workflow: Workflow) -> str:
     return dump_workflow(workflow)
+
+
+async def publier_workflow(  # lang: fr-ok alias:internal  # noqa: PLR0913
+    session: AsyncSession,
+    principal: Any,
+    project: Project,
+    source_yaml: str,
+    *,
+    source: str = "platform",
+    activate: bool = True,
+    base_version: int | None = None,
+    nom_attendu: str | None = None,  # lang: fr-ok alias:internal
+    devient_le_defaut: bool = False,  # lang: fr-ok alias:internal
+    creation_seule: bool = False,  # lang: fr-ok alias:internal
+    origin: str | None = None,
+) -> WorkflowDef:
+    """The former name of `publish_workflow`, with its former keywords: the routers, the local demo
+    and the orchestrator's tests still call it so."""
+    return await publish_workflow(
+        session,
+        principal,
+        project,
+        source_yaml,
+        source=source,
+        activate=activate,
+        base_version=base_version,
+        expected_name=nom_attendu,  # lang: fr-ok alias:internal
+        becomes_default=devient_le_defaut,  # lang: fr-ok alias:internal
+        create_only=creation_seule,  # lang: fr-ok alias:internal
+        origin=origin,
+    )
+
+
+workflow_actif = active_workflow_named  # lang: fr-ok alias:internal
+workflow_du_ticket = work_item_workflow  # lang: fr-ok alias:internal
+signaler_ce_que_la_politique_n_applique_pas = report_unenforced_policy  # lang: fr-ok alias:internal
+derniere_version = latest_version  # lang: fr-ok alias:internal
+
+alias_names(
+    __name__,
+    {
+        "workflow_actif": "active_workflow_named",  # lang: fr-ok alias:internal
+        "workflow_du_ticket": "work_item_workflow",  # lang: fr-ok alias:internal
+        "signaler_ce_que_la_politique_n_applique_pas": "report_unenforced_policy",  # lang: fr-ok
+        "derniere_version": "latest_version",  # lang: fr-ok alias:internal
+    },
+)

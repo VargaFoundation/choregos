@@ -59,7 +59,7 @@ export function InstallDrawer({
       >
         <header className="flex items-start justify-between gap-4">
           <h2 id="install-drawer-title" className="text-base font-semibold text-ink">
-            {verb} <span data-donnee>{title}</span>
+            {verb} <span data-verbatim>{title}</span>
           </h2>
           <button
             type="button"
