@@ -37,6 +37,11 @@ from ..logging import get_logger
 DEFAULT_WORKFLOW = "default-simple"
 DEFAULT_POLICY_PRESET = "solo"
 
+#: Names a NEW workflow may not take (S55-15): its console page is `/p/<slug>/workflows/<name>`, and the
+#: console's own pages there win — `library` and `new` are pages, `catalogue` redirects to the library
+#: (S55-04). A workflow already published under one of them keeps its next versions.
+RESERVED_WORKFLOW_NAMES = frozenset({"library", "new", "catalogue"})
+
 
 async def default_workflow(session: AsyncSession, project_id: str) -> WorkflowDef | None:
     """The active version of the project's DEFAULT workflow (ADR 0031).
@@ -248,6 +253,12 @@ async def publish_workflow(  # noqa: PLR0913 - the only write path: its options 
         raise unprocessable(
             f"the YAML is named `{name}`, the route `{expected_name}`: `metadata.name` must match"
         )
+    already = await latest_version(session, project.id, name)
+    if already is None and name in RESERVED_WORKFLOW_NAMES:
+        raise unprocessable(
+            f"`{name}` is reserved: the console has a page at that address. Choose another name",
+            [{"loc": ["metadata", "name"], "msg": f"`{name}` is reserved", "code": "workflow.name_reserved"}],
+        )
     _check_effects(workflow)
     await _check_named_agents(session, project, workflow)
     await _check_budget(session, project, workflow)
@@ -259,7 +270,6 @@ async def publish_workflow(  # noqa: PLR0913 - the only write path: its options 
         raise conflict(
             f"`{name}` has changed: you were editing version {base_version}, the active one is {read_version}"
         )
-    already = await latest_version(session, project.id, name)
     # Creating overwrites nothing (#336): without this guard, naming a new workflow like an old one
     # published the text as the old one's next version, and the console's check did not close the
     # race between two creations in the same second.

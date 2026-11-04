@@ -127,8 +127,8 @@ describe("the connectors, sorted by what they are (S21-04)", () => {
     expect(screen.queryByText(/Catalogue:/)).toBeNull();
     const callout = screen.getByTestId("add-from-catalogues");
     expect(callout).toHaveTextContent("Add from the catalogues");
-    expect(within(callout).getByRole("link", { name: "Browse MCP servers" })).toHaveAttribute("href", "/catalogue/mcp-servers");
-    expect(within(callout).getByRole("link", { name: "Browse connector types" })).toHaveAttribute("href", "/catalogue/connectors");
+    expect(within(callout).getByRole("link", { name: "Browse MCP servers" })).toHaveAttribute("href", "/library/mcp-servers");
+    expect(within(callout).getByRole("link", { name: "Browse connector types" })).toHaveAttribute("href", "/library/connectors");
     expect(screen.getByText(/Connectors this organisation has installed/)).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Project delivery tools — configured in each project" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Declare a connector" })).toBeInTheDocument();

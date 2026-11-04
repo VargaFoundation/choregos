@@ -88,7 +88,7 @@ describe("a project page's header", () => {
 
 describe("the trail below a section", () => {
   it("names a fixed page instead of showing its path segment", () => {
-    expect(projectTrail("fon", "/p/fon/workflows/catalogue")?.[1]).toEqual({
+    expect(projectTrail("fon", "/p/fon/workflows/library")?.[1]).toEqual({
       label: "Library",
     });
     expect(projectTrail("fon", "/p/fon/workflows/new")?.[1]).toEqual({

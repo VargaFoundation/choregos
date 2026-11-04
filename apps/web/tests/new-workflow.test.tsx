@@ -49,6 +49,22 @@ describe("creating a workflow (#336)", () => {
     expect(pousser).not.toHaveBeenCalled();
   });
 
+  it.each(["library", "new", "catalogue"])("refuses %s, the name of a console page (S55-15)", async (name) => {
+    search = new URLSearchParams();
+    await act(async () => {
+      render(
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <Suspense fallback="…">
+            <NewWorkflowPage params={Promise.resolve({ slug: "rh" })} />
+          </Suspense>
+        </QueryClientProvider>,
+      );
+    });
+    fireEvent.change(await screen.findByLabelText("Name"), { target: { value: name } });
+    expect(await screen.findByText(new RegExp(`${name} is reserved: the console has a page at that address`))).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: `Publish ${name}` })).toBeDisabled();
+  });
+
   it("from the readiness fix, publishes default-request and makes it the default, keeping the rules", async () => {
     search = new URLSearchParams("template=default-request&default=1");
     vi.mocked(api.createWorkflow).mockResolvedValue({} as never);

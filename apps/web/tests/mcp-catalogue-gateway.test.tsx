@@ -7,7 +7,7 @@ import {
   within,
 } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import McpCataloguePage from "@/app/catalogue/mcp-servers/page";
+import McpCataloguePage from "@/app/library/mcp-servers/page";
 import type { McpCatalogue, McpCatalogueEntry } from "@/lib/types";
 import file from "../src/mocks/mcp-catalogue.json";
 
@@ -20,7 +20,7 @@ const { push, install, discover, gatewayRoutes } = vi.hoisted(() => ({
 }));
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/catalogue/mcp-servers",
+  usePathname: () => "/library/mcp-servers",
   useRouter: () => ({ push }),
 }));
 vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme" }) }));

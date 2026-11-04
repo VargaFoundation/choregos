@@ -6,7 +6,7 @@ test("browse, filter, install and land on the connector", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/");
   await page.getByRole("navigation").getByRole("link", { name: "MCP servers" }).click();
-  await expect(page).toHaveURL(/\/catalogue\/mcp-servers$/);
+  await expect(page).toHaveURL(/\/library\/mcp-servers$/);
   await expect(page.getByTestId("catalogue-version")).toContainText("Catalogue 2026.10.0");
 
   // The facets narrow the grid; an OAuth server stays listed, with its reason, and cannot be installed.
@@ -57,6 +57,15 @@ test("browse, filter, install and land on the connector", async ({ page }) => {
 
 test("the old administration path redirects to Catalogue, MCP servers", async ({ page }) => {
   await page.goto("/admin/connectors/catalogue");
-  await expect(page).toHaveURL(/\/catalogue\/mcp-servers$/);
+  await expect(page).toHaveURL(/\/library\/mcp-servers$/);
   await expect(page.getByRole("heading", { name: "MCP servers", level: 1 })).toBeVisible();
+});
+
+test("an old /catalogue/ link lands on the library, its query kept (S55-15)", async ({ page }) => {
+  await page.goto("/catalogue/mcp-servers?from=bookmark");
+  await expect(page).toHaveURL(/\/library\/mcp-servers\?from=bookmark$/);
+  await expect(page.getByRole("heading", { name: "MCP servers", level: 1 })).toBeVisible();
+  await page.goto("/skills/catalogue");
+  await expect(page).toHaveURL(/\/skills\/library$/);
+  await expect(page.getByRole("tab", { name: "Library" }).or(page.getByRole("link", { name: "Library", exact: true }))).toHaveAttribute("aria-current", "page");
 });

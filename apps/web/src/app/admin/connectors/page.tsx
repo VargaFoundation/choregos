@@ -74,11 +74,11 @@ export default function OrgConnectorsPage() {
       >
         <strong>Add from the catalogues</strong>
         <span className="text-ink-muted"> — </span>
-        <Link href="/catalogue/mcp-servers" className="underline">
+        <Link href="/library/mcp-servers" className="underline">
           Browse MCP servers
         </Link>
         <span className="text-ink-muted"> · </span>
-        <Link href="/catalogue/connectors" className="underline">
+        <Link href="/library/connectors" className="underline">
           Browse connector types
         </Link>
       </aside>
@@ -132,7 +132,7 @@ export default function OrgConnectorsPage() {
             <Empty
               title="No MCP server yet"
               action={
-                <Link href="/catalogue/mcp-servers" className="text-sm underline">
+                <Link href="/library/mcp-servers" className="text-sm underline">
                   Browse the MCP catalogue
                 </Link>
               }
@@ -249,7 +249,7 @@ function Instance({
         <p className="mb-2 text-sm text-ink-muted" data-testid={`plugin-server-${instance.name}`}>
           The server of the plugin <strong data-verbatim>{instance.server.plugin}</strong> {instance.server.version}, run by
           the platform. Its settings are the server&apos;s own; until they are complete it has no replica.{" "}
-          <Link href="/catalogue/plugins" className="underline">
+          <Link href="/library/plugins" className="underline">
             Plugins
           </Link>
         </p>

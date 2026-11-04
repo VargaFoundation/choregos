@@ -53,27 +53,27 @@ export default function SkillsPage() {
           }
         />
         <Glossary ici="skills" />
-        <SkillTabs active="library" />
+        <SkillTabs active="installed" />
       </div>
-      <Card title="Library">
+      <Card title="Installed">
         {skills.error ? (
           <ErrorNote>{String(skills.error)}</ErrorNote>
         ) : !skills.data ? (
-          <p className="text-sm text-ink-muted">Reading the library…</p>
+          <p className="text-sm text-ink-muted">Reading the installed skills…</p>
         ) : skills.data.length === 0 ? (
           <Empty
             title="No skill yet"
             action={
-              <Link href="/skills/catalogue" className="text-sm underline">
-                Browse the catalogue
+              <Link href="/skills/library" className="text-sm underline">
+                Browse the library
               </Link>
             }
           >
-            Pick default skills from the catalogue, or import a zip or a repository below.
+            Pick default skills from the library, or import a zip or a repository below.
           </Empty>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm" data-testid="library">
+            <table className="w-full text-sm" data-testid="installed-skills">
               <thead className="text-left text-xs text-ink-muted">
                 <tr>
                   <th className="py-1 font-normal">Skill</th>

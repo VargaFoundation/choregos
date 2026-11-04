@@ -4201,6 +4201,14 @@ stories:
     size: S
     depends_on: [S55-05]
     notes: "Acceptance: the journey's replay player folded behind a Disclosure (Replay this ticket), opened on demand, closing it returns to live; the request card labels a field with its workflow's metadata.inputs title, else its humanised name; no contract change."
+  - id: S55-15
+    title: "feat(web,api): the organisation's catalogue pages move to library, and a workflow cannot take a console page's name"
+    stream: S55
+    sprint: 3
+    priority: 2
+    size: M
+    depends_on: [S55-04]
+    notes: "Acceptance: /catalogue/* and /skills/catalogue redirect for good to /library/* and /skills/library, sub-path and query kept; every link and the sidebar follow; a new workflow named library, new or catalogue is refused by the console's forms and by the API (422, no contract change)."
   - id: S57-00
     title: "docs(adr): an agent may call its run's tools from a script (ADR 0122)"
     stream: S57

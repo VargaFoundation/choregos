@@ -5,8 +5,8 @@ import { expect, test } from "@playwright/test";
 test("install a bundled skill and read its provenance in the library", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/skills");
-  await page.getByRole("link", { name: "Catalogue" }).click();
-  await expect(page).toHaveURL(/\/skills\/catalogue$/);
+  await page.getByRole("link", { name: "Library", exact: true }).click();
+  await expect(page).toHaveURL(/\/skills\/library$/);
   await expect(page.getByTestId("catalogue-version")).toContainText("Catalogue 2026.10.0");
 
   await page.getByLabel("Search the catalogue").fill("write spec");
@@ -28,14 +28,14 @@ test("install a bundled skill and read its provenance in the library", async ({ 
   // The library lists it, and the catalogue says it is installed.
   // Client-side navigation: the demo data lives in the page, a reload would forget the install.
   await page.getByRole("complementary", { name: "Sidebar" }).getByRole("link", { name: "Skills" }).click();
-  await expect(page.getByTestId("library")).toContainText("write-spec");
-  await page.getByRole("link", { name: "Catalogue" }).click();
+  await expect(page.getByTestId("installed-skills")).toContainText("write-spec");
+  await page.getByRole("link", { name: "Library", exact: true }).click();
   await page.getByLabel("Search the catalogue").fill("write spec");
   await expect(page.getByTestId("entry-write-spec")).toContainText("Installed, version 1");
 });
 
 test("a high-risk git skill says a second administrator will have to approve it, and waits", async ({ page }) => {
-  await page.goto("/skills/catalogue");
+  await page.goto("/skills/library");
   await page.getByLabel("Search the catalogue").fill("systematic debugging");
   const card = page.getByTestId("entry-systematic-debugging");
   await expect(card).toContainText("High risk");

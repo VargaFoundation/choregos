@@ -62,9 +62,9 @@ export const NAV: { href: string; label: string; icone: LucideIcon }[] = [
   { href: "/skills", label: "Skills", icone: BookOpen },
   { href: "/knowledge", label: "Knowledge", icone: Library },
   { href: "/memories", label: "Memories", icone: Brain },
-  { href: "/catalogue/mcp-servers", label: "MCP servers", icone: ServerCog },
-  { href: "/catalogue/connectors", label: "Connector types", icone: Cable },
-  { href: "/catalogue/plugins", label: "Plugins", icone: Puzzle },
+  { href: "/library/mcp-servers", label: "MCP servers", icone: ServerCog },
+  { href: "/library/connectors", label: "Connector types", icone: Cable },
+  { href: "/library/plugins", label: "Plugins", icone: Puzzle },
   { href: "/inbox", label: "Inbox", icone: Inbox },
   { href: "/integrations", label: "Integrations", icone: Plug },
   { href: "/costs", label: "Spend", icone: Wallet },
@@ -85,7 +85,7 @@ export const GROUP_HUES = { work: 1, define: 2, configure: 7 } as const satisfie
 /** The entries, grouped: the work, what agents use, the organisation (S40-08). */
 export const GROUPS: { titre: string; hue: Hue; entrees: string[] }[] = [
   { titre: "Work", hue: GROUP_HUES.work, entrees: ["/", "/inbox"] },
-  { titre: "Catalogue", hue: GROUP_HUES.define, entrees: ["/agents", "/skills", "/knowledge", "/memories", "/catalogue/mcp-servers", "/catalogue/connectors", "/catalogue/plugins"] },
+  { titre: "Catalogue", hue: GROUP_HUES.define, entrees: ["/agents", "/skills", "/knowledge", "/memories", "/library/mcp-servers", "/library/connectors", "/library/plugins"] },
   { titre: "Organisation", hue: GROUP_HUES.configure, entrees: ["/integrations", "/costs", "/admin"] },
 ];
 
@@ -312,7 +312,6 @@ export function projectTrail(slug: string, pathname: string): BreadcrumbStep[] |
 
 /** The fixed pages under a section, by their path below the project: named, never shown as a raw segment. */
 const PAGES_OF_A_SECTION: Record<string, string> = {
-  "/workflows/catalogue": "Library",
   "/workflows/library": "Library",
   "/workflows/new": "New workflow",
   // The settings' groups (S55-07, `components/project-settings/groups.tsx`).
