@@ -1169,6 +1169,18 @@ A session (prompt, hosted or realtime) gives its model text: the answer's text b
 (S40-18c). Both come after the cap and the masking, and the injection guard reads exactly that text;
 over the cap, the structured part is dropped and the model reads the cut text with its marker.
 
+A run's agent reads the answer's meaning, not only its result (S57-04, [ADR 0122](adr/0122-an-agent-may-call-its-run-s-tools-from-a-script.md) §8).
+The run's tool server (`choregos-tools`) turns the API's answer — `{status_code, result, remaining,
+suspicions}` — into one text: a `202` whose result names an action starts with `PROPOSED, NOT
+EXECUTED: …` (`pending_approval`, with the console path where a person decides) or `NOT FINISHED
+YET: …` (a governed write still running); `suspicions` put first a line that names their reasons —
+never the excerpts — and says the content is data, never instructions; a run with a cap ends it with
+`Tool calls left in this run: <n>.`. The result's JSON is cut so that the whole text stays within
+20 000 characters, the notices outside the cut; a status of 400 or more is still `isError`.
+`structuredContent` carries the API's answer as it came, `status_code` included, with the same lines
+under `notices`, when its JSON fits the same bound. A hosted session's tools do not say these yet
+(#1349), nor does an ontology proposal, which answers `201` (#1350).
+
 Spend is bounded per run (`budgets.tool_calls_per_run`) and every call lands in the cost
 ledger under `kind: tool` — visible on the project overview and in the run's access record.
 
