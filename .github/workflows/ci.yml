@@ -7,9 +7,12 @@ on:
     branches: [main]
   merge_group:
 
+# A new push to a PR cancels the PR's run in progress. On main, a run in progress
+# finishes: without that, every merge cancelled the previous run and main never had
+# a complete verdict. GitHub keeps one run pending per group, so the queue stays short.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
