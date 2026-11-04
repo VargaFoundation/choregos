@@ -566,6 +566,24 @@ async def _release_name(session: Any, release: Release) -> str:
     return str(revision) if revision else f"batch {release.batch_no}"
 
 
+def _poll_may_start(tracker: Any, config: Any, data: Any) -> bool:
+    """Whether the poll may open a work item the project does not hold yet (#1112).
+
+    GitHub, GitLab and Jira already search for `agent-ready` and the start rules (S56-03). A plugin
+    tracker's server returns its own candidates (ServiceNow: its open queue), so the poll asks the
+    item what the webhook asks the event: `agent-ready`, or a start rule that holds."""
+    from choregos_adapters.tracker.plugin import PluginTracker
+
+    if not isinstance(tracker, PluginTracker):
+        return True
+    labels = {str(label) for label in data.labels if label}
+    if "agent-ready" in labels:
+        return True
+    item_type = str(data.item_type) if data.item_type else None
+    state = str(data.state) if data.state else None
+    return any(rule.matches(labels, item_type, state) for rule in config.start_rules)
+
+
 @activity.defn(name="reconcile_tracker")
 async def reconcile_tracker(payload: dict[str, Any]) -> dict[str, Any]:
     """Catch-up for lost webhooks: the `agent-ready` work items nobody saw (S3-06).
@@ -581,6 +599,7 @@ async def reconcile_tracker(payload: dict[str, Any]) -> dict[str, Any]:
 
     created: list[str] = []
     started: list[str] = []
+    skipped: list[str] = []
     async with db() as session:
         bundle = await project_bundle(session, payload["project_slug"])
         if bundle.project.status in {"archived", "suspended"}:
@@ -617,6 +636,9 @@ async def reconcile_tracker(payload: dict[str, Any]) -> dict[str, Any]:
             ).scalar_one_or_none()
             if item is None:
                 data = await bundle.adapters.tracker.fetch_item(key)
+                if not _poll_may_start(bundle.adapters.tracker, bundle.config, data):
+                    skipped.append(key)
+                    continue
                 # Born in the workflow its labels or its type designate (ADR 0031).
                 item = await nouveau_ticket(
                     session,
@@ -665,4 +687,4 @@ async def reconcile_tracker(payload: dict[str, Any]) -> dict[str, Any]:
                 created=created,
                 started=started,
             )
-    return {"candidates": len(candidates), "created": created, "started": started}
+    return {"candidates": len(candidates), "created": created, "started": started, "skipped": skipped}

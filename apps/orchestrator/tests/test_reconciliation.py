@@ -95,7 +95,7 @@ async def test_a_finished_or_paused_ticket_is_left_alone(setup: Fixture) -> None
 async def test_without_a_candidate_the_catch_up_does_nothing(setup: Fixture) -> None:
     clear_fake_signals()
     result = await tracker_activities.reconcile_tracker({"project_slug": setup.project_slug})
-    assert result == {"candidates": 0, "created": [], "started": []}
+    assert result == {"candidates": 0, "created": [], "started": [], "skipped": []}
     assert fake_starts() == {}
 
 
@@ -359,3 +359,39 @@ async def test_a_caught_up_issue_keeps_who_filed_it(setup: Fixture) -> None:
     async with session_scope() as session:
         row = (await session.execute(select(WorkItem).where(WorkItem.tracker_key == key))).scalar_one()
         assert row.reporter == "Jean Martin <jmartin@varga.dev>"
+
+
+async def test_a_plugin_tracker_s_poll_starts_only_agent_ready_or_a_start_rule(setup: Fixture) -> None:
+    """#1112: a plugin server returns its whole open queue; the poll starts only what the webhook
+    would: `agent-ready`, or an item a start rule matches. The others get no work item at all."""
+    from choregos_adapters.fakes.plugin_tracker import FakePluginTrackerServer
+    from choregos_adapters.plugin_servers import PluginServerClient
+    from choregos_adapters.tracker.plugin import PluginTracker
+    from choregos_api.db.models import Project, WorkItem
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    clear_fake_signals()
+    server = FakePluginTrackerServer(token="t0k")
+    server.add("INC0001", "Payroll export fails", state="New")
+    server.add("INC0002", "Printer jam", state="In Progress")
+    client = PluginServerClient("http://desk.plugins.svc:8080/mcp", token="t0k", transport=server.transport())
+    setup.adapters.tracker = PluginTracker(client, "desk", "desk")
+
+    first = await tracker_activities.reconcile_tracker({"project_slug": setup.project_slug})
+    assert first["created"] == [] and first["started"] == [], "no rule, no agent-ready: nothing starts"
+    assert sorted(first["skipped"]) == ["INC0001", "INC0002"]
+
+    async with session_scope() as session:
+        project = await session.get(Project, setup.project_id)
+        assert project is not None
+        project.config = {**project.config, "start_rules": [{"item_type": "incident", "states": ["new"]}]}
+    second = await tracker_activities.reconcile_tracker({"project_slug": setup.project_slug})
+
+    assert second["created"] == ["INC0001"] and second["started"] == ["INC0001"], second
+    assert second["skipped"] == ["INC0002"]
+    async with session_scope() as session:
+        keys = (
+            await session.execute(select(WorkItem.tracker_key).where(WorkItem.tracker_key.like("INC%")))
+        ).scalars()
+        assert sorted(keys) == ["INC0001"]
