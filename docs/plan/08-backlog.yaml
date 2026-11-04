@@ -4185,6 +4185,14 @@ stories:
     size: S
     depends_on: [S55-11]
     notes: "ADR 0120 on the organisation's detail and creation pages."
+  - id: S55-13
+    title: "feat(web): from a step chosen on the graph, connect its state to another"
+    stream: S55
+    sprint: 2
+    priority: 2
+    size: S
+    depends_on: [S55-09]
+    notes: "The 'Connect to…' S55-06 left out: the keyboard equivalent of the list view's drag (ADR 0112 §4, §6) on the serpentine diagram, reusing the add-transition form and operation."
   - id: S55-14
     title: "feat(web): finishing the ticket page — the replay player folded, the request's fields titled by their workflow"
     stream: S55

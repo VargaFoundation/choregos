@@ -69,3 +69,14 @@ test("the map opens as a snake, without overflowing, and a clicked step opens it
   await expect(page).toHaveURL(/view=list/);
   await expect(page.getByTestId("workflow-graph")).toBeVisible();
 });
+
+test("from a step chosen on the diagram, Connect to… opens the transition form from the keyboard (S55-13)", async ({ page }) => {
+  await page.goto("/p/billing-api/workflows/release-full");
+  await page.getByTestId("serpentine-map").getByTestId("step-t-implement").focus();
+  await page.keyboard.press("Enter");
+  await page.getByTestId("map-panels").getByRole("button", { name: "Connect to…" }).focus();
+  await page.keyboard.press("Enter");
+  const form = page.getByTestId("drawn-transition").getByRole("form", { name: /^New transition from / });
+  await expect(form).toBeVisible();
+  await expect(form.getByRole("combobox").first()).toBeFocused();
+});
