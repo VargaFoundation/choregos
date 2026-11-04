@@ -69,3 +69,64 @@ async def test_the_gate_sees_the_call_in_the_registry(setup: Any) -> None:
         )
     [ok] = await evaluate_gates(charge)
     assert ok["passed"] is True
+
+
+async def test_a_place_held_under_the_cap_is_not_a_call(setup: Any) -> None:
+    """S57-03: a call under the tool-call cap holds its place with a provisional line before it
+    leaves. A request that died during its call leaves that line behind; the call never answered, so
+    the gate does not take it for one."""
+    from choregos_api.db.models import CostLedger, Run
+    from choregos_api.db.session import session_scope
+    from choregos_core import utcnow
+    from choregos_core.tool_ledger import IN_FLIGHT
+    from choregos_orchestrator.activities.gates import evaluate_gates
+
+    async with session_scope(orgs="*") as session:
+        run = Run(
+            id="varga-billing-api-124-t-sourcing-1",
+            work_item_id=setup.work_item_id,
+            project_id=setup.project_id,
+            transition_id="t-sourcing",
+            stage_role="sourcing",
+            attempt=1,
+            actor="agent",
+            status="succeeded",
+            stage_input={},
+            result={"schema": "choregos/StageResult/v1", "status": "done", "summary": "ok"},
+        )
+        session.add(run)
+        await session.flush()
+        session.add(
+            CostLedger(
+                project_id=setup.project_id,
+                work_item_id=setup.work_item_id,
+                run_id=run.id,
+                provider=IN_FLIGHT,
+                model="check_address",
+                ts=utcnow(),
+                kind="tool",
+            )
+        )
+    charge = {
+        "project_id": setup.project_id,
+        "work_item_id": setup.work_item_id,
+        "run_id": run.id,
+        "gates": [{"name": "tool_called", "params": {"tools": ["check_address"]}}],
+    }
+    [refusal] = await evaluate_gates(charge)
+    assert refusal["passed"] is False and "check_address" in refusal["detail"]
+
+    async with session_scope(orgs="*") as session:
+        session.add(
+            CostLedger(
+                project_id=setup.project_id,
+                work_item_id=setup.work_item_id,
+                run_id=run.id,
+                provider="addresses",
+                model="check_address",
+                ts=utcnow(),
+                kind="tool",
+            )
+        )
+    [ok] = await evaluate_gates(charge)
+    assert ok["passed"] is True

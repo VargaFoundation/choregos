@@ -15,6 +15,10 @@ When the call ends, the provisional line is deleted in the request's own transac
 line the call books — or does not book: a call the network policy stopped is still not counted
 (ADR 0070). A call that fails gives its place back. A request whose final commit fails keeps its
 place: the cap then errs by one call fewer, never one more.
+
+A provisional line is not a call: the readers that take a `tool` line for one leave it out
+(`choregos_core.tool_ledger`). If the API process dies during a call, its line stays; the run's next
+call deletes those older than `IN_FLIGHT_STALE_AFTER` under the run's lock, before it counts.
 """
 
 from __future__ import annotations
@@ -22,6 +26,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from choregos_core import utcnow
+from choregos_core.tool_ledger import IN_FLIGHT, IN_FLIGHT_STALE_AFTER
 from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -31,9 +36,6 @@ from ..logging import get_logger
 from .budgets import lock_budget_scopes
 
 log = get_logger("choregos.tool_call_cap")
-
-#: The provider of a provisional line: the call holds its place under the cap and has not answered.
-IN_FLIGHT = "in_flight"
 
 
 def lock_scope(run_id: str) -> str:
@@ -90,6 +92,16 @@ async def take_tool_call_slot(session: AsyncSession, run: Run, tool: str, cap: i
     if not cap:
         return ToolCallSlot(already_called=0)
     await lock_budget_scopes(session, [lock_scope(run.id)])
+    # A place whose request died during its call is given back here, or it would hold it for good. At
+    # the cap, this goes with the refusal's rollback and the run's next call does it again.
+    await session.execute(
+        delete(CostLedger).where(
+            CostLedger.run_id == run.id,
+            CostLedger.kind == "tool",
+            CostLedger.provider == IN_FLIGHT,
+            CostLedger.ts < utcnow() - IN_FLIGHT_STALE_AFTER,
+        )
+    )
     already_called = (
         await session.execute(
             select(func.count())

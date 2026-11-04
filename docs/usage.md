@@ -1174,7 +1174,10 @@ ledger under `kind: tool` — visible on the project overview and in the run's a
 The cap holds when a run's calls arrive at once (S57-03): the API counts them under a per-run lock
 (`pg_advisory_xact_lock`) and each call takes its place before it leaves, as a provisional ledger line
 with `provider: in_flight`, replaced by the call's own line when it answers. A call that fails, or
-that the network policy stopped, gives its place back; while calls are in flight, they count.
+that the network policy stopped, gives its place back; while calls are in flight, they count against
+the cap and nothing else: the `tool_called` gate, the run's access record, the cost reports and the
+per-run fetch rate leave a held place out. A place whose request died (the API restarted during the
+call) is deleted by the run's next call once it is ten minutes old.
 
 **Announcing a tool is not using it.** On the 2026-09-24 bench the sourcing playbook said
 "verify the location with `verifier_adresse` before anything else", the agent recorded

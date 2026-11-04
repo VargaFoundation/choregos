@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+from datetime import timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -226,7 +227,7 @@ async def test_on_postgresql_the_lock_is_asked_for_before_the_count(
     monkeypatch: pytest.MonkeyPatch, count: int
 ) -> None:
     """The SQLite suite cannot take a PostgreSQL lock; it checks the route asks for one, on the run,
-    before it counts, and commits the place it takes before the call leaves."""
+    before it sweeps and counts, and commits the place it takes before the call leaves."""
     from choregos_api.services import budgets, tool_call_cap
 
     postgres = SimpleNamespace(is_sqlite=False)
@@ -241,10 +242,12 @@ async def test_on_postgresql_the_lock_is_asked_for_before_the_count(
     assert lock == "SELECT pg_advisory_xact_lock(:n)"
     expected = int.from_bytes(hashlib.sha256(b"tool_calls:run-pg").digest()[:8], "big", signed=True)
     assert parameters == {"n": expected}
-    assert "count(" in session.statements[1][0] and "cost_ledger" in session.statements[1][0]
+    sweep, count_query = session.statements[1][0], session.statements[2][0]
+    assert sweep.startswith("DELETE FROM cost_ledger"), "the stale places go before the count"
+    assert "count(" in count_query and "cost_ledger" in count_query
     assert slot.already_called == count
     if count >= CAP:
-        assert session.added == [] and len(session.statements) == 2, "the cap is reached: nothing is taken"
+        assert session.added == [] and len(session.statements) == 3, "the cap is reached: nothing is taken"
         return
     (line,) = session.added
     assert (line.kind, line.provider, line.model, line.run_id) == (
@@ -253,7 +256,7 @@ async def test_on_postgresql_the_lock_is_asked_for_before_the_count(
         TOOL,
         "run-pg",
     )
-    after = [sql for sql, _ in session.statements[2:]]
+    after = [sql for sql, _ in session.statements[3:]]
     assert after[1] == "COMMIT" and "set_config('app.current_orgs'" in after[2], after
 
 
@@ -264,3 +267,106 @@ async def test_without_a_cap_nothing_is_locked_or_counted(monkeypatch: pytest.Mo
     run = SimpleNamespace(id="run-free", project_id="p", work_item_id="w", stage_role="plan")
     slot = await tool_call_cap.take_tool_call_slot(session, run, TOOL, 0)  # type: ignore[arg-type]
     assert session.statements == [] and slot.line_id is None
+
+
+# ───────────────────── a place is not a call (the readers of `tool` lines) ─────────────────────
+
+
+async def _hold_a_place(run_id: str, project_id: str, *, age: timedelta, tool: str = TOOL) -> str:
+    """A provisional line, as `take_tool_call_slot` leaves it when the API dies during the call."""
+    from choregos_api.db.models import CostLedger
+    from choregos_api.db.session import session_scope
+    from choregos_core import utcnow
+    from choregos_core.tool_ledger import IN_FLIGHT
+
+    async with session_scope() as session:
+        line = CostLedger(
+            project_id=project_id,
+            run_id=run_id,
+            ts=utcnow() - age,
+            kind="tool",
+            provider=IN_FLIGHT,
+            model=tool,
+        )
+        session.add(line)
+        await session.flush()
+        return str(line.id)
+
+
+async def test_a_place_whose_request_died_is_given_back_by_the_runs_next_call(
+    client: AsyncClient, project: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A pod restarted during a call leaves its place: past the bound it is deleted, under the lock,
+    by the run's next call; a recent one is a call still running and keeps its place."""
+    from choregos_core.tool_ledger import IN_FLIGHT, IN_FLIGHT_STALE_AFTER
+
+    run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch, run_id="run-cap-stale")
+    await _cap_the_project(project["id"], 2)
+    provider = HeldProvider()
+    provider.install(monkeypatch)
+    provider.release.set()
+    stale = await _hold_a_place(run_id, project["id"], age=IN_FLIGHT_STALE_AFTER + timedelta(minutes=1))
+    running = await _hold_a_place(run_id, project["id"], age=timedelta(minutes=1))
+    url = f"/api/v1/internal/runs/{run_id}/tools/{TOOL}"
+
+    answer = await client.post(url, headers=headers, json={"metier": "x"})
+    assert answer.status_code == 200, answer.text
+    assert answer.json()["remaining"] == 0, "the running call counts, the dead one does not"
+    lines = {line.id: line.provider for line in await _tool_lines(run_id)}
+    assert stale not in lines and lines.get(running) == IN_FLIGHT
+    assert sorted(lines.values()) == ["annuaire", IN_FLIGHT]
+    capped = await client.post(url, headers=headers, json={"metier": "x"})
+    assert capped.status_code == 429, capped.text
+
+
+async def test_a_place_in_flight_is_not_a_call_in_the_access_record_or_the_costs(
+    client: AsyncClient, project: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`GET /runs/{id}/access` lists the run's tool calls and the cost reports count lines: a place
+    held under the cap is neither until its call answers."""
+    run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch, run_id="run-cap-readers")
+    await _cap_the_project(project["id"], CAP)
+    provider = HeldProvider()
+    provider.install(monkeypatch)
+    provider.release.set()
+    answer = await client.post(
+        f"/api/v1/internal/runs/{run_id}/tools/{TOOL}", headers=headers, json={"metier": "x"}
+    )
+    assert answer.status_code == 200, answer.text
+    await _hold_a_place(run_id, project["id"], age=timedelta(seconds=5))
+
+    access = await client.get(f"/api/v1/runs/{run_id}/access")
+    assert access.status_code == 200, access.text
+    tools = [line for line in access.json()["access"] if line["nature"] == "tool"]
+    assert [(line["target"], line["requests"]) for line in tools] == [(TOOL, 1)], tools
+    assert access.json()["tool_cost_eur"] == pytest.approx(0.02)
+
+    for url in (f"/api/v1/projects/{project['id']}/costs", "/api/v1/orgs/varga/costs"):
+        report = await client.get(url, params={"group_by": "kind", "kind": "tool"})
+        assert report.status_code == 200, report.text
+        assert [(row["key"], row["runs"]) for row in report.json()["rows"]] == [("tool", 1)], report.text
+
+
+async def test_a_fetchs_own_place_does_not_count_against_the_runs_fetch_rate(
+    client: AsyncClient,
+    project: dict[str, Any],
+    web: Any,  # noqa: F811 - the fixture imported above
+) -> None:
+    """`per_run_per_minute` counts the run's fetches of the last minute: the fetch being made holds a
+    place under the tool-call cap, and that place is not a fetch already made."""
+    from .test_network_policy_api import _policy
+
+    web.add(PAGE, HTML)
+    web.add("https://docs.example.com/two", HTML)
+    base, headers = await _ready(client, project)
+    rate = _policy(["docs.example.com"], per_run_per_minute=1) + "budgets:\n  tool_calls_per_run: 5\n"
+    assert (
+        await client.put(f"/api/v1/projects/{project['id']}/policy", json={"yaml": rate})
+    ).status_code == 200
+    first = await client.post(f"{base}/web_fetch", headers=headers, json={"url": PAGE})
+    assert first.status_code == 200 and first.json()["status_code"] == 200, first.text
+    second = await client.post(
+        f"{base}/web_fetch", headers=headers, json={"url": "https://docs.example.com/two"}
+    )
+    assert second.json()["status_code"] == 429, second.text
+    assert "this run already fetched 1" in second.json()["result"]["error"]

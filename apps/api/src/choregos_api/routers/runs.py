@@ -7,6 +7,7 @@ import json
 from typing import Annotated, Any
 
 from choregos_core import access_report, matches_any
+from choregos_core.tool_ledger import IN_FLIGHT
 from fastapi import APIRouter, Header, Query, Request
 from sqlalchemy import select
 from sse_starlette.sse import EventSourceResponse
@@ -111,7 +112,8 @@ async def run_access(id: str, session: Db, principal: Me) -> dict[str, Any]:
     audit, and two agents produce two hundred events in a few minutes.
 
     Calls to the tool catalogue are added from the cost ledger: they carry what they cost, and a
-    spend is part of what was touched.
+    spend is part of what was touched. A place still held under the tool-call cap is not a call yet
+    (S57-03): it is left out until the call answers.
     """
     run, _ = await _run(session, id, principal)
     rows = (
@@ -122,7 +124,9 @@ async def run_access(id: str, session: Db, principal: Me) -> dict[str, Any]:
     calls = (
         (
             await session.execute(
-                select(CostLedger).where(CostLedger.run_id == run.id, CostLedger.kind == "tool")
+                select(CostLedger).where(
+                    CostLedger.run_id == run.id, CostLedger.kind == "tool", CostLedger.provider != IN_FLIGHT
+                )
             )
         )
         .scalars()

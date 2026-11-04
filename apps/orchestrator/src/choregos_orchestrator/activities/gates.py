@@ -88,13 +88,17 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
                 except Exception:
                     ci_status = None
 
-        # What the run really called in the catalogue: the registry, not the result.
+        # What the run really called in the catalogue: the registry, not the result. A place held under
+        # the tool-call cap is not a call (S57-03): one whose request died never answered.
         calls: list[str] = []
         if run is not None:
+            from choregos_core.tool_ledger import IN_FLIGHT
             from sqlalchemy import select
 
             rows = await session.execute(
-                select(CostLedger.model).where(CostLedger.run_id == run.id, CostLedger.kind == "tool")
+                select(CostLedger.model).where(
+                    CostLedger.run_id == run.id, CostLedger.kind == "tool", CostLedger.provider != IN_FLIGHT
+                )
             )
             calls = [str(m) for m in rows.scalars() if m]
         # The scope is judged on what the RUN wrote, since the commit where it began (S22-11): from
