@@ -6,7 +6,7 @@ platform emits the English code in `code` and the former French one in `deprecat
 `canonical_issue_code` accepts either spelling wherever a code is read.
 
 S34-03 renamed `gate.sans_matiere` and `workflow.effet_implicite`; that window ended in S45-02.
-`role.playbook_introuvable` is the last one (S45-02; remove in 0.22.0).
+`role.playbook_introuvable` is the last one (S45-02; remove in 0.23.0).
 """
 
 from __future__ import annotations

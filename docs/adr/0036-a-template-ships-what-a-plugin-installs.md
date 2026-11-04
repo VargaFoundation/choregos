@@ -14,7 +14,7 @@ template also needs an **ontology**: the register of what an arrival opens and a
 (a person, a contract, an account, groups, a laptop, a badge), readable by an HR person's Claude at
 the MCP door.
 
-The ontology is a **plugin**, and a trial one: it is off unless `CHOREGOS_ONTOLOGY_TRIAL=1` (formerly `CHOREGOS_ESSAI_ONTOLOGIE`, which works until 0.22.0). The core
+The ontology is a **plugin**, and a trial one: it is off unless `CHOREGOS_ONTOLOGY_TRIAL=1` (formerly `CHOREGOS_ESSAI_ONTOLOGIE`, which works until 0.23.0). The core
 must not import it, and a template that requires it must not break every deployment where it is off.
 
 ## Decision

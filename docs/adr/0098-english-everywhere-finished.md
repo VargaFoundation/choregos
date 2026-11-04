@@ -81,8 +81,9 @@ stories, keeps every name that cannot move behind an alias with a window, and fr
      deprecated contract fields, alert names (through a `legacy_alertname` label), runbook URLs
      (through redirect stubs), the YAML key of the tool catalogue — keeps an `alias:external`
      window of one release. It warns with the release that removes it (`EXTERNAL_ALIAS_REMOVAL`,
-     0.22.0), has one removal issue (label `deprecation`, milestone 0.22.0) and, when another
+     0.23.0), has one removal issue (label `deprecation`, milestone 0.23.0) and, when another
      repository imports it, a coordination issue listing every pair.
+     Amended 2026-11-04: the external alias window ends in 0.23.0, because 0.22.x shipped before the renames finished.
    - **(g) A test module is never shimmed.** It is moved with `git mv` and no redirect; a helper
      that several test modules import moves to a kit module that they all import.
    - **(h) A story renames what it owns and switches no importer it does not own.** The importers
@@ -123,7 +124,7 @@ stories, keeps every name that cannot move behind an alias with a window, and fr
    `plugins`. The entry-point group value `choregos.plugins` and persisted prefixes never change.
 8. **Order and windows.** Internal aliases are deleted when the last importer is switched (the
    stories that close each package) and in any case before the release that ends the track;
-   external aliases are removed in 0.22.0, one story each. Readers of a recorded name ship before
+   external aliases are removed in 0.23.0, one story each. Readers of a recorded name ship before
    its writers (one release apart). After every wave the integrator regenerates the baselines
    with `--all --update-baseline` and checks that no area count rose. When the baselines hold
    only their headers, `--all` fails on a stale entry and a test asserts that every baseline is

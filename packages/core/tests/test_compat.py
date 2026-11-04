@@ -80,7 +80,7 @@ def test_former_name_reads_the_english_object(monkeypatch: pytest.MonkeyPatch) -
 
 def test_external_alias_warns_with_its_window(mod: types.ModuleType) -> None:
     alias_names(mod.__name__, {"old": "new"}, removed_in=EXTERNAL_ALIAS_REMOVAL)
-    with pytest.warns(DeprecationWarning, match=r"use new.*0\.22\.0") as record:
+    with pytest.warns(DeprecationWarning, match=r"use new.*0\.23\.0") as record:
         value = mod.old
     assert value is mod.new
     assert len(record) == 1

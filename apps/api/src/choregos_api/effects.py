@@ -14,7 +14,7 @@ the effects already done (`effects`): an onboarding's second effect adds to the 
 the first one created.
 
 The French names this module had before 0.21 (`effets.py`, `declarer_un_effet`...) keep working
-until 0.22.0 and warn (ADR 0098 §3 (f)).
+until 0.23.0 and warn (ADR 0098 §3 (f)).
 """
 
 from __future__ import annotations
@@ -65,7 +65,7 @@ def declare_effect(
 
     `policy`: what a workflow action needs to play it: `approval` (a person decides, the default),
     `allowed` (the transition is enough) or `forbidden`. `politique=` is the former name of
-    `policy=`: it keeps working until 0.22.0 and warns."""
+    `policy=`: it keeps working until 0.23.0 and warns."""
     from choregos_adapters import POLITIQUES
 
     if politique is not None:  # lang: fr-ok alias:external
@@ -298,7 +298,7 @@ def reset() -> None:
 reset()
 
 
-# ───────────────────────────── the former names (removed in 0.22.0) ─────────────────────────────
+# ───────────────────────────── the former names (removed in 0.23.0) ─────────────────────────────
 
 _FORMER = {
     "EffetRefuse": "EffectRefused",  # lang: fr-ok alias:external

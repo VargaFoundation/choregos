@@ -439,7 +439,7 @@ python -m choregos_api.migrate           # upgrade heads — the core, then ever
 python -m choregos_api.migrate downgrade <extension_label>@base
 ```
 
-`python -m choregos_api.migrer` is the former name of the same command: it keeps working until 0.22.0.
+`python -m choregos_api.migrer` is the former name of the same command: it keeps working until 0.23.0.
 
 An extension that needs tables declares a directory of Alembic revisions in the `choregos.migrations`
 entry-point group; the value it points to is a path:
@@ -568,11 +568,11 @@ It is written to the GitOps repository at provisioning, so it takes effect the n
 is provisioned. A malformed quantity is refused at construction, not by Argo CD later. Why there is no
 Temporal queue per organisation: [ADR 0027](adr/0027-noisy-neighbours-at-admission-and-quota.md).
 
-### Former names (removed in 0.22.0)
+### Former names (removed in 0.23.0)
 
 Before 0.21 the extension API had French names. Every one of them still works and raises a
 `DeprecationWarning` that names its English replacement and the release that removes it
-([ADR 0098](adr/0098-english-everywhere-finished.md) §3 (f)); switch an extension at your pace, before 0.22.0.
+([ADR 0098](adr/0098-english-everywhere-finished.md) §3 (f)); switch an extension at your pace, before 0.23.0.
 `choregos_api.greffons` and `choregos_api.effets` are the former modules: they are the same module
 objects as `choregos_api.extensions` and `choregos_api.effects`.
 
@@ -722,7 +722,7 @@ reads, writes and deletes the English name: `module.LIMITEUR`, `from module impo
 `monkeypatch.setattr(module, "LIMITEUR", fake)` and its undo all reach `LIMITER`, and a patch of
 `LIMITER` is seen through `LIMITEUR`. A second call on the same module extends the same class, so
 several stories can add their pairs. A former name that another repository or an operator uses
-(`alias:external`, ADR 0098 §3 (f)) passes `removed_in=EXTERNAL_ALIAS_REMOVAL` (`0.22.0`) and
+(`alias:external`, ADR 0098 §3 (f)) passes `removed_in=EXTERNAL_ALIAS_REMOVAL` (`0.23.0`) and
 warns with a `DeprecationWarning` each time it is read; the test suite ignores those warnings.
 A renamed module leaves a shim at its former path that ends with
 `replace_module(__name__, sys.modules["package.new_module"])`, so `import package.former` and

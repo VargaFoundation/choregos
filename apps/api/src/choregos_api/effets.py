@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# lang: fr-ok-file alias:external — former module of the effects API, removed in 0.22.0 (ADR 0098)
+# lang: fr-ok-file alias:external — former module of the effects API, removed in 0.23.0 (ADR 0098)
 """The former name of `choregos_api.effects`: every name still resolves, with a warning."""
 
 from __future__ import annotations

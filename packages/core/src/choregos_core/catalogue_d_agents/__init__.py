@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-# lang: fr-ok-file alias:external — former package of the agent catalogue, removed in 0.22.0 (ADR 0098)
+# lang: fr-ok-file alias:external — former package of the agent catalogue, removed in 0.23.0 (ADR 0098)
 """The former name of `choregos_core.agent_catalogue`: the same module, under its old path.
 
 `import choregos_core.catalogue_d_agents` gives `choregos_core.agent_catalogue` itself, so a patch

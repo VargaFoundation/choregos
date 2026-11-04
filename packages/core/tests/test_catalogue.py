@@ -220,7 +220,7 @@ def test_catalogue_reads_tools_and_former_outils_key(  # lang: fr-ok
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """The operators' YAML key is `tools:`; the former `outils:` still loads the same tools, with a
-    one-time warning that it is deprecated until 0.22.0, and a bare list maps to the tools."""
+    one-time warning that it is deprecated until 0.23.0, and a bare list maps to the tools."""
     former = CATALOGUE.replace("tools:", "outils:", 1)  # lang: fr-ok
     catalogue_module._former_key_warned.clear()
     with caplog.at_level(logging.WARNING, logger="choregos.catalogue"):
@@ -229,7 +229,7 @@ def test_catalogue_reads_tools_and_former_outils_key(  # lang: fr-ok
     assert from_former.tools == load_catalogue(CATALOGUE).tools
     assert [t.name for t in from_former.tools] == ["search_profiles"]
     warnings = [r for r in caplog.records if "deprecated" in r.getMessage()]
-    assert len(warnings) == 1 and "0.22.0" in warnings[0].getMessage()
+    assert len(warnings) == 1 and "0.23.0" in warnings[0].getMessage()
 
     caplog.clear()
     assert load_catalogue(CATALOGUE).tools  # the new key does not warn

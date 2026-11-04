@@ -143,7 +143,7 @@ What only a plugin understands, a template ships as an **extension** (`defaults.
 a folder of the template): `joiners-leavers` ships its ontology as `ontology: ./ontology`. When the
 project is born, the plugin that declared an installer under that name installs it — an invalid
 package fails the creation, like an invalid workflow. Without such a plugin (the ontology plugin is a
-trial, off unless `CHOREGOS_ONTOLOGY_TRIAL=1`; the former name `CHOREGOS_ESSAI_ONTOLOGIE` works until 0.22.0), the project is born without it, and the audit log
+trial, off unless `CHOREGOS_ONTOLOGY_TRIAL=1`; the former name `CHOREGOS_ESSAI_ONTOLOGIE` works until 0.23.0), the project is born without it, and the audit log
 says so (`template.extension.skip`).
 
 ### Create the project

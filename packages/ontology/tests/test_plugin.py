@@ -585,7 +585,7 @@ def test_former_activation_variable_still_activates(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Both `CHOREGOS_ONTOLOGY_TRIAL=1` and the former `CHOREGOS_ESSAI_ONTOLOGIE=1` activate the
-    ontology extension until 0.22.0; only the former one logs a deprecation warning."""
+    ontology extension until 0.23.0; only the former one logs a deprecation warning."""
     import logging
 
     from choregos_ontology.service import plugin as module

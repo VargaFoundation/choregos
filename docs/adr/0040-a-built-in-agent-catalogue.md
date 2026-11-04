@@ -7,7 +7,7 @@
 > catalogue is a common (`platform`) agent, changed by an `org_admin` only; to extend it, fork it.
 
 - **Status**: accepted, 2026-10-07
-- **Concerns**: `packages/core` (`choregos_core.agent_catalogue`, formerly `catalogue_d_agents`, which works until 0.22.0), the agent registry API, the
+- **Concerns**: `packages/core` (`choregos_core.agent_catalogue`, formerly `catalogue_d_agents`, which works until 0.23.0), the agent registry API, the
   console's `/agents`, the shipped templates; amends [ADR 0033](0033-agent-registry-and-skill-library.md)
 
 ## Context

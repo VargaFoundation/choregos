@@ -353,7 +353,7 @@ affinity:
 {{/*
 The alert rules, written once and served in both flavours (PrometheusRule and VMRule).
 The PromQL is the same; only the packaging changes. Since 0.21 (ADR 0098) four alerts have English
-names; each carries its former name in `legacy_alertname` until 0.22.0, so a route or a silence can
+names; each carries its former name in `legacy_alertname` until 0.23.0, so a route or a silence can
 still match it.
 */}}
 {{- define "choregos.alertRules" -}}

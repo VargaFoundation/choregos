@@ -63,7 +63,7 @@ LIVE_CONTEXTS: dict[str, dict[str, str]] = {
 }
 EVAL_BRANCH_PREFIX = "choregos-evals"
 #: The fixtures' French names (before S45-24) and the English name each one answers to: a stored
-#: matrix or a schedule that names one still plays the same ticket (ADR 0098 §4, removed in 0.22.0).
+#: matrix or a schedule that names one still plays the same ticket (ADR 0098 §4, removed in 0.23.0).
 FORMER_FIXTURE_NAMES: dict[str, str] = {  # lang: fr-ok alias:external
     "node-slug-longueur": "node-slug-length",  # lang: fr-ok
     "py-bug-arrondi": "py-rounding-bug",  # lang: fr-ok

@@ -18,7 +18,7 @@ raises ANYTHING ELSE is not a refusal, it is a failure; it goes up as it is and 
 retried, rather than passing for a decision.
 
 The French names this module had before 0.21 (`declarer_une_admission`, `AdmissionRefusee`...) keep
-working until 0.22.0 and warn (ADR 0098 §3 (f)).
+working until 0.23.0 and warn (ADR 0098 §3 (f)).
 """
 
 from __future__ import annotations

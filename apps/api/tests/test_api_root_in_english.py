@@ -124,7 +124,7 @@ def test_edition_former_names_warn_and_resolve() -> None:
             assert edition.declarer is edition.declare
         with pytest.warns(DeprecationWarning, match="fonctions=...") as caught:
             edition.declare(edition.ENTERPRISE, fonctions=["multi-org", "saml"])
-        assert "0.22.0" in str(caught[0].message)
+        assert "0.23.0" in str(caught[0].message)
         assert edition.features() == frozenset({"multi-org", "saml"})
         assert edition.is_enterprise()
         with warnings.catch_warnings():

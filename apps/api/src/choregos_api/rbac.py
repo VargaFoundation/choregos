@@ -125,7 +125,7 @@ class Principal:
 
     @property
     def authentifie_le(self) -> int | None:  # lang: fr-ok alias:external
-        """Former name of `authenticated_at` (removed in 0.22.0): read and written like it."""
+        """Former name of `authenticated_at` (removed in 0.23.0): read and written like it."""
         return self.authenticated_at
 
     @authentifie_le.setter

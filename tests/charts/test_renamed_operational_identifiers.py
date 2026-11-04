@@ -148,5 +148,5 @@ def test_upgrade_notes_list_every_renamed_identifier() -> None:
         assert any(f"`{name}" in row for row in rows), f"the 'Renamed in 0.21' tables do not name {name}"
     for new in RENAMED_ALERTS.values():
         assert any(f"`{new}`" in row for row in rows), f"the tables do not name the new alert {new}"
-    assert "legacy_alertname" in section and "0.22.0" in section
+    assert "legacy_alertname" in section and "0.23.0" in section
     assert "choregos-plugins" in section, "the pod-security note must warn about the plugin namespace"

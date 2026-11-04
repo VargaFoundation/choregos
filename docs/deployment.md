@@ -855,7 +855,7 @@ global:
 ## Database migrations
 
 Alembic runs as a Helm hook before the API starts, through `python -m choregos_api.migrate`
-(the former `python -m choregos_api.migrer` works until 0.22.0)
+(the former `python -m choregos_api.migrer` works until 0.23.0)
 (`upgrade heads`: the core, then the branch of any installed plugin that ships a schema):
 
 ```yaml
@@ -1656,7 +1656,7 @@ with `--profile decisions`: the variable is also what tells `litellm-config` to 
 0.21 renames the French operational identifiers of the chart, the Kyverno policies and the runbooks
 ([ADR 0098](adr/0098-english-everywhere-finished.md)). A rename of a name that something outside the
 chart reads (an alert route, a PolicyException, a mounted path) keeps a shim for one release or tells
-you what to do by hand; this section lists each. The shims go in 0.22.0.
+you what to do by hand; this section lists each. The shims go in 0.23.0.
 
 ### Alerts
 
@@ -1666,7 +1666,7 @@ the old `alertname` keeps matching if you add `legacy_alertname` to its matchers
 
 | Former alert | New alert | What an operator does |
 | :-- | :-- | :-- |
-| `ChoregosApiErreurs5xx` | `ChoregosApi5xxErrors` | Route on `alertname` = the new name, or on `legacy_alertname` = the former one until 0.22.0. <!-- lang: fr-ok --> |
+| `ChoregosApiErreurs5xx` | `ChoregosApi5xxErrors` | Route on `alertname` = the new name, or on `legacy_alertname` = the former one until 0.23.0. <!-- lang: fr-ok --> |
 | `ChoregosRunEnAttente` | `ChoregosRunPending` | Same. <!-- lang: fr-ok --> |
 | `ChoregosBudgetJournalier` | `ChoregosDailyBudgetHigh` | Same. <!-- lang: fr-ok --> |
 | `ChoregosTrainGele` | `ChoregosTrainFrozen` | Same. <!-- lang: fr-ok --> |
@@ -1680,12 +1680,12 @@ route:
   routes:
     - matchers: ['alertname=~"ChoregosApi5xxErrors|ChoregosRunPending|ChoregosDailyBudgetHigh|ChoregosTrainFrozen"']
       receiver: platform-oncall
-    # Until 0.22.0, the rule that still names the former alerts keeps working with:
+    # Until 0.23.0, the rule that still names the former alerts keeps working with:
     - matchers: ['legacy_alertname="ChoregosTrainGele"']
       receiver: platform-oncall
 ```
 
-`legacy_alertname` is removed in 0.22.0.
+`legacy_alertname` is removed in 0.23.0.
 
 The rule group is renamed too (the rules inside it are the same objects):
 
@@ -1696,7 +1696,7 @@ The rule group is renamed too (the rules inside it are the same objects):
 ### Runbooks
 
 The six runbooks below, and the secret rotation one, moved. The former path stays as a one-line
-redirect stub until 0.22.0: the `runbook_url` annotation of an alert already deployed points at it.
+redirect stub until 0.23.0: the `runbook_url` annotation of an alert already deployed points at it.
 The chart's alerts now point at the new paths.
 
 | Former runbook | New runbook |
@@ -1742,8 +1742,8 @@ must match the rule name instead.
 
 | Former | New | What an operator does |
 | :-- | :-- | :-- |
-| `CHOREGOS_ESSAI_ONTOLOGIE=1` | `CHOREGOS_ONTOLOGY_TRIAL=1` | Rename it in `global.extraEnv`; the former one still works until 0.22.0 and warns. <!-- lang: fr-ok --> |
-| `CONNECTOR_DEMO_JETON` | `CONNECTOR_DEMO_TOKEN` | The demo fakes' chart switches itself; rename it in your own values or `.env`; the former one is still read when the new one is unset (until 0.22.0). <!-- lang: fr-ok --> |
-| `python -m choregos_adapters.fakes.serveur` | `python -m choregos_adapters.fakes.server` | The chart switches the demo fakes' command; change your own container command; the former one still serves until 0.22.0. <!-- lang: fr-ok --> |
-| `python -m choregos_api.migrer` | `python -m choregos_api.migrate` | Change a custom migration command; the former one still works until 0.22.0. <!-- lang: fr-ok --> |
+| `CHOREGOS_ESSAI_ONTOLOGIE=1` | `CHOREGOS_ONTOLOGY_TRIAL=1` | Rename it in `global.extraEnv`; the former one still works until 0.23.0 and warns. <!-- lang: fr-ok --> |
+| `CONNECTOR_DEMO_JETON` | `CONNECTOR_DEMO_TOKEN` | The demo fakes' chart switches itself; rename it in your own values or `.env`; the former one is still read when the new one is unset (until 0.23.0). <!-- lang: fr-ok --> |
+| `python -m choregos_adapters.fakes.serveur` | `python -m choregos_adapters.fakes.server` | The chart switches the demo fakes' command; change your own container command; the former one still serves until 0.23.0. <!-- lang: fr-ok --> |
+| `python -m choregos_api.migrer` | `python -m choregos_api.migrate` | Change a custom migration command; the former one still works until 0.23.0. <!-- lang: fr-ok --> |
 | `python -m choregos_core.catalogue_d_agents.evals` | `python -m choregos_core.agent_catalogue.evals` | Same. <!-- lang: fr-ok --> |
