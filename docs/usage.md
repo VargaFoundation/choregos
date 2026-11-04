@@ -641,7 +641,7 @@ curl         $API/projects/acme:hr/workflows                                    
   active workflow is an option with its description and hint. It always answers one workflow and the
   probability of that answer. `min_confidence` (0 to 1, `null` by default) sets how sure it must be:
   below it, the default takes the item and the reason says so (`the decision model chose … with a
-  confidence of 0.42, below the project's minimum of 0.50`). A chat model answers no probability
+  probability of 0.42, below the project's minimum of 0.50`). A chat model answers no probability
   and is never held to the minimum. `documents.routing` and the preview carry `confidence`. A `PUT`
   that leaves out `min_confidence` keeps it; `null` clears it.
 

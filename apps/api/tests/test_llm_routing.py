@@ -415,7 +415,7 @@ async def test_the_decision_client_asks_one_choice_question_on_systemone(
         {
             "type": "choice",
             "choice": "offboarding",
-            "confidence": 0.93,
+            "confidence": 0.86,
             "probabilities": {"offboarding": 0.93, "onboarding": 0.07},
         }
     )
@@ -440,16 +440,91 @@ async def test_the_decision_client_asks_one_choice_question_on_systemone(
     assert criteria["onboarding"] == "Welcome a new hire before their first day"
     routing = (await _documents(item["id"]))["routing"]
     assert (routing["model"], routing["confidence"]) == (DECIDER, 0.93)
-    assert "confidence of 0.93" in routing["reason"]
+    assert "probability of 0.93" in routing["reason"], "probabilities[choice], not the margin (0.86)"
     (line,) = await _route_lines()
     assert (line.model, line.tokens_in, line.tokens_out) == (DECIDER, 157, 0)
+
+
+# A real answer of gpt-6-luna behind LiteLLM 1.105.5, recorded in prod on 2026-11-04 (#1303): its
+# `confidence` is the margin over the runner-up (0.93 - 0.07), not the probability of the answer.
+RECORDED_ANSWER = {
+    "type": "choice",
+    "choice": "offboarding",
+    "confidence": 0.86,
+    "probabilities": {"offboarding": 0.93, "onboarding": 0.07},
+}
+
+
+@pytest.mark.parametrize(
+    ("answer", "minimum", "workflow"),
+    [
+        # A sure answer whose margin is small: 0.54 against 0.46 is above 0.5, its `confidence` 0.08
+        # is not. The threshold reads the probability, so the model's choice is taken.
+        (
+            {"type": "choice", "choice": "offboarding", "confidence": 0.08,
+             "probabilities": {"offboarding": 0.54, "onboarding": 0.46}},
+            0.5,
+            "offboarding",
+        ),
+        # A `confidence` above the minimum does not lift a probability below it.
+        (
+            {"type": "choice", "choice": "offboarding", "confidence": 0.9,
+             "probabilities": {"offboarding": 0.6, "onboarding": 0.4}},
+            0.7,
+            "onboarding",
+        ),
+        (RECORDED_ANSWER, 0.9, "offboarding"),
+        (RECORDED_ANSWER, 0.95, "onboarding"),
+    ],
+)  # fmt: skip
+async def test_the_minimum_reads_the_probability_of_the_choice_not_its_confidence(
+    client: AsyncClient,
+    project: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+    answer: dict[str, Any],
+    minimum: float,
+    workflow: str,
+) -> None:
+    pid = project["id"]
+    await _two_workflows(client, pid)
+    await _routing(client, pid, "llm", min_confidence=minimum)
+    await _decider(client, "route", "decide")
+    transport, _ = _systemone(answer)
+    _scripted_decider(monkeypatch, transport)
+    item = await _born(client, pid, "Bob leaves")
+    assert item["workflow_name"] == workflow
+    routing = (await _documents(item["id"]))["routing"]
+    assert routing["confidence"] == answer["probabilities"]["offboarding"]
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        {"type": "choice", "choice": "offboarding", "confidence": 0.9},
+        {"type": "choice", "choice": "offboarding", "probabilities": {"onboarding": 1.0}},
+        {"type": "choice", "choice": "offboarding", "probabilities": {"offboarding": 1.5}},
+        {"type": "choice", "choice": "offboarding", "probabilities": [0.9, 0.1]},
+    ],
+)
+async def test_an_answer_without_the_probability_of_its_choice_leaves_the_item_to_the_default(
+    client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch, answer: dict[str, Any]
+) -> None:
+    pid = project["id"]
+    await _two_workflows(client, pid)
+    await _routing(client, pid, "llm")
+    await _decider(client, "route", "decide")
+    transport, _ = _systemone(answer)
+    _scripted_decider(monkeypatch, transport)
+    item = await _born(client, pid, "Bob leaves")
+    assert item["workflow_name"] == "onboarding"
+    assert "did not answer the question" in (await _documents(item["id"]))["routing"]["reason"]
 
 
 @pytest.mark.parametrize(
     ("answer", "status", "reason"),
     [
         (
-            {"type": "choice", "choice": "payroll", "confidence": 1.0},
+            {"type": "choice", "choice": "payroll", "confidence": 1.0, "probabilities": {"payroll": 1.0}},
             200,
             "`payroll`, which is not an active",
         ),
