@@ -28,7 +28,7 @@ from choregos_contracts import (
 from choregos_core import PolicyEngine, matches_any, telemetry, utcnow
 from choregos_core.workspace import is_read_only_scope
 from fastapi import APIRouter, Query, Request, Response, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from ..catalogue import call as call_catalogue_tool
 from ..catalogue import project_tools
@@ -84,6 +84,7 @@ from ..services.costs import dimensions_of
 from ..services.network import record_decisions, run_network
 from ..services.receipts import PRODUCED, PROMPT_DOCUMENTS, READ, record, record_digests
 from ..services.tickets import outputs_to_store
+from ..services.tool_call_cap import take_tool_call_slot
 from ..temporal import get_temporal, interpreter_id
 
 router = APIRouter(tags=["internal"], prefix="/internal")
@@ -942,13 +943,10 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
 
     engine = PolicyEngine(await effective_policy(session, project.id))
     cap = engine.max_tool_calls_per_run()
-    already_called = (
-        await session.execute(
-            select(func.count())
-            .select_from(CostLedger)
-            .where(CostLedger.run_id == run.id, CostLedger.kind == "tool")
-        )
-    ).scalar_one()
+    # Counted under the run's lock, and this call's place taken before it leaves: calls of one run
+    # made at once (a script through the tool bridge) cannot all pass at `cap - 1` (S57-03).
+    slot = await take_tool_call_slot(session, run, name, cap)
+    already_called = slot.already_called
     if cap and already_called >= cap:
         raise ApiError(
             status.HTTP_429_TOO_MANY_REQUESTS,
@@ -960,82 +958,87 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
     price_usd = 0.0
     #: What the event says of a search query: its fingerprint and its length, never its text (ADR 0015).
     about_query: dict[str, Any] = {}
-    if is_search:
-        code, result_body, provider, price_usd, about_query = await _web_search(
-            session, run, project, body or {}
-        )
-        price_eur = 0.0
-        code, result_body, suspicions = await _injection_guard(
-            session, run, project, SimpleNamespace(name=name), code, result_body
-        )
-    elif is_web:
-        code, result_body, provider = await _web_fetch(session, run, project, body or {})
-        price_eur = 0.0
-        code, result_body, suspicions = await _injection_guard(
-            session, run, project, SimpleNamespace(name=name), code, result_body
-        )
-    elif catalogue_tool is not None:
-        if catalogue_tool.may_write:
-            detail = (
-                f"catalogue tool `{name}` may write (an http POST or a remote MCP tool) and catalogue "
-                "calls are not governed actions: the deployment marks it `read_only: true` if it only "
-                "reads, or the organisation declares the server as an MCP connector, whose writes are "
-                "governed (ADR 0034)"
+    try:
+        if is_search:
+            code, result_body, provider, price_usd, about_query = await _web_search(
+                session, run, project, body or {}
             )
-            raise ApiError(
-                status.HTTP_409_CONFLICT,
-                "Catalogue write refused",
-                detail,
-                errors=[{"code": "catalogue_write_refused", "msg": detail}],
+            price_eur = 0.0
+            code, result_body, suspicions = await _injection_guard(
+                session, run, project, SimpleNamespace(name=name), code, result_body
             )
-        from ..services.broker import bounded_payload
+        elif is_web:
+            code, result_body, provider = await _web_fetch(session, run, project, body or {})
+            price_eur = 0.0
+            code, result_body, suspicions = await _injection_guard(
+                session, run, project, SimpleNamespace(name=name), code, result_body
+            )
+        elif catalogue_tool is not None:
+            if catalogue_tool.may_write:
+                detail = (
+                    f"catalogue tool `{name}` may write (an http POST or a remote MCP tool) and catalogue "
+                    "calls are not governed actions: the deployment marks it `read_only: true` if it only "
+                    "reads, or the organisation declares the server as an MCP connector, whose writes are "
+                    "governed (ADR 0034)"
+                )
+                raise ApiError(
+                    status.HTTP_409_CONFLICT,
+                    "Catalogue write refused",
+                    detail,
+                    errors=[{"code": "catalogue_write_refused", "msg": detail}],
+                )
+            from ..services.broker import bounded_payload
 
-        code, result_body = await call_catalogue_tool(catalogue_tool, body or {})
-        # A catalogue provider writes what the agent reads, as the broker's servers do (#759).
-        result_body = bounded_payload(result_body, catalogue_tool.result_max_bytes)
-        # ... and what it writes may be an injection, read by the same guard (S40-18).
-        code, result_body, suspicions = await _injection_guard(
-            session, run, project, SimpleNamespace(name=name), code, result_body
-        )
-        provider, price_eur = catalogue_tool.provider, catalogue_tool.price_eur
-    elif name in brokered and brokered[name].needs_approval:
-        # Under approval (ADR 0035): the call PROPOSES the action; nothing goes to the server. The
-        # proposal counts against the run's cap, so that a loop does not fill the inbox.
-        from ..services.broker import ArgumentsRefused, check_arguments, propose_call
+            code, result_body = await call_catalogue_tool(catalogue_tool, body or {})
+            # A catalogue provider writes what the agent reads, as the broker's servers do (#759).
+            result_body = bounded_payload(result_body, catalogue_tool.result_max_bytes)
+            # ... and what it writes may be an injection, read by the same guard (S40-18).
+            code, result_body, suspicions = await _injection_guard(
+                session, run, project, SimpleNamespace(name=name), code, result_body
+            )
+            provider, price_eur = catalogue_tool.provider, catalogue_tool.price_eur
+        elif name in brokered and brokered[name].needs_approval:
+            # Under approval (ADR 0035): the call PROPOSES the action; nothing goes to the server. The
+            # proposal counts against the run's cap, so that a loop does not fill the inbox.
+            from ..services.broker import ArgumentsRefused, check_arguments, propose_call
 
-        try:
-            check_arguments(brokered[name], body or {})
-        except ArgumentsRefused as refusal:
-            raise ApiError(status.HTTP_400_BAD_REQUEST, "Arguments refused", str(refusal)) from refusal
-        code, result_body = 202, await propose_call(session, run, project, brokered[name], body or {})
-        provider, price_eur = f"mcp:{brokered[name].connector.name}", 0.0
-    elif name in brokered and brokered[name].is_write:
-        # A write, even an allowed one, is a governed action (#241): done once, journaled,
-        # compensable, played by the `ActionWorkflow`. Its price is counted when it is born.
-        code, result_body, suspicions, created = await _write_by_the_broker(
-            session, run, project, brokered[name], body or {}
-        )
-        provider, price_eur = f"mcp:{brokered[name].connector.name}", 0.0
-        price_usd = (brokered[name].operation.price_usd or 0.0) if created else 0.0
-    elif name in brokered:
-        code, result_body, suspicions = await _read_by_the_broker(
-            session, run, project, brokered[name], body or {}
-        )
-        provider, price_eur = f"mcp:{brokered[name].connector.name}", 0.0
-        price_usd = brokered[name].operation.price_usd or 0.0
-    else:
-        from ..extensions import tool_providers
-        from ..services.broker import bounded_payload
+            try:
+                check_arguments(brokered[name], body or {})
+            except ArgumentsRefused as refusal:
+                raise ApiError(status.HTTP_400_BAD_REQUEST, "Arguments refused", str(refusal)) from refusal
+            code, result_body = 202, await propose_call(session, run, project, brokered[name], body or {})
+            provider, price_eur = f"mcp:{brokered[name].connector.name}", 0.0
+        elif name in brokered and brokered[name].is_write:
+            # A write, even an allowed one, is a governed action (#241): done once, journaled,
+            # compensable, played by the `ActionWorkflow`. Its price is counted when it is born.
+            code, result_body, suspicions, created = await _write_by_the_broker(
+                session, run, project, brokered[name], body or {}
+            )
+            provider, price_eur = f"mcp:{brokered[name].connector.name}", 0.0
+            price_usd = (brokered[name].operation.price_usd or 0.0) if created else 0.0
+        elif name in brokered:
+            code, result_body, suspicions = await _read_by_the_broker(
+                session, run, project, brokered[name], body or {}
+            )
+            provider, price_eur = f"mcp:{brokered[name].connector.name}", 0.0
+            price_usd = brokered[name].operation.price_usd or 0.0
+        else:
+            from ..extensions import tool_providers
+            from ..services.broker import bounded_payload
 
-        extension, extension_tool = from_extensions[name]
-        code, result_body = await tool_providers()[extension].call_tool(
-            session, run, project, name, body or {}
-        )
-        result_body = bounded_payload(result_body, _extension_result_cap(extension, extension_tool))
-        code, result_body, suspicions = await _injection_guard(
-            session, run, project, SimpleNamespace(name=name), code, result_body
-        )
-        provider, price_eur = f"greffon:{extension}", 0.0  # lang: fr-ok — persisted cost provider, S45-39
+            extension, extension_tool = from_extensions[name]
+            code, result_body = await tool_providers()[extension].call_tool(
+                session, run, project, name, body or {}
+            )
+            result_body = bounded_payload(result_body, _extension_result_cap(extension, extension_tool))
+            code, result_body, suspicions = await _injection_guard(
+                session, run, project, SimpleNamespace(name=name), code, result_body
+            )
+            provider, price_eur = f"greffon:{extension}", 0.0  # lang: fr-ok — persisted cost provider, S45-39
+    except BaseException:
+        # A call that fails is not booked, as it never was: its place is given back.
+        await slot.give_back(session)
+        raise
     # A call the organisation's network policy stopped never reached the server: it is not counted
     # against the per-host rate either, or an agent that keeps retrying would never recover (ADR 0070).
     # A search query or a fetch address refused for what it holds was not sent either (ADR 0083 §5).
@@ -1063,6 +1066,8 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
                 **await dimensions_of(session, run.id),
             )
         )
+    # The provisional line goes with this transaction, which holds the call's own line (if any).
+    await slot.settle(session)
     await check_after_spend(session, run.id)
     await persist_event(
         session,

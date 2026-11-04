@@ -1171,6 +1171,10 @@ over the cap, the structured part is dropped and the model reads the cut text wi
 
 Spend is bounded per run (`budgets.tool_calls_per_run`) and every call lands in the cost
 ledger under `kind: tool` — visible on the project overview and in the run's access record.
+The cap holds when a run's calls arrive at once (S57-03): the API counts them under a per-run lock
+(`pg_advisory_xact_lock`) and each call takes its place before it leaves, as a provisional ledger line
+with `provider: in_flight`, replaced by the call's own line when it answers. A call that fails, or
+that the network policy stopped, gives its place back; while calls are in flight, they count.
 
 **Announcing a tool is not using it.** On the 2026-09-24 bench the sourcing playbook said
 "verify the location with `verifier_adresse` before anything else", the agent recorded
