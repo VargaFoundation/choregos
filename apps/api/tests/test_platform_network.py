@@ -95,7 +95,7 @@ async def test_an_internal_address_is_not_the_internet(client: AsyncClient, admi
 async def test_a_ceiling_tightened_after_creation_refuses_the_call_and_journals_it(
     client: AsyncClient,
     project: dict[str, Any],
-    fournisseur: Any,  # noqa: F811
+    fournisseur: Any,  # noqa: F811  # lang: fr-ok: the fixture of S46-01's test_courtier
 ) -> None:
     base, headers = await _preparer(client, project, ["*"])
     assert (await client.post(f"{base}/fournisseur__stock", headers=headers, json={})).json()[
@@ -126,13 +126,13 @@ async def test_discovery_obeys_the_ceiling_too(client: AsyncClient, admin: str) 
 async def test_a_governed_write_reads_the_ceiling_again_when_it_runs(
     client: AsyncClient,
     project: dict[str, Any],
-    fournisseur: Any,  # noqa: F811
+    fournisseur: Any,  # noqa: F811  # lang: fr-ok: the fixture of S46-01's test_courtier
 ) -> None:
     """The effect of an approved action is played later, by a workflow: it must not reach a host the
     organisation has closed since."""
     from choregos_api.db.models import Action, Project
     from choregos_api.db.session import session_scope
-    from choregos_api.effets import ContexteEffet, EffetRefuse, _appel_de_connecteur
+    from choregos_api.effects import EffectContext, EffectRefused, _connector_call
     from sqlalchemy import select
 
     await _preparer(client, project, ["*"])
@@ -140,9 +140,9 @@ async def test_a_governed_write_reads_the_ceiling_again_when_it_runs(
     async with session_scope() as session:
         stored = (await session.execute(select(Project).where(Project.id == project["id"]))).scalar_one()
         action = Action(id="a1", project_id=project["id"], kind="x", title="t", status="approved")
-        with pytest.raises(EffetRefuse, match=r"fournisseur\.test"):
-            await _appel_de_connecteur(
-                ContexteEffet(session, action, stored),
+        with pytest.raises(EffectRefused, match=r"fournisseur\.test"):
+            await _connector_call(
+                EffectContext(session, action, stored),
                 {"connector": "fournisseur", "operation": "stock", "arguments": {}},
             )
     assert fournisseur.appels == []
@@ -151,7 +151,7 @@ async def test_a_governed_write_reads_the_ceiling_again_when_it_runs(
 async def test_the_organisation_calls_a_host_at_most_n_times_a_minute(
     client: AsyncClient,
     project: dict[str, Any],
-    fournisseur: Any,  # noqa: F811
+    fournisseur: Any,  # noqa: F811  # lang: fr-ok: the fixture of S46-01's test_courtier
 ) -> None:
     base, headers = await _preparer(client, project, ["*"])
     await _ceiling(client, {"per_host_per_minute": 2})
@@ -169,7 +169,7 @@ async def test_the_organisation_calls_a_host_at_most_n_times_a_minute(
 async def test_the_rate_is_counted_over_the_last_minute_only(
     client: AsyncClient,
     project: dict[str, Any],
-    fournisseur: Any,  # noqa: F811
+    fournisseur: Any,  # noqa: F811  # lang: fr-ok: the fixture of S46-01's test_courtier
 ) -> None:
     from choregos_api.db.models import OrgConnector
     from choregos_api.db.session import session_scope
@@ -195,7 +195,7 @@ async def test_the_rate_is_counted_over_the_last_minute_only(
 async def test_mcp_calls_carry_the_organisations_contact(
     client: AsyncClient,
     project: dict[str, Any],
-    fournisseur: Any,  # noqa: F811
+    fournisseur: Any,  # noqa: F811  # lang: fr-ok: the fixture of S46-01's test_courtier
 ) -> None:
     from choregos_api import __version__
 
@@ -204,7 +204,7 @@ async def test_mcp_calls_carry_the_organisations_contact(
     assert (await client.post(f"{base}/fournisseur__stock", headers=headers, json={})).json()[
         "status_code"
     ] == 200
-    agents = {recus["user-agent"] for _, recus, _ in fournisseur.recues[-3:]}
+    agents = {received["user-agent"] for _, received, _ in fournisseur.recues[-3:]}
     assert agents == {f"Choregos/{__version__} (+security@ops.example)"}
 
 

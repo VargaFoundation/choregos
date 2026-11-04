@@ -84,7 +84,7 @@ async def test_the_middleware_keys_on_the_trusted_proxy_address(
 
 def test_a_forwarded_entry_with_a_port_is_keyed_by_its_address() -> None:
     """Azure Application Gateway writes `address:port`: the source port buys no new window."""
-    from choregos_api.limiteur import client_address
+    from choregos_api.rate_limit import client_address
 
     trusted = _settings(cidrs=CHART_DEFAULT_RANGES)
     keys = {client_address(_request("10.0.0.5", f"203.0.113.5:{port}"), trusted) for port in (54321, 54322)}
@@ -94,7 +94,7 @@ def test_a_forwarded_entry_with_a_port_is_keyed_by_its_address() -> None:
 
 
 def test_a_bracketed_ipv6_entry_is_keyed_by_its_64() -> None:
-    from choregos_api.limiteur import client_address
+    from choregos_api.rate_limit import client_address
 
     trusted = _settings(cidrs=CHART_DEFAULT_RANGES)
     written = ("[2001:db8:1:2::5]", "[2001:db8:1:2::9]:443", "[2001:db8:1:2::9]:444")
@@ -107,7 +107,7 @@ def test_a_bracketed_ipv6_entry_is_keyed_by_its_64() -> None:
 
 
 def test_behind_trusted_proxies_the_nearest_untrusted_entry_is_the_client() -> None:
-    from choregos_api.limiteur import client_address
+    from choregos_api.rate_limit import client_address
 
     trusted = _settings(cidrs=["10.0.0.0/8"])
     forwarded = "1.1.1.1, 198.51.100.7, 10.0.0.9"
@@ -122,21 +122,21 @@ def test_behind_trusted_proxies_the_nearest_untrusted_entry_is_the_client() -> N
 
 def test_a_proxy_line_of_its_own_is_read_after_the_client_line() -> None:
     """A proxy may add its own `X-Forwarded-For` line rather than append to the client's."""
-    from choregos_api.limiteur import client_address
+    from choregos_api.rate_limit import client_address
 
     request = _request("10.0.0.5", "6.6.6.6", "198.51.100.7")
     assert client_address(request, _settings(cidrs=["10.0.0.0/8"])) == "198.51.100.7"
 
 
 def test_behind_the_console_rewrite_the_browser_address_is_the_key() -> None:
-    from choregos_api.limiteur import client_address
+    from choregos_api.rate_limit import client_address
 
     request = _request("10.0.0.7", "203.0.113.5, 10.0.0.3")
     assert client_address(request, _settings(cidrs=CHART_DEFAULT_RANGES)) == "203.0.113.5"
 
 
 def test_ipv6_clients_are_keyed_by_their_64() -> None:
-    from choregos_api.limiteur import client_address
+    from choregos_api.rate_limit import client_address
 
     keys = {client_address(_request(peer), _settings()) for peer in ("2001:db8:1:2::5", "2001:db8:1:2::9")}
     assert keys == {"2001:db8:1:2::/64"}
@@ -145,11 +145,11 @@ def test_ipv6_clients_are_keyed_by_their_64() -> None:
 
 
 def test_the_limiter_holds_at_most_ten_thousand_keys() -> None:
-    from choregos_api.limiteur import Limiteur
+    from choregos_api.rate_limit import RateLimiter
 
-    limiter = Limiteur(5)
+    limiter = RateLimiter(5)
     for n in range(12_000):
-        assert limiter.admet(f"key-{n}", 0.0)[0]
+        assert limiter.admits(f"key-{n}", 0.0)[0]
     assert len(limiter._fenetres) <= 10_000
     assert "key-11999" in limiter._fenetres, "the newest key was evicted"
     assert "key-0" not in limiter._fenetres, "the least recently seen key goes first"
@@ -157,15 +157,15 @@ def test_the_limiter_holds_at_most_ten_thousand_keys() -> None:
 
 def test_a_key_seen_again_is_evicted_last() -> None:
     """A throttled client that keeps knocking keeps its window while silent keys go."""
-    from choregos_api.limiteur import Limiteur
+    from choregos_api.rate_limit import RateLimiter
 
-    limiter = Limiteur(1)
+    limiter = RateLimiter(1)
     for n in range(10_000):
-        limiter.admet(f"key-{n}", 0.0)
-    assert not limiter.admet("key-0", 1.0)[0], "key-0 has spent its minute"
-    limiter.admet("newcomer", 1.0)
+        limiter.admits(f"key-{n}", 0.0)
+    assert not limiter.admits("key-0", 1.0)[0], "key-0 has spent its minute"
+    limiter.admits("newcomer", 1.0)
     assert "key-0" in limiter._fenetres and "key-1" not in limiter._fenetres
-    assert not limiter.admet("key-0", 2.0)[0], "eviction gave a throttled key a fresh window"
+    assert not limiter.admits("key-0", 2.0)[0], "eviction gave a throttled key a fresh window"
 
 
 class _Unwalkable(OrderedDict[str, deque[float]]):
@@ -185,12 +185,12 @@ class _Unwalkable(OrderedDict[str, deque[float]]):
 
 
 def test_no_request_walks_the_table() -> None:
-    from choregos_api.limiteur import Limiteur
+    from choregos_api.rate_limit import RateLimiter
 
-    limiter = Limiteur(5)
+    limiter = RateLimiter(5)
     limiter._fenetres = _Unwalkable()
     for n in range(10_100):
-        limiter.admet(f"key-{n}", 0.0)
+        limiter.admits(f"key-{n}", 0.0)
     assert len(limiter._fenetres) == 10_000
 
 

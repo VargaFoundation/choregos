@@ -218,7 +218,7 @@ async def test_its_name_is_reserved(
     async def clashing(*_args: Any) -> dict[str, Any]:
         return {"web_search": ("a-plugin", {"name": "web_search", "description": "", "inputSchema": {}})}
 
-    monkeypatch.setattr(internal, "_outils_des_greffons", clashing)
+    monkeypatch.setattr(internal, "_extension_tools", clashing)
     listed = await client.get(base, headers=headers)
     assert listed.status_code == 409 and "built in" in listed.text
     called = await client.post(f"{base}/web_search", headers=headers, json={"query": QUERY})

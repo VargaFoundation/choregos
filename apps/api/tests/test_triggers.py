@@ -281,7 +281,7 @@ async def test_an_external_tracker_refuses_the_trigger(
     async def external(*_: Any) -> bool:
         return False
 
-    monkeypatch.setattr(tickets, "le_tracker_est_interne", external)
+    monkeypatch.setattr(tickets, "tracker_is_internal", external)
     refused = await _call(client, "incident", token, SNOW)
 
     assert refused.status_code == 409, refused.text

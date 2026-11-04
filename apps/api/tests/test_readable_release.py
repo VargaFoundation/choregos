@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Une release se lit, quel que soit le signal d'embarquement qu'elle range (S22-25).
+"""A release is readable, whatever onboarding signal it stores (S22-25).
 
-Sur le locataire dev, le 10/10, la première release réelle rendait 500 à `getTrainStatus` et
-`listReleases` : le train range chaque élément tel que l'interpréteur l'a signalé, et le contrat de
-l'élément refuse les champs qu'il ne connaît pas.
+On the dev tenant, on 10/10, the first real release answered 500 to `getTrainStatus` and
+`listReleases`: the train stores each item as the interpreter reported it, and the item contract
+refuses the fields it does not know.
 """
 
 from __future__ import annotations
@@ -11,8 +11,8 @@ from __future__ import annotations
 from choregos_api.db.models import Release
 from choregos_api.services import release_dto
 
-#: L'élément du lot tel que `train-dev-prod` l'a rangé pour #4, le 10/10.
-SIGNAL_DE_4 = {
+#: The batch item as `train-dev-prod` stored it for #4, on 10/10.
+SIGNAL_OF_4 = {
     "approval": {"group": None, "required": False},
     "infra_pr_url": None,
     "labels": [],
@@ -26,14 +26,14 @@ SIGNAL_DE_4 = {
 }
 
 
-def test_une_release_qui_range_le_signal_brut_se_lit() -> None:
+def test_a_release_that_stores_the_raw_signal_is_readable() -> None:
     release = Release(
         id="r-1",
         project_id="p-1",
         env="prod",
         batch_no=1,
         status="departing",
-        items=[SIGNAL_DE_4],
+        items=[SIGNAL_OF_4],
         verdict={},
     )
 

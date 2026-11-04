@@ -252,13 +252,13 @@ async def test_an_external_tracker_receives_a_neutral_issue_for_a_marked_child(
     from choregos_api.services import tickets
 
     fake = FakeTracker("billing-api")
-    real = tickets.tracker_du_projet
+    real = tickets.project_tracker
 
     async def with_the_fake(session: Any, owner: Any) -> Any:
         row, _ = await real(session, owner)
         return row, fake
 
-    monkeypatch.setattr(tickets, "tracker_du_projet", with_the_fake)
+    monkeypatch.setattr(tickets, "project_tracker", with_the_fake)
     connected = await client.put(
         f"/api/v1/projects/{project['id']}/connectors/tracker",
         json={"type": "github-issues", "config": {"repo": "varga/billing-api"}},
@@ -266,7 +266,7 @@ async def test_an_external_tracker_receives_a_neutral_issue_for_a_marked_child(
     assert connected.status_code == 200, connected.text
     async with session_scope() as session:
         owner = await session.get(Project, project["id"])
-        child = await tickets.creer_un_ticket(
+        child = await tickets.create_work_item(
             session,
             SYSTEM,
             owner,

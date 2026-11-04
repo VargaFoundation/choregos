@@ -27,13 +27,13 @@ def tracker(monkeypatch: pytest.MonkeyPatch) -> FakeTracker:
     fake = FakeTracker("billing-api")
     seeded = fake.seed("Credit notes fail")
     fake.items[KEY] = fake.items.pop(seeded).model_copy(update={"key": KEY})
-    real = tickets.tracker_du_projet
+    real = tickets.project_tracker
 
     async def with_the_fake(session: Any, project: Any) -> Any:
         row, _ = await real(session, project)
         return row, (fake if row is not None and row.type not in {"internal", "fake"} else None)
 
-    monkeypatch.setattr(tickets, "tracker_du_projet", with_the_fake)
+    monkeypatch.setattr(tickets, "project_tracker", with_the_fake)
     return fake
 
 

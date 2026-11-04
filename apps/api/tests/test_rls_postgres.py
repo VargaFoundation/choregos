@@ -1,9 +1,8 @@
-"""La RLS PostgreSQL isole-t-elle VRAIMENT une organisation d'une autre ?
+"""Does PostgreSQL RLS REALLY isolate one organisation from another?
 
-Jamais exercée avant le 2026-09-24 : toute la suite tournait sur SQLite, où la politique
-n'existe pas, et la politique elle-même était fail-open. Ce test ne tourne que contre un
-vrai PostgreSQL (`CHOREGOS_TEST_DATABASE_URL`) : la CI en lance un, en local
-`docs/development.md` dit comment.
+Never exercised before 2026-09-24: the whole suite ran on SQLite, where the policy does not
+exist, and the policy itself was fail-open. This test runs only against a real PostgreSQL
+(`CHOREGOS_TEST_DATABASE_URL`): the CI starts one, locally `docs/development.md` says how.
 """
 
 from __future__ import annotations
@@ -21,8 +20,8 @@ pytestmark = without_postgres
 
 
 @pytest.fixture
-async def deux_organisations(pg_app: Any) -> dict[str, str]:
-    """`a` et `b`, chacune avec un projet `billing-api` et un ticket."""
+async def two_organisations(pg_app: Any) -> dict[str, str]:
+    """`a` and `b`, each with a `billing-api` project and a work item."""
     from choregos_api.db.models import Organization, Project, WorkItem
     from choregos_api.db.session import session_scope
     from choregos_api.services import ensure_defaults
@@ -33,76 +32,78 @@ async def deux_organisations(pg_app: Any) -> dict[str, str]:
             org = Organization(slug=slug, name=slug.upper())
             session.add(org)
             await session.flush()
-            projet = Project(
+            project_row = Project(
                 org_id=org.id,
                 slug="billing-api",
                 name="Billing",
                 status="active",
                 config={"slug": "billing-api", "org": slug},
             )
-            session.add(projet)
+            session.add(project_row)
             await session.flush()
-            await ensure_defaults(session, projet)
-            session.add(WorkItem(project_id=projet.id, tracker_key=f"{slug}-1", title="T", state="ready"))
-            ids[slug] = projet.id
+            await ensure_defaults(session, project_row)
+            session.add(
+                WorkItem(project_id=project_row.id, tracker_key=f"{slug}-1", title="T", state="ready")
+            )
+            ids[slug] = project_row.id
     return ids
 
 
-async def test_une_session_sans_organisation_ne_voit_rien(deux_organisations: dict[str, str]) -> None:
+async def test_a_session_without_an_organisation_sees_nothing(two_organisations: dict[str, str]) -> None:
     from choregos_api.db.models import Project, WorkItem
     from choregos_api.db.session import session_scope
 
-    async with session_scope() as session:  # aucune portée : c'est l'oubli qui ouvrait tout
+    async with session_scope() as session:  # no scope: it was the omission that opened everything
         assert (await session.execute(select(Project))).scalars().all() == []
         assert (await session.execute(select(WorkItem))).scalars().all() == []
     async with session_scope(orgs=["a"]) as session:
-        projets = (await session.execute(select(Project))).scalars().all()
-        assert [p.id for p in projets] == [deux_organisations["a"]]
-        tickets = (await session.execute(select(WorkItem.tracker_key))).scalars().all()
-        assert tickets == ["a-1"]
-        # même par identifiant : la ligne de l'autre organisation n'existe pas pour cette session
-        assert await session.get(Project, deux_organisations["b"]) is None
+        projects = (await session.execute(select(Project))).scalars().all()
+        assert [p.id for p in projects] == [two_organisations["a"]]
+        work_items = (await session.execute(select(WorkItem.tracker_key))).scalars().all()
+        assert work_items == ["a-1"]
+        # even by identifier: the row of the other organisation does not exist for this session
+        assert await session.get(Project, two_organisations["b"]) is None
     async with session_scope(orgs="*") as session:
         assert len((await session.execute(select(Project))).scalars().all()) == 2
 
 
-async def test_par_l_api_un_membre_de_a_ne_voit_pas_b(
-    pg_app: Any, deux_organisations: dict[str, str]
+async def test_through_the_api_a_member_of_a_does_not_see_b(
+    pg_app: Any, two_organisations: dict[str, str]
 ) -> None:
-    """Le principal borne la session : le projet de `b` n'existe pas pour un membre de `a` (404, pas 403)."""
+    """The principal bounds the session: the project of `b` does not exist for a member of `a` (404)."""
     async with AsyncClient(transport=ASGITransport(app=pg_app), base_url="http://test") as client:
-        await login(client, "dev@a.test")  # développeur de `a` seulement (OIDC_DEFAULT_ORG=a)
+        await login(client, "dev@a.test")  # developer of `a` only (OIDC_DEFAULT_ORG=a)
         me = (await client.get("/api/v1/me")).json()
         assert {m["org"] for m in me["memberships"]} == {"a"}
 
-        assert (await client.get(f"/api/v1/projects/{deux_organisations['a']}")).status_code == 200
-        assert (await client.get(f"/api/v1/projects/{deux_organisations['b']}")).status_code == 404
+        assert (await client.get(f"/api/v1/projects/{two_organisations['a']}")).status_code == 200
+        assert (await client.get(f"/api/v1/projects/{two_organisations['b']}")).status_code == 404
         assert (await client.get("/api/v1/projects/b:billing-api")).status_code == 404
-        liste = (await client.get("/api/v1/orgs/a/projects")).json()
-        assert [p["slug"] for p in liste["items"]] == ["billing-api"]
+        listing = (await client.get("/api/v1/orgs/a/projects")).json()
+        assert [p["slug"] for p in listing["items"]] == ["billing-api"]
 
 
-async def test_un_administrateur_cree_un_projet_dans_son_organisation(
-    pg_app: Any, deux_organisations: dict[str, str]
+async def test_an_administrator_creates_a_project_in_their_organisation(
+    pg_app: Any, two_organisations: dict[str, str]
 ) -> None:
-    """L'INSERT passe la politique (jugée sur `org_id`, pas sur un sous-select qui ne voit pas la ligne)."""
+    """The INSERT passes the policy (judged on `org_id`, not on a sub-select that does not see the row)."""
     async with AsyncClient(transport=ASGITransport(app=pg_app), base_url="http://test") as client:
         await login(client, "admin@a.test")
         created = await client.post(
             "/api/v1/orgs/a/projects",
-            json={"slug": "nouveau", "name": "Nouveau", "config": {"slug": "nouveau", "org": "a"}},
+            json={"slug": "fresh", "name": "Fresh", "config": {"slug": "fresh", "org": "a"}},
         )
         assert created.status_code == 201, created.text
         assert (
             await client.post(
                 "/api/v1/orgs/b/projects",
-                json={"slug": "intrus", "name": "Intrus", "config": {"slug": "intrus", "org": "b"}},
+                json={"slug": "intruder", "name": "Intruder", "config": {"slug": "intruder", "org": "b"}},
             )
-        ).status_code in {403, 404}  # 404 sous la RLS de l'identité : `b` est invisible
+        ).status_code in {403, 404}  # 404 under the identity RLS: `b` is invisible
 
 
-async def test_un_jeton_de_run_voit_son_run_quelle_que_soit_l_organisation(
-    pg_app: Any, deux_organisations: dict[str, str]
+async def test_a_run_token_sees_its_run_whatever_the_organisation(
+    pg_app: Any, two_organisations: dict[str, str]
 ) -> None:
     from choregos_api.db.models import Run, WorkItem
     from choregos_api.db.session import session_scope
@@ -113,7 +114,7 @@ async def test_un_jeton_de_run_voit_son_run_quelle_que_soit_l_organisation(
         run = Run(
             id="b-1-t-implement-1",
             work_item_id=item.id,
-            project_id=deux_organisations["b"],
+            project_id=two_organisations["b"],
             transition_id="t-implement",
             stage_role="implement",
             attempt=1,
@@ -124,20 +125,20 @@ async def test_un_jeton_de_run_voit_son_run_quelle_que_soit_l_organisation(
             stage_input={"schema": "choregos/StageInput/v1"},
         )
         session.add(run)
-    jeton = mint_run_token(
+    run_token = mint_run_token(
         "b-1-t-implement-1", project_slug="billing-api", work_item_key="b-1", ttl_minutes=5
     )
     async with AsyncClient(transport=ASGITransport(app=pg_app), base_url="http://test") as client:
-        reponse = await client.get(
-            "/api/v1/internal/runs/b-1-t-implement-1/ticket", headers={"Authorization": f"Bearer {jeton}"}
+        response = await client.get(
+            "/api/v1/internal/runs/b-1-t-implement-1/ticket", headers={"Authorization": f"Bearer {run_token}"}
         )
-        assert reponse.status_code == 200, reponse.text
-        assert reponse.json()["key"] == "b-1"
+        assert response.status_code == 200, response.text
+        assert response.json()["key"] == "b-1"
 
 
 @pytest.fixture
-async def trois_traces(deux_organisations: dict[str, str]) -> dict[str, str]:
-    """Une trace pour `a`, une pour `b`, une de plateforme (sans organisation)."""
+async def three_traces(two_organisations: dict[str, str]) -> dict[str, str]:
+    """A trace for `a`, one for `b`, one for the platform (no organisation)."""
     from choregos_api.db.models import AuditLog, Organization
     from choregos_api.db.session import session_scope
     from choregos_core import utcnow
@@ -152,14 +153,14 @@ async def trois_traces(deux_organisations: dict[str, str]) -> dict[str, str]:
                 org_id=orgs[slug],
                 action="project.update",
                 target_type="project",
-                target_id=deux_organisations[slug],
+                target_id=two_organisations[slug],
                 payload={},
                 ts=utcnow(),
             )
             session.add(trace)
             await session.flush()
             ids[slug] = trace.id
-        plateforme = AuditLog(
+        platform = AuditLog(
             actor_id="u-a",
             actor_kind="user",
             org_id=None,
@@ -169,97 +170,102 @@ async def trois_traces(deux_organisations: dict[str, str]) -> dict[str, str]:
             payload={},
             ts=utcnow(),
         )
-        session.add(plateforme)
+        session.add(platform)
         await session.flush()
-        ids["plateforme"] = plateforme.id
+        ids["platform"] = platform.id
     return ids
 
 
-async def test_la_trace_d_audit_d_une_organisation_est_invisible_a_l_autre(
-    pg_app: Any, trois_traces: dict[str, str]
+async def test_the_audit_trace_of_an_organisation_is_invisible_to_the_other(
+    pg_app: Any, three_traces: dict[str, str]
 ) -> None:
-    """`audit_log` était la dernière table de mutation hors RLS — et sans colonne d'organisation."""
+    """`audit_log` was the last mutation table outside RLS, and without an organisation column."""
     from choregos_api.db.models import AuditLog
     from choregos_api.db.session import session_scope
 
     async with session_scope(orgs=["a"]) as session:
-        vues = (await session.execute(select(AuditLog.id))).scalars().all()
-        assert vues == [trois_traces["a"]], "une session bornée à `a` voit autre chose que `a`"
-    async with session_scope() as session:  # aucune portée : l'oubli ne doit rien ouvrir
+        seen = (await session.execute(select(AuditLog.id))).scalars().all()
+        assert seen == [three_traces["a"]], "a session bounded to `a` sees something other than `a`"
+    async with session_scope() as session:  # no scope: the omission must open nothing
         assert (await session.execute(select(AuditLog))).scalars().all() == []
     async with session_scope(orgs="*") as session:
         assert len((await session.execute(select(AuditLog))).scalars().all()) == 3
 
 
-async def test_par_l_api_membre_des_deux_mais_audit_read_dans_une_seule(
-    pg_app: Any, trois_traces: dict[str, str]
+async def test_through_the_api_member_of_both_but_audit_read_in_only_one(
+    pg_app: Any, three_traces: dict[str, str]
 ) -> None:
-    """Le cas que la RLS seule NE couvre PAS, et c'est celui qui fuyait.
+    """The case RLS alone does NOT cover, and the one that leaked.
 
-    Un principal membre de `a` **et** de `b` a une session bornée aux deux : la politique
-    laisse donc passer les traces des deux. Seule la route peut distinguer « membre de `b` »
-    de « autorisé à lire l'audit de `b` ». Avant le 2026-09-26 elle ne distinguait rien —
-    `GET /audit` renvoyait `select(AuditLog)` sans le moindre `where`, et `audit:read` dans
-    une organisation donnait l'audit de toutes les autres.
+    A principal who is a member of `a` **and** of `b` has a session bounded to both: the policy
+    therefore lets the traces of both through. Only the route can tell "member of `b`" from
+    "allowed to read the audit of `b`". Before 2026-09-26 it told nothing apart: `GET /audit`
+    returned `select(AuditLog)` without any `where`, and `audit:read` in one organisation gave the
+    audit of all the others.
 
-    Retirer le filtre de `routers/admin.py` fait rougir ce test, et lui seul.
+    Removing the filter of `routers/admin.py` turns this test red, and this test alone.
     """
     from choregos_api.db.models import Membership, Organization, User
     from choregos_api.db.session import session_scope
 
     async with AsyncClient(transport=ASGITransport(app=pg_app), base_url="http://test") as client:
-        await login(client, "admin@a.test")  # ORG_ADMIN de `a` — donc `audit:read` sur `a`
+        await login(client, "admin@a.test")  # ORG_ADMIN of `a`, hence `audit:read` on `a`
         async with session_scope(orgs="*") as session:
             user = (await session.execute(select(User).where(User.email == "admin@a.test"))).scalar_one()
             org_b = (await session.execute(select(Organization).where(Organization.slug == "b"))).scalar_one()
-            # simple lecteur chez `b` : la session le verra, la permission non
+            # a mere reader at `b`: the session will see it, the permission will not
             session.add(Membership(user_id=user.id, org_id=org_b.id, project_id=None, role="viewer"))
 
         me = (await client.get("/api/v1/me")).json()
-        assert {m["org"] for m in me["memberships"]} == {"a", "b"}, "le principal doit porter les deux"
+        assert {m["org"] for m in me["memberships"]} == {"a", "b"}, "the principal must carry both"
 
         page = await client.get("/api/v1/audit")
         assert page.status_code == 200, page.text
-        ids = {ligne["id"] for ligne in page.json()["items"]}
-        assert trois_traces["b"] not in ids, "l'audit de `b` fuit vers un simple lecteur de `b`"
-        assert trois_traces["plateforme"] not in ids, "un événement de plateforme fuit"
-        assert trois_traces["a"] in ids, "l'audit de `a` doit rester lisible par son administrateur"
+        ids = {line["id"] for line in page.json()["items"]}
+        assert three_traces["b"] not in ids, "the audit of `b` leaks to a mere reader of `b`"
+        assert three_traces["platform"] not in ids, "a platform event leaks"
+        assert three_traces["a"] in ids, "the audit of `a` must stay readable by its administrator"
 
 
-# ─────────── ce qui se rattache à un projet : événements de run, déploiements, clés ───────────
+# ─────────── what attaches to a project: run events, deployments, keys ───────────
 
 
 @pytest.fixture
-async def rattachees(deux_organisations: dict[str, str]) -> None:
-    """Pour chaque organisation : un run et son événement, une release et son déploiement, une clé."""
+async def attached(two_organisations: dict[str, str]) -> None:
+    """For each organisation: a run and its event, a release and its deployment, a key."""
     from choregos_api.db.base import utcnow
     from choregos_api.db.models import Deployment, GatewayKeyRow, Release, Run, RunEvent, WorkItem
     from choregos_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
-        for slug, projet in deux_organisations.items():
-            (ticket,) = (
-                await session.execute(select(WorkItem).where(WorkItem.project_id == projet))
+        for slug, project_row in two_organisations.items():
+            (work_item,) = (
+                await session.execute(select(WorkItem).where(WorkItem.project_id == project_row))
             ).scalars()
             session.add(
-                Run(id=f"run-{slug}", work_item_id=ticket.id, project_id=projet, stage_role="implement")
+                Run(
+                    id=f"run-{slug}",
+                    work_item_id=work_item.id,
+                    project_id=project_row,
+                    stage_role="implement",
+                )
             )
-            release = Release(project_id=projet, env="prod")
+            release = Release(project_id=project_row, env="prod")
             session.add(release)
             await session.flush()
             session.add(RunEvent(run_id=f"run-{slug}", seq=1, type="agent/message", payload={}, ts=utcnow()))
             session.add(Deployment(release_id=release.id, env="prod", status="succeeded"))
-            session.add(GatewayKeyRow(key_id=f"cle-{slug}", run_id=f"run-{slug}", project_id=projet))
+            session.add(GatewayKeyRow(key_id=f"key-{slug}", run_id=f"run-{slug}", project_id=project_row))
 
 
-async def test_les_tables_rattachees_ne_montrent_que_l_organisation_de_la_session(rattachees: None) -> None:
+async def test_the_attached_tables_show_only_the_organisation_of_the_session(attached: None) -> None:
     from choregos_api.db.models import Deployment, GatewayKeyRow, Release, RunEvent
     from choregos_api.db.session import session_scope
 
     async with session_scope(orgs=["a"]) as session:
         assert (await session.execute(select(RunEvent.run_id))).scalars().all() == ["run-a"]
-        assert (await session.execute(select(GatewayKeyRow.key_id))).scalars().all() == ["cle-a"]
-        deploiements = (
+        assert (await session.execute(select(GatewayKeyRow.key_id))).scalars().all() == ["key-a"]
+        deployments = (
             (
                 await session.execute(
                     select(Release.project_id).join(Deployment, Deployment.release_id == Release.id)
@@ -268,17 +274,17 @@ async def test_les_tables_rattachees_ne_montrent_que_l_organisation_de_la_sessio
             .scalars()
             .all()
         )
-        assert len(deploiements) == 1
+        assert len(deployments) == 1
         assert len((await session.execute(select(Deployment))).scalars().all()) == 1
     async with session_scope() as session:
-        for modele in (RunEvent, Deployment, GatewayKeyRow):
-            assert (await session.execute(select(modele))).scalars().all() == [], modele.__tablename__
+        for model in (RunEvent, Deployment, GatewayKeyRow):
+            assert (await session.execute(select(model))).scalars().all() == [], model.__tablename__
     async with session_scope(orgs="*") as session:
         assert len((await session.execute(select(RunEvent))).scalars().all()) == 2
 
 
-async def test_une_session_de_a_ne_peut_pas_ecrire_un_evenement_sur_le_run_de_b(rattachees: None) -> None:
-    """`USING` sert de `WITH CHECK` à l'INSERT : on n'attribue pas une ligne à l'autre organisation."""
+async def test_a_session_of_a_cannot_write_an_event_on_the_run_of_b(attached: None) -> None:
+    """`USING` serves as `WITH CHECK` for the INSERT: a row is not attributed to the other organisation."""
     from choregos_api.db.base import utcnow
     from choregos_api.db.models import RunEvent
     from choregos_api.db.session import session_scope
@@ -289,22 +295,22 @@ async def test_une_session_de_a_ne_peut_pas_ecrire_un_evenement_sur_le_run_de_b(
             session.add(RunEvent(run_id="run-b", seq=2, type="agent/message", payload={}, ts=utcnow()))
 
 
-#: Les tables HORS RLS, et pourquoi. Toute autre table doit être sous RLS forcée : une table
-#: ajoutée demain sans politique fait rougir `test_chaque_table_est_sous_rls_ou_exemptee`.
-EXEMPTEES = {
-    # Catalogues de l'instance, en lecture ouverte par décision (`test_routeurs_nus.py`) :
-    # aucune donnée d'organisation.
-    "agent_backends": "catalogue de l'instance",
-    "templates": "catalogue de l'instance",
-    "model_profiles": "catalogue de l'instance (seules des lignes `scope=platform` sont écrites)",
-    "webhook_deliveries": "empreintes de déduplication, sans contenu ni organisation",
-    "alembic_version": "table d'Alembic",
+#: The tables OUTSIDE RLS, and why. Every other table must be under forced RLS: a table
+#: added tomorrow without a policy turns `test_every_table_is_under_rls_or_exempted` red.
+EXEMPTED = {
+    # Instance catalogues, openly readable by decision (`test_bare_routers.py`):
+    # no organisation data.
+    "agent_backends": "instance catalogue",
+    "templates": "instance catalogue",
+    "model_profiles": "instance catalogue (only `scope=platform` rows are written)",
+    "webhook_deliveries": "deduplication digests, no content or organisation",
+    "alembic_version": "Alembic table",
     "org_slug_aliases": "address -> organisation id, no content: resolved BEFORE any scope exists (ADR 0090)",
 }
 
 
 async def test_named_memories_and_their_facts_are_invisible_across_organisations(
-    deux_organisations: dict[str, str],
+    two_organisations: dict[str, str],
 ) -> None:
     """S40-11: `memory_stores` and the facts of a global memory (no project) are under forced RLS, keyed on
     the organisation; a project fact is keyed the same way since `memory_facts.org_id`."""
@@ -328,7 +334,7 @@ async def test_named_memories_and_their_facts_are_invisible_across_organisations
             await session.flush()
             for project_id, memory_store_id, subject in (
                 (None, store.id, f"{slug}-global"),
-                (deux_organisations[slug], None, f"{slug}-project"),
+                (two_organisations[slug], None, f"{slug}-project"),
             ):
                 session.add(
                     MemoryFact(
@@ -359,7 +365,7 @@ async def test_named_memories_and_their_facts_are_invisible_across_organisations
 
 
 async def test_a_renamed_organisation_is_still_seen_and_its_old_slug_still_scopes(
-    pg_app: Any, deux_organisations: dict[str, str]
+    pg_app: Any, two_organisations: dict[str, str]
 ) -> None:
     """RLS compares CURRENT slugs. After `a` becomes `z`: the new slug sees the rows, and a scope built
     from the OLD slug (a workflow payload written before the rename) is resolved to the new one instead
@@ -377,24 +383,24 @@ async def test_a_renamed_organisation_is_still_seen_and_its_old_slug_still_scope
         assert [p.slug for p in (await session.execute(select(Project))).scalars()] == ["billing-api"]
         assert (await session.execute(select(Organization.slug))).scalars().all() == ["z"]
     async with session_scope(orgs=["a"]) as session:  # the old slug, written down earlier
-        assert [p.id for p in (await session.execute(select(Project))).scalars()] == [deux_organisations["a"]]
+        assert [p.id for p in (await session.execute(select(Project))).scalars()] == [two_organisations["a"]]
         assert (await session.execute(select(Organization.slug))).scalars().all() == ["z"]
     async with session_scope(orgs=["b"]) as session:
-        assert [p.id for p in (await session.execute(select(Project))).scalars()] == [deux_organisations["b"]]
+        assert [p.id for p in (await session.execute(select(Project))).scalars()] == [two_organisations["b"]]
     async with session_scope(orgs=["nobody"]) as session:
         assert (await session.execute(select(Project))).scalars().all() == []
     async with session_scope(orgs=["b"]) as session:
         # resolving an alias works under a narrow scope, and leaves that scope as it was
         assert await current_slug(session, "a") == "z"
-        assert [p.id for p in (await session.execute(select(Project))).scalars()] == [deux_organisations["b"]]
+        assert [p.id for p in (await session.execute(select(Project))).scalars()] == [two_organisations["b"]]
 
 
-async def test_chaque_table_est_sous_rls_ou_exemptee(pg_app: Any) -> None:
+async def test_every_table_is_under_rls_or_exempted(pg_app: Any) -> None:
     from choregos_api.db.session import session_scope
     from sqlalchemy import text
 
     async with session_scope(orgs="*") as session:
-        lignes = (
+        rows = (
             await session.execute(
                 text(
                     "SELECT relname, relrowsecurity, relforcerowsecurity FROM pg_class "
@@ -402,110 +408,108 @@ async def test_chaque_table_est_sous_rls_ou_exemptee(pg_app: Any) -> None:
                 )
             )
         ).all()
-    tables = {nom: (rls, forcee) for nom, rls, forcee in lignes}
-    assert len(tables) >= 25, f"{len(tables)} tables seulement : les migrations ont-elles tourné ?"
-    sans = sorted(
-        nom for nom, (rls, forcee) in tables.items() if not (rls and forcee) and nom not in EXEMPTEES
+    tables = {name: (rls, forced) for name, rls, forced in rows}
+    assert len(tables) >= 25, f"only {len(tables)} tables: did the migrations run?"
+    unprotected = sorted(
+        name for name, (rls, forced) in tables.items() if not (rls and forced) and name not in EXEMPTED
     )
-    assert not sans, f"tables ni sous RLS forcée ni exemptées avec leur raison : {sans}"
-    exemptees_sous_rls = sorted(nom for nom in EXEMPTEES if tables.get(nom, (False, False))[0])
-    assert not exemptees_sous_rls, f"exemptées mais sous RLS — retirer l'exemption : {exemptees_sous_rls}"
+    assert not unprotected, f"tables neither under forced RLS nor exempted with their reason: {unprotected}"
+    exempted_under_rls = sorted(name for name in EXEMPTED if tables.get(name, (False, False))[0])
+    assert not exempted_under_rls, f"exempted but under RLS: remove the exemption: {exempted_under_rls}"
 
 
-# ───────────────────────── les webhooks, sur un VRAI PostgreSQL ─────────────────────────
+# ───────────────────────── the webhooks, on a REAL PostgreSQL ─────────────────────────
 
 
-async def test_un_webhook_achemine_son_evenement_sous_rls(
-    pg_app: Any, deux_organisations: dict[str, str]
-) -> None:
-    """Un webhook n'a pas de principal : il est authentifié par sa signature, et agit POUR la
-    plateforme. Sa session doit donc voir les projets — la RLS fail-closed les cachait tous, et
-    chaque événement de CI, de CD ou de tracker était jeté comme « sans projet connu » sur
-    PostgreSQL, sans que les tests (SQLite) le voient."""
+async def test_a_webhook_routes_its_event_under_rls(pg_app: Any, two_organisations: dict[str, str]) -> None:
+    """A webhook has no principal: it is authenticated by its signature, and acts FOR the platform.
+    Its session must therefore see the projects: the fail-closed RLS hid them all, and every CI, CD
+    or tracker event was dropped as "no known project" on PostgreSQL, without the tests (SQLite)
+    seeing it."""
     from choregos_api.db.models import WorkItem
     from choregos_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
-        # `billing-api` existe dans `a` ET `b` : on donne un slug unique pour que le routage soit
-        # possible, comme le fait l'étiquette d'un vrai PipelineRun.
-        (ticket,) = (await session.execute(select(WorkItem).where(WorkItem.tracker_key == "a-1"))).scalars()
+        # `billing-api` exists in `a` AND `b`: we give a unique slug so that routing is
+        # possible, as the label of a real PipelineRun does.
+        (work_item,) = (
+            await session.execute(select(WorkItem).where(WorkItem.tracker_key == "a-1"))
+        ).scalars()
         from choregos_api.db.models import Project
 
-        projet = await session.get(Project, ticket.project_id)
-        assert projet is not None
-        projet.slug = "facturation-a"
-    corps = {
+        project_row = await session.get(Project, work_item.project_id)
+        assert project_row is not None
+        project_row.slug = "invoicing-a"
+    body = {
         "pipelineRun": {
             "metadata": {
                 "name": "run-1",
-                "labels": {"choregos/project": "facturation-a", "choregos/work-item": "a-1"},
+                "labels": {"choregos/project": "invoicing-a", "choregos/work-item": "a-1"},
             }
         }
     }
-    entetes = {"ce-type": "dev.tekton.event.pipelinerun.successful.v1", "ce-id": "ev-rls-1"}
+    headers = {"ce-type": "dev.tekton.event.pipelinerun.successful.v1", "ce-id": "ev-rls-1"}
     async with AsyncClient(transport=ASGITransport(app=pg_app), base_url="http://test") as client:
-        reponse = await client.post("/api/v1/webhooks/tekton", json=corps, headers=entetes)
-    assert reponse.status_code == 202, reponse.text
-    assert reponse.json()["events"] == 1, "l'événement n'a été acheminé vers aucun ticket"
+        response = await client.post("/api/v1/webhooks/tekton", json=body, headers=headers)
+    assert response.status_code == 202, response.text
+    assert response.json()["events"] == 1, "the event was routed to no work item"
 
 
-async def test_un_role_de_projet_ne_devient_pas_un_role_d_organisation(
-    pg_app: Any, deux_organisations: dict[str, str]
+async def test_a_project_role_does_not_become_an_organisation_role(
+    pg_app: Any, two_organisations: dict[str, str]
 ) -> None:
-    """Le principal était résolu AVANT que la portée soit posée ; la jointure sur `projects` (sous
-    RLS) ne voyait alors aucun projet, et une appartenance DE PROJET arrivait sans projet — donc
-    comme un rôle sur toute l'organisation. Un développeur invité sur un projet lisait les autres."""
+    """The principal was resolved BEFORE the scope was set; the join on `projects` (under RLS) then
+    saw no project, and a PROJECT membership arrived without a project, hence as a role on the whole
+    organisation. A developer invited on one project read the others."""
     from choregos_api.db.models import Membership, Organization, Project, User
     from choregos_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         a = (await session.execute(select(Organization).where(Organization.slug == "a"))).scalar_one()
-        autre = Project(
+        other = Project(
             org_id=a.id, slug="secret", name="Secret", status="active", config={"slug": "secret", "org": "a"}
         )
-        session.add(autre)
-        invite = User(oidc_sub="dev|invite@a.test", email="invite@a.test", display_name="invité")
-        session.add(invite)
+        session.add(other)
+        invited = User(oidc_sub="dev|invited@a.test", email="invited@a.test", display_name="invited")
+        session.add(invited)
         await session.flush()
         session.add(
-            Membership(user_id=invite.id, org_id=a.id, project_id=deux_organisations["a"], role="developer")
+            Membership(user_id=invited.id, org_id=a.id, project_id=two_organisations["a"], role="developer")
         )
-        secret_id = autre.id
+        secret_id = other.id
 
-    # Directement, comme `current_principal` : l'utilisateur lu en portée de plateforme, puis la
-    # résolution — qui pose elle-même `*` avant la jointure, et borne après. Une connexion de
-    # développement donnerait en plus « developer » dans l'organisation par défaut, et brouillerait
-    # la preuve.
+    # Directly, like `current_principal`: the user read in platform scope, then the
+    # resolution, which itself sets `*` before the join, and bounds afterwards. A development
+    # login would additionally give "developer" in the default organisation, and blur the
+    # proof.
     from choregos_api.deps import _principal_from_user
 
     async with session_scope(orgs="*") as session:
-        user = await session.get(User, invite.id)
+        user = await session.get(User, invited.id)
         assert user is not None
         principal = await _principal_from_user(session, user)
     assert principal.project_roles == {"a/billing-api": "developer"}, principal.project_roles
-    assert principal.org_roles == {}, (
-        f"le rôle de projet est devenu un rôle d'organisation : {principal.org_roles}"
-    )
+    assert principal.org_roles == {}, f"the project role became an organisation role: {principal.org_roles}"
     assert not principal.can(
         __import__("choregos_api.rbac", fromlist=["Permission"]).Permission.PROJECT_READ, "a", "secret"
     )
     assert secret_id
 
 
-async def test_creer_une_seconde_organisation_sous_rls(
-    pg_app: Any, deux_organisations: dict[str, str]
+async def test_creating_a_second_organisation_under_rls(
+    pg_app: Any, two_organisations: dict[str, str]
 ) -> None:
-    """`POST /orgs` rendait 500 sur PostgreSQL : la trace d'audit de la nouvelle organisation était
-    refusée par la RLS, la session étant bornée aux organisations existantes de l'appelant."""
-    from choregos_api.edition import ENTREPRISE, declarer, reinitialiser
+    """`POST /orgs` answered 500 on PostgreSQL: the audit trace of the new organisation was refused
+    by RLS, the session being bounded to the caller's existing organisations."""
+    from choregos_api.edition import ENTERPRISE, declare, reset
 
-    declarer(ENTREPRISE, fonctions=frozenset({"multi_org"}))
+    declare(ENTERPRISE, features=frozenset({"multi_org"}))
     try:
         async with AsyncClient(transport=ASGITransport(app=pg_app), base_url="http://test") as client:
             await login(client, "admin@a.test")
-            # l'admin de `a` n'administre pas `b` : la règle du cœur (admin de TOUTES) refuse.
-            refus = await client.post("/api/v1/orgs", json={"slug": "c", "name": "C"})
-            assert refus.status_code == 403
+            # the admin of `a` does not administer `b`: the core rule (admin of ALL) refuses.
+            refusal = await client.post("/api/v1/orgs", json={"slug": "c", "name": "C"})
+            assert refusal.status_code == 403
         from choregos_api.db.models import Membership, Organization, User
         from choregos_api.db.session import session_scope
 
@@ -515,17 +519,17 @@ async def test_creer_une_seconde_organisation_sous_rls(
             session.add(Membership(user_id=admin.id, org_id=b.id, role="org_admin"))
         async with AsyncClient(transport=ASGITransport(app=pg_app), base_url="http://test") as client:
             await login(client, "admin@a.test")
-            cree = await client.post("/api/v1/orgs", json={"slug": "c", "name": "C"})
-            assert cree.status_code == 201, cree.text
+            created = await client.post("/api/v1/orgs", json={"slug": "c", "name": "C"})
+            assert created.status_code == 201, created.text
     finally:
-        reinitialiser()
+        reset()
 
 
-# ───────────────────────── l'identité sous RLS (0.11) ─────────────────────────
+# ───────────────────────── identity under RLS (0.11) ─────────────────────────
 
 
-async def test_une_organisation_ne_voit_ni_le_nom_ni_les_membres_de_l_autre(
-    pg_app: Any, deux_organisations: dict[str, str]
+async def test_an_organisation_sees_neither_the_name_nor_the_members_of_the_other(
+    pg_app: Any, two_organisations: dict[str, str]
 ) -> None:
     from choregos_api.db.models import ApiToken, Membership, Organization, User
     from choregos_api.db.session import session_scope
@@ -533,7 +537,7 @@ async def test_une_organisation_ne_voit_ni_le_nom_ni_les_membres_de_l_autre(
     async with session_scope(orgs="*") as session:
         orgs = {o.slug: o.id for o in (await session.execute(select(Organization))).scalars()}
         for slug in ("a", "b"):
-            u = User(oidc_sub=f"dev|m@{slug}", email=f"membre@{slug}.test", display_name=slug)
+            u = User(oidc_sub=f"dev|m@{slug}", email=f"member@{slug}.test", display_name=slug)
             session.add(u)
             await session.flush()
             session.add(Membership(user_id=u.id, org_id=orgs[slug], role="developer"))
@@ -542,43 +546,43 @@ async def test_une_organisation_ne_voit_ni_le_nom_ni_les_membres_de_l_autre(
     async with session_scope(orgs=["a"]) as session:
         assert (await session.execute(select(Organization.slug))).scalars().all() == ["a"]
         assert {m.org_id for m in (await session.execute(select(Membership))).scalars()} == {orgs["a"]}
-        assert (await session.execute(select(User.email))).scalars().all() == ["membre@a.test"]
+        assert (await session.execute(select(User.email))).scalars().all() == ["member@a.test"]
         assert [t.name for t in (await session.execute(select(ApiToken))).scalars()] == ["ci"]
     async with session_scope() as session:
-        for modele in (Organization, Membership, User, ApiToken):
-            assert (await session.execute(select(modele))).scalars().all() == [], modele.__tablename__
+        for model in (Organization, Membership, User, ApiToken):
+            assert (await session.execute(select(model))).scalars().all() == [], model.__tablename__
 
 
-async def test_inviter_un_utilisateur_deja_membre_ailleurs_ne_cree_pas_de_doublon(
-    pg_app: Any, deux_organisations: dict[str, str]
+async def test_inviting_a_user_already_a_member_elsewhere_creates_no_duplicate(
+    pg_app: Any, two_organisations: dict[str, str]
 ) -> None:
-    """L'e-mail est unique à l'échelle de l'instance ; sous la RLS de `users`, un membre de `b` est
-    invisible depuis `a`, et l'invitation tentait un doublon."""
+    """The e-mail is unique across the instance; under the RLS of `users`, a member of `b` is
+    invisible from `a`, and the invitation tried a duplicate."""
     from choregos_api.db.models import Membership, Organization, User
     from choregos_api.db.session import session_scope
 
     async with session_scope(orgs="*") as session:
         b = (await session.execute(select(Organization).where(Organization.slug == "b"))).scalar_one()
-        ailleurs = User(oidc_sub="dev|x@b", email="partage@b.test", display_name="partagé")
-        session.add(ailleurs)
+        elsewhere = User(oidc_sub="dev|x@b", email="shared@b.test", display_name="shared")
+        session.add(elsewhere)
         await session.flush()
-        session.add(Membership(user_id=ailleurs.id, org_id=b.id, role="developer"))
-        ailleurs_id = ailleurs.id
+        session.add(Membership(user_id=elsewhere.id, org_id=b.id, role="developer"))
+        elsewhere_id = elsewhere.id
     async with AsyncClient(transport=ASGITransport(app=pg_app), base_url="http://test") as client:
         await login(client, "admin@a.test")
-        reponse = await client.post(
-            "/api/v1/orgs/a/members", json={"email": "partage@b.test", "role": "viewer"}
+        response = await client.post(
+            "/api/v1/orgs/a/members", json={"email": "shared@b.test", "role": "viewer"}
         )
-        assert reponse.status_code in {200, 201}, reponse.text
+        assert response.status_code in {200, 201}, response.text
     async with session_scope(orgs="*") as session:
-        (seul,) = (await session.execute(select(User).where(User.email == "partage@b.test"))).scalars()
-        assert seul.id == ailleurs_id
+        (alone,) = (await session.execute(select(User).where(User.email == "shared@b.test"))).scalars()
+        assert alone.id == elsewhere_id
 
 
-async def test_un_utilisateur_sans_appartenance_se_lit_lui_meme(
-    pg_app: Any, deux_organisations: dict[str, str]
+async def test_a_user_without_a_membership_reads_themselves(
+    pg_app: Any, two_organisations: dict[str, str]
 ) -> None:
-    """Portée vide, mais `app.current_user` : il lit son compte et ses jetons, rien d'autre."""
+    """Empty scope, but `app.current_user`: they read their account and their tokens, nothing else."""
     import time
 
     from choregos_api.db.models import User
@@ -586,27 +590,25 @@ async def test_un_utilisateur_sans_appartenance_se_lit_lui_meme(
     from choregos_api.security import sign_session
 
     async with session_scope(orgs="*") as session:
-        seul = User(oidc_sub="dev|seul", email="seul@nulle-part.test", display_name="seul")
-        session.add(seul)
+        alone = User(oidc_sub="dev|alone", email="alone@nowhere.test", display_name="alone")
+        session.add(alone)
         await session.flush()
-        seul_id = seul.id
+        alone_id = alone.id
     async with AsyncClient(transport=ASGITransport(app=pg_app), base_url="http://test") as client:
-        maintenant = int(time.time())
-        client.cookies.set(
-            "choregos_session", sign_session({"sub": seul_id, "iat": maintenant, "exp": maintenant + 600})
-        )
-        moi = await client.get("/api/v1/me")
-        assert moi.status_code == 200 and moi.json()["email"] == "seul@nulle-part.test", moi.text
-        cree = await client.post("/api/v1/me/tokens", json={"name": "cli"})
-        assert cree.status_code == 201, cree.text
+        now = int(time.time())
+        client.cookies.set("choregos_session", sign_session({"sub": alone_id, "iat": now, "exp": now + 600}))
+        me = await client.get("/api/v1/me")
+        assert me.status_code == 200 and me.json()["email"] == "alone@nowhere.test", me.text
+        created = await client.post("/api/v1/me/tokens", json={"name": "cli"})
+        assert created.status_code == 201, created.text
         assert [t["name"] for t in (await client.get("/api/v1/me/tokens")).json()] == ["cli"]
 
 
-async def test_un_agent_et_ses_versions_ne_sortent_pas_de_leur_organisation(
-    deux_organisations: dict[str, str],
+async def test_an_agent_and_its_versions_do_not_leave_their_organisation(
+    two_organisations: dict[str, str],
 ) -> None:
-    """Le registre d'agents (ADR 0033) : un agent de `b` n'existe pas pour une session bornée à `a`,
-    ni ses versions, ni son épingle sur un projet."""
+    """The agent registry (ADR 0033): an agent of `b` does not exist for a session bounded to `a`,
+    nor its versions, nor its pin on a project."""
     from choregos_api.db.models import Agent, AgentVersion, Organization, ProjectAgent
     from choregos_api.db.session import session_scope
 
@@ -622,20 +624,20 @@ async def test_un_agent_et_ses_versions_ne_sortent_pas_de_leur_organisation(
                 AgentVersion(agent_id=agent.id, org_id=org.id, version=1, spec={}, checksum="sha256:x")
             )
             session.add(
-                ProjectAgent(project_id=deux_organisations[slug], org_id=org.id, agent_id=agent.id, version=1)
+                ProjectAgent(project_id=two_organisations[slug], org_id=org.id, agent_id=agent.id, version=1)
             )
     async with session_scope(orgs=["a"]) as session:
         assert (await session.execute(select(Agent.slug))).scalars().all() == ["agent-a"]
         assert len((await session.execute(select(AgentVersion))).scalars().all()) == 1
         assert len((await session.execute(select(ProjectAgent))).scalars().all()) == 1
     async with session_scope() as session:
-        assert (await session.execute(select(Agent))).scalars().all() == [], "sans portée, rien"
+        assert (await session.execute(select(Agent))).scalars().all() == [], "without a scope, nothing"
 
 
-async def test_une_skill_et_ses_versions_ne_sortent_pas_de_leur_organisation(
-    deux_organisations: dict[str, str],
+async def test_a_skill_and_its_versions_do_not_leave_their_organisation(
+    two_organisations: dict[str, str],
 ) -> None:
-    """La bibliothèque de skills (ADR 0033) : une skill de `b` n'existe pas pour `a`."""
+    """The skill library (ADR 0033): a skill of `b` does not exist for `a`."""
     from choregos_api.db.models import Organization, Skill, SkillVersion
     from choregos_api.db.session import session_scope
 
@@ -654,7 +656,7 @@ async def test_une_skill_et_ses_versions_ne_sortent_pas_de_leur_organisation(
 
 
 async def test_a_knowledge_base_and_its_documents_stay_in_their_organisation(
-    deux_organisations: dict[str, str],
+    two_organisations: dict[str, str],
 ) -> None:
     """Knowledge bases (ADR 0051): a base of `b`, and its documents, do not exist for `a`."""
     from choregos_api.db.models import KnowledgeBase, KnowledgeDocument, Organization
@@ -689,7 +691,7 @@ async def test_a_knowledge_base_and_its_documents_stay_in_their_organisation(
         )
 
 
-async def test_org_secrets_are_isolated(deux_organisations: dict[str, str]) -> None:
+async def test_org_secrets_are_isolated(two_organisations: dict[str, str]) -> None:
     """Sealed connector secrets (ADR 0058): org `a` reads none of `b`'s, writes none into it, and
     a session without a scope sees nothing — the AAD is a second lock, not the first."""
     import base64
@@ -728,7 +730,7 @@ async def test_org_secrets_are_isolated(deux_organisations: dict[str, str]) -> N
         assert sorted(r.kek_id for r in rows) == ["k1", "k1"]
 
 
-async def test_github_installations_are_isolated(deux_organisations: dict[str, str]) -> None:
+async def test_github_installations_are_isolated(two_organisations: dict[str, str]) -> None:
     """GitHub App installations (ADR 0073): a claimed row is its organisation's, an unclaimed one is
     the platform's, and an organisation cannot claim into another by writing the row."""
     from choregos_api.db.models import GitHubInstallation, Organization
@@ -769,7 +771,7 @@ async def test_github_installations_are_isolated(deux_organisations: dict[str, s
         assert len((await session.execute(select(GitHubInstallation))).scalars().all()) == 3
 
 
-async def test_network_decisions_stay_in_their_organisation(deux_organisations: dict[str, str]) -> None:
+async def test_network_decisions_stay_in_their_organisation(two_organisations: dict[str, str]) -> None:
     """Network decisions (ADR 0070): what org `b`'s runs reached is invisible to `a`, and a session
     scoped to `a` cannot write a decision into `b`."""
     from choregos_api.db.models import NetworkDecision, Organization
@@ -793,17 +795,17 @@ async def test_network_decisions_stay_in_their_organisation(deux_organisations: 
     async with session_scope(orgs="*") as session:
         ids = {o.slug: o.id for o in (await session.execute(select(Organization))).scalars()}
         for slug in ("a", "b"):
-            session.add(row(ids[slug], deux_organisations[slug], f"host-of-{slug}.example"))
+            session.add(row(ids[slug], two_organisations[slug], f"host-of-{slug}.example"))
     async with session_scope(orgs=["a"]) as session:
         assert (await session.execute(select(NetworkDecision.host))).scalars().all() == ["host-of-a.example"]
     with pytest.raises(DBAPIError):  # a write INTO b from a's session is refused by the policy
         async with session_scope(orgs=["a"]) as session:
-            session.add(row(ids["b"], deux_organisations["b"], "stolen.example"))
+            session.add(row(ids["b"], two_organisations["b"], "stolen.example"))
     async with session_scope() as session:
         assert (await session.execute(select(NetworkDecision))).scalars().all() == [], "no scope, nothing"
 
 
-async def test_received_events_stay_in_their_organisation(deux_organisations: dict[str, str]) -> None:
+async def test_received_events_stay_in_their_organisation(two_organisations: dict[str, str]) -> None:
     """Received webhook events (S42-06f): org `a` reads none of `b`'s, writes none into it, and a
     session with no scope reads nothing."""
     from choregos_api.db.models import Organization, ReceivedEvent
@@ -825,17 +827,17 @@ async def test_received_events_stay_in_their_organisation(deux_organisations: di
     async with session_scope(orgs="*") as session:
         ids = {o.slug: o.id for o in (await session.execute(select(Organization))).scalars()}
         for slug in ("a", "b"):
-            session.add(row(ids[slug], deux_organisations[slug], f"{slug.upper()}-1"))
+            session.add(row(ids[slug], two_organisations[slug], f"{slug.upper()}-1"))
     async with session_scope(orgs=["a"]) as session:
         assert (await session.execute(select(ReceivedEvent.work_item_key))).scalars().all() == ["A-1"]
     with pytest.raises(DBAPIError):  # a write INTO b from a's session is refused by the policy
         async with session_scope(orgs=["a"]) as session:
-            session.add(row(ids["b"], deux_organisations["b"], "STOLEN-1"))
+            session.add(row(ids["b"], two_organisations["b"], "STOLEN-1"))
     async with session_scope() as session:
         assert (await session.execute(select(ReceivedEvent))).scalars().all() == [], "no scope, nothing"
 
 
-async def test_trigger_tokens_stay_in_their_organisation(deux_organisations: dict[str, str]) -> None:
+async def test_trigger_tokens_stay_in_their_organisation(two_organisations: dict[str, str]) -> None:
     """HTTP trigger tokens (S56-01): org `a` reads none of `b`'s digests, writes none into it, and a
     session with no scope reads nothing."""
     from choregos_api.db.models import Organization, TriggerToken
@@ -848,17 +850,17 @@ async def test_trigger_tokens_stay_in_their_organisation(deux_organisations: dic
     async with session_scope(orgs="*") as session:
         ids = {o.slug: o.id for o in (await session.execute(select(Organization))).scalars()}
         for slug in ("a", "b"):
-            session.add(row(ids[slug], deux_organisations[slug], f"incident-{slug}"))
+            session.add(row(ids[slug], two_organisations[slug], f"incident-{slug}"))
     async with session_scope(orgs=["a"]) as session:
         assert (await session.execute(select(TriggerToken.name))).scalars().all() == ["incident-a"]
     with pytest.raises(DBAPIError):  # a write INTO b from a's session is refused by the policy
         async with session_scope(orgs=["a"]) as session:
-            session.add(row(ids["b"], deux_organisations["b"], "stolen"))
+            session.add(row(ids["b"], two_organisations["b"], "stolen"))
     async with session_scope() as session:
         assert (await session.execute(select(TriggerToken))).scalars().all() == [], "no scope, nothing"
 
 
-async def test_org_egress_rules_are_isolated(deux_organisations: dict[str, str]) -> None:
+async def test_org_egress_rules_are_isolated(two_organisations: dict[str, str]) -> None:
     """The egress allowlist (S39-22): org `a` reads none of `b`'s rules, writes none into it, and a
     session without a scope sees nothing."""
     from choregos_api.db.models import Organization, OrgEgressRule

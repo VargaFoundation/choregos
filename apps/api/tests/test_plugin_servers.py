@@ -162,7 +162,7 @@ async def test_human_approval_is_never_lowered(
 ) -> None:
     from choregos_api.db.models import ConnectorOperation
     from choregos_api.db.session import session_scope
-    from choregos_api.services.connecteurs import human_floor
+    from choregos_api.services.connectors import human_floor
 
     await _install(client)
     refused = await client.patch(
@@ -187,7 +187,7 @@ async def test_human_approval_is_never_lowered(
 async def test_the_declaration_carries_compensation_and_platform_arguments(
     client: AsyncClient, admin: str, kube: FakeKubernetesApi
 ) -> None:
-    from choregos_api.services.connecteurs import declared_operation
+    from choregos_api.services.connectors import declared_operation
 
     await _install(client)
     declared = declared_operation(await _connector(), "post_greeting")
@@ -222,7 +222,7 @@ async def test_an_undeclared_tool_is_refused_and_the_token_rides_every_call(
 ) -> None:
     from choregos_api.db.models import ConnectorOperation, OrgConnector, Project
     from choregos_api.db.session import session_scope
-    from choregos_api.services.connecteurs import politique_pour_le_projet
+    from choregos_api.services.connectors import policy_for_project
     from choregos_api.services.courtier import tools_of_selection
     from choregos_api.services.plugin_servers import use_plugin_transport
 
@@ -261,7 +261,7 @@ async def test_an_undeclared_tool_is_refused_and_the_token_rides_every_call(
         tools = await tools_of_selection(session, {"hello": ["*"]}, project)
         assert "hello__say_hello" in tools and "hello__rogue" not in tools
         assert tools["hello__post_greeting"].sous_validation
-        assert await politique_pour_le_projet(session, project, "hello", "rogue") == "forbidden"
+        assert await policy_for_project(session, project, "hello", "rogue") == "forbidden"
 
 
 async def test_configuration_is_the_server_s_schema_and_rolls_the_deployment(
@@ -454,14 +454,14 @@ async def test_the_platform_fills_its_arguments_and_drops_the_agent_s(
     `action_key` of its own does not choose the idempotency key the server trusts."""
     from types import SimpleNamespace
 
-    from choregos_api.effets import _arguments_de_la_plateforme
+    from choregos_api.effects import _platform_arguments
 
     await _install(client)
     ctx: Any = SimpleNamespace(
         session=None, action=SimpleNamespace(id="act-1", work_item_id=None), project=None
     )
     arguments = {"text": "hi", "action_key": "forged"}
-    filled = await _arguments_de_la_plateforme(ctx, await _connector(), "post_greeting", arguments)
+    filled = await _platform_arguments(ctx, await _connector(), "post_greeting", arguments)
     assert arguments == {"text": "hi"}
     assert filled["action_key"] != "forged" and len(filled["action_key"]) == 24
-    assert await _arguments_de_la_plateforme(ctx, await _connector(), "say_hello", {"action_key": "x"}) == {}
+    assert await _platform_arguments(ctx, await _connector(), "say_hello", {"action_key": "x"}) == {}

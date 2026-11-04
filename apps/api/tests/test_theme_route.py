@@ -9,7 +9,7 @@ import choregos_contracts as contracts
 import jsonschema
 import pytest
 import structlog
-from choregos_api.greffons import declare_theme_provider, reinitialiser
+from choregos_api.extensions import declare_theme_provider, reset
 from httpx import AsyncClient
 
 from .theme_fixtures import SAMPLE_THEME, sample
@@ -17,9 +17,9 @@ from .theme_fixtures import SAMPLE_THEME, sample
 
 @pytest.fixture(autouse=True)
 def _clean_seams() -> Iterator[None]:
-    reinitialiser()
+    reset()
     yield
-    reinitialiser()
+    reset()
 
 
 def _schema() -> dict[str, Any]:

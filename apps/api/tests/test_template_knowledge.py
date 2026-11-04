@@ -181,8 +181,8 @@ async def test_applying_the_template_again_duplicates_nothing(
 ) -> None:
     from choregos_api.db.models import KnowledgeBase, KnowledgeSource, Project
     from choregos_api.db.session import session_scope
-    from choregos_api.services.gabarits import livraison, manifeste_du_gabarit
-    from choregos_api.services.installation import installer_ce_que_livre_le_gabarit
+    from choregos_api.services.installation import install_what_template_delivers
+    from choregos_api.services.templates import delivery, template_manifest
     from sqlalchemy import func, select
 
     born = await _born(client)
@@ -192,8 +192,8 @@ async def test_applying_the_template_again_duplicates_nothing(
         async with session_scope(orgs="*") as session:
             project = await session.get(Project, born.json()["id"])
             assert project is not None
-            delivered = livraison(*await manifeste_du_gabarit(session, "kb-flow", project.org_id))
-            done = await installer_ce_que_livre_le_gabarit(session, project, delivered, "kb-flow")
+            delivered = delivery(*await template_manifest(session, "kb-flow", project.org_id))
+            done = await install_what_template_delivers(session, project, delivered, "kb-flow")
             assert sorted(done["knowledge"]) == ["house-style", "product-docs"]
     async with session_scope(orgs="*") as session:
         assert (await session.execute(select(func.count()).select_from(KnowledgeBase))).scalar_one() == 2
@@ -207,8 +207,8 @@ async def test_a_source_the_project_lost_is_added_back_and_only_it(
 ) -> None:
     from choregos_api.db.models import Project
     from choregos_api.db.session import session_scope
-    from choregos_api.services.gabarits import livraison, manifeste_du_gabarit
-    from choregos_api.services.installation import installer_ce_que_livre_le_gabarit
+    from choregos_api.services.installation import install_what_template_delivers
+    from choregos_api.services.templates import delivery, template_manifest
 
     born = await _born(client)
     (gone,) = (await _base(client, "house-style"))["sources"]
@@ -216,8 +216,8 @@ async def test_a_source_the_project_lost_is_added_back_and_only_it(
     async with session_scope(orgs="*") as session:
         project = await session.get(Project, born.json()["id"])
         assert project is not None
-        delivered = livraison(*await manifeste_du_gabarit(session, "kb-flow", project.org_id))
-        await installer_ce_que_livre_le_gabarit(session, project, delivered, "kb-flow")
+        delivered = delivery(*await template_manifest(session, "kb-flow", project.org_id))
+        await install_what_template_delivers(session, project, delivered, "kb-flow")
     (back,) = (await _base(client, "house-style"))["sources"]
     assert back["name"] == "Style guide" and back["id"] != gone["id"]
     assert len((await _base(client, "product-docs"))["sources"]) == 1

@@ -80,10 +80,10 @@ async def client(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Asy
     from choregos_api.db.models import Organization
     from choregos_api.db.session import create_all, session_scope
     from choregos_api.main import create_app
-    from choregos_api.routers.auth import oublier_la_decouverte
+    from choregos_api.routers.auth import forget_discovery
 
     reset_settings_cache()
-    oublier_la_decouverte()
+    forget_discovery()
     await db_session.dispose_engine()
     application = create_app()
     await create_all()
@@ -94,7 +94,7 @@ async def client(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> Asy
             yield http
     finally:
         await db_session.dispose_engine()
-        oublier_la_decouverte()
+        forget_discovery()
         reset_settings_cache()
         os.environ.pop("CHOREGOS_DATABASE_URL", None)
 

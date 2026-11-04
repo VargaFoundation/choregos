@@ -25,13 +25,13 @@ def tracker(monkeypatch: pytest.MonkeyPatch) -> FakeTracker:
     fake = FakeTracker("billing-api")
     seeded = fake.seed("Credit notes fail")
     fake.items[KEY] = fake.items.pop(seeded).model_copy(update={"key": KEY})
-    real = tickets.tracker_du_projet
+    real = tickets.project_tracker
 
     async def with_the_fake(session: Any, project: Any) -> Any:
         row, _ = await real(session, project)
         return row, (fake if row is not None and row.type not in {"internal", "fake"} else None)
 
-    monkeypatch.setattr(tickets, "tracker_du_projet", with_the_fake)
+    monkeypatch.setattr(tickets, "project_tracker", with_the_fake)
     return fake
 
 
@@ -142,7 +142,7 @@ async def test_a_broken_tracker_connector_does_not_fail_the_webhook(
     async def broken(session: Any, project: Any) -> Any:
         raise upstream("github-issues", "x")
 
-    monkeypatch.setattr(tickets, "tracker_du_projet", broken)
+    monkeypatch.setattr(tickets, "project_tracker", broken)
     first = await _comment(client, "d5", "/choregos reject no")
     assert first.status_code == 202, first.text
     assert first.json()["duplicate"] is False

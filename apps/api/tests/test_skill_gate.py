@@ -100,9 +100,9 @@ def test_the_scan_finds_what_a_reviewer_must_read(text: str, code: str) -> None:
     from choregos_api.services.skill_gate import assess
 
     assessment = assess({"SKILL.md": PLAIN["SKILL.md"] + "\n" + text + "\n"})
-    trouve = [f for f in assessment.findings if f.code == code]
-    assert trouve, [f.code for f in assessment.findings]
-    assert trouve[0].file == "SKILL.md" and trouve[0].line is not None
+    found = [f for f in assessment.findings if f.code == code]
+    assert found, [f.code for f in assessment.findings]
+    assert found[0].file == "SKILL.md" and found[0].line is not None
     assert assessment.risk == "high"
 
 

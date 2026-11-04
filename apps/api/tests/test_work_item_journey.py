@@ -1,9 +1,10 @@
-"""Le parcours d'un ticket se lit en une fois, et chaque déplacement nomme son arête (S22-01).
+"""The journey of a work item reads in one go, and each move names its edge (S22-01).
 
-La console animait la vie d'un ticket en relisant les titres de sa chronologie (« a → b ») : rien ne
-disait par quelle transition il était passé, ni si une revue l'avait renvoyé ou une personne refusé. La
-route `/work-items/{id}/journey` rend la carte de la version où il est épinglé, ses déplacements
-rattachés à leur arête, et les pas de chaque acteur — runs, demandes, actions, départs du train.
+The console animated the life of a work item by rereading the titles of its timeline ("a -> b"):
+nothing said by which transition it had gone, nor whether a review had sent it back or a person
+refused it. The route `/work-items/{id}/journey` returns the map of the version it is pinned to,
+its moves attached to their edge, and the steps of each actor: runs, requests, actions, train
+departures.
 """
 
 from __future__ import annotations
@@ -18,18 +19,18 @@ from httpx import AsyncClient
 
 from .conftest import login
 
-RACINE = pathlib.Path(__file__).resolve().parents[3]
+ROOT = pathlib.Path(__file__).resolve().parents[3]
 
 
 @pytest.fixture(scope="module")
 def dev_complex() -> Any:
-    texte = (RACINE / "templates/github-software-delivery/workflows/dev-complex.yaml").read_text()
-    workflow, _ = parse_workflow(texte)
+    text = (ROOT / "templates/github-software-delivery/workflows/dev-complex.yaml").read_text()
+    workflow, _ = parse_workflow(text)
     return workflow
 
 
 @pytest.mark.parametrize(
-    ("de", "vers", "raison", "attendu"),
+    ("source", "target", "reason", "expected"),
     [
         (None, "inbox", "started", ("start", None)),
         ("implemented", "tested", "", ("nominal", "t-test")),
@@ -52,35 +53,35 @@ def dev_complex() -> Any:
         ("inbox", "verified", "moved by hand in the tracker", ("other", None)),
     ],
 )
-def test_chaque_deplacement_nomme_l_arete_qui_l_a_porte(
-    dev_complex: Any, de: str | None, vers: str, raison: str, attendu: tuple[str, str | None]
+def test_each_move_names_the_edge_that_carried_it(
+    dev_complex: Any, source: str | None, target: str, reason: str, expected: tuple[str, str | None]
 ) -> None:
-    from choregos_api.services import arete_du_deplacement
+    from choregos_api.services import move_edge
 
-    assert arete_du_deplacement(dev_complex, de, vers, raison) == attendu
+    assert move_edge(dev_complex, source, target, reason) == expected
 
 
-def test_un_defaut_depuis_tout_etat_d_agent_se_reconnait(dev_complex: Any) -> None:
-    from choregos_api.services import arete_du_deplacement
+def test_a_default_from_any_agent_state_is_recognised(dev_complex: Any) -> None:
+    from choregos_api.services import move_edge
 
     # `documented` has no escalation to `needs_human` on its transition: it is the `on_question` default.
-    sans_escalade = dev_complex.model_copy(deep=True)
-    for t in sans_escalade.transitions:
+    without_escalation = dev_complex.model_copy(deep=True)
+    for t in without_escalation.transitions:
         if t.key == "t-review":
             t.on_changes_requested = None
-    assert arete_du_deplacement(sans_escalade, "documented", "needs_human", "a question") == ("default", None)
+    assert move_edge(without_escalation, "documented", "needs_human", "a question") == ("default", None)
 
 
-LIVRAISON = """apiVersion: choregos/v1
+DELIVERY = """apiVersion: choregos/v1
 kind: Workflow
-metadata: {name: livraison, version: 1}
+metadata: {name: delivery, version: 1}
 initial: inbox
 actors:
   dev: {type: agent, role: implement}
-  relecteur: {type: agent, role: review, fresh_context: true}
-  repondant: {type: agent, role: address_review}
-  mainteneurs: {type: human, group: maintainers}
-  plateforme: {type: system}
+  reviewer: {type: agent, role: review, fresh_context: true}
+  responder: {type: agent, role: address_review}
+  maintainers: {type: human, group: maintainers}
+  platform: {type: system}
 states:
   inbox: {display: To do, kind: wait}
   implemented: {display: Implemented}
@@ -99,75 +100,75 @@ transitions:
   - id: t-review
     from: implemented
     to: reviewed
-    by: relecteur
+    by: reviewer
     outputs: [verdict]
     on_changes_requested: {to: addressing, max_attempts: 2, escalate_to: needs_human}
   - id: t-address
     from: addressing
     to: implemented
-    by: repondant
+    by: responder
     on_fail: {to: addressing, max_attempts: 2, escalate_to: needs_human}
-  - {id: t-approve, from: reviewed, to: approved, by: mainteneurs, on_reject: addressing}
+  - {id: t-approve, from: reviewed, to: approved, by: maintainers, on_reject: addressing}
   - {id: t-stage, from: approved, to: staged, via: release_train, train: {env: staging}}
-  - {id: t-close, from: staged, to: done, by: plateforme}
+  - {id: t-close, from: staged, to: done, by: platform}
 defaults:
   from_any_agent_state: {on_question: needs_human}
   needs_human: {on_abandon: done}
 """
 
 
-async def _ticket(client: AsyncClient, pid: str) -> dict[str, Any]:
-    publie = await client.put(f"/api/v1/projects/{pid}/workflow", json={"yaml": LIVRAISON})
-    assert publie.status_code == 200, publie.text
-    cree = await client.post(
-        f"/api/v1/projects/{pid}/work-items", json={"title": "Les avoirs", "start": False}
+async def _work_item(client: AsyncClient, pid: str) -> dict[str, Any]:
+    published = await client.put(f"/api/v1/projects/{pid}/workflow", json={"yaml": DELIVERY})
+    assert published.status_code == 200, published.text
+    created = await client.post(
+        f"/api/v1/projects/{pid}/work-items", json={"title": "The credit notes", "start": False}
     )
-    assert cree.status_code == 201, cree.text
-    return dict(cree.json())
+    assert created.status_code == 201, created.text
+    return dict(created.json())
 
 
-async def _vie_du_ticket(project: dict[str, Any], item: dict[str, Any]) -> dict[str, str]:
-    """Une vie complète, écrite comme l'orchestrateur l'écrit : une revue qui renvoie une fois, une
-    approbation humaine, un départ du train, et l'action de la plateforme qui attend encore."""
+async def _life_of_the_work_item(project: dict[str, Any], item: dict[str, Any]) -> dict[str, str]:
+    """A complete life, written as the orchestrator writes it: a review that sends back once, a human
+    approval, a train departure, and the platform action that is still waiting."""
     from choregos_api.db.models import Action, Event, HumanRequest, Project, Release, Run
     from choregos_api.db.session import session_scope
 
-    debut = utcnow() - timedelta(hours=3)
-    instant = iter(debut + timedelta(minutes=10 * i) for i in range(1, 40))
+    begin = utcnow() - timedelta(hours=3)
+    instant = iter(begin + timedelta(minutes=10 * i) for i in range(1, 40))
     ids: dict[str, str] = {}
 
     async with session_scope(orgs="*") as session:
-        projet = await session.get(Project, project["id"])
-        assert projet is not None
+        project_row = await session.get(Project, project["id"])
+        assert project_row is not None
 
-        def deplacer(de: str | None, vers: str, raison: str = "") -> None:
+        def move(source: str | None, target: str, reason: str = "") -> None:
             session.add(
                 Event(
                     project_id=project["id"],
                     work_item_id=item["id"],
                     type="choregos.workitem.state_changed",
                     subject=item["tracker_key"],
-                    payload={"from": de, "to": vers, "reason": raison},
+                    payload={"from": source, "to": target, "reason": reason},
                     ts=next(instant),
                 )
             )
 
-        def courir(transition: str, role: str, tentative: int, verdict: str | None = None) -> Run:
-            depart = next(instant)
+        def run_stage(transition: str, role: str, attempt_no: int, verdict: str | None = None) -> Run:
+            started = next(instant)
             run = Run(
                 work_item_id=item["id"],
                 project_id=project["id"],
                 transition_id=transition,
                 stage_role=role,
-                attempt=tentative,
-                actor={"t-impl": "dev", "t-review": "relecteur", "t-address": "repondant"}[transition],
+                attempt=attempt_no,
+                actor={"t-impl": "dev", "t-review": "reviewer", "t-address": "responder"}[transition],
                 model="profile:standard",
                 status="succeeded",
-                started_at=depart,
-                ended_at=depart + timedelta(minutes=4),
+                started_at=started,
+                ended_at=started + timedelta(minutes=4),
                 cost_usd=0.5,
                 result={
-                    "summary": f"{role}, tour {tentative}",
+                    "summary": f"{role}, round {attempt_no}",
                     "outputs": {"verdict": verdict} if verdict else {},
                     "evidence": {"tests_run": 412, "tests_failed": 0, "lint": "ok", "coverage_delta": None},
                 },
@@ -175,16 +176,16 @@ async def _vie_du_ticket(project: dict[str, Any], item: dict[str, Any]) -> dict[
             session.add(run)
             return run
 
-        deplacer(None, "inbox", "started")
-        courir("t-impl", "implement", 1)
-        deplacer("inbox", "implemented", "credit notes deducted")
-        revue = courir("t-review", "review", 1, "changes_requested")
-        deplacer("implemented", "addressing", "two remarks")
-        courir("t-address", "address_review", 1)
-        deplacer("addressing", "implemented")
-        courir("t-review", "review", 2, "approve")
-        deplacer("implemented", "reviewed")
-        demande = HumanRequest(
+        move(None, "inbox", "started")
+        run_stage("t-impl", "implement", 1)
+        move("inbox", "implemented", "credit notes deducted")
+        review_run = run_stage("t-review", "review", 1, "changes_requested")
+        move("implemented", "addressing", "two remarks")
+        run_stage("t-address", "address_review", 1)
+        move("addressing", "implemented")
+        run_stage("t-review", "review", 2, "approve")
+        move("implemented", "reviewed")
+        request = HumanRequest(
             work_item_id=item["id"],
             project_id=project["id"],
             transition_id="t-approve",
@@ -195,8 +196,8 @@ async def _vie_du_ticket(project: dict[str, Any], item: dict[str, Any]) -> dict[
             decided_by="marie@varga.dev",
             decision={"kind": "approval", "approved": True, "reason": "looks good"},
         )
-        session.add(demande)
-        deplacer("reviewed", "approved", "human decision: approved")
+        session.add(request)
+        move("reviewed", "approved", "human decision: approved")
         release = Release(
             project_id=project["id"],
             env="staging",
@@ -207,20 +208,20 @@ async def _vie_du_ticket(project: dict[str, Any], item: dict[str, Any]) -> dict[
             ended_at=next(instant),
         )
         session.add(release)
-        # Une release qui ne l'emporte pas n'est pas un pas de ce ticket.
+        # A release that does not carry it is not a step of this work item.
         session.add(
             Release(
                 project_id=project["id"],
                 env="staging",
                 batch_no=8,
                 status="verified",
-                items=[{"work_item_key": "AUTRE-9"}],
+                items=[{"work_item_key": "OTHER-9"}],
                 started_at=next(instant),
             )
         )
-        deplacer("approved", "staged", "deployment verified")
+        move("approved", "staged", "deployment verified")
         action = Action(
-            org_id=projet.org_id,
+            org_id=project_row.org_id,
             project_id=project["id"],
             work_item_id=item["id"],
             origin="transition",
@@ -231,33 +232,33 @@ async def _vie_du_ticket(project: dict[str, Any], item: dict[str, Any]) -> dict[
         )
         session.add(action)
         await session.flush()
-        ids["revue-1"], ids["demande"], ids["release"], ids["action"] = (
-            revue.id,
-            demande.id,
+        ids["review-1"], ids["request"], ids["release"], ids["action"] = (
+            review_run.id,
+            request.id,
             release.id,
             action.id,
         )
     return ids
 
 
-async def test_le_parcours_rattache_chaque_deplacement_et_chaque_pas_a_sa_transition(
+async def test_the_journey_attaches_each_move_and_each_step_to_its_transition(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    item = await _ticket(client, project["id"])
-    ids = await _vie_du_ticket(project, item)
+    item = await _work_item(client, project["id"])
+    ids = await _life_of_the_work_item(project, item)
 
-    reponse = await client.get(f"/api/v1/work-items/{item['id']}/journey")
-    assert reponse.status_code == 200, reponse.text
-    parcours = reponse.json()
+    response = await client.get(f"/api/v1/work-items/{item['id']}/journey")
+    assert response.status_code == 200, response.text
+    journey = response.json()
 
-    assert (parcours["workflow_name"], parcours["workflow_version"], parcours["initial"]) == (
-        "livraison",
+    assert (journey["workflow_name"], journey["workflow_version"], journey["initial"]) == (
+        "delivery",
         1,
         "inbox",
     )
-    assert {n["id"] for n in parcours["graph"]["nodes"]} >= {"inbox", "addressing", "staged"}
-    assert [e["id"] for e in parcours["process"]][:2] == ["t-impl", "t-review"]
-    assert [(m["from"], m["to"], m["kind"], m["transition_id"]) for m in parcours["moves"]] == [
+    assert {n["id"] for n in journey["graph"]["nodes"]} >= {"inbox", "addressing", "staged"}
+    assert [e["id"] for e in journey["process"]][:2] == ["t-impl", "t-review"]
+    assert [(m["from"], m["to"], m["kind"], m["transition_id"]) for m in journey["moves"]] == [
         (None, "inbox", "start", None),
         ("inbox", "implemented", "nominal", "t-impl"),
         ("implemented", "addressing", "changes_requested", "t-review"),
@@ -267,8 +268,8 @@ async def test_le_parcours_rattache_chaque_deplacement_et_chaque_pas_a_sa_transi
         ("approved", "staged", "nominal", "t-stage"),
     ]
 
-    pas = parcours["steps"]
-    assert [(p["kind"], p["transition_id"], p["attempt"]) for p in pas] == [
+    steps = journey["steps"]
+    assert [(p["kind"], p["transition_id"], p["attempt"]) for p in steps] == [
         ("agent", "t-impl", 1),
         ("agent", "t-review", 1),
         ("agent", "t-address", 1),
@@ -276,55 +277,55 @@ async def test_le_parcours_rattache_chaque_deplacement_et_chaque_pas_a_sa_transi
         ("human", "t-approve", 1),
         ("action", "t-stage", 1),
         ("action", "t-close", 1),
-    ], "dans l'ordre du temps, la release qui ne l'emporte pas en moins"
-    revues = [p for p in pas if p["transition_id"] == "t-review"]
-    assert [r["verdict"] for r in revues] == ["changes_requested", "approve"]
-    assert revues[0]["id"] == ids["revue-1"] and revues[1]["summary"] == "review, tour 2"
-    assert revues[0]["evidence"] == {"tests_run": 412, "tests_failed": 0, "lint": "ok"}, (
-        "les preuves nulles se taisent"
+    ], "in time order, minus the release that does not carry it"
+    reviews = [p for p in steps if p["transition_id"] == "t-review"]
+    assert [r["verdict"] for r in reviews] == ["changes_requested", "approve"]
+    assert reviews[0]["id"] == ids["review-1"] and reviews[1]["summary"] == "review, round 2"
+    assert reviews[0]["evidence"] == {"tests_run": 412, "tests_failed": 0, "lint": "ok"}, (
+        "null evidence stays silent"
     )
-    humain = next(p for p in pas if p["kind"] == "human")
-    assert (humain["id"], humain["actor"], humain["status"], humain["decided_by"]) == (
-        ids["demande"],
-        "mainteneurs",
+    person = next(p for p in steps if p["kind"] == "human")
+    assert (person["id"], person["actor"], person["status"], person["decided_by"]) == (
+        ids["request"],
+        "maintainers",
         "approved",
         "marie@varga.dev",
     )
-    train = next(p for p in pas if p["transition_id"] == "t-stage")
+    train = next(p for p in steps if p["transition_id"] == "t-stage")
     assert (train["id"], train["status"], train["actor"]) == (ids["release"], "verified", "release_train")
-    attente = pas[-1]
-    assert (attente["id"], attente["status"], attente["actor"]) == (
+    waiting = steps[-1]
+    assert (waiting["id"], waiting["status"], waiting["actor"]) == (
         ids["action"],
         "pending_approval",
         "platform",
     )
-    assert (parcours["state"], parcours["closed"]) == (item["state"], False)
+    assert (journey["state"], journey["closed"]) == (item["state"], False)
 
 
-async def test_le_parcours_garde_la_carte_ou_le_ticket_est_epingle(
+async def test_the_journey_keeps_the_map_where_the_work_item_is_pinned(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    item = await _ticket(client, project["id"])
+    item = await _work_item(client, project["id"])
     from choregos_core import template_yaml
 
-    autre = await client.put(
+    other = await client.put(
         f"/api/v1/projects/{project['id']}/workflow", json={"yaml": template_yaml("default-simple")}
     )
-    assert autre.status_code == 200, autre.text
-    parcours = (await client.get(f"/api/v1/work-items/{item['id']}/journey")).json()
-    assert parcours["workflow_name"] == "livraison"
-    assert "addressing" in {n["id"] for n in parcours["graph"]["nodes"]}, (
-        "la carte du ticket, pas celle du projet"
+    assert other.status_code == 200, other.text
+    journey = (await client.get(f"/api/v1/work-items/{item['id']}/journey")).json()
+    assert journey["workflow_name"] == "delivery"
+    assert "addressing" in {n["id"] for n in journey["graph"]["nodes"]}, (
+        "the map of the work item, not that of the project"
     )
 
 
-async def test_une_demande_humaine_en_attente_se_voit_et_un_inconnu_ne_lit_rien(
+async def test_a_pending_human_request_shows_and_a_stranger_reads_nothing(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     from choregos_api.db.models import HumanRequest
     from choregos_api.db.session import session_scope
 
-    item = await _ticket(client, project["id"])
+    item = await _work_item(client, project["id"])
     async with session_scope(orgs="*") as session:
         session.add(
             HumanRequest(
@@ -337,19 +338,21 @@ async def test_une_demande_humaine_en_attente_se_voit_et_un_inconnu_ne_lit_rien(
                 due_at=utcnow() + timedelta(hours=24),
             )
         )
-    (pas,) = (await client.get(f"/api/v1/work-items/{item['id']}/journey")).json()["steps"]
-    assert (pas["status"], pas["summary"], pas["ended_at"]) == ("waiting", "Ship it?", None)
-    assert pas["due_at"] is not None
+    (steps,) = (await client.get(f"/api/v1/work-items/{item['id']}/journey")).json()["steps"]
+    assert (steps["status"], steps["summary"], steps["ended_at"]) == ("waiting", "Ship it?", None)
+    assert steps["due_at"] is not None
 
-    assert (await client.get("/api/v1/work-items/inconnu/journey")).status_code == 404
-    # Un compte sans aucun rôle dans l'organisation : la connexion de développement en pose un, on le retire.
-    await login(client, "intrus@ailleurs.dev")
+    assert (await client.get("/api/v1/work-items/unknown/journey")).status_code == 404
+    # An account with no role in the organisation: the development login sets one, we remove it.
+    await login(client, "intruder@elsewhere.dev")
     from choregos_api.db.models import Membership, User
     from sqlalchemy import delete, select
 
     async with session_scope(orgs="*") as session:
-        intrus = (await session.execute(select(User).where(User.email == "intrus@ailleurs.dev"))).scalar_one()
-        await session.execute(delete(Membership).where(Membership.user_id == intrus.id))
-    # Sur PostgreSQL, la RLS cache déjà le ticket à ce compte (404) ; sur SQLite, c'est la garde de la
-    # route qui répond (403). Les deux disent la même chose : un inconnu ne lit rien — jamais 200.
+        intruder = (
+            await session.execute(select(User).where(User.email == "intruder@elsewhere.dev"))
+        ).scalar_one()
+        await session.execute(delete(Membership).where(Membership.user_id == intruder.id))
+    # On PostgreSQL, RLS already hides the work item from this account (404); on SQLite, the route
+    # guard answers (403). Both say the same thing: a stranger reads nothing, never 200.
     assert (await client.get(f"/api/v1/work-items/{item['id']}/journey")).status_code in {403, 404}

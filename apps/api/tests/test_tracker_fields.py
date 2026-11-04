@@ -81,16 +81,16 @@ async def test_the_block_passes_strict_inputs_survives_a_field_change_and_reache
     from choregos_api.db.models import Project, Run
     from choregos_api.db.session import session_scope
     from choregos_api.security import mint_run_token
-    from choregos_api.services import Naissance, nouveau_ticket
+    from choregos_api.services import WorkItemBirth, new_work_item
 
     pid = await _strict(client, project)
     async with session_scope() as session:
         row = await session.get(Project, pid)
         assert row is not None
-        item = await nouveau_ticket(
+        item = await new_work_item(
             session,
             row,
-            Naissance(tracker_key="FON-270", title="New project", workflow="access", tracker=block()),
+            WorkItemBirth(tracker_key="FON-270", title="New project", workflow="access", tracker=block()),
         )
         item_id, key = item.id, item.tracker_key
     assert (await client.get(f"/api/v1/work-items/{item_id}")).json()["fields"] == {"tracker": block()}
@@ -134,7 +134,7 @@ def test_a_job_reads_the_block_in_its_fields_json(tmp_path: Any) -> None:
 async def jira_issue(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> dict[str, Any]:
-    """The project's Jira (key `FON`), as `tracker_du_projet` builds it: a fake whose issue says
+    """The project's Jira (key `FON`), as `project_tracker` builds it: a fake whose issue says
     `tracker`."""
     from choregos_adapters.fakes import FakeTracker
     from choregos_api.config import get_settings
@@ -170,7 +170,7 @@ async def jira_issue(
     async def project_tracker(session: Any, project: Any) -> tuple[Any, Any]:
         return SimpleNamespace(type="jira"), fake
 
-    monkeypatch.setattr(tickets, "tracker_du_projet", project_tracker)
+    monkeypatch.setattr(tickets, "project_tracker", project_tracker)
     return state
 
 
