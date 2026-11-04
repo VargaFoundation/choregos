@@ -132,7 +132,6 @@ class CdAdapter(Protocol):
 #:                A property of `start`, like `queue`: no method. Freezing a RUNNING sandbox
 #:                and restoring it is not what this word promises.
 EXECUTOR_CAPABILITIES: frozenset[str] = frozenset({"queue", "renew", "suspend", "resume", "snapshot"})
-CAPACITES_EXECUTEUR = EXECUTOR_CAPABILITIES  # lang: fr-ok alias:internal
 
 
 @runtime_checkable

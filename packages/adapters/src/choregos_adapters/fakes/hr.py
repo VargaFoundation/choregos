@@ -20,13 +20,13 @@ import copy
 import hashlib
 import hmac
 import inspect
-from dataclasses import InitVar, dataclass, field
+from dataclasses import dataclass, field
 from functools import partial
 from typing import Any, ClassVar
 
 from ..errors import AdapterError, UpstreamError
 from ..families import ACCESS_CONTROL_OPERATIONS, MDM_OPERATIONS, SHIPPING_OPERATIONS
-from ..registry import OperationSpec, schema_d_entree
+from ..registry import OperationSpec, build_input_schema
 from .mcp import FakeMcpServer
 
 
@@ -44,12 +44,6 @@ class BusinessFake:
     #: `old name -> (new name, {old parameter: new parameter})`: answered, never announced.
     former_names: ClassVar[dict[str, tuple[str, dict[str, str]]]] = {}
     expected_key: str = field(default="", repr=False, kw_only=True)
-    #: The former keyword of `expected_key`.
-    cle_attendue: InitVar[str | None] = field(default=None, kw_only=True)  # lang: fr-ok alias:internal
-
-    def __post_init__(self, cle_attendue: str | None) -> None:  # lang: fr-ok alias:internal
-        if cle_attendue is not None:  # lang: fr-ok alias:internal
-            self.expected_key = cle_attendue  # lang: fr-ok alias:internal
 
     def authenticate(self, key: str) -> None:
         if self.expected_key and not hmac.compare_digest(key.encode(), self.expected_key.encode()):
@@ -76,17 +70,11 @@ class BusinessFake:
         """The simulated system's state, copied: what a replayed gesture must not change."""
         return copy.deepcopy({key: value for key, value in vars(self).items() if key != "expected_key"})
 
-    etat = state  # lang: fr-ok alias:internal
-
 
 @dataclass
 class FakeMdm(BusinessFake):
     operations = MDM_OPERATIONS
     devices: dict[str, dict[str, Any]] = field(default_factory=dict)
-
-    @property
-    def postes(self) -> dict[str, dict[str, Any]]:  # lang: fr-ok alias:internal
-        return self.devices
 
     def enroll_device(self, serial: str, upn: str) -> dict[str, Any]:
         device = self.devices.get(serial)
@@ -115,10 +103,6 @@ class FakeMdm(BusinessFake):
 class FakeCarrier(BusinessFake):
     operations = SHIPPING_OPERATIONS
     shipments: dict[str, dict[str, Any]] = field(default_factory=dict)
-
-    @property
-    def envois(self) -> dict[str, dict[str, Any]]:  # lang: fr-ok alias:internal
-        return self.shipments
 
     def _ship(self, reference: str, address: str, direction: str, items: list[str]) -> dict[str, Any]:
         existing = self.shipments.get(reference)
@@ -186,13 +170,13 @@ SUPPLIER_TOOLS: tuple[OperationSpec, ...] = (
         "order_laptop",
         "write",
         "orders a laptop for a joiner; one order per reference",
-        schema_d_entree("reference", "model", "upn"),
+        build_input_schema("reference", "model", "upn"),
     ),
     OperationSpec(
         "order_status",
         "read",
         "where an order stands: its state, the laptop's serial number, the parcel's tracking",
-        schema_d_entree("reference"),
+        build_input_schema("reference"),
     ),
 )
 
@@ -210,10 +194,6 @@ class FakeSupplier(BusinessFake):
     operations = SUPPLIER_TOOLS
     former_names = FORMER_SUPPLIER_TOOLS
     orders: dict[str, dict[str, Any]] = field(default_factory=dict)
-
-    @property
-    def commandes(self) -> dict[str, dict[str, Any]]:  # lang: fr-ok alias:internal
-        return self.orders
 
     def order_laptop(self, reference: str, model: str, upn: str) -> dict[str, Any]:
         existing = self.orders.get(reference)
@@ -259,8 +239,6 @@ class Desk:
         self.fake.authenticate(self.key)
         return self.fake.perform(operation, params)
 
-    executer = execute  # lang: fr-ok alias:internal
-
     async def test(self) -> dict[str, Any]:
         self.fake.authenticate(self.key)
         return {"ok": True, "fake": type(self.fake).__name__}
@@ -281,23 +259,14 @@ class RemoteDesk:
         structure = result.get("structuredContent")
         return dict(structure) if isinstance(structure, dict) else {}
 
-    executer = execute  # lang: fr-ok alias:internal
-
     async def test(self) -> dict[str, Any]:
         result: dict[str, Any] = await self.client.test()
         return result
 
 
-def mcp_server(
-    fake: BusinessFake,
-    *,
-    token: str = "",
-    jeton: str | None = None,  # lang: fr-ok alias:internal
-) -> FakeMcpServer:
+def mcp_server(fake: BusinessFake, *, token: str = "") -> FakeMcpServer:
     """The same fake, served as an MCP server: each operation becomes a tool (a read carries
     `readOnlyHint`) and each call plays the same method, on the same state."""
-    if jeton is not None:  # lang: fr-ok alias:internal
-        token = jeton  # lang: fr-ok alias:internal
     return FakeMcpServer(
         outils=[
             {
@@ -314,15 +283,3 @@ def mcp_server(
             for name in [*(operation.name for operation in fake.operations), *fake.former_names]
         },
     )
-
-
-# Former names that other code imports (ADR 0098 §3 (b)); `fakes/rh.py` keeps the former path.
-FauxMetier = BusinessFake  # lang: fr-ok alias:internal
-FakeTransporteur = FakeCarrier  # lang: fr-ok alias:internal
-FakeFournisseur = FakeSupplier  # lang: fr-ok alias:internal
-FAUX_PAR_FAMILLE = FAKES_BY_FAMILY  # lang: fr-ok alias:internal
-OUTILS_DU_FOURNISSEUR = SUPPLIER_TOOLS  # lang: fr-ok alias:internal
-ANCIENS_OUTILS_DU_FOURNISSEUR = FORMER_SUPPLIER_TOOLS  # lang: fr-ok alias:internal
-Guichet = Desk  # lang: fr-ok alias:internal
-GuichetDistant = RemoteDesk  # lang: fr-ok alias:internal
-serveur_mcp = mcp_server  # lang: fr-ok alias:internal

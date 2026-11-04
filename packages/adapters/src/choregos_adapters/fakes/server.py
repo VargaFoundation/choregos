@@ -39,14 +39,7 @@ Send = Callable[[dict[str, Any]], Awaitable[None]]
 
 
 class DemoApplication:
-    def __init__(
-        self,
-        token: str = "",
-        *,
-        jeton: str | None = None,  # lang: fr-ok alias:internal
-    ) -> None:
-        if jeton is not None:  # lang: fr-ok alias:internal
-            token = jeton  # lang: fr-ok alias:internal
+    def __init__(self, token: str = "") -> None:
         self.directory = FakeEntra(expected_secret=token)
         self.fakes: dict[str, BusinessFake] = {family: cls() for family, cls in FAKES_BY_FAMILY.items()}
         # `fournisseur` is the path a tenant configured before S39-11: a tenant name, kept.
@@ -59,18 +52,6 @@ class DemoApplication:
         # S39-11: the supplier is reached at `/supplier/mcp`; `/fournisseur/mcp` (what a tenant
         # configured before) answers the same server, so both see one state.
         self.servers["supplier"] = self.servers["fournisseur"]  # lang: fr-ok
-
-    @property
-    def annuaire(self) -> FakeEntra:  # lang: fr-ok alias:internal
-        return self.directory
-
-    @property
-    def faux(self) -> dict[str, BusinessFake]:  # lang: fr-ok alias:internal
-        return self.fakes
-
-    @property
-    def serveurs(self) -> dict[str, FakeMcpServer]:  # lang: fr-ok alias:internal
-        return self.servers
 
     def respond(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -87,8 +68,6 @@ class DemoApplication:
                 httpx.Request(request.method, unprefixed, headers=request.headers, content=request.content)
             )
         return httpx.Response(404, json={"error": f"nothing here: {path}"})
-
-    repondre = respond  # lang: fr-ok alias:internal
 
     async def __call__(self, scope: dict[str, Any], receive: Receive, send: Send) -> None:
         if scope["type"] == "lifespan":
@@ -154,7 +133,3 @@ def main() -> None:  # pragma: no cover - the container's entry point
 
 if __name__ == "__main__":  # pragma: no cover - the container's entry point
     main()
-
-
-# Former names that other code imports (ADR 0098 §3 (b)); `fakes/serveur.py` keeps the former path.
-ApplicationDeDemo = DemoApplication  # lang: fr-ok alias:internal

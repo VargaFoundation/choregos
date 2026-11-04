@@ -32,8 +32,8 @@ from choregos_core.domain import (
     ExecStatus,
     StageJobSpec,
 )
+from choregos_core.exit_codes import explanation
 from choregos_core.hosted import SHARED_WORKSPACE_AGENT, SHARED_WORKSPACE_RUNNER, native_sidecars_refusal
-from choregos_core.sorties import explication
 
 from ..errors import UnsupportedClusterError
 from .tekton import (
@@ -451,7 +451,7 @@ class KubernetesJobExecutor:
         reason: str | None = None
         if state == "failed":
             # "Job has reached the specified backoff limit" does not say why: the pod knows, through
-            # its exit code, which the runner chooses (`choregos_core.sorties`), or the reason its
+            # its exit code, which the runner chooses (`choregos_core.exit_codes`), or the reason its
             # container never started (image, secret, configuration).
             code, cause = await self._diagnostic(ref)
             reason = await self._termination_reason(ref)
@@ -490,7 +490,7 @@ class KubernetesJobExecutor:
         if terminated:
             code = terminated.get("exitCode")
             reason = str(terminated.get("reason") or "terminated")
-            meaning = explication(code)
+            meaning = explanation(code)
             return code, f"runner exited with {code} ({reason}{': ' + meaning if meaning else ''})"
         waiting = current.get("waiting")
         if waiting:

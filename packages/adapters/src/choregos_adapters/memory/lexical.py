@@ -109,10 +109,6 @@ class LexicalMemory:
             raise ConfigurationError("lexical memory: models not injected (see `brancher_memoire_lexicale`)")
         return self._models
 
-    @property
-    def modeles(self) -> MemoryModels:  # lang: fr-ok alias:internal
-        return self.models
-
     @staticmethod
     def _scope(memory_fact: Any, home: Home) -> Any:
         """The facts of a namespace: a named memory's (S40-11), the project's own (no agent, no
@@ -412,7 +408,3 @@ def _memory(row: Any, score: float | None = None) -> Memory:
         provenance=row.provenance or {},
         proposed_by=row.proposed_by,
     )
-
-
-# Former names that other code imports (ADR 0098 §3 (b)); `memory/lexicale.py` keeps the former path.
-ModelesMemoire = MemoryModels  # lang: fr-ok alias:internal

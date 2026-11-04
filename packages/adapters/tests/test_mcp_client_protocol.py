@@ -13,7 +13,7 @@ from typing import Any
 import httpx
 import pytest
 from choregos_adapters.mcp import CLIENT_VERSIONS, McpClient, McpError
-from choregos_core.mcp import negocier, version_acceptable
+from choregos_core.mcp import acceptable_version, negotiate
 
 URL = "https://gateway.test/mcp"
 TOOLS = [{"name": "read_order", "inputSchema": {"type": "object"}}]
@@ -90,12 +90,12 @@ async def test_a_server_that_speaks_only_today_s_versions_is_reached() -> None:
 
     def handle(request: httpx.Request) -> httpx.Response:
         method, headers, body = _record(seen, request)
-        if not version_acceptable(headers.get("mcp-protocol-version")):
+        if not acceptable_version(headers.get("mcp-protocol-version")):
             return httpx.Response(400, json={"error": "unsupported protocol version"})
         if "id" not in body:
             return httpx.Response(202)
         if method == "initialize":
-            return _initialized(body, negocier(body["params"]["protocolVersion"]))
+            return _initialized(body, negotiate(body["params"]["protocolVersion"]))
         return _answer(body, {"tools": TOOLS})
 
     client = _client(handle)

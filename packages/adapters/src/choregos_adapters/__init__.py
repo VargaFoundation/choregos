@@ -13,8 +13,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from choregos_core.compat import alias_names
-
 from .base import (
     AgentBackend,
     CdAdapter,
@@ -137,25 +135,3 @@ def load_extensions(group: str = EXTENSION_GROUP) -> list[str]:
 
 
 _register_builtins()
-
-# Former names (ADR 0098 §3 (b), (c)). A name that tests patch goes through `alias_names`, which
-# forwards reading, patching and undoing to the English one; the typed aliases are for mypy.
-FAUX_ENTRA = FAKE_ENTRA  # lang: fr-ok alias:internal
-FAUX_MARKETDATA = FAKE_MARKETDATA  # lang: fr-ok alias:internal
-FAUX_WEB_SEARCH = FAKE_WEB_SEARCH  # lang: fr-ok alias:internal
-charger_les_greffons = load_extensions  # lang: fr-ok alias:internal
-GROUPE_DE_GREFFONS = EXTENSION_GROUP  # lang: fr-ok alias:internal
-POLITIQUES = POLICIES  # lang: fr-ok alias:internal
-configuration_resolue = resolved_configuration  # lang: fr-ok alias:internal
-type_par_defaut = default_type  # lang: fr-ok alias:internal
-_SPECS_LIVREES = _SHIPPED_SPECS  # lang: fr-ok alias:internal (tests/procedures reads it)
-alias_names(
-    __name__,
-    {
-        "FAUX_ENTRA": "FAKE_ENTRA",
-        "FAUX_MARKETDATA": "FAKE_MARKETDATA",
-        "FAUX_WEB_SEARCH": "FAKE_WEB_SEARCH",
-        "charger_les_greffons": "load_extensions",
-        "GROUPE_DE_GREFFONS": "EXTENSION_GROUP",
-    },
-)

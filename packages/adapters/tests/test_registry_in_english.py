@@ -94,71 +94,34 @@ def test_owned_adapters_have_no_french() -> None:
     assert declarations == []
 
 
-def test_patching_a_former_fake_global_patches_the_english_one(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_factories_read_the_english_fake_global(monkeypatch: pytest.MonkeyPatch) -> None:
     import choregos_adapters
 
-    for former, current in (
-        ("FAUX_ENTRA", "FAKE_ENTRA"),
-        ("FAUX_MARKETDATA", "FAKE_MARKETDATA"),
-        ("FAUX_WEB_SEARCH", "FAKE_WEB_SEARCH"),
-    ):
-        sentinel = object()
-        monkeypatch.setattr(choregos_adapters, former, sentinel)
-        assert getattr(choregos_adapters, current) is sentinel, f"{former} must reach {current}"
-        assert getattr(choregos_adapters, former) is sentinel
-    # What the factories read is the English global: a patch through the former name is seen by them.
     sentinel = object()
-    monkeypatch.setattr(choregos_adapters, "FAUX_WEB_SEARCH", sentinel)
+    monkeypatch.setattr(choregos_adapters, "FAKE_WEB_SEARCH", sentinel)
     monkeypatch.setenv("CHOREGOS_FAKES", "1")
     assert choregos_adapters.build("web_search", "fake") is sentinel
 
 
-def test_patching_charger_les_greffons_patches_load_extensions(  # lang: fr-ok (the former name)
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_the_extension_group_value_is_the_entry_point_group_of_adr_0093() -> None:
     import choregos_adapters
 
-    calls: list[str] = []
-    monkeypatch.setattr(choregos_adapters, "charger_les_greffons", lambda: calls.append("loaded") or ["x"])
-    assert choregos_adapters.load_extensions() == ["x"]
-    assert calls == ["loaded"]
-    # The group is the English constant, and its value is the entry-point group ADR 0093 keeps.
-    assert choregos_adapters.GROUPE_DE_GREFFONS == choregos_adapters.EXTENSION_GROUP == "choregos.plugins"
+    assert choregos_adapters.EXTENSION_GROUP == "choregos.plugins"
 
 
-def test_former_tracker_modules_still_import() -> None:
-    from choregos_adapters.tracker import fields, internal
-    from choregos_adapters.tracker.champs import nom_actuel, nom_present
-    from choregos_adapters.tracker.interne import InternalTracker
+def test_the_board_keeps_its_former_french_names_as_data() -> None:
+    from choregos_adapters.tracker import fields
 
-    assert InternalTracker is internal.InternalTracker
-    assert importlib.import_module("choregos_adapters.tracker.interne") is internal
-    assert importlib.import_module("choregos_adapters.tracker.champs") is fields
-    assert nom_actuel is fields.current_name and nom_present is fields.present_name
-    # The former French names of the board's fields live in this one table, as data.
     assert fields.FORMER_NAMES == {"Cost (€)": "Coût (€)", "Size": "Taille", "Risk": "Risque"}  # lang: fr-ok
-    assert nom_actuel("Taille") == "Size" and nom_present("Size", {"Taille"}) == "Taille"
+    assert fields.current_name("Taille") == "Size"  # lang: fr-ok
+    assert fields.present_name("Size", {"Taille"}) == "Taille"  # lang: fr-ok
 
 
-def test_former_registry_and_base_names_still_resolve() -> None:
-    from choregos_adapters import POLITIQUES, base, registry
+def test_the_registry_names_are_english() -> None:
+    from choregos_adapters import POLICIES, registry
 
-    assert POLITIQUES is registry.POLICIES == ("allowed", "approval", "forbidden")
-    assert registry.TYPES_PAR_DEFAUT is registry.DEFAULT_TYPES
-    assert registry.type_par_defaut is registry.default_type
-    assert registry.schema_d_entree is registry.build_input_schema
-    assert registry.references_de_secret is registry.secret_references
-    assert registry.configuration_resolue is registry.resolved_configuration
-    assert base.CAPACITES_EXECUTEUR is base.EXECUTOR_CAPABILITIES
+    assert POLICIES is registry.POLICIES == ("allowed", "approval", "forbidden")
     assert registry.DEFAULT_TYPES["tracker"] == "internal"
-
-
-def test_the_wire_keeps_its_former_names_for_the_tests_of_other_stories() -> None:
-    from ._transport import Fil, Wire, no_wait, sans_attente
-
-    assert Fil is Wire and sans_attente is no_wait
-    wire = Wire()
-    assert wire.requetes is wire.requests
 
 
 def test_a_stored_connector_identifier_is_not_renamed() -> None:

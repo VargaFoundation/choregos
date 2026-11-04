@@ -9,7 +9,7 @@ import structlog
 from choregos_adapters.errors import AdapterError
 from choregos_adapters.fakes.mcp import FakeMcpServer
 from choregos_adapters.http.egress import GuardedTransport, guarded
-from choregos_adapters.mcp import ClientMcp
+from choregos_adapters.mcp import McpClient
 from choregos_core.egress import AllowedRule, EgressPolicy, EgressRefusedError, use_policy
 
 TOOLS = [{"name": "read", "inputSchema": {"type": "object"}, "annotations": {"readOnlyHint": True}}]
@@ -111,7 +111,7 @@ async def test_warn_mode_in_the_policy_logs_and_passes() -> None:
 
 async def test_the_mcp_client_is_guarded() -> None:
     server = FakeMcpServer(outils=TOOLS)
-    client = ClientMcp("https://vendor.test/mcp", transport=server.transport())
+    client = McpClient("https://vendor.test/mcp", transport=server.transport())
     with use_policy(_policy()), pytest.raises(EgressRefusedError):
         await client.list_tools()
     assert server.recues == [], "the vendor received nothing"

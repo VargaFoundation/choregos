@@ -7,7 +7,7 @@ from __future__ import annotations
 import json
 import re
 import uuid
-from dataclasses import InitVar, dataclass, field
+from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import parse_qs
 
@@ -32,52 +32,16 @@ class FakeEntra:
     #: the application secret expected at the token endpoint; empty: any
     expected_secret: str = field(default="", repr=False)
     received: list[tuple[str, str]] = field(default_factory=list)
-    #: The former keyword of `expected_secret`.
-    secret_attendu: InitVar[str | None] = field(default=None, kw_only=True)  # lang: fr-ok alias:internal
-
-    def __post_init__(self, secret_attendu: str | None) -> None:  # lang: fr-ok alias:internal
-        if secret_attendu is not None:  # lang: fr-ok alias:internal
-            self.expected_secret = secret_attendu  # lang: fr-ok alias:internal
-
-    @property
-    def unite(self) -> str:  # lang: fr-ok alias:internal
-        return self.unit
-
-    @property
-    def comptes(self) -> dict[str, dict[str, Any]]:  # lang: fr-ok alias:internal
-        return self.accounts
-
-    @property
-    def groupes(self) -> dict[str, set[str]]:  # lang: fr-ok alias:internal
-        return self.groups
-
-    @property
-    def membres_de_l_unite(self) -> set[str]:  # lang: fr-ok alias:internal
-        return self.unit_members
-
-    @property
-    def sessions_revoquees(self) -> list[str]:  # lang: fr-ok alias:internal
-        return self.revoked_sessions
 
     def transport(self) -> httpx.MockTransport:
         return httpx.MockTransport(self.respond)
 
-    def add_account(
-        self,
-        upn: str,
-        *,
-        in_unit: bool = True,
-        dans_l_unite: bool | None = None,  # lang: fr-ok alias:internal
-    ) -> str:
-        if dans_l_unite is not None:  # lang: fr-ok alias:internal
-            in_unit = dans_l_unite  # lang: fr-ok alias:internal
+    def add_account(self, upn: str, *, in_unit: bool = True) -> str:
         identifier = str(uuid.uuid4())
         self.accounts[identifier] = {"id": identifier, "userPrincipalName": upn, "accountEnabled": True}
         if in_unit:
             self.unit_members.add(identifier)
         return identifier
-
-    ajouter_compte = add_account  # lang: fr-ok alias:internal
 
     def _account(self, key: str) -> dict[str, Any] | None:
         return self.accounts.get(key) or next(
@@ -145,5 +109,3 @@ class FakeEntra:
             members.discard(m.group(2))
             return httpx.Response(204)
         return httpx.Response(404, json={"error": {"code": "not in the fake", "path": path}})
-
-    repondre = respond  # lang: fr-ok alias:internal

@@ -270,8 +270,6 @@ class CiliumNetwork:
             raise AdapterError(f"cilium {operation}: {error}") from error
         return result
 
-    executer = execute  # lang: fr-ok alias:internal
-
     async def test(self) -> dict[str, Any]:
         await self.kubernetes.get(f"{CILIUM_API}/ciliumclusterwidenetworkpolicies?limit=1")
         return {"ok": True, "kubernetes_url": self.kubernetes.base_url}

@@ -286,8 +286,6 @@ class PfSenseFirewall:
             raise AdapterError(f"pfsense {operation}: {error}") from error
         return result
 
-    executer = execute  # lang: fr-ok alias:internal
-
     async def test(self) -> dict[str, Any]:
         await self._data("GET", "/status/gateways")
         return {"ok": True, "base_url": self.base_url, "tls_verified": self.tls_verified}

@@ -58,7 +58,7 @@ from choregos_core.domain import (
     StageJobSpec,
     utcnow,
 )
-from choregos_core.sorties import explication
+from choregos_core.exit_codes import explanation
 
 from ..errors import ConfigurationError, UpstreamError
 from ..sealing import key_from_log, seal
@@ -456,7 +456,7 @@ class AgentSandboxExecutor:
         )
         if terminated:
             code = terminated.get("exitCode")
-            meaning = explication(code)
+            meaning = explanation(code)
             reason = str(terminated.get("reason") or "terminated")
             return code, f"runner exited with {code} ({reason}{': ' + meaning if meaning else ''})"
         waiting = (runner.get("state") or {}).get("waiting")

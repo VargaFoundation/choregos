@@ -176,8 +176,6 @@ class NginxConfig:
             raise AdapterError(f"nginx {operation}: {error}") from error
         return result
 
-    executer = execute  # lang: fr-ok alias:internal
-
     async def test(self) -> dict[str, Any]:
         files = await self.reader.list_files(f"{self.root}/" if self.root else "")
         return {"ok": True, "root": self.root, "files": len(files)}

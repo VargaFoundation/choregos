@@ -226,12 +226,12 @@ def resolved_configuration(
 
     `preresolved` (field -> value): the fields the platform already read with the organisation's
     context — the sealed `store:` values (ADR 0058). They are not resolved again."""
-    from choregos_core.secrets import resoudre
+    from choregos_core.secrets import resolve
 
     resolved = dict(config or {})
     already = dict(preresolved or {})
     for field_name, reference in secret_references(kind, type_name, secret_refs, secret_ref).items():
-        resolved[field_name] = already[field_name] if field_name in already else resoudre(reference)
+        resolved[field_name] = already[field_name] if field_name in already else resolve(reference)
     return pooled(kind, type_name, resolved)
 
 
@@ -471,12 +471,3 @@ def egress_hosts(kind: str, type_name: str, config: dict[str, Any]) -> list[tupl
     properties = (spec.config_schema.get("properties") if spec else None) or {}
     defaults = {name: p.get("default") for name, p in properties.items() if isinstance(p, dict)}
     return hosts_of_config(config, defaults)
-
-
-# Former names (ADR 0098 §3 (b)): apps/api, apps/orchestrator and the fakes still import them.
-POLITIQUES = POLICIES  # lang: fr-ok alias:internal
-TYPES_PAR_DEFAUT = DEFAULT_TYPES  # lang: fr-ok alias:internal
-schema_d_entree = build_input_schema  # lang: fr-ok alias:internal
-references_de_secret = secret_references  # lang: fr-ok alias:internal
-configuration_resolue = resolved_configuration  # lang: fr-ok alias:internal
-type_par_defaut = default_type  # lang: fr-ok alias:internal

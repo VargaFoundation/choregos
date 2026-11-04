@@ -11,7 +11,7 @@ follows, idempotent writes — a governed action is replayed —, no secret in t
 from __future__ import annotations
 
 from .marketdata.base import DATE_PATTERN, SYMBOL_PATTERN
-from .registry import OperationSpec, schema_d_entree
+from .registry import OperationSpec, build_input_schema
 
 #: `mdm`: the fleet. A device is enrolled for its user and wiped when it comes back.
 MDM_OPERATIONS: tuple[OperationSpec, ...] = (
@@ -19,16 +19,16 @@ MDM_OPERATIONS: tuple[OperationSpec, ...] = (
         "enroll_device",
         "write",
         "enrols a device for its user (already enrolled for them: done)",
-        schema_d_entree("serial", "upn"),
+        build_input_schema("serial", "upn"),
     ),
     OperationSpec(
         "wipe_device",
         "write",
         "wipes a returned device and releases it (already wiped: done)",
-        schema_d_entree("serial"),
+        build_input_schema("serial"),
     ),
     OperationSpec(
-        "device_status", "read", "reads a device: its user and its state", schema_d_entree("serial")
+        "device_status", "read", "reads a device: its user and its state", build_input_schema("serial")
     ),
 )
 
@@ -38,19 +38,19 @@ SHIPPING_OPERATIONS: tuple[OperationSpec, ...] = (
         "create_shipment",
         "write",
         "ships a parcel to an address (one shipment per reference)",
-        schema_d_entree("reference", "address", items={"type": "array", "items": {"type": "string"}}),
+        build_input_schema("reference", "address", items={"type": "array", "items": {"type": "string"}}),
     ),
     OperationSpec(
         "create_return",
         "write",
         "books the collection of a parcel at an address (one return per reference)",
-        schema_d_entree("reference", "address"),
+        build_input_schema("reference", "address"),
     ),
     OperationSpec(
         "shipment_status",
         "read",
         "tracks a shipment or a return: its state and tracking number",
-        schema_d_entree("reference"),
+        build_input_schema("reference"),
     ),
 )
 
@@ -60,16 +60,16 @@ ACCESS_CONTROL_OPERATIONS: tuple[OperationSpec, ...] = (
         "activate_badge",
         "write",
         "activates a badge for its holder (already active for them: done)",
-        schema_d_entree("uid", "holder"),
+        build_input_schema("uid", "holder"),
     ),
     OperationSpec(
         "deactivate_badge",
         "write",
         "deactivates a badge (already inactive: done)",
-        schema_d_entree("uid"),
+        build_input_schema("uid"),
     ),
     OperationSpec(
-        "badge_status", "read", "reads a badge: its holder and whether it opens", schema_d_entree("uid")
+        "badge_status", "read", "reads a badge: its holder and whether it opens", build_input_schema("uid")
     ),
 )
 
@@ -82,7 +82,7 @@ OPERATIONS_MARKETDATA: tuple[OperationSpec, ...] = (
         "read",
         "reads the daily bars (open, high, low, close, adjusted close, volume) of a stock or ETF "
         "between two dates, sorted, one per date",
-        schema_d_entree(
+        build_input_schema(
             "symbol",
             "start",
             "end",
@@ -95,7 +95,7 @@ OPERATIONS_MARKETDATA: tuple[OperationSpec, ...] = (
         "get_instrument",
         "read",
         "reads what a symbol is: its name, whether it is a stock or an ETF, its currency and exchange",
-        schema_d_entree(
+        build_input_schema(
             "symbol", symbol={"type": "string", "pattern": SYMBOL_PATTERN, "description": "e.g. AAPL"}
         ),
     ),
@@ -107,10 +107,3 @@ FAMILIES: dict[str, tuple[OperationSpec, ...]] = {
     "shipping": SHIPPING_OPERATIONS,
     "access_control": ACCESS_CONTROL_OPERATIONS,
 }
-
-
-# Former names that other code imports (ADR 0098 §3 (b)); `familles.py` keeps the former path.
-OPERATIONS_MDM = MDM_OPERATIONS  # lang: fr-ok alias:internal
-OPERATIONS_EXPEDITION = SHIPPING_OPERATIONS  # lang: fr-ok alias:internal
-OPERATIONS_CONTROLE_D_ACCES = ACCESS_CONTROL_OPERATIONS  # lang: fr-ok alias:internal
-FAMILLES = FAMILIES  # lang: fr-ok alias:internal
