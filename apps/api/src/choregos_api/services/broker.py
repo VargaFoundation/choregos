@@ -26,7 +26,7 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from fnmatch import fnmatchcase
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -91,8 +91,17 @@ class BrokerTool:
         """A WRITE operation: even when allowed, it goes through a governed action (#241)."""
         return self.operation.access == "write"
 
+    @property
+    def access(self) -> Literal["read", "write", "approval"]:
+        """What calling it does (ADR 0122): `approval` proposes an action a person decides — a read
+        under approval too —, `write` plays a governed action, `read` reads."""
+        if self.needs_approval:
+            return "approval"
+        return "write" if self.is_write else "read"
+
     def announcement(self) -> dict[str, Any]:
-        """The MCP format the side-car serves to the agent."""
+        """The MCP format the side-car serves to the agent. `readOnlyHint` is MCP's own annotation:
+        true only when a call reads, never for a proposal, which writes into the inbox."""
         description = self.operation.description or self.operation.name
         if self.needs_approval:
             description += " — needs a human approval: calling it proposes the action, it does not run it"
@@ -102,6 +111,7 @@ class BrokerTool:
             "name": self.name,
             "description": f"[{self.connector.name}] {description}",
             "inputSchema": self.operation.input_schema or {"type": "object"},
+            "annotations": {"readOnlyHint": self.access == "read"},
         }
 
 

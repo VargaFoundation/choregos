@@ -59,3 +59,45 @@ def test_defaults_the_policy_does_not_write_are_compared_too() -> None:
 def test_no_ceiling_no_limit() -> None:
     assert widenings(load_preset("solo"), None) == []
     assert clamp(load_preset("solo"), None)[1] == []
+
+
+# ── tool scripts (S57-05, ADR 0122 §6): the ceiling can only forbid them ──
+
+
+def _offering(**tools: object) -> object:
+    from choregos_contracts import Policy
+
+    solo = load_preset("solo")
+    return Policy.model_validate(solo.model_dump(mode="json") | {"tools": tools})
+
+
+def test_a_ceiling_that_forbids_tool_scripts_refuses_each_offer() -> None:
+    from choregos_contracts import Policy
+
+    ceiling = PolicyCeiling.model_validate({"tools": {"scripts": "off"}})
+    policy = _offering(
+        scripts="offer", per_role={"review": {"scripts": "off"}, "triage": {"scripts": "offer"}}
+    )
+    assert isinstance(policy, Policy)
+    found = widenings(policy, ceiling)
+    assert found == [
+        "tools.scripts: `offer` is refused, the organisation forbids tool scripts",
+        "tools.per_role.triage.scripts: `offer` is refused, the organisation forbids tool scripts",
+    ]
+    clamped, said = clamp(policy, ceiling)
+    assert said == found
+    assert [clamped.tools.for_role(role) for role in ("implement", "review", "triage")] == [None] * 3
+    assert policy.tools.scripts == "offer", "the written policy is left as written"
+
+
+def test_a_policy_that_does_not_offer_scripts_is_within_a_forbidding_ceiling() -> None:
+    ceiling = PolicyCeiling.model_validate({"tools": {"scripts": "off"}})
+    assert widenings(load_preset("solo"), ceiling) == []
+    off = _offering(scripts="off", max_concurrent_calls=8, per_role={"review": {"max_concurrent_calls": 2}})
+    assert widenings(off, ceiling) == []  # type: ignore[arg-type]
+
+
+def test_a_ceiling_that_allows_or_omits_scripts_leaves_the_project_free() -> None:
+    offering = _offering(scripts="offer")
+    for ceiling in ({}, {"tools": {}}, {"tools": {"scripts": "offer"}}, {"tools": {"scripts": None}}):
+        assert widenings(offering, PolicyCeiling.model_validate(ceiling)) == [], ceiling  # type: ignore[arg-type]

@@ -84,6 +84,10 @@ class OrchestratorSettings(BaseSettings):
     #: off for every run, whatever a policy asks. `on` (the default) lets the policy decide, and a
     #: policy without `context` reduces nothing.
     context_reduction: bool = True
+    #: The deployment's kill switch for tool scripts (ADR 0122 §6): off (the default) offers no run the
+    #: tool bridge, whatever a policy asks; `on` lets the organisation's ceiling and the policy decide,
+    #: and a policy without `tools` offers nothing. `CHOREGOS_TOOL_SCRIPTS`.
+    tool_scripts: bool = False
 
     @model_validator(mode="after")
     def _images_named_by_the_operator(self) -> OrchestratorSettings:

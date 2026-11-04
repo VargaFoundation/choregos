@@ -68,6 +68,8 @@ from .policy import (
     ReviewPolicy,
     SandboxPolicy,
     ScopePolicy,
+    ToolsOverride,
+    ToolsPolicy,
     TrainEnvPolicy,
 )
 from .project import (
@@ -127,6 +129,7 @@ from .stage import (
     StageMemory,
     StageOutputs,
     StageResult,
+    ToolScripts,
     ToolsRef,
     TransitionRef,
     WorkItemLinks,
@@ -340,6 +343,9 @@ __all__ = [
     "StateOutcome",
     "SystemActor",
     "TaskSpec",
+    "ToolScripts",
+    "ToolsOverride",
+    "ToolsPolicy",
     "ToolsRef",
     "TrainEnvPolicy",
     "Transition",

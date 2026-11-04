@@ -254,7 +254,13 @@ async def test_the_run_sees_the_generated_tools_the_trial_can_serve(
         "service_host",
         "service_search",
     ], "no `alert_*` (connector), no `escalate_finding` (`notify`), no `open_finding` (not an agent)"
-    assert all(set(t) == {"name", "description", "inputSchema"} for t in response.json()["tools"])
+    tools = response.json()["tools"]
+    assert all(
+        set(t) == {"name", "description", "inputSchema", "annotations", "x-choregos-access"} for t in tools
+    )
+    # What a call does (S57-05, ADR 0122): the plugin declares it, the core announces it.
+    access = {t["name"]: (t["x-choregos-access"], t["annotations"]["readOnlyHint"]) for t in tools}
+    assert access["action_list"] == access["host_search"] == ("read", True)
 
 
 def test_every_served_kind_declares_its_result_cap() -> None:

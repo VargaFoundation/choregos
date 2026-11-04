@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from choregos_contracts import Policy
+from choregos_contracts.policy import ToolScriptsMode
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .network import covered, outside, validate_pattern
@@ -94,6 +95,13 @@ class CeilingWebSearch(_Strict):
     regions: list[str] | None = None
 
 
+class CeilingTools(_Strict):
+    """The organisation's bound on tool scripts (ADR 0122 §6): it can only forbid them. `off` refuses a
+    project policy that offers them, for any role; `offer` or absent leaves each project to choose."""
+
+    scripts: ToolScriptsMode | None = None
+
+
 class PolicyCeiling(_Strict):
     """The caps an organisation sets on every project policy."""
 
@@ -103,6 +111,7 @@ class PolicyCeiling(_Strict):
     findings: CeilingFindings = Field(default_factory=CeilingFindings)
     network: CeilingNetwork = Field(default_factory=CeilingNetwork)
     web_search: CeilingWebSearch | None = None
+    tools: CeilingTools = Field(default_factory=CeilingTools)
 
 
 @dataclass(frozen=True)
@@ -326,11 +335,36 @@ def _web_search_excesses(policy: Policy, ceiling: PolicyCeiling) -> Iterator[Exc
         )
 
 
+def _scripts_off(role: str | None) -> Callable[[Policy], None]:
+    def lower(p: Policy) -> None:
+        if role is None:
+            p.tools.scripts = "off"
+        else:
+            p.tools.per_role[role].scripts = "off"
+
+    return lower
+
+
+def _tools_excesses(policy: Policy, ceiling: PolicyCeiling) -> Iterator[Excess]:
+    """Under a ceiling that forbids tool scripts, every place the policy offers them is an excess: the
+    project's value and each role's override. A role that inherits `offer` is settled by the first."""
+    if ceiling.tools.scripts != "off":
+        return
+    refused = "`offer` is refused, the organisation forbids tool scripts"
+    tools = policy.tools
+    if tools.scripts == "offer":
+        yield Excess("tools.scripts", "offer", "off", _scripts_off(None), refused)
+    for role, override in tools.per_role.items():
+        if override.scripts == "offer":
+            yield Excess(f"tools.per_role.{role}.scripts", "offer", "off", _scripts_off(role), refused)
+
+
 def _excesses(policy: Policy, ceiling: PolicyCeiling) -> Iterator[Excess]:
     yield from _budget_excesses(policy, ceiling)
     yield from _other_excesses(policy, ceiling)
     yield from _network_excesses(policy, ceiling)
     yield from _web_search_excesses(policy, ceiling)
+    yield from _tools_excesses(policy, ceiling)
 
 
 def widenings(policy: Policy, ceiling: PolicyCeiling | None) -> list[str]:
@@ -361,4 +395,4 @@ def clamp(policy: Policy, ceiling: PolicyCeiling | None) -> tuple[Policy, list[s
     return clamped, said
 
 
-__all__ = ["CeilingNetwork", "CeilingWebSearch", "PolicyCeiling", "clamp", "widenings"]
+__all__ = ["CeilingNetwork", "CeilingTools", "CeilingWebSearch", "PolicyCeiling", "clamp", "widenings"]

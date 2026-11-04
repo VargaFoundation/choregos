@@ -23,6 +23,26 @@ PROTOCOL_VERSION = "2025-06-18"
 SERVER_INFO = {"name": "choregos-tools", "version": "1.0.0"}
 
 
+#: The prefix of the platform's own keys on an entry of the run's tool list (`x-choregos-access`).
+PLATFORM_KEYS = "x-choregos-"
+
+
+def listed_to_the_model(tool: dict[str, Any]) -> dict[str, Any]:
+    """An entry of the API's tool list as this server lists it to the model (ADR 0122).
+
+    Without `outputSchema`: a relayed call's `structuredContent` is the API's whole answer and its
+    notices (S57-04), never the operation's output, and an MCP client validates `structuredContent`
+    against a tool's output schema — it would refuse every answer. Without the platform's
+    `x-choregos-*` keys either, at the top and inside `annotations`: MCP's tool has no such key, and a
+    strict client could refuse the list. MCP's own `annotations` stay. The tool bridge (S57-07)
+    reads the API's list itself, whole."""
+    listed = {k: v for k, v in tool.items() if k != "outputSchema" and not k.startswith(PLATFORM_KEYS)}
+    annotations = listed.get("annotations")
+    if isinstance(annotations, dict):
+        listed["annotations"] = {k: v for k, v in annotations.items() if not k.startswith(PLATFORM_KEYS)}
+    return listed
+
+
 class McpServer:
     """A minimal, explicit implementation of the MCP protocol (initialize, tools/*)."""
 
@@ -50,7 +70,8 @@ class McpServer:
         if method in {"notifications/initialized", "initialized"}:
             return None
         if method == "tools/list":
-            return _ok(request_id, {"tools": [*await self._schemas(), *await self._catalogue_tools()]})
+            catalogue = [listed_to_the_model(tool) for tool in await self._catalogue_tools()]
+            return _ok(request_id, {"tools": [*await self._schemas(), *catalogue]})
         if method == "tools/call":
             name = str(params.get("name", ""))
             arguments = params.get("arguments") or {}

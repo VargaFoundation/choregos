@@ -107,3 +107,28 @@ async def test_a_ceiling_is_read_audited_and_removed(client: AsyncClient, admin:
     assert set_["updated_by"] == "admin@varga.dev" and set_["updated_at"]
     assert (await client.get("/api/v1/orgs/varga/policy-ceiling")).json()["ceiling"] == set_["ceiling"]
     assert (await _ceiling(client, None)).json()["ceiling"] is None
+
+
+async def test_a_policy_offering_tool_scripts_under_a_ceiling_that_forbids_them_is_refused(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    """S57-05 (ADR 0122 §6, ADR 0101): refused at PUT like every widening, each offer named."""
+    assert (await _ceiling(client, {"tools": {"scripts": "off"}})).status_code == 200
+    stored = (await client.get("/api/v1/orgs/varga/policy-ceiling")).json()["ceiling"]
+    assert stored == {"tools": {"scripts": "off"}}
+    offering = _policy() + "tools:\n  scripts: offer\n  per_role:\n    review: { scripts: off }\n"
+    refused = await client.put(f"/api/v1/projects/{project['id']}/policy", json={"yaml": offering})
+    assert refused.status_code == 422, refused.text
+    assert (
+        "tools.scripts: `offer` is refused, the organisation forbids tool scripts" in refused.json()["detail"]
+    )
+    assert ("policy", "tools", "scripts") in {tuple(e["loc"]) for e in refused.json()["errors"]}
+
+    without = _policy() + "tools:\n  scripts: off\n  max_concurrent_calls: 2\n"
+    assert (
+        await client.put(f"/api/v1/projects/{project['id']}/policy", json={"yaml": without})
+    ).status_code == 200
+    assert (await _ceiling(client, {"tools": {"scripts": "offer"}})).status_code == 200
+    allowed = await client.put(f"/api/v1/projects/{project['id']}/policy", json={"yaml": offering})
+    assert allowed.status_code == 200, allowed.text
+    assert allowed.json()["json"]["tools"]["scripts"] == "offer"

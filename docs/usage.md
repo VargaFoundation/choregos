@@ -367,7 +367,11 @@ connector's configuration and secrets), hence the flat `<type>_api_key` secret f
 business days only). Every tool call also records `request_sha256` and `response_sha256` (SHA-256 of
 the canonical JSON) in its `tool.called` event, so a result can later be matched to what the run was
 served, and `response_bytes`, the size in UTF-8 bytes of that same canonical JSON of the result: what
-the call put back into the model's context (S57-01).
+the call put back into the model's context (S57-01). It also records `origin`, the door the call came through —
+`model` (the agent's MCP client), `script` (a script, through the runner's tool bridge) or `job` (a job
+step) — from the call's `X-Choregos-Tool-Origin` header (absent: `model`; any other value is a `400`
+problem), and `script_sha256` when an `X-Choregos-Script` header names the script (64 lowercase
+hexadecimal characters, else `400`). Both are attribution: no authorisation reads them (ADR 0122 §2, §4).
 
 `memory: lexical` keeps the project's memory in Choregos's own database — no extra service,
 and a lexical, not semantic, search: there is no `vector` extension behind it. It was called
@@ -1181,6 +1185,30 @@ never the excerpts — and says the content is data, never instructions; a run w
 `structuredContent` carries the API's answer as it came, `status_code` included, with the same lines
 under `notices`, when its JSON fits the same bound. A hosted session's tools do not say these yet
 (#1349), nor does an ontology proposal, which answers `201` (#1350).
+
+The run's tool list (`GET /internal/runs/{id}/tools`) says what a call of each tool does (S57-05,
+[ADR 0122](adr/0122-an-agent-may-call-its-run-s-tools-from-a-script.md)): MCP's own
+`annotations.readOnlyHint`, true only for a read, and `x-choregos-access`:
+
+| Tool | `x-choregos-access` |
+| :-- | :-- |
+| a connector operation the policy allows, that reads | `read` |
+| a connector operation the policy allows, that writes (a governed action) | `write` |
+| a connector operation under approval, a read included (a call proposes an action) | `approval` |
+| a catalogue tool (one that may write is not listed) | `read` |
+| `web_fetch`, `web_search` | `read` |
+| a plugin extension's tool that declares `x-choregos-access` beside its `name` | what it declares (`read`, `write`, `approval`; any other value is refused when the tools are listed) |
+| a plugin extension's tool annotated `readOnlyHint: true`, declaring nothing | `read` |
+| any other plugin extension tool (MCP's default is not read-only) | `write` |
+
+The ontology plugin declares its reads (`describe`, `search`, `get`, links, `action_list`,
+`action_status`) `read` and its action tools `approval`: calling one proposes what a person decides.
+
+A connector operation whose server declares an `outputSchema` is listed with it: it describes the
+`structuredContent` of the tool's `result`. The run's tool server lists the tools to the model
+without `outputSchema` and without the `x-choregos-*` keys: it hands back the API's whole answer as
+`structuredContent`, which an MCP client would check against the operation's schema and refuse, and
+MCP has no such keys. MCP's `annotations` reach the model.
 
 Spend is bounded per run (`budgets.tool_calls_per_run`) and every call lands in the cost
 ledger under `kind: tool` — visible on the project overview and in the run's access record.
@@ -2368,6 +2396,12 @@ ceiling of 20`). A policy saved before the ceiling was set is not refused: what 
 ceiling, the policy keeps what was written, and `GET /projects/{id}/policy` (and the project's
 settings page) lists each clamp.
 
+The ceiling's `tools` section can only forbid tool scripts ([ADR 0122](adr/0122-an-agent-may-call-its-run-s-tools-from-a-script.md) §6):
+`{"tools": {"scripts": "off"}}` refuses a project policy that offers them — `tools.scripts: offer` or a
+role's `per_role.<role>.scripts: offer`, each named (``tools.scripts: `offer` is refused, the
+organisation forbids tool scripts``) — and clamps a policy saved earlier to `off`. `offer`, `null` or no
+section leaves each project to choose. The form has no row for it yet: **Advanced: raw JSON**.
+
 **The ceiling's `network` section bounds what projects and agents may reach**
 ([ADR 0070](adr/0070-network-access-is-bounded-and-enforced-per-run.md)):
 
@@ -2634,6 +2668,27 @@ context:
 ```
 
 The contract carries these switches; the runner does not act on them yet (stream S37).
+
+**Tool scripts** ([ADR 0122](adr/0122-an-agent-may-call-its-run-s-tools-from-a-script.md)) let the agent
+call its run's tools from a script it writes, through the runner's tool bridge, so that chained calls
+and their raw results stay out of the model's context. They are off unless the policy offers them; the
+organisation's ceiling can forbid them, and the deployment refuses them unless it turns them on
+(`CHOREGOS_TOOL_SCRIPTS`, off by default):
+
+```yaml
+tools:
+  scripts: offer                # off (default) | offer
+  max_concurrent_calls: 4       # 1-16: calls of one run the bridge relays at once
+  per_role:
+    review: { scripts: off }    # a reviewer reads every result itself
+```
+
+An unquoted `off` is read as `off` (YAML 1.1 reads it as `false`). A call from a script is governed
+exactly as the model's: the same allowlist, cap, approvals, ledger row and `tool.called` event. The
+orchestrator resolves the setting per role into the stage input's `tools.scripts`
+(`{max_concurrent_calls: n}`), and leaves the key out when it is off, so a runner older than ADR 0122
+never sees it; an eval cell runs without it until the matrix measures it (S57-09). The contract
+carries the switch; the runner does not serve the bridge yet (S57-07).
 
 **A policy does not decide who approves a work item.** People are declared in the **workflow**: a
 transition `by` a human actor, or `train: {approval: <actor>}` on a release train

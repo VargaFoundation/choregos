@@ -123,6 +123,9 @@ async def list_tools(session: AsyncSession, run: Any, project: Any) -> list[dict
             "description": t["description"],
             "inputSchema": t["input_schema"],
             "result_max_bytes": RESULT_CAPS[t["kind"]],
+            # What a call does, declared to the core beside the name (ADR 0122): an action tool
+            # proposes what a person decides; every other kind reads.
+            "x-choregos-access": "approval" if t["kind"] == "action" else "read",
         }
         for t in served_tools(version.compiled_ir)
     ]

@@ -371,6 +371,23 @@
               }
             }
           }
+        },
+        "scripts": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "The run's agent may call the run's tools from a script, through the runner's tool bridge (ADR 0122), resolved by the orchestrator from the deployment, the policy and the stage's role. Absent = off: the orchestrator never sends an off setting, so a runner older than ADR 0122 never sees the key.",
+          "additionalProperties": false,
+          "properties": {
+            "max_concurrent_calls": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 16,
+              "default": 4,
+              "description": "Calls of this run the bridge relays at once; the next waits."
+            }
+          }
         }
       }
     },

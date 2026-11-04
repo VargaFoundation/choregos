@@ -51,7 +51,12 @@ from choregos_core.workspace import write_paths_for
 from temporalio import activity
 
 from ..config import get_settings
-from ..context_reduction import forced_context, resolve_context, stage_input_payload
+from ..context_reduction import (
+    forced_context,
+    resolve_context,
+    resolve_tool_scripts,
+    stage_input_payload,
+)
 from ..org_egress import org_runner_hosts
 from .base import db, load_work_item, org_memory, project_bundle, without_secrets
 from .execution import (
@@ -342,7 +347,17 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             allowed_paths=allowed_paths,
             context_pack_url=f"{settings.object_store_url}/runs/{run_id}/context.json",
             playbook=PlaybookRef(ref=playbook_ref, prompt=playbook_prompt),
-            tools=ToolsRef(mcp={} if remote_runtime is not None else _mcp_servers(settings, memory_scope)),
+            tools=ToolsRef(
+                mcp={} if remote_runtime is not None else _mcp_servers(settings, memory_scope),
+                # The tool bridge (ADR 0122): the deployment, the ceiling (the bundle's policy is
+                # already clamped to it), the policy and the role. An eval cell runs the model's MCP
+                # tools only, as the matrix's `mcp` cell, until it measures the other door (S57-09).
+                scripts=resolve_tool_scripts(
+                    bundle.policy.tools, plan.role, allowed_by_deployment=settings.tool_scripts
+                )
+                if plan.eval_cell is None
+                else None,
+            ),
             memory_scope=memory_scope,
             memories=resolved_memories.memories,
             # The container of a hosted agent reads no file of the runner's: skills would be lost on it.
