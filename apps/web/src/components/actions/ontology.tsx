@@ -50,22 +50,22 @@ export function OntologyDetail({ action }: { action: Action }) {
       </dl>
       {effects.length + evidence.length > 0 && (
         <ul className="mt-3 space-y-1 text-xs" data-testid="ontology-folder">
-          {effects.map((effet, position) => (
+          {effects.map((effect, position) => (
             <li key={`e${position}`} className="flex flex-wrap items-center gap-2">
               <span>Effect</span>
-              <code>{effet.type ?? String(effet.index ?? position)}</code>
-              {effet.status && <Status statut={effet.status} />}
-              {effet.url && <span className="text-ink-muted">{effet.url}</span>}
-              {effet.error && <span className="text-danger">{effet.error}</span>}
+              <code>{effect.type ?? String(effect.index ?? position)}</code>
+              {effect.status && <Status statut={effect.status} />}
+              {effect.url && <span className="text-ink-muted">{effect.url}</span>}
+              {effect.error && <span className="text-danger">{effect.error}</span>}
             </li>
           ))}
-          {evidence.map((preuve, position) => (
+          {evidence.map((proof, position) => (
             <li key={`p${position}`} className="flex flex-wrap items-center gap-2">
               <span>Evidence</span>
-              <code>{preuve.name ?? String(preuve.index ?? position)}</code>
-              {preuve.status && <Status statut={preuve.status} />}
-              {preuve.expect && <span className="text-ink-muted">Expects {preuve.expect}</span>}
-              {preuve.error && <span className="text-danger">{preuve.error}</span>}
+              <code>{proof.name ?? String(proof.index ?? position)}</code>
+              {proof.status && <Status statut={proof.status} />}
+              {proof.expect && <span className="text-ink-muted">Expects {proof.expect}</span>}
+              {proof.error && <span className="text-danger">{proof.error}</span>}
             </li>
           ))}
         </ul>

@@ -5,12 +5,12 @@ import { OrganisationCard } from "@/components/admin/organisation-card";
 import { ApiError, api } from "@/lib/api";
 
 /** The Organisation card on /admin (S40-24): rename, currency, and the slug for a platform administrator. */
-const session = vi.hoisted(() => ({ choisirOrg: vi.fn() }));
+const session = vi.hoisted(() => ({ selectOrg: vi.fn() }));
 vi.mock("@/lib/session", () => ({
   useSession: () => ({
     org: "varga",
     orgs: [{ slug: "varga", name: "Varga Foundation", role: "org_admin", currency: "EUR" }],
-    choisirOrg: session.choisirOrg,
+    selectOrg: session.selectOrg,
   }),
 }));
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -108,7 +108,7 @@ describe("the Organisation card", () => {
       await user.type(input, "diametral");
       await user.click(screen.getByRole("button", { name: "Change the slug" }));
       await waitFor(() => expect(api.updateOrg).toHaveBeenCalledWith("varga", { slug: "diametral" }));
-      expect(session.choisirOrg).toHaveBeenCalledWith("diametral");
+      expect(session.selectOrg).toHaveBeenCalledWith("diametral");
       expect(assign).toHaveBeenCalledWith("http://console.test/admin");
     });
 
@@ -119,7 +119,7 @@ describe("the Organisation card", () => {
       await user.type(screen.getByRole("textbox", { name: /New slug/ }), "taken");
       await user.click(screen.getByRole("button", { name: "Change the slug" }));
       expect(await screen.findByText(/already exists/)).toBeTruthy();
-      expect(session.choisirOrg).not.toHaveBeenCalled();
+      expect(session.selectOrg).not.toHaveBeenCalled();
       expect(assign).not.toHaveBeenCalled();
     });
   });

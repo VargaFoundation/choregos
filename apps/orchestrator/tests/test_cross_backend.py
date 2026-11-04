@@ -134,7 +134,7 @@ async def test_the_tools_server_is_announced_to_every_agent() -> None:
 
     I briefly made this announcement conditional, believing no server existed under `k8s_job`.
     The condition removed a true announcement and deprived the agent of its tools:
-    `runner/outils_locaux.py` starts the server when nothing answers, but the agent only knows it
+    `runner/local_tools.py` starts the server when nothing answers, but the agent only knows it
     if it is told.
     """
     from choregos_orchestrator.activities.stage import _mcp_servers

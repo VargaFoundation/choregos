@@ -19,7 +19,7 @@ type ThemeState = {
   preference: PreferenceDeTheme;
   /** What is shown. */
   theme: Theme;
-  choisir: (preference: PreferenceDeTheme) => void;
+  select: (preference: PreferenceDeTheme) => void;
 };
 
 const ThemeContext = createContext<ThemeState | null>(null);
@@ -81,7 +81,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     window.dispatchEvent(new Event(LOCAL_EVENT));
   }, []);
 
-  const value = useMemo(() => ({ preference, theme, choisir: choose }), [preference, theme, choose]);
+  const value = useMemo(() => ({ preference, theme, select: choose }), [preference, theme, choose]);
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 

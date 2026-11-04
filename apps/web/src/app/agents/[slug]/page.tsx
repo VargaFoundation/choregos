@@ -277,11 +277,11 @@ function AgentMetrics({ org, slug }: { org: string; slug: string }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {(m.by_project ?? []).map((ligne) => (
-                    <tr key={ligne.project} className="border-t border-line">
-                      <td className="py-1">{ligne.project}</td>
-                      <td>{ligne.runs}</td>
-                      <td>{usd(ligne.cost_usd)}</td>
+                  {(m.by_project ?? []).map((row) => (
+                    <tr key={row.project} className="border-t border-line">
+                      <td className="py-1">{row.project}</td>
+                      <td>{row.runs}</td>
+                      <td>{usd(row.cost_usd)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -457,10 +457,10 @@ function Clients({ org, slug }: { org: string; slug: string }) {
   const [erreur, setErreur] = useState<string | null>(null);
   const rattaches = new Set((links.data ?? []).map((l) => l.token_id));
   const libres = (tokens.data ?? []).filter((j) => isMcpClient(j) && !rattaches.has(j.id));
-  async function agir(geste: () => Promise<unknown>) {
+  async function agir(gesture: () => Promise<unknown>) {
     setErreur(null);
     try {
-      await geste();
+      await gesture();
       setChoisi("");
       await client.invalidateQueries({ queryKey: ["agent-credentials", org, slug] });
     } catch (cause) {

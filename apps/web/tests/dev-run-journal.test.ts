@@ -13,23 +13,23 @@ describe("a real opencode run from the dev tenant (S25-06)", () => {
     const plan = agentPlan(journal);
     expect(plan).not.toBeNull();
     expect(plan!.revisions).toHaveLength(6);
-    expect(plan!.revisions[0]?.taches[0]).toEqual({
-      contenu: "Inspect invoice total code and tests",
+    expect(plan!.revisions[0]?.tasks[0]).toEqual({
+      content: "Inspect invoice total code and tests",
       priorite: "high",
-      statut: "in_progress",
+      status: "in_progress",
     });
     expect(plan!.faites).toBe(6);
     expect(plan!.total).toBe(6);
-    expect(plan!.taches.some((t) => t.retiree)).toBe(false);
+    expect(plan!.tasks.some((t) => t.retiree)).toBe(false);
   });
 
   it("its activity counts each tool call once, however many updates it had", () => {
     const activity = runActivity(journal);
     expect(journal.filter((e) => e.type === "session/update")).toHaveLength(123);
-    expect(activity.appels).toHaveLength(29);
+    expect(activity.calls).toHaveLength(29);
     expect(activity.termines).toBe(29);
-    expect(activity.refus).toEqual([]);
+    expect(activity.refusals).toEqual([]);
     expect(activity.sousAgents).toBe(0);
-    expect(activity.appels.map((a) => a.titre)).toContain("make test");
+    expect(activity.calls.map((a) => a.title)).toContain("make test");
   });
 });

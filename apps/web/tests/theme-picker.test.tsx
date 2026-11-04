@@ -4,7 +4,7 @@ import { ThemePicker } from "@/components/theme-picker";
 import { SIDEBAR_KEY, THEME_KEY, readSidebar, SCRIPT_DES_PREFERENCES, defaultTheme, themeResolu } from "@/lib/preferences";
 import { ThemeProvider } from "@/lib/theme";
 
-type Ecouteur = (evenement: { matches: boolean }) => void;
+type Ecouteur = (event: { matches: boolean }) => void;
 
 /** A `matchMedia` that answers "light" or not, and that can be made to change. */
 function systeme(enClair: boolean) {
@@ -46,11 +46,11 @@ describe("the header script sets the theme before the paint (ADR 0043)", () => {
     ["system", true, "light"],
     ["system", false, "dark"],
     ["anything", true, "dark"],
-  ])("preference %s, system light: %s -> %s, like themeResolu", (preference, clair, attendu) => {
+  ])("preference %s, system light: %s -> %s, like themeResolu", (preference, clair, expected) => {
     systeme(clair);
     if (preference !== null) window.localStorage.setItem(THEME_KEY, preference);
-    expect(runScript()).toBe(attendu);
-    expect(themeResolu(preference, clair)).toBe(attendu);
+    expect(runScript()).toBe(expected);
+    expect(themeResolu(preference, clair)).toBe(expected);
   });
 
   it.each([
@@ -60,12 +60,12 @@ describe("the header script sets the theme before the paint (ADR 0043)", () => {
     ["light", false, "light"],
     ["system", false, "dark"],
     ["system", true, "light"],
-  ])("with data-default-theme=light, preference %s (system light: %s) → %s, as themeResolu", (preference, clair, attendu) => {
+  ])("with data-default-theme=light, preference %s (system light: %s) → %s, as themeResolu", (preference, clair, expected) => {
     systeme(clair);
     document.documentElement.dataset.defaultTheme = "light";
     if (preference !== null) window.localStorage.setItem(THEME_KEY, preference);
-    expect(runScript()).toBe(attendu);
-    expect(themeResolu(preference, clair, defaultTheme())).toBe(attendu);
+    expect(runScript()).toBe(expected);
+    expect(themeResolu(preference, clair, defaultTheme())).toBe(expected);
     delete document.documentElement.dataset.defaultTheme;
   });
 
@@ -92,13 +92,13 @@ describe("the header script also folds the sidebar before the paint (S24-03)", (
     ["rail", "rail"],
     ["full", undefined],
     ["anything", undefined],
-  ])("kept bar %s -> data-sidebar %s, like readSidebar", (gardee, attendu) => {
+  ])("kept bar %s -> data-sidebar %s, like readSidebar", (gardee, expected) => {
     systeme(false);
     if (gardee !== null) window.localStorage.setItem(SIDEBAR_KEY, gardee);
     delete document.documentElement.dataset.sidebar;
     new Function(SCRIPT_DES_PREFERENCES)();
-    expect(document.documentElement.dataset.sidebar).toBe(attendu);
-    expect(readSidebar()).toBe(attendu ?? "full");
+    expect(document.documentElement.dataset.sidebar).toBe(expected);
+    expect(readSidebar()).toBe(expected ?? "full");
   });
 
   it("a refused storage leaves the bar full, and the theme dark", () => {

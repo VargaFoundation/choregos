@@ -19,7 +19,7 @@ export interface HueClasses {
   soft: string;
   /** A border in the hue. */
   line: string;
-  /** Text in the hue (4.5:1 on every surface and on `soft`, `theme-contraste.test.ts`). */
+  /** Text in the hue (4.5:1 on every surface and on `soft`, `theme-contrast.test.ts`). */
   ink: string;
   /** A pill: tinted background, border and text. */
   pill: string;

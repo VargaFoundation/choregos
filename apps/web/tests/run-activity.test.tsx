@@ -33,8 +33,8 @@ describe("a run's activity, re-read from the journal (S25-02)", () => {
       maj(3, 4, { sessionUpdate: "tool_call_update", toolCallId: "t1", status: "completed" }),
       maj(4, 9, { sessionUpdate: "tool_call_update", toolCallId: "t1", status: "completed" }),
     ]);
-    expect(activity.appels).toHaveLength(1);
-    expect(activity.appels[0]).toMatchObject({ titre: "Read a.py", genre: "read", statut: "completed", dureeMs: 4000 });
+    expect(activity.calls).toHaveLength(1);
+    expect(activity.calls[0]).toMatchObject({ title: "Read a.py", genre: "read", status: "completed", durationMs: 4000 });
     expect(activity.termines).toBe(1);
   });
 
@@ -45,8 +45,8 @@ describe("a run's activity, re-read from the journal (S25-02)", () => {
       maj(3, 2, { sessionUpdate: "tool_call_update", toolCallId: "t2", status: "failed" }),
       permission(4, 3, true, "t3"),
     ]);
-    expect(activity.appels[0]).toMatchObject({ id: "t2", statut: "failed", refus: "outside the allowed paths" });
-    expect(activity.refus).toEqual([{ cible: "src/x.py", raison: "outside the allowed paths", appel: "t2" }]);
+    expect(activity.calls[0]).toMatchObject({ id: "t2", status: "failed", refusals: "outside the allowed paths" });
+    expect(activity.refusals).toEqual([{ target: "src/x.py", reason: "outside the allowed paths", call: "t2" }]);
   });
 
   it("a sub-agent is recognised by its tool name, not by its kind", () => {
@@ -55,7 +55,7 @@ describe("a run's activity, re-read from the journal (S25-02)", () => {
       maj(2, 0, { sessionUpdate: "tool_call", toolCallId: "b", title: "Explore", kind: "think", _meta: { claudeCode: { toolName: "Task" } } }),
       maj(3, 0, { sessionUpdate: "tool_call", toolCallId: "c", title: "Think about it", kind: "think" }),
     ]);
-    expect(activity.appels.map((a) => a.sousAgent)).toEqual([true, true, false]);
+    expect(activity.calls.map((a) => a.sousAgent)).toEqual([true, true, false]);
     expect(activity.sousAgents).toBe(2);
   });
 
@@ -63,12 +63,12 @@ describe("a run's activity, re-read from the journal (S25-02)", () => {
     const start = maj(1, 0, { sessionUpdate: "tool_call", toolCallId: "t1", title: "make test", kind: "execute" });
     const refusal = permission(3, 6, false);
     const activity = runActivity([start, refusal, start, maj(2, 5, { sessionUpdate: "tool_call_update", toolCallId: "t9", status: "completed" }), refusal]);
-    expect(activity.appels.map((a) => [a.id, a.titre])).toEqual([
+    expect(activity.calls.map((a) => [a.id, a.title])).toEqual([
       ["t1", "make test"],
       ["t9", "t9"],
     ]);
     // The same refusal, received twice (stored then live), counts only once.
-    expect(activity.refus).toHaveLength(1);
+    expect(activity.refusals).toHaveLength(1);
   });
 
   it("ignores what is not a tool call: messages, plans, platform events", () => {
@@ -77,7 +77,7 @@ describe("a run's activity, re-read from the journal (S25-02)", () => {
       maj(2, 0, { sessionUpdate: "plan", entries: [] }),
       { seq: 3, type: "run.result", ts: ts(1), payload: { status: "done" } },
     ]);
-    expect(activity).toEqual({ appels: [], refus: [], termines: 0, sousAgents: 0 });
+    expect(activity).toEqual({ calls: [], refusals: [], termines: 0, sousAgents: 0 });
   });
 });
 

@@ -39,7 +39,7 @@ export function ConnectorForm({
 }: {
   types: ConnectorType[];
   actuel?: ConnectorDto;
-  onSave: (corps: ConnectorBody) => Promise<void>;
+  onSave: (body: ConnectorBody) => Promise<void>;
   onSecret: (field: string, draft: SecretDraft) => Promise<void>;
   onClearSecret: (field: string) => Promise<void>;
 }) {

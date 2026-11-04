@@ -5,7 +5,7 @@ describe("the diff of two versions of a workflow (S16-13)", () => {
   it("says the removed line and the added line, and nothing else", () => {
     const avant = "a\nb\ngates: [scope_respected]\nd";
     const after = "a\nb\ngates: [scope_respected, ci_green]\nd";
-    const changes = diffLines(avant, after).filter((ligne) => ligne.kind !== "same");
+    const changes = diffLines(avant, after).filter((line) => line.kind !== "same");
     expect(changes).toEqual([
       { kind: "del", text: "gates: [scope_respected]", before: 3 },
       { kind: "add", text: "gates: [scope_respected, ci_green]", after: 3 },

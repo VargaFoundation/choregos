@@ -86,15 +86,15 @@ export default function SkillPage({ params }: { params: Promise<{ slug: string }
         ) : (
           <div className="grid gap-4 md:grid-cols-[14rem_1fr]" data-testid="files">
             <ul className="space-y-1 text-xs">
-              {files.map((nom) => (
-                <li key={nom}>
+              {files.map((name) => (
+                <li key={name}>
                   <button
                     type="button"
-                    aria-current={nom === montre ? "true" : undefined}
-                    className={`text-left hover:underline ${nom === montre ? "font-semibold" : ""}`}
-                    onClick={() => setFichier(nom)}
+                    aria-current={name === montre ? "true" : undefined}
+                    className={`text-left hover:underline ${name === montre ? "font-semibold" : ""}`}
+                    onClick={() => setFichier(name)}
                   >
-                    {nom}
+                    {name}
                   </button>
                 </li>
               ))}

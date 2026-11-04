@@ -114,6 +114,32 @@ EXCLUDED_NAMES = {"pnpm-lock.yaml"}
 FROZEN_PATHS = {
     f"tests/replay/histories/{stem}.json": "stem is a recorded workflow id (ADR 0098)"
     for stem in ("wi-panier-DEMO-1e", "wi-panier-DEMO-2d", "wi-staffing-RH-1d", "wi-staffing-RH-1f")
+} | {
+    # A `.d.ts` is a TypeScript declaration file: the `d` is English.
+    "apps/web/next-env.d.ts": "`.d.ts` is TypeScript's declaration suffix",
+    "apps/web/next.config.d.mts": "`.d.mts` is TypeScript's declaration suffix",
+    "apps/web/src/types/assets.d.ts": "`.d.ts` is TypeScript's declaration suffix",
+    # `a_d` is the letter range of the file names it covers, not French words.
+    "apps/api/tests/test_api_tests_a_d_in_english.py": "`a_d` is the range of letters a to d",
+    # Former module paths kept as aliases until 0.23.0 (ADR 0098 §3 (a)); each carries `lang: fr-ok-file`.
+    "apps/api/src/choregos_api/services/catalogue_d_agents.py": "alias of services.agent_catalogue",
+    "packages/adapters/src/choregos_adapters/fakes/cd_de_demo.py": "alias of fakes.demo_cd",
+    "packages/core/src/choregos_core/catalogue_d_agents/__init__.py": "alias of agent_catalogue",
+    "packages/core/src/choregos_core/catalogue_d_agents/evals.py": "alias of agent_catalogue.evals",
+    # The former runbook name stays as a redirect: deployed alerts' `runbook_url` point at it.
+    "docs/runbooks/perte-de-noeud.md": "redirect stub for the former name of node-loss.md",
+    # The 1.x joiners-leavers template is French on purpose: what S39-11c's script migrates (EXCLUDED).
+    **{
+        f"apps/api/tests/fixtures/joiners-leavers-v1/joiners-leavers/{name}": "French 1.x fixture (S39-11c)"
+        for name in (
+            "ontology/actions/consigner_le_badge.yaml",
+            "ontology/actions/consigner_le_compte.yaml",
+            "ontology/actions/consigner_le_poste.yaml",
+            "ontology/actions/consigner_une_arrivee.yaml",
+            "ontology/actions/constater_un_depart.yaml",
+            "skills/profils-d-acces/SKILL.md",
+        )
+    },
 }
 
 # ───────────────────────────────────────── the detector ─────────────────────────────────────────
@@ -443,16 +469,77 @@ def python_declarations(content: str) -> Iterator[tuple[int, str]]:
 _TS_DECLARATION = re.compile(r"\b(?:function|const|let|var|class|interface|type|enum)\s+([A-Za-z_$][\w$]*)")
 
 
+_TS_BODY_HEAD = re.compile(
+    r"\b(?:interface\s+[A-Za-z_$][\w$]*[^{;=]*|type\s+[A-Za-z_$][\w$]*[^{;=]*=[\s|&]*)\{"
+)
+_TS_MEMBER = re.compile(r"(?:^|[;,{\n])\s*(?:readonly\s+)?([A-Za-z_$][\w$]*)\??\s*:")
+_TS_FUNCTION_HEAD = re.compile(r"\bfunction\s*\*?\s*[A-Za-z_$]?[\w$]*\s*(?:<[^>(]*>)?\s*\(")
+_TS_PARAMETER = re.compile(
+    r"^\s*(?:\.\.\.)?(?:(?:public|private|protected|readonly)\s+)*([A-Za-z_$][\w$]*)\s*\??\s*(?::|=(?!>)|$)"
+)
+_TS_ARROW_TAIL = re.compile(r"\s*(?::[^=;{}]*?)?=>")
+_TS_BARE_ARROW = re.compile(r"(?<![\w$.)])([A-Za-z_$][\w$]*)\s*=>")
+
+
+def _closing(text: str, start: int, opener: str, closer: str) -> int:
+    """The index of the bracket closing the one at `start`, or -1."""
+    depth = 0
+    for index in range(start, len(text)):
+        if text[index] == opener:
+            depth += 1
+        elif text[index] == closer:
+            depth -= 1
+            if depth == 0:
+                return index
+    return -1
+
+
+def _split_parameters(text: str) -> Iterator[tuple[int, str]]:
+    """(offset, fragment) for each top-level, comma-separated fragment of a parameter list."""
+    depth, begin = 0, 0
+    for index, char in enumerate(text + ","):
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth -= 1
+        elif char == "," and depth == 0:
+            yield begin, text[begin:index]
+            begin = index + 1
+
+
+def _ts_parameters(blanked: str, open_paren: int) -> Iterator[tuple[int, str]]:
+    close = _closing(blanked, open_paren, "(", ")")
+    if close < 0:
+        return
+    for offset, fragment in _split_parameters(blanked[open_paren + 1 : close]):
+        found = _TS_PARAMETER.match(fragment)
+        if found:
+            yield open_paren + 1 + offset + found.start(1), found.group(1)
+
+
 def ts_declarations(content: str) -> Iterator[tuple[int, str]]:
     """(line, name) for every `function`, `const`, `let`, `var`, `class`, `interface`, `type` and
-    `enum` a TypeScript or JavaScript file declares. Comments and strings are blanked first, newlines
-    kept, so a name inside one is not read and the line numbers hold."""
+    `enum` a TypeScript or JavaScript file declares, every member of an `interface` or `type` body
+    (`name?: string`) and every parameter of a function or an arrow function. Comments and strings
+    are blanked first, newlines kept, so a name inside one is not read and the line numbers hold."""
     blanked = _TS_TOKEN.sub(lambda match: re.sub(r"[^\n]", " ", match.group()), content)
-    line, position = 1, 0
-    for match in _TS_DECLARATION.finditer(blanked):
-        line += blanked.count("\n", position, match.start(1))
-        position = match.start(1)
-        yield line, match.group(1)
+    found: list[tuple[int, str]] = [
+        (match.start(1), match.group(1)) for match in _TS_DECLARATION.finditer(blanked)
+    ]
+    for head in _TS_BODY_HEAD.finditer(blanked):
+        close = _closing(blanked, head.end() - 1, "{", "}")
+        body_end = close if close >= 0 else len(blanked)
+        found += [(m.start(1), m.group(1)) for m in _TS_MEMBER.finditer(blanked, head.end() - 1, body_end)]
+    for head in _TS_FUNCTION_HEAD.finditer(blanked):
+        found += _ts_parameters(blanked, head.end() - 1)
+    for index, char in enumerate(blanked):
+        if char == "(":
+            close = _closing(blanked, index, "(", ")")
+            if close >= 0 and _TS_ARROW_TAIL.match(blanked, close + 1):
+                found += _ts_parameters(blanked, index)
+    found += [(match.start(1), match.group(1)) for match in _TS_BARE_ARROW.finditer(blanked)]
+    for position, name in sorted(set(found)):
+        yield blanked.count("\n", 0, position) + 1, name
 
 
 # ─────────────────────────────── what is prose, language by language ───────────────────────────────

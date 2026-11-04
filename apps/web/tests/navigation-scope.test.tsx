@@ -12,7 +12,7 @@ import { projectGroups, projectTrail, scopeOf } from "@/components/shell/navigat
 const path = { current: "/" };
 vi.mock("next/navigation", () => ({ usePathname: () => path.current }));
 vi.mock("@/lib/session", () => ({
-  useSession: () => ({ me: null, orgs: [], org: "acme", choisirOrg: vi.fn(), deconnecter: vi.fn() }),
+  useSession: () => ({ me: null, orgs: [], org: "acme", selectOrg: vi.fn(), deconnecter: vi.fn() }),
 }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();

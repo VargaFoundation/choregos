@@ -1,6 +1,6 @@
-/** Normalise un titre en identifiant d'URL. */
-export function slugify(titre) {
-  return String(titre)
+/** Normalises a title into a URL identifier. */
+export function slugify(title) {
+  return String(title)
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()

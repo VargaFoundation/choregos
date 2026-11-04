@@ -11,8 +11,8 @@ const POLITIQUES = ["allowed", "approval", "forbidden"];
 const TON = { allowed: "ok", approval: "warn", forbidden: "danger" } as const;
 
 /** What a project can choose: the organisation's policy, or stricter (ADR 0034). */
-export function allowedChoices(politiqueDeLOrganisation: string): string[] {
-  return POLITIQUES.slice(Math.max(0, POLITIQUES.indexOf(politiqueDeLOrganisation)));
+export function allowedChoices(organisationPolicy: string): string[] {
+  return POLITIQUES.slice(Math.max(0, POLITIQUES.indexOf(organisationPolicy)));
 }
 
 /**
@@ -50,10 +50,10 @@ export function ProjectOperations({ slug }: { slug: string }) {
 function Row({ slug, operation }: { slug: string; operation: ProjectOperation }) {
   const client = useQueryClient();
   const [erreur, setErreur] = useState<string | null>(null);
-  async function agir(geste: () => Promise<unknown>) {
+  async function agir(gesture: () => Promise<unknown>) {
     setErreur(null);
     try {
-      await geste();
+      await gesture();
       await client.invalidateQueries({ queryKey: ["project-operations", slug] });
     } catch (cause) {
       setErreur(cause instanceof Error ? cause.message : "refused");

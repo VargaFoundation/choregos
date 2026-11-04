@@ -85,7 +85,7 @@ export function StepPanel({
           </p>
           {step.sentence && (
             <p className="mt-1 text-ink-muted">
-              <EngineSentence texte={step.sentence} />
+              <EngineSentence text={step.sentence} />
             </p>
           )}
           {outputsOf(step) && (

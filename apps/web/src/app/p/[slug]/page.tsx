@@ -46,7 +46,7 @@ export default function ProjectOverview({ params }: { params: Promise<{ slug: st
         <Card
           eyebrow="Provisioning"
           title={`${provisioning.data.status} · ${provisioning.data.current_step ?? "—"}`}
-          titreDonnee
+          verbatimTitle
         >
           <ol className="space-y-1 text-sm">
             {provisioning.data.steps.map((step) => (

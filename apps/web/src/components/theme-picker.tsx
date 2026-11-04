@@ -16,30 +16,30 @@ const LIBELLES: Record<PreferenceDeTheme, string> = { dark: "Dark", light: "Ligh
  * and two groups of the same name would make only one: checking one would uncheck the other.
  */
 export function ThemePicker({ className }: { className?: string }) {
-  const { preference, choisir } = useTheme();
+  const { preference, select } = useTheme();
   const group = useId();
   return (
     <fieldset className={cn("flex items-center gap-1", className)}>
       <legend className="sr-only">Theme</legend>
-      {PREFERENCES_DE_THEME.map((valeur) => (
+      {PREFERENCES_DE_THEME.map((value) => (
         <label
-          key={valeur}
+          key={value}
           className={cn(
             "inline-flex cursor-pointer items-center rounded px-2 py-1 text-[11px] pointer-coarse:min-h-11",
             // The radio button is hidden: its label is what shows the keyboard focus.
             "has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-focus",
-            preference === valeur ? "bg-accent-soft text-accent-strong" : "text-ink-muted hover:text-ink",
+            preference === value ? "bg-accent-soft text-accent-strong" : "text-ink-muted hover:text-ink",
           )}
         >
           <input
             type="radio"
             name={group}
-            value={valeur}
-            checked={preference === valeur}
-            onChange={() => choisir(valeur)}
+            value={value}
+            checked={preference === value}
+            onChange={() => select(value)}
             className="sr-only"
           />
-          {LIBELLES[valeur]}
+          {LIBELLES[value]}
         </label>
       ))}
     </fieldset>

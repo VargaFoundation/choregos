@@ -43,11 +43,11 @@ export function defaultTheme(): Theme {
 export function themeResolu(
   preference: string | null | undefined,
   systemeEnClair: boolean,
-  parDefaut: Theme = DEFAULT_THEME,
+  fallback: Theme = DEFAULT_THEME,
 ): Theme {
   if (preference === "light" || preference === "dark") return preference;
   if (preference === "system") return systemeEnClair ? "light" : "dark";
-  return parDefaut;
+  return fallback;
 }
 
 /** The sidebar's key: "rail" folds it; any other value, or none, leaves it full. */

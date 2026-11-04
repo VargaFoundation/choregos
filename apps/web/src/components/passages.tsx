@@ -65,9 +65,9 @@ export function Passages({ passages }: { passages: HandOff[] }) {
             )}
           </p>
           <ol className="space-y-1 border-l border-line pl-3 text-xs">
-            {passage.events.map((evenement, rang) => (
-              <Row key={`${evenement.kind}-${evenement.run_id}-${evenement.digest}`} evenement={evenement}>
-                {evenement.kind === "read" && <Verdict lecture={lecture(passage, rang)} />}
+            {passage.events.map((event, rang) => (
+              <Row key={`${event.kind}-${event.run_id}-${event.digest}`} event={event}>
+                {event.kind === "read" && <Verdict lecture={lecture(passage, rang)} />}
               </Row>
             ))}
           </ol>
@@ -77,20 +77,20 @@ export function Passages({ passages }: { passages: HandOff[] }) {
   );
 }
 
-function Row({ evenement, children }: { evenement: HandOffEvent; children?: ReactNode }) {
-  const qui = [evenement.stage ?? evenement.run_id, evenement.attempt ? `attempt ${evenement.attempt}` : null]
+function Row({ event, children }: { event: HandOffEvent; children?: ReactNode }) {
+  const qui = [event.stage ?? event.run_id, event.attempt ? `attempt ${event.attempt}` : null]
     .filter(Boolean)
     .join(" · ");
   return (
-    <li className="flex flex-wrap items-center gap-x-2 gap-y-1" data-kind={evenement.kind}>
-      <Dot tone={evenement.kind === "produced" ? "agent" : "neutral"} />
+    <li className="flex flex-wrap items-center gap-x-2 gap-y-1" data-kind={event.kind}>
+      <Dot tone={event.kind === "produced" ? "agent" : "neutral"} />
       {/* Spaces in the text, not only the flex gap: a screen reader reads the text. */}
-      <span className="text-ink-muted">{evenement.kind === "produced" ? "Produced by" : "Read by"}</span>{" "}
+      <span className="text-ink-muted">{event.kind === "produced" ? "Produced by" : "Read by"}</span>{" "}
       <span className="text-ink">{qui}</span>{" "}
-      <code className="font-mono text-ink-muted" title={evenement.digest}>
-        {courte(evenement.digest)}
+      <code className="font-mono text-ink-muted" title={event.digest}>
+        {courte(event.digest)}
       </code>{" "}
-      <span className="font-mono text-ink-muted">{shortDate(evenement.at)}</span> {children}
+      <span className="font-mono text-ink-muted">{shortDate(event.at)}</span> {children}
     </li>
   );
 }

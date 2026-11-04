@@ -19,9 +19,9 @@ import type { Action, BudgetAlert, EgressRule, HumanRequest, WorkItemDto } from 
 
 export interface Waiting {
   item: WorkItemDto;
-  demande: HumanRequest;
+  request: HumanRequest;
   /** The due date has passed: the request will be chased, then escalated. */
-  enRetard: boolean;
+  overdue: boolean;
 }
 
 const LIBELLES: Record<string, string> = {
@@ -50,18 +50,18 @@ export function requestSummary(request: HumanRequest): string {
  * nearest due date, then what has waited the longest. A request already decided waits for no one.
  */
 export function waitingTickets(items: WorkItemDto[], now: number = Date.now()): Waiting[] {
-  const dueTime = (a: Waiting) => (a.demande.due_at ? new Date(a.demande.due_at).getTime() : Infinity);
+  const dueTime = (a: Waiting) => (a.request.due_at ? new Date(a.request.due_at).getTime() : Infinity);
   return items
     .filter((item) => item.pending_request && !item.pending_request.decided_at)
     .map((item) => {
       const request = item.pending_request as HumanRequest;
-      return { item, demande: request, enRetard: !!request.due_at && new Date(request.due_at).getTime() < now };
+      return { item, request, overdue: !!request.due_at && new Date(request.due_at).getTime() < now };
     })
     .sort(
       (a, b) =>
-        Number(b.enRetard) - Number(a.enRetard) ||
+        Number(b.overdue) - Number(a.overdue) ||
         dueTime(a) - dueTime(b) ||
-        new Date(a.demande.requested_at).getTime() - new Date(b.demande.requested_at).getTime(),
+        new Date(a.request.requested_at).getTime() - new Date(b.request.requested_at).getTime(),
     );
 }
 
@@ -92,7 +92,7 @@ export function useADecider(org: string, project?: string) {
     staleTime: 30_000,
     enabled: !project,
   });
-  const slugs = project ? [project] : (projects.data?.items ?? []).map((projet) => projet.slug);
+  const slugs = project ? [project] : (projects.data?.items ?? []).map((project) => project.slug);
   const tickets = useQueries({
     queries: slugs.map((slug) => ({
       queryKey: ["items", slug],

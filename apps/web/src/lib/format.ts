@@ -67,16 +67,16 @@ export function libelleDeCode(code: string): string {
  * only, the rest as it is: `release train` becomes "Release train", `ci_green` stays `ci_green`
  * where it is shown as code.
  */
-export function toSentenceCase(texte: string): string {
-  return texte.charAt(0).toUpperCase() + texte.slice(1);
+export function toSentenceCase(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 /** The segments between backticks in an engine sentence (`refiner`, `spec_markdown`): code. */
-export function segmentsDeCode(texte: string): { code: boolean; texte: string }[] {
-  return texte
+export function segmentsDeCode(text: string): { code: boolean; text: string }[] {
+  return text
     .split("`")
-    .map((morceau, index) => ({ code: index % 2 === 1, texte: morceau }))
-    .filter((segment) => segment.texte !== "");
+    .map((morceau, index) => ({ code: index % 2 === 1, text: morceau }))
+    .filter((segment) => segment.text !== "");
 }
 
 /** A ratio shown as a percentage, without false precision. */

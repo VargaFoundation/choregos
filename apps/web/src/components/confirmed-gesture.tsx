@@ -13,10 +13,10 @@ export interface ProprietesDeConfirmation {
   confirmer: string;
   ton?: Ton;
   /** A reason to type (abandoning a train); `requise` forbids running without it. */
-  raison?: { label: string; requise?: boolean };
+  reason?: { label: string; required?: boolean };
   /** The gesture itself. An error stays displayed here, and the confirmation stays open. */
-  action: (raison: string) => Promise<unknown>;
-  onFait?: () => void;
+  action: (reason: string) => Promise<unknown>;
+  onDone?: () => void;
   onAnnuler: () => void;
 }
 
@@ -26,7 +26,7 @@ export interface ProprietesDeConfirmation {
  * without a word if the API refused; the trains went through `confirm()` and `prompt()`, which block
  * the tab and cannot be styled. The focus goes to the first field, Escape cancels and hands back control.
  */
-export function Confirmation({ question, confirmer, ton = "danger", raison, action, onFait, onAnnuler }: ProprietesDeConfirmation) {
+export function Confirmation({ question, confirmer, ton = "danger", reason, action, onDone, onAnnuler }: ProprietesDeConfirmation) {
   const id = useId();
   const zone = useRef<HTMLDivElement>(null);
   const [texte, setTexte] = useState("");
@@ -59,14 +59,14 @@ export function Confirmation({ question, confirmer, ton = "danger", raison, acti
     setErreur(null);
     try {
       await action(texte.trim());
-      onFait?.();
+      onDone?.();
     } catch (cause) {
       setErreur(cause instanceof Error ? cause.message : "refused");
       setOccupe(false);
     }
   }
 
-  const blocked = occupe || Boolean(raison?.requise && !texte.trim());
+  const blocked = occupe || Boolean(reason?.required && !texte.trim());
   return (
     <div
       ref={zone}
@@ -76,11 +76,11 @@ export function Confirmation({ question, confirmer, ton = "danger", raison, acti
       data-testid="confirmation"
     >
       <p id={`${id}-question`}>{question}</p>
-      {raison && (
+      {reason && (
         <label className="block space-y-1">
           <span className="text-xs text-ink-muted">
-            {raison.label}
-            {raison.requise ? " (required)" : ""}
+            {reason.label}
+            {reason.required ? " (required)" : ""}
           </span>
           <Input
             value={texte}
@@ -102,7 +102,7 @@ export function Confirmation({ question, confirmer, ton = "danger", raison, acti
       </span>
       {erreur && (
         <ErrorNote>
-          <EngineSentence texte={erreur} />
+          <EngineSentence text={erreur} />
         </ErrorNote>
       )}
     </div>
@@ -135,9 +135,9 @@ export function ConfirmedGesture({
     return (
       <Confirmation
         {...confirmation}
-        onFait={() => {
+        onDone={() => {
           setOuvert(false);
-          confirmation.onFait?.();
+          confirmation.onDone?.();
         }}
         onAnnuler={() => {
           restoreFocus.current = true;

@@ -124,7 +124,7 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
               question={`Replay this stage? An agent runs it again from the start — a new run, billed like this one (${usd(run.data.cost_usd)}).`}
               confirmer="Replay the stage"
               action={() => api.action(run.data!.work_item_id!, "rerun_stage")}
-              onFait={() => setRelance(true)}
+              onDone={() => setRelance(true)}
             >
               Replay the stage
             </ConfirmedGesture>
@@ -176,7 +176,7 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
 
       <Access acces={access.data} />
 
-      {(activity.appels.length > 0 || activity.refus.length > 0) && (
+      {(activity.calls.length > 0 || activity.refusals.length > 0) && (
         <Card title="Activity" action={<Provenance de="declared" />}>
           <RunActivityView activite={activity} />
         </Card>

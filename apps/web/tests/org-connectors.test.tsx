@@ -16,8 +16,8 @@ const { annuaire, parc, fournisseur, outil, type } = vi.hoisted(() => ({
   parc: { name: "parc", kind: "mdm", type: "demo", operations: [] } as unknown as OrgConnector,
   fournisseur: { name: "supplier-agent", kind: "mcp", type: "mcp", operations: [] } as unknown as OrgConnector,
   outil: (kind: string, type: string, status = "ok") => ({ kind, type, status, config: {} }) as ConnectorDto,
-  type: (kind: string, nom: string) =>
-    ({ kind, type: nom, display: nom, config_schema: {}, secret_fields: [] }) as unknown as ConnectorType,
+  type: (kind: string, name: string) =>
+    ({ kind, type: name, display: name, config_schema: {}, secret_fields: [] }) as unknown as ConnectorType,
 }));
 
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -56,10 +56,10 @@ describe("the connectors, sorted by what they are (S21-04)", () => {
   });
 
   it("the delivery tools are read per project, in the order of the requirements, without what is not one", () => {
-    const [ligne] = deliveryRows([{ slug: "billing-api", name: "Billing API" }], [
+    const [row] = deliveryRows([{ slug: "billing-api", name: "Billing API" }], [
       { data: [outil("cd", "argocd", "error"), outil("tracker", "jira"), outil("notify", "slack")] },
     ]);
-    expect(ligne!.outils).toEqual([
+    expect(row!.tools).toEqual([
       { kind: "tracker", type: "jira", status: "ok" },
       { kind: "cd", type: "argocd", status: "error" },
     ]);
@@ -73,8 +73,8 @@ describe("the connectors, sorted by what they are (S21-04)", () => {
       ],
       [{ error: new ApiError(403, {}) }, { data: [outil("scm", "github")] }],
     );
-    expect(rows.map((l) => l.refus)).toEqual(["No access", null]);
-    expect(rows[1]!.outils).toHaveLength(1);
+    expect(rows.map((l) => l.refusal)).toEqual(["No access", null]);
+    expect(rows[1]!.tools).toHaveLength(1);
   });
 
   it("each section says what it contains, and declaring does not offer a project's delivery tools", async () => {

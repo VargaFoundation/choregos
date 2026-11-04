@@ -106,6 +106,26 @@ def test_typescript_line_numbers_hold_across_comments_and_strings() -> None:
     assert list(ce.ts_declarations(source)) == [(3, "s"), (5, "Rapport")]  # lang: fr-ok
 
 
+def test_typescript_members_and_parameters_are_read() -> None:
+    member = "interface A { fichierSource: string }\n"  # lang: fr-ok
+    assert list(ce.ts_declarations(member)) == [(1, "A"), (1, "fichierSource")]  # lang: fr-ok
+    assert _identifiers("apps/web/src/x.ts", member) != []
+    parameter = "function f(cheminDuFichier: string) {}\n"  # lang: fr-ok
+    assert (1, "cheminDuFichier") in ce.ts_declarations(parameter)  # lang: fr-ok
+    assert _identifiers("apps/web/src/x.ts", parameter) != []
+    assert _identifiers("apps/web/src/x.ts", "interface A { path: string }\n") == []
+    arrow = "const g = (ligne: string, count = 1) => ligne\n"  # lang: fr-ok
+    assert [name for _, name in ce.ts_declarations(arrow)] == ["g", "ligne", "count"]  # lang: fr-ok
+    typed = "type T = { nomComplet?: string; readonly b: number }\n"  # lang: fr-ok
+    assert [name for _, name in ce.ts_declarations(typed)] == ["T", "nomComplet", "b"]  # lang: fr-ok
+    assert (
+        _identifiers("apps/web/src/x.ts", "// interface A { fichierSource: string }\n") == []
+    )  # lang: fr-ok
+    assert (
+        _identifiers("apps/web/src/x.ts", "const s = 'f(cheminDuFichier: string) =>'\n") == []
+    )  # lang: fr-ok
+
+
 # ───────────────────────────────────── the lexicon of names ─────────────────────────────────────
 
 
@@ -179,12 +199,15 @@ def test_a_directory_of_a_path_counts_for_its_files() -> None:
     ]  # lang: fr-ok
 
 
-def test_frozen_paths_are_the_four_recorded_workflow_ids() -> None:
-    assert len(ce.FROZEN_PATHS) == 4
+def test_frozen_paths_are_recorded_names_with_a_reason() -> None:
+    recorded = [path for path in ce.FROZEN_PATHS if path.startswith("tests/replay/histories/")]
+    assert len(recorded) == 4
     for path, reason in ce.FROZEN_PATHS.items():
-        assert "ADR 0098" in reason
+        assert reason.strip()
         assert (ROOT / path).is_file(), f"{path}: no longer there, remove it from FROZEN_PATHS"
         assert ce.path_reason(path) is None
+    for path in recorded:
+        assert "ADR 0098" in ce.FROZEN_PATHS[path]
     assert ce.path_reason("tests/replay/histories/wi-panier-DEMO-9z.json")  # lang: fr-ok
 
 

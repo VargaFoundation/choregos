@@ -62,20 +62,20 @@ function Tabs({ children }: { children: ReactNode }) {
 }
 
 let client: QueryClient;
-async function mount(contenu: ReactNode = <Sonde />) {
+async function mount(content: ReactNode = <Sonde />) {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
       <DraftProvider slug="rh" name="onboarding">
         <DraftBar />
-        <Tabs>{contenu}</Tabs>
+        <Tabs>{content}</Tabs>
       </DraftProvider>
     </QueryClientProvider>,
   );
   await waitFor(() => expect((screen.getAllByRole("textbox")[0] as HTMLTextAreaElement).value).toContain("apiVersion"));
 }
 
-const taper = (texte: string) => fireEvent.change(screen.getByLabelText("texte"), { target: { value: texte } });
+const taper = (text: string) => fireEvent.change(screen.getByLabelText("texte"), { target: { value: text } });
 const validAtTheEnd = () => waitFor(() => expect(screen.getByTestId("validation")).toHaveTextContent("current"), { timeout: 2000 });
 
 beforeEach(() => {
@@ -109,8 +109,8 @@ describe("the single draft of the three views (S21-06)", () => {
 
   it("a stale validation does not replace the latest one", async () => {
     let lente: (v: WorkflowValidation) => void = () => {};
-    vi.mocked(api.validateWorkflow).mockImplementation((texte: string) =>
-      texte === "kind: Workflow\n" ? new Promise((resolve) => (lente = resolve)) : Promise.resolve(valid),
+    vi.mocked(api.validateWorkflow).mockImplementation((text: string) =>
+      text === "kind: Workflow\n" ? new Promise((resolve) => (lente = resolve)) : Promise.resolve(valid),
     );
     await mount();
     taper("kind: Workflow\n");
@@ -128,8 +128,8 @@ describe("the single draft of the three views (S21-06)", () => {
 
   it("a stale answer that arrives during the next validation does not unblock publishing", async () => {
     const pending = new Map<string, (v: WorkflowValidation) => void>();
-    vi.mocked(api.validateWorkflow).mockImplementation((texte: string) =>
-      texte === LU ? Promise.resolve(valid) : new Promise((resolve) => pending.set(texte, resolve)),
+    vi.mocked(api.validateWorkflow).mockImplementation((text: string) =>
+      text === LU ? Promise.resolve(valid) : new Promise((resolve) => pending.set(text, resolve)),
     );
     await mount();
     taper(`${LU}# A\n`);
@@ -147,8 +147,8 @@ describe("the single draft of the three views (S21-06)", () => {
 
   it("an unreachable validation says so and forbids publishing; retrying relaunches it", async () => {
     let calls = 0;
-    vi.mocked(api.validateWorkflow).mockImplementation(async (texte: string) => {
-      if (texte === LU) return valid; // the published version
+    vi.mocked(api.validateWorkflow).mockImplementation(async (text: string) => {
+      if (text === LU) return valid; // the published version
       calls += 1;
       if (calls === 1) throw new Error("network down");
       return valid;

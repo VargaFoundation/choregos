@@ -13,7 +13,7 @@ import type { WorkflowValidation } from "@/lib/types";
 
 type Issue = NonNullable<WorkflowValidation["errors"]>[number];
 
-export type EditorHandle = { allerALaLigne: (ligne: number) => void };
+export type EditorHandle = { goToLine: (line: number) => void };
 
 /**
  * YAML editor (CodeMirror 6), with the API's errors placed **in the margin**.
@@ -119,10 +119,10 @@ export function YamlEditor({
   }, [issues, warnings, value]);
 
   useImperativeHandle(ref, () => ({
-    allerALaLigne(ligne: number) {
+    goToLine(line: number) {
       const instance = vue.current;
       if (!instance) return;
-      const target = instance.state.doc.line(Math.min(Math.max(ligne, 1), instance.state.doc.lines));
+      const target = instance.state.doc.line(Math.min(Math.max(line, 1), instance.state.doc.lines));
       instance.dispatch({ selection: { anchor: target.from }, effects: EditorView.scrollIntoView(target.from, { y: "center" }) });
       instance.focus();
     },

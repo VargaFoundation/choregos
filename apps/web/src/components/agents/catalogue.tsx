@@ -11,12 +11,12 @@ import { estClient, extrait, gateUrl } from "@/lib/integrations";
 import type { AgentCatalogueConnection, AgentCatalogueEntry } from "@/lib/types";
 
 /** The state of an entry in the organisation, in plain words: what the button will do. */
-export function entryState(entree: AgentCatalogueEntry): { libelle: string; action: "install" | "update" | null } {
-  if (entree.own_agent) return { libelle: "Your organisation has its own agent with this name", action: null };
-  if (!entree.installed) return { libelle: "Not installed", action: "install" };
-  if (entree.update_available)
-    return { libelle: `Installed v${entree.installed_version} — an update is available`, action: "update" };
-  return { libelle: `Installed v${entree.installed_version}`, action: null };
+export function entryState(entry: AgentCatalogueEntry): { libelle: string; action: "install" | "update" | null } {
+  if (entry.own_agent) return { libelle: "Your organisation has its own agent with this name", action: null };
+  if (!entry.installed) return { libelle: "Not installed", action: "install" };
+  if (entry.update_available)
+    return { libelle: `Installed v${entry.installed_version} — an update is available`, action: "update" };
+  return { libelle: `Installed v${entry.installed_version}`, action: null };
 }
 
 /**
@@ -54,8 +54,8 @@ export function AgentCatalogue({ org }: { org: string }) {
                 </tr>
               </thead>
               <tbody>
-                {internes.map((entree) => (
-                  <CatalogueRow key={entree.slug} org={org} entree={entree} />
+                {internes.map((entry) => (
+                  <CatalogueRow key={entry.slug} org={org} entry={entry} />
                 ))}
               </tbody>
             </table>
@@ -81,24 +81,24 @@ export function AiClientCatalogue({ org }: { org: string }) {
           configuration once. To connect one simply as yourself, use the steps above.
         </p>
         <ul className="space-y-2" data-testid="catalogue-clients">
-          {clients.map((entree) => (
-            <ClientDuCatalogue key={entree.slug} org={org} entree={entree} />
+          {clients.map((entry) => (
+            <ClientDuCatalogue key={entry.slug} org={org} entry={entry} />
           ))}
         </ul>
       </Card>
   );
 }
 
-function CatalogueRow({ org, entree }: { org: string; entree: AgentCatalogueEntry }) {
+function CatalogueRow({ org, entry }: { org: string; entry: AgentCatalogueEntry }) {
   const client = useQueryClient();
   const [erreur, setErreur] = useState<string | null>(null);
   const [occupe, setOccupe] = useState(false);
-  const state = entryState(entree);
+  const state = entryState(entry);
   async function agir() {
     setErreur(null);
     setOccupe(true);
     try {
-      await api.installCatalogueAgent(org, entree.slug, state.action === "update");
+      await api.installCatalogueAgent(org, entry.slug, state.action === "update");
       await client.invalidateQueries({ queryKey: ["agent-catalogue", org] });
       await client.invalidateQueries({ queryKey: ["agents", org] });
     } catch (cause) {
@@ -108,24 +108,24 @@ function CatalogueRow({ org, entree }: { org: string; entree: AgentCatalogueEntr
     }
   }
   return (
-    <tr className="border-t border-line align-top" data-testid={`catalogue-${entree.slug}`}>
+    <tr className="border-t border-line align-top" data-testid={`catalogue-${entry.slug}`}>
       <td className="py-2 pr-2">
-        {entree.installed ? (
-          <Link href={`/agents/${entree.slug}`} className="font-medium hover:underline">
-            {entree.display_name}
+        {entry.installed ? (
+          <Link href={`/agents/${entry.slug}`} className="font-medium hover:underline">
+            {entry.display_name}
           </Link>
         ) : (
-          <span className="font-medium">{entree.display_name}</span>
+          <span className="font-medium">{entry.display_name}</span>
         )}
-        {entree.skills && entree.skills.length > 0 && (
-          <span className="block text-xs text-ink-muted">Carries {entree.skills.join(", ")}</span>
+        {entry.skills && entry.skills.length > 0 && (
+          <span className="block text-xs text-ink-muted">Carries {entry.skills.join(", ")}</span>
         )}
-        <TagList tags={entree.tags} />
+        <TagList tags={entry.tags} />
       </td>
       <td className="py-2 pr-2">
-        <Badge tone="neutral">{entree.role}</Badge>
+        <Badge tone="neutral">{entry.role}</Badge>
       </td>
-      <td className="py-2 pr-2 text-xs text-ink-muted">{entree.summary}</td>
+      <td className="py-2 pr-2 text-xs text-ink-muted">{entry.summary}</td>
       <td className="py-2 pr-2 text-xs">{state.libelle}</td>
       <td className="py-2 text-right">
         {state.action && (
@@ -139,7 +139,7 @@ function CatalogueRow({ org, entree }: { org: string; entree: AgentCatalogueEntr
   );
 }
 
-function ClientDuCatalogue({ org, entree }: { org: string; entree: AgentCatalogueEntry }) {
+function ClientDuCatalogue({ org, entry }: { org: string; entry: AgentCatalogueEntry }) {
   const client = useQueryClient();
   const infos = useQuery({ queryKey: ["integrations"], queryFn: () => api.integrations(), staleTime: Infinity });
   const [lecture, setLecture] = useState(false);
@@ -148,26 +148,26 @@ function ClientDuCatalogue({ org, entree }: { org: string; entree: AgentCatalogu
   async function connecter() {
     setErreur(null);
     try {
-      setConnexion(await api.connectCatalogueClient(org, entree.slug, lecture));
+      setConnexion(await api.connectCatalogueClient(org, entry.slug, lecture));
       await client.invalidateQueries({ queryKey: ["agents", org] });
       await client.invalidateQueries({ queryKey: ["tokens"] });
     } catch (cause) {
       setErreur(cause instanceof Error ? cause.message : "connection refused");
     }
   }
-  const id = entree.client ?? entree.slug;
+  const id = entry.client ?? entry.slug;
   const url = infos.data ? gateUrl(infos.data.mcp_url) : "…";
   const code = connexion?.token && estClient(id) ? extrait(id, url, connexion.token.token) : null;
   return (
-    <li className="space-y-2 rounded border border-line p-3" data-testid={`client-catalogue-${entree.slug}`}>
+    <li className="space-y-2 rounded border border-line p-3" data-testid={`client-catalogue-${entry.slug}`}>
       <div className="flex flex-wrap items-center gap-3 text-sm">
-        <span className="font-medium">{entree.display_name}</span>
+        <span className="font-medium">{entry.display_name}</span>
         <span className="text-xs text-ink-muted">
-          {entree.reach === "cloud" ? "Calls from its vendor's cloud" : "Calls from your machine"}
+          {entry.reach === "cloud" ? "Calls from its vendor's cloud" : "Calls from your machine"}
         </span>
-        {entree.offered ? (
+        {entry.offered ? (
           <span className="ml-auto inline-flex items-center gap-3">
-            {entree.reach !== "cloud" && (
+            {entry.reach !== "cloud" && (
               <label className="inline-flex items-center gap-1 text-xs text-ink-muted">
                 <input type="checkbox" checked={lecture} onChange={(e) => setLecture(e.target.checked)} />
                 Read only
@@ -183,17 +183,17 @@ function ClientDuCatalogue({ org, entree }: { org: string; entree: AgentCatalogu
           </span>
         )}
       </div>
-      {!entree.offered && entree.unavailable_reason && (
-        <p className="text-xs text-ink-muted">Why: {entree.unavailable_reason}</p>
+      {!entry.offered && entry.unavailable_reason && (
+        <p className="text-xs text-ink-muted">Why: {entry.unavailable_reason}</p>
       )}
       {connexion?.oauth_client_id && (
         <p className="text-sm" role="status">
-          Registered as an external agent: add Choregos in {entree.display_name} with the address {url} — it signs you
+          Registered as an external agent: add Choregos in {entry.display_name} with the address {url} — it signs you
           in.
         </p>
       )}
       {code && (
-        <div className="space-y-1" data-testid={`extrait-${entree.slug}`}>
+        <div className="space-y-1" data-testid={`extrait-${entry.slug}`}>
           <p className="text-xs text-ink-muted">{code.where} — the token is shown once; it is not kept here.</p>
           <pre className="overflow-x-auto rounded border border-line bg-surface-muted p-2 text-xs">{code.code}</pre>
         </div>

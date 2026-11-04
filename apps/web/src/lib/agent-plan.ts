@@ -20,14 +20,14 @@ import type { RunEventDto } from "./types";
 export type TaskStatus = "pending" | "in_progress" | "completed";
 export type TaskPriority = "high" | "medium" | "low";
 
-export type Task = { contenu: string; priorite: TaskPriority; statut: TaskStatus };
+export type Task = { content: string; priorite: TaskPriority; status: TaskStatus };
 
-export type PlanRevision = { seq: number; ts: string; taches: Task[] };
+export type PlanRevision = { seq: number; ts: string; tasks: Task[] };
 
 export type PlanTask =
   | (Task & { retiree: false })
   | {
-      contenu: string;
+      content: string;
       priorite: TaskPriority;
       retiree: true;
       /** The last status the agent gave it. */
@@ -39,7 +39,7 @@ export type PlanTask =
 export type AgentPlan = {
   revisions: PlanRevision[];
   /** The current plan, in the agent's order, then the removed tasks, in the order of their removal. */
-  taches: PlanTask[];
+  tasks: PlanTask[];
   /** The done tasks of the current plan, never a removed task. */
   faites: number;
   /** The tasks of the current plan. */
@@ -84,9 +84,9 @@ function tasksOf(event: RunEventDto): Task[] | null {
     const status = raw.status as TaskStatus;
     const priority = raw.priority as TaskPriority;
     tasks.push({
-      contenu: content,
+      content: content,
       priorite: PRIORITIES.has(priority) ? priority : "medium",
-      statut: STATUSES.has(status) ? status : "pending",
+      status: STATUSES.has(status) ? status : "pending",
     });
   }
   return tasks;
@@ -100,7 +100,7 @@ export function agentPlan(events: RunEventDto[]): AgentPlan | null {
   const revisions: PlanRevision[] = [];
   for (const event of [...bySeq.values()].sort((a, b) => a.seq - b.seq)) {
     const found = tasksOf(event);
-    if (found) revisions.push({ seq: event.seq, ts: event.ts, taches: found });
+    if (found) revisions.push({ seq: event.seq, ts: event.ts, tasks: found });
   }
   const current = revisions.at(-1);
   if (!current) return null;
@@ -108,23 +108,23 @@ export function agentPlan(events: RunEventDto[]): AgentPlan | null {
   // Every task seen, with its last state and the last revision that carried it.
   const seen = new Map<string, { task: Task; last: number }>();
   revisions.forEach((revision, index) => {
-    for (const task of revision.taches) seen.set(task.contenu, { task, last: index });
+    for (const task of revision.tasks) seen.set(task.content, { task, last: index });
   });
-  const present = new Set(current.taches.map((t) => t.contenu));
+  const present = new Set(current.tasks.map((t) => t.content));
   const removed: PlanTask[] = [...seen.values()]
-    .filter(({ task }) => !present.has(task.contenu))
+    .filter(({ task }) => !present.has(task.content))
     .sort((a, b) => a.last - b.last)
     .map(({ task, last }) => ({
-      contenu: task.contenu,
+      content: task.content,
       priorite: task.priorite,
       retiree: true,
-      avant: task.statut,
+      avant: task.status,
       revision: last + 2,
     }));
   return {
     revisions,
-    taches: [...current.taches.map((t): PlanTask => ({ ...t, retiree: false })), ...removed],
-    faites: current.taches.filter((t) => t.statut === "completed").length,
-    total: current.taches.length,
+    tasks: [...current.tasks.map((t): PlanTask => ({ ...t, retiree: false })), ...removed],
+    faites: current.tasks.filter((t) => t.status === "completed").length,
+    total: current.tasks.length,
   };
 }

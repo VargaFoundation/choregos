@@ -17,7 +17,7 @@ const SLUG = /^[a-z0-9][a-z0-9-]*$/;
  * first change), so they are not on that list.
  */
 export function OrganisationCard({ org, canEdit }: { org: string; canEdit: boolean }) {
-  const { orgs, choisirOrg } = useSession();
+  const { orgs, selectOrg } = useSession();
   const client = useQueryClient();
   const current = (orgs ?? []).find((o) => o.slug === org);
   // The same read the sign-in card does: only a platform administrator is answered (403 otherwise).
@@ -49,7 +49,7 @@ export function OrganisationCard({ org, canEdit }: { org: string; canEdit: boole
     await api.updateOrg(org, { slug: typed });
     // The console follows the organisation: remember the new slug, then reload on /admin so nothing
     // keyed by the old one survives.
-    choisirOrg(typed);
+    selectOrg(typed);
     window.location.assign(new URL("/admin", window.location.origin).toString());
   }
 
@@ -107,7 +107,7 @@ export function OrganisationCard({ org, canEdit }: { org: string; canEdit: boole
               </>
             }
             confirmer="Change the slug"
-            raison={{ label: "New slug", requise: true }}
+            reason={{ label: "New slug", required: true }}
             action={changeSlug}
           >
             Change the slug

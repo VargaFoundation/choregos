@@ -16,8 +16,8 @@ import { NavigationList } from "./navigation";
 const LOCAL_EVENT = "choregos:sidebar";
 
 function abonner(rappel: () => void): () => void {
-  const surStockage = (evenement: StorageEvent) => {
-    if (evenement.key !== SIDEBAR_KEY) return;
+  const surStockage = (event: StorageEvent) => {
+    if (event.key !== SIDEBAR_KEY) return;
     appliquerLaBarre(readSidebar());
     rappel();
   };

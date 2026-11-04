@@ -56,7 +56,7 @@ def test_the_direct_gateway_refuses_to_be_built_in_production(
     `direct` returns the key it was given: no virtual key per run, so no hard ceiling
     and no measured cost. The bench ran like this for a week and "proved" a spend ceiling
     that had never measured any spend (BLOCKERS, S12). On a serious environment,
-    it is a refusal, as `garde.yaml` refuses an embedded dependency.
+    it is a refusal, as `guard.yaml` refuses an embedded dependency.
     """
     from choregos_adapters import build
     from choregos_adapters.errors import ConfigurationError

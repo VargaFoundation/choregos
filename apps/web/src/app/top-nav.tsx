@@ -24,7 +24,7 @@ import { useSession } from "@/lib/session";
  */
 export function TopNav({ demo = false }: { demo?: boolean }) {
   const pathname = usePathname();
-  const { me, orgs, org, choisirOrg, deconnecter } = useSession();
+  const { me, orgs, org, selectOrg, deconnecter } = useSession();
   // The edition does not change during a session: a single read is enough.
   const edition = useQuery({ queryKey: ["edition"], queryFn: () => api.edition(), staleTime: Infinity, retry: false });
   // What waits for a person is counted in the header, on every page (S23-02).
@@ -60,7 +60,7 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
         <Select
           aria-label="Current organisation"
           value={org}
-          onChange={(event) => choisirOrg(event.target.value)}
+          onChange={(event) => selectOrg(event.target.value)}
           className="w-auto h-7 font-mono"
         >
           {orgs.map((o) => (
@@ -111,7 +111,7 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
           type="button"
           aria-expanded={ouvert}
           aria-controls="menu-principal"
-          onClick={() => setOuvert((valeur) => !valeur)}
+          onClick={() => setOuvert((value) => !value)}
           className="-mr-3 inline-flex min-h-11 items-center gap-2 rounded px-3 text-[13px] text-ink hover:bg-surface-muted aria-expanded:bg-surface-muted"
         >
           {ouvert ? (

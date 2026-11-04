@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { estUneReference, connectorRows } from "@/components/connectors";
 import type { ConnectorDto, ProjectRequirement } from "@/lib/types";
 
-const exige = (...capacites: string[]): ProjectRequirement[] =>
-  capacites.map((capability) => ({ capability, reasons: [`${capability} needed`], connector: null }));
+const exige = (...capabilities: string[]): ProjectRequirement[] =>
+  capabilities.map((capability) => ({ capability, reasons: [`${capability} needed`], connector: null }));
 
 describe("a project's connectors (ADR 0034, S19-01)", () => {
   it("an HR project sees neither scm, nor ci, nor cd: only what its workflows require", () => {

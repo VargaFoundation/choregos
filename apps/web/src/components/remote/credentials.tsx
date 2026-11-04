@@ -123,7 +123,7 @@ export function RemoteCredentials({
                           question={`Revoke ${credential.name}? Its sealed secrets are deleted and no run can use it again. Agents that name it stop until another credential is set.`}
                           confirmer="Revoke the credential"
                           action={() => api.revokeRemoteCredential(org, credential.name)}
-                          onFait={() => void refresh()}
+                          onDone={() => void refresh()}
                         >
                           Revoke
                         </ConfirmedGesture>

@@ -20,7 +20,7 @@ export default function AuditPage() {
     queryKey: ["audit", filtres],
     queryFn: ({ pageParam }) => api.audit({ ...filtres, cursor: pageParam, limit: 50 }),
     initialPageParam: undefined as string | undefined,
-    getNextPageParam: (derniere) => (derniere.meta.has_more ? (derniere.meta.next_cursor ?? undefined) : undefined),
+    getNextPageParam: (lastPage) => (lastPage.meta.has_more ? (lastPage.meta.next_cursor ?? undefined) : undefined),
   });
   const rows = pages.data?.pages.flatMap((page) => page.items) ?? [];
 

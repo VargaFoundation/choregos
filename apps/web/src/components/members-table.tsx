@@ -181,7 +181,7 @@ export function MembersTable({ project }: { project?: string }) {
                               setMessage(`${person.email} is now ${ROLE_LABELS[newRole.role]}`);
                               await refresh();
                             }}
-                            onFait={() => setNewRole(null)}
+                            onDone={() => setNewRole(null)}
                             onAnnuler={() => setNewRole(null)}
                           />
                         </div>

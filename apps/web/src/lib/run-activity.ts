@@ -14,25 +14,25 @@ export type CallStatus = "pending" | "in_progress" | "completed" | "failed";
 
 export type ToolCall = {
   id: string;
-  titre: string;
+  title: string;
   /** The ACP kind: read, edit, delete, move, search, execute, think, fetch, switch_mode, other. */
   genre: string;
-  statut: CallStatus;
+  status: CallStatus;
   /** The time of its first update, and the time it ended (`completed` or `failed`). */
-  debut: string;
-  fin?: string;
-  dureeMs?: number;
+  start: string;
+  end?: string;
+  durationMs?: number;
   /** The files it targets (`locations`). */
-  chemins: string[];
+  paths: string[];
   /** The refusal that blocked it, if there is one. */
-  refus?: string;
+  refusals?: string;
   /** A sub-agent: the tool the agent launches to delegate a task. */
   sousAgent: boolean;
 };
 
-export type Refusal = { cible: string; raison: string; appel?: string };
+export type Refusal = { target: string; reason: string; call?: string };
 
-export type RunActivity = { appels: ToolCall[]; refus: Refusal[]; termines: number; sousAgents: number };
+export type RunActivity = { calls: ToolCall[]; refusals: Refusal[]; termines: number; sousAgents: number };
 
 const STATUSES = new Set<CallStatus>(["pending", "in_progress", "completed", "failed"]);
 const FINISHED = new Set<CallStatus>(["completed", "failed"]);
@@ -65,7 +65,7 @@ export function runActivity(events: RunEventDto[]): RunActivity {
       const params = (payload.params ?? {}) as { toolCall?: { toolCallId?: unknown } };
       const id = typeof params.toolCall?.toolCallId === "string" ? params.toolCall.toolCallId : undefined;
       const reason = String(payload.reason ?? "refused");
-      refusals.push({ cible: String(payload.target ?? ""), raison: reason, appel: id });
+      refusals.push({ target: String(payload.target ?? ""), reason: reason, call: id });
       continue;
     }
     if (event.type !== "session/update") continue;
@@ -75,21 +75,21 @@ export function runActivity(events: RunEventDto[]): RunActivity {
     const id = update.toolCallId;
     const call =
       calls.get(id) ??
-      ({ id, titre: id, genre: "other", statut: "pending", debut: event.ts, chemins: [], sousAgent: false } as ToolCall);
-    if (typeof update.title === "string" && update.title) call.titre = update.title;
+      ({ id, title: id, genre: "other", status: "pending", start: event.ts, paths: [], sousAgent: false } as ToolCall);
+    if (typeof update.title === "string" && update.title) call.title = update.title;
     if (typeof update.kind === "string") call.genre = update.kind;
     if (Array.isArray(update.locations)) {
-      call.chemins = (update.locations as { path?: unknown }[]).flatMap((l) => (typeof l?.path === "string" ? [l.path] : []));
+      call.paths = (update.locations as { path?: unknown }[]).flatMap((l) => (typeof l?.path === "string" ? [l.path] : []));
     }
     const name = toolName(update);
     if (name && SUB_AGENTS.test(name)) call.sousAgent = true;
     const status = update.status as CallStatus;
     if (STATUSES.has(status)) {
-      call.statut = status;
+      call.status = status;
       // The end is the FIRST update that finishes it: a repeat does not lengthen the call.
-      if (FINISHED.has(status) && !call.fin) {
-        call.fin = event.ts;
-        call.dureeMs = Math.max(0, Date.parse(event.ts) - Date.parse(call.debut));
+      if (FINISHED.has(status) && !call.end) {
+        call.end = event.ts;
+        call.durationMs = Math.max(0, Date.parse(event.ts) - Date.parse(call.start));
       }
     }
     calls.set(id, call);
@@ -97,14 +97,14 @@ export function runActivity(events: RunEventDto[]): RunActivity {
 
   // A refusal lands on the call it cites, after the fact: the request can precede the call in the journal.
   for (const r of refusals) {
-    const call = r.appel ? calls.get(r.appel) : undefined;
-    if (call && !call.refus) call.refus = r.raison;
+    const call = r.call ? calls.get(r.call) : undefined;
+    if (call && !call.refusals) call.refusals = r.reason;
   }
   const list = [...calls.values()];
   return {
-    appels: list,
-    refus: refusals,
-    termines: list.filter((a) => FINISHED.has(a.statut)).length,
+    calls: list,
+    refusals: refusals,
+    termines: list.filter((a) => FINISHED.has(a.status)).length,
     sousAgents: list.filter((a) => a.sousAgent).length,
   };
 }

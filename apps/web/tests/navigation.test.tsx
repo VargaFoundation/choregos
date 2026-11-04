@@ -8,7 +8,7 @@ import { ThemeProvider } from "@/lib/theme";
 const route = { current: "/" };
 vi.mock("next/navigation", () => ({ usePathname: () => route.current }));
 vi.mock("@/lib/session", () => ({
-  useSession: () => ({ me: null, orgs: [], org: "acme", choisirOrg: vi.fn(), deconnecter: vi.fn() }),
+  useSession: () => ({ me: null, orgs: [], org: "acme", selectOrg: vi.fn(), deconnecter: vi.fn() }),
 }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const reel = await importOriginal<typeof import("@/lib/api")>();
@@ -45,26 +45,26 @@ describe("la navigation (S21-03, S24-03)", () => {
   });
 
   it("each entry is placed in a group, once; skills have their own", () => {
-    expect(NAV.map((entree) => entree.label)).toContain("Skills");
-    const rangees = GROUPS.flatMap((groupe) => groupe.entrees);
-    expect([...rangees].sort()).toEqual(NAV.map((entree) => entree.href).sort());
+    expect(NAV.map((entry) => entry.label)).toContain("Skills");
+    const rangees = GROUPS.flatMap((group) => group.entrees);
+    expect([...rangees].sort()).toEqual(NAV.map((entry) => entry.href).sort());
   });
 
   it("Integrations is not in the Catalogue group and is named like the project's entry (S40-08)", () => {
-    const catalogue = GROUPS.find((groupe) => groupe.titre === "Catalogue")!;
+    const catalogue = GROUPS.find((group) => group.titre === "Catalogue")!;
     expect(catalogue.entrees).not.toContain("/integrations");
-    const organisation = GROUPS.find((groupe) => groupe.titre === "Organisation")!;
+    const organisation = GROUPS.find((group) => group.titre === "Organisation")!;
     expect(organisation.entrees[0]).toBe("/integrations");
     const project = projectGroups("x")
-      .flatMap((groupe) => groupe.entries)
-      .find((entree) => entree.href.endsWith("/integrations"))!;
-    expect(NAV.find((entree) => entree.href === "/integrations")!.label).toBe(project.label);
+      .flatMap((group) => group.entries)
+      .find((entry) => entry.href.endsWith("/integrations"))!;
+    expect(NAV.find((entry) => entry.href === "/integrations")!.label).toBe(project.label);
   });
 
   it("projects stay active inside a project, and a single entry is active at a time", () => {
     expect(isActiveEntry("/", "/p/billing-api/board")).toBe(true);
     for (const pathname of ["/", "/agents", "/skills", "/inbox", "/integrations", "/admin/connectors", "/p/x"]) {
-      expect(NAV.filter((entree) => isActiveEntry(entree.href, pathname))).toHaveLength(1);
+      expect(NAV.filter((entry) => isActiveEntry(entry.href, pathname))).toHaveLength(1);
     }
   });
 
@@ -102,7 +102,7 @@ describe("la navigation (S21-03, S24-03)", () => {
     // The header (from 1280 px) and the panel: the same name would make only one group.
     const groups = screen.getAllByRole("group", { name: "Theme" });
     expect(groups).toHaveLength(2);
-    const names = groups.map((groupe) => within(groupe).getAllByRole("radio")[0]!.getAttribute("name"));
+    const names = groups.map((group) => within(group).getAllByRole("radio")[0]!.getAttribute("name"));
     expect(new Set(names).size).toBe(2);
     fireEvent.click(within(groups[1]!).getByRole("radio", { name: "Light" }));
     for (const group of groups) expect(within(group).getByRole("radio", { name: "Light" })).toBeChecked();

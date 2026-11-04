@@ -27,7 +27,7 @@ export function DangerZoneSection({ slug }: { slug: string }) {
               disabled={status !== "active"}
               question={`Suspend ${slug}? Runs in flight finish; no new one starts.`}
               action={() => api.suspendProject(slug)}
-              onFait={() => void refresh()}
+              onDone={() => void refresh()}
             >
               Suspend
             </ConfirmedGesture>
@@ -43,7 +43,7 @@ export function DangerZoneSection({ slug }: { slug: string }) {
               disabled={status === "archived"}
               question={`Archive ${slug}? Its work stops and it leaves the project lists.`}
               action={() => api.deleteProject(slug)}
-              onFait={() => void refresh()}
+              onDone={() => void refresh()}
             >
               Archive
             </ConfirmedGesture>

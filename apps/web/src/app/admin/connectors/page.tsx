@@ -231,7 +231,7 @@ function Instance({
   return (
     <Card
       title={`${instance.name} — ${instance.type}`}
-      titreDonnee
+      verbatimTitle
       action={action}
       className={highlighted ? "border-accent" : undefined}
       aria-current={highlighted ? "true" : undefined}
@@ -425,10 +425,10 @@ function Operation({ org, connecteur, operation }: { org: string; connecteur: st
   const [erreur, setErreur] = useState<string | null>(null);
   const [assouplir, setAssouplir] = useState<OperationPatch["policy"] | null>(null);
   const [cap, setCap] = useState(operation.result_max_bytes?.toString() ?? "");
-  async function changer(corps: OperationPatch) {
+  async function changer(body: OperationPatch) {
     setErreur(null);
     try {
-      await api.updateConnectorOperation(org, connecteur, operation.name, corps);
+      await api.updateConnectorOperation(org, connecteur, operation.name, body);
       await client.invalidateQueries({ queryKey: ["org-connectors", org] });
     } catch (cause) {
       setErreur(cause instanceof Error ? cause.message : "refused");
@@ -490,7 +490,7 @@ function Operation({ org, connecteur, operation }: { org: string; connecteur: st
                 await api.updateConnectorOperation(org, connecteur, operation.name, { policy: assouplir });
                 await client.invalidateQueries({ queryKey: ["org-connectors", org] });
               }}
-              onFait={() => setAssouplir(null)}
+              onDone={() => setAssouplir(null)}
               onAnnuler={() => setAssouplir(null)}
             />
           </div>
@@ -745,12 +745,12 @@ function DeclareInstance({ org }: { org: string }) {
               connectorType={webSearchType(type.kind, type.type)}
             />
           )}
-          {(type?.secret_fields ?? []).map((champ) => (
+          {(type?.secret_fields ?? []).map((field) => (
             <SecretField
-              key={champ}
-              field={champ}
-              draft={secrets[champ] ?? EMPTY_DRAFT}
-              onChange={(draft) => setSecrets({ ...secrets, [champ]: draft })}
+              key={field}
+              field={field}
+              draft={secrets[field] ?? EMPTY_DRAFT}
+              onChange={(draft) => setSecrets({ ...secrets, [field]: draft })}
             />
           ))}
           {noGateway && !gateway.isPending && (
@@ -831,7 +831,7 @@ function Availability({ org, instance }: { org: string; instance: OrgConnector }
           }
           confirmer="Restrict to selected projects"
           action={() => set("selected_projects")}
-          onFait={() => setAsking(false)}
+          onDone={() => setAsking(false)}
           onAnnuler={() => setAsking(false)}
         />
       )}

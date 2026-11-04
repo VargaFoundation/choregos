@@ -27,7 +27,7 @@ test("the most expensive: agents, workflows, tickets; models and tools apart; a 
   await expect(page.getByRole("table", { name: "By model" })).toContainText("claude-sonnet");
   const csv = page.getByRole("link", { name: "CSV", exact: true });
   expect(await csv.count()).toBeGreaterThanOrEqual(7);
-  const hrefs = await csv.evaluateAll((liens) => liens.map((l) => l.getAttribute("href") ?? ""));
+  const hrefs = await csv.evaluateAll((links) => links.map((l) => l.getAttribute("href") ?? ""));
   expect(hrefs.some((h) => h.includes("group_by=agent"))).toBe(true);
   expect(hrefs.some((h) => h.includes("group_by=model") && h.includes("kind=tool"))).toBe(true);
 });

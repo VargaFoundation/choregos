@@ -17,8 +17,8 @@ const ORDRE = ["tracker", "scm", "ci", "cd", "runtime", "gateway", "memory", "no
  * The rows to show: what the workflows require, what is already configured, nothing else.
  * An HR project sees neither `scm`, nor `ci`, nor `cd` (ADR 0034); "add a connector" opens the rest.
  */
-export function connectorRows(exigences: ProjectRequirement[], configures: ConnectorDto[]): string[] {
-  const kinds = new Set([...exigences.map((e) => e.capability), ...configures.map((c) => c.kind)]);
+export function connectorRows(requirements: ProjectRequirement[], configures: ConnectorDto[]): string[] {
+  const kinds = new Set([...requirements.map((e) => e.capability), ...configures.map((c) => c.kind)]);
   return [...kinds].sort((a, b) => {
     const ra = ORDRE.indexOf(a) === -1 ? ORDRE.length : ORDRE.indexOf(a);
     const rb = ORDRE.indexOf(b) === -1 ? ORDRE.length : ORDRE.indexOf(b);
@@ -29,9 +29,9 @@ export function connectorRows(exigences: ProjectRequirement[], configures: Conne
 export { isReference as estUneReference };
 
 /** Cards to show first: what a workflow needs and nothing provides (S40-03b). */
-export function missingFirst(lignes: string[], parSorte: Map<string, ProjectRequirement>, configures: ConnectorDto[]): string[] {
-  const manque = (sorte: string) => !configures.some((c) => c.kind === sorte) && !!parSorte.get(sorte) && !parSorte.get(sorte)?.default_type;
-  return [...lignes.filter(manque), ...lignes.filter((sorte) => !manque(sorte))];
+export function missingFirst(rows: string[], byKind: Map<string, ProjectRequirement>, configures: ConnectorDto[]): string[] {
+  const manque = (kind: string) => !configures.some((c) => c.kind === kind) && !!byKind.get(kind) && !byKind.get(kind)?.default_type;
+  return [...rows.filter(manque), ...rows.filter((kind) => !manque(kind))];
 }
 
 export function Connectors({ slug }: { slug: string }) {
@@ -45,7 +45,7 @@ export function Connectors({ slug }: { slug: string }) {
   const [message, setMessage] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   if (requirements.error) return <ErrorNote>{String(requirements.error)}</ErrorNote>;
-  const actuelDe = (sorte: string) => (connectors.data ?? []).find((c) => c.kind === sorte);
+  const actuelDe = (kind: string) => (connectors.data ?? []).find((c) => c.kind === kind);
   const byKind = new Map((requirements.data ?? []).map((e) => [e.capability, e]));
   // A connector added by hand and then saved is a configured one: one row, not two.
   const rows = missingFirst(
@@ -56,9 +56,9 @@ export function Connectors({ slug }: { slug: string }) {
   // The runtimes this deployment runs (`GET /platform/executors`): a project cannot pick another one.
   // An empty answer means the deployment did not say, not that nothing runs.
   const permis = new Set<string>((executors.data ?? []).filter((e) => e.enabled).map((e) => e.kind));
-  const typesDe = (sorte: string) =>
+  const typesDe = (kind: string) =>
     (types.data ?? []).filter(
-      (t) => t.kind === sorte && (sorte !== "runtime" || permis.size === 0 || permis.has(t.type) || actuelDe(sorte)?.type === t.type),
+      (t) => t.kind === kind && (kind !== "runtime" || permis.size === 0 || permis.has(t.type) || actuelDe(kind)?.type === t.type),
     );
   const others = [...new Set((types.data ?? []).map((t) => t.kind))].filter((k) => !rows.includes(k)).sort();
 
@@ -94,48 +94,48 @@ export function Connectors({ slug }: { slug: string }) {
           </div>
         )}
         <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="connectors">
-          {rows.map((sorte) => (
+          {rows.map((kind) => (
             <ConnectorCard
-              key={sorte}
-              sorte={sorte}
-              exigence={byKind.get(sorte)}
-              actuel={(connectors.data ?? []).find((c) => c.kind === sorte)}
-              types={typesDe(sorte)}
-              onSave={(corps) =>
+              key={kind}
+              kind={kind}
+              exigence={byKind.get(kind)}
+              actuel={(connectors.data ?? []).find((c) => c.kind === kind)}
+              types={typesDe(kind)}
+              onSave={(body) =>
                 agir(
-                  () => api.putConnector(slug, sorte, corps),
+                  () => api.putConnector(slug, kind, body),
                   (saved) => {
                     const { status, last_error } = saved as ConnectorDto;
-                    if (status === "ok") return `${sorte} connector saved: connected`;
-                    return `${sorte} connector saved: ${status === "error" ? `failing, ${last_error ?? "the test failed"}` : "not tested yet"}`;
+                    if (status === "ok") return `${kind} connector saved: connected`;
+                    return `${kind} connector saved: ${status === "error" ? `failing, ${last_error ?? "the test failed"}` : "not tested yet"}`;
                   },
                 )
               }
               onSecret={(field, draft) =>
                 agir(async () => {
-                  if (draft.mode === "value") await api.setConnectorSecret(slug, sorte, field, draft.text);
+                  if (draft.mode === "value") await api.setConnectorSecret(slug, kind, field, draft.text);
                   else {
-                    const refs = { ...(actuelDe(sorte)?.secret_refs ?? {}), [field]: draft.text };
-                    await api.putConnector(slug, sorte, {
-                      type: actuelDe(sorte)?.type,
-                      config: actuelDe(sorte)?.config ?? {},
+                    const refs = { ...(actuelDe(kind)?.secret_refs ?? {}), [field]: draft.text };
+                    await api.putConnector(slug, kind, {
+                      type: actuelDe(kind)?.type,
+                      config: actuelDe(kind)?.config ?? {},
                       secret_refs: refs,
                     });
                   }
-                }, `${sorte}: ${field.replaceAll("_", " ")} saved`)
+                }, `${kind}: ${field.replaceAll("_", " ")} saved`)
               }
               onClearSecret={(field) =>
-                agir(() => api.clearConnectorSecret(slug, sorte, field), `${sorte}: ${field.replaceAll("_", " ")} cleared`)
+                agir(() => api.clearConnectorSecret(slug, kind, field), `${kind}: ${field.replaceAll("_", " ")} cleared`)
               }
               onTest={() =>
                 agir(async () => {
-                  const outcome = await api.testConnector(slug, sorte);
+                  const outcome = await api.testConnector(slug, kind);
                   if (!outcome.ok) {
                     throw new Error(
-                      `${sorte}: ` + outcome.checks.map((c) => `${c.name} ${c.ok ? "✓" : `✗ ${c.detail ?? ""}`}`).join(", "),
+                      `${kind}: ` + outcome.checks.map((c) => `${c.name} ${c.ok ? "✓" : `✗ ${c.detail ?? ""}`}`).join(", "),
                     );
                   }
-                }, `${sorte}: connection OK`)
+                }, `${kind}: connection OK`)
               }
             />
           ))}
@@ -157,9 +157,9 @@ export function Connectors({ slug }: { slug: string }) {
                 onChange={(event) => setAjout(event.target.value)}
               >
                 <option value="">—</option>
-                {others.map((sorte) => (
-                  <option key={sorte} value={sorte}>
-                    {sorte}
+                {others.map((kind) => (
+                  <option key={kind} value={kind}>
+                    {kind}
                   </option>
                 ))}
               </Select>

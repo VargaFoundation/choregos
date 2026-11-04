@@ -41,47 +41,47 @@ export function AgentPlanView({ plan }: { plan: Plan }) {
         />
       </div>
       <ol aria-label="Agent plan" className="space-y-1.5 text-sm">
-        {plan.taches.map((tache) => (
-          <Row key={`${tache.retiree ? "retiree" : "courante"}:${tache.contenu}`} tache={tache} />
+        {plan.tasks.map((task) => (
+          <Row key={`${task.retiree ? "retiree" : "courante"}:${task.content}`} task={task} />
         ))}
       </ol>
     </div>
   );
 }
 
-function Row({ tache }: { tache: PlanTask }) {
-  if (tache.retiree) {
+function Row({ task }: { task: PlanTask }) {
+  if (task.retiree) {
     return (
       <li className="flex items-start gap-2 text-ink-muted" data-status="removed">
         <CircleMinus aria-hidden className="mt-0.5 size-4 shrink-0" strokeWidth={1.75} />
         <span className="min-w-0">
-          <span className="line-through">{tache.contenu}</span>{" "}
+          <span className="line-through">{task.content}</span>{" "}
           <span className="font-mono text-[11px]">
-            removed in revision {tache.revision}
-            {tache.avant === "completed" ? ", after being marked done" : ""}
+            removed in revision {task.revision}
+            {task.avant === "completed" ? ", after being marked done" : ""}
           </span>
         </span>
       </li>
     );
   }
-  const Icone = { pending: Circle, in_progress: CircleDot, completed: CircleCheck }[tache.statut];
+  const Icone = { pending: Circle, in_progress: CircleDot, completed: CircleCheck }[task.status];
   return (
-    <li className="flex items-start gap-2" data-status={tache.statut}>
+    <li className="flex items-start gap-2" data-status={task.status}>
       <Icone
         aria-hidden
         className={cn(
           "mt-0.5 size-4 shrink-0",
-          tache.statut === "completed" && "text-succeeded-ink",
-          tache.statut === "in_progress" && "text-running-ink motion-safe:animate-pulse",
-          tache.statut === "pending" && "text-ink-subtle",
+          task.status === "completed" && "text-succeeded-ink",
+          task.status === "in_progress" && "text-running-ink motion-safe:animate-pulse",
+          task.status === "pending" && "text-ink-subtle",
         )}
         strokeWidth={1.75}
       />
-      <span className={cn("min-w-0", tache.statut === "completed" ? "text-ink-muted" : "text-ink")}>
-        {tache.contenu}
-        <span className="sr-only"> — {LIBELLE[tache.statut]}</span>
+      <span className={cn("min-w-0", task.status === "completed" ? "text-ink-muted" : "text-ink")}>
+        {task.content}
+        <span className="sr-only"> — {LIBELLE[task.status]}</span>
       </span>
-      {tache.priorite === "high" && (
+      {task.priorite === "high" && (
         <span className="ml-auto shrink-0 font-mono text-[11px] text-ink-muted">High</span>
       )}
     </li>

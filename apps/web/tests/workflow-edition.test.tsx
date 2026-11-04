@@ -73,13 +73,13 @@ function Sonde({ gesture }: { gesture?: WorkflowOperation }) {
 }
 
 /** Renders under a draft, once the workflow is read: that is where the map opens its panels. */
-async function renderUnderDraft(contenu: ReactNode) {
+async function renderUnderDraft(content: ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
       <DraftProvider slug="rh" name="onboarding">
         <DraftBar />
-        {contenu}
+        {content}
       </DraftProvider>
     </QueryClientProvider>,
   );

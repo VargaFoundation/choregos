@@ -21,7 +21,7 @@ export function MemoryReimport({ slug }: { slug: string }) {
         confirmer="Re-import"
         ton="accent"
         action={() => api.reimportMemory(slug)}
-        onFait={() => setScheduledAt(new Date().toISOString())}
+        onDone={() => setScheduledAt(new Date().toISOString())}
       >
         Re-import the project memory
       </ConfirmedGesture>

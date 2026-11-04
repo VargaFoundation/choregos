@@ -17,9 +17,9 @@ async function surveiller(page: Page) {
   page.on("console", (message) => {
     if (/Content Security Policy|Refused to/i.test(message.text())) violations.push(message.text());
   });
-  page.on("request", (requete) => {
-    const url = new URL(requete.url());
-    if (!["127.0.0.1", "localhost"].includes(url.hostname) && !url.protocol.startsWith("data")) dehors.push(requete.url());
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (!["127.0.0.1", "localhost"].includes(url.hostname) && !url.protocol.startsWith("data")) dehors.push(request.url());
   });
   return async () => {
     const vues = await page.evaluate(() => (window as unknown as { __violations?: string[] }).__violations ?? []);

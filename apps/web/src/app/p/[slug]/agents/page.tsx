@@ -42,7 +42,7 @@ import { BuiltinAgentOfActor } from "@/components/agents/builtin-agent";
 export default function ProjectAgentsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = use(params);
   const { org } = useSession();
-  const epingles = useQuery({ queryKey: ["project-agents", slug], queryFn: () => api.projectAgents(slug) });
+  const pins = useQuery({ queryKey: ["project-agents", slug], queryFn: () => api.projectAgents(slug) });
   const registre = useQuery({ queryKey: ["agents", org], queryFn: () => api.agents(org) });
   const implicites = useQuery({ queryKey: ["implicit-agents", slug], queryFn: () => api.implicitAgents(slug) });
   // A project's own agents come first; a personal agent, or another project's, cannot be pinned here (ADR 0061).
@@ -99,19 +99,19 @@ export default function ProjectAgentsPage({ params }: { params: Promise<{ slug: 
         </div>
       </Card>
       <Card title="Pinned agents">
-        {epingles.error ? (
-          <ErrorNote>{String(epingles.error)}</ErrorNote>
-        ) : !epingles.data ? (
+        {pins.error ? (
+          <ErrorNote>{String(pins.error)}</ErrorNote>
+        ) : !pins.data ? (
           <p className="text-sm text-ink-muted">Reading…</p>
-        ) : epingles.data.length === 0 ? (
+        ) : pins.data.length === 0 ? (
           <Empty title="Nothing pinned">
             A workflow actor that names an agent runs its production version; pin one to hold a revision or follow a
             channel, and tighten it.
           </Empty>
         ) : (
           <ul className="space-y-3" data-testid="pins">
-            {epingles.data.map((epingle) => (
-              <Pinned key={epingle.agent} projet={slug} epingle={epingle} />
+            {pins.data.map((pin) => (
+              <Pinned key={pin.agent} projet={slug} pin={pin} />
             ))}
           </ul>
         )}
@@ -173,26 +173,26 @@ function ProjectChannel({ projet }: { projet: string }) {
   );
 }
 
-function Pinned({ projet, epingle }: { projet: string; epingle: ProjectAgent }) {
+function Pinned({ projet, pin }: { projet: string; pin: ProjectAgent }) {
   const client = useQueryClient();
-  const resserre = Object.values(epingle.overrides ?? {}).some((valeur) => valeur != null);
+  const resserre = Object.values(pin.overrides ?? {}).some((value) => value != null);
   return (
     <li className="flex flex-wrap items-center gap-3 text-sm">
-      <Link href={`/agents/${epingle.agent}`} className="font-medium hover:underline">
-        {epingle.agent}
+      <Link href={`/agents/${pin.agent}`} className="font-medium hover:underline">
+        {pin.agent}
       </Link>
-      <Badge tone="neutral">v{epingle.version}</Badge>
-      <Badge tone={epingle.channel ? "agent" : "neutral"} data-testid="pin-mode">
-        {epingle.channel === "candidate" ? "follows testing" : epingle.channel === "stable" ? "follows production" : "fixed revision"}
+      <Badge tone="neutral">v{pin.version}</Badge>
+      <Badge tone={pin.channel ? "agent" : "neutral"} data-testid="pin-mode">
+        {pin.channel === "candidate" ? "follows testing" : pin.channel === "stable" ? "follows production" : "fixed revision"}
       </Badge>
       {resserre && <Badge tone="warn">Tightened</Badge>}
-      <span className="text-xs text-ink-muted">{versionSummary(epingle.effective)}</span>
+      <span className="text-xs text-ink-muted">{versionSummary(pin.effective)}</span>
       <span className="ml-auto">
         <ConfirmedGesture
-          question={`Unpin ${epingle.agent}? Its workflows run its production version from now on${resserre ? ", and the limits tightened here are lost" : ""}.`}
-          confirmer={`Unpin ${epingle.agent}`}
+          question={`Unpin ${pin.agent}? Its workflows run its production version from now on${resserre ? ", and the limits tightened here are lost" : ""}.`}
+          confirmer={`Unpin ${pin.agent}`}
           action={async () => {
-            await api.unpinProjectAgent(projet, epingle.agent);
+            await api.unpinProjectAgent(projet, pin.agent);
             await client.invalidateQueries({ queryKey: ["project-agents", projet] });
           }}
         >
