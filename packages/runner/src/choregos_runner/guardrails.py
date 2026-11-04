@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Garde-fous du runner : ce que l'agent a le droit de faire, et ce qui est vérifié après.
+"""Runner guardrails: what the agent is allowed to do, and what is checked afterwards.
 
-La permission n'est pas la garantie : la garantie, c'est la vérification du diff et les
-gates. Ici on refuse ce qui est refusable tout de suite, et on journalise tout.
+Permission is not the guarantee: the guarantee is the diff verification and the
+gates. Here we refuse at once what can be refused, and we journal everything.
 """
 
 from __future__ import annotations
@@ -46,14 +46,14 @@ SECRET_FILE_PATTERNS = (".env", ".git-credentials", "id_rsa", ".npmrc", ".pypirc
 
 @dataclass(slots=True)
 class Decision:
-    """Verdict sur une demande de permission, toujours motivé."""
+    """Verdict on a permission request, always reasoned."""
 
     allowed: bool
     reason: str
     kind: str = "unknown"
     target: str = ""
-    #: La nature n'était pas dans la demande ACP : on l'a DÉDUITE du titre ou des arguments.
-    #: Dit dans le journal, parce qu'une déduction se relit autrement qu'une déclaration.
+    #: The nature was not in the ACP request: it was INFERRED from the title or the arguments.
+    #: Said in the journal, because an inference is read differently from a declaration.
     inferred: bool = False
 
     def to_event(self) -> dict[str, Any]:
@@ -66,10 +66,10 @@ class Decision:
         }
 
 
-#: Premier mot du titre ACP → nature. Les titres de Claude Code sont « Write /chemin »,
-#: « Edit /chemin », « Read /chemin », « Bash: … » ; ceux des autres agents suivent le même
-#: réflexe. Ce qu'on ne reconnaît pas reste vide : la règle générale décide alors.
-_VERBES_ECRITURE = {
+#: First word of the ACP title → nature. Claude Code's titles are "Write /path",
+#: "Edit /path", "Read /path", "Bash: …"; those of other agents follow the same
+#: habit. What we do not recognise stays empty: the general rule then decides.
+_WRITE_VERBS = {
     "write",
     "edit",
     "multiedit",
@@ -81,51 +81,51 @@ _VERBES_ECRITURE = {
     "mkdir",
     "touch",
 }
-_VERBES_LECTURE = {"read", "glob", "grep", "ls", "search", "view", "cat", "find", "list"}
-_VERBES_EXECUTION = {"bash", "run", "exec", "execute", "shell", "sh", "terminal"}
-_VERBES_RESEAU = {"webfetch", "fetch", "curl", "http", "websearch", "download"}
+_READ_VERBS = {"read", "glob", "grep", "ls", "search", "view", "cat", "find", "list"}
+_EXECUTE_VERBS = {"bash", "run", "exec", "execute", "shell", "sh", "terminal"}
+_NETWORK_VERBS = {"webfetch", "fetch", "curl", "http", "websearch", "download"}
 
 
 def _nature_deduite(title: str, raw: dict[str, Any], *, path: str, command: str, url: str) -> str:
-    """Déduit `edit`/`read`/`execute`/`network` d'une demande ACP qui n'a pas de `kind`."""
+    """Infer `edit`/`read`/`execute`/`network` from an ACP request that has no `kind`."""
     if command:
         return "execute"
     if url:
         return "network"
     if any(k in raw for k in ("content", "new_string", "old_string", "edits", "new_str", "text")) and path:
         return "edit"
-    premier = title.split(" ", 1)[0].rstrip(":").lower() if title else ""
-    if premier in _VERBES_ECRITURE:
+    first = title.split(" ", 1)[0].rstrip(":").lower() if title else ""
+    if first in _WRITE_VERBS:
         return "edit"
-    if premier in _VERBES_LECTURE:
+    if first in _READ_VERBS:
         return "read"
-    if premier in _VERBES_EXECUTION:
+    if first in _EXECUTE_VERBS:
         return "execute"
-    if premier in _VERBES_RESEAU:
+    if first in _NETWORK_VERBS:
         return "network"
     return ""
 
 
 @dataclass
 class GuardRails:
-    """Politique de permission appliquée en direct pendant la session ACP."""
+    """Permission policy applied live during the ACP session."""
 
     permissions: Permissions
     allowed_paths: list[str] = field(default_factory=list)
     decisions: list[Decision] = field(default_factory=list)
-    #: Racine du workspace : les agents demandent des chemins ABSOLUS (`/workspace/src/x.py`),
-    #: le périmètre est écrit en relatif (`src/**`). Sans la retirer, tout est « hors
-    #: périmètre » — ce que personne n'avait vu, puisque `check_write` ne tournait jamais.
+    #: Workspace root: agents ask for ABSOLUTE paths (`/workspace/src/x.py`),
+    #: the scope is written relative (`src/**`). Without removing it, everything is "out of
+    #: scope", which nobody had seen, since `check_write` never ran.
     workspace: str = "/workspace"
 
     def __post_init__(self) -> None:
         if not self.allowed_paths:
             self.allowed_paths = list(self.permissions.write_paths)
 
-    # ───────────────────────── entrée principale ─────────────────────────
+    # ───────────────────────── main entry ─────────────────────────
 
     def decide(self, params: dict[str, Any]) -> Decision:
-        """Analyse une demande ACP `session/request_permission` et tranche."""
+        """Analyse an ACP `session/request_permission` request and decide."""
         tool = params.get("toolCall", params.get("tool_call", params)) or {}
         kind = str(tool.get("kind") or tool.get("type") or "").lower()
         raw = tool.get("rawInput") or tool.get("input") or {}
@@ -137,10 +137,10 @@ class GuardRails:
 
         inferred = False
         if not kind:
-            # Claude Code n'envoie PAS `kind` dans `session/request_permission` : seulement
-            # `title` (« Write /workspace/x.py ») et `rawInput`. Sans cette déduction, chaque
-            # écriture tombait dans « lecture ou recherche : autorisé » et le périmètre de
-            # chemins n'était jamais consulté — 23 écritures sur 23, banc du 2026-09-24.
+            # Claude Code does NOT send `kind` in `session/request_permission`: only
+            # `title` ("Write /workspace/x.py") and `rawInput`. Without this inference, every
+            # write fell into "read or search: allowed" and the path scope was
+            # never consulted: 23 writes out of 23, bench of 2026-09-24.
             kind = _nature_deduite(title, raw, path=path, command=command, url=url)
             inferred = bool(kind)
 
@@ -164,9 +164,9 @@ class GuardRails:
         elif kind in {"read", "search", "fetch", "think", "other"}:
             decision = Decision(True, "read or search: allowed", kind, path or title)
         elif not kind and self.permissions.unknown_requests == "reject":
-            # Fermé : la politique (`sandbox.unknown_requests: reject`) refuse ce qu'elle ne
-            # sait pas nommer. Le message dit à l'agent par où passer — un refus muet fait
-            # un agent qui réessaie autrement.
+            # Closed: the policy (`sandbox.unknown_requests: reject`) refuses what it cannot
+            # name. The message tells the agent which way to go: a mute refusal makes
+            # an agent that retries another way.
             decision = Decision(
                 False,
                 "request of unknown kind, refused by the project's policy "
@@ -187,7 +187,7 @@ class GuardRails:
         self.decisions.append(decision)
         return decision
 
-    # ───────────────────────── règles ─────────────────────────
+    # ───────────────────────── rules ─────────────────────────
 
     def check_write(self, path: str) -> Decision:
         normalized = self._relatif(path)
@@ -219,10 +219,10 @@ class GuardRails:
         )
 
     def _relatif(self, path: str) -> str:
-        """Le chemin tel que le périmètre le nomme : relatif à la racine du workspace."""
-        racine = self.workspace.rstrip("/")
-        if racine and (path == racine or path.startswith(racine + "/")):
-            path = path[len(racine) :]
+        """The path as the scope names it: relative to the workspace root."""
+        root = self.workspace.rstrip("/")
+        if root and (path == root or path.startswith(root + "/")):
+            path = path[len(root) :]
         return path.removeprefix("./").lstrip("/")  # `lstrip(".")` mangerait `.choregos`
 
     def check_command(self, command: str) -> Decision:
@@ -277,7 +277,7 @@ class GuardRails:
         )
 
     def extend_scope(self, paths: list[str]) -> None:
-        """Élargit le périmètre à chaud après un `request_scope_change` accordé."""
+        """Widen the scope live after a granted `request_scope_change`."""
         for path in paths:
             if path not in self.allowed_paths:
                 self.allowed_paths.append(path)
@@ -317,7 +317,7 @@ def _before_rtk(command: str) -> list[str]:
 
 
 def _command_matches(command: str, denied: str) -> bool:
-    """`kubectl` interdit `kubectl get pods` ; `terraform apply` n'interdit pas `terraform plan`."""
+    """`kubectl` forbidden forbids `kubectl get pods`; `terraform apply` does not forbid `terraform plan`."""
     try:
         tokens = shlex.split(command)
     except ValueError:

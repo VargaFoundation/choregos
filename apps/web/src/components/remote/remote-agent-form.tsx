@@ -144,7 +144,7 @@ export function RemoteAgentForm({
       {card && found && (
         <>
           <Card title="What the card says" action={<Badge tone="accent">Remote · A2A {card.protocol_version}</Badge>} data-testid="card-summary">
-            <p className="text-sm font-medium" data-donnee>
+            <p className="text-sm font-medium" data-verbatim>
               {card.name}
             </p>
             {card.description && <p className="mt-1 max-w-3xl text-xs text-ink-muted">{card.description}</p>}

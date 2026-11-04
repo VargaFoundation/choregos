@@ -46,7 +46,7 @@ export function Artifacts({
             aria-selected={group.name === current.name}
             aria-controls={`artifact-panel-${group.name}`}
             data-artifact={group.name}
-            data-donnee
+            data-verbatim
             onClick={() => setSelected(group.name)}
             className={
               "min-h-11 px-3 font-mono text-xs " +

@@ -69,8 +69,8 @@ export default function MemoryPage({ params }: { params: Promise<{ slug: string 
   return (
     <div className="space-y-6">
       <div className="space-y-2">
-        <Breadcrumbs steps={[{ href: "/memories", label: "Memories" }, { label: <span data-donnee>{current?.display_name ?? slug}</span> }]} />
-        <OrgPageHeader eyebrow="Organisation memory" title={<span data-donnee>{current?.display_name ?? slug}</span>} />
+        <Breadcrumbs steps={[{ href: "/memories", label: "Memories" }, { label: <span data-verbatim>{current?.display_name ?? slug}</span> }]} />
+        <OrgPageHeader eyebrow="Organisation memory" title={<span data-verbatim>{current?.display_name ?? slug}</span>} />
         <p className="font-mono text-xs text-ink-muted">
           global:{slug}
           {current?.status === "archived" && " · archived"}

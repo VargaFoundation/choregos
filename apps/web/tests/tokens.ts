@@ -7,18 +7,18 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import postcss from "postcss";
 
-export const FEUILLE_DU_THEME = resolve(import.meta.dirname, "../src/styles/theme.css");
+export const THEME_SHEET = resolve(import.meta.dirname, "../src/styles/theme.css");
 
 export type Mode = "dark" | "light";
 export type Declarations = Map<string, string>;
 
 /** The custom-property declarations of an exact selector, comments excluded. */
-export function declarationsDe(chemin: string, selecteur: string): Declarations {
-  const root = postcss.parse(readFileSync(chemin, "utf-8"));
+export function declarationsOf(path: string, selector: string): Declarations {
+  const root = postcss.parse(readFileSync(path, "utf-8"));
   const found: Declarations = new Map();
   root.walkRules((rule) => {
     // One selector of the list is enough.
-    if (!rule.selectors.some((s) => s.trim() === selecteur)) return;
+    if (!rule.selectors.some((s) => s.trim() === selector)) return;
     // Top level only (not inside an @media).
     if (rule.parent?.type !== "root") return;
     rule.walkDecls((declaration) => {
@@ -29,11 +29,10 @@ export function declarationsDe(chemin: string, selecteur: string): Declarations 
 }
 
 export function tokensOfMode(mode: Mode): Declarations {
-  const dark = declarationsDe(FEUILLE_DU_THEME, ":root");
+  const dark = declarationsOf(THEME_SHEET, ":root");
   if (mode === "dark") return dark;
-  return new Map([...dark, ...declarationsDe(FEUILLE_DU_THEME, ':root[data-theme="light"]')]);
+  return new Map([...dark, ...declarationsOf(THEME_SHEET, ':root[data-theme="light"]')]);
 }
-export const jetonsDuMode = tokensOfMode; // lang: fr-ok alias:internal
 
 type Rgba = [number, number, number, number];
 
@@ -68,7 +67,6 @@ export function resolveColour(value: string, tokens: Declarations, depth = 0): R
   }
   throw new Error(`colour not resolved: ${value}`);
 }
-export const couleur = resolveColour; // lang: fr-ok alias:internal
 
 export function token(name: string, mode: Mode): Rgba {
   const tokens = tokensOfMode(mode);
@@ -76,7 +74,6 @@ export function token(name: string, mode: Mode): Rgba {
   if (value === undefined) throw new Error(`token missing in ${mode}: ${name}`);
   return resolveColour(value, tokens);
 }
-export const jeton = token; // lang: fr-ok alias:internal
 
 function linear(c: number): number {
   return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
@@ -91,4 +88,3 @@ export function contrast(a: Rgba, b: Rgba): number {
   const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
   return (light + 0.05) / (dark + 0.05);
 }
-export const contraste = contrast; // lang: fr-ok alias:internal

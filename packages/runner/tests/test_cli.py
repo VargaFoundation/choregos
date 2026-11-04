@@ -1,4 +1,4 @@
-"""Tests de la CLI du runner (`choregos-runner`)."""
+"""Tests of the runner CLI (`choregos-runner`)."""
 
 from __future__ import annotations
 
@@ -14,21 +14,21 @@ from typer.testing import CliRunner
 cli = CliRunner()
 
 
-def test_la_liste_des_backends_affiche_les_versions_epinglees() -> None:
+def test_the_backends_list_shows_the_pinned_versions() -> None:
     result = cli.invoke(app, ["backends"])
     assert result.exit_code == 0
     assert "claude-code" in result.stdout and "gemini-cli" in result.stdout
-    assert "openhands" not in result.stdout, "un backend retiré ne se propose plus"
+    assert "openhands" not in result.stdout, "a retired backend is no longer offered"
 
 
-def test_validate_accepte_un_resultat_conforme(tmp_path: Path) -> None:
+def test_validate_accepts_a_conforming_result(tmp_path: Path) -> None:
     path = tmp_path / "result.json"
     path.write_text(
         json.dumps(
             {
                 "schema": "choregos/StageResult/v1",
                 "status": "done",
-                "summary": "étape terminée",
+                "summary": "step finished",
                 "evidence": {"tests_passed": True, "tests_run": 3},
             }
         ),
@@ -39,14 +39,14 @@ def test_validate_accepte_un_resultat_conforme(tmp_path: Path) -> None:
     assert "valid — status=done" in result.stdout
 
 
-def test_validate_refuse_un_resultat_invalide(tmp_path: Path) -> None:
+def test_validate_refuses_an_invalid_result(tmp_path: Path) -> None:
     path = tmp_path / "result.json"
     path.write_text('{"status": "licorne"}', encoding="utf-8")
     result = cli.invoke(app, ["validate", str(path)])
     assert result.exit_code == int(Exit.INVALID_RESULT)
 
 
-def test_validate_signale_un_fichier_absent(tmp_path: Path) -> None:
+def test_validate_reports_a_missing_file(tmp_path: Path) -> None:
     result = cli.invoke(app, ["validate", str(tmp_path / "rien.json")])
     assert result.exit_code == int(Exit.INVALID_RESULT)
 

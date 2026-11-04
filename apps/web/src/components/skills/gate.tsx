@@ -25,11 +25,11 @@ export function toneOfRisk(risk: string | null | undefined): Tone {
 export function RiskBadge({ risk, reviewStatus }: { risk?: string | null; reviewStatus?: string | null }) {
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5">
-      <Badge tone={toneOfRisk(risk)} data-testid="risque">
+      <Badge tone={toneOfRisk(risk)} data-testid="risk">
         {risk ? `${risk[0]!.toUpperCase()}${risk.slice(1)} risk` : "Not assessed"}
       </Badge>
       {reviewStatus === "pending_review" && (
-        <Badge tone="waiting" data-testid="revue">
+        <Badge tone="waiting" data-testid="review">
           Pending review
         </Badge>
       )}
@@ -53,7 +53,7 @@ export function sortFindings(findings: SkillFinding[]): SkillFinding[] {
 export function Findings({ findings }: { findings: SkillFinding[] | null | undefined }) {
   if (!findings || findings.length === 0) return <p className="text-xs text-ink-muted">The scan found nothing.</p>;
   return (
-    <ul className="space-y-1 text-xs" data-testid="constats">
+    <ul className="space-y-1 text-xs" data-testid="findings">
       {sortFindings(findings).map((finding, index) => (
         <li key={`${finding.code}-${finding.file ?? ""}-${index}`} className="flex flex-wrap items-baseline gap-2">
           <Badge tone={SEVERITY_TONE[finding.severity] ?? "neutral"} dot={false}>
@@ -168,7 +168,7 @@ export function GitImport({ org, onImported }: { org: string; onImported?: (skil
         Preview
       </Button>
       {preview && (
-        <div className="space-y-2" data-testid="apercu">
+        <div className="space-y-2" data-testid="preview">
           <p className="text-xs text-ink-muted">
             <code>{preview.repo}</code> at <code>{preview.sha}</code>
             {preview.allowed ? " · in the allowlist" : " · not in the allowlist: an administrator imports it"}
@@ -251,7 +251,7 @@ export function VersionGate({
   }
   const mine = version.review_status === "pending_review" && !canApprove(version, me);
   return (
-    <div className="space-y-3 text-sm" data-testid="porte">
+    <div className="space-y-3 text-sm" data-testid="gate">
       <div className="flex flex-wrap items-center gap-2">
         <RiskBadge risk={version.risk} reviewStatus={version.review_status} />
         {version.reviewed_by && (

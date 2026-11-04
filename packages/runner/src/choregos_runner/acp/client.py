@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Client ACP headless : lance l'agent, tient la session, arbitre les permissions."""
+"""Headless ACP client: starts the agent, holds the session, arbitrates permissions."""
 
 from __future__ import annotations
 
@@ -46,19 +46,19 @@ UpdateHandler = Callable[[dict[str, Any]], Awaitable[None]]
 
 
 class AgentUnreachableError(RuntimeError):
-    """Le backend n'a pas répondu à `initialize` : le backend est cassé, pas l'agent."""
+    """The backend did not answer `initialize`: the backend is broken, not the agent."""
 
 
 class AgentProtocolError(RuntimeError):
-    """L'agent a violé le protocole ACP."""
+    """The agent broke the ACP protocol."""
 
 
 @dataclass
 class PromptOutcome:
     stop_reason: str = "end_turn"
     turns: int = 0
-    #: Fragments de texte reçus de l'agent. Zéro message ET zéro outil = le modèle n'a pas
-    #: répondu : ce n'est pas un agent distrait, c'est un accès qui ne marche pas.
+    #: Text fragments received from the agent. Zero messages AND zero tools = the model did not
+    #: answer: this is not a distracted agent, it is an access that does not work.
     messages: int = 0
     tool_calls: int = 0
     permission_denials: int = 0
@@ -73,32 +73,30 @@ class PromptOutcome:
 
 
 def _option_id(params: dict[str, Any], allowed: bool) -> str:
-    """L'identifiant d'option à RENVOYER, choisi parmi ceux que l'agent propose.
+    """The option id to SEND BACK, chosen among those the agent offers.
 
-    ACP laisse l'agent nommer ses options : il annonce `{kind, optionId, name}`, et le
-    client répond avec un `optionId` DE CETTE LISTE. Nous renvoyions `allow_once`, un nom
-    que claude-code-acp n'offre pas — il propose `allow` (de genre `allow_once`). Notre
-    « oui » ne correspondait donc à rien, l'agent le lisait comme un refus, et il écrivait
-    dans sa transcription que ses écritures étaient « refusées par l'utilisateur » alors
-    que le journal de la plateforme, lui, disait « autorisé ». Deux versions de la même
-    étape, et aucune ne mentait.
+    ACP lets the agent name its options: it announces `{kind, optionId, name}`, and the
+    client answers with an `optionId` FROM THIS LIST. We used to send back `allow_once`, a name
+    that claude-code-acp does not offer: it offers `allow` (of kind `allow_once`). Our "yes"
+    therefore matched nothing, the agent read it as a refusal, and it wrote in its transcript
+    that its writes were "refused by the user" while the platform's journal said "allowed".
+    Two versions of the same step, and neither was lying.
     """
-    # L'ordre compte : `once` d'abord. Une décision de garde-fou porte sur CET appel ;
-    # répondre « toujours » donnerait à l'agent un blanc-seing pour tous les suivants,
-    # que personne n'a accordé.
-    voulus = ("allow_once", "allow_always") if allowed else ("reject_once", "reject_always")
+    # Order matters: `once` first. A guardrail decision is about THIS call; answering "always"
+    # would give the agent a blank cheque for all the following ones, which nobody granted.
+    wanted = ("allow_once", "allow_always") if allowed else ("reject_once", "reject_always")
     options = [o for o in (params.get("options") or []) if isinstance(o, dict)]
-    for genre in voulus:
+    for kind in wanted:
         for option in options:
-            if option.get("kind") == genre and option.get("optionId"):
+            if option.get("kind") == kind and option.get("optionId"):
                 return str(option["optionId"])
-    # Aucune option du genre attendu : on retombe sur le nom canonique du genre, qui est
-    # aussi l'identifiant employé par les agents qui ne renomment rien.
-    return voulus[0]
+    # No option of the expected kind: fall back on the kind's canonical name, which is
+    # also the id used by agents that rename nothing.
+    return wanted[0]
 
 
 class AcpClient:
-    """Client ACP sur stdio. Aucune dépendance au backend : c'est le contrat qui compte."""
+    """ACP client over stdio. No dependency on the backend: the contract is what counts."""
 
     def __init__(
         self,
@@ -187,12 +185,12 @@ class AcpClient:
             {
                 "protocolVersion": PROTOCOL_VERSION,
                 "acpVersion": ACP_VERSION,
-                # On annonce ce qu'on SERT, et on sert les deux méthodes fichier (plus bas).
-                # Les deux mensonges possibles coûtent cher, et on les a payés tous les deux :
-                # annoncer `fs` puis refuser l'appel envoie l'agent tout refaire en `bash`
-                # (« le système de fichiers n'est pas exposé », dit sa transcription) ;
-                # annoncer `false` fait désactiver ses outils d'édition, et il ne peut plus
-                # rien écrire du tout.
+                # We announce what we SERVE, and we serve both file methods (further down).
+                # The two possible lies are costly, and we paid for both:
+                # announcing `fs` then refusing the call sends the agent off to redo everything with `bash`
+                # ("the file system is not exposed", says its transcript);
+                # announcing `false` makes it disable its edit tools, and it can no longer
+                # write anything at all.
                 "clientCapabilities": client_capabilities
                 or {"fs": {"readTextFile": True, "writeTextFile": True}, "terminal": False},
                 "clientInfo": {"name": "choregos-runner", "version": "1.0.0"},
@@ -237,7 +235,7 @@ class AcpClient:
         return session_id
 
     async def prompt(self, text: str, *, timeout: float) -> PromptOutcome:
-        """Envoie un tour de prompt et laisse l'agent travailler jusqu'à `stopReason`."""
+        """Send a prompt turn and let the agent work until `stopReason`."""
         if self.session_id is None:
             raise AgentProtocolError("no open session")
         if self.outcome.guard is not None:
@@ -262,25 +260,25 @@ class AcpClient:
 
     async def _prompt_until_tripped(self, text: str, timeout: float) -> Response | None:
         """The prompt's response — or `None` when the guard stopped the agent first."""
-        envoi = asyncio.create_task(
+        send_task = asyncio.create_task(
             self.request(
                 SESSION_PROMPT,
                 {"sessionId": self.session_id, "prompt": [{"type": "text", "text": text}]},
                 timeout=timeout,
             )
         )
-        alarme = asyncio.create_task(self._tripped.wait())
-        done, _ = await asyncio.wait({envoi, alarme}, return_when=asyncio.FIRST_COMPLETED)
-        if envoi in done:
-            alarme.cancel()
-            return envoi.result()
+        alarm = asyncio.create_task(self._tripped.wait())
+        done, _ = await asyncio.wait({send_task, alarm}, return_when=asyncio.FIRST_COMPLETED)
+        if send_task in done:
+            alarm.cancel()
+            return send_task.result()
         # The guard tripped: the session was cancelled; the agent gets a moment to end its turn.
         with contextlib.suppress(Exception):
-            await asyncio.wait_for(asyncio.shield(envoi), timeout=self.cancel_grace_s)
-        if not envoi.done():
-            envoi.cancel()
+            await asyncio.wait_for(asyncio.shield(send_task), timeout=self.cancel_grace_s)
+        if not send_task.done():
+            send_task.cancel()
             with contextlib.suppress(BaseException):
-                await envoi
+                await send_task
         self.outcome.stop_reason = str(self.outcome.guard)
         self.outcome.cancelled = True
         return None
@@ -317,19 +315,19 @@ class AcpClient:
         try:
             return await asyncio.wait_for(future, timeout=timeout)
         except TimeoutError as exc:
-            raise AgentUnreachableError(self._pourquoi_muet(method, timeout)) from exc
+            raise AgentUnreachableError(self._why_silent(method, timeout)) from exc
         finally:
             self._pending.pop(request.id, None)
 
-    def _pourquoi_muet(self, method: str, timeout: float) -> str:
-        """Ce qu'on sait d'un agent qui n'a pas répondu — au lieu d'un `TimeoutError` nu.
+    def _why_silent(self, method: str, timeout: float) -> str:
+        """What we know about an agent that did not answer, instead of a bare `TimeoutError`.
 
-        Le 2026-09-27, sur le locataire dev, `opencode` n'a pas répondu à `initialize` et le
-        journal du pod ne portait QUE la pile d'`asyncio.wait_for`. Rien sur la commande lancée,
-        rien sur le fait que le processus vivait encore, rien de sa sortie d'erreur — alors que
-        `stderr_tail` la collecte depuis le premier jour et que personne ne la lisait à cet
-        endroit. Un agent muet est le cas le plus fréquent d'un premier déploiement : c'est
-        exactement là qu'il faut une phrase qui dit quoi regarder.
+        On 2026-09-27, on the dev tenant, `opencode` did not answer `initialize` and the
+        pod's journal carried ONLY the `asyncio.wait_for` stack. Nothing about the command run,
+        nothing about the process still being alive, nothing from its error output, although
+        `stderr_tail` has collected it since day one and nobody read it at that place. A
+        silent agent is the most frequent case of a first deployment: that is exactly where
+        a sentence that says what to look at is needed.
         """
         morceaux = [
             f"the agent did not answer `{method}` within {timeout:.0f} s",
@@ -348,8 +346,10 @@ class AcpClient:
                 f"{self.dropped_messages} message(s) longer than {self.max_message_bytes} bytes dropped"
             )
         if self.stderr_tail:
-            dernieres = " / ".join(ligne.strip() for ligne in self.stderr_tail[-5:] if ligne.strip())
-            morceaux.append(f"agent's error output: {dernieres[:600]}")
+            last_lines = " / ".join(
+                line_text.strip() for line_text in self.stderr_tail[-5:] if line_text.strip()
+            )
+            morceaux.append(f"agent's error output: {last_lines[:600]}")
         else:
             morceaux.append("agent's error output: EMPTY")
         return " — ".join(morceaux)
@@ -429,18 +429,18 @@ class AcpClient:
                 self.outcome.permission_denials += 1
                 return
             allowed, reason = await self._decide(request.params)
-            choix = _option_id(request.params, allowed)
+            choice = _option_id(request.params, allowed)
             if not allowed:
                 self.outcome.permission_denials += 1
                 await self.respond(
                     Response(
                         id=request.id,
-                        result={"outcome": {"outcome": "selected", "optionId": choix}, "reason": reason},
+                        result={"outcome": {"outcome": "selected", "optionId": choice}, "reason": reason},
                     )
                 )
                 return
             await self.respond(
-                Response(id=request.id, result={"outcome": {"outcome": "selected", "optionId": choix}})
+                Response(id=request.id, result={"outcome": {"outcome": "selected", "optionId": choice}})
             )
             return
         if request.method == SESSION_UPDATE:
@@ -458,44 +458,44 @@ class AcpClient:
         )
 
     def _resolve(self, raw: Any) -> Path | None:
-        """Un chemin du workspace, ou rien.
+        """A path inside the workspace, or nothing.
 
-        Le workspace est la frontière : un chemin relatif s'y rattache, un chemin absolu
-        doit y tomber. Ce qui sort — `../../etc/passwd`, un lien qui remonte — n'est pas
-        une erreur de l'agent à corriger, c'est une demande à refuser.
+        The workspace is the boundary: a relative path is attached to it, an absolute path
+        must fall inside it. What goes outside, such as `../../etc/passwd` or a link that climbs
+        out, is not an agent error to correct, it is a request to refuse.
         """
         if not isinstance(raw, str) or not raw:
             return None
-        racine = Path(self.cwd).resolve()
-        cible = (racine / raw).resolve() if not Path(raw).is_absolute() else Path(raw).resolve()
-        return cible if cible == racine or racine in cible.parents else None
+        root = Path(self.cwd).resolve()
+        target = (root / raw).resolve() if not Path(raw).is_absolute() else Path(raw).resolve()
+        return target if target == root or root in target.parents else None
 
     async def _read_text_file(self, request: Request) -> None:
         params = request.params or {}
-        cible = self._resolve(params.get("path"))
-        if cible is None:
+        target = self._resolve(params.get("path"))
+        if target is None:
             await self.respond(error_response(request.id, PERMISSION_DENIED, "path outside the workspace"))
             return
         try:
-            lignes = cible.read_text(encoding="utf-8").splitlines(keepends=True)
+            lines = target.read_text(encoding="utf-8").splitlines(keepends=True)
         except OSError as exc:
             await self.respond(error_response(request.id, PERMISSION_DENIED, f"cannot read: {exc}"))
             return
-        # `line` est 1-indexé dans ACP ; `limit` borne le nombre de lignes rendues.
-        depart = max(int(params.get("line") or 1) - 1, 0)
-        limite = params.get("limit")
-        fin = depart + int(limite) if limite else len(lignes)
-        await self.respond(Response(id=request.id, result={"content": "".join(lignes[depart:fin])}))
+        # `line` is 1-indexed in ACP; `limit` bounds the number of lines returned.
+        start = max(int(params.get("line") or 1) - 1, 0)
+        limit_value = params.get("limit")
+        end = start + int(limit_value) if limit_value else len(lines)
+        await self.respond(Response(id=request.id, result={"content": "".join(lines[start:end])}))
 
     async def _write_text_file(self, request: Request) -> None:
         params = request.params or {}
-        cible = self._resolve(params.get("path"))
-        if cible is None:
+        target = self._resolve(params.get("path"))
+        if target is None:
             await self.respond(error_response(request.id, PERMISSION_DENIED, "path outside the workspace"))
             return
         try:
-            cible.parent.mkdir(parents=True, exist_ok=True)
-            cible.write_text(str(params.get("content", "")), encoding="utf-8")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(str(params.get("content", "")), encoding="utf-8")
         except OSError as exc:
             await self.respond(error_response(request.id, PERMISSION_DENIED, f"cannot write: {exc}"))
             return

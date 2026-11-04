@@ -109,7 +109,7 @@ export default function ProjectAgentsPage({ params }: { params: Promise<{ slug: 
             channel, and tighten it.
           </Empty>
         ) : (
-          <ul className="space-y-3" data-testid="epingles">
+          <ul className="space-y-3" data-testid="pins">
             {epingles.data.map((epingle) => (
               <Pinned key={epingle.agent} projet={slug} epingle={epingle} />
             ))}
@@ -317,7 +317,7 @@ function Implicites({ projet, org, registre }: { projet: string; org: string; re
         {implicites.length === 0 ? (
           <p className="text-sm text-ink-muted">None: every agent of this project&apos;s workflows is in the registry.</p>
         ) : (
-          <ul className="space-y-2" data-testid="implicites">
+          <ul className="space-y-2" data-testid="implicit">
             {implicites.map((implicite) => (
               <Implicite
                 key={`${implicite.workflow}/${implicite.acteur}`}
@@ -383,10 +383,10 @@ function Implicite({
   }
   return (
     <li className="flex flex-wrap items-center gap-3 text-sm">
-      <span className="font-medium" data-donnee>
+      <span className="font-medium" data-verbatim>
         {implicite.acteur}
       </span>
-      <span className="text-xs text-ink-muted" data-donnee>
+      <span className="text-xs text-ink-muted" data-verbatim>
         {implicite.workflow}
         {implicite.role ? ` · role ${implicite.role}` : ""}
         {implicite.model ? ` · ${implicite.model}` : ""}
@@ -439,7 +439,7 @@ function AgentsThisProjectRuns({ projet }: { projet: string }) {
       {lu.data.length === 0 ? (
         <p className="text-sm text-ink-muted">No active workflow of this project has an agent step.</p>
       ) : (
-        <Table data-testid="agents-du-projet">
+        <Table data-testid="project-agents">
           <THead>
             <TR>
               <TH>Actor</TH>

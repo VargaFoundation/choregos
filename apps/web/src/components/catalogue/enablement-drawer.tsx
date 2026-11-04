@@ -73,7 +73,7 @@ export function EnablementDrawer({
                     disabled={busy === slug || enablement.availability !== "selected_projects"}
                     onChange={(event) => void toggle(slug, event.target.checked)}
                   />
-                  <span data-donnee>{slug}</span>
+                  <span data-verbatim>{slug}</span>
                 </label>
               </li>
             ))}

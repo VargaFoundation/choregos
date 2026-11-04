@@ -6,30 +6,30 @@ import type { WorkflowOperation } from "@/lib/types";
  * rewrites the YAML: it asks the API for a graft, which returns the text, the diff and the inverse.
  */
 // The keys below are the console's gesture names, shared with the fixture
-// `tests/fixtures/gestes-de-la-console.json` that `packages/core/tests/test_edition.py` reads too:
-// they are renamed together with that file (S45-29). // lang: fr-ok alias:external
+// `tests/fixtures/console-gestures.json` that `packages/core/tests/test_edition.py` reads too:
+// they are renamed together with that file.
 export const operations = {
-  libelle: (state: string, label: string): WorkflowOperation => ({ op: "set_state", name: state, field: "display", value: label }),
-  genre: (state: string, kind: string): WorkflowOperation => ({ op: "set_state", name: state, field: "kind", value: kind }),
-  renommer: (from: string, to: string): WorkflowOperation => ({ op: "rename_state", from, to }),
-  retirerLEtat: (state: string): WorkflowOperation => ({ op: "remove_state", name: state }),
-  ajouterUnEtat: (name: string, label: string, kind?: string): WorkflowOperation => ({
+  stateLabel: (state: string, label: string): WorkflowOperation => ({ op: "set_state", name: state, field: "display", value: label }),
+  stateKind: (state: string, kind: string): WorkflowOperation => ({ op: "set_state", name: state, field: "kind", value: kind }),
+  renameState: (from: string, to: string): WorkflowOperation => ({ op: "rename_state", from, to }),
+  removeState: (state: string): WorkflowOperation => ({ op: "remove_state", name: state }),
+  addState: (name: string, label: string, kind?: string): WorkflowOperation => ({
     op: "add_state",
     name: name,
     spec: kind ? { display: label, kind: kind } : { display: label },
   }),
-  ajouterUneTransition: (from: string, to: string, by: string, id?: string): WorkflowOperation => ({
+  addTransition: (from: string, to: string, by: string, id?: string): WorkflowOperation => ({
     op: "add_transition",
     transition: { ...(id ? { id } : {}), from: from, to: to, by: by },
   }),
-  retirerLaTransition: (id: string): WorkflowOperation => ({ op: "remove_transition", id }),
-  acteur: (transition: string, actor: string): WorkflowOperation => ({ op: "set_transition", id: transition, field: "by", value: actor }),
-  delai: (transition: string, hours: number | null): WorkflowOperation =>
+  removeTransition: (id: string): WorkflowOperation => ({ op: "remove_transition", id }),
+  transitionActor: (transition: string, actor: string): WorkflowOperation => ({ op: "set_transition", id: transition, field: "by", value: actor }),
+  transitionTimeout: (transition: string, hours: number | null): WorkflowOperation =>
     hours === null
       ? { op: "set_transition", id: transition, field: "timeout_hours", unset: true }
       : { op: "set_transition", id: transition, field: "timeout_hours", value: hours },
-  ajouterUneGarantie: (transition: string, gate: string): WorkflowOperation => ({ op: "add_gate", transition, gate: gate }),
-  retirerUneGarantie: (transition: string, gate: string): WorkflowOperation => ({ op: "remove_gate", transition, name: gate }),
+  addGate: (transition: string, gate: string): WorkflowOperation => ({ op: "add_gate", transition, gate: gate }),
+  removeGate: (transition: string, gate: string): WorkflowOperation => ({ op: "remove_gate", transition, name: gate }),
   // ADR 0112: actors, every transition field, the workflow's own fields.
   addActor: (name: string, spec: Record<string, unknown>): WorkflowOperation => ({ op: "add_actor", name, spec }),
   removeActor: (name: string): WorkflowOperation => ({ op: "remove_actor", name }),

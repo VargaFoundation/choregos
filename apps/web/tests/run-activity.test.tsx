@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { RunActivityView } from "@/components/run-activity";
-import { activiteDuRun } from "@/lib/activite-du-run";
+import { runActivity } from "@/lib/run-activity";
 import type { RunEventDto } from "@/lib/types";
 import { runEvents } from "@/mocks/data";
 
@@ -27,7 +27,7 @@ const permission = (seq: number, s: number, allowed: boolean, toolCallId?: strin
 
 describe("a run's activity, re-read from the journal (S25-02)", () => {
   it("each finished call appears once, with its duration up to the FIRST end", () => {
-    const activity = activiteDuRun([
+    const activity = runActivity([
       maj(1, 0, { sessionUpdate: "tool_call", toolCallId: "t1", title: "Read a.py", kind: "read", status: "pending" }),
       maj(2, 1, { sessionUpdate: "tool_call_update", toolCallId: "t1", status: "in_progress" }),
       maj(3, 4, { sessionUpdate: "tool_call_update", toolCallId: "t1", status: "completed" }),
@@ -39,7 +39,7 @@ describe("a run's activity, re-read from the journal (S25-02)", () => {
   });
 
   it("a refused permission shows on the call it blocks, even when the request precedes it", () => {
-    const activity = activiteDuRun([
+    const activity = runActivity([
       permission(1, 0, false, "t2"),
       maj(2, 1, { sessionUpdate: "tool_call", toolCallId: "t2", title: "Edit b.py", kind: "edit", status: "pending" }),
       maj(3, 2, { sessionUpdate: "tool_call_update", toolCallId: "t2", status: "failed" }),
@@ -50,7 +50,7 @@ describe("a run's activity, re-read from the journal (S25-02)", () => {
   });
 
   it("a sub-agent is recognised by its tool name, not by its kind", () => {
-    const activity = activiteDuRun([
+    const activity = runActivity([
       maj(1, 0, { sessionUpdate: "tool_call", toolCallId: "a", title: "Explore", kind: "think", name: "Task" }),
       maj(2, 0, { sessionUpdate: "tool_call", toolCallId: "b", title: "Explore", kind: "think", _meta: { claudeCode: { toolName: "Task" } } }),
       maj(3, 0, { sessionUpdate: "tool_call", toolCallId: "c", title: "Think about it", kind: "think" }),
@@ -62,7 +62,7 @@ describe("a run's activity, re-read from the journal (S25-02)", () => {
   it("live and stored overlap: an event counts once; an orphan update creates the call", () => {
     const start = maj(1, 0, { sessionUpdate: "tool_call", toolCallId: "t1", title: "make test", kind: "execute" });
     const refusal = permission(3, 6, false);
-    const activity = activiteDuRun([start, refusal, start, maj(2, 5, { sessionUpdate: "tool_call_update", toolCallId: "t9", status: "completed" }), refusal]);
+    const activity = runActivity([start, refusal, start, maj(2, 5, { sessionUpdate: "tool_call_update", toolCallId: "t9", status: "completed" }), refusal]);
     expect(activity.appels.map((a) => [a.id, a.titre])).toEqual([
       ["t1", "make test"],
       ["t9", "t9"],
@@ -72,7 +72,7 @@ describe("a run's activity, re-read from the journal (S25-02)", () => {
   });
 
   it("ignores what is not a tool call: messages, plans, platform events", () => {
-    const activity = activiteDuRun([
+    const activity = runActivity([
       maj(1, 0, { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "je lis" } }),
       maj(2, 0, { sessionUpdate: "plan", entries: [] }),
       { seq: 3, type: "run.result", ts: ts(1), payload: { status: "done" } },
@@ -83,20 +83,20 @@ describe("a run's activity, re-read from the journal (S25-02)", () => {
 
 describe("the activity card", () => {
   it("summarises the run, shows each call, and the refusal on the blocked call's row", () => {
-    render(<RunActivityView activite={activiteDuRun(runEvents)} />);
-    expect(screen.getByTestId("activite-resume")).toHaveTextContent("5 tool calls · 5 finished · 1 refused · 1 sub-agent");
+    render(<RunActivityView activite={runActivity(runEvents)} />);
+    expect(screen.getByTestId("activity-summary")).toHaveTextContent("5 tool calls · 5 finished · 1 refused · 1 sub-agent");
     const rows = within(screen.getByRole("table", { name: "Tool calls" })).getAllByRole("row").slice(1);
     expect(rows).toHaveLength(5);
-    const bloquee = rows.find((l) => l.getAttribute("data-appel") === "tc-4")!;
-    expect(bloquee).toHaveAttribute("data-statut", "failed");
+    const bloquee = rows.find((l) => l.getAttribute("data-call") === "tc-4")!;
+    expect(bloquee).toHaveAttribute("data-status", "failed");
     expect(within(bloquee).getByText("Denied")).toBeInTheDocument();
-    expect(within(rows.find((l) => l.getAttribute("data-appel") === "tc-2")!).getByText("Sub-agent")).toBeInTheDocument();
+    expect(within(rows.find((l) => l.getAttribute("data-call") === "tc-2")!).getByText("Sub-agent")).toBeInTheDocument();
     // A refusal that nothing links to a call stays visible, apart.
     expect(screen.queryByRole("list", { name: "Refusals outside a tool call" })).not.toBeInTheDocument();
   });
 
   it("a refusal without a call is listed apart", () => {
-    render(<RunActivityView activite={activiteDuRun([permission(1, 0, false)])} />);
+    render(<RunActivityView activite={runActivity([permission(1, 0, false)])} />);
     expect(within(screen.getByRole("list", { name: "Refusals outside a tool call" })).getByText("src/x.py")).toBeInTheDocument();
   });
 });

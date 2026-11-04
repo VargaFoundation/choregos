@@ -824,6 +824,75 @@
     "origin": "shipped"
   },
   {
+    "id": "connector.ci.gitlab",
+    "title": "Read pipeline status from GitLab CI",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "ci/gitlab"
+    },
+    "link": null,
+    "reviewed": "2026-11-04",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A GitLab project with CI pipelines, where you are a Maintainer (to create a token and a webhook).\n- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Choregos: GitLab sends it as the webhook's secret token, and without it the endpoint refuses every\n  delivery."
+      },
+      {
+        "key": "at",
+        "title": "At GitLab",
+        "markdown": "1. Project, Settings, **Access tokens**, **Add new token**: role **Developer**, scope **api**, and an\n   expiry. Copy the token when it is shown.\n2. Project, Settings, **Webhooks**, **Add new webhook**: URL `https://choregos.example.com/api/v1/webhooks/gitlab`, **Secret token**\n   the platform's shared webhook secret, and the trigger **Pipeline events**. If the project already has\n   this webhook for its tracker, tick **Pipeline events** on it instead of adding a second one."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "- The token needs the `api` scope and the Developer role: it reads pipelines and job traces, and it\n  creates pipelines. A `read_api` token can read but cannot trigger.\n- The token is project-scoped: it cannot touch another project."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Project settings, Connectors, **CI**, type **GitLab CI**.\n2. `base_url`: `https://gitlab.com` (the default) or your self-managed address. `project`: the project's\n   path (for example `group/app`) or numeric id.\n3. `token`: the access token, in the password field (sealed, shown once)."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test**: the connector reads the project and answers `ok`. Then push a commit and watch its\npipeline state change on the work item."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `401` from GitLab: the token is wrong, expired or revoked.\n- `403` or `404` on the project: the token belongs to another project, or the path is wrong.\n- Status stays `unknown`: no pipeline exists for that commit (check the project's `.gitlab-ci.yml` rules).\n- A webhook that GitLab shows as failing with `401`: the Secret token differs from the platform's shared\n  webhook secret.\n- A self-managed GitLab with a private certificate authority: the API must trust it."
+      }
+    ],
+    "values": {
+      "webhook_url:gitlab": "https://choregos.example.com/api/v1/webhooks/gitlab"
+    },
+    "egress": [
+      "gitlab.com"
+    ],
+    "fields": {
+      "base_url": "https://gitlab.com, or your self-managed GitLab",
+      "project": "the project's path with namespace, or its numeric id",
+      "token": "a project access token, typed once"
+    },
+    "vendor_docs": [
+      {
+        "title": "GitLab pipelines API",
+        "url": "https://docs.gitlab.com/api/pipelines/"
+      },
+      {
+        "title": "GitLab project access tokens",
+        "url": "https://docs.gitlab.com/user/project/settings/project_access_tokens/"
+      },
+      {
+        "title": "GitLab webhooks",
+        "url": "https://docs.gitlab.com/user/project/integrations/webhooks/"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
     "id": "connector.ci.tekton",
     "title": "Read pipeline status from Tekton",
     "version": 1,
@@ -2670,6 +2739,80 @@
       {
         "title": "Managing a merge queue",
         "url": "https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.scm.gitlab",
+    "title": "Use GitLab for branches, merge requests and auto-merge",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "scm/gitlab"
+    },
+    "link": null,
+    "reviewed": "2026-11-04",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A GitLab project the agents change. They work on a branch and open a merge request; nothing is pushed to\n  the default branch.\n- You are a **Maintainer** of that project: the connector creates a short-lived token for each run, and\n  only a Maintainer can create project access tokens.\n- **GitLab.com needs the Premium or Ultimate tier for project access tokens.** On the Free tier the\n  connector cannot give a run its token. A self-managed GitLab has no such tier limit.\n- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Choregos, if you want merge request events."
+      },
+      {
+        "key": "at",
+        "title": "At GitLab",
+        "markdown": "1. Project, Settings, **Access tokens**, **Add new token**: role **Maintainer**, scope **api**, and an\n   expiry. Copy the token when it is shown. This is the connector's own token: it stays on the platform.\n2. Optional, for merge request events: Project, Settings, **Webhooks**, **Add new webhook**: URL\n   `https://choregos.example.com/api/v1/webhooks/gitlab`, **Secret token** the platform's shared webhook secret, and the trigger\n   **Merge request events**. If the project already has this webhook for its tracker, tick **Merge request\n   events** on it instead of adding a second one."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "- The connector's token needs the Maintainer role and the `api` scope: it creates branches, commits,\n  merge requests and notes, sets reviewers, turns on auto-merge, and creates the per-run tokens.\n- **A run never receives that token.** Each run gets its own project access token, created when the run\n  starts: scope `write_repository` only, role Developer, named `choregos-run-<id>`, expiring the next\n  day (UTC). GitLab counts token lifetimes in days, so a day is the shortest there is.\n- GitLab has no revoke at run end in this connector: a run token stays valid until its expiry date. The\n  next time a run starts, the connector deletes the project's expired `choregos-run-` tokens (at most 20\n  per run, and a failure there never stops the run). Tokens with other names are never touched. Each token\n  is backed by a bot user in the project: this cleanup is what keeps them from piling up.\n- The model and its limits are in ADR 0104."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Project settings, Connectors, **SCM**, type **GitLab**.\n2. `base_url`: `https://gitlab.com` (the default) or your self-managed address. `project`: the project's\n   path (for example `group/app`) or numeric id. `default_branch`: the branch merge requests target.\n3. `token`: the Maintainer access token, in the password field (sealed, shown once)."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test**: the connector reads the project and answers `ok`. Then start a run: a `choregos-run-` token\nappears in the project's access tokens, expiring tomorrow, and a merge request opens. Auto-merge turns on\n\"merge when the pipeline succeeds\"; the project needs a pipeline for that to mean anything."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `401` from GitLab: the connector's token is wrong, expired or revoked.\n- `403` when a run starts: the token is not a Maintainer's, lacks the `api` scope, or the GitLab.com tier\n  has no project access tokens (Premium or Ultimate).\n- `404` on the project: the token belongs to another project, or the path is wrong.\n- Merge refused after auto-merge: the project's merge rules (approvals, a required pipeline) are not met\n  yet; GitLab merges when they are.\n- A self-managed GitLab with a private certificate authority: the API must trust it."
+      }
+    ],
+    "values": {
+      "webhook_url:gitlab": "https://choregos.example.com/api/v1/webhooks/gitlab"
+    },
+    "egress": [
+      "gitlab.com"
+    ],
+    "fields": {
+      "base_url": "https://gitlab.com, or your self-managed GitLab",
+      "project": "the project's path with namespace, or its numeric id",
+      "default_branch": "the branch merge requests target, main by default",
+      "token": "a project access token with the Maintainer role and the api scope, typed once"
+    },
+    "vendor_docs": [
+      {
+        "title": "GitLab project access tokens",
+        "url": "https://docs.gitlab.com/user/project/settings/project_access_tokens/"
+      },
+      {
+        "title": "GitLab project access tokens API",
+        "url": "https://docs.gitlab.com/api/project_access_tokens/"
+      },
+      {
+        "title": "GitLab merge requests API",
+        "url": "https://docs.gitlab.com/api/merge_requests/"
+      },
+      {
+        "title": "GitLab webhooks",
+        "url": "https://docs.gitlab.com/user/project/integrations/webhooks/"
       }
     ],
     "origin": "shipped"

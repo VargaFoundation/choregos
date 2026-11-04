@@ -93,7 +93,7 @@ export function Connectors({ slug }: { slug: string }) {
             )}
           </div>
         )}
-        <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="connecteurs">
+        <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="connectors">
           {rows.map((sorte) => (
             <ConnectorCard
               key={sorte}

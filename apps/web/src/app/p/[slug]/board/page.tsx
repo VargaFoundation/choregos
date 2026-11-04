@@ -147,7 +147,7 @@ export default function BoardPage({ params }: { params: Promise<{ slug: string }
         </p>
       )}
       {waiting.length > 0 && (
-        <div className="raised border border-line border-l-2 border-l-waiting p-3 text-sm" data-testid="attentes-du-board">
+        <div className="raised border border-line border-l-2 border-l-waiting p-3 text-sm" data-testid="board-waiting">
           <p className="font-medium">
             {waiting.length} ticket{waiting.length > 1 ? "s" : ""} wait{waiting.length > 1 ? "" : "s"} for a person
           </p>
@@ -213,7 +213,7 @@ function WorkflowSwitcher({
             key={workflow.name}
             href={`${pathname}?workflow=${encodeURIComponent(workflow.name)}`}
             aria-current={active ? "page" : undefined}
-            data-donnee
+            data-verbatim
             className={cn(pill, active ? cn(hue.pill, "font-medium") : "border-line text-ink-muted hover:text-ink")}
           >
             <span aria-hidden className={cn("size-2 rounded-full", hue.solid)} />

@@ -8,11 +8,11 @@ import { expect, test } from "@playwright/test";
 test("the month's spend, its forecast and its budget read", async ({ page }) => {
   await page.goto("/costs");
   await expect(page.getByRole("heading", { name: "Spend", level: 1 })).toBeVisible();
-  const mois = page.getByTestId("mois");
+  const mois = page.getByTestId("month");
   await expect(mois).toContainText("Forecast at month end (linear)");
   await expect(mois).toContainText("Budget: daily budget × days in the month");
   await expect(mois).toContainText("€"); // the organisation's currency: the euro by default
-  await expect(page.getByTestId("budget-etat")).toBeVisible();
+  await expect(page.getByTestId("budget-state")).toBeVisible();
 });
 
 test("the most expensive: agents, workflows, tickets; models and tools apart; a CSV per grouping", async ({
@@ -43,7 +43,7 @@ test("a project: the same page, narrowed, and the link from its overview", async
 
 test("changing the period changes the total", async ({ page }) => {
   await page.goto("/costs");
-  const total = page.getByTestId("total-periode");
+  const total = page.getByTestId("period-total");
   await expect(total).toContainText("Total €");
   const avant = await total.textContent();
   await page.getByRole("combobox", { name: "Period" }).selectOption("90");
@@ -59,7 +59,7 @@ test("the Spend entry is in the navigation", async ({ page }) => {
 
 test("the inbox shows the crossed budgets, and an acknowledgement removes them", async ({ page }) => {
   await page.goto("/inbox");
-  const list = page.getByTestId("budgets-franchis");
+  const list = page.getByTestId("budgets-exceeded");
   await expect(list.getByRole("listitem")).toHaveCount(2);
   await expect(list).toContainText("Project billing-api has spent 80 % of its daily budget");
   await expect(list).toContainText("Agent onboarding-coordinator has spent its whole daily budget");

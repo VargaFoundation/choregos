@@ -414,10 +414,31 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
             ("repo",),
         ),
     ),
+    ("scm", "gitlab"): ConnectorTypeSpec(
+        "GitLab",
+        ("scm",),
+        _object_schema(
+            {
+                "base_url": {"type": "string", "default": "https://gitlab.com"},
+                "project": _TEXT,
+                "default_branch": {"type": "string", "default": "main"},
+            },
+            ("project",),
+        ),
+        ("token",),
+    ),
     ("ci", "tekton"): ConnectorTypeSpec(
         "Tekton Pipelines",
         ("ci",),
         _object_schema({"namespace": _TEXT, "pipeline": {"type": "string", "default": "choregos-ci"}}),
+    ),
+    ("ci", "gitlab"): ConnectorTypeSpec(
+        "GitLab CI",
+        ("ci",),
+        _object_schema(
+            {"base_url": {"type": "string", "default": "https://gitlab.com"}, "project": _TEXT}, ("project",)
+        ),
+        ("token",),
     ),
     ("cd", "argocd"): ConnectorTypeSpec(
         "Argo CD + Rollouts",
@@ -1289,7 +1310,7 @@ def _plugin_tracker(cfg: dict[str, Any]) -> Any:
     return PluginTracker(client, str(cfg["plugin"]), str(cfg["server"]), audit=cfg.get("audit"))
 
 
-def _register_builtins() -> None:
+def _register_builtins() -> None:  # noqa: PLR0915 - one flat list of registrations
     """Registers the shipped implementations (a lazy import to avoid cycles)."""
     from .fakes import (
         FakeCd,
@@ -1325,6 +1346,7 @@ def _register_builtins() -> None:
 
     # ───────────────── real implementations (day 1) ─────────────────
     from .cd.argocd import ArgoCdAdapter
+    from .ci.gitlab import GitLabCi
     from .ci.tekton import TektonCi
     from .executor.aca import AcaExecutor, AzureArmClient
     from .executor.agent_sandbox import DEFAULT_TTL_SECONDS, AgentSandboxExecutor
@@ -1338,6 +1360,7 @@ def _register_builtins() -> None:
     from .notify.email import EmailNotifier
     from .notify.slack import SlackNotifier
     from .scm.github import GitHubScm
+    from .scm.gitlab import GitLabScm
     from .tracker.github import GitHubTracker
     from .tracker.gitlab import GitLabTracker
     from .tracker.interne import InternalTracker
@@ -1373,11 +1396,32 @@ def _register_builtins() -> None:
             use_merge_queue=cfg.get("merge_queue", True),
         )
     )
+    register("scm", "gitlab", _SHIPPED_SPECS[("scm", "gitlab")])(
+        lambda cfg: GitLabScm(
+            RestClient(
+                cfg.get("base_url", "https://gitlab.com"),
+                headers={"PRIVATE-TOKEN": cfg["token"]},
+                service="gitlab",
+            ),
+            cfg["project"],
+            default_branch=cfg.get("default_branch", "main"),
+        )
+    )
     register("ci", "tekton", _SHIPPED_SPECS[("ci", "tekton")])(
         lambda cfg: TektonCi(
             KubernetesClient(**cfg.get("kubernetes", {})),
             namespace=cfg.get("namespace", "default"),
             pipeline=cfg.get("pipeline", "choregos-ci"),
+        )
+    )
+    register("ci", "gitlab", _SHIPPED_SPECS[("ci", "gitlab")])(
+        lambda cfg: GitLabCi(
+            RestClient(
+                cfg.get("base_url", "https://gitlab.com"),
+                headers={"PRIVATE-TOKEN": cfg["token"]},
+                service="gitlab",
+            ),
+            cfg["project"],
         )
     )
     register("cd", "argocd", _SHIPPED_SPECS[("cd", "argocd")])(

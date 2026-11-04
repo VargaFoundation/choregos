@@ -13,24 +13,24 @@ describe("the artifacts table under the map (S39-13)", () => {
     render(<ArtifactFlowCard artifacts={artifacts} steps={steps} onHighlight={() => {}} />);
     const table = screen.getByRole("table", { name: "Artifacts" });
     expect(within(table).getAllByRole("row")).toHaveLength(artifacts.length + 1);
-    const row = screen.getByTestId("artefact-test_report");
+    const row = screen.getByTestId("artifact-row-test_report");
     expect(row).toHaveTextContent("t-test");
     expect(row).toHaveTextContent("t-implement");
-    expect(screen.getByTestId("artefact-spec_markdown")).toHaveTextContent("context of every agent step");
-    expect(screen.getByTestId("artefact-spec_markdown")).toHaveTextContent("in the pull request");
-    expect(screen.getByTestId("artefact-human_feedback")).toHaveTextContent("on rejection");
+    expect(screen.getByTestId("artifact-row-spec_markdown")).toHaveTextContent("context of every agent step");
+    expect(screen.getByTestId("artifact-row-spec_markdown")).toHaveTextContent("in the pull request");
+    expect(screen.getByTestId("artifact-row-human_feedback")).toHaveTextContent("on rejection");
   });
 
   it("focusing a row names the producing and the reading steps", () => {
     const onHighlight = vi.fn();
     render(<ArtifactFlowCard artifacts={artifacts} steps={steps} onHighlight={onHighlight} />);
-    fireEvent.focus(screen.getByTestId("artefact-test_report"));
+    fireEvent.focus(screen.getByTestId("artifact-row-test_report"));
     const lit = onHighlight.mock.calls.at(-1)![0] as Highlight;
     expect(lit.get("t-test")).toBe("produces");
     expect(lit.get("t-implement")).toBe("reads");
-    fireEvent.blur(screen.getByTestId("artefact-test_report"));
+    fireEvent.blur(screen.getByTestId("artifact-row-test_report"));
     expect(onHighlight.mock.calls.at(-1)![0]).toBeNull();
-    fireEvent.mouseEnter(screen.getByTestId("artefact-review_markdown"));
+    fireEvent.mouseEnter(screen.getByTestId("artifact-row-review_markdown"));
     expect((onHighlight.mock.calls.at(-1)![0] as Highlight).get("t-address-review")).toBe("produces");
   });
 
@@ -49,7 +49,7 @@ describe("the artifacts table under the map (S39-13)", () => {
         highlight={highlight}
       />,
     );
-    expect(screen.getByTestId("etape-t-implement")).toHaveAttribute("data-flow", "reads");
-    expect(screen.getByTestId("etape-t-test")).toHaveAttribute("data-flow", "produces");
+    expect(screen.getByTestId("step-t-implement")).toHaveAttribute("data-flow", "reads");
+    expect(screen.getByTestId("step-t-test")).toHaveAttribute("data-flow", "produces");
   });
 });

@@ -44,7 +44,7 @@ describe("the policy screen does not promise a phantom guard", () => {
         </QueryClientProvider>,
       );
     });
-    const note = await screen.findByTestId("politique-sans-gardes");
+    const note = await screen.findByTestId("policy-without-guards");
     expect(note.textContent).toContain("approvals and review.require_human_for_risk are accepted but not enforced");
     expect(note.textContent).toContain("declare a human transition in the workflow");
     // What the orchestrator applies no longer names the approvals.

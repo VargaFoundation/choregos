@@ -83,6 +83,6 @@ test("loosening an operation's policy is confirmed, tightening it is not", async
 
 test("unpinning an agent says what is lost", async ({ page }) => {
   await page.goto("/p/billing-api/agents");
-  await page.getByTestId("epingles").getByRole("button", { name: "Unpin" }).first().click();
+  await page.getByTestId("pins").getByRole("button", { name: "Unpin" }).first().click();
   await expect(page.getByTestId("confirmation")).toContainText("Its workflows run its production version from now on");
 });

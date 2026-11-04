@@ -4,8 +4,7 @@
 every tracked file. This test runs its tree scan over what this story renamed and translated (the
 journey components, the workflow components, the journey fixtures, their tests and e2e specs) and
 refuses any finding, so a French comment, a French local name or a French file name cannot come back
-without the test turning red. The former paths stay as shims that declare themselves
-(`lang: fr-ok-file`), which the scan skips.
+without the test turning red. The former French paths are gone (S45-29 deleted the shims).
 """
 
 from __future__ import annotations
@@ -38,8 +37,8 @@ PREFIXES = (
     f"{WEB}e2e/journey.spec.ts",
     f"{WEB}e2e/yaml-editor.spec.ts",
 )
-#: The former paths, each a shim until the one story that removes them (S45-29).
-SHIMS = (
+#: The former French paths: S45-29 switched their importers and deleted them.
+FORMER_PATHS = (
     "src/components/workflows/brouillon.tsx",
     "src/components/workflows/barre-du-brouillon.tsx",
     "src/components/workflows/panneaux.tsx",
@@ -79,13 +78,9 @@ def test_the_renamed_modules_have_english_paths() -> None:
     assert (ROOT / WEB / "src" / "mocks" / "journey.ts").is_file()
 
 
-def test_the_former_paths_are_shims_that_say_so() -> None:
-    """A former path left in place must declare itself, or the scan would count its French."""
-    for relative in SHIMS:
-        text = (ROOT / WEB / relative).read_text(encoding="utf-8")
-        head = "\n".join(text.splitlines()[:5])
-        assert "lang: fr-ok-file" in head, relative
-        assert len(text.splitlines()) < 60, f"{relative} is more than a shim"
+def test_the_former_paths_are_gone() -> None:
+    for relative in FORMER_PATHS:
+        assert not (ROOT / WEB / relative).exists(), relative
 
 
 def test_the_french_edge_label_fallback_is_gone() -> None:

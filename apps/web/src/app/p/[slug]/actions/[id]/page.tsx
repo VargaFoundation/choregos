@@ -27,13 +27,13 @@ export default function ActionPage({ params }: { params: Promise<{ slug: string;
         <span aria-hidden className="text-ink-muted">
           /
         </span>
-        <Heading as="h2" size="lg" data-donnee>
+        <Heading as="h2" size="lg" data-verbatim>
           {a.title}
         </Heading>
         <Status statut={a.status} />
       </div>
       <p className="text-sm text-ink-muted">
-        <span data-donnee>{a.kind}</span> · proposed by {propose(a.proposed_by)}
+        <span data-verbatim>{a.kind}</span> · proposed by {propose(a.proposed_by)}
         {a.created_at ? ` · ${relative(a.created_at)}` : ""}
         {a.justification ? ` — ${a.justification}` : ""}
       </p>
@@ -64,7 +64,7 @@ export default function ActionPage({ params }: { params: Promise<{ slug: string;
           {(a.effects ?? []).map((spec, position) => {
             const recorded = (a.journal ?? []).find((e) => e.position === position);
             return (
-              <li key={position} className="border-t border-line pt-2" data-testid={`effet-${position}`}>
+              <li key={position} className="border-t border-line pt-2" data-testid={`effect-${position}`}>
                 <div className="flex flex-wrap items-center gap-2">
                   <code>{String(spec.effect)}</code>
                   {recorded ? <Status statut={recorded.status} /> : <span className="text-xs text-ink-muted">Not started</span>}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { activiteDuRun } from "@/lib/activite-du-run";
-import { planDeLAgent } from "@/lib/plan-de-l-agent";
+import { runActivity } from "@/lib/run-activity";
+import { agentPlan } from "@/lib/agent-plan";
 import type { RunEventDto } from "@/lib/types";
 import events from "./fixtures/dev-run-opencode-events.json";
 
@@ -10,7 +10,7 @@ const journal = events as RunEventDto[];
 
 describe("a real opencode run from the dev tenant (S25-06)", () => {
   it("its plan comes from todowrite, revision by revision, and ends all done", () => {
-    const plan = planDeLAgent(journal);
+    const plan = agentPlan(journal);
     expect(plan).not.toBeNull();
     expect(plan!.revisions).toHaveLength(6);
     expect(plan!.revisions[0]?.taches[0]).toEqual({
@@ -24,7 +24,7 @@ describe("a real opencode run from the dev tenant (S25-06)", () => {
   });
 
   it("its activity counts each tool call once, however many updates it had", () => {
-    const activity = activiteDuRun(journal);
+    const activity = runActivity(journal);
     expect(journal.filter((e) => e.type === "session/update")).toHaveLength(123);
     expect(activity.appels).toHaveLength(29);
     expect(activity.termines).toBe(29);

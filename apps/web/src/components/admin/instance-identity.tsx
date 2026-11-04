@@ -27,7 +27,7 @@ export function InstanceIdentityCard() {
                 <th scope="row" className="py-1 pr-3 text-left font-normal text-ink-muted">
                   {row.label}
                 </th>
-                <td className="py-1 font-mono [overflow-wrap:anywhere]" data-donnee>
+                <td className="py-1 font-mono [overflow-wrap:anywhere]" data-verbatim>
                   {row.value === "missing" ? <Badge tone="danger">missing</Badge> : row.value}
                 </td>
                 <td className="py-1 pl-3 text-right text-ink-muted [overflow-wrap:anywhere]">{row.source}</td>

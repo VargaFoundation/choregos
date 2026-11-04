@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Agent ACP factice : joue le protocole complet, scripté par une variable d'environnement.
+"""Fake ACP agent: plays the complete protocol, scripted by an environment variable.
 
-Il sert la suite de conformité et les tests du runner : il répond à `initialize`,
-ouvre une session, demande des permissions, écrit des fichiers, et produit un
-`.choregos/result.json`. Son scénario est donné par `FAKE_AGENT_SCRIPT` (JSON).
+It serves the conformance suite and the runner's tests: it answers `initialize`,
+opens a session, asks for permissions, writes files, and produces a
+`.choregos/result.json`. Its scenario is given by `FAKE_AGENT_SCRIPT` (JSON).
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ def read() -> dict[str, Any] | None:
 
 
 def request(request_id: int, method: str, params: dict[str, Any]) -> dict[str, Any] | None:
-    """Envoie une requête au client (runner) et attend sa réponse."""
+    """Send a request to the client (runner) and wait for its answer."""
     send({"jsonrpc": "2.0", "id": request_id, "method": method, "params": params})
     while True:
         message = read()
@@ -81,7 +81,7 @@ def _load(message: dict[str, Any], script: dict[str, Any]) -> None:
 def _initialize(message_id: Any, script: dict[str, Any]) -> bool:
     """Answer `initialize`; False when the script asks the agent to fail it."""
     if script.get("fail_initialize"):
-        send({"jsonrpc": "2.0", "id": message_id, "error": {"code": -32000, "message": "cassé"}})
+        send({"jsonrpc": "2.0", "id": message_id, "error": {"code": -32000, "message": "broken"}})
         return False
     send(
         {
@@ -197,7 +197,7 @@ def main() -> int:
                         "sessionId": session_id,
                         "toolCall": {
                             "toolCallId": f"tc-{outgoing_id}",
-                            "title": f"écrire {write['path']}",
+                            "title": f"write {write['path']}",
                             "kind": "edit",
                             "rawInput": {"path": write["path"]},
                         },
@@ -260,7 +260,7 @@ def main() -> int:
                 {
                     "jsonrpc": "2.0",
                     "id": message_id,
-                    "error": {"code": -32601, "message": f"méthode inconnue : {method}"},
+                    "error": {"code": -32601, "message": f"unknown method: {method}"},
                 }
             )
     return 0

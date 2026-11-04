@@ -2,7 +2,7 @@
 "use client";
 
 import { useState } from "react";
-import { GesteConfirme } from "@/components/geste-confirme";
+import { ConfirmedGesture } from "@/components/confirmed-gesture";
 import { Button, ErrorNote } from "@/components/ui";
 import { useDraft } from "@/components/workflows/draft";
 
@@ -32,7 +32,7 @@ export function DraftBar() {
             <Button size="sm" onClick={() => void draft.undo()} disabled={draft.busy}>
               Undo
             </Button>
-            <GesteConfirme
+            <ConfirmedGesture
               tonDuBouton="default"
               question={`Discard ${draft.pending} unpublished change${draft.pending > 1 ? "s" : ""}? The workflow goes back to v${draft.definition.data?.version ?? "?"} — undo cannot bring them back.`}
               confirmer="Discard my changes"
@@ -40,7 +40,7 @@ export function DraftBar() {
               disabled={draft.busy}
             >
               Discard
-            </GesteConfirme>
+            </ConfirmedGesture>
             <Button
               size="sm"
               tone="primary"
@@ -92,7 +92,7 @@ export function DraftBar() {
       {draft.lastDiff && (
         <details>
           <summary className="cursor-pointer text-xs text-ink-muted">Last change</summary>
-          <pre className="mt-1 whitespace-pre-wrap break-all text-xs" data-testid="dernier-diff">
+          <pre className="mt-1 whitespace-pre-wrap break-all text-xs" data-testid="last-diff">
             {draft.lastDiff}
           </pre>
         </details>

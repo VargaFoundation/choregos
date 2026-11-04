@@ -1,11 +1,11 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * Parcours e2e du front. En CI, le serveur tourne en mode démo (`NEXT_PUBLIC_API_MODE=mock`)
- * pour que les parcours soient testables sans API ; les scénarios de bout en bout avec
- * l'API réelle vivent dans `tests/e2e/` à la racine.
+ * End-to-end journeys of the front end. In CI, the server runs in demo mode
+ * (`NEXT_PUBLIC_API_MODE=mock`) so that the journeys can be tested without an API; the
+ * end-to-end scenarios against the real API live in `tests/e2e/` at the root.
  */
-// `PORT` : un poste où un `next dev` occupe déjà 3000 lance les parcours sur un autre port.
+// `PORT`: a machine where a `next dev` already holds 3000 runs the journeys on another port.
 const port = process.env.PORT ?? "3000";
 
 export default defineConfig({

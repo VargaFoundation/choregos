@@ -1,14 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Cœur Choregos : domaine, DSL de workflow, politiques, gates, résolution de modèles.
+"""Choregos core: domain, workflow DSL, policies, gates, model resolution.
 
-Ce paquet ne fait **aucune** entrée/sortie : il est pur, typé strict et testable sans service.
-Tout ce qui parle au monde extérieur vit dans `packages/adapters`.
+This package does **no** input/output: it is pure, strictly typed and testable without a service.
+Everything that talks to the outside world lives in `packages/adapters`.
 """
 
 from __future__ import annotations
 
-from .acces import Acces, RapportAcces, rapport_d_acces
-from .catalogue import Catalogue, OutilCatalogue, charger_catalogue, construire_requete
+from .access import AccessLine, AccessReport, access_report
+from .catalogue import Catalogue, CatalogueTool, build_request, load_catalogue
 from .domain import (
     AgentContainer,
     Change,
@@ -111,16 +111,26 @@ from .policy import (
 
 __version__ = "0.1.0"
 
+# Former names (ADR 0098 §3 (b)): other packages import them until their own stories switch.
+Acces = AccessLine  # lang: fr-ok alias:internal
+RapportAcces = AccessReport  # lang: fr-ok alias:internal
+rapport_d_acces = access_report  # lang: fr-ok alias:internal
+OutilCatalogue = CatalogueTool  # lang: fr-ok alias:internal
+charger_catalogue = load_catalogue  # lang: fr-ok alias:internal
+construire_requete = build_request  # lang: fr-ok alias:internal
+
 __all__ = [
     "BY_SIZE_MAP",
     "DEFAULT_ENABLED_BACKEND",
     "KNOWN_BACKEND_NAMES",
     "PRESET_NAMES",
     "TEMPLATE_NAMES",
-    "Acces",
+    "AccessLine",
+    "AccessReport",
     "AgentContainer",
     "Catalogue",
     "CatalogueEntry",
+    "CatalogueTool",
     "Change",
     "ChoregosError",
     "CiStatus",
@@ -150,14 +160,12 @@ __all__ = [
     "ModelResolutionError",
     "ModelResolver",
     "NewItem",
-    "OutilCatalogue",
     "PolicyEngine",
     "PolicyError",
     "PrRef",
     "PrState",
     "PromotionRef",
     "Provenance",
-    "RapportAcces",
     "ReleaseItem",
     "ReleaseRecord",
     "ResolvedModel",
@@ -175,14 +183,14 @@ __all__ = [
     "Window",
     "WorkItemData",
     "WorkflowEngine",
+    "access_report",
     "analyser",
     "artifact_flow",
     "aware",
     "backend_enabled",
     "binding_problems",
-    "charger_catalogue",
+    "build_request",
     "checksum",
-    "construire_requete",
     "dump_workflow",
     "effective_bindings",
     "effective_network",
@@ -194,6 +202,7 @@ __all__ = [
     "is_async_gate",
     "known_gates",
     "legacy_scope",
+    "load_catalogue",
     "load_preset",
     "load_template",
     "matches_any",
@@ -207,7 +216,6 @@ __all__ = [
     "pattern_within",
     "policy_warnings",
     "preset_yaml",
-    "rapport_d_acces",
     "scan_secrets",
     "split_namespace",
     "suspicions",

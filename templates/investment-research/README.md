@@ -83,7 +83,7 @@ forbids.
   campaign goes to `to_review`, when more symbols diverge than the campaign field
   `max_diverging_symbols` (default 0) allows — `diverging_excess` > 0. A single-source connector has
   nothing to compare and is not refused: read `cross_checked`. On 2026-10-14 Stooq answered scripts with a browser check: a composite of
-  Yahoo and Alpha Vantage (free key) is the one that cross-checks (`essai/investissement/`).
+  Yahoo and Alpha Vantage (free key) is the one that cross-checks (`trials/investment/`).
 - **Assumed costs.** `cost_bps` per change of position; no spread model, no tax, no currency hedge.
 - **Internal use.** The memo is a research note, not investment advice, not an offer, not an order.
   Adopting a campaign means following its products on paper.

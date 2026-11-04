@@ -205,20 +205,20 @@ describe("the builder", () => {
     fireEvent.click(within(builder).getByRole("button", { name: "Add it" }));
     fireEvent.click(within(builder).getByRole("button", { name: "Move global:security-lessons up" }));
     // What it costs and allows, next to the form.
-    const summary = screen.getByTestId("ce-que-ca-permet");
+    const summary = screen.getByTestId("what-it-allows");
     expect(summary).toHaveTextContent("platform/cheap");
     expect(summary).toHaveTextContent("A run stops at US$0.50");
     expect(summary).toHaveTextContent("Alerts at 50, 80 and 100 % of US$100.00 a month; suspended at 100 %.");
-    expect(within(summary).getByTestId("outils-resolus")).toHaveTextContent("track_order — called freely");
-    expect(within(summary).getByTestId("outils-resolus")).toHaveTextContent("track_parcel — each call asks a person, US$0.01 a call");
-    expect(within(summary).getByTestId("outils-resolus")).not.toHaveTextContent("order_laptop");
-    expect(within(summary).getByTestId("connaissances-resolues")).toHaveTextContent(
+    expect(within(summary).getByTestId("resolved-tools")).toHaveTextContent("track_order — called freely");
+    expect(within(summary).getByTestId("resolved-tools")).toHaveTextContent("track_parcel — each call asks a person, US$0.01 a call");
+    expect(within(summary).getByTestId("resolved-tools")).not.toHaveTextContent("order_laptop");
+    expect(within(summary).getByTestId("resolved-knowledge")).toHaveTextContent(
       "network-runbooks — searched with knowledge_search; served to projects netops.",
     );
-    expect(within(summary).getByTestId("memoire-resolue")).toHaveTextContent(
+    expect(within(summary).getByTestId("resolved-memory")).toHaveTextContent(
       "Security lessons (organisation) — readThe project's shared memory — read and written",
     );
-    expect(within(summary).getByTestId("memoire-resolue")).toHaveTextContent("It writes to the project's shared memory");
+    expect(within(summary).getByTestId("resolved-memory")).toHaveTextContent("It writes to the project's shared memory");
 
     fireEvent.click(within(builder).getByRole("button", { name: "Create and activate" }));
     await waitFor(() => expect(api.createAgent).toHaveBeenCalled());
@@ -300,7 +300,7 @@ describe("the builder", () => {
     const model = screen.getByLabelText("Model");
     await within(model).findByRole("option", { name: "platform/cheap" });
     expect(within(model).getByRole("option", { name: "platform/disabled-here (disabled by the organisation)" })).toBeInTheDocument();
-    expect(await screen.findByTestId("ce-que-ca-permet")).toHaveTextContent("disabled by the organisation");
+    expect(await screen.findByTestId("what-it-allows")).toHaveTextContent("disabled by the organisation");
   });
 
   it("a code agent: the runtime selector swaps the backend for an image, a command and an API", async () => {
@@ -330,7 +330,7 @@ describe("the builder", () => {
     fireEvent.change(image, { target: { value: "ticket-triager" } });
     fireEvent.change(within(builder).getByLabelText("Command"), { target: { value: "python\n-m\nticket_triager\n" } });
     fireEvent.change(within(builder).getByLabelText("Model API"), { target: { value: "anthropic" } });
-    expect(screen.getByTestId("runtime-resolu")).toHaveTextContent("Your code runs in the image ticket-triager");
+    expect(screen.getByTestId("runtime-resolved")).toHaveTextContent("Your code runs in the image ticket-triager");
 
     fireEvent.click(within(builder).getByRole("button", { name: "Create and activate" }));
     await waitFor(() => expect(api.createAgent).toHaveBeenCalled());

@@ -60,7 +60,7 @@ describe("the project creation wizard (S23-06)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
 
-    const recap = screen.getByTestId("recapitulatif");
+    const recap = screen.getByTestId("summary");
     expect(recap).toHaveTextContent("Identifier");
     expect(recap).not.toHaveTextContent("sansDepot");
   });
@@ -91,7 +91,7 @@ describe("the project creation wizard (S23-06)", () => {
     fireEvent.change(screen.getByLabelText("Identifier (slug)"), { target: { value: "people-ops" } });
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    expect(screen.getByTestId("recapitulatif")).toHaveTextContent("Onboarding (template:joiners-leavers)");
+    expect(screen.getByTestId("summary")).toHaveTextContent("Onboarding (template:joiners-leavers)");
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() =>
       expect(api.adoptWorkflow).toHaveBeenCalledWith("p1", {
@@ -116,7 +116,7 @@ describe("the project creation wizard (S23-06)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(screen.getByLabelText(/Slack channel/)).toHaveValue("");
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
-    const recap = screen.getByTestId("recapitulatif");
+    const recap = screen.getByTestId("summary");
     expect(recap).not.toHaveTextContent("Slack");
     expect(recap).not.toHaveTextContent("Main language");
     fireEvent.click(screen.getByRole("button", { name: "Create" }));

@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Workspace du run : clone, branche, fichiers de contexte, diff, commit, push.
+"""Run workspace: clone, branch, context files, diff, commit, push.
 
-Toutes les commandes git passent par ici, avec un `git` non interactif et une identité
-`choregos-bot`. Aucun credential n'est écrit dans l'image : le jeton est monté en mémoire.
+All git commands go through here, with a non-interactive `git` and a `choregos-bot`
+identity. No credential is written into the image: the token is mounted in memory.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from typing import Any, ClassVar
 
 from choregos_contracts import ContextPack, StageInput
 
-# Fichiers écrits par le runner dans le workspace : ils n'appartiennent pas au dépôt.
+# Files written by the runner in the workspace: they do not belong to the repository.
 RUNNER_FILES = (
     ".choregos/task.md",
     ".choregos/context.md",
@@ -65,16 +65,16 @@ def clean_git_environment(base: Mapping[str, str], cwd: Path) -> dict[str, str]:
 
 
 def _git_env(workspace: Path) -> dict[str, str]:
-    """L'environnement git d'un run, workspace compris.
+    """The git environment of a run, workspace included.
 
-    `safe.directory` : le volume du pod appartient à root, l'agent tourne en 1000, et git
-    refuse alors le dépôt — « detected dubious ownership », suivi d'un conseil (`git config
-    --global --add safe.directory`) qu'un conteneur éphémère n'a nulle part où écrire. La
-    garde de git protège contre un dépôt POSÉ PAR QUELQU'UN D'AUTRE sur une machine
-    partagée ; ici le workspace est créé pour ce run et détruit avec lui.
+    `safe.directory`: the pod's volume belongs to root, the agent runs as 1000, and git
+    then refuses the repository, "detected dubious ownership", followed by advice (`git config
+    --global --add safe.directory`) that an ephemeral container has nowhere to write. Git's
+    guard protects against a repository PLACED BY SOMEONE ELSE on a shared machine;
+    here the workspace is created for this run and destroyed with it.
 
-    Par variables plutôt que par fichier : rien n'est écrit sur disque, et `GIT_CONFIG_*`
-    fonctionne même sans répertoire personnel inscriptible.
+    By variables rather than by file: nothing is written to disk, and `GIT_CONFIG_*`
+    works even without a writable home directory.
     """
     return {
         **GIT_ENV,
@@ -115,7 +115,7 @@ def agent_git_env(env: Mapping[str, str], workspace: Path) -> dict[str, str]:
 
 
 class WorkspaceError(RuntimeError):
-    """Le workspace n'a pas pu être préparé (clone, branche)."""
+    """The workspace could not be prepared (clone, branch)."""
 
 
 @dataclass(slots=True)
@@ -140,8 +140,8 @@ async def run_command(
     env: dict[str, str] | None = None,
     timeout: float = 900.0,
 ) -> CommandResult:
-    """Exécute une commande, capture tout, ne lève jamais sur un code non nul."""
-    # `cwd` est le workspace du run : c'est lui que git doit considérer comme sûr.
+    """Run a command, capture everything, never raise on a non-zero code."""
+    # `cwd` is the run's workspace: it is the one git must consider safe.
     merged = {**clean_git_environment(os.environ, Path(cwd)), **_git_env(Path(cwd)), **(env or {})}
     if isinstance(command, str):
         process = await asyncio.create_subprocess_shell(
@@ -172,7 +172,7 @@ async def run_command(
 
 
 class Workspace:
-    """Le répertoire de travail d'un run, et les opérations git qui vont avec."""
+    """A run's working directory, and the git operations that go with it."""
 
     def __init__(self, path: Path, user_name: str = "choregos-bot", user_email: str = "bot@choregos") -> None:
         self.path = path
@@ -185,21 +185,21 @@ class Workspace:
         return await run_command(["git", *args], cwd=self.path, timeout=timeout)
 
     async def prepare(self, stage_input: StageInput, *, token: str | None = None) -> None:
-        """Prépare le dépôt et la branche de travail.
+        """Prepare the repository and the working branch.
 
-        On n'utilise pas `git clone` : le workspace Tekton peut déjà contenir des fichiers
-        (journal du run, restes d'un rejeu). `init` + `fetch` donne le même résultat et
-        rend l'opération rejouable.
+        We do not use `git clone`: the Tekton workspace may already contain files
+        (run journal, leftovers of a replay). `init` + `fetch` gives the same result and
+        makes the operation replayable.
         """
         repo = stage_input.repo
         self.path.mkdir(parents=True, exist_ok=True)
         if repo is None:
-            # Projet sans dépôt (ADR 0012) : l'agent travaille dans un répertoire vide.
-            # On initialise quand même un git LOCAL, sans distant — c'est ce qui permet
-            # au reste du runner de mesurer ce qui a changé et d'exclure ses propres
-            # fichiers, sans rien cloner ni rien pousser.
+            # Project without a repository (ADR 0012): the agent works in an empty directory.
+            # We still initialise a LOCAL git, with no remote: this is what lets
+            # the rest of the runner measure what changed and exclude its own
+            # files, without cloning or pushing anything.
             if not (self.path / ".git").exists():
-                init = await self.git("init", "--initial-branch", "travail")
+                init = await self.git("init", "--initial-branch", "work")
                 if not init.ok:
                     raise WorkspaceError(f"git init failed: {init.output}")
             await self._require_own_repository()
@@ -208,10 +208,10 @@ class Workspace:
             await self.git("config", "commit.gpgsign", "false")
             self._exclude_runner_files()
             return
-        # Le jeton ne s'écrit nulle part : ni dans l'URL d'`origin` (donc dans `.git/config`, que
-        # l'agent lit), ni sur disque. Il passe en en-tête, commande par commande (S22-07).
+        # The token is written nowhere: neither in the `origin` URL (so in `.git/config`, which
+        # the agent reads), nor on disk. It goes in a header, command by command (S22-07).
         url = repo.url
-        avec = _entete(token)
+        auth = _auth_header(token)
         if not (self.path / ".git").exists():
             init = await self.git("init", "--initial-branch", repo.base_branch)
             if not init.ok:
@@ -226,16 +226,16 @@ class Workspace:
         await self.git("config", "advice.detachedHead", "false")
 
         fetch = await self.git(
-            *avec, "fetch", "--depth", str(repo.clone_depth), "origin", repo.base_branch, timeout=600.0
+            *auth, "fetch", "--depth", str(repo.clone_depth), "origin", repo.base_branch, timeout=600.0
         )
         if not fetch.ok:
             raise WorkspaceError(f"fetch failed: {_redact(fetch.output, token)}")
         await self.git("branch", "-f", repo.base_branch, "FETCH_HEAD")
 
-        # La branche de travail existe-t-elle déjà côté distant (rejeu, étape suivante) ?
-        remote = await self.git(*avec, "ls-remote", "--heads", "origin", repo.work_branch)
+        # Does the working branch already exist on the remote (replay, next step)?
+        remote = await self.git(*auth, "ls-remote", "--heads", "origin", repo.work_branch)
         if remote.ok and repo.work_branch in remote.stdout:
-            await self.git(*avec, "fetch", "--depth", str(repo.clone_depth), "origin", repo.work_branch)
+            await self.git(*auth, "fetch", "--depth", str(repo.clone_depth), "origin", repo.work_branch)
             checkout = await self.git("checkout", "-B", repo.work_branch, "FETCH_HEAD")
         else:
             checkout = await self.git("checkout", "-B", repo.work_branch, repo.base_branch)
@@ -256,13 +256,13 @@ class Workspace:
             )
 
     def _exclude_runner_files(self) -> None:
-        """Les fichiers du runner ne doivent jamais apparaître dans un commit d'agent."""
+        """The runner's files must never appear in an agent commit."""
         self.exclude(list(RUNNER_FILES))
 
-    #: Bruit d'exécution : produit par les tests que l'agent lance, jamais par le ticket.
-    #: Sans ces motifs, `__pycache__/` et consorts entraient dans le commit du run — le
-    #: diff d'une étape devenait illisible, et les gardes de taille comptaient des fichiers
-    #: que personne n'a écrits. Un dépôt qui les ignore déjà n'y perd rien.
+    #: Execution noise: produced by the tests the agent runs, never by the ticket.
+    #: Without these patterns, `__pycache__/` and the like went into the run's commit, so the
+    #: step's diff became unreadable, and the size guards counted files
+    #: that nobody wrote. A repository that already ignores them loses nothing.
     BRUIT: ClassVar[tuple[str, ...]] = (
         "__pycache__/",
         "*.py[cod]",
@@ -271,13 +271,13 @@ class Workspace:
         ".mypy_cache/",
         "node_modules/",
         ".venv/",
-        # Le cache de pip qu'un agent pose dans le dépôt (`PIP_CACHE_DIR=.cache/pip`) : 42 fichiers
-        # dans le commit de la spec de #6, sur le locataire dev, le 09/10 (S22-13).
+        # The pip cache an agent drops in the repository (`PIP_CACHE_DIR=.cache/pip`): 42 files
+        # in the commit of the spec of #6, on the dev tenant, on 09/10 (S22-13).
         ".cache/",
     )
 
     def exclude(self, paths: list[str]) -> None:
-        """Ajoute des chemins à `.git/info/exclude` (configuration de backend, journal…)."""
+        """Add paths to `.git/info/exclude` (backend configuration, journal...)."""
         self.runner_paths.extend(path for path in paths if path not in self.runner_paths)
         paths = [*paths, *self.BRUIT]
         if not paths:
@@ -292,7 +292,7 @@ class Workspace:
             handle.write("\n# Choregos — files outside the repository\n" + "\n".join(lines) + "\n")
 
     def write_context_files(self, stage_input: StageInput, context: ContextPack | None) -> None:
-        """Écrit `.choregos/task.md` et `.choregos/context.md` : ce que l'agent doit lire."""
+        """Write `.choregos/task.md` and `.choregos/context.md`: what the agent must read."""
         folder = self.path / ".choregos"
         folder.mkdir(parents=True, exist_ok=True)
         (folder / "task.md").write_text(_task_markdown(stage_input), encoding="utf-8")
@@ -305,12 +305,12 @@ class Workspace:
         return self.path / ".choregos" / "result.json"
 
     async def base_sha(self, base_branch: str) -> str:
-        """La référence à laquelle on comparera tout le travail du run.
+        """The reference against which all the run's work will be compared.
 
-        Rendre le NOM de la branche quand rien ne résout était le pire des replis : la
-        comparaison suivante échoue en silence, `changed_files` rend une liste vide, et
-        tout paraît en ordre — périmètre respecté, diff de zéro fichier — alors qu'on ne
-        mesure plus rien. Mieux vaut refuser de démarrer.
+        Returning the branch NAME when nothing resolves was the worst of the fallbacks: the
+        next comparison fails silently, `changed_files` returns an empty list, and
+        everything looks in order (scope respected, diff of zero files) while nothing
+        is measured any more. Better to refuse to start.
         """
         for reference in (f"origin/{base_branch}", base_branch, "FETCH_HEAD"):
             resolved = await self.git("rev-parse", "--verify", "--quiet", f"{reference}^{{commit}}")
@@ -322,18 +322,18 @@ class Workspace:
         )
 
     async def head_sha(self) -> str:
-        """Le commit où le run commence : la base, ou le dernier commit de la branche du ticket."""
+        """The commit where the run starts: the base, or the last commit of the ticket's branch."""
         resolved = await self.git("rev-parse", "--verify", "HEAD^{commit}")
         if not resolved.ok or not resolved.stdout.strip():
             raise WorkspaceError(f"HEAD does not resolve after checkout: {resolved.output}")
         return resolved.stdout.strip()
 
     async def changed_files(self, base: str) -> list[str]:
-        """Fichiers modifiés depuis la base, y compris ceux qui ne sont pas encore indexés."""
-        # `base HEAD` et pas `base...HEAD` : la seconde forme exige une base de fusion, que
-        # l'historique SUPERFICIEL d'un runner (`fetch --depth`) ne permet pas toujours de
-        # calculer. La commande échoue alors, la sortie est vide, et le run conclut que
-        # rien n'a changé — le périmètre ne voit plus rien et les preuves annoncent zéro.
+        """Files modified since the base, including those not yet indexed."""
+        # `base HEAD` and not `base...HEAD`: the second form requires a merge base, which a
+        # runner's SHALLOW history (`fetch --depth`) does not always allow
+        # computing. The command then fails, the output is empty, and the run concludes that
+        # nothing changed: the scope sees nothing any more and the evidence announces zero.
         tracked = await self.git("diff", "--name-only", base, "HEAD")
         working = await self.git("status", "--porcelain")
         files = {line.strip() for line in tracked.stdout.splitlines() if line.strip()}
@@ -359,7 +359,7 @@ class Workspace:
         return result.stdout
 
     async def revert_paths(self, paths: list[str], base: str) -> list[str]:
-        """Annule les modifications hors périmètre : la garantie, c'est le diff, pas la promesse."""
+        """Revert the changes outside the scope: the guarantee is the diff, not the promise."""
         reverted: list[str] = []
         for path in paths:
             restored = await self.git("checkout", base, "--", path)
@@ -399,22 +399,24 @@ class Workspace:
         return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
     async def push(self, branch: str, token: str | None = None) -> CommandResult:
-        resultat = await self.git(*_entete(token), "push", "--set-upstream", "origin", branch, timeout=300.0)
-        return CommandResult(resultat.code, _redact(resultat.stdout, token), _redact(resultat.stderr, token))
+        outcome = await self.git(
+            *_auth_header(token), "push", "--set-upstream", "origin", branch, timeout=300.0
+        )
+        return CommandResult(outcome.code, _redact(outcome.stdout, token), _redact(outcome.stderr, token))
 
 
-def _entete(token: str | None) -> list[str]:
-    """`-c http.extraHeader=…` : le jeton pour UNE commande git, sans rien écrire (S22-07)."""
+def _auth_header(token: str | None) -> list[str]:
+    """`-c http.extraHeader=…`: the token for ONE git command, writing nothing (S22-07)."""
     if not token:
         return []
     import base64
 
-    valeur = base64.b64encode(f"x-access-token:{token}".encode()).decode()
-    return ["-c", f"http.extraHeader=Authorization: Basic {valeur}"]
+    encoded = base64.b64encode(f"x-access-token:{token}".encode()).decode()
+    return ["-c", f"http.extraHeader=Authorization: Basic {encoded}"]
 
 
 def _with_token(url: str, token: str | None) -> str:
-    """Injecte le jeton dans l'URL de clone ; il n'est jamais écrit sur disque."""
+    """Inject the token into the clone URL; it is never written to disk."""
     if not token or not url.startswith("https://"):
         return url
     return url.replace("https://", f"https://x-access-token:{token}@", 1)
@@ -447,7 +449,7 @@ def _task_markdown(stage_input: StageInput) -> str:
         *(
             [
                 "When you finish (`status: done`), `outputs` holds exactly these keys, each at the top "
-                "level of `outputs`: " + ", ".join(f"`{nom}`" for nom in inline_outputs(stage_input)) + ".",
+                "level of `outputs`: " + ", ".join(f"`{name}`" for name in inline_outputs(stage_input)) + ".",
             ]
             if inline_outputs(stage_input)
             else []
@@ -487,9 +489,9 @@ def _context_markdown(context: ContextPack | None) -> str:
 
 def agent_home(stage_input: StageInput) -> Path:
     """The agent's `$HOME`: outside the workspace, specific to the run."""
-    # Créé ici : un `HOME` qui n'existe pas ferait échouer l'agent au premier fichier d'état.
-    # Le chemin est fixe et porte le run : dans un pod jetable, il n'y a personne d'autre
-    # pour le préempter, et un nom aléatoire empêcherait de rejouer le même run.
+    # Created here: a `HOME` that does not exist would make the agent fail at its first state file.
+    # The path is fixed and carries the run: in a disposable pod, nobody else exists
+    # to pre-empt it, and a random name would prevent replaying the same run.
     home = Path(tempfile.gettempdir()) / f"choregos-{stage_input.run_id}"
     home.mkdir(parents=True, exist_ok=True)
     return home
@@ -499,10 +501,10 @@ def workspace_env(stage_input: StageInput, extra: dict[str, Any] | None = None) 
     """The environment every backend shares."""
     home = agent_home(stage_input)
     env = {
-        # Le dépôt n'est pas le répertoire personnel de l'agent. Sans cette ligne, un agent
-        # qui écrit son état sous `$HOME` le pose DANS le workspace — ses transcriptions se
-        # retrouvaient commitées sur la branche du ticket, et le diff du run devenait
-        # illisible. Le répertoire est propre à ce run et disparaît avec le pod.
+        # The repository is not the agent's home directory. Without this line, an agent
+        # that writes its state under `$HOME` puts it IN the workspace: its transcripts
+        # ended up committed on the ticket's branch, and the run's diff became
+        # unreadable. The directory is specific to this run and disappears with the pod.
         "HOME": str(home),
         "CHOREGOS_RUN_ID": stage_input.run_id,
         "CHOREGOS_PROJECT": stage_input.project.slug,

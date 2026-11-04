@@ -10,18 +10,18 @@ import type { StepStatus } from "./model";
  * lives wears a ring.
  */
 export const STATUS_COLOUR: Record<StepStatus, string> = {
-  a_venir: "var(--choregos-neutral-solid)",
-  en_cours: "var(--choregos-running-ink)",
-  attend: "var(--choregos-waiting-ink)",
-  fait: "var(--choregos-succeeded-ink)",
-  renvoye: "var(--choregos-retrying-ink)",
-  echoue: "var(--choregos-failed-ink)",
+  upcoming: "var(--choregos-neutral-solid)",
+  running: "var(--choregos-running-ink)",
+  waiting: "var(--choregos-waiting-ink)",
+  done: "var(--choregos-succeeded-ink)",
+  sent_back: "var(--choregos-retrying-ink)",
+  failed: "var(--choregos-failed-ink)",
 };
 
 /** A box's fill: tinted when it lives, the page's otherwise. */
 export function statusFill(status: StepStatus): string {
-  if (status === "en_cours") return "var(--choregos-running-soft)";
-  if (status === "attend") return "var(--choregos-waiting-soft)";
+  if (status === "running") return "var(--choregos-running-soft)";
+  if (status === "waiting") return "var(--choregos-waiting-soft)";
   return "var(--choregos-surface)";
 }
 

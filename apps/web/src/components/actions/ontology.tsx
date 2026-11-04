@@ -36,7 +36,7 @@ export function OntologyDetail({ action }: { action: Action }) {
   const targets = meta.target_ids ?? [];
   return (
     <Card title="Ontology">
-      <dl className="grid grid-cols-[8rem_1fr] gap-x-4 gap-y-1 text-sm" data-testid="ontologie">
+      <dl className="grid grid-cols-[8rem_1fr] gap-x-4 gap-y-1 text-sm" data-testid="ontology">
         <dt className="text-ink-muted">Action type</dt>
         <dd>
           <Code>{meta.action_type ?? "—"}</Code>
@@ -49,7 +49,7 @@ export function OntologyDetail({ action }: { action: Action }) {
         </dd>
       </dl>
       {effects.length + evidence.length > 0 && (
-        <ul className="mt-3 space-y-1 text-xs" data-testid="ontologie-dossier">
+        <ul className="mt-3 space-y-1 text-xs" data-testid="ontology-folder">
           {effects.map((effet, position) => (
             <li key={`e${position}`} className="flex flex-wrap items-center gap-2">
               <span>Effect</span>

@@ -5,7 +5,7 @@ import { DraftProvider, useDraft } from "@/components/workflows/draft";
 import { operations } from "@/components/workflows/operations";
 import { api } from "@/lib/api";
 import type { WorkflowEditResult, WorkflowOperation } from "@/lib/types";
-import fixture from "./fixtures/gestes-de-la-console.json";
+import fixture from "./fixtures/console-gestures.json";
 
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
@@ -44,7 +44,7 @@ describe("a workflow draft under quick gestures (#678)", () => {
   it("grafts the second gesture onto the first one's text, not onto the text last rendered", async () => {
     vi.mocked(api.workflowNamed).mockResolvedValue({ name: "onboarding", version: 3, yaml: YAML, is_active: true } as never);
     vi.mocked(api.validateWorkflow).mockResolvedValue({ valid: true, errors: [], warnings: [], process: [] });
-    const gesture = operations.libelle("inbox", "New requests");
+    const gesture = operations.stateLabel("inbox", "New requests");
     vi.mocked(api.editWorkflow)
       .mockResolvedValueOnce(result("after-A", []))
       .mockResolvedValueOnce(result("after-B", []));

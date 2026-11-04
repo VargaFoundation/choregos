@@ -58,8 +58,8 @@ test("an agent binds an organisation memory and a project memory, and the versio
   await expect(next.getByTestId("memory-binding").nth(0)).toContainText("global:security-lessons");
   await expect(next.getByTestId("memory-binding").nth(2)).toContainText("project:decisions");
   await page.getByRole("tab", { name: "What it costs and allows" }).click();
-  await expect(page.getByTestId("memoire-resolue")).toContainText("Security lessons (organisation) — read");
-  await expect(page.getByTestId("memoire-resolue")).toContainText("It writes to the project's shared memory");
+  await expect(page.getByTestId("resolved-memory")).toContainText("Security lessons (organisation) — read");
+  await expect(page.getByTestId("resolved-memory")).toContainText("It writes to the project's shared memory");
 });
 
 test("the organisation's registry lists its memories, and an administrator creates one", async ({ page }) => {

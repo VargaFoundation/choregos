@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Projections des tickets, runs, demandes humaines et releases ; la clé d'un ticket interne ;
-le rangement des sorties d'une étape."""
+"""Projections of work items, runs, human requests and releases; the key of an internal work
+item; the storing of a stage's outputs."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ import httpx
 import structlog
 from choregos_adapters.errors import AdapterError
 from choregos_contracts import EventType
+from choregos_core.compat import alias_names
 from choregos_core.domain import NewItem
 from choregos_core.restricted import RESTRICTED_TITLE, WITHHELD, mark
 from choregos_core.secrets import SecretIntrouvable
@@ -45,24 +46,24 @@ from ..schemas import (
     WorkItemDto,
 )
 from ..temporal import get_temporal, interpreter_id
-from .couts import estimate_cost
-from .definitions import workflow_du_ticket, workflow_model
-from .evenements import persist_event
+from .costs import estimate_cost
+from .definitions import work_item_workflow, workflow_model
+from .events import persist_event
 from .initiator import of_principal
-from .routage import Naissance, nouveau_ticket, verifier_la_naissance
+from .routing import WorkItemBirth, new_work_item, verify_birth
 
 
-def _detail_de_la_decision(decision: dict[str, Any]) -> str:
-    """Ce qu'une décision dit d'elle-même ; une tâche, sa preuve : la phrase attestée et les valeurs."""
-    morceaux = []
+def _decision_detail(decision: dict[str, Any]) -> str:
+    """What a decision says of itself; a task, its proof: the attested sentence and the values."""
+    parts = []
     if decision.get("attestation"):
-        morceaux.append(f"attested: “{decision['attestation']}”")
-    valeurs = dict(decision.get("values") or {})
-    if valeurs:
-        morceaux.append(", ".join(f"{nom} = {valeur}" for nom, valeur in sorted(valeurs.items())))
+        parts.append(f"attested: “{decision['attestation']}”")
+    values = dict(decision.get("values") or {})
+    if values:
+        parts.append(", ".join(f"{name} = {value}" for name, value in sorted(values.items())))
     if decision.get("reason"):
-        morceaux.append(str(decision["reason"]))
-    return " — ".join(morceaux)
+        parts.append(str(decision["reason"]))
+    return " — ".join(parts)
 
 
 def totals_from(raw: dict[str, Any] | None) -> Totals:
@@ -160,9 +161,9 @@ def human_request_dto(row: HumanRequest) -> HumanRequestDto:
 async def work_item_dto(
     session: AsyncSession, item: WorkItem, project: Project, *, with_temporal: bool = False
 ) -> WorkItemDto:
-    # Le workflow DU TICKET : sa version épinglée, sinon le défaut du projet — plus le gabarit
-    # `default-simple`, qui faisait afficher un workflow que le projet n'avait jamais eu.
-    workflow_row = await workflow_du_ticket(session, item)
+    # The workflow OF THE WORK ITEM: its pinned version, otherwise the project's default, and no
+    # longer the `default-simple` template, which showed a workflow the project never had.
+    workflow_row = await work_item_workflow(session, item)
     workflow = workflow_model(workflow_row)
     state = workflow.states.get(item.state)
     current = (
@@ -209,7 +210,7 @@ async def work_item_dto(
         workflow_name=workflow_row.name if workflow_row else workflow.metadata.name,
         workflow_version=workflow_row.version if workflow_row else workflow.metadata.version,
         temporal_wf_id=item.temporal_wf_id,
-        workflow_status=await _statut_temporal(item) if with_temporal else None,
+        workflow_status=await _temporal_status(item) if with_temporal else None,
         failure=WorkflowFailure(**item.failure) if item.failure else None,
         paused=item.paused,
         current_run=run_summary(current) if current else None,
@@ -226,10 +227,10 @@ async def work_item_dto(
     )
 
 
-async def _statut_temporal(item: WorkItem) -> str | None:
-    """Le statut du workflow du ticket, si Temporal le connaît.
+async def _temporal_status(item: WorkItem) -> str | None:
+    """The status of the work item's workflow, if Temporal knows it.
 
-    Jamais une erreur : un ticket doit se lire sans Temporal.
+    Never an error: a work item must be readable without Temporal.
     """
     if not item.temporal_wf_id:
         return None
@@ -241,18 +242,18 @@ async def _statut_temporal(item: WorkItem) -> str | None:
 
 
 def release_dto(row: Release, project_slug: str) -> ReleaseDto:
-    # Le train range dans la release le signal d'embarquement tel quel (`approval`, `merged_at`,
-    # `infra_pr_url`, `start_payload`…) ; le contrat n'en expose que les champs de l'élément et
-    # refuse le reste. Sur le locataire dev, le 10/10, la première release réelle rendait 500 à
-    # `getTrainStatus` et `listReleases` (S22-25).
-    champs = ReleaseItemDto.model_fields
+    # The train stores the boarding signal in the release as is (`approval`, `merged_at`,
+    # `infra_pr_url`, `start_payload`...); the contract only exposes the item's fields and refuses
+    # the rest. On the dev tenant, on 10/10, the first real release answered 500 to
+    # `getTrainStatus` and `listReleases` (S22-25).
+    fields = ReleaseItemDto.model_fields
     return ReleaseDto(
         id=row.id,
         project_slug=project_slug,
         env=row.env,
         batch_no=row.batch_no,
         status=row.status,
-        items=[{k: v for k, v in item.items() if k in champs} for item in row.items or []],
+        items=[{k: v for k, v in item.items() if k in fields} for item in row.items or []],
         started_at=row.started_at,
         ended_at=row.ended_at,
         approved_by=row.approved_by,
@@ -262,50 +263,52 @@ def release_dto(row: Release, project_slug: str) -> ReleaseDto:
     )
 
 
-async def cle_de_ticket_interne(session: AsyncSession, project: Project, *, numerotee: bool = True) -> str:
-    """Attribue `<PRÉFIXE>-<n>` quand la plateforme tient elle-même les tickets (`tracker: internal`).
+async def internal_work_item_key(session: AsyncSession, project: Project, *, numerotee: bool = True) -> str:
+    """Assigns `<PREFIX>-<n>` when the platform keeps the work items itself (`tracker: internal`).
 
-    Compter en base plutôt que tenir un compteur évite un deuxième endroit où l'état vit ;
-    la course entre deux créations simultanées est laissée à la contrainte d'unicité
-    `(project_id, tracker_key)`. Servait à l'orchestrateur (findings) ; sert aussi à l'API
-    depuis que `POST /projects/{id}/work-items` existe.
+    Counting in the database rather than keeping a counter avoids a second place where the state
+    lives; the race between two simultaneous creations is left to the uniqueness constraint
+    `(project_id, tracker_key)`. It served the orchestrator (findings); it also serves the API
+    since `POST /projects/{id}/work-items` exists.
 
     `numerotee=False` returns the prefix alone: a schedule builds its own key on it (S38-11).
     """
-    connecteur = (
+    connector = (
         await session.execute(
             select(Connector).where(Connector.project_id == project.id, Connector.kind == "tracker")
         )
     ).scalar_one_or_none()
-    configure = (connecteur.config or {}).get("key_prefix") if connecteur else None
-    prefixe = str(configure or project.slug).upper()
+    configured = (connector.config or {}).get("key_prefix") if connector else None
+    prefix = str(configured or project.slug).upper()
     if not numerotee:
-        return prefixe
-    existantes = (
+        return prefix
+    existing = (
         (
             await session.execute(
                 select(WorkItem.tracker_key).where(
-                    WorkItem.project_id == project.id, WorkItem.tracker_key.like(f"{prefixe}-%")
+                    WorkItem.project_id == project.id, WorkItem.tracker_key.like(f"{prefix}-%")
                 )
             )
         )
         .scalars()
         .all()
     )
-    numeros = [int(suffixe) for cle in existantes if (suffixe := cle.rsplit("-", 1)[-1]).isdigit()]
-    return f"{prefixe}-{max(numeros, default=0) + 1}"
+    numbers = [
+        int(suffix) for tracker_key in existing if (suffix := tracker_key.rsplit("-", 1)[-1]).isdigit()
+    ]
+    return f"{prefix}-{max(numbers, default=0) + 1}"
 
 
-async def le_tracker_est_interne(session: AsyncSession, project: Project) -> bool:
-    connecteur = (
+async def tracker_is_internal(session: AsyncSession, project: Project) -> bool:
+    connector = (
         await session.execute(
             select(Connector).where(Connector.project_id == project.id, Connector.kind == "tracker")
         )
     ).scalar_one_or_none()
-    return connecteur is None or connecteur.type in {"internal", "fake"}
+    return connector is None or connector.type in {"internal", "fake"}
 
 
-async def tracker_du_projet(session: AsyncSession, project: Project) -> tuple[Connector | None, Any]:
+async def project_tracker(session: AsyncSession, project: Project) -> tuple[Connector | None, Any]:
     """The project's tracker connector and, when the tracker is external, its adapter.
 
     Returns `(row, None)` for an internal tracker (no row, `internal`, `fake`): the platform mints
@@ -329,54 +332,55 @@ async def tracker_du_projet(session: AsyncSession, project: Project) -> tuple[Co
         pinned = await pin_plugin_tracker(session, project.org_id, "tracker", row.type, pinned)
         config = configuration_resolue("tracker", row.type, pinned, row.secret_refs, row.secret_ref)
         return row, build("tracker", row.type, config)
-    except (AdapterError, SecretIntrouvable, ValueError, KeyError) as erreur:
-        raise upstream(row.type, f"the tracker connector cannot be built: {erreur}") from erreur
+    except (AdapterError, SecretIntrouvable, ValueError, KeyError) as error:
+        raise upstream(row.type, f"the tracker connector cannot be built: {error}") from error
 
 
 ORIGIN_MARKER = "<!-- choregos:origin -->"
 FILED_LABEL = "source:choregos"
 
 
-DOCUMENTS_LOGICIELS = ("spec_markdown", "plan_markdown", "review_markdown", "release_notes_markdown")
+SOFTWARE_DOCUMENTS = ("spec_markdown", "plan_markdown", "review_markdown", "release_notes_markdown")
 
 
-def sorties_a_ranger(outputs: Any, declarees: list[str] | None = None) -> dict[str, Any]:
-    """Les sorties d'une étape qui se rangent dans `item.documents` : les quatre documents logiciels
-    présents, et chaque sortie que la transition déclare. Ce sont elles qui reçoivent un reçu (S25-04)."""
-    valeurs = (
+def outputs_to_store(outputs: Any, declared: list[str] | None = None) -> dict[str, Any]:
+    """The outputs of a stage that are stored in `item.documents`: the four software documents
+    present, and each output the transition declares. They are the ones that get a receipt (S25-04)."""
+    values = (
         outputs.model_dump(mode="json", exclude_none=True)
         if hasattr(outputs, "model_dump")
         else dict(outputs)
     )
-    rangees = {champ: valeurs[champ] for champ in DOCUMENTS_LOGICIELS if valeurs.get(champ)}
-    for nom in declarees or []:
-        if nom in valeurs and valeurs[nom] not in (None, "", [], {}):
-            rangees[nom] = valeurs[nom]
-    return rangees
+    stored = {field: values[field] for field in SOFTWARE_DOCUMENTS if values.get(field)}
+    for name in declared or []:
+        if name in values and values[name] not in (None, "", [], {}):
+            stored[name] = values[name]
+    return stored
 
 
-def ranger_les_sorties(item: WorkItem, outputs: Any, declarees: list[str] | None = None) -> dict[str, Any]:
-    """Range les sorties d'une étape dans `item.documents`, pour que l'étape SUIVANTE les lise.
+def store_outputs(item: WorkItem, outputs: Any, declared: list[str] | None = None) -> dict[str, Any]:
+    """Stores a stage's outputs in `item.documents`, so that the NEXT stage reads them.
 
-    Les quatre documents logiciels étaient rangés ; les sorties nommées par le métier
-    (`profils`, `evaluation`) ne l'étaient jamais — `outputs_present` les voyait dans le
-    résultat, puis elles disparaissaient. Sur le banc du 2026-09-24, la qualification RH
-    cherchait « les profils proposés à l'étape précédente » dans un workspace vide.
-    Une sortie déclarée par la transition (`outputs: [profils]`) est rangée sous son nom.
+    The four software documents were stored; the outputs named by the trade (`profiles`,
+    `evaluation`) never were: `outputs_present` saw them in the result, then they disappeared. On
+    the 2026-09-24 bench, the HR qualification looked for "the profiles proposed at the previous
+    stage" in an empty workspace. An output declared by the transition (`outputs: [profiles]`) is
+    stored under its name.
     """
-    documents = {**(item.documents or {}), **sorties_a_ranger(outputs, declarees)}
+    documents = {**(item.documents or {}), **outputs_to_store(outputs, declared)}
     item.documents = documents
     return documents
 
 
-async def creer_un_ticket(  # noqa: PLR0913 - one creation path, the birth facts keyword-only
+async def create_work_item(  # noqa: PLR0913 - one creation path, the birth facts keyword-only
     session: AsyncSession,
     principal: Principal,
     project: Project,
-    demande: WorkItemCreate,
+    request: WorkItemCreate,
     *,
     canal: str = "api",
-    cle: str | None = None,
+    key: str | None = None,
+    cle: str | None = None,  # lang: fr-ok alias:internal
     initiated_by: str | None = None,
     item_id: str | None = None,
     restricted_knowledge: list[str] | None = None,
@@ -396,54 +400,57 @@ async def creer_un_ticket(  # noqa: PLR0913 - one creation path, the birth facts
 
     `restricted_knowledge` marks it at birth (ADR 0114): a fan-out child of a marked parent. An
     external tracker then receives a neutral title and no body; the work item keeps its own.
+
+    `key` was `cle`: the former keyword still works (ADR 0098 §3 (e)).
     """
-    row, adapter = await tracker_du_projet(session, project)
+    given_key = key if key is not None else cle
+    row, adapter = await project_tracker(session, project)
     url: str | None = None
     if adapter is None:
         # A schedule gives its own key, one per window, so that a second firing finds the first (S38-11).
-        key = cle or await cle_de_ticket_interne(session, project)
+        key = given_key or await internal_work_item_key(session, project)
     else:
         # Validate first: a refused field or budget must not leave an issue behind.
-        await verifier_la_naissance(
+        await verify_birth(
             session,
             project,
-            Naissance(
+            WorkItemBirth(
                 tracker_key="-",
-                title=demande.title,
-                size=demande.size,
-                workflow=demande.workflow,
-                labels=tuple(demande.labels),
-                fields=dict(demande.fields),
-                budget_usd=demande.budget_usd,
+                title=request.title,
+                size=request.size,
+                workflow=request.workflow,
+                labels=tuple(request.labels),
+                fields=dict(request.fields),
+                budget_usd=request.budget_usd,
             ),
         )
         assert row is not None
         # A schedule gives its own key, one per window (S38-11); an external tracker mints its own.
         outward = (
-            demande.model_copy(update={"title": RESTRICTED_TITLE, "body": WITHHELD})
+            request.model_copy(update={"title": RESTRICTED_TITLE, "body": WITHHELD})
             if restricted_knowledge
-            else demande
+            else request
         )
-        key, url = await _classer_dans_le_tracker(row.type, adapter, principal, outward)
-    item = await nouveau_ticket(
+        key, url = await _file_in_tracker(row.type, adapter, principal, outward)
+    item = await new_work_item(
         session,
         project,
-        Naissance(
+        WorkItemBirth(
             tracker_key=key,
-            title=demande.title,
-            body=demande.body,
+            title=request.title,
+            body=request.body,
             url=url,
-            size=demande.size,
-            risk=demande.risk,
+            size=request.size,
+            risk=request.risk,
             created_by=principal.email,
             # The person who filed it here, even when the issue lands in an external tracker under
             # the platform's own account (#1179).
             reporter=principal.email,
             initiated_by=initiated_by or of_principal(principal, canal),
-            workflow=demande.workflow,
-            labels=tuple(demande.labels),
-            fields=dict(demande.fields),
-            budget_usd=demande.budget_usd,
+            workflow=request.workflow,
+            labels=tuple(request.labels),
+            fields=dict(request.fields),
+            budget_usd=request.budget_usd,
             item_id=item_id,
         ),
     )
@@ -456,9 +463,9 @@ async def creer_un_ticket(  # noqa: PLR0913 - one creation path, the birth facts
         project_slug=project.slug,
         subject=key,
         key=key,
-        title=demande.title,
+        title=request.title,
     )
-    if demande.start:
+    if request.start:
         await start_work_item(project, item)
     await record(
         session,
@@ -475,7 +482,7 @@ async def creer_un_ticket(  # noqa: PLR0913 - one creation path, the birth facts
 
 
 async def start_work_item(project: Project, item: WorkItem) -> None:
-    """Starts the work item's interpreter: what `creer_un_ticket` does unless `start=False`.
+    """Starts the work item's interpreter: what `create_work_item` does unless `start=False`.
 
     The A2A door starts it itself, once the files a message carried are stored: the first step
     must find the inputs it declares (ADR 0078 §6)."""
@@ -492,23 +499,23 @@ async def start_work_item(project: Project, item: WorkItem) -> None:
     item.temporal_wf_id = workflow_id
 
 
-async def _classer_dans_le_tracker(
-    tracker_type: str, adapter: Any, principal: Principal, demande: WorkItemCreate
+async def _file_in_tracker(
+    tracker_type: str, adapter: Any, principal: Principal, request: WorkItemCreate
 ) -> tuple[str, str | None]:
     """Creates the issue in the external tracker; returns its key and, best effort, its URL."""
-    body = f"{demande.body or ''}\n\n{ORIGIN_MARKER}Filed from Choregos by {principal.email}".strip()
-    labels = [*dict.fromkeys([*demande.labels, FILED_LABEL])]
+    body = f"{request.body or ''}\n\n{ORIGIN_MARKER}Filed from Choregos by {principal.email}".strip()
+    labels = [*dict.fromkeys([*request.labels, FILED_LABEL])]
     try:
-        key = str(await adapter.create_item(NewItem(title=demande.title, body=body, labels=labels)))
-    except (AdapterError, SecretIntrouvable, httpx.HTTPError) as erreur:
+        key = str(await adapter.create_item(NewItem(title=request.title, body=body, labels=labels)))
+    except (AdapterError, SecretIntrouvable, httpx.HTTPError) as error:
         raise upstream(
             tracker_type,
-            f"the tracker {tracker_type} refused the issue: {erreur}. Nothing was created in Choregos.",
-        ) from erreur
+            f"the tracker {tracker_type} refused the issue: {error}. Nothing was created in Choregos.",
+        ) from error
     try:
         return key, (await adapter.fetch_item(key)).url
-    except Exception as erreur:
-        structlog.get_logger().warning("issue_url_unavailable", key=key, error=str(erreur))
+    except Exception as error:
+        structlog.get_logger().warning("issue_url_unavailable", key=key, error=str(error))
         return key, None
 
 
@@ -520,8 +527,8 @@ def _via(value: Any) -> TrackerWrite | None:
     return TrackerWrite(type=str(value["type"]), account=str(account) if account else None)
 
 
-async def chronologie(session: AsyncSession, item: WorkItem) -> list[TimelineEntry]:
-    """États, runs, décisions, findings : l'histoire complète d'un ticket, dans l'ordre."""
+async def timeline(session: AsyncSession, item: WorkItem) -> list[TimelineEntry]:
+    """States, runs, decisions, findings: the complete story of a work item, in order."""
     entries: list[TimelineEntry] = []
     runs = (
         (await session.execute(select(Run).where(Run.work_item_id == item.id).order_by(Run.created_at)))
@@ -583,7 +590,7 @@ async def chronologie(session: AsyncSession, item: WorkItem) -> list[TimelineEnt
                     ts=req.decided_at,
                     kind="decision",
                     title=f"decision: {(req.decision or {}).get('kind', 'answered')}",
-                    detail=_detail_de_la_decision(req.decision or {}),
+                    detail=_decision_detail(req.decision or {}),
                     actor=req.decided_by,
                     actor_kind="user",
                     ref_id=req.id,
@@ -617,3 +624,29 @@ async def chronologie(session: AsyncSession, item: WorkItem) -> list[TimelineEnt
             )
         )
     return sorted(entries, key=lambda e: e.ts)
+
+
+_statut_temporal = _temporal_status  # lang: fr-ok alias:internal
+cle_de_ticket_interne = internal_work_item_key  # lang: fr-ok alias:internal
+le_tracker_est_interne = tracker_is_internal  # lang: fr-ok alias:internal
+tracker_du_projet = project_tracker  # lang: fr-ok alias:internal
+DOCUMENTS_LOGICIELS = SOFTWARE_DOCUMENTS  # lang: fr-ok alias:internal
+sorties_a_ranger = outputs_to_store  # lang: fr-ok alias:internal
+ranger_les_sorties = store_outputs  # lang: fr-ok alias:internal
+creer_un_ticket = create_work_item  # lang: fr-ok alias:internal
+chronologie = timeline  # lang: fr-ok alias:internal
+
+alias_names(
+    __name__,
+    {
+        "_statut_temporal": "_temporal_status",  # lang: fr-ok alias:internal
+        "cle_de_ticket_interne": "internal_work_item_key",  # lang: fr-ok alias:internal
+        "le_tracker_est_interne": "tracker_is_internal",  # lang: fr-ok alias:internal
+        "tracker_du_projet": "project_tracker",  # lang: fr-ok alias:internal
+        "DOCUMENTS_LOGICIELS": "SOFTWARE_DOCUMENTS",  # lang: fr-ok alias:internal
+        "sorties_a_ranger": "outputs_to_store",  # lang: fr-ok alias:internal
+        "ranger_les_sorties": "store_outputs",  # lang: fr-ok alias:internal
+        "creer_un_ticket": "create_work_item",  # lang: fr-ok alias:internal
+        "chronologie": "timeline",  # lang: fr-ok alias:internal
+    },
+)

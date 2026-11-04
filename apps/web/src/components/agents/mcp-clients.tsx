@@ -42,7 +42,7 @@ export function McpClients({ org, clients, agents }: { org: string; clients: Api
       {clients.length === 0 ? (
         <Empty title="No AI client">Connect Claude Code or another client above: it appears here once it has called.</Empty>
       ) : (
-        <ul className="space-y-3" data-testid="clients-mcp">
+        <ul className="space-y-3" data-testid="mcp-clients">
           {clients.map((jeton) => (
             <ClientMcp key={jeton.id} org={org} jeton={jeton} agent={agentByToken.get(jeton.id)} />
           ))}

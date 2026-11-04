@@ -52,7 +52,7 @@ export function ArtifactFlowCard({
   if (!artifacts || artifacts.length === 0) return null;
   const parId = new Map(steps.map((s) => [s.id, s]));
   return (
-    <Card title="Artifacts" data-testid="artifacts-du-workflow">
+    <Card title="Artifacts" data-testid="workflow-artifacts">
       <div className="overflow-x-auto">
         <table className="w-full text-left text-xs">
           <caption className="sr-only">Artifacts</caption>
@@ -69,7 +69,7 @@ export function ArtifactFlowCard({
               <tr
                 key={a.name}
                 tabIndex={0}
-                data-testid={`artefact-${a.name}`}
+                data-testid={`artifact-row-${a.name}`}
                 className="border-t border-line align-top focus-visible:bg-surface-sunken hover:bg-surface-sunken"
                 onMouseEnter={() => onHighlight(highlightOf(a))}
                 onFocus={() => onHighlight(highlightOf(a))}

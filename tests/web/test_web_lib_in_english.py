@@ -20,8 +20,7 @@ PREFIXES = (
     "apps/web/src/types/",
     "apps/web/src/proxy.ts",
 )
-#: Nothing is excluded since S45-27 renamed the journey fixtures (`mocks/journey.ts`); the former
-#: path is a shim, which declares itself with `lang: fr-ok-file`.
+#: Nothing is excluded: the journey fixtures are `mocks/journey.ts` and their former path is gone.
 EXCLUDED: tuple[str, ...] = ()
 
 

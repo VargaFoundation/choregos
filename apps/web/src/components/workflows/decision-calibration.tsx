@@ -2,7 +2,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { EtatDeLecture } from "@/components/ui";
+import { ReadState } from "@/components/ui";
 import { DECISION_HUE } from "@/components/workflows/map/layout";
 import { CONFIDENCE_SUFFIX, transitions, type WorkflowDocument } from "@/components/workflows/document";
 import { api } from "@/lib/api";
@@ -237,7 +237,7 @@ function QuestionCard({ question, target, minObserved, workflowThreshold }: {
  * for the target accuracy — or why it suggests none. Measured, never declared.
  */
 export function DecisionCalibration({ read, thresholds }: { read: CalibrationRead; thresholds?: Record<string, number> }) {
-  if (!read.data) return <EtatDeLecture lecture={read} quoi="the calibration" />;
+  if (!read.data) return <ReadState lecture={read} quoi="the calibration" />;
   const { questions = [], target_accuracy: target, min_observed: minObserved } = read.data;
   if (questions.length === 0)
     return (

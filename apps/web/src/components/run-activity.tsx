@@ -16,7 +16,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Badge, Table, TBody, TD, TH, THead, TR, type Tone } from "@/components/ui";
-import type { ActiviteDuRun, AppelDOutil, StatutDAppel } from "@/lib/activite-du-run";
+import type { RunActivity, ToolCall, CallStatus } from "@/lib/run-activity";
 import { duration } from "@/lib/format";
 
 const ICONES: Record<string, LucideIcon> = {
@@ -31,8 +31,8 @@ const ICONES: Record<string, LucideIcon> = {
   switch_mode: ToggleRight,
 };
 
-const TONS: Record<StatutDAppel, Tone> = { pending: "neutral", in_progress: "running", completed: "succeeded", failed: "failed" };
-const LIBELLES: Record<StatutDAppel, string> = { pending: "Pending", in_progress: "Running", completed: "Done", failed: "Failed" };
+const TONS: Record<CallStatus, Tone> = { pending: "neutral", in_progress: "running", completed: "succeeded", failed: "failed" };
+const LIBELLES: Record<CallStatus, string> = { pending: "Pending", in_progress: "Running", completed: "Done", failed: "Failed" };
 
 const HEURE = new Intl.DateTimeFormat("en-GB", { timeStyle: "medium" });
 
@@ -46,12 +46,12 @@ function callDuration(ms: number | undefined): string {
  * A run's activity (S25-02), above the raw journal: each tool call once, its state,
  * its duration, and the refusal that blocked it; then the refusals that nothing links to a call.
  */
-export function RunActivityView({ activite }: { activite: ActiviteDuRun }) {
+export function RunActivityView({ activite }: { activite: RunActivity }) {
   const { appels, refus, termines, sousAgents } = activite;
   const orphelins = refus.filter((r) => !r.appel || !appels.some((a) => a.id === r.appel));
   return (
-    <div className="space-y-3" data-testid="activite-du-run">
-      <p className="font-mono text-xs text-ink-muted" data-testid="activite-resume">
+    <div className="space-y-3" data-testid="run-activity">
+      <p className="font-mono text-xs text-ink-muted" data-testid="activity-summary">
         {appels.length} tool call{appels.length === 1 ? "" : "s"} · {termines} finished · {refus.length} refused
         {sousAgents > 0 ? ` · ${sousAgents} sub-agent${sousAgents === 1 ? "" : "s"}` : ""}
       </p>
@@ -89,10 +89,10 @@ export function RunActivityView({ activite }: { activite: ActiviteDuRun }) {
   );
 }
 
-function Row({ appel }: { appel: AppelDOutil }) {
+function Row({ appel }: { appel: ToolCall }) {
   const Icone = appel.sousAgent ? Bot : (ICONES[appel.genre] ?? Wrench);
   return (
-    <TR data-appel={appel.id} data-statut={appel.statut}>
+    <TR data-call={appel.id} data-status={appel.statut}>
       <TD className="font-mono text-xs whitespace-nowrap text-ink-muted tabular-nums">{HEURE.format(new Date(appel.debut))}</TD>
       <TD className="min-w-0">
         <span className="flex min-w-0 items-center gap-2">

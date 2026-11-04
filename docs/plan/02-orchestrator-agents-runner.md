@@ -1,23 +1,23 @@
-# 2. Orchestrateur, agents, runner
+# 2. Orchestrator, agents, runner
 
-## 2.1 Orchestrateur Temporal (`apps/orchestrator`)
+## 2.1 Temporal orchestrator (`apps/orchestrator`)
 
 ### Workflows
 
-| Workflow | ID | Rôle |
+| Workflow | ID | Role |
 | :-- | :-- | :-- |
-| `WorkflowInterpreter` | `wi-<project>-<tracker_key>` | Exécute le DSL épinglé pour un ticket |
-| `ReleaseTrain` | `train-<project>-<env>` | Sérialise les déploiements d'un environnement (section 5) |
-| `FindingsTriage` | `findings-<project>` | Déduplique, classe, crée les tickets (section 5) |
-| `ProjectProvisioning` | `prov-<project>` | Exécute les étapes du template (section 3) |
-| `MemoryIngestion` | `mem-<project>` | Import planifié tracker/SCM/CD → Ecphoria (section 4) |
-| `EvalMatrix` | `evals-<project>` | Évals nocturnes backend × modèle (section 4) |
+| `WorkflowInterpreter` | `wi-<project>-<tracker_key>` | Runs the pinned DSL for a ticket |
+| `ReleaseTrain` | `train-<project>-<env>` | Serialises the deployments of an environment (section 5) |
+| `FindingsTriage` | `findings-<project>` | Deduplicates, classifies, creates the tickets (section 5) |
+| `ProjectProvisioning` | `prov-<project>` | Runs the template's steps (section 3) |
+| `MemoryIngestion` | `mem-<project>` | Scheduled tracker/SCM/CD import → Ecphoria (section 4) |
+| `EvalMatrix` | `evals-<project>` | Nightly backend × model evals (section 4) |
 
-Task queues : `orchestrator` (workflows + activités légères), `executor` (création/suivi de runs), `tracker` (appels API externes, rate-limités), `memory`. Workers : `apps/orchestrator/worker.py --queues …` ; déploiement 2+ réplicas par queue (section 6).
+Task queues: `orchestrator` (workflows + light activities), `executor` (creation/tracking of runs), `tracker` (external API calls, rate-limited), `memory`. Workers: `apps/orchestrator/worker.py --queues …`; deployed with 2+ replicas per queue (section 6).
 
-La table qui dit **quelle activité va sur quelle file** vit dans `choregos_orchestrator.repartition`, et les workflows planifient chaque activité sur la file déclarée via `workflows.planification.executer_activite`. Ce détail n'en est pas un : jusqu'au 2026-09-27, la table n'était lue que par le worker (pour savoir ce qu'il enregistre) et jamais par les workflows (pour savoir où planifier). `workflow.execute_activity` sans `task_queue` planifie sur la file du *workflow* — donc tout tournait sur `orchestrator`, les trois workers spécialisés ne recevaient rien, et une politique réseau écrite d'après la répartition déclarée échouait. Les quatre historiques de `tests/replay/` en portent la trace : 83 activités planifiées, **toutes** sur `orchestrator`.
+The table that says **which activity goes on which queue** lives in `choregos_orchestrator.repartition`, and the workflows schedule each activity on the declared queue through `workflows.planification.executer_activite`. This detail is not a detail: until 2026-09-27, the table was only read by the worker (to know what it registers) and never by the workflows (to know where to schedule). `workflow.execute_activity` without a `task_queue` schedules on the *workflow's* queue — so everything ran on `orchestrator`, the three specialised workers received nothing, and a network policy written from the declared distribution failed. The four histories in `tests/replay/` carry the trace: 83 activities scheduled, **all** on `orchestrator`.
 
-### `WorkflowInterpreter` — algorithme
+### `WorkflowInterpreter` — algorithm
 
 ```python
 @workflow.defn
@@ -30,7 +30,7 @@ class WorkflowInterpreter:
         self.paused = False
         self.stopped = False
 
-    # signaux
+    # signals
     @workflow.signal
     def human_decision(self, d: HumanDecision):
         self.inbox.append(d)
@@ -65,7 +65,7 @@ class WorkflowInterpreter:
             t = wf.select_transition(self.state, self.last_outcome)
             if t is None:
                 self.state = await self.wait_external_transition(wf)
-                continue  # état d'attente humaine (board)
+                continue  # human waiting state (board)
             if t.via == "release_train":
                 await self.act(signal_train, project, t.train.env, wi, self.last_pr)
                 deploy = await self.wait_for(DeployResult, timeout=t.timeout)
@@ -74,7 +74,7 @@ class WorkflowInterpreter:
                 res = await self.run_stage(wi, t, project, policy)
                 self.state = self.after_stage(t, res, wf)
             elif t.actor.type == "human":
-                dec = await self.wait_human(wi, t, project, policy)  # crée human_request, SLA, rappels
+                dec = await self.wait_human(wi, t, project, policy)  # creates human_request, SLA, reminders
                 self.state = t.to if dec.approved else (t.on_reject or self.state)
             else:  # system
                 ok = await self.wait_gates(t.gates, wi, timeout=t.timeout)
@@ -89,9 +89,9 @@ class WorkflowInterpreter:
         attempt = self.attempts[t.id]
         self.attempts[t.id] += 1
         budget = policy.budget_for(t.actor.role, wi.size)
-        model = await self.act(resolve_model, project, t.actor.model, wi.size)  # profils → litellm_model
+        model = await self.act(resolve_model, project, t.actor.model, wi.size)  # profiles → litellm_model
         key = await self.act(mint_gateway_key, project, wi, t, attempt, budget, model)
-        ctx = await self.act(build_context_pack, project, wi, t)  # Ecphoria + tickets liés + logs CI
+        ctx = await self.act(build_context_pack, project, wi, t)  # Ecphoria + linked tickets + CI logs
         spec = StageInput.build(wi, t, project, model, key, budget, ctx, attempt)
         ref = await self.act(start_run, spec)  # Executor.start → Tekton PipelineRun
         res = await self.act(
@@ -108,14 +108,14 @@ class WorkflowInterpreter:
             await self.handle_scope_change(wi, t, q, policy)
         if self.cost_usd > policy.budget_ticket(wi.size):
             res.status = "needs_human"
-            res.summary += " (budget ticket dépassé)"
+            res.summary += " (ticket budget exceeded)"
         return res
 
     def after_stage(self, t, res, wf) -> str:
         if res.status == "done":
             gates_ok = await_gates_sync(
                 t.gates
-            )  # évaluées par activité ; gates asynchrones (CI) → attente signal
+            )  # evaluated by activity; asynchronous gates (CI) → wait for a signal
             return t.to if gates_ok else self.retry_or_escalate(t, wf)
         if res.status == "needs_human":
             return wf.defaults.on_question
@@ -126,76 +126,76 @@ class WorkflowInterpreter:
         return r.to if self.attempts[t.id] < r.max_attempts else r.escalate_to
 ```
 
-Activités (`apps/orchestrator/activities/`) : `mirror_state`, `resolve_model`, `mint_gateway_key`, `collect_spend`, `revoke_key`, `build_context_pack`, `start_run`, `await_run` (avec heartbeat et annulation), `record_run`, `update_ticket_status_comment`, `emit_finding`, `create_human_request`, `notify`, `evaluate_gate`, `signal_train`, `close_out`, `write_run_lesson` (mémoire). Toutes idempotentes par `(run_id|work_item_id, step)`. Retries Temporal : réseau 5× exponentiel ; erreurs métier (`ApplicationError(non_retryable=True)`).
+Activities (`apps/orchestrator/activities/`): `mirror_state`, `resolve_model`, `mint_gateway_key`, `collect_spend`, `revoke_key`, `build_context_pack`, `start_run`, `await_run` (with heartbeat and cancellation), `record_run`, `update_ticket_status_comment`, `emit_finding`, `create_human_request`, `notify`, `evaluate_gate`, `signal_train`, `close_out`, `write_run_lesson` (memory). All idempotent by `(run_id|work_item_id, step)`. Temporal retries: network 5× exponential; business errors (`ApplicationError(non_retryable=True)`).
 
-Attente humaine : `create_human_request` poste un commentaire structuré sur le ticket (et une notification), puis `wait_for(HumanDecision)` avec timers : rappel à `sla_hours`, escalade à `escalate_to` ensuite. Une décision peut arriver par le board (carte déplacée), par un commentaire `/choregos approve|reject|answer …` (parsé par le webhook), par le front, ou par le CLI.
+Human wait: `create_human_request` posts a structured comment on the ticket (and a notification), then `wait_for(HumanDecision)` with timers: reminder at `sla_hours`, then escalation to `escalate_to`. A decision can arrive through the board (card moved), through a `/choregos approve|reject|answer …` comment (parsed by the webhook), through the front end, or through the CLI.
 
-Gates asynchrones : `ci_green` et `review_approved` attendent des `InboundEvent` (`scm.check.completed`, `scm.pr.review_submitted`) ; timeout → `retry_or_escalate`. `scope_respected`, `evidence_present`, `diff_size_max`, `no_secrets` sont synchrones (activité `evaluate_gate` qui appelle `ScmAdapter.compare`).
+Asynchronous gates: `ci_green` and `review_approved` wait for `InboundEvent`s (`scm.check.completed`, `scm.pr.review_submitted`); timeout → `retry_or_escalate`. `scope_respected`, `evidence_present`, `diff_size_max`, `no_secrets` are synchronous (`evaluate_gate` activity that calls `ScmAdapter.compare`).
 
-Migration : signal `control(migrate, workflow_def_id)` → l'interpréteur vérifie que l'état courant existe dans la nouvelle définition (sinon mapping fourni) puis `continue_as_new` avec la nouvelle définition.
+Migration: signal `control(migrate, workflow_def_id)` → the interpreter checks that the current state exists in the new definition (otherwise a mapping is provided) then `continue_as_new` with the new definition.
 
-## 2.2 Le runner (`packages/runner`) — client ACP headless
+## 2.2 The runner (`packages/runner`) — headless ACP client
 
-Image `ghcr.io/vargafoundation/choregos-runner:<version>` : Debian slim + Python 3.12 + `git`, `gh`, `glab`, `jq`, `ripgrep`, outils de test usuels (node 22, pnpm, uv, go, java 21 en variantes d'image), scanners (Semgrep, Trivy, gitleaks), **agents ACP préinstallés** (`claude-agent-acp`, `codex-acp`, Gemini CLI, Goose, OpenCode — OpenHands retiré, [ADR 0011](../adr/0011-retrait-d-openhands.md)) à versions épinglées dans `packages/runner/backends/versions.lock`.
+Image `ghcr.io/vargafoundation/choregos-runner:<version>`: Debian slim + Python 3.12 + `git`, `gh`, `glab`, `jq`, `ripgrep`, the usual test tools (node 22, pnpm, uv, go, java 21 in image variants), scanners (Semgrep, Trivy, gitleaks), **preinstalled ACP agents** (`claude-agent-acp`, `codex-acp`, Gemini CLI, Goose, OpenCode — OpenHands removed, [ADR 0011](../adr/0011-openhands-removed.md)) at versions pinned in `packages/runner/backends/versions.lock`.
 
-### Algorithme
+### Algorithm
 
 ```
-1. input  ← GET /internal/runs/{id}/input (run_token)            ; si résultat déjà posté → exit 0 (idempotence)
-2. clone  ← git clone --depth N repo ; checkout work_branch (créée depuis base si absente) ; git config user = choregos-bot
-3. ctx    ← télécharger context_pack ; écrire .choregos/context.md ; écrire .choregos/task.md (ticket + spec + consignes de sortie)
-4. tools  ← démarrer sidecar MCP choregos-tools (localhost:7777) avec run_token ; écrire la config MCP du backend
-5. agent  ← backend.launch_spec(ctx) : écrire fichiers de config (modèle, MCP), exporter model_env ; spawn processus ; ACP initialize
+1. input  ← GET /internal/runs/{id}/input (run_token)            ; if the result is already posted → exit 0 (idempotence)
+2. clone  ← git clone --depth N repo ; checkout work_branch (created from base if absent) ; git config user = choregos-bot
+3. ctx    ← download context_pack ; write .choregos/context.md ; write .choregos/task.md (ticket + spec + output instructions)
+4. tools  ← start the choregos-tools MCP sidecar (localhost:7777) with run_token ; write the backend's MCP config
+5. agent  ← backend.launch_spec(ctx) : write config files (model, MCP), export model_env ; spawn process ; ACP initialize
 6. sess   ← session/new(cwd=/workspace, mcpServers=[choregos, memory, github-readonly])
-7. prompt ← session/prompt(playbook rendu + task.md)              ; boucle d'événements :
-      - session/update → journaliser (batch POST /internal/runs/{id}/events), compter tours/outils
+7. prompt ← session/prompt(rendered playbook + task.md)           ; event loop:
+      - session/update → log (batch POST /internal/runs/{id}/events), count turns/tools
       - session/request_permission → PolicyEngine.decide(op) :
-            write hors allowed_paths → deny + message "report_finding / request_scope_change"
-            commande dans deny_commands ou motif dangereux → deny
-            réseau hors allowlist → deny (le sandbox bloque aussi)
-            sinon allow (journalisé)
-      - dépassement max_turns / max_minutes → cancel session → status failed(reason=limit)
-8. dod    ← boucle externe (max policy.dod_iterations, défaut 3) :
-      a. lancer `make test` / commande du dépôt ; lint ; typecheck
-      b. si échec → session/prompt("Les vérifications échouent : <sortie tronquée>. Corrige.") ; retour 7
-9. scope  ← git diff --name-only base..HEAD ; fichiers hors allowed_paths → revert de ces fichiers + prompt de rappel (1 fois) ; s'il en reste → status blocked(reason=scope)
-10. result← lire .choregos/result.json ; valider schéma ; invalide → prompt de réparation (2 fois) ; compléter evidence/artifacts/diagnostics
-11. publish← commit conventionnel (si diff), push ; upload transcript (JSONL des events ACP) + rapports vers object store
+            write outside allowed_paths → deny + message "report_finding / request_scope_change"
+            command in deny_commands or dangerous pattern → deny
+            network outside the allowlist → deny (the sandbox blocks it too)
+            otherwise allow (logged)
+      - max_turns / max_minutes exceeded → cancel session → status failed(reason=limit)
+8. dod    ← outer loop (max policy.dod_iterations, default 3) :
+      a. run `make test` / the repository's command ; lint ; typecheck
+      b. on failure → session/prompt("The checks fail: <truncated output>. Fix it.") ; back to 7
+9. scope  ← git diff --name-only base..HEAD ; files outside allowed_paths → revert those files + reminder prompt (once) ; if any remain → status blocked(reason=scope)
+10. result← read .choregos/result.json ; validate schema ; invalid → repair prompt (twice) ; complete evidence/artifacts/diagnostics
+11. publish← conventional commit (if diff), push ; upload transcript (JSONL of the ACP events) + reports to the object store
 12. POST /internal/runs/{id}/result ; exit 0
 ```
 
-Sorties standardisées : code 0 (résultat posté, quel que soit `status`), 10 (input introuvable), 20 (clone impossible), 30 (agent injoignable — backend cassé), 40 (résultat invalide après réparations). Tout autre code = crash → l'activité `await_run` rejoue une fois avec le même `run_id`.
+Standardised exits: code 0 (result posted, whatever the `status`), 10 (input not found), 20 (clone impossible), 30 (agent unreachable — broken backend), 40 (invalid result after repairs). Any other code = crash → the `await_run` activity replays once with the same `run_id`.
 
 ### Backends (`packages/runner/backends/`)
 
 | Backend | `launch_spec` | `model_env` | Notes |
 | :-- | :-- | :-- | :-- |
-| ~~`openhands`~~ **retiré** | aucun agent ACP en ligne de commande (0.59 : `serve`/`cli` ; 1.x : `agent-server` HTTP) — [ADR 0011](../adr/0011-retrait-d-openhands.md) ; le défaut est `claude-code` | — | — |
+| ~~`openhands`~~ **removed** | no command-line ACP agent (0.59: `serve`/`cli`; 1.x: HTTP `agent-server`) — [ADR 0011](../adr/0011-openhands-removed.md); the default is `claude-code` | — | — |
 | `claude-code` | `claude-agent-acp` (`@agentclientprotocol/claude-agent-acp`, pinned in `versions.lock`; the image keeps a `claude-code-acp` link for stages that name the old Zed package, #436); `CLAUDE.md` → link to `AGENTS.md`; project `settings.json` with fallback hooks | `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_MODEL` | Claude models only (project validation) |
-| `codex` | `codex-acp` ; `AGENTS.md` natif | `OPENAI_BASE_URL`, `OPENAI_API_KEY`, modèle via config | |
-| `gemini-cli` | `gemini --acp` (`--experimental-acp` déprécié depuis 0.39) | `GOOGLE_GEMINI_BASE_URL` (via LiteLLM), clé | |
-| `goose` | `goose acp` | provider `openai` pointé sur LiteLLM | |
-| `opencode` | `opencode acp` ou `opencode serve` + SDK | `opencode.json` provider `openai-compatible` → LiteLLM | API mouvante : suite de conformité obligatoire |
-| `copilot-cli` | `copilot --acp` | selon doc GitHub | Optionnel |
+| `codex` | `codex-acp`; native `AGENTS.md` | `OPENAI_BASE_URL`, `OPENAI_API_KEY`, model via config | |
+| `gemini-cli` | `gemini --acp` (`--experimental-acp` deprecated since 0.39) | `GOOGLE_GEMINI_BASE_URL` (via LiteLLM), key | |
+| `goose` | `goose acp` | `openai` provider pointed at LiteLLM | |
+| `opencode` | `opencode acp` or `opencode serve` + SDK | `opencode.json` `openai-compatible` provider → LiteLLM | Moving API: conformance suite mandatory |
+| `copilot-cli` | `copilot --acp` | per GitHub docs | Optional |
 
-Suite de conformité (`tests/conformance/backends/`) exécutée en CI pour chaque backend : (1) démarre et répond à `initialize` ; (2) accepte les serveurs MCP ; (3) exécute un prompt trivial (créer un fichier) ; (4) une permission refusée n'est pas contournée (le fichier n'existe pas) ; (5) produit `.choregos/result.json` valide ; (6) respecte `max_turns` ; (7) le coût apparaît au gateway. Un backend qui échoue est désactivé (`platform/backends`) jusqu'à correction.
+Conformance suite (`tests/conformance/backends/`) run in CI for each backend: (1) starts and answers `initialize`; (2) accepts MCP servers; (3) runs a trivial prompt (create a file); (4) a refused permission is not bypassed (the file does not exist); (5) produces a valid `.choregos/result.json`; (6) respects `max_turns`; (7) the cost appears at the gateway. A backend that fails is disabled (`platform/backends`) until fixed.
 
-### Sidecar MCP `choregos-tools` (`packages/tools-mcp`)
+### `choregos-tools` MCP sidecar (`packages/tools-mcp`)
 
-Outils exposés à l'agent (toutes les écritures passent par l'API interne) :
+Tools exposed to the agent (all writes go through the internal API):
 
-| Outil | Effet |
+| Tool | Effect |
 | :-- | :-- |
-| `report_finding(title, type, severity, evidence, suggested_fix, estimate)` | `POST /internal/runs/{id}/findings` ; plafond `policy.findings.max_per_run` |
-| `request_scope_change(paths, justification)` | `POST …/scope-change` ; réponse `granted|pending|denied` ; si `granted`, le runner étend `allowed_paths` à chaud |
-| `ask_human(question, options?)` | `POST …/question` ; l'agent doit terminer proprement ; le run se termine `needs_human` |
-| `get_ticket()` / `get_spec()` / `get_plan()` | lecture |
-| `get_ci_logs(pr?, tail)` | logs CI du dernier échec |
-| `get_context()` | context pack complet |
-| `search_memory(query, k)` | proxy vers Ecphoria (si l'agent ne monte pas le serveur mémoire directement) |
-| `propose_fact(subject, content, provenance)` | file `pending` d'Ecphoria |
+| `report_finding(title, type, severity, evidence, suggested_fix, estimate)` | `POST /internal/runs/{id}/findings`; cap `policy.findings.max_per_run` |
+| `request_scope_change(paths, justification)` | `POST …/scope-change`; answer `granted|pending|denied`; if `granted`, the runner extends `allowed_paths` live |
+| `ask_human(question, options?)` | `POST …/question`; the agent must finish cleanly; the run ends `needs_human` |
+| `get_ticket()` / `get_spec()` / `get_plan()` | read |
+| `get_ci_logs(pr?, tail)` | CI logs of the last failure |
+| `get_context()` | complete context pack |
+| `search_memory(query, k)` | proxy to Ecphoria (if the agent does not mount the memory server directly) |
+| `propose_fact(subject, content, provenance)` | Ecphoria `pending` queue |
 
-## 2.3 `Task` Tekton `agent-stage` (`templates/*/tekton/agent-stage.yaml`)
+## 2.3 Tekton `agent-stage` `Task` (`templates/*/tekton/agent-stage.yaml`)
 
 ```yaml
 apiVersion: tekton.dev/v1
@@ -206,7 +206,7 @@ spec:
     - { name: run-id, type: string }
     - { name: api-url, type: string }
     - { name: runner-image, type: string, default: "ghcr.io/vargafoundation/choregos-runner:1.0.0" }
-  workspaces: [{ name: source }]                       # PVC éphémère (emptyDir volumeClaimTemplate)
+  workspaces: [{ name: source }]                       # ephemeral PVC (emptyDir volumeClaimTemplate)
   results: [{ name: result-url }, { name: status }]
   stepTemplate:
     securityContext: { runAsNonRoot: true, runAsUser: 1000, allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
@@ -229,35 +229,35 @@ spec:
       env: [{ name: CHOREGOS_RUN_TOKEN, valueFrom: { secretKeyRef: { name: run-$(params.run-id), key: token } } }]
 ```
 
-L'`Executor` Tekton (`packages/adapters/executor/tekton.py`) : crée le `Secret run-<id>` (token, TTL) et le `PipelineRun` (Pipeline `choregos-agent` = git-clone → agent-stage, ou la Task seule) dans `proj-<slug>-runners`, avec `runtimeClassName: gvisor` si la politique l'exige, `activeDeadlineSeconds`, labels `choregos/run-id`, `choregos/project`; suit via watch + CloudEvents ; récupère `result-url` ; supprime le Secret ; laisse Tekton Results archiver les logs. Chains signe le `PipelineRun` : la provenance des commits d'agent est vérifiable.
+The Tekton `Executor` (`packages/adapters/executor/tekton.py`): creates the `Secret run-<id>` (token, TTL) and the `PipelineRun` (Pipeline `choregos-agent` = git-clone → agent-stage, or the Task alone) in `proj-<slug>-runners`, with `runtimeClassName: gvisor` if the policy requires it, `activeDeadlineSeconds`, labels `choregos/run-id`, `choregos/project`; follows it via watch + CloudEvents; retrieves `result-url`; deletes the Secret; lets Tekton Results archive the logs. Chains signs the `PipelineRun`: the provenance of agent commits is verifiable.
 
-`Executor` Job K8s (`k8s_job.py`) : même image, même contrat, `Job` + `ConfigMap` + `Secret`, `ttlSecondsAfterFinished`. `Executor` ACA (`azure_container_apps.py`) : phase 6.
+K8s Job `Executor` (`k8s_job.py`): same image, same contract, `Job` + `ConfigMap` + `Secret`, `ttlSecondsAfterFinished`. ACA `Executor` (`azure_container_apps.py`): phase 6.
 
 ## 2.4 Sandbox
 
-- Namespace `proj-<slug>-runners` : `NetworkPolicy` default-deny egress + autorisations : API interne, LiteLLM, Ecphoria, collecteur OTel, SCM (via proxy d'egress), registres de paquets (via proxy/miroir). DNS restreint.
-- Proxy d'egress (Envoy ou Squid, namespace `choregos-egress`) : allowlist par projet, journalisation, **injection de credentials** pour les registres privés — les secrets ne sont jamais dans le workspace.
-- `RuntimeClass gvisor` (ou Kata) selon `policy.sandbox.runtime`. Non-root, `seccompProfile: RuntimeDefault`, pas de `hostPath`, `ResourceQuota` par namespace.
-- Shims dans l'image : `/usr/local/bin/kubectl`, `terraform`, `az`, `gcloud`, `aws` → binaire qui refuse et journalise (défense en profondeur ; aucun credential n'existe de toute façon).
-- Token Git : minté par run (`ScmAdapter.mint_token`, App GitHub, portée dépôt, TTL 1 h), injecté via `.git-credentials` en mémoire (`credential.helper store` sur tmpfs), jamais dans l'image ni en `env` globale.
+- Namespace `proj-<slug>-runners`: default-deny egress `NetworkPolicy` + allowances: internal API, LiteLLM, Ecphoria, OTel collector, SCM (via egress proxy), package registries (via proxy/mirror). Restricted DNS.
+- Egress proxy (Envoy or Squid, namespace `choregos-egress`): per-project allowlist, logging, **credential injection** for private registries — secrets are never in the workspace.
+- `RuntimeClass gvisor` (or Kata) according to `policy.sandbox.runtime`. Non-root, `seccompProfile: RuntimeDefault`, no `hostPath`, `ResourceQuota` per namespace.
+- Shims in the image: `/usr/local/bin/kubectl`, `terraform`, `az`, `gcloud`, `aws` → binary that refuses and logs (defence in depth; no credential exists anyway).
+- Git token: minted per run (`ScmAdapter.mint_token`, GitHub App, repository scope, 1 h TTL), injected via `.git-credentials` in memory (`credential.helper store` on tmpfs), never in the image nor in a global `env`.
 
 ## 2.5 Playbooks (`packages/playbooks`)
 
-Un dossier par rôle : `prompt.md` (Jinja2 : `{{ ticket }}`, `{{ spec }}`, `{{ allowed_paths }}`, `{{ context }}`, `{{ output_contract }}`), `README.md` (intention, invariants), `evals/` (cas + rubriques). Surcharges par projet dans `.choregos/playbooks/<role>/prompt.md` (fusion par blocs Jinja `{% block %}`). Le runner enregistre `playbook_checksum` dans le run.
+One folder per role: `prompt.md` (Jinja2: `{{ ticket }}`, `{{ spec }}`, `{{ allowed_paths }}`, `{{ context }}`, `{{ output_contract }}`), `README.md` (intent, invariants), `evals/` (cases + rubrics). Per-project overrides in `.choregos/playbooks/<role>/prompt.md` (merge by Jinja `{% block %}` blocks). The runner records `playbook_checksum` in the run.
 
-Invariants communs à tous les prompts : écrire `.choregos/result.json` conforme au contrat ; ne jamais élargir le périmètre sans `request_scope_change` ; signaler via `report_finding` ; s'arrêter et `ask_human` plutôt que deviner ; commits conventionnels ; ne pas toucher aux fichiers de configuration Choregos ; consulter `search_memory` avant une décision d'architecture.
+Invariants common to all prompts: write `.choregos/result.json` conforming to the contract; never widen the scope without `request_scope_change`; report through `report_finding`; stop and `ask_human` rather than guess; conventional commits; do not touch Choregos configuration files; consult `search_memory` before an architecture decision.
 
-| Rôle | Entrées | Sorties attendues | Points d'attention |
+| Role | Inputs | Expected outputs | Points of attention |
 | :-- | :-- | :-- | :-- |
-| `triage` | ticket, mémoire (tickets similaires) | `size`, `risk`, `repos`, `questions[]`, `duplicate_of?` | 3 questions max ; détection de doublon |
-| `refine` | ticket, mémoire, code (lecture) | `spec_markdown` (problème, critères Given/When/Then, hors-périmètre, plan de test, risque, rollback, flag ?), `allowed_paths` | `allowed_paths` doit être minimal et justifié |
-| `plan` | spec | `plan_markdown` (étapes, fichiers, migrations, ordre des commits) | pas de code |
-| `implement` | spec, plan, context | branche, commits, `evidence` partielle | TDD encouragé ; findings |
-| `verify` | branche | `evidence` complète, rapports | ne modifie pas le code sauf tests |
-| `review` | PR (diff), spec | commentaires de review structurés, verdict | contexte vierge, backend ≠ implémenteur si politique |
-| `fix_ci` | logs CI | commits | borné |
-| `address_review` | commentaires | commits + réponses | borné |
+| `triage` | ticket, memory (similar tickets) | `size`, `risk`, `repos`, `questions[]`, `duplicate_of?` | 3 questions max; duplicate detection |
+| `refine` | ticket, memory, code (read) | `spec_markdown` (problem, Given/When/Then criteria, out of scope, test plan, risk, rollback, flag?), `allowed_paths` | `allowed_paths` must be minimal and justified |
+| `plan` | spec | `plan_markdown` (steps, files, migrations, commit order) | no code |
+| `implement` | spec, plan, context | branch, commits, partial `evidence` | TDD encouraged; findings |
+| `verify` | branch | complete `evidence`, reports | does not modify the code except tests |
+| `review` | PR (diff), spec | structured review comments, verdict | blank context, backend ≠ implementer if policy |
+| `fix_ci` | CI logs | commits | bounded |
+| `address_review` | comments | commits + replies | bounded |
 | `release_notes` | batch | markdown | |
-| `verify_prod` | release, SLO | go/no-go + preuves | lecture seule |
+| `verify_prod` | release, SLO | go/no-go + evidence | read-only |
 
-Évals (`claude plugin eval`-like maison, `packages/playbooks/evals/runner.py`) : cas fixtures (dépôts jouets), rubriques notées par un modèle juge + assertions déterministes (fichier créé, tests verts, `result.json` valide). Score minimal par rôle bloque la CI des playbooks.
+Evals (in-house, in the style of `claude plugin eval`, `packages/playbooks/evals/runner.py`): fixture cases (toy repositories), rubrics graded by a judge model + deterministic assertions (file created, tests green, valid `result.json`). A minimum score per role blocks the playbooks' CI.

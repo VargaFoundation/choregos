@@ -26,7 +26,7 @@ export function ProjectOperations({ slug }: { slug: string }) {
   return (
     <Card title="Operations of the organisation's connectors" className="lg:col-span-2">
       <div className="overflow-x-auto">
-        <table className="w-full text-sm" data-testid="operations-du-projet">
+        <table className="w-full text-sm" data-testid="project-operations">
           <thead className="text-left text-xs text-ink-muted">
             <tr>
               <th className="py-1 font-normal">Connector</th>

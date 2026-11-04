@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import WorkflowGraphPage from "@/app/p/[slug]/workflows/[name]/page";
-import { BrouillonProvider } from "@/components/workflows/brouillon";
+import { DraftProvider } from "@/components/workflows/draft";
 import { api } from "@/lib/api";
 import config from "../next.config.mjs";
 
@@ -74,9 +74,9 @@ beforeEach(() => {
 function graphPage() {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <BrouillonProvider slug="hr" name="requests">
+      <DraftProvider slug="hr" name="requests">
         <WorkflowGraphPage />
-      </BrouillonProvider>
+      </DraftProvider>
     </QueryClientProvider>,
   );
 }
@@ -133,10 +133,10 @@ describe("building on the graph (S55-09)", () => {
       document: DOCUMENT,
     } as never);
     graphPage();
-    fireEvent.click(await screen.findByTestId("etape-t-take"));
+    fireEvent.click(await screen.findByTestId("step-t-take"));
     const after = await screen.findByTestId("step-after-step");
     expect(within(after).getByRole("form", { name: "New transition from review" })).toBeInTheDocument();
-    fireEvent.click(screen.getByTestId("etape-t-accept"));
+    fireEvent.click(screen.getByTestId("step-t-accept"));
     await waitFor(() => expect(screen.queryByTestId("step-after-step")).toBeNull());
   });
 });

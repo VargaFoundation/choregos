@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { libelleDeDemande, resumeDeDemande, ticketsEnAttente, waitingInProject } from "@/lib/a-decider";
+import { requestLabel, requestSummary, waitingTickets, waitingInProject } from "@/lib/a-decider";
 import type { Action, BudgetAlert, HumanRequest, WorkItemDto } from "@/lib/types";
 
 const MAINTENANT = Date.parse("2026-10-08T12:00:00Z");
@@ -15,7 +15,7 @@ const ticket = (id: string, demande?: Partial<HumanRequest>) =>
 describe("what waits for a person (S23-02)", () => {
   it("keeps only the tickets stopped on a request that no one has decided yet", () => {
     const tickets = [ticket("libre"), ticket("attend", {}), ticket("decide", { decided_at: heure(-0.5) })];
-    expect(ticketsEnAttente(tickets, MAINTENANT).map((a) => a.item.id)).toEqual(["attend"]);
+    expect(waitingTickets(tickets, MAINTENANT).map((a) => a.item.id)).toEqual(["attend"]);
   });
 
   it("puts what is late first, then the nearest due date, then what has waited the longest", () => {
@@ -26,7 +26,7 @@ describe("what waits for a person (S23-02)", () => {
       ticket("en-retard", { due_at: heure(-2) }),
       ticket("echeance-proche", { due_at: heure(3) }),
     ];
-    const attentes = ticketsEnAttente(tickets, MAINTENANT);
+    const attentes = waitingTickets(tickets, MAINTENANT);
     expect(attentes.map((a) => a.item.id)).toEqual([
       "en-retard",
       "echeance-proche",
@@ -39,14 +39,14 @@ describe("what waits for a person (S23-02)", () => {
 
   it("names the request by its question or its summary, otherwise by its kind, in words", () => {
     const base = { id: "h", requested_at: heure(0) } as const;
-    expect(resumeDeDemande({ ...base, kind: "question", payload: { question: "Which currency? " } })).toBe(
+    expect(requestSummary({ ...base, kind: "question", payload: { question: "Which currency? " } })).toBe(
       "Which currency?",
     );
-    expect(resumeDeDemande({ ...base, kind: "approval", payload: { summary: "Approve the spec" } })).toBe(
+    expect(requestSummary({ ...base, kind: "approval", payload: { summary: "Approve the spec" } })).toBe(
       "Approve the spec",
     );
-    expect(resumeDeDemande({ ...base, kind: "scope_change", payload: {} })).toBe("scope change");
-    expect(libelleDeDemande("a_new_kind")).toBe("a new kind");
+    expect(requestSummary({ ...base, kind: "scope_change", payload: {} })).toBe("scope change");
+    expect(requestLabel("a_new_kind")).toBe("a new kind");
   });
 });
 

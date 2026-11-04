@@ -1,57 +1,61 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Catalogue d'outils : des API tierces utilisables par un agent, sans lui donner de clé.
+"""Tool catalogue: third-party APIs an agent can use, without giving it a key.
 
-POURQUOI CE FICHIER EXISTE
---------------------------
-La démonstration RH du 2026-09-23 s'est arrêtée sur « aucune base de profils candidats
-accessible ». Ce n'était pas un défaut du moteur : c'était une absence de **données**. Un
-agent qui instruit un dossier, cherche un profil ou vérifie une entreprise a besoin d'API
-tierces — et ces API ont des clés.
+WHY THIS FILE EXISTS
+--------------------
+The HR demonstration of 2026-09-23 stopped on "no candidate profile database reachable". It was
+not a defect of the engine: it was an absence of **data**. An agent that investigates a case,
+looks up a profile or checks a company needs third-party APIs, and those APIs have keys.
 
-Le réflexe serait de poser la clé dans le pod de l'agent. AGENTS.md l'interdit, et à raison :
-un agent qui porte une clé d'API peut la dépenser sans plafond, l'exfiltrer dans un commit,
-ou la garder. Le catalogue prend le problème par l'autre bout, exactement comme la passerelle
-LLM le fait pour les modèles :
+The reflex would be to put the key in the agent's pod. AGENTS.md forbids it, and rightly: an agent
+that carries an API key can spend it without a ceiling, exfiltrate it in a commit, or keep it. The
+catalogue takes the problem from the other end, exactly as the LLM gateway does for models:
 
-- le **déploiement** déclare les outils et détient les clés ;
-- l'agent appelle l'outil **par son nom**, avec son jeton de run pour toute identité ;
-- la plateforme appelle le fournisseur, injecte la clé côté serveur, et **compte l'appel**.
+- the **deployment** declares the tools and holds the keys;
+- the agent calls the tool **by its name**, with its run token as its only identity;
+- the platform calls the provider, injects the key on the server side, and **counts the call**.
 
-L'agent ne voit jamais la clé, ne sort jamais vers le fournisseur (son egress reste fermé),
-et sa dépense est plafonnée par run comme le reste.
+The agent never sees the key, never goes out to the provider (its egress stays closed), and its
+spending is capped per run like everything else.
 
-CE QUE CE N'EST PAS
--------------------
-Pas un annuaire de milliers d'outils. Un catalogue est une liste **courte et choisie**, écrite
-par celui qui déploie, revue comme du code. Le jour où l'on veut la largeur d'un annuaire
-public, c'est un outil du catalogue qui y mène — pas une dépendance de la plateforme.
+WHAT THIS IS NOT
+----------------
+Not a directory of thousands of tools. A catalogue is a **short, chosen** list, written by whoever
+deploys, reviewed like code. The day one wants the breadth of a public directory, a catalogue tool
+leads there, not a dependency of the platform.
+
+The operators' YAML key is `tools:`; the former `outils:` is still read until 0.22.0 (ADR 0098 §3 (f)).
 """
 
 from __future__ import annotations
 
+import logging
 import posixpath
 import re
 from typing import Any, Literal
 from urllib.parse import quote, urlsplit, urlunsplit
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 from .errors import ChoregosError
 
-GABARIT = re.compile(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}")
+PLACEHOLDER = re.compile(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}")
+GABARIT = PLACEHOLDER  # lang: fr-ok alias:internal
+
+_logger = logging.getLogger("choregos.catalogue")
+_former_key_warned: set[str] = set()  # the key is warned about once per process
 
 
 class Model(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class AppelHttp(Model):
-    """Comment l'appel part chez le fournisseur.
+class HttpCall(Model):
+    """How the call goes to the provider.
 
-    Les gabarits `{{ champ }}` sont remplis avec les arguments de l'agent, et **seulement**
-    avec eux : pas d'URL libre, pas de méthode libre. Un outil du catalogue ne peut pas
-    servir à joindre n'importe quoi — sinon le catalogue deviendrait un proxy ouvert au nom
-    de la plateforme.
+    The `{{ field }}` placeholders are filled with the agent's arguments, and **only** with them:
+    no free URL, no free method. A catalogue tool cannot be used to reach just anything,
+    otherwise the catalogue would become an open proxy in the platform's name.
     """
 
     method: Literal["GET", "POST"] = "GET"
@@ -62,48 +66,48 @@ class AppelHttp(Model):
     timeout_s: float = Field(default=20.0, gt=0, le=120)
 
 
-class AppelMcp(Model):
-    """Un outil servi par un serveur MCP **extérieur à l'organisation**.
+class McpCall(Model):
+    """A tool served by an MCP server **outside the organisation**.
 
-    LE JETON DU RUN NE SORT JAMAIS. Il authentifie l'agent auprès de NOUS, et rien d'autre :
-    le donner à un service distant reviendrait à lui confier de quoi écrire dans la
-    plateforme — poster un résultat, déposer un finding, demander une extension de
-    périmètre. Le serveur distant reçoit `credential_env`, une clé qui ne vaut que pour lui.
+    THE RUN'S TOKEN NEVER LEAVES. It authenticates the agent to US, and nothing else: handing it
+    to a remote service would give it what it takes to write into the platform: post a result,
+    file a finding, ask for a wider perimeter. The remote server receives `credential_env`, a key
+    that is worth something only to it.
 
-    `tool` est le nom de l'outil CHEZ LUI ; le nom exposé à l'agent est celui du catalogue.
-    Cette indirection n'est pas cosmétique : elle permet de n'exposer qu'une partie des
-    outils d'un serveur, et de les renommer dans le vocabulaire de la maison.
+    `tool` is the tool's name AT THE REMOTE SERVER; the name exposed to the agent is the
+    catalogue's. This indirection is not cosmetic: it makes it possible to expose only part of a
+    server's tools, and to rename them in the house vocabulary.
     """
 
     url: str
-    #: L'outil tel que le serveur distant le nomme.
+    #: The tool as the remote server names it.
     tool: str
     headers: dict[str, str] = Field(default_factory=dict)
     timeout_s: float = Field(default=30.0, gt=0, le=120)
 
 
-class OutilCatalogue(Model):
-    """Un outil : ce que l'agent voit, et ce que la plateforme fait pour lui."""
+class CatalogueTool(Model):
+    """A tool: what the agent sees, and what the platform does for it."""
 
     name: str = Field(pattern=r"^[a-z][a-z0-9_]{2,63}$")
     description: str
     provider: str
     categories: list[str] = Field(default_factory=list)
     input_schema: dict[str, Any] = Field(default_factory=dict)
-    #: Groupes de l'organisation autorisés à s'en servir. **Vide = aucune restriction de
-    #: groupe** — l'outil reste soumis à la déclaration du projet (`ProjectConfig.tools`).
-    #: Deux verrous, et ils ne disent pas la même chose : le déploiement dit QUI a le droit
-    #: (groupes), le projet dit ce dont IL se sert (liste d'outils). Un projet qui déclare
-    #: un outil réservé à un groupe dont il ne fait pas partie ne l'obtient pas.
+    #: Groups of the organisation allowed to use it. **Empty = no group restriction**: the tool
+    #: stays subject to the project's declaration (`ProjectConfig.tools`). Two locks, and they do
+    #: not say the same thing: the deployment says WHO may (groups), the project says what IT uses
+    #: (list of tools). A project that declares a tool reserved to a group it does not belong to
+    #: does not get it.
     groups: list[str] = Field(default_factory=list)
-    #: L'une OU l'autre : un appel HTTP direct, ou un outil d'un serveur MCP distant.
-    http: AppelHttp | None = None
-    mcp: AppelMcp | None = None
-    #: Nom de la variable d'environnement qui porte la clé du fournisseur, côté plateforme.
-    #: Jamais la clé elle-même : ce fichier est lu dans une PR.
+    #: One OR the other: a direct HTTP call, or a tool of a remote MCP server.
+    http: HttpCall | None = None
+    mcp: McpCall | None = None
+    #: Name of the environment variable that carries the provider's key, on the platform side.
+    #: Never the key itself: this file is read in a PR.
     credential_env: str | None = None
-    #: Ce qu'un appel coûte, en euros. Zéro pour une API gratuite — mais le compter quand
-    #: même, parce qu'un quota gratuit s'épuise aussi.
+    #: What a call costs, in euros. Zero for a free API, but count it all the same, because a
+    #: free quota runs out too.
     price_eur: float = Field(default=0.0, ge=0)
     #: The most one of its answers may weigh, as JSON bytes, when it reaches the agent; none: the
     #: platform's default. The platform's ceiling still applies (S40-17).
@@ -113,11 +117,11 @@ class OutilCatalogue(Model):
     read_only: bool | None = None
 
     @model_validator(mode="after")
-    def _une_seule_source(self) -> OutilCatalogue:
-        """Un outil a UNE source : un appel HTTP, ou un outil MCP distant.
+    def _a_single_source(self) -> CatalogueTool:
+        """A tool has ONE source: an HTTP call, or a remote MCP tool.
 
-        Aucune des deux et l'outil ne fait rien ; les deux et on ne saurait laquelle
-        employer. Le dire au chargement du catalogue vaut mieux qu'au premier appel.
+        With neither the tool does nothing; with both one would not know which to use. Saying so
+        when the catalogue loads beats saying so at the first call.
         """
         if (self.http is None) == (self.mcp is None):
             raise ValueError(f"the tool {self.name} must declare `http:` or `mcp:`, and only one")
@@ -130,144 +134,183 @@ class OutilCatalogue(Model):
             return not self.read_only
         return self.mcp is not None or (self.http is not None and self.http.method != "GET")
 
-    def ouvert_a(self, groupes: list[str]) -> bool:
-        """L'outil est-il ouvert à ces groupes ? Sans restriction déclarée, oui."""
-        return not self.groups or bool(set(self.groups) & set(groupes))
+    def open_to(self, groups: list[str]) -> bool:
+        """Is the tool open to these groups? With no declared restriction, yes."""
+        return not self.groups or bool(set(self.groups) & set(groups))
+
+    def ouvert_a(self, groups: list[str]) -> bool:  # lang: fr-ok alias:internal
+        return self.open_to(groups)
 
 
 class Catalogue(Model):
-    outils: list[OutilCatalogue] = Field(default_factory=list)
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    def par_nom(self, nom: str) -> OutilCatalogue | None:
-        return next((o for o in self.outils if o.name == nom), None)
+    #: The YAML key is `tools:`; the former `outils:` is read until 0.22.0 (ADR 0098 §3 (f)).
+    tools: list[CatalogueTool] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("tools", "outils"),  # lang: fr-ok alias:external
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _warn_about_the_former_key(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "outils" in data:  # lang: fr-ok alias:external
+            if "tools" in data:
+                raise ValueError("a catalogue declares `tools:` or the former `outils:`, not both")
+            if not _former_key_warned:
+                _former_key_warned.add("outils")  # lang: fr-ok alias:external
+                _logger.warning(
+                    "the catalogue key `outils:` is deprecated: write `tools:` "  # lang: fr-ok alias:external
+                    "(the former key is removed in 0.22.0)"
+                )
+        return data
+
+    @property
+    def outils(self) -> list[CatalogueTool]:  # lang: fr-ok alias:internal
+        return self.tools
+
+    def by_name(self, name: str) -> CatalogueTool | None:
+        return next((t for t in self.tools if t.name == name), None)
+
+    def par_nom(self, name: str) -> CatalogueTool | None:  # lang: fr-ok alias:internal
+        return self.by_name(name)
 
 
-class OutilInconnuError(ChoregosError):
-    """Nom absent du catalogue, ou refusé au projet."""
+class UnknownToolError(ChoregosError):
+    """A name absent from the catalogue, or refused to the project."""
 
 
-class ArgumentRefuseError(ChoregosError):
-    """Un argument manque, ou ne respecte pas le schéma que l'outil annonce."""
+class ArgumentRefusedError(ChoregosError):
+    """An argument is missing, or does not respect the schema the tool announces."""
 
 
-def valider_les_arguments(outil: OutilCatalogue, arguments: dict[str, Any]) -> None:
-    """Refuse des arguments qui ne respectent pas `input_schema`.
+def validate_arguments(tool: CatalogueTool, arguments: dict[str, Any]) -> None:
+    """Refuse arguments that do not respect `input_schema`.
 
-    `input_schema` était **décoratif** : la plateforme l'annonçait à l'agent — c'est
-    l'`inputSchema` que `GET /internal/runs/{id}/tools` rend au format MCP — et ne le vérifiait
-    jamais. Un agent avait donc toutes les raisons de le croire contraignant, et il ne l'était pas.
-    Un schéma annoncé et non appliqué est pire que pas de schéma : il décrit une garantie qui
-    n'existe pas.
+    `input_schema` was **decorative**: the platform announced it to the agent (it is the
+    `inputSchema` that `GET /internal/runs/{id}/tools` returns in MCP format) and never checked it.
+    An agent therefore had every reason to believe it binding, and it was not. A schema that is
+    announced and not enforced is worse than no schema: it describes a guarantee that does not
+    exist.
 
-    Un outil sans schéma n'impose rien, et c'est volontaire — le catalogue reste écrivable à la
-    main pour un outil trivial.
+    A tool without a schema imposes nothing, and that is deliberate: the catalogue stays writable
+    by hand for a trivial tool.
     """
-    if not outil.input_schema:
+    if not tool.input_schema:
         return
     import jsonschema
 
     try:
-        jsonschema.validate(arguments, outil.input_schema)
+        jsonschema.validate(arguments, tool.input_schema)
     except jsonschema.ValidationError as exc:
-        chemin = "/".join(str(p) for p in exc.absolute_path) or "(racine)"
-        raise ArgumentRefuseError(
-            f"argument refused by the schema of {outil.name} at {chemin}: {exc.message}"
+        path = "/".join(str(p) for p in exc.absolute_path) or "(root)"
+        raise ArgumentRefusedError(
+            f"argument refused by the schema of {tool.name} at {path}: {exc.message}"
         ) from exc
 
 
-def _remplir(gabarit: str, arguments: dict[str, Any], *, encoder: bool = False) -> str:
-    """Remplit `{{ cle }}`. `encoder` percent-encode la valeur : à employer dans une URL."""
+def _fill(template: str, arguments: dict[str, Any], *, encode: bool = False) -> str:
+    """Fill `{{ key }}`. `encode` percent-encodes the value: to use inside a URL."""
 
-    def _un(m: re.Match[str]) -> str:
-        cle = m.group(1)
-        if cle not in arguments:
-            raise ArgumentRefuseError(f"argument manquant : {cle}")
-        valeur = str(arguments[cle])
-        return quote(valeur, safe="") if encoder else valeur
+    def _one(m: re.Match[str]) -> str:
+        key = m.group(1)
+        if key not in arguments:
+            raise ArgumentRefusedError(f"missing argument: {key}")
+        value = str(arguments[key])
+        return quote(value, safe="") if encode else value
 
-    return GABARIT.sub(_un, gabarit)
+    return PLACEHOLDER.sub(_one, template)
 
 
-def _url_de(gabarit: str, arguments: dict[str, Any]) -> str:
-    """L'URL d'un appel : les valeurs de l'agent la remplissent **sans pouvoir la déplacer**.
+def _url_of(template: str, arguments: dict[str, Any]) -> str:
+    """The URL of a call: the agent's values fill it **without being able to move it**.
 
-    Le catalogue existe précisément pour que l'agent ne choisisse pas l'URL (ADR 0014). Il la
-    choisissait en partie : la valeur était substituée nue, donc `{{ owner }}` valant `../..`
-    remontait le chemin et un outil censé lire `/repos/<org>/<dépôt>` atteignait n'importe quel
-    autre point d'entrée du même hôte — **avec la clé du fournisseur que la plateforme y attache**.
+    The catalogue exists precisely so that the agent does not choose the URL (ADR 0014). It
+    partly did: the value was substituted bare, so `{{ owner }}` set to `../..` climbed the path,
+    and a tool meant to read `/repos/<org>/<repository>` reached any other entry point of the same
+    host, **with the provider's key that the platform attaches there**.
 
-    Deux gardes, parce que la première ne suffit pas : l'encodage neutralise `/`, `?` et `#`, mais
-    **pas** la remontée — `quote("..")` rend `..`, le point étant un caractère non réservé. La
-    seconde compare donc l'URL NORMALISÉE au préfixe littéral du gabarit, celui qui précède le
-    premier `{{`. Ce qui sort de ce préfixe est refusé, quelle qu'en soit l'écriture.
+    Two guards, because the first is not enough: encoding neutralises `/`, `?` and `#`, but **not**
+    the climb: `quote("..")` gives `..`, the dot being an unreserved character. The second
+    therefore compares the NORMALISED URL with the template's literal prefix, the one before the
+    first `{{`. What leaves that prefix is refused, however it is written.
     """
-    url = _remplir(gabarit, arguments, encoder=True)
-    prefixe = gabarit.split("{{", 1)[0]
-    if prefixe == gabarit:  # aucun gabarit : rien à vérifier
+    url = _fill(template, arguments, encode=True)
+    prefix = template.split("{{", 1)[0]
+    if prefix == template:  # no placeholder: nothing to check
         return url
-    decoupe, attendu = urlsplit(url), urlsplit(prefixe)
-    if (decoupe.scheme, decoupe.netloc) != (attendu.scheme, attendu.netloc):
-        raise ArgumentRefuseError(f"an argument moved the call's host: {url}")
-    normalise = posixpath.normpath(decoupe.path)
-    if decoupe.path.endswith("/") and not normalise.endswith("/"):
-        normalise += "/"
-    if not normalise.startswith(attendu.path):
-        raise ArgumentRefuseError(
-            f"an argument left the tool's path: {normalise} is not under {attendu.path}"
+    split, expected = urlsplit(url), urlsplit(prefix)
+    if (split.scheme, split.netloc) != (expected.scheme, expected.netloc):
+        raise ArgumentRefusedError(f"an argument moved the call's host: {url}")
+    normalised = posixpath.normpath(split.path)
+    if split.path.endswith("/") and not normalised.endswith("/"):
+        normalised += "/"
+    if not normalised.startswith(expected.path):
+        raise ArgumentRefusedError(
+            f"an argument left the tool's path: {normalised} is not under {expected.path}"
         )
-    return urlunsplit((decoupe.scheme, decoupe.netloc, normalise, decoupe.query, decoupe.fragment))
+    return urlunsplit((split.scheme, split.netloc, normalised, split.query, split.fragment))
 
 
-def construire_requete(outil: OutilCatalogue, arguments: dict[str, Any], cle: str | None) -> dict[str, Any]:
-    """Rend de quoi appeler le fournisseur : méthode, URL, paramètres, en-têtes, corps.
+def build_request(tool: CatalogueTool, arguments: dict[str, Any], key: str | None) -> dict[str, Any]:
+    """Render what it takes to call the provider: method, URL, parameters, headers, body.
 
-    La clé n'apparaît que dans les en-têtes rendus ici, jamais dans ce qui est journalisé
-    ni dans ce qui repart vers l'agent.
+    The key appears only in the headers rendered here, never in what is logged nor in what goes
+    back to the agent.
     """
-    if outil.http is None:
-        raise ValueError(f"l'outil {outil.name} n'a pas de source HTTP")
-    entetes = {
-        nom: _remplir(valeur, {**arguments, "credential": cle or ""})
-        for nom, valeur in outil.http.headers.items()
+    if tool.http is None:
+        raise ValueError(f"the tool {tool.name} has no HTTP source")
+    headers = {
+        name: _fill(value, {**arguments, "credential": key or ""})
+        for name, value in tool.http.headers.items()
     }
     return {
-        "method": outil.http.method,
-        "url": _url_de(outil.http.url, arguments),
-        "params": {nom: _remplir(v, arguments) for nom, v in outil.http.query.items()},
-        "headers": entetes,
-        "json": _remplir_profond(outil.http.body, arguments) if outil.http.body else None,
-        "timeout": outil.http.timeout_s,
+        "method": tool.http.method,
+        "url": _url_of(tool.http.url, arguments),
+        "params": {name: _fill(v, arguments) for name, v in tool.http.query.items()},
+        "headers": headers,
+        "json": _fill_deep(tool.http.body, arguments) if tool.http.body else None,
+        "timeout": tool.http.timeout_s,
     }
 
 
-def _remplir_profond(valeur: Any, arguments: dict[str, Any]) -> Any:
-    if isinstance(valeur, str):
-        return _remplir(valeur, arguments)
-    if isinstance(valeur, dict):
-        return {k: _remplir_profond(v, arguments) for k, v in valeur.items()}
-    if isinstance(valeur, list):
-        return [_remplir_profond(v, arguments) for v in valeur]
-    return valeur
+def _fill_deep(value: Any, arguments: dict[str, Any]) -> Any:
+    if isinstance(value, str):
+        return _fill(value, arguments)
+    if isinstance(value, dict):
+        return {k: _fill_deep(v, arguments) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_fill_deep(v, arguments) for v in value]
+    return value
 
 
-def charger_catalogue(texte: str) -> Catalogue:
-    """Lit un catalogue YAML. Un catalogue illisible est une erreur, pas un catalogue vide."""
+def load_catalogue(text: str) -> Catalogue:
+    """Read a YAML catalogue. An unreadable catalogue is an error, not an empty catalogue."""
     import yaml
 
-    donnees = yaml.safe_load(texte) or {}
-    if isinstance(donnees, list):
-        donnees = {"outils": donnees}
-    return Catalogue.model_validate(donnees)
+    data = yaml.safe_load(text) or {}
+    if isinstance(data, list):
+        data = {"tools": data}
+    return Catalogue.model_validate(data)
 
+
+AppelHttp = HttpCall  # lang: fr-ok alias:internal
+AppelMcp = McpCall  # lang: fr-ok alias:internal
+OutilCatalogue = CatalogueTool  # lang: fr-ok alias:internal
+OutilInconnuError = UnknownToolError  # lang: fr-ok alias:internal
+ArgumentRefuseError = ArgumentRefusedError  # lang: fr-ok alias:internal
+valider_les_arguments = validate_arguments  # lang: fr-ok alias:internal
+construire_requete = build_request  # lang: fr-ok alias:internal
+charger_catalogue = load_catalogue  # lang: fr-ok alias:internal
 
 __all__ = [
-    "AppelHttp",
-    "AppelMcp",
-    "ArgumentRefuseError",
+    "ArgumentRefusedError",
     "Catalogue",
-    "OutilCatalogue",
-    "OutilInconnuError",
-    "charger_catalogue",
-    "construire_requete",
-    "valider_les_arguments",
+    "CatalogueTool",
+    "HttpCall",
+    "McpCall",
+    "UnknownToolError",
+    "build_request",
+    "load_catalogue",
+    "validate_arguments",
 ]

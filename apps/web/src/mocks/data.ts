@@ -88,7 +88,7 @@ import { normalizeSpec } from "@/lib/agent-diff";
 import { ApiError } from "@/lib/api";
 import type { McpGatewayPut, McpGatewayState, OutboundProxyPut, OutboundProxyState, StepCalibration, WorkflowAdopt, WorkflowCatalogueEntry } from "@/lib/types";
 import { readSandboxNetwork } from "@/lib/policy-network";
-import { parcoursDe, parcoursEnCours, parcoursTermine } from "./parcours";
+import { journeyInProgress, journeyFinished, journeyOf } from "./journey";
 import { egressApi } from "./egress";
 import { peopleOps, peopleOpsApi, peopleOpsFixtures } from "./joiners-leavers";
 import mcpCatalogueFile from "./mcp-catalogue.json";
@@ -531,7 +531,7 @@ export function ticketDetaille(id: string): WorkItemDto {
 }
 
 /** The two journeys of the demo mode, exposed for the fixtures' language check. */
-export const demoJourneys = [parcoursEnCours(), parcoursTermine()];
+export const demoJourneys = [journeyInProgress(), journeyFinished()];
 
 /** The pod log tail of the running run (`/runs/{id}/logs`, S36-03): a live snapshot, redacted. */
 export const runLogsLive: RunLogs = {
@@ -2561,7 +2561,7 @@ const checkoutWebConnectors = [
   { id: "c-argo", kind: "cd", type: "argocd", config: {}, secret_refs: {}, status: "error", last_error: "401 from Argo CD" },
 ];
 /**
- * The project `dev` as `essai/projet-dev/scenario_dev.py preparer` leaves it: a tracker, a repository, and
+ * The project `dev` as `trials/dev-project/scenario_dev.py prepare` leaves it: a tracker, a repository, and
  * a CD that is the demo stand-in, never tested. The runtime is the deployment's own (agent-sandbox).
  */
 const devConnectors = [
@@ -3766,7 +3766,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (agentLu) return structuredClone(decorateAgent(agents.find((a) => a.slug === agentLu[1]) ?? agents[0]!)) as T;
   // A ticket's journey and its detail, by identifier: each its own (S22-02).
   const journeyMatch = /^\/work-items\/([^/]+)\/journey$/.exec(route ?? "");
-  if (journeyMatch) return parcoursDe(journeyMatch[1]!) as T;
+  if (journeyMatch) return journeyOf(journeyMatch[1]!) as T;
   const ticket = /^\/work-items\/([^/]+)$/.exec(route ?? "");
   if (ticket) return ticketDetaille(ticket[1]!) as T;
   if (/^\/orgs\/[^/]+\/agent-credentials$/.test(route ?? "")) {

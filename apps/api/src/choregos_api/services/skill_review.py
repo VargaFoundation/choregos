@@ -23,29 +23,27 @@ async def unusable_skills(session: AsyncSession, org_id: Any, refs: list[Any]) -
 
     `refs` are `AgentSkillRef`s (`slug`, `version` or `None`). A skill absent from the library is
     not judged here: the run says so when it prepares."""
-    problemes: list[str] = []
+    problems: list[str] = []
     for ref in refs:
-        lignes = (
+        rows = (
             await session.execute(
                 select(SkillVersion.version, SkillVersion.review_status)
                 .join(Skill, Skill.id == SkillVersion.skill_id)
                 .where(Skill.org_id == org_id, Skill.slug == ref.slug)
             )
         ).tuples()
-        etats = dict(lignes.all())
-        if not etats:
+        states = dict(rows.all())
+        if not states:
             continue
         if ref.version is not None:
-            etat = etats.get(ref.version)
-            if etat is not None and etat != APPROVED:
-                problemes.append(
+            state = states.get(ref.version)
+            if state is not None and state != APPROVED:
+                problems.append(
                     f"skill `{ref.slug}` v{ref.version} is high risk and waits for a second reviewer"
                 )
-        elif all(etat != APPROVED for etat in etats.values()):
-            problemes.append(
-                f"skill `{ref.slug}` has no approved version yet: it waits for a second reviewer"
-            )
-    return problemes
+        elif all(state != APPROVED for state in states.values()):
+            problems.append(f"skill `{ref.slug}` has no approved version yet: it waits for a second reviewer")
+    return problems
 
 
 __all__ = ["APPROVED", "unusable_skills"]
