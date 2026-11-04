@@ -414,6 +414,19 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
             ("repo",),
         ),
     ),
+    ("scm", "gitlab"): ConnectorTypeSpec(
+        "GitLab",
+        ("scm",),
+        _object_schema(
+            {
+                "base_url": {"type": "string", "default": "https://gitlab.com"},
+                "project": _TEXT,
+                "default_branch": {"type": "string", "default": "main"},
+            },
+            ("project",),
+        ),
+        ("token",),
+    ),
     ("ci", "tekton"): ConnectorTypeSpec(
         "Tekton Pipelines",
         ("ci",),
@@ -1297,7 +1310,7 @@ def _plugin_tracker(cfg: dict[str, Any]) -> Any:
     return PluginTracker(client, str(cfg["plugin"]), str(cfg["server"]), audit=cfg.get("audit"))
 
 
-def _register_builtins() -> None:
+def _register_builtins() -> None:  # noqa: PLR0915 - one flat list of registrations
     """Registers the shipped implementations (a lazy import to avoid cycles)."""
     from .fakes import (
         FakeCd,
@@ -1347,6 +1360,7 @@ def _register_builtins() -> None:
     from .notify.email import EmailNotifier
     from .notify.slack import SlackNotifier
     from .scm.github import GitHubScm
+    from .scm.gitlab import GitLabScm
     from .tracker.github import GitHubTracker
     from .tracker.gitlab import GitLabTracker
     from .tracker.interne import InternalTracker
@@ -1380,6 +1394,17 @@ def _register_builtins() -> None:
             default_repo=cfg.get("repo", ""),
             merge_method=cfg.get("merge_method", "SQUASH"),
             use_merge_queue=cfg.get("merge_queue", True),
+        )
+    )
+    register("scm", "gitlab", _SHIPPED_SPECS[("scm", "gitlab")])(
+        lambda cfg: GitLabScm(
+            RestClient(
+                cfg.get("base_url", "https://gitlab.com"),
+                headers={"PRIVATE-TOKEN": cfg["token"]},
+                service="gitlab",
+            ),
+            cfg["project"],
+            default_branch=cfg.get("default_branch", "main"),
         )
     )
     register("ci", "tekton", _SHIPPED_SPECS[("ci", "tekton")])(
