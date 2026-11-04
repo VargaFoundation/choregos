@@ -414,7 +414,7 @@ async def refusals_for_named_agents(
     ).scalars()
     refusals = []
     for agent in sorted(rows, key=lambda a: a.slug):
-        refus = usable_in_project(agent.scope, agent.project_id, agent.slug, project_id)
-        if refus is not None:
-            refusals.append(f"{refus} (scope: {agent.scope})")
+        refusal = usable_in_project(agent.scope, agent.project_id, agent.slug, project_id)
+        if refusal is not None:
+            refusals.append(f"{refusal} (scope: {agent.scope})")
     return refusals

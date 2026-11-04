@@ -21,8 +21,8 @@ from ..audit import record
 from ..db.models import Agent, AgentRelease, AgentVersion, Organization, Project, ProjectAgent, Run
 from ..deps import _aware
 from ..errors import ApiError, conflict, forbidden, not_found, unprocessable
+from ..extensions import GestureRequest, check_gesture
 from ..fraicheur import age_de_l_authentification, exiger_une_authentification_fraiche
-from ..greffons import DemandeDeGeste, controler
 from ..rbac import Permission, Principal
 from ..schemas import (
     AgentChannelStats,
@@ -557,9 +557,9 @@ async def release(
             exiger_une_authentification_fraiche(principal, policy.stable.step_up_minutes)
         elif policy.on_publish != "stable":
             raise forbidden("a release to production is made in a human session, not with an API token")
-        await controler(
+        await check_gesture(
             session,
-            DemandeDeGeste(
+            GestureRequest(
                 "agent.release",
                 organisation.slug,
                 principal,
@@ -770,9 +770,9 @@ async def decide_release(
                 )
         if any(d.get("by", "").lower() == me and d.get("decision") == "approve" for d in decisions):
             raise conflict("you have already approved this release")
-        await controler(
+        await check_gesture(
             session,
-            DemandeDeGeste(
+            GestureRequest(
                 "agent.release",
                 organisation.slug,
                 principal,
