@@ -124,6 +124,44 @@ async def test_the_event_carries_the_digest_of_the_request_and_the_response(
     assert event.payload["response_sha256"] == digest_of(response.json()["result"])
 
 
+async def test_the_event_carries_the_size_of_the_answer(
+    client: AsyncClient, project: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """S57-01 (ADR 0122): `response_bytes` is the size of the canonical JSON the digest is taken
+    of, in UTF-8 bytes, not characters: what a round trip puts back into the model's context."""
+    import json
+
+    from choregos_api.db.models import Event
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch)
+    intercept(
+        monkeypatch,
+        httpx.Response(
+            200,
+            json={"profiles": [{"name": "Ελένη Παππά", "skills": ["a", "b"]}], "total": 1},
+            request=httpx.Request("GET", "https://api.annuaire.example/v1/search"),
+        ),
+        [],
+    )
+    response = await client.post(
+        f"/api/v1/internal/runs/{run_id}/tools/recherche_profils", headers=headers, json={"metier": "x"}
+    )
+    assert response.status_code == 200, response.text
+    canonical = json.dumps(
+        response.json()["result"], sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+
+    async with session_scope() as session:
+        events = (
+            (await session.execute(select(Event).where(Event.type == "choregos.tool.called"))).scalars().all()
+        )
+    (event,) = [e for e in events if e.subject == run_id]
+    assert event.payload["response_bytes"] == len(canonical)
+    assert len(canonical) > len(canonical.decode("utf-8")), "the answer holds multi-byte characters"
+
+
 async def test_a_tool_not_declared_by_the_project_is_not_found(
     client: AsyncClient, project: dict[str, Any], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

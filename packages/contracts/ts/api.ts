@@ -3656,6 +3656,8 @@ export type Totals = {
   cost_eur?: number;
   duration_s?: number;
   runs?: number;
+  /** the model calls the gateway counted (S57-01, ADR 0122): a run's round trips, or a work item's summed over its runs; null when unknown (a run booked before S57-01, a remote agent, a gateway that cannot read a spend back, or a work item one such run belongs to) */
+  requests?: number | null;
   /** how the cost was priced (ADR 0060) */
   priced_by?: "gateway" | "override" | "none" | null;
   /** the gateway's own figure when an override replaced it */

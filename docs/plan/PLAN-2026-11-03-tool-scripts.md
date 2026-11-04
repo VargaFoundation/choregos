@@ -115,8 +115,9 @@ index and the STATUS total tests. **Does not prove**: anything about the code.
 - `choregos.tool.called` gains `response_bytes` (the canonical JSON size of the answer the API returns).
 - `tools/report_round_trips.py`: per agent and backend over a window, the runs, success rate, medians and p90 of
   model requests, platform tool calls, agent tool calls, `tokens_in`, `tokens_cached`, `tokens_out`, cost and wall
-  time, and the share of runs with ≥ 5 platform tool calls. Reads through the API (`/costs`, `/runs`) with an
-  operator token; §4.3 gives the same as SQL.
+  time, and the share of runs with ≥ 5 platform tool calls. Reads through the public API with an operator token
+  (no route lists runs over a window: projects → work items → runs → `/runs/{id}/access`); §4.3 gives the same as
+  SQL (`--sql`).
 - The operator runs it on production (30 days) and the numbers are written into §4.4 of this plan.
 - **Test that fails without it**: a run booked from a fake gateway with 7 requests reads `tokens.requests == 7`;
   an event carries `response_bytes` equal to the answer's size.
@@ -271,29 +272,49 @@ judged by the same guard rails; the client is written into the shared workspace.
 
 ### 4.3 The baseline query (story 01; for the operator, read-only)
 
+`uv run python tools/report_round_trips.py --sql --days 30` prints it; without `--sql`, the same tool computes
+the same columns through the API with an operator token (`tools/report_round_trips.py`'s docstring). A value
+nobody measured (`tokens.requests` of a run booked before story 01) is null and left out of its percentile.
+
 ```sql
 with r as (
   select r.id, coalesce(r.agent_slug, r.stage_role) as agent, r.backend, r.status,
-         nullif(r.result->'diagnostics'->>'turns','')::numeric      as turns,
+         nullif(r.tokens->>'requests','')::numeric                  as requests,
+         (select count(*) from cost_ledger l
+           where l.run_id = r.id and l.kind = 'tool')               as platform_tool_calls,
          nullif(r.result->'diagnostics'->>'tool_calls','')::numeric as agent_tool_calls,
+         nullif(r.result->'diagnostics'->>'turns','')::numeric      as turns,
          nullif(r.tokens->>'tokens_in','')::numeric                 as tokens_in,
          nullif(r.tokens->>'tokens_cached','')::numeric             as tokens_cached,
          nullif(r.tokens->>'tokens_out','')::numeric                as tokens_out,
          r.cost_usd,
-         (select count(*) from cost_ledger l where l.run_id = r.id and l.kind = 'tool') as platform_tool_calls
+         coalesce(nullif(nullif(r.result->'diagnostics'->>'duration_s','')::numeric, 0),
+                  extract(epoch from (r.ended_at - r.started_at)))  as wall_time_s
   from runs r
   where r.started_at > now() - interval '30 days' and r.ended_at is not null
 )
 select agent, backend, count(*) as runs,
-       round(avg(case when status = 'succeeded' then 1 else 0 end), 2)          as ok_rate,
-       percentile_cont(0.5) within group (order by turns)                       as turns_p50,
-       percentile_cont(0.5) within group (order by agent_tool_calls)            as agent_tool_calls_p50,
-       percentile_cont(0.5) within group (order by platform_tool_calls)         as platform_tool_calls_p50,
-       round(avg(case when platform_tool_calls >= 5 then 1 else 0 end), 2)      as share_5_calls_or_more,
-       percentile_cont(0.5) within group (order by tokens_in)                   as tokens_in_p50,
-       percentile_cont(0.5) within group (order by tokens_cached)               as tokens_cached_p50,
-       percentile_cont(0.5) within group (order by tokens_out)                  as tokens_out_p50,
-       round(sum(cost_usd)::numeric, 2)                                         as cost_usd
+       round(avg(case when status = 'succeeded' then 1 else 0 end), 4)     as success_rate,
+       percentile_cont(0.5) within group (order by requests)               as requests_p50,
+       percentile_cont(0.9) within group (order by requests)               as requests_p90,
+       percentile_cont(0.5) within group (order by platform_tool_calls)    as platform_tool_calls_p50,
+       percentile_cont(0.9) within group (order by platform_tool_calls)    as platform_tool_calls_p90,
+       percentile_cont(0.5) within group (order by agent_tool_calls)       as agent_tool_calls_p50,
+       percentile_cont(0.9) within group (order by agent_tool_calls)       as agent_tool_calls_p90,
+       percentile_cont(0.5) within group (order by turns)                  as turns_p50,
+       percentile_cont(0.9) within group (order by turns)                  as turns_p90,
+       percentile_cont(0.5) within group (order by tokens_in)              as tokens_in_p50,
+       percentile_cont(0.9) within group (order by tokens_in)              as tokens_in_p90,
+       percentile_cont(0.5) within group (order by tokens_cached)          as tokens_cached_p50,
+       percentile_cont(0.9) within group (order by tokens_cached)          as tokens_cached_p90,
+       percentile_cont(0.5) within group (order by tokens_out)             as tokens_out_p50,
+       percentile_cont(0.9) within group (order by tokens_out)             as tokens_out_p90,
+       percentile_cont(0.5) within group (order by cost_usd)               as cost_usd_p50,
+       percentile_cont(0.9) within group (order by cost_usd)               as cost_usd_p90,
+       percentile_cont(0.5) within group (order by wall_time_s)            as wall_time_s_p50,
+       percentile_cont(0.9) within group (order by wall_time_s)            as wall_time_s_p90,
+       round(sum(cost_usd)::numeric, 4)                                    as cost_usd_total,
+       round(avg(case when platform_tool_calls >= 5 then 1 else 0 end), 4) as share_5_platform_calls_or_more
 from r group by 1, 2 order by runs desc;
 ```
 

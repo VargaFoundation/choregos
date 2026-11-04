@@ -366,7 +366,8 @@ connector's configuration and secrets), hence the flat `<type>_api_key` secret f
 `CHOREGOS_FAKES=1` a `fake` serves deterministic synthetic bars (a random walk seeded by the symbol,
 business days only). Every tool call also records `request_sha256` and `response_sha256` (SHA-256 of
 the canonical JSON) in its `tool.called` event, so a result can later be matched to what the run was
-served.
+served, and `response_bytes`, the size in UTF-8 bytes of that same canonical JSON of the result: what
+the call put back into the model's context (S57-01).
 
 `memory: lexical` keeps the project's memory in Choregos's own database — no extra service,
 and a lexical, not semantic, search: there is no `vector` extension behind it. It was called

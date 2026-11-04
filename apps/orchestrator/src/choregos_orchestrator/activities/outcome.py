@@ -86,14 +86,11 @@ async def book_spend(session: Any, bundle: Any, run: Run, settings: Any) -> dict
     spend = Spend()
     if run.gateway_key_id:
         spend = await bundle.adapters.gateway.spend(run.gateway_key_id)
+    measured = "spend_readback" in getattr(bundle.adapters.gateway, "capabilities", {"spend_readback"})
     # The organisation's price override (ADR 0060) replaces the gateway's figure when tokens are
     # known; a gateway that cannot read a spend back leaves the line `unmeasured`.
     spend, pricing = await priced_spend(
-        session,
-        bundle.project.org_id,
-        [run.model or "", *spend.models_used],
-        spend,
-        measured="spend_readback" in getattr(bundle.adapters.gateway, "capabilities", {"spend_readback"}),
+        session, bundle.project.org_id, [run.model or "", *spend.models_used], spend, measured=measured
     )
     # A remote agent reports no cost (ADR 0062): what its registry entry DECLARES is booked,
     # as `external`, apart from the model spend.
@@ -101,6 +98,10 @@ async def book_spend(session: Any, bundle: Any, run: Run, settings: Any) -> dict
     if remote is not None:
         wall = elapsed_seconds(run.started_at, run.ended_at or utcnow())
         spend = Spend(cost_usd=declared_cost_usd(StageInput.model_validate(run.stage_input), wall))
+    # The round trips (S57-01, ADR 0122): the model calls the gateway's spend logs counted for
+    # this segment's key. Unknown, not zero, when the gateway cannot read a spend back, and for a
+    # remote agent, whose model calls the platform never sees.
+    requests = spend.requests if measured and remote is None else None
     item = await load_work_item(session, run.work_item_id)
     segment = {
         "tokens_in": spend.tokens_in,
@@ -118,6 +119,13 @@ async def book_spend(session: Any, bundle: Any, run: Run, settings: Any) -> dict
         of_the_run[name] = int(resumed.get(name, 0)) + int(segment[name])
     for name in ("cost_usd", "cost_eur"):
         of_the_run[name] = round(float(resumed.get(name, 0.0)) + float(segment[name]), 6)
+    # A segment whose calls are unknown, this one or the one before the question (booked before
+    # S57-01), leaves the run's count unknown: a partial count would read as fewer round trips.
+    earlier = resumed.get("requests") if resumed else 0
+    if requests is None or earlier is None:
+        of_the_run.pop("requests", None)
+    else:
+        of_the_run["requests"] = int(earlier) + requests
     of_the_run["runs"] = 1
     of_the_run.update(pricing)
     run.tokens = of_the_run
@@ -146,6 +154,12 @@ async def book_spend(session: Any, bundle: Any, run: Run, settings: Any) -> dict
         fx_rate=settings.fx_usd_eur,
     )
     totals = dict(item.totals or {})
+    # The work item counts its model calls only while every run of it told them: one booked
+    # before S57-01, or whose calls are unknown, leaves the work item's count unknown for good.
+    if requests is not None and ("requests" in totals or not int(totals.get("runs", 0))):
+        totals["requests"] = int(totals.get("requests", 0)) + requests
+    else:
+        totals.pop("requests", None)
     for field in ("tokens_in", "tokens_out", "tokens_cached"):
         totals[field] = int(totals.get(field, 0)) + int(segment[field])
     totals["cost_usd"] = round(float(totals.get("cost_usd", 0.0)) + spend.cost_usd, 6)

@@ -267,6 +267,8 @@ async def test_a_case_whose_facts_hold_succeeds_with_the_ledger_s_tokens(eval_pr
         "tokens_out": 2_000,
         "cost_usd": pytest.approx(verdict["usage"]["cost_usd"]),
         "turns": 7,
+        # One model call billed at the gateway: the run's round trips, booked with it (S57-01).
+        "requests": 1,
     }
     assert verdict["usage"]["cost_usd"] > 0
 

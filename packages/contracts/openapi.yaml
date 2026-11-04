@@ -8010,6 +8010,7 @@ components:
         cost_eur: { type: number, default: 0 }
         duration_s: { type: number, default: 0 }
         runs: { type: integer, default: 0 }
+        requests: { type: [integer, "null"], minimum: 0, description: "the model calls the gateway counted (S57-01, ADR 0122): a run's round trips, or a work item's summed over its runs; null when unknown (a run booked before S57-01, a remote agent, a gateway that cannot read a spend back, or a work item one such run belongs to)" }
         priced_by: { type: [string, "null"], enum: [gateway, override, none, null], description: "how the cost was priced (ADR 0060)" }
         gateway_cost_usd: { type: [number, "null"], description: "the gateway's own figure when an override replaced it" }
         unmeasured: { type: boolean, default: false }
