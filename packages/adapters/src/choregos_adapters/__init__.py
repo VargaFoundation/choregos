@@ -419,6 +419,14 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
         ("ci",),
         _object_schema({"namespace": _TEXT, "pipeline": {"type": "string", "default": "choregos-ci"}}),
     ),
+    ("ci", "gitlab"): ConnectorTypeSpec(
+        "GitLab CI",
+        ("ci",),
+        _object_schema(
+            {"base_url": {"type": "string", "default": "https://gitlab.com"}, "project": _TEXT}, ("project",)
+        ),
+        ("token",),
+    ),
     ("cd", "argocd"): ConnectorTypeSpec(
         "Argo CD + Rollouts",
         ("cd",),
@@ -1325,6 +1333,7 @@ def _register_builtins() -> None:
 
     # ───────────────── real implementations (day 1) ─────────────────
     from .cd.argocd import ArgoCdAdapter
+    from .ci.gitlab import GitLabCi
     from .ci.tekton import TektonCi
     from .executor.aca import AcaExecutor, AzureArmClient
     from .executor.agent_sandbox import DEFAULT_TTL_SECONDS, AgentSandboxExecutor
@@ -1378,6 +1387,16 @@ def _register_builtins() -> None:
             KubernetesClient(**cfg.get("kubernetes", {})),
             namespace=cfg.get("namespace", "default"),
             pipeline=cfg.get("pipeline", "choregos-ci"),
+        )
+    )
+    register("ci", "gitlab", _SHIPPED_SPECS[("ci", "gitlab")])(
+        lambda cfg: GitLabCi(
+            RestClient(
+                cfg.get("base_url", "https://gitlab.com"),
+                headers={"PRIVATE-TOKEN": cfg["token"]},
+                service="gitlab",
+            ),
+            cfg["project"],
         )
     )
     register("cd", "argocd", _SHIPPED_SPECS[("cd", "argocd")])(

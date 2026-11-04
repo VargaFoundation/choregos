@@ -824,6 +824,75 @@
     "origin": "shipped"
   },
   {
+    "id": "connector.ci.gitlab",
+    "title": "Read pipeline status from GitLab CI",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "ci/gitlab"
+    },
+    "link": null,
+    "reviewed": "2026-11-04",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A GitLab project with CI pipelines, where you are a Maintainer (to create a token and a webhook).\n- The platform's shared webhook secret (`CHOREGOS_GENERIC_WEBHOOK_SECRET`), held by whoever operates\n  Choregos: GitLab sends it as the webhook's secret token, and without it the endpoint refuses every\n  delivery."
+      },
+      {
+        "key": "at",
+        "title": "At GitLab",
+        "markdown": "1. Project, Settings, **Access tokens**, **Add new token**: role **Developer**, scope **api**, and an\n   expiry. Copy the token when it is shown.\n2. Project, Settings, **Webhooks**, **Add new webhook**: URL `https://choregos.example.com/api/v1/webhooks/gitlab`, **Secret token**\n   the platform's shared webhook secret, and the trigger **Pipeline events**. If the project already has\n   this webhook for its tracker, tick **Pipeline events** on it instead of adding a second one."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "- The token needs the `api` scope and the Developer role: it reads pipelines and job traces, and it\n  creates pipelines. A `read_api` token can read but cannot trigger.\n- The token is project-scoped: it cannot touch another project."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Project settings, Connectors, **CI**, type **GitLab CI**.\n2. `base_url`: `https://gitlab.com` (the default) or your self-managed address. `project`: the project's\n   path (for example `group/app`) or numeric id.\n3. `token`: the access token, in the password field (sealed, shown once)."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Press **Test**: the connector reads the project and answers `ok`. Then push a commit and watch its\npipeline state change on the work item."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `401` from GitLab: the token is wrong, expired or revoked.\n- `403` or `404` on the project: the token belongs to another project, or the path is wrong.\n- Status stays `unknown`: no pipeline exists for that commit (check the project's `.gitlab-ci.yml` rules).\n- A webhook that GitLab shows as failing with `401`: the Secret token differs from the platform's shared\n  webhook secret.\n- A self-managed GitLab with a private certificate authority: the API must trust it."
+      }
+    ],
+    "values": {
+      "webhook_url:gitlab": "https://choregos.example.com/api/v1/webhooks/gitlab"
+    },
+    "egress": [
+      "gitlab.com"
+    ],
+    "fields": {
+      "base_url": "https://gitlab.com, or your self-managed GitLab",
+      "project": "the project's path with namespace, or its numeric id",
+      "token": "a project access token, typed once"
+    },
+    "vendor_docs": [
+      {
+        "title": "GitLab pipelines API",
+        "url": "https://docs.gitlab.com/api/pipelines/"
+      },
+      {
+        "title": "GitLab project access tokens",
+        "url": "https://docs.gitlab.com/user/project/settings/project_access_tokens/"
+      },
+      {
+        "title": "GitLab webhooks",
+        "url": "https://docs.gitlab.com/user/project/integrations/webhooks/"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
     "id": "connector.ci.tekton",
     "title": "Read pipeline status from Tekton",
     "version": 1,

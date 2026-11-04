@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from .gitlab import GitLabCi
 from .tekton import TektonCi
 
-__all__ = ["TektonCi"]
+__all__ = ["GitLabCi", "TektonCi"]
