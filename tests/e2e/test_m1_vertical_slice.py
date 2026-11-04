@@ -27,7 +27,7 @@ def evidence() -> Evidence:
     )
 
 
-async def test_issue_agent_ready_devient_une_pr_verte(platform: Platform, worker: Any) -> None:
+async def test_issue_agent_ready_becomes_a_green_pr(platform: Platform, worker: Any) -> None:
     await login(platform.client)
 
     # ── 1. an issue is labelled `agent-ready` on GitHub ──
@@ -183,7 +183,7 @@ async def test_issue_agent_ready_devient_une_pr_verte(platform: Platform, worker
     assert platform.adapters.tracker.items["varga/billing-api#123"].state == "Done"
 
 
-async def test_webhook_signature_invalide_est_refusee(platform: Platform) -> None:
+async def test_webhook_with_an_invalid_signature_is_refused(platform: Platform) -> None:
     from choregos_api.config import get_settings
 
     settings = get_settings()

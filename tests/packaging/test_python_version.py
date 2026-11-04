@@ -17,28 +17,28 @@ import pathlib
 import re
 import tomllib
 
-RACINE = pathlib.Path(__file__).resolve().parents[2]
-DOCKER = RACINE / "docker"
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+DOCKER = ROOT / "docker"
 #: `FROM python:3.12-slim-bookworm AS builder`
 IMAGE = re.compile(r"^FROM python:(\d+\.\d+)[-\w.]*\s", re.M)
 #: `requires-python = ">=3.12,<3.13"`
-EXIGENCE = re.compile(r">=\s*(\d+\.\d+)")
+REQUIREMENT = re.compile(r">=\s*(\d+\.\d+)")
 
 
 def _exigee() -> str:
     """The floor version the packages require, and the guarantee that they agree."""
-    fichiers = [
-        RACINE / "pyproject.toml",
-        *sorted(RACINE.glob("packages/*/pyproject.toml")),
-        *sorted(RACINE.glob("apps/*/pyproject.toml")),
+    files = [
+        ROOT / "pyproject.toml",
+        *sorted(ROOT.glob("packages/*/pyproject.toml")),
+        *sorted(ROOT.glob("apps/*/pyproject.toml")),
     ]
     versions: dict[str, list[str]] = {}
-    for chemin in fichiers:
-        contrainte = tomllib.loads(chemin.read_text(encoding="utf-8"))["project"].get("requires-python")
-        assert contrainte, f"{chemin.relative_to(RACINE)} does not declare `requires-python`"
-        trouve = EXIGENCE.search(contrainte)
-        assert trouve, f"{chemin.relative_to(RACINE)}: `{contrainte}` has no readable floor"
-        versions.setdefault(trouve.group(1), []).append(str(chemin.relative_to(RACINE)))
+    for path in files:
+        contrainte = tomllib.loads(path.read_text(encoding="utf-8"))["project"].get("requires-python")
+        assert contrainte, f"{path.relative_to(ROOT)} does not declare `requires-python`"
+        found = REQUIREMENT.search(contrainte)
+        assert found, f"{path.relative_to(ROOT)}: `{contrainte}` has no readable floor"
+        versions.setdefault(found.group(1), []).append(str(path.relative_to(ROOT)))
     assert len(versions) == 1, "the packages do not all require the same Python version: " + " ; ".join(
         f"{v} → {', '.join(f)}" for v, f in sorted(versions.items())
     )
@@ -48,18 +48,18 @@ def _exigee() -> str:
 def _images() -> dict[str, list[str]]:
     """{version: files} for each `FROM python:` of the Dockerfiles."""
     trouves: dict[str, list[str]] = {}
-    for chemin in sorted(DOCKER.glob("*.Dockerfile")):
-        for version in IMAGE.findall(chemin.read_text(encoding="utf-8")):
-            trouves.setdefault(version, []).append(chemin.name)
+    for path in sorted(DOCKER.glob("*.Dockerfile")):
+        for version in IMAGE.findall(path.read_text(encoding="utf-8")):
+            trouves.setdefault(version, []).append(path.name)
     return trouves
 
 
 def test_il_y_a_bien_des_images_a_verifier() -> None:
     """Without this guard, renaming the Dockerfiles would leave the suite green and empty."""
-    assert _images(), f"no `FROM python:` found in {DOCKER.relative_to(RACINE)}"
+    assert _images(), f"no `FROM python:` found in {DOCKER.relative_to(ROOT)}"
 
 
-def test_les_images_utilisent_la_version_exigee_par_les_paquets() -> None:
+def test_images_use_the_version_required_by_the_packages() -> None:
     exigee = _exigee()
     ecarts = {v: f for v, f in _images().items() if v != exigee}
     assert not ecarts, (

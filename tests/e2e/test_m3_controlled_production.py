@@ -21,7 +21,7 @@ async def _train_status(handle: Any, predicate: Any, timeout: float = 60.0) -> d
     raise AssertionError(f"condition never reached: {await handle.query('status_query')}")
 
 
-async def test_deux_merges_partent_dans_le_meme_lot(platform: Platform, worker: Any) -> None:
+async def test_two_merges_go_out_in_the_same_batch(platform: Platform, worker: Any) -> None:
     await login(platform.client)
     with platform.env.auto_time_skipping_disabled():
         async with worker():
@@ -80,7 +80,7 @@ async def test_deux_merges_partent_dans_le_meme_lot(platform: Platform, worker: 
     assert dora["deployment_frequency"]["level"] != "unknown"
 
 
-async def test_canary_casse_declenche_rollback_et_gel(platform: Platform, worker: Any) -> None:
+async def test_broken_canary_triggers_rollback_and_freeze(platform: Platform, worker: Any) -> None:
     await login(platform.client)
     platform.adapters.cd.fail_next_analysis()
     with platform.env.auto_time_skipping_disabled():
@@ -116,7 +116,7 @@ async def test_canary_casse_declenche_rollback_et_gel(platform: Platform, worker
     assert dora["change_failure_rate"]["level"] == "low"
 
 
-async def test_gel_manuel_bloque_le_depart(platform: Platform, worker: Any) -> None:
+async def test_manual_freeze_blocks_the_departure(platform: Platform, worker: Any) -> None:
     await login(platform.client)
     with platform.env.auto_time_skipping_disabled():
         async with worker():
@@ -142,7 +142,7 @@ async def test_gel_manuel_bloque_le_depart(platform: Platform, worker: Any) -> N
             await handle.result()
 
 
-async def test_le_gel_exige_un_motif(platform: Platform) -> None:
+async def test_the_freeze_requires_a_reason(platform: Platform) -> None:
     await login(platform.client)
     response = await platform.client.post(
         f"/api/v1/projects/{platform.project_id}/trains/prod/freeze", json={"reason": ""}
@@ -150,7 +150,7 @@ async def test_le_gel_exige_un_motif(platform: Platform) -> None:
     assert response.status_code == 422, "freezing without a reason is refused by the contract"
 
 
-async def test_l_apply_terraform_part_pendant_le_depart_apres_approbation(
+async def test_the_terraform_apply_goes_out_with_the_departure_after_approval(
     platform: Platform, worker: Any
 ) -> None:
     """Terraform applies within the train window, never between two departures (S9-05)."""

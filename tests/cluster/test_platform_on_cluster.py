@@ -230,7 +230,7 @@ def _api_once(method: str, path: str, body: dict | None = None) -> dict:
         return {"raw": payload}
 
 
-def test_l_api_repond_depuis_le_cluster(platform: None) -> None:
+def test_the_api_answers_from_the_cluster(platform: None) -> None:
     """The repository image starts, finds its database, and applies its migrations."""
     health = api("GET", "/healthz")
     assert health.get("status") in {"ok", "healthy"}, health
@@ -242,7 +242,7 @@ def test_les_workers_sont_connectes_a_temporal(platform: None) -> None:
     assert "Traceback" not in logs, logs[-800:]
 
 
-def test_la_base_porte_le_schema_complet(platform: None) -> None:
+def test_the_database_carries_the_full_schema(platform: None) -> None:
     """The Alembic migrations run on a real Postgres, not on SQLite."""
     tables = kubectl(
         "-n",
@@ -262,7 +262,7 @@ def test_la_base_porte_le_schema_complet(platform: None) -> None:
     assert int(tables) >= 20, f"only {tables} tables — the migrations did not run"
 
 
-def test_un_worker_tue_repart_sans_perdre_le_travail(platform: None) -> None:
+def test_a_killed_worker_restarts_without_losing_work(platform: None) -> None:
     """S12-05 — resuming after the loss of a worker does not replay what is already done."""
     before = kubectl("-n", NS, "get", "pod", "-l", "app=worker", "-o", "name").strip()
     assert before, "no worker to kill"

@@ -58,7 +58,7 @@ async def tracker() -> AsyncIterator[JiraTracker]:
         await client.aclose()
 
 
-async def test_cycle_complet_sur_un_vrai_ticket(tracker: JiraTracker) -> None:
+async def test_full_cycle_on_a_real_ticket(tracker: JiraTracker) -> None:
     """Creation, read, transition, rewritten follow-up note, fields, candidates."""
     key = await tracker.create_item(
         NewItem(
@@ -78,15 +78,15 @@ async def test_cycle_complet_sur_un_vrai_ticket(tracker: JiraTracker) -> None:
     # This is the point the simulated transport cannot check: the transitions depend on the
     # workflow scheme of *your* project, not ours.
     await tracker.set_state(key, TrackerStateMapping(status="In Progress"))
-    apres = await tracker.fetch_item(key)
-    assert apres.state, "the ticket must carry a status after the transition"
+    after = await tracker.fetch_item(key)
+    assert after.state, "the ticket must carry a status after the transition"
 
     # A single follow-up comment, rewritten (§4.3).
-    def suivi(etape: str) -> str:
-        return f"### Choregos\n\n| Step | Status |\n| --- | --- |\n| {etape} | ✅ |"
+    def track(step: str) -> str:
+        return f"### Choregos\n\n| Step | Status |\n| --- | --- |\n| {step} | ✅ |"
 
-    await tracker.upsert_status_comment(key, suivi("implement"))
-    await tracker.upsert_status_comment(key, suivi("verify"))
+    await tracker.upsert_status_comment(key, track("implement"))
+    await tracker.upsert_status_comment(key, track("verify"))
     relu = await tracker.fetch_item(key)
     suivis = [c for c in relu.comments if c.marker]
     assert len(suivis) == 1, f"{len(suivis)} follow-up comments instead of one"
@@ -122,7 +122,7 @@ async def test_cycle_complet_sur_un_vrai_ticket(tracker: JiraTracker) -> None:
         )
 
 
-async def test_un_projet_inexistant_donne_une_erreur_lisible(tracker: JiraTracker) -> None:
+async def test_a_missing_project_gives_a_readable_error(tracker: JiraTracker) -> None:
     from choregos_adapters.errors import UpstreamError
 
     absent = JiraTracker(tracker.client, "ZZZINEXISTANT")
@@ -132,7 +132,7 @@ async def test_un_projet_inexistant_donne_une_erreur_lisible(tracker: JiraTracke
     assert error.value.status_code in {400, 403, 404}
 
 
-async def test_le_jeton_est_accepte(tracker: JiraTracker) -> None:
+async def test_the_token_is_accepted(tracker: JiraTracker) -> None:
     """The most useful check when nothing works: who are we, as far as Jira is concerned?
 
     `AUTHENTICATED_FAILED` on this call means an expired or revoked token, or a wrong

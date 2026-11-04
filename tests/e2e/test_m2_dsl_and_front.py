@@ -13,7 +13,7 @@ pytestmark = [pytest.mark.e2e, pytest.mark.asyncio]
 
 
 @pytest.mark.parametrize("name", TEMPLATE_NAMES)
-async def test_les_trois_templates_sont_acceptes_par_l_api(platform: Platform, name: str) -> None:
+async def test_the_three_templates_are_accepted_by_the_api(platform: Platform, name: str) -> None:
     await login(platform.client)
     validation = (
         await platform.client.post("/api/v1/workflows/validate", json={"yaml": template_yaml(name)})
@@ -41,7 +41,7 @@ async def test_les_trois_templates_sont_acceptes_par_l_api(platform: Platform, n
     assert saved.json()["name"] == name
 
 
-async def test_un_workflow_invalide_est_refuse_avec_la_ligne_fautive(platform: Platform) -> None:
+async def test_an_invalid_workflow_is_refused_with_the_faulty_line(platform: Platform) -> None:
     await login(platform.client)
     broken = template_yaml("default-simple").replace("to: awaiting_spec_approval", "to: nulle_part", 1)
     response = await platform.client.put(
@@ -98,7 +98,7 @@ async def test_a_card_moved_on_the_board_does_not_move_the_work_item(platform: P
     assert not any(name == "inbound" for name, _ in attempts), attempts
 
 
-async def test_le_wizard_cree_un_projet_et_demarre_le_provisioning(platform: Platform) -> None:
+async def test_the_wizard_creates_a_project_and_starts_provisioning(platform: Platform) -> None:
     await login(platform.client)
     created = await platform.client.post(
         "/api/v1/orgs/varga/projects",
@@ -127,7 +127,7 @@ async def test_le_wizard_cree_un_projet_et_demarre_le_provisioning(platform: Pla
     assert any(workflow_id.startswith("prov-") for _, workflow_id in attempts), attempts
 
 
-async def test_estimation_de_cout_affichee_sur_un_ticket(platform: Platform) -> None:
+async def test_cost_estimate_shown_on_a_ticket(platform: Platform) -> None:
     """The estimate comes from comparable tickets already finished, not from a formula."""
     await login(platform.client)
     from choregos_api.db.models import WorkItem

@@ -214,7 +214,7 @@ def psql(cluster: str, sql: str) -> str:
     return kubectl("-n", NS, "exec", pod, "--", "psql", "-U", "postgres", "-d", "choregos", "-tAc", sql)
 
 
-def test_le_cluster_du_depot_demarre(stack: None) -> None:
+def test_the_store_cluster_starts(stack: None) -> None:
     """First truth: the repository's configuration produces a Postgres that starts."""
     kubectl("apply", "-f", "-", input_text=_cluster_manifest(CLUSTER))
     deadline = time.monotonic() + 600
@@ -227,11 +227,11 @@ def test_le_cluster_du_depot_demarre(stack: None) -> None:
             break
         time.sleep(10)
     if ready != "1":
-        etat = kubectl("-n", NS, "describe", "cluster", CLUSTER, check=False)[-1500:]
-        raise AssertionError(f"the cluster never became ready:\n{etat}")
+        state = kubectl("-n", NS, "describe", "cluster", CLUSTER, check=False)[-1500:]
+        raise AssertionError(f"the cluster never became ready:\n{state}")
 
 
-def test_une_sauvegarde_se_restaure_avec_ses_donnees(stack: None) -> None:
+def test_a_backup_restores_with_its_data(stack: None) -> None:
     psql(CLUSTER, "CREATE TABLE IF NOT EXISTS preuve (id int primary key, texte text);")
     psql(CLUSTER, "INSERT INTO preuve VALUES (1, 'before the backup') ON CONFLICT DO NOTHING;")
     assert "before the backup" in psql(CLUSTER, "SELECT texte FROM preuve WHERE id = 1;")

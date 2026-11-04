@@ -4,7 +4,7 @@
 `@agentclientprotocol/claude-agent-acp`, whose binary is `claude-agent-acp` — the
 `versions.lock` key the backend already pinned under. A stage input that names the old binary
 still starts: the image links `claude-code-acp` to the new one
-(`tests/paquets/test_claude_agent_acp_in_the_runner_image.py`).
+(`tests/packaging/test_claude_agent_acp_in_the_runner_image.py`).
 """
 
 from __future__ import annotations

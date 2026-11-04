@@ -50,12 +50,12 @@ def namespaces() -> None:
     "name",
     ["namespaces.yaml", "quotas.yaml", "netpol.yaml", "rbac.yaml"],
 )
-def test_le_serveur_accepte_les_manifests_du_projet(name: str) -> None:
+def test_the_server_accepts_the_project_manifests(name: str) -> None:
     result = server_dry_run(manifests()[name])
     assert result.returncode == 0, f"{name} refused:\n{result.stderr[:600]}"
 
 
-def test_les_quotas_sont_ceux_de_la_politique() -> None:
+def test_the_quotas_are_the_policy_ones() -> None:
     kubectl("apply", "-f", "-", input_text=manifests()["quotas.yaml"])
     quota = kubectl(
         "-n", f"proj-{SLUG}-runners", "get", "resourcequota", "-o", "jsonpath={.items[0].spec.hard}"
@@ -63,18 +63,18 @@ def test_les_quotas_sont_ceux_de_la_politique() -> None:
     assert "cpu" in quota and "memory" in quota, quota
 
 
-def test_le_runtimeclass_gvisor_n_est_exige_que_si_la_politique_le_demande() -> None:
+def test_the_gvisor_runtimeclass_is_required_only_if_the_policy_asks() -> None:
     """`gvisor` does not exist on every cluster: the template must not impose it."""
-    avec = manifests("regulated")
-    sans = manifests("solo")
-    assert "gvisor" in avec.get("runtimeclass.yaml", "") or "gvisor" in avec.get("tekton.yaml", "")
-    assert "runtimeClassName: gvisor" not in sans.get("tekton.yaml", "")
+    regulated = manifests("regulated")
+    solo = manifests("solo")
+    assert "gvisor" in regulated.get("runtimeclass.yaml", "") or "gvisor" in regulated.get("tekton.yaml", "")
+    assert "runtimeClassName: gvisor" not in solo.get("tekton.yaml", "")
 
 
-def test_un_manifest_tekton_sans_operateur_echoue_clairement() -> None:
+def test_a_tekton_manifest_without_the_operator_fails_clearly() -> None:
     """Without Tekton installed, the refusal must name the unknown resource, not an unreadable YAML."""
     result = server_dry_run(manifests()["tekton.yaml"])
     if result.returncode == 0:
         pytest.skip("Tekton is installed on this cluster: nothing to prove here")
-    sortie = (result.stderr + result.stdout).lower()
-    assert "no matches for kind" in sortie or "not found" in sortie, result.stderr[:400]
+    output = (result.stderr + result.stdout).lower()
+    assert "no matches for kind" in output or "not found" in output, result.stderr[:400]

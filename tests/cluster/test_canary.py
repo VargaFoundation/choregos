@@ -111,13 +111,13 @@ def wait_for(predicate, timeout: float = 300) -> dict:
     raise AssertionError(f"state never reached: {json.dumps(state)[:600]}")
 
 
-def test_le_rollout_initial_se_deploie(namespace: None) -> None:
+def test_initial_rollout_deploys(namespace: None) -> None:
     kubectl("apply", "-f", "-", input_text=rollout("hashicorp/http-echo:1.0"))
     state = wait_for(lambda s: s.get("phase") == "Healthy")
     assert state.get("readyReplicas") == 4, state
 
 
-def test_une_nouvelle_version_est_retenue_au_premier_palier(namespace: None) -> None:
+def test_a_new_version_is_kept_at_the_first_step(namespace: None) -> None:
     """The heart of S7-08: the next version does not replace the old one all at once."""
     kubectl("apply", "-f", "-", input_text=rollout("hashicorp/http-echo:0.2.3"))
     state = wait_for(lambda s: s.get("phase") == "Paused", timeout=300)
@@ -132,7 +132,7 @@ def test_une_nouvelle_version_est_retenue_au_premier_palier(namespace: None) -> 
     assert len(versions) == 2, f"both versions must coexist during the step: {versions}"
 
 
-def test_un_abandon_restaure_la_version_stable(namespace: None) -> None:
+def test_an_abort_restores_the_stable_version(namespace: None) -> None:
     """Rollback is the other half of the guarantee: a canary that cannot be cancelled is not one."""
     kubectl(
         "-n",

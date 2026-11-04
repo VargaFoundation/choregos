@@ -54,7 +54,7 @@ def base_url() -> str:
     return require("CHOREGOS_LIVE_LITELLM_URL")["CHOREGOS_LIVE_LITELLM_URL"]
 
 
-async def test_le_proxy_expose_les_alias_de_la_plateforme(base_url: str, gateway: LiteLlmGateway) -> None:
+async def test_the_proxy_exposes_the_platform_aliases(base_url: str, gateway: LiteLlmGateway) -> None:
     """Agents never see a provider name, only a platform alias."""
     async with httpx.AsyncClient(timeout=20) as client:
         response = await client.get(
@@ -65,7 +65,7 @@ async def test_le_proxy_expose_les_alias_de_la_plateforme(base_url: str, gateway
     assert MODEL in names, names
 
 
-async def test_une_cle_de_run_est_mintee_bornee_et_revocable(gateway: LiteLlmGateway) -> None:
+async def test_a_run_key_is_minted_bounded_and_revocable(gateway: LiteLlmGateway) -> None:
     key = await gateway.mint_key(
         {"project": "billing-api", "run_id": f"live-{RUN}-1", "actor": "dev"},
         budget_usd=0.5,
@@ -84,7 +84,7 @@ async def test_une_cle_de_run_est_mintee_bornee_et_revocable(gateway: LiteLlmGat
     await gateway.revoke(key.key)
 
 
-async def test_une_cle_de_run_ne_peut_appeler_que_ses_modeles(gateway: LiteLlmGateway, base_url: str) -> None:
+async def test_a_run_key_can_only_call_its_models(gateway: LiteLlmGateway, base_url: str) -> None:
     """The model scope is a bound of the proxy, not an instruction in a prompt."""
     key = await gateway.mint_key(
         {"project": "billing-api", "run_id": f"live-{RUN}-2"},
@@ -109,7 +109,7 @@ async def test_une_cle_de_run_ne_peut_appeler_que_ses_modeles(gateway: LiteLlmGa
     await gateway.revoke(key.key)
 
 
-async def test_le_cout_est_mesure_a_la_passerelle(gateway: LiteLlmGateway, base_url: str) -> None:
+async def test_the_cost_is_measured_at_the_gateway(gateway: LiteLlmGateway, base_url: str) -> None:
     """The S4 rule: a run's cost comes from the gateway, never from the agent.
 
     On a priced model (`platform/cheap` → gpt-4o-mini): an alias whose price the proxy does not
@@ -150,7 +150,7 @@ async def test_le_cout_est_mesure_a_la_passerelle(gateway: LiteLlmGateway, base_
     await gateway.revoke(key.key)
 
 
-async def test_le_budget_est_un_plafond_dur(gateway: LiteLlmGateway, base_url: str) -> None:
+async def test_the_budget_is_a_hard_ceiling(gateway: LiteLlmGateway, base_url: str) -> None:
     """A tiny budget must end up refusing — it is a mechanism, not an instruction."""
     key = await gateway.mint_key(
         {"project": "billing-api", "run_id": f"live-{RUN}-4"},
@@ -158,7 +158,7 @@ async def test_le_budget_est_un_plafond_dur(gateway: LiteLlmGateway, base_url: s
         ttl_s=900,
         models=[MODEL],
     )
-    refus = None
+    refusal = None
     async with httpx.AsyncClient(timeout=30) as client:
         for _ in range(6):
             response = await client.post(
@@ -167,15 +167,15 @@ async def test_le_budget_est_un_plafond_dur(gateway: LiteLlmGateway, base_url: s
                 json={"model": MODEL, "messages": [{"role": "user", "content": "x" * 400}]},
             )
             if response.status_code >= 400:
-                refus = response
+                refusal = response
                 break
-    assert refus is not None, "the budget was never enforced"
-    assert "budget" in refus.text.lower(), refus.text[:300]
+    assert refusal is not None, "the budget was never enforced"
+    assert "budget" in refusal.text.lower(), refusal.text[:300]
 
     await gateway.revoke(key.key)
 
 
-async def test_une_cle_revoquee_ne_passe_plus(gateway: LiteLlmGateway, base_url: str) -> None:
+async def test_a_revoked_key_no_longer_passes(gateway: LiteLlmGateway, base_url: str) -> None:
     key = await gateway.mint_key(
         {"project": "billing-api", "run_id": f"live-{RUN}-5"},
         budget_usd=0.5,
@@ -195,7 +195,9 @@ async def test_une_cle_revoquee_ne_passe_plus(gateway: LiteLlmGateway, base_url:
 # ───────────────────── Anthropic format: the S4-05 gap ─────────────────────
 
 
-async def test_le_format_anthropic_passe_par_le_meme_alias(gateway: LiteLlmGateway, base_url: str) -> None:
+async def test_the_anthropic_format_goes_through_the_same_alias(
+    gateway: LiteLlmGateway, base_url: str
+) -> None:
     """`claude-code` only speaks `/v1/messages`: the platform alias must answer there."""
     key = await gateway.mint_key(
         {"project": "billing-api", "run_id": f"live-{RUN}-6"},
@@ -226,9 +228,7 @@ async def test_le_format_anthropic_passe_par_le_meme_alias(gateway: LiteLlmGatew
     await gateway.revoke(key.key)
 
 
-async def test_l_environnement_que_recoit_claude_code_fonctionne(
-    gateway: LiteLlmGateway, base_url: str
-) -> None:
+async def test_the_environment_claude_code_receives_works(gateway: LiteLlmGateway, base_url: str) -> None:
     """The missing proof: the variables passed to the runner lead to a proxy that answers.
 
     We take exactly what `prepare_stage` would put in the container — a resolved `ModelRef`

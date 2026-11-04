@@ -4,7 +4,7 @@ access control system promise — their operations, read or write, and the schem
 
 A family is not an implementation. The `demo` type holds it today, in memory; a real type (Intune,
 a carrier, a reader maker) will take these operations over as they are, and the conformance suite
-(`tests/conformance/connecteurs/`) will judge them the same way: schemas that the implementation
+(`tests/conformance/connectors/`) will judge them the same way: schemas that the implementation
 follows, idempotent writes — a governed action is replayed —, no secret in the log.
 """
 

@@ -56,16 +56,16 @@ def fact(subject: str, content: str, **kwargs: object) -> Fact:
     )
 
 
-async def test_le_serveur_repond(memory: EcphoriaMemory) -> None:
+async def test_the_server_answers(memory: EcphoriaMemory) -> None:
     assert (await memory.test())["ok"] is True
 
 
-async def test_le_tenant_est_cree_avant_la_premiere_ecriture(memory: EcphoriaMemory) -> None:
+async def test_the_tenant_is_created_before_the_first_write(memory: EcphoriaMemory) -> None:
     """Provisioning must be able to check its rights before sending data."""
     await memory.create_tenant(TENANT)
 
 
-async def test_ecrire_puis_retrouver_un_fait(memory: EcphoriaMemory) -> None:
+async def test_write_then_find_a_fact(memory: EcphoriaMemory) -> None:
     written = await memory.write_fact(
         TENANT,
         fact("convention:billing:devise", "amounts are in cents, never in floats"),
@@ -79,7 +79,7 @@ async def test_ecrire_puis_retrouver_un_fait(memory: EcphoriaMemory) -> None:
     assert retrouve.provenance.get("source") == "orchestrator"
 
 
-async def test_un_external_id_rejoue_ne_duplique_pas(memory: EcphoriaMemory) -> None:
+async def test_a_replayed_external_id_does_not_duplicate(memory: EcphoriaMemory) -> None:
     proposition = fact(
         "ticket:varga/billing-api#7",
         "ticket #7 was delivered without regression",
@@ -90,7 +90,7 @@ async def test_un_external_id_rejoue_ne_duplique_pas(memory: EcphoriaMemory) -> 
     assert first == second, "a redelivery confirms, it does not create a second memory"
 
 
-async def test_le_context_pack_respecte_son_budget_et_les_chemins(memory: EcphoriaMemory) -> None:
+async def test_the_context_pack_respects_its_budget_and_the_paths(memory: EcphoriaMemory) -> None:
     await memory.write_fact(
         TENANT,
         fact(
@@ -121,13 +121,13 @@ async def test_le_context_pack_respecte_son_budget_et_les_chemins(memory: Ecphor
     assert serre.truncated is True
 
 
-async def test_le_pack_distingue_les_incidents_des_conventions(memory: EcphoriaMemory) -> None:
+async def test_the_pack_tells_incidents_from_conventions(memory: EcphoriaMemory) -> None:
     pack = await memory.context_pack(TENANT, "billing credit notes", paths=[], budget_tokens=4000)
     assert pack.incidents, "an incident is not a convention"
     assert all(str(item.kind) == "incident" for item in pack.incidents)
 
 
-async def test_un_agent_propose_un_humain_valide(memory: EcphoriaMemory) -> None:
+async def test_an_agent_proposes_a_human_validates(memory: EcphoriaMemory) -> None:
     proposed = await memory.propose_fact(
         TENANT,
         fact(f"convention:tests:coverage:{RUN}", f"coverage {RUN} must not drop below 80 %"),
@@ -146,11 +146,11 @@ async def test_un_agent_propose_un_humain_valide(memory: EcphoriaMemory) -> None
     assert propose_item.proposed_by == "run-live-1", "we know which run proposed it"
 
     assert await memory.accept_pending(TENANT, proposed) is True
-    apres = await memory.search(TENANT, f"coverage {RUN}", k=10)
-    assert any(RUN in item.content for item in apres), apres
+    after = await memory.search(TENANT, f"coverage {RUN}", k=10)
+    assert any(RUN in item.content for item in after), after
 
 
-async def test_une_proposition_refusee_ne_revient_pas(memory: EcphoriaMemory) -> None:
+async def test_a_refused_proposal_does_not_come_back(memory: EcphoriaMemory) -> None:
     proposed = await memory.propose_fact(
         TENANT,
         fact(f"convention:prod:cache:{RUN}", f"the prod cache {RUN} can be flushed while hot"),
@@ -165,7 +165,7 @@ async def test_une_proposition_refusee_ne_revient_pas(memory: EcphoriaMemory) ->
     assert all(item.id != proposed for item in await memory.list_pending(TENANT))
 
 
-async def test_l_ingestion_par_lot_passe(memory: EcphoriaMemory) -> None:
+async def test_batch_ingestion_passes(memory: EcphoriaMemory) -> None:
     await memory.ingest_events(
         TENANT,
         [
@@ -183,12 +183,12 @@ async def test_l_ingestion_par_lot_passe(memory: EcphoriaMemory) -> None:
     assert len(found) >= 1, found
 
 
-async def test_une_memoire_injoignable_rend_un_pack_vide_pas_une_erreur() -> None:
+async def test_an_unreachable_memory_returns_an_empty_pack_not_an_error() -> None:
     """The S10 rule: a slow or dead memory never blocks a stage."""
-    mort = EcphoriaMemory("http://127.0.0.1:9", token="x", tenant=TENANT, read_timeout_ms=50)
+    dead = EcphoriaMemory("http://127.0.0.1:9", token="x", tenant=TENANT, read_timeout_ms=50)
     try:
-        pack = await mort.context_pack(TENANT, "never mind", paths=[], budget_tokens=1000)
+        pack = await dead.context_pack(TENANT, "never mind", paths=[], budget_tokens=1000)
         assert pack.memories == [] and pack.incidents == []
         assert pack.tokens_estimated == 0
     finally:
-        await mort.aclose()
+        await dead.aclose()

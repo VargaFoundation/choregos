@@ -23,7 +23,7 @@ pytestmark = pytest.mark.conformance
 #: concerned (ceiling reached, queue in arrival order).
 #: `snapshot` imposes none either since ADR 0053: it is a property of `start` (every run gets a
 #: sandbox made from the template, never a used one), proved by the executor's own tests.
-METHODE_ATTENDUE = {"renew": "renew", "suspend": "suspend", "resume": "resume"}
+EXPECTED_METHOD = {"renew": "renew", "suspend": "suspend", "resume": "resume"}
 
 # Building an executor outside a cluster: without `token`, the Kubernetes client goes and reads
 # the service-account token mounted in a pod, and that file does not exist here.
@@ -38,34 +38,34 @@ CONFIGS = {
 }
 
 
-def _executeurs() -> list[str]:
+def _executors() -> list[str]:
     return sorted(available("runtime"))
 
 
-def test_le_vocabulaire_reste_ferme() -> None:
+def test_the_vocabulary_stays_closed() -> None:
     """A capability invented on the fly means nothing to the caller."""
     assert frozenset({"queue", "renew", "suspend", "resume", "snapshot"}) == CAPACITES_EXECUTEUR
 
 
-@pytest.mark.parametrize("nom", _executeurs())
-def test_chaque_executeur_declare_ses_capacites(nom: str) -> None:
-    executeur = build("runtime", nom, CONFIGS.get(nom, {}))
-    capacites = getattr(executeur, "capabilities", None)
-    assert isinstance(capacites, frozenset), f"{nom} announces nothing: a caller would have to guess"
-    inconnues = capacites - CAPACITES_EXECUTEUR
-    assert not inconnues, f"{nom} announces capabilities outside the vocabulary: {sorted(inconnues)}"
+@pytest.mark.parametrize("name", _executors())
+def test_each_executor_declares_its_capabilities(name: str) -> None:
+    executor = build("runtime", name, CONFIGS.get(name, {}))
+    capabilities = getattr(executor, "capabilities", None)
+    assert isinstance(capabilities, frozenset), f"{name} announces nothing: a caller would have to guess"
+    inconnues = capabilities - CAPACITES_EXECUTEUR
+    assert not inconnues, f"{name} announces capabilities outside the vocabulary: {sorted(inconnues)}"
 
 
-@pytest.mark.parametrize("nom", _executeurs())
-def test_ce_qui_est_annonce_est_implemente(nom: str) -> None:
-    executeur = build("runtime", nom, CONFIGS.get(nom, {}))
-    for capacite in sorted(getattr(executeur, "capabilities", frozenset())):
-        methode = METHODE_ATTENDUE.get(capacite)
+@pytest.mark.parametrize("name", _executors())
+def test_what_is_announced_is_implemented(name: str) -> None:
+    executor = build("runtime", name, CONFIGS.get(name, {}))
+    for capability in sorted(getattr(executor, "capabilities", frozenset())):
+        methode = EXPECTED_METHOD.get(capability)
         if methode is None:
             continue
-        fonction = getattr(executeur, methode, None)
-        assert callable(fonction), f"{nom} announces `{capacite}` without `{methode}()`"
-        assert inspect.iscoroutinefunction(fonction), f"{nom}.{methode}() must be asynchronous"
+        fonction = getattr(executor, methode, None)
+        assert callable(fonction), f"{name} announces `{capability}` without `{methode}()`"
+        assert inspect.iscoroutinefunction(fonction), f"{name}.{methode}() must be asynchronous"
 
 
 def test_only_agent_sandbox_starts_every_run_from_a_clean_sandbox(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -81,7 +81,7 @@ def test_only_agent_sandbox_starts_every_run_from_a_clean_sandbox(monkeypatch: p
     monkeypatch.delenv("CHOREGOS_FAKES", raising=False)
     with_snapshot = [
         name
-        for name in _executeurs()
+        for name in _executors()
         if "snapshot" in getattr(build("runtime", name, CONFIGS.get(name, {})), "capabilities", frozenset())
     ]
     assert with_snapshot == ["agent_sandbox"], (

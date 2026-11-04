@@ -37,7 +37,7 @@ async def tracker() -> AsyncIterator[GitLabTracker]:
         await client.aclose()
 
 
-async def test_cycle_complet_sur_un_vrai_ticket(tracker: GitLabTracker) -> None:
+async def test_full_cycle_on_a_real_ticket(tracker: GitLabTracker) -> None:
     """Creation, read, scoped label, rewritten follow-up note, fields, candidates."""
     key = await tracker.create_item(
         NewItem(
@@ -58,16 +58,16 @@ async def test_cycle_complet_sur_un_vrai_ticket(tracker: GitLabTracker) -> None:
     await tracker.set_state(
         key, TrackerStateMapping(label="choregos::verifying", remove_labels=["choregos::implement"])
     )
-    apres = await tracker.fetch_item(key)
-    assert "choregos::verifying" in apres.labels
-    assert "choregos::implement" not in apres.labels, "scoped labels are exclusive"
+    after = await tracker.fetch_item(key)
+    assert "choregos::verifying" in after.labels
+    assert "choregos::implement" not in after.labels, "scoped labels are exclusive"
 
     # A single follow-up comment, rewritten (§4.3).
-    def suivi(etape: str) -> str:
-        return f"### Choregos\n\n| Step | Status |\n| --- | --- |\n| {etape} | ✅ |"
+    def track(step: str) -> str:
+        return f"### Choregos\n\n| Step | Status |\n| --- | --- |\n| {step} | ✅ |"
 
-    await tracker.upsert_status_comment(key, suivi("implement"))
-    await tracker.upsert_status_comment(key, suivi("verify"))
+    await tracker.upsert_status_comment(key, track("implement"))
+    await tracker.upsert_status_comment(key, track("verify"))
     relu = await tracker.fetch_item(key)
     suivis = [c for c in relu.comments if c.marker]
     assert len(suivis) == 1, f"{len(suivis)} follow-up comments instead of one"
@@ -78,10 +78,10 @@ async def test_cycle_complet_sur_un_vrai_ticket(tracker: GitLabTracker) -> None:
         key,
         {"Coût (€)": "1,25", "Taille": "M", "Risque": "low"},  # lang: fr-ok (legacy field names)
     )
-    avec_champs = await tracker.fetch_item(key)
-    assert str(avec_champs.size) == "M"
-    assert str(avec_champs.risk) == "low"
-    assert "choregos:fields" not in avec_champs.body, "the metadata does not pollute the body"
+    with_fields = await tracker.fetch_item(key)
+    assert str(with_fields.size) == "M"
+    assert str(with_fields.risk) == "low"
+    assert "choregos:fields" not in with_fields.body, "the metadata does not pollute the body"
 
     # The fallback polling finds the ticket by its label.
     config = ProjectConfig(slug="sandbox", org="varga", repo=RepoConfig(url="https://gitlab.com/x/y.git"))
@@ -95,7 +95,7 @@ async def test_cycle_complet_sur_un_vrai_ticket(tracker: GitLabTracker) -> None:
     )
 
 
-async def test_un_projet_inexistant_donne_une_erreur_lisible(tracker: GitLabTracker) -> None:
+async def test_a_missing_project_gives_a_readable_error(tracker: GitLabTracker) -> None:
     from choregos_adapters.errors import UpstreamError
 
     absent = GitLabTracker(tracker.client, "varga/this-project-does-not-exist-999")
@@ -105,7 +105,7 @@ async def test_un_projet_inexistant_donne_une_erreur_lisible(tracker: GitLabTrac
     assert error.value.status_code in {403, 404}
 
 
-async def test_le_client_rest_suit_la_pagination(tracker: GitLabTracker) -> None:
+async def test_the_rest_client_follows_pagination(tracker: GitLabTracker) -> None:
     """GitLab's real pagination (`X-Next-Page` headers) does not break our loop."""
     issues = await tracker.client.paginate(
         f"/api/v4/projects/{tracker.encoded}/issues", params={"state": "all"}

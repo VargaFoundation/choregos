@@ -42,18 +42,18 @@ def environnement_pose(variables: dict[str, str]) -> Iterator[None]:
     """
     from choregos_api.config import reset_settings_cache
 
-    avant = {nom: os.environ.get(nom) for nom in variables}
-    for nom, valeur in variables.items():
-        os.environ.setdefault(nom, valeur)
+    avant = {name: os.environ.get(name) for name in variables}
+    for name, value in variables.items():
+        os.environ.setdefault(name, value)
     reset_settings_cache()
     try:
         yield
     finally:
-        for nom, valeur in avant.items():
-            if valeur is None:
-                os.environ.pop(nom, None)
+        for name, value in avant.items():
+            if value is None:
+                os.environ.pop(name, None)
             else:
-                os.environ[nom] = valeur
+                os.environ[name] = value
         reset_settings_cache()
 
 
