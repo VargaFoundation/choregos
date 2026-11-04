@@ -1,4 +1,4 @@
-# cloudnative-pg — vague 1. Installé par Argo CD, jamais à la main.
+# cloudnative-pg — wave 1. Installed by Argo CD, never by hand.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

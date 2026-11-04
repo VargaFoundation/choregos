@@ -1,4 +1,4 @@
-# Les politiques d'admission, appliquées dès que Kyverno est prêt (vague 2).
+# The admission policies, applied as soon as Kyverno is ready (wave 2).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

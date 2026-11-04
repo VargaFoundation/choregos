@@ -1,12 +1,12 @@
-# Les images de la plateforme et des runners sont signées par la fondation et référencées
-# par digest. Une image non signée ne démarre pas — c'est un mécanisme, pas une consigne.
+# The platform's and the runners' images are signed by the foundation and referenced by
+# digest. An unsigned image does not start — it is a mechanism, not a guideline.
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
   name: choregos-verify-images
   annotations:
     policies.kyverno.io/description: >-
-      Vérifie la signature cosign des images Choregos et impose la référence par digest.
+      Verifies the cosign signature of the Choregos images and requires the reference by digest.
 spec:
   validationFailureAction: Enforce
   background: false
@@ -29,11 +29,11 @@ spec:
                     rekor: { url: "https://rekor.sigstore.dev" }
           mutateDigest: true
           required: true
-        # Ecphoria est de la fondation mais pas de ce dépôt : ses images sont signées par les
-        # workflows de `VargaFoundation/ecphoria`. Avec le seul motif ci-dessus, le glob
-        # `ghcr.io/vargafoundation/*` attrapait `ghcr.io/vargafoundation/ecphoria` et exigeait
-        # une signature émise par un dépôt qui ne l'a jamais produite — la mémoire de la
-        # plateforme n'aurait pas démarré, et le message aurait parlé de signature manquante.
+        # Ecphoria belongs to the foundation but not to this repository: its images are signed by
+        # the workflows of `VargaFoundation/ecphoria`. With the pattern above alone, the glob
+        # `ghcr.io/vargafoundation/*` caught `ghcr.io/vargafoundation/ecphoria` and demanded a
+        # signature issued by a repository that never produced it — the platform's memory would
+        # not have started, and the message would have talked about a missing signature.
         - imageReferences: ["ghcr.io/vargafoundation/ecphoria*"]
           attestors:
             - entries:

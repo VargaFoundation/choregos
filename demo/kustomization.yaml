@@ -1,6 +1,6 @@
 # Everything the demonstration puts in the namespace, outside the chart: the cluster's git
 # repository and the three ConfigMaps that the chart and the seed Job expect BY NAME — hence
-# `disableNameSuffixHash`: `demo-playbooks` and `demo-outils` are cited in values-demo.yaml.
+# `disableNameSuffixHash`: `demo-playbooks` and `demo-tools` are cited in values-demo.yaml.
 #
 #   kubectl -n choregos apply -k demo
 #
@@ -21,6 +21,6 @@ configMapGenerator:
     files:
       - sourcing.md=playbooks/sourcing.md
       - qualification.md=playbooks/qualification.md
-  - name: demo-outils
+  - name: demo-tools
     files:
-      - catalogue.yaml=outils/catalogue.yaml
+      - catalogue.yaml=tools/catalogue.yaml

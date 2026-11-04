@@ -35,7 +35,7 @@
   },
   "packageRules": [
     {
-      "description": "Les montées de patch sûres sont groupées et fusionnées seules si la CI passe.",
+      "description": "Safe patch bumps are grouped and merged on their own if CI passes.",
       "matchUpdateTypes": [
         "patch",
         "pin",
@@ -46,7 +46,7 @@
       "automergeType": "pr"
     },
     {
-      "description": "Temporal, SQLAlchemy et Pydantic portent des contrats : jamais d'automerge.",
+      "description": "Temporal, SQLAlchemy and Pydantic carry contracts: never automerge.",
       "matchPackageNames": [
         "temporalio",
         "sqlalchemy",
@@ -62,14 +62,14 @@
       ]
     },
     {
-      "description": "Le front bouge ensemble (Next, React, TanStack).",
+      "description": "The front end moves together (Next, React, TanStack).",
       "matchFileNames": [
         "apps/web/**"
       ],
       "groupName": "front"
     },
     {
-      "description": "Images et charts : par digest, la signature est revérifiée au déploiement.",
+      "description": "Images and charts: by digest, the signature is checked again at deployment.",
       "matchManagers": [
         "helmv3",
         "dockerfile",
@@ -80,7 +80,7 @@
       "automerge": false
     },
     {
-      "description": "Backends d'agents : chaque bump doit passer la suite de conformité (S2-11).",
+      "description": "Agent backends: every bump must pass the conformance suite (S2-11).",
       "matchManagers": [
         "custom.regex"
       ],
@@ -123,7 +123,7 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Versions des agents ACP épinglées dans l'image du runner (lignes annotées).",
+      "description": "ACP agent versions pinned in the runner image (annotated lines).",
       "managerFilePatterns": [
         "/^packages/runner/src/choregos_runner/backends/versions\\.lock$/"
       ],

@@ -1,10 +1,10 @@
-# Image du runner : le workspace d'un agent.
+# The runner image: an agent's workspace.
 #
-# Trois principes :
-#   1. **aucun credential** — ni kubectl, ni cloud, ni registre ; les shims refusent et journalisent ;
-#   2. **versions épinglées** — les agents ACP viennent de `versions.lock`, Renovate propose
-#      les montées, la suite de conformité les valide ;
-#   3. **non-root, sans capacité** — le sandbox du cluster fait le reste.
+# Three principles:
+#   1. **no credential** — no kubectl, no cloud, no registry; the shims refuse and log;
+#   2. **pinned versions** — the ACP agents come from `versions.lock`, Renovate proposes the
+#      bumps, the conformance suite validates them;
+#   3. **non-root, no capability** — the cluster's sandbox does the rest.
 FROM python:3.12-slim-bookworm AS builder
 ENV UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 UV_PYTHON_DOWNLOADS=never
 COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv
@@ -105,8 +105,8 @@ ENV PYTHONUNBUFFERED=1 \
     LITELLM_LOCAL_MODEL_COST_MAP=True \
     HF_HOME=/opt/headroom/models
 
-# Outils du travail d'un développeur : git, gh, jq, ripgrep, make, compilateurs usuels. Les
-# correctifs de sécurité de Debian d'abord : l'image de base peut porter un paquet déjà corrigé.
+# A developer's working tools: git, gh, jq, ripgrep, make, the usual compilers. Debian's
+# security fixes first: the base image can carry a package already fixed.
 RUN apt-get update && apt-get upgrade -y --no-install-recommends \
  && apt-get install -y --no-install-recommends \
       ca-certificates curl git gnupg jq ripgrep make build-essential tini unzip nginx \
@@ -120,7 +120,7 @@ RUN apt-get update && apt-get upgrade -y --no-install-recommends \
  && apt-get update && apt-get install -y --no-install-recommends gh \
  && rm -rf /var/lib/apt/lists/*
 
-# Scanners de sécurité, utilisés par la boucle DoD et la CI des projets.
+# Security scanners, used by the DoD loop and the projects' CI.
 # trivy 0.76.1 is the first built with a Go without CVE-2026-56857 (1.27.3); gitleaks is built above.
 COPY --from=aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c /usr/local/bin/trivy /usr/local/bin/trivy
 COPY --from=gitleaks /out/gitleaks /usr/local/bin/gitleaks
@@ -131,7 +131,7 @@ COPY --from=rtk /usr/local/bin/rtk /usr/local/bin/rtk
 COPY --from=headroom /opt/headroom /opt/headroom
 RUN ln -s /opt/headroom/bin/headroom /usr/local/bin/headroom
 
-# Agents ACP, à versions épinglées (packages/runner/backends/versions.lock).
+# ACP agents, at pinned versions (packages/runner/backends/versions.lock).
 COPY packages/runner/src/choregos_runner/backends/versions.lock /etc/choregos/versions.lock
 RUN set -eux; \
     version() { grep "^$1=" /etc/choregos/versions.lock | cut -d= -f2; }; \
@@ -158,23 +158,23 @@ RUN set -eux; \
     test -f node_modules/@opencode-ai/plugin/package.json; \
     chown -R 1000:1000 /opt/choregos
 
-# OpenHands n'est plus installé (docs/adr/0011-openhands-removed.md). Il n'exposait aucun
-# agent ACP en ligne de commande, et il pesait le plus lourd de l'image : son arbre Python
-# portait quatre des quatorze CRITICAL trouvés par Trivy (`litellm`, `fastmcp`, `anyio`,
-# `GitPython`), et c'était lui qui rendait la construction arm64 interminable.
+# OpenHands is no longer installed (docs/adr/0011-openhands-removed.md). It exposed no
+# command-line ACP agent, and it was the heaviest thing in the image: its Python tree carried
+# four of the fourteen CRITICALs Trivy found (`litellm`, `fastmcp`, `anyio`, `GitPython`),
+# and it was what made the arm64 build interminable.
 
-# Ce que l'image prétend contenir, elle le contient — et ce qu'elle contient démarre.
+# What the image claims to contain, it contains — and what it contains starts.
 #
-# Le `|| echo` qui suivait le `npm install` a laissé publier une image runner sans `opencode` :
-# la version épinglée n'existait pas sur npm, l'installation sortait en erreur, l'avertissement
-# partait dans un log de build que personne ne lit, et l'image était signée comme les autres.
+# The `|| echo` that followed the `npm install` let a runner image without `opencode` be
+# published: the pinned version did not exist on npm, the install exited with an error, the
+# warning went into a build log nobody reads, and the image was signed like the others.
 #
-# Et `command -v` ne suffit pas. `opencode-ai` 1.x installe un lanceur qui télécharge son vrai
-# binaire en postinstall, et npm 12 bloque les scripts de cycle de vie par défaut — une
-# nouveauté héritée en montant npm pour le CVE de son `tar`. Résultat : le fichier existe,
-# `command -v opencode` le trouve, et toute invocation répond « opencode-ai's postinstall
-# script was not run ». D'où `--allow-scripts` ci-dessus, et un contrôle qui **appelle** chaque
-# agent au lieu de constater sa présence.
+# And `command -v` is not enough. `opencode-ai` 1.x installs a launcher that downloads its real
+# binary in a postinstall, and npm 12 blocks lifecycle scripts by default — a novelty inherited
+# by raising npm for the CVE in its `tar`. Result: the file exists, `command -v opencode` finds
+# it, and every invocation answers "opencode-ai's postinstall script was not run". Hence
+# `--allow-scripts` above, and a check that **calls** each agent instead of noting its
+# presence.
 RUN set -eux; \
     timeout 30 claude-agent-acp --version >/dev/null </dev/null; \
     timeout 30 claude-code-acp --version >/dev/null </dev/null; \
@@ -195,8 +195,8 @@ RUN set -eux; \
     timeout 30 mutmut --version >/dev/null; \
     timeout 60 stryker --version >/dev/null
 
-# Shims : défense en profondeur. Aucun credential n'existe de toute façon, mais un agent
-# qui essaie doit être **refusé et tracé**, pas silencieusement ignoré.
+# Shims: defence in depth. No credential exists anyway, but an agent that tries must be
+# **refused and traced**, not silently ignored.
 COPY docker/shims/refuse.sh /usr/local/bin/choregos-refuse
 RUN chmod +x /usr/local/bin/choregos-refuse \
  && for binary in kubectl helm terraform az gcloud aws docker podman; do \
@@ -220,10 +220,10 @@ RUN mkdir -p /var/log/nginx /var/lib/nginx \
 
 WORKDIR /app
 COPY --from=builder --chown=1000:1000 /app /app
-# Le runner doit DÉMARRER dans cette image. `uv sync --package choregos-runner` n'installe
-# que ce que ce paquet déclare, quand l'environnement de développement en a bien plus : une
-# dépendance oubliée ne se voyait qu'au premier agent lancé en cluster, sur un
-# `ModuleNotFoundError` (arrivé avec `pydantic-settings`). Ici, la construction échoue.
+# The runner must START in this image. `uv sync --package choregos-runner` installs only what
+# that package declares, where the development environment has far more: a forgotten
+# dependency only showed at the first agent launched in a cluster, as a `ModuleNotFoundError`
+# (it happened with `pydantic-settings`). Here, the build fails.
 RUN /app/.venv/bin/choregos-runner --help >/dev/null
 # Same for the deterministic backtest engine (a dependency of the runner package): a job stage
 # runs `choregos-quant` with no network, so it must be installed and start here.

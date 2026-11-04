@@ -14,7 +14,7 @@ global:
   # agents have no tool — which is exactly the state the 2026-09-24 bench ran in without
   # anyone noticing. The ConfigMap comes from `demo/manifests`.
   toolCatalog:
-    configMap: demo-outils
+    configMap: demo-tools
   # The LLM gateway stays EMBEDDED (inherited from local.yaml): it is what mints a key per
   # run, caps the spend and counts it. Without it, the cost ledger stays at zero — 12 runs
   # at 0 EUR on the 2026-09-24 bench, presented as a cap that held.

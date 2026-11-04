@@ -1,4 +1,4 @@
-# Tekton via l'opérateur : Pipelines, Triggers, Chains (signature des runs) et Results.
+# Tekton through the operator: Pipelines, Triggers, Chains (run signing) and Results.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

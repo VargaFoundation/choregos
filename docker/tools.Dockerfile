@@ -1,4 +1,4 @@
-# Sidecar MCP `choregos-tools` : il ne détient que le jeton du run.
+# The `choregos-tools` MCP sidecar: it holds nothing but the run's token.
 FROM python:3.12-slim-bookworm AS builder
 ENV UV_LINK_MODE=copy UV_COMPILE_BYTECODE=1 UV_PYTHON_DOWNLOADS=never
 COPY --from=ghcr.io/astral-sh/uv:0.5.11 /uv /usr/local/bin/uv
@@ -12,9 +12,9 @@ RUN mkdir -p apps/api/src apps/orchestrator/src \
 
 FROM python:3.12-slim-bookworm AS runtime
 ENV PYTHONUNBUFFERED=1 PATH="/app/.venv/bin:$PATH" CHOREGOS_TOOLS_PORT=7777
-# Les correctifs de sécurité de Debian, appliqués à la construction : l'image de base (une étiquette,
-# reconstruite à son rythme) peut porter un paquet déjà corrigé dans `bookworm-security` — perl-base
-# 5.36.0-7+deb12u3 et ses trois CRITICAL ont arrêté la release 0.16.0 au scan Trivy.
+# Debian's security fixes, applied at build time: the base image (a tag, rebuilt at its own pace)
+# can carry a package already fixed in `bookworm-security` — perl-base 5.36.0-7+deb12u3 and its
+# three CRITICALs stopped release 0.16.0 at the Trivy scan.
 RUN apt-get update && apt-get upgrade -y --no-install-recommends \
  && apt-get install -y --no-install-recommends ca-certificates tini \
  && rm -rf /var/lib/apt/lists/* \
