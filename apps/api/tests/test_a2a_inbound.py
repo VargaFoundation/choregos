@@ -398,7 +398,7 @@ async def test_the_door_reads_a_body_only_as_large_as_the_organisation_takes(
     from choregos_api.a2a.door import MAX_BODY
     from choregos_api.db.models import Project
     from choregos_api.db.session import session_scope
-    from choregos_api.mcp.transport import TAILLE_MAX_DU_CORPS
+    from choregos_api.mcp.transport import MAX_BODY_SIZE
 
     token = await _ready(client, project, modes=FILE_MODES)
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
@@ -410,7 +410,7 @@ async def test_the_door_reads_a_body_only_as_large_as_the_organisation_takes(
         owner = await session.get(Project, project["id"])
         assert owner is not None
         owner.config = {**owner.config, "a2a": {"max_file_bytes": 10}}
-    body = b" " * (TAILLE_MAX_DU_CORPS + 17)
+    body = b" " * (MAX_BODY_SIZE + 17)
     refused = await client.post(ENDPOINT, content=body, headers=headers)
     assert refused.status_code == 413 and "for this organisation" in refused.text
 
@@ -573,10 +573,10 @@ async def test_the_door_is_rate_limited(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from choregos_api.a2a import door
-    from choregos_api.limiteur import Limiteur
+    from choregos_api.rate_limit import RateLimiter
 
     token = await _ready(client, project)
-    monkeypatch.setattr(door, "RATE_LIMITER", Limiteur(1))
+    monkeypatch.setattr(door, "RATE_LIMITER", RateLimiter(1))
     assert (await _rpc(client, token, "tasks/get", {"id": "x"})).status_code == 200
     limited = await _rpc(client, token, "tasks/get", {"id": "x"})
     assert limited.status_code == 429, limited.text

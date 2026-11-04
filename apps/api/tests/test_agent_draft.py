@@ -176,9 +176,9 @@ async def test_the_org_can_override_the_drafter(
 ) -> None:
     drafter = _script(monkeypatch, {"instructions": "1. Go."})
     await client.post(f"{ORG}/agent-drafts", json=REQUEST)
-    from choregos_core.catalogue_d_agents import entree
+    from choregos_core.agent_catalogue import entry
 
-    assert drafter.instructions == entree("agent-drafter").document["spec"]["instructions"]  # type: ignore[union-attr]
+    assert drafter.instructions == entry("agent-drafter").document["spec"]["instructions"]  # type: ignore[union-attr]
     assert (await client.post(f"{ORG}/agent-catalogue/agent-drafter/install")).status_code == 201
     mine = {"instructions": "Our house drafting rules.", "limits": {"max_turns": 1}}
     published = await client.post(f"{ORG}/agents/agent-drafter/versions", json=mine)

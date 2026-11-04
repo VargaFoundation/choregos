@@ -279,7 +279,7 @@ def supplier(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     yield server
 
 
-async def test_a_granted_read_goes_through_the_courtier_and_anything_else_is_refused(
+async def test_a_granted_read_goes_through_the_broker_and_anything_else_is_refused(
     client: AsyncClient, project: dict[str, Any], voice: Voice, supplier: Any
 ) -> None:
     from .test_agent_sessions import _supplier

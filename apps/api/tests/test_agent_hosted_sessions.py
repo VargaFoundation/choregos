@@ -357,7 +357,7 @@ async def test_a_turn_is_answered_once(
     assert unknown.status_code == 404
 
 
-async def test_the_pods_tool_calls_go_through_the_courtier(
+async def test_the_pods_tool_calls_go_through_the_broker(
     client: AsyncClient,
     project: dict[str, Any],
     upstream: Upstream,  # noqa: F811
@@ -476,7 +476,7 @@ async def test_a_pod_reads_a_structured_content_its_text_does_not_carry_masked(
 
 
 async def test_a_structured_content_the_text_already_serializes_is_not_given_twice() -> None:
-    from choregos_api.services.courtier import session_text
+    from choregos_api.services.broker import session_text
 
     stock = {"quantity": 3}
     same = {"content": [{"type": "text", "text": '{"quantity": 3}'}], "structuredContent": stock}

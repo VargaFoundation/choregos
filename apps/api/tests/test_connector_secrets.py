@@ -115,7 +115,7 @@ async def test_a_replaced_secret_is_the_one_the_vendor_receives(
     assert refused.status_code == 502, refused.text
     assert vendor.recues[-1][1]["authorization"] == f"Bearer {VALUE_2}"
     assert VALUE_2 not in refused.text and VALUE_1 not in refused.text
-    vendor.jeton = VALUE_2
+    vendor.jeton = VALUE_2  # lang: fr-ok - the fake's field keeps its name
     assert (await client.post(f"{ORG}/vendor/discover")).status_code == 200
     audit = await _audit_text()
     assert VALUE_2 not in audit and '"version": 2' in audit
