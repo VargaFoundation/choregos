@@ -127,13 +127,17 @@ async def _start(env: Any, setup: Fixture) -> Any:
     )
 
 
-async def _until(what: str, probe: Any) -> Any:
-    for _ in range(600):
+async def _until(what: str, probe: Any, *, within_s: float = 120.0) -> Any:
+    # A wall-clock deadline, not a count of polls: under a loaded machine (the whole suite and the
+    # console tests at once) the parent's re-read took longer than 600 x 50 ms.
+    deadline = asyncio.get_running_loop().time() + within_s
+    while True:
         value = await probe()
         if value:
             return value
+        if asyncio.get_running_loop().time() > deadline:
+            raise AssertionError(f"{what}: never true within {within_s:.0f} s")
         await asyncio.sleep(0.05)
-    raise AssertionError(f"{what}: never true")
 
 
 async def _items(setup: Fixture) -> dict[str, Any]:
