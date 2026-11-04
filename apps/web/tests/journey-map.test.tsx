@@ -174,3 +174,38 @@ describe("the reader (S22-02)", () => {
     expect(reduce(INITIAL, { type: "play", count: 0 })).toBe(INITIAL);
   });
 });
+
+describe("the replay player is folded until asked for (S55-14)", () => {
+  const fold = () => screen.getByRole("toolbar", { name: "Replay the journey" }).closest("details")!;
+  const summary = () => within(fold()).getByText("Replay this ticket");
+
+  it("sits closed under Replay this ticket; the legend stays in sight", () => {
+    renderMap();
+    expect(fold()).not.toBeNull();
+    expect(fold()).not.toHaveAttribute("open");
+    expect(summary().closest("summary")).not.toBeNull();
+    expect(screen.getByRole("list", { name: "Legend" }).closest("details")).toBeNull();
+    expect(status("t-security-review")).toBe("running");
+  });
+
+  it("opens on demand, and closing it brings the map back to where the ticket stands", async () => {
+    renderMap();
+    fireEvent.click(summary());
+    await waitFor(() => expect(fold()).toHaveAttribute("open"));
+    fireEvent.click(screen.getByRole("button", { name: "Replay the journey" }));
+    expect(screen.getByTestId("journey-moment")).toHaveTextContent("1 / 34");
+    expect(status("t-security-review")).toBe("upcoming");
+    fireEvent.click(summary());
+    await waitFor(() => expect(fold()).not.toHaveAttribute("open"));
+    await waitFor(() => expect(status("t-security-review")).toBe("running"));
+    expect(screen.getByRole("button", { name: "Live: follow the work item" })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("a clicked stage opens the player at the moment it starts", () => {
+    renderMap();
+    const phases = screen.getByRole("navigation", { name: "Stages of the journey" });
+    fireEvent.click(within(phases).getByRole("button", { name: /In progress/ }));
+    expect(fold()).toHaveAttribute("open");
+    expect(status("t-implement")).toBe("running");
+  });
+});

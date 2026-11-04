@@ -8,9 +8,19 @@ import { libelleDeCode, toSentenceCase } from "@/lib/format";
 
 /**
  * The request itself (S55-05): what was asked when the ticket was filed — its text and its fields. The
- * ticket's page never showed it: one had to open the tracker to know what the ticket was about.
+ * ticket's page never showed it: one had to open the tracker to know what the ticket was about. A field
+ * is labelled with the title its workflow gives it (`titles`, from `metadata.inputs`, S55-14), else with
+ * its name, humanised.
  */
-export function RequestCard({ body, fields }: { body?: string | null; fields?: Record<string, unknown> | null }) {
+export function RequestCard({
+  body,
+  fields,
+  titles = {},
+}: {
+  body?: string | null;
+  fields?: Record<string, unknown> | null;
+  titles?: Record<string, string>;
+}) {
   const entries = Object.entries(fields ?? {}).filter(([, value]) => value !== null && value !== undefined && value !== "");
   const text = body?.trim();
   return (
@@ -30,7 +40,7 @@ export function RequestCard({ body, fields }: { body?: string | null; fields?: R
             <dl className="grid grid-cols-[minmax(8rem,auto)_1fr] gap-x-4 gap-y-1.5 text-sm" aria-label="Fields of the request">
               {entries.map(([name, value]) => (
                 <div key={name} className="contents">
-                  <dt className="text-ink-muted">{toSentenceCase(libelleDeCode(name))}</dt>
+                  <dt className="text-ink-muted">{toSentenceCase(titles[name] ?? libelleDeCode(name))}</dt>
                   <dd data-verbatim className="min-w-0 break-words">
                     {fieldValue(value)}
                   </dd>

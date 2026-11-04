@@ -4185,6 +4185,14 @@ stories:
     size: S
     depends_on: [S55-11]
     notes: "ADR 0120 on the organisation's detail and creation pages."
+  - id: S55-14
+    title: "feat(web): finishing the ticket page — the replay player folded, the request's fields titled by their workflow"
+    stream: S55
+    sprint: 3
+    priority: 2
+    size: S
+    depends_on: [S55-05]
+    notes: "Acceptance: the journey's replay player folded behind a Disclosure (Replay this ticket), opened on demand, closing it returns to live; the request card labels a field with its workflow's metadata.inputs title, else its humanised name; no contract change."
   - id: S57-00
     title: "docs(adr): an agent may call its run's tools from a script (ADR 0122)"
     stream: S57

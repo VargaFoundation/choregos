@@ -49,6 +49,22 @@ export function fieldsFromSchema(schema: Record<string, unknown> | undefined): F
   });
 }
 
+/**
+ * The titles a workflow gives its fields in `metadata.inputs`, by field name (S55-14): a ticket's page
+ * labels its request's fields with them. A field without a title is left out — its name, humanised,
+ * stands in.
+ */
+export function fieldTitles(schema: unknown): Record<string, string> {
+  const properties = (schema as { properties?: unknown } | null | undefined)?.properties;
+  if (typeof properties !== "object" || properties === null) return {};
+  const titles: Record<string, string> = {};
+  for (const [name, property] of Object.entries(properties as Record<string, Property | null>)) {
+    const title = property?.title;
+    if (typeof title === "string" && title.trim()) titles[name] = title.trim();
+  }
+  return titles;
+}
+
 /** What was typed, typed as the schema expects; an empty field is not sent. */
 export function valuesForApi(fields: Field[], entries: Record<string, string | boolean>): Record<string, unknown> {
   const values: Record<string, unknown> = {};

@@ -9,10 +9,7 @@ import { api } from "@/lib/api";
  * The validation is the orchestrator's: what the console shows is what will apply.
  */
 export function useWorkflow(slug: string, name: string) {
-  const definition = useQuery({
-    queryKey: ["workflow", slug, name],
-    queryFn: () => api.workflowNamed(slug, name),
-  });
+  const definition = useWorkflowDefinition(slug, name);
   const yaml = definition.data?.yaml;
   const validation = useQuery({
     queryKey: ["workflow-validation", slug, name, definition.data?.version],
@@ -20,4 +17,17 @@ export function useWorkflow(slug: string, name: string) {
     enabled: Boolean(yaml),
   });
   return { definition, validation };
+}
+
+/**
+ * A project's workflow, by its name, without its validation: what a page reads from the document
+ * alone (a ticket's page, its fields' titles, S55-14). Nothing is asked without a name; the cache is
+ * the one `useWorkflow` fills.
+ */
+export function useWorkflowDefinition(slug: string, name: string | null | undefined) {
+  return useQuery({
+    queryKey: ["workflow", slug, name],
+    queryFn: () => api.workflowNamed(slug, name ?? ""),
+    enabled: Boolean(name),
+  });
 }
