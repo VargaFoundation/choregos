@@ -47,7 +47,7 @@ export default function ConnectorCataloguePage() {
         The systems Choregos can reach, by family. Installing one happens in Administration → Installed connectors. An organisation connector is declared once by the administrator and
         turned on for the projects that need it; a project connector is configured in the project&apos;s settings.
         MCP servers have{" "}
-        <Link href="/catalogue/mcp-servers" className="underline">
+        <Link href="/library/mcp-servers" className="underline">
           their own catalogue
         </Link>
         .

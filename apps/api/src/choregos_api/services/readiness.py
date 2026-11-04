@@ -718,7 +718,7 @@ def item_workflow_catalogue(f: Facts) -> list[ReadinessItem]:
     if not f.adopted:
         return []
     title = "Adopted workflows up to date"
-    fix = ReadinessFix(href=f"/p/{f.slug}/workflows/catalogue", by="project_owner")
+    fix = ReadinessFix(href=f"/p/{f.slug}/workflows/library", by="project_owner")
     behind: list[str] = []
     for name, origin, offered in f.adopted:
         parts = parse_origin(origin)

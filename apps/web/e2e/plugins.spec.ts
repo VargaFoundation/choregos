@@ -6,7 +6,7 @@ test("install waits for a second administrator, who approves; a server links to 
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/");
   await page.getByRole("navigation").getByRole("link", { name: "Plugins" }).click();
-  await expect(page).toHaveURL(/\/catalogue\/plugins$/);
+  await expect(page).toHaveURL(/\/library\/plugins$/);
   await expect(page.getByTestId("trust-varga")).toContainText("keyless");
   await expect(page.getByTestId("source-partner")).toContainText("did not answer");
 

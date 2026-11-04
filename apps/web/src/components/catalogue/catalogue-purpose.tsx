@@ -25,7 +25,7 @@ const PURPOSE: Record<
     not:
       "An agent does not call these itself. It hands its results to the workflow, which writes them " +
       "(the triage's size and risk, a finding, a question).",
-    other: { href: "/catalogue/mcp-servers", label: "Tools for agents: MCP servers" },
+    other: { href: "/library/mcp-servers", label: "Tools for agents: MCP servers" },
   },
   "mcp-servers": {
     title: "What it is for: tools your agents call",
@@ -39,7 +39,7 @@ const PURPOSE: Record<
     not:
       "A workflow does not move its ticket through MCP: the platform does that through the connector types, " +
       "with their APIs.",
-    other: { href: "/catalogue/connectors", label: "The platform's own integrations: connector types" },
+    other: { href: "/library/connectors", label: "The platform's own integrations: connector types" },
   },
 };
 

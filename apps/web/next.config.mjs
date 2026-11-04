@@ -57,6 +57,12 @@ const nextConfig = {
       { source: "/approvals", destination: "/inbox", permanent: true },
       // The workflow catalogue is the workflow library (S55-04): the word read as French.
       { source: "/p/:slug/workflows/catalogue", destination: "/p/:slug/workflows/library", permanent: true },
+      // The organisation's catalogues followed (S55-15): MCP servers, connector types, plugins and the
+      // skills one live under `library`; a sub-path and the query (`?q=`) are kept.
+      { source: "/catalogue/:path*", destination: "/library/:path*", permanent: true },
+      { source: "/skills/catalogue/:path*", destination: "/skills/library/:path*", permanent: true },
+      // The administration's path of the MCP catalogue (ADR 0074), a page that only redirected until S55-15.
+      { source: "/admin/connectors/catalogue", destination: "/library/mcp-servers", permanent: true },
       // A workflow opens on its graph (S55-06): the map is the workflow's page, its query (`?view=list`) kept.
       { source: "/p/:slug/workflows/:name/map", destination: "/p/:slug/workflows/:name", permanent: true },
     ];

@@ -195,7 +195,7 @@ describe("the Definition tab", () => {
     expect(href(/Those of the platform/)).toBe("/p/billing-api/settings#tools");
     expect(href(/the project's hosts/)).toBe("/p/billing-api/settings#network");
     expect(href(/Organisation tiers/)).toBe("/admin/models");
-    expect(href(/MCP servers/)).toBe("/catalogue/mcp-servers");
+    expect(href(/MCP servers/)).toBe("/library/mcp-servers");
   });
 
   it("an organisation agent runs in any project: it says the value is set in each project's settings", async () => {

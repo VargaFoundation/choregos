@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import PluginsPage from "@/app/catalogue/plugins/page";
+import PluginsPage from "@/app/library/plugins/page";
 import { ApiError } from "@/lib/api";
 import { isPending, shortDigest, trustLabel } from "@/lib/plugins";
 import type { InstalledPlugin, MeDto, OrgConnector, PluginApproval, PluginSource } from "@/lib/types";
@@ -25,7 +25,7 @@ const { api, session } = vi.hoisted(() => ({
   session: { me: null as MeDto | null },
 }));
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/catalogue/plugins", useRouter: () => ({ push: vi.fn() }) }));
+vi.mock("next/navigation", () => ({ usePathname: () => "/library/plugins", useRouter: () => ({ push: vi.fn() }) }));
 vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme", me: session.me }) }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();

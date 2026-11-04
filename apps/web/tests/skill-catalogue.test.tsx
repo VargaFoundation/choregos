@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import SkillCataloguePage from "@/app/skills/catalogue/page";
+import SkillCataloguePage from "@/app/skills/library/page";
 import { NO_FILTERS, withToggle } from "@/lib/catalogue";
 import { confirmationLines, filterSkillEntries, installAction } from "@/lib/skill-catalogue";
 import type { SkillCatalogue, SkillCatalogueEntry } from "@/lib/types";
@@ -9,7 +9,7 @@ import file from "../src/mocks/skill-catalogue.json";
 
 const { push, install } = vi.hoisted(() => ({ push: vi.fn(), install: vi.fn() }));
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/skills/catalogue", useRouter: () => ({ push }) }));
+vi.mock("next/navigation", () => ({ usePathname: () => "/skills/library", useRouter: () => ({ push }) }));
 vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme" }) }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();

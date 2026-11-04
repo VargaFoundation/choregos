@@ -1,14 +1,14 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import ConnectorCataloguePage from "@/app/catalogue/connectors/page";
+import ConnectorCataloguePage from "@/app/library/connectors/page";
 import { NO_FILTERS, withToggle } from "@/lib/catalogue";
 import { filterConnectorEntries } from "@/lib/connector-catalogue";
 import type { ConnectorCatalogue, ConnectorCatalogueEntry } from "@/lib/types";
 
 const { state } = vi.hoisted(() => ({ state: { catalogue: null as unknown } }));
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/catalogue/connectors" }));
+vi.mock("next/navigation", () => ({ usePathname: () => "/library/connectors" }));
 vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme" }) }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
@@ -67,7 +67,7 @@ describe("the connector catalogue page (ADR 0074)", () => {
     const purpose = await screen.findByRole("complementary", { name: /the platform's own integrations/ });
     expect(purpose).toHaveTextContent("Choregos calls these systems through their APIs");
     expect(purpose).toHaveTextContent("never under the person who started the workflow");
-    expect(within(purpose).getByRole("link", { name: /MCP servers/ })).toHaveAttribute("href", "/catalogue/mcp-servers");
+    expect(within(purpose).getByRole("link", { name: /MCP servers/ })).toHaveAttribute("href", "/library/mcp-servers");
   });
 
   it("groups the cards by family, in the server's order, each with its icon and a scope badge", async () => {

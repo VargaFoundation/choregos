@@ -28,12 +28,12 @@ describe("the header of an organisation's page (S55-11)", () => {
   it.each([
     ["/", "Projects", GROUP_HUES.work],
     ["/agents", "Agents", GROUP_HUES.define],
-    ["/skills/catalogue", "Skills", GROUP_HUES.define],
+    ["/skills/library", "Skills", GROUP_HUES.define],
     ["/knowledge", "Knowledge", GROUP_HUES.define],
     ["/memories", "Memories", GROUP_HUES.define],
-    ["/catalogue/mcp-servers", "MCP servers", GROUP_HUES.define],
-    ["/catalogue/connectors", "Connector types", GROUP_HUES.define],
-    ["/catalogue/plugins", "Plugins", GROUP_HUES.define],
+    ["/library/mcp-servers", "MCP servers", GROUP_HUES.define],
+    ["/library/connectors", "Connector types", GROUP_HUES.define],
+    ["/library/plugins", "Plugins", GROUP_HUES.define],
     ["/integrations", "Integrations", GROUP_HUES.configure],
     ["/costs", "Spend", GROUP_HUES.configure],
   ])("%s is titled %s, on the hue of its family", (pathname, label, hue) => {

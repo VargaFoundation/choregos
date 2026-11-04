@@ -103,6 +103,16 @@ describe("the workflow catalogue (S49-08, ADR 0111)", () => {
     await waitFor(() => expect(push).toHaveBeenCalledWith("/p/f4f/workflows/requests?view=list"));
   });
 
+  it("does not adopt under the name of a console page (S55-15)", async () => {
+    repo = undefined;
+    await show();
+    const list = await screen.findByRole("list", { name: "Workflow library" });
+    fireEvent.click(await within(list).findByRole("button", { name: "Adopt default-request" }));
+    fireEvent.change(screen.getByLabelText("Name in this project"), { target: { value: "library" } });
+    expect(screen.getByText(/library is reserved: the console has a page at that address/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Adopt as library" })).toBeDisabled();
+  });
+
   it("with a repository, lists every workflow", async () => {
     repo = { url: "https://github.com/acme/f4f.git" };
     await show();

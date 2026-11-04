@@ -40,7 +40,7 @@ export default function SkillCataloguePage() {
     <div className="space-y-6">
       <div className="space-y-2">
         <OrgPageHeader title="Skills" eyebrow="What agents know how to do" />
-        <SkillTabs active="catalogue" />
+        <SkillTabs active="library" />
       </div>
       <p className="max-w-3xl text-sm text-ink-muted">
         Default skills from public repositories, each pinned to a commit and under an open licence. Installing one adds

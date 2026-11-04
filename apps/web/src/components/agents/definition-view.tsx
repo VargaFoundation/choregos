@@ -245,7 +245,7 @@ export function ProjectSetting({
 export function AgentMcpServers({ servers, agent }: { servers: NonNullable<AgentSpec["mcp_servers"]>; agent?: Pick<Agent, "scope" | "project"> }) {
   if (servers.length === 0)
     return (
-      <ProjectSetting agent={agent} section="tools" organisation={{ href: "/catalogue/mcp-servers", label: "MCP servers" }}>
+      <ProjectSetting agent={agent} section="tools" organisation={{ href: "/library/mcp-servers", label: "MCP servers" }}>
         Those of the platform (or of its human)
       </ProjectSetting>
     );

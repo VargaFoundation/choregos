@@ -18,8 +18,7 @@ import {
 } from "@/components/workflows/catalogue";
 import { ApiError, api } from "@/lib/api";
 import type { ConnectorDto, WorkflowCatalogueEntry } from "@/lib/types";
-
-const NAME = /^[a-z][a-z0-9-]{0,62}$/;
+import { workflowNameError } from "@/lib/workflow-name";
 
 /**
  * The workflow library (ADR 0111; "catalogue" until S55-04, a word read as French): what this project can adopt — the platform's workflows, the
@@ -178,7 +177,8 @@ function AdoptForm({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const preview = readinessPreview(entry, connectors);
-  const valid = NAME.test(name);
+  const nameError = workflowNameError(name);
+  const valid = nameError === undefined;
 
   async function adopt() {
     setBusy(true);
@@ -215,7 +215,7 @@ function AdoptForm({
           </li>
         ))}
       </ul>
-      <Field label="Name in this project" error={name && !valid ? "Lowercase letters, digits and dashes only" : undefined}>
+      <Field label="Name in this project" error={name ? nameError : undefined}>
         {(p) => <Input {...p} value={name} onChange={(e) => setName(e.target.value)} />}
       </Field>
       <label className="flex items-center gap-2">

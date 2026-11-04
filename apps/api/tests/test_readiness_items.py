@@ -480,6 +480,6 @@ def test_an_adopted_workflow_behind_its_catalogue_entry_is_to_check() -> None:
     assert current.state == "done"
     (behind,) = item_workflow_catalogue(facts(adopted=(("requests", "core/default-request@1", 2),)))
     assert behind.state == "check" and "version 2 is offered" in behind.detail
-    assert behind.fix.href == "/p/dev/workflows/catalogue"
+    assert behind.fix.href == "/p/dev/workflows/library"
     (gone,) = item_workflow_catalogue(facts(adopted=(("ghostly", "org/ghostly@1", None),)))
     assert gone.state == "check" and "no longer offers" in gone.detail

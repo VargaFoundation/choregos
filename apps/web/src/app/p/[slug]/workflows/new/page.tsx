@@ -8,8 +8,7 @@ import { use, useState } from "react";
 import { Button, Card, ErrorNote, Field, Input, Select } from "@/components/ui";
 import { rename } from "@/components/workflows/rename";
 import { ApiError, api } from "@/lib/api";
-
-const NAME_PATTERN = /^[a-z][a-z0-9-]{0,62}$/;
+import { workflowNameError } from "@/lib/workflow-name";
 
 /**
  * One more workflow in the project, from a template: it is born active, next to the others, and
@@ -48,7 +47,8 @@ export default function NewWorkflowPage({
     queryKey: ["workflows", slug],
     queryFn: () => api.workflows(slug),
   });
-  const validName = NAME_PATTERN.test(nom);
+  const nameError = workflowNameError(nom);
+  const validName = nameError === undefined;
   const pris = existants.data?.some((w) => w.name === nom) ?? false;
 
   async function publish() {
@@ -86,7 +86,7 @@ export default function NewWorkflowPage({
           }
           error={
             nom && !validName
-              ? "Lowercase letters, digits and dashes only"
+              ? nameError
               : pris
                 ? `A workflow named ${nom} already exists — publishing would replace its active version`
                 : undefined

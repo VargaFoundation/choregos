@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import McpCataloguePage from "@/app/catalogue/mcp-servers/page";
+import McpCataloguePage from "@/app/library/mcp-servers/page";
 import { categoriesOf, matchesText, NO_FILTERS, stars, withToggle } from "@/lib/catalogue";
 import { filterMcpEntries, whyNotInstallable } from "@/lib/mcp-catalogue";
 import type { McpCatalogue, McpCatalogueEntry } from "@/lib/types";
@@ -17,7 +17,7 @@ const { push, install, discover, enable, disable, overrides } = vi.hoisted(() =>
   overrides: new Map<string, Record<string, unknown>>(),
 }));
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/catalogue/mcp-servers", useRouter: () => ({ push }) }));
+vi.mock("next/navigation", () => ({ usePathname: () => "/library/mcp-servers", useRouter: () => ({ push }) }));
 vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme" }) }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
@@ -97,7 +97,7 @@ describe("the catalogue page", () => {
     const purpose = await screen.findByRole("complementary", { name: /tools your agents call/ });
     expect(purpose).toHaveTextContent("never hands it to the agent");
     expect(purpose).toHaveTextContent("A workflow does not move its ticket through MCP");
-    expect(within(purpose).getByRole("link", { name: /connector types/ })).toHaveAttribute("href", "/catalogue/connectors");
+    expect(within(purpose).getByRole("link", { name: /connector types/ })).toHaveAttribute("href", "/library/connectors");
   });
 
   it("lists the entries, each with its badges, and the facets narrow them", async () => {
