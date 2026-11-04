@@ -16,7 +16,7 @@ the order ever changed, would silently replace a core route, an authentication r
 replacement is not an addition; it is asked for through a named seam, like the group mapper.
 
 The French names this module had before 0.21 (`greffons.py`, `declarer_un_routeur`...) keep working
-until 0.22.0 and warn (ADR 0098 §3 (f)); `docs/development.md` lists them.
+until 0.23.0 and warn (ADR 0098 §3 (f)); `docs/development.md` lists them.
 """
 
 from __future__ import annotations
@@ -189,7 +189,7 @@ class ToolProvider:
     the agent reads, as a catalogue entry declares it (S40-17b); the agent is never shown it.
 
     The keywords `lister` and `appeler` are the former names of `list_tools` and `call_tool`: they
-    keep working until 0.22.0 and warn."""
+    keep working until 0.23.0 and warn."""
 
     list_tools: Any
     call_tool: Any
@@ -279,7 +279,7 @@ class HumanToolProvider:
     An extension's tool never takes the name of a core tool: the gate would discard it.
 
     The keywords `lister`, `appeler` and `en_attente` are the former names of `list_tools`,
-    `call_tool` and `pending`: they keep working until 0.22.0 and warn.
+    `call_tool` and `pending`: they keep working until 0.23.0 and warn.
     """
 
     list_tools: Any
@@ -441,7 +441,7 @@ _FORMER_NATURES = {"interdit": "forbidden", "conflit": "conflict"}  # lang: fr-o
 class GestureRefused(Exception):  # noqa: N818 - a decision, not an error
     """`nature` picks the answer: `forbidden` (403), `conflict` (409), `reauth` (401: sign in again
     with `GET /api/v1/auth/login?reauth=1`, then the gesture). `interdit` and `conflit` are the former
-    names of the first two: they keep working until 0.22.0 and warn."""
+    names of the first two: they keep working until 0.23.0 and warn."""
 
     def __init__(self, reason: str, nature: str = "forbidden") -> None:
         if nature in _FORMER_NATURES:
@@ -527,7 +527,7 @@ def theme_provider() -> Any | None:
     return _THEME_PROVIDER[0] if _THEME_PROVIDER else None
 
 
-# ───────────────────────────── the former names (removed in 0.22.0) ─────────────────────────────
+# ───────────────────────────── the former names (removed in 0.23.0) ─────────────────────────────
 
 _FORMER = {
     "declarer_un_routeur": "declare_router",  # lang: fr-ok alias:external

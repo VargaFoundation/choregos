@@ -17,7 +17,7 @@ and the access control is the `imagePullSecret`. A key signed offline will be th
 customer hosts it themselves (ADR 0024, decision 5).
 
 This module is the extension API of the edition (an entry-point package of the `choregos.plugins`
-group is an *extension*). Its French names of before 0.21 keep working until 0.22.0 and warn
+group is an *extension*). Its French names of before 0.21 keep working until 0.23.0 and warn
 (ADR 0098 §3 (f)).
 """
 
@@ -230,7 +230,7 @@ def reset() -> None:
     tenant_sign_in.reset()
 
 
-# ───────────────────────────── the former names (removed in 0.22.0) ─────────────────────────────
+# ───────────────────────────── the former names (removed in 0.23.0) ─────────────────────────────
 
 _FORMER = {
     "COMMUNAUTAIRE": "COMMUNITY",  # lang: fr-ok alias:external

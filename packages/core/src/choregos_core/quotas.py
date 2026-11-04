@@ -12,7 +12,7 @@ is written in the GitOps repository: it takes effect at the project's NEXT provi
 retroactively.
 
 The French names this module had before 0.21 (`declarer_un_quota`, `Quota(memoire=...)`...) keep
-working until 0.22.0 and warn (ADR 0098 §3 (f)).
+working until 0.23.0 and warn (ADR 0098 §3 (f)).
 """
 
 from __future__ import annotations

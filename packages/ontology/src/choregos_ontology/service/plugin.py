@@ -7,7 +7,7 @@
     choregos-ontology = "choregos_ontology.service.plugin:MIGRATIONS"
 
 **The plugin ships inactive.** It turns on only with `CHOREGOS_ONTOLOGY_TRIAL=1` (the former name,
-`CHOREGOS_ESSAI_ONTOLOGIE`, works until 0.22.0 and logs a deprecation warning; in the chart:
+`CHOREGOS_ESSAI_ONTOLOGIE`, works until 0.23.0 and logs a deprecation warning; in the chart:
 `global.extraEnv`, which gives it to the API, the workers and the migration Job). Inactive, `register()`
 declares nothing and `MIGRATIONS` names a directory without any revision: an installation that did not
 ask for it serves none of its routes, announces none of its tools, and has none of its tables. This is
@@ -25,7 +25,7 @@ NAME = "choregos-ontology"
 INSTALLER = "ontology"
 #: The switch (ADR 0098 §3 (f)).
 ACTIVATION = "CHOREGOS_ONTOLOGY_TRIAL"
-#: The switch as deployments set it until 0.21: still honoured until 0.22.0, with a warning.
+#: The switch as deployments set it until 0.21: still honoured until 0.23.0, with a warning.
 FORMER_ACTIVATION = "CHOREGOS_ESSAI_ONTOLOGIE"  # lang: fr-ok alias:external
 _TRUE = {"1", "true", "yes"}
 _log = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ def active() -> bool:
         if not _warned:
             _warned.append(True)
             _log.warning(
-                "%s is deprecated: set %s instead (the former name is removed in 0.22.0)",
+                "%s is deprecated: set %s instead (the former name is removed in 0.23.0)",
                 FORMER_ACTIVATION,
                 ACTIVATION,
             )

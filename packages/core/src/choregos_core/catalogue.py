@@ -24,7 +24,7 @@ Not a directory of thousands of tools. A catalogue is a **short, chosen** list, 
 deploys, reviewed like code. The day one wants the breadth of a public directory, a catalogue tool
 leads there, not a dependency of the platform.
 
-The operators' YAML key is `tools:`; the former `outils:` is still read until 0.22.0 (ADR 0098 §3 (f)).
+The operators' YAML key is `tools:`; the former `outils:` is still read until 0.23.0 (ADR 0098 §3 (f)).
 """
 
 from __future__ import annotations
@@ -145,7 +145,7 @@ class CatalogueTool(Model):
 class Catalogue(Model):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    #: The YAML key is `tools:`; the former `outils:` is read until 0.22.0 (ADR 0098 §3 (f)).
+    #: The YAML key is `tools:`; the former `outils:` is read until 0.23.0 (ADR 0098 §3 (f)).
     tools: list[CatalogueTool] = Field(
         default_factory=list,
         validation_alias=AliasChoices("tools", "outils"),  # lang: fr-ok alias:external
@@ -161,7 +161,7 @@ class Catalogue(Model):
                 _former_key_warned.add("outils")  # lang: fr-ok alias:external
                 _logger.warning(
                     "the catalogue key `outils:` is deprecated: write `tools:` "  # lang: fr-ok alias:external
-                    "(the former key is removed in 0.22.0)"
+                    "(the former key is removed in 0.23.0)"
                 )
         return data
 

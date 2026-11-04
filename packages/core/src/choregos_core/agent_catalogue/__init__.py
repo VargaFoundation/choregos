@@ -284,7 +284,7 @@ __all__ = [
     "skill_files",
 ]
 
-# ───────────────────── the former names (removed in 0.22.0, ADR 0098 §3) ─────────────────────
+# ───────────────────── the former names (removed in 0.23.0, ADR 0098 §3) ─────────────────────
 # The typed assignments are for mypy and readers; `alias_names` makes a read, a patch and its undo
 # of a former name reach the English one.
 

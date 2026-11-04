@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The extension API in English, and the French names it had before 0.21 (S45-04, ADR 0098 §3).
 
-Every former name keeps resolving to the English object until 0.22.0 and warns. The pairs below
+Every former name keeps resolving to the English object until 0.23.0 and warns. The pairs below
 are the public rename table of `docs/development.md` ("Former names"); the lines that hold a former
 name carry the alias marker.
 """
@@ -114,7 +114,7 @@ def test_every_former_extension_name_is_the_english_object(
 ) -> None:
     former = importlib.import_module(former_module)
     current = importlib.import_module(module)
-    with pytest.warns(DeprecationWarning, match="removed in 0.22.0"):
+    with pytest.warns(DeprecationWarning, match="removed in 0.23.0"):
         found = getattr(former, old)
     assert found is getattr(current, new)
 

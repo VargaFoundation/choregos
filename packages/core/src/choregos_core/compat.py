@@ -46,7 +46,9 @@ from collections.abc import Mapping
 from types import ModuleType
 from typing import cast
 
-EXTERNAL_ALIAS_REMOVAL = "0.22.0"
+# The window moved from 0.22.0 because 0.22.x shipped before the renames finished
+# (owner decision, 2026-11-04).
+EXTERNAL_ALIAS_REMOVAL = "0.23.0"
 """The release that removes the external former names (`alias:external`, ADR 0098 §3 (f))."""
 
 _MARKER = "__choregos_aliases__"

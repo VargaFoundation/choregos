@@ -3,7 +3,7 @@
 
     python -m choregos_core.agent_catalogue.evals --all
 
-The former `python -m choregos_core.catalogue_d_agents.evals` works until 0.22.0 (ADR 0098).
+The former `python -m choregos_core.catalogue_d_agents.evals` works until 0.23.0 (ADR 0098).
 
 The playbook evals (`choregos_playbooks.evals`) check the rendering of a ROLE; the catalogue's agents
 carry their own instructions, which nothing checked. One case per internal agent, in its plugin's

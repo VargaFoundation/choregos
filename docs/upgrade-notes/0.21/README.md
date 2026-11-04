@@ -10,13 +10,13 @@ table:
 ```markdown
 | Former | New | What an operator does |
 | :-- | :-- | :-- |
-| `CHOREGOS_OLD_NAME` | `CHOREGOS_NEW_NAME` | Rename it in your values or `.env`; the former one still works until 0.22.0 and warns. |
+| `CHOREGOS_OLD_NAME` | `CHOREGOS_NEW_NAME` | Rename it in your values or `.env`; the former one still works until 0.23.0 and warns. |
 ```
 
 - A row that holds French ends with `<!-- lang: fr-ok -->`, so that `tools/check_english.py` leaves
   the line alone: the former name is French on purpose, it is what the operator has today.
 - "What an operator does" says one of three things: nothing (an internal name, an alias keeps
-  working), "rename it before 0.22.0" (an external name under an `alias:external` window,
+  working), "rename it before 0.23.0" (an external name under an `alias:external` window,
   ADR 0098 §3 (f)), or what to change by hand (a file moved, a key renamed with no alias).
 - A name recorded in a Temporal history or persisted in a row is not listed as renamed: it is read
   under both names and never rewritten (ADR 0098 §4).

@@ -87,7 +87,7 @@ async def test_demo_token_reads_english_and_former_variable(
     monkeypatch.delenv("CONNECTOR_DEMO_JETON", raising=False)  # lang: fr-ok
     monkeypatch.setenv(variable, TOKEN)
     expected = (
-        pytest.warns(DeprecationWarning, match="removed in 0.22.0")
+        pytest.warns(DeprecationWarning, match="removed in 0.23.0")
         if variable.endswith("JETON")
         else nullcontext()
     )

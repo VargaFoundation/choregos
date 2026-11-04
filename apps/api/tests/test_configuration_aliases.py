@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The former entry points of the API keep working until 0.22.0 (S45-05, ADR 0098 §3 (f))."""
+"""The former entry points of the API keep working until 0.23.0 (S45-05, ADR 0098 §3 (f))."""
 
 from __future__ import annotations
 
