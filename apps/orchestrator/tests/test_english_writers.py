@@ -7,6 +7,7 @@ still read; what is written from now on is English.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from types import SimpleNamespace
 from typing import Any
@@ -135,10 +136,17 @@ async def test_proposed_action_refusal_is_english(
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
-    async with session_scope() as session:
-        rows = (
-            await session.execute(select(Event).where(Event.work_item_id == setup.work_item_id))
-        ).scalars()
-        reasons = [str((e.payload or {}).get("reason")) for e in rows]
+    # The event is written by an activity that may end after the state query saw `to_review` (on
+    # PostgreSQL the read came back empty once, run 41882317486): read until it is there, ten seconds at most.
+    reasons: list[str] = []
+    for _ in range(100):
+        async with session_scope() as session:
+            rows = (
+                await session.execute(select(Event).where(Event.work_item_id == setup.work_item_id))
+            ).scalars()
+            reasons = [str((e.payload or {}).get("reason")) for e in rows]
+        if reasons:
+            break
+        await asyncio.sleep(0.1)
     assert reasons == ["failing gates: action_succeeded"], reasons
     assert done_effects == []
