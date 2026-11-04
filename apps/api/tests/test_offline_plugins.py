@@ -217,7 +217,7 @@ async def test_an_installed_version_replaces_the_offline_one_in_the_catalogue(
 
     from choregos_api.db.models import Organization
     from choregos_api.db.session import session_scope
-    from choregos_api.services.catalogue_d_agents import catalogue_of
+    from choregos_api.services.agent_catalogue import catalogue_of
 
     # The deployment's directory no longer holds it: the organisation's catalogue still does.
     deployment([], tmp_path / "empty")

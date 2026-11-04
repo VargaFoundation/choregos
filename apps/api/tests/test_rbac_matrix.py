@@ -1,9 +1,9 @@
-"""La matrice RBAC, générée : cinq rôles × les routes qui portent une permission.
+"""The RBAC matrix, generated: five roles x the routes that carry a permission.
 
-Un seul test couvrait 18 permissions × 5 rôles × ~60 routes (état des lieux du
-2026-09-24). Ici l'attendu n'est pas écrit à la main : il se DÉDUIT de `ROLE_PERMISSIONS`
-et de la permission que chaque route déclare. Une route qui changerait de permission, ou
-un rôle qui en gagnerait une, se voit ici — dans les deux sens.
+A single test covered 18 permissions x 5 roles x ~60 routes (state of play of 2026-09-24). Here
+the expectation is not written by hand: it is DEDUCED from `ROLE_PERMISSIONS` and from the
+permission each route declares. A route that changed permission, or a role that gained one, shows
+up here, in both directions.
 """
 
 from __future__ import annotations
@@ -20,9 +20,9 @@ ROLES = [Role.VIEWER, Role.DEVELOPER, Role.RELEASE_CAPTAIN, Role.PROJECT_OWNER, 
 
 
 def _routes(project_id: str, workflow_yaml: str, policy_yaml: str) -> list[tuple[str, str, str, Any]]:
-    """(permission attendue, méthode, chemin, corps VALIDE).
+    """(expected permission, method, path, VALID body).
 
-    Un corps invalide ferait un 422 avant le RBAC : chaque corps est valide.
+    An invalid body would give a 422 before the RBAC: every body is valid.
     """
     return [
         ("project:read", "GET", f"/api/v1/projects/{project_id}", None),
@@ -91,7 +91,7 @@ def _routes(project_id: str, workflow_yaml: str, policy_yaml: str) -> list[tuple
     ]
 
 
-async def _membre(email: str, role: Role) -> None:
+async def _member(email: str, role: Role) -> None:
     from choregos_api.db.models import Membership, Organization, User
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
@@ -115,40 +115,38 @@ async def _membre(email: str, role: Role) -> None:
 
 
 @pytest.mark.parametrize("role", ROLES, ids=[str(r) for r in ROLES])
-async def test_chaque_role_obtient_exactement_ses_permissions(
+async def test_each_role_gets_exactly_its_permissions(
     client: AsyncClient, project: dict[str, Any], role: Role, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from choregos_api.config import reset_settings_cache
     from choregos_api.rbac import ROLE_PERMISSIONS, Permission
 
-    # le dev-login ne doit pas rétrograder ni promouvoir : on pose le rôle en base, puis on
-    # se connecte comme ce membre (aucun admin de dev, donc `developers` par défaut ignoré)
+    # the dev sign-in must neither demote nor promote: the role is set in the database, then we
+    # sign in as that member (no dev admin, so the default `developers` is ignored)
     monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "admin@varga.dev")
     reset_settings_cache()
     workflow_yaml = (await client.get(f"/api/v1/projects/{project['id']}/workflow")).json()["yaml"]
     policy_yaml = (await client.get(f"/api/v1/projects/{project['id']}/policy")).json()["yaml"]
-    # tracker interne : sinon `POST /work-items` répond 409 pour tout le monde, avant ou après le RBAC
+    # internal tracker: otherwise `POST /work-items` answers 409 to everyone, before or after the RBAC
     await client.put(
         f"/api/v1/projects/{project['id']}/connectors/tracker", json={"type": "internal", "config": {}}
     )
 
     email = f"{role}@varga.dev"
-    await _membre(email, role)
+    await _member(email, role)
     async with AsyncClient(transport=ASGITransport(app=client._transport.app), base_url="http://test") as c:  # type: ignore[attr-defined]
         await login(c, email)
         me = (await c.get("/api/v1/me")).json()
-        assert {m["role"] for m in me["memberships"]} == {str(role)}, "le dev-login a touché au rôle"
-        ecarts: list[str] = []
-        for permission, methode, chemin, corps in _routes(project["id"], workflow_yaml, policy_yaml):
-            attendu = Permission(permission) in ROLE_PERMISSIONS[role]
-            reponse = await c.request(methode, chemin, json=corps)
-            refuse = reponse.status_code == 403
-            if refuse == attendu:
-                ecarts.append(
-                    f"{methode} {chemin} → {reponse.status_code} (attendu {'autorisé' if attendu else '403'})"
+        assert {m["role"] for m in me["memberships"]} == {str(role)}, "the dev sign-in touched the role"
+        gaps: list[str] = []
+        for permission, method, path, body in _routes(project["id"], workflow_yaml, policy_yaml):
+            expected = Permission(permission) in ROLE_PERMISSIONS[role]
+            response = await c.request(method, path, json=body)
+            refused = response.status_code == 403
+            if refused == expected:
+                gaps.append(
+                    f"{method} {path} -> {response.status_code} (expected {'allowed' if expected else '403'})"
                 )
-            assert reponse.status_code != 422, (
-                f"corps invalide pour {methode} {chemin} : {reponse.text[:200]}"
-            )
-        assert not ecarts, "\n".join(ecarts)
+            assert response.status_code != 422, f"invalid body for {method} {path}: {response.text[:200]}"
+        assert not gaps, "\n".join(gaps)
     reset_settings_cache()

@@ -33,11 +33,11 @@ def memory(monkeypatch: pytest.MonkeyPatch) -> FakeMemory:
 
 @pytest.fixture
 async def platform_admin(admin: str) -> Any:
-    from choregos_api.edition import reinitialiser
+    from choregos_api.edition import reset
 
     await declare_administrator({"admin@varga.dev"})
     yield
-    reinitialiser()
+    reset()
 
 
 def test_the_key_is_the_slug_until_a_rename_pins_it() -> None:

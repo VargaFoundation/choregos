@@ -135,7 +135,7 @@ starts.
 
 ### Row-level security on a real PostgreSQL
 
-`apps/api/tests/test_rls_postgres.py` and `test_evenements_postgres.py` only run against
+`apps/api/tests/test_rls_postgres.py` and `test_events_postgres.py` only run against
 PostgreSQL — SQLite has no RLS, and that is how the policy stayed fail-open for a week
 without a test noticing. CI starts a PostgreSQL service; locally:
 
@@ -143,7 +143,7 @@ without a test noticing. CI starts a PostgreSQL service; locally:
 docker run -d --name choregos-test-pg -p 55433:5432 \
   -e POSTGRES_USER=choregos -e POSTGRES_PASSWORD=choregos -e POSTGRES_DB=choregos_test postgres:16-alpine
 CHOREGOS_TEST_DATABASE_URL=postgresql+asyncpg://choregos:choregos@127.0.0.1:55433/choregos_test \
-  uv run pytest apps/api/tests/test_rls_postgres.py apps/api/tests/test_evenements_postgres.py -q
+  uv run pytest apps/api/tests/test_rls_postgres.py apps/api/tests/test_events_postgres.py -q
 ```
 
 The test migrates the schema with Alembic, then drops it: do not point it at a database that
@@ -295,7 +295,7 @@ same path) **stops start-up**, naming it: Starlette serves the first match, so t
 silently ignored — or, if the order ever changed, would silently replace a core route, an
 authentication route included. Nested routers are refused for the same reason: FastAPI exposes them
 only through a private object, and a route nobody can see is a route nobody can check.
-`apps/api/tests/test_greffons_routes.py` proves both with an extension installed for real.
+`apps/api/tests/test_extension_routes.py` proves both with an extension installed for real.
 
 An extension that serves administration routes gives them **screens without shipping code to the
 console** ([ADR 0032](adr/0032-admin-sections-by-manifest.md)): it declares each
@@ -454,7 +454,7 @@ Its revisions form a **branch** in the same `alembic_version` table: the first o
 creates **its** tables and may point foreign keys at the core's; it never alters a core table —
 two owners for one table is how the next core migration breaks. A declared directory that does not
 exist stops the command: an extension whose schema silently did not run gives a platform that starts
-and fails at the first request touching its tables. `apps/api/tests/test_migrer.py` proves all of
+and fails at the first request touching its tables. `apps/api/tests/test_migrate.py` proves all of
 it with an extension installed for real.
 
 The Job connects as the API's own role, never the database's administrator, so a migration runs

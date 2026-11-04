@@ -65,9 +65,9 @@ async def _run(
     from choregos_api.db.models import Run, WorkItem
     from choregos_api.db.session import session_scope
     from choregos_api.security import mint_run_token
-    from choregos_core.catalogue_d_agents import entree
+    from choregos_core.agent_catalogue import entry
 
-    netops = entree("netops")
+    netops = entry("netops")
     assert netops is not None
     document = netops.document
     if connector:
@@ -192,15 +192,15 @@ async def _call_as_effect(action_id: str) -> dict[str, Any]:
     """What the `ActionWorkflow` does with the action's first effect — here, without Temporal."""
     from choregos_api.db.models import Action, Project
     from choregos_api.db.session import session_scope
-    from choregos_api.effets import ContexteEffet, effet
+    from choregos_api.effects import EffectContext, effect
 
     async with session_scope() as session:
         action = await session.get(Action, action_id)
         assert action is not None
         project = await session.get(Project, action.project_id)
         assert project is not None
-        result: dict[str, Any] = await effet("connector.call")(
-            ContexteEffet(session, action, project), dict(action.effects[0]["with"])
+        result: dict[str, Any] = await effect("connector.call")(
+            EffectContext(session, action, project), dict(action.effects[0]["with"])
         )
         return result
 
@@ -258,7 +258,7 @@ async def test_a_pfsense_write_is_approved_by_a_person_always(
 async def test_an_unapproved_pfsense_write_is_refused_and_carries_its_compensation(
     client: AsyncClient, project: dict[str, Any], estate: dict[str, Any]
 ) -> None:
-    from choregos_api.effets import EffetRefuse
+    from choregos_api.effects import EffectRefused
 
     await _declare(client)
     base, headers = await _run(client, project)
@@ -277,7 +277,7 @@ async def test_an_unapproved_pfsense_write_is_refused_and_carries_its_compensati
         "arguments": {"snapshot": "{{ result.snapshot }}"},
     }, "the broker attaches what the type declares undoes it"
 
-    with pytest.raises(EffetRefuse, match="not approved"):
+    with pytest.raises(EffectRefused, match="not approved"):
         await _call_as_effect(action_id)
     assert estate["pfsense"].writes == 0 and estate["pfsense"].state() == before
 
@@ -300,7 +300,7 @@ async def test_a_cilium_policy_change_is_a_pull_request_that_rides_the_work_item
 ) -> None:
     from choregos_adapters.fakes import FakeScm
     from choregos_adapters.tracker.github_events import parse_github_event
-    from choregos_api.effets import EffetRefuse
+    from choregos_api.effects import EffectRefused
 
     scm = FakeScm()
     estate["scm"] = scm
@@ -319,7 +319,7 @@ async def test_a_cilium_policy_change_is_a_pull_request_that_rides_the_work_item
     )
     assert proposed.json()["status_code"] == 202, proposed.text
     action_id = proposed.json()["result"]["action"]
-    with pytest.raises(EffetRefuse, match="not approved"):
+    with pytest.raises(EffectRefused, match="not approved"):
         await _call_as_effect(action_id)
     assert scm.prs == {}
 
@@ -346,7 +346,7 @@ async def test_a_proposal_that_is_not_one_cilium_policy_or_leaves_its_root_is_re
     client: AsyncClient, project: dict[str, Any], estate: dict[str, Any]
 ) -> None:
     from choregos_adapters.fakes import FakeScm
-    from choregos_api.effets import EffetRefuse
+    from choregos_api.effects import EffectRefused
 
     estate["scm"] = FakeScm()
     await _declare(client)
@@ -363,7 +363,7 @@ async def test_a_proposal_that_is_not_one_cilium_policy_or_leaves_its_root_is_re
         )
         action_id = proposed.json()["result"]["action"]
         await _approve(action_id)
-        with pytest.raises(EffetRefuse, match=refusal):
+        with pytest.raises(EffectRefused, match=refusal):
             await _call_as_effect(action_id)
     assert estate["scm"].prs == {}
 

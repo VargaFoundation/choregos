@@ -1,4 +1,4 @@
-"""Rapport A/B de la mémoire : elle doit payer, et on refuse de conclure trop vite (S10-06)."""
+"""Memory A/B report: it must pay off, and we refuse to conclude too fast (S10-06)."""
 
 from __future__ import annotations
 
@@ -35,7 +35,7 @@ async def _project(client: AsyncClient, slug: str, *, memory: bool) -> str:
 
 
 async def _tickets(project_id: str, *, count: int, attempts: int, cost: float) -> None:
-    """`count` tickets fermés, chacun avec son implémentation en `attempts` tentative(s)."""
+    """`count` closed work items, each with its implementation in `attempts` attempt(s)."""
     from choregos_api.db.models import Run, WorkItem
     from choregos_api.db.session import session_scope
     from choregos_core import utcnow
@@ -45,7 +45,7 @@ async def _tickets(project_id: str, *, count: int, attempts: int, cost: float) -
             item = WorkItem(
                 project_id=project_id,
                 tracker_key=f"varga/x#{index}",
-                title=f"ticket {index}",
+                title=f"work item {index}",
                 state="deployed_prod",
                 closed_at=utcnow() - timedelta(days=3),
             )
@@ -64,7 +64,7 @@ async def _tickets(project_id: str, *, count: int, attempts: int, cost: float) -
                 )
 
 
-async def test_sans_assez_de_tickets_le_rapport_refuse_de_conclure(
+async def test_without_enough_work_items_the_report_refuses_to_conclude(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     await _tickets(project["id"], count=2, attempts=1, cost=1.0)
@@ -73,31 +73,29 @@ async def test_sans_assez_de_tickets_le_rapport_refuse_de_conclure(
     assert "10 are needed on each side" in report["detail"]
 
 
-async def test_la_memoire_paie_quand_elle_ameliore_le_premier_passage(
-    client: AsyncClient, admin: str
-) -> None:
-    avec = await _project(client, "avec-memoire", memory=True)
-    sans = await _project(client, "sans-memoire", memory=False)
-    await _tickets(avec, count=12, attempts=1, cost=1.0)
-    await _tickets(sans, count=12, attempts=2, cost=2.0)
+async def test_memory_pays_off_when_it_improves_the_first_pass(client: AsyncClient, admin: str) -> None:
+    with_memory = await _project(client, "with-memory", memory=True)
+    without_memory = await _project(client, "without-memory", memory=False)
+    await _tickets(with_memory, count=12, attempts=1, cost=1.0)
+    await _tickets(without_memory, count=12, attempts=2, cost=2.0)
 
     report = (await client.get("/api/v1/orgs/varga/memory/ab-report")).json()
 
-    assert report["with_memory"]["projects"] == ["avec-memoire"]
-    assert report["without_memory"]["projects"] == ["sans-memoire"]
+    assert report["with_memory"]["projects"] == ["with-memory"]
+    assert report["without_memory"]["projects"] == ["without-memory"]
     assert report["with_memory"]["first_pass_merge_rate"] == 1.0
     assert report["without_memory"]["first_pass_merge_rate"] == 0.0
     assert report["verdict"] == "memory pays off"
     assert "first pass" in report["detail"]
 
 
-async def test_la_memoire_ne_paie_pas_quand_elle_coute_plus_cher_sans_gain(
+async def test_memory_does_not_pay_off_when_it_costs_more_without_gain(
     client: AsyncClient, admin: str
 ) -> None:
-    avec = await _project(client, "avec-memoire", memory=True)
-    sans = await _project(client, "sans-memoire", memory=False)
-    await _tickets(avec, count=12, attempts=1, cost=6.0)
-    await _tickets(sans, count=12, attempts=1, cost=2.0)
+    with_memory = await _project(client, "with-memory", memory=True)
+    without_memory = await _project(client, "without-memory", memory=False)
+    await _tickets(with_memory, count=12, attempts=1, cost=6.0)
+    await _tickets(without_memory, count=12, attempts=1, cost=2.0)
 
     report = (await client.get("/api/v1/orgs/varga/memory/ab-report")).json()
 
@@ -105,16 +103,16 @@ async def test_la_memoire_ne_paie_pas_quand_elle_coute_plus_cher_sans_gain(
     assert report["with_memory"]["cost_per_ticket_usd"] == 6.0
 
 
-async def test_une_organisation_inconnue_ne_pretend_rien(client: AsyncClient, admin: str) -> None:
-    report = await client.get("/api/v1/orgs/inconnue/memory/ab-report")
+async def test_an_unknown_organisation_claims_nothing(client: AsyncClient, admin: str) -> None:
+    report = await client.get("/api/v1/orgs/unknown/memory/ab-report")
     assert report.status_code in {200, 403}
     if report.status_code == 200:
-        assert report.json()["verdict"] == "organisation inconnue"
+        assert report.json()["verdict"] == "organisation inconnue"  # lang: fr-ok (the service's own verdict)
 
 
-async def test_la_fenetre_est_reglable(client: AsyncClient, admin: str) -> None:
-    avec = await _project(client, "avec-memoire", memory=True)
-    await _tickets(avec, count=3, attempts=1, cost=1.0)
+async def test_the_window_is_adjustable(client: AsyncClient, admin: str) -> None:
+    with_memory = await _project(client, "with-memory", memory=True)
+    await _tickets(with_memory, count=3, attempts=1, cost=1.0)
     report = (await client.get("/api/v1/orgs/varga/memory/ab-report", params={"weeks": 1})).json()
     assert report["weeks"] == 1
-    assert report["with_memory"]["tickets"] == 3, "trois jours, c'est dans la semaine"
+    assert report["with_memory"]["tickets"] == 3, "three days is within the week"

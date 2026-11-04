@@ -201,7 +201,7 @@ async def test_checking_a_birth_then_creating_it_asks_the_model_once(
     from choregos_api.db.models import Project
     from choregos_api.db.session import session_scope
     from choregos_api.services import llm_routing
-    from choregos_api.services.routage import Naissance, nouveau_ticket, verifier_la_naissance
+    from choregos_api.services.routing import WorkItemBirth, new_work_item, verify_birth
 
     pid = project["id"]
     await _two_workflows(client, pid)
@@ -217,12 +217,12 @@ async def test_checking_a_birth_then_creating_it_asks_the_model_once(
             return await fake.choose(candidates, item)
 
     monkeypatch.setattr(llm_routing, "get_workflow_router", lambda model, settings=None: Counting())
-    birth = Naissance(tracker_key="HR-9", title="Bob's departure on Friday")
+    birth = WorkItemBirth(tracker_key="HR-9", title="Bob's departure on Friday")
     async with session_scope() as session:
         row = await session.get(Project, pid)
         assert row is not None
-        await verifier_la_naissance(session, row, birth)
-        await nouveau_ticket(session, row, birth)
+        await verify_birth(session, row, birth)
+        await new_work_item(session, row, birth)
     assert asked == ["Bob's departure on Friday"]
     assert len(await _route_lines()) == 1
 

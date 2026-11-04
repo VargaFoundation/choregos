@@ -17,7 +17,7 @@ import pytest
 from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
-from choregos_api.db.models import Base, objet_du_coeur
+from choregos_api.db.models import Base, is_core_object
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from .conftest import PG_URL, _administer, _app_url, _prepare_postgres, without_postgres
@@ -44,7 +44,7 @@ def _postgres_only(difference: Any) -> bool:
 
 
 def _differences(connection: Any) -> list[Any]:
-    context = MigrationContext.configure(connection, opts={"include_object": objet_du_coeur})
+    context = MigrationContext.configure(connection, opts={"include_object": is_core_object})
     return [
         difference
         for difference in compare_metadata(context, Base.metadata)
@@ -111,7 +111,7 @@ async def _postgres_only_missing() -> set[str]:
 async def test_every_migration_goes_down_and_up_again_on_postgres(monkeypatch: pytest.MonkeyPatch) -> None:
     from choregos_api.config import reset_settings_cache
     from choregos_api.db import session as db_session
-    from choregos_api.migrer import configuration
+    from choregos_api.migrate import configuration
 
     await _prepare_postgres()
     monkeypatch.setenv("CHOREGOS_DATABASE_URL", _app_url(PG_URL))
@@ -307,7 +307,7 @@ async def test_the_latest_migrations_go_down_and_up_again_over_data(monkeypatch:
     from alembic.script import ScriptDirectory
     from choregos_api.config import reset_settings_cache
     from choregos_api.db import session as db_session
-    from choregos_api.migrer import configuration
+    from choregos_api.migrate import configuration
 
     await _prepare_postgres()
     monkeypatch.setenv("CHOREGOS_DATABASE_URL", _app_url(PG_URL))
@@ -370,7 +370,7 @@ async def test_the_latest_migrations_go_down_and_up_again_over_data(monkeypatch:
 async def _migrate_as_the_job(monkeypatch: pytest.MonkeyPatch) -> Any:
     from choregos_api.config import reset_settings_cache
     from choregos_api.db import session as db_session
-    from choregos_api.migrer import configuration
+    from choregos_api.migrate import configuration
 
     await _prepare_postgres()
     monkeypatch.setenv("CHOREGOS_DATABASE_URL", _app_url(PG_URL))

@@ -18,10 +18,10 @@ CAPPED = {"input_tokens": 1000, "output_tokens": 500}
 
 async def _ledger() -> list[Any]:
     from choregos_api.db.models import CostLedger
-    from choregos_api.db.session import TOUT, session_scope
+    from choregos_api.db.session import ALL_ORGS, session_scope
     from sqlalchemy import select
 
-    async with session_scope(orgs=TOUT) as session:
+    async with session_scope(orgs=ALL_ORGS) as session:
         rows = (await session.execute(select(CostLedger).order_by(CostLedger.ts))).scalars().all()
         session.expunge_all()
         return list(rows)
@@ -29,10 +29,10 @@ async def _ledger() -> list[Any]:
 
 async def _set_record(record: dict[str, Any] | None, **columns: Any) -> None:
     from choregos_api.db.models import KnowledgeBase
-    from choregos_api.db.session import TOUT, session_scope
+    from choregos_api.db.session import ALL_ORGS, session_scope
     from sqlalchemy import select
 
-    async with session_scope(orgs=TOUT) as session:
+    async with session_scope(orgs=ALL_ORGS) as session:
         base = (await session.execute(select(KnowledgeBase))).scalars().one()
         base.distillation = record
         for name, value in columns.items():
@@ -125,7 +125,7 @@ async def test_the_organisation_report_shows_the_spend_and_the_project_report_do
 
 async def test_a_ledger_line_needs_a_project_or_an_organisation(client: AsyncClient, admin: str) -> None:
     from choregos_api.db.session import session_scope
-    from choregos_api.services.couts import record_cost
+    from choregos_api.services.costs import record_cost
 
     async with session_scope() as session:
         with pytest.raises(ValueError, match="project or, failing one, to an organisation"):
@@ -165,10 +165,10 @@ async def test_stopping_a_running_distillation_cancels_the_workflow_and_says_who
     assert (after["status"], after["code"]) == ("stopped", "cancelled")
     assert after["stopped_by"] == record["requested_by"] and after["at"]
     from choregos_api.db.models import KnowledgeBase
-    from choregos_api.db.session import TOUT, session_scope
+    from choregos_api.db.session import ALL_ORGS, session_scope
     from sqlalchemy import select
 
-    async with session_scope(orgs=TOUT) as session:
+    async with session_scope(orgs=ALL_ORGS) as session:
         base_id = (await session.execute(select(KnowledgeBase.id))).scalar_one()
     assert knowledge_distill_id(base_id, record["started_at"]) in get_temporal().cancelled  # type: ignore[attr-defined]
     # Nothing runs any more: a second stop has nothing to stop.
@@ -266,7 +266,7 @@ async def test_a_stop_just_before_publishing_publishes_nothing(
 async def test_a_write_lands_only_on_the_run_that_is_still_running(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api.db.session import TOUT, session_scope
+    from choregos_api.db.session import ALL_ORGS, session_scope
     from choregos_api.knowledge.distill import write_if_running
 
     base_id = await _base(client, FOUR, monkeypatch)
@@ -277,7 +277,7 @@ async def test_a_write_lands_only_on_the_run_that_is_still_running(
         ({**STOPPED, "status": "running"}, started, True),
     ):
         await _set_record(record)
-        async with session_scope(orgs=TOUT) as session:
+        async with session_scope(orgs=ALL_ORGS) as session:
             written = await write_if_running(session, base_id, started_at, {"status": "running", "x": 1})
         assert written is lands
         assert ((await _outcome(client)).get("x") == 1) is lands
