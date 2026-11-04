@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Vérification de périmètre : ce que l'agent a réellement modifié.
+"""Scope check: what the agent really modified.
 
-La permission refusée est un raccourci ; la garantie est ici : on regarde le diff,
-on annule ce qui dépasse, on redemande une fois, et s'il en reste on bloque.
+The refused permission is a shortcut; the guarantee is here: we look at the diff,
+we revert what goes beyond, we ask again once, and if some remains we block.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from .workspace import RUNNER_FILES, Workspace
 
 @dataclass
 class ScopeCheck:
-    """Résultat d'une vérification de périmètre."""
+    """Result of a scope check."""
 
     changed: list[str] = field(default_factory=list)
     out_of_scope: list[str] = field(default_factory=list)
@@ -44,7 +44,7 @@ class ScopeCheck:
 async def check_scope(
     workspace: Workspace, base: str, allowed_paths: list[str], *, revert: bool = True
 ) -> ScopeCheck:
-    """Compare le diff au périmètre autorisé et annule les débordements."""
+    """Compare the diff to the authorised scope and revert the overflows."""
     changed = await workspace.changed_files(base)
     ignored = set(RUNNER_FILES)
     candidates = [path for path in changed if path not in ignored]
@@ -64,5 +64,5 @@ async def check_scope(
 
 
 def config_files_touched(changed: list[str], workspace_path: Path) -> list[str]:
-    """Fichiers de configuration Choregos modifiés : toujours suspect, jamais silencieux."""
+    """Choregos configuration files modified: always suspect, never silent."""
     return [path for path in changed if path.startswith(".choregos/") and not path.endswith("result.json")]

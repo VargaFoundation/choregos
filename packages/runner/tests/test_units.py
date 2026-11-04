@@ -1,4 +1,4 @@
-"""Tests unitaires du runner : guardrails, périmètre, résultat, backends, client interne."""
+"""Runner unit tests: guardrails, scope, result, backends, internal client."""
 
 from __future__ import annotations
 
@@ -38,20 +38,20 @@ def guards(**kwargs: Any) -> GuardRails:
     return GuardRails(Permissions(**kwargs))
 
 
-def test_lecture_et_recherche_sont_autorisees() -> None:
+def test_reads_and_searches_are_allowed() -> None:
     rails = guards(write_paths=["src/**"])
     assert rails.decide({"toolCall": {"kind": "read", "rawInput": {"path": "README.md"}}}).allowed
     assert rails.decide({"toolCall": {"kind": "search", "rawInput": {"query": "total"}}}).allowed
 
 
-def test_une_operation_sans_cible_est_autorisee_et_tracee() -> None:
+def test_an_operation_without_a_target_is_allowed_and_traced() -> None:
     rails = guards(write_paths=["src/**"])
-    decision = rails.decide({"toolCall": {"kind": "think", "title": "réfléchir"}})
+    decision = rails.decide({"toolCall": {"kind": "think", "title": "think"}})
     assert decision.allowed
     assert rails.decisions and rails.decisions[-1].reason
 
 
-def test_commandes_dangereuses() -> None:
+def test_dangerous_commands() -> None:
     rails = guards(deny_commands=["terraform apply"])
     assert not rails.check_command("terraform apply -auto-approve").allowed
     assert rails.check_command("terraform plan").allowed, "seul `apply` est interdit"
@@ -60,31 +60,31 @@ def test_commandes_dangereuses() -> None:
     assert rails.check_command("git push --force-with-lease origin main").allowed
 
 
-def test_le_chemin_du_binaire_ne_contourne_pas_le_refus() -> None:
+def test_the_binary_path_does_not_bypass_the_refusal() -> None:
     rails = guards(deny_commands=["kubectl"])
     assert not rails.check_command("/usr/local/bin/kubectl get pods").allowed
 
 
-def test_extension_de_perimetre_a_chaud() -> None:
+def test_live_scope_extension() -> None:
     rails = guards(write_paths=["src/**"])
     assert not rails.check_write("tests/test_x.py").allowed
     rails.extend_scope(["tests/**"])
     assert rails.check_write("tests/test_x.py").allowed
 
 
-def test_reseau_sans_allowlist_est_autorise() -> None:
+def test_network_without_allowlist_is_allowed() -> None:
     assert guards().check_network("https://n-importe-ou.example").allowed
 
 
-def test_decision_serialisable_pour_le_journal() -> None:
+def test_decision_serialisable_for_the_journal() -> None:
     event = guards(write_paths=["src/**"]).check_write("src/a.py").to_event()
     assert set(event) == {"allowed", "reason", "kind", "target", "inferred"}
 
 
-# ───────────────────────────── résultat ─────────────────────────────
+# ───────────────────────────── result ─────────────────────────────
 
 
-def test_resultat_absent_puis_repare(tmp_path: Path) -> None:
+def test_missing_result_then_repaired(tmp_path: Path) -> None:
     path = tmp_path / "result.json"
     load = load_result(path)
     assert not load.ok and "missing" in (load.error or "")
@@ -101,38 +101,38 @@ def test_resultat_absent_puis_repare(tmp_path: Path) -> None:
     assert "contract" in error and "status" in error
 
 
-def test_une_sortie_declaree_absente_repart_en_reparation(tmp_path: Path) -> None:
-    """Le triage de #4 (locataire dev, 09/10) : `size` et `risk` rangés dans une sortie à lui."""
+def test_a_missing_declared_output_goes_back_to_repair(tmp_path: Path) -> None:
+    """The triage of #4 (dev tenant, 09/10): `size` and `risk` filed into an output of their own."""
     path = tmp_path / "result.json"
     imbrique = {
         "status": "done",
-        "summary": "trié",
+        "summary": "sorted",
         "outputs": {"triage": '{"size": "S", "risk": "medium"}'},
     }
     path.write_text(json.dumps(imbrique), encoding="utf-8")
     load = load_result(path, ["size", "risk"])
     assert not load.ok
     assert "`size`" in (load.error or "") and "`risk`" in (load.error or "")
-    assert load_result(path).ok, "sans sorties déclarées, rien ne change"
+    assert load_result(path).ok, "without declared outputs, nothing changes"
 
     path.write_text(json.dumps({**imbrique, "outputs": {"size": "S", "risk": "medium"}}), encoding="utf-8")
     assert load_result(path, ["size", "risk"]).ok
 
-    question = {"status": "needs_human", "summary": "une question", "outputs": {}}
+    question = {"status": "needs_human", "summary": "a question", "outputs": {}}
     path.write_text(json.dumps(question), encoding="utf-8")
-    assert load_result(path, ["size", "risk"]).ok, "une étape qui ne finit pas n'a pas à les rendre"
+    assert load_result(path, ["size", "risk"]).ok, "a step that does not finish does not have to return them"
 
 
-def test_la_tache_nomme_les_sorties_attendues(stage_input) -> None:  # type: ignore[no-untyped-def]
+def test_the_task_names_the_expected_outputs(stage_input) -> None:  # type: ignore[no-untyped-def]
     from choregos_runner.workspace import _task_markdown
 
-    entree = stage_input.model_copy(
+    stage_with_outputs = stage_input.model_copy(
         update={"transition": stage_input.transition.model_copy(update={"outputs": ["size", "risk"]})}
     )
-    assert "`size`, `risk`" in _task_markdown(entree)
+    assert "`size`, `risk`" in _task_markdown(stage_with_outputs)
 
 
-def test_les_preuves_mesurees_ecrasent_les_preuves_declarees() -> None:
+def test_measured_evidence_overwrites_declared_evidence() -> None:
     declared = StageResult(
         status=StageStatus.DONE,
         summary="tout va bien",
@@ -150,7 +150,7 @@ def test_les_preuves_mesurees_ecrasent_les_preuves_declarees() -> None:
     assert completed.reason == "tests"
 
 
-def test_fichiers_hors_perimetre_non_annulables_bloquent() -> None:
+def test_out_of_scope_files_that_cannot_be_reverted_block() -> None:
     completed = complete_result(
         StageResult(
             status=StageStatus.DONE, summary="fait", evidence=Evidence(tests_passed=True, tests_run=1)
@@ -165,9 +165,9 @@ def test_fichiers_hors_perimetre_non_annulables_bloquent() -> None:
     assert "infra/prod.tf" in completed.summary
 
 
-def test_ecriture_et_relecture_du_resultat(tmp_path: Path) -> None:
+def test_writing_and_rereading_the_result(tmp_path: Path) -> None:
     path = tmp_path / ".choregos" / "result.json"
-    write_result(path, fallback_result("agent_error", "l'agent a planté"))
+    write_result(path, fallback_result("agent_error", "the agent crashed"))
     reread = load_result(path)
     assert reread.ok and reread.result is not None
     assert reread.result.reason == "agent_error"
@@ -176,7 +176,7 @@ def test_ecriture_et_relecture_du_resultat(tmp_path: Path) -> None:
 # ───────────────────────────── boucle DoD ─────────────────────────────
 
 
-def test_commandes_deduites_du_depot(tmp_path: Path) -> None:
+def test_commands_deduced_from_the_repository(tmp_path: Path) -> None:
     from choregos_contracts import ProjectRef
 
     (tmp_path / "package.json").write_text("{}", encoding="utf-8")
@@ -186,13 +186,13 @@ def test_commandes_deduites_du_depot(tmp_path: Path) -> None:
     assert "npm" in commands["tests"], commands
 
 
-def test_les_commandes_du_projet_priment(tmp_path: Path) -> None:
+def test_the_project_commands_take_precedence(tmp_path: Path) -> None:
     stage_input = _minimal_stage_input(tmp_path)
     commands = commands_for(stage_input, tmp_path)
     assert commands["tests"] == "make test"
 
 
-async def test_une_commande_absente_est_skipped_pas_ok(tmp_path: Path) -> None:
+async def test_an_absent_command_is_skipped_not_ok(tmp_path: Path) -> None:
     from choregos_contracts import ProjectRef
 
     stage_input = _minimal_stage_input(tmp_path)
@@ -202,10 +202,10 @@ async def test_une_commande_absente_est_skipped_pas_ok(tmp_path: Path) -> None:
     lint = report.get("lint")
     assert tests is not None and tests.ok
     assert lint is not None and lint.skipped and lint.status == "skipped"
-    assert report.ok, "des commandes absentes n'invalident pas l'étape"
+    assert report.ok, "absent commands do not invalidate the step"
 
 
-def test_le_prompt_de_reparation_cite_la_sortie() -> None:
+def test_the_repair_prompt_cites_the_output() -> None:
     report = DodReport(
         checks=[
             CheckOutcome(name="tests", command="make test", ok=False, output="AssertionError: total faux")
@@ -216,17 +216,17 @@ def test_le_prompt_de_reparation_cite_la_sortie() -> None:
     assert "without widening the scope" in prompt
 
 
-# ───────────────────────────── périmètre ─────────────────────────────
+# ───────────────────────────── scope ─────────────────────────────
 
 
-async def test_verification_de_perimetre_sans_restriction(tmp_path: Path) -> None:
+async def test_scope_check_without_restriction(tmp_path: Path) -> None:
     workspace = await _git_workspace(tmp_path)
     (workspace.path / "a.py").write_text("x = 1\n", encoding="utf-8")
     check = await check_scope(workspace, "HEAD", [])
     assert check.clean and "a.py" in check.changed
 
 
-async def test_les_fichiers_du_runner_sont_ignores(tmp_path: Path) -> None:
+async def test_the_runner_files_are_ignored(tmp_path: Path) -> None:
     workspace = await _git_workspace(tmp_path)
     (workspace.path / ".choregos").mkdir(exist_ok=True)
     (workspace.path / ".choregos" / "result.json").write_text("{}", encoding="utf-8")
@@ -234,7 +234,7 @@ async def test_les_fichiers_du_runner_sont_ignores(tmp_path: Path) -> None:
     assert check.clean, check.remaining
 
 
-async def test_un_fichier_hors_perimetre_est_annule(tmp_path: Path) -> None:
+async def test_an_out_of_scope_file_is_reverted(tmp_path: Path) -> None:
     workspace = await _git_workspace(tmp_path)
     (workspace.path / "src").mkdir(exist_ok=True)
     (workspace.path / "src" / "ok.py").write_text("x = 1\n", encoding="utf-8")
@@ -250,7 +250,7 @@ async def test_un_fichier_hors_perimetre_est_annule(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("name", known_backends())
-def test_chaque_backend_produit_un_plan_de_lancement(name: str, tmp_path: Path) -> None:
+def test_each_backend_produces_a_launch_plan(name: str, tmp_path: Path) -> None:
     backend = get_backend(name)
     stage_input = _minimal_stage_input(tmp_path)
     if backend.model_constraint:
@@ -262,10 +262,10 @@ def test_chaque_backend_produit_un_plan_de_lancement(name: str, tmp_path: Path) 
     written = plan.materialize(tmp_path)
     assert all((tmp_path / relative).exists() for relative in written)
     env = backend.model_env(stage_input.model, "sk-test")
-    assert any("sk-test" in value for value in env.values()), "la clé du run arrive au backend"
+    assert any("sk-test" in value for value in env.values()), "the run's key reaches the backend"
 
 
-def test_un_fichier_du_depot_n_est_jamais_ecrase(tmp_path: Path) -> None:
+def test_a_repository_file_is_never_overwritten(tmp_path: Path) -> None:
     (tmp_path / "CLAUDE.md").write_text("instructions du projet", encoding="utf-8")
     stage_input = _minimal_stage_input(tmp_path)
     stage_input.model = ModelRef(
@@ -277,20 +277,20 @@ def test_un_fichier_du_depot_n_est_jamais_ecrase(tmp_path: Path) -> None:
     assert (tmp_path / "CLAUDE.md").read_text() == "instructions du projet"
 
 
-def test_backend_inconnu_et_versions() -> None:
+def test_unknown_backend_and_versions() -> None:
     with pytest.raises(KeyError, match="unknown backend"):
         get_backend("licorne")
     assert set(known_backends()) | RUNTIME_BACKENDS == set(BACKENDS)
     assert "code" in RUNTIME_BACKENDS
     assert "code" not in known_backends(), "a runtime backend ships no agent to rotate over"
-    assert backend_version("claude-code"), "la version du binaire est épinglée"
+    assert backend_version("claude-code"), "the binary's version is pinned"
     assert backend_version("licorne") is None
 
 
 # ───────────────────────────── client interne ─────────────────────────────
 
 
-async def test_le_client_interne_parle_le_contrat() -> None:
+async def test_the_internal_client_speaks_the_contract() -> None:
     seen: list[tuple[str, str]] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -321,49 +321,47 @@ async def test_le_client_interne_parle_le_contrat() -> None:
     client._client = httpx.AsyncClient(transport=transport, headers={"Authorization": "Bearer tok"})
     async with client:
         assert await client.post_events([{"seq": 1, "type": "x", "payload": {}}]) == 1
-        assert await client.post_events([]) == 0, "un lot vide n'appelle pas l'API"
-        ack = await client.report_finding(
-            _finding("Requête N+1 sur les lignes", "perf", "medium", "repo.py:88")
-        )
+        assert await client.post_events([]) == 0, "an empty batch does not call the API"
+        ack = await client.report_finding(_finding("N+1 query on the lines", "perf", "medium", "repo.py:88"))
         assert ack["finding_id"] == "f1"
-        assert (await client.request_scope_change(["src/**"], "nécessaire"))["decision"] == "granted"
+        assert (await client.request_scope_change(["src/**"], "needed"))["decision"] == "granted"
         assert "erreur" in await client.fetch_ci_logs()
         assert (await client.fetch_context()).query == "q"
         assert (await client.fetch_ticket())["key"] == "a#1"
-        await client.ask_human("Quelle devise ?", ["EUR"])
+        await client.ask_human("Which currency?", ["EUR"])
     assert ("POST", "/internal/runs/run-1/events") in seen
 
 
-async def test_une_erreur_de_l_api_est_explicite() -> None:
-    transport = httpx.MockTransport(lambda request: httpx.Response(403, text="jeton d'un autre run"))
+async def test_an_api_error_is_explicit() -> None:
+    transport = httpx.MockTransport(lambda request: httpx.Response(403, text="token of another run"))
     client = InternalClient("http://api/internal", "run-1", "tok")
     client._client = httpx.AsyncClient(transport=transport)
     async with client:
         with pytest.raises(InternalApiError) as error:
             await client.fetch_input()
     assert error.value.status_code == 403
-    assert "autre run" in str(error.value)
+    assert "another run" in str(error.value)
 
 
 # ───────────────────────────── workspace ─────────────────────────────
 
 
-async def test_une_commande_qui_echoue_ne_leve_pas(tmp_path: Path) -> None:
+async def test_a_failing_command_does_not_raise(tmp_path: Path) -> None:
     result = await run_command(["false"], cwd=tmp_path, timeout=10)
     assert not result.ok and result.code != 0
 
 
-async def test_le_depassement_de_delai_est_rapporte(tmp_path: Path) -> None:
+async def test_the_timeout_is_reported(tmp_path: Path) -> None:
     result = await run_command(["sleep", "5"], cwd=tmp_path, timeout=0.2)
     assert result.code == 124 and "timed out" in result.stderr
 
 
-async def test_le_jeton_n_apparait_jamais_en_clair(tmp_path: Path) -> None:
+async def test_the_token_never_appears_in_clear(tmp_path: Path) -> None:
     from choregos_runner.workspace import _redact, _with_token
 
     url = _with_token("https://github.com/acme/billing.git", "ghs_secret")
     assert "x-access-token:ghs_secret@" in url
-    assert "ghs_secret" not in _redact(f"échec sur {url}", "ghs_secret")
+    assert "ghs_secret" not in _redact(f"failure on {url}", "ghs_secret")
 
 
 # ───────────────────────────── utilitaires ─────────────────────────────
@@ -423,55 +421,55 @@ async def _git_workspace(path: Path) -> Workspace:
     return workspace
 
 
-def test_un_backend_retire_est_refuse_avec_sa_raison() -> None:
-    """« openhands » n'est pas une faute de frappe : on dit pourquoi il n'est plus là."""
+def test_a_retired_backend_is_refused_with_its_reason() -> None:
+    """The "openhands" backend is not a typo: we say why it is no longer there."""
     from choregos_runner.backends import get_backend
 
     with pytest.raises(KeyError) as error:
         get_backend("openhands")
     message = str(error.value)
     assert "retired" in message and "ACP" in message
-    assert "claude-code" in message, "le message indique le remplaçant"
+    assert "claude-code" in message, "the message names the replacement"
 
 
-async def test_git_accepte_le_workspace_meme_si_le_volume_appartient_a_root(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """Le volume d'un pod appartient à root, l'agent tourne en 1000 : sans `safe.directory`,
-    git refuse le dépôt (« detected dubious ownership ») et conseille d'écrire une
-    configuration globale, ce qu'un conteneur éphémère ne peut pas faire."""
+async def test_git_accepts_the_workspace_even_if_the_volume_belongs_to_root(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """A pod's volume belongs to root, the agent runs as 1000: without `safe.directory`,
+    git refuses the repository ("detected dubious ownership") and advises writing a
+    global configuration, which an ephemeral container cannot do."""
     from choregos_runner.workspace import _git_env, run_command
 
     env = _git_env(tmp_path)
     assert env["GIT_CONFIG_KEY_0"] == "safe.directory"
     assert env["GIT_CONFIG_VALUE_0"] == str(tmp_path)
 
-    resultat = await run_command(["git", "init", "-q"], cwd=tmp_path)
-    assert resultat.ok, resultat.stderr
+    outcome = await run_command(["git", "init", "-q"], cwd=tmp_path)
+    assert outcome.ok, outcome.stderr
     lecture = await run_command(["git", "config", "--get-all", "safe.directory"], cwd=tmp_path)
     assert str(tmp_path) in lecture.stdout
 
 
-def test_un_serveur_mcp_http_porte_ses_en_tetes(stage_input) -> None:  # type: ignore[no-untyped-def]
-    """Le schéma ACP exige `headers` pour un serveur HTTP. Sans lui, `session/new` est
-    refusé avec « Invalid params » et une arborescence d'erreurs où le champ manquant se
-    lit mal — l'agent ne démarre jamais."""
+def test_an_http_mcp_server_carries_its_headers(stage_input) -> None:  # type: ignore[no-untyped-def]
+    """The ACP schema requires `headers` for an HTTP server. Without it, `session/new` is
+    refused with "Invalid params" and a tree of errors where the missing field is hard to
+    read: the agent never starts."""
     from choregos_contracts import McpServerRef, ToolsRef
     from choregos_runner.backends.base import Backend
 
     stage_input.tools = ToolsRef(
         mcp={
-            "memoire": McpServerRef(url="http://memoire:8432/mcp", env={"Authorization": "Bearer x"}),
-            "outils": McpServerRef(command=["choregos-tools", "serve"], env={"A": "b"}),
+            "memory": McpServerRef(url="http://memory:8432/mcp", env={"Authorization": "Bearer x"}),
+            "tools": McpServerRef(command=["choregos-tools", "serve"], env={"A": "b"}),
         }
     )
-    par_nom = {s["name"]: s for s in Backend.mcp_servers(stage_input)}
-    assert par_nom["memoire"]["headers"] == [{"name": "Authorization", "value": "Bearer x"}]
-    assert par_nom["outils"]["env"] == [{"name": "A", "value": "b"}]
+    by_name = {s["name"]: s for s in Backend.mcp_servers(stage_input)}
+    assert by_name["memory"]["headers"] == [{"name": "Authorization", "value": "Bearer x"}]
+    assert by_name["tools"]["env"] == [{"name": "A", "value": "b"}]
 
 
-def test_le_depot_n_est_pas_le_repertoire_personnel_de_l_agent(stage_input) -> None:  # type: ignore[no-untyped-def]
-    """Un agent qui écrit son état sous `$HOME` le posait DANS le workspace : ses
-    transcriptions finissaient commitées sur la branche du ticket, et le diff du run
-    devenait illisible."""
+def test_the_repository_is_not_the_agents_home_directory(stage_input) -> None:  # type: ignore[no-untyped-def]
+    """An agent that writes its state under `$HOME` used to put it IN the workspace: its
+    transcripts ended up committed on the ticket's branch, and the run's diff
+    became unreadable."""
     from pathlib import Path
 
     from choregos_runner.workspace import workspace_env
@@ -483,10 +481,10 @@ def test_le_depot_n_est_pas_le_repertoire_personnel_de_l_agent(stage_input) -> N
     assert stage_input.run_id in str(home)
 
 
-async def test_le_runner_sert_vraiment_les_fichiers_qu_il_annonce(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """Les deux mensonges coûtent cher, et on les a payés : annoncer `fs` puis refuser
-    l'appel envoie l'agent tout refaire en `bash` ; annoncer `false` désactive ses outils
-    d'édition et il n'écrit plus rien."""
+async def test_the_runner_really_serves_the_files_it_announces(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """The two lies are costly, and we paid for them: announcing `fs` then refusing
+    the call sends the agent off to redo everything in `bash`; announcing `false` disables its
+    editing tools and it writes nothing any more."""
     from choregos_runner.acp.client import AcpClient
     from choregos_runner.acp.protocol import FS_READ_TEXT_FILE, FS_WRITE_TEXT_FILE, Request, Response
 
@@ -496,10 +494,10 @@ async def test_le_runner_sert_vraiment_les_fichiers_qu_il_annonce(tmp_path) -> N
     client = AcpClient(["faux"], cwd=str(tmp_path))
     rendus: list[Response] = []
 
-    async def capter(response: Response) -> None:
+    async def capture(response: Response) -> None:
         rendus.append(response)
 
-    client.respond = capter  # type: ignore[method-assign]
+    client.respond = capture  # type: ignore[method-assign]
 
     lecture = Request(id=1, method=FS_READ_TEXT_FILE, params={"path": "src/a.py", "line": 2, "limit": 1})
     await client._handle_request(lecture)
@@ -510,44 +508,44 @@ async def test_le_runner_sert_vraiment_les_fichiers_qu_il_annonce(tmp_path) -> N
     )
     assert (tmp_path / "src" / "b.py").read_text() == "print()\n"
 
-    # La frontière est le workspace : ce qui en sort est refusé, pas corrigé.
+    # The boundary is the workspace: what goes out is refused, not corrected.
     await client._handle_request(Request(id=3, method=FS_READ_TEXT_FILE, params={"path": "../../etc/passwd"}))
     assert rendus[-1].error is not None
 
 
-def test_le_hook_de_perimetre_laisse_ecrire_le_resultat(tmp_path, stage_input) -> None:  # type: ignore[no-untyped-def]
-    """Le contrat EXIGE `.choregos/result.json`, et le périmètre du ticket ne le couvre
-    jamais. Un hook qui le refuse place l'agent devant une contradiction : il l'a écrite
-    dans sa transcription, puis a abandonné l'étape."""
+def test_the_scope_hook_lets_the_result_be_written(tmp_path, stage_input) -> None:  # type: ignore[no-untyped-def]
+    """The contract REQUIRES `.choregos/result.json`, and the ticket's scope never
+    covers it. A hook that refuses it puts the agent in front of a contradiction: it wrote it
+    in its transcript, then abandoned the step."""
     import json
     import subprocess
 
     from choregos_runner.backends.claude_code import ClaudeCodeBackend
 
-    espace = tmp_path / "ws"
-    (espace / ".choregos").mkdir(parents=True)
-    (espace / ".choregos" / "allowed_paths.txt").write_text("src/**\ntests/**\n")
-    hook = espace / "hook.sh"
-    plan = ClaudeCodeBackend().launch_plan(stage_input, espace)
+    workspace = tmp_path / "ws"
+    (workspace / ".choregos").mkdir(parents=True)
+    (workspace / ".choregos" / "allowed_paths.txt").write_text("src/**\ntests/**\n")
+    hook = workspace / "hook.sh"
+    plan = ClaudeCodeBackend().launch_plan(stage_input, workspace)
     hook.write_text(plan.files[".choregos/hooks/check_scope.sh"])
     hook.chmod(0o755)
 
-    def verdict(chemin: str) -> int:
-        entree = json.dumps({"tool_input": {"file_path": f"{espace}/{chemin}"}})
+    def verdict(rel_path: str) -> int:
+        hook_input = json.dumps({"tool_input": {"file_path": f"{workspace}/{rel_path}"}})
         rendu = subprocess.run(
-            [str(hook)], input=entree, capture_output=True, text=True, cwd=espace, check=False
+            [str(hook)], input=hook_input, capture_output=True, text=True, cwd=workspace, check=False
         )
         return rendu.returncode
 
-    assert verdict(".choregos/result.json") == 0, "le résultat de l'étape doit pouvoir s'écrire"
+    assert verdict(".choregos/result.json") == 0, "the step's result must be writable"
     assert verdict("src/panier.py") == 0
-    assert verdict("infra/secrets.yaml") == 2, "hors périmètre : toujours refusé"
+    assert verdict("infra/secrets.yaml") == 2, "out of scope: always refused"
 
 
-async def test_la_reponse_de_permission_reprend_un_identifiant_propose(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """ACP laisse l'agent NOMMER ses options. Répondre `allow_once` quand il propose
-    `allow` revient à ne rien choisir : l'agent lit un refus, et sa transcription dit
-    « refusées par l'utilisateur » pendant que notre journal dit « autorisé »."""
+async def test_the_permission_answer_reuses_a_proposed_id(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """ACP lets the agent NAME its options. Answering `allow_once` when it offers
+    `allow` amounts to choosing nothing: the agent reads a refusal, and its transcript says
+    "refused by the user" while our journal says "allowed"."""
     from choregos_runner.acp.client import AcpClient
     from choregos_runner.acp.protocol import SESSION_REQUEST_PERMISSION, Request, Response
 
@@ -558,77 +556,77 @@ async def test_la_reponse_de_permission_reprend_un_identifiant_propose(tmp_path)
     ]
     rendus: list[Response] = []
 
-    async def capter(response: Response) -> None:
+    async def capture(response: Response) -> None:
         rendus.append(response)
 
-    async def toujours_oui(_: dict) -> tuple[bool, str]:  # type: ignore[type-arg]
-        return True, "autorisé"
+    async def always_yes(_: dict) -> tuple[bool, str]:  # type: ignore[type-arg]
+        return True, "allowed"
 
-    async def toujours_non(_: dict) -> tuple[bool, str]:  # type: ignore[type-arg]
-        return False, "refusé"
+    async def always_no(_: dict) -> tuple[bool, str]:  # type: ignore[type-arg]
+        return False, "refused"
 
-    client = AcpClient(["faux"], cwd=str(tmp_path), on_permission=toujours_oui)
-    client.respond = capter  # type: ignore[method-assign]
-    demande = Request(id=1, method=SESSION_REQUEST_PERMISSION, params={"options": options})
-    await client._handle_request(demande)
+    client = AcpClient(["faux"], cwd=str(tmp_path), on_permission=always_yes)
+    client.respond = capture  # type: ignore[method-assign]
+    request = Request(id=1, method=SESSION_REQUEST_PERMISSION, params={"options": options})
+    await client._handle_request(request)
     assert rendus[-1].result == {"outcome": {"outcome": "selected", "optionId": "allow"}}
 
-    client.on_permission = toujours_non  # type: ignore[assignment]
-    refus = Request(id=2, method=SESSION_REQUEST_PERMISSION, params={"options": options})
-    await client._handle_request(refus)
+    client.on_permission = always_no  # type: ignore[assignment]
+    refusal = Request(id=2, method=SESSION_REQUEST_PERMISSION, params={"options": options})
+    await client._handle_request(refusal)
     assert (rendus[-1].result or {})["outcome"]["optionId"] == "reject"
 
 
-def test_le_bruit_d_execution_n_entre_pas_dans_le_commit_du_run(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """Les tests que l'agent lance produisent des caches. Commités, ils rendaient le diff
-    d'une étape illisible et faisaient compter aux gardes de taille des fichiers que
-    personne n'a écrits."""
+def test_runtime_noise_does_not_enter_the_runs_commit(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """The tests the agent runs produce caches. Committed, they made a step's diff
+    unreadable and made the size guards count files that
+    nobody wrote."""
     import subprocess
 
     from choregos_runner.workspace import Workspace
 
-    depot = tmp_path / "ws"
-    depot.mkdir()
-    subprocess.run(["git", "init", "-q"], cwd=depot, check=True)
-    espace = Workspace(depot)
-    espace.exclude([".mcp.json"])
+    repo_dir = tmp_path / "ws"
+    repo_dir.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo_dir, check=True)
+    workspace = Workspace(repo_dir)
+    workspace.exclude([".mcp.json"])
 
-    (depot / "__pycache__").mkdir()
-    (depot / "__pycache__" / "panier.cpython-312.pyc").write_bytes(b"\x00")
-    (depot / ".cache" / "pip" / "http-v2").mkdir(parents=True)
-    (depot / ".cache" / "pip" / "http-v2" / "0a1b.body").write_bytes(b"\x00")
-    (depot / "src.py").write_text("x = 1\n")
+    (repo_dir / "__pycache__").mkdir()
+    (repo_dir / "__pycache__" / "panier.cpython-312.pyc").write_bytes(b"\x00")
+    (repo_dir / ".cache" / "pip" / "http-v2").mkdir(parents=True)
+    (repo_dir / ".cache" / "pip" / "http-v2" / "0a1b.body").write_bytes(b"\x00")
+    (repo_dir / "src.py").write_text("x = 1\n")
 
-    vus = subprocess.run(
+    seen = subprocess.run(
         ["git", "status", "--porcelain", "--untracked-files=all"],
-        cwd=depot,
+        cwd=repo_dir,
         capture_output=True,
         text=True,
         check=True,
     ).stdout
-    assert "src.py" in vus
-    assert "__pycache__" not in vus
-    assert ".cache" not in vus, "le cache de pip d'un agent n'entre pas dans le commit (S22-13)"
+    assert "src.py" in seen
+    assert "__pycache__" not in seen
+    assert ".cache" not in seen, "an agent's pip cache does not enter the commit (S22-13)"
 
 
-def test_un_agent_muet_est_nomme_comme_tel() -> None:
-    """Quand le modèle ne répond pas — clé refusée, quota atteint, fournisseur en panne —
-    l'agent ne dit rien et ne fait rien. Réclamer `result.json` accuserait alors l'agent
-    d'un oubli, et l'enquête partirait du mauvais côté."""
+def test_a_silent_agent_is_named_as_such() -> None:
+    """When the model does not answer (key refused, quota reached, provider down),
+    the agent says nothing and does nothing. Demanding `result.json` would then accuse the agent
+    of an oversight, and the investigation would start from the wrong side."""
     from choregos_runner.acp.client import PromptOutcome
-    from choregos_runner.runner import _agent_muet
+    from choregos_runner.runner import _agent_silent
 
-    assert _agent_muet(PromptOutcome(turns=1, messages=0, tool_calls=0))
-    assert not _agent_muet(PromptOutcome(turns=1, messages=7, tool_calls=0)), "il a parlé"
-    assert not _agent_muet(PromptOutcome(turns=1, messages=0, tool_calls=3)), "il a agi"
-    # Une erreur ne rend pas l'agent bavard : elle est REPRISE dans le diagnostic.
-    assert _agent_muet(PromptOutcome(messages=0, tool_calls=0, errors=["boum"]))
+    assert _agent_silent(PromptOutcome(turns=1, messages=0, tool_calls=0))
+    assert not _agent_silent(PromptOutcome(turns=1, messages=7, tool_calls=0)), "it spoke"
+    assert not _agent_silent(PromptOutcome(turns=1, messages=0, tool_calls=3)), "it acted"
+    # An error does not make the agent chatty: it is TAKEN UP in the diagnosis.
+    assert _agent_silent(PromptOutcome(messages=0, tool_calls=0, errors=["boum"]))
 
 
-async def test_le_diff_se_mesure_sur_un_historique_superficiel(tmp_path) -> None:  # type: ignore[no-untyped-def]
-    """Un runner cloue son dépôt à `--depth` : `base...HEAD` n'y trouve pas toujours de base
-    de fusion, la commande échoue, la sortie est vide — et le run conclut que rien n'a
-    changé. Le périmètre ne voit alors plus rien, et les preuves annoncent zéro fichier."""
+async def test_the_diff_is_measured_on_a_shallow_history(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    """A runner pins its repository to `--depth`: `base...HEAD` does not always find a merge
+    base there, the command fails, the output is empty, and the run concludes that nothing
+    changed. The scope then sees nothing any more, and the evidence announces zero files."""
     import subprocess
 
     from choregos_runner.workspace import Workspace
@@ -656,19 +654,19 @@ async def test_le_diff_se_mesure_sur_un_historique_superficiel(tmp_path) -> None
     git("config", "user.email", "a@b", cwd=local)
     git("config", "user.name", "t", cwd=local)
 
-    espace = Workspace(local)
-    base = await espace.base_sha("main")
+    workspace = Workspace(local)
+    base = await workspace.base_sha("main")
     (local / "b.py").write_text("y = 1\n")
     git("add", "-A", cwd=local)
-    git("commit", "-q", "-m", "travail de l'agent", cwd=local)
+    git("commit", "-q", "-m", "the agent's work", cwd=local)
 
-    assert await espace.changed_files(base) == ["b.py"]
-    assert await espace.diff_stats(base) == (1, 0)
+    assert await workspace.changed_files(base) == ["b.py"]
+    assert await workspace.diff_stats(base) == (1, 0)
 
 
-# ───────────────────────── la nature déduite quand l'ACP ne la dit pas (2026-09-24) ─────────────────────────
+# ───────────────────────── the nature deduced when ACP does not give it (2026-09-24) ────────────────────
 
-#: Le payload RÉEL d'une demande de Claude Code, relevé sur le banc : ni `kind`, ni `type`.
+#: The REAL payload of a Claude Code request, taken from the bench: neither `kind`, nor `type`.
 PERMISSION_CLAUDE_CODE_WRITE = {
     "options": [
         {"kind": "allow_always", "name": "Always Allow", "optionId": "allow_always"},
@@ -683,25 +681,25 @@ PERMISSION_CLAUDE_CODE_WRITE = {
 }
 
 
-def test_une_ecriture_de_claude_code_passe_par_le_perimetre() -> None:
-    """Sans `kind`, l'écriture tombait dans « lecture ou recherche : autorisé » — 23 fois sur 23."""
+def test_a_claude_code_write_goes_through_the_scope() -> None:
+    """Without `kind`, the write fell into "read or search: allowed", 23 times out of 23."""
     rails = guards(write_paths=["src/**"])
-    dedans = rails.decide(PERMISSION_CLAUDE_CODE_WRITE)
-    assert dedans.allowed and dedans.kind == "write" and dedans.inferred
+    inside = rails.decide(PERMISSION_CLAUDE_CODE_WRITE)
+    assert inside.allowed and inside.kind == "write" and inside.inferred
 
-    dehors = dict(PERMISSION_CLAUDE_CODE_WRITE)
-    dehors["toolCall"] = {
+    outside = dict(PERMISSION_CLAUDE_CODE_WRITE)
+    outside["toolCall"] = {
         **PERMISSION_CLAUDE_CODE_WRITE["toolCall"],
         "title": "Write /workspace/.github/workflows/ci.yml",
         "rawInput": {"content": "x", "file_path": "/workspace/.github/workflows/ci.yml"},
     }
-    refus = rails.decide(dehors)
-    assert not refus.allowed, "une écriture hors périmètre doit être refusée, même sans `kind`"
-    assert refus.kind == "write" and refus.inferred
-    assert "allowed paths" in refus.reason
+    refusal = rails.decide(outside)
+    assert not refusal.allowed, "an out-of-scope write must be refused, even without `kind`"
+    assert refusal.kind == "write" and refusal.inferred
+    assert "allowed paths" in refusal.reason
 
 
-def test_la_nature_se_deduit_du_titre_quand_les_arguments_ne_disent_rien() -> None:
+def test_the_nature_is_deduced_from_the_title_when_the_arguments_say_nothing() -> None:
     rails = guards(write_paths=["src/**"])
     lecture = rails.decide(
         {
@@ -712,7 +710,7 @@ def test_la_nature_se_deduit_du_titre_quand_les_arguments_ne_disent_rien() -> No
         }
     )
     assert lecture.allowed and lecture.kind == "read" and lecture.inferred
-    edition = rails.decide(
+    edit_decision = rails.decide(
         {
             "toolCall": {
                 "title": "Edit /workspace/docs/x.md",
@@ -720,8 +718,8 @@ def test_la_nature_se_deduit_du_titre_quand_les_arguments_ne_disent_rien() -> No
             }
         }
     )
-    assert not edition.allowed and edition.inferred, "`Edit` hors périmètre, déduit du titre"
-    inconnu = rails.decide(
+    assert not edit_decision.allowed and edit_decision.inferred, "`Edit` out of scope, deduced from the title"
+    unknown_decision = rails.decide(
         {
             "toolCall": {
                 "title": "Something /workspace/docs/x.md",
@@ -729,8 +727,8 @@ def test_la_nature_se_deduit_du_titre_quand_les_arguments_ne_disent_rien() -> No
             }
         }
     )
-    assert inconnu.allowed and not inconnu.inferred, (
-        "ce qu'on ne reconnaît pas garde la règle générale, sans prétendre déduire"
+    assert unknown_decision.allowed and not unknown_decision.inferred, (
+        "what is not recognised keeps the general rule, without claiming to deduce"
     )
     declare = rails.decide(
         {"toolCall": {"kind": "edit", "title": "Edit", "rawInput": {"file_path": "/workspace/src/a.py"}}}
@@ -738,27 +736,27 @@ def test_la_nature_se_deduit_du_titre_quand_les_arguments_ne_disent_rien() -> No
     assert declare.allowed and not declare.inferred
 
 
-def test_decision_serialisable_dit_si_la_nature_est_deduite() -> None:
+def test_serialisable_decision_says_whether_the_nature_is_deduced() -> None:
     event = guards(write_paths=["src/**"]).decide(PERMISSION_CLAUDE_CODE_WRITE).to_event()
     assert set(event) == {"allowed", "reason", "kind", "target", "inferred"}
     assert event["inferred"] is True
 
 
-def test_une_demande_de_nature_inconnue_passe_par_defaut_et_le_dit() -> None:
-    """Le défaut reste un filet : ce que le runner ne sait pas nommer passe, journalisé."""
+def test_a_request_of_unknown_nature_goes_through_by_default_and_says_so() -> None:
+    """The default stays a safety net: what the runner cannot name goes through, journaled."""
     rails = guards(write_paths=["src/**"])
     decision = rails.decide({"toolCall": {"title": "Frobnicate", "rawInput": {"foo": "bar"}}})
     assert decision.allowed and decision.kind == "read" and "a net" in decision.reason
 
 
-def test_la_politique_peut_fermer_les_demandes_de_nature_inconnue() -> None:
-    """`sandbox.unknown_requests: reject` (preset `regulated`) : refusé, et le refus dit à
-    l'agent par où passer — `report_finding`, `request_scope_change`."""
+def test_the_policy_can_close_requests_of_unknown_nature() -> None:
+    """`sandbox.unknown_requests: reject` (preset `regulated`): refused, and the refusal tells
+    the agent which way to go: `report_finding`, `request_scope_change`."""
     rails = guards(write_paths=["src/**"], unknown_requests="reject")
     decision = rails.decide({"toolCall": {"title": "Frobnicate", "rawInput": {"foo": "bar"}}})
     assert not decision.allowed and decision.kind == "unknown"
     assert "request_scope_change" in decision.reason and "report_finding" in decision.reason
-    # Ce qui est reconnu n'est pas touché : une lecture déclarée, une écriture déduite en périmètre.
+    # What is recognised is not touched: a declared read, a deduced write within the scope.
     assert rails.decide({"toolCall": {"kind": "read", "rawInput": {"path": "README.md"}}}).allowed
     assert rails.decide(
         {
@@ -778,31 +776,31 @@ def test_la_politique_peut_fermer_les_demandes_de_nature_inconnue() -> None:
     ).allowed
 
 
-def test_le_preset_regulated_ferme_les_demandes_inconnues() -> None:
+def test_the_regulated_preset_closes_unknown_requests() -> None:
     from choregos_core import load_preset
 
     assert load_preset("regulated").sandbox.unknown_requests == "reject"
     assert load_preset("team").sandbox.unknown_requests == "allow"
 
 
-# ──────── opencode a son propre schéma MCP (2026-09-27) ────────
+# ──────── opencode has its own MCP schema (2026-09-27) ────────
 
 
-def test_opencode_ecrit_ses_serveurs_mcp_dans_son_propre_schema(tmp_path: Path) -> None:
-    """Le format `mcpServers` répandu fait REFUSER toute la configuration à opencode.
+def test_opencode_writes_its_mcp_servers_in_its_own_schema(tmp_path: Path) -> None:
+    """The common `mcpServers` format makes opencode REFUSE the whole configuration.
 
-    Relevé en lançant `opencode acp` 1.18.31 à la main dans le locataire dev, avec la
-    configuration que ce backend écrivait :
+    Found by running `opencode acp` 1.18.31 by hand in the dev tenant, with the
+    configuration this backend used to write:
 
         Configuration is invalid at /tmp/ws/opencode.json
         ↳ Expected { readonly "type": "local", … } | { readonly "type": "remote", … },
           got {"type":"http","url":"http://localhost:7777/mcp"} mcp.choregos
         ↳ Missing key mcp.choregos.enabled
 
-    C'est la raison pour laquelle aucun agent n'avait jamais tourné sur ce locataire : opencode
-    écrivait ce refus sur sa sortie d'erreur, que le runner ne lisait pas, et l'étape mourait sur
-    un `TimeoutError` d'`initialize`. Avec `type: remote` + `enabled`, le même binaire répond en
-    six secondes — vérifié dans le même pod.
+    This is why no agent had ever run on this tenant: opencode wrote this refusal on its
+    error output, which the runner did not read, and the step died on an
+    `initialize` `TimeoutError`. With `type: remote` + `enabled`, the same binary answers in
+    six seconds, verified in the same pod.
     """
     import json as _json
 
@@ -812,23 +810,23 @@ def test_opencode_ecrit_ses_serveurs_mcp_dans_son_propre_schema(tmp_path: Path) 
     stage_input.tools.mcp = {
         "choregos": McpServerRef(url="http://localhost:7777/mcp"),
         "memory": McpServerRef(url="http://ecphoria:8432/mcp", env={"Authorization": "Bearer jeton"}),
-        "local": McpServerRef(command=["mon-serveur", "--stdio"], env={"TZ": "UTC"}),
+        "local": McpServerRef(command=["mon-server", "--stdio"], env={"TZ": "UTC"}),
     }
     plan = get_backend("opencode").launch_plan(stage_input, tmp_path)
     config = _json.loads(plan.files["opencode.json"])
 
-    for nom, serveur in config["mcp"].items():
-        assert serveur["type"] in {"remote", "local"}, f"{nom} : {serveur['type']} refusé par opencode"
-        assert serveur["enabled"] is True, f"{nom} : opencode exige `enabled`"
-        assert serveur["type"] != "http", f"{nom} : `http` est le format des AUTRES backends"
+    for name, server in config["mcp"].items():
+        assert server["type"] in {"remote", "local"}, f"{name}: {server['type']} refused by opencode"
+        assert server["enabled"] is True, f"{name} : opencode exige `enabled`"
+        assert server["type"] != "http", f"{name}: `http` is the format of the OTHER backends"
 
     assert config["mcp"]["memory"]["headers"] == {"Authorization": "Bearer jeton"}
-    assert config["mcp"]["local"]["command"] == ["mon-serveur", "--stdio"]
+    assert config["mcp"]["local"]["command"] == ["mon-server", "--stdio"]
     assert config["mcp"]["local"]["environment"] == {"TZ": "UTC"}
 
 
-def test_les_autres_backends_gardent_le_format_repandu(tmp_path: Path) -> None:
-    """Le format `mcpServers` reste celui de Claude Code, Codex et Gemini : ne pas l'aligner."""
+def test_the_other_backends_keep_the_common_format(tmp_path: Path) -> None:
+    """The `mcpServers` format stays that of Claude Code, Codex and Gemini: do not align it."""
     import json as _json
 
     from choregos_contracts import McpServerRef
@@ -839,17 +837,17 @@ def test_les_autres_backends_gardent_le_format_repandu(tmp_path: Path) -> None:
     assert serveurs["choregos"] == {"type": "http", "url": "http://localhost:7777/mcp"}
 
 
-def test_opencode_sait_ou_trouver_sa_cle_sans_jamais_la_porter(tmp_path: Path) -> None:
-    """Le fournisseur `choregos` a besoin d'une clé, et la config ne doit pas la contenir.
+def test_opencode_knows_where_to_find_its_key_without_ever_carrying_it(tmp_path: Path) -> None:
+    """The `choregos` provider needs a key, and the config must not contain it.
 
-    `OPENAI_API_KEY` de l'environnement ne sert qu'au fournisseur `openai` **intégré** ; un
-    fournisseur déclaré par la configuration n'en hérite pas. Sans `apiKey` dans ses options, la
-    passerelle répond « Authentication Error, No api key passed in ». Mesuré le 2026-09-27 dans le
-    locataire dev : `opencode run` échoue sans cette ligne et rend `pong` avec, sur le même modèle
-    et la même passerelle.
+    The environment's `OPENAI_API_KEY` only serves the **built-in** `openai` provider; a
+    provider declared by the configuration does not inherit it. Without `apiKey` in its options, the
+    gateway answers "Authentication Error, No api key passed in". Measured on 2026-09-27 in the
+    dev tenant: `opencode run` fails without this line and returns `pong` with it, on the same model
+    and the same gateway.
 
-    Et ce qui est écrit reste le NOM de la variable : `opencode.json` est posé dans l'espace de
-    travail de l'agent, donc susceptible d'être lu dans un diff.
+    And what is written stays the NAME of the variable: `opencode.json` is placed in the agent's
+    workspace, so it may be read in a diff.
     """
     import json as _json
 
@@ -859,10 +857,10 @@ def test_opencode_sait_ou_trouver_sa_cle_sans_jamais_la_porter(tmp_path: Path) -
 
     options = config["provider"]["choregos"]["options"]
     assert options["apiKey"] == "{env:OPENAI_API_KEY}", (
-        "sans clé, la passerelle refuse ; avec la clé en clair, le secret part dans l'espace de travail"
+        "without a key, the gateway refuses; with the key in clear, the secret goes into the workspace"
     )
-    assert "sk-le-secret-du-run" not in _json.dumps(config), "la clé du run est écrite dans la config"
+    assert "sk-le-secret-du-run" not in _json.dumps(config), "the run's key is written in the config"
 
-    # La variable, elle, est bien posée dans l'environnement du processus.
+    # The variable is indeed set in the process environment.
     env = get_backend("opencode").model_env(stage_input.model, stage_input.gateway_key)
     assert env["OPENAI_API_KEY"] == "sk-le-secret-du-run"

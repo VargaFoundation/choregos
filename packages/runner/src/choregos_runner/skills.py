@@ -1,13 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Les skills de l'agent, posées là où son backend les lit (ADR 0033).
+"""The agent's skills, placed where its backend reads them (ADR 0033).
 
-Le `StageInput` nomme chaque skill par son nom, sa version et son **empreinte**, posés quand le
-run a été préparé. Les fichiers viennent de l'API interne ; le runner recalcule leur empreinte
-avant d'écrire quoi que ce soit, et une empreinte fausse arrête le run : une skill modifiée entre
-la préparation et l'exécution n'est pas celle que la version de l'agent portait.
+The `StageInput` names each skill by its name, its version and its **digest**, set when the
+run was prepared. The files come from the internal API; the runner recomputes their digest
+before writing anything, and a wrong digest stops the run: a skill modified between
+preparation and execution is not the one the agent's version carried.
 
-Un backend qui ne lit pas de skills (`skills_dir = None`) les reçoit sous `.choregos/skills`, avec
-un index dans son prompt. Dans tous les cas, ces fichiers restent hors du diff.
+A backend that does not read skills (`skills_dir = None`) gets them under `.choregos/skills`, with
+an index in its prompt. In every case, these files stay out of the diff.
 """
 
 from __future__ import annotations
@@ -17,72 +17,72 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from choregos_contracts import SkillRef, empreinte_de_skill, is_inert_binary_path, skill_file_bytes
+from choregos_contracts import SkillRef, is_inert_binary_path, skill_digest, skill_file_bytes
 
-REPLI = ".choregos/skills"
+FALLBACK_DIR = ".choregos/skills"
 
 
-class SkillInvalide(RuntimeError):  # noqa: N818 - un refus motivé, qui arrête le run
+class InvalidSkill(RuntimeError):  # noqa: N818 - a reasoned refusal, which stops the run
     pass
 
 
 def _description(skill_md: str) -> str:
     if not skill_md.startswith("---"):
         return ""
-    fin = skill_md.find("\n---", 3)
+    end = skill_md.find("\n---", 3)
     try:
-        entete = yaml.safe_load(skill_md[3:fin]) if fin > 0 else {}
+        header = yaml.safe_load(skill_md[3:end]) if end > 0 else {}
     except yaml.YAMLError:
         return ""
-    return str((entete or {}).get("description") or "").strip() if isinstance(entete, dict) else ""
+    return str((header or {}).get("description") or "").strip() if isinstance(header, dict) else ""
 
 
-def poser(
-    livrees: list[dict[str, Any]], attendues: list[SkillRef], workspace: Path, skills_dir: str | None
+def place_skills(
+    delivered: list[dict[str, Any]], expected: list[SkillRef], workspace: Path, skills_dir: str | None
 ) -> tuple[list[str], str]:
-    """Vérifie et écrit les skills ; rend les fichiers écrits (hors du diff) et l'index du prompt."""
-    par_nom = {str(skill.get("slug")): skill for skill in livrees}
-    racine = skills_dir or REPLI
-    ecrits: list[str] = []
+    """Verify and write the skills; return the files written (out of the diff) and the prompt index."""
+    by_slug = {str(skill.get("slug")): skill for skill in delivered}
+    root = skills_dir or FALLBACK_DIR
+    written: list[str] = []
     index: list[str] = []
-    for ref in attendues:
-        skill = par_nom.get(ref.slug)
+    for ref in expected:
+        skill = by_slug.get(ref.slug)
         if skill is None:
-            raise SkillInvalide(f"the skill `{ref.slug}@{ref.version}` was not delivered")
-        fichiers: dict[str, str] = dict(skill.get("files") or {})
+            raise InvalidSkill(f"the skill `{ref.slug}@{ref.version}` was not delivered")
+        files: dict[str, str] = dict(skill.get("files") or {})
         try:
-            digest = empreinte_de_skill(fichiers)
-        except ValueError as erreur:
-            raise SkillInvalide(
-                f"the skill `{ref.slug}@{ref.version}` carries a corrupt binary: {erreur}"
-            ) from erreur
+            digest = skill_digest(files)
+        except ValueError as error:
+            raise InvalidSkill(
+                f"the skill `{ref.slug}@{ref.version}` carries a corrupt binary: {error}"
+            ) from error
         if digest != ref.digest:
-            raise SkillInvalide(
+            raise InvalidSkill(
                 f"the skill `{ref.slug}@{ref.version}` does not have the digest the run expects"
             )
-        for chemin, texte in fichiers.items():
-            normalise = posixpath.normpath(chemin)
-            if normalise.startswith(("../", "/")) or normalise == "..":
-                raise SkillInvalide(f"the skill `{ref.slug}` reaches outside its folder: `{chemin}`")
-            relatif = f"{racine}/{ref.slug}/{normalise}"
-            cible = workspace / relatif
-            cible.parent.mkdir(parents=True, exist_ok=True)
-            if is_inert_binary_path(normalise):
+        for path, text in files.items():
+            normalised = posixpath.normpath(path)
+            if normalised.startswith(("../", "/")) or normalised == "..":
+                raise InvalidSkill(f"the skill `{ref.slug}` reaches outside its folder: `{path}`")
+            relative = f"{root}/{ref.slug}/{normalised}"
+            target = workspace / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if is_inert_binary_path(normalised):
                 # A font or an image: the bytes, never an exec bit (a plain 0o644 file).
-                cible.write_bytes(skill_file_bytes(normalise, texte))
-                cible.chmod(0o644)
+                target.write_bytes(skill_file_bytes(normalised, text))
+                target.chmod(0o644)
             else:
-                cible.write_text(texte, encoding="utf-8")
-            ecrits.append(relatif)
+                target.write_text(text, encoding="utf-8")
+            written.append(relative)
         if skills_dir is None:
-            description = _description(fichiers.get("SKILL.md", ""))
-            index.append(f"- `{racine}/{ref.slug}/SKILL.md`" + (f" — {description}" if description else ""))
-    texte_index = (
+            description = _description(files.get("SKILL.md", ""))
+            index.append(f"- `{root}/{ref.slug}/SKILL.md`" + (f" — {description}" if description else ""))
+    index_text = (
         "## Skills\n\nBefore you act, read the skill that fits the task:\n\n" + "\n".join(index)
         if index
         else ""
     )
-    return ecrits, texte_index
+    return written, index_text
 
 
-__all__ = ["REPLI", "SkillInvalide", "poser"]
+__all__ = ["FALLBACK_DIR", "InvalidSkill", "place_skills"]

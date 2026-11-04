@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Runner Choregos : client ACP headless, guardrails, boucle DoD, publication.
 
-Le runner est jetable : il ne garde rien. Tout ce qu'il produit part par l'API interne
-(journal, findings, résultat) et dans l'object store (transcript, rapports).
+The runner is disposable: it keeps nothing. Everything it produces leaves through the internal API
+(journal, findings, result) and through the object store (transcript, reports).
 """
 
 from __future__ import annotations

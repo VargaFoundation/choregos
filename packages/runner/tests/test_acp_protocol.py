@@ -1,4 +1,4 @@
-"""Protocole ACP : encodage, décodage, et couverture des messages de la v0.11."""
+"""ACP protocol: encoding, decoding, and coverage of the v0.11 messages."""
 
 from __future__ import annotations
 
@@ -42,16 +42,16 @@ def test_notification_roundtrip() -> None:
     assert isinstance(decoded, Notification) and decoded.method == SESSION_UPDATE
 
 
-@pytest.mark.parametrize("line", ["", "   ", "bruit sur stdout", "{cassé", "[]", "null"])
+@pytest.mark.parametrize("line", ["", "   ", "noise on stdout", "{broken", "[]", "null"])
 def test_garbage_lines_are_ignored(line: str) -> None:
     assert decode(line) is None
 
 
 def test_encoding_is_one_json_per_line() -> None:
-    encoded = Request(id=1, method="m", params={"texte": "accentué é"}).encode()
+    encoded = Request(id=1, method="m", params={"text": "accented ☃"}).encode()
     assert encoded.endswith(b"\n")
     assert encoded.count(b"\n") == 1
-    assert json.loads(encoded)["params"]["texte"] == "accentué é"
+    assert json.loads(encoded)["params"]["text"] == "accented ☃"
 
 
 async def _client(tmp_path: Path, script: dict[str, Any], **kwargs: Any) -> AcpClient:
@@ -72,7 +72,7 @@ async def test_full_session_against_fake_agent(tmp_path: Path) -> None:
 
     async def on_permission(params: dict[str, Any]) -> tuple[bool, str]:
         permissions.append(params)
-        return True, "autorisé par le test"
+        return True, "allowed by the test"
 
     client = await _client(
         tmp_path,
@@ -94,10 +94,10 @@ async def test_full_session_against_fake_agent(tmp_path: Path) -> None:
 
 
 async def test_denied_permission_prevents_the_write(tmp_path: Path) -> None:
-    """Une permission refusée n'est pas contournée : le fichier n'existe pas (conformité §2.2)."""
+    """A refused permission is not bypassed: the file does not exist (conformance §2.2)."""
 
     async def deny(params: dict[str, Any]) -> tuple[bool, str]:
-        return False, "refusé par le test"
+        return False, "refused by the test"
 
     client = await _client(
         tmp_path,
@@ -107,13 +107,13 @@ async def test_denied_permission_prevents_the_write(tmp_path: Path) -> None:
     async with client:
         await client.initialize()
         await client.new_session(str(tmp_path))
-        outcome = await client.prompt("écris", timeout=30)
+        outcome = await client.prompt("write", timeout=30)
     assert not (tmp_path / "interdit.txt").exists()
     assert outcome.permission_denials == 1
 
 
 async def test_fs_requests_are_refused(tmp_path: Path) -> None:
-    """Le runner n'expose pas le système de fichiers : l'agent écrit lui-même, sous contrôle du diff."""
+    """The runner does not expose the file system: the agent writes itself, under the diff's control."""
     client = await _client(tmp_path, {"turns": [{}]})
     async with client:
         await client.initialize()
@@ -143,13 +143,13 @@ async def test_prompt_timeout_cancels_session(tmp_path: Path) -> None:
     async with client:
         await client.initialize()
         await client.new_session(str(tmp_path))
-        # Un timeout très court force l'annulation avant la réponse.
+        # A very short timeout forces the cancellation before the answer.
         outcome = await client.prompt("travaille", timeout=0.001)
     assert outcome.stop_reason in {"timeout", "end_turn"}
 
 
 def test_protocol_methods_are_covered() -> None:
-    """Les méthodes du protocole utilisées par le runner sont toutes nommées explicitement."""
+    """The protocol methods used by the runner are all named explicitly."""
     from choregos_runner.acp import protocol
 
     expected = {
@@ -167,61 +167,61 @@ def test_protocol_methods_are_covered() -> None:
     assert len(expected) == 10
 
 
-# ──────── un agent muet doit dire pourquoi il l'est (2026-09-27) ────────
+# ──────── a silent agent must say why it is (2026-09-27) ────────
 
 
 @pytest.mark.asyncio
-async def test_un_agent_qui_ne_repond_pas_explique_ce_qu_on_sait(tmp_path: Path) -> None:
-    """Un `TimeoutError` nu n'apprend rien ; ce refus nomme quoi regarder.
+async def test_an_agent_that_does_not_answer_explains_what_is_known(tmp_path: Path) -> None:
+    """A bare `TimeoutError` teaches nothing; this refusal names what to look at.
 
-    Sur le locataire dev, `opencode` n'a pas répondu à `initialize` et le journal du pod ne
-    portait QUE la pile d'`asyncio.wait_for` : rien sur la commande, rien sur l'état du
-    processus, rien de sa sortie d'erreur — alors que `stderr_tail` la collecte depuis le
-    premier jour et que personne ne la lisait à cet endroit.
+    On the dev tenant, `opencode` did not answer `initialize` and the pod's journal carried
+    ONLY the `asyncio.wait_for` stack: nothing about the command, nothing about the state of
+    the process, nothing from its error output, although `stderr_tail` has collected it since
+    day one and nobody read it at that place.
     """
     from choregos_runner.acp.client import AgentUnreachableError
 
-    muet = tmp_path / "muet.py"
-    muet.write_text(
+    silent = tmp_path / "silent.py"
+    silent.write_text(
         "import sys, time\n"
-        "print('je démarre mais je ne parle pas ACP', file=sys.stderr, flush=True)\n"
-        "print('provider introuvable : @ai-sdk/openai-compatible', file=sys.stderr, flush=True)\n"
+        "print('I start but I do not speak ACP', file=sys.stderr, flush=True)\n"
+        "print('provider not found: @ai-sdk/openai-compatible', file=sys.stderr, flush=True)\n"
         "time.sleep(30)\n",
         encoding="utf-8",
     )
-    client = AcpClient(command=[sys.executable, str(muet)], cwd=tmp_path)
+    client = AcpClient(command=[sys.executable, str(silent)], cwd=tmp_path)
     await client.start()
     try:
-        with pytest.raises(AgentUnreachableError) as refus:
+        with pytest.raises(AgentUnreachableError) as refusal:
             await client.request(INITIALIZE, {"protocolVersion": 1}, timeout=1.0)
     finally:
         await client.stop()
 
-    message = str(refus.value)
+    message = str(refusal.value)
     assert INITIALIZE in message, message
-    assert "muet.py" in message, "le refus doit nommer la commande lancée"
-    assert "alive" in message, "il doit dire que le processus n'a pas planté"
-    assert "provider introuvable" in message, "il doit porter la sortie d'erreur de l'agent"
+    assert "silent.py" in message, "the refusal must name the command launched"
+    assert "alive" in message, "it must say that the process did not crash"
+    assert "provider not found" in message, "it must carry the agent's error output"
 
 
 @pytest.mark.asyncio
-async def test_un_agent_qui_meurt_le_dit_aussi(tmp_path: Path) -> None:
-    """Le processus mort est l'autre moitié du diagnostic : son code de sortie."""
+async def test_an_agent_that_dies_says_so_too(tmp_path: Path) -> None:
+    """The dead process is the other half of the diagnosis: its exit code."""
     from choregos_runner.acp.client import AgentUnreachableError
 
-    mort = tmp_path / "mort.py"
-    mort.write_text("import sys\nsys.stderr.write('config illisible\\n')\nsys.exit(3)\n", encoding="utf-8")
-    client = AcpClient(command=[sys.executable, str(mort)], cwd=tmp_path)
+    dead = tmp_path / "dead.py"
+    dead.write_text("import sys\nsys.stderr.write('config unreadable\\n')\nsys.exit(3)\n", encoding="utf-8")
+    client = AcpClient(command=[sys.executable, str(dead)], cwd=tmp_path)
     await client.start()
     try:
-        with pytest.raises(AgentUnreachableError) as refus:
+        with pytest.raises(AgentUnreachableError) as refusal:
             await client.request(INITIALIZE, {"protocolVersion": 1}, timeout=1.0)
     finally:
         await client.stop()
 
-    message = str(refus.value)
+    message = str(refusal.value)
     assert "code 3" in message, message
-    assert "config illisible" in message, message
+    assert "config unreadable" in message, message
 
 
 # ──────── an ACP message longer than 64 KiB (#498) ────────

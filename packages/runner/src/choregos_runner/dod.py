@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Boucle « definition of done » : tests, lint, typage — et re-prompt borné si c'est rouge.
+"""The "definition of done" loop: tests, lint, typing, and a bounded re-prompt if it is red.
 
-C'est le mécanisme qui transforme « l'agent dit que c'est fini » en « les commandes du dépôt
-passent ». Le nombre d'itérations vient de la politique du projet.
+This is the mechanism that turns "the agent says it is finished" into "the repository's commands
+pass". The number of iterations comes from the project's policy.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ class CheckOutcome:
 
 @dataclass
 class DodReport:
-    """Résultat d'un passage complet de vérification."""
+    """Result of one complete verification pass."""
 
     checks: list[CheckOutcome] = field(default_factory=list)
     iterations: int = 0
@@ -62,7 +62,7 @@ class DodReport:
     def get(self, name: str) -> CheckOutcome | None:
         return next((check for check in self.checks if check.name == name), None)
 
-    #: {nom: vrai/faux} pour les faits MESURÉS par une commande (`dod.facts` du projet).
+    #: {name: true/false} for the facts MEASURED by a command (the project's `dod.facts`).
     facts: dict[str, bool] = field(default_factory=dict)
 
     def evidence(self) -> Evidence:
@@ -76,13 +76,13 @@ class DodReport:
             tests_failed=counts.get("failed"),
             lint=(lint.status if lint else None),
             typecheck=(typecheck.status if typecheck else None),
-            # `None` et non `{}` quand rien n'est mesuré : `merge_evidence` n'écrase que le
-            # non-`None`, donc un dictionnaire vide effacerait les faits de l'agent.
+            # `None` and not `{}` when nothing is measured: `merge_evidence` only overwrites the
+            # non-`None`, so an empty dictionary would erase the agent's facts.
             facts=(dict(self.facts) or None),
         )
 
     def prompt_for_repair(self) -> str:
-        """Message envoyé à l'agent quand les vérifications échouent."""
+        """Message sent to the agent when the verifications fail."""
         blocks = [
             "The repository's checks fail. Fix the cause, without widening the scope.",
             "",
@@ -100,7 +100,7 @@ class DodReport:
 
 
 def commands_for(stage_input: StageInput, workspace: Path) -> dict[str, str]:
-    """Commandes du dépôt : celles du projet d'abord, sinon les conventions du langage."""
+    """Repository commands: the project's first, otherwise the language's conventions."""
     project = stage_input.project
     defaults = LANGUAGE_DEFAULTS.get(_detect_language(workspace), {})
     return {
@@ -125,7 +125,7 @@ def _detect_language(workspace: Path) -> str:
 
 
 async def run_checks(stage_input: StageInput, workspace: Path, *, timeout: float = 1800.0) -> DodReport:
-    """Exécute tests, lint et typage. Une commande absente est `skipped`, jamais `ok`."""
+    """Run tests, lint and typing. A missing command is `skipped`, never `ok`."""
     report = DodReport()
     for name, command in commands_for(stage_input, workspace).items():
         if not command:
@@ -135,33 +135,33 @@ async def run_checks(stage_input: StageInput, workspace: Path, *, timeout: float
         report.checks.append(
             CheckOutcome(name=name, command=command, ok=result.ok, output=_truncate(result.output))
         )
-    await _mesurer_les_faits(stage_input, workspace, report, timeout=timeout)
+    await _measure_facts(stage_input, workspace, report, timeout=timeout)
     return report
 
 
-async def _mesurer_les_faits(
+async def _measure_facts(
     stage_input: StageInput, workspace: Path, report: DodReport, *, timeout: float
 ) -> None:
-    """Exécute les commandes de `dod.facts` : code de sortie 0 = vrai.
+    """Run the `dod.facts` commands: exit code 0 = true.
 
-    C'est ce qui sépare `evidence_facts` d'un récit. Avant, un fait métier — « le constat est
-    résolu », « la pièce d'identité est là » — était écrit par l'agent, donc croyable et pas
-    vérifiable. Une commande, elle, se rejoue.
+    This is what separates `evidence_facts` from a story. Before, a business fact ("the finding
+    is resolved", "the identity document is there") was written by the agent, so believable and not
+    verifiable. A command, on the other hand, can be replayed.
 
-    Les faits vivent à la racine de la configuration du projet, pas sous `repo` : un projet sans
-    dépôt doit pouvoir prouver quelque chose (ADR 0012).
+    The facts live at the root of the project configuration, not under `repo`: a project without
+    a repository must be able to prove something (ADR 0012).
     """
-    for nom, commande in stage_input.project.fact_commands.items():
-        if not commande.strip():
+    for name, command in stage_input.project.fact_commands.items():
+        if not command.strip():
             continue
-        resultat = await run_command(commande, cwd=workspace, timeout=timeout)
-        report.facts[nom] = resultat.ok
+        outcome = await run_command(command, cwd=workspace, timeout=timeout)
+        report.facts[name] = outcome.ok
         report.checks.append(
             CheckOutcome(
-                name=f"fait:{nom}",
-                command=commande,
-                ok=resultat.ok,
-                output=_truncate(resultat.output),
+                name=f"fait:{name}",
+                command=command,
+                ok=outcome.ok,
+                output=_truncate(outcome.output),
             )
         )
 
@@ -175,7 +175,7 @@ def _truncate(text: str, limit: int = MAX_OUTPUT_CHARS) -> str:
 
 
 def _parse_test_counts(output: str) -> dict[str, int]:
-    """Extrait « N passed, M failed » des sorties de test les plus courantes."""
+    """Extract "N passed, M failed" from the most common test outputs."""
     import re
 
     counts: dict[str, int] = {}
@@ -197,27 +197,27 @@ def _parse_test_counts(output: str) -> dict[str, int]:
 
 
 def merge_evidence(base: Evidence, measured: Evidence) -> Evidence:
-    """Les preuves mesurées par le runner l'emportent sur celles déclarées par l'agent.
+    """The evidence measured by the runner wins over what the agent declared.
 
-    `facts` fusionne **par clé**, pas en bloc : l'agent peut nommer cinq faits dont un seul est
-    mesuré par une commande. Écraser le dictionnaire entier perdrait les quatre autres — et la
-    perte serait silencieuse, ce qui est le pire des deux.
+    `facts` merges **by key**, not as a block: the agent may name five facts of which only one is
+    measured by a command. Overwriting the whole dictionary would lose the other four, and the
+    loss would be silent, which is the worse of the two.
     """
     data: dict[str, Any] = base.model_dump()
-    # Ce que la plateforme a mesuré, champ par champ (ADR 0045) : la console dit « constaté » pour
-    # ceux-là, « déclaré » pour le reste. La liste de l'agent est ignorée — il ne peut pas se dire
-    # mesuré.
-    mesures: set[str] = set()
+    # What the platform measured, field by field (ADR 0045): the console says "observed" for
+    # those, "declared" for the rest. The agent's list is ignored: it cannot call itself
+    # measured.
+    measured_fields: set[str] = set()
     for field_name, value in measured.model_dump().items():
         if value is None or field_name == "measured":
             continue
         if field_name == "facts" and isinstance(value, dict):
-            fusion = dict(data.get("facts") or {})
-            fusion.update(value)
-            data["facts"] = fusion
-            mesures.update(f"facts.{cle}" for cle in value)
+            merged_facts = dict(data.get("facts") or {})
+            merged_facts.update(value)
+            data["facts"] = merged_facts
+            measured_fields.update(f"facts.{key}" for key in value)
             continue
         data[field_name] = value
-        mesures.add(field_name)
-    data["measured"] = sorted(mesures)
+        measured_fields.add(field_name)
+    data["measured"] = sorted(measured_fields)
     return Evidence.model_validate(data)

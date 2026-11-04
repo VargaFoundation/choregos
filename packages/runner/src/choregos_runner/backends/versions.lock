@@ -1,15 +1,15 @@
-# Versions des agents ACP installées dans l'image `choregos-runner`.
-# Renovate propose les montées ; chaque bump passe par la suite de conformité (S2-11).
+# Versions of the ACP agents installed in the `choregos-runner` image.
+# Renovate proposes the upgrades; each bump goes through the conformance suite (S2-11).
 #
-# Une ligne annotée `# renovate: datasource=… depName=…` est suivie automatiquement.
-# Les autres sont épinglées à la main tant que leur source amont n'est pas confirmée :
-# mieux vaut un suivi manquant qu'un dépôt inventé sur lequel Renovate ouvrirait des PR
-# fausses.
+# A line annotated `# renovate: datasource=… depName=…` is tracked automatically.
+# The others are pinned by hand until their upstream source is confirmed:
+# better a missing tracking than an invented repository on which Renovate would open false
+# PRs.
 #
-# L'image installe trois de ces agents — `claude-agent-acp`, `gemini-cli`, `opencode` — et
-# appelle chacun à la construction. Les autres lignes décrivent des backends supportés dont
-# l'image ne porte pas le binaire.
-# OpenHands a été retiré le 2026-09-21 (docs/adr/0011-retrait-d-openhands.md).
+# The image installs three of these agents (`claude-agent-acp`, `gemini-cli`, `opencode`) and
+# calls each one at build time. The other lines describe supported backends whose
+# binary the image does not carry.
+# OpenHands was removed on 2026-09-21 (docs/adr/0011-openhands-removed.md).
 # npm `@agentclientprotocol/claude-agent-acp`, binary `claude-agent-acp` (#436); it replaces the
 # deprecated `@zed-industries/claude-code-acp`.
 claude-agent-acp=0.85.1
@@ -19,10 +19,10 @@ gemini-cli=0.60.0
 # renovate: datasource=github-releases depName=block/goose
 goose=1.9.0
 # renovate: datasource=github-releases depName=sst/opencode
-# 0.8.3 n'a jamais existé sur npm : la ligne 0.8 de `opencode-ai` s'arrête à 0.8.0. Le premier
-# build de l'image dans une CI l'a dit (`npm error notarget`) ; personne ne l'avait entendu
-# parce que l'installation était suivie d'un `|| echo`. 0.8.0 porte CVE-2026-22813, corrigée
-# en 1.1.10 — d'où la 1.x et non le plus proche voisin de l'épingle d'origine.
+# 0.8.3 never existed on npm: the 0.8 line of `opencode-ai` stops at 0.8.0. The first
+# image build in a CI said so (`npm error notarget`); nobody had heard it
+# because the installation was followed by `|| echo`. 0.8.0 carries CVE-2026-22813, fixed
+# in 1.1.10, hence 1.x and not the nearest neighbour of the original pin.
 opencode=1.18.31
 # S40-25b: `@opencode-ai/plugin`, which opencode installs from npm into every config directory at
 # start. The image bakes it into opencode's config root, so a run asks the registry for nothing.
