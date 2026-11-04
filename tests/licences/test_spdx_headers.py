@@ -3,7 +3,7 @@
 
 `LICENSE` and `NOTICE` state the repository's license. They do not follow a file that is copied
 elsewhere — and that is precisely what happens in an open-core model with two entities
-([ADR 0024](../../docs/adr/0024-deux-editions.md)): code flows between an Apache-2.0 repository
+([ADR 0024](../../docs/adr/0024-two-editions.md)): code flows between an Apache-2.0 repository
 and a proprietary one, in both directions, and nothing in the file said where it came from.
 
 `SPDX-License-Identifier` says it. It is readable by a human in one line and by a tool (`reuse`,
@@ -22,55 +22,55 @@ from __future__ import annotations
 
 import pathlib
 
-RACINE = pathlib.Path(__file__).resolve().parents[2]
+ROOT = pathlib.Path(__file__).resolve().parents[2]
 MARQUE = "SPDX-License-Identifier: Apache-2.0"
 
 
-def _fichiers_distribues() -> list[pathlib.Path]:
+def _shipped_files() -> list[pathlib.Path]:
     trouves: list[pathlib.Path] = []
     racines = [
-        *sorted((RACINE / "packages").glob("*/src")),
-        *sorted((RACINE / "apps").glob("*/src")),
-        RACINE / "apps/api/src/choregos_api/migrations",
+        *sorted((ROOT / "packages").glob("*/src")),
+        *sorted((ROOT / "apps").glob("*/src")),
+        ROOT / "apps/api/src/choregos_api/migrations",
     ]
-    for racine in racines:
-        if not racine.exists():
+    for root in racines:
+        if not root.exists():
             continue
-        trouves += [f for f in sorted(racine.rglob("*.py")) if "__pycache__" not in f.parts]
-    for dossier in (RACINE / "apps/web/src", RACINE / "packages/contracts/ts"):
+        trouves += [f for f in sorted(root.rglob("*.py")) if "__pycache__" not in f.parts]
+    for dossier in (ROOT / "apps/web/src", ROOT / "packages/contracts/ts"):
         if dossier.exists():
             trouves += [f for f in sorted(dossier.rglob("*")) if f.suffix in {".ts", ".tsx"}]
     return trouves
 
 
-def test_il_y_a_bien_des_fichiers_a_verifier() -> None:
+def test_there_are_files_to_check() -> None:
     """Without this guard, a path that changes would make the test green while looking at nothing."""
-    fichiers = _fichiers_distribues()
-    assert len(fichiers) > 150, f"only {len(fichiers)} files found: the scope has drifted"
+    files = _shipped_files()
+    assert len(files) > 150, f"only {len(files)} files found: the scope has drifted"
 
 
-def test_chaque_fichier_distribue_declare_sa_licence() -> None:
+def test_every_shipped_file_declares_its_licence() -> None:
     sans: list[str] = []
-    for fichier in _fichiers_distribues():
+    for file in _shipped_files():
         # In the first lines: after a possible shebang, before the docstring.
-        tete = "\n".join(fichier.read_text(encoding="utf-8").splitlines()[:5])
+        tete = "\n".join(file.read_text(encoding="utf-8").splitlines()[:5])
         if MARQUE not in tete:
-            sans.append(str(fichier.relative_to(RACINE)))
+            sans.append(str(file.relative_to(ROOT)))
     assert not sans, (
         f"{len(sans)} distributed file(s) without `{MARQUE}` at the top — add the line "
         f"(`# …` in Python, `// …` in TypeScript):\n  " + "\n  ".join(sans[:20])
     )
 
 
-def test_aucun_fichier_ne_declare_une_autre_licence() -> None:
+def test_no_file_declares_another_licence() -> None:
     """An `SPDX-License-Identifier` other than Apache-2.0 flags code that came from elsewhere.
 
     This is the case that really matters: not the omission, which shows, but the file that openly
     declares an incompatible license and that nobody reads.
     """
     etrangers: list[str] = []
-    for fichier in _fichiers_distribues():
-        for ligne in fichier.read_text(encoding="utf-8").splitlines()[:5]:
-            if "SPDX-License-Identifier" in ligne and "Apache-2.0" not in ligne:
-                etrangers.append(f"{fichier.relative_to(RACINE)} : {ligne.strip()}")
+    for file in _shipped_files():
+        for line in file.read_text(encoding="utf-8").splitlines()[:5]:
+            if "SPDX-License-Identifier" in line and "Apache-2.0" not in line:
+                etrangers.append(f"{file.relative_to(ROOT)} : {line.strip()}")
     assert not etrangers, "this repository is entirely Apache-2.0:\n  " + "\n  ".join(etrangers)

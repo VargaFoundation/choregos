@@ -793,7 +793,6 @@ AREAS: dict[str, tuple[str, ...]] = {
     "contracts": ("packages/contracts/",),
     "packages-other": ("packages/",),
     "tests-language": (
-        "tests/langue/",
         "tests/language/",
         "tests/docs/",
         "tests/ci/",

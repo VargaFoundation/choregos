@@ -3,7 +3,7 @@
 > This file was **emptied by accident** on 2026-09-24 (commit `98c2a492`): switching the
 > documentation to English was meant to turn `CLAUDE.md` into a pointer to `AGENTS.md`, and
 > replaced the content of `AGENTS.md` with an import of itself. `CLAUDE.md` is a symbolic link to
-> this file; both are therefore the same page, and `tests/docs/test_instructions_des_agents.py`
+> this file; both are therefore the same page, and `tests/docs/test_agent_instructions.py`
 > refuses to let it be emptied again.
 
 ## Context

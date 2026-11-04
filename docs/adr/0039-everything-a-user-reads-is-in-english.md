@@ -31,7 +31,7 @@ product.
    Installed agents and skills are never rewritten (ADR 0033): an organisation that already has
    `coordinateur-onboarding` v1 keeps it until it publishes the next version.
 3. **Code, comments, docstrings, `docs/plan` and commit messages stay in French**, as AGENTS.md says.
-4. **A guard enforces it, story by story.** `tests/langue/test_anglais.py` reads what is shipped —
+4. **A guard enforces it, story by story.** `tests/language/test_shipped_text_in_english.py` reads what is shipped —
    only the fields a person reads, without code spans and Jinja — and refuses French. Each later
    story (core messages, contracts, API, orchestrator, playbooks) adds its own scan to the same
    file, so the guard grows with the translation and never lags behind it.
@@ -74,7 +74,7 @@ template **ships**:
   (parameter `motif`) is `check` (`reason`), the old pair kept as an alias;
 - `tools/rename_tenant_names.py` re-publishes a tenant's French names as new English versions
   (`docs/runbooks/rename-tenant-names.md`); it never renames a project slug;
-- `tests/langue/test_template_identifiers.py` splits every key, value and path of every template
+- `tests/language/test_template_identifiers.py` splits every key, value and path of every template
   into words and refuses those of a lexicon of French identifier words (`tools/check_english.py`,
   `IDENTIFIER_WORDS`); the lexicon is a net, not a dictionary: a French word it does not know is
   added the day it is found.

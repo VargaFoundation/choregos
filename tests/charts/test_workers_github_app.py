@@ -16,8 +16,8 @@ from typing import Any
 import pytest
 import yaml
 
-RACINE = pathlib.Path(__file__).resolve().parents[2]
-CHART = RACINE / "charts" / "choregos"
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+CHART = ROOT / "charts" / "choregos"
 
 pytestmark = pytest.mark.skipif(shutil.which("helm") is None, reason="helm absent")
 
@@ -33,16 +33,16 @@ def _deploiements() -> list[dict[str, Any]]:
     return [d for d in yaml.safe_load_all(rendu) if d and d.get("kind") == "Deployment"]
 
 
-def test_chaque_worker_de_l_orchestrateur_recoit_l_app_github_en_option() -> None:
+def test_every_worker_of_the_orchestrator_receives_the_github_app_as_an_option() -> None:
     workers = [d for d in _deploiements() if "orchestrator" in d["metadata"]["name"]]
     assert workers, "no orchestrator worker rendered"
     for worker in workers:
         conteneur = worker["spec"]["template"]["spec"]["containers"][0]
         env = {e["name"]: e for e in conteneur.get("env", [])}
-        for nom, cle in (
+        for name, key in (
             ("CHOREGOS_GITHUB_APP_ID", "github-app-id"),
             ("CHOREGOS_GITHUB_APP_PRIVATE_KEY", "github-app-private-key"),
         ):
-            assert nom in env, f"{worker['metadata']['name']} does not receive {nom}"
-            ref = env[nom]["valueFrom"]["secretKeyRef"]
-            assert (ref["name"], ref["key"], ref.get("optional")) == ("choregos-api-secrets", cle, True)
+            assert name in env, f"{worker['metadata']['name']} does not receive {name}"
+            ref = env[name]["valueFrom"]["secretKeyRef"]
+            assert (ref["name"], ref["key"], ref.get("optional")) == ("choregos-api-secrets", key, True)

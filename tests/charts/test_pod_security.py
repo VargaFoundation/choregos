@@ -18,43 +18,43 @@ from typing import Any
 import pytest
 import yaml
 
-RACINE = pathlib.Path(__file__).resolve().parents[2]
-CHART = RACINE / "charts" / "choregos"
-ENVIRONNEMENTS = ("local", "dev", "staging", "prod")
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+CHART = ROOT / "charts" / "choregos"
+ENVIRONMENTS = ("local", "dev", "staging", "prod")
 
 pytestmark = pytest.mark.skipif(shutil.which("helm") is None, reason="helm absent")
 
 
-def _rendu(env: str) -> list[dict[str, Any]]:
-    resultat = subprocess.run(
+def _rendered(env: str) -> list[dict[str, Any]]:
+    result = subprocess.run(
         ["helm", "template", "choregos", str(CHART), "-f", str(CHART / "values" / f"{env}.yaml")],
         capture_output=True,
         text=True,
         check=True,
         timeout=120,
     )
-    return [d for d in yaml.safe_load_all(resultat.stdout) if d]
+    return [d for d in yaml.safe_load_all(result.stdout) if d]
 
 
-def _modeles_de_pod(documents: list[dict[str, Any]]) -> list[tuple[str, dict[str, Any]]]:
-    sortie: list[tuple[str, dict[str, Any]]] = []
+def _pod_templates(documents: list[dict[str, Any]]) -> list[tuple[str, dict[str, Any]]]:
+    output: list[tuple[str, dict[str, Any]]] = []
     for doc in documents:
-        kind, nom = doc.get("kind"), doc.get("metadata", {}).get("name", "?")
+        kind, name = doc.get("kind"), doc.get("metadata", {}).get("name", "?")
         if kind in {"Deployment", "StatefulSet", "Job", "Rollout"}:
-            sortie.append((f"{kind}/{nom}", doc["spec"]["template"]["spec"]))
+            output.append((f"{kind}/{name}", doc["spec"]["template"]["spec"]))
         elif kind == "CronJob":
-            sortie.append((f"{kind}/{nom}", doc["spec"]["jobTemplate"]["spec"]["template"]["spec"]))
+            output.append((f"{kind}/{name}", doc["spec"]["jobTemplate"]["spec"]["template"]["spec"]))
         elif kind == "Pod":
-            sortie.append((f"{kind}/{nom}", doc["spec"]))
-    return sortie
+            output.append((f"{kind}/{name}", doc["spec"]))
+    return output
 
 
-def _confined(profil: dict[str, Any] | None) -> bool:
+def _confined(profile: dict[str, Any] | None) -> bool:
     """An absent profile passes (`=()` anchor); a present one must be RuntimeDefault or Localhost."""
-    return profil is None or profil.get("type") in {"RuntimeDefault", "Localhost"}
+    return profile is None or profile.get("type") in {"RuntimeDefault", "Localhost"}
 
 
-def manquements(spec: dict[str, Any]) -> list[str]:
+def violations(spec: dict[str, Any]) -> list[str]:
     """What the `non-root` rule would fault this pod for; empty if it passes."""
     fautes: list[str] = []
     pod = spec.get("securityContext") or {}
@@ -66,36 +66,36 @@ def manquements(spec: dict[str, Any]) -> list[str]:
         fautes.append("pod.appArmorProfile")
     # Ephemeral containers: only their profiles are judged (as in the policy).
     for conteneur in spec.get("ephemeralContainers", []):
-        contexte = conteneur.get("securityContext") or {}
-        for profil in ("seccompProfile", "appArmorProfile"):
-            if not _confined(contexte.get(profil)):
-                fautes.append(f"{conteneur['name']}.{profil}")
+        context = conteneur.get("securityContext") or {}
+        for profile in ("seccompProfile", "appArmorProfile"):
+            if not _confined(context.get(profile)):
+                fautes.append(f"{conteneur['name']}.{profile}")
     for conteneur in spec.get("containers", []) + spec.get("initContainers", []):
-        contexte = conteneur.get("securityContext") or {}
+        context = conteneur.get("securityContext") or {}
         # A container's own profile overrides the pod's (finding #784).
-        for profil in ("seccompProfile", "appArmorProfile"):
-            if not _confined(contexte.get(profil)):
-                fautes.append(f"{conteneur['name']}.{profil}")
-        if contexte.get("allowPrivilegeEscalation") is not False:
+        for profile in ("seccompProfile", "appArmorProfile"):
+            if not _confined(context.get(profile)):
+                fautes.append(f"{conteneur['name']}.{profile}")
+        if context.get("allowPrivilegeEscalation") is not False:
             fautes.append(f"{conteneur['name']}.allowPrivilegeEscalation")
-        if "ALL" not in ((contexte.get("capabilities") or {}).get("drop") or []):
+        if "ALL" not in ((context.get("capabilities") or {}).get("drop") or []):
             fautes.append(f"{conteneur['name']}.capabilities.drop")
     return fautes
 
 
-@pytest.mark.parametrize("env", ENVIRONNEMENTS)
-def test_chaque_pod_du_chart_passe_la_regle_non_root(env: str) -> None:
-    fautifs = {nom: manquements(spec) for nom, spec in _modeles_de_pod(_rendu(env))}
-    assert {nom: f for nom, f in fautifs.items() if f} == {}, (
+@pytest.mark.parametrize("env", ENVIRONMENTS)
+def test_every_pod_of_the_chart_passes_the_non_root_rule(env: str) -> None:
+    offenders = {name: violations(spec) for name, spec in _pod_templates(_rendered(env))}
+    assert {name: f for name, f in offenders.items() if f} == {}, (
         f"{env}: the Kyverno rule would refuse these pods"
     )
 
 
-def test_la_regle_kyverno_est_bien_stricte() -> None:
+def test_the_kyverno_rule_is_strict() -> None:
     """The file itself: no more conditional anchor on the fields that matter."""
-    politique = yaml.safe_load((RACINE / "infra" / "policies" / "pod-security.yaml").read_text())
-    regle = next(r for r in politique["spec"]["rules"] if r["name"] == "non-root")
-    motif = regle["validate"]["pattern"]["spec"]
+    policy = yaml.safe_load((ROOT / "infra" / "policies" / "pod-security.yaml").read_text())
+    rule = next(r for r in policy["spec"]["rules"] if r["name"] == "non-root")
+    motif = rule["validate"]["pattern"]["spec"]
     assert motif["securityContext"]["runAsNonRoot"] is True, "`=(securityContext)` laissait passer un pod nu"
     assert "seccompProfile" in motif["securityContext"]
     assert motif["containers"][0]["securityContext"]["allowPrivilegeEscalation"] is False
@@ -116,34 +116,34 @@ def _pod(**surcharges: Any) -> dict[str, Any]:
 
 def test_a_profile_set_on_a_container_or_an_init_container_is_judged() -> None:
     """Finding #784: the pod's RuntimeDefault used to hide a container's own `Unconfined`."""
-    assert manquements(_pod()) == []
+    assert violations(_pod()) == []
     unconfined = {"type": "Unconfined"}
-    for profil in ("seccompProfile", "appArmorProfile"):
+    for profile in ("seccompProfile", "appArmorProfile"):
         spec = _pod()
-        spec["containers"][0]["securityContext"][profil] = unconfined
-        assert manquements(spec) == [f"main.{profil}"]
+        spec["containers"][0]["securityContext"][profile] = unconfined
+        assert violations(spec) == [f"main.{profile}"]
         init = {**_pod()["containers"][0], "name": "side"}
-        init["securityContext"] = {**init["securityContext"], profil: unconfined}
-        assert manquements(_pod(initContainers=[init])) == [f"side.{profil}"]
-        assert manquements(
-            _pod(ephemeralContainers=[{"name": "dbg", "securityContext": {profil: unconfined}}])
-        ) == [f"dbg.{profil}"]
+        init["securityContext"] = {**init["securityContext"], profile: unconfined}
+        assert violations(_pod(initContainers=[init])) == [f"side.{profile}"]
+        assert violations(
+            _pod(ephemeralContainers=[{"name": "dbg", "securityContext": {profile: unconfined}}])
+        ) == [f"dbg.{profile}"]
     spec = _pod()
     spec["securityContext"]["appArmorProfile"] = unconfined
-    assert manquements(spec) == ["pod.appArmorProfile"]
+    assert violations(spec) == ["pod.appArmorProfile"]
     spec = _pod()
     spec["containers"][0]["securityContext"]["seccompProfile"] = {
         "type": "Localhost",
         "localhostProfile": "x",
     }
-    assert manquements(spec) == []
+    assert violations(spec) == []
 
 
 def test_the_policy_file_judges_container_profiles() -> None:
-    politique = yaml.safe_load((RACINE / "infra" / "policies" / "pod-security.yaml").read_text())
-    regle = next(r for r in politique["spec"]["rules"] if r["name"] == "non-root")
-    motif = regle["validate"]["pattern"]["spec"]
+    policy = yaml.safe_load((ROOT / "infra" / "policies" / "pod-security.yaml").read_text())
+    rule = next(r for r in policy["spec"]["rules"] if r["name"] == "non-root")
+    motif = rule["validate"]["pattern"]["spec"]
     assert "=(appArmorProfile)" in motif["securityContext"]
-    for cle in ("containers", "=(initContainers)"):
-        contexte = motif[cle][0]["securityContext"]
-        assert "=(seccompProfile)" in contexte and "=(appArmorProfile)" in contexte, cle
+    for key in ("containers", "=(initContainers)"):
+        context = motif[key][0]["securityContext"]
+        assert "=(seccompProfile)" in context and "=(appArmorProfile)" in context, key

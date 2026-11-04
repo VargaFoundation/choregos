@@ -17,11 +17,11 @@ import shutil
 import subprocess
 import sys
 
-RACINE = pathlib.Path(__file__).resolve().parents[2]
-E2E = RACINE / "tests" / "e2e"
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+E2E = ROOT / "tests" / "e2e"
 
 #: The variables the end-to-end bench sets (`ENVIRONNEMENT_E2E` in its conftest).
-VARIABLES_DU_BANC = (
+BENCH_VARIABLES = (
     "CHOREGOS_FAKES",
     "CHOREGOS_ENV",
     "CHOREGOS_DEV_LOGIN_ENABLED",
@@ -29,28 +29,28 @@ VARIABLES_DU_BANC = (
     "CHOREGOS_GENERIC_WEBHOOK_SECRET",
 )
 
-SONDE = '''
+PROBE = '''
 import os
 
-def test_sonde_259() -> None:
+def test_probe_259() -> None:
     """Another directory of the same session: it sees the original environment."""
-    vues = {{nom: os.environ.get(nom) for nom in {variables!r}}}
-    assert vues == {attendu!r}, f"the end-to-end bench left behind: {{vues}}"
+    seen = {{nom: os.environ.get(nom) for nom in {variables!r}}}
+    assert seen == {expected!r}, f"the end-to-end bench left behind: {{seen}}"
 '''
 
 
-def _environnement_propre(**poses: str) -> dict[str, str]:
+def _clean_environment(**poses: str) -> dict[str, str]:
     """The current process environment, without any `CHOREGOS_*` variable, plus `poses`."""
-    env = {nom: valeur for nom, valeur in os.environ.items() if not nom.startswith("CHOREGOS_")}
+    env = {name: value for name, value in os.environ.items() if not name.startswith("CHOREGOS_")}
     env.update(poses)
     return env
 
 
-def _pytest(*args: str, racine: pathlib.Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+def _pytest(*args: str, root: pathlib.Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
     """A pytest session played from `racine`, with the configuration it finds there."""
     return subprocess.run(
         [sys.executable, "-m", "pytest", "-p", "no:cacheprovider", *args],
-        cwd=racine,
+        cwd=root,
         env=env,
         capture_output=True,
         text=True,
@@ -59,27 +59,27 @@ def _pytest(*args: str, racine: pathlib.Path, env: dict[str, str]) -> subprocess
     )
 
 
-def _sonde(dossier: pathlib.Path, attendu: dict[str, str | None]) -> pathlib.Path:
-    dossier.mkdir(parents=True)
-    fichier = dossier / "test_sonde_259.py"
-    fichier.write_text(SONDE.format(variables=VARIABLES_DU_BANC, attendu=attendu), encoding="utf-8")
-    return fichier
+def _probe(directory: pathlib.Path, expected: dict[str, str | None]) -> pathlib.Path:
+    directory.mkdir(parents=True)
+    file = directory / "test_probe_259.py"
+    file.write_text(PROBE.format(variables=BENCH_VARIABLES, expected=expected), encoding="utf-8")
+    return file
 
 
-def test_collecter_le_bout_en_bout_ne_touche_pas_l_environnement_d_un_autre_repertoire(
+def test_collecting_the_end_to_end_does_not_touch_the_environment_of_another_directory(
     tmp_path: pathlib.Path,
 ) -> None:
     """The proof command of #259: `tests/e2e` collected, its scenarios dropped by `-k`.
 
     With the variables set at the conftest's import, the probe saw all of them.
     """
-    sonde = _sonde(tmp_path / "autre", dict.fromkeys(VARIABLES_DU_BANC))
-    resultat = _pytest(str(E2E), str(sonde), "-k", "sonde_259", racine=RACINE, env=_environnement_propre())
-    assert resultat.returncode == 0, resultat.stdout[-3000:] + resultat.stderr[-3000:]
-    assert "1 passed" in resultat.stdout, resultat.stdout[-3000:]
+    probe = _probe(tmp_path / "other", dict.fromkeys(BENCH_VARIABLES))
+    result = _pytest(str(E2E), str(probe), "-k", "probe_259", root=ROOT, env=_clean_environment())
+    assert result.returncode == 0, result.stdout[-3000:] + result.stderr[-3000:]
+    assert "1 passed" in result.stdout, result.stdout[-3000:]
 
 
-def test_le_banc_rend_l_environnement_apres_son_dernier_test(tmp_path: pathlib.Path) -> None:
+def test_the_bench_gives_the_environment_back_after_its_last_test(tmp_path: pathlib.Path) -> None:
     """The bench's real conftest, in front of a test that uses it, then another directory's probe.
 
     The bench's test sees its variables, except the one the environment already set, which wins.
@@ -101,14 +101,14 @@ def test_le_banc_rend_l_environnement_apres_son_dernier_test(tmp_path: pathlib.P
         "    assert os.environ['CHOREGOS_ENV'] == 'deja-pose', 'a value already set wins'\n",
         encoding="utf-8",
     )
-    attendu: dict[str, str | None] = dict.fromkeys(VARIABLES_DU_BANC)
-    attendu["CHOREGOS_ENV"] = "deja-pose"
-    sonde = _sonde(tmp_path / "apps" / "api" / "tests", attendu)
-    resultat = _pytest(
+    expected: dict[str, str | None] = dict.fromkeys(BENCH_VARIABLES)
+    expected["CHOREGOS_ENV"] = "deja-pose"
+    probe = _probe(tmp_path / "apps" / "api" / "tests", expected)
+    result = _pytest(
         "tests/e2e",
-        str(sonde.relative_to(tmp_path)),
-        racine=tmp_path,
-        env=_environnement_propre(CHOREGOS_ENV="deja-pose"),
+        str(probe.relative_to(tmp_path)),
+        root=tmp_path,
+        env=_clean_environment(CHOREGOS_ENV="deja-pose"),
     )
-    assert resultat.returncode == 0, resultat.stdout[-3000:] + resultat.stderr[-3000:]
-    assert "2 passed" in resultat.stdout, resultat.stdout[-3000:]
+    assert result.returncode == 0, result.stdout[-3000:] + result.stderr[-3000:]
+    assert "2 passed" in result.stdout, result.stdout[-3000:]

@@ -1,1 +1,1 @@
-"""La documentation est vérifiée comme du code."""
+"""The documentation is checked like code."""

@@ -20,34 +20,34 @@ from typing import Any
 import pytest
 import yaml
 
-RACINE = pathlib.Path(__file__).resolve().parents[2]
-CHART = RACINE / "charts" / "choregos"
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+CHART = ROOT / "charts" / "choregos"
 
 pytestmark = pytest.mark.skipif(shutil.which("helm") is None, reason="helm absent")
 
 
-def _rendu(*surcharges: str) -> list[dict[str, Any]]:
-    commande = ["helm", "template", "choregos", str(CHART)]
+def _rendered(*surcharges: str) -> list[dict[str, Any]]:
+    command = ["helm", "template", "choregos", str(CHART)]
     for surcharge in surcharges:
-        commande += ["--set", surcharge]
-    sortie = subprocess.run(commande, capture_output=True, text=True, check=True, timeout=120)
-    return [doc for doc in yaml.safe_load_all(sortie.stdout) if doc]
+        command += ["--set", surcharge]
+    output = subprocess.run(command, capture_output=True, text=True, check=True, timeout=120)
+    return [doc for doc in yaml.safe_load_all(output.stdout) if doc]
 
 
 def _objets(docs: list[dict[str, Any]], kind: str) -> list[dict[str, Any]]:
     return [doc for doc in docs if doc.get("kind") == kind]
 
 
-def test_la_saveur_par_defaut_reste_prometheus_operator() -> None:
+def test_the_default_flavour_stays_prometheus_operator() -> None:
     """Changing the default would break every existing installation."""
-    docs = _rendu()
+    docs = _rendered()
     assert _objets(docs, "ServiceMonitor"), "no more ServiceMonitor by default"
     assert _objets(docs, "PrometheusRule"), "no more PrometheusRule by default"
     assert not _objets(docs, "VMServiceScrape") and not _objets(docs, "VMRule")
 
 
-def test_la_saveur_victoriametrics_ne_rend_que_des_types_victoriametrics() -> None:
-    docs = _rendu("monitoring.flavour=victoriametrics")
+def test_the_victoriametrics_flavour_renders_only_victoriametrics_types() -> None:
+    docs = _rendered("monitoring.flavour=victoriametrics")
     scrapes, regles = _objets(docs, "VMServiceScrape"), _objets(docs, "VMRule")
     assert scrapes, "no VMServiceScrape: nothing will be collected"
     assert regles, "no VMRule: no alert will be evaluated"
@@ -59,22 +59,22 @@ def test_la_saveur_victoriametrics_ne_rend_que_des_types_victoriametrics() -> No
     assert not restes, f"inert types rendered at the same time: {restes}"
 
 
-def test_il_n_y_a_qu_un_seul_vmrule() -> None:
+def test_there_is_only_one_vmrule() -> None:
     """Two VMRules in the same vmalert scope make the operator loop -- the host platform
     has already paid for it once, and the integration contract spells it out in black and white."""
-    assert len(_objets(_rendu("monitoring.flavour=victoriametrics"), "VMRule")) == 1
+    assert len(_objets(_rendered("monitoring.flavour=victoriametrics"), "VMRule")) == 1
 
 
-def test_les_deux_saveurs_portent_exactement_les_memes_alertes() -> None:
+def test_both_flavours_carry_exactly_the_same_alerts() -> None:
     """Without this guard, an alert added on one side would be missing on the other, silently."""
-    prometheus = _objets(_rendu(), "PrometheusRule")[0]["spec"]["groups"]
-    victoria = _objets(_rendu("monitoring.flavour=victoriametrics"), "VMRule")[0]["spec"]["groups"]
+    prometheus = _objets(_rendered(), "PrometheusRule")[0]["spec"]["groups"]
+    victoria = _objets(_rendered("monitoring.flavour=victoriametrics"), "VMRule")[0]["spec"]["groups"]
     assert prometheus == victoria, "the rules diverged between the two flavours"
-    noms = [regle["alert"] for groupe in prometheus for regle in groupe["rules"]]
-    assert len(noms) == 5, f"5 alertes attendues, {len(noms)} rendues : {noms}"
+    names = [rule["alert"] for group in prometheus for rule in group["rules"]]
+    assert len(names) == 5, f"5 alertes attendues, {len(names)} rendues : {names}"
 
 
-def test_une_saveur_inconnue_arrete_le_rendu_et_se_nomme() -> None:
+def test_an_unknown_flavour_stops_the_render_and_names_itself() -> None:
     """A typo must not produce a silently blind deployment."""
     echec = subprocess.run(
         ["helm", "template", "choregos", str(CHART), "--set", "monitoring.flavour=victoria"],

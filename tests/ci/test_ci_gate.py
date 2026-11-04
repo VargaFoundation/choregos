@@ -23,32 +23,32 @@ def _workflow() -> dict:
     return yaml.safe_load(CI.read_text(encoding="utf-8"))
 
 
-def _porte(resultats: dict[str, str]) -> int:
+def _gate(results: dict[str, str]) -> int:
     """The `ci-ok` script, played with `needs` as GitHub renders it: the exit code."""
-    (etape,) = [e for e in _workflow()["jobs"]["ci-ok"]["steps"] if "run" in e]
-    needs = {job: {"result": resultat, "outputs": {}} for job, resultat in resultats.items()}
-    script = etape["run"].replace("${{ toJSON(needs) }}", json.dumps(needs, indent=2))
+    (step,) = [e for e in _workflow()["jobs"]["ci-ok"]["steps"] if "run" in e]
+    needs = {job: {"result": result, "outputs": {}} for job, result in results.items()}
+    script = step["run"].replace("${{ toJSON(needs) }}", json.dumps(needs, indent=2))
     return subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=False).returncode
 
 
-def _tous(resultat: str) -> dict[str, str]:
-    return dict.fromkeys(_workflow()["jobs"]["ci-ok"]["needs"], resultat)
+def _all(result: str) -> dict[str, str]:
+    return dict.fromkeys(_workflow()["jobs"]["ci-ok"]["needs"], result)
 
 
-def test_la_porte_attend_chaque_job_de_la_ci() -> None:
+def test_the_gate_waits_for_every_job_of_the_ci() -> None:
     """A job the gate does not wait for, it does not judge."""
     jobs = set(_workflow()["jobs"]) - {"ci-ok"}
     assert set(_workflow()["jobs"]["ci-ok"]["needs"]) == jobs
 
 
-def test_reussis_ou_sautes_la_porte_s_ouvre() -> None:
-    resultats = _tous("success")
-    resultats["charts"] = "skipped"
-    assert _porte(resultats) == 0
+def test_succeeded_or_skipped_the_gate_opens() -> None:
+    results = _all("success")
+    results["charts"] = "skipped"
+    assert _gate(results) == 0
 
 
-@pytest.mark.parametrize("resultat", ["failure", "cancelled", "abandoned", "timed_out", "quelque_chose"])
-def test_tout_autre_resultat_ferme_la_porte(resultat: str) -> None:
-    resultats = _tous("success")
-    resultats["python"] = resultat
-    assert _porte(resultats) == 1, f"a `{resultat}` job got through the gate"
+@pytest.mark.parametrize("result", ["failure", "cancelled", "abandoned", "timed_out", "something_else"])
+def test_any_other_result_closes_the_gate(result: str) -> None:
+    results = _all("success")
+    results["python"] = result
+    assert _gate(results) == 1, f"a `{result}` job got through the gate"

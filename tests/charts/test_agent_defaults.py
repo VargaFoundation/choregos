@@ -20,11 +20,11 @@ CHART = pathlib.Path(__file__).resolve().parents[2] / "charts" / "choregos"
 pytestmark = pytest.mark.skipif(shutil.which("helm") is None, reason="helm absent")
 
 
-def _env_de_l_api(*surcharges: str) -> dict[str, str]:
-    commande = ["helm", "template", "choregos", str(CHART)]
+def _api_env(*surcharges: str) -> dict[str, str]:
+    command = ["helm", "template", "choregos", str(CHART)]
     for surcharge in surcharges:
-        commande += ["--set", surcharge]
-    rendu = subprocess.run(commande, capture_output=True, text=True, check=False)
+        command += ["--set", surcharge]
+    rendu = subprocess.run(command, capture_output=True, text=True, check=False)
     assert rendu.returncode == 0, rendu.stderr
     documents: list[dict[str, Any]] = [d for d in yaml.safe_load_all(rendu.stdout) if d]
     deploiements = [d for d in documents if d.get("kind") == "Deployment"]
@@ -33,14 +33,14 @@ def _env_de_l_api(*surcharges: str) -> dict[str, str]:
     return {e["name"]: e.get("value", "") for e in conteneur.get("env", []) if "value" in e}
 
 
-def test_rien_par_defaut() -> None:
-    env = _env_de_l_api()
+def test_nothing_by_default() -> None:
+    env = _api_env()
     assert not {"CHOREGOS_DEFAULT_AGENT_BACKEND", "CHOREGOS_ALLOWED_AGENT_BACKENDS"} & env.keys()
     assert "CHOREGOS_DEFAULT_MODEL_PROFILES" not in env
 
 
-def test_le_backend_et_les_profils_du_deploiement_atteignent_l_api() -> None:
-    env = _env_de_l_api(
+def test_the_backend_and_profiles_of_the_deployment_reach_the_api() -> None:
+    env = _api_env(
         "global.agents.defaultBackend=opencode",
         "global.agents.allowedBackends={opencode}",
         "global.agents.modelProfiles.standard=platform/standard",

@@ -185,7 +185,7 @@ def test_laya_runs_offline_on_cpu_and_is_probed_on_its_health_route() -> None:
     for probe in ("startupProbe", "readinessProbe", "livenessProbe"):
         assert container[probe]["httpGet"] == {"path": "/health", "port": "http"}, probe
     assert "nvidia.com/gpu" not in container["resources"].get("limits", {})
-    # The strict Kyverno `non-root` rule (test_securite_des_pods.py) on this pod too.
+    # The strict Kyverno `non-root` rule (test_pod_security.py) on this pod too.
     assert pod["securityContext"]["runAsNonRoot"] is True
     assert pod["securityContext"]["seccompProfile"] == {"type": "RuntimeDefault"}
     assert container["securityContext"]["allowPrivilegeEscalation"] is False

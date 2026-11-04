@@ -15,20 +15,20 @@ from typing import Any
 import pytest
 import yaml
 
-RACINE = pathlib.Path(__file__).resolve().parents[2]
-CHART = RACINE / "charts" / "choregos"
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+CHART = ROOT / "charts" / "choregos"
 PRIVE = "harbor.build.diametral.com/choregos-ee"
 
 pytestmark = pytest.mark.skipif(shutil.which("helm") is None, reason="helm absent")
 
 
 def _images(*surcharges: str) -> dict[str, list[str]]:
-    commande = ["helm", "template", "choregos", str(CHART)]
+    command = ["helm", "template", "choregos", str(CHART)]
     for surcharge in surcharges:
-        commande += ["--set", surcharge]
-    sortie = subprocess.run(commande, capture_output=True, text=True, check=True, timeout=120)
+        command += ["--set", surcharge]
+    output = subprocess.run(command, capture_output=True, text=True, check=True, timeout=120)
     images: dict[str, list[str]] = {}
-    for doc in yaml.safe_load_all(sortie.stdout):
+    for doc in yaml.safe_load_all(output.stdout):
         if not doc or doc.get("kind") not in {"Deployment", "StatefulSet", "Job"}:
             continue
         spec: dict[str, Any] = doc["spec"]["template"]["spec"]
@@ -45,28 +45,28 @@ EE = (
 )
 
 
-def test_l_api_et_l_orchestrateur_viennent_du_projet_prive_le_reste_du_coeur() -> None:
+def test_the_api_and_the_orchestrator_come_from_the_private_project_the_rest_of_the_core() -> None:
     images = _images(*EE)
-    prives = {nom for nom, refs in images.items() if any(r.startswith(PRIVE) for r in refs)}
-    assert any("api" in nom for nom in prives) and any("orchestrator" in nom for nom in prives), prives
+    prives = {name for name, refs in images.items() if any(r.startswith(PRIVE) for r in refs)}
+    assert any("api" in name for name in prives) and any("orchestrator" in name for name in prives), prives
     # The migration job runs the API image: it follows its registry.
-    assert any(nom.startswith("Job/") for nom in prives), prives
-    for nom, refs in images.items():
-        if nom not in prives:
-            assert all(not r.startswith(PRIVE) for r in refs), (nom, refs)
+    assert any(name.startswith("Job/") for name in prives), prives
+    for name, refs in images.items():
+        if name not in prives:
+            assert all(not r.startswith(PRIVE) for r in refs), (name, refs)
     assert any(r.startswith("ghcr.io/vargafoundation/choregos-web") for refs in images.values() for r in refs)
 
 
-def test_le_digest_global_ne_designe_pas_une_image_d_un_autre_registre() -> None:
+def test_the_global_digest_does_not_point_at_an_image_of_another_registry() -> None:
     images = _images(*EE, "global.imageDigest=sha256:" + "a" * 64)
-    for nom, refs in images.items():
+    for name, refs in images.items():
         for ref in refs:
             if ref.startswith(PRIVE):
-                assert "@sha256" not in ref, f"{nom}: the core digest set on an EE image"
+                assert "@sha256" not in ref, f"{name}: the core digest set on an EE image"
             elif ref.startswith("ghcr.io/vargafoundation/choregos-"):
-                assert "@sha256:" in ref, f"{nom}: the core keeps its digest"
+                assert "@sha256:" in ref, f"{name}: the core keeps its digest"
 
 
-def test_sans_surcharge_rien_ne_change() -> None:
-    for nom, refs in _images().items():
-        assert all(not r.startswith(PRIVE) for r in refs), nom
+def test_without_an_override_nothing_changes() -> None:
+    for name, refs in _images().items():
+        assert all(not r.startswith(PRIVE) for r in refs), name
