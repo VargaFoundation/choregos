@@ -26,10 +26,24 @@ def _reprs(value: Any) -> str | None:
     return None if value is None else re.sub(r" at 0x[0-9a-f]+", "", repr(value))
 
 
+def _foreign_tables() -> set[str]:
+    """Tables a package outside the core maps on the core's `Base` (the ontology plugin's, once it is
+    imported by an earlier test of the same run): not part of `db/models/`, so not pinned here."""
+    return {
+        mapper.persist_selectable.fullname  # type: ignore[attr-defined]
+        for mapper in Base.registry.mappers
+        if not mapper.class_.__module__.startswith(f"{models.__name__}.")
+        and mapper.class_.__module__ != models.__name__
+    }
+
+
 def describe_metadata() -> dict[str, Any]:
-    """A canonical, JSON-able description of `Base.metadata`, tables sorted by name."""
+    """A canonical, JSON-able description of the core's tables in `Base.metadata`, sorted by name."""
     tables: dict[str, Any] = {}
+    foreign = _foreign_tables()
     for name, table in sorted(Base.metadata.tables.items()):
+        if name in foreign:
+            continue
         columns = [
             {
                 "name": column.name,
