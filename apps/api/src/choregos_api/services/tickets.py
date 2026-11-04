@@ -66,7 +66,14 @@ def _decision_detail(decision: dict[str, Any]) -> str:
 
 
 def totals_from(raw: dict[str, Any] | None) -> Totals:
-    return Totals.model_validate(raw or {})
+    """The totals the DTO declares, from a JSON column several writers add to (#1348).
+
+    A run's `tokens` also carry the suspension's bookkeeping (`resumed`, `resumed_for`), and an
+    orchestrator newer than this API may write a figure `Totals` does not declare yet: neither may
+    make the run unreadable. Known fields are still validated.
+    """
+    declared = {key: value for key, value in (raw or {}).items() if key in Totals.model_fields}
+    return Totals.model_validate(declared)
 
 
 def run_summary(run: Run) -> RunSummary:
