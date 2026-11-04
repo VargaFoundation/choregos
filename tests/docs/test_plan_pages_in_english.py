@@ -26,6 +26,7 @@ PAGES = (
     "docs/plan/06-kubernetes-deployment.md",
     "docs/plan/07-delivery-parallelisation-conventions.md",
     "docs/plan/BLOCKERS.md",
+    "docs/plan/STATUS.md",
     "docs/plan/PRODUCT-REVIEW-2026-10-07.md",
     "README.md",
     "apps/web/README.md",
