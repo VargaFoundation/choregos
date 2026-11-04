@@ -3,12 +3,19 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import Field
+from pydantic import BeforeValidator, Field
 
 from .enums import Risk, Severity, Size
-from .stage import Compression, HeadroomProfile, ShellFilter, StageContext
+from .stage import (
+    MAX_CONCURRENT_TOOL_CALLS,
+    Compression,
+    HeadroomProfile,
+    ShellFilter,
+    StageContext,
+    ToolScripts,
+)
 from .workflow import Strict
 
 BySize = dict[str, float]
@@ -164,6 +171,42 @@ class ContextPolicy(Strict):
         )
 
 
+def off_from_yaml(value: Any) -> Any:
+    """YAML 1.1 (PyYAML) reads an unquoted `off` as `false`: what the author wrote is `off`."""
+    return "off" if value is False else value
+
+
+#: Whether a run's agent may call its tools from a script (ADR 0122).
+ToolScriptsMode = Annotated[Literal["off", "offer"], BeforeValidator(off_from_yaml)]
+
+
+class ToolsOverride(Strict):
+    """What a role changes in the project's tool scripts; an absent field keeps the project's value."""
+
+    scripts: ToolScriptsMode | None = None
+    max_concurrent_calls: int | None = Field(default=None, ge=1, le=MAX_CONCURRENT_TOOL_CALLS)
+
+
+class ToolsPolicy(Strict):
+    """How a run's agent may call its tools (ADR 0122): `offer` lets it call them from a script too,
+    through the runner's tool bridge, under the same governance as the model's calls. Off unless the
+    policy offers it; the organisation's ceiling can forbid it, and the deployment's kill switch
+    (`CHOREGOS_TOOL_SCRIPTS`, off by default) wins over both."""
+
+    scripts: ToolScriptsMode = "off"
+    #: Calls of one run the bridge relays at once.
+    max_concurrent_calls: int = Field(default=4, ge=1, le=MAX_CONCURRENT_TOOL_CALLS)
+    #: {stage role: override}, e.g. `{"review": {"scripts": "off"}}` so a reviewer reads every result.
+    per_role: dict[str, ToolsOverride] = Field(default_factory=dict)
+
+    def for_role(self, role: str) -> ToolScripts | None:
+        """The policy's tool scripts for one role, before the deployment's kill switch: `None` when off."""
+        override = self.per_role.get(role, ToolsOverride())
+        if (override.scripts or self.scripts) == "off":
+            return None
+        return ToolScripts(max_concurrent_calls=override.max_concurrent_calls or self.max_concurrent_calls)
+
+
 class ReviewPolicy(Strict):
     cross_backend: bool = False
     require_human_for_risk: list[Risk] = Field(default_factory=lambda: [Risk.HIGH])
@@ -229,6 +272,7 @@ class Policy(Strict):
     findings: FindingsPolicy = Field(default_factory=FindingsPolicy)
     memory: MemoryPolicy = Field(default_factory=MemoryPolicy)
     context: ContextPolicy = Field(default_factory=ContextPolicy)
+    tools: ToolsPolicy = Field(default_factory=ToolsPolicy)
     review: ReviewPolicy = Field(default_factory=ReviewPolicy)
     release_train: dict[str, TrainEnvPolicy] = Field(default_factory=dict)
     web_search: WebSearchPolicy = Field(default_factory=WebSearchPolicy)

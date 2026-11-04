@@ -1425,6 +1425,27 @@ export type AgentSessionSocketRecorded = {
   out_n: number;
 };
 
+/** A tool a run may call, in MCP's `tools/list` format, with what the platform knows of it (ADR 0122). A plugin extension's tool may carry other MCP keys of its own. */
+export type RunTool = {
+  name: string;
+  description: string;
+  inputSchema: {
+    [key: string]: unknown;
+  };
+  /** The output schema the operation declares (an organisation connector's, as its server declared it): it describes the `structuredContent` of the tool's `result`, not the API's answer around it. Absent when none is declared. */
+  outputSchema?: {
+    [key: string]: unknown;
+  };
+  /** MCP tool annotations. `readOnlyHint` is true only for `x-choregos-access: read`. */
+  annotations: {
+    readOnlyHint?: boolean;
+    [key: string]: unknown;
+  };
+  /** `read`: a call reads (a catalogue tool — writers are not listed —, a connector read, `web_fetch`, `web_search`, a plugin tool annotated `readOnlyHint`). `write`: a connector write the policy allows, played as a governed action; or a plugin tool that does not say it only reads. `approval`: a connector operation under approval — calling it proposes an action, a person decides. A plugin tool may declare its own, beside its `name`. */
+  "x-choregos-access": "read" | "write" | "approval";
+  [key: string]: unknown;
+};
+
 export type AgentSessionTools = {
   tools?: Array<{
     [key: string]: unknown;
@@ -2974,6 +2995,10 @@ export type PolicyCeiling = {
     allow_query_reuse?: boolean;
     regions?: Array<string> | null;
   } | null;
+  /** Tool scripts (ADR 0122 §6): the ceiling can only forbid them. `off` refuses a project policy that offers them, for any role (422 at PUT, clamped to `off` for a policy saved earlier); `offer` or null leaves each project to choose. */
+  tools?: {
+    scripts?: "off" | "offer" | null;
+  };
 };
 
 /** The organisation's network bound (ADR 0070): no project or agent goes beyond it. */
@@ -4711,13 +4736,7 @@ export interface Operations {
 }> };
   getRunTicket: { method: "GET"; path: "/internal/runs/{id}/ticket"; body: never; response: RunTicket };
   getRunTools: { method: "GET"; path: "/internal/runs/{id}/tools"; body: never; response: {
-  tools?: Array<{
-    name: string;
-    description: string;
-    inputSchema?: {
-      [key: string]: unknown;
-    };
-  }>;
+  tools?: Array<RunTool>;
 } };
   getRunTranscript: { method: "GET"; path: "/runs/{id}/transcript"; body: never; response: ArtifactRef };
   getSkill: { method: "GET"; path: "/orgs/{org}/skills/{slug}"; body: never; response: Skill };

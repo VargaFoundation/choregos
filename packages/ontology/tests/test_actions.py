@@ -461,6 +461,9 @@ async def test_the_agent_does_not_see_an_action_it_may_not_propose(
     names = {o["name"] for o in tools.json()["tools"]}
     assert "action_open_infra_pr" in names
     assert "action_register_host" not in names, "reserved to people and to the system"
+    # An action tool proposes what a person decides (S57-05, ADR 0122): it is announced so.
+    (action,) = [o for o in tools.json()["tools"] if o["name"] == "action_open_infra_pr"]
+    assert (action["x-choregos-access"], action["annotations"]["readOnlyHint"]) == ("approval", False)
     refusal = await client.post(
         f"/api/v1/internal/runs/{RUN}/tools/action_register_host",
         headers=it4it,

@@ -178,6 +178,28 @@
         }
       }
     },
+    "tools": {
+      "type": "object",
+      "description": "How a run's agent may call its tools (ADR 0122): `offer` lets it call them from a script too, through the runner's tool bridge, under the same governance as the model's calls. Absent = off; the organisation's ceiling can forbid it and the deployment's kill switch wins over the policy.",
+      "additionalProperties": false,
+      "properties": {
+        "scripts": { "type": "string", "enum": ["off", "offer"], "default": "off" },
+        "max_concurrent_calls": { "type": "integer", "minimum": 1, "maximum": 16, "default": 4,
+          "description": "Calls of one run the tool bridge relays at once; the next waits." },
+        "per_role": {
+          "type": "object",
+          "description": "Per stage role, what changes from the project's values; an absent field keeps them.",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "scripts": { "type": "string", "enum": ["off", "offer"] },
+              "max_concurrent_calls": { "type": "integer", "minimum": 1, "maximum": 16 }
+            }
+          }
+        }
+      }
+    },
     "review": {
       "type": "object",
       "additionalProperties": false,

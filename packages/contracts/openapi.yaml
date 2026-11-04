@@ -3766,6 +3766,13 @@ paths:
       security: [{ runToken: [] }]
       operationId: getRunTools
       summary: The catalogue tools THIS run may call, in MCP format.
+      description: |
+        Every tool THIS run may call — catalogue, plugin extension, organisation connector (broker),
+        `web_fetch`, `web_search` — in MCP's `tools/list` format, with what the platform knows of
+        each (ADR 0122): MCP `annotations.readOnlyHint` and `x-choregos-access`, and `outputSchema`
+        when the operation declares one. The run's tool server (`choregos-tools`) lists them to the
+        model without `outputSchema` and without the `x-choregos-*` keys: it relays the API's whole
+        answer as `structuredContent`, which an operation's output schema does not describe.
       responses:
         "200":
           description: Tool list
@@ -3776,13 +3783,7 @@ paths:
                 properties:
                   tools:
                     type: array
-                    items:
-                      type: object
-                      required: [name, description]
-                      properties:
-                        name: { type: string }
-                        description: { type: string }
-                        inputSchema: { type: object, additionalProperties: true }
+                    items: { $ref: "#/components/schemas/RunTool" }
   /internal/runs/{id}/tools/{name}:
     parameters:
       - $ref: "#/components/parameters/Id"
@@ -3799,6 +3800,21 @@ paths:
         `result.action`; beyond that, `status_code` 202 and the action's id. The same call
         (run, tool, arguments) returns the same action. A write under approval (`approval`) returns
         202: a person decides.
+
+        The two `X-Choregos-*` headers say which door the call came through (ADR 0122 §4): they
+        are attribution, recorded on `choregos.tool.called` (`origin`, `script_sha256`), and no
+        authorisation reads them — a call is governed the same way whatever its origin.
+      parameters:
+        - name: X-Choregos-Tool-Origin
+          in: header
+          required: false
+          description: "Who made the call: `model` (the agent's MCP client; the default when absent), `script` (a script, through the runner's tool bridge), `job` (a job step, ADR 0056). Any other value is a 400 problem."
+          schema: { type: string, enum: [model, script, job], default: model }
+        - name: X-Choregos-Script
+          in: header
+          required: false
+          description: "The SHA-256 of the script that made the call, 64 lowercase hexadecimal characters; anything else is a 400 problem."
+          schema: { type: string, pattern: "^[0-9a-f]{64}$" }
       requestBody:
         required: true
         content: { application/json: { schema: { type: object, additionalProperties: true } } }
@@ -3814,6 +3830,7 @@ paths:
                   status_code: { type: integer }
                   result: {}
                   remaining: { type: integer, nullable: true }
+        "400": { description: "Arguments refused by the tool's schema, or an origin header that is not one of the values above", content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
         "404": { description: "Unknown tool, or not allowed for the project", content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
         "429": { description: Tool call cap reached, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
   /internal/runs/{id}/scope-change:
@@ -5763,6 +5780,29 @@ components:
       required: [out_n]
       properties:
         out_n: { type: integer, minimum: 0 }
+    RunTool:
+      type: object
+      description: "A tool a run may call, in MCP's `tools/list` format, with what the platform knows of it (ADR 0122). A plugin extension's tool may carry other MCP keys of its own."
+      required: [name, description, inputSchema, annotations, x-choregos-access]
+      additionalProperties: true
+      properties:
+        name: { type: string }
+        description: { type: string }
+        inputSchema: { type: object, additionalProperties: true }
+        outputSchema:
+          type: object
+          additionalProperties: true
+          description: "The output schema the operation declares (an organisation connector's, as its server declared it): it describes the `structuredContent` of the tool's `result`, not the API's answer around it. Absent when none is declared."
+        annotations:
+          type: object
+          additionalProperties: true
+          description: "MCP tool annotations. `readOnlyHint` is true only for `x-choregos-access: read`."
+          properties:
+            readOnlyHint: { type: boolean }
+        x-choregos-access:
+          type: string
+          enum: [read, write, approval]
+          description: "`read`: a call reads (a catalogue tool — writers are not listed —, a connector read, `web_fetch`, `web_search`, a plugin tool annotated `readOnlyHint`). `write`: a connector write the policy allows, played as a governed action; or a plugin tool that does not say it only reads. `approval`: a connector operation under approval — calling it proposes an action, a person decides. A plugin tool may declare its own, beside its `name`."
     AgentSessionTools:
       type: object
       properties:
@@ -7236,6 +7276,12 @@ components:
             max_query_retention_days: { type: [integer, "null"], minimum: 0 }
             allow_query_reuse: { type: boolean, default: false }
             regions: { type: [array, "null"], items: { type: string } }
+        tools:
+          type: object
+          additionalProperties: false
+          description: "Tool scripts (ADR 0122 §6): the ceiling can only forbid them. `off` refuses a project policy that offers them, for any role (422 at PUT, clamped to `off` for a policy saved earlier); `offer` or null leaves each project to choose."
+          properties:
+            scripts: { type: [string, "null"], enum: ["off", "offer", null] }
     CeilingNetwork:
       type: object
       additionalProperties: false

@@ -29,6 +29,15 @@ def test_presets_parse(name: str) -> None:
     assert preset_yaml(name).startswith("#")
 
 
+@pytest.mark.parametrize("name", PRESET_NAMES)
+def test_no_preset_and_no_template_offers_tool_scripts(name: str) -> None:
+    """ADR 0122 §9: tool scripts are on by default only once the matrix shows they pay, per agent."""
+    assert "tools" not in yaml.safe_load(preset_yaml(name))
+    assert all(load_preset(name).tools.for_role(role) is None for role in ("implement", "review", "triage"))
+    for path in TEMPLATE_POLICIES:
+        assert "tools" not in (yaml.safe_load(path.read_text(encoding="utf-8")) or {}), path
+
+
 def test_budget_for_by_role_and_size() -> None:
     e = PolicyEngine(load_preset("solo"))
     assert e.stage_usd("implement", Size.S) == 5

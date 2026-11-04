@@ -150,10 +150,12 @@ index and the STATUS total tests. **Does not prove**: anything about the code.
   when off (`context_reduction.stage_input_payload`'s rule).
 - Orchestrator: `resolve_tool_scripts(policy, role, allowed_by_deployment)` beside `resolve_context`; the kill
   switch `CHOREGOS_TOOL_SCRIPTS` and its Helm value.
-- OpenAPI: `getRunTools` entries gain `annotations` (`readOnlyHint`, `x-choregos-access: read|write|approval`)
-  and `outputSchema` when the operation declares one; `callRunTool` accepts `X-Choregos-Tool-Origin`
-  (`model|script|job`) and `X-Choregos-Script` (64 hex).
-- The event schema of `choregos.tool.called` gains `origin` and `script_sha256`.
+- OpenAPI: `getRunTools` entries gain MCP's `annotations.readOnlyHint` and, beside it at the entry's top level,
+  `x-choregos-access: read|write|approval`, and `outputSchema` when the operation declares one (the run's
+  tool server lists neither `outputSchema` nor `x-choregos-*` to the model); `callRunTool` accepts
+  `X-Choregos-Tool-Origin` (`model|script|job`) and `X-Choregos-Script` (64 hex).
+- `choregos.tool.called` gains `origin` and `script_sha256` (the event schema's `data` is open: the fields
+  are documented in `docs/usage.md`).
 - **Tests that fail without it**: schema and model declare the same fields; the ceiling refuses `offer` under
   `off`; an inactive setting is absent from the payload; a run of `review` with `per_role` off gets none.
 

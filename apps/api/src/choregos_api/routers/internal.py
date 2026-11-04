@@ -10,6 +10,7 @@ from __future__ import annotations
 import functools
 import hashlib
 import json
+import re
 from collections.abc import Awaitable, Callable
 from types import SimpleNamespace
 from typing import Annotated, Any
@@ -27,7 +28,7 @@ from choregos_contracts import (
 )
 from choregos_core import PolicyEngine, matches_any, telemetry, utcnow
 from choregos_core.workspace import is_read_only_scope
-from fastapi import APIRouter, Query, Request, Response, status
+from fastapi import APIRouter, Header, Query, Request, Response, status
 from sqlalchemy import select
 
 from ..catalogue import call as call_catalogue_tool
@@ -825,6 +826,7 @@ async def _extension_tools(
                 other = found[tool_name][0] if tool_name in found else "the catalogue"
                 raise conflict(f"tool `{tool_name}` declared by {other} and by the plugin `{extension}`")
             _extension_result_cap(extension, tool)
+            _extension_access(extension, tool)
             found[tool_name] = (extension, tool)
     return found
 
@@ -849,9 +851,50 @@ def _extension_result_cap(plugin: str, tool: dict[str, Any]) -> int | None:
     return declared
 
 
-def _announced(tool: dict[str, Any]) -> dict[str, Any]:
+def _extension_access(plugin: str, tool: dict[str, Any]) -> str:
+    """What calling an extension's tool does (ADR 0122): the `x-choregos-access` it declares beside
+    its `name` (`read`, `write`, `approval` — a call that proposes what a person decides), else `read`
+    when it is annotated `readOnlyHint: true`, else `write`: the platform does not know what it does,
+    and MCP's own default is not read-only. Any other declaration is an extension bug, refused when
+    the tools are listed, as a bad `result_max_bytes` is."""
+    declared = tool.get(ACCESS_KEY)
+    if declared is not None:
+        if declared not in ACCESSES:
+            raise ApiError(
+                status.HTTP_500_INTERNAL_SERVER_ERROR,
+                "Plugin tool refused",
+                f"tool `{tool.get('name')}` of the plugin `{plugin}` declares {ACCESS_KEY}={declared!r}:"
+                f" one of {', '.join(ACCESSES)} is expected",
+            )
+        return str(declared)
+    annotations = tool.get("annotations")
+    reads = isinstance(annotations, dict) and annotations.get("readOnlyHint") is True
+    return "read" if reads else "write"
+
+
+def _announced(plugin: str, tool: dict[str, Any]) -> dict[str, Any]:
     """An extension's tool as the agent sees it: the platform's own keys are not the agent's business."""
-    return {k: v for k, v in tool.items() if k != "result_max_bytes"}
+    own = {k: v for k, v in tool.items() if k not in {"result_max_bytes", ACCESS_KEY}}
+    return _run_tool(own, _extension_access(plugin, tool))
+
+
+#: The platform's own key on an entry of the run's tool list (ADR 0122): what a call does. The run's
+#: tool server does not list it to the model, which reads it in the description and `readOnlyHint`.
+ACCESS_KEY = "x-choregos-access"
+ACCESSES = ("read", "write", "approval")
+
+
+def _run_tool(
+    entry: dict[str, Any], access: str, output_schema: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """An entry of the run's tool list: MCP's keys, MCP's `readOnlyHint` (true for a read only), the
+    access the platform knows, and the output schema the operation declares, when it declares one."""
+    own = entry.get("annotations")
+    annotations = {**(own if isinstance(own, dict) else {}), "readOnlyHint": access == "read"}
+    listed = {**entry, "annotations": annotations, ACCESS_KEY: access}
+    if output_schema:
+        listed["outputSchema"] = output_schema
+    return listed
 
 
 def canonical_json(value: Any) -> bytes:
@@ -867,7 +910,10 @@ def json_sha256(value: Any) -> str:
 
 @router.get("/runs/{id}/tools", operation_id="getRunTools")
 async def get_tools(id: str, session: Db, claims: RunAuth) -> dict[str, Any]:
-    """The tools THIS run can call, in MCP format (`name`, `description`, `inputSchema`)."""
+    """The tools THIS run can call, in MCP format (`name`, `description`, `inputSchema`), each with
+    `annotations.readOnlyHint`, its access (`x-choregos-access`: `read`, `write`, `approval`) and the
+    `outputSchema` its operation declares (ADR 0122). A catalogue tool and the web tools read: a
+    catalogue tool that may write is not listed, and its call is refused."""
     from ..services.broker import broker_tools
 
     run, _item, project = await _run_and_item(session, id)
@@ -891,14 +937,52 @@ async def get_tools(id: str, session: Db, claims: RunAuth) -> dict[str, Any]:
     return {
         "tools": [
             *(
-                {"name": o.name, "description": o.description, "inputSchema": o.input_schema}
+                _run_tool(
+                    {"name": o.name, "description": o.description, "inputSchema": o.input_schema}, "read"
+                )
                 for o in catalogue_tools
             ),
-            *(_announced(tool) for _, tool in from_extensions.values()),
-            *(tool.announcement() for tool in brokered.values()),
-            *web,
+            *(_announced(extension, tool) for extension, tool in from_extensions.values()),
+            *(
+                _run_tool(tool.announcement(), tool.access, tool.operation.output_schema)
+                for tool in brokered.values()
+            ),
+            *(_run_tool(builtin, "read") for builtin in web),
         ]
     }
+
+
+#: Who made a tool call (ADR 0122 §4): the agent's MCP client, a script through the runner's tool
+#: bridge, a job step. Attribution only: no authorisation reads it.
+TOOL_ORIGIN_HEADER = "X-Choregos-Tool-Origin"
+TOOL_ORIGINS = ("model", "script", "job")
+#: The SHA-256 of the script that made the call, as the runner's tool bridge knows it.
+SCRIPT_HEADER = "X-Choregos-Script"
+_SHA256 = re.compile(r"[0-9a-f]{64}")
+
+
+def _call_origin(origin: str | None, script: str | None) -> tuple[str, str | None]:
+    """The door a call came through and its script's digest, read from the request's headers.
+
+    Absent, the origin is `model`, what the run's tool server sends. A value outside the contract
+    is a 400 problem: an attribution nobody can read back is worse than none."""
+    if origin is not None and origin not in TOOL_ORIGINS:
+        detail = f"{TOOL_ORIGIN_HEADER} must be one of {', '.join(TOOL_ORIGINS)}, not {origin[:40]!r}"
+        raise ApiError(
+            status.HTTP_400_BAD_REQUEST,
+            "Tool origin refused",
+            detail,
+            errors=[{"code": "tool_origin_refused", "loc": ["header", TOOL_ORIGIN_HEADER], "msg": detail}],
+        )
+    if script is not None and _SHA256.fullmatch(script) is None:
+        detail = f"{SCRIPT_HEADER} must be a SHA-256 in 64 lowercase hexadecimal characters"
+        raise ApiError(
+            status.HTTP_400_BAD_REQUEST,
+            "Script digest refused",
+            detail,
+            errors=[{"code": "script_digest_refused", "loc": ["header", SCRIPT_HEADER], "msg": detail}],
+        )
+    return origin or "model", script
 
 
 def _traced_tool_call(
@@ -921,8 +1005,20 @@ def _traced_tool_call(
 
 @router.post("/runs/{id}/tools/{name}", operation_id="callRunTool")
 @_traced_tool_call
-async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claims: RunAuth) -> dict[str, Any]:
-    """Call a tool of the catalogue or of an extension for the run, and record it in the cost ledger."""
+async def call_tool(
+    id: str,
+    name: str,
+    body: dict[str, Any],
+    session: Db,
+    claims: RunAuth,
+    tool_origin: Annotated[str | None, Header(alias=TOOL_ORIGIN_HEADER)] = None,
+    script: Annotated[str | None, Header(alias=SCRIPT_HEADER)] = None,
+) -> dict[str, Any]:
+    """Call a tool of the catalogue or of an extension for the run, and record it in the cost ledger.
+
+    The origin headers are read here and recorded on the event, nowhere else: the call is governed
+    the same way whatever door it came through (ADR 0122 §2)."""
+    origin, script_sha256 = _call_origin(tool_origin, script)
     run, item, project = await _run_and_item(session, id)
     if run.result is not None:
         raise conflict("result already posted for this run")
@@ -1092,6 +1188,9 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
         # What the answer weighs (S57-01, ADR 0122): the size of the same canonical bytes, the
         # measure of what a round trip puts back into the model's context.
         response_bytes=len(served),
+        # Which door the call came through (ADR 0122 §4), and the script's digest when one made it.
+        origin=origin,
+        **({"script_sha256": script_sha256} if script_sha256 is not None else {}),
         **about_query,
     )
     telemetry.record_tool_call(

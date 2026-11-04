@@ -589,6 +589,12 @@ choregos-orchestrator:
     # policy without `context` reduces nothing.
     contextReduction:
       enabled: true
+    # Tool scripts (ADR 0122): an agent calls its run's tools from a script, through the runner's
+    # tool bridge, governed by the API like any call. `enabled: false` (the default) offers it to no
+    # run; `true` lets the organisation's ceiling and each project's policy decide, and a policy
+    # without `tools` offers nothing.
+    toolScripts:
+      enabled: false
     # The egress proxy through which EACH agent pod gets out (`HTTP_PROXY`/`HTTPS_PROXY`),
     # `{namespace}` = the runners'. In per-project runner namespaces the provisioning deploys a Squid
     # there whose allowlist is `policy.sandbox.network.allow_domains` (project-level, host-level);

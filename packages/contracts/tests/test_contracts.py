@@ -22,8 +22,12 @@ from choregos_contracts import (
     ProjectConfig,
     StageInput,
     StageResult,
+    ToolScripts,
+    ToolsPolicy,
+    ToolsRef,
     Workflow,
 )
+from choregos_contracts.stage import MAX_CONCURRENT_TOOL_CALLS
 from jsonschema import Draft202012Validator, RefResolver
 
 SCHEMAS = contracts.schemas_dir()
@@ -286,6 +290,106 @@ def test_an_unknown_reduction_is_refused_by_the_schema_and_the_model() -> None:
     assert list(_validator("policy.schema.json").iter_errors(raw))
     with pytest.raises(ValueError, match="compression"):
         Policy.model_validate(raw)
+
+
+# ───────────────────────── tool scripts (S57-05, ADR 0122) ─────────────────────────
+
+
+def test_a_policy_without_tools_offers_no_scripts() -> None:
+    assert "tools" not in _load("policy.solo.json")
+    policy = Policy.model_validate(_load("policy.solo.json"))
+    assert policy.tools.scripts == "off" and policy.tools.max_concurrent_calls == 4
+    for role in ("implement", "review", "triage"):
+        assert policy.tools.for_role(role) is None
+    stage_input = StageInput.model_validate(_load("stage-input.example.json"))
+    assert stage_input.tools.scripts is None
+
+
+def test_a_role_override_turns_scripts_off_or_bounds_them_for_that_role_only() -> None:
+    raw = _load("policy.solo.json") | {
+        "tools": {
+            "scripts": "offer",
+            "max_concurrent_calls": 4,
+            "per_role": {"review": {"scripts": "off"}, "triage": {"max_concurrent_calls": 2}},
+        }
+    }
+    assert not list(_validator("policy.schema.json").iter_errors(raw))
+    tools = Policy.model_validate(raw).tools
+    assert tools.for_role("review") is None
+    assert tools.for_role("implement") == ToolScripts(max_concurrent_calls=4)
+    assert tools.for_role("triage") == ToolScripts(max_concurrent_calls=2)
+    only = Policy.model_validate(
+        _load("policy.solo.json") | {"tools": {"per_role": {"plan": {"scripts": "offer"}}}}
+    )
+    assert only.tools.for_role("plan") == ToolScripts(max_concurrent_calls=4)
+    assert only.tools.for_role("implement") is None, "the project's `off` holds for the other roles"
+
+
+def test_the_tools_schema_and_model_declare_the_same_fields() -> None:
+    """The policy's `tools` block, overrides included, and the stage input's `tools.scripts`; the whole
+    policy and stage input are compared above."""
+    gaps: list[str] = []
+    _compare(
+        "policy.tools", contracts.load_schema("policy.schema.json")["properties"]["tools"], ToolsPolicy, gaps
+    )
+    _compare(
+        "stage-input.tools",
+        contracts.load_schema("stage-input.schema.json")["properties"]["tools"],
+        ToolsRef,
+        gaps,
+    )
+    assert not gaps, "\n".join(gaps)
+    node = contracts.load_schema("policy.schema.json")["properties"]["tools"]["properties"]
+    assert set(node) == {"scripts", "max_concurrent_calls", "per_role"}
+    assert node["scripts"]["default"] == ToolsPolicy().scripts == "off"
+    bound = node["max_concurrent_calls"]
+    assert (bound["minimum"], bound["maximum"], bound["default"]) == (1, MAX_CONCURRENT_TOOL_CALLS, 4)
+    scripts = contracts.load_schema("stage-input.schema.json")["properties"]["tools"]["properties"]["scripts"]
+    assert scripts["properties"]["max_concurrent_calls"]["maximum"] == MAX_CONCURRENT_TOOL_CALLS
+
+
+@pytest.mark.parametrize(
+    "tools",
+    [
+        {"scripts": "on"},
+        {"scripts": True},
+        {"max_concurrent_calls": 0},
+        {"max_concurrent_calls": 17},
+        {"per_role": {"review": {"scripts": "always"}}},
+        {"per_role": {"review": {"max_concurrent_calls": 32}}},
+        {"bridge": "on"},
+    ],
+)
+def test_a_tools_value_outside_the_contract_is_refused_by_the_schema_and_the_model(
+    tools: dict[str, Any],
+) -> None:
+    raw = _load("policy.solo.json") | {"tools": tools}
+    assert list(_validator("policy.schema.json").iter_errors(raw))
+    with pytest.raises(ValueError, match="tools"):
+        Policy.model_validate(raw)
+
+
+def test_a_stage_input_with_tool_scripts_validates_against_the_schema_and_the_model() -> None:
+    raw = _load("stage-input.example.json")
+    raw["tools"] = {**raw.get("tools", {}), "scripts": {"max_concurrent_calls": 3}}
+    assert not list(_validator("stage-input.schema.json").iter_errors(raw))
+    assert StageInput.model_validate(raw).tools.scripts == ToolScripts(max_concurrent_calls=3)
+    raw["tools"]["scripts"] = {"max_concurrent_calls": 3, "mode": "offer"}
+    assert list(_validator("stage-input.schema.json").iter_errors(raw)), "off is absent, not a mode"
+    with pytest.raises(ValueError, match="mode"):
+        StageInput.model_validate(raw)
+
+
+def test_an_unquoted_off_in_a_yaml_policy_reads_as_off() -> None:
+    """YAML 1.1 (PyYAML) reads `scripts: off` as false: what the author wrote is `off`."""
+    import yaml
+
+    raw = yaml.safe_load("tools:\n  scripts: off\n  per_role:\n    review: { scripts: off }\n")
+    assert raw["tools"]["scripts"] is False, "the YAML reading this test is about"
+    tools = Policy.model_validate(_load("policy.solo.json") | raw).tools
+    assert tools.scripts == "off" and tools.per_role["review"].scripts == "off"
+    with pytest.raises(ValueError, match="scripts"):
+        Policy.model_validate(_load("policy.solo.json") | {"tools": {"scripts": True}})
 
 
 def _edition_validator() -> Draft202012Validator:

@@ -186,7 +186,10 @@ class ToolProvider:
     A code of 400 or more is an answer the agent reads, not a failure.
 
     A listed tool may carry `result_max_bytes` (an integer of at least 1024): how much of its answer
-    the agent reads, as a catalogue entry declares it (S40-17b); the agent is never shown it.
+    the agent reads, as a catalogue entry declares it (S40-17b); the agent is never shown it. It may
+    carry `x-choregos-access` (`read`, `write` or `approval`: a call proposes what a person decides),
+    which the run's tool list announces (ADR 0122); without it, a tool annotated `readOnlyHint: true`
+    is a read and any other a write.
 
     The keywords `lister` and `appeler` are the former names of `list_tools` and `call_tool`: they
     keep working until 0.23.0 and warn."""

@@ -140,8 +140,23 @@ class McpServerRef(Strict):
     env: dict[str, str] = Field(default_factory=dict)
 
 
+#: The most calls of one run a script may have in flight at once through the tool bridge (ADR 0122 §7).
+MAX_CONCURRENT_TOOL_CALLS = 16
+
+
+class ToolScripts(Strict):
+    """The run's agent may call the run's tools from a script, through the runner's tool bridge
+    (ADR 0122), resolved by the orchestrator from the deployment, the policy and the stage's role.
+    Present means offered; off is never sent: a runner older than ADR 0122 refuses the key."""
+
+    #: Calls of this run the bridge relays at once; the next waits.
+    max_concurrent_calls: int = Field(default=4, ge=1, le=MAX_CONCURRENT_TOOL_CALLS)
+
+
 class ToolsRef(Strict):
     mcp: dict[str, McpServerRef] = Field(default_factory=dict)
+    #: The tool bridge, when the run is offered it (ADR 0122 §6); `None`: the model's MCP tools only.
+    scripts: ToolScripts | None = None
 
 
 class Permissions(Strict):

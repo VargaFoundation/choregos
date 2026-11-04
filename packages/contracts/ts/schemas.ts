@@ -650,6 +650,19 @@ export type Policy = {
       };
     };
   };
+  /** How a run's agent may call its tools (ADR 0122): `offer` lets it call them from a script too, through the runner's tool bridge, under the same governance as the model's calls. Absent = off; the organisation's ceiling can forbid it and the deployment's kill switch wins over the policy. */
+  tools?: {
+    scripts?: "off" | "offer";
+    /** Calls of one run the tool bridge relays at once; the next waits. */
+    max_concurrent_calls?: number;
+    /** Per stage role, what changes from the project's values; an absent field keeps them. */
+    per_role?: {
+      [key: string]: {
+        scripts?: "off" | "offer";
+        max_concurrent_calls?: number;
+      };
+    };
+  };
   review?: {
     /** The review backend must differ from the implementation's. */
     cross_backend?: boolean;
@@ -875,6 +888,11 @@ export type StageInput = {
         };
       };
     };
+    /** The run's agent may call the run's tools from a script, through the runner's tool bridge (ADR 0122), resolved by the orchestrator from the deployment, the policy and the stage's role. Absent = off: the orchestrator never sends an off setting, so a runner older than ADR 0122 never sees the key. */
+    scripts?: {
+      /** Calls of this run the bridge relays at once; the next waits. */
+      max_concurrent_calls?: number;
+    } | null;
   };
   permissions?: {
     write_paths?: Array<string>;

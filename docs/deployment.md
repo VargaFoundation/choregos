@@ -911,6 +911,8 @@ this bench does **not** prove.
 
 **Context reduction kill switch.** `choregos-orchestrator.runner.contextReduction.enabled: false` (env `CHOREGOS_CONTEXT_REDUCTION=off`) refuses rtk and headroom to every run, whatever a project's policy asks ([ADR 0055](adr/0055-fewer-tokens-per-run.md)). Left at `true`, each policy decides, and a policy without `context` reduces nothing.
 
+**Tool scripts kill switch.** `choregos-orchestrator.runner.toolScripts.enabled` (env `CHOREGOS_TOOL_SCRIPTS`) is `false` by default: no run is offered the tool bridge, whatever a project's policy asks ([ADR 0122](adr/0122-an-agent-may-call-its-run-s-tools-from-a-script.md) §6). Set to `true`, the organisation's ceiling and each policy decide, and a policy without `tools` offers nothing. Turn it on only once the runner image serves the bridge (S57-07): an older runner refuses a stage input that carries `tools.scripts`.
+
 ## The first organisation, and the first token
 
 A fresh database has no organisation and no member. The chart bootstraps both:
