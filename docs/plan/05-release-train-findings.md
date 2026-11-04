@@ -1,19 +1,19 @@
-# 5. Release train et findings
+# 5. Release train and findings
 
-## 5.1 Release train — pourquoi trois verrous
+## 5.1 Release train — why three locks
 
-| Verrou | Ce qu'il garantit | Où |
+| Lock | What it guarantees | Where |
 | :-- | :-- | :-- |
-| Merge queue | `main` toujours intégré et vert, une PR à la fois | GitHub / GitLab |
-| `ReleaseTrain` (Temporal, singleton par projet × env) | Un seul déploiement en cours par environnement, batches, cadence, fenêtres, soak, approbation, canary, rollback, freeze | Choregos |
-| Garde-fous déclaratifs | Même si Choregos tombe, personne ne déploie hors règles : *sync windows* Argo CD, `GitHub Environment production` (approbateurs requis, wait timer), lock Atlantis pour Terraform | Cluster / SCM |
+| Merge queue | `main` always integrated and green, one PR at a time | GitHub / GitLab |
+| `ReleaseTrain` (Temporal, singleton per project × env) | A single deployment in progress per environment, batches, cadence, windows, soak, approval, canary, rollback, freeze | Choregos |
+| Declarative guardrails | Even if Choregos goes down, nobody deploys outside the rules: Argo CD *sync windows*, `GitHub Environment production` (required approvers, wait timer), Atlantis lock for Terraform | Cluster / SCM |
 
-## 5.2 `ReleaseTrain` — spécification
+## 5.2 `ReleaseTrain` — specification
 
 ```yaml
-# extrait de .choregos/policy.yaml
+# excerpt from .choregos/policy.yaml
 release_train:
-  dev:     { mode: auto_sync }                                  # pas de train : Argo suit main
+  dev:     { mode: auto_sync }                                  # no train: Argo follows main
   staging: { schedule: "*/30 9-19 * * 1-5", batch_max: 10, soak_minutes: 10, approval: none }
   prod:
     schedule: "0 10,14,17 * * 1-4"                              # Europe/Paris
@@ -34,60 +34,60 @@ release_train:
 stateDiagram-v2
   [*] --> collecting
   collecting --> departing: cron | batch_max | depart_now | hotfix
-  departing --> collecting: freeze | hors fenêtre | batch vide
-  departing --> staging: PR GitOps staging mergée
+  departing --> collecting: freeze | outside window | empty batch
+  departing --> staging: staging GitOps PR merged
   staging --> departing: Argo degraded (retry 1)
   staging --> awaiting_approval: soak OK
   staging --> rolled_back: smoke KO
   awaiting_approval --> promoting: approve
-  awaiting_approval --> collecting: reject | timeout (batch reporté)
+  awaiting_approval --> collecting: reject | timeout (batch postponed)
   promoting --> verifying: canary complet
-  promoting --> rolled_back: analyse KO (abort Rollouts)
+  promoting --> rolled_back: analysis KO (Rollouts abort)
   verifying --> done: verify_prod go
   verifying --> rolled_back: verify_prod no-go
   rolled_back --> frozen: freeze_on_rollback
-  frozen --> collecting: unfreeze (humain)
+  frozen --> collecting: unfreeze (human)
   done --> collecting
 ```
 
-Signaux : `merged(work_item, sha, risk, labels)`, `depart_now(by)`, `freeze(reason, by)`, `unfreeze(by)`, `approve(release_id, by)`, `reject(release_id, by, reason)`, `abort(by)`, `deploy_event(InboundEvent)`. Requête : `status()` (batch, prochain départ, verrou, freeze).
+Signals: `merged(work_item, sha, risk, labels)`, `depart_now(by)`, `freeze(reason, by)`, `unfreeze(by)`, `approve(release_id, by)`, `reject(release_id, by, reason)`, `abort(by)`, `deploy_event(InboundEvent)`. Query: `status()` (batch, next departure, lock, freeze).
 
-Activités : `check_window`, `create_release`, `promote(env, changes)` (`CdAdapter.promote` → PR GitOps, merge auto ou par approbateur selon env), `wait_synced`, `run_smoke` (Job Tekton `smoke-<env>`), `soak(minutes, slo_query)` (Prometheus/Azure Monitor), `request_approval` (Slack + GitHub Environment + front), `promote_canary_step`, `analysis_status`, `abort_rollout`, `write_release_notes` (stage `release_notes`), `notify`, `mark_items(deployed|rolled_back)`, `record_incident` (finding `critical` + mémoire).
+Activities: `check_window`, `create_release`, `promote(env, changes)` (`CdAdapter.promote` → GitOps PR, merged automatically or by an approver depending on the env), `wait_synced`, `run_smoke` (Tekton Job `smoke-<env>`), `soak(minutes, slo_query)` (Prometheus/Azure Monitor), `request_approval` (Slack + GitHub Environment + front end), `promote_canary_step`, `analysis_status`, `abort_rollout`, `write_release_notes` (stage `release_notes`), `notify`, `mark_items(deployed|rolled_back)`, `record_incident` (`critical` finding + memory).
 
-Terraform : les changements d'infra d'un projet sont des PR ordinaires sur son dépôt `infra/` ; Atlantis poste `plan` ; l'`apply` est déclenché par le train **pendant un départ**, après approbation, sous le lock Atlantis. Choregos ne détient aucun credential cloud : Atlantis les a.
+Terraform: a project's infra changes are ordinary PRs on its `infra/` repository; Atlantis posts the `plan`; the `apply` is triggered by the train **during a departure**, after approval, under the Atlantis lock. Choregos holds no cloud credential: Atlantis has them.
 
-Feature flags : `refine` impose un flag (OpenFeature + Unleash) pour `risk: high` ; la gate `flag_present` vérifie qu'un flag nommé dans la spec existe dans le code ; l'activation reste une décision produit hors train.
+Feature flags: `refine` requires a flag (OpenFeature + Unleash) for `risk: high`; the `flag_present` gate checks that a flag named in the spec exists in the code; activation remains a product decision outside the train.
 
-## 5.3 GitOps — layout du repo d'environnements
+## 5.3 GitOps — layout of the environments repo
 
 ```
 <project>-gitops/
-├── apps/<app>/base/                 (kustomize : Deployment→Rollout, Service, HPA, PDB)
+├── apps/<app>/base/                 (kustomize: Deployment→Rollout, Service, HPA, PDB)
 ├── apps/<app>/overlays/{dev,staging,prod}/  (images, replicas, AnalysisTemplate refs)
-├── releases/<env>/manifest.yaml     (écrit par le train : release id, items, SHAs, images)
+├── releases/<env>/manifest.yaml     (written by the train: release id, items, SHAs, images)
 └── argocd/                          (Applications, sync windows, notifications)
 ```
 
-Le train modifie uniquement `apps/*/overlays/<env>/kustomization.yaml` (tags d'images) et `releases/<env>/manifest.yaml`, dans une PR titrée `release(<env>): R-2026.09.18-2` dont le corps est le journal du batch (tickets, PR, risques, notes). `AnalysisTemplate slo-default` : taux 5xx < 1 %, p95 latence < seuil, erreurs métier < seuil, sur les requêtes Prometheus du projet (paramétrables).
+The train modifies only `apps/*/overlays/<env>/kustomization.yaml` (image tags) and `releases/<env>/manifest.yaml`, in a PR titled `release(<env>): R-2026.09.18-2` whose body is the batch log (tickets, PRs, risks, notes). `AnalysisTemplate slo-default`: 5xx rate < 1%, p95 latency < threshold, business errors < threshold, on the project's Prometheus queries (configurable).
 
 ## 5.4 Findings — pipeline
 
 ```mermaid
 flowchart LR
-  A[Agent : report_finding] --> B[API interne → signal finding]
+  A[Agent: report_finding] --> B[Internal API → finding signal]
   B --> C[FindingsTriage]
-  C --> D{Doublon ?<br/>embedding ≥ seuil<br/>même projet, ouvert}
-  D -->|oui| E[Commentaire sur l'item existant<br/>+1 occurrence · lien origine]
-  D -->|non| F[Classer : type, sévérité, estimation, dépôt<br/>modèle profile:cheap]
+  C --> D{Duplicate?<br/>embedding ≥ threshold<br/>same project, open}
+  D -->|yes| E[Comment on the existing item<br/>+1 occurrence · link to origin]
+  D -->|no| F[Classify: type, severity, estimate, repository<br/>model profile:cheap]
   F --> G[TrackerAdapter.create_item<br/>labels finding, source:agent, origin:#123, needs-triage]
-  G --> H[Commentaire sur l'origine · section PR]
-  F -->|critical sécurité| I[Notify immédiat]
-  G --> J{Politique}
-  J -->|auto pour S| K[agent-ready → nouveau WorkflowInterpreter]
-  J -->|sinon| L[Triage humain — front /findings]
-  G --> M[Mémoire : fait kind=finding]
+  G --> H[Comment on the origin · PR section]
+  F -->|critical security| I[Immediate notify]
+  G --> J{Policy}
+  J -->|auto for S| K[agent-ready → new WorkflowInterpreter]
+  J -->|otherwise| L[Human triage — front end /findings]
+  G --> M[Memory: fact kind=finding]
 ```
 
-Règles : plafond par run ; seuil de dédup `policy.findings.dedupe_threshold` (défaut 0,86, embeddings `platform/embed`) ; un finding de sévérité `critical` **dans le périmètre** est corrigé dans la PR courante et signalé ; hors périmètre, jamais corrigé — permission ACP refusée + vérification de diff + gate `scope_respected`. Template de ticket : origine (ticket, PR, run, transcript), type, sévérité, estimation, preuve `fichier:ligne`, impact, correction suggérée, pourquoi hors périmètre. Le finding créé est un `WorkItem` ordinaire ; son coût est comptabilisé sur lui, pas sur l'origine.
+Rules: cap per run; dedup threshold `policy.findings.dedupe_threshold` (default 0.86, `platform/embed` embeddings); a finding of `critical` severity **within scope** is fixed in the current PR and reported; out of scope, never fixed — ACP permission refused + diff check + `scope_respected` gate. Ticket template: origin (ticket, PR, run, transcript), type, severity, estimate, `file:line` evidence, impact, suggested fix, why out of scope. The created finding is an ordinary `WorkItem`; its cost is accounted on it, not on the origin.
 
-Boucle de qualité : le front affiche par projet le ratio findings créés / findings fermés « pertinent » ; un taux de faux positifs > 30 % sur 30 jours déclenche une révision du prompt `implement` (invariant « ne signale que ce qui est actionnable »).
+Quality loop: the front end shows per project the ratio of findings created / findings closed as "relevant"; a false-positive rate > 30% over 30 days triggers a review of the `implement` prompt (invariant "only report what is actionable").

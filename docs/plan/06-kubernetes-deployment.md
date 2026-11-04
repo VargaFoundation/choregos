@@ -1,54 +1,54 @@
-# 6. Déploiement de la plateforme sur Kubernetes
+# 6. Deploying the platform on Kubernetes
 
-Choregos se déploie **sur** Kubernetes et déploie **vers** Kubernetes ; les deux plans sont séparés : la plateforme vit dans ses namespaces `choregos-*`, chaque projet client dans `proj-<slug>-*`. Tout est GitOps : le dépôt `VargaFoundation/choregos-infra` est la seule source de vérité du cluster ; personne (ni humain, ni API) n'applique de manifeste à la main.
+Choregos is deployed **on** Kubernetes and deploys **to** Kubernetes; the two planes are separate: the platform lives in its `choregos-*` namespaces, each customer project in `proj-<slug>-*`. Everything is GitOps: the `VargaFoundation/choregos-infra` repository is the cluster's only source of truth; nobody (neither human nor API) applies a manifest by hand.
 
-## 6.1 Topologie
+## 6.1 Topology
 
 ```mermaid
 flowchart TB
-  subgraph cluster["Cluster Kubernetes — AKS ou GKE, 1.31+"]
-    subgraph sys[Namespaces système]
+  subgraph cluster["Kubernetes cluster — AKS or GKE, 1.31+"]
+    subgraph sys[System namespaces]
       ing["gateway — Envoy Gateway, Gateway API, cert-manager"]
       eso[external-secrets]
       argo[argocd + argo-rollouts]
       tekton["tekton-pipelines, triggers, chains, results, dashboard"]
       mon["monitoring — kube-prometheus-stack, Loki, Tempo, OTel Collector, Grafana"]
-      pol["kyverno — politiques d'admission"]
-      cnpg["cnpg-system — opérateur CloudNativePG"]
+      pol["kyverno — admission policies"]
+      cnpg["cnpg-system — CloudNativePG operator"]
     end
-    subgraph plat[Namespaces Choregos]
-      api["choregos-system — api ×2, web ×2, orchestrator workers ×2 par queue, tools-mcp, migrations Job"]
+    subgraph plat[Choregos namespaces]
+      api["choregos-system — api ×2, web ×2, orchestrator workers ×2 per queue, tools-mcp, migrations Job"]
       temporal["choregos-temporal — frontend, history, matching, worker, UI, schema Jobs"]
-      data["choregos-data — Postgres CNPG ×3 : choregos, temporal, litellm · MinIO ou bucket cloud"]
-      gw["choregos-gateway — LiteLLM ×2, Redis, vLLM optionnel"]
+      data["choregos-data — Postgres CNPG ×3: choregos, temporal, litellm · MinIO or cloud bucket"]
+      gw["choregos-gateway — LiteLLM ×2, Redis, optional vLLM"]
       mem["choregos-memory — Ecphoria StatefulSet ×3 Raft"]
-      egress["choregos-egress — proxy d'egress Envoy ou Squid"]
+      egress["choregos-egress — Envoy or Squid egress proxy"]
     end
-    subgraph projs["Namespaces projets — générés"]
+    subgraph projs["Project namespaces — generated"]
       pci["proj-SLUG-ci — EventListener, PipelineRuns CI"]
-      prun["proj-SLUG-runners — PipelineRuns agent-stage, Secrets de run, quotas"]
+      prun["proj-SLUG-runners — agent-stage PipelineRuns, run Secrets, quotas"]
     end
   end
-  users[Utilisateurs] --> ing --> api
+  users[Users] --> ing --> api
   hooks["Webhooks GitHub, Jira, Argo, Tekton"] --> ing
   api --> temporal --> data
   api --> data
-  prun --> gw --> llm[Fournisseurs de modèles]
-  prun --> egress --> scm[GitHub / registres]
+  prun --> gw --> llm[Model providers]
+  prun --> egress --> scm[GitHub / registries]
   prun --> mem
   argo --> projs
 ```
 
-Pools de nœuds :
+Node pools:
 
-| Pool | Taille | Rôle | Notes |
+| Pool | Size | Role | Notes |
 | :-- | :-- | :-- | :-- |
-| `system` | 3 × 4 vCPU / 16 Go | Composants système, API, Temporal, Postgres | Taints `role=system` ; stockage SSD |
-| `platform` | 2–3 × 8 vCPU / 32 Go | LiteLLM, Ecphoria, Tekton controllers, monitoring | |
-| `runners` | 0–20 × 8 vCPU / 32 Go **spot/preemptible** | PipelineRuns agent et CI | Autoscaler cluster ; `RuntimeClass gvisor` installé ; taint `role=runners` ; éviction tolérée (le run rejoue) |
-| `gpu` (optionnel) | 0–2 | vLLM local | Seulement si modèle local |
+| `system` | 3 × 4 vCPU / 16 GB | System components, API, Temporal, Postgres | `role=system` taints; SSD storage |
+| `platform` | 2–3 × 8 vCPU / 32 GB | LiteLLM, Ecphoria, Tekton controllers, monitoring | |
+| `runners` | 0–20 × 8 vCPU / 32 GB **spot/preemptible** | Agent and CI PipelineRuns | Cluster autoscaler; `RuntimeClass gvisor` installed; `role=runners` taint; eviction tolerated (the run replays) |
+| `gpu` (optional) | 0–2 | Local vLLM | Only with a local model |
 
-## 6.2 Composants et charts
+## 6.2 Components and charts
 
 Umbrella `charts/choregos/Chart.yaml` :
 
@@ -67,84 +67,84 @@ dependencies:
   - { name: redis,                 version: pinned, repository: oci://registry-1.docker.io/bitnamicharts }
 ```
 
-Les opérateurs et l'outillage cluster (CNPG, cert-manager, ESO, Envoy Gateway, Argo CD, Rollouts, Tekton via `tektoncd/operator`, kube-prometheus-stack, Loki, Tempo, OTel Collector, Kyverno, gVisor `containerd-shim` via DaemonSet) sont installés par `choregos-infra/bootstrap/` (app-of-apps), pas par l'umbrella.
+The operators and cluster tooling (CNPG, cert-manager, ESO, Envoy Gateway, Argo CD, Rollouts, Tekton via `tektoncd/operator`, kube-prometheus-stack, Loki, Tempo, OTel Collector, Kyverno, gVisor `containerd-shim` via DaemonSet) are installed by `choregos-infra/bootstrap/` (app-of-apps), not by the umbrella.
 
-Sous-charts Choregos — points notables :
+Choregos sub-charts — notable points:
 
-| Chart | Contenu |
+| Chart | Content |
 | :-- | :-- |
-| `api` | Deployment ×2, HPA (CPU 70 %), PDB, `Service`, `HTTPRoute`, `ServiceAccount` (droits : lire `PipelineRun` status dans `proj-*`, rien d'autre), `ConfigMap` (OIDC, URLs), `ExternalSecret` (DB, JWT keys, webhook secrets, GitHub App key), `Job` pre-install/pre-upgrade `python -m choregos_api.migrer` (cœur + branches des greffons) (hook Helm `pre-upgrade`, `wait`) |
-| `web` | Deployment ×2, `HTTPRoute`, CSP stricte, `NEXT_PUBLIC_*` |
-| `orchestrator` | Un Deployment par task queue (`orchestrator`, `executor`, `tracker`, `memory`), réplicas 2, `ServiceAccount executor` avec RBAC : créer/lister/supprimer `PipelineRun`, `Secret`, `ConfigMap` dans les namespaces `proj-*-runners` uniquement (Role par namespace généré par le provisioning) ; KEDA optionnel (scale sur `temporal_task_queue_backlog`) |
-| `tools` | Publie l'image `choregos-tools` et la `Task` Tekton `choregos-agent-stage` en `ClusterTask`-like (Task dans chaque namespace projet via Kustomize) |
-| `temporal` | Persistence Postgres (CNPG `temporal`), `numHistoryShards: 512`, frontend/history/matching/worker ×2, UI derrière OIDC, `schema` Jobs |
-| `litellm` | Postgres `litellm`, Redis, `proxy_config` depuis `ConfigMap` + modèles en base, `PodDisruptionBudget`, `NetworkPolicy` (entrée : runners, orchestrator, api ; sortie : fournisseurs via egress) |
-| `ecphoria` | StatefulSet ×3, PVC SSD 50 Go, Raft, `CronJob` backup vers bucket, `ServiceMonitor` |
+| `api` | Deployment ×2, HPA (CPU 70%), PDB, `Service`, `HTTPRoute`, `ServiceAccount` (rights: read `PipelineRun` status in `proj-*`, nothing else), `ConfigMap` (OIDC, URLs), `ExternalSecret` (DB, JWT keys, webhook secrets, GitHub App key), pre-install/pre-upgrade `Job` `python -m choregos_api.migrer` (core + extension branches) (Helm `pre-upgrade` hook, `wait`) |
+| `web` | Deployment ×2, `HTTPRoute`, strict CSP, `NEXT_PUBLIC_*` |
+| `orchestrator` | One Deployment per task queue (`orchestrator`, `executor`, `tracker`, `memory`), 2 replicas, `ServiceAccount executor` with RBAC: create/list/delete `PipelineRun`, `Secret`, `ConfigMap` in the `proj-*-runners` namespaces only (one Role per namespace generated by the provisioning); optional KEDA (scale on `temporal_task_queue_backlog`) |
+| `tools` | Publishes the `choregos-tools` image and the `choregos-agent-stage` Tekton `Task` as `ClusterTask`-like (Task in each project namespace via Kustomize) |
+| `temporal` | Postgres persistence (CNPG `temporal`), `numHistoryShards: 512`, frontend/history/matching/worker ×2, UI behind OIDC, `schema` Jobs |
+| `litellm` | `litellm` Postgres, Redis, `proxy_config` from a `ConfigMap` + models in the database, `PodDisruptionBudget`, `NetworkPolicy` (ingress: runners, orchestrator, api; egress: providers via the egress proxy) |
+| `ecphoria` | StatefulSet ×3, 50 GB SSD PVC, Raft, `CronJob` backup to a bucket, `ServiceMonitor` |
 
-## 6.3 `choregos-infra` — GitOps de la plateforme
+## 6.3 `choregos-infra` — GitOps of the platform
 
 ```
 choregos-infra/
-├── bootstrap/                      # app-of-apps Argo CD : opérateurs et outillage (sync-wave 0–2)
+├── bootstrap/                      # Argo CD app-of-apps: operators and tooling (sync-wave 0–2)
 │   ├── cert-manager/ external-secrets/ envoy-gateway/ cnpg/ tekton-operator/ argo-rollouts/ kyverno/ monitoring/ gvisor/
-├── platform/                       # l'umbrella choregos par environnement (sync-wave 3)
+├── platform/                       # the choregos umbrella per environment (sync-wave 3)
 │   ├── base/ (Application → charts/choregos)  overlays/{dev,staging,prod}/values.yaml
-├── projects/                       # écrit par ProjectProvisioning ; ApplicationSet "git directory generator" (sync-wave 4)
+├── projects/                       # written by ProjectProvisioning; "git directory generator" ApplicationSet (sync-wave 4)
 │   └── <slug>/  namespaces.yaml  quotas.yaml  netpol.yaml  rbac.yaml  tekton/ (EventListener, Pipeline CI, Task agent-stage)  argocd/ (Applications dev/staging/prod)
-└── policies/                       # Kyverno : images signées, non-root, pas de latest, labels obligatoires, quotas présents
+└── policies/                       # Kyverno: signed images, non-root, no latest, mandatory labels, quotas present
 ```
 
-Ordre de synchronisation par `sync-wave` ; `ApplicationSet` `projects` avec `prune: true` et `selfHeal: true`. Le bot Argo CD a les droits d'écriture ; l'API Choregos n'a que le droit de **commiter** dans `projects/` (App GitHub dédiée, portée dépôt).
+Synchronisation order by `sync-wave`; `projects` `ApplicationSet` with `prune: true` and `selfHeal: true`. The Argo CD bot has write rights; the Choregos API only has the right to **commit** into `projects/` (dedicated GitHub App, repository scope).
 
-## 6.4 Environnements
+## 6.4 Environments
 
-| Env | Cible | Particularités |
+| Env | Target | Specifics |
 | :-- | :-- | :-- |
-| `dev` | kind (3 nœuds) ou k3d, `make dev-up` (Tilt) | Temporal dev-server, Postgres single, LiteLLM avec fournisseur de test (`fake-openai` + un vrai modèle cheap), Ecphoria single, Tekton complet, Argo CD léger, Keycloak local, fixtures |
-| `staging` | Cluster partagé, namespace-prefixé `stg-` ou cluster dédié | Données synthétiques, projets de référence pour les évals, promotion automatique depuis `main` |
-| `prod` | Cluster dédié (AKS `eu-west` ou GKE `europe-west1`) | HA (section 6.5), sauvegardes, fenêtres de déploiement, **la plateforme est déployée par son propre release train** (dogfooding dès la phase 4) |
+| `dev` | kind (3 nodes) or k3d, `make dev-up` (Tilt) | Temporal dev-server, single Postgres, LiteLLM with a test provider (`fake-openai` + one real cheap model), single Ecphoria, complete Tekton, light Argo CD, local Keycloak, fixtures |
+| `staging` | Shared cluster, `stg-` namespace prefix, or dedicated cluster | Synthetic data, reference projects for the evals, automatic promotion from `main` |
+| `prod` | Dedicated cluster (AKS `eu-west` or GKE `europe-west1`) | HA (section 6.5), backups, deployment windows, **the platform is deployed by its own release train** (dogfooding from phase 4) |
 
-Promotion de la plateforme : image taguée par SHA → `platform/overlays/staging` (auto) → soak → PR `platform/overlays/prod` (approbation release captain) → Argo Rollouts canary sur `api`/`web`/`orchestrator` (les workers Temporal supportent le rolling grâce au versioning des workflows : `workflow.patched()` pour tout changement de logique).
+Promotion of the platform: image tagged by SHA → `platform/overlays/staging` (auto) → soak → `platform/overlays/prod` PR (release captain approval) → Argo Rollouts canary on `api`/`web`/`orchestrator` (the Temporal workers support rolling thanks to workflow versioning: `workflow.patched()` for any logic change).
 
-## 6.5 Haute disponibilité et données
+## 6.5 High availability and data
 
-| Composant | HA | Sauvegarde | RPO / RTO prod |
+| Component | HA | Backup | Prod RPO / RTO |
 | :-- | :-- | :-- | :-- |
-| Postgres (3 clusters CNPG) | 3 instances, failover automatique, PgBouncer | Base + WAL continu vers bucket (Barman), rétention 30 j, test de restauration mensuel automatisé | 5 min / 30 min |
-| Temporal | 2 réplicas par service, `numHistoryShards` fixé dès le départ (non modifiable) | via Postgres | idem |
-| Ecphoria | Raft 3 nœuds, PDB `minAvailable: 2` | `CronJob` quotidien + manifeste d'intégrité (E-11) | 24 h / 1 h |
-| LiteLLM | 2 réplicas, Redis | via Postgres `litellm` (spend logs) | 1 h / 15 min |
-| Object store (transcripts, rapports, context packs) | Bucket cloud versionné (Blob/GCS) ou MinIO distribué | Versioning + lifecycle 180 j | — |
-| Tekton Results | Postgres partagé `choregos` (schéma dédié) | idem Postgres | — |
+| Postgres (3 CNPG clusters) | 3 instances, automatic failover, PgBouncer | Base + continuous WAL to a bucket (Barman), 30 d retention, automated monthly restore test | 5 min / 30 min |
+| Temporal | 2 replicas per service, `numHistoryShards` fixed from the start (cannot be changed) | via Postgres | same |
+| Ecphoria | Raft 3 nodes, PDB `minAvailable: 2` | daily `CronJob` + integrity manifest (E-11) | 24 h / 1 h |
+| LiteLLM | 2 replicas, Redis | via `litellm` Postgres (spend logs) | 1 h / 15 min |
+| Object store (transcripts, reports, context packs) | Versioned cloud bucket (Blob/GCS) or distributed MinIO | Versioning + 180 d lifecycle | — |
+| Tekton Results | Shared `choregos` Postgres (dedicated schema) | same as Postgres | — |
 
-Runbooks (`docs/runbooks/`) : restauration Postgres, perte d'un nœud Raft Ecphoria, rotation du secret d'App GitHub, rotation `master_key` LiteLLM, montée de version Temporal, purge de runs, incident « train gelé ».
+Runbooks (`docs/runbooks/`): Postgres restore, loss of an Ecphoria Raft node, GitHub App secret rotation, LiteLLM `master_key` rotation, Temporal version upgrade, run purge, "frozen train" incident.
 
-## 6.6 Secrets, identité, réseau
+## 6.6 Secrets, identity, network
 
-- **Secrets** : External Secrets Operator ↔ Azure Key Vault / GCP Secret Manager (Vault possible). Aucun secret dans Git ; bootstrap par un unique `ClusterSecretStore` créé à la main. Rotation : GitHub App key (90 j), `master_key` LiteLLM (90 j), clés JWT ES256 de l'API (30 j, rotation à deux clés), webhook secrets (180 j).
-- **Identité** : OIDC pour les humains (front, Argo UI, Temporal UI, Grafana) ; workload identity (Azure AD Workload Identity / GKE Workload Identity) pour les composants qui parlent au cloud (ESO, sauvegardes, Atlantis) ; **aucun** pour les runners.
-- **Entrée** : Gateway API (Envoy Gateway) + cert-manager (Let's Encrypt DNS-01) ; `api.<domain>`, `app.<domain>`, `hooks.<domain>` (webhooks, rate-limit dédié), `temporal.<domain>`, `argocd.<domain>`, `grafana.<domain>` derrière OIDC.
-- **Sortie** : egress par défaut refusé dans `proj-*-runners` et `choregos-gateway` ; proxy d'egress avec allowlist par projet (`policy.network.allow_domains`), journalisation, injection de credentials pour les registres privés ; les fournisseurs de modèles ne sont joignables que depuis `choregos-gateway`.
-- **Admission** (Kyverno) : images signées (cosign, clés de la fondation) et par digest ; `runAsNonRoot` ; pas de `hostPath`/`privileged` ; labels `choregos/project` obligatoires dans `proj-*` ; `ResourceQuota` présente ; `RuntimeClass gvisor` imposée dans `proj-*-runners` si `policy.sandbox.runtime=gvisor`.
+- **Secrets**: External Secrets Operator ↔ Azure Key Vault / GCP Secret Manager (Vault possible). No secret in Git; bootstrap by a single `ClusterSecretStore` created by hand. Rotation: GitHub App key (90 d), LiteLLM `master_key` (90 d), the API's ES256 JWT keys (30 d, two-key rotation), webhook secrets (180 d).
+- **Identity**: OIDC for humans (front end, Argo UI, Temporal UI, Grafana); workload identity (Azure AD Workload Identity / GKE Workload Identity) for the components that talk to the cloud (ESO, backups, Atlantis); **none** for the runners.
+- **Ingress**: Gateway API (Envoy Gateway) + cert-manager (Let's Encrypt DNS-01); `api.<domain>`, `app.<domain>`, `hooks.<domain>` (webhooks, dedicated rate limit), `temporal.<domain>`, `argocd.<domain>`, `grafana.<domain>` behind OIDC.
+- **Egress**: egress denied by default in `proj-*-runners` and `choregos-gateway`; egress proxy with a per-project allowlist (`policy.network.allow_domains`), logging, credential injection for private registries; the model providers are reachable only from `choregos-gateway`.
+- **Admission** (Kyverno): signed images (cosign, the foundation's keys) and by digest; `runAsNonRoot`; no `hostPath`/`privileged`; `choregos/project` labels mandatory in `proj-*`; `ResourceQuota` present; `RuntimeClass gvisor` imposed in `proj-*-runners` if `policy.sandbox.runtime=gvisor`.
 
-## 6.7 Observabilité de la plateforme
+## 6.7 Platform observability
 
-- **Métriques** : Prometheus (kube-prometheus-stack) ; `ServiceMonitor` pour api, orchestrator (métriques Temporal SDK : latence d'activité, backlog par queue), Temporal server, LiteLLM, Ecphoria, Tekton, Argo. Dashboards Grafana livrés dans `charts/choregos/dashboards/` : *Plateforme*, *Projets & coûts*, *Trains*, *Runners*, *Gateway*, *Mémoire*.
-- **Logs** : Loki via OTel Collector (DaemonSet) ; les logs des runners sont étiquetés `run_id`, `project`, `stage`.
-- **Traces** : Tempo ; traces API → Temporal → runner (propagation W3C via `StageInput.trace_parent`) ; LiteLLM `otel` callback.
-- **Alertes** (Alertmanager → Slack) : API 5xx > 1 %, backlog Temporal > 100 pendant 10 min, activité `await_run` en échec > 3, budget journalier > 80 %, train gelé > 2 h, Postgres réplication en retard, Ecphoria quorum perdu, certificat < 14 j, PipelineRun en `Pending` > 15 min (autoscaling en panne).
-- **SLO** : disponibilité API 99,9 % ; latence webhook → signal Temporal p95 < 2 s ; démarrage d'un run p95 < 90 s ; coût attribué à 100 % des runs.
+- **Metrics**: Prometheus (kube-prometheus-stack); `ServiceMonitor` for api, orchestrator (Temporal SDK metrics: activity latency, backlog per queue), Temporal server, LiteLLM, Ecphoria, Tekton, Argo. Grafana dashboards delivered in `charts/choregos/dashboards/`: *Platform*, *Projects & costs*, *Trains*, *Runners*, *Gateway*, *Memory*.
+- **Logs**: Loki via the OTel Collector (DaemonSet); the runners' logs are labelled `run_id`, `project`, `stage`.
+- **Traces**: Tempo; API → Temporal → runner traces (W3C propagation via `StageInput.trace_parent`); LiteLLM `otel` callback.
+- **Alerts** (Alertmanager → Slack): API 5xx > 1%, Temporal backlog > 100 for 10 min, `await_run` activity failing > 3, daily budget > 80%, train frozen > 2 h, Postgres replication lagging, Ecphoria quorum lost, certificate < 14 d, PipelineRun `Pending` > 15 min (autoscaling down).
+- **SLO**: API availability 99.9%; webhook → Temporal signal latency p95 < 2 s; run start p95 < 90 s; cost attributed to 100% of the runs.
 
-## 6.8 Mises à jour et opérations
+## 6.8 Updates and operations
 
-- Renovate sur `choregos` et `choregos-infra` : images, charts, dépendances Python/npm/Cargo, versions de backends agents (`versions.lock`) — chaque bump passe par la suite de conformité.
-- Migrations DB : `alembic` idempotent, compatibles N-1 (expand/contract), exécutées par Job Helm avant le déploiement des pods.
-- Versionnage des workflows Temporal : `workflow.patched("<id>")` obligatoire pour toute modification de logique ; test de replay des historiques (`temporalio.worker.Replayer`) en CI sur un jeu d'historiques archivés.
-- Capacité : autoscaler cluster sur le pool `runners` ; `ResourceQuota` par projet (défaut : 8 runs concurrents, 32 vCPU, 96 Go) ; file d'attente visible dans le front.
-- Coût infra estimé (prod, sans tokens) : pool `system` + `platform` fixe ~5–6 nœuds, pool `runners` variable (spot) ; base ~600–1 000 €/mois selon fournisseur et région, hors object store et egress ; à mesurer en staging.
+- Renovate on `choregos` and `choregos-infra`: images, charts, Python/npm/Cargo dependencies, agent backend versions (`versions.lock`) — each bump goes through the conformance suite.
+- DB migrations: idempotent `alembic`, N-1 compatible (expand/contract), run by a Helm Job before the pods are deployed.
+- Temporal workflow versioning: `workflow.patched("<id>")` mandatory for any logic change; replay test of the histories (`temporalio.worker.Replayer`) in CI on a set of archived histories.
+- Capacity: cluster autoscaler on the `runners` pool; `ResourceQuota` per project (default: 8 concurrent runs, 32 vCPU, 96 GB); queue visible in the front end.
+- Estimated infra cost (prod, excluding tokens): fixed `system` + `platform` pool ~5–6 nodes, variable `runners` pool (spot); base ~€600–1,000/month depending on provider and region, excluding object store and egress; to be measured in staging.
 
-## 6.9 Développement local (`dev/`)
+## 6.9 Local development (`dev/`)
 
-`make dev-up` : crée le cluster kind (`dev/kind.yaml`, 1 control-plane + 2 workers, port-forwards), installe via Helmfile/Argo léger : CNPG (1 instance), Temporal dev-server, LiteLLM (fournisseur `fake` + un modèle cheap réel si `LITELLM_REAL=1`), Ecphoria single, Tekton (operator, profil `lite`), Argo CD + Rollouts, Keycloak (realm `choregos`, users `augustin/owner`, `marie/captain`), monitoring allégé ; puis `tilt up` : hot-reload de `api`, `web`, `orchestrator`, `runner` (image locale), `tools-mcp`. `make dev-seed` : org `varga`, projet `demo` (template `github-tekton-argo-k8s` en mode `CHOREGOS_FAKES=1` : tracker/SCM/CD simulés), 10 tickets, un train. `make e2e` : scénarios Playwright + pytest contre kind.
+`make dev-up`: creates the kind cluster (`dev/kind.yaml`, 1 control-plane + 2 workers, port-forwards), installs via Helmfile/light Argo: CNPG (1 instance), Temporal dev-server, LiteLLM (`fake` provider + a real cheap model if `LITELLM_REAL=1`), single Ecphoria, Tekton (operator, `lite` profile), Argo CD + Rollouts, Keycloak (realm `choregos`, users `augustin/owner`, `marie/captain`), light monitoring; then `tilt up`: hot reload of `api`, `web`, `orchestrator`, `runner` (local image), `tools-mcp`. `make dev-seed`: org `varga`, project `demo` (template `github-tekton-argo-k8s` in `CHOREGOS_FAKES=1` mode: simulated tracker/SCM/CD), 10 tickets, one train. `make e2e`: Playwright + pytest scenarios against kind.
 
-Alternative sans Kubernetes pour le front et l'API : `docker compose -f dev/compose.yaml up` (Postgres, Temporal dev, LiteLLM, Ecphoria, Keycloak, MinIO) + `CHOREGOS_FAKES=1` (exécuteur `local_docker`).
+Alternative without Kubernetes for the front end and the API: `docker compose -f dev/compose.yaml up` (Postgres, Temporal dev, LiteLLM, Ecphoria, Keycloak, MinIO) + `CHOREGOS_FAKES=1` (`local_docker` executor).
