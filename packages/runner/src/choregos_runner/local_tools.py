@@ -21,10 +21,13 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlparse
 
 from .client import InternalClient
+
+if TYPE_CHECKING:
+    from choregos_tools_mcp.bridge import Bridge
 
 
 def _local_address(url: str) -> tuple[str, int] | None:
@@ -47,12 +50,16 @@ async def _already_answers(host: str, port: int) -> bool:
     return True
 
 
-async def start_if_absent(url: str, client: InternalClient, *, max_findings: int = 5) -> Any:
+async def start_if_absent(
+    url: str, client: InternalClient, *, max_findings: int = 5, bridge: Bridge | None = None
+) -> Any:
     """Start the tools server on `url` if nothing answers there. Returns what is needed to stop it.
 
     Returns `None` when there is nothing to do: remote address, or sidecar already in place.
     A failure at startup is not fatal: the agent will lose its tools, which is already the
-    case today, but the step goes on and the journal says so.
+    case today, but the step goes on and the journal says so. `bridge`, when the run is offered
+    tool scripts (ADR 0122), is served by the same server, on the same port: a sidecar in place
+    serves its own.
     """
     address = _local_address(url)
     if address is None:
@@ -68,7 +75,7 @@ async def start_if_absent(url: str, client: InternalClient, *, max_findings: int
 
     # The server shares the runner's client: same run token, same scope. It needs
     # nothing else, and above all no provider credential.
-    app = create_app(McpServer(client, ToolContext(max_findings=max_findings)))
+    app = create_app(McpServer(client, ToolContext(max_findings=max_findings)), bridge=bridge)
     config = uvicorn.Config(app, host=host, port=port, log_level="warning")
     server = uvicorn.Server(config)
     task = asyncio.create_task(server.serve())

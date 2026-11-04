@@ -17,7 +17,7 @@ import tempfile
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from choregos_contracts import (
     Artifacts,
@@ -71,6 +71,9 @@ from .result import complete_result, fallback_result, load_result, repair_prompt
 from .scope import check_scope
 from .skills import InvalidSkill, place_skills
 from .workspace import Workspace, agent_git_env, agent_home, inline_outputs, workspace_env
+
+if TYPE_CHECKING:
+    from choregos_tools_mcp.bridge import Bridge
 
 MAX_RESULT_REPAIRS = 2
 #: What the journal keeps of a job's stdout and stderr: the tail, enough to see why it failed.
@@ -126,13 +129,15 @@ class EventJournal:
             await self.flush()
 
     async def flush(self) -> None:
-        if not self.buffer or self.client is None:
-            self.buffer.clear()
+        # The batch leaves the buffer before the post: an event recorded while it is on its way (the
+        # tool bridge records from its own requests, ADR 0122) waits for the next batch, instead of
+        # being cleared with this one unsent.
+        batch, self.buffer = self.buffer, []
+        if not batch or self.client is None:
             return
         # A lost journal must never make a run fail: the result takes precedence.
         with contextlib.suppress(Exception):
-            await self.client.post_events(self.buffer)
-        self.buffer.clear()
+            await self.client.post_events(batch)
 
 
 #: Git's "empty tree" object: the reference when there is no earlier history.
@@ -482,13 +487,20 @@ class Runner:
         if stage_input.job is not None or stage_input.remote is not None:
             return None
         announced = stage_input.tools.mcp.get("choregos")
+        # The tool bridge (ADR 0122), when the run is offered scripts: on the same server and port,
+        # with the runner's client and journal. The agent gets no credential for it.
+        bridge: Bridge | None = None
+        if (scripts := stage_input.tools.scripts) is not None:
+            from choregos_tools_mcp.bridge import Bridge  # the server's own imports, when it serves
+
+            bridge = Bridge(client, scripts, journal, secrets=(self.settings.run_token,))
         try:
             tools = await start_if_absent(
-                (announced.url if announced else "") or self.settings.tools_url, client
+                (announced.url if announced else "") or self.settings.tools_url, client, bridge=bridge
             )
             await journal.record(
                 "tools.local",
-                {"started": tools is not None},
+                {"started": tools is not None, **({} if bridge is None else {"bridge": tools is not None})},
             )
             return tools
         except Exception as exc:  # losing its tools must not stop the step

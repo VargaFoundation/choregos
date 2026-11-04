@@ -4,10 +4,16 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 from choregos_contracts import ContextPack, Finding, StageInput, StageResult
+
+#: The headers that say which door a tool call came through (ADR 0122 §4), as `callRunTool` reads them.
+TOOL_ORIGIN_HEADER = "X-Choregos-Tool-Origin"
+SCRIPT_HEADER = "X-Choregos-Script"
 
 
 class InternalApiError(RuntimeError):
@@ -19,13 +25,43 @@ class InternalApiError(RuntimeError):
         self.detail = detail
 
 
+@dataclass(frozen=True)
+class Relayed:
+    """An answer of the internal API as it came, for a door that hands it on unchanged (the tool
+    bridge, ADR 0122 §1): its status, its bytes, its media type, and `Retry-After` when it has one."""
+
+    status_code: int
+    content: bytes
+    media_type: str
+    retry_after: str | None = None
+
+    @classmethod
+    def of(cls, response: httpx.Response) -> Relayed:
+        return cls(
+            response.status_code,
+            response.content,
+            response.headers.get("content-type", "application/octet-stream"),
+            response.headers.get("retry-after"),
+        )
+
+
 class InternalClient:
     """Calls to the API's `/internal`, authenticated with the run token."""
 
-    def __init__(self, base_url: str, run_id: str, token: str, *, timeout: float = 30.0) -> None:
+    def __init__(
+        self,
+        base_url: str,
+        run_id: str,
+        token: str,
+        *,
+        timeout: float = 30.0,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
         self.base_url = base_url.rstrip("/")
         self.run_id = run_id
-        self._client = httpx.AsyncClient(timeout=timeout, headers={"Authorization": f"Bearer {token}"})
+        self._client = httpx.AsyncClient(
+            timeout=timeout, headers={"Authorization": f"Bearer {token}"}, transport=transport
+        )
         self._event_lock = asyncio.Lock()
 
     async def aclose(self) -> None:
@@ -84,6 +120,25 @@ class InternalClient:
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         """Calls a catalogue tool. The provider's key stays on the platform side."""
         return dict(await self._request("POST", f"/tools/{name}", json=arguments))
+
+    async def relay_tools(self) -> Relayed:
+        """`getRunTools` as the API answers it, whatever its status: the tool bridge lists it whole."""
+        return Relayed.of(await self._client.get(self._url("/tools")))
+
+    async def relay_tool_call(
+        self, name: str, arguments: bytes, *, script: str | None, within_s: float
+    ) -> Relayed:
+        """`callRunTool` from a script (ADR 0122 §4): origin `script`, the script's digest when known,
+        and the API's answer as it came — a problem is an answer here, not an error. Raises
+        `httpx.TimeoutException` past `within_s` seconds, `httpx.TransportError` when the API is
+        unreachable."""
+        headers = {"Content-Type": "application/json", TOOL_ORIGIN_HEADER: "script"}
+        if script is not None:
+            headers[SCRIPT_HEADER] = script
+        response = await self._client.post(
+            self._url(f"/tools/{quote(name, safe='')}"), content=arguments, headers=headers, timeout=within_s
+        )
+        return Relayed.of(response)
 
     async def fetch_context(self) -> ContextPack:
         return ContextPack.model_validate(await self._request("GET", "/context"))

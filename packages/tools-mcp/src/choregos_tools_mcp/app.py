@@ -1,5 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The HTTP sidecar of the `choregos-tools` MCP server (endpoint `/mcp`)."""
+"""The HTTP sidecar of the `choregos-tools` MCP server (endpoint `/mcp`), and the tool bridge
+(`/bridge/v1`, ADR 0122) when the run is offered tool scripts."""
 
 from __future__ import annotations
 
@@ -11,6 +12,8 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 
+from . import bridge as tool_bridge
+from .bridge import ApiJournal, Bridge, StageInputBridge
 from .client import InternalClient
 from .server import McpServer
 from .tools import ToolContext
@@ -26,21 +29,31 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # authenticated with the run's token; creating a second one would be a second identity.
         yield
         return
+    token = os.environ.get("CHOREGOS_RUN_TOKEN", "")
     client = InternalClient(
         os.environ.get("CHOREGOS_API_URL", "http://localhost:8000/api/v1/internal"),
         os.environ.get("CHOREGOS_RUN_ID", ""),
-        os.environ.get("CHOREGOS_RUN_TOKEN", ""),
+        token,
     )
     _state["client"] = client
     _state["server"] = McpServer(
         client, ToolContext(max_findings=int(os.environ.get("CHOREGOS_MAX_FINDINGS", "5")))
     )
+    # The sidecar is not told its run's input: the bridge reads it from the API on first use.
+    _state["bridge"] = StageInputBridge(client, ApiJournal(client), secrets=(token,))
     yield
     await client.aclose()
 
 
-def create_app(server: McpServer | None = None) -> FastAPI:
-    """The sidecar's application. With `server` injected, the runner serves it itself."""
+async def _sidecar_bridge() -> Bridge | None:
+    source = _state.get("bridge")
+    return None if source is None else await source()
+
+
+def create_app(server: McpServer | None = None, bridge: Bridge | None = None) -> FastAPI:
+    """The sidecar's application. With `server` injected, the runner serves it itself, and the tool
+    bridge only when it hands one over: it knows its run's input. The sidecar (no `server`) always has
+    the bridge's routes, and serves the bridge when the run's input, read from the API, offers it."""
     if server is not None:
         _state["server"] = server
     app = FastAPI(title="choregos-tools", version="1.0.0", lifespan=lifespan)
@@ -66,6 +79,14 @@ def create_app(server: McpServer | None = None) -> FastAPI:
             return Response(status_code=202)
         return JSONResponse(response)
 
+    if bridge is not None:
+
+        async def offered() -> Bridge | None:
+            return bridge
+
+        tool_bridge.mount(app, offered)
+    elif server is None:
+        tool_bridge.mount(app, _sidecar_bridge)
     return app
 
 

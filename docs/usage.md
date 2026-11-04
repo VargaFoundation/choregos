@@ -2687,8 +2687,10 @@ An unquoted `off` is read as `off` (YAML 1.1 reads it as `false`). A call from a
 exactly as the model's: the same allowlist, cap, approvals, ledger row and `tool.called` event. The
 orchestrator resolves the setting per role into the stage input's `tools.scripts`
 (`{max_concurrent_calls: n}`), and leaves the key out when it is off, so a runner older than ADR 0122
-never sees it; an eval cell runs without it until the matrix measures it (S57-09). The contract
-carries the switch; the runner does not serve the bridge yet (S57-07).
+never sees it; an eval cell runs without it until the matrix measures it (S57-09). The runner's
+tool server serves the bridge when the stage input offers it (S57-07): its routes, bounds and journal
+events are in [the deployment guide](deployment.md#the-tool-bridge); the client a script imports
+comes with S57-08.
 
 **A policy does not decide who approves a work item.** People are declared in the **workflow**: a
 transition `by` a human actor, or `train: {approval: <actor>}` on a release train
