@@ -46,6 +46,7 @@ from choregos_core import utcnow
 from choregos_core.network import allowed
 from choregos_core.outbound_proxy import OutboundProxyError, ProxyConfig
 from choregos_core.redaction import redact
+from choregos_core.tool_ledger import IN_FLIGHT
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -570,6 +571,8 @@ async def _politeness(ctx: Context, host: str, crawl_delay: float | None) -> Non
                     CostLedger.run_id == ctx.run.id,
                     CostLedger.kind == "tool",
                     CostLedger.model == TOOL_NAME,
+                    # This fetch's own place under the tool-call cap is not a fetch made (S57-03).
+                    CostLedger.provider != IN_FLIGHT,
                     CostLedger.ts >= now - timedelta(seconds=60),
                 )
             )

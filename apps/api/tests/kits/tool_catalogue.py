@@ -82,6 +82,7 @@ async def run_with_catalogue(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     tools: str = "recherche_profils",
+    run_id: str = "run-outils-1",
 ) -> tuple[str, dict[str, str]]:
     from choregos_api import catalogue as catalogue_service
     from choregos_api.db.models import Project, Run, WorkItem
@@ -104,7 +105,7 @@ async def run_with_catalogue(
         session.add(item)
         await session.flush()
         run = Run(
-            id="run-outils-1",
+            id=run_id,
             work_item_id=item.id,
             project_id=project["id"],
             stage_role="custom",
@@ -113,10 +114,8 @@ async def run_with_catalogue(
         )
         session.add(run)
 
-    token = mint_run_token(
-        "run-outils-1", project_slug="billing-api", work_item_key="varga/x#9", ttl_minutes=30
-    )
-    return "run-outils-1", {"Authorization": f"Bearer {token}"}
+    token = mint_run_token(run_id, project_slug="billing-api", work_item_key="varga/x#9", ttl_minutes=30)
+    return run_id, {"Authorization": f"Bearer {token}"}
 
 
 async def project_with_mcp(

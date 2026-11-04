@@ -12,6 +12,7 @@ from typing import Annotated, Any
 from choregos_contracts import StageRole
 from choregos_core import aware, utcnow
 from choregos_core.cross_review import Arm, StageRun, cross_backend_arms, cross_backend_verdict
+from choregos_core.tool_ledger import IN_FLIGHT
 from fastapi import APIRouter, Query, Response
 from sqlalchemy import func, or_, select
 
@@ -105,9 +106,11 @@ async def _report(
 
 def _period(since: date | None, until: date | None, kind: str | None = None) -> list[Any]:
     """The ledger lines of a period: `since` (default 30 days ago) to `until`, both inclusive;
-    `kind` keeps only what models cost, or only what tools cost (S29-03)."""
+    `kind` keeps only what models cost, or only what tools cost (S29-03). A place held under the
+    tool-call cap costs nothing and is not a call yet (S57-03): it is left out of the counts."""
     where: list[Any] = [
-        CostLedger.ts >= (datetime.combine(since, datetime.min.time()) if since else _default_since())
+        CostLedger.ts >= (datetime.combine(since, datetime.min.time()) if since else _default_since()),
+        CostLedger.provider != IN_FLIGHT,
     ]
     if until:
         where.append(CostLedger.ts <= datetime.combine(until, datetime.max.time()))
