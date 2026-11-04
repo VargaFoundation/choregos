@@ -5,12 +5,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import os
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from ..config import agent_base_environment
 from .guard import TurnGuard
 from .protocol import (
     ACP_VERSION,
@@ -112,7 +112,9 @@ class AcpClient:
     ) -> None:
         self.command = command
         self.cwd = cwd
-        self.env = {**os.environ, **(env or {})}
+        # The runner's environment without the run's credentials (ADR 0115): under `k8s_job`, ACA,
+        # local Docker and Tekton, the run token is in the runner's environment, never the agent's.
+        self.env = {**agent_base_environment(), **(env or {})}
         self.on_update = on_update
         self.on_permission = on_permission
         self.read_timeout = read_timeout

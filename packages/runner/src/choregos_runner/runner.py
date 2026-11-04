@@ -41,7 +41,7 @@ from .acp.guard import TurnGuard
 from .backends import get_backend
 from .budget import BUDGET_REASON, gateway_budget_refusal
 from .client import InternalApiError, InternalClient
-from .config import RunnerSettings, get_settings
+from .config import RunnerSettings, agent_base_environment, get_settings
 from .dod import CheckOutcome, DodReport, run_checks
 from .egress import AUTH_VARIABLE as EGRESS_AUTH_VARIABLE
 from .egress import authenticate_proxy_env
@@ -311,8 +311,9 @@ class Runner:
             **workspace_env(stage_input),
         }
         # The agent reads its repository with its own git: the same `safe.directory` as the
-        # runner, counted on the environment it will really receive (the runner's, then its own).
-        env.update(agent_git_env({**os.environ, **env}, workspace.path))
+        # runner, counted on the environment it will really receive (the runner's without the run's
+        # credentials, ADR 0115, then its own).
+        env.update(agent_git_env({**agent_base_environment(), **env}, workspace.path))
 
         command, refusal = await self._confine(plan, env, workspace, journal)
         if refusal is not None:
@@ -529,6 +530,7 @@ class Runner:
             **workspace_env(stage_input),
             # The run token is the run's, scoped to it and short-lived: what a job uses to call a
             # connector through the internal API (`POST /runs/{id}/tools/{name}`), never a provider key.
+            # Named here on purpose: no command inherits it from the runner (ADR 0115).
             "CHOREGOS_RUN_ID": stage_input.run_id,
             "CHOREGOS_API_URL": stage_input.callbacks.api_url,
             "CHOREGOS_RUN_TOKEN": token,
@@ -589,7 +591,8 @@ class Runner:
         """The agent's command, confined by the kernel before it starts (ADR 0094), and what it is
         held to, journaled. With `enforce` and a kernel that cannot, the agent does not start."""
         mode = self.settings.confinement
-        agent_env = {**os.environ, **env}
+        # What `AcpClient` will start the agent with: never the run's credentials (ADR 0115).
+        agent_env = {**agent_base_environment(), **env}
         endpoints = [
             self.settings.api_url,
             self.settings.tools_url,
