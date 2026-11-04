@@ -61,6 +61,7 @@ __all__ = [
     "call",
     "call_id",
     "check_arguments",
+    "is_job_step",
     "output_refusal",
     "propose_call",
     "readable_text",
@@ -115,10 +116,16 @@ class BrokerTool:
         }
 
 
+def is_job_step(run: Run) -> bool:
+    """Whether a run is a job step (ADR 0056): the orchestrator wrote `backend: job` and the job's
+    spec in its StageInput when it prepared it (`prepare_job`), and the run cannot rewrite either."""
+    return run.backend == "job" and isinstance((run.stage_input or {}).get("job"), dict)
+
+
 async def _selection_of_run(session: AsyncSession, run: Run) -> dict[str, list[str]]:
     """{connector: patterns} that the run's agent version names; nothing without a registry agent."""
-    job = (run.stage_input or {}).get("job") if run.backend == "job" else None
-    if isinstance(job, dict):
+    if is_job_step(run):
+        job = (run.stage_input or {})["job"]
         # A job (ADR 0056) names its operations in the workflow (`tools:`), reviewed with it; the
         # orchestrator copied them into the run's StageInput, which the run cannot rewrite.
         return {str(c): [str(m) for m in patterns or []] for c, patterns in (job.get("tools") or {}).items()}

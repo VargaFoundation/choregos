@@ -1675,7 +1675,7 @@ paths:
       tags: [costs]
       operationId: getProjectCosts
       parameters:
-        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project], default: day } }
+        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project, origin], default: day }, description: "origin is the door a tool call came through (model, script, job; S57-06), `—` for a line that does not say (a model call, a tool line booked before S57-06)" }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
         - { name: kind, in: query, schema: { type: string, enum: [model, tool, distill] }, description: "only what models cost, only what tools cost (S29-03), or only what knowledge-base distillations cost (S42-10d)" }
@@ -1688,7 +1688,7 @@ paths:
       operationId: exportProjectCostsCsv
       summary: The cost report as CSV (`;` separator, UTF-8 BOM)
       parameters:
-        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project], default: day } }
+        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project, origin], default: day } }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
         - { name: kind, in: query, schema: { type: string, enum: [model, tool, distill] }, description: "only what models cost, only what tools cost (S29-03), or only what knowledge-base distillations cost (S42-10d)" }
@@ -1722,7 +1722,7 @@ paths:
       tags: [costs]
       operationId: getOrgCosts
       parameters:
-        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project], default: day }, description: "agent, workflow and work_item come from the ledger's own columns (S29-01); a project is named by its slug, a work item by its tracker key" }
+        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project, origin], default: day }, description: "agent, workflow and work_item come from the ledger's own columns (S29-01); a project is named by its slug, a work item by its tracker key; origin is the door a tool call came through (model, script, job; S57-06), `—` for a line that does not say (a model call, a tool line booked before S57-06)" }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
         - { name: kind, in: query, schema: { type: string, enum: [model, tool, distill] }, description: "only what models cost, only what tools cost (S29-03), or only what knowledge-base distillations cost (S42-10d)" }
@@ -1735,7 +1735,7 @@ paths:
       operationId: exportOrgCostsCsv
       summary: The organisation's cost report as CSV, in any grouping
       parameters:
-        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project], default: day } }
+        - { name: group_by, in: query, schema: { type: string, enum: [day, stage, model, backend, size, kind, agent, workflow, work_item, project, origin], default: day } }
         - { name: since, in: query, schema: { type: string, format: date } }
         - { name: until, in: query, schema: { type: string, format: date } }
         - { name: kind, in: query, schema: { type: string, enum: [model, tool, distill] }, description: "only what models cost, only what tools cost (S29-03), or only what knowledge-base distillations cost (S42-10d)" }
@@ -3802,13 +3802,16 @@ paths:
         202: a person decides.
 
         The two `X-Choregos-*` headers say which door the call came through (ADR 0122 §4): they
-        are attribution, recorded on `choregos.tool.called` (`origin`, `script_sha256`), and no
-        authorisation reads them — a call is governed the same way whatever its origin.
+        are attribution, recorded on the call's ledger line (`group_by=origin` of the cost
+        reports), on `choregos.tool.called` (`origin`, `script_sha256`) and on its `execute_tool`
+        span (`choregos.tool.origin`, `choregos.tool.script_sha256`), and no authorisation reads
+        them — a call is governed the same way whatever its origin. A job step's calls are `job`
+        whatever they send, read from the run (S57-06).
       parameters:
         - name: X-Choregos-Tool-Origin
           in: header
           required: false
-          description: "Who made the call: `model` (the agent's MCP client; the default when absent), `script` (a script, through the runner's tool bridge), `job` (a job step, ADR 0056). Any other value is a 400 problem."
+          description: "Who made the call: `model` (the agent's MCP client; the default when absent), `script` (a script, through the runner's tool bridge), `job` (a job step, ADR 0056). A job step's calls are `job` whatever this header says, and a run that is not a job step sending `job` is a 400 problem, as any other value is."
           schema: { type: string, enum: [model, script, job], default: model }
         - name: X-Choregos-Script
           in: header
@@ -3830,7 +3833,7 @@ paths:
                   status_code: { type: integer }
                   result: {}
                   remaining: { type: integer, nullable: true }
-        "400": { description: "Arguments refused by the tool's schema, or an origin header that is not one of the values above", content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
+        "400": { description: "Arguments refused by the tool's schema, or an origin header that is not one of the values above or that the run contradicts (`job` from a run that is not a job step)", content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
         "404": { description: "Unknown tool, or not allowed for the project", content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
         "429": { description: Tool call cap reached, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
   /internal/runs/{id}/scope-change:

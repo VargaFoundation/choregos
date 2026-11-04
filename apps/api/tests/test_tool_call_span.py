@@ -69,6 +69,8 @@ async def test_a_tool_call_is_a_child_of_the_stage_span(
         "project": project["slug"],
         "work_item": "varga/x#9",
         "stage": "custom",
+        # The door the call came through (S57-06, ADR 0122 §4): no header, the agent's MCP client.
+        "choregos.tool.origin": "model",
     }
     assert span.status.status_code is StatusCode.UNSET
     assert "data engineer" not in repr(span.to_json()), "a span never carries the tool's arguments"

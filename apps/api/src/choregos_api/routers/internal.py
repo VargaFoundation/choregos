@@ -956,6 +956,8 @@ async def get_tools(id: str, session: Db, claims: RunAuth) -> dict[str, Any]:
 #: bridge, a job step. Attribution only: no authorisation reads it.
 TOOL_ORIGIN_HEADER = "X-Choregos-Tool-Origin"
 TOOL_ORIGINS = ("model", "script", "job")
+#: The origin of a job step's calls, which the API reads from the run, never from the call (S57-06).
+JOB_ORIGIN = "job"
 #: The SHA-256 of the script that made the call, as the runner's tool bridge knows it.
 SCRIPT_HEADER = "X-Choregos-Script"
 _SHA256 = re.compile(r"[0-9a-f]{64}")
@@ -983,6 +985,32 @@ def _call_origin(origin: str | None, script: str | None) -> tuple[str, str | Non
             errors=[{"code": "script_digest_refused", "loc": ["header", SCRIPT_HEADER], "msg": detail}],
         )
     return origin or "model", script
+
+
+def _attributed(run: Run, origin: str, script_sha256: str | None) -> tuple[str, str | None]:
+    """The door the API records for a call of `run` (S57-06): what the call says, checked against
+    what the API knows of the run.
+
+    A job step's calls are `job` whatever the call says: the API reads it from the run, which the
+    orchestrator wrote and the run cannot rewrite, so a job needs no header and cannot pass for
+    another door. A script digest it sends is not kept: a digest names a script the runner's tool
+    bridge journaled, and a job step has no bridge (its command's digest is on the run already).
+    A run that is not a job step claiming `job` is a 400 problem, as an origin outside the contract
+    is: the API knows the attribution false, and booking it would make the ledger lie. Neither rule
+    decides what a call may do: every refusal of the route is the same for every door (ADR 0122 §2)."""
+    from ..services.broker import is_job_step
+
+    if is_job_step(run):
+        return JOB_ORIGIN, None
+    if origin == JOB_ORIGIN:
+        detail = f"run {run.id} is not a job step: `{JOB_ORIGIN}` is the origin of a job step's calls"
+        raise ApiError(
+            status.HTTP_400_BAD_REQUEST,
+            "Tool origin refused",
+            detail,
+            errors=[{"code": "tool_origin_refused", "loc": ["header", TOOL_ORIGIN_HEADER], "msg": detail}],
+        )
+    return origin, script_sha256
 
 
 def _traced_tool_call(
@@ -1016,10 +1044,13 @@ async def call_tool(
 ) -> dict[str, Any]:
     """Call a tool of the catalogue or of an extension for the run, and record it in the cost ledger.
 
-    The origin headers are read here and recorded on the event, nowhere else: the call is governed
-    the same way whatever door it came through (ADR 0122 §2)."""
+    The origin headers are read here and recorded on the span, the ledger line and the event,
+    nowhere else: the call is governed the same way whatever door it came through (ADR 0122 §2)."""
     origin, script_sha256 = _call_origin(tool_origin, script)
     run, item, project = await _run_and_item(session, id)
+    origin, script_sha256 = _attributed(run, origin, script_sha256)
+    # On the span from here on: a call refused below is a span with its door too.
+    telemetry.record_tool_origin(origin, script_sha256)
     if run.result is not None:
         raise conflict("result already posted for this run")
     from ..services.broker import broker_tools
@@ -1165,6 +1196,9 @@ async def call_tool(
                 cost_usd=price_usd,
                 stage_role=run.stage_role,
                 **await dimensions_of(session, run.id),
+                # Which door the call came through (S57-06, ADR 0122 §4): what `group_by=origin` reads.
+                origin=origin,
+                script_sha256=script_sha256,
             )
         )
     # The provisional line goes with this transaction, which holds the call's own line (if any).

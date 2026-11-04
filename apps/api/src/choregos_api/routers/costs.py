@@ -47,9 +47,12 @@ GROUPS: dict[str, Any] = {
     "agent": CostLedger.agent_slug,
     "workflow": CostLedger.workflow_name,
     "work_item": CostLedger.work_item_id,
+    # The door a tool call came through (S57-06, ADR 0122 §4): `model`, `script`, `job`. A line that
+    # does not say (a model call, a distillation, a tool line booked before S57-06) is `—`.
+    "origin": CostLedger.origin,
 }
 #: Every grouping, at project and organisation scope alike, and in the CSV.
-GROUP_PATTERN = "^(day|stage|model|backend|size|kind|agent|workflow|work_item|project)$"
+GROUP_PATTERN = "^(day|stage|model|backend|size|kind|agent|workflow|work_item|project|origin)$"
 
 
 def _default_since() -> datetime:
