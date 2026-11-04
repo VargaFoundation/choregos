@@ -173,6 +173,8 @@ def _cell(payload: dict[str, Any], context: str, outcomes: list[dict[str, Any]])
         "median_tokens_cached": _median(metered, "tokens_cached"),
         "median_tokens_out": _median(metered, "tokens_out"),
         "median_turns": _median([u for u in metered if u["turns"] is not None], "turns"),
+        # The round trips (S57-01): over the cases whose model calls the gateway counted.
+        "median_requests": _median([u for u in metered if u.get("requests") is not None], "requests"),
         "median_duration_s": round(statistics.median(durations), 2) if durations else None,
         "validated": bool(successes) and rate >= MIN_SUCCESS_RATE,
         "details": details,
@@ -291,6 +293,7 @@ async def _ledger(gateway: Any, key_id: str, turns: int | None) -> dict[str, Any
         "tokens_out": spend.tokens_out,
         "cost_usd": spend.cost_usd,
         "turns": turns,
+        "requests": spend.requests,
     }
 
 
@@ -547,6 +550,7 @@ async def judge_eval_run(payload: dict[str, Any]) -> dict[str, Any]:
         verdict = _verdict(spec, run.result, str(payload.get("failure") or ""))
         tokens = dict(run.tokens or {}) if run.spend_collected else {}
         turns = ((run.result or {}).get("diagnostics") or {}).get("turns")
+        requests = tokens.get("requests")
         usage = (
             {
                 "tokens_in": int(tokens.get("tokens_in", 0)),
@@ -554,6 +558,7 @@ async def judge_eval_run(payload: dict[str, Any]) -> dict[str, Any]:
                 "tokens_out": int(tokens.get("tokens_out", 0)),
                 "cost_usd": float(tokens.get("cost_usd", 0.0)),
                 "turns": turns if isinstance(turns, int) else None,
+                "requests": requests if isinstance(requests, int) else None,
             }
             if int(tokens.get("tokens_in", 0)) + int(tokens.get("tokens_out", 0)) > 0
             else None

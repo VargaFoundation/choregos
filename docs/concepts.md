@@ -348,6 +348,14 @@ What a work item has spent is read from the cost ledger, models and tools alike,
 interpreter's memory: an interpreter started again for the same work item starts from what was
 already spent.
 
+A run's `tokens` (`GET /runs/{id}`) also carry `requests`, its round trips: the model calls the
+gateway's spend logs counted for its key, both segments of a run resumed after a person's answer
+included; a work item's `totals.requests` sums its runs'. It is `null`, never zero, when it cannot be
+told: a run booked before S57-01, a remote agent, a gateway that cannot read a spend back, or a work
+item one such run belongs to. `tools/report_round_trips.py` reports them per agent and backend over a
+window, beside the platform and agent tool calls, tokens, cost and wall time, through the API with an
+operator token, or as one read-only SQL query (`--sql`) ([ADR 0122](adr/0122-an-agent-may-call-its-run-s-tools-from-a-script.md)).
+
 A work item can be given its own budget, which only **tightens** the others: `budget_usd` when it
 is created (API, MCP door, the board's form), or a workflow's `budget: {ticket_usd, on_exceeded}`
 block. Wider than the workflow's or the policy's ticket budget is refused (422). `on_exceeded` names

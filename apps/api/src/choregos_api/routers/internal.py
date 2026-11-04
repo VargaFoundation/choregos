@@ -853,10 +853,15 @@ def _announced(tool: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in tool.items() if k != "result_max_bytes"}
 
 
+def canonical_json(value: Any) -> bytes:
+    """The canonical JSON of a value: sorted keys, compact separators, UTF-8."""
+    text = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str)
+    return text.encode("utf-8")
+
+
 def json_sha256(value: Any) -> str:
-    """The SHA-256 of the canonical JSON of a value: sorted keys, compact separators, UTF-8."""
-    canonical = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str)
-    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    """The SHA-256 of the canonical JSON of a value (`canonical_json`)."""
+    return hashlib.sha256(canonical_json(value)).hexdigest()
 
 
 @router.get("/runs/{id}/tools", operation_id="getRunTools")
@@ -1064,6 +1069,7 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
             )
         )
     await check_after_spend(session, run.id)
+    served = canonical_json(result_body)
     await persist_event(
         session,
         EventType.TOOL_CALLED,
@@ -1077,7 +1083,10 @@ async def call_tool(id: str, name: str, body: dict[str, Any], session: Db, claim
         # Provenance: WHAT went in and WHAT came back, as digests of the canonical JSON — the event
         # keeps no payload, but a result that is later disputed can be matched to the bytes served.
         request_sha256=json_sha256(body or {}),
-        response_sha256=json_sha256(result_body),
+        response_sha256=hashlib.sha256(served).hexdigest(),
+        # What the answer weighs (S57-01, ADR 0122): the size of the same canonical bytes, the
+        # measure of what a round trip puts back into the model's context.
+        response_bytes=len(served),
         **about_query,
     )
     telemetry.record_tool_call(

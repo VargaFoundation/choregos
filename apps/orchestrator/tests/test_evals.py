@@ -261,6 +261,7 @@ async def test_the_cell_reports_what_the_ledger_says_not_what_the_fixture_script
     )
     assert cell["median_cost_usd"] == 0.04
     assert cell["median_turns"] is None, "turns are scripted, and a real gateway billed nothing scripted"
+    assert cell["median_requests"] == 3, "the round trips are the gateway's count (S57-01)"
 
     setup.adapters.gateway = Ledger(Spend())
     silent = await evals.run_eval_cell(payload)
