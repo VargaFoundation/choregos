@@ -175,12 +175,14 @@ async def test_on_publish_candidate_serves_testing_only_to_those_who_follow_it(
 async def resolve_for(project_id: str, work_item: str) -> Any:
     from choregos_api.db.models import Project
     from choregos_api.db.session import session_scope
-    from choregos_api.services.agents import resoudre_l_agent
+    from choregos_api.services.agents import resolve_agent
 
     async with session_scope() as session:
-        projet = await session.get(Project, project_id)
-        assert projet is not None
-        return await resoudre_l_agent(session, projet.org_id, projet.id, "reviewer", work_item_id=work_item)
+        project_row = await session.get(Project, project_id)
+        assert project_row is not None
+        return await resolve_agent(
+            session, project_row.org_id, project_row.id, "reviewer", work_item_id=work_item
+        )
 
 
 async def test_a_canary_share_is_deterministic_per_work_item(
@@ -380,7 +382,7 @@ async def test_a_migrated_agent_rolls_back_to_any_version_up_to_its_baseline(cli
 async def test_production_needs_a_person_with_a_fresh_sign_in(
     client: AsyncClient, app: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api import fraicheur
+    from choregos_api import freshness
 
     await as_user(client, ADMIN)
     await new_agent(client, policy={"on_publish": "candidate"})
@@ -397,7 +399,7 @@ async def test_production_needs_a_person_with_a_fresh_sign_in(
         assert withdrawn.status_code == 201 and withdrawn.json()["kind"] == "withdraw"
 
     later = time.time() + 11 * 60
-    monkeypatch.setattr(fraicheur.time, "time", lambda: later)
+    monkeypatch.setattr(freshness.time, "time", lambda: later)
     old = await release(client, "reviewer", channel="stable", version=2)
     assert old.status_code == 401 and old.json()["errors"][0]["error"] == "step_up_required"
     assert (await agent_of(client))["stable_version"] == 1, "production is unchanged"
@@ -413,14 +415,14 @@ async def test_production_needs_a_person_with_a_fresh_sign_in(
 async def test_a_personal_agent_is_released_without_a_step_up(
     client: AsyncClient, app: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api import fraicheur
+    from choregos_api import freshness
 
     await add_member(client, "dev@varga.dev", "developer")
     await as_user(client, "dev@varga.dev")
     await new_agent(client, "mine", policy={"on_publish": "candidate"}, scope="personal")
     await save(client, "mine", 2)
     later = time.time() + 60 * 60
-    monkeypatch.setattr(fraicheur.time, "time", lambda: later)
+    monkeypatch.setattr(freshness.time, "time", lambda: later)
     done = await release(client, "mine", channel="stable", version=2)
     assert done.status_code == 201, done.text
 
@@ -455,16 +457,16 @@ async def test_who_may_release(client: AsyncClient) -> None:
 
 
 async def test_the_plugin_gesture_check_can_refuse_a_release(client: AsyncClient) -> None:
-    from choregos_api import greffons
+    from choregos_api import extensions
 
     def refuse(_session: Any, demand: Any) -> None:
         assert demand.cible["channel"] == "stable" and demand.cible["kind"] == "promote"
-        raise greffons.GesteRefuse("the organisation says no")
+        raise extensions.GestureRefused("the organisation says no")
 
     await as_user(client, ADMIN)
     await new_agent(client, policy={"on_publish": "candidate"})
     await save(client, "reviewer", 2)
-    greffons.declarer_un_controle_de_geste("agent.release", "test", refuse)
+    extensions.declare_gesture_check("agent.release", "test", refuse)
     try:
         refused = await release(client, "reviewer", channel="stable", version=2)
         assert refused.status_code == 403 and "test: the organisation says no" in refused.text
@@ -472,7 +474,7 @@ async def test_the_plugin_gesture_check_can_refuse_a_release(client: AsyncClient
         withdraw = await release(client, "reviewer", channel="candidate", version=None)
         assert withdraw.status_code == 201, "a withdrawal is not a gated gesture"
     finally:
-        greffons.reinitialiser_les_controles()
+        extensions.reset_gesture_checks()
     assert (await release(client, "reviewer", channel="candidate", version=2)).status_code == 201
 
 
@@ -550,7 +552,7 @@ async def test_the_exposure_lists_who_chose_their_own_revision(client: AsyncClie
 async def test_the_release_policy_is_the_owners_and_loosening_it_needs_a_fresh_sign_in(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api import fraicheur
+    from choregos_api import freshness
 
     await make_project(client, "dev")
     await add_member(client, "owner@varga.dev", "project_owner", project="dev")
@@ -561,7 +563,7 @@ async def test_the_release_policy_is_the_owners_and_loosening_it_needs_a_fresh_s
     assert refused.status_code == 403
     await as_user(client, ADMIN)
     later = time.time() + 11 * 60
-    monkeypatch.setattr(fraicheur.time, "time", lambda: later)
+    monkeypatch.setattr(freshness.time, "time", lambda: later)
     loosening = await client.put(f"{ORG}/agents/reviewer/release-policy", json={"on_publish": "stable"})
     assert loosening.status_code == 401 and loosening.json()["errors"][0]["error"] == "step_up_required"
     assert (await agent_of(client))["release_policy"]["on_publish"] == "candidate"
@@ -625,7 +627,7 @@ async def test_retiring_an_agent_empties_testing(client: AsyncClient) -> None:
 async def test_a_release_made_meanwhile_is_a_conflict_not_a_lost_update(client: AsyncClient) -> None:
     """The pointer moves with a compare-and-set from the revision the checks saw: a gesture check
     that lets another release slip in (a stand-in for a concurrent request) makes this one a 409."""
-    from choregos_api import greffons
+    from choregos_api import extensions
     from choregos_api.db.models import Agent
     from sqlalchemy import update
 
@@ -637,11 +639,11 @@ async def test_a_release_made_meanwhile_is_a_conflict_not_a_lost_update(client: 
     async def concurrent(session: Any, _demand: Any) -> None:
         await session.execute(update(Agent).where(Agent.slug == "reviewer").values(stable_version=3))
 
-    greffons.declarer_un_controle_de_geste("agent.release", "race", concurrent)
+    extensions.declare_gesture_check("agent.release", "race", concurrent)
     try:
         refused = await release(client, "reviewer", channel="stable", version=2)
     finally:
-        greffons.reinitialiser_les_controles()
+        extensions.reset_gesture_checks()
     assert refused.status_code == 409 and "another release" in refused.text
     # (the stand-in ran inside the refused request, so it is rolled back with it)
     assert (await agent_of(client))["stable_version"] == 1

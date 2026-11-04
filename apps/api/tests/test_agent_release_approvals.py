@@ -99,7 +99,7 @@ async def test_separation_of_duties_can_be_switched_off(client: AsyncClient) -> 
 async def test_an_approval_needs_a_fresh_sign_in_and_a_person(
     client: AsyncClient, app: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api import fraicheur
+    from choregos_api import freshness
 
     await org_admins(client, DAVE)
     await as_user(client, ADMIN)
@@ -111,7 +111,7 @@ async def test_an_approval_needs_a_fresh_sign_in_and_a_person(
         assert refused.status_code == 403 and "human session" in refused.text
     await as_user(client, DAVE)
     later = time.time() + 11 * 60
-    monkeypatch.setattr(fraicheur.time, "time", lambda: later)
+    monkeypatch.setattr(freshness.time, "time", lambda: later)
     old = await decide(client, waiting["id"], "approve")
     assert old.status_code == 401 and old.json()["errors"][0]["error"] == "step_up_required"
     monkeypatch.undo()
@@ -270,12 +270,12 @@ async def test_retiring_an_agent_cancels_its_waiting_request(client: AsyncClient
 async def test_the_approvals_gate_is_not_loosened_without_a_fresh_sign_in(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from choregos_api import fraicheur
+    from choregos_api import freshness
 
     await as_user(client, ADMIN)
     await new_agent(client, policy={"on_publish": "candidate", "stable": {"approvals": 2}})
     later = time.time() + 11 * 60
-    monkeypatch.setattr(fraicheur.time, "time", lambda: later)
+    monkeypatch.setattr(freshness.time, "time", lambda: later)
     fewer = await client.put(
         f"{ORG}/agents/reviewer/release-policy", json={"on_publish": "candidate", "stable": {"approvals": 1}}
     )
@@ -292,24 +292,24 @@ async def test_the_approvals_gate_is_not_loosened_without_a_fresh_sign_in(
 
 
 async def test_the_gesture_check_sees_each_approval(client: AsyncClient) -> None:
-    from choregos_api import greffons
+    from choregos_api import extensions
 
     seen: list[dict[str, Any]] = []
 
     def refuse_approvals(_session: Any, demand: Any) -> None:
         seen.append(demand.cible)
         if demand.cible.get("decision") == "approve":
-            raise greffons.GesteRefuse("approvals are closed this week")
+            raise extensions.GestureRefused("approvals are closed this week")
 
     await org_admins(client, DAVE)
     await as_user(client, ADMIN)
-    greffons.declarer_un_controle_de_geste("agent.release", "freeze", refuse_approvals)
+    extensions.declare_gesture_check("agent.release", "freeze", refuse_approvals)
     try:
         waiting = await request_v2(client)
         await as_user(client, DAVE)
         refused = await decide(client, waiting["id"], "approve")
     finally:
-        greffons.reinitialiser_les_controles()
+        extensions.reset_gesture_checks()
     assert refused.status_code == 403 and "freeze: approvals are closed" in refused.text
     assert [c.get("decision") for c in seen] == [None, "approve"], "the request, then the approval"
     assert (await agent_of(client))["stable_version"] == 1

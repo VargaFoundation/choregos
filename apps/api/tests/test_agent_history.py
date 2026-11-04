@@ -193,7 +193,7 @@ async def test_platform_written_versions_have_a_message(
 ) -> None:
     import dataclasses
 
-    from choregos_core.catalogue_d_agents import entree, entrees
+    from choregos_core.agent_catalogue import entries, entry
 
     await as_user(client, ADMIN)
     created = await create_agent(client, "plain", message="  The first draft ")
@@ -210,12 +210,12 @@ async def test_platform_written_versions_have_a_message(
     )
     assert explicit.json()["versions"][0]["message"] == "For billing"
 
-    old = entree("triager")
+    old = entry("triager")
     assert old is not None
     document = {**old.document, "spec": {**old.document["spec"], "instructions": "Triage it, briefly."}}
     new = dataclasses.replace(old, version=2, document=document)
-    others = tuple(e for e in entrees() if e.slug != "triager")
-    from choregos_api.services import catalogue_d_agents as service
+    others = tuple(e for e in entries() if e.slug != "triager")
+    from choregos_api.services import agent_catalogue as service
 
     view = dataclasses.replace(service.offline_catalogue(), entries=(*others, new))
     monkeypatch.setattr(service, "offline_catalogue", lambda: view)

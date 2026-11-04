@@ -1,4 +1,4 @@
-"""Parcours fonctionnels de l'API : projets, workflow, RBAC, décisions, webhooks, API interne."""
+"""Functional journeys of the API: projects, workflow, RBAC, decisions, webhooks, internal API."""
 
 from __future__ import annotations
 
@@ -118,7 +118,7 @@ async def test_github_webhook_signature_and_dedup(client: AsyncClient, project: 
         "repository": {"full_name": "varga/billing-api"},
         "issue": {
             "number": 42,
-            "title": "Corriger les avoirs",
+            "title": "Fix the credit notes",
             "body": "…",
             "labels": [{"name": "agent-ready"}],
         },
@@ -173,7 +173,7 @@ async def test_webhook_starts_one_workflow_only(client: AsyncClient, project: di
 
 
 async def test_internal_run_api(client: AsyncClient, project: dict[str, Any]) -> None:
-    """Le runner lit son input, journalise, dépose findings et résultat — et rien d'autre."""
+    """The runner reads its input, logs, posts findings and a result, and nothing else."""
     from choregos_api.db.models import Run, WorkItem
     from choregos_api.db.session import session_scope
     from choregos_api.security import mint_run_token
@@ -214,7 +214,7 @@ async def test_internal_run_api(client: AsyncClient, project: dict[str, Any]) ->
     assert fetched.status_code == 200
     assert fetched.json()["run_id"] == run_id
 
-    other = await client.get("/api/v1/internal/runs/autre-run/input", headers=headers)
+    other = await client.get("/api/v1/internal/runs/other-run/input", headers=headers)
     assert other.status_code == 403
 
     events = await client.post(
@@ -228,12 +228,12 @@ async def test_internal_run_api(client: AsyncClient, project: dict[str, Any]) ->
         headers=headers,
         json={"events": [{"seq": 1, "type": "session/update", "payload": {"text": "…"}}]},
     )
-    assert again.json()["accepted"] == 0, "le journal est idempotent par seq"
+    assert again.json()["accepted"] == 0, "the log is idempotent by seq"
 
     finding = await client.post(
         f"/api/v1/internal/runs/{run_id}/findings",
         headers=headers,
-        json={"title": "N+1 sur les lignes", "type": "perf", "severity": "medium", "evidence": "repo.py:88"},
+        json={"title": "N+1 on the lines", "type": "perf", "severity": "medium", "evidence": "repo.py:88"},
     )
     assert finding.status_code == 201
     assert finding.json()["accepted"] is True
@@ -241,31 +241,31 @@ async def test_internal_run_api(client: AsyncClient, project: dict[str, Any]) ->
     scope = await client.post(
         f"/api/v1/internal/runs/{run_id}/scope-change",
         headers=headers,
-        json={"paths": ["src/shared/util.py"], "justification": "fonction commune"},
+        json={"paths": ["src/shared/util.py"], "justification": "shared function"},
     )
     assert scope.json()["decision"] == "granted"
 
     denied = await client.post(
         f"/api/v1/internal/runs/{run_id}/scope-change",
         headers=headers,
-        json={"paths": [".choregos/workflow.yaml"], "justification": "non"},
+        json={"paths": [".choregos/workflow.yaml"], "justification": "no"},
     )
     assert denied.json()["decision"] == "denied"
 
     result = {
         "schema": "choregos/StageResult/v1",
         "status": "done",
-        "summary": "fait",
+        "summary": "done",
         "evidence": {"tests_passed": True, "tests_run": 12},
         "outputs": {"size": "M"},
     }
     posted = await client.post(f"/api/v1/internal/runs/{run_id}/result", headers=headers, json=result)
     assert posted.json()["status"] == "recorded"
     reposted = await client.post(f"/api/v1/internal/runs/{run_id}/result", headers=headers, json=result)
-    assert reposted.json()["status"] == "already_recorded", "le dépôt de résultat est idempotent"
+    assert reposted.json()["status"] == "already_recorded", "posting the result is idempotent"
 
     after = await client.get(f"/api/v1/internal/runs/{run_id}/input", headers=headers)
-    assert after.status_code == 409, "résultat déjà posté : le runner doit sortir en 0"
+    assert after.status_code == 409, "result already posted: the runner must exit with 0"
 
 
 async def test_internal_requires_valid_token(client: AsyncClient) -> None:
@@ -282,7 +282,7 @@ async def test_findings_listing_and_triage(client: AsyncClient, project: dict[st
     async with session_scope() as session:
         row = Finding(
             project_id=project["id"],
-            title="Fuite de connexion",
+            title="Connection leak",
             type="bug",
             severity="high",
             evidence="db.py:12",
@@ -293,7 +293,7 @@ async def test_findings_listing_and_triage(client: AsyncClient, project: dict[st
         finding_id = row.id
 
     listed = (await client.get(f"/api/v1/projects/{project['id']}/findings")).json()
-    assert listed["items"][0]["title"] == "Fuite de connexion"
+    assert listed["items"][0]["title"] == "Connection leak"
 
     dismissed = await client.post(f"/api/v1/findings/{finding_id}/actions", json={"action": "dismiss"})
     assert dismissed.json()["status"] == "dismissed"
@@ -347,24 +347,24 @@ async def test_platform_backends_and_executors(client: AsyncClient, admin: str) 
     assert "openhands" not in {b["name"] for b in backends}
     updated = await client.put(
         "/api/v1/platform/backends",
-        json={"name": "codex", "enabled": False, "disabled_reason": "conformité rouge"},
+        json={"name": "codex", "enabled": False, "disabled_reason": "conformance red"},
     )
     assert updated.json()["enabled"] is False
     executors = (await client.get("/api/v1/platform/executors")).json()
     assert {e["kind"] for e in executors} >= {"tekton", "k8s_job"}
 
 
-async def test_webhook_jira_cree_le_ticket_et_demarre_le_workflow(
+async def test_a_jira_webhook_creates_the_work_item_and_starts_the_workflow(
     client: AsyncClient, project: dict[str, Any], monkeypatch: Any
 ) -> None:
-    """Un webhook Jira suit exactement le même chemin qu'un webhook GitHub (S13-04)."""
+    """A Jira webhook follows exactly the same path as a GitHub webhook (S13-04)."""
     from choregos_api.config import get_settings
 
     monkeypatch.setattr(get_settings(), "generic_webhook_secret", "s3cret")
     payload = {
         "webhookEvent": "jira:issue_updated",
         "user": {"displayName": "Augustin"},
-        "issue": {"key": "BILLING-API-9", "fields": {"summary": "Avoirs", "labels": ["agent-ready"]}},
+        "issue": {"key": "BILLING-API-9", "fields": {"summary": "Credit notes", "labels": ["agent-ready"]}},
         "changelog": {"items": [{"field": "labels", "fromString": "", "toString": "agent-ready"}]},
     }
     response = await client.post(
@@ -375,12 +375,12 @@ async def test_webhook_jira_cree_le_ticket_et_demarre_le_workflow(
     assert response.status_code == 202
     assert response.json()["accepted"] is True
 
-    rejeu = await client.post(
+    replayed = await client.post(
         "/api/v1/webhooks/jira",
         json=payload,
         headers={"X-Choregos-Secret": "s3cret", "X-Atlassian-Webhook-Identifier": "d-1"},
     )
-    assert rejeu.json()["duplicate"] is True, "une livraison rejouée ne compte qu'une fois"
+    assert replayed.json()["duplicate"] is True, "a replayed delivery counts only once"
 
 
 async def test_a_tracker_birth_records_who_filed_the_issue(
@@ -406,13 +406,13 @@ async def test_a_tracker_birth_records_who_filed_the_issue(
     )
     assert response.status_code == 202, response.text
 
-    liste = (await client.get(f"/api/v1/projects/{project['id']}/work-items")).json()
-    born = next(i for i in liste["items"] if i["tracker_key"].endswith("#11"))
+    listing = (await client.get(f"/api/v1/projects/{project['id']}/work-items")).json()
+    born = next(i for i in listing["items"] if i["tracker_key"].endswith("#11"))
     assert born["reporter"] == "jmartin"
     assert (await client.get(f"/api/v1/work-items/{born['id']}")).json()["reporter"] == "jmartin"
 
 
-async def test_webhook_gitlab_refuse_un_jeton_invalide(
+async def test_a_gitlab_webhook_refuses_an_invalid_token(
     client: AsyncClient, project: dict[str, Any], monkeypatch: Any
 ) -> None:
     from choregos_api.config import get_settings
@@ -421,15 +421,15 @@ async def test_webhook_gitlab_refuse_un_jeton_invalide(
     response = await client.post(
         "/api/v1/webhooks/gitlab",
         json={"object_kind": "issue"},
-        headers={"X-Gitlab-Token": "faux", "X-Gitlab-Event": "Issue Hook"},
+        headers={"X-Gitlab-Token": "wrong", "X-Gitlab-Event": "Issue Hook"},
     )
     assert response.status_code == 401
 
 
-async def test_un_projet_sans_depot_se_cree(client: AsyncClient, admin: str) -> None:
-    """Limite n°1 de l'ADR 0012 : un métier qui instruit des dossiers n'a pas de dépôt,
-    et devait pourtant en déclarer un qui ne servait à rien."""
-    reponse = await client.post(
+async def test_a_project_without_a_repository_is_created(client: AsyncClient, admin: str) -> None:
+    """Limit no. 1 of ADR 0012: a trade that processes case files has no repository, and yet had to
+    declare one that served no purpose."""
+    response = await client.post(
         "/api/v1/orgs/varga/projects",
         json={
             "slug": "staffing",
@@ -437,22 +437,22 @@ async def test_un_projet_sans_depot_se_cree(client: AsyncClient, admin: str) -> 
             "config": {"slug": "staffing", "org": "varga"},
         },
     )
-    assert reponse.status_code == 201, reponse.text
-    assert reponse.json()["config"].get("repo") is None
+    assert response.status_code == 201, response.text
+    assert response.json()["config"].get("repo") is None
 
     from choregos_contracts import ProjectConfig
 
-    config = ProjectConfig.model_validate(reponse.json()["config"])
+    config = ProjectConfig.model_validate(response.json()["config"])
     assert not config.has_repo
     with pytest.raises(ValueError, match="has no repository"):
         _ = config.repo_url
 
 
-async def test_la_fiche_d_acces_replie_le_journal(
+async def test_the_access_sheet_folds_the_log(
     client: AsyncClient, project: dict[str, Any], admin: str
 ) -> None:
-    """Deux agents produisent deux cents événements en quelques minutes : personne ne les
-    lit. La fiche répond à « à quoi a-t-il touché », et met les refus devant."""
+    """Two agents produce two hundred events in a few minutes: nobody reads them. The sheet answers
+    "what did it touch", and puts the refusals first."""
     from choregos_api.db.models import Run, RunEvent, WorkItem
     from choregos_api.db.session import session_scope
 
@@ -461,15 +461,15 @@ async def test_la_fiche_d_acces_replie_le_journal(
         session.add(item)
         await session.flush()
         run = Run(
-            id="run-acces-1",
+            id="run-access-1",
             work_item_id=item.id,
             project_id=project["id"],
             stage_role="implement",
             status="succeeded",
         )
         session.add(run)
-        evenements = [
-            ("session/update", {"update": {"text": "je lis le ticket"}}),
+        events_list = [
+            ("session/update", {"update": {"text": "I read the work item"}}),
             (
                 "session/request_permission",
                 {"kind": "read", "target": "/workspace/src/a.py", "allowed": True, "reason": "ok"},
@@ -484,32 +484,32 @@ async def test_la_fiche_d_acces_replie_le_journal(
                     "kind": "write",
                     "target": "/workspace/.env",
                     "allowed": False,
-                    "reason": "fichier sensible",
+                    "reason": "sensitive file",
                 },
             ),
         ]
         from choregos_core import utcnow
 
-        for seq, (type_, payload) in enumerate(evenements, start=1):
+        for seq, (type_, payload) in enumerate(events_list, start=1):
             session.add(RunEvent(run_id=run.id, seq=seq, type=type_, payload=payload, ts=utcnow()))
 
-    reponse = await client.get("/api/v1/runs/run-acces-1/access")
-    assert reponse.status_code == 200, reponse.text
-    fiche = reponse.json()
-    assert fiche["events"] == 4 and fiche["refusals"] == 1
-    assert fiche["access"][0]["target"] == "/workspace/.env", "the refusal first"
-    assert fiche["access"][0]["reasons"] == ["fichier sensible"]
-    assert fiche["access"][1]["requests"] == 2, "two reads of the same file, grouped"
-    # La prose de l'agent n'y entre pas : la fiche redeviendrait illisible.
-    assert all("je lis le ticket" not in a["target"] for a in fiche["access"])
+    response = await client.get("/api/v1/runs/run-access-1/access")
+    assert response.status_code == 200, response.text
+    sheet = response.json()
+    assert sheet["events"] == 4 and sheet["refusals"] == 1
+    assert sheet["access"][0]["target"] == "/workspace/.env", "the refusal first"
+    assert sheet["access"][0]["reasons"] == ["sensitive file"]
+    assert sheet["access"][1]["requests"] == 2, "two reads of the same file, grouped"
+    # The agent's prose does not enter it: the sheet would become unreadable again.
+    assert all("I read the work item" not in a["target"] for a in sheet["access"])
 
 
-async def test_un_ticket_dont_le_workflow_est_mort_le_dit(
+async def test_a_work_item_whose_workflow_is_dead_says_so(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    """L'API lit l'état Temporal ET la marque posée par le workflow : un ticket mort ne se cache plus.
+    """The API reads the Temporal state AND the mark set by the workflow: a dead work item no longer hides.
 
-    Banc du 2026-09-24 : deux workflows FAILED, deux tickets « en attente » à l'écran.
+    Bench of 2026-09-24: two FAILED workflows, two "waiting" work items on the screen.
     """
     from choregos_api.db.models import WorkItem
     from choregos_api.db.session import session_scope
@@ -522,7 +522,7 @@ async def test_un_ticket_dont_le_workflow_est_mort_le_dit(
             title="T",
             state="ready",
             temporal_wf_id="wi-billing-api-404",
-            failure={"message": "le projet n'a pas de dépôt", "activity": "collect_run_artifacts"},
+            failure={"message": "the project has no repository", "activity": "collect_run_artifacts"},
         )
         session.add(item)
         await session.flush()
@@ -533,15 +533,15 @@ async def test_un_ticket_dont_le_workflow_est_mort_le_dit(
 
     body = (await client.get(f"/api/v1/work-items/{item_id}")).json()
     assert body["workflow_status"] == "FAILED"
-    assert body["failure"]["message"] == "le projet n'a pas de dépôt"
+    assert body["failure"]["message"] == "the project has no repository"
     assert body["failure"]["activity"] == "collect_run_artifacts"
 
-    # La liste ne demande rien à Temporal (un appel par ticket serait trop cher) : le statut
-    # y est absent, mais la marque persistée, elle, y est.
-    liste = (await client.get(f"/api/v1/projects/{project['id']}/work-items")).json()
-    mort = next(i for i in liste["items"] if i["id"] == item_id)
-    assert mort["workflow_status"] is None
-    assert mort["failure"]["message"] == "le projet n'a pas de dépôt"
+    # The list asks Temporal nothing (one call per work item would cost too much): the status is
+    # absent there, but the persisted mark is present.
+    listing = (await client.get(f"/api/v1/projects/{project['id']}/work-items")).json()
+    dead = next(i for i in listing["items"] if i["id"] == item_id)
+    assert dead["workflow_status"] is None
+    assert dead["failure"]["message"] == "the project has no repository"
 
 
 async def test_a_declined_ticket_says_so_and_is_not_a_success(

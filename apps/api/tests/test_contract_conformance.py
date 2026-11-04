@@ -1,4 +1,4 @@
-"""L'application implémente exactement le contrat : mêmes chemins, mêmes opérations."""
+"""The application implements exactly the contract: the same paths, the same operations."""
 
 from __future__ import annotations
 
@@ -30,8 +30,8 @@ async def test_paths_match_contract(app: Any) -> None:
     implemented = _app_paths(spec)
     missing = declared - implemented - CONTRACT_ONLY_PATHS
     extra = implemented - declared
-    assert not missing, f"chemins du contrat non implémentés : {sorted(missing)}"
-    assert not extra, f"chemins implémentés hors contrat : {sorted(extra)}"
+    assert not missing, f"contract paths not implemented: {sorted(missing)}"
+    assert not extra, f"implemented paths outside the contract: {sorted(extra)}"
 
 
 async def test_operation_ids_match_contract(app: Any) -> None:

@@ -41,7 +41,7 @@ async def _persisted_elsewhere(task_id: str) -> None:
     would: through `persist_event`, which only `NOTIFY`s on PostgreSQL, at the commit."""
     from choregos_api.db.models import WorkItem
     from choregos_api.db.session import session_scope
-    from choregos_api.services.evenements import persist_event
+    from choregos_api.services.events import persist_event
     from choregos_contracts import EventType
 
     async with session_scope(orgs="*") as session:
@@ -64,13 +64,13 @@ async def test_a_stream_wakes_up_on_an_event_another_replica_persists(
 ) -> None:
     from choregos_api.a2a import door
     from choregos_api.config import get_settings
-    from choregos_api.events import RelaisPostgres
+    from choregos_api.events import PostgresRelay
 
     monkeypatch.setattr(door, "STREAM_POLL", 60.0)  # within the test, only the event can wake it
     token = await _ready(client, project)
     task = await _send(client, token)
-    relay = RelaisPostgres(get_settings().database_url)  # this replica's LISTEN, as the lifespan starts it
-    relay.demarrer()
+    relay = PostgresRelay(get_settings().database_url)  # this replica's LISTEN, as the lifespan starts it
+    relay.start()
     try:
         await asyncio.sleep(0.5)  # LISTEN is in place
         frames, _ = await asyncio.gather(
@@ -78,11 +78,11 @@ async def test_a_stream_wakes_up_on_an_event_another_replica_persists(
             _when_followed(lambda: _persisted_elsewhere(task["id"])),
         )
     finally:
-        await relay.arreter()
+        await relay.stop()
     results = [f["result"] for f in frames]
     assert [r["kind"] for r in results] == ["task", "status-update"]
     assert results[1]["status"]["state"] == "completed" and results[1]["final"] is True
-    assert relay.recus >= 1, "the event came through NOTIFY, not this process's bus"
+    assert relay.received >= 1, "the event came through NOTIFY, not this process's bus"
 
 
 @on_postgres

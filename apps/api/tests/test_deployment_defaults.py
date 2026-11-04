@@ -1,9 +1,9 @@
-"""Un projet neuf hérite de ce que son déploiement sait faire tourner (#245).
+"""A new project inherits what its deployment can run (#245).
 
-Le 06/10, sur le dev, le premier agent du gabarit RH n'a jamais atteint le modèle : un projet neuf
-partait sur `claude-code` et aucun profil, que le dev ne sert pas — il sert opencode derrière la
-passerelle de la plateforme. Le déploiement dit désormais son backend et ses profils ; un projet qui
-naît sans en parler en hérite, un projet qui en parle garde les siens.
+On 06/10, on the dev environment, the first agent of the HR template never reached the model: a new
+project started on `claude-code` and no profile, which the dev environment does not serve (it serves
+opencode behind the platform's gateway). The deployment now states its backend and its profiles; a
+project that is born without mentioning them inherits them, a project that mentions them keeps its own.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ ORG = "/api/v1/orgs/varga"
 
 
 @pytest.fixture
-def deploiement(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+def deployment(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     from choregos_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_DEFAULT_AGENT_BACKEND", "opencode")
@@ -34,25 +34,25 @@ def deploiement(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         reset_settings_cache()
 
 
-async def _projet(client: AsyncClient, slug: str, **config: Any) -> dict[str, Any]:
-    corps = {"slug": slug, "name": slug, "config": {"slug": slug, "org": "varga", **config}}
-    cree = await client.post(f"{ORG}/projects", json=corps)
-    assert cree.status_code == 201, cree.text
-    return dict((await client.get(f"/api/v1/projects/{cree.json()['id']}")).json()["config"])
+async def _project(client: AsyncClient, slug: str, **config: Any) -> dict[str, Any]:
+    body = {"slug": slug, "name": slug, "config": {"slug": slug, "org": "varga", **config}}
+    created = await client.post(f"{ORG}/projects", json=body)
+    assert created.status_code == 201, created.text
+    return dict((await client.get(f"/api/v1/projects/{created.json()['id']}")).json()["config"])
 
 
-async def test_un_projet_neuf_herite_du_backend_et_des_profils_du_deploiement(
-    client: AsyncClient, admin: str, deploiement: None
+async def test_a_new_project_inherits_the_deployments_backend_and_profiles(
+    client: AsyncClient, admin: str, deployment: None
 ) -> None:
-    config = await _projet(client, "rh")
+    config = await _project(client, "hr")
     assert config["agent"] == {"default_backend": "opencode", "allowed_backends": ["opencode", "codex"]}
     assert config["models"]["profiles"]["standard"]["litellm_model"] == "platform/standard"
 
 
-async def test_un_projet_qui_en_parle_garde_les_siens(
-    client: AsyncClient, admin: str, deploiement: None
+async def test_a_project_that_speaks_of_them_keeps_its_own(
+    client: AsyncClient, admin: str, deployment: None
 ) -> None:
-    config = await _projet(
+    config = await _project(
         client,
         "billing",
         agent={"default_backend": "claude-code", "allowed_backends": ["claude-code"]},
@@ -62,13 +62,13 @@ async def test_un_projet_qui_en_parle_garde_les_siens(
     assert config["models"]["profiles"]["standard"]["litellm_model"] == "anthropic/claude-sonnet-5"
 
 
-async def test_sans_defaut_du_deploiement_rien_ne_change(client: AsyncClient, admin: str) -> None:
-    config = await _projet(client, "vieux")
+async def test_without_a_deployment_default_nothing_changes(client: AsyncClient, admin: str) -> None:
+    config = await _project(client, "old")
     assert config["agent"]["default_backend"] == "claude-code"
     assert config["models"]["profiles"] == {}
 
 
-async def test_un_backend_seul_est_aussi_le_seul_permis(
+async def test_a_lone_backend_is_also_the_only_one_allowed(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from choregos_api.config import reset_settings_cache
@@ -76,9 +76,9 @@ async def test_un_backend_seul_est_aussi_le_seul_permis(
     monkeypatch.setenv("CHOREGOS_DEFAULT_AGENT_BACKEND", "opencode")
     reset_settings_cache()
     try:
-        config = await _projet(client, "seul")
+        config = await _project(client, "alone")
     finally:
         monkeypatch.delenv("CHOREGOS_DEFAULT_AGENT_BACKEND")
         reset_settings_cache()
     assert config["agent"] == {"default_backend": "opencode", "allowed_backends": ["opencode"]}
-    assert config["models"]["profiles"] == {}, "aucun profil dit : aucun profil posé"
+    assert config["models"]["profiles"] == {}, "no profile said: no profile set"

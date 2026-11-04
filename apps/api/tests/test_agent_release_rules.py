@@ -18,7 +18,7 @@ from choregos_api.services.agent_releases import (
     loosens,
     served,
 )
-from choregos_api.services.agents import effective, elargissements
+from choregos_api.services.agents import effective, widenings
 from pydantic import ValidationError
 
 
@@ -179,4 +179,4 @@ def test_an_override_never_widens_the_revision_it_meets() -> None:
     assert result.limits.max_turns == 10
     unbounded = AgentSpec()
     assert effective(unbounded, loose).budget.run_usd == 2.0, "tightening an unbounded cap"
-    assert elargissements(spec, loose), "pinning such an override on a fixed revision is still refused"
+    assert widenings(spec, loose), "pinning such an override on a fixed revision is still refused"
