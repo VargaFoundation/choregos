@@ -137,6 +137,8 @@ class FakeInternalClient:
         self.tool_answer = Relayed(
             200, b'{"status_code":200,"result":{"ok":true},"remaining":null}', "application/json"
         )
+        #: A tool's own answer, by its name; `tool_answer` for any other.
+        self.tool_answers: dict[str, Relayed] = {}
         self.relayed: list[dict[str, Any]] = []
 
     async def relay_tools(self) -> Relayed:
@@ -146,7 +148,7 @@ class FakeInternalClient:
         self, name: str, arguments: bytes, *, script: str | None, within_s: float
     ) -> Relayed:
         self.relayed.append({"name": name, "arguments": arguments, "script": script})
-        return self.tool_answer
+        return self.tool_answers.get(name, self.tool_answer)
 
     async def fetch_skills(self) -> list[dict[str, Any]]:
         return list(self.skills)

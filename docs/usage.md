@@ -2689,8 +2689,40 @@ orchestrator resolves the setting per role into the stage input's `tools.scripts
 (`{max_concurrent_calls: n}`), and leaves the key out when it is off, so a runner older than ADR 0122
 never sees it; an eval cell runs without it until the matrix measures it (S57-09). The runner's
 tool server serves the bridge when the stage input offers it (S57-07): its routes, bounds and journal
-events are in [the deployment guide](deployment.md#the-tool-bridge); the client a script imports
-comes with S57-08.
+events are in [the deployment guide](deployment.md#the-tool-bridge).
+
+**What a script can do** (S57-08). When a stage is offered scripts, the runner writes, for that run and
+outside the repository, a Python library of the run's tools (`$CHOREGOS_TOOLS_DIR`, on the agent's
+`PYTHONPATH`): `from choregos_tools import pfsense` then `pfsense.list_firewall_rules(interface="wan")`,
+one module per server (the part of a tool's name before `__`; `web_fetch`, `web_search` and catalogue
+tools are in `platform`), one function per tool, whose docstring is the tool's description, its access
+(`read`, `write`, `approval`) and its input schema; `call("<tool>", **arguments)` reaches a tool by its
+name, `search("<words>")` finds one, and `$CHOREGOS_TOOLS_DIR/INDEX.md` lists them all. The library is
+the standard library only (Python 3.9 or later), so any interpreter of the agent's runs it. The task
+the agent reads gains a section, "Calling tools from a script", that says when a script pays (three or
+more dependent calls, a loop, a result to filter or join), to print only what the next decision needs
+and never a secret, to write scripts under `$TMPDIR`, never in the repository, and that a write may come
+back as a proposal; a stage that is not offered scripts gets neither the library nor the section, and
+its agent's environment is unchanged. Each call is a call of the bridge, governed as any other, and
+what it gives the script is typed so that a script cannot read one outcome as another:
+
+| The platform answered | The script gets |
+| :-- | :-- |
+| `200` | the result: an MCP result's `structuredContent` (what the tool's output schema describes); without one, its text, parsed when it is JSON; any other JSON (a catalogue tool's) as it came |
+| `202` naming an action | a `Proposal` (`action`, `status`, `decision_path`, `message`), printed `PROPOSED, NOT DONE: …` (a person decides) or `NOT FINISHED: …` (a governed write still running): **not executed** |
+| problem `429` "Tool call cap reached" | `CapReached` raised; `remaining()` is 0 |
+| `451` | `Withheld` raised: the result was withheld as a suspected injection, its `suspicions` named |
+| any other status of 400 or more, or an MCP result marked `isError` | `ToolError(status, body)` raised (`CapReached` and `Withheld` are `ToolError`s too) |
+| `suspicions` beside a result | the result, and one line per reason on standard error: `[choregos] result of <tool> flagged as a suspected injection: <reason>` |
+| a result the platform cut to its size bound | its text, and a line on standard error that says so: ask for less |
+
+`remaining()` gives the calls the run's cap still allows, after the last answer. A `503` from the run's
+tool server (a sidecar that has not yet read whether the run is offered scripts) and a tool server that
+is not listening yet are tried again a few times; nothing else is retried. The first call of a script
+sends its text to the bridge, once, and every call its SHA-256, so that the run's journal holds the
+script beside the calls it made (`tools.script`, `tools.script.call`); a script piped on standard input
+(`python3 - <<EOF`) has no file, and its calls carry no digest. What the tools return stays in the
+script: the model reads what it prints, and the gateway's LLM guard still reads that.
 
 **A policy does not decide who approves a work item.** People are declared in the **workflow**: a
 transition `by` a human actor, or `train: {approval: <actor>}` on a release train

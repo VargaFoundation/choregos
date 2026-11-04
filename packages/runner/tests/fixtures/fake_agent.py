@@ -167,6 +167,42 @@ def _http(calls: list[dict[str, Any]]) -> None:
     )
 
 
+#: What `scripts` records of the agent's environment: what the runner sets for tool scripts (ADR 0122).
+SCRIPT_VARIABLES = ("CHOREGOS_TOOLS_DIR", "CHOREGOS_TOOLS_BRIDGE", "PYTHONPATH", "TMPDIR")
+
+
+def _scripts(scripts: list[dict[str, Any]], workspace: Path) -> None:
+    """`scripts`: what an agent does with a script it wrote (ADR 0122) — writes it from its shell under
+    `$TMPDIR`, then runs the file with Python (`python`, `[sys.executable]` by default) and its own
+    environment, in the workspace. Each run's exit code, stdout and stderr go to `$HOME/scripts.json`,
+    in order, beside the variables the runner sets for tool scripts."""
+    if not scripts:
+        return
+    import tempfile
+
+    ran: list[dict[str, Any]] = []
+    for script in scripts:
+        path = Path(os.environ.get("TMPDIR") or tempfile.gettempdir()) / script["name"]
+        try:
+            path.write_text(script["text"], encoding="utf-8")
+        except OSError as exc:  # said, not crashed: a dead agent would leave its turn unanswered
+            ran.append({"code": None, "stdout": "", "stderr": repr(exc)})
+            continue
+        completed = subprocess.run(
+            [*script.get("python", [sys.executable]), str(path)],
+            cwd=workspace,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=120,
+        )
+        ran.append({"code": completed.returncode, "stdout": completed.stdout, "stderr": completed.stderr})
+    (Path(os.environ["HOME"]) / "scripts.json").write_text(
+        json.dumps({"runs": ran, "env": {name: os.environ.get(name) for name in SCRIPT_VARIABLES}}),
+        encoding="utf-8",
+    )
+
+
 def _say(session_id: str, notes: list[str]) -> None:
     for note in notes:
         send(
@@ -261,6 +297,7 @@ def main() -> int:
             outgoing_id = _report_tool_calls(session_id, plan.get("tool_calls", []), outgoing_id)
             _unasked(plan.get("unasked", []))
             _http(plan.get("http", []))
+            _scripts(plan.get("scripts", []), workspace)
 
             for command in plan.get("commands", []):
                 outgoing_id += 1
