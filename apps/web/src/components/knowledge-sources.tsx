@@ -71,11 +71,11 @@ function SourceConnector({
     <span className="text-xs" data-testid={`source-connector-${source.id}`}>
       via connector{" "}
       {unreadable ? (
-        <strong data-donnee title="Only the organisation's members with access to its connectors can open it">
+        <strong data-verbatim title="Only the organisation's members with access to its connectors can open it">
           {name}
         </strong>
       ) : (
-        <Link href={orgConnectorHref(name)} className="font-medium underline" data-donnee>
+        <Link href={orgConnectorHref(name)} className="font-medium underline" data-verbatim>
           {name}
         </Link>
       )}

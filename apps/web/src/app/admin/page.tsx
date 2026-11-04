@@ -54,7 +54,7 @@ export default function AdminPage() {
           {groups.map((group) => (
             <div key={group.org ?? "platform"} className="mt-2">
               {group.org !== null && (
-                <p className="text-xs font-medium text-ink" data-donnee>
+                <p className="text-xs font-medium text-ink" data-verbatim>
                   {group.org}
                 </p>
               )}
@@ -64,7 +64,7 @@ export default function AdminPage() {
               >
                 {group.lines.map((line) => (
                   <li key={line.scope} data-testid="membership">
-                    <span data-donnee>{line.scope}</span> :{" "}
+                    <span data-verbatim>{line.scope}</span> :{" "}
                     <span className="font-mono" title={ROLE_LABELS[line.role]}>
                       {line.role}
                     </span>
@@ -115,7 +115,7 @@ export default function AdminPage() {
             {(tokens.data ?? []).map((token) => (
               <li key={token.id} className="flex items-center justify-between gap-2">
                 <span>
-                  <span className="font-mono" data-donnee>
+                  <span className="font-mono" data-verbatim>
                     {token.name}
                   </span>
                   <span className="text-ink-muted">

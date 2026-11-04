@@ -109,7 +109,7 @@ function Spend() {
         ) : (
           <>
             <CostGraph rows={byDay.data.rows} currency={currency} />
-            <p className="mt-3 text-sm" data-testid="total-periode">
+            <p className="mt-3 text-sm" data-testid="period-total">
               Total {money(byDay.data.rows.reduce((s, r) => s + (currency === "USD" ? r.cost_usd : r.cost_eur), 0), currency)}
             </p>
           </>

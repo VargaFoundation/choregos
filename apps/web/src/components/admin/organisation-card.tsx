@@ -89,7 +89,7 @@ export function OrganisationCard({ org, canEdit }: { org: string; canEdit: boole
       {saved && <p className="mt-2 text-xs text-ink-muted">Organisation saved</p>}
       {error && <ErrorNote>{error}</ErrorNote>}
       <p className="mt-3 text-xs text-ink-muted">
-        Slug <code className="font-mono" data-donnee>{org}</code> — used in every URL, MCP address and identity-provider group.
+        Slug <code className="font-mono" data-verbatim>{org}</code> — used in every URL, MCP address and identity-provider group.
       </p>
       {platform.isSuccess && (
         <div className="mt-2">

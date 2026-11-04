@@ -130,7 +130,7 @@ export function MembersTable({ project }: { project?: string }) {
         ) : people.length === 0 ? (
           <Empty>No member</Empty>
         ) : (
-          <Table aria-label={project ? "Members of this project" : `Members of ${org}`} data-testid="membres">
+          <Table aria-label={project ? "Members of this project" : `Members of ${org}`} data-testid="members">
             <THead>
               <TR>
                 <TH>Member</TH>
@@ -147,7 +147,7 @@ export function MembersTable({ project }: { project?: string }) {
                 const shown = newRole?.key === key ? newRole.role : person.role;
                 const lowering = person.role != null && newRole?.key === key && rank(newRole.role) < rank(person.role);
                 return (
-                  <TR key={key} data-testid={`membre-${person.email}`}>
+                  <TR key={key} data-testid={`member-${person.email}`}>
                     <TD>{person.email}</TD>
                     <TD>
                       <Select
@@ -193,7 +193,7 @@ export function MembersTable({ project }: { project?: string }) {
                           ? "—"
                           : person.projects.map((p) => (
                               <span key={p.slug} className="mr-2 inline-block">
-                                <span data-donnee className="font-mono">
+                                <span data-verbatim className="font-mono">
                                   {p.slug}
                                 </span>{" "}
                                 · {ROLE_LABELS[p.role]}

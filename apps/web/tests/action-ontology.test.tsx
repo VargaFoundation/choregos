@@ -36,11 +36,11 @@ const ontology = {
 describe("an ontology action says what it touches (S20-10)", () => {
   it("its type, its targets, its parameters, what its effects returned and its evidence gathered", () => {
     render(<OntologyDetail action={ontology} />);
-    const card = screen.getByTestId("ontologie");
+    const card = screen.getByTestId("ontology");
     expect(card).toHaveTextContent("open_infra_pr");
     expect(card).toHaveTextContent("os-reboot-required");
     expect(card).toHaveTextContent("platform/maintenance/reboot.yaml");
-    const dossier = screen.getByTestId("ontologie-dossier");
+    const dossier = screen.getByTestId("ontology-folder");
     expect(dossier).toHaveTextContent("gitops.pull_request");
     expect(dossier).toHaveTextContent("https://github.com/acme/infra/pull/7");
     expect(dossier).toHaveTextContent("finding_gone");
@@ -59,7 +59,7 @@ describe("an ontology action says what it touches (S20-10)", () => {
         </QueryClientProvider>,
       );
     });
-    expect(await screen.findByTestId("ontologie")).toHaveTextContent("os-reboot-required");
+    expect(await screen.findByTestId("ontology")).toHaveTextContent("os-reboot-required");
   });
 
   it("an action of another origin does not have this card", () => {
@@ -74,14 +74,14 @@ describe("an ontology action says what it touches (S20-10)", () => {
         <DecisionDAction projet="infra" action={{ ...pending, approval: { step_up_minutes: 10 } } as Action} />
       </QueryClientProvider>,
     );
-    expect(screen.getByTestId("regles-de-decision")).toHaveTextContent("within 10 min");
+    expect(screen.getByTestId("decision-rules")).toHaveTextContent("within 10 min");
     unmount();
     render(
       <QueryClientProvider client={new QueryClient()}>
         <DecisionDAction projet="infra" action={{ ...pending, approval: {} } as Action} />
       </QueryClientProvider>,
     );
-    expect(screen.getByTestId("regles-de-decision")).not.toHaveTextContent("recent sign-in");
+    expect(screen.getByTestId("decision-rules")).not.toHaveTextContent("recent sign-in");
   });
 
   it("the old links of the proposals lead to the actions, under the same identifier", async () => {

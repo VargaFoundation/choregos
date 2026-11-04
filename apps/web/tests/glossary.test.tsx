@@ -5,7 +5,7 @@ import { Glossary } from "@/components/glossary";
 describe("the glossary of the four notions (S21-03)", () => {
   it("names agent, skill, connector and client, and points to their page", () => {
     render(<Glossary ici="agents" ouvert />);
-    const glossaire = screen.getByTestId("glossaire");
+    const glossaire = screen.getByTestId("glossary");
     expect(within(glossaire).getByRole("link", { name: "Skill" })).toHaveAttribute("href", "/skills");
     expect(within(glossaire).getByRole("link", { name: "Connector" })).toHaveAttribute("href", "/admin/connectors");
     expect(within(glossaire).getByRole("link", { name: "Client" })).toHaveAttribute("href", "/integrations");
@@ -13,14 +13,14 @@ describe("the glossary of the four notions (S21-03)", () => {
 
   it("the notion of the current page is not a link and carries aria-current", () => {
     render(<Glossary ici="connectors" />);
-    const glossaire = screen.getByTestId("glossaire");
+    const glossaire = screen.getByTestId("glossary");
     expect(within(glossaire).queryByRole("link", { name: "Connector" })).toBeNull();
     expect(within(glossaire).getByText("Connector")).toHaveAttribute("aria-current", "page");
   });
 
   it("says that an agent called over MCP at a supplier is a connector", () => {
     render(<Glossary ici="clients" />);
-    expect(screen.getByTestId("glossaire")).toHaveTextContent(/supplier's agent that you call over MCP is a connector/);
+    expect(screen.getByTestId("glossary")).toHaveTextContent(/supplier's agent that you call over MCP is a connector/);
   });
 
   it("says a request's path, from the client to the person who approves", () => {
@@ -36,7 +36,7 @@ describe("the glossary of the four notions (S21-03)", () => {
 
   it("does not contradict the registry: a registered client is an external agent (S23-14)", () => {
     render(<Glossary ici="agents" ouvert />);
-    const glossaire = screen.getByTestId("glossaire");
+    const glossaire = screen.getByTestId("glossary");
     expect(glossaire).toHaveTextContent(/an external agent is an AI client registered here/);
     expect(glossaire).toHaveTextContent(/fewer once registered as an external agent/);
     expect(glossaire).not.toHaveTextContent(/MCP gate/);

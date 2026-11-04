@@ -61,7 +61,7 @@ export function BreakdownCard({
             {rows.map((row) => (
               <tr key={row.key} className="border-t border-line first:border-t-0">
                 <th scope="row" className="w-2/5 py-1.5 pr-3 text-left font-normal">
-                  <span className="break-all" data-donnee>
+                  <span className="break-all" data-verbatim>
                     {row.key}
                   </span>
                 </th>

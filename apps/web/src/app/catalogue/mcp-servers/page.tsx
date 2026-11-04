@@ -157,7 +157,7 @@ function Entry({
           )}
           {(entry.enablement ?? []).map((item) => (
             <p key={item.connector} data-testid={`enablement-${item.connector}`}>
-              Installed as <strong data-donnee>{item.connector}</strong> — {where(item)}
+              Installed as <strong data-verbatim>{item.connector}</strong> — {where(item)}
             </p>
           ))}
         </>
@@ -281,7 +281,7 @@ function InstallForm({ org, entry, onDone }: { org: string; entry: McpCatalogueE
           <ProcedurePanel target="connector:mcp/mcp" procedure={entry.procedure} autoOpen={false} inline />
         </div>
       )}
-      <p className="text-ink-muted" data-donnee>
+      <p className="text-ink-muted" data-verbatim>
         {entry.description}
       </p>
       {entry.remote && !viaGateway && (

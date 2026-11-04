@@ -16,7 +16,6 @@
 
 /** The key, modelled on `choregos.org` (lib/session.tsx). */
 export const THEME_KEY = "choregos.theme";
-export const CLE_DU_THEME = THEME_KEY; // lang: fr-ok alias:internal
 
 export type Theme = "dark" | "light";
 export type PreferenceDeTheme = Theme | "system";
@@ -25,12 +24,10 @@ export const PREFERENCES_DE_THEME: readonly PreferenceDeTheme[] = ["dark", "ligh
 
 /** Without a preference, dark: an operations console's, and the one that holds without JavaScript. */
 export const DEFAULT_THEME: Theme = "dark";
-export const THEME_PAR_DEFAUT = DEFAULT_THEME; // lang: fr-ok alias:internal
 
 export function isPreference(value: unknown): value is PreferenceDeTheme {
   return value === "dark" || value === "light" || value === "system";
 }
-export const estUnePreference = isPreference; // lang: fr-ok alias:internal
 
 /**
  * The mode a person without a preference gets: the served theme's `default_mode`, which the layout
@@ -41,7 +38,6 @@ export function defaultTheme(): Theme {
     ? "light"
     : DEFAULT_THEME;
 }
-export const themeParDefaut = defaultTheme; // lang: fr-ok alias:internal
 
 /** The theme that shows, for a preference read (or absent) and what the system asks for. */
 export function themeResolu(
@@ -56,7 +52,6 @@ export function themeResolu(
 
 /** The sidebar's key: "rail" folds it; any other value, or none, leaves it full. */
 export const SIDEBAR_KEY = "choregos.sidebar";
-export const CLE_DE_LA_BARRE = SIDEBAR_KEY; // lang: fr-ok alias:internal
 
 export type Barre = "full" | "rail";
 
@@ -86,7 +81,6 @@ export function readPreference(): PreferenceDeTheme | null {
     return null;
   }
 }
-export const lirePreference = readPreference; // lang: fr-ok alias:internal
 
 /** Sets on <html> the theme a preference gives, and returns it. */
 export function appliquerLeTheme(preference: PreferenceDeTheme | null): Theme {
@@ -104,7 +98,6 @@ export function chooseTheme(preference: PreferenceDeTheme): Theme {
   }
   return appliquerLeTheme(preference);
 }
-export const choisirLeTheme = chooseTheme; // lang: fr-ok alias:internal
 
 /** The sidebar kept: folded only if it was folded. */
 export function readSidebar(): Barre {
@@ -114,7 +107,6 @@ export function readSidebar(): Barre {
     return "full";
   }
 }
-export const lireLaBarre = readSidebar; // lang: fr-ok alias:internal
 
 /** Sets the sidebar on <html>: the attribute exists only when folded, the full sidebar is the default without it. */
 export function appliquerLaBarre(barre: Barre): void {
@@ -131,4 +123,3 @@ export function chooseSidebar(barre: Barre): void {
   }
   appliquerLaBarre(barre);
 }
-export const choisirLaBarre = chooseSidebar; // lang: fr-ok alias:internal

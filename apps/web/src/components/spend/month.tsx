@@ -24,7 +24,7 @@ export function MonthPanel({ scope, currency, now }: { scope: Scope; currency: C
   const forecast = monthForecast(report.data.rows, now, currency, report.data.total.budget_usd, currency === "USD" ? 1 : usdToCurrency(report.data.total));
   return (
     <Card title="This month" eyebrow="Budget against actual">
-      <div className="flex flex-wrap items-end gap-x-10 gap-y-3" data-testid="mois">
+      <div className="flex flex-wrap items-end gap-x-10 gap-y-3" data-testid="month">
         <Stat value={money(forecast.spent, currency)} label={`Spent in ${forecast.daysElapsed} of ${forecast.daysInMonth} days`} />
         <Stat value={money(forecast.forecast, currency)} label="Forecast at month end (linear)" />
         <Stat
@@ -32,7 +32,7 @@ export function MonthPanel({ scope, currency, now }: { scope: Scope; currency: C
           label={forecast.budget === null ? "No daily budget set" : "Budget: daily budget × days in the month"}
         />
         {forecast.budget !== null && (
-          <Badge tone={forecast.over ? "danger" : "ok"} data-testid="budget-etat">
+          <Badge tone={forecast.over ? "danger" : "ok"} data-testid="budget-state">
             {forecast.over
               ? `Over budget${forecast.spent > forecast.budget ? "" : " by month end"}`
               : `${Math.round((forecast.ratio ?? 0) * 100)} % of the budget spent`}

@@ -3,8 +3,8 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { useState, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import YamlPage from "@/app/p/[slug]/workflows/[name]/yaml/page";
-import { BarreDuBrouillon } from "@/components/workflows/barre-du-brouillon";
-import { BrouillonProvider, useBrouillon } from "@/components/workflows/brouillon";
+import { DraftBar } from "@/components/workflows/draft-bar";
+import { DraftProvider, useDraft } from "@/components/workflows/draft";
 import { operations } from "@/components/workflows/operations";
 import { ApiError, api } from "@/lib/api";
 import type { WorkflowEditResult, WorkflowValidation } from "@/lib/types";
@@ -36,12 +36,12 @@ const invalide: WorkflowValidation = {
 const version = { courante: 3 };
 
 function Sonde() {
-  const draft = useBrouillon();
+  const draft = useDraft();
   return (
     <div>
-      <textarea aria-label="texte" value={draft.yaml} onChange={(e) => draft.ecrire(e.target.value)} />
-      <p data-testid="validation">{draft.validation.etat}</p>
-      <button type="button" onClick={() => void draft.appliquer(operations.libelle("inbox", "New requests"))}>
+      <textarea aria-label="texte" value={draft.yaml} onChange={(e) => draft.write(e.target.value)} />
+      <p data-testid="validation">{draft.validation.state}</p>
+      <button type="button" onClick={() => void draft.apply(operations.stateLabel("inbox", "New requests"))}>
         geste
       </button>
     </div>
@@ -66,17 +66,17 @@ async function mount(contenu: ReactNode = <Sonde />) {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <BrouillonProvider slug="rh" name="onboarding">
-        <BarreDuBrouillon />
+      <DraftProvider slug="rh" name="onboarding">
+        <DraftBar />
         <Tabs>{contenu}</Tabs>
-      </BrouillonProvider>
+      </DraftProvider>
     </QueryClientProvider>,
   );
   await waitFor(() => expect((screen.getAllByRole("textbox")[0] as HTMLTextAreaElement).value).toContain("apiVersion"));
 }
 
 const taper = (texte: string) => fireEvent.change(screen.getByLabelText("texte"), { target: { value: texte } });
-const validAtTheEnd = () => waitFor(() => expect(screen.getByTestId("validation")).toHaveTextContent("a_jour"), { timeout: 2000 });
+const validAtTheEnd = () => waitFor(() => expect(screen.getByTestId("validation")).toHaveTextContent("current"), { timeout: 2000 });
 
 beforeEach(() => {
   version.courante = 3;
@@ -138,7 +138,7 @@ describe("the single draft of the three views (S21-06)", () => {
     await waitFor(() => expect(pending.has(`${LU}# B\n`)).toBe(true), { timeout: 2000 });
     // A answers while B is still in flight: A's verdict does not hold for B.
     await act(async () => pending.get(`${LU}# A\n`)!(valid));
-    expect(screen.getByTestId("validation")).toHaveTextContent("en_cours");
+    expect(screen.getByTestId("validation")).toHaveTextContent("running");
     expect(screen.getByRole("button", { name: "Publish v4" })).toBeDisabled();
     await act(async () => pending.get(`${LU}# B\n`)!(valid));
     await validAtTheEnd();
@@ -203,7 +203,7 @@ describe("the single draft of the three views (S21-06)", () => {
     await mount();
     taper(`${LU}# typed\n`);
     fireEvent.click(screen.getByRole("button", { name: "geste" }));
-    await waitFor(() => expect(api.editWorkflow).toHaveBeenCalledWith(`${LU}# typed\n`, [operations.libelle("inbox", "New requests")]));
+    await waitFor(() => expect(api.editWorkflow).toHaveBeenCalledWith(`${LU}# typed\n`, [operations.stateLabel("inbox", "New requests")]));
     expect(await screen.findByText("2 changes not published yet")).toBeInTheDocument();
   });
 
@@ -234,10 +234,10 @@ describe("the single draft of the three views (S21-06)", () => {
     client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
-        <BrouillonProvider slug="rh" name="onboarding">
-          <BarreDuBrouillon />
+        <DraftProvider slug="rh" name="onboarding">
+          <DraftBar />
           <YamlPage />
-        </BrouillonProvider>
+        </DraftProvider>
       </QueryClientProvider>,
     );
     const field = (await screen.findByLabelText("YAML of onboarding")) as HTMLTextAreaElement;

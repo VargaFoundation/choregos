@@ -58,10 +58,10 @@ describe("members per scope", () => {
   it("the organisation's page lists a person once, and offers a project picker", async () => {
     vi.mocked(api.members).mockResolvedValue(MEMBERSHIPS);
     wrap();
-    const table = await screen.findByTestId("membres");
-    expect(within(table).getAllByTestId("membre-lea@acme.dev")).toHaveLength(1);
+    const table = await screen.findByTestId("members");
+    expect(within(table).getAllByTestId("member-lea@acme.dev")).toHaveLength(1);
     expect(within(table).getAllByRole("row")).toHaveLength(4);
-    expect(screen.getByTestId("membre-lea@acme.dev")).toHaveTextContent("billing-api · Project owner");
+    expect(screen.getByTestId("member-lea@acme.dev")).toHaveTextContent("billing-api · Project owner");
     expect(api.members).toHaveBeenCalledWith("acme", undefined);
     // The scope of an invitation is a list of the organisation's projects, not free text.
     const scope = screen.getByLabelText("Scope");
@@ -70,7 +70,7 @@ describe("members per scope", () => {
     // A project chosen: org_admin is not offered.
     fireEvent.change(scope, { target: { value: "billing-api" } });
     expect(options(screen.getByLabelText("Role"))).not.toContain("org_admin");
-    expect(screen.getByTestId("roles-additifs")).toHaveTextContent("adds to the person's organisation role");
+    expect(screen.getByTestId("additive-roles")).toHaveTextContent("adds to the person's organisation role");
   });
 
   it("a project's page lists its members with project roles only", async () => {

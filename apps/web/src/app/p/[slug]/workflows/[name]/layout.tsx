@@ -7,8 +7,8 @@ import { DEFAULT_WORKFLOW_HINT } from "@/components/workflows/timing";
 import { usePathname } from "next/navigation";
 import { use, type ReactNode } from "react";
 import { Badge, Tabs, tabClasses } from "@/components/ui";
-import { BarreDuBrouillon } from "@/components/workflows/barre-du-brouillon";
-import { BrouillonProvider } from "@/components/workflows/brouillon";
+import { DraftBar } from "@/components/workflows/draft-bar";
+import { DraftProvider } from "@/components/workflows/draft";
 import { useWorkflow } from "@/components/workflows/use-workflow";
 
 // The graph first (S55-06): a workflow is read as a picture, the list of steps is one tab away.
@@ -63,10 +63,10 @@ export default function WorkflowLayout({
       </Tabs>
       {/* The draft is shared by the map and the process view: a gesture on one shows on
               the other, and nothing is published before "publish". */}
-      <BrouillonProvider slug={slug} name={name}>
-        <BarreDuBrouillon />
+      <DraftProvider slug={slug} name={name}>
+        <DraftBar />
         {children}
-      </BrouillonProvider>
+      </DraftProvider>
     </div>
   );
 }

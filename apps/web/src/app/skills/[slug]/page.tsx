@@ -32,9 +32,9 @@ export default function SkillPage({ params }: { params: Promise<{ slug: string }
   const montre = fichier && files.includes(fichier) ? fichier : (files.find((f) => f === "SKILL.md") ?? files[0]);
   return (
     <div className="space-y-6">
-      <Breadcrumbs steps={[{ href: "/skills", label: "Skills" }, { label: <span data-donnee>{skill.data.slug}</span> }]} />
+      <Breadcrumbs steps={[{ href: "/skills", label: "Skills" }, { label: <span data-verbatim>{skill.data.slug}</span> }]} />
       <OrgPageHeader
-        title={<span data-donnee>{skill.data.slug}</span>}
+        title={<span data-verbatim>{skill.data.slug}</span>}
         eyebrow={`Version ${skill.data.latest_version}`}
         description={skill.data.description || undefined}
       />
@@ -84,7 +84,7 @@ export default function SkillPage({ params }: { params: Promise<{ slug: string }
         {!version.data ? (
           <p className="text-sm text-ink-muted">Reading the files…</p>
         ) : (
-          <div className="grid gap-4 md:grid-cols-[14rem_1fr]" data-testid="fichiers">
+          <div className="grid gap-4 md:grid-cols-[14rem_1fr]" data-testid="files">
             <ul className="space-y-1 text-xs">
               {files.map((nom) => (
                 <li key={nom}>

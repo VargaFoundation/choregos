@@ -57,7 +57,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             <DocumentTitle />
             {/* Nine tab stops separated the top of the page from its content (S23-05, WCAG 2.4.1). */}
             <a
-              href="#contenu"
+              href="#content"
               className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:bg-inverse focus:px-4 focus:py-3 focus:text-sm focus:text-inverse-ink"
             >
               Skip to content
@@ -68,7 +68,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
               <Sidebar />
               <div className="flex min-h-screen min-w-0 flex-col">
                 {/* 48 px, border included: its rule continues the brand's, in the sidebar. */}
-                <header data-barre-du-haut className="sticky top-0 z-20 h-12 border-b border-line bg-surface/95 backdrop-blur-sm">
+                <header data-top-bar className="sticky top-0 z-20 h-12 border-b border-line bg-surface/95 backdrop-blur-sm">
                   <Container size="wide" className="flex h-full items-center gap-4 sm:gap-8">
                     {/* From 1280 px, the brand sits at the top of the sidebar. */}
                     <Link href="/" className="no-underline xl:hidden">
@@ -77,7 +77,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                     <TopNav demo={demo} />
                   </Container>
                 </header>
-                <main id="contenu" tabIndex={-1} className="flex-1 focus:outline-none">
+                <main id="content" tabIndex={-1} className="flex-1 focus:outline-none">
                   {/* A page that needs the whole window (the board's columns) says so with `data-full-width`. */}
                   <Container size="wide" className="py-8 has-[[data-full-width]]:max-w-none">
                     {children}

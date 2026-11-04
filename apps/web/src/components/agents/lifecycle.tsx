@@ -49,7 +49,7 @@ export function LifecycleBadges({ agent }: { agent: Pick<Agent, "lifecycle" | "u
         </Badge>
       )}
       {agent.unused && (
-        <Badge tone="warn" data-testid="inutilise" title={agent.last_run_at ? `last run ${relative(agent.last_run_at)}` : "never ran"}>
+        <Badge tone="warn" data-testid="unused" title={agent.last_run_at ? `last run ${relative(agent.last_run_at)}` : "never ran"}>
           unused for 60 days
         </Badge>
       )}
@@ -117,7 +117,7 @@ export function LifecyclePanel({ org, agent, disabled = false }: { org: string; 
   }
 
   return (
-    <div className="space-y-3 text-sm" data-testid="cycle-de-vie">
+    <div className="space-y-3 text-sm" data-testid="lifecycle">
       <div className="flex flex-wrap items-center gap-2">
         <Badge tone={TONE[lifecycle]}>{lifecycle}</Badge>
         <span className="text-xs text-ink-muted">

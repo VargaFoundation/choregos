@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { DecisionBar } from "@/components/decision-bar";
-import { ActorIcon, Badge, Card, CostChip, Dot, Heading, LEGENDE, tonDEtat } from "@/components/ui";
+import { ActorIcon, Badge, Card, CostChip, Dot, Heading, LEGENDE, toneOfState } from "@/components/ui";
 import { type Column, foldedItems } from "@/components/workflows/board";
 import { cn } from "@/lib/cn";
 import { workflowHueClasses } from "@/lib/workflow-hue";
@@ -55,7 +55,7 @@ export function BoardSection({
       <header className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span aria-hidden className={cn("size-2.5 shrink-0 rounded-full", hue.solid)} />
         <Heading as="h2" size="md" id={headingId} className={hue.ink}>
-          <span data-donnee>{section.name}</span>
+          <span data-verbatim>{section.name}</span>
         </Heading>
         <span className="font-mono text-xs text-ink-muted">v{section.version ?? "?"}</span>
         {section.isDefault && <Badge tone="neutral">Default</Badge>}
@@ -77,7 +77,7 @@ export function BoardSection({
       ) : (
         <>
           {/* The summary of the columns: each one is named, even when it is out of sight. */}
-          <nav aria-label={`Columns of ${section.name}`} data-donnee className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+          <nav aria-label={`Columns of ${section.name}`} data-verbatim className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
             {section.columns.map((column) => {
               const waiting = column.items.filter((item) => item.pending_request).length;
               return (
@@ -139,7 +139,7 @@ function BoardColumn({
       )}
     >
       <header className="flex h-8 items-center gap-2 border-b border-line" title={column.state}>
-        <Dot tone={tonDEtat(column.state, column.kind)} />
+        <Dot tone={toneOfState(column.state, column.kind)} />
         <h3 className={cn(LEGENDE, "truncate")}>{column.display}</h3>
         <span className="ml-auto rounded-full bg-surface-muted px-1.5 font-mono text-[11px] tabular-nums text-ink-muted">
           {column.items.length}

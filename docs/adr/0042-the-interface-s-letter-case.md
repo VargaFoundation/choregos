@@ -29,8 +29,8 @@ client"), next to hundreds that did not.
 
 ## Consequences
 
-- `e2e/la-casse.spec.ts` walks the console's pages and refuses a sentence that starts in lowercase,
-  and a label the console writes that starts with a capital; data is marked `data-donnee` and left
+- `e2e/letter-case.spec.ts` walks the console's pages and refuses a sentence that starts in lowercase,
+  and a label the console writes that starts with a capital; data is marked `data-verbatim` and left
   alone.
 - Messages written by the API (errors, the catalogue's summaries) are outside this ADR's test: they
   are aligned in the API.

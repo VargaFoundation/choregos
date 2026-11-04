@@ -90,7 +90,7 @@ export function RemoteCredentials({
             <TBody>
               {credentials.data.map((credential) => (
                 <TR key={credential.name}>
-                  <TD className="font-mono text-xs" data-donnee>
+                  <TD className="font-mono text-xs" data-verbatim>
                     {credential.name}
                   </TD>
                   <TD className="text-xs">{CREDENTIAL_TYPES[credential.type]}</TD>

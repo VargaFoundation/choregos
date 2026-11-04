@@ -2,29 +2,29 @@ import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { EvidencePanel } from "@/components/evidence";
 import { Provenance } from "@/components/provenance";
-import { finDeclaree, provenanceDePreuve } from "@/lib/provenance";
+import { declaredEnd, evidenceProvenance } from "@/lib/provenance";
 
 describe("where evidence comes from (ADR 0045, S25-03)", () => {
   it("observed if the platform measured it, declared otherwise; unknown when the runner does not say", () => {
     const evidence = { measured: ["tests_passed", "facts.smoke_ok"] };
-    expect(provenanceDePreuve(evidence, "tests_passed")).toBe("observed");
-    expect(provenanceDePreuve(evidence, "facts.smoke_ok")).toBe("observed");
-    expect(provenanceDePreuve(evidence, "coverage_delta")).toBe("declared");
-    expect(provenanceDePreuve({ measured: [] }, "tests_passed")).toBe("declared");
-    expect(provenanceDePreuve({ measured: null }, "tests_passed")).toBe("unknown");
-    expect(provenanceDePreuve(undefined, "tests_passed")).toBe("unknown");
+    expect(evidenceProvenance(evidence, "tests_passed")).toBe("observed");
+    expect(evidenceProvenance(evidence, "facts.smoke_ok")).toBe("observed");
+    expect(evidenceProvenance(evidence, "coverage_delta")).toBe("declared");
+    expect(evidenceProvenance({ measured: [] }, "tests_passed")).toBe("declared");
+    expect(evidenceProvenance({ measured: null }, "tests_passed")).toBe("unknown");
+    expect(evidenceProvenance(undefined, "tests_passed")).toBe("unknown");
   });
 
   it("a run the agent says is done but with a failing guarantee is \"declared done, not observed\"", () => {
     const refused = { passed: false, pending: false };
     const passee = { passed: true, pending: false };
-    expect(finDeclaree("done", [passee, refused])).toBe("declared done, not observed");
-    expect(finDeclaree("done", [])).toBe("declared done, not verified yet");
-    expect(finDeclaree("done", [passee, { passed: false, pending: true }])).toBe("declared done, not verified yet");
-    expect(finDeclaree("done", [passee])).toBeNull();
+    expect(declaredEnd("done", [passee, refused])).toBe("declared done, not observed");
+    expect(declaredEnd("done", [])).toBe("declared done, not verified yet");
+    expect(declaredEnd("done", [passee, { passed: false, pending: true }])).toBe("declared done, not verified yet");
+    expect(declaredEnd("done", [passee])).toBeNull();
     // The agent does not say it is done: nothing to confront.
-    expect(finDeclaree("failed", [refused])).toBeNull();
-    expect(finDeclaree(undefined, [refused])).toBeNull();
+    expect(declaredEnd("failed", [refused])).toBeNull();
+    expect(declaredEnd(undefined, [refused])).toBeNull();
   });
 });
 

@@ -21,7 +21,7 @@ export function RemoteTaskCard({ task }: { task: RemoteTask }) {
       <dl className="grid gap-x-6 gap-y-1 text-xs sm:grid-cols-2">
         <div>
           <dt className="text-ink-muted">Endpoint</dt>
-          <dd className="break-all font-mono" data-donnee>
+          <dd className="break-all font-mono" data-verbatim>
             {task.endpoint || "—"}
           </dd>
         </div>

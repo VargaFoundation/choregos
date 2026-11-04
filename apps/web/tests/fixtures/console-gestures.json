@@ -1,22 +1,22 @@
 {
-  "_": "Les gestes de la console (S16-12) et l'opération que chacun envoie à POST /workflows/edit. La console vérifie qu'elle les émet (tests/workflow-edition.test.tsx) ; le cœur, qu'il les greffe dans ce workflow (packages/core/tests/test_edition.py). Un champ renommé d'un côté fait rougir l'autre.",
-  "workflow": "apiVersion: choregos/v1\nkind: Workflow\nmetadata: { name: default-simple, version: 1 }\nactors:\n  refiner: { type: agent, role: refine, model: \"profile:standard\" }\n  owner: { type: human, group: product-owners, sla_hours: 24 }\n  dev: { type: agent, role: implement, model: \"profile:by_size\" }\nstates:\n  inbox: { display: À trier, kind: wait }\n  ready: { display: Prêt }\n  archive: { display: Archivé }\n  done: { display: Fini, terminal: true }\ntransitions:\n  - { id: t-refine, from: inbox, to: ready, by: refiner }\n  - { id: t-implement, from: ready, to: done, by: dev, gates: [scope_respected], timeout_hours: 72 }\n",
-  "gestes": [
+  "_": "The console's gestures (S16-12) and the operation each one sends to POST /workflows/edit. The console checks that it emits them (tests/workflow-edition.test.tsx); the core, that it grafts them into this workflow (packages/core/tests/test_edition.py). A field renamed on one side turns the other red.",
+  "workflow": "apiVersion: choregos/v1\nkind: Workflow\nmetadata: { name: default-simple, version: 1 }\nactors:\n  refiner: { type: agent, role: refine, model: \"profile:standard\" }\n  owner: { type: human, group: product-owners, sla_hours: 24 }\n  dev: { type: agent, role: implement, model: \"profile:by_size\" }\nstates:\n  inbox: { display: To triage, kind: wait }\n  ready: { display: Ready }\n  archive: { display: Archived }\n  done: { display: Done, terminal: true }\ntransitions:\n  - { id: t-refine, from: inbox, to: ready, by: refiner }\n  - { id: t-implement, from: ready, to: done, by: dev, gates: [scope_respected], timeout_hours: 72 }\n",
+  "gestures": [
     {
-      "geste": "libelle",
+      "gesture": "stateLabel",
       "args": [
         "inbox",
-        "Nouvelles demandes"
+        "New requests"
       ],
       "operation": {
         "op": "set_state",
         "name": "inbox",
         "field": "display",
-        "value": "Nouvelles demandes"
+        "value": "New requests"
       }
     },
     {
-      "geste": "genre",
+      "gesture": "stateKind",
       "args": [
         "ready",
         "wait"
@@ -29,19 +29,19 @@
       }
     },
     {
-      "geste": "renommer",
+      "gesture": "renameState",
       "args": [
         "ready",
-        "pret"
+        "prepared"
       ],
       "operation": {
         "op": "rename_state",
         "from": "ready",
-        "to": "pret"
+        "to": "prepared"
       }
     },
     {
-      "geste": "retirerLEtat",
+      "gesture": "removeState",
       "args": [
         "archive"
       ],
@@ -51,37 +51,37 @@
       }
     },
     {
-      "geste": "ajouterUnEtat",
+      "gesture": "addState",
       "args": [
-        "revue",
-        "En revue"
+        "review",
+        "In review"
       ],
       "operation": {
         "op": "add_state",
-        "name": "revue",
+        "name": "review",
         "spec": {
-          "display": "En revue"
+          "display": "In review"
         }
       }
     },
     {
-      "geste": "ajouterUnEtat",
+      "gesture": "addState",
       "args": [
-        "revue",
-        "En revue",
+        "review",
+        "In review",
         "wait"
       ],
       "operation": {
         "op": "add_state",
-        "name": "revue",
+        "name": "review",
         "spec": {
-          "display": "En revue",
+          "display": "In review",
           "kind": "wait"
         }
       }
     },
     {
-      "geste": "ajouterUneTransition",
+      "gesture": "addTransition",
       "args": [
         "ready",
         "archive",
@@ -97,17 +97,17 @@
       }
     },
     {
-      "geste": "ajouterUneTransition",
+      "gesture": "addTransition",
       "args": [
         "ready",
         "archive",
         "owner",
-        "t-archiver"
+        "t-archive"
       ],
       "operation": {
         "op": "add_transition",
         "transition": {
-          "id": "t-archiver",
+          "id": "t-archive",
           "from": "ready",
           "to": "archive",
           "by": "owner"
@@ -115,7 +115,7 @@
       }
     },
     {
-      "geste": "retirerLaTransition",
+      "gesture": "removeTransition",
       "args": [
         "t-refine"
       ],
@@ -125,7 +125,7 @@
       }
     },
     {
-      "geste": "acteur",
+      "gesture": "transitionActor",
       "args": [
         "t-implement",
         "owner"
@@ -138,7 +138,7 @@
       }
     },
     {
-      "geste": "delai",
+      "gesture": "transitionTimeout",
       "args": [
         "t-implement",
         48
@@ -151,7 +151,7 @@
       }
     },
     {
-      "geste": "delai",
+      "gesture": "transitionTimeout",
       "args": [
         "t-implement",
         null
@@ -164,7 +164,7 @@
       }
     },
     {
-      "geste": "ajouterUneGarantie",
+      "gesture": "addGate",
       "args": [
         "t-refine",
         "outputs_present"
@@ -176,7 +176,7 @@
       }
     },
     {
-      "geste": "ajouterUneGarantie",
+      "gesture": "addGate",
       "args": [
         "t-implement",
         "ci_green"
@@ -188,7 +188,7 @@
       }
     },
     {
-      "geste": "retirerUneGarantie",
+      "gesture": "removeGate",
       "args": [
         "t-implement",
         "scope_respected"
@@ -200,7 +200,7 @@
       }
     },
     {
-      "geste": "addActor",
+      "gesture": "addActor",
       "args": [
         "reviewer",
         {
@@ -220,7 +220,7 @@
       }
     },
     {
-      "geste": "removeActor",
+      "gesture": "removeActor",
       "args": [
         "owner"
       ],
@@ -230,7 +230,7 @@
       }
     },
     {
-      "geste": "addActor",
+      "gesture": "addActor",
       "args": [
         "router",
         {
@@ -288,7 +288,7 @@
       }
     },
     {
-      "geste": "actorField",
+      "gesture": "actorField",
       "args": [
         "owner",
         "sla_hours",
@@ -303,7 +303,7 @@
       }
     },
     {
-      "geste": "actorField",
+      "gesture": "actorField",
       "args": [
         "owner",
         "state",
@@ -324,7 +324,7 @@
       }
     },
     {
-      "geste": "actorField",
+      "gesture": "actorField",
       "args": [
         "owner",
         "questions",
@@ -359,7 +359,7 @@
       }
     },
     {
-      "geste": "actorField",
+      "gesture": "actorField",
       "args": [
         "owner",
         "sla_hours",
@@ -373,7 +373,7 @@
       }
     },
     {
-      "geste": "transitionField",
+      "gesture": "transitionField",
       "args": [
         "t-implement",
         "task",
@@ -408,7 +408,7 @@
       }
     },
     {
-      "geste": "transitionField",
+      "gesture": "transitionField",
       "args": [
         "t-refine",
         "outputs",
@@ -427,7 +427,7 @@
       }
     },
     {
-      "geste": "transitionField",
+      "gesture": "transitionField",
       "args": [
         "t-implement",
         "timeout_hours",
@@ -441,7 +441,7 @@
       }
     },
     {
-      "geste": "workflowField",
+      "gesture": "workflowField",
       "args": [
         "description",
         "Requests of the HR desk."
@@ -454,7 +454,7 @@
       }
     },
     {
-      "geste": "workflowField",
+      "gesture": "workflowField",
       "args": [
         "initial",
         "inbox"

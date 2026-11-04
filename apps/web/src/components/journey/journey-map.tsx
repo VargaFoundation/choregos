@@ -28,20 +28,20 @@ import { StepPanel } from "./step-panel";
 
 /** What a status says, in so many words: colour never carries the meaning alone. */
 export const STATUS_LABEL: Record<StepStatus, string> = {
-  a_venir: "not reached",
-  en_cours: "in progress",
-  attend: "waiting for a person",
-  fait: "done",
-  renvoye: "sent back",
-  echoue: "failed",
+  upcoming: "not reached",
+  running: "in progress",
+  waiting: "waiting for a person",
+  done: "done",
+  sent_back: "sent back",
+  failed: "failed",
 };
 
 const STATUS_LEGEND: [StepStatus, string][] = [
-  ["en_cours", "in progress"],
-  ["attend", "waiting for a person"],
-  ["renvoye", "sent back"],
-  ["fait", "done"],
-  ["echoue", "failed"],
+  ["running", "in progress"],
+  ["waiting", "waiting for a person"],
+  ["sent_back", "sent back"],
+  ["done", "done"],
+  ["failed", "failed"],
 ];
 
 const SPEEDS: Speed[] = [0.5, 1, 2];
@@ -87,7 +87,7 @@ export function JourneyMap({
   const story = reader.mode === "replay" ? narrate(model, instant.latest) : "";
 
   return (
-    <section className="space-y-3" data-testid="parcours" aria-label={`Journey of ${journey.tracker_key ?? "the work item"}`}>
+    <section className="space-y-3" data-testid="journey" aria-label={`Journey of ${journey.tracker_key ?? "the work item"}`}>
       <Header journey={journey} model={model} instant={instant} />
       <ReaderBar reader={reader} frames={frames} story={story} />
       <div className={cn("grid gap-4", selectedStep && "xl:grid-cols-[minmax(0,1fr)_26rem]")}>
@@ -162,7 +162,7 @@ export function SnakeMap({
   const [frame, width] = useWidth(initialWidth);
   const placement = useMemo(() => place(model, width, true), [model, width]);
   return (
-    <section className="space-y-3" data-testid="carte-en-serpentin" aria-label="Workflow diagram">
+    <section className="space-y-3" data-testid="serpentine-map" aria-label="Workflow diagram">
       <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted" aria-label="Who carries each step">
         {[
           ...KIND_LEGEND,
@@ -221,11 +221,11 @@ function Header({ journey, model, instant }: { journey: WorkItemJourney; model: 
   const cost = journey.steps.reduce((sum, s) => sum + (s.cost_usd ?? 0), 0);
   const activeSteps = model.steps.concat(model.detours.map((d) => d.step)).filter((e) => {
     const s = instant.steps.get(e.id)?.status;
-    return s === "en_cours" || s === "attend";
+    return s === "running" || s === "waiting";
   });
   return (
-    <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm" data-testid="parcours-maintenant">
-      <span className="text-ink-muted" data-donnee>
+    <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm" data-testid="journey-now">
+      <span className="text-ink-muted" data-verbatim>
         {journey.workflow_name} v{journey.workflow_version}
       </span>
       <span>
@@ -235,7 +235,7 @@ function Header({ journey, model, instant }: { journey: WorkItemJourney; model: 
             {" "}
             ·{" "}
             {activeSteps
-              .map((e) => `${e.label} ${instant.steps.get(e.id)?.status === "attend" ? "awaited" : "working"}`)
+              .map((e) => `${e.label} ${instant.steps.get(e.id)?.status === "waiting" ? "awaited" : "working"}`)
               .join(", ")}
           </span>
         )}
@@ -303,7 +303,7 @@ function ReaderBar({ reader, frames, story }: { reader: ReturnType<typeof useRea
           onClick={reader.live}
           aria-label="Live: follow the work item"
         >
-          <span aria-hidden className={cn("inline-block size-1.5 rounded-full bg-current", live && "parcours-pouls-point")} />
+          <span aria-hidden className={cn("inline-block size-1.5 rounded-full bg-current", live && "journey-pulse-dot")} />
           Live
         </button>
         {!live && frames.length > 0 && (
@@ -317,7 +317,7 @@ function ReaderBar({ reader, frames, story }: { reader: ReturnType<typeof useRea
               className="flex-1 accent-[var(--choregos-accent)]"
               aria-label="Moment of the journey"
             />
-            <span className="whitespace-nowrap font-mono" data-testid="parcours-moment">
+            <span className="whitespace-nowrap font-mono" data-testid="journey-moment">
               {reader.index + 1} / {frames.length} · {shortDate(new Date(frames[reader.index]!).toISOString())}
             </span>
           </label>
@@ -331,7 +331,7 @@ function ReaderBar({ reader, frames, story }: { reader: ReturnType<typeof useRea
           ))}
         </ul>
       </div>
-      <p className={cn("min-h-5 text-sm", story ? "text-ink" : "text-ink-muted")} aria-live="polite" data-testid="parcours-recit">
+      <p className={cn("min-h-5 text-sm", story ? "text-ink" : "text-ink-muted")} aria-live="polite" data-testid="journey-story">
         {story || (live ? "Live: the map follows the work item. Replay plays its life back, event by event." : "")}
       </p>
     </div>
@@ -344,7 +344,7 @@ function ReaderBar({ reader, frames, story }: { reader: ReturnType<typeof useRea
  * what runs is filled; what is done wears neither.
  */
 function StatusDot({ status }: { status: StepStatus }) {
-  const alive = status === "en_cours" || status === "attend";
+  const alive = status === "running" || status === "waiting";
   return (
     <span
       aria-hidden
@@ -426,21 +426,21 @@ function Diagram({
               <g
                 key={`${segment.state}-${k}`}
                 data-segment={segment.state}
-                data-statut={active ? "actif" : travelled ? "parcouru" : "a_venir"}
+                data-status={active ? "active" : travelled ? "travelled" : "upcoming"}
               >
                 <path
                   d={segment.d}
                   fill="none"
-                  stroke={active ? COLOUR.en_cours : travelled ? "var(--choregos-ink-muted)" : "var(--choregos-line-strong)"}
+                  stroke={active ? COLOUR.running : travelled ? "var(--choregos-ink-muted)" : "var(--choregos-line-strong)"}
                   strokeWidth={active || travelled ? 3 : 2}
                   strokeLinecap="round"
                   // Once crossed, the stretch is drawn: `pathLength` brings its length to 1, the animation does the rest.
                   pathLength={active || travelled ? 1 : undefined}
                   strokeDasharray={active || travelled ? 1 : undefined}
-                  className={cn("parcours-trait", (active || travelled) && "parcours-trace")}
+                  className={cn("journey-stroke", (active || travelled) && "journey-trace")}
                 />
                 {active && (
-                  <circle r={4.5} fill={COLOUR.en_cours} className="parcours-anime">
+                  <circle r={4.5} fill={COLOUR.running} className="journey-animated">
                     <animateMotion dur="1.8s" repeatCount="indefinite" path={segment.d} />
                   </circle>
                 )}
@@ -453,7 +453,7 @@ function Diagram({
                   textAnchor={label.anchor}
                   fontSize={11}
                   fontWeight={active ? 600 : 400}
-                  fill={active ? COLOUR.en_cours : "var(--choregos-ink-muted)"}
+                  fill={active ? COLOUR.running : "var(--choregos-ink-muted)"}
                 >
                   <title>{model.name(segment.state)}</title>
                   {truncate(
@@ -476,7 +476,7 @@ function Diagram({
               latest: false,
             };
             return (
-              <g key={arc.key} data-arc={arc.key} data-fois={taken.times}>
+              <g key={arc.key} data-arc={arc.key} data-times={taken.times}>
                 <path
                   d={route.d}
                   fill="none"
@@ -485,10 +485,10 @@ function Diagram({
                   strokeDasharray={taken.times > 0 ? undefined : "4 5"}
                   opacity={taken.times > 0 ? 1 : 0.55}
                   markerEnd={`url(#${arrowId}-${taken.times > 0 ? "taken" : "structure"})`}
-                  className="parcours-trait"
+                  className="journey-stroke"
                 />
                 {taken.latest && (
-                  <circle r={4} fill={SENT_BACK_COLOUR} className="parcours-anime">
+                  <circle r={4} fill={SENT_BACK_COLOUR} className="journey-animated">
                     <animateMotion dur="1.4s" repeatCount="indefinite" path={route.d} />
                   </circle>
                 )}
@@ -570,7 +570,7 @@ function EndMark({ point, atteinte = false }: { point: Point; atteinte?: boolean
       width={6}
       height={40}
       rx={3}
-      fill={atteinte ? COLOUR.fait : "var(--choregos-ink-muted)"}
+      fill={atteinte ? COLOUR.done : "var(--choregos-ink-muted)"}
     />
   );
 }
@@ -602,12 +602,12 @@ function Box({
   structural?: boolean;
 }) {
   const colour = structural ? KIND_STROKE[step.kind] : COLOUR[state.status];
-  const alive = state.status === "en_cours" || state.status === "attend";
-  const filled = structural || state.status !== "a_venir";
+  const alive = state.status === "running" || state.status === "waiting";
+  const filled = structural || state.status !== "upcoming";
   const fill = structural ? "var(--choregos-surface)" : statusFill(state.status);
   const { x, y } = point;
   return (
-    <g data-etape={step.id} data-statut={state.status}>
+    <g data-step={step.id} data-status={state.status}>
       {alive && (
         <circle
           cx={x}
@@ -616,7 +616,7 @@ function Box({
           fill="none"
           stroke={colour}
           strokeWidth={2}
-          className={state.status === "attend" ? "parcours-pouls-lent" : "parcours-pouls"}
+          className={state.status === "waiting" ? "journey-pulse-slow" : "journey-pulse"}
         />
       )}
       {chosen && <circle cx={x} cy={y} r={RADIUS + 7} fill="none" stroke="var(--choregos-focus)" strokeWidth={2} />}
@@ -630,7 +630,7 @@ function Box({
           fill={fill}
           stroke={colour}
           strokeWidth={3}
-          className="parcours-forme"
+          className="journey-shape"
         />
       ) : step.kind === "decision" ? (
         // A decision is a diamond, the shape a flowchart gives a question (ADR 0121).
@@ -640,7 +640,7 @@ function Box({
           stroke={colour}
           strokeWidth={3}
           strokeLinejoin="round"
-          className="parcours-forme"
+          className="journey-shape"
         />
       ) : step.kind === "train" ? (
         <rect
@@ -652,10 +652,10 @@ function Box({
           fill={fill}
           stroke={colour}
           strokeWidth={3}
-          className="parcours-forme"
+          className="journey-shape"
         />
       ) : (
-        <circle cx={x} cy={y} r={RADIUS} fill={fill} stroke={colour} strokeWidth={3} className="parcours-forme" />
+        <circle cx={x} cy={y} r={RADIUS} fill={fill} stroke={colour} strokeWidth={3} className="journey-shape" />
       )}
       {step.kind === "human" ? (
         <g fill={filled ? colour : "var(--choregos-ink-muted)"}>
@@ -715,7 +715,7 @@ function detailOf(step: Step, state: StepState, structural = false): string | nu
     return failures > 0 ? `✗ ${failures} of ${evidence.tests_run} tests fail` : `✓ ${evidence.tests_run} tests pass`;
   }
   if (step.kind === "human") {
-    if (state.status === "attend" && last?.due_at) return `due ${relative(last.due_at)}`;
+    if (state.status === "waiting" && last?.due_at) return `due ${relative(last.due_at)}`;
     if (last?.decided_by) return `${last.status} by ${last.decided_by.split("@")[0]}`;
   }
   if (step.kind === "train" && last)
@@ -723,7 +723,7 @@ function detailOf(step: Step, state: StepState, structural = false): string | nu
   if (step.kind === "platform" && step.gates.length) {
     // A workflow's map has no work item: nothing is met or unmet yet, and empty boxes read as failures.
     if (structural) return `waits for: ${step.gates.map((g) => g.replace(/_/g, " ")).join(", ")}`;
-    const tick = state.status === "fait" ? "☑" : "☐";
+    const tick = state.status === "done" ? "☑" : "☐";
     return step.gates.map((g) => `${tick} ${g.replace(/_/g, " ")}`).join("  ");
   }
   return null;
@@ -732,7 +732,7 @@ function detailOf(step: Step, state: StepState, structural = false): string | nu
 function roundOf(step: Step, state: StepState): string | null {
   if (state.rounds < 2) return null;
   const sur = step.maxRounds ? ` of ${step.maxRounds}` : "";
-  if (state.status === "fait")
+  if (state.status === "done")
     return `${state.verdict === "approve" || step.kind === "human" ? "approved" : "passed"} in round ${state.rounds}`;
   return `round ${state.rounds}${sur}`;
 }
@@ -779,9 +779,9 @@ function StepButton({
   return (
     <button
       type="button"
-      data-testid={`etape-${step.id}`}
-      data-statut={state.status}
-      data-donnee
+      data-testid={`step-${step.id}`}
+      data-status={state.status}
+      data-verbatim
       data-flow={flow}
       aria-describedby={descriptionId}
       aria-pressed={chosen}
@@ -806,7 +806,7 @@ function StepButton({
       </span>
       {outputs && (
         <span
-          data-testid={`sorties-${step.id}`}
+          data-testid={`outputs-${step.id}`}
           className="mx-auto mt-0.5 line-clamp-2 block w-fit max-w-full break-words bg-surface px-1 text-[11px] leading-4 text-ink-muted"
         >
           {outputs}
@@ -819,7 +819,7 @@ function StepButton({
               data-testid={`tour-${step.id}`}
               className={cn(
                 "whitespace-nowrap rounded-full border px-1.5 text-[11px] font-medium",
-                state.status === "fait"
+                state.status === "done"
                   ? "border-succeeded-line bg-succeeded-soft text-succeeded-ink"
                   : "border-retrying-line bg-retrying-soft text-retrying-ink",
               )}
@@ -831,11 +831,11 @@ function StepButton({
             <span
               className={cn(
                 "min-w-0 truncate",
-                state.status === "echoue" || /fail/.test(detail)
+                state.status === "failed" || /fail/.test(detail)
                   ? "text-failed-ink"
-                  : state.status === "renvoye" || /changes/.test(detail)
+                  : state.status === "sent_back" || /changes/.test(detail)
                     ? "text-retrying-ink"
-                    : state.status === "fait"
+                    : state.status === "done"
                       ? "text-succeeded-ink"
                       : "text-ink-muted",
               )}
@@ -852,7 +852,7 @@ function StepButton({
 function Exceptions({ model, instant }: { model: JourneyModel; instant: Instant }) {
   if (model.exceptions.length === 0) return null;
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-ink-muted" data-testid="parcours-exceptions">
+    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-ink-muted" data-testid="journey-exceptions">
       <span>When something goes wrong:</span>
       {model.exceptions.map((exception) => {
         const here = instant.state === exception.id;
@@ -860,7 +860,7 @@ function Exceptions({ model, instant }: { model: JourneyModel; instant: Instant 
         return (
           <span
             key={exception.id}
-            data-statut={here ? "actif" : gone ? "passe" : "a_venir"}
+            data-status={here ? "active" : gone ? "past" : "upcoming"}
             className={cn(
               "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5",
               here
@@ -870,7 +870,7 @@ function Exceptions({ model, instant }: { model: JourneyModel; instant: Instant 
                   : "border-line text-ink-muted",
             )}
           >
-            {here && <span aria-hidden className="parcours-pouls-point inline-block size-1.5 rounded-full bg-current" />}
+            {here && <span aria-hidden className="journey-pulse-dot inline-block size-1.5 rounded-full bg-current" />}
             {exception.display}
             {here ? " — here now" : gone ? " — went through" : ""}
           </span>
@@ -898,7 +898,7 @@ function Phases({
       <ol className="flex flex-wrap gap-2">
         {model.phases.map((phase, i) => {
           const statuses = phase.steps.map((id) => instant.steps.get(id)?.status);
-          const done = statuses.every((s) => s === "fait");
+          const done = statuses.every((s) => s === "done");
           const current = instant.phase === i && !done;
           const start = phaseStart(journey, model, phase);
           const index = start === null ? -1 : frames.findIndex((t) => t >= start);

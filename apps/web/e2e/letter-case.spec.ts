@@ -4,7 +4,7 @@ import { expect, test } from "@playwright/test";
  * The console's case (ADR 0048, which supersedes ADR 0042): everything the console writes — a
  * heading, a button, a tab, a link of the navigation, a table header, a field's label, a sentence —
  * is in sentence case: it starts with a capital. Data keeps its own case (a project's name, a
- * state's label, an actor, a ticket's title): it is marked `data-donnee`. An identifier or a code
+ * state's label, an actor, a ticket's title): it is marked `data-verbatim`. An identifier or a code
  * (`supplier-agent.order_laptop`, `mcp:write`, `owner/repo`) keeps its case too.
  */
 const PAGES = [
@@ -62,41 +62,41 @@ const PAGES = [
 ];
 
 /** Names written in lowercase by their owners: they keep it, wherever they stand. */
-const NOMS_EN_MINUSCULES = /^(claude\.ai|kubectl|git|npm|pnpm|uv|curl|helm|e\.g\.|i\.e\.|vs\b)/;
+const LOWERCASE_NAMES = /^(claude\.ai|kubectl|git|npm|pnpm|uv|curl|helm|e\.g\.|i\.e\.|vs\b)/;
 
 test("everything the console writes is in sentence case; data and codes keep theirs", async ({ page }) => {
   test.setTimeout(180_000);
-  const ecarts: string[] = [];
-  for (const chemin of PAGES) {
-    await page.goto(chemin);
+  const deviations: string[] = [];
+  for (const path of PAGES) {
+    await page.goto(path);
     await page.waitForLoadState("networkidle");
-    const trouves = await page.evaluate((minuscules) => {
-      const noms = new RegExp(minuscules);
+    const found = await page.evaluate((lowercase) => {
+      const names = new RegExp(lowercase);
       const visible = (e: Element) => (e as HTMLElement).offsetParent !== null || e.getClientRects().length > 0;
-      const donnee = (e: Element) => e.closest("[data-donnee]") !== null;
-      const premiereLigne = (e: Element) => ((e as HTMLElement).innerText ?? "").trim().split("\n")[0]!.trim();
+      const isData = (e: Element) => e.closest("[data-verbatim]") !== null;
+      const firstLine = (e: Element) => ((e as HTMLElement).innerText ?? "").trim().split("\n")[0]!.trim();
       // A code or an identifier: `mcp:write`, `owner/repo`, `supplier-agent.order_laptop`, `#124`, a mail.
-      const code = (e: Element, texte: string) =>
-        /^[a-z0-9_-]+[._:/@#][a-z0-9]/i.test(texte) ||
-        /^[a-z0-9]+(?:[_-][a-z0-9]+)+$/.test(texte) ||
+      const code = (e: Element, text: string) =>
+        /^[a-z0-9_-]+[._:/@#][a-z0-9]/i.test(text) ||
+        /^[a-z0-9]+(?:[_-][a-z0-9]+)+$/.test(text) ||
         e.firstElementChild?.tagName === "CODE" ||
-        (e.firstElementChild !== null && e.firstElementChild.closest("[data-donnee]") !== null && premiereLigne(e.firstElementChild) !== "" && texte.startsWith(premiereLigne(e.firstElementChild)));
-      const sortie: string[] = [];
-      const libelles =
+        (e.firstElementChild !== null && e.firstElementChild.closest("[data-verbatim]") !== null && firstLine(e.firstElementChild) !== "" && text.startsWith(firstLine(e.firstElementChild)));
+      const out: string[] = [];
+      const labels =
         "button, [role=tab], [role=menuitem], nav a, th, summary, legend, label > span:first-child, h1, h2, h3, h4, dt, caption";
-      for (const e of document.querySelectorAll(libelles)) {
-        if (!visible(e) || donnee(e)) continue;
-        const texte = premiereLigne(e);
-        if (/^[a-z]/.test(texte) && !noms.test(texte) && !code(e, texte)) sortie.push(`label « ${texte.slice(0, 70)} »`);
+      for (const e of document.querySelectorAll(labels)) {
+        if (!visible(e) || isData(e)) continue;
+        const text = firstLine(e);
+        if (/^[a-z]/.test(text) && !names.test(text) && !code(e, text)) out.push(`label "${text.slice(0, 70)}"`);
       }
       for (const e of document.querySelectorAll("p, li > span:first-child, [role=status], [role=alert]")) {
-        if (!visible(e) || donnee(e)) continue;
-        const texte = premiereLigne(e);
-        if (/^[a-z]/.test(texte) && !noms.test(texte) && !code(e, texte)) sortie.push(`text « ${texte.slice(0, 70)} »`);
+        if (!visible(e) || isData(e)) continue;
+        const text = firstLine(e);
+        if (/^[a-z]/.test(text) && !names.test(text) && !code(e, text)) out.push(`text "${text.slice(0, 70)}"`);
       }
-      return sortie;
-    }, NOMS_EN_MINUSCULES.source);
-    for (const ecart of new Set(trouves)) ecarts.push(`${chemin} : ${ecart}`);
+      return out;
+    }, LOWERCASE_NAMES.source);
+    for (const deviation of new Set(found)) deviations.push(`${path}: ${deviation}`);
   }
-  expect(ecarts).toEqual([]);
+  expect(deviations).toEqual([]);
 });

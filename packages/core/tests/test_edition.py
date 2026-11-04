@@ -419,14 +419,13 @@ def test_several_operations_undo_in_the_opposite_order() -> None:
 
 # The console (S16-12) emits these operations: each of its gestures must pass the core's door. The same
 # file is read by `apps/web/tests/workflow-edition.test.tsx`, which checks that the console emits them.
-# The web fixture owns these keys and its file name (S45-29).  # lang: fr-ok
 GESTURES = json.loads(
-    (Path(__file__).parents[3] / "apps/web/tests/fixtures/gestes-de-la-console.json").read_text("utf-8")
+    (Path(__file__).parents[3] / "apps/web/tests/fixtures/console-gestures.json").read_text("utf-8")
 )
 
 
 @pytest.mark.parametrize(
-    "gesture", GESTURES["gestes"], ids=[f"{g['geste']}-{i}" for i, g in enumerate(GESTURES["gestes"])]
+    "gesture", GESTURES["gestures"], ids=[f"{g['gesture']}-{i}" for i, g in enumerate(GESTURES["gestures"])]
 )
 def test_each_console_gesture_grafts_and_undoes(gesture: dict[str, Any]) -> None:
     text = GESTURES["workflow"]

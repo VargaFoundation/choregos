@@ -78,7 +78,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
       <Breadcrumbs steps={[{ href: `/p/${slug}/board`, label: "Board" }, { label: data.tracker_key }]} />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 space-y-1.5">
-          <Heading as="h1" size="xl" data-donnee>
+          <Heading as="h1" size="xl" data-verbatim>
             {data.title}
           </Heading>
           {/* Which workflow, in its colour, and where the ticket stands in it (S55-05). */}
@@ -91,7 +91,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
               />
             )}
             <StateBadge state={data.state} display={data.state_display} outcome={data.state_outcome} />
-            <span className="font-mono text-ink-muted" data-donnee>
+            <span className="font-mono text-ink-muted" data-verbatim>
               {data.tracker_key}
             </span>
           </div>
@@ -300,7 +300,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
                   <span>{entry.title}</span>
                 </p>
                 {entry.detail && (
-                  <p className="text-xs text-ink-muted" data-donnee>
+                  <p className="text-xs text-ink-muted" data-verbatim>
                     {entry.detail}
                   </p>
                 )}

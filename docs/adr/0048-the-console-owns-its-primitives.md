@@ -40,8 +40,8 @@ console; "by Varga Foundation" stays as a footer line.**
    menu entries, table headers, field labels, badges, empty states and help text start with a
    capital and continue in lowercase ("New project", "Approve", "Release trains"). Data keeps its
    case (a project's name, a state's label, an identifier, a product name), as ADR 0042 §3 already
-   said; it is marked `data-donnee` where the console shows it in a place a label could be.
-   `e2e/la-casse.spec.ts` refuses a label or a sentence the console writes that starts in
+   said; it is marked `data-verbatim` where the console shows it in a place a label could be.
+   `e2e/letter-case.spec.ts` refuses a label or a sentence the console writes that starts in
    lowercase.
 4. **Sans for what is read, mono for what is compared.** Geist carries text, titles, navigation,
    buttons, captions and table headers; Geist Mono carries identifiers, code, numbers that line up

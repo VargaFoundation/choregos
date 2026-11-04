@@ -11,10 +11,10 @@ import {
   CLIENTS,
   type ClientId,
   clientOAuth,
-  etatDuClient,
+  clientState,
   extrait,
   PLACEHOLDER,
-  urlDeLaPorte,
+  gateUrl,
 } from "@/lib/integrations";
 import type { ApiTokenCreated } from "@/lib/types";
 
@@ -34,7 +34,7 @@ const DUREES = [7, 30, 90] as const;
 export function IntegrationsPanel({ client, projet, base }: { client: ClientId; projet?: string; base: string }) {
   const scope = projet ? qualify(projet) : undefined;
   const infos = useQuery({ queryKey: ["integrations"], queryFn: () => api.integrations(), staleTime: Infinity });
-  const url = infos.data ? urlDeLaPorte(infos.data.mcp_url, scope) : "…";
+  const url = infos.data ? gateUrl(infos.data.mcp_url, scope) : "…";
   const [ecriture, setEcriture] = useState(false);
   const [duree, setDuree] = useState<(typeof DUREES)[number]>(30);
   const [frappe, setFrappe] = useState<ApiTokenCreated | null>(null);
@@ -44,7 +44,7 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
   const generique = CLIENTS.find((c) => c.id === client) ?? CLIENTS[0]!;
   // Single sign-on first, when the IdP has a client for this one; the token on request.
   const sso = clientOAuth(client, oauth) !== null && !parJeton;
-  const info = sso ? etatDuClient(generique, url, oauth) : generique;
+  const info = sso ? clientState(generique, url, oauth) : generique;
   const code = extrait(client, url, frappe?.token ?? PLACEHOLDER, sso ? oauth : null);
   const withMcpToken = info.auth === "MCP token";
   const alsoByToken = clientOAuth(client, oauth) !== null && generique.auth === "MCP token";
@@ -190,7 +190,7 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
               </tr>
             </thead>
             <tbody>
-              {CLIENTS.map((c) => etatDuClient(c, url, oauth)).map((c) => (
+              {CLIENTS.map((c) => clientState(c, url, oauth)).map((c) => (
                 <tr key={c.id}>
                   <td>{c.label}</td>
                   <td className="text-xs">{c.calls_from}</td>

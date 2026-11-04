@@ -138,7 +138,7 @@ function Agents() {
             )}
           </div>
         ) : (
-          <Table data-testid="registre">
+          <Table data-testid="registry">
             <THead>
               <TR>
                 <TH>Agent</TH>

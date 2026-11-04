@@ -73,7 +73,7 @@ export default function SkillsPage() {
           </Empty>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm" data-testid="bibliotheque">
+            <table className="w-full text-sm" data-testid="library">
               <thead className="text-left text-xs text-ink-muted">
                 <tr>
                   <th className="py-1 font-normal">Skill</th>

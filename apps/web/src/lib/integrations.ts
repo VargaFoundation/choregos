@@ -88,14 +88,12 @@ export function clientState(info: ClientInfo, url: string, oauth?: OAuth | null)
   }
   return { ...info, auth: "OAuth", status: "ready" };
 }
-export const etatDuClient = clientState; // lang: fr-ok alias:internal
 
 /** The URL of a project's gate: `/mcp/projects/org:slug`. Without a project, the gate of all. */
 export function gateUrl(base: string, projet?: string | null): string {
   const root = base.replace(/\/+$/, "");
   return projet ? `${root}/projects/${projet}` : root;
 }
-export const urlDeLaPorte = gateUrl; // lang: fr-ok alias:internal
 
 /** The platform's origin, derived from the gate's URL (`.../mcp`). */
 export function origineDe(urlMcp: string): string {

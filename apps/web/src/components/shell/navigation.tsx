@@ -306,7 +306,7 @@ export function projectTrail(slug: string, pathname: string): BreadcrumbStep[] |
     { href: section.href, label: section.label },
     // A page the console names ("Library") is written as a label; anything else is data — a
     // workflow's name, an action's id — shown as written.
-    { label: page ?? <span data-donnee>{decodeURIComponent(reste[0]!)}</span> },
+    { label: page ?? <span data-verbatim>{decodeURIComponent(reste[0]!)}</span> },
   ];
 }
 
@@ -418,7 +418,7 @@ function ScopeHeader({ scope, compact, rail }: { scope: Scope; compact: boolean;
     >
       <ArrowLeft aria-hidden className="size-4 shrink-0" strokeWidth={1.75} />
       <span className={cn(compact && "rail:sr-only")}>
-        All of <span data-donnee className="font-mono">{org}</span>
+        All of <span data-verbatim className="font-mono">{org}</span>
       </span>
     </Link>
   );
@@ -433,7 +433,7 @@ function ScopeHeader({ scope, compact, rail }: { scope: Scope; compact: boolean;
           aria-label={`Project ${name}: switch project`}
         >
           <FolderKanban aria-hidden className="size-4 shrink-0 text-ink-muted" strokeWidth={1.75} />
-          <span data-donnee className="min-w-0 flex-1 truncate">
+          <span data-verbatim className="min-w-0 flex-1 truncate">
             {name}
           </span>
           <ChevronsUpDown aria-hidden className="size-4 shrink-0 text-ink-muted" strokeWidth={1.75} />
@@ -452,7 +452,7 @@ function ScopeHeader({ scope, compact, rail }: { scope: Scope; compact: boolean;
                   p.slug === scope.slug ? "font-medium text-ink" : "text-ink-muted",
                 )}
               >
-                <span data-donnee>{p.name ?? p.slug}</span>
+                <span data-verbatim>{p.name ?? p.slug}</span>
               </Link>
             </li>
           ))}

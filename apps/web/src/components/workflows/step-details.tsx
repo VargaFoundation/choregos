@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import Link from "next/link";
-import { ActorIcon, Badge, LEGENDE, PhraseDuMoteur } from "@/components/ui";
-import { canarySentence, sourceLabel } from "@/components/agents/registre";
+import { ActorIcon, Badge, LEGENDE, EngineSentence } from "@/components/ui";
+import { canarySentence, sourceLabel } from "@/components/agents/registry";
 import { humanise } from "@/components/journey/model";
 import { cn } from "@/lib/cn";
 import type { AgentResolution, ArtifactFlow, ProcessStep } from "@/lib/types";
@@ -76,7 +76,7 @@ function Source({ name, flow, parId }: { name: string; flow: ArtifactFlow | unde
   if (flow.origin === "field") return <span>a work item field</span>;
   if (flow.origin === "missing")
     return (
-      <span className="text-retrying-ink" data-testid={`manque-${name}`}>
+      <span className="text-retrying-ink" data-testid={`missing-${name}`}>
         nothing produces it — {consequenceOfAMissingInput(name)}
       </span>
     );
@@ -184,7 +184,7 @@ function StepDetailsCard({
           <>
             <ActorIcon kind={ACTOR_KIND_ICON[step.actor_type] ?? "system"} />
             <span className="text-ink-muted">
-              <PhraseDuMoteur texte={step.who} />
+              <EngineSentence texte={step.who} />
             </span>
           </>
         )}

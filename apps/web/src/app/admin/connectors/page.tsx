@@ -25,7 +25,7 @@ import { Badge, Button, Card, Empty, ErrorNote, Input, Select } from "@/componen
 import { api } from "@/lib/api";
 import { connectorTarget, presetOfMcpUrl } from "@/lib/procedures";
 import { useSession } from "@/lib/session";
-import { libelleDeSorte, isOrgDeclarable } from "@/lib/sortes-de-connecteurs";
+import { kindLabel, isOrgDeclarable } from "@/lib/connector-kinds";
 import type { ConnectorOperation, ConnectorSecretState, OperationPatch, OrgConnector } from "@/lib/types";
 import { Confirmation } from "@/components/confirmed-gesture";
 
@@ -84,7 +84,7 @@ export default function OrgConnectorsPage() {
       </aside>
       {arrival && (
         <p className="max-w-3xl text-sm" role="status" data-testid="installed-from-catalogue">
-          Installed <strong data-donnee>{arrival.name}</strong> from the catalogue.
+          Installed <strong data-verbatim>{arrival.name}</strong> from the catalogue.
           {arrival.discovery ? ` Tools: ${arrival.discovery}.` : ""} Open the tools your agents need below.
         </p>
       )}
@@ -96,7 +96,7 @@ export default function OrgConnectorsPage() {
         </p>
         <Glossary ici="connectors" ouvert />
       </div>
-      <section className="space-y-3" aria-labelledby="business" data-testid="section-metier">
+      <section className="space-y-3" aria-labelledby="business" data-testid="business-section">
         <h2 id="business" className="text-lg font-semibold">
           Business systems (API) ({metier.length})
         </h2>
@@ -215,7 +215,7 @@ function Instance({
   }
   const action = (
     <span className="inline-flex items-center gap-2">
-      <Badge tone="neutral">{libelleDeSorte(instance.kind)}</Badge>
+      <Badge tone="neutral">{kindLabel(instance.kind)}</Badge>
       {instance.type === "mcp-gateway" && (
         <Badge tone="accent" data-testid={`route-${instance.name}`}>
           via gateway{typeof instance.config?.server === "string" ? `: ${instance.config.server}` : ""}
@@ -247,7 +247,7 @@ function Instance({
       {erreur && <ErrorNote>{erreur}</ErrorNote>}
       {instance.server && (
         <p className="mb-2 text-sm text-ink-muted" data-testid={`plugin-server-${instance.name}`}>
-          The server of the plugin <strong data-donnee>{instance.server.plugin}</strong> {instance.server.version}, run by
+          The server of the plugin <strong data-verbatim>{instance.server.plugin}</strong> {instance.server.version}, run by
           the platform. Its settings are the server&apos;s own; until they are complete it has no replica.{" "}
           <Link href="/catalogue/plugins" className="underline">
             Plugins
@@ -443,7 +443,7 @@ function Operation({ org, connecteur, operation }: { org: string; connecteur: st
       <td className="py-2">
         <code>{operation.name}</code>
         {operation.description && (
-          <p className="text-xs text-ink-muted" data-donnee>
+          <p className="text-xs text-ink-muted" data-verbatim>
             {operation.description}
           </p>
         )}
@@ -721,7 +721,7 @@ function DeclareInstance({ org }: { org: string }) {
                   <optgroup key={famille.titre} label={famille.titre}>
                     {famille.types.map((t) => (
                       <option key={`${t.kind}/${t.type}`} value={`${t.kind}/${t.type}`}>
-                        {t.display} — {libelleDeSorte(t.kind)}
+                        {t.display} — {kindLabel(t.kind)}
                       </option>
                     ))}
                   </optgroup>
@@ -826,7 +826,7 @@ function Availability({ org, instance }: { org: string; instance: OrgConnector }
         <Confirmation
           question={
             <>
-              Every project loses <strong data-donnee>{instance.name}</strong> until it is enabled for it.
+              Every project loses <strong data-verbatim>{instance.name}</strong> until it is enabled for it.
             </>
           }
           confirmer="Restrict to selected projects"

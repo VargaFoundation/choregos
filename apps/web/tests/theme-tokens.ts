@@ -4,7 +4,7 @@
  * Node only (reads the stylesheet through postcss): used by `scripts/export-theme-defaults.mts`
  * and by the drift test, never by the browser bundle. Reuses the resolver of the contrast tests.
  */
-import { couleur, jetonsDuMode, type Mode } from "./tokens.ts";
+import { resolveColour, tokensOfMode, type Mode } from "./tokens.ts";
 
 /** Custom properties of `theme.css` that are not a themable colour. */
 const NOT_A_ROLE = new Set(["scroll-hint"]);
@@ -18,7 +18,7 @@ function hex(value: number): string {
 
 /** `{ surface: "#111113", … }` for one mode: every opaque colour role of the stylesheet. */
 export function rolesOf(mode: Mode): Record<string, string> {
-  const tokens = jetonsDuMode(mode);
+  const tokens = tokensOfMode(mode);
   const roles: Record<string, string> = {};
   for (const [name, value] of [...tokens].sort(([a], [b]) => a.localeCompare(b))) {
     if (!name.startsWith(PREFIX)) continue;
@@ -26,7 +26,7 @@ export function rolesOf(mode: Mode): Record<string, string> {
     if (NOT_A_ROLE.has(role)) continue;
     let rgba;
     try {
-      rgba = couleur(value, tokens);
+      rgba = resolveColour(value, tokens);
     } catch {
       continue; // fonts, easing, shadows, line-height: not colours
     }

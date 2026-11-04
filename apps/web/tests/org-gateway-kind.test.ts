@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isOrgDeclarable } from "@/lib/sortes-de-connecteurs";
+import { isOrgDeclarable } from "@/lib/connector-kinds";
 
 /** S44-04: an organisation declares its own model gateway; a project's other delivery tools stay in the project. */
 describe("the kinds an organisation declares", () => {

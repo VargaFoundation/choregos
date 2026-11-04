@@ -77,7 +77,7 @@ export default function PlatformPage() {
                 {running.map((executor, index) => (
                   <span key={executor.kind}>
                     {index > 0 && (index === running.length - 1 ? " or " : ", ")}
-                    <span className="font-mono" data-donnee>
+                    <span className="font-mono" data-verbatim>
                       {executor.kind}
                     </span>
                   </span>
@@ -96,7 +96,7 @@ export default function PlatformPage() {
                   display={executor.enabled === false ? "Not turned on here" : "In use"}
                   kind={executor.enabled === false ? "blocked" : "terminal"}
                 />
-                <span className="font-mono" data-donnee>
+                <span className="font-mono" data-verbatim>
                   {executor.kind}
                 </span>
               </div>

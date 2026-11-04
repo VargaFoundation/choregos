@@ -92,7 +92,7 @@ export function AgentDetailsCard({ org, agent, bare = false }: { org: string; ag
         <>
           <dl className="grid gap-3 text-sm sm:grid-cols-[8rem_minmax(0,1fr)]">
             <dt className="text-xs text-ink-muted">Name</dt>
-            <dd data-donnee>{agent.display_name}</dd>
+            <dd data-verbatim>{agent.display_name}</dd>
             <dt className="text-xs text-ink-muted">Description</dt>
             <dd className="max-w-3xl text-ink-muted">{agent.description ?? "No description."}</dd>
             <dt className="text-xs text-ink-muted">Tags</dt>

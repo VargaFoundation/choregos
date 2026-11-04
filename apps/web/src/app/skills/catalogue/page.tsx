@@ -175,7 +175,7 @@ function Confirm({ org, entry, onDone }: { org: string; entry: SkillCatalogueEnt
   }
   return (
     <div className="space-y-4 text-sm">
-      <p className="text-ink-muted" data-donnee>
+      <p className="text-ink-muted" data-verbatim>
         {entry.description}
       </p>
       <ul className="list-disc space-y-1 pl-5" data-testid="confirmation">

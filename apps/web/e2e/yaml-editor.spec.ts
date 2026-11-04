@@ -95,7 +95,7 @@ test("an invalid text is underlined in the margin and cannot be published", asyn
   await expect(page.getByTestId("yaml-editor").locator(".cm-editor.cm-focused")).toHaveCount(1);
   // The map keeps the last valid version, and says so.
   await page.getByRole("link", { name: "Graph", exact: true }).click();
-  await expect(page.getByTestId("texte-illisible")).toBeVisible();
+  await expect(page.getByTestId("unreadable-text")).toBeVisible();
 });
 
 test("a draft survives a detour through another console page (S23-06)", async ({ page }) => {
