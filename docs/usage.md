@@ -371,7 +371,14 @@ the call put back into the model's context (S57-01). It also records `origin`, t
 `model` (the agent's MCP client), `script` (a script, through the runner's tool bridge) or `job` (a job
 step) — from the call's `X-Choregos-Tool-Origin` header (absent: `model`; any other value is a `400`
 problem), and `script_sha256` when an `X-Choregos-Script` header names the script (64 lowercase
-hexadecimal characters, else `400`). Both are attribution: no authorisation reads them (ADR 0122 §2, §4).
+hexadecimal characters, else `400`). A job step's calls are `job` whatever they send: the API reads it
+from the run (`backend: job` and the job's spec, both written by the orchestrator), not from the
+header, and keeps no script digest for them (a job has no tool bridge to journal a script); a run that
+is not a job step sending `job` is a `400` problem (`tool_origin_refused`), because the API knows the
+claim false (S57-06). The same `origin` and `script_sha256` are written on the call's cost ledger line
+and on its `execute_tool` span (`choregos.tool.origin`, `choregos.tool.script_sha256`). They are
+attribution: no authorisation reads them, and every refusal of the route (unknown tool, cap, catalogue
+write, arguments, a proposal for a write under approval) is the same for every door (ADR 0122 §2, §4).
 
 `memory: lexical` keeps the project's memory in Choregos's own database — no extra service,
 and a lexical, not semantic, search: there is no `vector` extension behind it. It was called
@@ -1212,6 +1219,11 @@ MCP has no such keys. MCP's `annotations` reach the model.
 
 Spend is bounded per run (`budgets.tool_calls_per_run`) and every call lands in the cost
 ledger under `kind: tool` — visible on the project overview and in the run's access record.
+Each line says which door the call came through (`origin`: `model`, `script`, `job`; S57-06), and the
+cost reports group by it: `GET /projects/{id}/costs?group_by=origin&kind=tool` (and
+`/orgs/{org}/costs`, and both CSV exports) gives the spend and the number of calls of each door. A line
+that does not say — a model call, a distillation, a tool line booked before S57-06 — is the `—` row, the
+way a playbook run's line is under `group_by=agent`.
 The cap holds when a run's calls arrive at once (S57-03): the API counts them under a per-run lock
 (`pg_advisory_xact_lock`) and each call takes its place before it leaves, as a provisional ledger line
 with `provider: in_flight`, replaced by the call's own line when it answers. A call that fails, or

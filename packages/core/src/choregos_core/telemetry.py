@@ -71,6 +71,10 @@ PROJECT = "project"
 STAGE = "stage"
 #: Ours, not the convention's: how the stage ended, as the orchestrator read it.
 STAGE_OUTCOME = "choregos.stage.outcome"
+#: Ours too (ADR 0122 §4): the door a tool call came through (`model`, `script`, `job`), and the
+#: SHA-256 of the script that made it. Attribution: no gate and no authorisation reads them.
+TOOL_ORIGIN = "choregos.tool.origin"
+TOOL_SCRIPT_SHA256 = "choregos.tool.script_sha256"
 
 #: Any of these set means an operator asked for traces; none set means tracing stays off.
 _ENDPOINT_VARIABLES = ("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "OTEL_EXPORTER_OTLP_ENDPOINT")
@@ -278,6 +282,14 @@ def record_tool_call(
     if status_code >= 400:
         span.set_attribute(ERROR_TYPE, str(status_code))
         span.set_status(Status(StatusCode.ERROR))
+
+
+def record_tool_origin(origin: str, script_sha256: str | None = None) -> None:
+    """The door the current `execute_tool` span's call came through, and its script's digest."""
+    span = trace.get_current_span()
+    span.set_attribute(TOOL_ORIGIN, origin)
+    if script_sha256:
+        span.set_attribute(TOOL_SCRIPT_SHA256, script_sha256)
 
 
 def record_correlation(

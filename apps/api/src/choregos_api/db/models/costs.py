@@ -60,6 +60,13 @@ class CostLedger(Base, PkMixin):
     agent_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     workflow_name: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     workflow_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: The door a tool call came through (S57-06, ADR 0122 §4): `model` (the agent's MCP client),
+    #: `script` (a script, through the runner's tool bridge) or `job` (a job step, read from the run).
+    #: NULL on every other line (a model call, a distillation) and on a tool line booked before it.
+    #: Attribution only: nothing that decides what a call may do reads it.
+    origin: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    #: The SHA-256 of the script that made the call, when the runner's tool bridge named it.
+    script_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     #: The agent session that spent it (S41-09, ADR 0080 §10): no run, no work item.
     session_id: Mapped[str | None] = mapped_column(
         ForeignKey("agent_sessions.id", ondelete="SET NULL"), nullable=True, index=True

@@ -12,7 +12,9 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-GROUPS = ["day", "stage", "model", "backend", "size", "kind", "agent", "workflow", "work_item", "project"]
+GROUPS = [
+    "day", "stage", "model", "backend", "size", "kind", "agent", "workflow", "work_item", "project", "origin",
+]  # fmt: skip
 
 
 async def _seed(project_id: str) -> None:
@@ -45,7 +47,7 @@ async def _seed(project_id: str) -> None:
                 line(one, 2.0, kind="model", model="m-small", backend="claude-code", stage_role="review",
                      size="M", agent_slug="reviewer", agent_version=1, workflow_name="delivery"),
                 line(two, 1.0, kind="tool", model="crm_export", stage_role="implement", size="S",
-                     agent_slug="coordinator", agent_version=1, workflow_name="onboarding"),
+                     agent_slug="coordinator", agent_version=1, workflow_name="onboarding", origin="script"),
                 line(None, 3.0, kind="model", model="m-big", stage_role="plan",
                      ts=now - timedelta(days=45)),  # outside the default 30 days
             ]
@@ -70,6 +72,8 @@ EXPECTED = {
     "kind": {"model": 6.0, "tool": 1.0},
     "model": {"m-big": 4.0, "m-small": 2.0, "crm_export": 1.0},
     "stage": {"implement": 5.0, "review": 2.0},
+    # The door of a tool call (S57-06); a model line says none and is `—`.
+    "origin": {"script": 1.0},
 }
 
 

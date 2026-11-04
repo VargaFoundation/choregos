@@ -4,7 +4,7 @@
 `annotations.readOnlyHint`, the platform's `x-choregos-access` (`read`, `write`, `approval`) and the
 `outputSchema` an operation declares: what the generated client of a script reads (S57-08).
 `callRunTool` reads `X-Choregos-Tool-Origin` and `X-Choregos-Script` and records them on
-`choregos.tool.called`; nothing else reads them.
+`choregos.tool.called` (and, since S57-06, on the ledger line and the span); nothing else reads them.
 """
 
 from __future__ import annotations
@@ -233,8 +233,8 @@ async def test_an_origin_header_outside_the_contract_is_a_400_and_nothing_is_boo
     [
         ({}, "model", None),
         ({"X-Choregos-Tool-Origin": "model"}, "model", None),
-        ({"X-Choregos-Tool-Origin": "script", "X-Choregos-Script": DIGEST}, "script", DIGEST),
-        ({"x-choregos-tool-origin": "job"}, "job", None),
+        ({"x-choregos-tool-origin": "script", "X-Choregos-Script": DIGEST}, "script", DIGEST),
+        # `job` is read from the run, not from the header (S57-06): `test_tool_call_attribution.py`.
     ],
 )
 async def test_a_good_origin_lands_in_the_event(

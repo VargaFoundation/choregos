@@ -160,10 +160,14 @@ index and the STATUS total tests. **Does not prove**: anything about the code.
   `off`; an inactive setting is absent from the payload; a run of `review` with `per_role` off gets none.
 
 ### S57-06 · feat(api): calls are attributed to their door
-- The origin and script digest land in the ledger row's `dimensions`, `choregos.tool.called` and the span
-  attribute `choregos.tool.origin`; an absent header is `model`, a job's token is `job`, any other value is
-  refused (400).
-- `/projects/{id}/costs` and `/orgs/{org}/costs` group by `origin`.
+- The origin and script digest land in the ledger row's dimensions (two columns, `cost_ledger.origin` and
+  `script_sha256`, beside `agent_slug` and `workflow_name`), `choregos.tool.called` and the span attributes
+  `choregos.tool.origin` and `choregos.tool.script_sha256`; an absent header is `model`, any value outside
+  the contract is refused (400). A job step's calls are `job` read from the run (`backend: job` and the job's
+  spec in its StageInput), whatever the header says and with no digest kept; a run that is not a job step
+  sending `job` is refused (400, `tool_origin_refused`): the API knows the claim false.
+- `/projects/{id}/costs` and `/orgs/{org}/costs` group by `origin` (`group_by=origin`, the CSV exports too);
+  a line without an origin (a model call, a tool line booked before S57-06) is the `—` row.
 - **Tests that fail without it**: one call per origin, each recorded with its origin; grouping returns the three.
   The origin is never read by an authorisation path (a test asserts that a refused call is refused for every
   origin).

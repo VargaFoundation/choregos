@@ -2874,6 +2874,20 @@
    },
    {
     "default": null,
+    "name": "origin",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=16)"
+   },
+   {
+    "default": null,
+    "name": "script_sha256",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=64)"
+   },
+   {
+    "default": null,
     "name": "session_id",
     "nullable": true,
     "server_default": null,
