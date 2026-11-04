@@ -204,7 +204,7 @@ async def record_migration(payload: dict[str, Any]) -> dict[str, Any]:
         bundle = await project_bundle(session, payload["project_id"])
         item = await load_work_item(session, payload["work_item_id"])
         # The key and the refusal are read under both spellings (S45-03), in the payload and in the
-        # events already persisted; the event still persists `cle`.
+        # events already persisted; the event persists `key` since S45-39 (and still reads `cle`).
         key = str(require_key(payload, "key"))
         types = (str(EventType.WORKITEM_MIGRATED), str(EventType.WORKITEM_MIGRATION_REFUSED))
         recorded = (
@@ -217,7 +217,7 @@ async def record_migration(payload: dict[str, Any]) -> dict[str, Any]:
             "work_item_id": item.id,
             "project_slug": bundle.slug,
             "subject": item.tracker_key,
-            "cle": key,  # lang: fr-ok — recorded wire value, S45-39
+            "key": key,
             "from_state": payload.get("from_state"),
         }
         refusal = read_key(payload, "refusal")

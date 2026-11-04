@@ -197,7 +197,7 @@ async def test_writing_is_asked_for_and_the_call_is_audited_in_the_clients_name(
     assert created.json()["result"]["isError"] is False, created.text
     audit = (await client.get("/api/v1/audit")).json()["items"]
     (call,) = [a for a in audit if a["action"] == "mcp.call" and a.get("target_id") == "create_work_item"]
-    assert call["payload"]["jeton"] == "oauth:claude-ai:sub-admin"  # lang: fr-ok — audit key, S45-39
+    assert call["payload"]["token"] == "oauth:claude-ai:sub-admin"
 
 
 async def test_another_idp_does_not_find_anyone_by_their_sub(

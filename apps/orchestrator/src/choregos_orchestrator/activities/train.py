@@ -428,9 +428,9 @@ async def confirm_auto_sync(payload: dict[str, Any]) -> dict[str, Any]:
     elif any(state == "Degraded" for state in states.values()) or read_key(payload, "conclude"):
         type_, ok = "cd.rollout.aborted", False
     else:
-        return {"ok": None, "etats": states}  # lang: fr-ok — recorded wire value, S45-39
+        return {"ok": None, "states": states}
     await _notify_work_items(to_notify, type_, str(payload["sync_id"]), str(payload["env"]))
-    return {"ok": ok, "etats": states}  # lang: fr-ok — recorded wire value, S45-39
+    return {"ok": ok, "states": states}
 
 
 @activity.defn(name="confirmer_auto_sync")  # lang: fr-ok

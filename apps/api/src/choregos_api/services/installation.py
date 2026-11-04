@@ -48,7 +48,7 @@ async def install_what_template_delivers(
         what=f"the template `{template}`",
         catalogue_provenance=getattr(delivered, "catalogue_agents", None),
     )
-    installed |= {"extensions": [], "sans_greffon": []}  # lang: fr-ok — persisted, S45-39
+    installed |= {"extensions": [], "without_extension": []}
     await _install_extensions(session, project, delivered, author, installed)
     if delivered.knowledge:
         # The bases its agents read (S51-06, ADR 0117): created for the project, or reused.
@@ -180,7 +180,7 @@ async def _install_extensions(
             await record(session, SYSTEM, "template.extension.skip", org_id=project.org_id,
                          target_type="project", target_id=project.id, extension=name, via=author,
                          reason="no active extension installs it")  # fmt: skip
-            installed["sans_greffon"].append(name)  # lang: fr-ok — persisted, S45-39
+            installed["without_extension"].append(name)
             continue
         result = await installer(session, project, dict(files), author)
         await record(session, SYSTEM, "template.extension.install", org_id=project.org_id,

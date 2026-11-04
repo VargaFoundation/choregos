@@ -47,6 +47,12 @@ describe("an ontology action says what it touches (S20-10)", () => {
     expect(dossier).toHaveTextContent("passed");
   });
 
+  it("an action proposed after S45-39 keeps its parameters under `ontology`", () => {
+    const { ontologie: meta } = ontology.params as unknown as { ontologie: object }; // lang: fr-ok
+    render(<OntologyDetail action={{ ...ontology, params: { ontology: meta } } as unknown as Action} />);
+    expect(screen.getByTestId("ontology")).toHaveTextContent("os-reboot-required");
+  });
+
   it("an action's page shows it", async () => {
     vi.mocked(api.projectAction).mockResolvedValue({ ...ontology, effects: [], decisions: [], journal: [] } as Action);
     // The page reads its parameters through `use(promise)`: it suspends, and the render has to be awaited.

@@ -19,7 +19,7 @@ from temporalio.common import RetryPolicy
 from temporalio.exceptions import ActivityError
 
 from ..wire_names import both_names, read_key, require_key
-from .activity_names import named
+from .activity_names import english_payload_keys, named
 from .scheduling import execute_on_its_queue
 
 with workflow.unsafe.imports_passed_through():
@@ -127,6 +127,17 @@ class ActionWorkflow:
         )
         return {"status": "succeeded", "effects": list(self.done)}
 
+    @staticmethod
+    def _awaiting_keys(waiting: bool, detail: Any) -> dict[str, Any]:
+        """The keys of `mark_awaiting_evidence`: English for a run started after S45-39, the recorded
+        French ones for a history that predates it (`ENGLISH_PAYLOAD_KEYS`). `detail` is the deadline
+        when the action starts waiting, the evidence received when it stops."""
+        if english_payload_keys():
+            return {"waiting": True, "until": detail} if waiting else {"waiting": False, "evidence": detail}
+        if waiting:
+            return {"en_attente": True, "jusqu_a": detail}  # lang: fr-ok
+        return {"en_attente": False, "preuve": detail}  # lang: fr-ok
+
     async def _wait_for_evidence(self, action_id: str, position: int, awaited: dict[str, Any]) -> None:
         """The effect is done; the action waits for the evidence that it served, until its deadline.
         If it comes and is favourable, the rest resumes; if it is contrary or missing, the action
@@ -135,13 +146,7 @@ class ActionWorkflow:
         self.state = "awaiting_evidence"
         await execute_on_its_queue(
             named(action_activities.mark_awaiting_evidence, action_activities.marquer_l_attente),
-            {
-                "action_id": action_id,
-                "position": position,
-                # Recorded payload keys (ADR 0098 §4): never renamed.
-                "en_attente": True,
-                "jusqu_a": until.isoformat(),
-            },
+            {"action_id": action_id, "position": position, **self._awaiting_keys(True, until.isoformat())},
             start_to_close_timeout=timedelta(seconds=30),
             retry_policy=READ,
         )
@@ -156,8 +161,7 @@ class ActionWorkflow:
         self.state = "running"
         await execute_on_its_queue(
             named(action_activities.mark_awaiting_evidence, action_activities.marquer_l_attente),
-            # Recorded payload keys (ADR 0098 §4): never renamed.
-            {"action_id": action_id, "position": position, "en_attente": False, "preuve": evidence},
+            {"action_id": action_id, "position": position, **self._awaiting_keys(False, evidence)},
             start_to_close_timeout=timedelta(seconds=30),
             retry_policy=READ,
         )

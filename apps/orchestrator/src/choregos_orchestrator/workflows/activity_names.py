@@ -21,10 +21,21 @@ from temporalio import workflow
 
 ENGLISH_ACTIVITY_NAMES = "english-activity-names"
 
+#: The keys a workflow SENDS to an activity (and carries over a continue-as-new) were born French
+#: too (S45-39, ADR 0098 §4). A workflow that starts after this patch sends them in English; one
+#: that started before keeps sending the French, and a history recorded before replays as it was.
+#: The activities read both spellings (`wire_names`), forever.
+ENGLISH_PAYLOAD_KEYS = "english-payload-keys"
+
 
 def named(english: Any, french: Any) -> Any:
     """The activity to schedule: the English one, unless this history predates the patch."""
     return english if workflow.patched(ENGLISH_ACTIVITY_NAMES) else french
 
 
-__all__ = ["ENGLISH_ACTIVITY_NAMES", "named"]
+def english_payload_keys() -> bool:
+    """Whether this run sends English payload keys (`False`: it replays a history that predates them)."""
+    return workflow.patched(ENGLISH_PAYLOAD_KEYS)
+
+
+__all__ = ["ENGLISH_ACTIVITY_NAMES", "ENGLISH_PAYLOAD_KEYS", "english_payload_keys", "named"]

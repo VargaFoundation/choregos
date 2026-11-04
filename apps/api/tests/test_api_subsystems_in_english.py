@@ -51,4 +51,4 @@ async def test_door_audit_keys_unchanged(client: AsyncClient, project: dict[str,
         calls = list((await session.execute(select(AuditLog).where(AuditLog.action == "a2a.call"))).scalars())
     assert calls
     for call in calls:
-        assert {"ecriture", "jeton", "issue"} <= set(call.payload)  # lang: fr-ok - persisted audit keys
+        assert {"write", "token", "issue"} <= set(call.payload)

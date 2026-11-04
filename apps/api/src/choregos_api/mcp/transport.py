@@ -205,7 +205,7 @@ async def _call(ctx: Context, request_id: Any, params: dict[str, Any], request: 
         text, structure = await tool.execute(ctx, arguments)
         result = text_result(truncate(text), structured=structure)
     except ToolRefused as refusal:
-        issue = "refus"  # lang: fr-ok — persisted audit value, S45-39 (ADR 0098 §4)
+        issue = "refused"
         result = text_result(str(refusal), is_error=True)
     await _audit(ctx, tool.name, tool.write and issue == "ok", issue, request)
     return ok(request_id, result)
@@ -225,9 +225,9 @@ async def _audit(ctx: Context, tool: str, write: bool, issue: str, request: Requ
         or ctx.caller.agent_org_id,
         target_type="mcp_tool",
         target_id=tool,
-        ecriture=write,  # lang: fr-ok — persisted audit key, S45-39
+        write=write,
         issue=issue,
-        jeton=ctx.caller.key,  # lang: fr-ok — persisted audit key, S45-39
+        token=ctx.caller.key,
         agent=ctx.caller.agent,
         client=(request.headers.get("user-agent") or "")[:100] or None,
     )

@@ -2166,7 +2166,8 @@ key was renamed.
 | `choregos_runner.runner.RAPPORT_DEPART`, `ARBRE_VIDE` | `REPORT_START_COMMIT`, `EMPTY_TREE` | Nothing: used only inside the runner. <!-- lang: fr-ok --> |
 | `choregos_runner.exits` (read `choregos_core.sorties`) | reads `choregos_core.exit_codes` | Nothing. <!-- lang: fr-ok --> |
 
-The run-event key `demarre` of the `tools.local` journal event is persisted and stays until S45-39.
+The run-event key `demarre` of the `tools.local` journal event is written `started` since S45-39
+(see [Persisted keys and error types](#persisted-keys-and-error-types-s45-39)).
 <!-- lang: fr-ok -->
 
 #### S45-12: API root modules, edition extension API, Principal and configuration in English
@@ -2597,13 +2598,49 @@ to `test_train_and_work_item`, `test_train_se_relaie_tot` to `test_train_relays_
 `test_worker_greffons` to `test_worker_extensions` (an entry-point package is an extension, ADR 0093).
 <!-- lang: fr-ok -->
 
+### Persisted keys and error types (S45-39)
+
+The names that histories and rows record were born French. S45-03 made every reader accept both
+spellings; from the release that carries S45-39, **everything written is English**. Nothing is
+rewritten: a history recorded before still replays, a row written before is still read, and the
+readers keep both spellings forever (do not remove a French one).
+
+| Where | Written until now | Written from S45-39 |
+| --- | --- | --- |
+| Audit payload of `mcp.call` and `a2a.call` | `ecriture`, `jeton`, issue `refus` | `write`, `token`, issue `refused` |
+| Audit payload of `org.update` | `avant`, `apres` | `before`, `after` |
+| Installation result (audit details) | `sans_greffon` | `without_extension` |
+| Run event `tools.local` | `demarre` | `started` |
+| Event `choregos.workitem.migrated` and `.migration_refused` | `cle` | `key` |
+| `action.result` | `attente` (`position`, `jusqu_a`), `preuves` | `waiting` (`position`, `until`), `evidence_received` |
+| `action.params` of an ontology action | `ontologie` | `ontology` |
+| Effect kinds of an ontology action | `ontology.effet`, `ontology.preuve` | `ontology.effect`, `ontology.evidence` |
+| Announced MCP tool of an extension | `ecriture` | `write` |
+| Activity returns | `effets`, `statut`, `etats`, `refus`, `attendre_une_preuve` (`jusqu_a`) | `effects`, `status`, `states`, `refusal`, `await_evidence` (`until`) |
+| Temporal error types | `AgentIndisponible`, `InstructionsInvalides`, `SkillAbsente`, `EffetRefuse`, `ActionIntrouvable`, `ActionPasEncoreVisible` | `AgentUnavailable`, `InvalidInstructions`, `SkillMissing`, `EffectRefused`, `ActionNotFound`, `ActionNotYetVisible` |
+
+What a **workflow sends** to an activity (`mark_awaiting_evidence`, `confirm_auto_sync`,
+`record_migration`, and the relay threshold a train carries over a continue-as-new) changes behind
+one patch, `english-payload-keys`: a workflow that started before keeps sending the French keys to
+its end, one that starts after sends English ones. The activities read both. The three histories
+`action-english-keys-S45-39`, `train-english-keys-S45-39` and `wi-migration-english-keys-S45-39`
+archive the English side; the older ones archive the French side, and all of them replay.
+
+Two things to know when you query these rows or watch these errors:
+
+- An alert, a dashboard or a query on one of the audit keys, the issue value or an error type above
+  must match **both** spellings for as long as rows or workflows written before exist.
+- `action.result.evidence_received` is not `evidence`: an ontology action already keeps its own
+  file of evidence under `result.evidence`, and the two must not mix.
+
 ### Kept on purpose
 
 Names that are recorded, persisted or wired, so they were not renamed here.
 
 #### Kept on purpose (S45-15)
 
-- The audit payload keys `avant` and `apres` of `org.update` (ADR 0098 §4, renamed by S45-39).
+- The audit payload keys `avant` and `apres` of `org.update` were kept until S45-39, which writes
+  `before` and `after`.
 - The audit key `canal` of `auth.login` and the keyword `canal` of `ouvrir_la_session`: persisted
   and shared with `services/tickets.py`.
 - `routers.auth.terminer_la_connexion(nom=, sujet=, groupes=, cible=, canal=)`: the public API that
@@ -2613,8 +2650,8 @@ Names that are recorded, persisted or wired, so they were not renamed here.
 
 #### Kept on purpose (S45-17)
 
-- The key `sans_greffon` of the installation result, which is persisted in audit details (S45-39).
-- The Temporal error type string `AgentIndisponible` (S45-39).
+- The key `sans_greffon` of the installation result and the Temporal error type string
+  `AgentIndisponible` were kept until S45-39, which writes `without_extension` and `AgentUnavailable`.
 - The `plugin:` provenance prefix and the `source == "plugin"` label of ADR 0093.
 - The verdict `organisation inconnue` of the memory A/B comparison (a returned value, S45-39).
 - The French imports from other packages (`POLITIQUES`, `ReferenceInvalide`,

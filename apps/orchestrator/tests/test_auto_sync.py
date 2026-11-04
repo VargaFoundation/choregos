@@ -104,8 +104,13 @@ async def test_a_healthy_auto_sync_environment_delivers_the_work_item(
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
     if recording_history():
         english = recording_history() == "english"  # S34-02
+        # S45-39: `english-keys` archives the history that sends English keys, and only that one.
         target = HISTORIES / (
-            "train-auto-sync-english-S34-02.json" if english else "train-auto-sync-S21-27.json"
+            "train-english-keys-S45-39.json"
+            if recording_history() == "english-keys"
+            else "train-auto-sync-english-S34-02.json"
+            if english
+            else "train-auto-sync-S21-27.json"
         )
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 

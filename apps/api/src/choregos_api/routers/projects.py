@@ -192,8 +192,8 @@ async def update_org(org: str, body: OrgUpdate, session: Db, principal: Me) -> O
         org_id=organisation.id,
         target_type="org",
         target_id=organisation.id,
-        avant=org_before,  # lang: fr-ok — persisted audit payload, S45-39
-        apres=org_after,  # lang: fr-ok — persisted audit payload, S45-39
+        before=org_before,
+        after=org_after,
     )
     return OrgDto(
         slug=organisation.slug,

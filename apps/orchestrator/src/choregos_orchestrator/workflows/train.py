@@ -18,7 +18,7 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ActivityError
 
-from .activity_names import named
+from .activity_names import english_payload_keys, named
 from .scheduling import execute_on_its_queue, start_on_its_queue
 
 with workflow.unsafe.imports_passed_through():
@@ -165,6 +165,18 @@ class TrainInput:
         return FORMER_RELAY_THRESHOLD if given is None else given
 
 
+def _with_english_threshold(payload: dict[str, Any]) -> dict[str, Any]:
+    """The relay threshold a train carries over a continue-as-new, under its English name for a run
+    started after S45-39 (`ENGLISH_PAYLOAD_KEYS`); a payload recorded before names it
+    `seuil_de_relais` and is decoded as it was (`TrainInput.threshold`)."""
+    former = "seuil_de_relais"  # lang: fr-ok — the recorded input name
+    if former not in payload or not english_payload_keys():
+        return payload
+    carried = {key: value for key, value in payload.items() if key != former}
+    carried.setdefault("relay_threshold", payload[former])
+    return carried
+
+
 @workflow.defn(name="ReleaseTrain", sandboxed=False)
 class ReleaseTrain:
     """Collection, departure, staging, soak, approval, canary, verification, rollback, freeze."""
@@ -284,6 +296,7 @@ class ReleaseTrain:
 
     @workflow.run
     async def run(self, payload: dict[str, Any]) -> dict[str, Any]:
+        payload = _with_english_threshold(payload)
         params = TrainInput(**payload)
         # A held express is carried by ONE relay; the next relays say it again only if still held.
         payload = {key: value for key, value in payload.items() if key != "express"}
@@ -370,6 +383,8 @@ class ReleaseTrain:
             items, self.batch = list(self.batch), []
             sync_id = f"auto-sync-{params.env}-{self.batch_no}"
             self.batch_no += 1
+            # English for a run started after S45-39 (`ENGLISH_PAYLOAD_KEYS`), the recorded key before.
+            conclude_key = "conclude" if english_payload_keys() else "conclure"  # lang: fr-ok
             for attempt in range(AUTO_SYNC_ATTEMPTS):
                 verdict = await execute_on_its_queue(
                     named(train_activities.confirm_auto_sync, train_activities.confirmer_auto_sync),
@@ -378,8 +393,7 @@ class ReleaseTrain:
                         "env": params.env,
                         "items": [str(item.get("work_item_key") or "") for item in items],
                         "sync_id": sync_id,
-                        # Recorded payload key (ADR 0098 §4): never renamed.
-                        "conclure": attempt == AUTO_SYNC_ATTEMPTS - 1,
+                        conclude_key: attempt == AUTO_SYNC_ATTEMPTS - 1,
                     },
                     start_to_close_timeout=timedelta(minutes=2),
                     retry_policy=DEFAULT_RETRY,

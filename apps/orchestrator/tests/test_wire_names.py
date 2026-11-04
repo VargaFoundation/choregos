@@ -141,13 +141,13 @@ async def test_awaiting_evidence_reads_english_and_former_keys(
     await mark_awaiting_evidence({"action_id": action_id, "position": 1, waiting: True, until: deadline})
     row = await _row(action_id)
     assert row.status == "awaiting_evidence"
-    # What is persisted does not change with the spelling read (S45-39 switches the writers).
-    assert row.result["attente"] == {"position": 1, "jusqu_a": deadline}  # lang: fr-ok
+    # What is persisted is English whichever spelling was read (S45-39 switched the writers).
+    assert row.result["waiting"] == {"position": 1, "until": deadline}
     seen = {"position": 1, "ok": True, "detail": "the next report no longer has the key"}
     await mark_awaiting_evidence({"action_id": action_id, "position": 1, waiting: False, evidence: seen})
     row = await _row(action_id)
-    assert row.status == "running" and "attente" not in row.result  # lang: fr-ok
-    assert row.result["preuves"] == [seen]  # lang: fr-ok
+    assert row.status == "running" and "waiting" not in row.result
+    assert row.result["evidence_received"] == [seen]
 
 
 async def test_awaiting_evidence_without_a_deadline_still_fails(setup: Fixture) -> None:
@@ -159,7 +159,7 @@ async def test_awaiting_evidence_without_a_deadline_still_fails(setup: Fixture) 
     with pytest.raises(KeyError):
         await mark_awaiting_evidence({"action_id": action_id, "position": 1, "waiting": True})
     row = await _row(action_id)
-    assert row.status == "running" and "attente" not in (row.result or {})  # lang: fr-ok
+    assert row.status == "running" and "waiting" not in (row.result or {})
 
 
 async def _migration_events(setup: Fixture) -> list[Any]:
@@ -189,7 +189,35 @@ async def test_migration_record_is_idempotent_across_key_names(setup: Fixture) -
     assert (await record_migration(english)) == {"recorded": False}
     events = await _migration_events(setup)
     assert len(events) == 1
-    assert events[0].payload["cle"] == key, "the event still persists the former key"  # lang: fr-ok
+    assert events[0].payload["key"] == key, "the event persists the English key (S45-39)"
+
+
+async def test_migration_record_finds_an_event_persisted_under_the_former_key(setup: Fixture) -> None:
+    """A row written before S45-39 holds `cle`: a replayed record still finds it."""
+    from choregos_api.db.models import Event
+    from choregos_api.db.session import session_scope
+    from choregos_contracts import EventType
+    from choregos_core import utcnow
+    from choregos_orchestrator.activities.interpretation import record_migration
+
+    async with session_scope() as session:
+        session.add(
+            Event(
+                project_id=setup.project_id,
+                work_item_id=setup.work_item_id,
+                type=str(EventType.WORKITEM_MIGRATED),
+                subject="WI-1",
+                ts=utcnow(),
+                payload={"cle": "wi-z/run-1/1"},  # lang: fr-ok - a row persisted before S45-39
+            )
+        )
+    payload = {
+        "project_id": setup.project_id,
+        "work_item_id": setup.work_item_id,
+        "key": "wi-z/run-1/1",
+        "from_state": "inbox",
+    }
+    assert (await record_migration(payload)) == {"recorded": False}
 
 
 async def test_migration_refusal_is_read_under_the_english_key(setup: Fixture) -> None:
@@ -208,7 +236,7 @@ async def test_migration_refusal_is_read_under_the_english_key(setup: Fixture) -
     assert [(e.type, e.payload["reason"]) for e in events] == [
         (str(EventType.WORKITEM_MIGRATION_REFUSED), "the state moved since the check")
     ]
-    assert events[0].payload["cle"] == "wi-y/run-1/1"  # lang: fr-ok
+    assert events[0].payload["key"] == "wi-y/run-1/1"
 
 
 async def test_migration_record_without_a_key_still_fails(setup: Fixture) -> None:

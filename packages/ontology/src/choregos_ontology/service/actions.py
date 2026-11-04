@@ -11,10 +11,10 @@ effect under its key; what was done is compensated if what follows fails.
   targets read, preconditions evaluated target by target, paths of `gitops.pull_request` checked
   against `paths_allowed`, policy applied. An invalid proposal is not recorded; a valid one waits for a
   decision, or is born approved by the policy (`approve: auto`) and leaves for Temporal at once.
-- **Execute**: each effect of the ontology is a core effect, `ontology.effet`; `gitops.pull_request`
+- **Execute**: each effect of the ontology is a core effect, `ontology.effect`; `gitops.pull_request`
   goes through the core's SCM adapter, which holds the token — the agent never sees it. Branch
   `choregos/<proposal id>`.
-- **Prove**: each piece of evidence is an effect, `ontology.preuve`. `object.reread` and
+- **Prove**: each piece of evidence is an effect, `ontology.evidence`. `object.reread` and
   `connector.query` are judged at once; `collector.rerun` makes the action WAIT (`awaiting_evidence`)
   for the collector's next report, which hands it back (`on_report`): an absent layer, an
   `unreachable` line, a partial report or a timeout fail it, never "key absent".
@@ -45,18 +45,18 @@ SUCCEEDED = "succeeded"
 FAILED = "failed"
 TERMINAL = frozenset({REJECTED, SUCCEEDED, FAILED})
 #: The origin of a core action born from the ontology, and the two effects the plugin declares.
-#: Their VALUES are persisted on every action row: they stay as they are.
+#: Their VALUES are persisted on every action row: since S45-39 a new action writes the English
+#: ones, and a row written before keeps the former ones (`FORMER_EFFECT`, `FORMER_EVIDENCE`), which
+#: stay declared for the same executors with the same policy (ADR 0098 §4).
 ORIGIN = "ontology"
-EFFECT = "ontology.effet"  # lang: fr-ok - persisted effect kind
-EVIDENCE = "ontology.preuve"  # lang: fr-ok - persisted effect kind
-#: Their English spellings (S45-03, ADR 0098 §4): declared for the same executors with the same
-#: policy, so that a row written either way resolves. The writers still write the values above.
-EFFECT_EN = "ontology.effect"
-EVIDENCE_EN = "ontology.evidence"
+EFFECT = "ontology.effect"
+EVIDENCE = "ontology.evidence"
+FORMER_EFFECT = "ontology.effet"  # lang: fr-ok - persisted effect kind of the rows before S45-39
+FORMER_EVIDENCE = "ontology.preuve"  # lang: fr-ok - persisted effect kind of the rows before S45-39
 #: The key of a core action's `params` where the ontology keeps what it knows of the action (persisted).
-PARAMS_KEY = "ontologie"  # lang: fr-ok - persisted key
-#: Its English spelling, read first (S45-03); nothing writes it yet.
-PARAMS_KEY_EN = "ontology"
+#: A row written before S45-39 holds it under `FORMER_PARAMS_KEY`: both are read, English first.
+PARAMS_KEY = "ontology"
+FORMER_PARAMS_KEY = "ontologie"  # lang: fr-ok - persisted key of the rows before S45-39
 
 #: In the trial, every run proposes under the agent identity `platform` (agent identities,
 #: R-SOC-MCP-03, do not exist yet).
@@ -242,7 +242,7 @@ def _policy_rule(ir: dict[str, Any], action: dict[str, Any]) -> tuple[dict[str, 
 def _meta(action: Any) -> dict[str, Any]:
     """What the ontology knows of one of its actions: its version, its type, its targets, its params."""
     params = action.params or {}
-    return dict(params.get(PARAMS_KEY_EN) or params.get(PARAMS_KEY) or {})
+    return dict(params.get(PARAMS_KEY) or params.get(FORMER_PARAMS_KEY) or {})
 
 
 def describe(action: Any) -> dict[str, Any]:
@@ -579,7 +579,7 @@ async def _record_failure(ctx: Any, kind: str, index: int, entry: dict[str, Any]
 
 
 async def ontology_effect(ctx: Any, params: dict[str, Any]) -> dict[str, Any]:
-    """`ontology.effet`: effect `index` of the ontology's action, rendered with the results of the
+    """`ontology.effect`: effect `index` of the ontology's action, rendered with the results of the
     effects already done. A failing effect fails the action, without hiding the error."""
     from choregos_api.effets import EffetRefuse
 
@@ -600,11 +600,11 @@ async def ontology_effect(ctx: Any, params: dict[str, Any]) -> dict[str, Any]:
     return entry
 
 
-# ───────────────────────────── prove: the `ontology.preuve` effect ─────────────────────────────
+# ───────────────────────────── prove: the `ontology.evidence` effect ─────────────────────────────
 
 
 async def ontology_evidence(ctx: Any, params: dict[str, Any]) -> dict[str, Any]:
-    """`ontology.preuve`: evidence `index`. `object.reread` and `connector.query` are judged here;
+    """`ontology.evidence`: evidence `index`. `object.reread` and `connector.query` are judged here;
     `collector.rerun` makes the action wait for the collector's next report, or the timeout."""
     from choregos_api.effets import EffetRefuse
 
@@ -628,7 +628,7 @@ async def ontology_evidence(ctx: Any, params: dict[str, Any]) -> dict[str, Any]:
             entry.update({"status": "pending", "with": collected, "requested_at": CLOCK.now().isoformat()})
             _record(ctx.action, "evidence", index, entry)
             # The core's `ActionWorkflow` reads these two keys: they are its protocol, not prose.
-            return {**entry, "attendre_une_preuve": {"jusqu_a": until.isoformat()}}  # lang: fr-ok
+            return {**entry, "await_evidence": {"until": until.isoformat()}}
         result = await _collect_now(ctx.session, ctx.project, kind, collected, targets, effects)
         passed = cel.condition(item["expect"], {**variables, "result": result})
         entry.update({"status": "passed" if passed else "failed", "result": result})

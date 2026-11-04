@@ -85,7 +85,7 @@ async def test_an_actor_backend_on_a_hosted_agent_is_refused(setup: Fixture) -> 
     await _agent(setup, _hosted())
     with pytest.raises(ApplicationError) as raised:
         await stage_activities.prepare_stage(_plan(setup, backend="codex"))
-    assert raised.value.type == "AgentIndisponible" and raised.value.non_retryable
+    assert raised.value.type == "AgentUnavailable" and raised.value.non_retryable
     assert "hosted agent" in str(raised.value)
 
 
