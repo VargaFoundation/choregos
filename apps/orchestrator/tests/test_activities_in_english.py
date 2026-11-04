@@ -104,9 +104,9 @@ RECORDED_ACTIVITY_NAMES = {
     "write_run_lesson",
 }
 
-#: The error types the activities raise that a history records (ADR 0098 section 4): they stay
-#: French until S45-39, each on a line that says so.
-RECORDED_ERROR_TYPES = {
+#: The error types the activities raised before S45-39 (ADR 0098 section 4): histories hold them,
+#: the readers accept them (`wire_names`), and nothing raises them any more.
+FORMER_ERROR_TYPES = {
     "AgentIndisponible",
     "InstructionsInvalides",
     "SkillAbsente",
@@ -153,16 +153,12 @@ def test_registered_activity_names_unchanged() -> None:
     }
 
 
-def test_recorded_error_types_stay_on_marked_lines() -> None:
-    """Every recorded French error type the activities raise sits on a line that says why it stays."""
-    found: set[str] = set()
+def test_no_activity_raises_a_former_error_type() -> None:
+    """Since S45-39 every error type an activity raises is English: the French spelling is only read."""
     for path in sorted(ACTIVITIES.glob("*.py")):
-        for number, line in enumerate(path.read_text("utf-8").splitlines(), 1):
-            for error_type in RECORDED_ERROR_TYPES:
-                if f'"{error_type}"' in line:
-                    found.add(error_type)
-                    assert "lang: fr-ok" in line, f"{path.name}:{number}: {error_type} is recorded"
-    assert found == RECORDED_ERROR_TYPES
+        text = path.read_text("utf-8")
+        for error_type in FORMER_ERROR_TYPES:
+            assert f'"{error_type}"' not in text, f"{path.name} raises {error_type}"
 
 
 def test_the_english_modules_hold_what_the_former_paths_forwarded() -> None:

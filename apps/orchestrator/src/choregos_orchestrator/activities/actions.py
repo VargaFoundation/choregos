@@ -34,10 +34,11 @@ logger = get_logger("choregos.actions")
 #: (`load_action` retried after it moved the row).
 EXECUTABLE = frozenset({ActionStatus.APPROVED.value, ActionStatus.RUNNING.value})
 
-#: Error types that histories record (ADR 0098 section 4): they stay French until S45-39.
-ACTION_NOT_FOUND = "ActionIntrouvable"  # lang: fr-ok — recorded wire value, S45-39
-ACTION_NOT_VISIBLE_YET = "ActionPasEncoreVisible"  # lang: fr-ok — recorded wire value, S45-39
-EFFECT_REFUSED = "EffetRefuse"  # lang: fr-ok — recorded wire value, S45-39
+#: Error types that histories record (ADR 0098 section 4). Raised in English since S45-39; the
+#: workflows' retry policies read both spellings (`wire_names.both_names`).
+ACTION_NOT_FOUND = "ActionNotFound"
+ACTION_NOT_VISIBLE_YET = "ActionNotYetVisible"
+EFFECT_REFUSED = "EffectRefused"
 
 
 async def _load(session: Any, action_id: str) -> tuple[Action, Project]:
@@ -85,10 +86,7 @@ async def load_action(action_id: str) -> dict[str, Any]:
             )
         if action.status == ActionStatus.APPROVED.value:
             action.status = ActionStatus.RUNNING.value
-        return {
-            "effets": len(action.effects or []),
-            "statut": action.status,
-        }  # lang: fr-ok — recorded wire value, S45-39
+        return {"effects": len(action.effects or []), "status": action.status}
 
 
 @activity.defn(name="execute_effect")
@@ -273,7 +271,7 @@ async def propose_transition_action(payload: dict[str, Any]) -> dict[str, Any]:
         project = await session.get(Project, payload["project_id"])
         item = await session.get(WorkItem, payload["work_item_id"])
         if project is None or item is None:
-            return {"refus": "work item or project not found"}  # lang: fr-ok — recorded wire value, S45-39
+            return {"refusal": "work item or project not found"}
         try:
             action = await propose_for_transition(
                 session,
@@ -285,11 +283,9 @@ async def propose_transition_action(payload: dict[str, Any]) -> dict[str, Any]:
                 workflow_id=str(payload["workflow_id"]),
             )
         except EffectRefused as refused:
-            return {"refus": str(refused)}  # lang: fr-ok — recorded wire value, S45-39
+            return {"refusal": str(refused)}
         except ApiError as refused:
-            return {
-                "refus": str(refused.detail or refused.title)
-            }  # lang: fr-ok — recorded wire value, S45-39
+            return {"refusal": str(refused.detail or refused.title)}
         identifier, status = action.id, action.status
     if status == ActionStatus.APPROVED.value:
         await _start(identifier)
@@ -318,20 +314,18 @@ async def mark_awaiting_evidence(payload: dict[str, Any]) -> dict[str, Any]:
     async with db() as session:
         action, _project = await _load(session, action_id)
         result = dict(action.result or {})
-        # The workflow's keys are read under both spellings (S45-03); what is persisted is unchanged.
+        # The workflow's keys are read under both spellings (S45-03).
         if read_key(payload, "waiting"):
             action.status = ActionStatus.AWAITING_EVIDENCE.value
             until = require_key(payload, "until")
-            result["attente"] = {
-                "position": payload["position"],
-                "jusqu_a": until,
-            }  # lang: fr-ok — recorded wire value, S45-39
+            result["waiting"] = {"position": payload["position"], "until": until}
         else:
             action.status = ActionStatus.RUNNING.value
-            result.pop("attente", None)  # lang: fr-ok — recorded wire value, S45-39
-            result.setdefault("preuves", []).append(
-                dict(read_key(payload, "evidence") or {})
-            )  # lang: fr-ok — recorded wire value, S45-39
+            # A row written before S45-39 holds `attente`: both are dropped.
+            result.pop("waiting", None)
+            result.pop("attente", None)  # lang: fr-ok — a row persisted before S45-39
+            # Not `evidence`: an ontology action keeps its own file of that name in `result`.
+            result.setdefault("evidence_received", []).append(dict(read_key(payload, "evidence") or {}))
         action.result = result
     return {"action_id": action_id, "status": action.status}
 

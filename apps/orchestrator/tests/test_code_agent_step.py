@@ -142,7 +142,7 @@ async def test_an_actor_backend_that_contradicts_the_runtime_is_refused(setup: F
     await _agent(setup, _code())
     with pytest.raises(ApplicationError) as raised:
         await stage_activities.prepare_stage(_plan(setup, backend="codex"))
-    assert raised.value.type == "AgentIndisponible" and raised.value.non_retryable
+    assert raised.value.type == "AgentUnavailable" and raised.value.non_retryable
     assert "written in code" in str(raised.value)
 
 
@@ -179,7 +179,7 @@ async def test_an_actor_backend_on_a_prompt_agent_is_refused(setup: Fixture, ima
     await _agent(setup, {"kind": "prompt"})
     with pytest.raises(ApplicationError) as raised:
         await stage_activities.prepare_stage(_plan(setup, backend="claude"))
-    assert raised.value.type == "AgentIndisponible" and raised.value.non_retryable
+    assert raised.value.type == "AgentUnavailable" and raised.value.non_retryable
     assert "prompt agent" in str(raised.value)
     assert setup.adapters.gateway.keys == {}
 
@@ -196,7 +196,7 @@ async def test_a_runtime_no_step_can_carry_is_refused_before_any_key(
     await _agent(setup, runtime)
     with pytest.raises(ApplicationError) as raised:
         await stage_activities.prepare_stage(_plan(setup))
-    assert raised.value.type == "AgentIndisponible" and raised.value.non_retryable
+    assert raised.value.type == "AgentUnavailable" and raised.value.non_retryable
     assert f"`{runtime['kind']}` cannot run as a workflow step" in str(raised.value)
     assert reason in str(raised.value)
     assert setup.adapters.gateway.keys == {}

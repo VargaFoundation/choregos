@@ -341,7 +341,7 @@ async def endpoint(org: str, request: Request, session: Db, settings: Config) ->
             return stream
         answer = ok(ident, await _dispatch(door, method, params))
     except Fault as refused:
-        outcome = "refus"  # lang: fr-ok - persisted audit value, S45-39
+        outcome = "refused"
         answer = error(ident, refused.code, str(refused), refused.data)
     await _audit(door, method, outcome)
     return JSONResponse(answer)
@@ -378,9 +378,9 @@ async def _audit(door: Door, method: str, outcome: str) -> None:
         org_id=door.org.id,
         target_type="a2a_method",
         target_id=method[:100],
-        ecriture=door.wrote,  # lang: fr-ok - persisted audit key, S45-39
+        write=door.wrote,
         issue=outcome,
-        jeton=door.caller.key,  # lang: fr-ok - persisted audit key, S45-39
+        token=door.caller.key,
         agent=door.caller.agent,
         client=(door.request.headers.get("user-agent") or "")[:100] or None if door.request else None,
     )

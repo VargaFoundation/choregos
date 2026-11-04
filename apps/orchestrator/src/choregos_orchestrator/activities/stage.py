@@ -664,7 +664,7 @@ def _render_playbook_text(
             who = f"{agent.agent.slug}@{agent.version}"
             raise ApplicationError(
                 f"the instructions of the agent `{who}` do not render: {error}",
-                type="InstructionsInvalides",  # lang: fr-ok — recorded wire value, S45-39
+                type="InvalidInstructions",
                 non_retryable=True,
             ) from error
     return render_playbook(plan.playbook or plan.role, **variables)
@@ -709,7 +709,7 @@ async def _plan_agent(session: Any, bundle: Any, plan: StagePlan) -> Any:
     except AgentUnavailable as refusal:
         raise ApplicationError(
             str(refusal),
-            type="AgentIndisponible",  # lang: fr-ok — recorded wire value, S45-39
+            type="AgentUnavailable",
             non_retryable=True,
         ) from refusal
     logger.info(

@@ -100,7 +100,7 @@ async def _agent_skills(session: Any, bundle: Any, agent: Any) -> list[SkillRef]
             raise ApplicationError(
                 f"the agent `{agent.agent.slug}` carries the skill `{requested.slug}`, "
                 "which is not in the library",
-                type="SkillAbsente",  # lang: fr-ok — recorded wire value, S45-39
+                type="SkillMissing",
                 non_retryable=True,
             )
         refs.append(SkillRef(slug=requested.slug, version=row.version, digest=row.digest))

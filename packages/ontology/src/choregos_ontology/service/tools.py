@@ -43,7 +43,7 @@ RESULT_CAPS: dict[str, int] = {
 }
 #: The key, in an announced tool, that tells the core's MCP gate the tool writes (read by
 #: `choregos_api.mcp`: a protocol key, not prose).
-WRITES_KEY = "ecriture"  # lang: fr-ok - read by the core's MCP gate
+WRITES_KEY = "write"
 
 
 def _is_table(ir: dict[str, Any], type_name: str) -> bool:

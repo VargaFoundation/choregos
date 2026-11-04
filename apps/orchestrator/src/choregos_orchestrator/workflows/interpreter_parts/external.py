@@ -10,6 +10,7 @@ from typing import Any
 
 from temporalio import workflow
 
+from ..activity_names import english_payload_keys
 from ..scheduling import execute_on_its_queue
 
 with workflow.unsafe.imports_passed_through():
@@ -41,11 +42,14 @@ class ExternalMixin(InterpreterBase):
         requested, self.migration, self.workflow_override = self.migration, {}, None
         self.migrations += 1
         info = workflow.info()
+        # S45-39: the keys are English for a run started after it, the recorded ones before.
+        key_name, refusal_name = (
+            ("key", "refusal") if english_payload_keys() else ("cle", "refus")
+        )  # lang: fr-ok
         record = {
             "project_id": params.project_id,
             "work_item_id": params.work_item_id,
-            # Recorded payload key (ADR 0098 §4): never renamed.
-            "cle": f"{info.workflow_id}/{info.run_id}/{self.migrations}",
+            key_name: f"{info.workflow_id}/{info.run_id}/{self.migrations}",
             "from_state": self.state,
         }
         try:
@@ -54,8 +58,7 @@ class ExternalMixin(InterpreterBase):
         except ValueError as refusal:  # a pydantic ValidationError is one
             await execute_on_its_queue(
                 record_migration,
-                # Recorded payload key (ADR 0098 §4): never renamed.
-                {**record, "refus": str(refusal)[:2000]},
+                {**record, refusal_name: str(refusal)[:2000]},
                 start_to_close_timeout=timedelta(seconds=30),
                 retry_policy=DEFAULT_RETRY,
             )

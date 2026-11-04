@@ -134,7 +134,7 @@ async def test_an_agent_needing_a_host_the_project_does_not_allow_is_refused_bef
 
     with pytest.raises(ApplicationError, match=r"api\.stripe\.com") as refused:
         await prepare_stage(_plan(setup, agent="pip"))
-    assert refused.value.type == "AgentIndisponible" and refused.value.non_retryable
+    assert refused.value.type == "AgentUnavailable" and refused.value.non_retryable
     assert "billing-api" in str(refused.value) and "pypi.org`" not in str(refused.value)
     assert setup.adapters.gateway.keys == {}, "no gateway key was minted"
     async with session_scope() as session:
@@ -163,7 +163,7 @@ async def test_a_trial_uses_the_drafts_network(setup: Fixture) -> None:
     outside = {"instructions": "Try me.", "network": {"domains": ["api.stripe.com"]}}
     with pytest.raises(ApplicationError, match=r"api\.stripe\.com") as refused:
         await prepare_stage(_plan(setup, trial_spec=outside, trial_budget_usd=0.5, attempt=2))
-    assert refused.value.type == "AgentIndisponible"
+    assert refused.value.type == "AgentUnavailable"
 
 
 async def test_a_job_step_gets_the_projects_network(setup: Fixture, monkeypatch: pytest.MonkeyPatch) -> None:

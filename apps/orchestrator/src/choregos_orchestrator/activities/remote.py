@@ -5,7 +5,7 @@ The orchestrator never calls the remote agent: it prepares the step (the `Remote
 cost to reserve, the egress and credential checks), mints the short-lived access token for the run's
 Secret at `start_run`, and books the declared cost at the end. The pod makes the call.
 
-Every refusal here is `AgentIndisponible`, non-retryable and one of the interpreter's configuration
+Every refusal here is `AgentUnavailable`, non-retryable and one of the interpreter's configuration
 refusals: the work item is escalated with the reason, a person fixes the configuration, the stage
 is replayed — and no new error type reaches `workflows/`.
 """
@@ -32,7 +32,7 @@ NOMINAL_BUDGET_USD = 0.01
 def refuse(message: str) -> ApplicationError:
     return ApplicationError(
         message,
-        type="AgentIndisponible",  # lang: fr-ok — recorded wire value, S45-39
+        type="AgentUnavailable",
         non_retryable=True,
     )
 

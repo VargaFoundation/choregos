@@ -185,7 +185,7 @@ async def test_a_resent_message_is_the_same_task(client: AsyncClient, project: d
         i.initiated_by for i in items
     ]
     assert len(calls) == 3
-    assert [c.payload["ecriture"] for c in calls].count(True) == 2, "a resent message writes nothing"
+    assert [c.payload["write"] for c in calls].count(True) == 2, "a resent message writes nothing"
 
 
 async def test_tasks_get_reads_the_work_item(client: AsyncClient, project: dict[str, Any]) -> None:

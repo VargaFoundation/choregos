@@ -42,12 +42,12 @@ async def test_the_slug_changes_and_the_projects_follow(
     assert read.status_code == 200, "the qualified identifier follows the new slug"
     assert {o["slug"] for o in (await client.get(ORG)).json()} == {"trust"}
     (row,) = [a for a in (await client.get("/api/v1/audit")).json()["items"] if a["action"] == "org.update"]
-    assert row["payload"]["avant"] == {  # lang: fr-ok: persisted audit keys
+    assert row["payload"]["before"] == {
         "slug": "varga",
         "name": "Varga Foundation",
         "currency": "EUR",
     }
-    assert row["payload"]["apres"] == {  # lang: fr-ok: persisted audit keys
+    assert row["payload"]["after"] == {
         "slug": "trust",
         "name": "Varga Trust",
         "currency": "EUR",
@@ -148,8 +148,8 @@ async def test_a_platform_administrator_who_is_not_a_member_renames_name_and_slu
         (row,) = [
             a for a in (await client.get("/api/v1/audit")).json()["items"] if a["action"] == "org.update"
         ]
-        assert row["payload"]["avant"]["slug"] == "varga"  # lang: fr-ok: persisted audit keys
-        assert row["payload"]["apres"] == {  # lang: fr-ok: persisted audit keys
+        assert row["payload"]["before"]["slug"] == "varga"
+        assert row["payload"]["after"] == {
             "slug": "diametral",
             "name": "Diametral",
             "currency": "EUR",

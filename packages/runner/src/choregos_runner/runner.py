@@ -487,13 +487,13 @@ class Runner:
             )
             await journal.record(
                 "tools.local",
-                {"demarre": tools is not None},  # lang: fr-ok — persisted run-event key, S45-39
+                {"started": tools is not None},
             )
             return tools
         except Exception as exc:  # losing its tools must not stop the step
             await journal.record(
                 "tools.local",
-                {"demarre": False, "error": str(exc)[:300]},  # lang: fr-ok — persisted run-event key, S45-39
+                {"started": False, "error": str(exc)[:300]},
             )
             return None
 

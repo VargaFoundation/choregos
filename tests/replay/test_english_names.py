@@ -136,3 +136,79 @@ def test_the_archive_holds_histories_with_both_names() -> None:
     assert french <= activities, sorted(french - activities)
     assert english <= activities, sorted(english - activities)
     assert {"preuve", "evidence"} <= signals
+
+
+# ───────────────── English payload keys (S45-39, ADR 0098 §4) ─────────────────
+
+#: The patch that makes a workflow SEND English keys, and the three histories recorded under it.
+ENGLISH_PAYLOAD_PATCH = "english-payload-keys"
+ENGLISH_KEY_HISTORIES = {
+    "action-english-keys-S45-39": ("mark_awaiting_evidence", {"waiting", "until", "evidence"}),
+    "train-english-keys-S45-39": ("confirm_auto_sync", {"conclude"}),
+    "wi-migration-english-keys-S45-39": ("record_migration", {"key"}),
+}
+#: The histories recorded before it, which keep the former keys and are replayed as they were.
+FORMER_KEY_HISTORIES = {
+    "action-evidence-english-S34-02": ("mark_awaiting_evidence", {"en_attente", "jusqu_a", "preuve"}),
+    "train-auto-sync-english-S34-02": ("confirm_auto_sync", {"conclure"}),
+    "wi-migration-S16-05": ("record_migration", {"cle"}),
+}
+
+
+def _decoded(data: str) -> Any:
+    import base64
+
+    return json.loads(base64.b64decode(data))
+
+
+def _patches(path: Path) -> set[str]:
+    events: list[dict[str, Any]] = json.loads(path.read_text(encoding="utf-8"))["events"]
+    found = set()
+    for event in events:
+        marker = event.get("markerRecordedEventAttributes")
+        if marker and marker["markerName"] == "core_patch":
+            found.add(_decoded(marker["details"]["patch-data"]["payloads"][0]["data"])["id"])
+    return found
+
+
+def _sent_keys(path: Path, activity: str) -> set[str]:
+    """The keys of every payload the workflow sent to `activity`."""
+    events: list[dict[str, Any]] = json.loads(path.read_text(encoding="utf-8"))["events"]
+    keys: set[str] = set()
+    for event in events:
+        scheduled = event.get("activityTaskScheduledEventAttributes")
+        if scheduled and scheduled["activityType"]["name"] == activity:
+            for payload in scheduled["input"]["payloads"]:
+                body = _decoded(payload["data"])
+                keys |= set(body) if isinstance(body, dict) else set()
+    return keys
+
+
+def test_the_english_payload_patch_is_declared_and_used() -> None:
+    source = _source()
+    declared = re.search(rf'^(\w+) = "{re.escape(ENGLISH_PAYLOAD_PATCH)}"', source, re.M)
+    assert declared, "the patch id is not declared in the workflows"
+    assert f"workflow.patched({declared.group(1)})" in source, "the patch is never checked"
+    # Used by every workflow that sends a key: the action, the train and the interpreter's migration.
+    for module in ("action.py", "train.py", "interpreter_parts/external.py"):
+        assert "english_payload_keys()" in (WORKFLOWS / module).read_text(encoding="utf-8"), module
+
+
+@pytest.mark.parametrize("name", sorted(ENGLISH_KEY_HISTORIES))
+def test_a_new_history_sends_english_keys(name: str) -> None:
+    activity, english = ENGLISH_KEY_HISTORIES[name]
+    path = HISTORIES / f"{name}.json"
+    assert ENGLISH_PAYLOAD_PATCH in _patches(path)
+    sent = _sent_keys(path, activity)
+    assert english <= sent, sorted(english - sent)
+    former = set().union(*(k for _, k in FORMER_KEY_HISTORIES.values()))
+    assert not sent & former, sorted(sent & former)
+
+
+@pytest.mark.parametrize("name", sorted(FORMER_KEY_HISTORIES))
+def test_an_old_history_keeps_its_french_keys(name: str) -> None:
+    """Replayed as it was (`test_replay.py`): no marker, and the keys it recorded."""
+    activity, former = FORMER_KEY_HISTORIES[name]
+    path = HISTORIES / f"{name}.json"
+    assert ENGLISH_PAYLOAD_PATCH not in _patches(path)
+    assert former <= _sent_keys(path, activity)

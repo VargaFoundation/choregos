@@ -179,7 +179,7 @@ async def test_a_host_the_policy_does_not_allow_is_refused_before_any_reservatio
     await _decor(setup, allow=False)
     with pytest.raises(ApplicationError) as raised:
         await stage_activities.prepare_stage(_plan(setup))
-    assert raised.value.type == "AgentIndisponible" and raised.value.non_retryable
+    assert raised.value.type == "AgentUnavailable" and raised.value.non_retryable
     assert HOST in str(raised.value) and "allow_domains" in str(raised.value)
     assert await _reservations() == []
 
@@ -189,7 +189,7 @@ async def test_a_credential_that_cannot_be_used_stops_the_step(setup: Fixture, s
     await _decor(setup, credential=state)
     with pytest.raises(ApplicationError, match=state) as raised:
         await stage_activities.prepare_stage(_plan(setup))
-    assert raised.value.type == "AgentIndisponible" and raised.value.non_retryable
+    assert raised.value.type == "AgentUnavailable" and raised.value.non_retryable
 
 
 async def test_a_credential_that_vanished_stops_the_step(setup: Fixture) -> None:
@@ -202,7 +202,7 @@ async def test_an_actor_backend_that_contradicts_a_remote_agent_is_refused(setup
     await _decor(setup)
     with pytest.raises(ApplicationError) as raised:
         await stage_activities.prepare_stage(_plan(setup, backend="codex"))
-    assert raised.value.type == "AgentIndisponible" and "remote" in str(raised.value)
+    assert raised.value.type == "AgentUnavailable" and "remote" in str(raised.value)
 
 
 async def test_a_declared_cost_that_does_not_fit_under_the_budget_refuses_the_stage(setup: Fixture) -> None:

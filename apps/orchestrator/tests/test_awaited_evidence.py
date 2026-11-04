@@ -106,7 +106,7 @@ async def test_an_action_awaits_its_evidence_and_succeeds_when_it_comes(
     async with worker_factory():
         handle = await _start(temporal_env, action_id)
         row = await _awaiting(action_id)
-        assert row.result["attente"] == {"position": 1, "jusqu_a": until}  # lang: fr-ok (recorded wire value)
+        assert row.result["waiting"] == {"position": 1, "until": until}
         await handle.signal(
             "preuve", {"position": 1, "ok": True, "detail": "the key is absent from the next report"}
         )
@@ -114,11 +114,11 @@ async def test_an_action_awaits_its_evidence_and_succeeds_when_it_comes(
         history = await handle.fetch_history()
     assert result["status"] == "succeeded"
     row = await _row(action_id)
-    assert row.status == "succeeded" and "attente" not in row.result
-    assert row.result["preuves"][0]["detail"] == "the key is absent from the next report"
+    assert row.status == "succeeded" and "waiting" not in row.result
+    assert row.result["evidence_received"][0]["detail"] == "the key is absent from the next report"
     assert [name for name, _ in done] == ["create", "wait"], "nothing is undone"
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
-    if recording_history():
+    if recording_history() and recording_history() != "english-keys":  # S45-39: that one archives another
         target = HISTORIES / "action-evidence-S20-08.json"
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 
@@ -184,5 +184,9 @@ async def test_the_evidence_signal_and_english_activity_names(
     ], activities
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
     if recording_history():
-        target = HISTORIES / "action-evidence-english-S34-02.json"
+        # S45-39: `english-keys` archives the history that sends English keys, and only that one.
+        english_keys = recording_history() == "english-keys"
+        target = HISTORIES / (
+            "action-english-keys-S45-39.json" if english_keys else "action-evidence-english-S34-02.json"
+        )
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")

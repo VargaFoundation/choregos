@@ -20,9 +20,11 @@ TESTS = pathlib.Path(__file__).resolve().parent
 #: The test modules another test module may import from (all English-named).
 ALLOWED_SOURCES = {
     "test_agent_monthly_cap",
+    "test_awaited_evidence",
     "test_backend_toggle_enforced",
     "test_budget_reservation",
     "test_code_agent_step",
+    "test_dated_action",
     "test_decision_branch",
     "test_fan_out",
     "test_gateway_key_through_the_secret",

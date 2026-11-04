@@ -103,7 +103,7 @@ async def test_an_agent_without_a_workspace_needs_the_repository_host_from_the_p
     await _agent(setup, workspace="none", network={"domains": ["github.com"]})
     with pytest.raises(ApplicationError, match=r"github\.com") as refused:
         await _prepared(setup, agent="analyst")
-    assert refused.value.type == "AgentIndisponible" and refused.value.non_retryable
+    assert refused.value.type == "AgentUnavailable" and refused.value.non_retryable
 
 
 async def test_an_agent_that_reads_clones_the_repository_but_writes_none_of_it(setup: Fixture) -> None:

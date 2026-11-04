@@ -161,7 +161,11 @@ async def test_a_parked_ticket_migrates_and_ends_on_its_new_definition(
     # The new history replays against the current code, and is archived for those to come.
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
     if recording_history():
-        target = HISTORIES / "wi-migration-S16-05.json"
+        # S45-39: `english-keys` archives the history that sends English keys, and only that one.
+        english_keys = recording_history() == "english-keys"
+        target = HISTORIES / (
+            "wi-migration-english-keys-S45-39.json" if english_keys else "wi-migration-S16-05.json"
+        )
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 
 

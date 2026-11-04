@@ -271,7 +271,7 @@ def _agent_plan(plan: StagePlan, spec: Any) -> StagePlan:
             raise ApplicationError(
                 f"the actor asks for the backend `{plan.backend}`, but the agent is written in code "
                 f"(runtime `code`): drop `backend:` from the actor",
-                type="AgentIndisponible",  # lang: fr-ok — recorded wire value, S45-39
+                type="AgentUnavailable",
                 non_retryable=True,
             )
         backend = CODE_BACKEND
@@ -281,7 +281,7 @@ def _agent_plan(plan: StagePlan, spec: Any) -> StagePlan:
             raise ApplicationError(
                 f"the actor asks for the backend `{plan.backend}`, but the agent is remote (runtime "
                 f"`a2a`): drop `backend:` from the actor",
-                type="AgentIndisponible",  # lang: fr-ok — recorded wire value, S45-39
+                type="AgentUnavailable",
                 non_retryable=True,
             )
         backend = A2A_BACKEND
@@ -291,7 +291,7 @@ def _agent_plan(plan: StagePlan, spec: Any) -> StagePlan:
             raise ApplicationError(
                 f"the actor asks for the backend `{plan.backend}`, but the agent is a prompt agent "
                 f"(runtime `prompt`): drop `backend:` from the actor",
-                type="AgentIndisponible",  # lang: fr-ok — recorded wire value, S45-39
+                type="AgentUnavailable",
                 non_retryable=True,
             )
         backend = PROMPT_BACKEND
@@ -301,7 +301,7 @@ def _agent_plan(plan: StagePlan, spec: Any) -> StagePlan:
             raise ApplicationError(
                 f"the actor asks for the backend `{plan.backend}`, but the agent is a hosted agent "
                 f"(runtime `hosted`): drop `backend:` from the actor",
-                type="AgentIndisponible",  # lang: fr-ok — recorded wire value, S45-39
+                type="AgentUnavailable",
                 non_retryable=True,
             )
         backend = HOSTED_BACKEND
@@ -310,7 +310,7 @@ def _agent_plan(plan: StagePlan, spec: Any) -> StagePlan:
         raise ApplicationError(
             f"the agent's runtime `{runtime.kind}` cannot run as a workflow step "
             "(a voice agent runs only as a session)",
-            type="AgentIndisponible",  # lang: fr-ok — recorded wire value, S45-39
+            type="AgentUnavailable",
             non_retryable=True,
         )
     elif runtime is not None and runtime.backend:

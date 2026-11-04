@@ -21,14 +21,16 @@ interface Entry {
 
 /**
  * What an ontology action touches (S20-08): its type, its targets, its parameters, then what
- * its effects returned and its evidence gathered. The core sees only `ontology.effet` and
- * `ontology.preuve` of it: the meaning is here, in `params.ontologie` and `result`.
+ * its effects returned and its evidence gathered. The core sees only `ontology.effect` and
+ * `ontology.evidence` of it: the meaning is here, in `params.ontology` and `result`. An action
+ * proposed before S45-39 keeps it under its former key, which is read as well (ADR 0098).
  *
  * Before S20-10, a separate "proposals" page said it; a proposal is a core action,
  * under the same identifier, and its old links lead here.
  */
 export function OntologyDetail({ action }: { action: Action }) {
-  const meta = (action.params as { ontologie?: Ontology } | undefined)?.ontologie;
+  const params = action.params as { ontology?: Ontology; ontologie?: Ontology } | undefined; // lang: fr-ok
+  const meta = params?.ontology ?? params?.ontologie; // lang: fr-ok - the key persisted before S45-39
   if (action.origin !== "ontology" || !meta) return null;
   const result = (action.result ?? {}) as { effects?: Entry[]; evidence?: Entry[] };
   const effects = result.effects ?? [];
