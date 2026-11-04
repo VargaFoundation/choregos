@@ -115,8 +115,9 @@ index and the STATUS total tests. **Does not prove**: anything about the code.
 - `choregos.tool.called` gains `response_bytes` (the canonical JSON size of the answer the API returns).
 - `tools/report_round_trips.py`: per agent and backend over a window, the runs, success rate, medians and p90 of
   model requests, platform tool calls, agent tool calls, `tokens_in`, `tokens_cached`, `tokens_out`, cost and wall
-  time, and the share of runs with ≥ 5 platform tool calls. Reads through the API (`/costs`, `/runs`) with an
-  operator token; §4.3 gives the same as SQL.
+  time, and the share of runs with ≥ 5 platform tool calls. Reads through the public API with an operator token
+  (no route lists runs over a window: projects → work items → runs → `/runs/{id}/access`); §4.3 gives the same as
+  SQL (`--sql`).
 - The operator runs it on production (30 days) and the numbers are written into §4.4 of this plan.
 - **Test that fails without it**: a run booked from a fake gateway with 7 requests reads `tokens.requests == 7`;
   an event carries `response_bytes` equal to the answer's size.
