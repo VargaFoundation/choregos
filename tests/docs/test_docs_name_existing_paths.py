@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """S45-44: the documentation names repository paths that exist, in English, and the upgrade notes are folded.
 
-After the English rename (ADR 0098) a page that still names a former French test folder or chart template sends the
-reader to a path that is gone. This test reads every backticked token of the pages below that
+After the English rename (ADR 0098) a page that still names a former French test folder or chart template
+sends the reader to a path that is gone. This test reads every backticked token of the pages below that
 starts with a repository directory and refuses one that is not in the tree, unless it is in
 `HISTORICAL` with its reason. The upgrade-note fragments of the rename are folded into
 `docs/deployment.md` ("Renamed in 0.21") and the folder is deleted.
