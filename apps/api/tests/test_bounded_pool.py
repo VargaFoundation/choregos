@@ -1,10 +1,9 @@
-"""Le pool de connexions est borné, et par la configuration.
+"""The connection pool is bounded, and by the configuration.
 
-`pool_size` seul laisse SQLAlchemy ouvrir dix connexions de débordement de plus par
-processus et attendre trente secondes une connexion libre : sous charge, chaque réplique
-pouvait tenir vingt connexions et une requête restait suspendue une demi-minute avant de
-répondre 500 (état des lieux du 2026-09-24). Le moteur est créé sans se connecter : rien
-ici ne demande un PostgreSQL.
+`pool_size` alone lets SQLAlchemy open ten more overflow connections per process and wait thirty
+seconds for a free connection: under load, each replica could hold twenty connections and a request
+stayed suspended for half a minute before answering 500 (inventory of 2026-09-24). The engine is
+created without connecting: nothing here needs a PostgreSQL.
 """
 
 from __future__ import annotations
@@ -13,7 +12,7 @@ from choregos_api.config import Settings
 from choregos_api.db.session import _create_engine
 
 
-def test_le_pool_postgres_est_borne_par_la_configuration() -> None:
+def test_the_postgres_pool_is_bounded_by_the_configuration() -> None:
     settings = Settings(
         database_url="postgresql+asyncpg://u:p@localhost:1/x",
         db_pool_size=3,
@@ -33,9 +32,9 @@ def test_le_pool_postgres_est_borne_par_la_configuration() -> None:
         engine.sync_engine.dispose()
 
 
-def test_les_bornes_par_defaut_sont_des_bornes() -> None:
-    """Un débordement fini, une attente courte : une requête sans connexion répond vite
-    plutôt que de rester suspendue trente secondes avant un 500."""
+def test_the_default_bounds_are_bounds() -> None:
+    """A finite overflow, a short wait: a request without a connection answers quickly
+    rather than staying suspended thirty seconds before a 500."""
     s = Settings(database_url="postgresql+asyncpg://u:p@localhost:1/x")
     assert 0 <= s.db_max_overflow <= s.db_pool_size
     assert s.db_pool_timeout_s <= 10

@@ -13,7 +13,7 @@ from httpx import AsyncClient
 
 
 async def test_a_frozen_train_is_exported(client: AsyncClient, project: dict[str, Any]) -> None:
-    from choregos_api.metriques import rafraichir
+    from choregos_api.metrics import refresh
     from choregos_api.temporal import FakeTemporal, get_temporal, train_id
 
     fake = get_temporal()
@@ -29,16 +29,16 @@ async def test_a_frozen_train_is_exported(client: AsyncClient, project: dict[str
         "window_open": True,
         "release_id": None,
     }
-    await rafraichir()
+    await refresh()
     body = (await client.get("/metrics")).text
     assert 'choregos_train_frozen{env="prod",project="billing-api"} 1.0' in body
     assert 'choregos_train_status{env="prod",project="billing-api"} 2.0' in body
 
 
 def test_the_metrics_ask_a_query_the_train_defines() -> None:
-    from choregos_api.metriques import ETATS_TRAIN, TRAIN_STATUS_QUERY
+    from choregos_api.metrics import TRAIN_STATES, TRAIN_STATUS_QUERY
     from choregos_contracts import ReleaseStatus
     from choregos_orchestrator.workflows.train import ReleaseTrain
 
     assert callable(getattr(ReleaseTrain, TRAIN_STATUS_QUERY, None))
-    assert set(ETATS_TRAIN) <= {str(s) for s in ReleaseStatus}, "every mapped state is a real status"
+    assert set(TRAIN_STATES) <= {str(s) for s in ReleaseStatus}, "every mapped state is a real status"

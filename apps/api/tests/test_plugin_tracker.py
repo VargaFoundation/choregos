@@ -159,14 +159,14 @@ async def test_tracker_calls_carry_the_token_and_writes_are_audited(
 ) -> None:
     from choregos_api.db.models import AuditLog, Project
     from choregos_api.db.session import session_scope
-    from choregos_api.services.tickets import tracker_du_projet
+    from choregos_api.services.tickets import project_tracker
     from choregos_core.domain import TrackerStateMapping
 
     fake = await _ready(client, kube)
     fake.add("INC0000001", "VPN drops")
     async with session_scope() as session:
         project = (await session.execute(select(Project).where(Project.slug == "desked"))).scalar_one()
-        _, tracker = await tracker_du_projet(session, project)
+        _, tracker = await project_tracker(session, project)
     assert (await tracker.fetch_item("INC0000001")).title == "VPN drops"
     await tracker.set_state("INC0000001", TrackerStateMapping(status="In Progress"))
     first = await tracker.comment("INC0000001", "Run started.")

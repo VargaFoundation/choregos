@@ -1,8 +1,8 @@
-"""Les routeurs que rien n'exerçait : tickets, runs, coûts, trains, webhooks, templates, plateforme.
+"""The routers nothing exercised: work items, runs, costs, trains, webhooks, templates, platform.
 
-Troisième tranche de P1-3 (couverture 78 % → 80 %). Chaque test parle à l'API par HTTP,
-avec les fakes ; ce qui a besoin d'une ligne en base (un run, une release, une dépense)
-l'insère par le modèle, comme l'orchestrateur le ferait.
+Third slice of P1-3 (coverage 78% -> 80%). Each test talks to the API over HTTP, with the fakes;
+what needs a row in the database (a run, a release, a spend) inserts it through the model, as the
+orchestrator would.
 """
 
 from __future__ import annotations
@@ -18,21 +18,21 @@ from httpx import AsyncClient
 from .conftest import login
 
 
-async def _interne(client: AsyncClient, project: dict[str, Any]) -> dict[str, Any]:
-    """Le projet de test reçoit ses demandes DANS Choregos, et une première est posée."""
+async def _internal(client: AsyncClient, project: dict[str, Any]) -> dict[str, Any]:
+    """The test project receives its requests IN Choregos, and a first one is placed."""
     put = await client.put(
         f"/api/v1/projects/{project['id']}/connectors/tracker", json={"type": "internal", "config": {}}
     )
     assert put.status_code in {200, 201}, put.text
     created = await client.post(
         f"/api/v1/projects/{project['id']}/work-items",
-        json={"title": "Un chef de projet", "body": "6 mois", "size": "M"},
+        json={"title": "A project manager", "body": "6 months", "size": "M"},
     )
     assert created.status_code == 201, created.text
     return dict(created.json())
 
 
-async def _run(project: dict[str, Any], item: dict[str, Any], **champs: Any) -> str:
+async def _run(project: dict[str, Any], item: dict[str, Any], **fields: Any) -> str:
     from choregos_api.db.models import Run
     from choregos_api.db.session import session_scope
 
@@ -42,52 +42,54 @@ async def _run(project: dict[str, Any], item: dict[str, Any], **champs: Any) -> 
             project_id=project["id"],
             stage_role="implement",
             attempt=1,
-            status=champs.pop("status", "succeeded"),
+            status=fields.pop("status", "succeeded"),
             backend="claude-code",
             model="platform/standard",
-            **champs,
+            **fields,
         )
         session.add(run)
         await session.flush()
         return str(run.id)
 
 
-# ───────────────────────── tickets ─────────────────────────
+# ───────────────────────── work items ─────────────────────────
 
 
-async def test_un_ticket_se_liste_se_lit_et_raconte_sa_timeline(
+async def test_a_work_item_is_listed_read_and_tells_its_timeline(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    item = await _interne(client, project)
+    item = await _internal(client, project)
     page = (await client.get(f"/api/v1/projects/{project['id']}/work-items")).json()
     assert [i["tracker_key"] for i in page["items"]] == ["BILLING-API-1"]
-    lu = (await client.get(f"/api/v1/work-items/{item['id']}")).json()
-    assert lu["title"] == "Un chef de projet" and lu["size"] == "M" and lu["temporal_wf_id"]
+    read_back = (await client.get(f"/api/v1/work-items/{item['id']}")).json()
+    assert (
+        read_back["title"] == "A project manager" and read_back["size"] == "M" and read_back["temporal_wf_id"]
+    )
     timeline = await client.get(f"/api/v1/work-items/{item['id']}/timeline")
     assert timeline.status_code == 200 and isinstance(timeline.json(), list)
     assert (await client.get("/api/v1/work-items/absent")).status_code == 404
 
 
-async def test_un_workflow_mort_se_voit_sur_le_ticket(client: AsyncClient, project: dict[str, Any]) -> None:
+async def test_a_dead_workflow_shows_on_the_work_item(client: AsyncClient, project: dict[str, Any]) -> None:
     from choregos_api.temporal import WorkflowState, get_temporal
 
-    item = await _interne(client, project)
+    item = await _internal(client, project)
     get_temporal().described[item["temporal_wf_id"]] = WorkflowState(status="FAILED")
-    lu = (await client.get(f"/api/v1/work-items/{item['id']}")).json()
-    assert lu["workflow_status"] == "FAILED"
+    read_back = (await client.get(f"/api/v1/work-items/{item['id']}")).json()
+    assert read_back["workflow_status"] == "FAILED"
 
 
-async def test_les_actions_de_controle_partent_au_workflow_et_s_auditent(
+async def test_the_control_actions_go_to_the_workflow_and_are_audited(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     from choregos_api.temporal import get_temporal
 
-    item = await _interne(client, project)
+    item = await _internal(client, project)
     for action, paused in (("pause", True), ("resume", False), ("stop", False)):
-        reponse = await client.post(
+        response = await client.post(
             f"/api/v1/work-items/{item['id']}/actions", json={"action": action, "reason": "test"}
         )
-        assert reponse.status_code == 202, reponse.text
+        assert response.status_code == 202, response.text
         assert (await client.get(f"/api/v1/work-items/{item['id']}")).json()["paused"] is paused
     assert len(get_temporal().signals) >= 3
     audit = (await client.get("/api/v1/audit", params={"target_type": "work_item"})).json()
@@ -97,44 +99,46 @@ async def test_les_actions_de_controle_partent_au_workflow_et_s_auditent(
     ).status_code == 202
 
 
-async def test_une_decision_tranche_la_demande_humaine_en_attente(
+async def test_a_decision_settles_the_pending_human_request(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     from choregos_api.db.models import HumanRequest
     from choregos_api.db.session import session_scope
 
-    item = await _interne(client, project)
-    sans = await client.post(f"/api/v1/work-items/{item['id']}/decisions", json={"kind": "approve"})
-    assert sans.status_code == 409, "aucune demande en attente : rien à trancher"
+    item = await _internal(client, project)
+    nothing_pending = await client.post(
+        f"/api/v1/work-items/{item['id']}/decisions", json={"kind": "approve"}
+    )
+    assert nothing_pending.status_code == 409, "no request pending: nothing to settle"
     async with session_scope(orgs="*") as session:
         session.add(
             HumanRequest(
                 work_item_id=item["id"],
                 project_id=project["id"],
                 kind="question",
-                payload={"question": "en euros ?"},
+                payload={"question": "in euros?"},
                 requested_at=utcnow(),
             )
         )
-    reponse = await client.post(
-        f"/api/v1/work-items/{item['id']}/decisions", json={"kind": "answer", "answer": "oui, en euros"}
+    response = await client.post(
+        f"/api/v1/work-items/{item['id']}/decisions", json={"kind": "answer", "answer": "yes, in euros"}
     )
-    assert reponse.status_code == 202, reponse.text
-    assert reponse.json()["decided_by"] == "admin@varga.dev"
-    encore = await client.post(f"/api/v1/work-items/{item['id']}/decisions", json={"kind": "approve"})
-    assert encore.status_code == 409, "déjà tranchée"
+    assert response.status_code == 202, response.text
+    assert response.json()["decided_by"] == "admin@varga.dev"
+    again = await client.post(f"/api/v1/work-items/{item['id']}/decisions", json={"kind": "approve"})
+    assert again.status_code == 409, "already settled"
 
 
 # ───────────────────────── runs ─────────────────────────
 
 
-async def test_un_run_se_lit_avec_ses_evenements_son_diff_et_ses_acces(
+async def test_a_run_is_read_with_its_events_its_diff_and_its_accesses(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     from choregos_api.db.models import CostLedger, RunEvent
     from choregos_api.db.session import session_scope
 
-    item = await _interne(client, project)
+    item = await _internal(client, project)
     run_id = await _run(
         project,
         item,
@@ -165,7 +169,7 @@ async def test_un_run_se_lit_avec_ses_evenements_son_diff_et_ses_acces(
                         "kind": "write",
                         "target": "/workspace/.env",
                         "allowed": False,
-                        "reason": "fichier sensible",
+                        "reason": "sensitive file",
                     },
                 ),
                 (
@@ -183,8 +187,8 @@ async def test_un_run_se_lit_avec_ses_evenements_son_diff_et_ses_acces(
                 work_item_id=item["id"],
                 run_id=run_id,
                 kind="tool",
-                provider="adresse",
-                model="verifier_adresse",
+                provider="address",
+                model="verify_address",
                 cost_eur=0.002,
                 ts=utcnow(),
             )
@@ -201,9 +205,11 @@ async def test_un_run_se_lit_avec_ses_evenements_son_diff_et_ses_acces(
         e["seq"] for e in (await client.get(f"/api/v1/runs/{run_id}/events", params={"after_seq": 2})).json()
     ] == [3]
 
-    acces = (await client.get(f"/api/v1/runs/{run_id}/access")).json()
-    assert acces["refusals"] == 1 and acces["tool_cost_eur"] == 0.002
-    assert any(a["nature"] == "tool" for a in acces["access"]), "the catalogue call counts as an access"
+    access_report = (await client.get(f"/api/v1/runs/{run_id}/access")).json()
+    assert access_report["refusals"] == 1 and access_report["tool_cost_eur"] == 0.002
+    assert any(a["nature"] == "tool" for a in access_report["access"]), (
+        "the catalogue call counts as an access"
+    )
 
     diff = (await client.get(f"/api/v1/runs/{run_id}/diff")).json()
     assert {f["path"]: f["in_scope"] for f in diff["files"]} == {"src/a.py": True, "infra/main.tf": False}
@@ -212,24 +218,24 @@ async def test_un_run_se_lit_avec_ses_evenements_son_diff_et_ses_acces(
     ] == "application/x-ndjson"
 
 
-async def test_un_run_sans_transcript_repond_404(client: AsyncClient, project: dict[str, Any]) -> None:
-    item = await _interne(client, project)
+async def test_a_run_without_a_transcript_answers_404(client: AsyncClient, project: dict[str, Any]) -> None:
+    item = await _internal(client, project)
     run_id = await _run(project, item)
     assert (await client.get(f"/api/v1/runs/{run_id}/transcript")).status_code == 404
     assert (await client.get(f"/api/v1/runs/{run_id}/diff")).json()["files"] == []
 
 
-# ───────────────────────── coûts ─────────────────────────
+# ───────────────────────── costs ─────────────────────────
 
 
-async def _depenses(client: AsyncClient, project: dict[str, Any]) -> dict[str, Any]:
+async def _spends(client: AsyncClient, project: dict[str, Any]) -> dict[str, Any]:
     from choregos_api.db.models import CostLedger
     from choregos_api.db.session import session_scope
 
-    item = await _interne(client, project)
+    item = await _internal(client, project)
     run_id = await _run(project, item)
     async with session_scope(orgs="*") as session:
-        maintenant = utcnow()
+        now = utcnow()
         session.add(
             CostLedger(
                 project_id=project["id"],
@@ -243,7 +249,7 @@ async def _depenses(client: AsyncClient, project: dict[str, Any]) -> dict[str, A
                 tokens_out=200,
                 cost_usd=0.5,
                 cost_eur=0.46,
-                ts=maintenant,
+                ts=now,
             )
         )
         session.add(
@@ -258,7 +264,7 @@ async def _depenses(client: AsyncClient, project: dict[str, Any]) -> dict[str, A
                 tokens_in=100,
                 cost_usd=0.1,
                 cost_eur=0.092,
-                ts=maintenant - timedelta(days=1),
+                ts=now - timedelta(days=1),
             )
         )
         session.add(
@@ -267,48 +273,50 @@ async def _depenses(client: AsyncClient, project: dict[str, Any]) -> dict[str, A
                 work_item_id=item["id"],
                 run_id=run_id,
                 kind="tool",
-                provider="adresse",
-                model="verifier_adresse",
+                provider="address",
+                model="verify_address",
                 cost_usd=0.01,
                 cost_eur=0.0092,
-                ts=maintenant,
+                ts=now,
             )
         )
         session.add(
             CostLedger(
                 project_id=project["id"],
                 kind="model",
-                model="vieux",
+                model="old",
                 cost_usd=99,
                 cost_eur=99,
-                ts=maintenant - timedelta(days=60),
+                ts=now - timedelta(days=60),
             )
         )
     return item
 
 
-async def test_le_rapport_de_couts_se_groupe_et_borne_sa_fenetre(
+async def test_the_cost_report_groups_and_bounds_its_window(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    await _depenses(client, project)
-    par_nature = (
+    await _spends(client, project)
+    by_kind = (
         await client.get(f"/api/v1/projects/{project['id']}/costs", params={"group_by": "kind"})
     ).json()
-    assert {r["key"]: r["runs"] for r in par_nature["rows"]} == {"model": 2, "tool": 1}
-    assert par_nature["total"]["cost_usd"] == pytest.approx(0.61), "la dépense de deux mois est hors fenêtre"
-    par_etape = (
+    assert {r["key"]: r["runs"] for r in by_kind["rows"]} == {"model": 2, "tool": 1}
+    assert by_kind["total"]["cost_usd"] == pytest.approx(0.61), (
+        "the spend of two months ago is out of the window"
+    )
+    by_stage = (
         await client.get(f"/api/v1/projects/{project['id']}/costs", params={"group_by": "stage"})
     ).json()
-    assert {r["key"] for r in par_etape["rows"]} >= {"implement", "verify"}
-    par_jour = (await client.get(f"/api/v1/projects/{project['id']}/costs")).json()
-    assert par_jour["group_by"] == "day" and len(par_jour["rows"]) == 2
+    assert {r["key"] for r in by_stage["rows"]} >= {"implement", "verify"}
+    by_day = (await client.get(f"/api/v1/projects/{project['id']}/costs")).json()
+    assert by_day["group_by"] == "day" and len(by_day["rows"]) == 2
     assert (
-        await client.get(f"/api/v1/projects/{project['id']}/costs", params={"group_by": "planete"})
+        await client.get(f"/api/v1/projects/{project['id']}/costs", params={"group_by": "planet"})
     ).status_code == 422
-    depuis = utcnow().date().isoformat()
+    since = utcnow().date().isoformat()
     assert (
         len(
-            (await client.get(f"/api/v1/projects/{project['id']}/costs", params={"since": depuis})).json()[
+            (await client.get(f"/api/v1/projects/{project['id']}/costs", params={"since": since})).json()[
                 "rows"
             ]
         )
@@ -316,34 +324,34 @@ async def test_le_rapport_de_couts_se_groupe_et_borne_sa_fenetre(
     )
 
 
-async def test_le_csv_porte_le_total_le_budget_et_le_bom_pour_excel(
+async def test_the_csv_carries_the_total_the_budget_and_the_bom_for_excel(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    await _depenses(client, project)
-    reponse = await client.get(f"/api/v1/projects/{project['id']}/costs.csv", params={"group_by": "kind"})
-    assert reponse.status_code == 200 and reponse.headers["content-type"].startswith("text/csv")
-    assert 'filename="couts-billing-api-kind-' in reponse.headers["content-disposition"]
-    texte = reponse.text
-    assert texte.startswith("\ufeff"), "le BOM, pour qu'Excel lise les accents"
-    en_tete = texte.lstrip("\ufeff").splitlines()[0]
-    assert en_tete == "kind;cout_usd;cout_eur;tokens_in;tokens_out;tokens_caches;runs"
-    assert any(ligne.startswith("total;") for ligne in texte.splitlines())
-    assert any(ligne.startswith("budget_quotidien_usd;") for ligne in texte.splitlines())
+    await _spends(client, project)
+    response = await client.get(f"/api/v1/projects/{project['id']}/costs.csv", params={"group_by": "kind"})
+    assert response.status_code == 200 and response.headers["content-type"].startswith("text/csv")
+    assert 'filename="couts-billing-api-kind-' in response.headers["content-disposition"]
+    text = response.text
+    assert text.startswith("\ufeff"), "the BOM, so that Excel reads the accents"
+    header = text.lstrip("\ufeff").splitlines()[0]
+    assert header == "kind;cout_usd;cout_eur;tokens_in;tokens_out;tokens_caches;runs"
+    assert any(line.startswith("total;") for line in text.splitlines())
+    assert any(line.startswith("budget_quotidien_usd;") for line in text.splitlines())
 
 
-async def test_les_couts_d_une_organisation_se_lisent_par_projet(
+async def test_the_costs_of_an_organisation_read_per_project(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    await _depenses(client, project)
-    rapport = (await client.get("/api/v1/orgs/varga/costs", params={"group_by": "project"})).json()
-    assert [r["key"] for r in rapport["rows"]] == ["billing-api"], "l'identifiant est traduit en slug"
-    assert (await client.get("/api/v1/orgs/inconnue/costs")).status_code == 404
+    await _spends(client, project)
+    report = (await client.get("/api/v1/orgs/varga/costs", params={"group_by": "project"})).json()
+    assert [r["key"] for r in report["rows"]] == ["billing-api"], "the identifier is translated to a slug"
+    assert (await client.get("/api/v1/orgs/unknown/costs")).status_code == 404
 
 
 # ───────────────────────── trains ─────────────────────────
 
 
-async def test_l_etat_du_train_vient_du_workflow_quand_il_repond(
+async def test_the_train_state_comes_from_the_workflow_when_it_answers(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     from choregos_api.temporal import get_temporal, train_id
@@ -356,18 +364,18 @@ async def test_l_etat_du_train_vient_du_workflow_quand_il_repond(
         "freeze_reason": "rollback",
         "window_open": False,
     }
-    etat = (await client.get(f"/api/v1/projects/{project['id']}/trains/prod")).json()
+    state = (await client.get(f"/api/v1/projects/{project['id']}/trains/prod")).json()
     assert (
-        etat["batch_size"] == 2
-        and etat["frozen"]
-        and etat["freeze_reason"] == "rollback"
-        and not etat["window_open"]
+        state["batch_size"] == 2
+        and state["frozen"]
+        and state["freeze_reason"] == "rollback"
+        and not state["window_open"]
     )
-    sans = (await client.get(f"/api/v1/projects/{project['id']}/trains/staging")).json()
-    assert sans["status"] == "collecting" and sans["batch_size"] == 0
+    unstarted = (await client.get(f"/api/v1/projects/{project['id']}/trains/staging")).json()
+    assert unstarted["status"] == "collecting" and unstarted["batch_size"] == 0
 
 
-async def test_departs_gels_et_degels_sont_des_signaux_traces(
+async def test_departures_freezes_and_unfreezes_are_traced_signals(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     from choregos_api.temporal import get_temporal
@@ -375,17 +383,17 @@ async def test_departs_gels_et_degels_sont_des_signaux_traces(
     base = f"/api/v1/projects/{project['id']}/trains/prod"
     assert (await client.post(f"{base}/depart")).status_code == 202
     assert (await client.post(f"{base}/freeze", json={"reason": "x"})).status_code == 422, (
-        "un motif de moins de trois caractères n'est pas un motif"
+        "a reason of less than three characters is not a reason"
     )
-    assert (await client.post(f"{base}/freeze", json={"reason": "incident en cours"})).status_code == 202
+    assert (await client.post(f"{base}/freeze", json={"reason": "incident in progress"})).status_code == 202
     assert (await client.post(f"{base}/unfreeze")).status_code == 202
-    noms = [nom for wf, nom, _ in get_temporal().signals if wf == "train-billing-api-prod"]
-    assert noms == ["depart_now", "freeze", "unfreeze"]
+    names = [name for wf, name, _ in get_temporal().signals if wf == "train-billing-api-prod"]
+    assert names == ["depart_now", "freeze", "unfreeze"]
     audit = (await client.get("/api/v1/audit", params={"target_type": "train"})).json()
     assert {e["action"] for e in audit["items"]} == {"train.depart", "train.freeze", "train.unfreeze"}
 
 
-async def test_une_release_s_approuve_et_s_abandonne(client: AsyncClient, project: dict[str, Any]) -> None:
+async def test_a_release_is_approved_and_aborted(client: AsyncClient, project: dict[str, Any]) -> None:
     from choregos_api.db.models import Release
     from choregos_api.db.session import session_scope
     from choregos_api.temporal import get_temporal
@@ -412,23 +420,23 @@ async def test_une_release_s_approuve_et_s_abandonne(client: AsyncClient, projec
     assert (
         await client.post(f"/api/v1/releases/{release_id}/abort", json={"reason": "smoke KO"})
     ).status_code == 202
-    noms = [nom for wf, nom, _ in get_temporal().signals if wf == "train-billing-api-prod"]
-    assert noms == ["approve", "abort"]
-    assert (await client.get("/api/v1/releases/absente")).status_code == 404
+    names = [name for wf, name, _ in get_temporal().signals if wf == "train-billing-api-prod"]
+    assert names == ["approve", "abort"]
+    assert (await client.get("/api/v1/releases/missing")).status_code == 404
 
 
 # ───────────────────────── webhooks ─────────────────────────
 
 
-async def test_un_cloudevent_tekton_est_achemine_une_seule_fois(
+async def test_a_tekton_cloudevent_is_routed_only_once(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from choregos_api.config import get_settings
 
-    # Ce test suppose un secret de webhook vide (environnement de test) : il le dit, au lieu de
-    # dépendre de ce qu'une autre partie de la session aurait posé (#259).
+    # This test assumes an empty webhook secret (test environment): it says so, instead of
+    # depending on what another part of the session may have set (#259).
     monkeypatch.setattr(get_settings(), "generic_webhook_secret", "")
-    corps = {
+    body = {
         "pipelineRun": {
             "metadata": {
                 "name": "run-1",
@@ -440,22 +448,22 @@ async def test_un_cloudevent_tekton_est_achemine_une_seule_fois(
             }
         }
     }
-    entetes = {"ce-type": "dev.tekton.event.pipelinerun.successful.v1", "ce-id": "ev-1"}
-    premier = await client.post("/api/v1/webhooks/tekton", json=corps, headers=entetes)
-    assert premier.status_code == 202 and premier.json()["duplicate"] is False
-    second = await client.post("/api/v1/webhooks/tekton", json=corps, headers=entetes)
-    assert second.json()["duplicate"] is True, "même ce-id : rien n'est acheminé deux fois"
+    headers = {"ce-type": "dev.tekton.event.pipelinerun.successful.v1", "ce-id": "ev-1"}
+    first = await client.post("/api/v1/webhooks/tekton", json=body, headers=headers)
+    assert first.status_code == 202 and first.json()["duplicate"] is False
+    second = await client.post("/api/v1/webhooks/tekton", json=body, headers=headers)
+    assert second.json()["duplicate"] is True, "same ce-id: nothing is routed twice"
 
 
-async def test_argocd_et_alertmanager_exigent_le_secret_partage_puis_signalent(
+async def test_argocd_and_alertmanager_require_the_shared_secret_then_signal(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from choregos_api.config import get_settings
     from choregos_api.temporal import get_temporal
 
     monkeypatch.setattr(get_settings(), "generic_webhook_secret", "s3cret")
-    refus = await client.post("/api/v1/webhooks/argocd", json={"app": "billing-prod"})
-    assert refus.status_code == 401
+    refusal = await client.post("/api/v1/webhooks/argocd", json={"app": "billing-prod"})
+    assert refusal.status_code == 401
     ok = await client.post(
         "/api/v1/webhooks/argocd",
         json={
@@ -470,117 +478,119 @@ async def test_argocd_et_alertmanager_exigent_le_secret_partage_puis_signalent(
     )
     assert ok.status_code == 202 and ok.json()["events"] == 1
     assert any(
-        wf == "train-billing-api-prod" and nom == "deploy_event" for wf, nom, _ in get_temporal().signals
+        wf == "train-billing-api-prod" and name == "deploy_event" for wf, name, _ in get_temporal().signals
     )
-    encore = await client.post(
+    again = await client.post(
         "/api/v1/webhooks/argocd",
         json={"app": "x", "project": "billing-api", "env": "prod", "delivery_id": "d-1"},
         headers={"X-Choregos-Secret": "s3cret"},
     )
-    assert encore.json()["duplicate"] is True
+    assert again.json()["duplicate"] is True
 
-    alertes = {
+    alerts = {
         "alerts": [
             {
                 "status": "firing",
                 "fingerprint": "f-1",
                 "labels": {"alertname": "ErrorBudget", "severity": "page", "project": "billing-api"},
             },
-            {"status": "resolved", "fingerprint": "f-2", "labels": {"project": "inconnu"}},
+            {"status": "resolved", "fingerprint": "f-2", "labels": {"project": "unknown"}},
         ]
     }
-    reponse = await client.post(
-        "/api/v1/webhooks/alertmanager", json=alertes, headers={"X-Choregos-Secret": "s3cret"}
+    response = await client.post(
+        "/api/v1/webhooks/alertmanager", json=alerts, headers={"X-Choregos-Secret": "s3cret"}
     )
-    assert reponse.status_code == 202 and reponse.json()["events"] == 2
-    assert any(wf == "mem-billing-api" and nom == "alert" for wf, nom, _ in get_temporal().signals)
+    assert response.status_code == 202 and response.json()["events"] == 2
+    assert any(wf == "mem-billing-api" and name == "alert" for wf, name, _ in get_temporal().signals)
     assert (
         await client.post(
-            "/api/v1/webhooks/alertmanager", json=alertes, headers={"X-Choregos-Secret": "s3cret"}
+            "/api/v1/webhooks/alertmanager", json=alerts, headers={"X-Choregos-Secret": "s3cret"}
         )
     ).json()["events"] == 0
 
 
-async def test_github_sans_secret_est_tolere_hors_production(
+async def test_github_without_a_secret_is_tolerated_outside_production(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    reponse = await client.post(
+    response = await client.post(
         "/api/v1/webhooks/github",
         json={"zen": "ping"},
         headers={"X-GitHub-Event": "ping", "X-GitHub-Delivery": "p-1"},
     )
-    assert reponse.status_code == 202 and reponse.json()["events"] == 0
+    assert response.status_code == 202 and response.json()["events"] == 0
 
 
 # ───────────────────────── templates ─────────────────────────
 
 
-async def test_les_templates_du_depot_se_listent_et_se_lisent(client: AsyncClient, admin: str) -> None:
-    liste = (await client.get("/api/v1/templates")).json()
-    assert liste, "le dépôt livre au moins un template"
-    premier = liste[0]
-    detail = (await client.get(f"/api/v1/templates/{premier['name']}")).json()
-    assert detail["manifest"]["metadata"]["name"] == premier["name"]
-    assert (await client.get("/api/v1/templates/inexistant")).status_code == 404
+async def test_the_repository_templates_are_listed_and_read(client: AsyncClient, admin: str) -> None:
+    listing = (await client.get("/api/v1/templates")).json()
+    assert listing, "the repository ships at least one template"
+    first = listing[0]
+    detail = (await client.get(f"/api/v1/templates/{first['name']}")).json()
+    assert detail["manifest"]["metadata"]["name"] == first["name"]
+    assert (await client.get("/api/v1/templates/nonexistent")).status_code == 404
 
 
-async def test_chaque_template_livre_passe_le_schema_des_manifestes(client: AsyncClient, admin: str) -> None:
-    """Un template lu depuis le dépôt est servi sans validation ; le même, envoyé par l'API,
-    était refusé : `github-aca` déclarait `requires.azure_capabilities`, que le schéma ne
-    connaissait pas (trouvé par cette tranche de tests). Le schéma le porte désormais, et
-    ce test empêche un template livré de dériver du contrat."""
-    for resume in (await client.get("/api/v1/templates")).json():
-        manifeste = (await client.get(f"/api/v1/templates/{resume['name']}")).json()["manifest"]
-        manifeste["metadata"] = {**manifeste["metadata"], "name": f"copie-{resume['name']}"}
-        reponse = await client.post("/api/v1/templates", json={"manifest": manifeste})
-        assert reponse.status_code in {200, 201}, f"{resume['name']} : {reponse.text}"
+async def test_each_shipped_template_passes_the_manifest_schema(client: AsyncClient, admin: str) -> None:
+    """A template read from the repository is served without validation; the same one, sent through
+    the API, was refused: `github-aca` declared `requires.azure_capabilities`, which the schema did
+    not know (found by this slice of tests). The schema now carries it, and this test keeps a
+    shipped template from drifting from the contract."""
+    for summary in (await client.get("/api/v1/templates")).json():
+        manifest = (await client.get(f"/api/v1/templates/{summary['name']}")).json()["manifest"]
+        manifest["metadata"] = {**manifest["metadata"], "name": f"copy-{summary['name']}"}
+        response = await client.post("/api/v1/templates", json={"manifest": manifest})
+        assert response.status_code in {200, 201}, f"{summary['name']} : {response.text}"
 
 
-async def test_un_template_se_cree_et_se_met_a_jour_par_un_administrateur(
-    client: AsyncClient, admin: str
-) -> None:
-    # Un manifeste valide est celui d'un template livré, renommé : le schéma exige
-    # `requires`, `defaults`, `inputs` et `steps`, et un test qui les invente vieillirait mal.
-    livre = (await client.get("/api/v1/templates")).json()[0]
-    manifeste = dict((await client.get(f"/api/v1/templates/{livre['name']}")).json()["manifest"])
-    manifeste["metadata"] = {
-        **manifeste["metadata"],
-        "name": "maison",
+async def test_a_template_is_created_and_updated_by_an_administrator(client: AsyncClient, admin: str) -> None:
+    # A valid manifest is that of a shipped template, renamed: the schema requires
+    # `requires`, `defaults`, `inputs` and `steps`, and a test that invents them would age badly.
+    shipped = (await client.get("/api/v1/templates")).json()[0]
+    manifest = dict((await client.get(f"/api/v1/templates/{shipped['name']}")).json()["manifest"])
+    manifest["metadata"] = {
+        **manifest["metadata"],
+        "name": "house",
         "version": "1.0.0",
-        "display": "Maison",
+        "display": "House",
     }
-    cree = await client.post("/api/v1/templates", json={"manifest": manifeste, "is_published": False})
-    assert cree.status_code in {200, 201}, cree.text
-    assert cree.json()["name"] == "maison" and cree.json()["is_published"] is False
-    manifeste["metadata"] = {**manifeste["metadata"], "version": "1.1.0"}
-    maj = await client.put("/api/v1/templates/maison", json={"manifest": manifeste, "is_published": True})
-    assert maj.status_code == 200 and maj.json()["version"] == "1.1.0" and maj.json()["is_published"] is True
-    assert any(t["name"] == "maison" for t in (await client.get("/api/v1/templates")).json())
-    invalide = await client.post("/api/v1/templates", json={"manifest": {"kind": "Autre"}})
-    assert invalide.status_code == 422
+    created = await client.post("/api/v1/templates", json={"manifest": manifest, "is_published": False})
+    assert created.status_code in {200, 201}, created.text
+    assert created.json()["name"] == "house" and created.json()["is_published"] is False
+    manifest["metadata"] = {**manifest["metadata"], "version": "1.1.0"}
+    updated = await client.put("/api/v1/templates/house", json={"manifest": manifest, "is_published": True})
+    assert (
+        updated.status_code == 200
+        and updated.json()["version"] == "1.1.0"
+        and updated.json()["is_published"] is True
+    )
+    assert any(t["name"] == "house" for t in (await client.get("/api/v1/templates")).json())
+    invalid = await client.post("/api/v1/templates", json={"manifest": {"kind": "Other"}})
+    assert invalid.status_code == 422
 
 
-# ───────────────────────── plateforme ─────────────────────────
+# ───────────────────────── platform ─────────────────────────
 
 
-async def test_backends_et_executeurs_se_listent_et_se_reglent(client: AsyncClient, admin: str) -> None:
+async def test_backends_and_executors_are_listed_and_set(client: AsyncClient, admin: str) -> None:
     backends = (await client.get("/api/v1/platform/backends")).json()
     assert {b["name"] for b in backends} >= {"claude-code", "codex"} and next(
         b for b in backends if b["name"] == "claude-code"
     )["enabled"]
-    coupe = await client.put(
+    switched_off = await client.put(
         "/api/v1/platform/backends",
-        json={"name": "codex", "enabled": False, "disabled_reason": "conformité KO"},
+        json={"name": "codex", "enabled": False, "disabled_reason": "compliance KO"},
     )
-    assert coupe.status_code == 200 and coupe.json()["enabled"] is False
+    assert switched_off.status_code == 200 and switched_off.json()["enabled"] is False
     assert (
         next(b for b in (await client.get("/api/v1/platform/backends")).json() if b["name"] == "codex")[
             "disabled_reason"
         ]
-        == "conformité KO"
+        == "compliance KO"
     )
-    executeurs = (await client.get("/api/v1/platform/executors")).json()
-    assert {e["kind"] for e in executeurs} == {"tekton", "k8s_job", "local_docker", "aca", "agent_sandbox"}
+    executors = (await client.get("/api/v1/platform/executors")).json()
+    assert {e["kind"] for e in executors} == {"tekton", "k8s_job", "local_docker", "aca", "agent_sandbox"}
     # S42-07b: the executors are the deployment's answer; there is no PUT to store one any more
     for method in ("PUT", "POST", "PATCH", "DELETE"):
         gone = await client.request(
@@ -590,35 +600,33 @@ async def test_backends_et_executeurs_se_listent_et_se_reglent(client: AsyncClie
     assert (await client.get("/api/v1/platform/gateway/keys")).json() == []
 
 
-async def test_les_reglages_de_plateforme_sont_reserves_aux_administrateurs(
-    client: AsyncClient, org: str
-) -> None:
+async def test_the_platform_settings_are_reserved_to_administrators(client: AsyncClient, org: str) -> None:
     await login(client, "dev@varga.dev")
     assert (
         await client.put("/api/v1/platform/backends", json={"name": "codex", "enabled": False})
     ).status_code == 403
     assert (await client.get("/api/v1/platform/gateway/keys")).status_code == 403
-    assert (await client.get("/api/v1/platform/backends")).status_code == 200, "lire reste ouvert"
+    assert (await client.get("/api/v1/platform/backends")).status_code == 200, "reading stays open"
 
 
-# ───────────── la timeline complète, le provisioning, l'API interne, la CLI ─────────────
+# ───────────── the full timeline, provisioning, the internal API, the CLI ─────────────
 
 
-async def test_la_timeline_raconte_runs_decisions_etats_et_findings(
+async def test_the_timeline_tells_runs_decisions_states_and_findings(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     from choregos_api.db.models import Event, Finding, HumanRequest
     from choregos_api.db.session import session_scope
 
-    item = await _interne(client, project)
-    run_id = await _run(project, item, result={"summary": "trois profils"}, cost_usd=0.4)
+    item = await _internal(client, project)
+    run_id = await _run(project, item, result={"summary": "three profiles"}, cost_usd=0.4)
     async with session_scope(orgs="*") as session:
         session.add(
             HumanRequest(
                 work_item_id=item["id"],
                 project_id=project["id"],
                 kind="approval",
-                payload={"summary": "valider ?"},
+                payload={"summary": "validate?"},
                 requested_at=utcnow(),
                 decided_at=utcnow(),
                 decided_by="marie@varga.dev",
@@ -631,7 +639,7 @@ async def test_la_timeline_raconte_runs_decisions_etats_et_findings(
                 work_item_id=item["id"],
                 type="choregos.workitem.state_changed",
                 subject="BILLING-API-1",
-                payload={"from": "demande", "to": "sourcing", "by": "orchestrateur"},
+                payload={"from": "request", "to": "sourcing", "by": "orchestrator"},
                 ts=utcnow(),
             )
         )
@@ -640,20 +648,20 @@ async def test_la_timeline_raconte_runs_decisions_etats_et_findings(
                 project_id=project["id"],
                 origin_work_item_id=item["id"],
                 origin_run_id=run_id,
-                title="Base de profils manquante",
+                title="Profile base missing",
                 type="docs",
                 severity="medium",
-                evidence="aucune base",
+                evidence="no base",
                 status="pending",
             )
         )
     timeline = (await client.get(f"/api/v1/work-items/{item['id']}/timeline")).json()
-    genres = [e["kind"] for e in timeline]
-    assert {"run", "decision", "state_change", "finding"} <= set(genres)
-    assert genres.count("decision") == 2, "la demande et la décision sont deux entrées"
+    kinds_seen = [e["kind"] for e in timeline]
+    assert {"run", "decision", "state_change", "finding"} <= set(kinds_seen)
+    assert kinds_seen.count("decision") == 2, "the request and the decision are two entries"
     run_entry = next(e for e in timeline if e["kind"] == "run")
-    assert run_entry["detail"] == "trois profils" and run_entry["cost_usd"] == 0.4
-    assert next(e for e in timeline if e["kind"] == "state_change")["title"] == "demande → sourcing"
+    assert run_entry["detail"] == "three profiles" and run_entry["cost_usd"] == 0.4
+    assert next(e for e in timeline if e["kind"] == "state_change")["title"] == "request → sourcing"
 
 
 async def test_a_project_with_a_repository_still_receives_default_simple(
@@ -662,25 +670,25 @@ async def test_a_project_with_a_repository_still_receives_default_simple(
     assert project["workflow_name"] == "default-simple", "D14 is unchanged for a software project"
 
 
-async def test_le_provisioning_demarre_un_workflow_et_expose_son_etat(
+async def test_provisioning_starts_a_workflow_and_exposes_its_state(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     from choregos_api.temporal import get_temporal
 
-    sec = await client.post(
+    dry_run = await client.post(
         f"/api/v1/projects/{project['id']}/provision", json={"dry_run": True, "inputs": {"env": "dev"}}
     )
-    assert sec.status_code == 202 and sec.json()["status"] == "running"
-    assert not get_temporal().started, "un dry-run ne démarre rien"
-    vrai = await client.post(f"/api/v1/projects/{project['id']}/provision", json={"inputs": {"region": "eu"}})
-    assert vrai.status_code == 202
+    assert dry_run.status_code == 202 and dry_run.json()["status"] == "running"
+    assert not get_temporal().started, "a dry run starts nothing"
+    real = await client.post(f"/api/v1/projects/{project['id']}/provision", json={"inputs": {"region": "eu"}})
+    assert real.status_code == 202
     ((workflow_id, payload),) = get_temporal().started.items()
-    assert workflow_id == vrai.json()["workflow_id"] and payload["inputs"] == {
+    assert workflow_id == real.json()["workflow_id"] and payload["inputs"] == {
         "env": "dev",
         "region": "eu",
-    }, "les entrées s'accumulent d'un appel à l'autre"
-    etat = (await client.get(f"/api/v1/projects/{project['id']}/provision")).json()
-    assert etat["status"] == "running" and etat["workflow_id"] == workflow_id
+    }, "the inputs accumulate from one call to the next"
+    state = (await client.get(f"/api/v1/projects/{project['id']}/provision")).json()
+    assert state["status"] == "running" and state["workflow_id"] == workflow_id
     assert (await client.get(f"/api/v1/projects/{project['id']}")).json()["status"] == "provisioning"
 
 
@@ -712,20 +720,20 @@ async def test_a_project_without_template_or_repository_is_activated_without_a_w
     assert (await client.get(f"/api/v1/projects/{project['id']}")).json()["status"] == "active"
 
 
-async def test_l_api_interne_sert_l_agent_avec_son_jeton_de_run(
+async def test_the_internal_api_serves_the_agent_with_its_run_token(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
     from choregos_api.config import get_settings
     from choregos_api.security import mint_run_token
     from choregos_api.temporal import get_temporal
 
-    item = await _interne(client, project)
+    item = await _internal(client, project)
     run_id = await _run(
         project,
         item,
         status="running",
         context_pack={
-            "query": "avoirs",
+            "query": "credit notes",
             "paths": [],
             "kinds": [],
             "budget_tokens": 100,
@@ -737,48 +745,48 @@ async def test_l_api_interne_sert_l_agent_avec_son_jeton_de_run(
             "generated_at": "2026-09-25T00:00:00Z",
         },
     )
-    jeton = mint_run_token(
+    run_token = mint_run_token(
         run_id,
         project_slug="billing-api",
         work_item_key="BILLING-API-1",
         ttl_minutes=5,
         settings=get_settings(),
     )
-    entetes = {"Authorization": f"Bearer {jeton}"}
-    client.cookies.clear()  # l'agent n'a pas de session : seul le jeton de run l'authentifie
+    headers = {"Authorization": f"Bearer {run_token}"}
+    client.cookies.clear()  # the agent has no session: only the run token authenticates it
 
-    ticket = await client.get(f"/api/v1/internal/runs/{run_id}/ticket", headers=entetes)
-    assert ticket.status_code == 200, ticket.text
-    assert ticket.json()["key"] == "BILLING-API-1" and ticket.json()["body"] == "6 mois"
-    assert (await client.get(f"/api/v1/internal/runs/{run_id}/context", headers=entetes)).json()[
+    fetched = await client.get(f"/api/v1/internal/runs/{run_id}/ticket", headers=headers)
+    assert fetched.status_code == 200, fetched.text
+    assert fetched.json()["key"] == "BILLING-API-1" and fetched.json()["body"] == "6 months"
+    assert (await client.get(f"/api/v1/internal/runs/{run_id}/context", headers=headers)).json()[
         "query"
-    ] == "avoirs"
+    ] == "credit notes"
 
-    lot = {
+    batch = {
         "events": [
-            {"seq": 1, "type": "session/update", "payload": {"text": "bonjour"}},
+            {"seq": 1, "type": "session/update", "payload": {"text": "hello"}},
             {"seq": 2, "type": "session/update", "payload": {}},
         ]
     }
     assert (
-        await client.post(f"/api/v1/internal/runs/{run_id}/events", json=lot, headers=entetes)
+        await client.post(f"/api/v1/internal/runs/{run_id}/events", json=batch, headers=headers)
     ).json() == {"accepted": 2}
     assert (
-        await client.post(f"/api/v1/internal/runs/{run_id}/events", json=lot, headers=entetes)
-    ).json() == {"accepted": 0}, "rejouer le lot n'écrit rien"
+        await client.post(f"/api/v1/internal/runs/{run_id}/events", json=batch, headers=headers)
+    ).json() == {"accepted": 0}, "replaying the batch writes nothing"
 
     question = await client.post(
         f"/api/v1/internal/runs/{run_id}/question",
-        json={"text": "en euros ?", "options": ["oui", "non"]},
-        headers=entetes,
+        json={"text": "in euros?", "options": ["yes", "no"]},
+        headers=headers,
     )
     assert question.status_code == 202 and question.json()["request_id"]
-    assert any(nom == "question_asked" for _, nom, _ in get_temporal().signals)
+    assert any(name == "question_asked" for _, name, _ in get_temporal().signals)
 
-    sans = await client.get(f"/api/v1/internal/runs/{run_id}/ticket")
-    assert sans.status_code == 401
-    autre = mint_run_token(
-        "autre-run",
+    anonymous = await client.get(f"/api/v1/internal/runs/{run_id}/ticket")
+    assert anonymous.status_code == 401
+    other = mint_run_token(
+        "other-run",
         project_slug="billing-api",
         work_item_key="BILLING-API-1",
         ttl_minutes=5,
@@ -786,12 +794,12 @@ async def test_l_api_interne_sert_l_agent_avec_son_jeton_de_run(
     )
     assert (
         await client.get(
-            f"/api/v1/internal/runs/{run_id}/ticket", headers={"Authorization": f"Bearer {autre}"}
+            f"/api/v1/internal/runs/{run_id}/ticket", headers={"Authorization": f"Bearer {other}"}
         )
-    ).status_code in {403, 404}, "un jeton ne vaut que pour son run"
+    ).status_code in {403, 404}, "a token holds only for its run"
 
 
-async def test_choregos_admin_frappe_un_jeton_et_rejoue_l_amorcage(
+async def test_choregos_admin_mints_a_token_and_replays_the_bootstrap(
     app: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     import asyncio
@@ -803,33 +811,33 @@ async def test_choregos_admin_frappe_un_jeton_et_rejoue_l_amorcage(
 
     runner = CliRunner()
 
-    async def invoque(*args: str) -> Any:
-        # La CLI fait `asyncio.run()` : dans un fil à part, avec un moteur neuf — celui du
-        # test est lié à la boucle de pytest, et un moteur ne se partage pas entre boucles.
+    async def invoke(*args: str) -> Any:
+        # The CLI calls `asyncio.run()`: in a separate thread, with a fresh engine; the one of the
+        # test is bound to pytest's loop, and an engine is not shared between loops.
         db_session._engine = None
         db_session._sessionmaker = None
         return await asyncio.to_thread(runner.invoke, cli, list(args))
 
-    frappe = await invoque(
+    minted = await invoke(
         "tokens", "create", "--email", "Ops@Varga.dev", "--name", "ci", "--expires-in-days", "7"
     )
-    assert frappe.exit_code == 0, frappe.output
-    jeton = frappe.output.strip()
-    assert jeton and len(jeton) > 20, "le clair est affiché une fois"
+    assert minted.exit_code == 0, minted.output
+    token = minted.output.strip()
+    assert token and len(token) > 20, "the clear text is shown once"
     monkeypatch.setattr(get_settings(), "bootstrap_org", "acme")
     monkeypatch.setattr(get_settings(), "bootstrap_org_name", "ACME")
     monkeypatch.setattr(get_settings(), "bootstrap_admins", "ops@varga.dev")
-    amorce = await invoque("orgs", "bootstrap")
-    assert amorce.exit_code == 0, amorce.output
-    assert "acme" in amorce.output and "ops@varga.dev" in amorce.output
-    encore = await invoque("orgs", "bootstrap")
-    assert "none" in encore.output, "idempotent: the second time creates nothing"
-    assert (await invoque()).exit_code != 0, "sans commande, l'aide"
+    bootstrapped = await invoke("orgs", "bootstrap")
+    assert bootstrapped.exit_code == 0, bootstrapped.output
+    assert "acme" in bootstrapped.output and "ops@varga.dev" in bootstrapped.output
+    again = await invoke("orgs", "bootstrap")
+    assert "none" in again.output, "idempotent: the second time creates nothing"
+    assert (await invoke()).exit_code != 0, "without a command, the help"
     db_session._engine = None
     db_session._sessionmaker = None
 
 
-async def test_tekton_webhook_accepts_token_and_jeton(
+async def test_tekton_webhook_accepts_token_and_jeton(  # lang: fr-ok: the `?jeton=` alias
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """It had no check at all. Tekton's CloudEvents sink adds no header: the secret also travels in the
@@ -838,99 +846,101 @@ async def test_tekton_webhook_accepts_token_and_jeton(
 
     monkeypatch.setenv("CHOREGOS_GENERIC_WEBHOOK_SECRET", "s3cret-tekton")
     reset_settings_cache()
-    corps = {"pipelineRun": {"metadata": {"name": "r", "labels": {"choregos/project": "billing-api"}}}}
-    entetes = {"ce-type": "dev.tekton.event.pipelinerun.successful.v1"}
+    body = {"pipelineRun": {"metadata": {"name": "r", "labels": {"choregos/project": "billing-api"}}}}
+    headers = {"ce-type": "dev.tekton.event.pipelinerun.successful.v1"}
     try:
-        sans = await client.post("/api/v1/webhooks/tekton", json=corps, headers={**entetes, "ce-id": "t-1"})
-        faux = await client.post(
-            "/api/v1/webhooks/tekton",
-            json=corps,
-            headers={**entetes, "ce-id": "t-2", "x-choregos-secret": "non"},
+        no_secret = await client.post(
+            "/api/v1/webhooks/tekton", json=body, headers={**headers, "ce-id": "t-1"}
         )
-        assert sans.status_code == 401 and faux.status_code == 401
-        en_tete = await client.post(
+        forged = await client.post(
             "/api/v1/webhooks/tekton",
-            json=corps,
-            headers={**entetes, "ce-id": "t-3", "x-choregos-secret": "s3cret-tekton"},
+            json=body,
+            headers={**headers, "ce-id": "t-2", "x-choregos-secret": "non"},
         )
-        dans_l_url = await client.post(
+        assert no_secret.status_code == 401 and forged.status_code == 401
+        header = await client.post(
+            "/api/v1/webhooks/tekton",
+            json=body,
+            headers={**headers, "ce-id": "t-3", "x-choregos-secret": "s3cret-tekton"},
+        )
+        in_the_url = await client.post(
             "/api/v1/webhooks/tekton",
             params={"jeton": "s3cret-tekton"},
-            json=corps,
-            headers={**entetes, "ce-id": "t-4"},
+            json=body,
+            headers={**headers, "ce-id": "t-4"},
         )
         with_token = await client.post(
             "/api/v1/webhooks/tekton",
             params={"token": "s3cret-tekton"},
-            json=corps,
-            headers={**entetes, "ce-id": "t-5"},
+            json=body,
+            headers={**headers, "ce-id": "t-5"},
         )
         wrong_token = await client.post(
             "/api/v1/webhooks/tekton",
             params={"token": "non"},
-            json=corps,
-            headers={**entetes, "ce-id": "t-6"},
+            json=body,
+            headers={**headers, "ce-id": "t-6"},
         )
-        wrong_jeton = await client.post(
+        wrong_former_param = await client.post(
             "/api/v1/webhooks/tekton",
             params={"jeton": "non"},
-            json=corps,
-            headers={**entetes, "ce-id": "t-7"},
+            json=body,
+            headers={**headers, "ce-id": "t-7"},
         )
-        assert en_tete.status_code == 202 and dans_l_url.status_code == 202
+        assert header.status_code == 202 and in_the_url.status_code == 202
         assert with_token.status_code == 202
-        assert wrong_token.status_code == 401 and wrong_jeton.status_code == 401
+        assert wrong_token.status_code == 401 and wrong_former_param.status_code == 401
     finally:
         reset_settings_cache()
 
 
-async def test_sans_secret_le_webhook_tekton_est_refuse_hors_du_developpement(
+async def test_without_a_secret_the_tekton_webhook_is_refused_outside_development(
     client: AsyncClient, org: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from choregos_api import config
 
-    reglages = config.get_settings()
-    monkeypatch.setattr(reglages, "env", "prod")
-    monkeypatch.setattr(reglages, "generic_webhook_secret", "")
-    refus = await client.post(
+    settings = config.get_settings()
+    monkeypatch.setattr(settings, "env", "prod")
+    monkeypatch.setattr(settings, "generic_webhook_secret", "")
+    refusal = await client.post(
         "/api/v1/webhooks/tekton",
         json={},
         headers={"ce-type": "dev.tekton.event.pipelinerun.started.v1", "ce-id": "p-1"},
     )
-    assert refus.status_code == 401 and "CHOREGOS_GENERIC_WEBHOOK_SECRET" in refus.text
+    assert refusal.status_code == 401 and "CHOREGOS_GENERIC_WEBHOOK_SECRET" in refusal.text
 
 
-async def test_une_sante_de_passage_d_argocd_ne_signale_pas_de_degradation(
+async def test_a_transient_argocd_health_does_not_signal_a_degradation(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Depuis S22-18, le train fait revenir un départ en arrière sur `cd.app.degraded` : une
-    notification `Progressing`, envoyée pendant un déploiement SAIN, ne doit pas en être un (#349)."""
+    """Since S22-18, the train rolls a departure back on `cd.app.degraded`: a `Progressing`
+    notification, sent during a HEALTHY deployment, must not be one (#349)."""
     from choregos_api.config import get_settings
     from choregos_api.temporal import get_temporal
 
     monkeypatch.setattr(get_settings(), "generic_webhook_secret", "s3cret")
-    entetes = {"X-Choregos-Secret": "s3cret"}
+    headers = {"X-Choregos-Secret": "s3cret"}
     base = {"app": "billing-api-prod", "project": "billing-api", "env": "prod"}
 
     def degradations() -> list[Any]:
         return [
             p
-            for wf, nom, p in get_temporal().signals
-            if nom == "deploy_event" and p["type"] == "cd.app.degraded"
+            for wf, name, p in get_temporal().signals
+            if name == "deploy_event" and p["type"] == "cd.app.degraded"
         ]
 
-    for i, sante in enumerate(["Progressing", "Suspended", "Missing", "Unknown"]):
-        reponse = await client.post(
+    for i, health_value in enumerate(["Progressing", "Suspended", "Missing", "Unknown"]):
+        response = await client.post(
             "/api/v1/webhooks/argocd",
-            json={**base, "health": sante, "delivery_id": f"p-{i}"},
-            headers=entetes,
+            json={**base, "health": health_value, "delivery_id": f"p-{i}"},
+            headers=headers,
         )
-        assert reponse.status_code == 202 and reponse.json()["events"] == 0, sante
-    assert degradations() == [], "une santé de passage n'est pas une dégradation"
+        assert response.status_code == 202 and response.json()["events"] == 0, health_value
+    assert degradations() == [], "a transient health is not a degradation"
 
-    reponse = await client.post(
-        "/api/v1/webhooks/argocd", json={**base, "health": "Degraded", "delivery_id": "p-9"}, headers=entetes
+    response = await client.post(
+        "/api/v1/webhooks/argocd", json={**base, "health": "Degraded", "delivery_id": "p-9"}, headers=headers
     )
-    assert reponse.json()["events"] == 1
-    (signal,) = degradations()
-    assert signal["payload"]["health"] == "degraded", "la santé reçue voyage avec l'événement"
+    assert response.json()["events"] == 1
+    (signal_seen,) = degradations()
+    assert signal_seen["payload"]["health"] == "degraded", "the received health travels with the event"

@@ -62,14 +62,14 @@ async def _new_project(session: Any, slug: str) -> Any:
 async def test_a_lazy_provisioning_does_not_refuse(app: Any, monkeypatch: pytest.MonkeyPatch) -> None:
     from choregos_api.db.session import session_scope
     from choregos_api.errors import ApiError
-    from choregos_api.services import definitions, gabarits
+    from choregos_api.services import definitions, templates
 
-    real = gabarits.livraison
+    real = templates.delivery
 
     def promising(*args: Any, **kwargs: Any) -> Any:
         return dataclasses.replace(real(*args, **kwargs), policy=PROMISING_POLICY)
 
-    monkeypatch.setattr(gabarits, "livraison", promising)
+    monkeypatch.setattr(templates, "delivery", promising)
 
     async with session_scope(orgs="*") as session:
         project = await _new_project(session, "lazy")

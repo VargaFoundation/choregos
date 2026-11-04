@@ -152,7 +152,7 @@ async def test_a_git_import_accepts_a_font_and_refuses_a_fake_or_other_binary(
 def test_the_gate_does_not_scan_a_binary_and_a_binary_makes_a_skill_medium() -> None:
     from choregos_api.services.skill_gate import assess
 
-    # `assess` does not validate base64 (`valider` does): a URL-shaped value would be a finding
+    # `assess` does not validate base64 (`validate` does): a URL-shaped value would be a finding
     # in a text file, and must be none in a binary one.
     assessment = assess({"SKILL.md": SKILL_MD, "a.png": "https://evil.example/x"})
     assert assessment.risk == "medium"

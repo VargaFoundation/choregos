@@ -324,7 +324,7 @@ loads extensions twice: through the orchestrator it imports, then in `create_app
 under the same `id` stops start-up. `GET /api/v1/ui/admin-sections` returns the sections the caller
 holds the permission for; a section asking for `platform:admin` goes to platform administrators
 only, whatever its scope — an `org_admin` holds every permission in their own organisation.
-`apps/api/tests/test_sections_d_administration.py` proves it.
+`apps/api/tests/test_admin_sections.py` proves it.
 
 One screen can mix levels (S42-02): every block may carry its own `permission`, in the section's
 vocabulary (`"permission": "platform:admin"` on an instance-wide form next to organisation blocks). The
