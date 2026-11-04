@@ -79,6 +79,7 @@ Waves are the backlog's `sprint`: a story only depends on stories of an earlier 
 | S57-01 | 2 | Measure round trips: persist model requests per run, `response_bytes` on `choregos.tool.called`, a report; the operator runs it on production | 00 |
 | S57-02 | 2 | The agent never holds the run token, on any executor | 00 |
 | S57-03 | 2 | The tool-call cap holds under concurrent calls | 00 |
+| S57-03b | 3 | A tool call in flight is never read as a call made (found in the review of S57-03) | 03 |
 | S57-04 | 2 | The MCP route keeps the answer's meaning: proposal, remaining, suspicions | 00 |
 | S57-05 | 3 | contract-change: `Policy.tools`, the ceiling, `StageInput.tools.scripts`, tool annotations, origin headers and event fields | 01 |
 | S57-06 | 4 | API: origin and script digest on the ledger, the event and the span; costs grouped by origin | 03, 05 |
