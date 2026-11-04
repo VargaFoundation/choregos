@@ -82,9 +82,15 @@ def test_by_default_no_signer_no_policy_and_the_log_is_checked() -> None:
     pod = _api()
     env = _env(pod)
     assert env["CHOREGOS_HOSTED_COSIGN_TLOG"] == "true"
-    assert not {"CHOREGOS_HOSTED_COSIGN_KEY", "CHOREGOS_HOSTED_COSIGN_IDENTITY", "TUF_ROOT"} & set(env)
+    assert not {"CHOREGOS_HOSTED_COSIGN_KEY", "CHOREGOS_HOSTED_COSIGN_IDENTITY"} & set(env)
     assert all(v["name"] != "cosign" for v in pod["volumes"])
     assert not [d for d in _documents() if d["kind"] == "ClusterPolicy"]
+
+
+def test_a_plugin_source_s_signatures_have_a_writable_trust_root() -> None:
+    """The default `varga` source is checked by cosign, keyless: without TUF_ROOT on a writable path,
+    cosign failed on `mkdir ~/.sigstore` and the source could never be read (choregos#1327)."""
+    assert _env(_api())["TUF_ROOT"].startswith("/tmp/"), "the default plugin source has no trust root"
 
 
 def test_the_key_secret_is_mounted_on_the_api_and_named_to_it() -> None:

@@ -111,6 +111,8 @@ def test_emptied_there_is_no_plugin_configuration(tmp_path: pathlib.Path) -> Non
     assert _config_map(docs) is None
     assert "CHOREGOS_PLUGINS_CONFIG" not in {e["name"] for e in spec["containers"][0]["env"]}
     assert "plugins-config" not in {v["name"] for v in spec["volumes"]}
+    # No source and no hosted image check: nothing for cosign to cache (choregos#1327).
+    assert "TUF_ROOT" not in {e["name"] for e in spec["containers"][0]["env"]}
 
 
 def test_the_values_become_the_file_the_api_reads(tmp_path: pathlib.Path) -> None:
