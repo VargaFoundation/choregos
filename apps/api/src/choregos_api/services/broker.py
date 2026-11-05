@@ -217,7 +217,14 @@ async def propose_call(
         raise ApiError(
             403, "Network policy", str(refused), type_="network_policy", extra={"code": refused.code}
         ) from refused
-    action = await _propose_tool_action(session, run, project, tool, arguments)
+    # The same call is the same action (#1379, ADR 0035), as for an allowed write: a model retrying or a
+    # script run again (ADR 0122) finds its proposal instead of putting a second one before a person.
+    from ..db.models import Action
+
+    action_id = call_id(run.id, tool.name, arguments)
+    action = await session.get(Action, action_id)
+    if action is None:
+        action = await _propose_tool_action(session, run, project, tool, arguments, action_id)
     return {
         "action": action.id,
         "status": action.status,
