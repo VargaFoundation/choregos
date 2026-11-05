@@ -550,7 +550,8 @@ when the API cannot be reached; `413` for a request body over 1 MiB. Without `to
 
 It journals `tools.script` (`sha256`, `bytes`, `text`) and, for each relayed call, `tools.script.call` (`tool`;
 `status_code`, the answer's own on a `200`, `202` for a proposal, the HTTP status otherwise; `duration_ms`;
-`response_bytes`, what it handed back; `script_sha256`, or null). The runner's own server writes them into the
+`response_bytes`, what it handed back; `script_sha256`, or null; `action`, the id of the governed action a `202` proposal
+created, when the API named one). The runner's own server writes them into the
 run's journal and says `bridge: true` on its `tools.local` event. The Tekton sidecar is not told its run's input:
 it reads it from the API (`GET /internal/runs/{id}/input`, with the run token) on the bridge's first request, and
 posts its events through `POST /internal/runs/{id}/events`, numbered from 1,000,000,000 so that they never take

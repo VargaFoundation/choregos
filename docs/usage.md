@@ -2741,9 +2741,9 @@ script: the model reads what it prints, and the gateway's LLM guard still reads 
 **What the console shows of them** (S57-10). The run page's **Tool scripts** card groups the calls each
 script made under it: its digest (the first twelve characters, the whole one on hover), its text, folded,
 in monospace, with a copy button, and its calls in order with the tool, the status, the duration and the
-size of the answer. A `202` reads **Proposed — not executed**: the bridge's journal line and the run's
-access record do not say which action the proposal created, so the card points to the project's actions
-instead of linking one (a journal line that names it, `action`, is linked to its page). A script whose
+size of the answer. A `202` reads **Proposed — not executed** and links to the action it created: the
+bridge's journal line keeps the action's id (`action`). A line written before that (or one without an id)
+points to the project's actions instead. A script whose
 text never reached the bridge says **Text not recorded**, and so do the calls of scripts piped on standard
 input, which are grouped together because nothing tells them apart. The calls the model made itself stay
 in the run's activity. The project's **Agents** settings show, in **Tools**, the policy's `tools.scripts`,

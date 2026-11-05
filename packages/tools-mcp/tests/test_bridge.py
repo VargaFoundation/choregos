@@ -236,6 +236,23 @@ async def test_a_proposal_is_journaled_with_the_answer_s_own_status(bridged: Bri
 
     assert (response.status_code, response.content) == (200, proposal)
     assert journal.of(CALL_EVENT)[0]["status_code"] == 202
+    # The console links a script's proposal to its action from this line (#1369).
+    assert journal.of(CALL_EVENT)[0]["action"] == "act-1"
+
+
+async def test_only_a_proposal_s_own_action_id_is_journaled(bridged: Bridged) -> None:
+    """A read whose result happens to carry an `action` key is not a proposal, and an action id that
+    is not one the API mints never reaches the console's link (#1369)."""
+    http, api, journal = bridged
+    for answer in (
+        b'{"status_code":200,"result":{"action":"act-2"},"remaining":null}',
+        b'{"status_code":202,"result":{"action":"https://elsewhere.example/x"},"remaining":null}',
+        b'{"status_code":202,"result":{"action":["act-3"]},"remaining":null}',
+        b'{"status_code":202,"result":"accepted","remaining":null}',
+    ):
+        api.answer = httpx.Response(200, content=answer, headers={"content-type": "application/json"})
+        await http.post(f"/bridge/v1/tools/{TOOL}", json={})
+    assert [call.get("action") for call in journal.of(CALL_EVENT)] == [None, None, None, None]
 
 
 async def test_the_tool_list_is_the_api_s_whole(bridged: Bridged) -> None:

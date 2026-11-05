@@ -9,8 +9,8 @@
  * so its calls carry no digest and its text is never sent. Calls the model makes itself are not here:
  * they are the ACP journal's tool calls (`run-activity.ts`).
  *
- * A proposal comes back as `202`. The bridge's journal line does not say which action it created
- * (the access record does not either): `action` is read when a line carries it, and is null otherwise.
+ * A proposal comes back as `202`. The bridge's journal line names the action it created (`action`,
+ * #1369); a line written before that carries none, and `action` is then null.
  */
 import type { RunEventDto } from "./types";
 
