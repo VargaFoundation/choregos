@@ -9,6 +9,10 @@ the catalogue is a VIEW over plugins — the deployment's offline directory (the
 `plugins/offline/` of this repository, `/opt/choregos/plugins` in the API image), plus, in the API,
 the plugins an organisation installed (`services/catalogue_d_agents.py`).
 
+The view also holds what the eval matrix reads of a plugin (#1372): its matrix cases
+(`contents.matrix_cases`, named `plugin:<plugin>/<case>` by the matrix, `matrix_case`) and its servers'
+declarations (`server`), whose operations govern a case's `plugin:<plugin>/<server>` connector.
+
 An entry is a plugin's agent file: `catalogue` (its version, the role it holds, a sentence) and `agent`,
 the document `POST /orgs/{org}/agents` accepts. An internal agent fixes neither model nor runtime: it
 inherits the project's and the deployment's. Its instructions are preceded by the work item's context
@@ -101,17 +105,60 @@ class EvalCase:
 
 
 @dataclass(frozen=True, slots=True)
+class MatrixCase:
+    """One matrix case of a plugin (`contents.matrix_cases`, #1372): an agent case of the core's eval
+    matrix, `plugin:<plugin>/<name>` to the matrix."""
+
+    name: str
+    plugin: str
+    plugin_version: str
+    case: dict[str, Any]
+
+    @property
+    def ref(self) -> str:
+        return f"{PLUGIN_CASE}{self.plugin}/{self.name}"
+
+
+#: How the eval matrix names a plugin's case, and a case its plugin's server (#1372).
+PLUGIN_CASE = "plugin:"
+
+
+def plugin_ref(ref: str) -> tuple[str, str] | None:
+    """`plugin:<plugin>/<name>` as `(plugin, name)`; `None` for anything else."""
+    if not ref.startswith(PLUGIN_CASE):
+        return None
+    plugin, _, name = ref.removeprefix(PLUGIN_CASE).partition("/")
+    return (plugin, name) if plugin and name and "/" not in name else None
+
+
+@dataclass(frozen=True, slots=True)
 class Catalogue:
-    """What a set of plugins offers: agents (internal first, then external, each by name), skills, evals."""
+    """What a set of plugins offers: agents (internal first, then external, each by name), skills, evals,
+    and what the eval matrix reads of them (#1372): their matrix cases and their servers' declarations."""
 
     entries: tuple[CatalogueEntry, ...] = ()
     skills: dict[str, CatalogueSkill] = field(default_factory=dict)
     evals: tuple[EvalCase, ...] = ()
     #: name -> version of every plugin read
     plugins: dict[str, str] = field(default_factory=dict)
+    matrix_cases: tuple[MatrixCase, ...] = ()
+    #: (plugin, server) -> the server's file (`plugin-server.schema.json`)
+    servers: dict[tuple[str, str], dict[str, Any]] = field(default_factory=dict)
 
     def entry(self, slug: str) -> CatalogueEntry | None:
         return next((e for e in self.entries if e.slug == slug), None)
+
+    def matrix_case(self, ref: str) -> MatrixCase | None:
+        """The case the matrix names `plugin:<plugin>/<case>`; `None` when no plugin read ships it."""
+        named = plugin_ref(ref)
+        if named is None:
+            return None
+        return next((c for c in self.matrix_cases if (c.plugin, c.name) == named), None)
+
+    def server(self, ref: str) -> dict[str, Any] | None:
+        """The declaration of the server a case names `plugin:<plugin>/<server>`; `None` when absent."""
+        named = plugin_ref(ref)
+        return None if named is None else self.servers.get(named)
 
     def over(self, base: Catalogue) -> Catalogue:
         """This catalogue's plugins replace `base`'s plugins of the same name (an organisation's installed
@@ -121,7 +168,16 @@ class Catalogue:
         entries |= {e.slug: e for e in self.entries}
         skills = {n: s for n, s in base.skills.items() if s.plugin not in mine} | dict(self.skills)
         evals = (*(c for c in base.evals if c.plugin not in mine), *self.evals)
-        return Catalogue(_ordered(entries.values()), skills, evals, {**base.plugins, **self.plugins})
+        matrix = (*(c for c in base.matrix_cases if c.plugin not in mine), *self.matrix_cases)
+        servers = {k: s for k, s in base.servers.items() if k[0] not in mine} | dict(self.servers)
+        return Catalogue(
+            _ordered(entries.values()),
+            skills,
+            evals,
+            {**base.plugins, **self.plugins},
+            matrix,
+            servers,
+        )
 
 
 def _ordered(entries: Iterable[CatalogueEntry]) -> tuple[CatalogueEntry, ...]:
@@ -183,7 +239,12 @@ def of_plugin(plugin: Plugin) -> Catalogue:
         )
         for ref in contents.get("evals") or []
     )
-    return Catalogue(_ordered(entries), skills, evals, {plugin.name: plugin.version})
+    matrix = tuple(
+        MatrixCase(name, plugin.name, plugin.version, dict(case))
+        for name, case in sorted(plugin.matrix_cases.items())
+    )
+    servers = {(plugin.name, name): dict(doc) for name, doc in sorted(plugin.servers.items())}
+    return Catalogue(_ordered(entries), skills, evals, {plugin.name: plugin.version}, matrix, servers)
 
 
 def _candidates(directory: Path) -> list[Path]:
@@ -254,10 +315,12 @@ def skill_files(name: str) -> dict[str, str]:
 
 __all__ = [
     "FOLDER",
+    "PLUGIN_CASE",
     "Catalogue",
     "CatalogueEntry",
     "CatalogueSkill",
     "EvalCase",
+    "MatrixCase",
     "catalogue",
     "catalogue_skills",
     "entries",
@@ -266,5 +329,6 @@ __all__ = [
     "load",
     "of_plugin",
     "offline_directory",
+    "plugin_ref",
     "skill_files",
 ]

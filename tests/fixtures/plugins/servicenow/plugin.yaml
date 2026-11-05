@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: Apache-2.0
+# FIXTURE, mirrored from VargaFoundation/choregos-agents#8 (`plugins/servicenow`, commit
+# 7e9c41754191415ad92e296ba09b6b15c2719790), so that the core's CI plays E3 and C1 of the tool-script
+# matrix offline until that plugin is published with what the core now reads (#1372). Byte for byte:
+# `agents/itsm-triager.yaml`, `skills/servicenow-triage/` and `evals/matrix/*.yaml`. Changed: this
+# manifest (only the agent, its skill, the server and the two matrix cases, declared in
+# `contents.matrix_cases`; `core` admitting the core that plays it, 0.23, where #8 says
+# ">=0.21.0,<0.23.0") and `servers/servicenow.yaml` (its `fake`, appended). The server's fake
+# itself is `tests/fixtures/plugin_fakes/servicenow.json`, a recording of that commit's server on its
+# fake instance. Once servicenow is published with `matrix_cases` and `fake` and the offline lock
+# carries it, this directory goes.
+apiVersion: choregos/v1
+kind: Plugin
+metadata:
+  name: servicenow
+  version: 0.1.1
+  publisher: Varga Foundation
+  license: Apache-2.0
+  description: >-
+    Triage ServiceNow incidents under human approval: an agent reads the incident, its CI and similar
+    incidents, cites knowledge articles, and proposes a classification and actions that the service
+    desk approves before anything is written.
+  homepage: https://github.com/VargaFoundation/choregos-agents
+  core: ">=0.23.0"
+requires:
+  plugins: []
+  connectors: {}
+contents:
+  agents: [agents/itsm-triager.yaml]
+  skills: [skills/servicenow-triage]
+  servers: [servers/servicenow.yaml]
+  matrix_cases:
+    - evals/matrix/itsm-triage-similar-incidents.yaml
+    - evals/matrix/itsm-triage-vague-incident.yaml

@@ -335,7 +335,9 @@ async def update_org_connector(
     if body.config is not None and server is None:
         check_type_config(instance.kind, instance.type, config)
     elif body.config is not None:
-        # A plugin's server (ADR 0096): its own schema, and the hosts it would reach within the bounds.
+        # A plugin's server (ADR 0096): its own schema, and the hosts it would reach within the bounds;
+        # never bound to its eval instance by an edit (#1372).
+        plugin_servers.refuse_fake_binding(config)
         problems = plugin_servers.configuration_problems(instance.plugin_server or {}, config, partial=True)
         if problems:
             raise unprocessable(

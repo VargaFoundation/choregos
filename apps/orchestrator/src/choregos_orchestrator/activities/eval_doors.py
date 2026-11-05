@@ -33,6 +33,15 @@ the API's own helpers: the orchestrator's imports of `choregos_api` are frozen (
 
 `mcp_calls` and `bridge_script` are the two doors with any run's `InternalClient`: the live matrix's
 tests (S57-11a) play a case through them against the real API, whose connectors are fake scenes.
+
+#1372: a case's connector may be a plugin's server, `{kind: "plugin:<plugin>/<server>", scene: <name>}`
+(a plugin's matrix case, E3 and C1 of the examples page). `ready` reaches it as the broker does, over MCP
+with a bearer token (`choregos_adapters.fakes.plugin_servers.plugin_scene`), on the fake registered for
+it, and governs its tools by the server's declaration, found in the offline plugins: the operations it
+declares only (a tool it serves without declaring is not offered), a `read` allowed, a write proposed
+unless the case allows writes, `human_approval` never lowered; an executed write gets the platform's
+arguments the declaration names (`action_key`, as a governed action fills it). Its answer is the
+server's MCP result, as the broker relays it: an `isError` result is a 422, an MCP failure a 502.
 """
 
 from __future__ import annotations
@@ -82,6 +91,8 @@ class Tool:
     access: str
     connector: Any = None
     operation: str = ""
+    #: What the platform fills on an executed write, never the agent (`OperationSpec.platform_arguments`).
+    platform_arguments: tuple[str, ...] = ()
 
 
 @dataclass
@@ -97,40 +108,26 @@ class EvalApi:
     actions: list[dict[str, Any]] = field(default_factory=list)
     #: `{type, tool}`, the security events the guard raised.
     security_events: list[dict[str, Any]] = field(default_factory=list)
-    #: name → the scene a test reads (`choregos_adapters.fakes.scenes.Scene`).
+    #: name → the scene a test reads (`choregos_adapters.fakes.scenes.Scene`, or for a plugin's server
+    #: `choregos_adapters.fakes.plugin_servers.PluginScene`).
     scenes: dict[str, Any] = field(default_factory=dict)
     tools: dict[str, Tool] = field(default_factory=dict)
+    #: name → `(kind, scene)` of the plugin servers `ready` has not reached yet (#1372).
+    pending: dict[str, tuple[str, str]] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
+        from choregos_adapters.fakes.plugin_servers import plugin_kind
         from choregos_adapters.fakes.scenes import scene
 
-        policy = self.case.get("policy") or {}
-        writes = str(policy.get("writes", "approval"))
         for name, declared in (self.case.get("connectors") or {}).items():
-            built = scene(str(declared["kind"]), str(declared.get("scene", "default")))
+            kind, named = str(declared["kind"]), str(declared.get("scene", "default"))
+            if plugin_kind(kind) is not None:
+                # A plugin's server is listed over MCP: `ready` reaches it (#1372).
+                self.pending[str(name)] = (kind, named)
+                continue
+            built = scene(kind, named)
             self.scenes[name] = built
-            for operation in built.operations:
-                access = "read"
-                if operation.access != "read":
-                    access = "approval" if operation.human_approval or writes != "allowed" else "write"
-                description = operation.description or operation.name
-                if access == "approval":
-                    description += (
-                        " — needs a human approval: calling it proposes the action, it does not run it"
-                    )
-                elif access == "write":
-                    description += (
-                        " — runs as a governed action: journaled, done once, undone if a later step fails"
-                    )
-                tool = f"{name}__{operation.name}"
-                self.tools[tool] = Tool(
-                    tool,
-                    f"[{name}] {description}",
-                    operation.input_schema or {"type": "object"},
-                    access,
-                    built.connector,
-                    operation.name,
-                )
+            self._offer(str(name), built.connector, built.operations)
         web = self.case.get("web") or {}
         if web.get("search") is not None:
             self.tools[WEB_SEARCH] = Tool(
@@ -146,6 +143,47 @@ class EvalApi:
                 {"type": "object", "required": ["url"], "properties": {"url": {"type": "string"}}},
                 "read",
             )
+
+    def _offer(self, name: str, connector: Any, operations: Any) -> None:
+        """A connector's operations as the run's tools, governed as `callRunTool` governs them."""
+        writes = str((self.case.get("policy") or {}).get("writes", "approval"))
+        for operation in operations:
+            access = "read"
+            if operation.access != "read":
+                access = "approval" if operation.human_approval or writes != "allowed" else "write"
+            description = operation.description or operation.name
+            if access == "approval":
+                description += " — needs a human approval: calling it proposes the action, it does not run it"
+            elif access == "write":
+                description += (
+                    " — runs as a governed action: journaled, done once, undone if a later step fails"
+                )
+            tool = f"{name}__{operation.name}"
+            self.tools[tool] = Tool(
+                tool,
+                f"[{name}] {description}",
+                operation.input_schema or {"type": "object"},
+                access,
+                connector,
+                operation.name,
+                tuple(operation.platform_arguments),
+            )
+
+    async def ready(self) -> EvalApi:
+        """The case's plugin servers reached on their fakes and their tools offered (#1372): each one's
+        declaration from the offline plugins (`choregos_core.agent_catalogue`), its tools as it lists
+        them. Raises `AdapterError` when no plugin ships the server or no fake of it is registered.
+        Idempotent; the routes call it before they answer."""
+        from choregos_adapters.fakes.plugin_servers import plugin_scene
+        from choregos_core.agent_catalogue import catalogue
+
+        while self.pending:
+            name, (kind, named) = next(iter(self.pending.items()))
+            built = await plugin_scene(kind, named, catalogue().server(kind))
+            self.scenes[name] = built
+            self._offer(name, built.connector, built.operations)
+            del self.pending[name]
+        return self
 
     # ───────────────────────── the routes ─────────────────────────
 
@@ -166,6 +204,7 @@ class EvalApi:
         """The internal routes the doors call, as `httpx.MockTransport` hands them over."""
         if request.headers.get("authorization") != f"Bearer {self.token}":
             return _problem(401, "Unauthorized", "a run token is required")
+        await self.ready()
         prefix = f"/internal/runs/{self.run_id}/tools"
         path = request.url.path
         if request.method == "GET" and path == prefix:
@@ -192,6 +231,7 @@ class EvalApi:
         """`callRunTool`, for the cases' tools."""
         import jsonschema
 
+        await self.ready()
         tool = self.tools.get(name)
         if tool is None:
             return _problem(404, "Tool not found", f"Tool `{name}` does not exist")
@@ -219,9 +259,12 @@ class EvalApi:
 
     # ───────────────────────── governance ─────────────────────────
 
-    def _action(self, tool: Tool, arguments: dict[str, Any], status: str) -> dict[str, Any]:
+    def _action_id(self, tool: Tool, arguments: dict[str, Any]) -> str:
         canonical = json.dumps(arguments, sort_keys=True, ensure_ascii=False, default=str)
-        action_id = str(uuid.uuid5(CALL_NAMESPACE, f"{self.run_id}:{tool.name}:{canonical}"))
+        return str(uuid.uuid5(CALL_NAMESPACE, f"{self.run_id}:{tool.name}:{canonical}"))
+
+    def _action(self, tool: Tool, arguments: dict[str, Any], status: str) -> dict[str, Any]:
+        action_id = self._action_id(tool, arguments)
         known = next((a for a in self.actions if a["id"] == action_id), None)
         if known is None:
             known = {"id": action_id, "tool": tool.name, "status": status, "arguments": arguments}
@@ -240,6 +283,8 @@ class EvalApi:
     async def _execute(self, tool: Tool, arguments: dict[str, Any]) -> tuple[int, dict[str, Any]]:
         from choregos_adapters.errors import AdapterError
 
+        if hasattr(tool.connector, "call_tool"):
+            return await self._call_server(tool, arguments)
         try:
             if tool.name == WEB_SEARCH:
                 raw: dict[str, Any] = await self._search(str(arguments["query"]))
@@ -253,6 +298,31 @@ class EvalApi:
         if tool.access == "write":
             action = self._action(tool, arguments, "succeeded")
             result["action"] = action["id"]
+        return 200, _bounded(result)
+
+    async def _call_server(self, tool: Tool, arguments: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+        """A plugin's server (#1372), as the broker calls one: its MCP result relayed, an `isError` result
+        a 422, an MCP failure a 502; an executed write with the platform's arguments filled as a governed
+        action fills them (`effects._platform_arguments`), never the agent's."""
+        from choregos_adapters.mcp import McpError
+
+        sent = dict(arguments)
+        action_id = self._action_id(tool, arguments) if tool.access == "write" else ""
+        for platform in tool.platform_arguments:
+            sent.pop(platform, None)
+        if "action_key" in tool.platform_arguments and action_id:
+            canonical = json.dumps(sent, sort_keys=True, ensure_ascii=False, default=str)
+            sent["action_key"] = hashlib.sha256(
+                f"{action_id}:{tool.operation}:{canonical}".encode()
+            ).hexdigest()[:24]
+        try:
+            result = await tool.connector.call_tool(tool.operation, sent)
+        except (McpError, httpx.HTTPError) as failure:
+            return 502, {"error": f"{tool.name}: {failure}"}
+        if result.get("isError"):
+            return 422, _bounded(result)
+        if tool.access == "write":
+            result = {**result, "action": self._action(tool, arguments, "succeeded")["id"]}
         return 200, _bounded(result)
 
     async def _search(self, query: str) -> dict[str, Any]:
@@ -578,7 +648,7 @@ async def play(case: dict[str, Any], cell: str, *, workdir: Path | None = None) 
     """`case` through the door of `cell` (`mcp` or `scripts`), on fresh fakes."""
     if cell not in TOOLS:
         raise ValueError(f"unknown tools cell {cell!r}, expected one of {', '.join(TOOLS)}")
-    api = EvalApi(case)
+    api = await EvalApi(case).ready()
     script = case.get("scripted_script") if cell == "scripts" else None
     if script is None:
         await through_mcp(api, [c for c in case.get("evidence") or [] if "tool" in c])

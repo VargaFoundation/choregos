@@ -1,0 +1,129 @@
+# SPDX-License-Identifier: Apache-2.0
+# The ServiceNow MCP server, as the platform runs and governs it (ADR 0094, plan S43 Decision 2).
+# Source: ../server. A tool not listed in `operations` is refused by the platform.
+name: servicenow
+# CI fills the digest when it builds, signs and publishes the image; the zeros are never pullable.
+image: ghcr.io/vargafoundation/choregos-agents/servicenow-mcp@sha256:0000000000000000000000000000000000000000000000000000000000000000
+port: 8080
+protocol: mcp-http
+# MCP at /mcp, behind the platform's bearer token (CHOREGOS_SERVER_TOKEN); the health probe stays open.
+paths: {mcp: /mcp, health: /healthz}
+
+# What an administrator types when installing the plugin. Each property reaches the server as the
+# environment variable named in `x-env`; `secret_fields` are sealed and never shown again.
+config_schema:
+  type: object
+  additionalProperties: false
+  required: [base_url, auth]
+  properties:
+    base_url:
+      type: string
+      format: uri
+      pattern: "^https://"
+      description: The instance URL, e.g. https://dev12345.service-now.com
+      x-env: SERVICENOW_BASE_URL
+    auth:
+      type: string
+      enum: [oauth, basic]
+      default: oauth
+      description: OAuth 2.0 client credentials, or basic authentication of a dedicated integration user (older releases, PDIs).
+      x-env: SERVICENOW_AUTH
+    client_id:
+      type: string
+      description: OAuth client id of the inbound integration (auth=oauth).
+      x-env: SERVICENOW_CLIENT_ID
+    client_secret:
+      type: string
+      description: OAuth client secret (auth=oauth).
+      x-env: SERVICENOW_CLIENT_SECRET
+    username:
+      type: string
+      description: The integration user, holding the plugin's custom role and never admin (auth=basic).
+      x-env: SERVICENOW_USERNAME
+    password:
+      type: string
+      description: The integration user's password (auth=basic).
+      x-env: SERVICENOW_PASSWORD
+    webhook_secret:
+      type: string
+      minLength: 32
+      description: The shared secret the Business Rule sends in X-Choregos-Secret.
+      x-env: SERVICENOW_WEBHOOK_SECRET
+    assignment_groups:
+      type: array
+      items: {type: string}
+      description: Group names or sys_ids whose queue is polled for work items (joined with commas).
+      x-env: SERVICENOW_ASSIGNMENT_GROUPS
+secret_fields: [client_secret, password, webhook_secret]
+
+# The only host the server may reach: the instance.
+egress:
+  from_fields: [base_url]
+
+# The governance floor. `access: read` is allowed by default; a write goes through approval unless an
+# administrator decides otherwise; `human_approval: true` is never lowered. `compensation` is the
+# operation that undoes the write, its arguments rendered from the write's own result; the platform
+# renders every argument to a string, so `fields` travels as JSON (`tojson`) and the server accepts it.
+# `platform_arguments: [action_key]` is an idempotency key the platform fills, never the agent.
+operations:
+  - {name: search_records, access: read}
+  - {name: get_record, access: read}
+  - {name: get_journal, access: read}
+  - {name: get_ci, access: read}
+  - {name: list_ci_relations, access: read}
+  - {name: search_knowledge, access: read}
+  - {name: similar_incidents, access: read}
+
+  - name: add_work_note
+    access: write
+    description: An internal work note, idempotent through the platform's action_key.
+    platform_arguments: [action_key]
+  - name: update_record
+    access: write
+    description: Classification fields, never priority. Undone by writing the previous values back.
+    compensation:
+      operation: update_record
+      arguments:
+        table: "{{ result.table }}"
+        sys_id: "{{ result.sys_id }}"
+        fields: "{{ result.previous | tojson }}"
+  - name: add_comment
+    access: write
+    human_approval: true
+  - name: resolve_incident
+    access: write
+    human_approval: true
+    description: Resolves an incident. Undone by reopening it to its previous state.
+    compensation:
+      operation: reopen_incident
+      arguments:
+        sys_id: "{{ result.sys_id }}"
+        state: "{{ result.previous_state }}"
+  - name: reopen_incident
+    access: write
+  - name: create_change_request
+    access: write
+    human_approval: true
+    description: A change request, idempotent through the platform's action_key (its correlation_id).
+    platform_arguments: [action_key]
+
+  # The tracker profile (TRACKER_PROFILE.md), called by the core's tracker/plugin adapter.
+  - {name: tracker_fetch_item, access: read}
+  - {name: tracker_list_candidates, access: read}
+  - {name: tracker_parse_event, access: read}
+  - {name: tracker_create_item, access: write, platform_arguments: [action_key]}
+  - {name: tracker_set_state, access: write}
+  - {name: tracker_comment, access: write, platform_arguments: [action_key]}
+  - {name: tracker_upsert_status, access: write}
+  - {name: tracker_close, access: write}
+
+implements: [tracker]
+
+webhook:
+  path: /events
+
+# FIXTURE addition (core #1372, not in choregos-agents#8): how the platform runs this server on its fake
+# for the live eval matrix — its seeded instance, switched on by SERVICENOW_FAKE (server/src/.../config.py).
+fake:
+  env: {SERVICENOW_FAKE: "1"}
+  scenes: [default]

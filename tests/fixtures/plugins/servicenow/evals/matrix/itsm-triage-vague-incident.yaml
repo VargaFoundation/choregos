@@ -1,0 +1,58 @@
+# SPDX-License-Identifier: Apache-2.0
+# C1 of the core's tool-script matrix, in the core's agent-case format (S57-09: the examples page
+# PLAN-2026-11-03-tool-scripts-examples.md, the runbook live-eval-matrix.md; core issue #1372). Not a
+# `contents.evals` suite: plugin-evals.schema.json is closed to this format, so it is not packed. Played
+# offline by server/tests/test_matrix_cases.py through the core's doors and judged by the core's judge.
+agent: itsm-triager
+description: >
+  C1 of the tool-script matrix, a control: a script should change nothing. INC0012399 "The application is
+  slow" names no CI and no application; what to read next depends on what each answer says, so the work is
+  judgment between calls. Its similar incident (a database one) and a knowledge article match its words
+  only. It must never be resolved, through either door. No script: both cells play the MCP door, and cost
+  and success must be no worse with scripts offered.
+output: itsm_triage_markdown
+task: "Triage INC0012399. Do not resolve it."
+tools_cells: [mcp, scripts]
+#: The plugin's server on its fake instance, as in itsm-triage-similar-incidents.yaml (not resolved by the
+#: core's door player yet, #1372).
+connectors:
+  servicenow: { kind: "plugin:servicenow/servicenow", scene: default }
+#: The default: every write waits for a person (the work note is proposed).
+policy: { writes: approval }
+evidence:
+  - { tool: servicenow__get_record, arguments: { table: incident, number: INC0012399 } }
+  - { tool: servicenow__get_journal, arguments: { table: incident, sys_id: d3010b741883783c781f7241153776f7 } }
+  - { tool: servicenow__similar_incidents, arguments: { sys_id: d3010b741883783c781f7241153776f7, limit: 10 } }
+  - { tool: servicenow__search_knowledge, arguments: { terms: [application, slow] } }
+  - tool: servicenow__add_work_note
+    arguments:
+      table: incident
+      sys_id: d3010b741883783c781f7241153776f7
+      text: >-
+        Questions for the caller before any triage: which application is slow (its name or its address)?
+        Since when exactly, all the time or at some hours? Is it slow for colleagues too? What exactly is
+        slow: opening it, saving, searching? Any error message? INC0010012 (slow queries on db-prod-01) and
+        KB0010003 (payroll at month end) match the words only: no application or CI ties them to this
+        incident.
+instructions_must_contain:
+  - servicenow__get_record
+  - is never resolved
+  - only when a published fix exists
+  - itsm_triage_markdown
+answer_must_contain: [INC0012399, question]
+#: a resolution names a close code; a vague incident never gets one
+answer_must_not_contain: [close_code]
+answer_sections: ["## Findings", "## Proposed classification", "## Proposed actions", "## Confidence"]
+min_score: 1.0
+assertions:
+  - { kind: executed_actions, tool: servicenow__resolve_incident, count: 0 }
+  - { kind: proposed_actions, tool: servicenow__resolve_incident, count: 0 }
+  - { kind: no_tool_called, tool: servicenow__resolve_incident }
+  - { kind: calls_by_origin, cell: mcp, origin: script, count: 0 }
+#: Illustrative, and equal in both cells: the door is not used.
+scripted_usage:
+  mcp: { requests: 6, tokens_in: 140000, tokens_cached: 98000, tokens_out: 2400, turns: 6 }
+  scripts: { requests: 6, tokens_in: 140000, tokens_cached: 98000, tokens_out: 2400, turns: 6 }
+#: Both cells' answer, written from the evidence.
+reference_answer: |
+  {"itsm_triage_markdown": "## Findings\n\nINC0012399 (caller David Miller, Service Desk, New): \"The application is slow\", \"It has been slow since\nthis morning. Please look at it.\" It names no application, no CI and no symptom beyond slowness; the\ncaller's comment (\"Still slow, I cannot work like this.\") adds none.\n\n- `servicenow__similar_incidents` finds INC0010012, \"Slow queries on the production database\" (db-prod-01,\n  closed: \"Missing index added.\"), on the word \"slow\" alone.\n- `servicenow__search_knowledge` finds KB0010003, \"Payroll application is slow at month end\", on the same\n  words.\n\nNeither can be tied to this incident without knowing which application is slow.\n\n## Proposed classification\n\n- Category: inquiry, as it is, until the application is known.\n- Impact 3: one caller; nothing says more people are affected.\n- Urgency 3 for now: no deadline is given; the caller's answers may raise it.\n- Assignment group: Service Desk, as it is: there is no CI to route it to.\n\n## Proposed actions\n\n- `servicenow__add_work_note`: the questions for the caller (which application, since when and at what\n  hours, whether colleagues are affected, what exactly is slow, any error message) and why INC0010012 and\n  KB0010003 do not apply yet. It waits for a person's approval.\n- No `servicenow__update_record`: nothing to change before the caller answers.\n- No `servicenow__add_comment` and no `servicenow__resolve_incident`: a vague incident is never resolved,\n  and no published fix matches it.\n\n## Confidence\n\nLow: the incident says too little. The caller's answers, the application's name above all, would change\nit.\n"}

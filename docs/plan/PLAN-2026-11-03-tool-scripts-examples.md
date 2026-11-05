@@ -55,8 +55,14 @@ The YAML below is the sketch the stream started from. The cases as they run are 
   withheld. Its `scripts` cell asserts 7 calls from the script and at most 4 model requests; the `mcp`
   cell, 7 from the model. Its services are fictional (`flagpole.example.org`, `toggly.example.com`,
   `switchyard.example.net`), its injected page `compare.flagreviews.example`.
-- **E3 and C1** need the ServiceNow plugin server, which lives in `choregos-agents`: they are not in core
-  (#1372). **C2** is the two tickets with a `none/scripts` usage.
+- **E3 and C1** are the servicenow plugin's matrix cases (choregos-agents#8, `plugins/servicenow/evals/matrix/`),
+  named `plugin:servicenow/itsm-triage-similar-incidents` and `plugin:servicenow/itsm-triage-vague-incident`
+  (#1372): a plugin declares them in `contents.matrix_cases`, and their connector is the plugin's server,
+  `{kind: "plugin:servicenow/servicenow", scene: default}`. The scripted matrix reaches that server over MCP
+  on a fake registered for it, governed by the server's file (`human_approval` on `add_comment` and
+  `resolve_incident`); the core's CI uses a fixture copy of the plugin and a recording of its server's fake
+  until servicenow is published with both declarations (choregos-agents#9). **C2** is the two tickets with a
+  `none/scripts` usage.
 - **Usage.** The `scripted_usage` numbers are the ones below, illustrative; C2's are equal in both cells
   (the door unused).
 - **Live (S57-11a).** A live cell plays E1, E2, E4 and E6 as real stages on the real gateway, each in an
@@ -67,7 +73,11 @@ The YAML below is the sketch the stream started from. The cases as they run are 
   `web_search` and `web_fetch` are bound to the case's fake web (a `web_search` connector of type `fake`,
   `fake_scene: web` and the case's pages, under the same switch and the same guards), so the real API's
   checks and its injection guard run on the case's own pages; the organisation's ceiling must open web
-  search, which the matrix never does.
+  search, which the matrix never does. E3 and C1 are played live on the servicenow server's eval instance
+  (#1372): the eval organisation installs the plugin, the API runs beside its server an instance on its
+  fake (the server file's `fake`, under the same switch), and the seeding binds the server's connector to it
+  (`fake_scene`), for a connector nobody configured only; until a published servicenow declares its `fake`,
+  their live cells skip, saying so.
 
 ---
 
@@ -164,6 +174,13 @@ does not need, only "how was it resolved"; then one allowed write and one write 
 Fake dataset (`servicenow` plugin server, fake mode): `INC0012345` "VPN drops every 10 minutes for the Lyon site";
 `similar_incidents` returns 10, two of which were resolved by the same change (`CHG0003311`, MTU on the Lyon
 concentrator); one knowledge article `KB0010042`.
+
+As implemented (#1372): the plugin's case `itsm-triage-similar-incidents`. Its output is
+`itsm_triage_markdown`; `similar_incidents` and the reads take the seed's `sys_id`s, `search_knowledge` takes
+`terms: [VPN, Lyon, MTU]`; the case adds `calls_by_origin` (`mcp`: none from a script; `scripts`: at least 22)
+and the agent's four sections. Its script makes 25 calls and prints only how each similar incident was
+resolved; the work note is executed as a governed action (its `action_key` the platform's), the comment is
+proposed and never reaches the server.
 
 ```yaml
 agent: itsm-triager
@@ -302,6 +319,11 @@ assertions:
   - { kind: executed_actions, tool: servicenow__resolve_incident, count: 0 }
   - { kind: proposed_actions, tool: servicenow__resolve_incident, count: 0 }
 ```
+
+As implemented (#1372): the plugin's case `itsm-triage-vague-incident`, with `policy: {writes: approval}` (its
+work note of questions for the caller is proposed), `no_tool_called {tool: servicenow__resolve_incident}`, and
+no script: both cells play the MCP door. Its similar incident (`INC0010012`) and article (`KB0010003`) match
+its words only.
 
 ### C2 · coding — the existing tickets
 
