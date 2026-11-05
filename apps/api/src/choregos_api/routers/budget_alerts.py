@@ -27,6 +27,11 @@ def _may_acknowledge(principal: Principal, org: str, alert: BudgetAlert) -> bool
     return principal.can(Permission.PROJECT_WRITE, org, project)
 
 
+def _is_member(principal: Principal, org: str) -> bool:
+    """A role on the organisation, or on one of its projects."""
+    return org in principal.org_roles or any(key.startswith(f"{org}/") for key in principal.project_roles)
+
+
 def _dto(alert: BudgetAlert, principal: Principal, org: str) -> BudgetAlertDto:
     dto = BudgetAlertDto.model_validate(alert)
     dto.can_acknowledge = alert.status == "open" and _may_acknowledge(principal, org, alert)
@@ -40,15 +45,25 @@ async def list_budget_alerts(
     principal: Me,
     status: Annotated[str, Query(pattern="^(open|acknowledged|all)$")] = "open",
 ) -> list[BudgetAlertDto]:
-    """The budgets that crossed a threshold, newest first; `open` (the default) are the inbox's."""
-    if not principal.can(Permission.PROJECT_READ, org):
-        raise forbidden(f"reading the budget alerts of {org} requires being a member of it")
+    """The budgets that crossed a threshold, newest first; `open` (the default) are the inbox's.
+
+    Like the actions of the inbox, the caller reads what they can see, not a refusal: a member of one
+    project only, with no organisation role, reads that project's alerts. An agent's alert spans the
+    organisation (an agent serves several projects), so it needs a role on the organisation.
+    """
+    if not _is_member(principal, org):
+        return []
     organisation = await organisation_by_slug(session, org)
     query = select(BudgetAlert).where(BudgetAlert.org_id == organisation.id)
     if status != "all":
         query = query.where(BudgetAlert.status == status)
     rows = (await session.execute(query.order_by(BudgetAlert.created_at.desc(), BudgetAlert.id))).scalars()
-    return [_dto(row, principal, org) for row in rows]
+    return [_dto(row, principal, org) for row in rows if _may_read(principal, org, row)]
+
+
+def _may_read(principal: Principal, org: str, alert: BudgetAlert) -> bool:
+    project = alert.subject if alert.scope == "project" else None
+    return principal.can(Permission.PROJECT_READ, org, project)
 
 
 @router.post(
@@ -64,7 +79,7 @@ async def acknowledge_budget_alert(org: str, alert_id: str, session: Db, princip
     project's alert is checked against that project; an agent's, which spans the organisation,
     against the organisation role.
     """
-    if not principal.can(Permission.PROJECT_READ, org):
+    if not _is_member(principal, org):
         raise forbidden(f"acknowledging a budget alert of {org} requires being a member of it")
     organisation = await organisation_by_slug(session, org)
     alert = await session.get(BudgetAlert, alert_id)

@@ -35,6 +35,20 @@ async def _agent_alert(client: AsyncClient, project: dict[str, Any]) -> str:
     return str(alerte["id"])
 
 
+async def _drop_organisation_role(email: str) -> None:
+    """The development sign-in grants a role on the organisation; a production member of one project
+    only has none, so it is taken back after the sign-in."""
+    from choregos_api.db.models import Membership, User
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import delete, select
+
+    async with session_scope() as session:
+        user_id = (await session.execute(select(User.id).where(User.email == email))).scalar_one()
+        await session.execute(
+            delete(Membership).where(Membership.user_id == user_id, Membership.project_id.is_(None))
+        )
+
+
 @pytest.mark.parametrize("role", ["developer", "release_captain", "viewer"])
 async def test_an_organisation_role_below_project_owner_cannot_acknowledge(
     client: AsyncClient, project: dict[str, Any], role: str
@@ -81,3 +95,34 @@ async def test_owning_one_project_does_not_acknowledge_an_agents_alert(
     async with _as(client, "max@varga.dev") as org_owner:
         done = await org_owner.post(f"/api/v1/orgs/varga/budget-alerts/{alert}/acknowledge")
     assert done.status_code == 200, done.text
+
+
+async def test_a_member_of_one_project_only_reads_that_projects_alerts(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    """A member of a project with no organisation role (agentic.diametral.com, 2026-11-05): the inbox
+    of their project used to answer 403 and stay on "Reading…". They read their project's alerts, not
+    an agent's, which spans the organisation."""
+    await _agent_alert(client, project)
+    await _set_daily_budget(client, project, 10)
+    await _spend(project["id"], 5.0, run_id="r-project")  # 3.5 + 5.0 = 85 %
+    assert len(await _alerts(client)) == 2, "the administrator reads both"
+    await _member("hakim@varga.dev", "developer", project["slug"])
+    async with _as(client, "hakim@varga.dev") as member:
+        await _drop_organisation_role("hakim@varga.dev")
+        response = await member.get("/api/v1/orgs/varga/budget-alerts")
+        assert response.status_code == 200, response.text
+        seen = response.json()
+    assert [(a["scope"], a["subject"]) for a in seen] == [("project", project["slug"])]
+    assert seen[0]["can_acknowledge"] is False
+
+
+async def test_the_owner_of_a_project_without_an_organisation_role_acknowledges_its_alert(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    alert = await _project_alert(client, project)
+    await _member("noor@varga.dev", "project_owner", project["slug"])
+    async with _as(client, "noor@varga.dev") as owner:
+        await _drop_organisation_role("noor@varga.dev")
+        response = await owner.post(f"/api/v1/orgs/varga/budget-alerts/{alert}/acknowledge")
+    assert response.status_code == 200, response.text
