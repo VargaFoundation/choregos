@@ -2775,8 +2775,9 @@ Names that are recorded, persisted or wired, so they were not renamed here.
 - The audit key `canal` of `auth.login` and the keyword `canal` of `ouvrir_la_session`: persisted
   and shared with `services/tickets.py`.
 - `routers.auth.terminer_la_connexion(nom=, sujet=, groupes=, cible=, canal=)`: the public API that
-  an edition's SAML protocol calls (`alias:external`). Its keywords keep their French names until
-  the story that gives the extension API a window renames them.
+  an edition's SAML protocol calls. It is not an alias (it has no English name yet) and no window
+  covers it: its name and keywords stay French until choregos-ee and the core rename it together
+  (#1411).
 - The CSV header `budget_quotidien_usd` of the cost export.
 
 #### Kept on purpose (S45-17)
