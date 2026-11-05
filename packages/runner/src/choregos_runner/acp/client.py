@@ -98,7 +98,7 @@ def _option_id(params: dict[str, Any], allowed: bool) -> str:
 class AcpClient:
     """ACP client over stdio. No dependency on the backend: the contract is what counts."""
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 - keyword-only, one per handler or bound of the session
         self,
         command: list[str],
         *,
@@ -109,9 +109,13 @@ class AcpClient:
         read_timeout: float = 120.0,
         guard: TurnGuard | None = None,
         max_message_bytes: int = MAX_MESSAGE_BYTES,
+        scripts_dir: str = "",
     ) -> None:
         self.command = command
         self.cwd = cwd
+        #: The run's script directory when it is offered tool scripts (#1365): the one place outside
+        #: the workspace its file system reads and writes, `""` otherwise.
+        self.scripts_dir = scripts_dir
         # The runner's environment without the run's credentials (ADR 0115): under `k8s_job`, ACA,
         # local Docker and Tekton, the run token is in the runner's environment, never the agent's.
         self.env = {**agent_base_environment(), **(env or {})}
@@ -460,17 +464,23 @@ class AcpClient:
         )
 
     def _resolve(self, raw: Any) -> Path | None:
-        """A path inside the workspace, or nothing.
+        """A path inside the workspace, or beneath the run's script directory, or nothing.
 
         The workspace is the boundary: a relative path is attached to it, an absolute path
         must fall inside it. What goes outside, such as `../../etc/passwd` or a link that climbs
-        out, is not an agent error to correct, it is a request to refuse.
+        out, is not an agent error to correct, it is a request to refuse. A run offered tool scripts
+        has a second place, its script directory (#1365), outside the workspace and so never
+        committed: a file beneath it, once links are followed — not its neighbour, the client's.
         """
         if not isinstance(raw, str) or not raw:
             return None
         root = Path(self.cwd).resolve()
         target = (root / raw).resolve() if not Path(raw).is_absolute() else Path(raw).resolve()
-        return target if target == root or root in target.parents else None
+        if target == root or root in target.parents:
+            return target
+        if self.scripts_dir and Path(self.scripts_dir).resolve() in target.parents:
+            return target
+        return None
 
     async def _read_text_file(self, request: Request) -> None:
         params = request.params or {}

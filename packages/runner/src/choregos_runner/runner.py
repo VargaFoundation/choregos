@@ -317,8 +317,13 @@ class Runner:
             or await self._lay_out_knowledge(client, journal, stage_input, workspace)
         ) is not None:
             return refusal
+        # A run offered tool scripts may write them with its file-write tool in their directory (#1365).
+        scripts_dir = tool_scripts.offered_script_directory(stage_input)
         guards = GuardRails(
-            stage_input.permissions, list(stage_input.allowed_paths), workspace=str(workspace.path)
+            stage_input.permissions,
+            list(stage_input.allowed_paths),
+            workspace=str(workspace.path),
+            scripts_dir=scripts_dir,
         )
         env = {
             **plan.env,
@@ -356,6 +361,7 @@ class Runner:
             async with AcpClient(
                 command,
                 cwd=str(workspace.path),
+                scripts_dir=scripts_dir,
                 env=env,
                 on_update=on_update,
                 on_permission=on_permission,
@@ -552,6 +558,7 @@ class Runner:
             written = tool_scripts.write_client(
                 tool_scripts.client_directory(), tools, bridge=bridge, run_id=stage_input.run_id
             )
+            tool_scripts.script_directory().mkdir(parents=True, exist_ok=True)
         except OSError as exc:
             await journal.record("tools.client", {"written": False, "error": str(exc)[:300]})
             return {}

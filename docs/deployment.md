@@ -566,7 +566,10 @@ copied, and only the per-server modules and the index are generated. The agent's
 `CHOREGOS_TOOLS_DIR` (that directory), `CHOREGOS_TOOLS_BRIDGE` (`http://<the tool server's host:port>/bridge/v1`),
 `PYTHONPATH` (the directory first, an existing value kept after it) and `TMPDIR` (the runner's temporary
 directory, which the confinement lets the agent write), for every shell backend; its task gains the section
-"Calling tools from a script". The run's journal says `tools.client` (`written`, `tools`, `modules`, and
+"Calling tools from a script". The runner creates `$TMPDIR/choregos/scripts`, where that section tells the agent
+to write its scripts: its write guards (`GuardRails.check_write`, Claude Code's `check_scope.sh`) and the ACP
+client's file system let the agent's file-write tool write beneath it — no `.` or `..` segment, no
+secret-looking file —, and nowhere else outside the workspace, the client's directory included (#1365). The run's journal says `tools.client` (`written`, `tools`, `modules`, and
 `error` when the tool list could not be read: the client is then written without modules, `call` reaching a
 tool by its name); a client that cannot be written (`written: false`) leaves the run without it and without
 the section. A run that is not offered scripts gets none of it.
