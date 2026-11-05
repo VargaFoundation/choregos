@@ -35,12 +35,12 @@ RUN set -eux; \
     apt-get update && apt-get install -y --no-install-recommends curl ca-certificates; \
     case "${TARGETARCH:-${host}}" in \
       amd64) \
-        curl -fsSL -o rtk.tar.gz "${release}/releases/download/v${rtk}/rtk-x86_64-unknown-linux-musl.tar.gz"; \
+        curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 -o rtk.tar.gz "${release}/releases/download/v${rtk}/rtk-x86_64-unknown-linux-musl.tar.gz"; \
         echo "$(version rtk-sha256-x86_64-unknown-linux-musl)  rtk.tar.gz" | sha256sum -c -; \
         tar xzf rtk.tar.gz rtk; \
         install -m 0755 rtk /usr/local/bin/rtk ;; \
       arm64) \
-        curl -fsSL -o rtk.tar.gz "${release}/archive/refs/tags/v${rtk}.tar.gz"; \
+        curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 -o rtk.tar.gz "${release}/archive/refs/tags/v${rtk}.tar.gz"; \
         echo "$(version rtk-sha256-source)  rtk.tar.gz" | sha256sum -c -; \
         tar xzf rtk.tar.gz --strip-components=1; \
         if [ "${host}" != arm64 ]; then \
