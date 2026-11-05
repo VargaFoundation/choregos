@@ -75,7 +75,7 @@ export type ContextPack = {
 
 /** What was observed after the decision; each field is filled in when it becomes known. */
 export type DecisionRecordOutcome = {
-  /** A later human step on the work item contradicted the decision. */
+  /** A later human step on the work item contradicted the decision; for a routing, the workflow a person re-routed it to, or the one it ended in, is not the one the model answered (ADR 0123). */
   overridden?: boolean | null;
   /** The work item's terminal outcome. */
   terminal?: "success" | "declined" | "cancelled" | null;
@@ -86,15 +86,16 @@ export type DecisionRecordOutcome = {
 
 /** One answered question of a decision (ADR 0121): what was decided, with which probability, by which model, which transition followed, and what was observed afterwards. Calibration is measured from these records, never declared. */
 export type DecisionRecord = {
-  run_id: string;
+  /** The run that answered; `null` for a work item's routing (`source: router`), which happens before any run (ADR 0123). */
+  run_id?: string | null;
   work_item: string;
   project: string;
   workflow: string;
   /** The state the step ran from. */
   step: string;
   question: string;
-  /** `decision_model`: a decision step's answer; `agent`: the `confidence` an agent declared (ADR 0106), recorded to be measured on the same footing. */
-  source: "decision_model" | "agent";
+  /** `decision_model`: a decision step's answer; `agent`: the `confidence` an agent declared (ADR 0106), recorded to be measured on the same footing; `router`: the decision model that routed a work item at its birth (ADR 0116, ADR 0123), with `step: routing` and `question: workflow`. */
+  source: "decision_model" | "agent" | "router";
   model: string;
   model_version?: string | null;
   answer: string | number | boolean;

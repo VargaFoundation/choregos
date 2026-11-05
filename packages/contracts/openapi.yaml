@@ -834,6 +834,22 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/WorkflowRouting" } } } }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /projects/{id}/workflow-routing/calibration:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+    get:
+      tags: [workflows]
+      operationId: getRoutingCalibration
+      description: >-
+        How well the decision model that routes the project's work items predicted the workflow they
+        needed (ADR 0123 §4): a routing is right when the workflow it answered is the one a person
+        re-routed the work item to, or the one it ended in. The measure of a step's calibration, beside
+        the project's `min_confidence`. Read only (S52-11).
+      parameters:
+        - { name: target, in: query, description: The accuracy a suggested threshold must reach., schema: { type: number, exclusiveMinimum: 0, maximum: 1, default: 0.9 } }
+      responses:
+        "200": { description: The routing's calibration, content: { application/json: { schema: { $ref: "#/components/schemas/RoutingCalibration" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /projects/{id}/workflow-routing/preview:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     post:
@@ -6590,7 +6606,7 @@ components:
       required: [question, source, model, count, observed]
       properties:
         question: { type: string }
-        source: { type: string, enum: [decision_model, agent] }
+        source: { type: string, enum: [decision_model, agent, router] }
         model: { type: string }
         model_version: { type: [string, "null"] }
         count: { type: integer, description: Every recorded decision. }
@@ -6608,6 +6624,18 @@ components:
       properties:
         workflow: { type: string }
         step: { type: string, description: The state the step runs from. }
+        target_accuracy: { type: number }
+        min_observed: { type: integer, description: The observed decisions below which no threshold is suggested. }
+        questions: { type: array, items: { $ref: "#/components/schemas/QuestionCalibration" } }
+    RoutingCalibration:
+      type: object
+      description: >-
+        A project's routing by a decision model, measured from the ledger (ADR 0123 §4): a routing is
+        right when the workflow it answered is the one a person re-routed the work item to, or the one
+        it ended in.
+      required: [target_accuracy, min_observed]
+      properties:
+        min_confidence: { type: [number, "null"], description: The probability below which the default workflow takes the work item. }
         target_accuracy: { type: number }
         min_observed: { type: integer, description: The observed decisions below which no threshold is suggested. }
         questions: { type: array, items: { $ref: "#/components/schemas/QuestionCalibration" } }
@@ -8266,8 +8294,15 @@ components:
       type: object
       required: [action]
       properties:
-        action: { type: string, enum: [pause, resume, stop, migrate, rerun_stage, mark_agent_ready] }
+        action: { type: string, enum: [pause, resume, stop, migrate, rerun_stage, mark_agent_ready, reroute] }
         workflow_def_id: { type: [string, "null"] }
+        workflow:
+          type: [string, "null"]
+          minLength: 1
+          maxLength: 100
+          description: >-
+            `reroute`: the name of the workflow the work item moves to, at its initial state (ADR 0123).
+            Accepted while a person is asked; 409 while a run is in progress or once the work item ended.
         state_mapping: { type: object, additionalProperties: { type: string } }
         run_id: { type: [string, "null"] }
         reason: { type: [string, "null"] }

@@ -27,7 +27,7 @@ from .artifact import (
     type_of_filename,
     type_of_value,
 )
-from .decision import DecisionOutcome, DecisionRecord, DecisionSource
+from .decision import ROUTING_QUESTION, ROUTING_STEP, DecisionOutcome, DecisionRecord, DecisionSource
 from .enums import (
     ActionOrigin,
     ActionStatus,
@@ -233,6 +233,8 @@ __all__ = [
     "ARTIFACT_TYPES",
     "INERT_BINARY_EXTENSIONS",
     "MAX_BINARY_BYTES",
+    "ROUTING_QUESTION",
+    "ROUTING_STEP",
     "RUN_ACTORS",
     "STAGE_INPUT_SCHEMA",
     "STAGE_RESULT_SCHEMA",

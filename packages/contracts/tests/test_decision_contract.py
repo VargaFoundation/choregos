@@ -173,3 +173,23 @@ def test_a_decision_record_is_read_the_same_by_both() -> None:
         assert list(validator.iter_errors(bad)), bad
         with pytest.raises(ValidationError):
             DecisionRecord.model_validate(bad)
+
+
+def test_a_routing_is_recorded_without_a_run() -> None:
+    """ADR 0123: the decision model that routed a work item answered before any run existed."""
+    validator = _validator("decision-record.schema.json")
+    record = _load("decision-record.example.json")
+    routing = {k: v for k, v in record.items() if k != "run_id"} | {
+        "source": "router",
+        "step": contracts.ROUTING_STEP,
+        "question": contracts.ROUTING_QUESTION,
+        "answer": "fon-access",
+        "transition": "fon-access",
+    }
+    for document in (routing, routing | {"run_id": None}):
+        assert not list(validator.iter_errors(document)), document
+        assert DecisionRecord.model_validate(document).run_id is None
+    for bad in (routing | {"run_id": ""}, routing | {"source": "routing"}):
+        assert list(validator.iter_errors(bad)), bad
+        with pytest.raises(ValidationError):
+            DecisionRecord.model_validate(bad)

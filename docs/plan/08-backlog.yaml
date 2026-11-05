@@ -4345,3 +4345,30 @@ stories:
     size: S
     depends_on: [S57-05]
     notes: "Organisation setting tool_scripts enabled|disabled|null on Org and OrgUpdate (PATCH /orgs/{org}, org_admin only, audited); the orchestrator reads it in the bundle; CHOREGOS_TOOL_SCRIPTS becomes the default of an organisation that does not choose; hard brake CHOREGOS_TOOL_SCRIPTS_ALLOWED (Helm toolScripts.allowed, default true); console switch on Administration and the project card's warning; ADR 0122 section 6 amended."
+
+  # ───────────── S52 — routing measured, re-routing (ADR 0123) ─────────────
+  - id: S52-10
+    title: "contract(schemas): a decision record without a run, the routing's (ADR 0123)"
+    stream: S52
+    sprint: 3
+    priority: 1
+    size: S
+    depends_on: [S52-05, S52-08]
+    notes: "ADR 0123: `run_id` optional, source `router`, `ROUTING_STEP` and `ROUTING_QUESTION`"
+  - id: S52-11
+    title: "feat(api,orchestrator): a work item is re-routed, and its routing is recorded and measured"
+    stream: S52
+    sprint: 3
+    priority: 1
+    size: M
+    depends_on: [S52-10]
+    notes: "ADR 0123 §1-4: `reroute` action (migrate to the initial state; accepted while a human step waits), routing records, outcome by re-route or end, routing calibration API"
+  - id: S52-12
+    title: "feat(web): change a ticket's workflow, and the routing's calibration"
+    stream: S52
+    sprint: 3
+    priority: 1
+    size: S
+    depends_on: [S52-11]
+    notes: "ADR 0123: a Change workflow action on the ticket page, the routing calibration card in the project's routing settings"
+
