@@ -238,7 +238,7 @@ K8s Job `Executor` (`k8s_job.py`): same image, same contract, `Job` + `ConfigMap
 - Namespace `proj-<slug>-runners`: default-deny egress `NetworkPolicy` + allowances: internal API, LiteLLM, Ecphoria, OTel collector, SCM (via egress proxy), package registries (via proxy/mirror). Restricted DNS.
 - Egress proxy (Envoy or Squid, namespace `choregos-egress`): per-project allowlist, logging, **credential injection** for private registries — secrets are never in the workspace.
 - `RuntimeClass gvisor` (or Kata) according to `policy.sandbox.runtime`. Non-root, `seccompProfile: RuntimeDefault`, no `hostPath`, `ResourceQuota` per namespace.
-- Shims in the image: `/usr/local/bin/kubectl`, `terraform`, `az`, `gcloud`, `aws` → binary that refuses and logs (defence in depth; no credential exists anyway).
+- Shims in the image: `/usr/local/bin/kubectl`, `helm`, `terraform`, `az`, `gcloud`, `aws`, `docker`, `podman` → binary that refuses (defence in depth; no credential exists anyway). The shim holds no credential and posts nothing (ADR 0115); the runner reads its line in the call's output and journals `shim.refused` (`choregos_runner.refusal_shims`, #1346).
 - Git token: minted per run (`ScmAdapter.mint_token`, GitHub App, repository scope, 1 h TTL), injected via `.git-credentials` in memory (`credential.helper store` on tmpfs), never in the image nor in a global `env`.
 
 ## 2.5 Playbooks (`packages/playbooks`)
