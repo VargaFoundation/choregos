@@ -29,6 +29,17 @@ from choregos_core.egress import check_current
 from .base import Changes, SourceItem, SourceRefusedError
 
 DEFAULT_PATHS = ("*.md", "**/*.md")
+
+
+def _matches(path: str, pattern: str) -> bool:
+    """`fnmatch`, where `*` already crosses folders, plus what `**/` means in git and in every glob: zero
+    folders or more. Without it, `docs/**/*.md` asked for a folder under `docs/` and missed `docs/*.md`
+    itself (seen in production: 5 of 99 files of a repository's `docs/`)."""
+    return fnmatch.fnmatch(path, pattern) or (
+        "**/" in pattern and fnmatch.fnmatch(path, pattern.replace("**/", ""))
+    )
+
+
 MAX_FILES = 500
 MAX_FILE_BYTES = 5 * 1024 * 1024
 TIMEOUT_S = 300.0
@@ -110,7 +121,7 @@ class GitSource:
         return await self._credential()
 
     def _wanted(self, path: str) -> bool:
-        return any(fnmatch.fnmatch(path, pattern) for pattern in self.paths)
+        return any(_matches(path, pattern) for pattern in self.paths)
 
     async def changes(self, cursor: dict[str, Any] | None) -> Changes:
         self.close()
