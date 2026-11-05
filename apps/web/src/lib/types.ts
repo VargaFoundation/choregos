@@ -123,7 +123,7 @@ export type {
   JourneyStep,
 } from "@choregos/contracts/api";
 
-import type { Operations } from "@choregos/contracts/api";
+import type { Operations, StepCalibration as MeasuredStep } from "@choregos/contracts/api";
 
 export type {
   Action,
@@ -290,6 +290,17 @@ export type {
 
 /** The running edition and what it allows itself (ADR 0024): the response of `GET /edition`. */
 export type Edition = Operations["edition"]["response"];
+
+/**
+ * A project's routing by a decision model, measured from the ledger (ADR 0123 §4), from
+ * `GET /projects/{id}/workflow-routing/calibration`: a step's measure without a workflow or a step,
+ * beside the project's `min_confidence`. Derived from `StepCalibration` while `openapi.yaml` does not
+ * declare the route (S52-11); re-exported from the contract once it does.
+ */
+export type RoutingCalibration = Omit<MeasuredStep, "workflow" | "step"> & {
+  /** The probability below which the default workflow takes the work item; null when unset. */
+  min_confidence?: number | null;
+};
 
 /** Who started a run's work item and which earlier runs it read (ADR 0077 §2), from `GET /runs/{id}/access`. */
 export type RunChain = NonNullable<Operations["getRunAccess"]["response"]["chain"]>;

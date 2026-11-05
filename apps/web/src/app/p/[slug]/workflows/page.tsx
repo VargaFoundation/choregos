@@ -6,6 +6,7 @@ import { DEFAULT_WORKFLOW_HINT } from "@/components/workflows/timing";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { use, useState } from "react";
 import { ConfirmedGesture } from "@/components/confirmed-gesture";
+import { RoutingCalibrationCard } from "@/components/workflows/routing-calibration";
 import { cn } from "@/lib/cn";
 import { workflowHueClasses } from "@/lib/workflow-hue";
 import { Workflow as WorkflowIcon } from "lucide-react";
@@ -123,6 +124,12 @@ export default function WorkflowsPage({ params }: { params: Promise<{ slug: stri
           />
         )}
       </Card>
+      {/* How good the saved routing's model was, once a strategy asks one (ADR 0123 §4, S52-12). */}
+      {routing.data && (routing.data.strategy ?? "labels") !== "labels" && (
+        <Card title="How good the routing is">
+          <RoutingCalibrationCard slug={slug} />
+        </Card>
+      )}
       {routing.data && workflows.data && workflows.data.length > 0 && (
         <Card title="Try the routing">
           <TryRouting slug={slug} />

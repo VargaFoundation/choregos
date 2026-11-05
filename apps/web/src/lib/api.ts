@@ -62,6 +62,7 @@ import type {
   GroupMembers,
   WorkflowActivity,
   StepCalibration,
+  RoutingCalibration,
   HostedSource,
   ImplicitAgent,
   WorkflowAgent,
@@ -549,6 +550,9 @@ export const api = {
     request<StepCalibration>(
       `/projects/${qualify(id)}/workflows/${encodeURIComponent(name)}/steps/${encodeURIComponent(step)}/calibration?target=${target}`,
     ),
+  /** How well the decision model that routes the project's work items chose their workflow (ADR 0123 §4, S52-11). */
+  routingCalibration: (id: string, target = 0.9) =>
+    request<RoutingCalibration>(`/projects/${qualify(id)}/workflow-routing/calibration?target=${target}`),
   /** What an `agent` actor that names no registry agent runs: its prompt, model, backend, limits and tools. */
   describeBuiltinAgent: (id: string, actor: BuiltinAgentQuery) =>
     request<BuiltinAgent>(
@@ -1005,6 +1009,16 @@ export const api = {
     request<unknown>(`/work-items/${id}/decisions`, { method: "POST", body: JSON.stringify(body) }),
   action: (id: string, action: string) =>
     request<unknown>(`/work-items/${id}/actions`, { method: "POST", body: JSON.stringify({ action }) }),
+  /**
+   * Moves a work item to another active workflow of its project, at that workflow's initial state
+   * (ADR 0123, S52-11). Refused (409) while a run is in progress, once the item ended and to its own
+   * workflow; 422 for a workflow unknown or inactive.
+   */
+  reroute: (id: string, workflow: string, reason?: string) =>
+    request<unknown>(`/work-items/${id}/actions`, {
+      method: "POST",
+      body: JSON.stringify({ action: "reroute", workflow, ...(reason ? { reason } : {}) }),
+    }),
 
   runs: (itemId: string) => request<Run[]>(`/work-items/${itemId}/runs`),
   run: (runId: string) => request<Run>(`/runs/${runId}`),
