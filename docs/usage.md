@@ -1137,7 +1137,9 @@ order a laptop — becomes a governed action the policy approves at once: record
 done once, compensated if a later step fails, played by Temporal. The agent still gets what the
 server answered (the call waits up to `courtier_attente_ecriture_s`, 30 s, then answers `202` with
 the action's id), and calling it again with the same arguments returns the same action instead of
-writing twice. A write set to `approval` waits for a person instead ([ADR 0034](adr/0034-connectors-by-capability.md) §7).
+writing twice. A write set to `approval` waits for a person instead ([ADR 0034](adr/0034-connectors-by-capability.md) §7),
+and the same rule holds for it: the same call made again in the same run, by the model or by a script, finds
+its proposal instead of putting a second one before a person (#1379).
 
 **What a server answers is bounded before the agent reads it** (#755). A third-party server writes
 what lands in the agent's context, so the broker holds every result, read or write, to three rules:
