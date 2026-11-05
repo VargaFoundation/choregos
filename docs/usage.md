@@ -1223,7 +1223,9 @@ Each line says which door the call came through (`origin`: `model`, `script`, `j
 cost reports group by it: `GET /projects/{id}/costs?group_by=origin&kind=tool` (and
 `/orgs/{org}/costs`, and both CSV exports) gives the spend and the number of calls of each door. A line
 that does not say — a model call, a distillation, a tool line booked before S57-06 — is the `—` row, the
-way a playbook run's line is under `group_by=agent`.
+way a playbook run's line is under `group_by=agent`. The console's spend page (`/costs`, the organisation's or,
+with `?project=<slug>`, one project's) shows it as **Tool calls by door**: `model`, `script` and `job` always
+(a door no call used reads 0), `—` when such lines exist, each with its calls and their cost (S57-10).
 The cap holds when a run's calls arrive at once (S57-03): the API counts them under a per-run lock
 (`pg_advisory_xact_lock`) and each call takes its place before it leaves, as a provisional ledger line
 with `provider: in_flight`, replaced by the call's own line when it answers. A call that fails, or
@@ -2735,6 +2737,18 @@ sends its text to the bridge, once, and every call its SHA-256, so that the run'
 script beside the calls it made (`tools.script`, `tools.script.call`); a script piped on standard input
 (`python3 - <<EOF`) has no file, and its calls carry no digest. What the tools return stays in the
 script: the model reads what it prints, and the gateway's LLM guard still reads that.
+
+**What the console shows of them** (S57-10). The run page's **Tool scripts** card groups the calls each
+script made under it: its digest (the first twelve characters, the whole one on hover), its text, folded,
+in monospace, with a copy button, and its calls in order with the tool, the status, the duration and the
+size of the answer. A `202` reads **Proposed — not executed**: the bridge's journal line and the run's
+access record do not say which action the proposal created, so the card points to the project's actions
+instead of linking one (a journal line that names it, `action`, is linked to its page). A script whose
+text never reached the bridge says **Text not recorded**, and so do the calls of scripts piped on standard
+input, which are grouped together because nothing tells them apart. The calls the model made itself stay
+in the run's activity. The project's **Agents** settings show, in **Tools**, the policy's `tools.scripts`,
+`max_concurrent_calls` and per-role overrides, read-only (they are edited in the policy's YAML, under
+**Guardrails**), and say when the organisation's ceiling forbids tool scripts.
 
 **A policy does not decide who approves a work item.** People are declared in the **workflow**: a
 transition `by` a human actor, or `train: {approval: <actor>}` on a release train

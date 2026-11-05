@@ -37,7 +37,7 @@ const LIBELLES: Record<CallStatus, string> = { pending: "Pending", in_progress: 
 const HEURE = new Intl.DateTimeFormat("en-GB", { timeStyle: "medium" });
 
 /** A call's duration: to the nearest second, to the tenth under one second. */
-function callDuration(ms: number | undefined): string {
+export function callDuration(ms: number | undefined): string {
   if (ms === undefined) return "—";
   return ms < 1000 ? `${(ms / 1000).toFixed(1)} s` : duration(ms / 1000);
 }

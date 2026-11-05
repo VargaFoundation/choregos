@@ -1022,13 +1022,37 @@ export const costs: CostReport = {
  * The mock ledger (S29-03): the lines every grouping is computed from, so each grouping adds up to
  * the same total — as the API's do. Days are counted back from today, in UTC.
  */
-type MockLine = { daysAgo: number; usd: number; kind: "model" | "tool"; model: string; agent: string | null; workflow: string; item: string; project: string };
+type MockLine = {
+  daysAgo: number;
+  usd: number;
+  kind: "model" | "tool";
+  model: string;
+  agent: string | null;
+  workflow: string;
+  item: string;
+  project: string;
+  /** The door a tool call came through (S57-06): a model line has none, nor a tool line booked before. */
+  origin?: "model" | "script" | "job";
+};
 const FX_EUR = 0.92;
 export const mockLedger: MockLine[] = Array.from({ length: 45 }, (_, i) => i).flatMap((daysAgo) => [
   { daysAgo, usd: 1.5 + (daysAgo % 5) * 0.4, kind: "model" as const, model: "claude-sonnet", agent: "coordinator", workflow: "delivery", item: "BILL-12", project: "billing-api" },
   { daysAgo, usd: 0.8 + (daysAgo % 3) * 0.3, kind: "model" as const, model: "claude-haiku", agent: "reviewer", workflow: "delivery", item: "BILL-14", project: "billing-api" },
   ...(daysAgo % 4 === 0
-    ? [{ daysAgo, usd: 0.25, kind: "tool" as const, model: "crm_export", agent: "coordinator", workflow: "onboarding", item: "HR-3", project: "checkout-web" }]
+    ? [
+        {
+          daysAgo,
+          usd: 0.25,
+          kind: "tool" as const,
+          model: "crm_export",
+          agent: "coordinator",
+          workflow: "onboarding",
+          item: "HR-3",
+          project: "checkout-web",
+          // The last weeks' calls say their door, half of them from a script; the older ones predate it.
+          ...(daysAgo < 32 ? { origin: daysAgo % 8 === 0 ? ("script" as const) : ("model" as const) } : {}),
+        },
+      ]
     : []),
   ...(daysAgo % 6 === 0
     ? [{ daysAgo, usd: 0.6, kind: "model" as const, model: "claude-sonnet", agent: null, workflow: "delivery", item: "BILL-12", project: "checkout-web" }]
@@ -1050,6 +1074,7 @@ export function mockCostReport(path: string): CostReport {
       case "project": return line.project;
       case "model": return line.model;
       case "kind": return line.kind;
+      case "origin": return line.origin ?? "—";
       default: return day(line.daysAgo);
     }
   };
