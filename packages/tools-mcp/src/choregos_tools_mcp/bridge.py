@@ -60,6 +60,8 @@ SIDECAR_SEQ_BASE = 1_000_000_000
 #: during its run goes on after the numbers it already used instead of starting over.
 SIDECAR_SEQ_SPAN = 1_000_000_000
 _SHA256 = re.compile(r"[0-9a-f]{64}")
+#: An action id as the API mints it, and as the console accepts it in a link (`run-scripts.ts`).
+_ACTION_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
 _NOT_FOUND = {"detail": "Not Found"}
 
 
@@ -118,6 +120,7 @@ class Bridge:
                         name, arguments or b"{}", script=script, within_s=self.call_timeout
                     )
                 response, outcome = self._handed_back(relayed), _outcome(relayed)
+                action = _proposed_action(relayed) if outcome == 202 else None
             except (TimeoutError, httpx.TimeoutException):
                 response = problem(
                     504,
@@ -125,9 +128,9 @@ class Bridge:
                     f"the internal API did not answer within {self.call_timeout:g} s; the call may still "
                     "complete, and the same write called again is the same governed action",
                 )
-                outcome = 504
+                outcome, action = 504, None
             except httpx.HTTPError:
-                response, outcome = _unreachable(), 502
+                response, outcome, action = _unreachable(), 502, None
             duration_ms = round((time.monotonic() - started) * 1000)
         await self._record(
             CALL_EVENT,
@@ -137,6 +140,8 @@ class Bridge:
                 "duration_ms": duration_ms,
                 "response_bytes": len(response.body),
                 "script_sha256": script,
+                # The action a proposal created, so that the console links the script's call to it.
+                **({"action": action} if action is not None else {}),
             },
         )
         return response
@@ -204,6 +209,19 @@ def _outcome(relayed: Relayed) -> int:
             if isinstance(code, int) and not isinstance(code, bool):
                 return code
     return relayed.status_code
+
+
+def _proposed_action(relayed: Relayed) -> str | None:
+    """The id of the governed action a `202` answer names (ADR 0035), when it is one the API mints: a
+    proposal's line keeps it so that the console can link the call to its action (#1369). Anything
+    else (a URL, a list, a free text) is not journaled as an action."""
+    with contextlib.suppress(ValueError):
+        answer = json.loads(relayed.content)
+        result = answer.get("result") if isinstance(answer, dict) else None
+        action = result.get("action") if isinstance(result, dict) else None
+        if isinstance(action, str) and _ACTION_ID.fullmatch(action):
+            return action
+    return None
 
 
 def _unreachable() -> JSONResponse:
