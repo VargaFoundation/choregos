@@ -32,4 +32,8 @@ regexes = [
   # a secret: `generic-api-key` reads `key: ` followed by a quoted word of enough entropy as a key. One
   # test on one branch turned the `secrets` job red on main and on every open pull request (2026-10-29).
   '''work_item_key: ["'][A-Za-z][A-Za-z0-9_-]*[-#][A-Za-z0-9_.#-]+["']''',
+  # The tool bridge's tests (S57-07, #1363) use a fake run token shaped like a key, so that a test can
+  # prove it never leaves the runner. `generic-api-key` reads it as a key; the CI scans the history, so
+  # once merged it turned the `secrets` job red on every pull request (2026-11-05, #1382). This value only.
+  '''rt-7f3c9a1e5b2d4c6f8a0b1c2d3e4f5a6b''',
 ]
