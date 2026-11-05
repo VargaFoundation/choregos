@@ -782,3 +782,233 @@ def test_a_live_answer_is_its_output_and_its_decision_paths_read_as_the_scripted
     assert live_cases.live_answer(case, {"summary": "no output"}, CASE_PROJECT) == "no output"
     assert live_cases.case_project_slug("evals", "x" * 70).startswith("evals-")
     assert len(live_cases.case_project_slug("evals", "x" * 70)) <= 63
+
+
+# ───────────────────────── a plugin's case: its server's eval instance (#1372) ─────────────────────────
+
+E3 = "plugin:servicenow/itsm-triage-similar-incidents"
+FIXTURES = Path(__file__).resolve().parents[3] / "tests" / "fixtures"
+E3_PROJECT = live_cases.case_project_slug("billing-api", "itsm-triage-similar-incidents")
+
+
+@pytest.fixture
+def plugin_runtime(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
+    """The plugins offline are the fixtures (servicenow mirrors choregos-agents#8); plugin servers run in
+    an in-memory cluster, and the platform's calls to them reach the server's recorded fake."""
+    from choregos_adapters.fakes.kubernetes import FakeKubernetesApi
+    from choregos_adapters.fakes.plugin_servers import FakePluginServer
+    from choregos_adapters.plugin_servers import PluginServerRuntime
+    from choregos_api.config import reset_settings_cache as reset_api_settings
+    from choregos_api.services.plugin_servers import use_plugin_runtime, use_plugin_transport
+    from choregos_core.agent_catalogue import OFFLINE_ENV
+
+    monkeypatch.setenv(OFFLINE_ENV, str(FIXTURES / "plugins"))
+    monkeypatch.setenv("CHOREGOS_PLUGIN_SERVERS_REGISTRIES", '["ghcr.io/vargafoundation/choregos-agents"]')
+    reset_api_settings()
+    kube = FakeKubernetesApi()
+    use_plugin_runtime(PluginServerRuntime(kube, "choregos-plugins"))
+    fake = FakePluginServer.from_recording(FIXTURES / "plugin_fakes" / "servicenow.json", token=None)
+    hosts: list[str] = []
+    inner = fake.transport()
+
+    async def handle(request: Any) -> Any:
+        hosts.append(request.url.host)
+        return await inner.handle_async_request(request)
+
+    import httpx
+
+    use_plugin_transport(httpx.MockTransport(handle))
+    yield {"kube": kube, "fake": fake, "hosts": hosts}
+    use_plugin_runtime(None)
+    use_plugin_transport(None)
+    monkeypatch.delenv("CHOREGOS_PLUGIN_SERVERS_REGISTRIES")
+    reset_api_settings()
+
+
+async def _install_servicenow(directory: Path | None = None) -> None:
+    """The servicenow plugin installed in the eval organisation, as an organisation installs it."""
+    from choregos_api.config import get_settings
+    from choregos_api.db.models import Organization
+    from choregos_api.db.session import session_scope
+    from choregos_api.services.plugin_installer import install
+    from choregos_core.plugins import load_directory
+    from sqlalchemy import select
+
+    async with session_scope() as session:
+        org = (await session.execute(select(Organization))).scalar_one()
+        plugin = load_directory(directory or FIXTURES / "plugins" / "servicenow")
+        await install(session, org.id, plugin, "offline", get_settings(), None)
+
+
+async def _discover_servicenow() -> dict[str, Any]:
+    """What the runbook asks of the operator once the connector is bound: discover its tools, which
+    reaches the server's eval instance (the connector's route, as an administrator calls it)."""
+    from choregos_api.db.models import Organization
+    from choregos_api.db.session import session_scope
+    from choregos_api.rbac import Principal, Role
+    from choregos_api.routers.org_connectors import discover_operations
+    from sqlalchemy import select
+
+    async with session_scope() as session:
+        org = (await session.execute(select(Organization))).scalar_one()
+        administrator = Principal(
+            user_id="admin",
+            email="admin@varga.dev",
+            display_name="Admin",
+            org_roles={org.slug: Role.ORG_ADMIN},
+        )
+        found = await discover_operations(org.slug, "servicenow", session, administrator)
+        return found.model_dump()
+
+
+async def test_a_plugin_case_binds_the_installed_server_to_its_eval_instance_for_its_project_alone(
+    eval_project: Fixture, plugin_runtime: Any
+) -> None:
+    from choregos_api.db.models import (
+        ConnectorOperation,
+        OrgConnector,
+        OrgConnectorProject,
+        Project,
+        ProjectOperationPolicy,
+    )
+
+    assert (await evals.seed_eval_ticket(_cell(case=E3)))["skipped"], "not installed: nothing to bind"
+    await _install_servicenow()
+    blind = await evals.seed_eval_ticket(_cell(case=E3))
+    assert blind["skipped"] and "have no input schema: a model would call them blind" in blind["reason"]
+    assert "/connectors/servicenow/discover" in blind["reason"]
+    hosts = plugin_runtime["hosts"]
+    discovered = await _discover_servicenow()
+    assert discovered["added"] == [] and discovered["unchanged"] == 21, "the declared tools' schemas, learnt"
+    [bound] = await _rows(OrgConnector, name="servicenow")
+    assert set(hosts) == {f"{bound.plugin_server['fake_object']}.choregos-plugins.svc"}, (
+        "on its eval instance"
+    )
+    first = await evals.seed_eval_ticket(_cell(case=E3))
+    again = await evals.seed_eval_ticket(_cell(case=E3))
+    assert not first["skipped"], first["reason"]
+    assert first["plan"] == again["plan"] and first["plan"]["agent"] == "itsm-triager"
+    [connector] = await _rows(OrgConnector, name="servicenow")
+    assert connector.config == {"fake_scene": "default"} and connector.availability == "selected_projects"
+    assert connector.plugin_server["plugin"] == "servicenow", "the plugin's own connector, bound"
+    [project] = await _rows(Project, slug=E3_PROJECT)
+    [enabled] = await _rows(OrgConnectorProject, connector_id=connector.id)
+    assert enabled.project_id == project.id
+    policies = {op.name: op.policy for op in await _rows(ConnectorOperation, connector_id=connector.id)}
+    assert (policies["add_work_note"], policies["get_record"]) == ("allowed", "allowed"), (
+        "the case allows writes"
+    )
+    assert (policies["add_comment"], policies["resolve_incident"]) == ("approval", "approval"), (
+        "never lowered"
+    )
+    assert await _rows(ProjectOperationPolicy, project_id=project.id) == [], (
+        "`writes: allowed`: no tightening"
+    )
+
+
+async def test_a_plugin_server_configured_for_a_real_instance_is_never_bound(
+    eval_project: Fixture, plugin_runtime: Any
+) -> None:
+    from choregos_api.db.models import OrgConnector
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    await _install_servicenow()
+    async with session_scope() as session:
+        row = (
+            await session.execute(select(OrgConnector).where(OrgConnector.name == "servicenow"))
+        ).scalar_one()
+        row.config = {"base_url": "https://acme.service-now.com", "auth": "oauth"}
+    seeded = await evals.seed_eval_ticket(_cell(case=E3))
+    assert seeded["skipped"] and "is configured (auth, base_url)" in seeded["reason"]
+    [untouched] = await _rows(OrgConnector, name="servicenow")
+    assert untouched.config == {"base_url": "https://acme.service-now.com", "auth": "oauth"}
+    assert untouched.availability == "all_projects"
+
+
+async def test_a_plugin_server_that_declares_no_fake_cannot_be_played_live(
+    eval_project: Fixture, plugin_runtime: Any, tmp_path: Path
+) -> None:
+    """servicenow as choregos-agents#8 publishes it: its server file has no `fake` yet."""
+    import shutil
+
+    import yaml
+
+    copy_of = tmp_path / "servicenow"
+    shutil.copytree(FIXTURES / "plugins" / "servicenow", copy_of)
+    server = copy_of / "servers" / "servicenow.yaml"
+    document = yaml.safe_load(server.read_text())
+    document.pop("fake")
+    server.write_text(yaml.safe_dump(document, sort_keys=False))
+    await _install_servicenow(copy_of)
+    seeded = await evals.seed_eval_ticket(_cell(case=E3))
+    assert seeded["skipped"] and "declares no `fake`" in seeded["reason"]
+
+
+async def test_a_live_cell_plays_the_case_its_organisation_installed(
+    eval_project: Fixture, plugin_runtime: Any
+) -> None:
+    from choregos_api.db.models import Organization, OrgPluginFile
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    await _install_servicenow()
+    async with session_scope() as session:
+        org = (await session.execute(select(Organization))).scalar_one()
+        kept = (
+            await session.execute(
+                select(OrgPluginFile).where(
+                    OrgPluginFile.path == "evals/matrix/itsm-triage-similar-incidents.yaml"
+                )
+            )
+        ).scalar_one()
+        kept.content = bytes(kept.content).replace(b"Triage INC0012345", b"Triage INC0012345 (installed)")
+        loaded = await evals.installed_agent_case(session, org.id, E3)
+    assert loaded is not None and loaded["task"].startswith("Triage INC0012345 (installed)")
+    assert (loaded["name"], loaded["plugin"]) == ("itsm-triage-similar-incidents", "servicenow")
+
+
+async def _e3_through_mcp(stage_input: StageInput, transport: Any, token: str) -> StageResult:
+    """E3's agent as a model makes its calls, through the run's MCP server, then the case's report. The
+    governed action its allowed write became is played as the action worker plays it (`ActionWorkflow`'s
+    activities), while the run is still running."""
+    from choregos_api.db.models import Action
+    from choregos_orchestrator.activities.actions import close_action, execute_effect, load_action
+
+    case = evals.load_agent_case(E3)
+    assert case is not None
+    answers = await eval_doors.mcp_calls(_client(transport, stage_input, token), case["evidence"])
+    assert all(not a.get("result", {}).get("isError") for a in answers), answers
+    for action in await _rows(Action, run_id=stage_input.run_id, status="approved"):
+        effects = (await load_action(action.id))["effects"]
+        for position in range(effects):
+            await execute_effect({"action_id": action.id, "position": position})
+        await close_action({"action_id": action.id, "status": "succeeded"})
+    return _done("itsm_triage_markdown", json.loads(case["reference_answer"])["itsm_triage_markdown"])
+
+
+async def test_e3_is_played_live_against_the_server_s_eval_instance_and_judged(
+    eval_project: Fixture, api: Any, plugin_runtime: Any
+) -> None:
+    from choregos_api.db.models import OrgConnector
+
+    await _install_servicenow()
+    assert (await evals.seed_eval_ticket(_cell("mcp", case=E3)))["skipped"], "bound, not discovered yet"
+    await _discover_servicenow()
+    [connector] = await _rows(OrgConnector, name="servicenow")
+    verdict = await _live(eval_project, api, _cell("mcp", case=E3), _e3_through_mcp)
+    assert not verdict["skipped"] and not verdict.get("invalid"), verdict["reason"]
+    assert verdict["ok"], verdict["reason"]
+    eval_instance = f"{connector.plugin_server['fake_object']}.choregos-plugins.svc"
+    assert set(plugin_runtime["hosts"]) == {eval_instance}, "its eval instance, and only it"
+    observation = verdict["observation"]
+    assert [c["origin"] for c in observation["calls"]] == ["model"] * 25
+    statuses = {a["tool"]: a["status"] for a in observation["actions"]}
+    assert statuses == {
+        "servicenow__add_work_note": "succeeded",
+        "servicenow__add_comment": "pending_approval",
+    }
+    fake = plugin_runtime["fake"]
+    [note] = fake.called("add_work_note")
+    assert len(note["action_key"]) == 24, "the governed action's own key, which the platform fills"
+    assert fake.called("add_comment") == [], "a person approves it: it never reached the server"

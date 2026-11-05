@@ -18,6 +18,11 @@ rather than the first:
   ships (`defaults.knowledge`, S51-06) that reads a template input names an input the template declares;
 - each eval suite against `plugin-evals.schema.json`, naming an agent of the plugin, a case's
   `input.fields` within the API's 64 KiB of JSON;
+- each matrix case (`contents.matrix_cases`, #1372), an agent case of the core's eval matrix in the format
+  `choregos_playbooks.evals.agents` reads: a mapping with a `task`, an agent of the plugin (or its own
+  `agent_spec`), its `tools_cells` among `mcp` and `scripts`, each connector `plugin:<plugin>/<server>`
+  naming this plugin and a server of it, and no two cases of one name. The matrix plays it; the
+  installer keeps it and never plays it;
 - each procedure through the ADR 0067 parser (`choregos_core.procedures.parse`), and each
   `{{plugin_webhook_url:<plugin>/<server>}}` it holds names this plugin and a server of it with a webhook;
 - each template that takes its tracker from a plugin (`requires.connectors.tracker:
@@ -25,7 +30,9 @@ rather than the first:
 - each server file against `plugin-server.schema.json`, plus what a schema cannot say (unique
   operation names, a compensation that names an operation of the same server, egress fields that the
   configuration schema declares, and — for a server that `implements: [tracker]` — every tool of the
-  tracker profile declared with its access, `TRACKER_PROFILE`).
+  tracker profile declared with its access, `TRACKER_PROFILE`) — and, for a server that declares its
+  `fake` (#1372), variables that are neither the platform's (`CHOREGOS_*`) nor any its configuration
+  reaches, so that no administrator ever switches a server to its fake.
 
 Loading also WARNS, without refusing (`Plugin.warnings`): an agent that reads a knowledge base
 (`spec.knowledge`) no template of the plugin ships (`defaults.knowledge`) runs only in an organisation
@@ -83,6 +90,12 @@ MAX_BYTES = 50 * 1024 * 1024
 AGENT_SLUG = r"^[a-z][a-z0-9-]{1,62}$"
 #: An eval case's `input.fields`, as JSON: the API's `AgentSampleInput` cap (S51-04, S51-10).
 MAX_CASE_FIELDS_BYTES = 64 * 1024
+#: A connector of a matrix case that is a plugin's server: `plugin:<plugin>/<server>` (#1372).
+PLUGIN_CONNECTOR = "plugin:"
+#: The doors a matrix case may be played through (`choregos_playbooks.evals.agents.TOOLS_CELLS`).
+MATRIX_CELLS = ("mcp", "scripts")
+#: The scenes a server's fake serves when its `fake` names none.
+DEFAULT_FAKE_SCENES = ("default",)
 
 
 class PluginError(ChoregosError):
@@ -103,6 +116,8 @@ class Plugin:
     agents: dict[str, dict[str, Any]] = field(default_factory=dict)
     servers: dict[str, dict[str, Any]] = field(default_factory=dict)
     procedures: tuple[str, ...] = ()
+    #: its matrix cases (`contents.matrix_cases`, #1372): file stem -> the case, its `name` the stem
+    matrix_cases: dict[str, dict[str, Any]] = field(default_factory=dict)
     #: the declared files, relative POSIX paths, sorted: what the digest covers and `pack` writes
     files: tuple[str, ...] = ()
     #: what loads but may not run as shipped (ADR 0117): said, never refused
@@ -217,7 +232,44 @@ def _check_server(path: Path, ref: str, problems: list[str]) -> dict[str, Any] |
     for name in (doc.get("egress") or {}).get("from_fields") or []:
         if name not in declared:
             problems.append(f"{ref}: egress field `{name}` is not in config_schema")
+    _check_fake(doc, ref, problems)
     return doc
+
+
+def configuration_variables(doc: dict[str, Any]) -> dict[str, str]:
+    """field -> the environment variable a server's configuration reaches it as: `x-env`, else the
+    upper-cased field name (the platform's rule, ADR 0096)."""
+    properties = (doc.get("config_schema") or {}).get("properties") or {}
+    names: dict[str, str] = {}
+    for name in [*properties, *(doc.get("secret_fields") or [])]:
+        declared = properties.get(name)
+        env = declared.get("x-env") if isinstance(declared, dict) else None
+        names[str(name)] = str(env or str(name).upper())
+    return names
+
+
+def fake_scenes(doc: dict[str, Any]) -> tuple[str, ...]:
+    """The scenes a server's fake serves (`fake.scenes`, `default` when absent); none without a fake."""
+    fake = doc.get("fake")
+    if not isinstance(fake, dict):
+        return ()
+    return tuple(str(s) for s in fake.get("scenes") or DEFAULT_FAKE_SCENES)
+
+
+def _check_fake(doc: dict[str, Any], ref: str, problems: list[str]) -> None:
+    """A server's `fake` (#1372) switches it to its fake through variables no administrator reaches."""
+    fake = doc.get("fake")
+    if not isinstance(fake, dict):
+        return
+    reached = {env: name for name, env in configuration_variables(doc).items()}
+    for env in sorted(fake.get("env") or {}):
+        if env.startswith("CHOREGOS_"):
+            problems.append(f"{ref}: fake variable `{env}` is the platform's (`CHOREGOS_*`)")
+        elif env in reached:
+            problems.append(
+                f"{ref}: fake variable `{env}` is what the configuration field `{reached[env]}` reaches: "
+                "an administrator would switch the server to its fake"
+            )
 
 
 def _check_eval(path: Path, ref: str, agents: set[str], problems: list[str]) -> None:
@@ -265,6 +317,91 @@ def _check_procedure(
     return proc.id
 
 
+def _check_matrix_case(
+    path: Path,
+    ref: str,
+    plugin: str,
+    agents: set[str],
+    servers: dict[str, dict[str, Any]],
+    problems: list[str],
+) -> dict[str, Any] | None:
+    """A matrix case (#1372): only what the matrix needs to find its agent, its doors and its
+    connectors is checked here; the rest is the core's agent-case format, which the matrix reads."""
+    if not path.is_file():
+        problems.append(f"{ref}: matrix case file missing")
+        return None
+    doc = _yaml(path, ref, problems)
+    if not isinstance(doc, dict):
+        problems.append(f"{ref}: a matrix case is a mapping (the core's agent-case format)")
+        return None
+    found: list[str] = []
+    if not isinstance(doc.get("task"), str) or not doc["task"].strip():
+        found.append(f"{ref}: a matrix case has a `task`")
+    agent, own = doc.get("agent"), doc.get("agent_spec")
+    if not isinstance(agent, str) or not re.fullmatch(AGENT_SLUG, agent):
+        found.append(f"{ref}: `agent` is an agent slug ({AGENT_SLUG})")
+    elif own is None and agent not in agents:
+        found.append(f"{ref}: plays `{agent}`, which the plugin does not ship (nor the case, `agent_spec`)")
+    if own is not None and not isinstance(own, dict):
+        found.append(f"{ref}: `agent_spec` is a mapping")
+    cells = doc.get("tools_cells", ["mcp"])
+    if not isinstance(cells, list) or not cells or any(c not in MATRIX_CELLS for c in cells):
+        found.append(f"{ref}: `tools_cells` lists doors among {', '.join(MATRIX_CELLS)}")
+    found.extend(_matrix_connectors(doc.get("connectors") or {}, ref, plugin, servers))
+    problems.extend(found)
+    if found:
+        return None
+    return {**doc, "name": path.stem}
+
+
+def _matrix_connectors(
+    connectors: Any, ref: str, plugin: str, servers: dict[str, dict[str, Any]]
+) -> list[str]:
+    """A matrix case's connectors: a plugin's server names this plugin, a server of it, by its name."""
+    if not isinstance(connectors, dict):
+        return [f"{ref}: `connectors` maps a name to `{{kind, scene}}`"]
+    found: list[str] = []
+    for name, declared in sorted(connectors.items()):
+        kind = declared.get("kind") if isinstance(declared, dict) else None
+        if not isinstance(kind, str) or not kind:
+            found.append(f"{ref}: the connector `{name}` has no `kind`")
+            continue
+        if not kind.startswith(PLUGIN_CONNECTOR):
+            continue  # a scene of the core's fakes, which the matrix checks when it plays the case
+        owner, _, server = kind.removeprefix(PLUGIN_CONNECTOR).partition("/")
+        if owner != plugin:
+            found.append(
+                f"{ref}: the connector `{name}` is `{kind}`, another plugin's server than `{plugin}`'s"
+            )
+        elif server not in servers:
+            found.append(f"{ref}: the connector `{name}` is `{kind}`, a server `{plugin}` does not ship")
+        elif name != server:
+            found.append(
+                f"{ref}: the connector `{name}` is the server `{server}`: an agent's tools are "
+                f"`<server>__<operation>`, so the case names it `{server}`"
+            )
+    return found
+
+
+def _matrix_cases(
+    root: Path,
+    refs: list[str],
+    plugin: str,
+    agents: set[str],
+    servers: dict[str, dict[str, Any]],
+    problems: list[str],
+) -> dict[str, dict[str, Any]]:
+    cases: dict[str, dict[str, Any]] = {}
+    for ref in refs:
+        path = _target(root, ref, problems)
+        case = _check_matrix_case(path, ref, plugin, agents, servers, problems) if path is not None else None
+        if case is not None:
+            if case["name"] in cases:
+                problems.append(f"{ref}: matrix case `{case['name']}` is declared twice")
+            cases[str(case["name"])] = case
+    return cases
+
+
 def _procedure_files(root: Path, pattern: str, problems: list[str]) -> list[tuple[str, Path]]:
     if "*" not in pattern:
         target = _target(root, pattern, problems)
@@ -296,7 +433,7 @@ def _link_on(root: Path, ref: str) -> str | None:
 
 def _declared_refs(root: Path, contents: dict[str, list[str]]) -> list[str]:
     refs = [MANIFEST, *(n for n in ROOT_FILES if (root / n).is_symlink() or (root / n).is_file())]
-    for kind in ("agents", "evals", "servers", "skills", "templates"):
+    for kind in ("agents", "evals", "servers", "skills", "templates", "matrix_cases"):
         refs.extend(contents.get(kind, []))
     for pattern in contents.get("procedures", []):
         if "*" in pattern:
@@ -506,6 +643,7 @@ def load_directory(root: Path) -> Plugin:
         if path is not None:
             _check_eval(path, ref, set(agents), problems)
     procedures = _procedures(root, contents.get("procedures", []), name, servers, problems)
+    matrix = _matrix_cases(root, contents.get("matrix_cases", []), name, set(agents), servers, problems)
 
     if problems:
         raise PluginError(problems)
@@ -516,6 +654,7 @@ def load_directory(root: Path) -> Plugin:
         agents,
         servers,
         tuple(procedures),
+        matrix,
         tuple(files),
         tuple(_knowledge_warnings(agents, shipped)),
     )
@@ -651,16 +790,21 @@ def build_index(
 
 
 __all__ = [
+    "DEFAULT_FAKE_SCENES",
     "MANIFEST",
+    "MATRIX_CELLS",
     "MAX_BYTES",
     "MAX_FILES",
+    "PLUGIN_CONNECTOR",
     "PLUGIN_TRACKER",
     "TRACKER_PROFILE",
     "Plugin",
     "PluginError",
     "build_index",
     "canonical_tar",
+    "configuration_variables",
     "digest",
+    "fake_scenes",
     "load_directory",
     "opened",
     "pack",

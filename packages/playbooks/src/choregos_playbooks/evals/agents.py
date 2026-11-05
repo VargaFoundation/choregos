@@ -21,6 +21,10 @@ and judges what the run DID beside what it answered: `check_assertions` reads an
 requests, tool calls by origin, actions proposed and executed, security events) against the case's
 `assertions`. A case may carry its own agent (`agent_spec.instructions`) when no catalogue agent fits.
 
+#1372: a plugin ships agent cases in this format (`contents.matrix_cases`); the matrix names one
+`plugin:<plugin>/<case>` (`plugin_case`), loads it from the plugin as the offline plugins hold it, and plays
+its connectors `plugin:<plugin>/<server>` on that server's fake.
+
 The catalogue (`choregos_core`) and the connectors (`choregos_adapters`) are imported lazily: the
 playbooks package does not depend on them, and an eval that cannot reach them says `not run`.
 """
@@ -94,6 +98,27 @@ def load_case(path: Path) -> dict[str, Any]:
     case: dict[str, Any] = yaml.safe_load(path.read_text(encoding="utf-8"))
     case.setdefault("name", path.stem)
     return case
+
+
+#: How the matrix names a plugin's case (#1372).
+PLUGIN_CASE = "plugin:"
+
+
+def plugin_case(ref: str, catalogue: Any = None) -> dict[str, Any] | None:
+    """The matrix case `plugin:<plugin>/<case>` a plugin ships (`contents.matrix_cases`, #1372), from the
+    offline plugins (`choregos_core.agent_catalogue`), or from `catalogue` when given (an organisation's
+    view); `None` when no plugin read ships it, or the catalogue is unreachable. Its `name` is the file's
+    stem and `plugin` the plugin that ships it."""
+    if catalogue is None:
+        try:
+            from choregos_core.agent_catalogue import catalogue as offline
+        except ImportError:
+            return None
+        catalogue = offline()
+    found = catalogue.matrix_case(ref)
+    if found is None:
+        return None
+    return {**json.loads(json.dumps(found.case)), "name": found.name, "plugin": found.plugin}
 
 
 def case_instructions(case: dict[str, Any]) -> str | None:

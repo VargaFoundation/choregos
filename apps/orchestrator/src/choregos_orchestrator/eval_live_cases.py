@@ -13,6 +13,14 @@ project's: its connectors, its policy, its agent.
   API serves it from the scene when the deployment serves eval fakes (`CHOREGOS_EVAL_FAKE_SCENES`); a
   connector of the same name that is not the matrix's, or that holds another scene, is never touched: the
   case is skipped and says why.
+- **A plugin's server** (#1372, a plugin's matrix case: `{kind: "plugin:<plugin>/<server>", scene}`). The
+  organisation installed the plugin, so its server is already an organisation connector named after the
+  server; the seeding BINDS that connector to the server's eval instance (`fake_scene: <scene>` in its
+  configuration, `plugin_servers.bound_fake` in the API), turns it on for the case's eval project alone and
+  applies the case's `writes`. It binds only a connector nobody configured (no configuration, no secret
+  but the platform's token): one an administrator pointed at a real instance is never touched, and the
+  case is skipped. The server must declare its `fake` and that scene, and its eval instance must run
+  (the API runs it at the plugin's install or upgrade while the deployment serves eval fakes).
 - **Web.** A case's `web:` (its search results and pages, #1378) is a fake web: one `web_search`
   organisation connector of type `fake` per case (`case_web`), its configuration `{fake_scene: web,
   fake_web: <the case's web>}`, available to the selected projects only and turned on for the case's eval
@@ -64,12 +72,15 @@ _SLUG = re.compile(r"^[a-z0-9][a-z0-9-]{0,62}$")
 
 @dataclass(frozen=True)
 class CaseConnector:
-    """A connector of a case, as its eval project declares it."""
+    """A connector of a case, as its eval project declares it: a scene's, or a plugin's server (`plugin`
+    and `server` set, #1372)."""
 
     name: str
     kind: str
     type: str
     scene: str
+    plugin: str = ""
+    server: str = ""
 
     @property
     def config(self) -> dict[str, str]:
@@ -113,6 +124,63 @@ def case_web(case: Mapping[str, Any]) -> CaseWeb | None:
     return CaseWeb(name, json.dumps(web, sort_keys=True, ensure_ascii=False))
 
 
+def plugin_binding_refusal(wanted: CaseConnector, row: Any) -> str:
+    """Why the seeding does not bind an organisation connector `row` to the eval instance of the plugin
+    server `wanted` names (#1372), `""` when it may: it is that plugin's server, the server declares a fake
+    of the case's scene and its eval instance runs, and nobody configured it (no configuration but the
+    matrix's binding, no secret but the platform's token)."""
+    from choregos_adapters.fakes.plugin_servers import declared_scenes
+    from choregos_adapters.registry import FAKE_SCENE_FIELD
+
+    if row is None:
+        return (
+            f"the plugin `{wanted.plugin}` is not installed in the eval organisation: its server "
+            f"`{wanted.server}` is the case's connector (install the plugin while the deployment serves eval "
+            "fakes)"
+        )
+    server = row.plugin_server or {}
+    if (server.get("plugin"), server.get("server")) != (wanted.plugin, wanted.server):
+        return (
+            f"the organisation's connector `{wanted.name}` is not the server `{wanted.server}` of the plugin "
+            f"`{wanted.plugin}`: the case is not played against it (use an eval organisation)"
+        )
+    scenes = declared_scenes(server)
+    if wanted.scene not in scenes:
+        declared = f"declares the scenes {', '.join(scenes)}" if scenes else "declares no `fake`"
+        return (
+            f"the server `{wanted.plugin}/{wanted.server}` {declared}: a live cell cannot run it on its fake "
+            f"scene `{wanted.scene}` (its server file's `fake`, #1372)"
+        )
+    if not server.get("fake_url"):
+        return (
+            f"the server `{wanted.plugin}/{wanted.server}` has no eval instance: upgrade or reinstall the "
+            "plugin while the deployment serves eval fakes, which runs it"
+        )
+    configured = {k for k in (row.config or {}) if k != FAKE_SCENE_FIELD}
+    secrets = {k for k in (row.secret_refs or {}) if not k.startswith("_")}
+    if configured or secrets:
+        held = ", ".join(sorted(configured | secrets))
+        return (
+            f"the server `{wanted.name}` of the eval organisation is configured ({held}): a configured "
+            "server is never bound to its fake (use an eval organisation)"
+        )
+    return ""
+
+
+def undiscovered(
+    case: Mapping[str, Any], wanted: CaseConnector, schemas: Mapping[str, dict[str, Any] | None]
+) -> list[str]:
+    """The operations of a plugin's server the case calls (its evidence; every one when it names none)
+    that hold no input schema: neither the server's file declares one nor a discovery learnt it (#1372)."""
+    prefix = f"{wanted.name}__"
+    called = {
+        str(call["tool"]).removeprefix(prefix)
+        for call in case.get("evidence") or []
+        if str(call.get("tool", "")).startswith(prefix)
+    }
+    return sorted(name for name, schema in schemas.items() if not schema and (not called or name in called))
+
+
 def case_project_slug(eval_slug: str, case_name: str) -> str:
     """The case's eval project: `<eval>-<case>`, or `<eval>-<digest>` when that is not a slug."""
     slug = f"{eval_slug}-{case_name}"
@@ -130,13 +198,27 @@ def live_refusal(case: Mapping[str, Any]) -> str:
 
 
 def case_connectors(case: Mapping[str, Any]) -> list[CaseConnector]:
-    """The case's connectors, each of the type its kind's scenes run; raises `AdapterError` for a kind or
-    a scene the fakes do not have."""
+    """The case's connectors, each of the type its kind's scenes run, or a plugin's server (an `mcp`
+    connector, whose scenes its declaration says, checked against the installed server); raises
+    `AdapterError` for a kind or a scene the fakes do not have."""
+    from choregos_adapters.errors import AdapterError
+    from choregos_adapters.fakes.plugin_servers import plugin_kind
     from choregos_adapters.fakes.scenes import scene, scene_type
 
     found: list[CaseConnector] = []
     for name, declared in sorted((case.get("connectors") or {}).items()):
         kind, named = str(declared["kind"]), str(declared.get("scene", "default"))
+        if kind.startswith("plugin:"):
+            server = plugin_kind(kind)
+            if server is None:
+                raise AdapterError(f"`{kind}` is not a plugin's server (`plugin:<plugin>/<server>`)")
+            if str(name) != server[1]:
+                raise AdapterError(
+                    f"the connector `{name}` is the server `{server[1]}`: an agent's tools are "
+                    f"`<server>__<operation>`, so the case names it `{server[1]}`"
+                )
+            found.append(CaseConnector(str(name), kind, "mcp", named, server[0], server[1]))
+            continue
         scene(kind, named)  # an unknown kind or scene is refused here, before any row is written
         found.append(CaseConnector(str(name), kind, scene_type(kind), named))
     return found
@@ -282,6 +364,8 @@ __all__ = [
     "live_answer",
     "live_refusal",
     "parity",
+    "plugin_binding_refusal",
     "spec_checksum",
+    "undiscovered",
     "writes_need_approval",
 ]
