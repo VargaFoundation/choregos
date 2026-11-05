@@ -9,7 +9,15 @@ from typing import Any
 import pytest
 from choregos_adapters.errors import AdapterError
 from choregos_adapters.fakes import entra, netops
-from choregos_adapters.fakes.scenes import scene, scenes
+from choregos_adapters.fakes.scenes import (
+    EVAL_FAKE_SCENES_ENV,
+    FAKE_SCENE_FIELD,
+    bound_scene,
+    eval_fake_scenes_allowed,
+    scene,
+    scene_type,
+    scenes,
+)
 
 #: The platform's bound on one result, its text and its `structuredContent` (`broker_result_max_bytes`).
 BOUND = 65536
@@ -77,3 +85,72 @@ def test_the_scenes_name_their_kinds_and_refuse_the_unknown() -> None:
         scene("tracker")
     with pytest.raises(AdapterError, match="has no scene"):
         scene("firewall", "open-everything")
+
+
+# ───────────────────── a connector bound to a scene, for the live matrix (S57-11a) ─────────────────────
+
+
+@pytest.fixture
+def eval_fakes(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(EVAL_FAKE_SCENES_ENV, "1")
+
+
+async def test_a_connector_bound_to_a_scene_is_served_by_it_where_the_deployment_allows_eval_fakes(
+    eval_fakes: None,
+) -> None:
+    bound = bound_scene("firewall", {FAKE_SCENE_FIELD: "ssh-exposure"})
+    assert bound is not None and bound.name == "ssh-exposure"
+    assert (await bound.connector.execute("list_aliases", {}))["count"] == 41, "the scene's data"
+    assert bound_scene("firewall", {"base_url": "https://pfsense.example"}) is None, "no field, no scene"
+    assert bound_scene("firewall", None) is None
+    with pytest.raises(AdapterError, match="has no scene"):
+        bound_scene("firewall", {FAKE_SCENE_FIELD: "open-everything"})
+
+
+@pytest.mark.parametrize("value", ["", "0", "off", "false"])
+def test_the_field_is_ignored_where_the_deployment_does_not_allow_eval_fakes(
+    monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    """Off by default: the connector is then built as its type says, from a configuration with no address."""
+    if value:
+        monkeypatch.setenv(EVAL_FAKE_SCENES_ENV, value)
+    else:
+        monkeypatch.delenv(EVAL_FAKE_SCENES_ENV, raising=False)
+    assert not eval_fake_scenes_allowed()
+    assert bound_scene("firewall", {FAKE_SCENE_FIELD: "ssh-exposure"}) is None
+
+
+@pytest.mark.parametrize(
+    ("kind", "type_name"),
+    [
+        ("firewall", "pfsense"),
+        ("identity", "entra"),
+        ("mcp", "mcp"),
+        ("tracker", "jira"),
+        ("runtime", "fake"),
+    ],
+)
+def test_no_declaration_or_edit_may_bind_a_connector_to_a_fake(
+    eval_fakes: None, kind: str, type_name: str
+) -> None:
+    """A person, a project or an organisation never sets the field, even on a deployment that serves eval
+    fakes: only the matrix's seeding, which writes its rows itself, does (`registry.validate_config`)."""
+    from choregos_adapters import validate_config
+    from choregos_adapters.errors import ConfigurationError
+
+    with pytest.raises(ConfigurationError, match="fake_scene"):
+        validate_config(kind, type_name, {FAKE_SCENE_FIELD: "ssh-exposure"})
+
+
+def test_each_kind_with_scenes_runs_a_registered_type() -> None:
+    from choregos_adapters import spec_of
+
+    assert {kind: scene_type(kind) for kind in scenes()} == {
+        "firewall": "pfsense",
+        "network_policy": "cilium",
+        "identity": "entra",
+        "marketdata": "composite",
+    }
+    assert all(spec_of(kind, scene_type(kind)) is not None for kind in scenes())
+    with pytest.raises(AdapterError, match="no scene for the kind"):
+        scene_type("tracker")

@@ -29,6 +29,9 @@ security event, `block` answers 451); the 64 KiB bound on a connector's result (
 past it, the text is cut, `structuredContent` dropped). It has no cap, no rate limit, no masking and no
 network policy: the live matrix (S57-11) meets those on the real API. It cannot import the API's own
 helpers: the orchestrator's imports of `choregos_api` are frozen (ADR 0099).
+
+`mcp_calls` and `bridge_script` are the two doors with any run's `InternalClient`: the live matrix's
+tests (S57-11a) play a case through them against the real API, whose connectors are fake scenes.
 """
 
 from __future__ import annotations
@@ -396,10 +399,15 @@ def _client(api: EvalApi) -> Any:
 
 async def through_mcp(api: EvalApi, calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """The calls as a model makes them: `tools/call` on the run's MCP server. Returns its answers."""
+    return await mcp_calls(_client(api), calls)
+
+
+async def mcp_calls(client: Any, calls: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """`through_mcp` with any run's `InternalClient` (the live matrix's tests give it the real API's);
+    the client is closed when the calls are made."""
     from choregos_tools_mcp.server import McpServer
     from choregos_tools_mcp.tools import ToolContext
 
-    client = _client(api)
     try:
         server = McpServer(client, ToolContext())
         answers: list[dict[str, Any]] = []
@@ -417,26 +425,43 @@ async def through_mcp(api: EvalApi, calls: list[dict[str, Any]]) -> list[dict[st
 
 
 class _Journal:
-    """The bridge's journal of an eval run: in memory, in order."""
+    """The bridge's journal of an eval run: in memory, in order; and, when given one, the run's own
+    journal too (the sidecar's `ApiJournal`, in a live run)."""
 
-    def __init__(self) -> None:
+    def __init__(self, forward: Any = None) -> None:
         self.events: list[dict[str, Any]] = []
+        self.forward = forward
 
     async def record(self, type_: str, payload: dict[str, Any]) -> None:
         self.events.append({"type": type_, "payload": payload})
+        if self.forward is not None:
+            await self.forward.record(type_, payload)
 
 
 async def through_the_bridge(api: EvalApi, script: dict[str, Any], workdir: Path) -> dict[str, Any]:
     """The case's script, run as an agent's shell runs it, its calls through the real tool bridge."""
+    return await bridge_script(_client(api), script, workdir, run_id=api.run_id, secrets=[api.token])
+
+
+async def bridge_script(
+    client: Any,
+    script: dict[str, Any],
+    workdir: Path,
+    *,
+    run_id: str,
+    secrets: list[str],
+    journal: Any = None,
+) -> dict[str, Any]:
+    """`through_the_bridge` with any run's `InternalClient`, its bridge's lines also recorded in `journal`
+    when one is given (the live matrix's tests give it the real API's and the run's journal)."""
     import uvicorn
     from choregos_contracts import ToolScripts
     from choregos_runner import tool_scripts
     from choregos_tools_mcp.app import create_app
     from choregos_tools_mcp.bridge import Bridge
 
-    client = _client(api)
-    journal = _Journal()
-    bridge = Bridge(client, ToolScripts(max_concurrent_calls=4), journal, secrets=[api.token])
+    lines = _Journal(journal)
+    bridge = Bridge(client, ToolScripts(max_concurrent_calls=4), lines, secrets=secrets)
     # The run's tool server as the runner builds it with a bridge, its lifespan off: no MCP server of
     # its own is injected (the `mcp` door is played on `McpServer` directly), no module state is set.
     app = create_app(bridge=bridge)
@@ -460,7 +485,7 @@ async def through_the_bridge(api: EvalApi, script: dict[str, Any], workdir: Path
             workdir / "choregos" / "tools",
             tools,
             bridge=f"http://127.0.0.1:{port}/bridge/v1",
-            run_id=api.run_id,
+            run_id=run_id,
         )
         environment = {
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
@@ -491,7 +516,7 @@ async def through_the_bridge(api: EvalApi, script: dict[str, Any], workdir: Path
             "exit_code": process.returncode,
             "stdout": stdout.decode("utf-8", errors="replace"),
             "stderr": stderr.decode("utf-8", errors="replace"),
-            "journal": journal.events,
+            "journal": lines.events,
             "modules": written.modules,
         }
     finally:
@@ -565,6 +590,8 @@ __all__ = [
     "EvalApi",
     "Played",
     "answer_of",
+    "bridge_script",
+    "mcp_calls",
     "play",
     "scripts_of",
     "through_mcp",

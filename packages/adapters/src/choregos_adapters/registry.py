@@ -449,8 +449,23 @@ class AdapterSet:
         )
 
 
+#: The configuration field that binds an organisation connector to a scene of its kind's fake
+#: (S57-11a, `choregos_adapters.fakes.scenes.bound_scene`): written by the eval matrix's seeding only,
+#: refused here on every declaration and edit, honoured only where the deployment serves eval fakes.
+FAKE_SCENE_FIELD = "fake_scene"
+
+
 def validate_config(kind: str, type_name: str, config: dict[str, Any]) -> None:
-    """Run the type's own configuration check, if it declares one; raises an `AdapterError`."""
+    """Run the type's own configuration check, if it declares one; raises an `AdapterError`.
+
+    `fake_scene` is refused for every type (S57-11a): a person, a project or an organisation never binds a
+    connector to a fake. Only the live eval matrix writes it, on the connectors of its own eval projects,
+    and the API honours it only when the deployment says so (`CHOREGOS_EVAL_FAKE_SCENES`)."""
+    if FAKE_SCENE_FIELD in config:
+        raise ConfigurationError(
+            f"`{FAKE_SCENE_FIELD}` binds a connector to a fake's scene for the live eval matrix (S57-11a): "
+            "only the matrix's seeding writes it, never a declaration or an edit"
+        )
     spec = _SPECS.get((kind, type_name))
     rotation = config.get("key_rotation")
     if rotation is not None and (spec is None or not spec.pooled_fields):

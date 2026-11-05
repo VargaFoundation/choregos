@@ -2,8 +2,8 @@
 
 *When:* measuring what rtk and headroom really save, before turning a reduction on by default
 (ADR 0055, S37-10), or what tool scripts save, before an agent offers them by default (ADR 0122 §9,
-S57-09). It spends real model money: a full matrix is backends × models × 4 contexts × 2 doors ×
-6 tickets × repetitions real stages.
+S57-09, S57-11). It spends real model money: a full matrix is backends × models × 4 contexts × 2 doors ×
+(6 tickets + the agent cases) × repetitions real stages.
 
 ## The matrix's dimensions
 
@@ -16,7 +16,7 @@ order. Each input has a default that keeps a matrix started before it as it was:
 | `contexts` | `none`, `rtk`, `headroom`, `rtk+headroom` | `["none"]` | the context reduction (ADR 0055) |
 | `tools` | `mcp`, `scripts` | `["mcp"]` | the door of the run's tools (ADR 0122): `mcp`, the model's MCP tools only; `scripts`, those and the tool bridge with the generated client `choregos_tools` |
 | `fixtures` | reference tickets (`tests/fixtures/tickets`) | all of them | |
-| `agent_cases` | agent cases (`packages/playbooks/src/choregos_playbooks/evals/agent_cases`) | `[]` | scripted cells only (below) |
+| `agent_cases` | agent cases (`packages/playbooks/src/choregos_playbooks/evals/agent_cases`) | `[]` | scripted cells (below), and live cells on fake scenes since S57-11a ([Agent cases in a live cell](#agent-cases-in-a-live-cell-s57-11a)) |
 | `repetitions` | 1 to 100 | `1` | each case played that many times: the bootstrap's pairs |
 | `live` | | `false` | real stages on the eval project's executor |
 
@@ -103,6 +103,8 @@ A case passes when its score reaches `min_score` **and** every assertion holds.
 2. The deployment allows context reduction: `runner.contextReduction.enabled: true` (the default).
    With it off, every cell but `none` is skipped, and says why.
 3. The runner image carries rtk and headroom (`docker/runner.Dockerfile`, built by `make images`; ADR 0055).
+4. For the agent cases: an eval organisation of its own, `CHOREGOS_EVAL_FAKE_SCENES=1` on the API and
+   the workers, and `netops` installed ([What the operator provides](#what-the-operator-provides-on-dev)).
 
 ## Run
 
@@ -119,9 +121,113 @@ temporal workflow start --task-queue orchestrator --type EvalMatrix \
 cells to `GET /models/matrix` and the settings page.
 
 To compare the doors, add `"tools": ["mcp", "scripts"]` and `"repetitions": 10`, with the deployment's
-`runner.toolScripts.enabled: true` (`CHOREGOS_TOOL_SCRIPTS`). A live cell plays the reference tickets
-only: an agent case named in `agent_cases` is seeded and skipped with its reason (its connectors on
-fakes, its policy and a case-local agent are not provisioned in the eval project yet; S57-11).
+`choregos-orchestrator.runner.toolScripts.enabled: true` (`CHOREGOS_TOOL_SCRIPTS`). To play the agent
+cases too (S57-11's matrix, the examples page), name them and switch the eval fakes on (next section):
+
+```bash
+temporal workflow start --task-queue orchestrator --type EvalMatrix \
+  --workflow-id evals-live-tools-$(date +%Y%m%d) \
+  --input '{"project_slug": "evals", "backends": ["claude-code"],
+            "models": ["platform/standard"], "with_memory": [false], "contexts": ["none"],
+            "tools": ["mcp", "scripts"], "repetitions": 10,
+            "fixtures": ["py-rounding-bug", "py-volume-discount"],
+            "agent_cases": ["netops-ssh-exposure", "netops-dropped-flows-top",
+                            "identity-offboarding", "marketdata-volatility"],
+            "live": true, "publish": true}'
+```
+
+That is 2 doors × (2 tickets + 4 agent cases) × 10 repetitions = 120 real stages. The two tickets are
+C2, the coding control; E5 (`research-injected-page*`) is left out: a live cell skips it (#1378).
+
+## Agent cases in a live cell (S57-11a)
+
+A live cell plays an agent case as a real stage of its agent, on the real gateway, against connectors
+that are **fake scenes** (`choregos_adapters.fakes.scenes`): no real firewall, cluster or directory is
+ever reached. `seed_eval_ticket` provisions it, idempotently (a retry and the next repetition find what
+the first one wrote), in an **eval project of its own** beside the matrix's eval project, in its
+organisation (`apps/orchestrator/src/choregos_orchestrator/eval_live_cases.py`):
+
+- the project `<eval project>-<case>` (`evals-netops-ssh-exposure`): the eval project's configuration
+  without its repository, GitOps, schedules, triggers and start rules; its `runtime` and `gateway`
+  connectors (references); its policy with memory off, no `tools` section (the cell forces the door) and
+  the case's `prompt_injection`;
+- one **organisation connector** per connector of the case, named as the case names it (`pfsense`,
+  `cilium`, `entra`, `marketdata`), of the type its kind's scenes run (`pfsense`, `cilium`, `entra`,
+  `composite`), its configuration `{fake_scene: <scene>}` and nothing else (no address, no secret),
+  `selected_projects` and turned on for the case's project alone. Its operations are its type's, `allowed`
+  at the organisation; with the case's `writes: approval` (the default) the case's project tightens every
+  write to `approval`, so a write is proposed, never played;
+- the agent: a **catalogue** agent (`netops`) is resolved as for any run, so the organisation must have
+  installed it; a **case-local** one (`agent_spec`: `identity-operator`, `analyst`) is registered as a
+  project agent of the case's project, its connectors the case's, `workspace: none`, `memory: none`, a new
+  version only when its spec changes;
+- the work item: the case's `task`, `EVAL-<digest>` of the matrix run, the cell and the repetition,
+  labels `eval` and `eval:<case>`, in the internal tracker.
+
+**Which connectors a fake serves.** The API builds a connector whose configuration holds `fake_scene` from
+that scene instead of its type's adapter (`services/plugin_servers.connector_client`), and only when the
+deployment says so: `CHOREGOS_EVAL_FAKE_SCENES=1`. Without it the field is ignored, the connector is
+built as its type says, from a configuration that points nowhere, and the seeding skips every agent case
+(`the deployment does not serve eval fakes`). No person, project or organisation can set the field: every
+declaration and edit of a connector refuses it (422, `registry.validate_config`), whatever the deployment
+allows; only the seeding, which writes its rows itself, does.
+
+**What is never touched.** A connector of the case's name that is not the matrix's (another type, another
+scene, a secret, an address, another author), or an agent of the case-local slug that is not the case
+project's, makes the case skip with its reason: the seeding does not rebind it. Use an **eval
+organisation** of its own, where the connector names and agent slugs are free.
+
+**How it is judged.** The run's answer is its output (`case.output`, else its summary), a decision path
+`/p/<case project>/actions/…` read as the scripted matrix's `/p/evals/actions/…`; what the run did is read
+from the API: its `choregos.tool.called` events (calls by origin), its actions (proposed, executed), its
+security events, its journal's scripts, its model calls (`tokens.requests`). The case's judge
+(`choregos_playbooks.evals.agents.judge`) checks `answer_must_contain`, `answer_must_not_contain`,
+`answer_sections`, `min_score` and every assertion of the case (`max_model_requests`, `calls_by_origin`,
+`proposed_actions`, `executed_actions`, `no_tool_called`, `security_event`). A run that did not get its
+cell's door or context is skipped, as a ticket's is.
+
+**Governance parity.** Before it is judged, a live agent-case run must agree with itself on its tool
+calls (the plan's §4.2): its booked `tool` lines of the ledger (an `in_flight` line is not a call) equal
+its `choregos.tool.called` events, per tool and origin; every event of a call from a script has its tool
+bridge `tools.script.call` line (same tool, digest and outcome); a bridge line without an event is a call
+the API refused before booking it (404, the cap, a refused schema, a timeout: 400 or more), never one it
+served. A run that breaks it is **invalid**: its line in `details` says `invalid: true` and why, the
+cell's `invalid` counts it, and it is in no rate, no median and no pair of the comparison. A call the
+network policy refused has an event and no ledger line (ADR 0070) and reads as a mismatch; the fake
+scenes reach no network.
+
+**What a live cell does not play.** E5 (`research-injected-page`, `…-block`): its tools are `web_search`
+and `web_fetch`, which read the internet from the API, not the case's `web:` pages (#1378). A case with no
+connector (`netops-dropped-flow`, the netops agent's own eval). E3 and C1 live in `choregos-agents`
+(#1372).
+
+### What the operator provides, on dev
+
+1. The deployment's switches, on the API **and** the orchestrator's workers (`global.extraEnv` gives a
+   variable to both):
+
+   ```yaml
+   global:
+     extraEnv:
+       - name: CHOREGOS_EVAL_FAKE_SCENES
+         value: "1"
+   choregos-orchestrator:
+     runner:
+       toolScripts:
+         enabled: true        # CHOREGOS_TOOL_SCRIPTS: the `scripts` cells
+       contextReduction:
+         enabled: true        # only for cells with a context other than `none`
+   ```
+
+   Switch `CHOREGOS_EVAL_FAKE_SCENES` off again once the matrix is done: while it is on, a connector the
+   seeding wrote is served by its scene.
+2. An **eval organisation** holding the matrix's eval project (`Before`, above) and nothing else, so
+   that the names `pfsense`, `cilium`, `entra`, `marketdata` and the slugs `identity-operator`,
+   `analyst` are free in it.
+3. The catalogue agent `netops` **installed** in that organisation (Agents → Catalogue), on a backend
+   and a model the eval project's policy allows. Without it the netops cases skip, saying so.
+4. The real model gateway the eval project runs on (its connector, or the organisation's, or the
+   deployment's): the agent cases' cost is what it bills.
 
 ## Read it
 
@@ -138,7 +244,8 @@ Over the runs with an observation (a live run's events, ledger and journal; a sc
   code is known and is not 0 (scripted cells only: a live run's exit code is the agent's shell's). The
   rate is errors over scripts, `null` without a script; a script that never called the bridge is not
   counted;
-- `proposed_actions`, `executed_actions`: the cell's actions waiting for a person, and those played.
+- `proposed_actions`, `executed_actions`: the cell's actions waiting for a person, and those played;
+- `invalid`: the live runs whose governance parity broke (S57-11a), out of every number above.
 
 Each case's line in `details` carries its `repetition`, its `agent` (the case's, or `role:<role>` for
 a ticket), its `cost_usd` (`null` when the gateway counted nothing) and its `door` (`bridge` when a

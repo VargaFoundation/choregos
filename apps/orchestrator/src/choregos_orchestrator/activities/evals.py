@@ -27,6 +27,12 @@ by its answer and its assertions; a live cell forces `tools.scripts` on or off i
 what its runs did with their tools (calls by origin, scripts and their errors, actions proposed and
 executed), and `publish_matrix` compares the cells that differ only by their door
 (`eval_comparison`: a paired bootstrap interval and a verdict).
+
+S57-11a: a live cell plays the agent cases too. `seed_eval_ticket` provisions, idempotently, the case's
+eval project beside the matrix's (its connectors on fake scenes, its policy, its case-local agent:
+`eval_live_cases`) and files the case's task there; the run is a stage like any other, and
+`judge_eval_run` scores its answer and journal with the case's assertions, once its governance parity
+holds: a run whose ledger, events and bridge lines disagree is `invalid`, reported and never counted.
 """
 
 from __future__ import annotations
@@ -43,8 +49,31 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
-from choregos_api.db.models import Action, Event, ModelProfileRow, Run, RunEvent, WorkItem
-from choregos_api.services import WorkItemBirth, new_work_item, tracker_is_internal
+from choregos_api.db.models import (
+    Action,
+    Agent,
+    AgentVersion,
+    Connector,
+    ConnectorOperation,
+    CostLedger,
+    Event,
+    ModelProfileRow,
+    OrgConnector,
+    OrgConnectorProject,
+    PolicyDef,
+    Project,
+    ProjectOperationPolicy,
+    Run,
+    RunEvent,
+    WorkItem,
+)
+from choregos_api.services import (
+    WorkItemBirth,
+    active_policy,
+    new_work_item,
+    policy_model,
+    tracker_is_internal,
+)
 from choregos_api.services.initiator import initiator
 from choregos_contracts import EventType
 from choregos_core import elapsed_seconds, utcnow
@@ -52,6 +81,7 @@ from sqlalchemy import select
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
+from .. import eval_live_cases as live_cases
 from ..config import get_settings
 from ..eval_comparison import compare_cells
 from . import eval_doors
@@ -230,6 +260,10 @@ def _cell(payload: dict[str, Any], context: str, outcomes: list[dict[str, Any]])
             "repetition": int(outcome.get("repetition", 0)),
             "agent": outcome.get("agent"),
         }
+        if outcome.get("invalid"):
+            # Its governance parity is broken (S57-11a): reported, never counted, never paired.
+            details.append({**unit, "invalid": True, "reason": outcome["reason"]})
+            continue
         if outcome["skipped"]:
             details.append({**unit, "skipped": True, "reason": outcome["reason"]})
             continue
@@ -259,6 +293,8 @@ def _cell(payload: dict[str, Any], context: str, outcomes: list[dict[str, Any]])
         "tools": str(payload.get("tools", "mcp")),
         "cases": len(successes),
         "skipped": sum(1 for d in details if d.get("skipped")),
+        # Live runs whose ledger, events and bridge lines disagreed (S57-11a): out of every rate.
+        "invalid": sum(1 for d in details if d.get("invalid")),
         # Cases the ledger has a measure for: tokens and cost are medians over these only.
         "metered": len(metered),
         "success_rate": round(rate, 4),
@@ -614,11 +650,7 @@ async def seed_eval_ticket(payload: dict[str, Any]) -> dict[str, Any]:
     context = _context(payload)
     tools = _tools(payload)
     if payload.get("agent_case"):
-        # An agent case needs its connectors on fakes in the eval project, its policy and, for a
-        # case-local agent, a registered agent: the live matrix that runs them is S57-11's.
-        return _skip(
-            "a live cell plays the reference tickets only: an agent case is played in scripted cells"
-        )
+        return await _seed_agent_case(payload, context, tools)
     fixture = _current_fixture_name(str(payload["fixture"]))
     spec = _load_spec(fixture)
     if spec is None:
@@ -750,13 +782,410 @@ def _file_check(kind: str, raw: dict[str, Any], toy: Path) -> str:
     return head + f"sys.exit('unknown assertion: ' + {kind!r})"
 
 
+# ───────────────────────── a live agent case (S57-11a) ─────────────────────────
+
+#: What the case's eval project keeps of the matrix's eval project's configuration: what a run reads.
+#: Its repository, its GitOps, its schedules, triggers and start rules are left behind: a case's run
+#: clones nothing, ships nothing and nothing opens a work item there but the matrix.
+_CASE_PROJECT_DROPS = ("repo", "gitops", "schedules", "triggers", "start_rules")
+#: The project connectors a case's run needs from the matrix's eval project: where it runs, its gateway.
+_CASE_PROJECT_KINDS = ("runtime", "gateway")
+
+
+async def _seed_agent_case(payload: dict[str, Any], context: str, tools: str) -> dict[str, Any]:
+    """An agent case in a live cell: its eval project provisioned (idempotent, ADR 0008), its task filed
+    there as an eval work item, the stage plan of its agent. A case a live cell cannot play faithfully is
+    skipped with its cause, and nothing real is ever touched: a connector or an agent of the same name that
+    is not the matrix's makes the case skip."""
+    from choregos_adapters.errors import AdapterError
+    from choregos_adapters.fakes.scenes import EVAL_FAKE_SCENES_ENV, eval_fake_scenes_allowed
+
+    name = str(payload["agent_case"])
+    case = load_agent_case(name)
+    if case is None:
+        return _skip(f"no agent case {name}")
+    if tools not in (case.get("tools_cells") or ["mcp"]):
+        return _skip(f"the case is not played in the {tools} cell (its tools_cells)")
+    if payload.get("with_memory"):
+        return _skip("a live cell does not wire memory: run it with `with_memory: [false]`")
+    if refused := live_cases.live_refusal(case):
+        return _skip(refused)
+    if not eval_fake_scenes_allowed():
+        return _skip(
+            f"the deployment does not serve eval fakes ({EVAL_FAKE_SCENES_ENV}): a live agent case's "
+            "connectors must be fake scenes"
+        )
+    if context != "none" and not get_settings().context_reduction:
+        return _skip("the deployment refuses context reduction (CHOREGOS_CONTEXT_REDUCTION)")
+    if tools == "scripts" and not get_settings().tool_scripts:
+        return _skip("the deployment refuses tool scripts (CHOREGOS_TOOL_SCRIPTS)")
+    try:
+        connectors = live_cases.case_connectors(case)
+    except AdapterError as unknown:
+        return _skip(str(unknown))
+    async with db() as session:
+        bundle = await project_bundle(session, payload["project_slug"])
+        if not await tracker_is_internal(session, bundle.project):
+            return _skip(f"the eval project {bundle.slug} has an external tracker: eval tickets stay inside")
+        if bundle.engine.memory_enabled():
+            return _skip(f"the eval project {bundle.slug} has memory on: its cells would not be without it")
+        project = await _case_project(session, bundle.project, case)
+        refusal = await _case_connectors(session, project, case, connectors)
+        if not refusal:
+            refusal = await _case_agent(session, project, case, connectors)
+        if refusal:
+            return _skip(refusal)
+        item = await _case_work_item(session, project, case, payload, context, tools)
+        plan = {
+            "project_id": project.id,
+            "work_item_id": item.id,
+            "transition_id": "eval",
+            "role": live_cases.LIVE_ROLE,
+            "from_state": item.state,
+            "to_state": item.state,
+            "actor": "eval",
+            "attempt": 1,
+            "backend": payload.get("backend"),
+            "model_request": str(payload.get("model", "platform/standard")),
+            "agent": live_cases.case_agent_slug(case),
+            **({"outputs": [str(case["output"])]} if case.get("output") else {}),
+            # No repository and no fact: the case is judged by its answer and its journal.
+            "eval_cell": {
+                "context": LIVE_CONTEXTS[context],
+                "tools": LIVE_TOOLS[tools],
+                "base_branch": "",
+                "facts": {},
+            },
+        }
+        return {"ok": False, "skipped": False, "reason": "", "plan": plan}
+
+
+async def _case_project(session: Any, source: Project, case: dict[str, Any]) -> Project:
+    """The case's eval project, in the matrix's eval project's organisation: created, or brought back to
+    what it must hold — the source's configuration without what a case's run does not use, its runtime
+    and gateway connectors, its policy with the case's (`eval_live_cases.case_policy`)."""
+    from choregos_contracts import Policy
+
+    slug = live_cases.case_project_slug(source.slug, str(case["name"]))
+    config = {
+        **{k: v for k, v in (source.config or {}).items() if k not in _CASE_PROJECT_DROPS},
+        "slug": slug,
+        "display_name": f"[eval] {case['name']}",
+    }
+    project: Project | None = (
+        await session.execute(select(Project).where(Project.org_id == source.org_id, Project.slug == slug))
+    ).scalar_one_or_none()
+    if project is None:
+        project = Project(
+            org_id=source.org_id,
+            slug=slug,
+            name=f"[eval] {case['name']}",
+            status=source.status,
+            config=config,
+        )
+        session.add(project)
+        await session.flush()
+    elif project.config != config:
+        project.config = config
+    await _copy_project_connectors(session, source, project)
+    desired = live_cases.case_policy(
+        policy_model(await active_policy(session, source.id)).model_dump(mode="json", exclude_none=True), case
+    )
+    current = await active_policy(session, project.id)
+    version = current.version if current is not None else 1
+    desired["metadata"] = {**(desired.get("metadata") or {}), "version": version}
+    if current is None or current.json_doc != desired:
+        if current is not None:
+            current.is_active = False
+            version += 1
+            desired["metadata"]["version"] = version
+        parsed = Policy.model_validate(desired)
+        session.add(
+            PolicyDef(
+                project_id=project.id,
+                name=parsed.metadata.name,
+                version=version,
+                yaml=_yaml(desired),
+                json_doc=desired,
+                is_active=True,
+            )
+        )
+        await session.flush()
+    return project
+
+
+def _yaml(document: dict[str, Any]) -> str:
+    import yaml
+
+    return str(yaml.safe_dump(document, sort_keys=False, allow_unicode=True))
+
+
+async def _copy_project_connectors(session: Any, source: Project, project: Project) -> None:
+    """The source's runtime and gateway connectors, as references (ADR 0034): the case's run runs where
+    the matrix's tickets run, on the same gateway. A kind the source does not declare is the deployment's."""
+    rows = (
+        await session.execute(
+            select(Connector).where(
+                Connector.project_id.in_([source.id, project.id]), Connector.kind.in_(_CASE_PROJECT_KINDS)
+            )
+        )
+    ).scalars()
+    by_project: dict[tuple[str, str], Connector] = {(row.project_id, row.kind): row for row in rows}
+    for kind in _CASE_PROJECT_KINDS:
+        wanted, held = by_project.get((source.id, kind)), by_project.get((project.id, kind))
+        if wanted is None:
+            if held is not None:
+                await session.delete(held)
+            continue
+        fields = {
+            "type": wanted.type,
+            "config": dict(wanted.config or {}),
+            "secret_ref": wanted.secret_ref,
+            "secret_refs": dict(wanted.secret_refs) if wanted.secret_refs else None,
+        }
+        if held is None:
+            session.add(Connector(project_id=project.id, kind=kind, **fields))
+        else:
+            for field_name, value in fields.items():
+                if getattr(held, field_name) != value:
+                    setattr(held, field_name, value)
+    await session.flush()
+
+
+def _the_matrix_s(row: OrgConnector, wanted: live_cases.CaseConnector) -> bool:
+    """Whether an organisation connector is the one the matrix declares for `wanted`: its kind and type,
+    the scene and nothing else in its configuration, no secret, selected projects only, written by it."""
+    return (
+        row.kind == wanted.kind
+        and row.type == wanted.type
+        and dict(row.config or {}) == wanted.config
+        and not row.secret_refs
+        and row.plugin_server is None
+        and row.availability == "selected_projects"
+        and row.created_by == live_cases.EVAL_CREATOR
+    )
+
+
+async def _case_connectors(
+    session: Any, project: Project, case: dict[str, Any], connectors: list[live_cases.CaseConnector]
+) -> str:
+    """The case's connectors on their fake scenes, turned on for its eval project alone, with the case's
+    policy on their writes (`eval_live_cases`'s docstring); `""`, or why the case cannot be played."""
+    from choregos_adapters import spec_of
+
+    approval = live_cases.writes_need_approval(case)
+    for wanted in connectors:
+        row = (
+            await session.execute(
+                select(OrgConnector).where(
+                    OrgConnector.org_id == project.org_id, OrgConnector.name == wanted.name
+                )
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            row = OrgConnector(
+                org_id=project.org_id,
+                name=wanted.name,
+                kind=wanted.kind,
+                type=wanted.type,
+                config=wanted.config,
+                created_by=live_cases.EVAL_CREATOR,
+                availability="selected_projects",
+            )
+            session.add(row)
+            await session.flush()
+        elif not _the_matrix_s(row, wanted):
+            return (
+                f"the organisation has a connector `{wanted.name}` that is not the matrix's {wanted.kind} on "
+                f"the scene {wanted.scene}: the case is not played against it (use an eval organisation)"
+            )
+        spec = spec_of(wanted.kind, wanted.type)
+        declared = {op.name: op for op in (spec.operations if spec is not None else ())}
+        held = {
+            op.name: op
+            for op in (
+                await session.execute(
+                    select(ConnectorOperation).where(ConnectorOperation.connector_id == row.id)
+                )
+            ).scalars()
+        }
+        for operation in declared.values():
+            # Allowed at the organisation, on a connector only the matrix's eval projects reach: what a
+            # write does is the case's project's to decide, below.
+            fields = {
+                "access": operation.access,
+                "policy": "allowed",
+                "input_schema": operation.input_schema,
+                "description": operation.description or None,
+            }
+            known = held.get(operation.name)
+            if known is None:
+                known = ConnectorOperation(
+                    org_id=project.org_id, connector_id=row.id, name=operation.name, groups=[], **fields
+                )
+                session.add(known)
+                held[operation.name] = known
+            else:
+                for field_name, value in fields.items():
+                    if getattr(known, field_name) != value:
+                        setattr(known, field_name, value)
+        await session.flush()
+        enabled = (
+            await session.execute(
+                select(OrgConnectorProject).where(
+                    OrgConnectorProject.connector_id == row.id, OrgConnectorProject.project_id == project.id
+                )
+            )
+        ).scalar_one_or_none()
+        if enabled is None:
+            session.add(
+                OrgConnectorProject(
+                    org_id=project.org_id,
+                    connector_id=row.id,
+                    project_id=project.id,
+                    enabled_by=live_cases.EVAL_CREATOR,
+                )
+            )
+        await _case_write_policies(session, project, list(held.values()), approval)
+    await session.flush()
+    return ""
+
+
+async def _case_write_policies(
+    session: Any, project: Project, operations: list[ConnectorOperation], approval: bool
+) -> None:
+    """`writes: approval`: every write tightened to `approval` in the case's project; `allowed`: none."""
+    for operation in operations:
+        tightened = (
+            await session.execute(
+                select(ProjectOperationPolicy).where(
+                    ProjectOperationPolicy.project_id == project.id,
+                    ProjectOperationPolicy.operation_id == operation.id,
+                )
+            )
+        ).scalar_one_or_none()
+        wanted = "approval" if approval and operation.access != "read" else None
+        if wanted is None and tightened is not None:
+            await session.delete(tightened)
+        elif wanted is not None and tightened is None:
+            session.add(
+                ProjectOperationPolicy(
+                    org_id=project.org_id, project_id=project.id, operation_id=operation.id, policy=wanted
+                )
+            )
+        elif wanted is not None and tightened is not None and tightened.policy != wanted:
+            tightened.policy = wanted
+
+
+async def _case_agent(
+    session: Any, project: Project, case: dict[str, Any], connectors: list[live_cases.CaseConnector]
+) -> str:
+    """The case's agent: a catalogue one must be installed in the organisation (it is resolved as for any
+    run); a case-local one is registered as a project agent of the case's eval project, a new version only
+    when its spec changed. `""`, or why the case cannot be played."""
+    slug = live_cases.case_agent_slug(case)
+    spec = live_cases.case_agent_spec(case, connectors)
+    agent = (
+        await session.execute(select(Agent).where(Agent.org_id == project.org_id, Agent.slug == slug))
+    ).scalar_one_or_none()
+    if spec is None:
+        if agent is None:
+            return (
+                f"the catalogue agent `{slug}` is not installed in the eval organisation: install it from "
+                "the agent catalogue"
+            )
+        return ""
+    if agent is None:
+        agent = Agent(
+            org_id=project.org_id,
+            slug=slug,
+            kind="internal",
+            scope="project",
+            project_id=project.id,
+            display_name=f"[eval] {slug}",
+            description=f"The agent of the eval case {case['name']} (S57-11a).",
+            status="active",
+            lifecycle="active",
+        )
+        session.add(agent)
+        await session.flush()
+    elif agent.scope != "project" or agent.project_id != project.id:
+        return (
+            f"the organisation has an agent `{slug}` that is not the case's: the case's own agent is not "
+            "registered over it (use an eval organisation)"
+        )
+    checksum = live_cases.spec_checksum(spec)
+    latest = (
+        await session.execute(
+            select(AgentVersion)
+            .where(AgentVersion.agent_id == agent.id)
+            .order_by(AgentVersion.version.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if latest is None or latest.checksum != checksum:
+        version = latest.version + 1 if latest is not None else 1
+        session.add(
+            AgentVersion(
+                agent_id=agent.id,
+                org_id=project.org_id,
+                version=version,
+                spec=spec,
+                checksum=checksum,
+                created_by=live_cases.EVAL_CREATOR,
+                message=f"the agent of the eval case {case['name']}",
+            )
+        )
+        agent.stable_version = version
+        await session.flush()
+    return ""
+
+
+async def _case_work_item(
+    session: Any, project: Project, case: dict[str, Any], payload: dict[str, Any], context: str, tools: str
+) -> WorkItem:
+    """The case's eval work item: its task, keyed by the matrix run, the cell and the repetition, so that
+    a retry finds the one it filed."""
+    name = str(case["name"])
+    cell = (
+        "|".join(str(payload.get(k, "")) for k in ("matrix_id", "backend", "model"))
+        + f"|{context}|agent:{name}|{tools}"
+        + (f"|{payload['repetition']}" if int(payload.get("repetition", 0)) else "")
+    )
+    key = f"EVAL-{sha256(cell.encode()).hexdigest()[:10]}"
+    item: WorkItem | None = (
+        await session.execute(
+            select(WorkItem).where(WorkItem.project_id == project.id, WorkItem.tracker_key == key)
+        )
+    ).scalar_one_or_none()
+    if item is None:
+        item = await new_work_item(
+            session,
+            project,
+            WorkItemBirth(
+                tracker_key=key,
+                title=f"[eval] {name}",
+                body=str(case.get("task", "")),
+                created_by="eval",
+                initiated_by=initiator("eval"),
+                labels=("eval", f"eval:{name}"),
+            ),
+        )
+    return item
+
+
 @activity.defn(name="judge_eval_run")
 async def judge_eval_run(payload: dict[str, Any]) -> dict[str, Any]:
     """A live case's verdict, from its run: the status it ended with, the facts the runner measured,
     the tokens the ledger counted. A run that did not get the cell's reduction is skipped: counting
-    it would credit the reduction with a run made without it."""
-    fixture = _current_fixture_name(str(payload["fixture"]))
-    spec = _load_spec(fixture) or {}
+    it would credit the reduction with a run made without it.
+
+    An agent case (`agent_case`, S57-11a) is judged by its answer and its journal against the case's
+    assertions (`choregos_playbooks.evals.agents.judge`), once its governance parity holds
+    (`eval_live_cases.parity`): a run whose ledger, events and bridge lines disagree is `invalid`."""
+    agent_case = str(payload.get("agent_case") or "")
+    fixture = agent_case or _current_fixture_name(str(payload["fixture"]))
+    spec = {} if agent_case else (_load_spec(fixture) or {})
     async with db() as session:
         run = await session.get(Run, payload["run_id"])
         if run is None:
@@ -767,9 +1196,10 @@ async def judge_eval_run(payload: dict[str, Any]) -> dict[str, Any]:
             .all()
         )
         tools = _tools(payload)
+        case = (load_agent_case(agent_case) or {}) if agent_case else {}
         unit = {
             "fixture": fixture,
-            "agent": _ticket_agent(spec),
+            "agent": str(case.get("agent", "")) if agent_case else _ticket_agent(spec),
             "repetition": int(payload.get("repetition", 0)),
         }
         unfaithful = _unfaithful(run, list(events), LIVE_CONTEXTS[_context(payload)]) or _unfaithful_door(
@@ -777,25 +1207,88 @@ async def judge_eval_run(payload: dict[str, Any]) -> dict[str, Any]:
         )
         if unfaithful:
             return {**_skip(unfaithful), **unit}
-        verdict = _verdict(spec, run.result, str(payload.get("failure") or ""))
-        tokens = dict(run.tokens or {}) if run.spend_collected else {}
-        turns = ((run.result or {}).get("diagnostics") or {}).get("turns")
-        requests = tokens.get("requests")
-        usage = (
-            {
-                "tokens_in": int(tokens.get("tokens_in", 0)),
-                "tokens_cached": int(tokens.get("tokens_cached", 0)),
-                "tokens_out": int(tokens.get("tokens_out", 0)),
-                "cost_usd": float(tokens.get("cost_usd", 0.0)),
-                "turns": turns if isinstance(turns, int) else None,
-                "requests": requests if isinstance(requests, int) else None,
-            }
-            if int(tokens.get("tokens_in", 0)) + int(tokens.get("tokens_out", 0)) > 0
-            else None
-        )
+        usage = _usage_of(run)
         duration = elapsed_seconds(run.started_at, run.ended_at) if run.ended_at else 0.0
         observation = await _observed(session, run, list(events), tools)
-    return {**verdict, "usage": usage, "duration_s": float(duration), **unit, "observation": observation}
+        if not agent_case:
+            verdict = _verdict(spec, run.result, str(payload.get("failure") or ""))
+            return {
+                **verdict,
+                "usage": usage,
+                "duration_s": float(duration),
+                **unit,
+                "observation": observation,
+            }
+        measured = {"usage": usage, "duration_s": float(duration), **unit, "observation": observation}
+        broken = await _parity_of(session, run, list(events))
+        if broken:
+            return {"ok": False, "skipped": False, "invalid": True, "reason": broken, **measured}
+        project = await session.get(Project, run.project_id)
+        verdict = _agent_case_verdict(
+            case, run.result, observation, project.slug if project else "", str(payload.get("failure") or "")
+        )
+    return {**verdict, **measured, "door": "bridge" if observation["scripts"] else "mcp"}
+
+
+def _usage_of(run: Run) -> dict[str, Any] | None:
+    """What the gateway counted for the run, once its spend is collected; `None` when it counted nothing."""
+    tokens = dict(run.tokens or {}) if run.spend_collected else {}
+    turns = ((run.result or {}).get("diagnostics") or {}).get("turns")
+    requests = tokens.get("requests")
+    if int(tokens.get("tokens_in", 0)) + int(tokens.get("tokens_out", 0)) <= 0:
+        return None
+    return {
+        "tokens_in": int(tokens.get("tokens_in", 0)),
+        "tokens_cached": int(tokens.get("tokens_cached", 0)),
+        "tokens_out": int(tokens.get("tokens_out", 0)),
+        "cost_usd": float(tokens.get("cost_usd", 0.0)),
+        "turns": turns if isinstance(turns, int) else None,
+        "requests": requests if isinstance(requests, int) else None,
+    }
+
+
+def _agent_case_verdict(
+    case: dict[str, Any],
+    result: dict[str, Any] | None,
+    observation: dict[str, Any],
+    project_slug: str,
+    failure: str,
+) -> dict[str, Any]:
+    """The case's judge on what the run answered and did; a run that posted nothing failed."""
+    from choregos_playbooks.evals.agents import judge
+
+    if not case:
+        return {"ok": False, "skipped": False, "reason": "the agent case is gone from the image"}
+    if not result:
+        return {"ok": False, "skipped": False, "reason": failure or "the run posted no result"}
+    verdict = judge(case, live_cases.live_answer(case, result, project_slug), observation)
+    return {"ok": verdict["ok"], "skipped": False, "reason": verdict["reason"]}
+
+
+async def _parity_of(session: Any, run: Run, events: list[RunEvent]) -> str:
+    """`eval_live_cases.parity` on the run's rows: its ledger's tool lines, its `choregos.tool.called`
+    events, its bridge's `tools.script.call` lines."""
+    booked = (
+        await session.execute(
+            select(CostLedger.provider, CostLedger.model, CostLedger.origin).where(
+                CostLedger.run_id == run.id, CostLedger.kind == "tool"
+            )
+        )
+    ).all()
+    called = (
+        (
+            await session.execute(
+                select(Event.payload).where(Event.subject == run.id, Event.type == str(EventType.TOOL_CALLED))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return live_cases.parity(
+        [{"provider": provider, "model": model, "origin": origin} for provider, model, origin in booked],
+        [dict(payload or {}) for payload in called],
+        [dict(event.payload or {}) for event in events if event.type == SCRIPT_CALL_EVENT],
+    )
 
 
 def _unfaithful_door(run: Run, events: list[RunEvent], tools: str) -> str:

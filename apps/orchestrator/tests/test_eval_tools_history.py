@@ -82,12 +82,14 @@ async def _play(
     return asked, result, history
 
 
-async def _replays(history: Any, name: str) -> None:
+async def _replays(history: Any, name: str | None) -> None:
+    """The fresh history replays; recorded under `name` when histories are recorded (`None`: never, the
+    archived one is the shape of an older code)."""
     from choregos_orchestrator.workflows import ALL_WORKFLOWS
     from temporalio.worker import Replayer
 
     await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
-    if recording_history():
+    if recording_history() and name is not None:
         target = HISTORIES / f"{name}.json"
         target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")
 
@@ -109,15 +111,20 @@ async def test_a_matrix_without_doors_asks_what_it_asked_before() -> None:
 
 
 async def test_a_live_matrix_plays_each_ticket_per_repetition_and_seeds_the_agent_cases() -> None:
+    """Since S57-11a an agent case is seeded once per repetition too (`LIVE_AGENT_CASES`); the history this
+    test archived before it (`evals-live-tools-S57-09.json`, one seed per agent case) still replays, and
+    is not recorded again: `test_eval_live_agent_cases_history.py` records the new shape."""
     asked, result, history = await _play(LIVE, "evals-live-tools-replay")
     seeds = asked["seed_eval_ticket"]
     assert [(s["tools"], s.get("repetition", 0), s.get("agent_case")) for s in seeds] == [
         ("mcp", 0, None),
         ("mcp", 1, None),
         ("mcp", 0, "netops-ssh-exposure"),
+        ("mcp", 1, "netops-ssh-exposure"),
         ("scripts", 0, None),
         ("scripts", 1, None),
         ("scripts", 0, "netops-ssh-exposure"),
+        ("scripts", 1, "netops-ssh-exposure"),
     ]
     judged = asked["judge_eval_run"]
     assert [(j["tools"], j["repetition"]) for j in judged] == [
@@ -126,8 +133,8 @@ async def test_a_live_matrix_plays_each_ticket_per_repetition_and_seeds_the_agen
         ("scripts", 0),
         ("scripts", 1),
     ]
-    assert [len(cell["outcomes"]) for cell in result["results"]] == [3, 3]
-    await _replays(history, "evals-live-tools-S57-09")
+    assert [len(cell["outcomes"]) for cell in result["results"]] == [4, 4]
+    await _replays(history, None)
 
 
 def test_the_new_histories_are_archived() -> None:

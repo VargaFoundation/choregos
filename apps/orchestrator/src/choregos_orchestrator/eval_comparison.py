@@ -6,7 +6,8 @@ only when `scripts` shows, against `mcp`, a lower cost per successful run AND a 
 not lower, with a paired bootstrap 95 % interval computed by the matrix itself. ADR 0055's interval was
 computed by hand; this is the matrix's own, pure Python, deterministic.
 
-**Pairs.** A unit is a case and a repetition (`(fixture, repetition)`) played, not skipped, in BOTH cells.
+**Pairs.** A unit is a case and a repetition (`(fixture, repetition)`) played, not skipped and not invalid
+(S57-11a: its governance parity broken), in BOTH cells.
 A unit is metered when the gateway counted its run in both cells (`cost_usd` is not `None`). When one
 unit of a comparison is not metered, its cost is unknown, not zero: the cost interval is not computed
 (`null`), and the verdict can only be `worse` by success, else `inconclusive` — a cell whose cost was
@@ -214,13 +215,15 @@ def _cell_key(cell: dict[str, Any]) -> tuple[Any, ...]:
 
 
 def _units(baseline: dict[str, Any], candidate: dict[str, Any]) -> list[Unit]:
-    """The cases and repetitions played, not skipped, in both cells, in the baseline's order."""
+    """The cases and repetitions played, not skipped and not invalid, in both cells, in the baseline's
+    order. An invalid run (its governance parity broken, S57-11a) is in no pair: neither door's numbers
+    are trusted for it."""
 
     def played(cell: dict[str, Any]) -> dict[tuple[str, int], dict[str, Any]]:
         return {
             (str(d["fixture"]), int(d.get("repetition", 0))): d
             for d in cell.get("details") or []
-            if not d.get("skipped")
+            if not d.get("skipped") and not d.get("invalid")
         }
 
     theirs = played(candidate)

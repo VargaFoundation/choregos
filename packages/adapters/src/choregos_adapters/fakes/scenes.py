@@ -16,16 +16,32 @@ the next one, and a test reads the fake's state to prove that nothing was writte
 | `network_policy` | `dropped-flows`  | E2: 12 namespaces, 2,400 flows, 310 dropped                     |
 | `identity`       | `offboarding`    | E4: one enabled account in six groups                           |
 | `marketdata`     | `default`        | the synthetic bars of `FakeMarketData` (a walk seeded by symbol) |
+
+S57-11a: the LIVE matrix plays an agent case on a deployment whose model is the real gateway and whose
+connectors are these scenes. Its seeding declares, in a per-case eval project, organisation connectors of
+the case's kinds (`scene_type`) whose configuration holds `fake_scene: <name>`; `bound_scene` is what the
+API builds for such a connector instead of its type's adapter. Two guards, so that no normal connector is
+ever served by a fake:
+
+- the field is refused on every declaration and edit (`registry.validate_config`): only the seeding, which
+  writes its rows itself, sets it;
+- it is honoured only when the deployment serves eval fakes (`CHOREGOS_EVAL_FAKE_SCENES=1`, given to the
+  API and the orchestrator); otherwise it is ignored and the connector is built as its type says, from its
+  configuration, which holds no address: it reaches nothing.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import os
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
 from ..errors import AdapterError
-from ..registry import OperationSpec, spec_of
+from ..registry import FAKE_SCENE_FIELD, OperationSpec, spec_of
+
+#: The deployment's switch: the API serves a `fake_scene` connector from its scene only when it is on.
+EVAL_FAKE_SCENES_ENV = "CHOREGOS_EVAL_FAKE_SCENES"
 
 
 @dataclass
@@ -116,4 +132,36 @@ def scene(kind: str, name: str = "default") -> Scene:
     return Scene(kind, name, connector, fake, spec.operations if spec is not None else ())
 
 
-__all__ = ["Scene", "scene", "scenes"]
+def scene_type(kind: str) -> str:
+    """The registered type whose real connector a kind's scenes run (`firewall` → `pfsense`): the type of
+    the organisation connector the live matrix declares, whose operations and policies are that type's."""
+    if kind not in _KINDS:
+        raise AdapterError(f"no scene for the kind {kind!r}: {', '.join(sorted(_KINDS))} have scenes")
+    return _KINDS[kind][0]
+
+
+def eval_fake_scenes_allowed() -> bool:
+    """Whether this deployment serves eval fakes (`CHOREGOS_EVAL_FAKE_SCENES=1`); off by default."""
+    return os.environ.get(EVAL_FAKE_SCENES_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def bound_scene(kind: str, config: Mapping[str, Any] | None) -> Scene | None:
+    """The scene a connector's configuration binds it to (`fake_scene`), built anew, or `None`: when the
+    configuration names none, and when the deployment does not serve eval fakes — the field is then
+    ignored, and the connector is built from its configuration as its type says (S57-11a)."""
+    name = (config or {}).get(FAKE_SCENE_FIELD)
+    if not name or not eval_fake_scenes_allowed():
+        return None
+    return scene(kind, str(name))
+
+
+__all__ = [
+    "EVAL_FAKE_SCENES_ENV",
+    "FAKE_SCENE_FIELD",
+    "Scene",
+    "bound_scene",
+    "eval_fake_scenes_allowed",
+    "scene",
+    "scene_type",
+    "scenes",
+]
