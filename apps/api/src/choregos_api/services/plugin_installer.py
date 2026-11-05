@@ -58,6 +58,7 @@ from ..db.models import (
     Organization,
     OrgPlugin,
     OrgPluginFile,
+    Project,
     ProjectAgent,
     Skill,
     SkillVersion,
@@ -631,6 +632,12 @@ async def upgrade(
     if plugin.name != row.name:
         raise unprocessable(f"the source served `{plugin.name}` for `{row.name}`")
     if plugin.digest == row.digest:
+        # Nothing to move, but a project born before the bases were delivered still receives them:
+        # upgrading to the installed version is how an organisation repairs that (S51-06b).
+        knowledge = await _projects_receive_template_knowledge(session, org_id, row.name)
+        if any(done.get("created") or done.get("served") for done in knowledge.values()):
+            await record(session, principal, "plugin.knowledge", org_id=org_id, target_type="plugin",
+                         target_id=row.name, version=row.version, knowledge=knowledge)  # fmt: skip
         return previous, []
     prepared = await _prepare(session, org_id, plugin, settings, replacing=row)
     offered: list[str] = []
@@ -686,11 +693,45 @@ async def upgrade(
     }
     row.status, row.installed_by, row.installed_at = status, principal.email, utcnow()
     await session.flush()
+    knowledge = await _projects_receive_template_knowledge(session, org_id, row.name)
     await record(session, principal, "plugin.upgrade", org_id=org_id, target_type="plugin",
                  target_id=row.name, previous_version=previous, version=plugin.version,
                  digest=plugin.digest, offered=offered, kept=kept,
-                 servers=contents.servers)  # fmt: skip
+                 servers=contents.servers, knowledge=knowledge)  # fmt: skip
     return previous, offered
+
+
+async def _projects_receive_template_knowledge(
+    session: AsyncSession, org_id: str, plugin: str
+) -> dict[str, dict[str, list[str]]]:
+    """The knowledge bases the upgraded templates ship (`defaults.knowledge`, S51-06), for the projects
+    already born of them: a project is born once, so without this an agent the upgrade brings refuses
+    every run on a base its project never received. The same idempotent path as a birth (created,
+    completed, reused, served or left alone with the reason, ADR 0008). Returns what was done, by project."""
+    from .template_knowledge import install_template_knowledge
+    from .templates import delivery, template_manifest
+
+    projects = (
+        await session.execute(
+            select(Project)
+            .where(
+                Project.org_id == org_id,
+                Project.status != "archived",
+                Project.template_ref.startswith(f"{PREFIX}{plugin}/", autoescape=True),
+            )
+            .order_by(Project.slug)
+        )
+    ).scalars()
+    done: dict[str, dict[str, list[str]]] = {}
+    for project in projects:
+        template = str(project.template_ref)
+        delivered = delivery(*await template_manifest(session, template, org_id))
+        if delivered.knowledge:
+            outcome = await install_template_knowledge(
+                session, project, delivered.knowledge, delivered.inputs, f"template:{template}"
+            )
+            done[project.slug] = {k: v for k, v in outcome.items() if v}
+    return done
 
 
 async def uninstall(
