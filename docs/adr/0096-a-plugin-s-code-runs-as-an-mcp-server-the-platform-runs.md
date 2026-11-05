@@ -136,3 +136,29 @@ platform fills.
   an agent calling the same tool through the broker.
 - **Under `CHOREGOS_FAKES` the plugin tracker is built as itself** (`registry.BUILT_UNDER_FAKES`) and
   talks to the in-memory `FakePluginTrackerServer`, so the profile mapping is what the fakes exercise.
+
+## A server on its fake, for the eval matrix (#1372, 2026-11-05)
+
+The tool-script matrix (ADR 0122 §9) plays E3 and C1 on the servicenow plugin's server. A plugin's code is
+an image, never a module of the core (§1), so the core reaches the server only as the broker does.
+
+- **A server declares its fake** (`plugin-server.schema.json`, `fake: {env, scenes}`, additive): the
+  variables that switch it to its seeded fake instance and the scenes that fake serves. They are not
+  configuration: the loader refuses a variable that is `CHOREGOS_*` or that a `config_schema` property or
+  a `secret_fields` entry reaches, so no administrator switches a server to its fake by typing a field.
+- **The live matrix gets an eval instance, not the server.** Where the deployment serves eval fakes
+  (`CHOREGOS_EVAL_FAKE_SCENES`, S57-11a's switch) and only there, every reconcile of a server that
+  declares a fake also applies `<server>-fake-<org digest>`: its image with the fake's variables and the
+  platform's token, nothing of the configuration, no egress at all, one replica; without the switch the
+  reconcile deletes it. Injecting the fake's variables into the server's own Deployment was rejected: it
+  would serve every project of the organisation from the fake. A connector reaches the eval instance only
+  when the matrix's seeding bound it (`fake_scene: <scene>` in its configuration, a scene the server
+  declares): every edit refuses the field (422), and without the switch it is ignored and the connector is
+  the server's own instance. The seeding binds only a connector nobody configured (no configuration, no
+  secret but the platform's token), makes it available to the selected projects and turns it on for its
+  eval projects, so an organisation's configured server is never served by a fake.
+- **The scripted matrix reaches a registered fake.** In a scripted cell the fake API calls the server's
+  MCP endpoint (`PluginServerClient`) through a transport registered for it in the process
+  (`choregos_adapters.fakes.plugin_servers`): the plugin's own CI serves its server in-process on its fake;
+  the core's CI answers from a recording of that fake (`FakePluginServer`). Its tools are the declared
+  operations the server lists, at their declared floor, as discovery and the broker govern them.

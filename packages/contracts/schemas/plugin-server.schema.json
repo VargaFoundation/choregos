@@ -207,6 +207,41 @@
           "pattern": "^/[A-Za-z0-9/_-]{0,127}$"
         }
       }
+    },
+    "fake": {
+      "type": "object",
+      "description": "how the platform runs this server on its fake for the live eval matrix (#1372): the environment that switches it to its seeded fake instance, and the scenes that fake serves. It is never an administrator's configuration: none of its variables may be one the configuration reaches. The platform runs it only where the deployment serves eval fakes (`CHOREGOS_EVAL_FAKE_SCENES`), as a separate eval instance with no configuration and no egress, reached only by a connector the matrix bound to it",
+      "required": [
+        "env"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "env": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[A-Z_][A-Z0-9_]{0,127}$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "maxLength": 256
+          }
+        },
+        "scenes": {
+          "type": "array",
+          "uniqueItems": true,
+          "minItems": 1,
+          "default": [
+            "default"
+          ],
+          "description": "the scenes the fake serves; `default` when absent",
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$"
+          }
+        }
+      }
     }
   }
 }

@@ -60,6 +60,8 @@ from choregos_api.db.models import (
     ModelProfileRow,
     OrgConnector,
     OrgConnectorProject,
+    OrgPlugin,
+    OrgPluginFile,
     PolicyDef,
     Project,
     ProjectOperationPolicy,
@@ -77,6 +79,7 @@ from choregos_api.services import (
 from choregos_api.services.initiator import initiator
 from choregos_contracts import EventType
 from choregos_core import elapsed_seconds, utcnow
+from choregos_core.agent_catalogue import PLUGIN_CASE, plugin_ref
 from choregos_core.tool_scripts_switch import tool_scripts_refusal
 from sqlalchemy import select
 from temporalio import activity
@@ -488,17 +491,60 @@ def _tool_scripts_refusal(bundle: ProjectBundle) -> str | None:
 
 
 def load_agent_case(name: str) -> dict[str, Any] | None:
-    """An agent case of `choregos_playbooks/evals/agent_cases` by its file name, `None` when absent."""
-    from choregos_playbooks.evals.agents import AGENT_CASES_DIR, load_case
+    """An agent case by its name, `None` when absent: a file of `choregos_playbooks/evals/agent_cases`, or
+    a plugin's matrix case `plugin:<plugin>/<case>` as the offline plugins hold it (#1372)."""
+    from choregos_playbooks.evals.agents import AGENT_CASES_DIR, load_case, plugin_case
 
+    if name.startswith(PLUGIN_CASE):
+        return plugin_case(name)
     path = AGENT_CASES_DIR / f"{name}.yaml"
     return load_case(path) if path.is_file() else None
+
+
+async def installed_agent_case(session: Any, org_id: str, name: str) -> dict[str, Any] | None:
+    """An agent case as a live cell plays it: a plugin's matrix case as the organisation INSTALLED it (its
+    file kept in `org_plugin_files`, #1372), else as `load_agent_case` finds it."""
+    import yaml
+
+    named = plugin_ref(name)
+    if named is None:
+        return load_agent_case(name)
+    plugin = (
+        await session.execute(select(OrgPlugin).where(OrgPlugin.org_id == org_id, OrgPlugin.name == named[0]))
+    ).scalar_one_or_none()
+    refs = (((plugin.manifest if plugin else None) or {}).get("contents") or {}).get("matrix_cases") or []
+    ref = next((str(r) for r in refs if Path(str(r)).stem == named[1]), None)
+    if plugin is None or ref is None:
+        return load_agent_case(name)
+    kept = (
+        await session.execute(
+            select(OrgPluginFile).where(
+                OrgPluginFile.org_id == org_id,
+                OrgPluginFile.digest == plugin.digest,
+                OrgPluginFile.path == ref,
+            )
+        )
+    ).scalar_one_or_none()
+    if kept is None:
+        return load_agent_case(name)
+    case = yaml.safe_load(bytes(kept.content).decode("utf-8"))
+    return {**dict(case), "name": named[1], "plugin": named[0]} if isinstance(case, dict) else None
+
+
+def _plugin_connectors(case: dict[str, Any]) -> list[str]:
+    """The case's connectors that are a plugin's server (`plugin:<plugin>/<server>`, #1372)."""
+    return [
+        str(name)
+        for name, declared in (case.get("connectors") or {}).items()
+        if str((declared or {}).get("kind", "")).startswith(PLUGIN_CASE)
+    ]
 
 
 async def _play_agent_case(name: str, payload: dict[str, Any], tools: str) -> dict[str, Any]:
     """An agent case in a scripted cell (S57-09): played through the cell's door on the fakes
     (`eval_doors.play`), its scripted usage billed on the fake gateway under its own key, then judged by
     its answer and by what its run did (`choregos_playbooks.evals.agents.judge`)."""
+    from choregos_adapters.errors import AdapterError
     from choregos_playbooks.evals.agents import judge
 
     case = load_agent_case(name)
@@ -526,6 +572,11 @@ async def _play_agent_case(name: str, payload: dict[str, Any], tools: str) -> di
         played = await eval_doors.play(case, tools)
         turns = _bill_scripted(gateway, key.key_id, case, context, model, {"source": "scripted"}, tools)
         usage = await _ledger(gateway, key.key_id, turns)
+    except AdapterError as unplayable:
+        if not _plugin_connectors(case):
+            raise  # a scene the fakes do not have is the case's error
+        # A plugin's server with no fake in this process (#1372): not played, never failed.
+        return {**_skip(str(unplayable)), **unit}
     finally:
         await gateway.revoke(key.key_id)
     observation = {**played.observation, "requests": usage["requests"] if usage else None}
@@ -799,6 +850,11 @@ async def _seed_agent_case(payload: dict[str, Any], context: str, tools: str) ->
 
     name = str(payload["agent_case"])
     case = load_agent_case(name)
+    if name.startswith(PLUGIN_CASE):
+        # A plugin's case, as the eval organisation installed it (#1372).
+        async with db() as session:
+            org_id = (await project_bundle(session, payload["project_slug"])).project.org_id
+            case = await installed_agent_case(session, org_id, name)
     if case is None:
         return _skip(f"no agent case {name}")
     if tools not in (case.get("tools_cells") or ["mcp"]):
@@ -982,6 +1038,11 @@ async def _case_connectors(
                 )
             )
         ).scalar_one_or_none()
+        if wanted.plugin:
+            refusal = await _case_plugin_server(session, project, case, wanted, row, approval)
+            if refusal:
+                return refusal
+            continue
         if row is None:
             row = OrgConnector(
                 org_id=project.org_id,
@@ -1033,6 +1094,55 @@ async def _case_connectors(
         await _turned_on(session, project, row)
         await _case_write_policies(session, project, list(held.values()), approval)
     await session.flush()
+    return ""
+
+
+async def _case_plugin_server(
+    session: Any,
+    project: Project,
+    case: dict[str, Any],
+    wanted: live_cases.CaseConnector,
+    row: OrgConnector | None,
+    approval: bool,
+) -> str:
+    """A plugin's server as the case's connector (#1372): the organisation's connector of that server,
+    bound to its eval instance (`fake_scene`), available to the selected projects and turned on for the
+    case's eval project; its writes `allowed` at the organisation but where the server says a person
+    approves (`human_approval`, never lowered), tightened by the case's project as for a scene. `""`, or why
+    the case cannot be played (`eval_live_cases.plugin_binding_refusal`), or — the binding written — that
+    the operations it calls were never discovered: a model would call them without their schemas."""
+    from choregos_adapters.registry import FAKE_SCENE_FIELD
+
+    refusal = live_cases.plugin_binding_refusal(wanted, row)
+    if refusal or row is None:
+        return refusal or "unreachable"
+    if dict(row.config or {}) != {FAKE_SCENE_FIELD: wanted.scene}:
+        row.config = {FAKE_SCENE_FIELD: wanted.scene}
+    if row.availability != "selected_projects":
+        # Nobody configured it, so nobody used it: from now on only the projects it is turned on for reach it.
+        row.availability = "selected_projects"
+    declared = (row.plugin_server or {}).get("operations") or {}
+    operations = list(
+        (
+            await session.execute(select(ConnectorOperation).where(ConnectorOperation.connector_id == row.id))
+        ).scalars()
+    )
+    for operation in operations:
+        floor = declared.get(operation.name) or {}
+        wanted_policy = "approval" if floor.get("human_approval") else "allowed"
+        if operation.access != "read" and operation.policy != wanted_policy:
+            operation.policy = wanted_policy
+    await session.flush()
+    await _turned_on(session, project, row)
+    await _case_write_policies(session, project, operations, approval)
+    undiscovered = live_cases.undiscovered(case, wanted, {op.name: op.input_schema for op in operations})
+    if undiscovered:
+        return (
+            f"the operations {', '.join(undiscovered)} of the server `{wanted.name}` have no input schema: a "
+            "model would call them blind. The connector is bound to its eval instance now: discover its "
+            f"tools (`POST /api/v1/orgs/<eval-org>/connectors/{wanted.name}/discover`), then play the case "
+            "again"
+        )
     return ""
 
 
@@ -1246,7 +1356,10 @@ async def judge_eval_run(payload: dict[str, Any]) -> dict[str, Any]:
             .all()
         )
         tools = _tools(payload)
-        case = (load_agent_case(agent_case) or {}) if agent_case else {}
+        case: dict[str, Any] = {}
+        if agent_case:
+            owner = await session.get(Project, run.project_id)
+            case = await installed_agent_case(session, owner.org_id if owner else "", agent_case) or {}
         unit = {
             "fixture": fixture,
             "agent": str(case.get("agent", "")) if agent_case else _ticket_agent(spec),
