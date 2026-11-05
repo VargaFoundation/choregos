@@ -30,7 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
 from ..db.models import AgentSessionEvent, AgentSessionRecord, Organization, Project
-from ..db.session import limit_to_organisations, session_scope
+from ..db.session import release_connection, session_scope
 from ..errors import not_found
 from ..logging import get_logger
 from ..schemas.agent_sessions import (
@@ -107,9 +107,11 @@ async def respond_hosted(
     organisation = await session.get(Organization, record.org_id)
     org_slug = organisation.slug if organisation else ""
     # The pod reads the turn from its own transaction: this one must be committed, and the waiting
-    # below must hold no lock (SQLite's SHARED lock would block the pod's answer).
-    await session.commit()
-    await limit_to_organisations(session, [org_slug])
+    # below must hold no lock (SQLite's SHARED lock would block the pod's answer) nor, on PostgreSQL,
+    # a pooled connection idle in transaction for as long as the pod takes (#1376). Nothing below
+    # touches `session` before the answer is in; its next transaction then begins in the scope this
+    # one had (`release_connection`).
+    await release_connection(session)
 
     error: AgentResponseError | None = None
     result: AgentSessionTurnResult | None = None

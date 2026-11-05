@@ -11,6 +11,7 @@ Each response runs the prompt loop of a workflow step (`choregos_core.prompt_loo
 history: the agent's instructions, its model, the read tools its `mcp_servers` grant in the project.
 A write or an approval tool is not offered in a session: it is a governed action that needs a work
 item. Every tool call goes through the courtier, the injection guard and the ledger, as a run's.
+Neither a model call nor a tool call holds a database connection while it is answered (#1376).
 
 Closing (by its person, at its expiry, or when the gateway refuses the key for budget) reads the
 key's spend, books it in the ledger with `session_id`, revokes the key and forgets its secret. It is
@@ -44,6 +45,12 @@ from ..db.models import (
     Organization,
     Project,
 )
+from ..db.session import (
+    allow_release_during_calls,
+    outside_the_transaction,
+    release_allowed,
+    release_connection,
+)
 from ..errors import ApiError, conflict, unprocessable
 from ..logging import get_logger
 from ..schemas.agent_sessions import (
@@ -60,6 +67,7 @@ from .events import persist_event
 
 if TYPE_CHECKING:
     from choregos_adapters.base import GatewayAdapter
+    from choregos_core.policy import PolicyEngine
 
     from ..rbac import Principal
     from ..schemas import AgentSpec
@@ -389,7 +397,14 @@ async def _reserve(
 async def respond(
     session: AsyncSession, record: AgentSessionRecord, project: Project, inputs: list[str]
 ) -> AgentResponse:
-    """One response of the session: the person's input, the agent's loop, what it said."""
+    """One response of the session: the person's input, the agent's loop, what it said.
+
+    No connection of the request is held while the model or a tool answers (#1376): the request's
+    transaction commits before each call leaves (`outside_the_transaction`), and what the call
+    brings back is written in the next one, in the same scope. So the journal commits turn by turn —
+    a call that was made, and paid on the key, stays written when the response then fails —, while
+    the history (`record.messages`) and the response's own line commit together at its end: a
+    response that failed half-way leaves no half of a turn in what the next one sends the model."""
     from .agents import resolve_agent
 
     if record.status != "open" or aware(record.expires_at) <= utcnow():  # type: ignore[operator]
@@ -405,6 +420,9 @@ async def respond(
         from .agent_hosted_sessions import respond_hosted
 
         return await respond_hosted(session, record, project, spec, inputs)
+    # What the request wrote so far (the session it opened, its reservation, the input) need not wait
+    # for the model's answer to be kept: the first call commits it, and releases the budget's lock.
+    allow_release_during_calls(session)
     keys = await get_secret_store().get_many(session, record.org_id, [secret_name(record.id)])
     key = keys.get(secret_name(record.id), "")
     tools = await session_tools(session, spec, project)
@@ -417,9 +435,16 @@ async def respond(
 
     # The gateway the session's key was minted on (ADR 0109): the organisation's own, else the deployment's.
     gateway_url = await org_gateway_url(session, record.org_id) or get_settings().gateway_url
+    #: What the response asked for, said when its booking fails after the calls were made.
+    made = {"model_calls": 0, "tool_calls": 0}
 
     async def complete(body: dict[str, Any]) -> dict[str, Any]:
-        async with httpx.AsyncClient(transport=_OVERRIDES.get("transport"), timeout=300) as http:
+        # Up to 300 s: the request's transaction does not wait for it on a pooled connection.
+        async with (
+            outside_the_transaction(session),
+            httpx.AsyncClient(transport=_OVERRIDES.get("transport"), timeout=300) as http,
+        ):
+            made["model_calls"] += 1
             answer = await http.post(
                 f"{gateway_url.rstrip('/')}/chat/completions",
                 json=body,
@@ -433,6 +458,7 @@ async def respond(
         return parsed
 
     async def call_tool(name: str, arguments: dict[str, Any]) -> str:
+        made["tool_calls"] += 1
         return await call_session_tool(session, record, project, tools[name], arguments)
 
     async def on_event(type_: str, payload: dict[str, Any]) -> None:
@@ -441,26 +467,52 @@ async def respond(
     outcome: LoopOutcome | None = None
     error: AgentResponseError | None = None
     try:
-        outcome = await run_loop(
-            LoopRequest(
-                model=record.model,
-                max_turns=spec.limits.max_turns or DEFAULT_MAX_TURNS,
-                max_output_tokens=getattr(runtime, "max_output_tokens", None),
-                tool_choice=getattr(runtime, "tool_choice", "auto"),
-                response_format=getattr(runtime, "response_format", "text"),
-            ),
-            messages,
-            [
-                LoopTool(t.name, str(t.announcement().get("description") or ""), tool_parameters(t))
-                for t in tools.values()
-            ],
-            complete,
-            call_tool,
-            on_event=on_event,
+        try:
+            outcome = await run_loop(
+                LoopRequest(
+                    model=record.model,
+                    max_turns=spec.limits.max_turns or DEFAULT_MAX_TURNS,
+                    max_output_tokens=getattr(runtime, "max_output_tokens", None),
+                    tool_choice=getattr(runtime, "tool_choice", "auto"),
+                    response_format=getattr(runtime, "response_format", "text"),
+                ),
+                messages,
+                [
+                    LoopTool(t.name, str(t.announcement().get("description") or ""), tool_parameters(t))
+                    for t in tools.values()
+                ],
+                complete,
+                call_tool,
+                on_event=on_event,
+            )
+        except (_ModelRefused, httpx.HTTPError, ValueError) as exc:
+            code = "budget_exceeded" if budget_refusal(str(exc)) else "model_error"
+            error = AgentResponseError(code=code, message=str(exc)[:500])
+        return await _book_the_response(session, record, response_id, messages, outcome, error)
+    except Exception as failure:
+        # Calls were made (and the journal may hold their lines) but the response is not booked:
+        # said here, with what it had asked for, besides the 500 the caller gets.
+        log.warning(
+            "agent_session.response_not_booked",
+            session_id=record.id,
+            project=project.slug,
+            response_id=response_id,
+            error=type(failure).__name__,
+            **made,
         )
-    except (_ModelRefused, httpx.HTTPError, ValueError) as exc:
-        code = "budget_exceeded" if budget_refusal(str(exc)) else "model_error"
-        error = AgentResponseError(code=code, message=str(exc)[:500])
+        raise
+
+
+async def _book_the_response(
+    session: AsyncSession,
+    record: AgentSessionRecord,
+    response_id: str,
+    messages: list[dict[str, Any]],
+    outcome: LoopOutcome | None,
+    error: AgentResponseError | None,
+) -> AgentResponse:
+    """What a response keeps once its last call answered: the history, the count, its line and the
+    close of a spent key, in one transaction committed here, in the scope the calls left with."""
     if outcome is not None and outcome.status == "max_turns":
         error = AgentResponseError(
             code="max_turns", message=f"stopped after {outcome.turns} model calls without an answer"
@@ -484,6 +536,7 @@ async def respond(
     if error is not None and error.code == "budget_exceeded":
         # The key is spent: nothing more can be said in this session.
         await close_session(session, record, reason="budget_exceeded")
+    await release_connection(session)
     return AgentResponse(
         id=response_id,
         session_id=record.id,
@@ -549,10 +602,9 @@ async def answer_session_tool(
     """One read through the courtier, as a run's: the policy's cap, the schema, the connector's key
     resolved here, the injection guard, a ledger line. What the model reads back is text: the text
     blocks and, when they do not serialize it, the `structuredContent` (S40-18c), guarded as read."""
-    from choregos_core.injection import suspicions as find
     from choregos_core.policy import PolicyEngine
 
-    from .broker import ArgumentsRefused, call, check_arguments, session_text
+    from .broker import ArgumentsRefused, call, check_arguments
     from .definitions import effective_policy
 
     engine = PolicyEngine(await effective_policy(session, project.id))
@@ -564,7 +616,50 @@ async def answer_session_tool(
         check_arguments(tool, arguments)
     except ArgumentsRefused as refusal:
         return SessionToolAnswer(str(refusal), 400, _calls_left(cap, record))
+    # The server is called with no connection of the request held when its owner allowed it
+    # (`allow_release_during_calls`, #1376): the broker commits first. What follows is the call's
+    # booking — the count, its line, its events with their notification —, one transaction after the
+    # call, committed here in the scope the call left with; all of it is kept or none.
     code, body = await call(session, tool, arguments, project=project)
+    provider = f"mcp:{tool.connector.name}"
+    try:
+        answer = await _book_the_tool_call(session, record, project, tool, engine, cap, code, body)
+        if release_allowed(session):
+            await release_connection(session)
+    except Exception as failure:
+        # The call was made and is not booked: said here, with what its line would have held,
+        # besides the error its caller gets.
+        log.warning(
+            "tool_call.not_booked",
+            session_id=record.id,
+            project=project.slug,
+            tool=tool.name,
+            provider=provider,
+            status_code=code,
+            cost_usd=tool.operation.price_usd or 0.0,
+            error=type(failure).__name__,
+        )
+        raise
+    return answer
+
+
+async def _book_the_tool_call(
+    session: AsyncSession,
+    record: AgentSessionRecord,
+    project: Project,
+    tool: BrokerTool,
+    engine: PolicyEngine,
+    cap: int,
+    code: int,
+    body: Any,
+) -> SessionToolAnswer:
+    """What the model reads back from a session's tool call, guarded, and what changes its meaning;
+    the call's count, line and events."""
+    from choregos_core.injection import suspicions as find
+
+    from .broker import session_text
+
+    provider = f"mcp:{tool.connector.name}"
     refused_by_network = isinstance(body, dict) and body.get("type") in {"network_policy", "rate_limited"}
     text = session_text(body) if code < 400 else json.dumps(body, default=str)[:2000]
     mode = engine.policy.sandbox.prompt_injection
@@ -591,7 +686,7 @@ async def answer_session_tool(
                 session_id=record.id,
                 ts=utcnow(),
                 kind="tool",
-                provider=f"mcp:{tool.connector.name}",
+                provider=provider,
                 model=tool.name,
                 cost_usd=tool.operation.price_usd or 0.0,
                 agent_slug=record.agent_slug,
@@ -606,7 +701,7 @@ async def answer_session_tool(
         subject=record.id,
         session_id=record.id,
         tool=tool.name,
-        provider=f"mcp:{tool.connector.name}",
+        provider=provider,
         status_code=code,
     )
     flagged = [s.to_dict() for s in found]

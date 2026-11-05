@@ -47,7 +47,7 @@ from choregos_adapters.registry import fakes_enabled
 
 from ..config import get_settings
 from ..db.models import AgentSessionRecord, Project
-from ..db.session import session_scope
+from ..db.session import allow_release_during_calls, session_scope
 from ..errors import unprocessable
 from ..logging import get_logger
 from .agent_sessions import (
@@ -605,6 +605,8 @@ async def _answer_the_call(upstream: RealtimeLink, voice: VoiceSession, event: d
             granted = tool
 
             async def call(db: AsyncSession, record: AgentSessionRecord, project: Project) -> str:
+                # The connector is awaited with no connection held; the call is booked after it (#1376).
+                allow_release_during_calls(db)
                 return await call_session_tool(db, record, project, granted, arguments)
 
             output = str(await voice.write(call) or "")

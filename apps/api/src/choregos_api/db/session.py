@@ -73,9 +73,16 @@ def allow_release_during_calls(session: AsyncSession) -> None:
 
     Only the owner knows that what its request wrote before an external call need not be atomic
     with what it writes after: the tool route (`callRunTool`) does, since its place under the cap is
-    already committed and its line is booked after the call. A session nobody marked keeps its
-    transaction open across the block, as before."""
+    already committed and its line is booked after the call; so do an agent session's response, its
+    pod's tool calls and its voice relay's (#1376). A session nobody marked keeps its transaction
+    open across the block, as before."""
     session.info[_RELEASABLE] = True
+
+
+def release_allowed(session: AsyncSession) -> bool:
+    """Whether the owner of `session` called `allow_release_during_calls`: then what an external call
+    brings back is booked in a transaction of its own, which the code that books it may commit."""
+    return bool(session.info.get(_RELEASABLE))
 
 
 async def release_connection(session: AsyncSession) -> None:
@@ -96,8 +103,8 @@ async def release_connection(session: AsyncSession) -> None:
 
 @asynccontextmanager
 async def outside_the_transaction(session: AsyncSession) -> AsyncIterator[None]:
-    """For the length of the block, an external call (a connector, a provider, a page, a search, a
-    governed write's wait), `session` holds no pooled connection, when its owner allowed it
+    """For the length of the block, an external call (a connector, a provider, a model, a page, a
+    search, a governed write's wait), `session` holds no pooled connection, when its owner allowed it
     (`allow_release_during_calls`).
 
     The request's transaction commits on entry (`release_connection`); nothing is done on exit. A
