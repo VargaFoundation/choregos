@@ -1,0 +1,94 @@
+agent: analyst
+description: >
+  E6 of the tool-script matrix (S57-09): twenty instruments, four months of daily bars, one computation.
+  Twenty `get_bars` reduced to a five-line table by arithmetic the model should never do in its head. The
+  examples page asked for a year of bars: a year is over the platform's 64 KiB bound on one answer; four
+  months hold the 31 closes the computation needs.
+#: No catalogue agent reads market data: the case carries its own.
+agent_spec:
+  slug: analyst
+  instructions: |
+    You answer quantitative questions about financial instruments from the platform's market data tools
+    (`marketdata__get_bars`, `marketdata__get_instrument`). Compute; never estimate a number you could
+    compute, and say how you computed it. You give no investment advice.
+
+    Write exactly this output: `{"analysis_markdown": "…"}`, with two sections, in this order: `## Result`
+    and `## Method`.
+output: analysis_markdown
+task: >
+  For the twenty instruments of the watch list (AAPL, MSFT, NVDA, AMZN, GOOGL, META, TSLA, JPM, V, MA, UNH,
+  XOM, JNJ, PG, HD, KO, PEP, COST, NFLX, AMD), compute the 30-day annualised volatility at the close of
+  2026-10-30 — the sample standard deviation of the last 30 daily log returns of the adjusted close, times
+  the square root of 252, in percent — from the bars of 2026-07-01 to 2026-10-30, and list the five most
+  volatile, with their volatility rounded to one decimal.
+tools_cells: [mcp, scripts]
+connectors:
+  marketdata: { kind: marketdata, scene: default }
+evidence:
+  - { tool: marketdata__get_bars, arguments: { symbol: AAPL, start: "2026-07-01", end: "2026-10-30" } }
+  - { tool: marketdata__get_bars, arguments: { symbol: MSFT, start: "2026-07-01", end: "2026-10-30" } }
+  - { tool: marketdata__get_bars, arguments: { symbol: NVDA, start: "2026-07-01", end: "2026-10-30" } }
+  - { tool: marketdata__get_bars, arguments: { symbol: AMZN, start: "2026-07-01", end: "2026-10-30" } }
+  - { tool: marketdata__get_bars, arguments: { symbol: GOOGL, start: "2026-07-01", end: "2026-10-30" } }
+  - { tool: marketdata__get_bars, arguments: { symbol: META, start: "2026-07-01", end: "2026-10-30" } }
+  - { tool: marketdata__get_bars, arguments: { symbol: TSLA, start: "2026-07-01", end: "2026-10-30" } }
+  - { tool: marketdata__get_bars, arguments: { symbol: JPM, start: "2026-07-01", end: "2026-10-30" } }
+  - { tool: marketdata__get_bars, arguments: { symbol: V, start: "2026-07-01", end: "2026-10-30" } }
+  - { tool: marketdata__get_bars, arguments: { symbol: MA, start: "2026-07-01", end: "2026-10-30" } }
+  - { tool: marketdata__get_bars, arguments: { symbol: UNH, start: "2026-07-01", end: "2026-10-30" } }
+  - { tool: marketdata__get_bars, arguments: { symbol: XOM, start: "2026-07-01", end: "2026-10-30" } }
+  - { tool: marketdata__get_bars, arguments: { symbol: JNJ, start: "2026-07-01", end: "2026-10-30" } }
+  - { tool: marketdata__get_bars, arguments: { symbol: PG, start: "2026-07-01", end: "2026-10-30" } }
+  - { tool: marketdata__get_bars, arguments: { symbol: HD, start: "2026-07-01", end: "2026-10-30" } }
+  - { tool: marketdata__get_bars, arguments: { symbol: KO, start: "2026-07-01", end: "2026-10-30" } }
+  - { tool: marketdata__get_bars, arguments: { symbol: PEP, start: "2026-07-01", end: "2026-10-30" } }
+  - { tool: marketdata__get_bars, arguments: { symbol: COST, start: "2026-07-01", end: "2026-10-30" } }
+  - { tool: marketdata__get_bars, arguments: { symbol: NFLX, start: "2026-07-01", end: "2026-10-30" } }
+  - { tool: marketdata__get_bars, arguments: { symbol: AMD, start: "2026-07-01", end: "2026-10-30" } }
+instructions_must_contain: ["marketdata__get_bars", "never estimate", "analysis_markdown"]
+#: The fake's bars give a known answer: `test_agent_cases_doors.py` recomputes it from them.
+answer_must_contain: ["1. AAPL 24.3 %", "2. GOOGL 22.7 %", "3. MA 22.1 %", "4. JPM 21.8 %", "5. AMZN 21.7 %"]
+answer_must_not_contain: ["PEP 20.6", "KO 20.6"]
+answer_sections: ["## Result", "## Method"]
+min_score: 1.0
+assertions:
+  - { kind: calls_by_origin, cell: mcp, origin: model, count: 20 }
+  - { kind: calls_by_origin, cell: scripts, origin: script, min: 20 }
+  - { kind: max_model_requests, cell: scripts, max: 3 }
+  - { kind: executed_actions, count: 0 }
+scripted_usage:            # illustrative (the examples page)
+  mcp: { requests: 22, tokens_in: 1250000, tokens_cached: 1080000, tokens_out: 3300, turns: 22 }
+  scripts: { requests: 3, tokens_in: 28000, tokens_cached: 17000, tokens_out: 2400, turns: 3 }
+scripted_script:
+  name: volatility.py
+  text: |
+    import math
+    import statistics
+
+    from choregos_tools import marketdata
+
+    WATCH = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA", "JPM", "V", "MA", "UNH", "XOM", "JNJ",
+             "PG", "HD", "KO", "PEP", "COST", "NFLX", "AMD"]
+    volatility = {}
+    for symbol in WATCH:
+        bars = marketdata.get_bars(symbol=symbol, start="2026-07-01", end="2026-10-30")["bars"]
+        closes = [bar["adj_close"] for bar in bars][-31:]
+        returns = [math.log(after / before) for before, after in zip(closes, closes[1:])]
+        volatility[symbol] = statistics.stdev(returns) * math.sqrt(252) * 100
+    for rank, (symbol, value) in enumerate(sorted(volatility.items(), key=lambda kv: -kv[1])[:5], start=1):
+        print(f"{rank}. {symbol} {value:.1f} %")
+  answer:
+    analysis_markdown: |
+      ## Result
+
+      The five most volatile instruments of the watch list, 30-day annualised volatility at the close of
+      2026-10-30:
+
+      <<stdout>>
+
+      ## Method
+
+      For each instrument, the sample standard deviation of the last 30 daily log returns of the adjusted
+      close (31 closes up to 2026-10-30), times the square root of 252, in percent.
+reference_answer: |
+  {"analysis_markdown": "## Result\n\nThe five most volatile instruments of the watch list, 30-day annualised volatility at the close of 2026-10-30:\n\n1. AAPL 24.3 %\n2. GOOGL 22.7 %\n3. MA 22.1 %\n4. JPM 21.8 %\n5. AMZN 21.7 %\n\n## Method\n\nFor each instrument, the sample standard deviation of the last 30 daily log returns of the adjusted close (31 closes up to 2026-10-30), times the square root of 252, in percent.\n"}

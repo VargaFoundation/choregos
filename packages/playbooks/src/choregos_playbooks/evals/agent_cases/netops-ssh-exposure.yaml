@@ -1,0 +1,101 @@
+agent: netops
+description: >
+  E1 of the tool-script matrix (S57-09, the examples page of PLAN-2026-11-03-tool-scripts): find every
+  pfSense rule that lets any source reach TCP 22, through aliases too, and propose closing them, without
+  applying anything. Three reads that must be JOINED: the rules (one call per interface, a whole list is
+  over the platform's 64 KiB bound), the aliases, the interfaces; the answer is three lines.
+output: netops_report_markdown
+task: >
+  Audit the firewall: list every rule that exposes SSH (TCP 22) to any source, on any interface, including
+  through aliases. Name each rule as `<interface>#<position>` (its position among its interface's rules,
+  from 1) and propose a fix for each.
+tools_cells: [mcp, scripts]
+#: The connectors of the run and the scene each one's fake holds (`choregos_adapters.fakes.scenes`).
+connectors:
+  pfsense: { kind: firewall, scene: ssh-exposure }
+#: What the model reads, one tool call at a time, in the `mcp` cell.
+evidence:
+  - { tool: pfsense__list_interfaces, kind: firewall, operation: list_interfaces, arguments: {} }
+  - { tool: pfsense__list_aliases, kind: firewall, operation: list_aliases, arguments: {} }
+  - { tool: pfsense__list_firewall_rules, kind: firewall, operation: list_firewall_rules, arguments: { interface: wan } }
+  - { tool: pfsense__list_firewall_rules, kind: firewall, operation: list_firewall_rules, arguments: { interface: lan } }
+  - { tool: pfsense__list_firewall_rules, kind: firewall, operation: list_firewall_rules, arguments: { interface: opt1 } }
+  - { tool: pfsense__list_firewall_rules, kind: firewall, operation: list_firewall_rules, arguments: { interface: opt2 } }
+  - { tool: pfsense__list_firewall_rules, kind: firewall, operation: list_firewall_rules, arguments: { interface: opt3 } }
+  - { tool: pfsense__list_firewall_rules, kind: firewall, operation: list_firewall_rules, arguments: { interface: opt4 } }
+instructions_must_contain:
+  - "never write directly"
+  - "pfsense__list_firewall_rules"
+  - "pfsense__list_aliases"
+  - "netops_report_markdown"
+answer_must_contain: ["`wan#17`", "`opt2#4`", "`lan#88`", "PARTNERS", "MGMT_PORTS", "3 of 184 rules"]
+#: The decoys: another port, a block, a disabled rule, a restricted source, a protocol without ports.
+answer_must_not_contain: ["`wan#3`", "`wan#30`", "`lan#2`", "`lan#5`", "`opt3#7`", "`opt4#2`"]
+answer_sections: ["## Findings", "## Proposed change", "## Risk", "## Rollback"]
+min_score: 1.0
+assertions:
+  - { kind: executed_actions, count: 0 }
+  - { kind: calls_by_origin, cell: mcp, origin: model, count: 8 }
+  - { kind: calls_by_origin, cell: mcp, origin: script, count: 0 }
+  - { kind: calls_by_origin, cell: scripts, origin: script, min: 3 }
+  - { kind: max_model_requests, cell: scripts, max: 4 }
+#: Illustrative numbers (the examples page), billed on the fake gateway by the scripted matrix; the live
+#: matrix (S57-11) measures them.
+scripted_usage:
+  mcp: { requests: 7, tokens_in: 214000, tokens_cached: 158000, tokens_out: 3900, turns: 7 }
+  scripts: { requests: 3, tokens_in: 41000, tokens_cached: 26000, tokens_out: 3100, turns: 3 }
+#: What the scripted agent runs in the `scripts` cell, through the real tool bridge; its answer is
+#: `answer` with what the script printed in place of `<<stdout>>`.
+scripted_script:
+  name: ssh_exposure.py
+  text: |
+    from choregos_tools import pfsense
+
+    interfaces = [i["id"] for i in pfsense.list_interfaces()["interfaces"]]
+    aliases = {a["name"]: a for a in pfsense.list_aliases()["aliases"]}
+
+
+    def expand(value, seen=()):
+        if value in aliases and value not in seen:
+            return {x for item in aliases[value]["address"] for x in expand(item, seen + (value,))}
+        return {value}
+
+
+    total, exposed = 0, []
+    for interface in interfaces:
+        rules = pfsense.list_firewall_rules(interface=interface)["rules"]
+        total += len(rules)
+        for position, rule in enumerate(rules, start=1):
+            if rule["type"] != "pass" or rule.get("disabled") or rule["protocol"] not in ("tcp", "any"):
+                continue
+            port = rule.get("destination_port") or "any"
+            if expand(rule["source"]) & {"any", "0.0.0.0/0"} and expand(port) & {"22", "any"}:
+                via = [name for name in (rule["source"], port) if name in aliases]
+                through = f" (through {', '.join(via)})" if via else ""
+                exposed.append(f'- `{interface}#{position}`: source `{rule["source"]}`, port `{port}`, "{rule["descr"]}"{through}')
+    print("\n".join(exposed))
+    print(f"{len(exposed)} of {total} rules expose TCP 22 to any source.")
+  answer:
+    netops_report_markdown: |
+      ## Findings
+
+      <<stdout>>
+
+      Aliases were expanded recursively: `PARTNERS` holds `PARTNER_CLOUD`, which holds `0.0.0.0/0`, and
+      `MGMT_PORTS` holds 22.
+
+      ## Proposed change
+
+      Restrict each rule's source to the networks that need SSH, through `pfsense__update_firewall_rule`
+      by its tracker: a person approves each one, nothing is applied by the proposal.
+
+      ## Risk
+
+      Whoever reached SSH through these rules from outside the restricted sources loses it.
+
+      ## Rollback
+
+      Each update's compensation restores the previous rule from its snapshot.
+#: The answer of the `mcp` cell, written from the evidence.
+reference_answer: |
+  {"netops_report_markdown": "## Findings\n\n- `wan#17`: source `any`, port `22`, \"Temporary vendor SSH\"\n- `lan#88`: source `any`, port `MGMT_PORTS`, \"Management from anywhere\" (through MGMT_PORTS)\n- `opt2#4`: source `PARTNERS`, port `22`, \"Partner bastion\" (through PARTNERS)\n3 of 184 rules expose TCP 22 to any source.\n\nAliases were expanded recursively: `PARTNERS` holds `PARTNER_CLOUD`, which holds `0.0.0.0/0`, and `MGMT_PORTS` holds 22.\n\n## Proposed change\n\nRestrict each rule's source to the networks that need SSH, through `pfsense__update_firewall_rule` by its tracker: a person approves each one, nothing is applied by the proposal.\n\n## Risk\n\nWhoever reached SSH through these rules from outside the restricted sources loses it.\n\n## Rollback\n\nEach update's compensation restores the previous rule from its snapshot.\n"}

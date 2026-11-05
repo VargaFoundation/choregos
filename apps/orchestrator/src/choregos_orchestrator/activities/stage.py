@@ -53,6 +53,7 @@ from temporalio import activity
 from ..config import get_settings
 from ..context_reduction import (
     forced_context,
+    forced_tool_scripts,
     resolve_context,
     resolve_tool_scripts,
     stage_input_payload,
@@ -350,13 +351,16 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             tools=ToolsRef(
                 mcp={} if remote_runtime is not None else _mcp_servers(settings, memory_scope),
                 # The tool bridge (ADR 0122): the deployment, the ceiling (the bundle's policy is
-                # already clamped to it), the policy and the role. An eval cell runs the model's MCP
-                # tools only, as the matrix's `mcp` cell, until it measures the other door (S57-09).
+                # already clamped to it), the policy and the role. An eval cell's door is the cell's
+                # (S57-09): on in a `scripts` cell, off in an `mcp` cell, whatever the policy says, and
+                # never against the deployment's kill switch.
                 scripts=resolve_tool_scripts(
                     bundle.policy.tools, plan.role, allowed_by_deployment=settings.tool_scripts
                 )
                 if plan.eval_cell is None
-                else None,
+                else forced_tool_scripts(
+                    plan.eval_cell.get("tools"), allowed_by_deployment=settings.tool_scripts
+                ),
             ),
             memory_scope=memory_scope,
             memories=resolved_memories.memories,

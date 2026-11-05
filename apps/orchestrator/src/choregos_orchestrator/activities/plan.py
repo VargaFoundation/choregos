@@ -38,6 +38,8 @@ class StagePlan:
     #: A job step (ADR 0056): `{"command": [...], "image": name | None}`; no model, no key.
     job: dict[str, Any] | None = None
     #: An eval cell's run (S37-10, ADR 0055): `context` (the cell's reduction, still under the
-    #: deployment's kill switch), `base_branch` (the toy repository's branch) and `facts` (the
-    #: ticket's assertions, measured by the runner). Nothing else ever sets it.
+    #: deployment's kill switch), `base_branch` (the toy repository's branch), `facts` (the
+    #: ticket's assertions, measured by the runner) and, since S57-09 (ADR 0122), `tools`: the cell's
+    #: door, `{max_concurrent_calls}` for `scripts`, `None` or absent for `mcp`, still under the
+    #: deployment's kill switch. Nothing else ever sets it.
     eval_cell: dict[str, Any] | None = None

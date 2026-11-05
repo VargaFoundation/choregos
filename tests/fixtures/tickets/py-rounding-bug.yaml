@@ -18,6 +18,9 @@ scripted_usage:
   "rtk": { tokens_in: 121600, tokens_cached: 81600, tokens_out: 4800, turns: 14 }
   "headroom": { tokens_in: 112800, tokens_cached: 76000, tokens_out: 5000, turns: 15 }
   "rtk+headroom": { tokens_in: 94400, tokens_cached: 63200, tokens_out: 5000, turns: 15 }
+  # C2 of the tool-script matrix (S57-09): the door offered, unused by the scripted change, so the same
+  # usage (illustrative; the instructions it adds to the task are not billed here). S57-11 measures it.
+  "none/scripts": { tokens_in: 144000, tokens_cached: 96000, tokens_out: 4800, turns: 14 }
 assertions:
   - { kind: file_exists, path: tests/test_rounding.py }
   - { kind: file_matches, path: src/cart/cart.py, pattern: "ROUND_HALF_UP", absent: false }

@@ -16,7 +16,10 @@ and is dropped, because the policy `api-ingress` selects `api` and admits only `
 from __future__ import annotations
 
 import copy
+import datetime as dt
+import hashlib
 import json
+import random
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -350,3 +353,252 @@ class FakeRepo:
         if path not in self.files:
             raise AdapterError(f"nginx: no file {path}")
         return self.files[path]
+
+
+# ───────────────────────── the scenes of the tool-script matrix (S57-09) ─────────────────────────
+#
+# Two larger datasets, from the examples page of PLAN-2026-11-03-tool-scripts: a firewall whose SSH
+# exposure needs three reads JOINED through aliases (E1), and a cluster whose dropped flows need one
+# read per namespace, then an aggregation (E2). Built by code, deterministically: the same rules and
+# flows on every machine. `fakes/scenes.py` wires them to the real connectors.
+
+#: The interfaces of the SSH-exposure firewall and how many rules each one has, in evaluation order.
+SSH_EXPOSURE_INTERFACES: tuple[tuple[str, str, str, int], ...] = (
+    ("wan", "vtnet0", "WAN", 30),
+    ("lan", "vtnet1", "LAN", 96),
+    ("opt1", "vtnet2", "DMZ", 20),
+    ("opt2", "vtnet3", "PARTNERS", 12),
+    ("opt3", "vtnet4", "GUEST", 14),
+    ("opt4", "vtnet5", "MGMT", 12),
+)
+#: The rules that expose TCP 22 to any source, by `<interface>#<position>` (1-based, per interface).
+SSH_EXPOSED = ("wan#17", "opt2#4", "lan#88")
+#: Rules that look like an exposure and are not one: another port, a block, a disabled rule, a
+#: restricted source, a protocol without ports.
+SSH_DECOYS = ("wan#3", "wan#30", "lan#2", "lan#5", "opt3#7", "opt4#2")
+
+
+def _rule(interface: str, position: int, **fields: Any) -> dict[str, Any]:
+    return {
+        "type": "pass",
+        "interface": [interface],
+        "ipprotocol": "inet",
+        "protocol": "tcp",
+        "source": interface,
+        "destination": "any",
+        "destination_port": "443",
+        "descr": f"{interface} rule {position}",
+        "disabled": False,
+        **fields,
+    }
+
+
+#: What each special rule of the SSH-exposure firewall is, by its label.
+_SSH_SPECIAL: dict[str, dict[str, Any]] = {
+    "wan#3": {"source": "any", "destination": "wan:ip", "destination_port": "2222", "descr": "SFTP gateway"},
+    "wan#17": {"source": "any", "destination": "wan:ip", "destination_port": "22",
+               "descr": "Temporary vendor SSH"},
+    "wan#30": {"type": "block", "protocol": "any", "source": "any", "destination_port": "",
+               "descr": "Default deny on WAN"},
+    "lan#2": {"protocol": "icmp", "source": "any", "destination_port": "", "descr": "Ping from anywhere"},
+    "lan#5": {"source": "lan", "destination_port": "22", "descr": "LAN administrators to SSH"},
+    "lan#88": {"source": "any", "destination": "lan:ip", "destination_port": "MGMT_PORTS",
+               "descr": "Management from anywhere"},
+    "opt2#4": {"source": "PARTNERS", "destination": "opt2:ip", "destination_port": "22",
+               "descr": "Partner bastion"},
+    "opt3#7": {"source": "any", "destination_port": "22", "disabled": True, "descr": "Guest SSH (retired)"},
+    "opt4#2": {"source": "MGMT_NETS", "destination_port": "22", "descr": "Management network to SSH"},
+}  # fmt: skip
+
+
+def _filler(interface: str, position: int, hosts: int) -> dict[str, Any]:
+    """An ordinary rule: the interface's own network or a host alias as the source, or any source
+    on a port that is not SSH. None of them exposes TCP 22 to any source."""
+    shape = position % 6
+    if shape == 0:
+        return _rule(interface, position, source="any", destination_port="WEB_PORTS",
+                     descr=f"{interface} web {position}")  # fmt: skip
+    if shape == 1:
+        return _rule(interface, position, protocol="udp", source="any", destination_port="DNS_PORTS",
+                     descr=f"{interface} DNS {position}")  # fmt: skip
+    if shape == 2:
+        alias = f"HOSTS_{(position + len(interface)) % hosts + 1:02d}"
+        return _rule(interface, position, source=alias, destination_port="ADMIN_PORTS",
+                     descr=f"{interface} administration from {alias}")  # fmt: skip
+    if shape == 3:
+        return _rule(interface, position, destination_port="80", descr=f"{interface} HTTP out {position}")
+    if shape == 4:
+        alias = f"HOSTS_{(position * 7) % hosts + 1:02d}"
+        return _rule(interface, position, source=alias, destination_port="8443",
+                     descr=f"{interface} reverse proxy from {alias}")  # fmt: skip
+    return _rule(interface, position, descr=f"{interface} HTTPS out {position}")
+
+
+def ssh_exposure_firewall() -> FakePfSense:
+    """E1: 6 interfaces, 184 rules, 41 aliases; three rules expose TCP 22 to any source — `wan#17`
+    (source `any`), `opt2#4` (source `PARTNERS`, an alias holding the alias `PARTNER_CLOUD`, which holds
+    `0.0.0.0/0`) and `lan#88` (destination port `MGMT_PORTS`, an alias holding 22) — and six decoys
+    (`SSH_DECOYS`). A rule is named `<interface>#<position>`, its position among its interface's rules,
+    from 1; pfSense's `id` is a position in the whole list."""
+    hosts = 34
+    aliases: list[dict[str, Any]] = [
+        {"name": "PARTNERS", "type": "network", "address": ["198.51.100.0/24", "PARTNER_CLOUD"],
+         "descr": "Partner networks"},
+        {"name": "PARTNER_CLOUD", "type": "network", "address": ["0.0.0.0/0"],
+         "descr": "Partner cloud egress (whole internet, temporary)"},
+        {"name": "MGMT_PORTS", "type": "port", "address": ["22", "443", "8443"], "descr": "Management ports"},
+        {"name": "MGMT_NETS", "type": "network", "address": ["10.40.0.0/24"], "descr": "Management network"},
+        {"name": "WEB_PORTS", "type": "port", "address": ["80", "443"], "descr": "Web"},
+        {"name": "DNS_PORTS", "type": "port", "address": ["53"], "descr": "DNS"},
+        {"name": "ADMIN_PORTS", "type": "port", "address": ["22", "3389"], "descr": "Administration"},
+    ]  # fmt: skip
+    aliases += [
+        {
+            "name": f"HOSTS_{n:02d}",
+            "type": "host",
+            "address": [f"10.{20 + n // 10}.{n % 10}.{10 + i}" for i in range(1 + n % 3)],
+            "descr": f"Office hosts {n}",
+        }
+        for n in range(1, hosts + 1)
+    ]
+    for index, alias in enumerate(aliases):
+        alias["id"] = index
+    rules: list[dict[str, Any]] = []
+    for interface, _device, _descr, count in SSH_EXPOSURE_INTERFACES:
+        for position in range(1, count + 1):
+            label = f"{interface}#{position}"
+            special = _SSH_SPECIAL.get(label)
+            rules.append(
+                _rule(interface, position, **special) if special else _filler(interface, position, hosts)
+            )
+    for index, rule in enumerate(rules):
+        rule["id"] = index
+        rule["tracker"] = 1700001000 + index
+    interfaces = [
+        {"id": name, "if": device, "descr": descr, "enable": True,
+         **({"typev4": "dhcp"} if name == "wan" else {"ipaddr": f"10.{10 * n}.0.1", "subnet": 24})}
+        for n, (name, device, descr, _) in enumerate(SSH_EXPOSURE_INTERFACES)
+    ]  # fmt: skip
+    return FakePfSense(rules=rules, aliases=aliases, interfaces=interfaces)
+
+
+#: The namespaces of the dropped-flows cluster.
+DROPPED_FLOWS_NAMESPACES = (
+    "shop", "payments", "auth", "catalog", "search", "orders",
+    "inventory", "shipping", "notifications", "analytics", "monitoring", "ingress",
+)  # fmt: skip
+#: (source, destination, port, dropped flows, the policy that drops them): the top five first.
+DROPPED_FLOWS_PAIRS: tuple[tuple[str, str, int, int, str], ...] = (
+    ("shop/frontend", "payments/api", 8443, 42, "payments-ingress"),
+    ("orders/worker", "inventory/api", 9090, 31, "inventory-ingress"),
+    ("search/indexer", "catalog/db", 5432, 24, "catalog-db-ingress"),
+    ("notifications/sender", "auth/api", 8080, 17, "auth-ingress"),
+    ("analytics/collector", "monitoring/grafana", 3000, 9, "grafana-ingress"),
+    ("monitoring/prometheus", "shipping/api", 9100, 4, "shipping-ingress"),
+    ("ingress/nginx", "search/api", 9200, 3, "search-ingress"),
+    ("shipping/api", "orders/api", 8080, 2, "orders-ingress"),
+)
+#: (source, destination, port, forwarded flows): what is allowed, 2,268 flows.
+_FORWARDED_PAIRS: tuple[tuple[str, str, int, int], ...] = (
+    ("ingress/nginx", "shop/frontend", 3000, 698),
+    ("shop/frontend", "shop/api", 8080, 410),
+    ("payments/checkout", "payments/api", 8443, 230),
+    ("shop/api", "orders/api", 8080, 190),
+    ("orders/api", "inventory/api", 9090, 160),
+    ("search/api", "catalog/db", 5432, 150),
+    ("shop/api", "auth/api", 8080, 140),
+    ("monitoring/prometheus", "shop/api", 9100, 120),
+    ("orders/api", "shipping/api", 8080, 90),
+    ("notifications/api", "notifications/sender", 8080, 80),
+)
+DROPPED_FLOWS_START = "2026-11-04T09:00:00Z"
+
+
+def _hubble_endpoint(where: str, number: int) -> dict[str, Any]:
+    namespace, app = where.split("/")
+    return {
+        "namespace": namespace,
+        "pod_name": f"{app}-{_suffix(where)}-{number % 3}",
+        "labels": [f"k8s:app={app}", f"k8s:io.kubernetes.pod.namespace={namespace}"],
+        "identity": 10000 + sum(map(ord, where)) % 5000,
+    }
+
+
+def _suffix(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest()[:9]
+
+
+def _hubble_line(index: int, source: str, destination: str, port: int, policy: str | None) -> dict[str, Any]:
+    start = dt.datetime.fromisoformat(DROPPED_FLOWS_START.replace("Z", "+00:00"))
+    when = (start + dt.timedelta(seconds=index * 1.5)).isoformat().replace("+00:00", "Z")
+    flow: dict[str, Any] = {
+        "time": when,
+        "verdict": "DROPPED" if policy else "FORWARDED",
+        "traffic_direction": "INGRESS",
+        "IP": {"source": f"10.0.{index % 250}.{index % 7 + 10}", "destination": f"10.1.{index % 200}.20"},
+        "l4": {"TCP": {"source_port": 40000 + index % 20000, "destination_port": port}},
+        "source": _hubble_endpoint(source, index),
+        "destination": _hubble_endpoint(destination, index),
+        "node_name": f"worker-{index % 4}",
+        "Summary": f"TCP Flags: SYN{' (denied)' if policy else ''}",
+    }
+    if policy:
+        flow["drop_reason_desc"] = "POLICY_DENIED"
+        flow["ingress_denied_by"] = [{"name": policy, "namespace": destination.split("/", maxsplit=1)[0]}]
+    return {"flow": flow, "node_name": flow["node_name"], "time": when}
+
+
+def dropped_flows_trace() -> RecordedFlows:
+    """E2: 2,400 flows over one hour across 12 namespaces, 132 of them DROPPED; the top pair is
+    `shop/frontend → payments/api:8443` (42 drops, policy `payments-ingress`), then four smaller ones.
+    The order is a fixed shuffle, so a pair's flows are spread over the hour.
+
+    Sized for the platform's bound on a tool result (64 KiB, text and `structuredContent` together):
+    no namespace's dropped flows exceed it, so one `get_flows` per namespace reads them whole. The
+    examples page first said 310 drops and 142 for the top pair; at that size, the busiest namespaces'
+    answers are cut."""
+    kinds: list[tuple[str, str, int, str | None]] = []
+    for source, destination, port, count, policy in DROPPED_FLOWS_PAIRS:
+        kinds += [(source, destination, port, policy)] * count
+    for source, destination, port, count in _FORWARDED_PAIRS:
+        kinds += [(source, destination, port, None)] * count
+    random.Random(57).shuffle(kinds)
+    return RecordedFlows([_hubble_line(i, *kind) for i, kind in enumerate(kinds)])
+
+
+def _ingress_policy(namespace: str, name: str, app: str, peer: str, port: int) -> dict[str, Any]:
+    return {
+        "apiVersion": "cilium.io/v2",
+        "kind": "CiliumNetworkPolicy",
+        "metadata": {
+            "name": name,
+            "namespace": namespace,
+            "labels": {"app.kubernetes.io/managed-by": "argocd"},
+        },
+        "spec": {
+            "endpointSelector": {"matchLabels": {"app": app}},
+            "ingress": [
+                {
+                    "fromEndpoints": [{"matchLabels": {"app": peer}}],
+                    "toPorts": [{"ports": [{"port": str(port), "protocol": "TCP"}]}],
+                }
+            ],
+        },
+    }
+
+
+def dropped_flows_cluster() -> FakeCiliumKubernetes:
+    """E2's policies: each one selects the destination of a dropped pair and admits another peer."""
+    return FakeCiliumKubernetes(
+        policies=[
+            _ingress_policy("payments", "payments-ingress", "api", "checkout", 8443),
+            _ingress_policy("inventory", "inventory-ingress", "api", "api", 9090),
+            _ingress_policy("catalog", "catalog-db-ingress", "db", "api", 5432),
+            _ingress_policy("auth", "auth-ingress", "api", "api", 8080),
+            _ingress_policy("monitoring", "grafana-ingress", "grafana", "nginx", 3000),
+            _ingress_policy("shipping", "shipping-ingress", "api", "api", 8080),
+            _ingress_policy("search", "search-ingress", "api", "api", 9200),
+            _ingress_policy("orders", "orders-ingress", "api", "api", 8080),
+        ],
+        clusterwide=[],
+    )

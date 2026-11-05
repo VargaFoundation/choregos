@@ -155,7 +155,7 @@ async def test_the_organisation_s_ceiling_forbids_them(setup: Fixture, switch_on
 
 
 async def test_an_eval_cell_runs_the_mcp_door_only(setup: Fixture, switch_on: None) -> None:
-    """Until the matrix measures the tool bridge (S57-09), a cell is the `mcp` cell, whatever the policy."""
+    """An `mcp` cell (the default, S57-09) gives its run the MCP door only, whatever the policy offers."""
     await _set_tools(setup.project_id, OFFERED)
     from choregos_api.db.session import session_scope
     from choregos_api.services import active_policy, policy_model

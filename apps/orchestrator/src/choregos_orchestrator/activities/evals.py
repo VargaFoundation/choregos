@@ -17,6 +17,16 @@ toy repository to a branch of the eval project's repository and files an eval wo
 `EvalMatrix` workflow then runs it like any stage (`prepare_stage`, `start_run`, `await_run`,
 `collect_spend`); `judge_eval_run` reads the verdict from the run: the ticket's assertions are
 compiled into fact commands the runner measures in its workspace, and the tokens are the ledger's.
+
+S57-09 (ADR 0122 §9): a cell also has a door for its run's tools, `mcp` (the model's MCP tools only)
+or `scripts` (those and the tool bridge, from a script). A cell plays the reference tickets and, named
+by `agent_cases`, the agent cases of `choregos_playbooks/evals/agent_cases`, each `repetitions` times.
+In scripted mode an agent case goes through the real doors on the fakes (`eval_doors`) and is judged
+by its answer and its assertions; a live cell forces `tools.scripts` on or off in the stage input
+(`StagePlan.eval_cell`), and a run that did not get the cell's door is skipped. A cell's line gains
+what its runs did with their tools (calls by origin, scripts and their errors, actions proposed and
+executed), and `publish_matrix` compares the cells that differ only by their door
+(`eval_comparison`: a paired bootstrap interval and a verdict).
 """
 
 from __future__ import annotations
@@ -33,15 +43,18 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
-from choregos_api.db.models import ModelProfileRow, Run, RunEvent, WorkItem
+from choregos_api.db.models import Action, Event, ModelProfileRow, Run, RunEvent, WorkItem
 from choregos_api.services import WorkItemBirth, new_work_item, tracker_is_internal
 from choregos_api.services.initiator import initiator
+from choregos_contracts import EventType
 from choregos_core import elapsed_seconds, utcnow
 from sqlalchemy import select
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
 from ..config import get_settings
+from ..eval_comparison import compare_cells
+from . import eval_doors
 from .base import db, project_bundle
 from .gates import _repo_slug
 
@@ -61,6 +74,12 @@ LIVE_CONTEXTS: dict[str, dict[str, str]] = {
     "headroom": {"compression": "headroom", "on_unavailable": "fail"},
     "rtk+headroom": {"shell_filter": "rtk", "compression": "headroom", "on_unavailable": "fail"},
 }
+#: The doors a cell may give its run's tools (ADR 0122): what `tools.scripts` a live cell forces into the
+#: stage input — none in an `mcp` cell, the bridge with the policy's default bound in a `scripts` cell.
+TOOLS = eval_doors.TOOLS
+LIVE_TOOLS: dict[str, dict[str, int] | None] = {"mcp": None, "scripts": {"max_concurrent_calls": 4}}
+#: The journal's events of the tool scripts (S57-07, S57-08).
+CLIENT_EVENT, SCRIPT_EVENT, SCRIPT_CALL_EVENT = "tools.client", "tools.script", "tools.script.call"
 EVAL_BRANCH_PREFIX = "choregos-evals"
 #: The fixtures' French names (before S45-24) and the English name each one answers to: a stored
 #: matrix or a schedule that names one still plays the same ticket (ADR 0098 §4, removed in 0.23.0).
@@ -113,14 +132,36 @@ async def run_eval_cell(payload: dict[str, Any]) -> dict[str, Any]:
     """
     fixtures: list[str] = payload.get("fixtures", [])
     context = _context(payload)
+    tools = _tools(payload)
+    repetitions = _repetitions(payload)
     outcomes: list[dict[str, Any]] = []
     for name in fixtures:
         spec = _load_spec(name)
         if spec is None:
             continue
-        outcomes.append({**await _play(spec, payload), "fixture": _current_fixture_name(name)})
-        with contextlib.suppress(RuntimeError):
-            activity.heartbeat({"fixture": name})
+        for repetition in range(repetitions):
+            outcome = await _play(spec, payload)
+            outcomes.append(
+                {
+                    **outcome,
+                    "fixture": _current_fixture_name(name),
+                    "repetition": repetition,
+                    "agent": _ticket_agent(spec),
+                    # The scripted change calls no platform tool; its model calls are the gateway's.
+                    "observation": {
+                        **_no_tool_use(tools),
+                        "requests": (outcome.get("usage") or {}).get("requests"),
+                    },
+                    "door": "mcp",
+                }
+            )
+            with contextlib.suppress(RuntimeError):
+                activity.heartbeat({"fixture": name, "repetition": repetition})
+    for name in payload.get("agent_cases") or []:
+        for repetition in range(repetitions):
+            outcomes.append({**await _play_agent_case(str(name), payload, tools), "repetition": repetition})
+            with contextlib.suppress(RuntimeError):
+                activity.heartbeat({"agent_case": name, "repetition": repetition})
     return _cell(payload, context, outcomes)
 
 
@@ -128,6 +169,41 @@ async def run_eval_cell(payload: dict[str, Any]) -> dict[str, Any]:
 async def summarize_eval_cell(payload: dict[str, Any]) -> dict[str, Any]:
     """A live cell's line of the matrix, from the verdicts `judge_eval_run` gave (S37-10)."""
     return _cell(payload, _context(payload), list(payload.get("outcomes", [])))
+
+
+def _tools(payload: dict[str, Any]) -> str:
+    tools = str(payload.get("tools", "mcp"))
+    if tools not in TOOLS:
+        raise ApplicationError(
+            f"unknown tools door {tools!r}, expected one of {', '.join(TOOLS)}", non_retryable=True
+        )
+    return tools
+
+
+def _repetitions(payload: dict[str, Any]) -> int:
+    repetitions = payload.get("repetitions", 1)
+    if not isinstance(repetitions, int) or isinstance(repetitions, bool) or not 1 <= repetitions <= 100:
+        raise ApplicationError(
+            f"repetitions must be an integer from 1 to 100, not {repetitions!r}", non_retryable=True
+        )
+    return repetitions
+
+
+def _ticket_agent(spec: dict[str, Any]) -> str:
+    """Who a ticket measures: its stage role (`role:implement`); no registry agent runs a ticket."""
+    return f"role:{spec.get('role', 'implement')}"
+
+
+def _no_tool_use(tools: str) -> dict[str, Any]:
+    """The observation of a run that called no platform tool and wrote no script."""
+    return {
+        "tools": tools,
+        "requests": None,
+        "calls": [],
+        "actions": [],
+        "security_events": [],
+        "scripts": [],
+    }
 
 
 def _context(payload: dict[str, Any]) -> str:
@@ -146,23 +222,41 @@ def _cell(payload: dict[str, Any], context: str, outcomes: list[dict[str, Any]])
     durations: list[float] = []
     metered: list[dict[str, Any]] = []
     details: list[dict[str, Any]] = []
+    observed: list[dict[str, Any]] = []
     for outcome in outcomes:
         name = outcome["fixture"]
+        unit = {
+            "fixture": name,
+            "repetition": int(outcome.get("repetition", 0)),
+            "agent": outcome.get("agent"),
+        }
         if outcome["skipped"]:
-            details.append({"fixture": name, "skipped": True, "reason": outcome["reason"]})
+            details.append({**unit, "skipped": True, "reason": outcome["reason"]})
             continue
         successes.append(bool(outcome["ok"]))
         if outcome["usage"] is not None:
             metered.append(outcome["usage"])
             costs.append(outcome["usage"]["cost_usd"])
         durations.append(outcome["duration_s"])
-        details.append({"fixture": name, "ok": outcome["ok"], "reason": outcome["reason"]})
+        if outcome.get("observation") is not None:
+            observed.append(outcome["observation"])
+        details.append(
+            {
+                **unit,
+                "ok": outcome["ok"],
+                "reason": outcome["reason"],
+                # `None`: the gateway counted nothing; its cost is unknown, never paired as free (S57-09).
+                "cost_usd": round(float(outcome["usage"]["cost_usd"]), 6) if outcome["usage"] else None,
+                **({"door": outcome["door"]} if outcome.get("door") else {}),
+            }
+        )
     rate = (sum(1 for s in successes if s) / len(successes)) if successes else 0.0
     return {
         "backend": payload["backend"],
         "model": payload["model"],
         "with_memory": payload["with_memory"],
         "context": context,
+        "tools": str(payload.get("tools", "mcp")),
         "cases": len(successes),
         "skipped": sum(1 for d in details if d.get("skipped")),
         # Cases the ledger has a measure for: tokens and cost are medians over these only.
@@ -176,8 +270,47 @@ def _cell(payload: dict[str, Any], context: str, outcomes: list[dict[str, Any]])
         # The round trips (S57-01): over the cases whose model calls the gateway counted.
         "median_requests": _median([u for u in metered if u.get("requests") is not None], "requests"),
         "median_duration_s": round(statistics.median(durations), 2) if durations else None,
+        **_tool_use(observed),
         "validated": bool(successes) and rate >= MIN_SUCCESS_RATE,
         "details": details,
+    }
+
+
+def _tool_use(observed: list[dict[str, Any]]) -> dict[str, Any]:
+    """What a cell's runs did with their tools (the plan's §4.2), over the runs with an observation:
+
+    - `median_platform_tool_calls`: the calls that reached the platform, per run;
+    - `calls_by_origin`: the same over the cell, by the door they came through (`model`, `script`, `job`);
+    - `script_adoption`: the share of runs with at least one script;
+    - `scripts`, `script_errors`, `script_error_rate`: the scripts of the cell's runs, those in error, and
+      their ratio (`None` without a script). A script is a digest the bridge journaled; it is in error
+      when one of its calls was answered 400 or more, or its exit code is known and not 0
+      (`eval_doors.scripts_of`);
+    - `proposed_actions`, `executed_actions`: the cell's actions waiting for a person, and those whose
+      write was played (`choregos_playbooks.evals.agents.PROPOSED_STATUSES`, `EXECUTED_STATUSES`).
+    """
+    from choregos_playbooks.evals.agents import EXECUTED_STATUSES, PROPOSED_STATUSES
+
+    origins: dict[str, int] = {}
+    for observation in observed:
+        for call in observation.get("calls") or []:
+            origin = str(call.get("origin") or "model")
+            origins[origin] = origins.get(origin, 0) + 1
+    scripts = [script for observation in observed for script in observation.get("scripts") or []]
+    errors = sum(1 for script in scripts if script.get("errored"))
+    actions = [action for observation in observed for action in observation.get("actions") or []]
+    calls = [float(len(observation.get("calls") or [])) for observation in observed]
+    return {
+        "median_platform_tool_calls": round(statistics.median(calls), 1) if calls else None,
+        "calls_by_origin": dict(sorted(origins.items())),
+        "script_adoption": (
+            round(sum(1 for o in observed if o.get("scripts")) / len(observed), 4) if observed else None
+        ),
+        "scripts": len(scripts),
+        "script_errors": errors,
+        "script_error_rate": round(errors / len(scripts), 4) if scripts else None,
+        "proposed_actions": sum(1 for a in actions if a.get("status") in PROPOSED_STATUSES),
+        "executed_actions": sum(1 for a in actions if a.get("status") in EXECUTED_STATUSES),
     }
 
 
@@ -229,7 +362,7 @@ async def _play(spec: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]
             patch = await _apply_change(spec, payload, work)
             if patch.get("skipped"):
                 return _skip(str(patch.get("reason", "")))
-            turns = _bill_scripted(gateway, key.key_id, spec, context, model, patch)
+            turns = _bill_scripted(gateway, key.key_id, spec, context, model, patch, _tools(payload))
             verdict = await _judge(spec, work, before, patch)
         usage = await _ledger(gateway, key.key_id, turns)
     finally:
@@ -258,27 +391,47 @@ async def _judge(
     return {"ok": ok, "skipped": False, "reason": reason}
 
 
+def scripted_usage(spec: dict[str, Any], context: str, tools: str = "mcp") -> dict[str, Any] | None:
+    """A case's scripted usage for a cell: under `<context>/<tools>`, else under the door alone when the
+    context is `none` (an agent case's `mcp` and `scripts`), else under the context alone when the door is
+    `mcp` (a ticket written before S57-09: `none`, `rtk`…)."""
+    usages = spec.get("scripted_usage") or {}
+    for key, applies in ((f"{context}/{tools}", True), (tools, context == "none"), (context, tools == "mcp")):
+        if applies and isinstance(usages.get(key), dict):
+            return dict(usages[key])
+    return None
+
+
 def _bill_scripted(
-    gateway: Any, key_id: str, spec: dict[str, Any], context: str, model: str, patch: dict[str, Any]
+    gateway: Any,
+    key_id: str,
+    spec: dict[str, Any],
+    context: str,
+    model: str,
+    patch: dict[str, Any],
+    tools: str = "mcp",
 ) -> int | None:
     """Bill the fixture's scripted usage on a fake gateway; returns the turns, which no ledger has.
 
     Only a scripted change is billed, and only on a gateway that can be billed by hand
-    (`record_usage`, the fake's): a real gateway counts what was really sent, and nothing else.
+    (`record_usage`, the fake's): a real gateway counts what was really sent, and nothing else. A usage
+    with `requests` is billed as that many model calls, its tokens shared between them (S57-09): the
+    gateway's spend then counts the round trips the case scripts.
     """
     if patch.get("source") != "scripted":
         return patch.get("turns") if isinstance(patch.get("turns"), int) else None
-    usage = (spec.get("scripted_usage") or {}).get(context)
+    usage = scripted_usage(spec, context, tools)
     record = getattr(gateway, "record_usage", None)
     if not isinstance(usage, dict) or record is None:
         return None
-    record(
-        key_id,
-        tokens_in=int(usage["tokens_in"]),
-        tokens_out=int(usage["tokens_out"]),
-        cached=int(usage.get("tokens_cached", 0)),
-        model=model,
-    )
+    requests = max(1, int(usage.get("requests", 1)))
+    totals = (int(usage["tokens_in"]), int(usage["tokens_out"]), int(usage.get("tokens_cached", 0)))
+    for request in range(requests):
+        # The remainder goes to the first call: the sums are the usage's, to the token.
+        tokens_in, tokens_out, cached = (
+            t // requests + (t % requests if request == 0 else 0) for t in totals
+        )
+        record(key_id, tokens_in=tokens_in, tokens_out=tokens_out, cached=cached, model=model)
     return int(usage["turns"]) if "turns" in usage else None
 
 
@@ -299,6 +452,61 @@ async def _ledger(gateway: Any, key_id: str, turns: int | None) -> dict[str, Any
 
 def _skip(reason: str) -> dict[str, Any]:
     return {"ok": False, "skipped": True, "reason": reason, "usage": None, "duration_s": 0.0}
+
+
+def load_agent_case(name: str) -> dict[str, Any] | None:
+    """An agent case of `choregos_playbooks/evals/agent_cases` by its file name, `None` when absent."""
+    from choregos_playbooks.evals.agents import AGENT_CASES_DIR, load_case
+
+    path = AGENT_CASES_DIR / f"{name}.yaml"
+    return load_case(path) if path.is_file() else None
+
+
+async def _play_agent_case(name: str, payload: dict[str, Any], tools: str) -> dict[str, Any]:
+    """An agent case in a scripted cell (S57-09): played through the cell's door on the fakes
+    (`eval_doors.play`), its scripted usage billed on the fake gateway under its own key, then judged by
+    its answer and by what its run did (`choregos_playbooks.evals.agents.judge`)."""
+    from choregos_playbooks.evals.agents import judge
+
+    case = load_agent_case(name)
+    if case is None:
+        return {**_skip(f"no agent case {name}"), "fixture": name}
+    unit = {"fixture": name, "agent": str(case["agent"])}
+    if tools not in (case.get("tools_cells") or ["mcp"]):
+        return {**_skip(f"the case is not played in the {tools} cell (its tools_cells)"), **unit}
+    async with db() as session:
+        gateway = (await project_bundle(session, payload["project_slug"])).adapters.gateway
+    context, model = str(payload.get("context", "none")), str(payload.get("model", "platform/standard"))
+    key = await gateway.mint_key(
+        {
+            "purpose": "eval",
+            "agent_case": name,
+            "context": context,
+            "tools": tools,
+            "backend": payload.get("backend"),
+        },
+        EVAL_KEY_BUDGET_USD,
+        EVAL_KEY_TTL_S,
+        [model],
+    )
+    try:
+        played = await eval_doors.play(case, tools)
+        turns = _bill_scripted(gateway, key.key_id, case, context, model, {"source": "scripted"}, tools)
+        usage = await _ledger(gateway, key.key_id, turns)
+    finally:
+        await gateway.revoke(key.key_id)
+    observation = {**played.observation, "requests": usage["requests"] if usage else None}
+    verdict = judge(case, played.answer, observation)
+    return {
+        "ok": verdict["ok"],
+        "skipped": False,
+        "reason": verdict["reason"],
+        "usage": usage,
+        "duration_s": float(case.get("expected_duration_s", 60.0)),
+        **unit,
+        "observation": observation,
+        "door": played.door,
+    }
 
 
 async def _apply_change(spec: dict[str, Any], payload: dict[str, Any], work: Path) -> dict[str, Any]:
@@ -404,6 +612,13 @@ async def seed_eval_ticket(payload: dict[str, Any]) -> dict[str, Any]:
     the one it filed. A case the eval project cannot measure faithfully is skipped, with its cause.
     """
     context = _context(payload)
+    tools = _tools(payload)
+    if payload.get("agent_case"):
+        # An agent case needs its connectors on fakes in the eval project, its policy and, for a
+        # case-local agent, a registered agent: the live matrix that runs them is S57-11's.
+        return _skip(
+            "a live cell plays the reference tickets only: an agent case is played in scripted cells"
+        )
     fixture = _current_fixture_name(str(payload["fixture"]))
     spec = _load_spec(fixture)
     if spec is None:
@@ -424,6 +639,8 @@ async def seed_eval_ticket(payload: dict[str, Any]) -> dict[str, Any]:
             return _skip(f"the eval project {bundle.slug} has memory on: its cells would not be without it")
         if context != "none" and not get_settings().context_reduction:
             return _skip("the deployment refuses context reduction (CHOREGOS_CONTEXT_REDUCTION)")
+        if tools == "scripts" and not get_settings().tool_scripts:
+            return _skip("the deployment refuses tool scripts (CHOREGOS_TOOL_SCRIPTS)")
 
         files = _toy_files(toy)
         digest = sha256(repr(sorted(files.items())).encode()).hexdigest()[:10]
@@ -437,6 +654,10 @@ async def seed_eval_ticket(payload: dict[str, Any]) -> dict[str, Any]:
         cell = (
             "|".join(str(payload.get(k, "")) for k in ("matrix_id", "backend", "model"))
             + f"|{context}|{fixture}"
+            # A cell's door and a repetition are a ticket of their own; the `mcp` cell's first keeps the key
+            # it had before S57-09, so a matrix retried across the upgrade files no second ticket.
+            + (f"|{tools}" if tools != "mcp" else "")
+            + (f"|{payload['repetition']}" if int(payload.get("repetition", 0)) else "")
         )
         key = f"EVAL-{sha256(cell.encode()).hexdigest()[:10]}"
         item = (
@@ -471,6 +692,7 @@ async def seed_eval_ticket(payload: dict[str, Any]) -> dict[str, Any]:
             "model_request": str(payload.get("model", "platform/standard")),
             "eval_cell": {
                 "context": LIVE_CONTEXTS[context],
+                "tools": LIVE_TOOLS[tools],
                 "base_branch": branch,
                 "facts": _facts(spec, toy),
             },
@@ -544,9 +766,17 @@ async def judge_eval_run(payload: dict[str, Any]) -> dict[str, Any]:
             .scalars()
             .all()
         )
-        unfaithful = _unfaithful(run, list(events), LIVE_CONTEXTS[_context(payload)])
+        tools = _tools(payload)
+        unit = {
+            "fixture": fixture,
+            "agent": _ticket_agent(spec),
+            "repetition": int(payload.get("repetition", 0)),
+        }
+        unfaithful = _unfaithful(run, list(events), LIVE_CONTEXTS[_context(payload)]) or _unfaithful_door(
+            run, list(events), tools
+        )
         if unfaithful:
-            return {**_skip(unfaithful), "fixture": fixture}
+            return {**_skip(unfaithful), **unit}
         verdict = _verdict(spec, run.result, str(payload.get("failure") or ""))
         tokens = dict(run.tokens or {}) if run.spend_collected else {}
         turns = ((run.result or {}).get("diagnostics") or {}).get("turns")
@@ -564,7 +794,80 @@ async def judge_eval_run(payload: dict[str, Any]) -> dict[str, Any]:
             else None
         )
         duration = elapsed_seconds(run.started_at, run.ended_at) if run.ended_at else 0.0
-    return {**verdict, "usage": usage, "duration_s": float(duration), "fixture": fixture}
+        observation = await _observed(session, run, list(events), tools)
+    return {**verdict, "usage": usage, "duration_s": float(duration), **unit, "observation": observation}
+
+
+def _unfaithful_door(run: Run, events: list[RunEvent], tools: str) -> str:
+    """Why a run did not get the cell's door, or `""` when it did (S57-09). A `scripts` run must have been
+    offered the bridge and have had its client written (`tools.client`, or a script journaled); an `mcp`
+    run must have been offered neither. A `scripts` run whose model wrote no script got the door: not
+    using it is what `script_adoption` measures."""
+    offered = ((run.stage_input or {}).get("tools") or {}).get("scripts")
+    clients = [event for event in events if event.type == CLIENT_EVENT]
+    scripted = any(event.type in {SCRIPT_EVENT, SCRIPT_CALL_EVENT} for event in events)
+    if tools == "scripts":
+        if offered is None:
+            return "the run was not offered tool scripts, the cell asked for them"
+        if not scripted and not any((event.payload or {}).get("written") is True for event in clients):
+            refused = next((str((e.payload or {}).get("error", "")) for e in clients if e.payload), "")
+            why = refused or "no tools.client event"
+            return f"the run was offered tool scripts but its agent got no client ({why})"
+        return ""
+    if offered is not None:
+        return "the run was offered tool scripts, the cell is mcp"
+    if clients or scripted:
+        return "the run journaled tool scripts in an mcp cell"
+    return ""
+
+
+async def _observed(session: Any, run: Run, events: list[RunEvent], tools: str) -> dict[str, Any]:
+    """What a live run did with its tools, for the cell's line: its calls from `choregos.tool.called`
+    (origin `model` when the event has none, before S57-05), its security events, its actions, its scripts
+    from the journal (no exit code: a live run's is the agent's shell's, which the platform does not see)."""
+    rows = (
+        (
+            await session.execute(
+                select(Event)
+                .where(
+                    Event.subject == run.id,
+                    Event.type.in_([str(EventType.TOOL_CALLED), str(EventType.SECURITY_INJECTION_SUSPECTED)]),
+                )
+                .order_by(Event.ts)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    actions = (await session.execute(select(Action).where(Action.run_id == run.id))).scalars().all()
+    journal = [
+        {"type": event.type, "payload": event.payload or {}}
+        for event in events
+        if event.type in {SCRIPT_EVENT, SCRIPT_CALL_EVENT}
+    ]
+    requests = (run.tokens or {}).get("requests")
+    return {
+        "tools": tools,
+        "requests": requests if isinstance(requests, int) else None,
+        "calls": [
+            {
+                "tool": (row.payload or {}).get("tool"),
+                "origin": (row.payload or {}).get("origin") or "model",
+                "status_code": (row.payload or {}).get("status_code"),
+            }
+            for row in rows
+            if row.type == str(EventType.TOOL_CALLED)
+        ],
+        "actions": [
+            {"tool": action.kind.replace(".", "__", 1), "status": action.status} for action in actions
+        ],
+        "security_events": [
+            {"type": row.type, "tool": (row.payload or {}).get("tool")}
+            for row in rows
+            if row.type == str(EventType.SECURITY_INJECTION_SUSPECTED)
+        ],
+        "scripts": eval_doors.scripts_of({"journal": journal}),
+    }
 
 
 def _unfaithful(run: Run, events: list[RunEvent], asked: dict[str, str]) -> str:
@@ -618,8 +921,12 @@ def _verdict(spec: dict[str, Any], result: dict[str, Any] | None, failure: str) 
 
 @activity.defn(name="publish_matrix")
 async def publish_matrix(payload: dict[str, Any]) -> dict[str, Any]:
-    """Publish the matrix: `model_profiles.validated_backends` and `GET /models/matrix`."""
+    """Publish the matrix: `model_profiles.validated_backends` and `GET /models/matrix`, and, in each
+    model's `params.matrix_comparisons`, its cells that differ only by their door compared
+    (`eval_comparison.compare_cells`, S57-09). The comparisons stay in the matrix's own payload: the API's
+    `ModelMatrixEntry` is unchanged."""
     results: list[dict[str, Any]] = payload.get("results", [])
+    comparisons = compare_cells(results)
     async with db() as session:
         bundle = await project_bundle(session, payload["project_slug"])
         by_model: dict[str, list[dict[str, Any]]] = {}
@@ -637,13 +944,21 @@ async def publish_matrix(payload: dict[str, Any]) -> dict[str, Any]:
                 row = ModelProfileRow(scope="platform", name=model.split("/")[-1], litellm_model=model)
                 session.add(row)
             # A run gets no context reduction unless its policy says so: a backend is validated by
-            # its cells without one, never by a cell that only passed with rtk or headroom (S37-09).
+            # its cells without one, never by a cell that only passed with rtk or headroom (S37-09); nor
+            # by one that only passed with tool scripts, which a run is not offered either (S57-09).
             row.validated_backends = sorted(
-                {e["backend"] for e in entries if e.get("validated") and e.get("context", "none") == "none"}
+                {
+                    e["backend"]
+                    for e in entries
+                    if e.get("validated")
+                    and e.get("context", "none") == "none"
+                    and e.get("tools", "mcp") == "mcp"
+                }
             )
             row.params = {
                 **(row.params or {}),
                 "matrix": entries,
+                "matrix_comparisons": [c for c in comparisons if c["model"] == model],
                 "matrix_generated_at": utcnow().isoformat(),
             }
-        return {"models": len(by_model), "project": bundle.slug}
+        return {"models": len(by_model), "project": bundle.slug, "comparisons": comparisons}
