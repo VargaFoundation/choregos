@@ -58,6 +58,78 @@ def _dropped(session: Session) -> None:
     session.info.pop(_PENDING, None)
 
 
+# ─────────────────── a session that holds no connection during an external call (#1354) ───────────────────
+
+#: Set by a session's owner that lets `outside_the_transaction` cut its transaction.
+_RELEASABLE = "choregos.releasable"
+#: The transaction-local settings the session's next transaction starts with (`release_connection`).
+_RESUME = "choregos.resume_settings"
+#: The settings `release_connection` carries to the next transaction: the RLS scope and the user it names.
+_CARRIED = ("app.current_orgs", "app.current_user")
+
+
+def allow_release_during_calls(session: AsyncSession) -> None:
+    """The owner of `session` lets each `outside_the_transaction` block commit first (#1354).
+
+    Only the owner knows that what its request wrote before an external call need not be atomic
+    with what it writes after: the tool route (`callRunTool`) does, since its place under the cap is
+    already committed and its line is booked after the call. A session nobody marked keeps its
+    transaction open across the block, as before."""
+    session.info[_RELEASABLE] = True
+
+
+async def release_connection(session: AsyncSession) -> None:
+    """Commit `session` and hand its connection back to the pool; its next transaction starts in the
+    same scope.
+
+    `set_config(..., true)` lives for one transaction (`limit_to_organisations`, `name_the_user`):
+    the scope and the user in force are read before the commit, and the session's next transaction,
+    whenever it begins, sets them again before its first statement (`_resumed`). A session that is
+    not in a transaction keeps what it was to resume with. The callbacks the commit released run at
+    once, as after any commit of a request (ADR 0085): the rows that justify them are written."""
+    carried = await _carried_settings(session) if session.in_transaction() else session.info.get(_RESUME)
+    await session.commit()
+    if carried:
+        session.info[_RESUME] = carried
+    await run_after_commit(session)
+
+
+@asynccontextmanager
+async def outside_the_transaction(session: AsyncSession) -> AsyncIterator[None]:
+    """For the length of the block, an external call (a connector, a provider, a page, a search, a
+    governed write's wait), `session` holds no pooled connection, when its owner allowed it
+    (`allow_release_during_calls`).
+
+    The request's transaction commits on entry (`release_connection`); nothing is done on exit. A
+    statement made inside the block, or after it, begins a new transaction in the same scope. On
+    PostgreSQL a transaction held across the call kept a connection `idle in transaction` for as
+    long as the call took: a few calls at once filled a replica's pool (#1354)."""
+    if session.info.get(_RELEASABLE) and session.in_transaction():
+        await release_connection(session)
+    yield
+
+
+async def _carried_settings(session: AsyncSession) -> dict[str, str]:
+    if get_settings().is_sqlite:
+        return {}
+    values = (
+        await session.execute(
+            text(
+                "SELECT current_setting('app.current_orgs', true), current_setting('app.current_user', true)"
+            )
+        )
+    ).one()
+    return {name: str(value) for name, value in zip(_CARRIED, values, strict=True) if value is not None}
+
+
+@event.listens_for(Session, "after_begin")
+def _resumed(session: Session, _transaction: Any, connection: Any) -> None:
+    """The first thing a transaction that follows `release_connection` does: set its scope again."""
+    carried: dict[str, str] | None = session.info.pop(_RESUME, None)
+    for name, value in (carried or {}).items():
+        connection.execute(text("SELECT set_config(:name, :value, true)"), {"name": name, "value": value})
+
+
 def _create_engine(settings: Settings) -> AsyncEngine:
     kwargs: dict[str, Any] = {"echo": settings.db_echo, "future": True}
     if not settings.is_sqlite:

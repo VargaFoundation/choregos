@@ -39,6 +39,7 @@ from ..db.models import (
     ProjectOperationPolicy,
     Run,
 )
+from ..db.session import outside_the_transaction
 from .catalogue_rights import SELECTED_PROJECTS, enabled_ids
 from .connectors import declared_operation, human_floor, stricter
 from .mcp_gateway import connector_client, route_of
@@ -312,7 +313,7 @@ async def write_through_action(
 
     from ..config import get_settings
     from ..db.models import Action
-    from ..db.session import ALL_ORGS, limit_to_organisations, session_scope
+    from ..db.session import ALL_ORGS, release_connection, session_scope
     from ..temporal import action_id as temporal_action_id
     from ..temporal import get_temporal
     from .actions import action_policy, approved_by_policy
@@ -328,23 +329,27 @@ async def write_through_action(
             return 202, _pending(project, action), created
         await approved_by_policy(session, project, action)
         # The row must be VISIBLE before the workflow reads it, and the wait below reads what the
-        # worker commits: we commit here, then the run token's scope is set again — it only lives
-        # for the length of one transaction.
-        await session.commit()
-        await limit_to_organisations(session, ALL_ORGS)
+        # worker commits: we commit here, whoever called. The run token's scope only lives for one
+        # transaction: the session's next one sets it again, and until then it holds no connection —
+        # neither while Temporal is asked nor while the wait below polls (#1354).
+        await release_connection(session)
         await get_temporal().start_action(temporal_action_id(action.id), {"action_id": action.id})
     deadline = time.monotonic() + get_settings().courtier_attente_ecriture_s
     finished = {ActionStatus.SUCCEEDED.value, ActionStatus.FAILED.value, ActionStatus.REJECTED.value}
-    while True:
-        # One SHORT read per round: a transaction held open between two rounds would keep, under
-        # SQLite, the lock that stops the worker from committing what it writes — the wait would
-        # bound itself.
-        async with session_scope(orgs=ALL_ORGS) as reading:
-            current = await reading.get(Action, action_id)
-            status = current.status if current is not None else action.status
-        if status in finished or time.monotonic() >= deadline:
-            break
-        await asyncio.sleep(0.2)
+    # A call that found its action already there read it in the request's transaction: that one ends
+    # before the wait too.
+    async with outside_the_transaction(session):
+        while True:
+            # One SHORT read per round, on a connection of its own given back at once: a transaction
+            # held open between two rounds would keep, under SQLite, the lock that stops the worker
+            # from committing what it writes — the wait would bound itself —, and on PostgreSQL a
+            # connection idle in transaction.
+            async with session_scope(orgs=ALL_ORGS) as reading:
+                current = await reading.get(Action, action_id)
+                status = current.status if current is not None else action.status
+            if status in finished or time.monotonic() >= deadline:
+                break
+            await asyncio.sleep(0.2)
     await session.refresh(action)
     if action.status == ActionStatus.SUCCEEDED.value:
         # The write is done: its result is masked and capped like a read's (#755), never refused —
@@ -479,13 +484,16 @@ async def _call(
             instance,
             lambda: identity_of_run(session, run, project, instance, tool.operation.name),
         )
-        if hasattr(client, "call_tool"):
-            result = await client.call_tool(tool.operation.name, arguments)
-        else:
-            # A connector that is not MCP (a directory): its declared operation, by its name,
-            # returned in the format of an MCP result — the agent reads the same everywhere.
-            raw = await client.execute(tool.operation.name, arguments)
-            result = {"content": [{"type": "text", "text": _json(raw)}], "structuredContent": raw}
+        # A server may take thirty seconds to answer: the caller's transaction, when it allows it,
+        # does not wait for it on a pooled connection (#1354).
+        async with outside_the_transaction(session):
+            if hasattr(client, "call_tool"):
+                result = await client.call_tool(tool.operation.name, arguments)
+            else:
+                # A connector that is not MCP (a directory): its declared operation, by its name,
+                # returned in the format of an MCP result — the agent reads the same everywhere.
+                raw = await client.execute(tool.operation.name, arguments)
+                result = {"content": [{"type": "text", "text": _json(raw)}], "structuredContent": raw}
     except McpError as mcp_error:
         return 502, {"error": redact(str(mcp_error))}
     except GatewayRefusal as refused:  # a lost assertion key or credential: refused, never a 500

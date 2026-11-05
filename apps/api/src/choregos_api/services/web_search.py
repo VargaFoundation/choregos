@@ -36,6 +36,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import CostLedger, Organization, OrgConnector, Project, Run
+from ..db.session import outside_the_transaction
 from .catalogue_rights import connector_enabled_for
 from .definitions import ceiling_of, effective_policy
 from .network import run_network
@@ -238,6 +239,9 @@ async def search(
         async with (
             egress_scope_for_org(session, connector.org_id, "api", f"web_search:{connector.name}"),
             proxy_scope(session, connector.org_id, (TOOL_NAME,)),
+            # The backend is asked with no connection of the caller's transaction held, when the
+            # caller allows it (#1354).
+            outside_the_transaction(session),
         ):
             found = await client.search(
                 query,
