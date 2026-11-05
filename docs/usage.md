@@ -1202,7 +1202,12 @@ prompt backend's loop lets through up to `CHOREGOS_BROKER_RESULT_CEILING_BYTES`'
 `choregos_core.mcp.RESULT_CEILING_BYTES`) and the notices.
 `structuredContent` carries the API's answer as it came, `status_code` included, with the same lines
 under `notices`, when its JSON fits the same bound. A hosted session's tools say the same around the
-text its model reads (#1349, [hosted agents](hosted-agents.md)). An ontology proposal does too (#1350): its
+text its model reads (#1349, [hosted agents](hosted-agents.md)), and so do a prompt session's tool
+messages and a realtime session's `function_call_output`s (#1399), which have no error flag: there a
+status of 400 or more is a first line, `FAILED (status <code>): the call did not succeed; what follows
+is its error, not a result.`, and the calls left are `Tool calls left in this session: <n>.`. Every door
+composes these lines in one place, `choregos_core.tool_answer`. An ontology proposal says it was not
+executed (#1350): its
 `action_<name>` tools are `approval` tools and answer as every one does, `202` naming the core action the
 proposal is (`action`, `status`, `decision_path`, `message`, beside the proposal's own file); one the policy
 approves (`approve: auto`) reads `NOT FINISHED YET` until Temporal has played it.
