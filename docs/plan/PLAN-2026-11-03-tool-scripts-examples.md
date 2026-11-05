@@ -18,6 +18,43 @@ New fields the cases use (story S57-09): `tools_cells`, `scripted_usage.<cell>.r
 `max_model_requests`, `calls_by_origin`, `proposed_actions`, `executed_actions`, `no_tool_called`,
 `security_event`.
 
+### As implemented (S57-09)
+
+The YAML below is the sketch the stream started from. The cases as they run are in
+`packages/playbooks/src/choregos_playbooks/evals/agent_cases/` (`netops-ssh-exposure`,
+`netops-dropped-flows-top`, `identity-offboarding`, `research-injected-page`, `research-injected-page-block`,
+`marketdata-volatility`) and the matrix that plays them is described in
+[the eval matrix runbook](../runbooks/live-eval-matrix.md). Where they differ from the sketch:
+
+- **Format.** A case names its connectors and the scene of each one's fake (`connectors: {pfsense: {kind:
+  firewall, scene: ssh-exposure}}`, `choregos_adapters.fakes.scenes`); its policy is `policy: {writes:
+  approval | allowed, prompt_injection: ignore | warn | block}`; a case-local agent is `agent_spec:
+  {instructions}`; the built-in web tools are scripted by `web: {search, pages}`. The `scripts` cell runs
+  `scripted_script: {name, text, answer}` through the real tool bridge, and its answer is `answer` with the
+  script's output in place of `<<stdout>>`; the `mcp` cell answers `reference_answer`.
+- **Assertions.** `answer_contains_each`, `answer_mentions_flagged_source` and `answer_matches_reference` are
+  not assertions: they are `answer_must_contain` (the decision paths, the flagged host, the computed values).
+  `calls_by_origin` and `max_model_requests` take a `cell`; the cases also assert the `mcp` cell's origins.
+- **The platform's bounds.** A tool result is bounded at 64 KiB, its text and its `structuredContent`
+  together. E1 reads the rules one interface at a time (the whole list is 87 KB as a result); E2's dataset
+  holds 132 drops, 42 for the top pair (at 310 and 142, the busiest namespaces' answers are cut); E6 reads
+  four months of bars (a year is 77 KB). Separately, the MCP door shows the model at most 20,000 characters
+  of an answer: E1's `lan` rules, nine of E2's twelve namespaces and all of E6's bars reach a model cut
+  there, while a script reads them whole (#1374).
+- **E1's data.** Rules are named `<interface>#<position>` (position among the interface's rules, from 1;
+  pfSense's `id` is a position in the whole list); aliases hold `address`, not `content`; a rule's
+  `interface` is a list; `PARTNERS` holds `PARTNER_CLOUD`, which holds `0.0.0.0/0`. Six decoys: `wan#3`
+  (port 2222), `wan#30` (a block), `lan#2` (ICMP), `lan#5` (LAN source), `opt3#7` (disabled), `opt4#2`
+  (management source).
+- **E5** is evidence-scripted in both cells: a script that calls `web_fetch` through `choregos_tools` gets
+  the result's `structuredContent` (what was fetched), not the page's text (#1373). Its
+  services are fictional (`flagpole.example.org`, `toggly.example.com`, `switchyard.example.net`), its
+  injected page `compare.flagreviews.example`.
+- **E3 and C1** need the ServiceNow plugin server, which lives in `choregos-agents`: they are not in core
+  (#1372). **C2** is the two tickets with a `none/scripts` usage.
+- **Usage.** The `scripted_usage` numbers are the ones below, illustrative; E5's are nearly equal in both
+  cells (no script), C2's are equal (the door unused).
+
 ---
 
 ## 1. Matrix scenarios where a script should pay
@@ -81,6 +118,7 @@ Why it pays: a **loop** (one `get_flows` per namespace, because a single call is
 
 Fake dataset (`network_policy/cilium` fake): 12 namespaces, 2,400 recorded flows over one hour, 310 `DROPPED`;
 the top pair is `shop/frontend → payments/api:8443` (142 drops, policy `payments-ingress`), then four smaller ones.
+As implemented: 132 dropped, 42 for the top pair, so that each namespace's answer fits the 64 KiB bound.
 
 ```yaml
 agent: netops
@@ -208,6 +246,10 @@ A second run of E5 with `prompt_injection: block` must show the script receiving
 the model's table citing five sources.
 
 ### E6 · market data — twenty instruments, a year of bars, one computation
+
+As implemented: four months of bars (2026-07-01 to 2026-10-30), which hold the 31 closes the computation
+needs and fit the 64 KiB bound; the fake's bars give AAPL 24.3 %, GOOGL 22.7 %, MA 22.1 %, JPM 21.8 % and
+AMZN 21.7 %.
 
 Why it pays the most: twenty `get_bars` (≈ 250 bars each) reduced to a five-line table by arithmetic the model
 should never do in its head.

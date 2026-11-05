@@ -1,0 +1,112 @@
+agent: netops
+description: >
+  E2 of the tool-script matrix (S57-09): which namespace pairs drop the most flows, and which policy drops
+  them. A loop (one `get_flows` per namespace, each answer under the platform's 64 KiB bound) and an
+  aggregation: the model needs the top five, not the flows. A flow is listed under both its namespaces;
+  it is counted once, at its source.
+output: netops_report_markdown
+task: >
+  Over the last hour, in the namespaces shop, payments, auth, catalog, search, orders, inventory, shipping,
+  notifications, analytics, monitoring and ingress, which source → destination pairs (namespace/app, and
+  the destination port) had the most dropped flows? For the top five, name the policy that drops them, and
+  propose a fix for the first.
+tools_cells: [mcp, scripts]
+connectors:
+  cilium: { kind: network_policy, scene: dropped-flows }
+evidence:
+  - { tool: cilium__get_flows, kind: network_policy, operation: get_flows, arguments: { namespace: shop, verdict: DROPPED, last: 2000 } }
+  - { tool: cilium__get_flows, kind: network_policy, operation: get_flows, arguments: { namespace: payments, verdict: DROPPED, last: 2000 } }
+  - { tool: cilium__get_flows, kind: network_policy, operation: get_flows, arguments: { namespace: auth, verdict: DROPPED, last: 2000 } }
+  - { tool: cilium__get_flows, kind: network_policy, operation: get_flows, arguments: { namespace: catalog, verdict: DROPPED, last: 2000 } }
+  - { tool: cilium__get_flows, kind: network_policy, operation: get_flows, arguments: { namespace: search, verdict: DROPPED, last: 2000 } }
+  - { tool: cilium__get_flows, kind: network_policy, operation: get_flows, arguments: { namespace: orders, verdict: DROPPED, last: 2000 } }
+  - { tool: cilium__get_flows, kind: network_policy, operation: get_flows, arguments: { namespace: inventory, verdict: DROPPED, last: 2000 } }
+  - { tool: cilium__get_flows, kind: network_policy, operation: get_flows, arguments: { namespace: shipping, verdict: DROPPED, last: 2000 } }
+  - { tool: cilium__get_flows, kind: network_policy, operation: get_flows, arguments: { namespace: notifications, verdict: DROPPED, last: 2000 } }
+  - { tool: cilium__get_flows, kind: network_policy, operation: get_flows, arguments: { namespace: analytics, verdict: DROPPED, last: 2000 } }
+  - { tool: cilium__get_flows, kind: network_policy, operation: get_flows, arguments: { namespace: monitoring, verdict: DROPPED, last: 2000 } }
+  - { tool: cilium__get_flows, kind: network_policy, operation: get_flows, arguments: { namespace: ingress, verdict: DROPPED, last: 2000 } }
+  - { tool: cilium__list_network_policies, kind: network_policy, operation: list_network_policies, arguments: { namespace: payments } }
+instructions_must_contain: ["cilium__get_flows", "cilium__list_network_policies", "denies by default", "netops_report_markdown"]
+answer_must_contain:
+  - "shop/frontend → payments/api:8443: 42 dropped"
+  - "orders/worker → inventory/api:9090: 31 dropped"
+  - "search/indexer → catalog/db:5432: 24 dropped"
+  - "notifications/sender → auth/api:8080: 17 dropped"
+  - "analytics/collector → monitoring/grafana:3000: 9 dropped"
+  - "payments-ingress"
+  - "fromEndpoints"
+answer_must_not_contain: ["monitoring/prometheus → shipping/api", "kubectl apply", "fromEntities"]
+answer_sections: ["## Findings", "## Proposed change", "## Risk", "## Rollback"]
+min_score: 1.0
+assertions:
+  - { kind: executed_actions, count: 0 }
+  - { kind: calls_by_origin, cell: mcp, origin: model, count: 13 }
+  - { kind: calls_by_origin, cell: scripts, origin: script, count: 13 }
+  - { kind: max_model_requests, cell: scripts, max: 4 }
+scripted_usage:            # illustrative (the examples page)
+  mcp: { requests: 15, tokens_in: 690000, tokens_cached: 560000, tokens_out: 5200, turns: 15 }
+  scripts: { requests: 4, tokens_in: 52000, tokens_cached: 33000, tokens_out: 3800, turns: 4 }
+scripted_script:
+  name: dropped_flows.py
+  text: |
+    from collections import Counter
+
+    from choregos_tools import cilium
+
+    NAMESPACES = ["shop", "payments", "auth", "catalog", "search", "orders", "inventory", "shipping",
+                  "notifications", "analytics", "monitoring", "ingress"]
+
+
+    def app(end):
+        return next(label.split("=", 1)[1] for label in end["labels"] if label.startswith("k8s:app="))
+
+
+    drops, denied_by = Counter(), {}
+    for namespace in NAMESPACES:
+        for flow in cilium.get_flows(namespace=namespace, verdict="DROPPED", last=2000)["flows"]:
+            if flow["source"]["namespace"] != namespace:
+                continue  # listed under both its namespaces: counted once, at its source
+            destination = flow["destination"]
+            pair = (f"{namespace}/{app(flow['source'])}", f"{destination['namespace']}/{app(destination)}:{destination['port']}")
+            drops[pair] += 1
+            denied_by[pair] = ", ".join(name.rsplit("/", 1)[-1] for name in flow.get("denied_by") or [])
+    top = drops.most_common(5)
+    for (source, destination), count in top:
+        print(f"- {source} → {destination}: {count} dropped, by `{denied_by[(source, destination)]}`")
+    first_namespace = top[0][0][1].split("/", 1)[0]
+    for policy in cilium.list_network_policies(namespace=first_namespace)["policies"]:
+        peers = [p["matchLabels"] for rule in policy["spec"].get("ingress", []) for p in rule.get("fromEndpoints", [])]
+        print(f"`{policy['name']}` selects {policy['spec']['endpointSelector']['matchLabels']} and admits only {peers}")
+  answer:
+    netops_report_markdown: |
+      ## Findings
+
+      Dropped flows over the last hour, by source → destination, counted once at their source:
+
+      <<stdout>>
+
+      With Cilium, a policy that selects an endpoint denies by default whatever it does not allow.
+
+      ## Proposed change
+
+      In the GitOps repository, `cilium/payments/payments-ingress.yaml`, admit `shop/frontend` on 8443/TCP:
+
+      ```yaml
+      ingress:
+        - fromEndpoints:
+            - matchLabels: {app: checkout}
+            - matchLabels: {app: frontend, k8s:io.kubernetes.pod.namespace: shop}
+          toPorts:
+            - ports: [{port: "8443", protocol: TCP}]
+      ```
+
+      ## Risk
+
+      Every `app=frontend` pod of `shop` can reach `payments/api` on 8443; no other port or peer opens.
+
+      ## Rollback
+
+      Revert the pull request; Argo CD restores the previous `payments-ingress`.
+reference_answer: |
+  {"netops_report_markdown": "## Findings\n\nDropped flows over the last hour, by source → destination, counted once at their source:\n\n- shop/frontend → payments/api:8443: 42 dropped, by `payments-ingress`\n- orders/worker → inventory/api:9090: 31 dropped, by `inventory-ingress`\n- search/indexer → catalog/db:5432: 24 dropped, by `catalog-db-ingress`\n- notifications/sender → auth/api:8080: 17 dropped, by `auth-ingress`\n- analytics/collector → monitoring/grafana:3000: 9 dropped, by `grafana-ingress`\n`payments-ingress` selects {'app': 'api'} and admits only [{'app': 'checkout'}]\n\nWith Cilium, a policy that selects an endpoint denies by default whatever it does not allow.\n\n## Proposed change\n\nIn the GitOps repository, `cilium/payments/payments-ingress.yaml`, admit `shop/frontend` on 8443/TCP:\n\n```yaml\ningress:\n  - fromEndpoints:\n      - matchLabels: {app: checkout}\n      - matchLabels: {app: frontend, k8s:io.kubernetes.pod.namespace: shop}\n    toPorts:\n      - ports: [{port: \"8443\", protocol: TCP}]\n```\n\n## Risk\n\nEvery `app=frontend` pod of `shop` can reach `payments/api` on 8443; no other port or peer opens.\n\n## Rollback\n\nRevert the pull request; Argo CD restores the previous `payments-ingress`.\n"}

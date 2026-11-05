@@ -40,6 +40,15 @@ def resolve_tool_scripts(
     return policy_tools.for_role(role)
 
 
+def forced_tool_scripts(values: dict[str, Any] | None, *, allowed_by_deployment: bool) -> ToolScripts | None:
+    """An eval cell's door (S57-09): `{max_concurrent_calls}` in a `scripts` cell, `None` (the model's MCP
+    tools only) in an `mcp` cell, or for a plan written before the cell had one. The cell decides instead
+    of the policy, never instead of the deployment."""
+    if values is None or not allowed_by_deployment:
+        return None
+    return ToolScripts.model_validate(values)
+
+
 def stage_input_payload(stage_input: StageInput) -> dict[str, Any]:
     """The stage input as the runner reads it. A setting that is off is left out: a runner older
     than ADR 0055 refuses an unknown `context`, one older than ADR 0122 an unknown `tools.scripts`,

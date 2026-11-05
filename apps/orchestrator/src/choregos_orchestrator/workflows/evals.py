@@ -10,6 +10,13 @@ fixture's scripted change. Its default, `false`, keeps every command of the scri
 
 S37-15 (#714): cancelling a live matrix stops it at the case in flight, whose run is stopped and
 its key revoked (`cancel_run`), instead of being caught as a failed case and followed by the next.
+
+S57-09 (ADR 0122 §9): the door of the run's tools is a fifth dimension, `tools` (`mcp`, `scripts`);
+`agent_cases` adds the agent cases of `choregos_playbooks/evals/agent_cases` to each cell, and
+`repetitions` plays each case that many times, the pairs the bootstrap of `publish_matrix` resamples.
+Their defaults, `["mcp"]`, `[]` and `1`, keep the commands of a matrix started before it: the same
+cells, the same cases, in the same order (`tests/replay/histories/evals-*-S37-*.json` replay; the new
+shape is `evals-tools-S57-09.json` and `evals-live-tools-S57-09.json`).
 """
 
 from __future__ import annotations
@@ -67,6 +74,12 @@ class EvalInput:
     contexts: list[str] = field(default_factory=lambda: ["none"])
     # S37-10: real runs on the project's executor, judged by the facts the runner measured.
     live: bool = False
+    # mcp | scripts (ADR 0122): the door a cell's runs get for their tools. Checked by the activities.
+    tools: list[str] = field(default_factory=lambda: ["mcp"])
+    # S57-09: agent cases played in each cell beside the tickets (scripted cells; a live cell skips them).
+    agent_cases: list[str] = field(default_factory=list)
+    # S57-09: how many times each case is played in a cell; the bootstrap pairs case and repetition.
+    repetitions: int = 1
 
 
 @workflow.defn(name="EvalMatrix", sandboxed=False)
@@ -88,35 +101,39 @@ class EvalMatrix:
             start_to_close_timeout=timedelta(minutes=1),
             retry_policy=RETRY,
         )
-        for backend in params.backends:
-            for model in params.models:
-                for memory in params.with_memory:
-                    for context in params.contexts:
-                        if params.live:
-                            cell = {
-                                "project_slug": params.project_slug,
-                                "backend": backend,
-                                "model": model,
-                                "with_memory": memory,
-                                "context": context,
-                            }
-                            self.results.append(await self._live_cell(cell, fixtures))
-                            continue
-                        outcome = await execute_on_its_queue(
-                            eval_activities.run_eval_cell,
-                            {
-                                "project_slug": params.project_slug,
-                                "backend": backend,
-                                "model": model,
-                                "with_memory": memory,
-                                "context": context,
-                                "fixtures": fixtures,
-                            },
-                            start_to_close_timeout=timedelta(hours=2),
-                            heartbeat_timeout=timedelta(minutes=10),
-                            retry_policy=RETRY,
-                        )
-                        self.results.append(outcome)
+        cells = [
+            (backend, model, memory, context, tools)
+            for backend in params.backends
+            for model in params.models
+            for memory in params.with_memory
+            for context in params.contexts
+            for tools in params.tools
+        ]
+        for backend, model, memory, context, tools in cells:
+            cell: dict[str, Any] = {
+                "project_slug": params.project_slug,
+                "backend": backend,
+                "model": model,
+                "with_memory": memory,
+                "context": context,
+                "tools": tools,
+            }
+            if params.live:
+                self.results.append(await self._live_cell(cell, fixtures, params))
+                continue
+            outcome = await execute_on_its_queue(
+                eval_activities.run_eval_cell,
+                {
+                    **cell,
+                    "fixtures": fixtures,
+                    **({"agent_cases": params.agent_cases} if params.agent_cases else {}),
+                    **({"repetitions": params.repetitions} if params.repetitions != 1 else {}),
+                },
+                start_to_close_timeout=timedelta(hours=2),
+                heartbeat_timeout=timedelta(minutes=10),
+                retry_policy=RETRY,
+            )
+            self.results.append(outcome)
         if params.publish:
             await execute_on_its_queue(
                 eval_activities.publish_matrix,
@@ -127,8 +144,16 @@ class EvalMatrix:
         self.done = True
         return {"cells": len(self.results), "results": self.results}
 
-    async def _live_cell(self, cell: dict[str, Any], fixtures: list[str]) -> dict[str, Any]:
-        outcomes = [await self._live_case(cell, fixture) for fixture in fixtures]
+    async def _live_cell(
+        self, cell: dict[str, Any], fixtures: list[str], params: EvalInput
+    ) -> dict[str, Any]:
+        outcomes = [
+            await self._live_case(cell, fixture, repetition)
+            for fixture in fixtures
+            for repetition in range(params.repetitions)
+        ]
+        # An agent case is seeded, and skipped there with its reason: a live cell plays tickets (S57-09).
+        outcomes += [await self._live_case(cell, name, 0, agent_case=True) for name in params.agent_cases]
         result: dict[str, Any] = await execute_on_its_queue(
             eval_activities.summarize_eval_cell,
             {**cell, "outcomes": outcomes},
@@ -137,12 +162,20 @@ class EvalMatrix:
         )
         return result
 
-    async def _live_case(self, cell: dict[str, Any], fixture: str) -> dict[str, Any]:
+    async def _live_case(
+        self, cell: dict[str, Any], fixture: str, repetition: int = 0, *, agent_case: bool = False
+    ) -> dict[str, Any]:
         """One case as the interpreter runs a stage, then judged. A run that fails is a case that
         failed, never a matrix that stops: the next cases still run."""
         seeded = await execute_on_its_queue(
             eval_activities.seed_eval_ticket,
-            {**cell, "fixture": fixture, "matrix_id": workflow.info().workflow_id},
+            {
+                **cell,
+                "fixture": fixture,
+                "matrix_id": workflow.info().workflow_id,
+                **({"repetition": repetition} if repetition else {}),
+                **({"agent_case": fixture} if agent_case else {}),
+            },
             start_to_close_timeout=timedelta(minutes=5),
             retry_policy=RETRY,
         )
@@ -207,7 +240,14 @@ class EvalMatrix:
         )
         verdict: dict[str, Any] = await execute_on_its_queue(
             eval_activities.judge_eval_run,
-            {**ids, "fixture": fixture, "context": cell["context"], "failure": failure},
+            {
+                **ids,
+                "fixture": fixture,
+                "context": cell["context"],
+                "tools": cell.get("tools", "mcp"),
+                "repetition": repetition,
+                "failure": failure,
+            },
             start_to_close_timeout=timedelta(minutes=1),
             retry_policy=RETRY,
         )

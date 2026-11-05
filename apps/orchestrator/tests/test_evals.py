@@ -176,7 +176,9 @@ def _usage(name: str, context: str) -> dict[str, int]:
 def test_every_ticket_scripts_its_usage_for_the_four_contexts(path: Path) -> None:
     spec = yaml.safe_load(path.read_text(encoding="utf-8"))
     usage = spec["scripted_usage"]
-    assert set(usage) == set(evals.CONTEXTS)
+    # A context alone is its `mcp` cell; `<context>/<tools>` another door's cell (S57-09).
+    assert {key for key in usage if "/" not in key} == set(evals.CONTEXTS)
+    assert {key.split("/")[1] for key in usage if "/" in key} <= set(evals.TOOLS) - {"mcp"}
     for numbers in usage.values():
         assert set(numbers) == {"tokens_in", "tokens_cached", "tokens_out", "turns"}
         assert numbers["tokens_cached"] <= numbers["tokens_in"], "the gateway counts cache reads as input"

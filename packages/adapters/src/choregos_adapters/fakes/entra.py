@@ -109,3 +109,27 @@ class FakeEntra:
             members.discard(m.group(2))
             return httpx.Response(204)
         return httpx.Response(404, json={"error": {"code": "not in the fake", "path": path}})
+
+
+#: E4's leaver and the groups they belong to (the examples page of PLAN-2026-11-03-tool-scripts).
+OFFBOARDING_UPN = "j.doe@example.org"
+OFFBOARDING_GROUPS = ("G-FIN", "G-VPN", "G-SHAREPOINT", "G-CRM", "G-BI", "G-ALL")
+
+
+def offboarding_directory() -> FakeEntra:
+    """E4 (S57-09): an enabled account in the platform's unit, member of six groups, with sessions to
+    revoke. An offboarding under approval must leave it exactly so: a test compares `state()`."""
+    fake = FakeEntra()
+    identifier = fake.add_account(OFFBOARDING_UPN)
+    for group in OFFBOARDING_GROUPS:
+        fake.groups[group] = {identifier}
+    return fake
+
+
+def state(fake: FakeEntra) -> dict[str, Any]:
+    """What a write would change: the accounts, the groups' members, the revoked sessions."""
+    return {
+        "accounts": {key: dict(value) for key, value in fake.accounts.items()},
+        "groups": {key: sorted(value) for key, value in fake.groups.items()},
+        "revoked_sessions": list(fake.revoked_sessions),
+    }

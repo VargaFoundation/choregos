@@ -1,0 +1,79 @@
+"""The scenes of the connector fakes (S57-09): the datasets of the tool-script matrix, on the REAL
+connectors, each built anew, each answer within the platform's 64 KiB bound on a tool result."""
+
+from __future__ import annotations
+
+import json
+from typing import Any
+
+import pytest
+from choregos_adapters.errors import AdapterError
+from choregos_adapters.fakes import entra, netops
+from choregos_adapters.fakes.scenes import scene, scenes
+
+#: The platform's bound on one result, its text and its `structuredContent` (`broker_result_max_bytes`).
+BOUND = 65536
+
+
+def _mcp_size(raw: dict[str, Any]) -> int:
+    """What the broker measures: the MCP result it builds from a directory connector's answer."""
+    text = json.dumps(raw, ensure_ascii=False, default=str)
+    return len(json.dumps({"content": [{"type": "text", "text": text}], "structuredContent": raw}).encode())
+
+
+async def test_the_ssh_exposure_firewall_has_the_examples_page_s_shape() -> None:
+    firewall = scene("firewall", "ssh-exposure")
+    interfaces = (await firewall.connector.execute("list_interfaces", {}))["interfaces"]
+    aliases = await firewall.connector.execute("list_aliases", {})
+    assert [i["id"] for i in interfaces] == [name for name, *_ in netops.SSH_EXPOSURE_INTERFACES]
+    assert aliases["count"] == 41 and _mcp_size(aliases) < BOUND
+    total = 0
+    for interface, _device, _descr, count in netops.SSH_EXPOSURE_INTERFACES:
+        rules = await firewall.connector.execute("list_firewall_rules", {"interface": interface})
+        assert rules["count"] == count and _mcp_size(rules) < BOUND, interface
+        total += count
+    assert total == 184
+    everything = await firewall.connector.execute("list_firewall_rules", {})
+    assert everything["count"] == 184 and _mcp_size(everything) > BOUND, "whole, the list is over the bound"
+    by_label: dict[str, dict[str, Any]] = {}
+    for interface, *_ in netops.SSH_EXPOSURE_INTERFACES:
+        rules = (await firewall.connector.execute("list_firewall_rules", {"interface": interface}))["rules"]
+        by_label |= {f"{interface}#{n}": rule for n, rule in enumerate(rules, start=1)}
+    assert by_label["wan#17"]["descr"] == "Temporary vendor SSH"
+    assert (
+        by_label["opt2#4"]["source"] == "PARTNERS" and by_label["lan#88"]["destination_port"] == "MGMT_PORTS"
+    )
+    assert by_label["opt3#7"]["disabled"] and by_label["wan#30"]["type"] == "block"
+    assert set(netops.SSH_DECOYS) <= set(by_label)
+
+
+async def test_the_dropped_flows_cluster_answers_each_namespace_within_the_bound() -> None:
+    cluster = scene("network_policy", "dropped-flows")
+    flows = netops.dropped_flows_trace().lines
+    assert len(flows) == 2400
+    assert sum(1 for line in flows if line["flow"]["verdict"] == "DROPPED") == 132
+    for namespace in netops.DROPPED_FLOWS_NAMESPACES:
+        answer = await cluster.connector.execute(
+            "get_flows", {"namespace": namespace, "verdict": "DROPPED", "last": 2000}
+        )
+        assert _mcp_size(answer) < BOUND, namespace
+    policies = await cluster.connector.execute("list_network_policies", {"namespace": "payments"})
+    assert [p["name"] for p in policies["policies"]] == ["payments-ingress"]
+
+
+async def test_a_scene_is_built_anew_each_time() -> None:
+    first, second = scene("identity", "offboarding"), scene("identity", "offboarding")
+    await first.connector.execute("disable_user", {"upn": entra.OFFBOARDING_UPN})
+    assert not next(iter(first.fake.accounts.values()))["accountEnabled"]
+    assert next(iter(second.fake.accounts.values()))["accountEnabled"], "the other scene is untouched"
+    [account] = second.fake.accounts
+    assert entra.state(second.fake)["groups"] == {group: [account] for group in entra.OFFBOARDING_GROUPS}
+
+
+def test_the_scenes_name_their_kinds_and_refuse_the_unknown() -> None:
+    assert scenes()["firewall"] == ["default", "ssh-exposure"]
+    assert {op.name for op in scene("marketdata").operations} == {"get_bars", "get_instrument"}
+    with pytest.raises(AdapterError, match="no scene for the kind"):
+        scene("tracker")
+    with pytest.raises(AdapterError, match="has no scene"):
+        scene("firewall", "open-everything")
