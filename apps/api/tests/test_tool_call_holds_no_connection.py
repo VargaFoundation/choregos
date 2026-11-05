@@ -26,8 +26,8 @@ from httpx import AsyncClient
 
 from .kits.extension_tools import run_extension_tool
 from .kits.tool_catalogue import run_with_catalogue
+from .kits.tool_ledger import cap_the_project, tool_lines
 from .test_broker import ORG, _prepare, supplier  # noqa: F401 - `supplier` is a fixture
-from .test_tool_call_cap_concurrency import _cap_the_project, _tool_lines
 from .test_web_fetch_tool import HTML, PAGE, web  # noqa: F401 - `web` is a fixture
 from .test_web_fetch_tool import _ready as web_ready
 from .test_web_search_tool import _ready as search_ready
@@ -76,7 +76,7 @@ async def test_a_catalogue_call_runs_with_no_connection_held(
     committed first and the run token's scope set again, which on PostgreSQL opens the next one."""
     run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch, run_id="run-no-conn-cat")
     if cap is not None:
-        await _cap_the_project(project["id"], cap)
+        await cap_the_project(project["id"], cap)
     seen: list[int] = []
     _catalogue_provider(monkeypatch, seen)
 
@@ -86,7 +86,7 @@ async def test_a_catalogue_call_runs_with_no_connection_held(
 
     assert answer.status_code == 200 and answer.json()["status_code"] == 200, answer.text
     assert seen == [0], "the request held a connection while the provider answered"
-    assert [line.provider for line in await _tool_lines(run_id)] == ["annuaire"]
+    assert [line.provider for line in await tool_lines(run_id)] == ["annuaire"]
     assert answer.json()["remaining"] == (cap - 1 if cap else None)
 
 
@@ -108,7 +108,7 @@ async def test_a_broker_read_runs_with_no_connection_held(
 
     assert answer.status_code == 200 and answer.json()["status_code"] == 200, answer.text
     assert seen == [0], "the request held a connection while the connector answered"
-    assert [line.provider for line in await _tool_lines("run-courtier-1")] == ["mcp:fournisseur"]
+    assert [line.provider for line in await tool_lines("run-courtier-1")] == ["mcp:fournisseur"]
 
 
 async def test_a_governed_write_waits_for_its_outcome_with_no_connection_held(
@@ -150,7 +150,7 @@ async def test_a_governed_write_waits_for_its_outcome_with_no_connection_held(
 
     assert at_start == [0], "the request held a connection while the workflow was started"
     assert between_polls and set(between_polls) == {0}, between_polls
-    assert [line.provider for line in await _tool_lines("run-courtier-1")] == ["mcp:fournisseur"] * 2
+    assert [line.provider for line in await tool_lines("run-courtier-1")] == ["mcp:fournisseur"] * 2
 
 
 async def test_a_web_fetch_resolves_and_reads_with_no_connection_held(
@@ -241,7 +241,7 @@ async def test_an_extension_is_called_with_no_connection_held_and_may_still_read
     assert answer.status_code == 200, answer.text
     assert answer.json()["result"] == {"read": True}, "the run is visible to the extension's own read"
     assert seen == [(False, 0)], "the extension was called inside the request's transaction"
-    assert [line.provider for line in await _tool_lines(run_id)] == ["greffon:no_connection"]
+    assert [line.provider for line in await tool_lines(run_id)] == ["greffon:no_connection"]
 
 
 # ─────────────────────────── what the booking after the call does when it fails ───────────────────────────
@@ -257,7 +257,7 @@ async def test_a_booking_that_fails_after_the_call_is_said_and_keeps_the_place(
     from choregos_core.tool_ledger import IN_FLIGHT
 
     run_id, headers = await run_with_catalogue(project, tmp_path, monkeypatch, run_id="run-no-conn-fail")
-    await _cap_the_project(project["id"], 5)
+    await cap_the_project(project["id"], 5)
     seen: list[int] = []
     _catalogue_provider(monkeypatch, seen)
 
@@ -277,7 +277,7 @@ async def test_a_booking_that_fails_after_the_call_is_said_and_keeps_the_place(
     assert not_booked["log_level"] == "warning"
     assert (not_booked["run_id"], not_booked["tool"], not_booked["provider"]) == (run_id, TOOL, "annuaire")
     assert (not_booked["status_code"], not_booked["error"]) == (200, "ConnectionError")
-    assert [line.provider for line in await _tool_lines(run_id)] == [IN_FLIGHT]
+    assert [line.provider for line in await tool_lines(run_id)] == [IN_FLIGHT]
 
 
 # ───────────────────────────── the session's own guarantees ─────────────────────────────
