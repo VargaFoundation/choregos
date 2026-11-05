@@ -256,17 +256,10 @@ class EvalApi:
         return 200, _bounded(result)
 
     async def _search(self, query: str) -> dict[str, Any]:
-        from choregos_adapters.fakes.web_search import FakeSearchBackend
-        from choregos_adapters.web_search.base import result
+        from choregos_adapters.fakes.scenes import web_scene
 
-        backend = FakeSearchBackend()
-        scripted = (self.case.get("web") or {}).get("search") or {}
-        backend.results = {
-            asked: [
-                made for hit in hits if (made := result(hit["title"], hit["url"], hit["snippet"])) is not None
-            ]
-            for asked, hits in scripted.items()
-        }
+        # The case's fake web, built as the live matrix's is (#1378).
+        backend = web_scene(self.case.get("web") or {}).search
         found = await backend.search(query, max_results=10)
         return {"backend": "fake", "results": [{**hit, "fetchable": True} for hit in found]}
 

@@ -16,6 +16,12 @@ memories. What matters is what the search provider does with it. So this built-i
 
 The router writes the ledger row (`search:<backend>`) and the event, which carries the query's
 fingerprint and length, never its text (ADR 0015).
+
+A connector the live eval matrix declared on a case's fake web (`fake_scene: web`, #1378) is served by that
+scene, where the deployment serves eval fakes (`CHOREGOS_EVAL_FAKE_SCENES`): its results are the case's,
+and `eval_web_scene` is what `web_fetch` reads the case's pages from for the projects it is turned on for.
+The API refuses `fake_scene` on every declaration and edit; nothing else changes — the ceiling, the
+policy, the data handling, the guard and the ledger hold as for any backend.
 """
 
 from __future__ import annotations
@@ -24,7 +30,7 @@ import hashlib
 import json
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
 from choregos_core import utcnow
@@ -42,6 +48,9 @@ from .definitions import ceiling_of, effective_policy
 from .network import run_network
 from .outbound_proxy import proxy_scope
 from .platform_network import ceiling_network, decide, journal
+
+if TYPE_CHECKING:
+    from choregos_adapters.fakes.scenes import WebScene
 
 TOOL_NAME = "web_search"
 MAX_RESULTS = 10
@@ -112,8 +121,11 @@ async def backend_for(session: AsyncSession, project: Project) -> tuple[Backend 
         .scalars()
         .all()
     )
+    from choregos_adapters.fakes.scenes import binds_web_scene
+
     reasons: list[str] = []
-    for connector in connectors:
+    # A project the live eval matrix bound to a case's fake web searches it before any other (#1378).
+    for connector in sorted(connectors, key=lambda c: not binds_web_scene(c.config)):
         if not await connector_enabled_for(session, connector, project):
             continue
         from choregos_adapters.web_search import declared
@@ -195,6 +207,7 @@ async def search(
     connector = backend.connector
     from choregos_adapters import build
     from choregos_adapters.errors import AdapterError
+    from choregos_adapters.fakes.scenes import bound_web_scene
     from choregos_adapters.registry import egress_hosts
     from choregos_core.secrets import SecretNotFound
 
@@ -235,7 +248,8 @@ async def search(
         config = await resolved_configuration(
             session, connector.org_id, connector.kind, connector.type, connector.config, connector.secret_refs
         )
-        client = build(connector.kind, connector.type, config)
+        scene = bound_web_scene(connector.config)
+        client = scene.search if scene is not None else build(connector.kind, connector.type, config)
         async with (
             egress_scope_for_org(session, connector.org_id, "api", f"web_search:{connector.name}"),
             proxy_scope(session, connector.org_id, (TOOL_NAME,)),
@@ -276,11 +290,39 @@ async def search(
     return 200, {"content": [{"type": "text", "text": text}], "structuredContent": found_here}, backend
 
 
+async def eval_web_scene(session: AsyncSession, project: Project) -> WebScene | None:
+    """The case's fake web the live eval matrix bound this project's web tools to (#1378), built anew, or
+    `None`: always where the deployment does not serve eval fakes (`CHOREGOS_EVAL_FAKE_SCENES`), and for
+    any project no such connector is turned on for — the API refuses `fake_scene` on every declaration
+    and edit, so only the matrix's seeding writes one, for its case's eval project."""
+    from choregos_adapters.fakes.scenes import bound_web_scene, eval_fake_scenes_allowed
+
+    if not eval_fake_scenes_allowed():
+        return None
+    connectors = (
+        (
+            await session.execute(
+                select(OrgConnector)
+                .where(OrgConnector.org_id == project.org_id, OrgConnector.kind == TOOL_NAME)
+                .order_by(OrgConnector.name)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for connector in connectors:
+        scene = bound_web_scene(connector.config)
+        if scene is not None and await connector_enabled_for(session, connector, project):
+            return scene
+    return None
+
+
 __all__ = [
     "INPUT_SCHEMA",
     "TOOL_NAME",
     "announcement",
     "backend_for",
+    "eval_web_scene",
     "fingerprint",
     "offered",
     "price_usd",
