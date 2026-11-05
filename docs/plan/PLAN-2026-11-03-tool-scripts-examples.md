@@ -54,6 +54,12 @@ The YAML below is the sketch the stream started from. The cases as they run are 
   (#1372). **C2** is the two tickets with a `none/scripts` usage.
 - **Usage.** The `scripted_usage` numbers are the ones below, illustrative; E5's are nearly equal in both
   cells (no script), C2's are equal (the door unused).
+- **Live (S57-11a).** A live cell plays E1, E2, E4 and E6 as real stages on the real gateway, each in an
+  eval project of its own whose connectors are these fakes' scenes (`fake_scene`, served only where the
+  deployment sets `CHOREGOS_EVAL_FAKE_SCENES`), its policy the case's, its case-local agent registered
+  there; a run is judged by the case's assertions once its governance parity holds, and is `invalid`
+  otherwise (the runbook, "Agent cases in a live cell"). E5 is not played live: its web tools read the
+  internet, not the case's pages (#1378).
 
 ---
 

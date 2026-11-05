@@ -354,9 +354,12 @@ async def test_the_kill_switch_skips_the_scripts_cell_and_still_wins_at_prepare_
     assert "scripts" not in prepared["stage_input"]["tools"]
 
 
-async def test_a_live_cell_skips_an_agent_case_with_its_reason(eval_project: Fixture) -> None:
+async def test_a_live_cell_skips_an_agent_case_where_the_deployment_serves_no_eval_fakes(
+    eval_project: Fixture,
+) -> None:
+    """Since S57-11a a live cell plays agent cases, on fake scenes only (`test_eval_live_agent_cases.py`)."""
     seeded = await evals.seed_eval_ticket(_live("mcp", agent_case=E1, fixture=E1))
-    assert seeded["skipped"] and "agent case" in seeded["reason"]
+    assert seeded["skipped"] and "CHOREGOS_EVAL_FAKE_SCENES" in seeded["reason"]
 
 
 async def _run(setup: Fixture, tools: str, events: list[tuple[str, dict[str, Any]]]) -> dict[str, Any]:

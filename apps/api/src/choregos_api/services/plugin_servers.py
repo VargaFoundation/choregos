@@ -549,11 +549,19 @@ async def plugin_client(session: AsyncSession, instance: OrgConnector) -> Plugin
 
 async def connector_client(session: AsyncSession, instance: OrgConnector) -> Any:
     """The client the platform calls an organisation connector with: a plugin's server through its
-    Service and bearer token; any other through its type's adapter, its secrets resolved here."""
+    Service and bearer token; any other through its type's adapter, its secrets resolved here.
+
+    A connector the live eval matrix declared on a fake's scene (`fake_scene`, S57-11a) is served by
+    that scene, built anew, when the deployment serves eval fakes (`CHOREGOS_EVAL_FAKE_SCENES`); the API
+    refuses the field on every declaration and edit, so no other connector carries it."""
     client = await plugin_client(session, instance)
     if client is not None:
         return client
     from choregos_adapters import build
+    from choregos_adapters.fakes.scenes import bound_scene
+
+    if (bound := bound_scene(instance.kind, instance.config)) is not None:
+        return bound.connector
 
     from .platform_network import with_identity
 

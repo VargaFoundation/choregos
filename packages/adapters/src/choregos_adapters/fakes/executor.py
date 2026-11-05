@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 from collections.abc import AsyncIterator, Callable
 from typing import Any
 
@@ -20,7 +21,8 @@ class FakeExecutor:
     """Test executor.
 
     - `queue_result()` queues the results returned, in order;
-    - `handler` computes the result from the `StageInput`;
+    - `handler` computes the result from the `StageInput`; it may be a coroutine function, awaited at
+      start, so that a scripted agent calls the platform during its run (S57-11a);
     - `cancel()` marks the run cancelled, like a deleted `PipelineRun`.
     """
 
@@ -113,6 +115,8 @@ class FakeExecutor:
             if spec.gateway_key and not stage_input.gateway_key:
                 stage_input = stage_input.model_copy(update={"gateway_key": spec.gateway_key})
             produced = self.handler(stage_input)
+            if inspect.isawaitable(produced):
+                produced = await produced
             result = produced if isinstance(produced, StageResult) else StageResult.model_validate(produced)
         else:
             result = _nothing_to_do(spec.stage_input)

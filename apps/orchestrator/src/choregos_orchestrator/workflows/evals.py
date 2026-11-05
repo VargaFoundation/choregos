@@ -17,6 +17,10 @@ S57-09 (ADR 0122 §9): the door of the run's tools is a fifth dimension, `tools`
 Their defaults, `["mcp"]`, `[]` and `1`, keep the commands of a matrix started before it: the same
 cells, the same cases, in the same order (`tests/replay/histories/evals-*-S37-*.json` replay; the new
 shape is `evals-tools-S57-09.json` and `evals-live-tools-S57-09.json`).
+
+S57-11a: a live cell plays its agent cases, each `repetitions` times, as real stages of their own eval
+projects, judged by their answers and journals (`activities/evals.py`); behind `LIVE_AGENT_CASES`, so a
+live matrix recorded before it replays (`evals-live-agent-cases-S57-11a.json` is the new shape).
 """
 
 from __future__ import annotations
@@ -52,6 +56,9 @@ CANCEL_STOPS_THE_MATRIX = "eval-cancel-stops-the-matrix"
 #: `prepare_stage` does not heartbeat, so it may commit after the cancellation: a run row and a
 #: reserved gateway key stayed behind, holding budget.
 CANCEL_WAITS_FOR_PREPARE = "eval-cancel-waits-for-prepare"
+#: S57-11a: a live cell plays its agent cases, once per repetition; before it, each was seeded once (and
+#: skipped there). A history recorded then (`evals-live-tools-S57-09.json`) replays that way.
+LIVE_AGENT_CASES = "eval-live-agent-cases"
 POLL_RETRY = RetryPolicy(
     initial_interval=timedelta(seconds=5),
     backoff_coefficient=2.0,
@@ -76,7 +83,7 @@ class EvalInput:
     live: bool = False
     # mcp | scripts (ADR 0122): the door a cell's runs get for their tools. Checked by the activities.
     tools: list[str] = field(default_factory=lambda: ["mcp"])
-    # S57-09: agent cases played in each cell beside the tickets (scripted cells; a live cell skips them).
+    # S57-09: agent cases played in each cell beside the tickets; S57-11a: in live cells too.
     agent_cases: list[str] = field(default_factory=list)
     # S57-09: how many times each case is played in a cell; the bootstrap pairs case and repetition.
     repetitions: int = 1
@@ -152,8 +159,16 @@ class EvalMatrix:
             for fixture in fixtures
             for repetition in range(params.repetitions)
         ]
-        # An agent case is seeded, and skipped there with its reason: a live cell plays tickets (S57-09).
-        outcomes += [await self._live_case(cell, name, 0, agent_case=True) for name in params.agent_cases]
+        if params.agent_cases and workflow.patched(LIVE_AGENT_CASES):
+            # S57-11a: an agent case is played like a ticket, once per repetition: the bootstrap's pairs.
+            outcomes += [
+                await self._live_case(cell, name, repetition, agent_case=True)
+                for name in params.agent_cases
+                for repetition in range(params.repetitions)
+            ]
+        else:
+            # Before S57-11a an agent case was seeded once, and skipped there with its reason.
+            outcomes += [await self._live_case(cell, name, 0, agent_case=True) for name in params.agent_cases]
         result: dict[str, Any] = await execute_on_its_queue(
             eval_activities.summarize_eval_cell,
             {**cell, "outcomes": outcomes},
@@ -247,6 +262,7 @@ class EvalMatrix:
                 "tools": cell.get("tools", "mcp"),
                 "repetition": repetition,
                 "failure": failure,
+                **({"agent_case": fixture} if agent_case else {}),
             },
             start_to_close_timeout=timedelta(minutes=1),
             retry_policy=RETRY,
