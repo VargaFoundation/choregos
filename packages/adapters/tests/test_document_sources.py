@@ -268,6 +268,25 @@ async def test_a_git_source_lists_structured_text_named_by_its_whole_path(tmp_pa
     source.close()
 
 
+async def test_a_double_star_folder_matches_zero_folders_too(tmp_path: Path) -> None:
+    """`docs/**/*.md` is every markdown file under `docs/`, the ones directly in it included: `**/` is
+    zero folders or more, as in git."""
+    repo = tmp_path / "repo"
+    (repo / "docs" / "archive").mkdir(parents=True)
+    _git(repo, "init", "-q", "-b", "main")
+    (repo / "docs" / "TEAM-ACCESS.md").write_text("# Access\n")
+    (repo / "docs" / "archive" / "old.md").write_text("# Old\n")
+    (repo / "README.md").write_text("# Readme\n")
+    _git(repo, "add", ".")
+    _git(repo, "commit", "-q", "-m", "one")
+    source = GitSource(url=f"file://{repo}", ref="main", paths=["docs/**/*.md"], allow_file=True)
+    assert sorted(i.ref for i in (await source.changes(None)).items) == [
+        "docs/TEAM-ACCESS.md",
+        "docs/archive/old.md",
+    ]
+    source.close()
+
+
 @pytest.mark.parametrize(
     ("url", "ref"), [("http://git.test/r.git", "main"), ("https://git.test/r.git", "--upload-pack=x")]
 )
