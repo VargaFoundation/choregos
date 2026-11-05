@@ -347,31 +347,38 @@ async def test_a_backend_is_validated_by_its_cells_without_context_reduction(set
     assert row.validated_backends == ["claude-code", "opencode"], "codex only passed with a reduction"
 
 
-# ── S45-24: the fixtures are English, the former names keep resolving (ADR 0098) ──
+# ── S45-24: the fixtures are English; S45-49: their former names are gone (ADR 0098) ──
+
+#: The fixtures' French names before S45-24, removed in 0.24.0 (S45-49).
+FORMER_FIXTURE_NAMES = (
+    "node-slug-longueur",  # lang: fr-ok - removed, asserted gone
+    "py-bug-arrondi",  # lang: fr-ok - removed, asserted gone
+    "py-hors-perimetre",  # lang: fr-ok - removed, asserted gone
+    "py-refactor-sans-regression",  # lang: fr-ok - removed, asserted gone
+    "py-remise-volume",  # lang: fr-ok - removed, asserted gone
+    "py-test-manquant",  # lang: fr-ok - removed, asserted gone
+)
 
 
-async def test_former_fixture_name_still_runs(setup: Fixture) -> None:
-    """A stored matrix that names `py-bug-arrondi` plays the ticket that replaced it."""
-    assert evals.FORMER_FIXTURE_NAMES["py-bug-arrondi"] == "py-rounding-bug"  # lang: fr-ok
+async def test_a_former_fixture_name_plays_nothing(setup: Fixture) -> None:
+    """A stored matrix that names `py-bug-arrondi` no longer plays the ticket that replaced it."""
+    assert not hasattr(evals, "FORMER_FIXTURE_NAMES")
     cell = await evals.run_eval_cell(
         {
             "project_slug": setup.project_slug,
             "backend": "codex",
             "model": "platform/standard",
             "with_memory": True,
-            "fixtures": ["py-bug-arrondi"],  # lang: fr-ok
+            "fixtures": ["py-bug-arrondi"],  # lang: fr-ok - removed, asserted gone
         }
     )
-    assert [(d["fixture"], d["ok"]) for d in cell["details"]] == [("py-rounding-bug", True)]
-    assert cell["cases"] == 1 and cell["success_rate"] == 1.0
+    assert cell["details"] == [] and cell["cases"] == 0
 
 
-def test_every_former_fixture_name_resolves_to_a_ticket() -> None:
-    assert len(evals.FORMER_FIXTURE_NAMES) == 6
-    for former, current in evals.FORMER_FIXTURE_NAMES.items():
+def test_no_former_fixture_name_resolves_to_a_ticket() -> None:
+    for former in FORMER_FIXTURE_NAMES:
         assert not (evals.TICKETS / f"{former}.yaml").exists(), former
-        assert (evals.TICKETS / f"{current}.yaml").is_file(), current
-        assert evals._load_spec(former) == evals._load_spec(current)
+        assert evals._load_spec(former) is None, former
 
 
 def test_a_french_ticket_fixture_still_exists() -> None:

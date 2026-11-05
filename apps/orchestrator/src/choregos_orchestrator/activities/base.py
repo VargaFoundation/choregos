@@ -181,7 +181,7 @@ async def org_gateway_spec(session: AsyncSession, org_id: str) -> dict[str, Any]
     first by name otherwise, as the API's `org_gateway` reads it.
     """
     from choregos_api.secret_store import resolve_store_fields
-    from choregos_core.secrets import SecretIntrouvable
+    from choregos_core.secrets import SecretNotFound
 
     connector = (
         (
@@ -201,7 +201,7 @@ async def org_gateway_spec(session: AsyncSession, org_id: str) -> dict[str, Any]
         resolved = await resolve_store_fields(
             session, org_id, "gateway", connector.type, connector.secret_refs
         )
-    except SecretIntrouvable:
+    except SecretNotFound:
         resolved = {}  # the build then fails on that reference, naming it
     return {
         "type": connector.type,
@@ -217,13 +217,13 @@ async def _sealed_values(session: AsyncSession, org_id: str, connector: Connecto
     out: the adapter's build then fails loudly on that reference, for that connector only — the
     other connectors of the project stay usable."""
     from choregos_api.secret_store import resolve_store_fields
-    from choregos_core.secrets import SecretIntrouvable
+    from choregos_core.secrets import SecretNotFound
 
     try:
         return await resolve_store_fields(
             session, org_id, connector.kind, connector.type, connector.secret_refs, connector.secret_ref
         )
-    except SecretIntrouvable:
+    except SecretNotFound:
         return {}
 
 
@@ -321,13 +321,13 @@ async def org_memory(session: AsyncSession, bundle: ProjectBundle) -> Any:
 
 async def _sealed_org_values(session: AsyncSession, org_id: str, connector: Any) -> dict[str, str]:
     from choregos_api.secret_store import resolve_store_fields
-    from choregos_core.secrets import SecretIntrouvable
+    from choregos_core.secrets import SecretNotFound
 
     try:
         return await resolve_store_fields(
             session, org_id, connector.kind, connector.type, connector.secret_refs, None
         )
-    except SecretIntrouvable:
+    except SecretNotFound:
         return {}
 
 

@@ -1,6 +1,6 @@
 """The fakes, families, memory, market data, identity, documents and storage adapters are English
-(S45-09, ADR 0098), and `python -m choregos_adapters.fakes.serveur`, the former module path that the
-chart runs until S45-33 switches it, still serves."""
+(S45-09, ADR 0098); `python -m choregos_adapters.fakes.server` serves, and the former module path is
+gone since 0.24.0 (S45-49)."""
 
 from __future__ import annotations
 
@@ -93,13 +93,12 @@ def _free_port() -> int:
         return int(probe.getsockname()[1])
 
 
-def test_python_m_fakes_serveur_still_serves() -> None:  # lang: fr-ok (the former command's name)
-    """The chart's container command is `python -m choregos_adapters.fakes.serveur`."""
+def test_python_m_fakes_server_serves() -> None:
+    """The chart's container command is `python -m choregos_adapters.fakes.server`."""
     port = _free_port()
     env = {**os.environ, "CHOREGOS_DEMO_PORT": str(port), "CONNECTOR_DEMO_TOKEN": "t"}
-    env.pop("CONNECTOR_DEMO_JETON", None)  # lang: fr-ok
     process = subprocess.Popen(
-        [sys.executable, "-m", "choregos_adapters.fakes.serveur"],
+        [sys.executable, "-m", "choregos_adapters.fakes.server"],
         env=env,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
@@ -117,3 +116,8 @@ def test_python_m_fakes_serveur_still_serves() -> None:  # lang: fr-ok (the form
     finally:
         process.terminate()
         process.wait(timeout=10)
+
+
+def test_the_former_fakes_module_is_gone() -> None:
+    with pytest.raises(ImportError):
+        importlib.import_module("choregos_adapters.fakes.serveur")  # lang: fr-ok - removed, asserted gone

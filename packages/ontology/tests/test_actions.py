@@ -120,9 +120,13 @@ async def test_the_agent_proposes_a_pr_that_waits_for_an_approval(
     client: AsyncClient, project: dict[str, Any], it4it: dict[str, str], scm: Any
 ) -> None:
     response = await _propose(client, it4it)
-    assert response["status_code"] == 201, response
+    # An `approval` tool's answer: nothing is done yet (#1350).
+    assert response["status_code"] == 202, response
     proposal = response["result"]
     assert proposal["status"] == "pending_approval"
+    assert proposal["action"] == proposal["proposal"], "the core action the proposal is (ADR 0035)"
+    assert proposal["decision_path"] == f"/p/{project['slug']}/actions/{proposal['proposal']}"
+    assert proposal["message"].startswith("proposed: a person approves it")
     assert proposal["justification"].startswith("Two nodes report")
     assert proposal["proposed_by"] == {"kind": "agent", "id": "agent:platform", "run_id": RUN}
     assert proposal["approval"]["mode"] == "human"
@@ -137,7 +141,7 @@ async def test_the_same_proposal_twice_returns_the_first(
 ) -> None:
     first = await _propose(client, it4it)
     second = await _propose(client, it4it)
-    assert second["status_code"] == 200
+    assert second["status_code"] == 202, "the same proposal, still not executed"
     assert second["result"]["proposal"] == first["result"]["proposal"]
     assert second["result"]["idempotent_replay"] is True
     every = await client.get(f"/api/v1/projects/{project['id']}/proposals")
@@ -276,7 +280,8 @@ async def test_a_pr_that_is_not_the_expected_one_fails_the_evidence(
 async def _verify(client: AsyncClient, headers: dict[str, str], project: dict[str, Any]) -> dict[str, Any]:
     arguments = {"target": [KEY], "justification": "The PR is merged and applied by GitOps.", "params": {}}
     response = await call_tool(client, RUN, headers, "action_verify_finding_fixed", arguments)
-    assert response["status_code"] == 201, response
+    # Approved, not done: Temporal plays it after the answer (#1350).
+    assert response["status_code"] == 202, response
     assert response["result"]["status"] == "approved", "the policy approves; Temporal plays"
     return await _until(client, project, response["result"]["proposal"], "awaiting_evidence", "failed")
 
@@ -365,32 +370,106 @@ async def test_without_a_report_in_time_the_evidence_fails(
     assert "timed out" in file["error"]
 
 
-async def test_the_agent_proposes_through_its_mcp_server(app: Any, it4it: dict[str, str]) -> None:
-    """The agent's path: `choregos-tools` relays the proposal to the internal API, run token included."""
-    import json
-
+async def _through_the_mcp_server(app: Any, headers: dict[str, str], tool: str, arguments: Any) -> Any:
+    """What the agent's model reads of one call: `choregos-tools` relays it to the internal API."""
     from choregos_tools_mcp.client import InternalClient
     from choregos_tools_mcp.server import McpServer
 
     internal = InternalClient("http://test/api/v1/internal", RUN, "unused")
     await internal.aclose()
-    internal._client = AsyncClient(transport=ASGITransport(app=app), headers=it4it)
+    internal._client = AsyncClient(transport=ASGITransport(app=app), headers=headers)
     try:
         call = await McpServer(internal).handle(
             {
                 "jsonrpc": "2.0",
                 "id": 1,
                 "method": "tools/call",
-                "params": {
-                    "name": "action_open_infra_pr",
-                    "arguments": {"target": [KEY], "justification": "Reboot needed.", "params": FIX},
-                },
+                "params": {"name": tool, "arguments": arguments},
             }
         )
     finally:
         await internal.aclose()
     assert call is not None and not call["result"].get("isError"), call
-    assert json.loads(call["result"]["content"][0]["text"])["status"] == "pending_approval"
+    return call["result"]
+
+
+async def test_the_agent_proposes_through_its_mcp_server(
+    app: Any, project: dict[str, Any], it4it: dict[str, str]
+) -> None:
+    """The agent's path: `choregos-tools` relays the proposal to the internal API, run token included,
+    and its model reads that nothing was done (#1350), as for any tool under approval (S57-04)."""
+    import json
+
+    arguments = {"target": [KEY], "justification": "Reboot needed.", "params": FIX}
+    result = await _through_the_mcp_server(app, it4it, "action_open_infra_pr", arguments)
+
+    notice, _, body = result["content"][0]["text"].partition("\n\n")
+    proposal = json.loads(body)
+    assert proposal["status"] == "pending_approval"
+    path = f"/p/{project['slug']}/actions/{proposal['proposal']}"
+    assert notice == (
+        f"PROPOSED, NOT EXECUTED: nothing was done; a person decides at {path} "
+        f"(action {proposal['proposal']}, status pending_approval)."
+    )
+    assert result["structuredContent"]["status_code"] == 202
+
+
+async def test_a_proposal_the_policy_approves_reads_as_not_finished(
+    app: Any, client: AsyncClient, project: dict[str, Any], it4it: dict[str, str]
+) -> None:
+    """`approve: auto`: approved, still to be played by Temporal — not done, whatever `approved` says."""
+    arguments = {"target": [KEY], "justification": "The PR is merged and applied by GitOps.", "params": {}}
+    result = await _through_the_mcp_server(app, it4it, "action_verify_finding_fixed", arguments)
+
+    notice = result["content"][0]["text"].split("\n\n", 1)[0]
+    assert notice.startswith("NOT FINISHED YET: the write runs as a governed action"), notice
+    assert "status approved" in notice and f"/p/{project['slug']}/actions/" in notice
+    proposal = result["structuredContent"]["result"]["proposal"]
+    await _until(client, project, proposal, "awaiting_evidence", "failed")
+
+
+async def test_a_script_s_proposal_is_a_proposal_and_its_journal_line_names_the_action(
+    app: Any, project: dict[str, Any], it4it: dict[str, str]
+) -> None:
+    """The tool bridge (ADR 0122): its journal line names the action (#1369), and the script's client
+    (`choregos_tools`, S57-08) returns a `Proposal`, never a result (#1350)."""
+    import json
+
+    from choregos_contracts import ToolScripts
+    from choregos_runner import tool_client
+    from choregos_tools_mcp.bridge import CALL_EVENT, Bridge
+    from choregos_tools_mcp.client import InternalClient
+
+    class Journal:
+        def __init__(self) -> None:
+            self.lines: list[tuple[str, dict[str, Any]]] = []
+
+        async def record(self, type_: str, payload: dict[str, Any]) -> None:
+            self.lines.append((type_, payload))
+
+    journal = Journal()
+    token = it4it["Authorization"].removeprefix("Bearer ")
+    internal = InternalClient("http://test/api/v1/internal", RUN, token, transport=ASGITransport(app=app))
+    arguments = {"target": [KEY], "justification": "Reboot needed.", "params": FIX}
+    try:
+        relayed = await Bridge(internal, ToolScripts(), journal).call(
+            "action_open_infra_pr", json.dumps(arguments).encode(), "ab" * 32
+        )
+    finally:
+        await internal.aclose()
+    answer = json.loads(relayed.body)
+    action = answer["result"]["proposal"]
+    ((kind, line),) = journal.lines
+    assert kind == CALL_EVENT and (line["status_code"], line["action"]) == (202, action)
+
+    script = tool_client._Bridge("http://127.0.0.1:1/bridge/v1")
+    script._known = True  # no script file to send: the call alone
+    script.send = lambda path, payload, digest: (200, answer)  # type: ignore[method-assign]
+    proposed = script.call("action_open_infra_pr", arguments)
+    assert isinstance(proposed, tool_client.Proposal), proposed
+    assert (proposed.action, proposed.status) == (action, "pending_approval")
+    assert proposed.decision_path == f"/p/{project['slug']}/actions/{action}"
+    assert proposed.proposed and not proposed.executed
 
 
 async def test_an_api_token_does_not_decide_and_a_rejection_needs_a_reason(

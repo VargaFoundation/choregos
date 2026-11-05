@@ -4,11 +4,14 @@
 from __future__ import annotations
 
 import json
+import shlex
 from pathlib import Path
 from typing import Any, ClassVar
 
 from choregos_contracts import ModelRef, StageInput
 
+from ..guardrails import SECRET_FILE_PATTERNS
+from ..tool_scripts import offered_script_directory
 from .base import Backend, LaunchPlan
 
 #: The hook rtk answers as (rtk 0.50: `rtk hook claude` reads a `PreToolUse` payload).
@@ -71,7 +74,7 @@ class ClaudeCodeBackend(Backend):
         files = {
             ".mcp.json": self.mcp_config_json(stage_input),
             ".claude/settings.json": json.dumps(settings, indent=2, ensure_ascii=False),
-            ".choregos/hooks/check_scope.sh": _scope_hook(),
+            ".choregos/hooks/check_scope.sh": _scope_hook(offered_script_directory(stage_input)),
             "CLAUDE.md": _claude_md(stage_input),
         }
         files.update(stage_input.agent.launch.files)
@@ -129,7 +132,7 @@ def _rtk_config(stage_input: StageInput) -> str:
     )
 
 
-def _scope_hook() -> str:
+def _scope_hook(scripts_dir: str = "") -> str:
     """Local safety net: the real check remains the diff verification.
 
     The script is dropped into the agent's workspace, which can read it: its comments
@@ -139,8 +142,17 @@ def _scope_hook() -> str:
     contradiction; it wrote it in black and white in its transcript ("there is a contradiction
     between the allowed scope and the obligation to write result.json"), then it gave up, and
     the step failed on a missing result.
+
+    `scripts_dir` is the run's script directory when it is offered tool scripts (#1365), written in
+    by the runner, not read from the agent's environment. A write there is allowed as
+    `GuardRails.check_write` allows it: beneath it, with no `.` or `..` segment
+    (`tool_scripts.is_under`), outside the workspace, not a secret-looking file.
     """
-    return """#!/usr/bin/env bash
+    secrets = "|".join(f'*"{pattern}"*' for pattern in SECRET_FILE_PATTERNS)
+    return _SCOPE_HOOK.replace("@SCRIPTS_DIR@", shlex.quote(scripts_dir)).replace("@SECRETS@", secrets)
+
+
+_SCOPE_HOOK = """#!/usr/bin/env bash
 # Fallback hook: refuses a write outside the allowed paths.
 # It is not the guarantee (the runner checks the diff); it is a useful shortcut.
 set -euo pipefail
@@ -153,6 +165,22 @@ rel_precoce=${path#"$PWD/"}
 case "$rel_precoce" in
   .choregos/*) exit 0 ;;
 esac
+# The run's script directory, when the run is offered tool scripts: outside the workspace,
+# so nothing written there reaches a commit. A path with a `.` or `..` segment names
+# another place, and the scope below judges it; so does the client's directory beside it.
+scripts_dir=@SCRIPTS_DIR@
+if [ -n "$scripts_dir" ] && [ "$rel_precoce" = "$path" ]; then
+  case "$path" in
+    */./*|*/../*|*/.|*/..) ;;
+    "$scripts_dir"/?*)
+      case "$path" in
+        @SECRETS@)
+          echo "writing to a sensitive file is forbidden: $path" >&2
+          exit 2 ;;
+      esac
+      exit 0 ;;
+  esac
+fi
 allowed_file=".choregos/allowed_paths.txt"
 [ -f "$allowed_file" ] || exit 0
 rel=${path#"$PWD/"}

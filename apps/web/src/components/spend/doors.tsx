@@ -7,15 +7,19 @@ import { Card, ReadState } from "@/components/ui";
 import type { CostFilter } from "@/lib/api";
 import { type Currency, amount, money } from "@/lib/spend";
 
-/** The doors a tool call comes through (ADR 0122 §4), always listed, so that a door no call used reads 0. */
+/**
+ * The doors a tool call comes through (ADR 0122 §4), always listed, so that a door no call used reads 0.
+ * `key` is the ledger's `origin` (the row's `data-door`); the console writes `label` and `meaning`,
+ * in sentence case like everything it writes (ADR 0048).
+ */
 const DOORS = [
-  { key: "model", label: "model", meaning: "the agent's own tool calls" },
-  { key: "script", label: "script", meaning: "calls from a script the agent wrote, through the tool bridge" },
-  { key: "job", label: "job", meaning: "calls from a job step" },
+  { key: "model", label: "Model", meaning: "The agent's own tool calls" },
+  { key: "script", label: "Script", meaning: "Calls from a script the agent wrote, through the tool bridge" },
+  { key: "job", label: "Job", meaning: "Calls from a job step" },
 ] as const;
 
 /** A tool line booked before the door was recorded (S57-06) says none. */
-const UNKNOWN = { key: "—", label: "—", meaning: "calls booked before the door was recorded" };
+const UNKNOWN = { key: "—", label: "None recorded", meaning: "Calls booked before the door was recorded" };
 
 /**
  * The run's tool calls by the door they came through (S57-10): the model, a script, a job step. Read
@@ -59,8 +63,10 @@ export function ToolCallsByDoorCard({ scope, currency, filtre }: { scope: Scope;
                 const share = total > 0 ? calls / total : 0;
                 return (
                   <tr key={door.key} data-door={door.key} className="border-t border-line first:border-t-0">
-                    <th scope="row" className="w-2/5 py-1.5 pr-3 text-left font-normal">
-                      <span className="font-mono">{door.label}</span>
+                    {/* A header cell does not wrap (`th` in the theme): the meaning must, or it pushes the
+                        card out of a phone's window (526 px at 360, #1398). */}
+                    <th scope="row" className="w-2/5 whitespace-normal py-1.5 pr-3 text-left font-normal">
+                      <span>{door.label}</span>
                       <span className="block text-xs text-ink-muted">{door.meaning}</span>
                     </th>
                     <td className="w-1/4 py-1.5">
@@ -68,10 +74,10 @@ export function ToolCallsByDoorCard({ scope, currency, filtre }: { scope: Scope;
                         {calls > 0 && <div className="h-2 rounded-sm bg-agent" style={{ width: `${Math.max(2, share * 100)}%` }} />}
                       </div>
                     </td>
-                    <td className="py-1.5 pl-3 text-right tabular-nums">
+                    <td className="whitespace-nowrap py-1.5 pl-3 text-right tabular-nums">
                       {calls} call{calls === 1 ? "" : "s"}
                     </td>
-                    <td className="py-1.5 pl-2 text-right text-xs tabular-nums text-ink-muted">{money(row ? amount(row, currency) : 0, currency)}</td>
+                    <td className="whitespace-nowrap py-1.5 pl-2 text-right text-xs tabular-nums text-ink-muted">{money(row ? amount(row, currency) : 0, currency)}</td>
                   </tr>
                 );
               })}

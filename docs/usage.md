@@ -552,9 +552,9 @@ did not write never matches, so an agent that says nothing takes the default. Th
 have a `when` (`when.no_default`).
 
 Validation codes are English (ADR 0046). The window in which `workflow.implicit_effect` and
-`gate.nothing_to_check` also carried their former spellings ended in S45-02. The last renamed code,
-`role.playbook_not_found`, carries its former spelling (`role.playbook_introuvable`) in
-`deprecated_code` until 0.23.0; match on `code`.
+`gate.nothing_to_check` also carried their former spellings ended in S45-02. The last one, for
+`role.playbook_not_found`, ended with 0.23.0: since 0.24.0 an issue carries no `deprecated_code`;
+match on `code`.
 
 The console's **workflows** tab (`/p/<slug>/workflows/<name>`) shows each workflow four ways:
 the process (each transition in plain words), the map (one lane per kind of actor), the YAML
@@ -1201,8 +1201,11 @@ reads the result up to that bound instead of its 65,536, and does not show it to
 prompt backend's loop lets through up to `CHOREGOS_BROKER_RESULT_CEILING_BYTES`' default (1 MiB,
 `choregos_core.mcp.RESULT_CEILING_BYTES`) and the notices.
 `structuredContent` carries the API's answer as it came, `status_code` included, with the same lines
-under `notices`, when its JSON fits the same bound. A hosted session's tools do not say these yet
-(#1349), nor does an ontology proposal, which answers `201` (#1350).
+under `notices`, when its JSON fits the same bound. A hosted session's tools say the same around the
+text its model reads (#1349, [hosted agents](hosted-agents.md)). An ontology proposal does too (#1350): its
+`action_<name>` tools are `approval` tools and answer as every one does, `202` naming the core action the
+proposal is (`action`, `status`, `decision_path`, `message`, beside the proposal's own file); one the policy
+approves (`approve: auto`) reads `NOT FINISHED YET` until Temporal has played it.
 
 The run's tool list (`GET /internal/runs/{id}/tools`) says what a call of each tool does (S57-05,
 [ADR 0122](adr/0122-an-agent-may-call-its-run-s-tools-from-a-script.md)): MCP's own
@@ -2742,8 +2745,9 @@ name, `search("<words>")` finds one, and `$CHOREGOS_TOOLS_DIR/INDEX.md` lists th
 the standard library only (Python 3.9 or later), so any interpreter of the agent's runs it. The task
 the agent reads gains a section, "Calling tools from a script", that says when a script pays (three or
 more dependent calls, a loop, a result to filter or join), to print only what the next decision needs
-and never a secret, to write scripts under `$TMPDIR`, never in the repository, and that a write may come
-back as a proposal; a stage that is not offered scripts gets neither the library nor the section, and
+and never a secret, to write scripts in `$TMPDIR/choregos/scripts/`, never in the repository, and that a write
+may come back as a proposal; the agent may write a script there with its file-write tool as well as from its
+shell, the one place outside the workspace its write guards allow, and only when the stage is offered scripts; a stage that is not offered scripts gets neither the library nor the section, and
 its agent's environment is unchanged. Each call is a call of the bridge, governed as any other, and
 what it gives the script is typed so that a script cannot read one outcome as another:
 

@@ -134,11 +134,11 @@ async def _en_mcp(fake: Any, key: str) -> Cas:
 
 
 async def _servie(famille: str, key: str) -> Cas:
-    """A `demo` connector that carries a `url`: the fake served by ONE process (`fakes/serveur.py`),
+    """A `demo` connector that carries a `url`: the fake served by ONE process (`fakes/server.py`),
     what the dev deploys — its operations are the family's, declared, not discovered."""
     import httpx
     from choregos_adapters.fakes.hr import RemoteDesk
-    from choregos_adapters.fakes.serveur import DemoApplication
+    from choregos_adapters.fakes.server import DemoApplication
     from choregos_adapters.mcp import McpClient
 
     app = DemoApplication(token=SECRET)

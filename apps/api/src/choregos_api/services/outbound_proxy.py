@@ -25,7 +25,7 @@ from choregos_core.outbound_proxy import (
     push_proxies,
 )
 from choregos_core.redaction import redact, remember_secret
-from choregos_core.secrets import SecretIntrouvable
+from choregos_core.secrets import SecretNotFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import Organization
@@ -75,7 +75,7 @@ async def _config(
     label = f"{proxy['scheme']}://{proxy['endpoint']}"
     try:
         values = await (store or get_secret_store()).get_many(session, organisation.id, [SECRET_NAME])
-    except (SecretIntrouvable, SecretStoreUnavailable) as lost:
+    except (SecretNotFound, SecretStoreUnavailable) as lost:
         raise OutboundProxyError(
             f"the outbound proxy {label} cannot be used: its password is not available ({lost})"
         ) from lost

@@ -1,5 +1,5 @@
 """The API root modules, the edition extension API and the Principal are English (S45-12, ADR 0098),
-and every former name another module imports still resolves to the English object."""
+and their former French names are gone since 0.24.0 (S45-49)."""
 
 from __future__ import annotations
 
@@ -69,38 +69,52 @@ def test_the_rate_limiter_reads_its_window_from_the_module(monkeypatch: pytest.M
     assert limiter.admits("k", 0.5) == (False, 1)
 
 
-def test_edition_former_names_warn_and_resolve() -> None:
+#: The edition's French names, removed in 0.24.0 (S45-49).
+FORMER_EDITION_NAMES = (
+    "COMMUNAUTAIRE",  # lang: fr-ok - removed, asserted gone
+    "ENTREPRISE",  # lang: fr-ok - removed, asserted gone
+    "declarer",  # lang: fr-ok - removed, asserted gone
+    "declarer_le_mappeur_de_groupes",  # lang: fr-ok - removed, asserted gone
+    "mappeur_de_groupes",  # lang: fr-ok - removed, asserted gone
+    "courante",  # lang: fr-ok - removed, asserted gone
+    "fonctions",  # lang: fr-ok - removed, asserted gone
+    "est_entreprise",  # lang: fr-ok - removed, asserted gone
+    "SessionRefusee",  # lang: fr-ok - removed, asserted gone
+    "declarer_une_validation_de_session",  # lang: fr-ok - removed, asserted gone
+    "validations_de_session",  # lang: fr-ok - removed, asserted gone
+    "declarer_un_administrateur_de_plateforme",  # lang: fr-ok - removed, asserted gone
+    "administrateurs_de_plateforme",  # lang: fr-ok - removed, asserted gone
+    "reinitialiser",  # lang: fr-ok - removed, asserted gone
+)
+
+
+@pytest.mark.parametrize("former", FORMER_EDITION_NAMES)
+def test_edition_former_names_are_gone(former: str) -> None:
+    from choregos_api import edition
+
+    assert not hasattr(edition, former)
+
+
+def test_edition_declare_refuses_the_former_keyword() -> None:
     from choregos_api import edition
 
     edition.reset()
     try:
-        with pytest.warns(DeprecationWarning, match="courante is deprecated: use current"):
-            assert edition.courante is edition.current
-        with pytest.warns(DeprecationWarning, match="declarer is deprecated: use declare"):
-            assert edition.declarer is edition.declare
-        with pytest.warns(DeprecationWarning, match="fonctions=...") as caught:
-            edition.declare(edition.ENTERPRISE, fonctions=["multi-org", "saml"])
-        assert "0.23.0" in str(caught[0].message)
-        assert edition.features() == frozenset({"multi-org", "saml"})
-        assert edition.is_enterprise()
+        with pytest.raises(TypeError):
+            edition.declare(edition.ENTERPRISE, **{"fonctions": ["saml"]})  # lang: fr-ok - asserted gone
         with warnings.catch_warnings():
             warnings.simplefilter("error")
             edition.declare(edition.ENTERPRISE, features=frozenset({"multi-org"}))
         assert edition.features() == frozenset({"multi-org"})
-        with pytest.raises(TypeError), pytest.warns(DeprecationWarning):
-            edition.declare(edition.ENTERPRISE, features=["a"], fonctions=["b"])
+        assert edition.is_enterprise()
     finally:
         edition.reset()
     assert edition.current() == edition.COMMUNITY
 
 
-def test_principal_former_attribute_reads_and_writes() -> None:
+def test_principal_former_attribute_is_gone() -> None:
     from choregos_api.rbac import Principal
 
     principal = Principal(user_id="u", email="u@example.test")
     assert principal.authenticated_at is None
-    principal.authentifie_le = 5
-    assert principal.authenticated_at == 5
-    assert principal.authentifie_le == 5
-    principal.authenticated_at = 7
-    assert principal.authentifie_le == 7
+    assert not hasattr(principal, "authentifie_le")  # lang: fr-ok - removed, asserted gone

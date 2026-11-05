@@ -566,7 +566,10 @@ copied, and only the per-server modules and the index are generated. The agent's
 `CHOREGOS_TOOLS_DIR` (that directory), `CHOREGOS_TOOLS_BRIDGE` (`http://<the tool server's host:port>/bridge/v1`),
 `PYTHONPATH` (the directory first, an existing value kept after it) and `TMPDIR` (the runner's temporary
 directory, which the confinement lets the agent write), for every shell backend; its task gains the section
-"Calling tools from a script". The run's journal says `tools.client` (`written`, `tools`, `modules`, and
+"Calling tools from a script". The runner creates `$TMPDIR/choregos/scripts`, where that section tells the agent
+to write its scripts: its write guards (`GuardRails.check_write`, Claude Code's `check_scope.sh`) and the ACP
+client's file system let the agent's file-write tool write beneath it — no `.` or `..` segment, no
+secret-looking file —, and nowhere else outside the workspace, the client's directory included (#1365). The run's journal says `tools.client` (`written`, `tools`, `modules`, and
 `error` when the tool list could not be read: the client is then written without modules, `call` reaching a
 tool by its name); a client that cannot be written (`written: false`) leaves the run without it and without
 the section. A run that is not offered scripts gets none of it.
@@ -614,8 +617,8 @@ A project declares what it calls in its own configuration (`tools: [verifier_adr
 Both default to empty, which means **no tools at all**. See [ADR 0014](adr/0014-a-platform-held-tool-catalogue.md)
 and `demo/tools/catalogue.yaml` for a working example that needs no key at all.
 
-The catalogue's top-level key is `tools:`. The former `outils:` key still loads, with a warning, until
-0.23.0; rename it in your own catalogue before then.
+The catalogue's top-level key is `tools:`. The former key was removed in 0.24.0: a catalogue that
+still uses it is refused (see "Upgrading to 0.24").
 
 ## Network access: the egress allowlist and its ceiling
 
@@ -905,7 +908,6 @@ global:
 ## Database migrations
 
 Alembic runs as a Helm hook before the API starts, through `python -m choregos_api.migrate`
-(the former `python -m choregos_api.migrer` works until 0.23.0)
 (`upgrade heads`: the core, then the branch of any installed plugin that ships a schema):
 
 ```yaml
@@ -1370,8 +1372,8 @@ the chart already assumes.
 `CHOREGOS_GITHUB_WEBHOOK_SECRET` signs GitHub deliveries (HMAC). `CHOREGOS_GENERIC_WEBHOOK_SECRET` is
 the shared secret of every other webhook — Argo CD, Alertmanager, Jira, GitLab, and **Tekton since
 0.10.1**: Tekton's CloudEvents sink is configured by URL and cannot add a header, so the secret goes in
-the sink URL, `…/api/v1/webhooks/tekton?token=<secret>` (`?jeton=`, the former spelling, is still
-accepted). On any deployed instance (`staging` or `prod`, or any instance served over https whatever its
+the sink URL, `…/api/v1/webhooks/tekton?token=<secret>` (the former spelling was removed in 0.24.0,
+see "Upgrading to 0.24"). On any deployed instance (`staging` or `prod`, or any instance served over https whatever its
 `CHOREGOS_ENV`), an unsigned GitHub or Tekton webhook, whose secret is not configured, is refused with a 401;
 only a local http instance accepts it.
 
@@ -1389,6 +1391,77 @@ value>` on the first model call. Nothing said the key had never resolved.
 
 If the API refuses to start with `réglages non résolus`, fix the source of the secret — the key
 is missing where it is stored, not where it is read.
+
+## Upgrading to 0.24
+
+0.24.0 removes every external French alias whose window closed with 0.23.0 (S45-49,
+[ADR 0098](adr/0098-english-everywhere-finished.md) 'Windows'). Each one warned, or was documented as
+deprecated, from 0.21 to 0.23. Nothing is aliased any more: a former name below fails (an
+`ImportError`, an `AttributeError` or a `TypeError` for a Python name, a refused catalogue, a 401 for
+the Tekton sink) or has no effect (an environment variable, a label, a tool key). Switch to the
+replacement before upgrading. Kept on purpose, and not listed: Temporal patch ids, the French activity
+and signal wire names, the readers of persisted rows and histories (ADR 0098 §4), the entry-point
+group `choregos.plugins`, the Grafana dashboard uids and the French ticket fixture
+`py-rounding-bug-fr`. <!-- lang: fr-ok -->
+
+### Operators: deployment, chart and contract
+
+| Removed | Replacement | What to do |
+| :-- | :-- | :-- |
+| `CHOREGOS_ESSAI_ONTOLOGIE=1` | `CHOREGOS_ONTOLOGY_TRIAL=1` | Rename it in `global.extraEnv` (or `.env`): the former variable no longer activates the ontology extension. <!-- lang: fr-ok --> |
+| `CONNECTOR_DEMO_JETON` | `CONNECTOR_DEMO_TOKEN` | Rename it: the former variable is no longer read, and a demo fakes process with only it set asks for no token. <!-- lang: fr-ok --> |
+| `python -m choregos_api.migrer` | `python -m choregos_api.migrate` | Change a custom migration command; the chart already runs the new one. <!-- lang: fr-ok --> |
+| `choregos-admin = choregos_api.outils:main`, `choregos_api.outils` | `choregos_api.admin_cli:main`, `choregos_api.admin_cli` | The `choregos-admin` script already points at the new module. <!-- lang: fr-ok --> |
+| `python -m choregos_core.catalogue_d_agents.evals` | `python -m choregos_core.agent_catalogue.evals` | Change a scheduled eval job. <!-- lang: fr-ok --> |
+| `python -m choregos_adapters.fakes.serveur` | `python -m choregos_adapters.fakes.server` | Change your own container command of the demo fakes; the chart already runs the new one. <!-- lang: fr-ok --> |
+| `outils:` (top-level key of the tool catalogue) | `tools:` | Rename the key: a catalogue with the former key is refused at load. <!-- lang: fr-ok --> |
+| `…/api/v1/webhooks/tekton?jeton=<secret>` | `…/api/v1/webhooks/tekton?token=<secret>` | Change the Tekton CloudEvents sink URL: the former parameter is no longer read, so the sink gets a 401. <!-- lang: fr-ok --> |
+| The `legacy_alertname` label on `ChoregosApi5xxErrors`, `ChoregosRunPending`, `ChoregosDailyBudgetHigh` and `ChoregosTrainFrozen` | `alertname` with the English name | Rewrite an Alertmanager route, inhibition or silence that matched `legacy_alertname`. |
+| `docs/runbooks/montee-temporal.md` (redirect stub) | `docs/runbooks/temporal-upgrade.md` | Nothing for the chart's alerts, whose `runbook_url` is English; fix a bookmark or a hand-written annotation. <!-- lang: fr-ok --> |
+| `docs/runbooks/perte-de-noeud.md` (redirect stub) | `docs/runbooks/node-loss.md` | Same. <!-- lang: fr-ok --> |
+| `docs/runbooks/restauration-postgres.md` (redirect stub) | `docs/runbooks/postgres-restore.md` | Same. <!-- lang: fr-ok --> |
+| `docs/runbooks/run-bloque.md` (redirect stub) | `docs/runbooks/stuck-run.md` | Same. <!-- lang: fr-ok --> |
+| `docs/runbooks/train-gele.md` (redirect stub) | `docs/runbooks/train-frozen.md` | Same. <!-- lang: fr-ok --> |
+| `docs/runbooks/webhook-perdu.md` (redirect stub) | `docs/runbooks/lost-webhook.md` | Same. <!-- lang: fr-ok --> |
+| `docs/runbooks/rotation-secrets.md` (redirect stub) | `docs/runbooks/secret-rotation.md` | Same. <!-- lang: fr-ok --> |
+| `GET /runs/{id}/access`: `evenements`, `deduites`, `acces` (with `acces[].motifs` and the nature `autre`) | `events`, `inferred`, `access` (with `access[].reasons` and the nature `other`) | Read the English fields; the former ones are no longer served nor in the contract. <!-- lang: fr-ok --> |
+| `deprecated_code` on a workflow issue and on a problem's `errors[]` (`role.playbook_introuvable`) | `code` (`role.playbook_not_found`) | Match on `code`; the field is no longer served nor in the contract. <!-- lang: fr-ok --> |
+| A stored eval matrix or schedule naming a fixture by its French name (`py-bug-arrondi`, `py-remise-volume`, `py-test-manquant`, `py-hors-perimetre`, `py-refactor-sans-regression`, `node-slug-longueur`) | `py-rounding-bug`, `py-volume-discount`, `py-missing-test`, `py-out-of-scope`, `py-refactor-without-regression`, `node-slug-length` | Rename it: a former name plays no ticket any more (`FORMER_FIXTURE_NAMES` is gone). <!-- lang: fr-ok --> |
+| The workflow editor's draft kept by a tab under `choregos.brouillon.<project>.<workflow>` | `choregos.draft.<project>.<workflow>` | Nothing: a draft left in a tab's storage by a console older than 0.21 is no longer resumed. <!-- lang: fr-ok --> |
+
+### Extension authors: the extension and edition API
+
+Every name below raised a `DeprecationWarning` naming its replacement until 0.23.0; it is now gone.
+The choregos-ee coordination is [#1229](https://github.com/VargaFoundation/choregos/issues/1229).
+
+| Removed | Replacement |
+| :-- | :-- |
+| module `choregos_api.greffons` | `choregos_api.extensions` <!-- lang: fr-ok --> |
+| `declarer_un_routeur`, `routeurs_declares`, `reinitialiser` | `declare_router`, `declared_routers`, `reset` <!-- lang: fr-ok --> |
+| `declarer_une_section_d_administration`, `sections_declarees`, `chemins_d_une_section` | `declare_admin_section`, `declared_sections`, `section_paths` <!-- lang: fr-ok --> |
+| `FournisseurDOutils`, `declarer_un_fournisseur_d_outils`, `fournisseurs_d_outils` | `ToolProvider`, `declare_tool_provider`, `tool_providers` <!-- lang: fr-ok --> |
+| `FournisseurHumain`, `declarer_des_outils_pour_les_humains`, `fournisseurs_humains` | `HumanToolProvider`, `declare_human_tools`, `human_tool_providers` <!-- lang: fr-ok --> |
+| `declarer_un_installateur_de_gabarit`, `installateurs_de_gabarit` | `declare_template_installer`, `template_installers` <!-- lang: fr-ok --> |
+| `GESTES`, `DemandeDeGeste` (and its `.geste`, `.cible`), `GesteRefuse` (and its `.raison`) | `GESTURES`, `GestureRequest` (`.gesture`, `.target`), `GestureRefused` (`str(refusal)`) <!-- lang: fr-ok --> |
+| `GestureRefused` natures `interdit`, `conflit` | `forbidden`, `conflict` (a former one is a `ValueError`) <!-- lang: fr-ok --> |
+| `declarer_un_controle_de_geste`, `controler`, `reinitialiser_les_controles` | `declare_gesture_check`, `check_gesture`, `reset_gesture_checks` <!-- lang: fr-ok --> |
+| `_ROUTEURS`, `_FOURNISSEURS_D_OUTILS`, `_FOURNISSEURS_HUMAINS`, `_INSTALLATEURS`, `_CONTROLES`, `_televersements` | `_ROUTERS`, `_TOOL_PROVIDERS`, `_HUMAN_TOOL_PROVIDERS`, `_INSTALLERS`, `_GESTURE_CHECKS`, `_uploads` <!-- lang: fr-ok --> |
+| keywords `lister=`, `appeler=`, `en_attente=` (and the attributes of the same names) of the tool providers | `list_tools=`, `call_tool=`, `pending=` <!-- lang: fr-ok --> |
+| `ecriture: true` in a tool announced by a human tool provider | `write: true` (the former key has no effect: the tool is a read) <!-- lang: fr-ok --> |
+| module `choregos_api.effets` | `choregos_api.effects` <!-- lang: fr-ok --> |
+| `EffetRefuse`, `ContexteEffet`, `Executer` | `EffectRefused`, `EffectContext`, `Execute` <!-- lang: fr-ok --> |
+| `declarer_un_effet(..., politique=)`, `politique_de_l_effet`, `effet`, `effets_declares`, `rendre`, `reinitialiser` | `declare_effect(..., policy=)`, `effect_policy`, `effect`, `declared_effects`, `render`, `reset` <!-- lang: fr-ok --> |
+| `choregos_core.quotas`: `DEFAUT`, `Fournisseur`, `declarer_un_quota`, `quota_pour`, `reinitialiser`, `Quota(memoire=)`, `Quota.memoire` | `DEFAULT`, `QuotaProvider`, `declare_quota`, `quota_for`, `reset`, `Quota(memory=)`, `Quota.memory` <!-- lang: fr-ok --> |
+| `choregos_core.admission`: `DemandeDeRun`, `AdmissionRefusee`, `Controle`, `declarer_une_admission`, `admissions_declarees`, `verifier`, `reinitialiser` | `RunRequest`, `AdmissionRefused`, `AdmissionCheck`, `declare_admission`, `declared_admissions`, `check`, `reset` <!-- lang: fr-ok --> |
+| `choregos_core.secrets`: `SecretIntrouvable`, `declarer_un_resolveur` | `SecretNotFound`, `declare_resolver` <!-- lang: fr-ok --> |
+| `choregos_api.edition`: `COMMUNAUTAIRE`, `ENTREPRISE`, `declarer(..., fonctions=)`, `declarer_le_mappeur_de_groupes`, `mappeur_de_groupes`, `courante`, `fonctions`, `est_entreprise` | `COMMUNITY`, `ENTERPRISE`, `declare(..., features=)`, `declare_group_mapper`, `group_mapper`, `current`, `features`, `is_enterprise` <!-- lang: fr-ok --> |
+| `choregos_api.edition`: `SessionRefusee`, `declarer_une_validation_de_session`, `validations_de_session`, `declarer_un_administrateur_de_plateforme`, `administrateurs_de_plateforme`, `reinitialiser` | `SessionRefused`, `declare_session_validation`, `session_validations`, `declare_platform_administrator`, `platform_administrators`, `reset` <!-- lang: fr-ok --> |
+| `Principal.authentifie_le` | `Principal.authenticated_at` <!-- lang: fr-ok --> |
+| module `choregos_api.migrer` (with `emplacements_des_greffons`, `GROUPE_DE_MIGRATIONS`), `configuration(avec_les_greffons=)` | `choregos_api.migrate` (`extension_locations`, `MIGRATIONS_GROUP`), `configuration(with_extensions=)` <!-- lang: fr-ok --> |
+| package `choregos_core.catalogue_d_agents` (and `.evals`): `EntreeDuCatalogue`, `DOSSIER`, `entrees`, `entree`, `skills_du_catalogue`, `fichiers_de_la_skill` | `choregos_core.agent_catalogue` (and `.evals`): `CatalogueEntry`, `FOLDER`, `entries`, `entry`, `catalogue_skills`, `skill_files` <!-- lang: fr-ok --> |
+| module `choregos_adapters.fakes.serveur` | `choregos_adapters.fakes.server` <!-- lang: fr-ok --> |
+| module `choregos_contracts.issue_codes` (`RENAMED_ISSUE_CODES`, `canonical_issue_code`, `deprecated_issue_code`) | none: issue codes are English only <!-- lang: fr-ok --> |
+| `choregos_core.compat.EXTERNAL_ALIAS_REMOVAL` | none: pass the release to `alias_names(..., removed_in=)` |
 
 ## Upgrading to 0.21
 
@@ -1715,7 +1788,9 @@ with `--profile decisions`: the variable is also what tells `litellm-config` to 
 0.21 renames the French operational identifiers of the chart, the Kyverno policies and the runbooks
 ([ADR 0098](adr/0098-english-everywhere-finished.md)). A rename of a name that something outside the
 chart reads (an alert route, a PolicyException, a mounted path) keeps a shim for one release or tells
-you what to do by hand; this section lists each. The shims go in 0.23.0.
+you what to do by hand; this section lists each. The shims went in 0.24.0: the tables below are
+the record of the 0.21 renames, and where a row says a former name "still works" or "warns", that
+held until 0.23.0. "Upgrading to 0.24" lists what was removed.
 
 **Internal aliases and shims are gone (S45-40).** Where a Python row below says "internal" and
 "alias keeps working" or "a shim keeps it importable", that held while another package still
@@ -1725,7 +1800,7 @@ imported the former name. Every user has switched, and the aliases and shims def
 `choregos_adapters.familles`, `choregos_adapters.memory.lexicale`,
 `choregos_adapters.tracker.champs`, `choregos_adapters.tracker.interne` and
 `choregos_runner.outils_locaux`, and every former name of those packages' `alias:internal` lines.
-Only the names marked `alias:external` (removed in 0.23.0) still resolve.
+The names marked `alias:external` resolved until 0.23.0 and were removed in 0.24.0 (S45-49).
 
 **Internal aliases and shims under `apps/` are gone too (S45-46).** The same holds for the rows
 below whose former name is marked internal or "a shim": every importer has switched, and the shims

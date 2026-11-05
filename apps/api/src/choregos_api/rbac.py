@@ -123,15 +123,6 @@ class Principal:
     #: too old.
     authenticated_at: int | None = None
 
-    @property
-    def authentifie_le(self) -> int | None:  # lang: fr-ok alias:external
-        """Former name of `authenticated_at` (removed in 0.23.0): read and written like it."""
-        return self.authenticated_at
-
-    @authentifie_le.setter
-    def authentifie_le(self, value: int | None) -> None:  # lang: fr-ok alias:external
-        self.authenticated_at = value
-
     def role_for(self, org: str, project_slug: str | None = None) -> Role | None:
         if project_slug:
             role = self.project_roles.get(f"{org}/{project_slug}")

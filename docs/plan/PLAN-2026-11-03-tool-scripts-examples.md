@@ -336,9 +336,9 @@ or a result you would only filter, count or join. Call a tool directly when the 
 reading the result yourself.
 
 - Print only what your next decision needs: counts, the rows that matter, identifiers. Never print a secret.
-- Write scripts under `$TMPDIR`, never in the repository: from your shell
-  (`cat > "$TMPDIR/check.py" <<'EOF'`), then run the file (`python3 "$TMPDIR/check.py"`), so that the run
-  records which script made which calls.
+- Write scripts in `$TMPDIR/choregos/scripts/`, never in the repository, with your file-write tool or from
+  your shell; then run the file (`python3 "$TMPDIR/choregos/scripts/check.py"`), so that the run records
+  which script made which calls.
 - A write returns a `Proposal` when a person must approve it: it is NOT done. Report its decision path.
 - `CapReached`, `Withheld` and `ToolError` are raised: let them surface, read them, decide.
 - Warnings on standard error come from the platform (for instance a result flagged as a suspected

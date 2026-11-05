@@ -16,9 +16,9 @@ from httpx import ASGITransport, AsyncClient
 
 EXTENSION = """
 from choregos_api.edition import (
-    SessionRefusee,
-    declarer_un_administrateur_de_plateforme,
-    declarer_une_validation_de_session,
+    SessionRefused,
+    declare_platform_administrator,
+    declare_session_validation,
 )
 
 #: Set by the test.
@@ -30,7 +30,7 @@ async def not_revoked(session, user, payload):
     if STATE["outage"]:
         raise ConnectionError("revocation table unreachable")
     if user.email in STATE["revoked"]:
-        raise SessionRefusee("session revoked by the administrator: sign in again")
+        raise SessionRefused("session revoked by the administrator: sign in again")
 
 
 def platform_administrator(session, principal):
@@ -38,14 +38,14 @@ def platform_administrator(session, principal):
 
 
 def plug_in():
-    declarer_une_validation_de_session(not_revoked)
-    declarer_un_administrateur_de_plateforme(platform_administrator)
+    declare_session_validation(not_revoked)
+    declare_platform_administrator(platform_administrator)
 """
 
 
 @pytest.fixture
 def identity_extension(tmp_path: pathlib.Path) -> Iterator[Any]:
-    from choregos_api.edition import reinitialiser
+    from choregos_api.edition import reset
 
     root = tmp_path / "site"
     root.mkdir()
@@ -64,7 +64,7 @@ def identity_extension(tmp_path: pathlib.Path) -> Iterator[Any]:
     finally:
         sys.path.remove(str(root))
         sys.modules.pop("identity_extension", None)
-        reinitialiser()
+        reset()
 
 
 @pytest.fixture

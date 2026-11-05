@@ -622,9 +622,7 @@ async def _extension_tools(ctx: Context) -> list[Tool]:
                     str(announcement.get("title") or name),
                     str(announcement.get("description") or ""),
                     announcement.get("inputSchema") or {"type": "object"},
-                    bool(
-                        announcement.get("write", announcement.get("ecriture"))
-                    ),  # lang: fr-ok alias:external
+                    bool(announcement.get("write")),
                     _extension_executor(provider, name),
                 )
             )

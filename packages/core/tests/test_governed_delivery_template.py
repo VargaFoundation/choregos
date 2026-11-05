@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 import yaml
-from choregos_core.catalogue_d_agents import entree
+from choregos_core.agent_catalogue import entry
 from choregos_core.dsl.parser import parse_workflow
 
 TEMPLATES = Path(__file__).resolve().parents[3] / "templates"
@@ -56,7 +56,7 @@ def test_the_template_installs_every_catalogue_agent_its_workflow_names() -> Non
     named = {a["agent"] for a in _doc(WORKFLOW)["actors"].values() if a.get("agent")}
     assert named == listed
     for slug in named:
-        assert entree(slug) is not None, f"`{slug}` is not in the catalogue"
+        assert entry(slug) is not None, f"`{slug}` is not in the catalogue"
     for skill in manifest["defaults"]["skills"]:
         assert skill.startswith("catalogue:")
 
@@ -66,7 +66,7 @@ def test_a_transition_declares_the_outputs_its_catalogue_agent_produces(path: Pa
     doc = _doc(path)
     actors = doc["actors"]
     for transition in doc["transitions"]:
-        agent = entree(str(actors.get(transition.get("by"), {}).get("agent", "")))
+        agent = entry(str(actors.get(transition.get("by"), {}).get("agent", "")))
         if agent is None or not agent.outputs:
             continue
         # A subset: an agent with two moments (architect: draft, then accept; devops: readiness, then
@@ -83,7 +83,7 @@ def test_an_agent_that_only_recommends_is_followed_by_people(path: Path) -> None
     doc = _doc(path)
     actors, states = doc["actors"], doc["states"]
     for transition in doc["transitions"]:
-        agent = entree(str(actors.get(transition.get("by"), {}).get("agent", "")))
+        agent = entry(str(actors.get(transition.get("by"), {}).get("agent", "")))
         if agent is None or not agent.human_gate_after:
             continue
         target = transition["to"]
