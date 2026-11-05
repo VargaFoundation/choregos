@@ -893,7 +893,7 @@ that follows from it. Rule since that day: nothing is ✅ without a test that fa
 
 
 
-**Total**: 561 delivered, 294 partial, 9 not started.
+**Total**: 562 delivered, 294 partial, 8 not started.
 
 
 **2026-10-05 — ADR 0029: Choregos becomes a platform of governed agents, for general use; 0028 is
