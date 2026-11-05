@@ -196,6 +196,45 @@ async def test_a_model_error_fails_the_response_and_leaves_the_session_open(
     assert retried["status"] == "completed" and retried["output_text"] == "Back again."
 
 
+async def test_an_expired_sessions_close_is_kept_when_its_response_is_refused(
+    client: AsyncClient, project: dict[str, Any], upstream: Upstream
+) -> None:
+    """#1409: the response finds its session expired and closes it — the key's spend booked, the key
+    revoked at the gateway — before refusing it. The refusal must not roll that close back: the
+    database would keep open a session whose key the gateway has revoked."""
+    from datetime import timedelta
+
+    from choregos_api.db.models import AgentSessionRecord
+    from choregos_api.db.session import session_scope
+    from choregos_core import utcnow
+
+    await _agent(client)
+    upstream.model.say("Order 42 shipped yesterday.")
+    session_id = (await _ask(client, "Where is order 42?")).json()["session_id"]
+    (key_id,) = upstream.gateway.keys
+    async with session_scope() as db:
+        record = await db.get(AgentSessionRecord, session_id)
+        assert record is not None
+        record.expires_at = utcnow() - timedelta(seconds=1)
+
+    refused = await _ask(client, "And now?", session_id=session_id)
+
+    assert refused.status_code == 409 and "closed (expired)" in refused.text, refused.text
+    assert upstream.gateway.revoked == [key_id]
+    read = (await client.get(f"{ORG}/agent-sessions/{session_id}")).json()
+    assert (read["status"], read["reason"]) == ("closed", "expired"), "the close the gateway saw is kept"
+    assert read["events"][-1]["type"] == "session.closed"
+    (row,) = await _key_rows()
+    assert row.revoked
+    (line,) = [entry for entry in await _ledger() if entry.kind != "tool"]
+    assert line.session_id == session_id
+    assert line.cost_usd == pytest.approx(upstream.gateway.spends[key_id].cost_usd)
+
+    again = await _ask(client, "Hello?", session_id=session_id)
+    assert again.status_code == 409 and upstream.gateway.revoked == [key_id], "closed once"
+    assert len([entry for entry in await _ledger() if entry.kind != "tool"]) == 1, "booked once"
+
+
 async def test_the_answer_streams_as_server_sent_events(
     client: AsyncClient, project: dict[str, Any], upstream: Upstream
 ) -> None:

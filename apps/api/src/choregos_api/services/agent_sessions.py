@@ -409,7 +409,12 @@ async def respond(
 
     if record.status != "open" or aware(record.expires_at) <= utcnow():  # type: ignore[operator]
         if record.status == "open":
+            from ..db.session import release_connection
+
             await close_session(session, record, reason="expired")
+            # The close revoked the key at the gateway: its rows are committed before the refusal
+            # below, which rolls the request's transaction back (#1409).
+            await release_connection(session)
         raise conflict(f"session {record.id} is {record.status} ({record.reason}): open a new one")
     resolved = await resolve_agent(
         session, record.org_id, project.id, f"{record.agent_slug}@{record.agent_version}"
