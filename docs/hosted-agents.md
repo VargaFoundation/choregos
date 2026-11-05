@@ -470,6 +470,13 @@ agent's own container, in a pod of its own.
   `/mcp/choregos` (`CHOREGOS_MCP_SERVERS=choregos`): each `tools/call` is judged by the guard rails,
   then sent through the internal API to the courtier as a prompt session's. No other MCP server is
   served. What the runner saw — refused model calls, tool calls — is journaled with the turn.
+- **A tool's answer keeps its meaning** (#1349), as a run's does through its tool server (S57-04):
+  the API answers `{status_code, text, remaining, suspicions}` (`callAgentSessionTool`), and the
+  container's model reads the injection guard's reasons first when `sandbox.prompt_injection: warn`
+  flagged the result, then the text, then `Tool calls left in this session: <n>.` when the policy caps
+  the calls (`budgets.tool_calls_per_run`, counted on the session). A status of 400 or more — a
+  provider's refusal, arguments the schema refuses (`400`), the cap reached (`429`), a result withheld
+  under `block` (`451`) — is `isError`. A session is offered reads only, so no answer is a proposal.
 - **The pod stops** at the first of: the session closed (`DELETE`, a spent key), `CHOREGOS_HOSTED_SESSION_IDLE_S`
   without a response (600 s by default; each response restarts the wait), the session's expiry.
   Stopping fails the turns still waiting, cancels the pod and closes the session with that reason;
