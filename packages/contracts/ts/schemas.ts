@@ -278,6 +278,14 @@ export type PluginServer = {
   webhook?: {
     path: string;
   };
+  /** how the platform runs this server on its fake for the live eval matrix (#1372): the environment that switches it to its seeded fake instance, and the scenes that fake serves. It is never an administrator's configuration: none of its variables may be one the configuration reaches. The platform runs it only where the deployment serves eval fakes (`CHOREGOS_EVAL_FAKE_SCENES`), as a separate eval instance with no configuration and no egress, reached only by a connector the matrix bound to it */
+  fake?: {
+    env: {
+      [key: string]: string;
+    };
+    /** the scenes the fake serves; `default` when absent */
+    scenes?: Array<string>;
+  };
 };
 
 export type PluginTrackerProfileKey = string;
@@ -487,6 +495,8 @@ export type Plugin = {
     procedures?: Array<PluginGlob>;
     /** plugin server files (plugin-server.schema.json) */
     servers?: Array<PluginPath>;
+    /** agent cases of the core's eval matrix (#1372): YAML files in the core's agent-case format (`choregos_playbooks.evals.agents`, the runbook `live-eval-matrix.md`), named `plugin:<plugin>/<file stem>` by the matrix and played by it, never at install. A case names an agent of this plugin (or carries its own `agent_spec`), and a connector `plugin:<plugin>/<server>` names this plugin and a server it ships */
+    matrix_cases?: Array<PluginPath>;
   };
 };
 

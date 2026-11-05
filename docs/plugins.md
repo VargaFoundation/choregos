@@ -17,11 +17,13 @@ hello/
 ├── skills/greeting/SKILL.md         # a skill directory
 ├── templates/hello-flow/manifest.yaml   # a template, with its files
 ├── evals/greeter.yaml               # an eval suite naming one of the plugin's agents
+├── evals/matrix/greeting.yaml       # a matrix case of the core's eval matrix (`matrix_cases`, #1372)
 ├── procedures/connector.mcp.hello.md    # a procedure (ADR 0067 front matter)
 └── servers/hello.yaml               # an MCP server the platform runs (plugin-server.schema.json)
 ```
 
-A complete example lives in `tests/fixtures/plugins/hello/`.
+A complete example lives in `tests/fixtures/plugins/hello/`; `tests/fixtures/plugins/servicenow/` ships
+matrix cases and a server with a `fake`.
 
 **A plugin is what its manifest declares**: `plugin.yaml`, a `README.md` and a `LICENSE` at its root when
 present, and exactly the paths `contents` names — each file, every file under a skill or template
@@ -50,6 +52,7 @@ contents:
   evals: [evals/greeter.yaml]
   procedures: ["procedures/*.md"]   # the only list that may use *
   servers: [servers/hello.yaml]
+  # matrix_cases: [evals/matrix/greeting.yaml]   # agent cases of the core's eval matrix (#1372)
 ```
 
 ## What is checked
@@ -74,6 +77,11 @@ contents:
   [Knowledge bases](#knowledge-bases)); a source that reads a template input must name an input the
   template declares.
 - **Evals** match `plugin-evals.schema.json` and name an agent of the plugin (see [Evals](#evals)).
+- **Matrix cases** (`contents.matrix_cases`) are agent cases of the core's eval matrix, in the format
+  of the core's own (see [Matrix cases](#matrix-cases)): a mapping with a `task`, an `agent` of the
+  plugin (or the case's own `agent_spec`), `tools_cells` among `mcp` and `scripts`, and every connector
+  `plugin:<plugin>/<server>` naming this plugin and one of its servers, under that server's name; no two
+  cases of one file name.
 - **Procedures** go through the same parser as the core's (ADR 0067): front matter, fixed sections,
   links listed in `vendor_docs`, no secret-shaped string. A procedure gives the address of its server's
   webhook with `{{plugin_webhook_url:<plugin>/<server>}}`, filled with
@@ -89,7 +97,9 @@ contents:
   - operation names are unique;
   - an egress `from_fields` entry is a field of `config_schema`;
   - a server that `implements: [tracker]` declares every tool of the
-    [tracker profile](#the-tracker-profile), each with the profile's access.
+    [tracker profile](#the-tracker-profile), each with the profile's access;
+  - a server's `fake` ([On its fake](#on-its-fake-for-the-eval-matrix)) switches it with variables
+    that are neither `CHOREGOS_*` nor any its configuration reaches.
 
   An operation's `human_approval` is a floor: an organisation may raise it, never lower it. A tool the
   server serves but does not list is refused.
@@ -169,6 +179,24 @@ tracker (ADR 0118); a plugin's case may set it, a caller's work item may not. Th
 and every case that is not `live`; a failure refuses the plugin. A `live` case is validated, not run at
 install.
 
+### Matrix cases
+
+A matrix case is an agent case of the core's eval matrix (S57-09; [the eval matrix
+runbook](runbooks/live-eval-matrix.md#a-plugins-cases-1372)), in the same format as the core's own
+(`choregos_playbooks/evals/agent_cases/*.yaml`): its agent, its task, its doors (`tools_cells`), its
+connectors, its evidence, its scripted script and answers, its assertions. The matrix names it
+`plugin:<plugin>/<file stem>` (`plugin:servicenow/itsm-triage-similar-incidents`). A connector may be
+one of the plugin's servers:
+
+```yaml
+connectors:
+  servicenow: { kind: "plugin:servicenow/servicenow", scene: default }   # named after the server
+```
+
+The installer keeps matrix cases and never plays them: the matrix does, in a scripted cell against the
+server's fake (in the core's CI, a fake registered for the server) and in a live cell against the
+server's eval instance.
+
 ## Pack and index
 
 ```
@@ -236,6 +264,7 @@ installed. Any refusal leaves the organisation unchanged.
 | skills | the skill library, version 1, author `plugin:<plugin>/<skill>@<plugin version>` | its name |
 | templates | kept with their files | `plugin:<plugin>/<template>`, usable as a project's `template_ref` |
 | evals | kept; played at every install and upgrade | `<agent>/<file>` |
+| matrix cases | kept, never played at install; the live eval matrix reads them | `plugin:<plugin>/<file stem>` |
 | procedures | kept; `GET /procedures` lists them for the organisation's members | their id |
 | servers | run in the plugins namespace and governed as an organisation `mcp` connector ([Servers](#servers)) | the connector's name is the server's |
 
@@ -317,6 +346,27 @@ each is checked against the organisation's network bounds when it is typed (a de
 the server's NetworkPolicy lets through DNS and public addresses on those hosts' ports (never the
 cluster's, the node's or the metadata endpoint's addresses). Kubernetes cannot name a host: with
 `plugins.servers.egress: cilium` a `CiliumNetworkPolicy` narrows egress to those exact names.
+
+### On its fake, for the eval matrix
+
+A server may declare how the platform runs it on its fake for the live eval matrix (#1372):
+
+```yaml
+fake:
+  env: {SERVICENOW_FAKE: "1"}   # what switches it to its seeded fake instance
+  scenes: [default]             # the scenes that fake serves (`default` when absent)
+```
+
+Its variables are not configuration: none may be `CHOREGOS_*` or one a `config_schema` property or a
+`secret_fields` entry reaches, so no administrator switches a server to its fake. Where the deployment
+serves eval fakes (`CHOREGOS_EVAL_FAKE_SCENES=1`), and only there, the platform runs beside the server
+its **eval instance**: the same image, the fake's variables and the platform's token, nothing of the
+configuration, no egress, one replica (`<server>-fake-<org digest>`); the next reconcile deletes it once
+the switch is off. A connector reaches the eval instance only when the live matrix's seeding bound it
+(`fake_scene: <scene>` in its configuration), which every declaration and edit refuses (422); without the
+switch the field is ignored and the connector is the server's own instance. The seeding binds only a
+server's connector nobody configured, available to the selected projects and turned on for its eval
+projects.
 
 ### Images
 

@@ -24,6 +24,16 @@ schema the Deployment has no replica and the connector says `unconfigured`.
 
 The image follows the hosted-agent rules (ADR 0080 §8): pinned by digest (the contract), under
 `CHOREGOS_PLUGIN_SERVERS_REGISTRIES`, and signed per `CHOREGOS_HOSTED_COSIGN`.
+
+**The eval instance (#1372).** A server that declares its `fake` (the variables that switch it to its
+seeded fake, the scenes that fake serves) is also run, where the deployment serves eval fakes
+(`CHOREGOS_EVAL_FAKE_SCENES`) and only there, as a second set of objects (`fake_object`): the same image,
+the fake's variables and the platform's token, no configuration, no egress at all, one replica. It is
+deleted at the next reconcile once the switch is off. A connector reaches it only when the live eval
+matrix's seeding bound it (`fake_scene: <scene>` in its configuration, which every API write path
+refuses); without the switch that field is ignored, and the connector is the server's own instance. So
+the server an organisation configured keeps serving its projects: the matrix binds only a server's
+connector that nobody configured, turned on for its eval projects alone.
 """
 
 from __future__ import annotations
@@ -43,9 +53,9 @@ from choregos_adapters.plugin_servers import (
     PluginServerRuntime,
     ServerDeployment,
 )
-from choregos_adapters.registry import fakes_enabled
+from choregos_adapters.registry import FAKE_SCENE_FIELD, fakes_enabled
 from choregos_core.egress import host_port_of
-from choregos_core.plugins import Plugin
+from choregos_core.plugins import Plugin, configuration_variables
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -141,6 +151,12 @@ def object_name(org_id: str, server: str) -> str:
     return f"{server[:54]}-{hashlib.sha256(org_id.encode()).hexdigest()[:8]}"
 
 
+def fake_object_name(org_id: str, server: str) -> str:
+    """The name of a server's eval instance (#1372), a DNS label beside `object_name`'s. Its digest is not
+    `object_name`'s, so a server named `<other>-fake` of the same organisation never holds the name."""
+    return f"{server[:49]}-fake-{hashlib.sha256(f'{org_id}:fake'.encode()).hexdigest()[:8]}"
+
+
 def service_url(settings: Settings, name: str, port: int, path: str) -> str:
     return f"http://{name}.{settings.plugin_servers_namespace}.svc:{port}{path}"
 
@@ -151,13 +167,7 @@ def _operations(doc: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 def _env_names(doc: dict[str, Any]) -> dict[str, str]:
     """field -> the environment variable it reaches the server as: `x-env`, else the upper-cased name."""
-    properties = (doc.get("config_schema") or {}).get("properties") or {}
-    names: dict[str, str] = {}
-    for field in [*properties, *(doc.get("secret_fields") or [])]:
-        declared = properties.get(field)
-        env = declared.get("x-env") if isinstance(declared, dict) else None
-        names[str(field)] = str(env or str(field).upper())
-    return names
+    return configuration_variables(doc)
 
 
 def declaration(plugin: Plugin, doc: dict[str, Any], org_id: str, settings: Settings) -> dict[str, Any]:
@@ -180,6 +190,20 @@ def declaration(plugin: Plugin, doc: dict[str, Any], org_id: str, settings: Sett
         "webhook": doc.get("webhook"),
         "object": name,
         "url": service_url(settings, name, int(doc["port"]), paths["mcp"]),
+        # How it runs on its fake for the live eval matrix (#1372), and where that instance answers.
+        **_fake_declaration(doc, org_id, settings, paths["mcp"]),
+    }
+
+
+def _fake_declaration(doc: dict[str, Any], org_id: str, settings: Settings, path: str) -> dict[str, Any]:
+    fake = doc.get("fake")
+    if not isinstance(fake, dict):
+        return {}
+    name = fake_object_name(org_id, str(doc["name"]))
+    return {
+        "fake": {"env": dict(fake.get("env") or {}), "scenes": list(fake.get("scenes") or ["default"])},
+        "fake_object": name,
+        "fake_url": service_url(settings, name, int(doc["port"]), path),
     }
 
 
@@ -514,20 +538,93 @@ async def reconcile(session: AsyncSession, instance: OrgConnector, settings: Set
         egress_mode=settings.plugin_servers_egress,
     )
     await _apply(found.apply(d), instance)
+    await _reconcile_fake(found, instance, server, token, settings)
     instance.status = UNCONFIGURED if problems else DEPLOYED
     instance.last_error = ("configuration incomplete: " + "; ".join(problems))[:1000] if problems else None
     await session.flush()
     return instance.status
 
 
+def fake_deployment(server: dict[str, Any], org_id: str, token: str, settings: Settings) -> ServerDeployment:
+    """A server's eval instance (#1372): its image with its fake's variables and the platform's token,
+    nothing of the configuration, no egress, one replica."""
+    fake = server.get("fake") or {}
+    env = {str(k): str(v) for k, v in (fake.get("env") or {}).items()}
+    env[TOKEN_ENV] = token
+    return ServerDeployment(
+        name=str(server["fake_object"]),
+        namespace=settings.plugin_servers_namespace,
+        image=str(server["image"]),
+        port=int(server["port"]),
+        health_path=str(server["paths"]["health"]),
+        env=env,
+        labels={
+            "app.kubernetes.io/name": "choregos-plugin-server",
+            "app.kubernetes.io/managed-by": "choregos-api",
+            "choregos.dev/plugin": str(server["plugin"]),
+            "choregos.dev/server": str(server["server"]),
+            "choregos.dev/org": org_id,
+            "choregos.dev/fake": "true",
+        },
+        replicas=1,
+        runtime_class=settings.plugin_servers_runtime_class or None,
+        cpu=settings.plugin_servers_cpu,
+        memory=settings.plugin_servers_memory,
+        api_namespace=settings.plugin_servers_api_namespace,
+        egress=(),
+        egress_mode=settings.plugin_servers_egress,
+    )
+
+
+async def _reconcile_fake(
+    found: PluginServerRuntime, instance: OrgConnector, server: dict[str, Any], token: str, settings: Settings
+) -> None:
+    """The eval instance of a server that declares its fake: running where the deployment serves eval
+    fakes, deleted everywhere else (an absent one is already deleted)."""
+    from choregos_adapters.fakes.scenes import eval_fake_scenes_allowed
+
+    if not server.get("fake_object"):
+        return
+    if eval_fake_scenes_allowed():
+        await _apply(found.apply(fake_deployment(server, instance.org_id, token, settings)), instance)
+    else:
+        await _apply(found.delete(str(server["fake_object"])), instance)
+
+
 # -- the broker's client -----------------------------------------------------------------------------------
 
 
+def bound_fake(instance: OrgConnector) -> str | None:
+    """The scene a plugin server's connector is bound to on its eval instance (#1372): `fake_scene` in
+    its configuration, written by the live eval matrix's seeding only, honoured where the deployment
+    serves eval fakes and the server declares that scene; `None` otherwise — the connector is then the
+    server's own instance."""
+    from choregos_adapters.fakes.plugin_servers import bound_plugin_fake
+
+    server = instance.plugin_server
+    if server is None or not server.get("fake_url"):
+        return None
+    return bound_plugin_fake(server, instance.config)
+
+
+def refuse_fake_binding(config: dict[str, Any]) -> None:
+    """No declaration or edit binds a plugin server's connector to its eval instance (#1372): only the
+    live eval matrix's seeding writes `fake_scene`, as for a connector on a scene (S57-11a)."""
+    if FAKE_SCENE_FIELD in config:
+        raise unprocessable(
+            f"`{FAKE_SCENE_FIELD}` binds a server's connector to its eval instance for the live eval matrix "
+            "(#1372): only the matrix's seeding writes it, never a declaration or an edit",
+            [{"loc": ["body", "config", FAKE_SCENE_FIELD], "msg": "refused"}],
+        )
+
+
 async def server_endpoint(session: AsyncSession, instance: OrgConnector) -> tuple[str, str] | None:
-    """`(url, bearer token)` of a plugin's server; `None` for any other connector."""
+    """`(url, bearer token)` of a plugin's server — of its eval instance for a connector the live eval
+    matrix bound to it (`bound_fake`); `None` for any other connector."""
     server = instance.plugin_server
     if server is None:
         return None
+    url = str(server["fake_url"]) if bound_fake(instance) is not None else str(server["url"])
     resolved = await resolved_configuration(
         session,
         instance.org_id,
@@ -536,7 +633,7 @@ async def server_endpoint(session: AsyncSession, instance: OrgConnector) -> tupl
         {},
         {SERVER_TOKEN_FIELD: (instance.secret_refs or {})[SERVER_TOKEN_FIELD]},
     )
-    return str(server["url"]), str(resolved[SERVER_TOKEN_FIELD])
+    return url, str(resolved[SERVER_TOKEN_FIELD])
 
 
 async def plugin_client(session: AsyncSession, instance: OrgConnector) -> PluginServerClient | None:
@@ -575,6 +672,7 @@ __all__ = [
     "DEPLOYED",
     "SERVER_TOKEN_FIELD",
     "UNCONFIGURED",
+    "bound_fake",
     "check",
     "check_egress",
     "configuration_problems",
@@ -583,12 +681,15 @@ __all__ = [
     "declaration",
     "deprovision",
     "egress_of",
+    "fake_deployment",
+    "fake_object_name",
     "fake_tracker_server",
     "floor_policy",
     "object_name",
     "plugin_client",
     "provision",
     "reconcile",
+    "refuse_fake_binding",
     "runtime",
     "server_endpoint",
     "spec_of_connector",
