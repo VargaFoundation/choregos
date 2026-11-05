@@ -92,6 +92,13 @@ slug, served to the right project, with the right sources.
   an administrator's decision, because it would show one project's documents to the other.
 - A template applied again (a project whose workflows are reset) restores a source that was deleted
   from its base. Removing a template's source for good means removing it from the template.
+- A plugin upgrade gives the projects already born of its templates the bases the new version ships
+  (amendment, S51-06b): a project is born once, so without it an agent the upgrade brings refused every
+  run on a base its project never received (seen in production: `fon`, born before `fondation-requests`
+  0.6.0 shipped `infra-docs`). The same idempotent path as a birth; the `plugin.upgrade` audit entry
+  says what each project received. Upgrading to the version already installed runs the same path and
+  nothing else (`plugin.knowledge` audit entry): the repair for a project born before the fix. Archived
+  projects receive nothing.
 - Inputs given only at provisioning (`POST /projects/{id}/provision` with `inputs`) arrive after the
   bases were installed; a `github-repo` input falls back to the project's repository.
 

@@ -21,7 +21,7 @@ import yaml
 from choregos_core import template_yaml
 from httpx import AsyncClient
 from jsonschema import Draft202012Validator
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 
 from .agent_scopes_kit import add_member, as_user, make_project
 from .catalogue_kit import project_only
@@ -464,6 +464,76 @@ async def test_a_project_is_born_from_a_plugin_template_with_its_files(
         },
     )
     assert refused.status_code == 422
+
+
+async def test_an_upgrade_gives_the_projects_born_of_its_template_the_knowledge_it_now_ships(
+    client: AsyncClient, admin: str, offline: Path
+) -> None:
+    """A project is born once: the bases a template ships from a later version reach the projects
+    already born of it at the upgrade, or the agents that read them refuse every run (S51-06)."""
+    from choregos_api.db.models import KnowledgeBase, KnowledgeSource
+    from choregos_api.db.session import session_scope
+
+    target = _version(offline, "1.2.0", server=False)
+    docs = {
+        "slug": "hello-docs",
+        "name": "Hello documentation",
+        "serving_mode": "files",
+        "sources": [
+            {
+                "name": "docs",
+                "kind": "git",
+                "config": {"url": "https://github.com/varga-foundation/hello.git", "paths": ["docs/**/*.md"]},
+            }
+        ],
+    }
+    _edit(
+        target / "templates" / "hello-flow" / "manifest.yaml",
+        lambda d: d["defaults"].update(knowledge=[docs]),
+    )
+    await _install(client)
+    created = await client.post(
+        f"{ORG}/projects",
+        json={
+            "slug": "greeted",
+            "name": "Greeted",
+            "template_ref": "plugin:hello/hello-flow",
+            "config": {"slug": "greeted", "org": "varga"},
+        },
+    )
+    assert created.status_code == 201, created.text
+    upgraded = await client.post(f"{ORG}/plugins/hello/upgrade", json={"version": "1.2.0"})
+    assert upgraded.status_code == 200, upgraded.text
+    async with session_scope() as session:
+        base = (
+            await session.execute(select(KnowledgeBase).where(KnowledgeBase.slug == "hello-docs"))
+        ).scalar_one()
+        assert (base.owner_project, base.projects) == ("greeted", ["greeted"])
+        sources = (
+            await session.execute(
+                select(KnowledgeSource.name).where(KnowledgeSource.knowledge_base_id == base.id)
+            )
+        ).scalars()
+        assert list(sources) == ["docs"]
+    again = await client.post(f"{ORG}/plugins/hello/upgrade", json={"version": "1.2.0"})
+    assert again.status_code == 200, again.text
+    async with session_scope() as session:
+        assert (await session.execute(select(func.count()).select_from(KnowledgeSource))).scalar_one() == 1, (
+            "upgrading again duplicates nothing"
+        )
+        # An organisation that upgraded before the fix has the project without the base: upgrading to
+        # the version it already has repairs it, and the audit says what each project received.
+        await session.execute(delete(KnowledgeBase).where(KnowledgeBase.slug == "hello-docs"))
+    repaired = await client.post(f"{ORG}/plugins/hello/upgrade", json={"version": "1.2.0"})
+    assert repaired.status_code == 200, repaired.text
+    async with session_scope() as session:
+        base = (
+            await session.execute(select(KnowledgeBase).where(KnowledgeBase.slug == "hello-docs"))
+        ).scalar_one()
+        assert base.projects == ["greeted"]
+    audit = (await client.get("/api/v1/audit")).json()["items"]
+    repairs = [a["payload"]["knowledge"] for a in audit if a["action"] == "plugin.knowledge"]
+    assert repairs == [{"greeted": {"created": ["hello-docs"]}}]
 
 
 async def test_procedures_of_a_plugin_are_served_to_the_organisation_only(
