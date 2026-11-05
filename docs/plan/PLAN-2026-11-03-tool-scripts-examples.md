@@ -35,19 +35,22 @@ The YAML below is the sketch the stream started from. The cases as they run are 
 - **Assertions.** `answer_contains_each`, `answer_mentions_flagged_source` and `answer_matches_reference` are
   not assertions: they are `answer_must_contain` (the decision paths, the flagged host, the computed values).
   `calls_by_origin` and `max_model_requests` take a `cell`; the cases also assert the `mcp` cell's origins.
-- **The platform's bounds.** A tool result is bounded at 64 KiB, its text and its `structuredContent`
-  together. E1 reads the rules one interface at a time (the whole list is 87 KB as a result); E2's dataset
-  holds 132 drops, 42 for the top pair (at 310 and 142, the busiest namespaces' answers are cut); E6 reads
-  four months of bars (a year is 77 KB). Separately, the MCP door shows the model at most 20,000 characters
-  of an answer: E1's `lan` rules, nine of E2's twelve namespaces and all of E6's bars reach a model cut
-  there, while a script reads them whole (#1374).
+- **The platform's bounds.** A tool result is bounded at 64 KiB, its data counted once (#1374: a text
+  block that serializes its `structuredContent` is not counted again; before, both were, and a
+  connector's answer was cut at about 32 KiB of data). The datasets were sized under the old count: E1
+  reads the rules one interface at a time (the whole list, 44 KB of data, is now whole too); E2's dataset
+  holds 132 drops, 42 for the top pair; E6 reads four months of bars. The MCP door shows the model the
+  same as a script reads (#1374): compact JSON, the data once, cut only past 64 KiB. Before, it cut at
+  20,000 characters of indented JSON that held the data twice, and E1's `lan` rules, nine of E2's twelve
+  namespaces and all of E6's bars reached a model cut while a script read them whole.
 - **E1's data.** Rules are named `<interface>#<position>` (position among the interface's rules, from 1;
   pfSense's `id` is a position in the whole list); aliases hold `address`, not `content`; a rule's
   `interface` is a list; `PARTNERS` holds `PARTNER_CLOUD`, which holds `0.0.0.0/0`. Six decoys: `wan#3`
   (port 2222), `wan#30` (a block), `lan#2` (ICMP), `lan#5` (LAN source), `opt3#7` (disabled), `opt4#2`
   (management source).
-- **E5** is evidence-scripted in both cells: a script that calls `web_fetch` through `choregos_tools` gets
-  the result's `structuredContent` (what was fetched), not the page's text (#1373). Its
+- **E5** is evidence-scripted in both cells: it was written when a script that called `web_fetch` through
+  `choregos_tools` got the result's `structuredContent` (what was fetched), not the page's text (#1373,
+  fixed: `platform.web_fetch(url=…)` gives `{"text": <the page>, "structured": <what was fetched>}`). Its
   services are fictional (`flagpole.example.org`, `toggly.example.com`, `switchyard.example.net`), its
   injected page `compare.flagreviews.example`.
 - **E3 and C1** need the ServiceNow plugin server, which lives in `choregos-agents`: they are not in core

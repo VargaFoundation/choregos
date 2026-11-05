@@ -11,11 +11,16 @@ in words, where the cut cannot reach it:
   the result is read;
 - `remaining` is what the run's tool-call cap leaves: said last.
 
-The result's JSON is cut so that the whole text stays within `MAX_TEXT`; the notices never are. A
-provider's 4xx is an answer, not an outage: it is flagged as an error, its body handed back.
+The result is read as a script reads it through the tool bridge (#1374): compact JSON, its data
+once — a text block that serializes the result's `structuredContent` (a connector's answer as the
+broker wraps it, `web_search`) is left out, the structure says it; a text that says something else
+(`web_fetch`'s page) stays — and as much of it as the platform lets through: the API bounds a result
+to `RESULT_MAX_BYTES` (`CHOREGOS_BROKER_RESULT_MAX_BYTES`, 64 KiB by default) with its data counted
+the same way, and this JSON is cut only past that many characters, the notices beside it and never
+cut. A provider's 4xx is an answer, not an outage: it is flagged as an error, its body handed back.
 `structuredContent` is the API's answer as it came, `status_code` included, plus the same `notices`
-for a client that hands the model the structure rather than the text, when its JSON fits the same
-bound: half an object is not the object (the broker's rule), so a cut answer has none.
+for a client that hands the model the structure rather than the text, when its JSON fits `MAX_TEXT`:
+half an object is not the object (the broker's rule), so a cut answer has none.
 """
 
 from __future__ import annotations
@@ -24,10 +29,14 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
-from choregos_core.mcp import text_result
+from choregos_core.mcp import RESULT_MAX_BYTES, data_once, text_result
 
-#: What the agent reads of one relayed answer, notices included.
-MAX_TEXT = 20_000
+#: The room of the notices beside the result: the guard's reasons (each named once, a hundred
+#: characters at most), an unfinished write's action and decision path, the calls left.
+MAX_NOTICES = 4_096
+#: What the agent reads of one relayed answer, notices included: the result is cut only past the
+#: platform's own bound, so that the model reads as much of it as a script does (#1374).
+MAX_TEXT = RESULT_MAX_BYTES + MAX_NOTICES
 #: The status of an action a person decides before anything is done (ADR 0035).
 PENDING_APPROVAL = "pending_approval"
 _CUT = "\n[cut by the tool server: the first {shown} of {total} characters]"
@@ -40,8 +49,9 @@ def render_answer(answer: Mapping[str, Any]) -> dict[str, Any]:
     head = [line for line in (_flagged(answer.get("suspicions")), _unfinished(code, result)) if line]
     remaining = answer.get("remaining")
     tail = [] if remaining is None else [f"Tool calls left in this run: {remaining}."]
-    body = json.dumps(result, ensure_ascii=False, indent=2, default=str)
+    body = json.dumps(_read_once(result), ensure_ascii=False, separators=(",", ":"), default=str)
     # The room the body has once the notices are placed: a one-character body, minus that character.
+    # Notices within `MAX_NOTICES` leave it at least `RESULT_MAX_BYTES`.
     room = MAX_TEXT - (len(_compose(head, "-", tail)) - 1)
     structured: dict[str, Any] = {**({"notices": [*head, *tail]} if head or tail else {}), **answer}
     fits = len(json.dumps(structured, ensure_ascii=False, default=str)) <= MAX_TEXT
@@ -50,6 +60,18 @@ def render_answer(answer: Mapping[str, Any]) -> dict[str, Any]:
         is_error=code >= 400,
         structured=structured if fits else None,
     )
+
+
+def _read_once(result: Any) -> Any:
+    """The result as the model reads it: an MCP result with its data once (`data_once`), without a
+    `content` left empty by it; any other JSON as it came."""
+    if not isinstance(result, Mapping) or not isinstance(result.get("content"), list):
+        return result
+    whole = dict(result)
+    once = data_once(whole)
+    if once is whole or once["content"]:
+        return once
+    return {key: value for key, value in once.items() if key != "content"}
 
 
 def _compose(head: list[str], body: str, tail: list[str]) -> str:

@@ -293,6 +293,25 @@ CUT_RESULT = {
     ],
     "truncated": {"returned_bytes": 65000, "total_bytes": 99000},
 }
+#: `web_fetch` (`services/web_fetch.py`): the page's text in the text block, what was fetched in
+#: `structuredContent`; the tool declares no output schema.
+PAGE = "Flagpole licence\nFlagpole is released under the Apache-2.0 licence."
+FETCHED = {
+    "url": "https://flagpole.example.org/docs/licence",
+    "status": 200,
+    "content_type": "text/html",
+    "bytes": 812,
+    "truncated": False,
+    "redirects": 0,
+    "title": "Flagpole licence",
+}
+WEB_FETCH_RESULT = {"content": [{"type": "text", "text": PAGE}], "structuredContent": FETCHED}
+#: `web_search` (`services/web_search.py`): its text is its `structuredContent` serialized.
+FOUND = {"backend": "fake", "results": [{"title": "Flagpole", "url": FETCHED["url"], "fetchable": True}]}
+WEB_SEARCH_RESULT = {
+    "content": [{"type": "text", "text": json.dumps(FOUND, ensure_ascii=False)}],
+    "structuredContent": FOUND,
+}
 #: A catalogue http tool: the provider's JSON as it came.
 CATALOGUE_RESULT = [{"city": "Lyon", "temperature": 12}]
 #: Under approval (`broker.propose_call`) and a governed write not finished (`write_through_action`).
@@ -329,6 +348,23 @@ def test_a_200_gives_the_result_unwrapped(tools: ModuleType, bridge: ScriptedBri
     assert _module("my_crm").class_()["rules"] == [{"id": 17}], "the text, parsed: it is JSON"
     assert _module("my_crm").call_() == "3 rules — wan", "the text: it is not JSON"
     assert _module("platform").web_fetch() == CATALOGUE_RESULT, "any other JSON as it came"
+
+
+def test_a_text_the_structure_does_not_hold_comes_beside_it(
+    tools: ModuleType, bridge: ScriptedBridge
+) -> None:
+    """#1373: a script's `web_fetch` gets the page's text, and what was fetched beside it, as the
+    model reads both through its MCP tools; a text that is the structure serialized adds nothing."""
+    bridge.answer("web_fetch", _answer(WEB_FETCH_RESULT))
+    bridge.answer("search__find", _answer(WEB_SEARCH_RESULT))
+    bridge.answer("my-crm__call", _answer(MCP_RESULT))
+
+    page = _module("platform").web_fetch(url=FETCHED["url"])
+    assert page == {"text": PAGE, "structured": FETCHED}
+    assert page["text"].splitlines()[0] == "Flagpole licence", "the page, which a script reads"
+    assert _module("search_").find(query="flagpole") == FOUND, "the text serializes it: the data, once"
+    # Without an output schema, a server's summary is something the structure does not say.
+    assert _module("my_crm").call_() == {"text": "1 alias: PARTNERS", "structured": DIRECTORY}
 
 
 def test_a_result_the_platform_cut_says_so_on_standard_error(

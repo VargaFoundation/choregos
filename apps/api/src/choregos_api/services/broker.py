@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from fnmatch import fnmatchcase
 from typing import Any, Literal
 
+from choregos_core.mcp import data_once, serializes
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -549,14 +550,18 @@ def bounded_result(
     result: dict[str, Any], declared: int | None = None, *, cut: bool = True
 ) -> dict[str, Any]:
     """A tool result as the agent may read it (#755): secrets masked in what it says, and no larger
-    than `result_limit(declared)`. A larger one keeps its text, cut, with `TRUNCATED` at the end;
-    its `structuredContent` is dropped, since half an object is not the object. `cut=False` masks
-    only: a job reads the answer, not a model (S40-13b)."""
+    than `result_limit(declared)`, its data counted once (#1374): a text block that serializes its
+    `structuredContent` — how `_call` wraps a directory's answer, what MCP asks a server to write —
+    is not counted again, since an agent reads one or the other (the run's tool server shows the
+    model the structure, a script gets the structure); a text that says something else
+    (`web_fetch`'s page, a server's summary) is counted with it. A larger one keeps its text, cut,
+    with `TRUNCATED` at the end; its `structuredContent` is dropped, since half an object is not the
+    object. `cut=False` masks only: a job reads the answer, not a model (S40-13b)."""
     masked = _masked(result)
     if not cut:
         return masked
     limit = result_limit(declared)
-    total = len(_json(masked).encode("utf-8"))
+    total = len(_json(data_once(masked)).encode("utf-8"))
     if total <= limit:
         return masked
     kept = {k: v for k, v in masked.items() if k not in ("content", "structuredContent")}
@@ -666,14 +671,7 @@ def session_text(result: dict[str, Any]) -> str:
 
 
 def _serialized_in_text(result: dict[str, Any], structured: Any) -> bool:
-    for block in result.get("content") or []:
-        if isinstance(block, dict) and block.get("type") == "text":
-            try:
-                if json.loads(str(block.get("text", ""))) == structured:
-                    return True
-            except ValueError:
-                continue
-    return False
+    return any(serializes(block, structured) for block in result.get("content") or [])
 
 
 def readable_text(payload: Any) -> str:
