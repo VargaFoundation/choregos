@@ -15,7 +15,8 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from choregos_core.compat import EXTERNAL_ALIAS_REMOVAL, alias_names, replace_module
+from choregos_core import compat
+from choregos_core.compat import alias_names, replace_module
 
 #: A module as a renaming story leaves it: the English names, the module's own code reading them,
 #: and the typed former names kept in the source.
@@ -78,9 +79,14 @@ def test_former_name_reads_the_english_object(monkeypatch: pytest.MonkeyPatch) -
         assert "old" not in mod.__dict__
 
 
+def test_the_closed_window_constant_is_gone() -> None:
+    """The external aliases' window closed with 0.23.0 (S45-49): no release constant is left to cite."""
+    assert not hasattr(compat, "EXTERNAL_ALIAS_REMOVAL")
+
+
 def test_external_alias_warns_with_its_window(mod: types.ModuleType) -> None:
-    alias_names(mod.__name__, {"old": "new"}, removed_in=EXTERNAL_ALIAS_REMOVAL)
-    with pytest.warns(DeprecationWarning, match=r"use new.*0\.23\.0") as record:
+    alias_names(mod.__name__, {"old": "new"}, removed_in="9.9.0")
+    with pytest.warns(DeprecationWarning, match=r"use new.*9\.9\.0") as record:
         value = mod.old
     assert value is mod.new
     assert len(record) == 1

@@ -163,10 +163,20 @@ async def _children_open(setup: Fixture, count: int) -> dict[str, Any]:
 
 
 async def _waiting(env: Any, workflow_id: str) -> None:
+    from temporalio.service import RPCError, RPCStatusCode
+
     handle = env.client.get_workflow_handle(workflow_id)
 
     async def probe() -> bool:
-        return bool((await handle.query("status")).get("state") == "proposed")
+        try:
+            status = await handle.query("status")
+        except RPCError as error:
+            # `spawn_children` commits the child's row, its workflow id with it, and only then starts
+            # its interpreter: until that start lands, Temporal knows no such workflow (#1362).
+            if error.status == RPCStatusCode.NOT_FOUND:
+                return False
+            raise
+        return bool(status.get("state") == "proposed")
 
     await _until(f"{workflow_id} waits for its owner", probe)
 

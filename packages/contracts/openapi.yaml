@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Choregos API
-  version: 0.22.3
+  version: 0.23.1
   description: |
     The Choregos platform API. The console and the CLI use this API and nothing else.
     Auth: an OIDC session (cookie) or `Authorization: Bearer <api_token>`.
@@ -137,7 +137,9 @@ paths:
       description: >-
         A new slug leaves the old one as an alias (`Org.aliases`): old URLs, MCP and A2A addresses,
         qualified ids and IdP group names keep resolving to the organisation (ADR 0090). 409 when the
-        slug is another organisation's slug or alias.
+        slug is another organisation's slug or alias. `tool_scripts` switches tool scripts for the
+        organisation's runs (S57-05b), by its administrator only: `null` returns it to the
+        deployment's default.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/OrgUpdate" } } }
@@ -614,7 +616,7 @@ paths:
     post:
       tags: [actions]
       operationId: proposeAction
-      description: A governed action awaiting a decision (ADR 0035). Its effects must be declared (`declarer_un_effet`); nothing runs before the approval.
+      description: A governed action awaiting a decision (ADR 0035). Its effects must be declared (`declare_effect`); nothing runs before the approval.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/ActionCreate" } } }
@@ -1340,18 +1342,10 @@ paths:
                 required: [events, refusals, access]
                 properties:
                   events: { type: integer, description: Log events scanned }
-                  evenements:
-                    type: integer
-                    deprecated: true
-                    description: Former name of `events`, emitted for one release (ADR 0046, S45-02)
                   inferred:
                     type: integer
                     description: >-
                       Permission decisions whose kind was inferred because the agent did not state it
-                  deduites:
-                    type: integer
-                    deprecated: true
-                    description: Former name of `inferred`, emitted for one release (ADR 0046, S45-02)
                   refusals: { type: integer, description: Total number of denied requests }
                   tool_cost_eur: { type: number, description: "What the catalogue tools called by the run cost, in euros" }
                   chain:
@@ -1394,19 +1388,6 @@ paths:
                         requests: { type: integer, description: How many times the agent asked for it }
                         refusals: { type: integer, description: How many of those requests were denied }
                         reasons: { type: array, items: { type: string } }
-                  acces:
-                    type: array
-                    deprecated: true
-                    description: Former name of `access`, emitted for one release (ADR 0046, S45-02)
-                    items:
-                      type: object
-                      required: [nature, target, requests, refusals]
-                      properties:
-                        nature: { type: string, enum: [read, write, execute, network, tool, autre] }  # lang: fr-ok alias:external
-                        target: { type: string }
-                        requests: { type: integer }
-                        refusals: { type: integer }
-                        motifs: { type: array, items: { type: string } }
   /runs/{id}/transcript:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -3631,7 +3612,6 @@ paths:
         - { name: ce-id, in: header, required: true, schema: { type: string } }
         - { name: X-Choregos-Secret, in: header, required: false, schema: { type: string }, description: "The shared webhook secret; `token` may carry it instead" }
         - { name: token, in: query, required: false, schema: { type: string }, description: "The shared webhook secret, for a sink that is set by a URL and adds no header" }
-        - { name: jeton, in: query, required: false, deprecated: true, schema: { type: string }, description: "Former name of `token`; still accepted" }  # lang: fr-ok alias:external
       requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
       responses: { "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
   /webhooks/argocd:
@@ -3849,6 +3829,11 @@ paths:
                   status_code: { type: integer }
                   result: {}
                   remaining: { type: integer, nullable: true }
+                  result_max_bytes:
+                    type: integer
+                    minimum: 1
+                    nullable: true
+                    description: "The bound the API held `result` to, in bytes of JSON, its data counted once (#1383): the operation's, catalogue entry's or plugin tool's own cap, else `CHOREGOS_BROKER_RESULT_MAX_BYTES` (a page of `web_fetch`, a search), never above `CHOREGOS_BROKER_RESULT_CEILING_BYTES`. The run's tool server shows the model the result up to it, so that both doors read the same amount of it (ADR 0122 §8). `null` when nothing was bounded: a proposal (202 under approval), a job step's read (masked, never cut)."
         "400": { description: "Arguments refused by the tool's schema, or an origin header that is not one of the values above or that the run contradicts (`job` from a run that is not a job step)", content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
         "404": { description: "Unknown tool, or not allowed for the project", content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
         "429": { description: Tool call cap reached, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
@@ -4085,7 +4070,9 @@ paths:
       operationId: callAgentSessionTool
       description: >-
         One of the container's tool calls, through the courtier, the injection guard and the ledger, as a prompt
-        session's. A tool the session is not granted is 404.
+        session's. A tool the session is not granted is 404. The answer says what a run's call says beside its
+        result (`callRunTool`, #1349): the status the call ended with, the calls the cap leaves the session, the
+        injection guard's flags; the runner puts them in what the container's model reads.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/AgentSessionToolCall" } } }
@@ -4582,10 +4569,6 @@ components:
               loc: { type: array, items: { type: string } }
               msg: { type: string }
               code: { type: string, description: Machine code of a workflow or policy issue }
-              deprecated_code:
-                type: string
-                deprecated: true
-                description: Former spelling of a code renamed to English, emitted for one release (ADR 0046)
               line: { type: integer }
               column: { type: integer }
         retry_after: { type: integer }
@@ -5832,9 +5815,20 @@ components:
         arguments: { type: object, additionalProperties: true }
     AgentSessionToolAnswer:
       type: object
-      required: [text]
+      required: [text, status_code, remaining, suspicions]
       properties:
-        text: { type: string }
+        text: { type: string, description: "What the model reads back: the courtier's text, or why the call was refused." }
+        status_code:
+          type: integer
+          description: "How the call ended, as `callRunTool`'s `status_code`: the server's status (a provider's answer of 400 or more is an error, its body in `text`), `400` for arguments the tool's schema refuses, `429` past the cap, `451` for a result withheld as a suspected injection (`sandbox.prompt_injection: block`)."
+        remaining:
+          type: [integer, "null"]
+          minimum: 0
+          description: "The calls the policy's cap (`budgets.tool_calls_per_run`) leaves the session; `null` without a cap."
+        suspicions:
+          type: array
+          items: { type: object, additionalProperties: true }
+          description: "The injection guard's flags on the result (`warn`: the result is in `text`; `block`: it is withheld), empty when none."
     A2aDeclaredCost:
       type: object
       description: What a remote agent costs, as the organisation declares it - A2A reports no figure; booked in the ledger as `external`.
@@ -7170,12 +7164,6 @@ components:
         path: { type: [string, "null"] }
         line: { type: [integer, "null"] }
         column: { type: [integer, "null"] }
-        deprecated_code:
-          type: [string, "null"]
-          deprecated: true
-          description: >-
-            Former spelling of a code renamed to English (`role.playbook_introuvable` is now
-            `role.playbook_not_found`), emitted for one release (ADR 0046, S45-02)
     WorkflowGraph:
       type: object
       required: [nodes, edges]
@@ -7859,6 +7847,7 @@ components:
         role: { oneOf: [{ $ref: "#/components/schemas/Role" }, { type: "null" }] }
         currency: { type: string, enum: [EUR, USD], default: EUR, description: "the currency the console shows spend in (S29-03); an organisation setting" }
         aliases: { type: array, items: { type: string }, default: [], description: "the slugs the organisation had before; they still resolve to it (ADR 0090). The organisation's id never changes, its slug is an address." }
+        tool_scripts: { type: [string, "null"], enum: [enabled, disabled, null], default: null, description: "whether the organisation's runs may be offered tool scripts (S57-05b, ADR 0122 §6): `enabled`, `disabled`, or null to follow the deployment's default (`CHOREGOS_TOOL_SCRIPTS`). Past it, the organisation's ceiling and each project's policy (`tools.scripts: offer`) decide; the deployment's brake (`CHOREGOS_TOOL_SCRIPTS_ALLOWED`) wins over it." }
     OrgCreate:
       type: object
       required: [slug, name]
@@ -7872,6 +7861,7 @@ components:
         slug: { type: [string, "null"], pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
         name: { type: [string, "null"], minLength: 1, maxLength: 200 }
         currency: { type: [string, "null"], enum: [EUR, USD, null], description: "the currency spend is shown in; org_admin" }
+        tool_scripts: { type: [string, "null"], enum: [enabled, disabled, null], description: "the organisation's switch for tool scripts (S57-05b); org_admin only, a platform administrator who is not one is refused (403). Absent: unchanged; `enabled` or `disabled`: the organisation's choice; null: back to the deployment's default. Audited in `org.update`." }
     WorkItemCreate:
       type: object
       required: [title]
@@ -8661,7 +8651,6 @@ components:
               loc: { type: array, items: { type: string } }
               msg: { type: string }
               code: { type: string }
-              deprecated_code: { type: string, deprecated: true }
               line: { type: integer }
               column: { type: integer }
         retry_after: { type: integer }

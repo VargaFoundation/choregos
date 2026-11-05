@@ -284,7 +284,8 @@ async def test_a_booking_that_fails_after_the_call_is_said_and_keeps_the_place(
 
 
 async def test_a_session_nobody_allowed_keeps_its_transaction_across_the_block(app: Any) -> None:
-    """The agent sessions and every other caller of the broker are not the route: unchanged."""
+    """A caller of the broker that did not opt in (every route but the tool route and the agent
+    sessions', #1376) keeps its transaction: unchanged."""
     from choregos_api.db.session import outside_the_transaction, session_scope
     from sqlalchemy import text
 

@@ -18,11 +18,11 @@ import pytest
 from choregos_api.catalogue import clear_cache
 from choregos_api.schemas import AgentSpec
 from choregos_contracts import ContextPack, ProjectConfig
-from choregos_core.catalogue_d_agents import entree
+from choregos_core.agent_catalogue import entry
 from choregos_orchestrator.activities.stage import _render_playbook, production_indicator_sources
 
 CATALOGUE = """
-outils:
+tools:
   - name: grafana_query
     description: Reads a Prometheus query through Grafana.
     provider: grafana
@@ -53,7 +53,7 @@ def _config(tools: list[str]) -> ProjectConfig:
 
 
 def _verifier(mcp_servers: list[dict[str, Any]] | None = None) -> Any:
-    catalogue_entry = entree("prod-verifier")
+    catalogue_entry = entry("prod-verifier")
     assert catalogue_entry is not None
     spec = AgentSpec.model_validate(
         {"instructions": catalogue_entry.document["spec"]["instructions"], "mcp_servers": mcp_servers or []}

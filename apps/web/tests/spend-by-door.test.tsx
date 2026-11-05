@@ -9,7 +9,9 @@ import { mockCostReport } from "@/mocks/data";
 /**
  * Spend shows the tool calls by the door they came through (S57-10, ADR 0122 §4): the model, a
  * script, a job step, and `—` for a line booked before the door was recorded; one ledger line is one
- * call. The organisation's page and a project's are the same page, narrowed.
+ * call. The organisation's page and a project's are the same page, narrowed. The console writes each
+ * door's name in sentence case ("None recorded" for `—`), and a row's header wraps, so that the card
+ * fits a phone's window (#1398; `e2e/letter-case` and `e2e/no-overflow` measure the built page).
  */
 const params = { current: new URLSearchParams() };
 vi.mock("next/navigation", () => ({
@@ -63,6 +65,13 @@ describe("tool calls by door, on the spend pages", () => {
       .filter(Boolean);
     expect(doors).toEqual(["model", "script", "job", "—"]);
     const line = (door: string) => table.querySelector(`[data-door="${door}"]`)!;
+    // Each row's header: the door's name, in sentence case, then what it means.
+    const names = within(table)
+      .getAllByRole("rowheader")
+      .map((header) => header.firstElementChild?.textContent);
+    expect(names).toEqual(["Model", "Script", "Job", "None recorded"]);
+    // A header cell does not wrap in the theme: the row's header must, or the card is wider than a phone.
+    for (const header of within(table).getAllByRole("rowheader")) expect(header).toHaveClass("whitespace-normal");
     expect(line("model")).toHaveTextContent("7 calls");
     expect(line("model")).toHaveTextContent("€0.50");
     expect(line("script")).toHaveTextContent("21 calls");

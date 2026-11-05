@@ -3,7 +3,8 @@
 Four things outside the code can break silently when a name moves: an Alertmanager route keyed on an
 alert name, a Grafana link keyed on a dashboard uid, a deployed alert's `runbook_url`, and an
 upgrade note that forgets one of them. The rendered rule, the dashboards and the page are read here,
-not a copy of them.
+not a copy of them. The `legacy_alertname` label and the runbook redirect stubs kept the former
+names for one window; both are gone since 0.24.0 (S45-49). The Grafana uids stay frozen.
 """
 
 from __future__ import annotations
@@ -87,15 +88,15 @@ def _rendered_rule(flavour: str) -> dict[str, Any]:
     return rule
 
 
-def test_alerts_have_english_names_and_their_legacy_label() -> None:
+def test_alerts_have_english_names_and_no_legacy_label() -> None:
     rules = _rules_from_the_template()
     by_name = {r["alert"]: r for r in rules}
     for former, new in RENAMED_ALERTS.items():
         assert new in by_name, f"{new} is missing: the alerts are {sorted(by_name)}"
         assert former not in by_name, f"{former} must not be an alert name any more"
-        assert by_name[new]["labels"]["legacy_alertname"] == former
     assert "ChoregosBacklogTemporal" in by_name
-    assert "legacy_alertname" not in by_name["ChoregosBacklogTemporal"]["labels"], "it was not renamed"
+    for rule in rules:
+        assert "legacy_alertname" not in rule["labels"], f"{rule['alert']}: the label was removed in 0.24.0"
 
 
 @pytest.mark.skipif(not HELM, reason="helm absent")
@@ -104,8 +105,9 @@ def test_the_rendered_rule_is_in_the_english_group(flavour: str) -> None:
     rule = _rendered_rule(flavour)
     (group,) = rule["spec"]["groups"]
     assert group["name"] == "choregos.platform"
-    labelled = {r["alert"]: r["labels"].get("legacy_alertname") for r in group["rules"]}
-    assert {new: former for former, new in RENAMED_ALERTS.items()}.items() <= labelled.items()
+    alerts = {r["alert"] for r in group["rules"]}
+    assert set(RENAMED_ALERTS.values()) <= alerts
+    assert not [r["alert"] for r in group["rules"] if "legacy_alertname" in r["labels"]]
 
 
 def test_runbook_urls_resolve() -> None:
@@ -123,12 +125,9 @@ def test_runbook_urls_resolve() -> None:
         assert "Moved" not in path.read_text("utf-8").splitlines()[0], f"{url} points at a redirect stub"
 
 
-def test_every_former_runbook_path_redirects_to_the_new_one() -> None:
+def test_every_former_runbook_stub_is_gone() -> None:
     for old, new in RENAMED_RUNBOOKS.items():
-        stub = (RUNBOOKS / old).read_text("utf-8")
-        assert stub.splitlines()[0] == "# Moved", old
-        assert "lang: fr-ok-file" in "\n".join(stub.splitlines()[:5]), old
-        assert f"]({new})" in stub, f"{old} does not link to {new}"
+        assert not (RUNBOOKS / old).exists(), f"{old}: the redirect stub was removed in 0.24.0"
         assert (RUNBOOKS / new).is_file(), new
 
 
@@ -148,5 +147,9 @@ def test_upgrade_notes_list_every_renamed_identifier() -> None:
         assert any(f"`{name}" in row for row in rows), f"the 'Renamed in 0.21' tables do not name {name}"
     for new in RENAMED_ALERTS.values():
         assert any(f"`{new}`" in row for row in rows), f"the tables do not name the new alert {new}"
-    assert "legacy_alertname" in section and "0.23.0" in section
+    assert "legacy_alertname" in section
+    upgrade = text.split("## Upgrading to 0.24", 1)[1].split("\n## ", 1)[0]
+    assert "`legacy_alertname`" in upgrade, "the 0.24 notes must say the label is gone"
+    for old in RENAMED_RUNBOOKS:
+        assert f"docs/runbooks/{old}" in upgrade, f"the 0.24 notes do not name the removed stub {old}"
     assert "choregos-plugins" in section, "the pod-security note must warn about the plugin namespace"

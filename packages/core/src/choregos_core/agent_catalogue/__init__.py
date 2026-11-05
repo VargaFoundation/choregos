@@ -29,7 +29,6 @@ from typing import Any, Literal
 
 import yaml
 
-from ..compat import EXTERNAL_ALIAS_REMOVAL, alias_names
 from ..plugins import Plugin, PluginError, opened
 
 FOLDER = Path(__file__).parent
@@ -269,27 +268,3 @@ __all__ = [
     "offline_directory",
     "skill_files",
 ]
-
-# ───────────────────── the former names (removed in 0.23.0, ADR 0098 §3) ─────────────────────
-# The typed assignments are for mypy and readers; `alias_names` makes a read, a patch and its undo
-# of a former name reach the English one.
-
-EntreeDuCatalogue = CatalogueEntry  # lang: fr-ok alias:external
-DOSSIER = FOLDER  # lang: fr-ok alias:external
-entrees = entries  # lang: fr-ok alias:external
-entree = entry  # lang: fr-ok alias:external
-skills_du_catalogue = catalogue_skills  # lang: fr-ok alias:external
-fichiers_de_la_skill = skill_files  # lang: fr-ok alias:external
-
-alias_names(
-    __name__,
-    {
-        "EntreeDuCatalogue": "CatalogueEntry",  # lang: fr-ok alias:external
-        "DOSSIER": "FOLDER",  # lang: fr-ok alias:external
-        "entrees": "entries",  # lang: fr-ok alias:external
-        "entree": "entry",  # lang: fr-ok alias:external
-        "skills_du_catalogue": "catalogue_skills",  # lang: fr-ok alias:external
-        "fichiers_de_la_skill": "skill_files",  # lang: fr-ok alias:external
-    },
-    removed_in=EXTERNAL_ALIAS_REMOVAL,
-)

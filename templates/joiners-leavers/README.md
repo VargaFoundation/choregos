@@ -18,7 +18,7 @@ the onboarding one.
 
 ## The registry (`ontology/`)
 
-When the ontology plugin is active (`CHOREGOS_ESSAI_ONTOLOGIE=1`), the project is born with the
+When the ontology plugin is active (`CHOREGOS_ONTOLOGY_TRIAL=1`), the project is born with the
 registry of what an onboarding opens and what an offboarding must close: `employee`,
 `contract`, `account` (and its groups), `group`, `device`, `badge`, and their links. An HR
 person's Claude queries it through the project's MCP door (`employee_search`,

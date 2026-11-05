@@ -198,7 +198,7 @@ def play(s: Scenario) -> dict[str, Any]:
             },
         }
         response = s.tool(token, "action_open_infra_pr", arguments)
-        assert response["status_code"] == 201, response
+        assert response["status_code"] == 202, response  # proposed, not executed (#1350)
         assert response["result"]["status"] == "pending_approval", response
         return str(response["result"]["proposal"])
 

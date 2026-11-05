@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from choregos_core.catalogue_d_agents import entree
+from choregos_core.agent_catalogue import entry
 from choregos_core.dsl.parser import parse_workflow
 
 TEMPLATE = Path(__file__).resolve().parents[3] / "templates" / "github-software-delivery"
@@ -64,4 +64,4 @@ def test_the_manifest_installs_exactly_the_agents_the_workflows_name() -> None:
     # `researcher` and `architect` are named by `study`, which is one of the three workflows.
     assert listed == named
     for slug in named:
-        assert entree(slug) is not None, f"`{slug}` is not in the catalogue"
+        assert entry(slug) is not None, f"`{slug}` is not in the catalogue"

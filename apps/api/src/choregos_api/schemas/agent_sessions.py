@@ -187,6 +187,13 @@ class AgentSessionToolCall(Dto):
 class AgentSessionToolAnswer(Dto):
     #: What the model reads back: the courtier's text, or why the call was refused.
     text: str
+    #: How the call ended, as a run's call says it (`callRunTool`, #1349): the server's status, `400`
+    #: for arguments its schema refuses, `429` past the cap, `451` for a result withheld.
+    status_code: int = 200
+    #: The calls the policy's cap (`budgets.tool_calls_per_run`) leaves the session; `None` without one.
+    remaining: int | None = None
+    #: The injection guard's flags on the result (`sandbox.prompt_injection` `warn` or `block`).
+    suspicions: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class AgentSessionTools(Dto):

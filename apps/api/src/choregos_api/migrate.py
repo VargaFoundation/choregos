@@ -4,8 +4,6 @@
     python -m choregos_api.migrate              # upgrade heads
     python -m choregos_api.migrate downgrade -1
 
-The former `python -m choregos_api.migrer` still works until 0.23.0 (ADR 0098).
-
 This is the command of the chart's migration Job. It replaces `alembic -c alembic.ini upgrade
 head`, which had two defects:
 
@@ -59,17 +57,8 @@ def extension_locations(group: str = MIGRATIONS_GROUP) -> list[pathlib.Path]:
     return locations
 
 
-def configuration(
-    *,
-    with_extensions: bool = True,
-    avec_les_greffons: bool | None = None,  # lang: fr-ok alias:external
-) -> Config:
-    """The Alembic configuration, built here rather than read from a file relative to the cwd.
-
-    The former keyword `avec_les_greffons` still works until 0.23.0 and wins when given.
-    """
-    if avec_les_greffons is not None:  # lang: fr-ok alias:external
-        with_extensions = avec_les_greffons  # lang: fr-ok alias:external
+def configuration(*, with_extensions: bool = True) -> Config:
+    """The Alembic configuration, built here rather than read from a file relative to the cwd."""
     config = Config()
     config.set_main_option("script_location", str(MIGRATIONS))
     config.set_main_option("path_separator", "os")

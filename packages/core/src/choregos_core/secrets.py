@@ -17,8 +17,6 @@ import os
 import re
 from collections.abc import Callable
 
-from .compat import EXTERNAL_ALIAS_REMOVAL, alias_names
-
 #: `scheme:rest`: a lowercase scheme, then whatever its resolver can read.
 _REFERENCE = re.compile(r"^([a-z][a-z0-9-]{1,31}):(.+)$")
 
@@ -154,15 +152,3 @@ __all__ = [
     "resolve",
     "schemas",
 ]
-
-SecretIntrouvable = SecretNotFound  # lang: fr-ok alias:external
-declarer_un_resolveur = declare_resolver  # lang: fr-ok alias:external
-
-alias_names(
-    __name__,
-    {
-        "SecretIntrouvable": "SecretNotFound",  # lang: fr-ok alias:external
-        "declarer_un_resolveur": "declare_resolver",  # lang: fr-ok alias:external
-    },
-    removed_in=EXTERNAL_ALIAS_REMOVAL,
-)

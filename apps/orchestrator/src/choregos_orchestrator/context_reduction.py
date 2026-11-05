@@ -1,10 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """The context reduction (ADR 0055) and the tool scripts (ADR 0122) a run starts with.
 
-Three switches each, the strictest wins: the deployment (`CHOREGOS_CONTEXT_REDUCTION`, Helm
-`runner.contextReduction.enabled`; `CHOREGOS_TOOL_SCRIPTS`, Helm `runner.toolScripts.enabled`) can
-refuse it whatever the policy says; the organisation's ceiling can forbid tool scripts (the policy
-the orchestrator reads is already brought down to it); the policy turns it on, per role if it wants.
+Three switches each, the strictest wins. Context reduction: the deployment
+(`CHOREGOS_CONTEXT_REDUCTION`, Helm `runner.contextReduction.enabled`) can refuse it whatever the policy
+says. Tool scripts: the organisation's switch (`tool_scripts_switched_on`: its `tool_scripts` setting,
+else the deployment's default `CHOREGOS_TOOL_SCRIPTS`, never past the deployment's brake
+`CHOREGOS_TOOL_SCRIPTS_ALLOWED`; S57-05b); the organisation's ceiling can forbid them (the policy the
+orchestrator reads is already brought down to it). Then the policy turns it on, per role if it wants.
 The stage input carries the result, so a run says what it ran with.
 """
 
@@ -13,6 +15,9 @@ from __future__ import annotations
 from typing import Any
 
 from choregos_contracts import ContextPolicy, StageContext, StageInput, ToolScripts, ToolsPolicy
+from choregos_core.tool_scripts_switch import OrgToolScripts, tool_scripts_switched_on
+
+from .config import OrchestratorSettings
 
 
 def resolve_context(policy: ContextPolicy, role: str, *, allowed_by_deployment: bool) -> StageContext:
@@ -30,21 +35,28 @@ def forced_context(values: dict[str, Any], *, allowed_by_deployment: bool) -> St
     return StageContext.model_validate(values)
 
 
-def resolve_tool_scripts(
-    policy_tools: ToolsPolicy, role: str, *, allowed_by_deployment: bool
-) -> ToolScripts | None:
+def tool_scripts_on_for(choice: OrgToolScripts | None, settings: OrchestratorSettings) -> bool:
+    """The organisation's switch for tool scripts (S57-05b): its choice, else the deployment's default,
+    never past the deployment's brake."""
+    return tool_scripts_switched_on(
+        choice, deployment_default=settings.tool_scripts, deployment_allowed=settings.tool_scripts_allowed
+    )
+
+
+def resolve_tool_scripts(policy_tools: ToolsPolicy, role: str, *, switched_on: bool) -> ToolScripts | None:
     """Whether this role's agent may call its tools from a script, and how many calls at once:
-    `None` (off) when the deployment refuses, or when the policy does not offer it to the role."""
-    if not allowed_by_deployment:
+    `None` (off) when the organisation's switch is off (`tool_scripts_on_for`), or when the policy does
+    not offer it to the role."""
+    if not switched_on:
         return None
     return policy_tools.for_role(role)
 
 
-def forced_tool_scripts(values: dict[str, Any] | None, *, allowed_by_deployment: bool) -> ToolScripts | None:
+def forced_tool_scripts(values: dict[str, Any] | None, *, switched_on: bool) -> ToolScripts | None:
     """An eval cell's door (S57-09): `{max_concurrent_calls}` in a `scripts` cell, `None` (the model's MCP
     tools only) in an `mcp` cell, or for a plan written before the cell had one. The cell decides instead
-    of the policy, never instead of the deployment."""
-    if values is None or not allowed_by_deployment:
+    of the policy, never instead of the organisation's switch or the deployment's brake."""
+    if values is None or not switched_on:
         return None
     return ToolScripts.model_validate(values)
 

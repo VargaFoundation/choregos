@@ -75,7 +75,7 @@ async def test_unconfigured_oidc_says_so(client: AsyncClient, admin: str) -> Non
 async def test_the_card_says_whether_organisations_bring_their_own_provider(
     client: AsyncClient, admin: str
 ) -> None:
-    from choregos_api.edition import reinitialiser
+    from choregos_api.edition import reset
     from choregos_api.tenant_sign_in import declare_sign_in_resolver
 
     key = "oidc.per_organisation"
@@ -84,7 +84,7 @@ async def test_the_card_says_whether_organisations_bring_their_own_provider(
     try:
         assert _by_key((await client.get(URL)).json())[key]["value"] == "declared by an extension"
     finally:
-        reinitialiser()
+        reset()
 
 
 async def test_mcp_rows_follow_mcp_oauth_enabled(

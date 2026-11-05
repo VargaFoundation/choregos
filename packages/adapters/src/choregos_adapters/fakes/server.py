@@ -16,18 +16,16 @@ no framework — that `uvicorn` serves: `python -m choregos_adapters.fakes.serve
 
 A token (`CONNECTOR_DEMO_TOKEN`) protects the MCP servers and is the fake Graph's application
 secret; when empty, they ask for none: the deployment's network policy is then the only door, which
-is fine for a demonstration only. The former variable name `CONNECTOR_DEMO_JETON` is still read.
+is fine for a demonstration only. The former variable name was removed in 0.24.0 (S45-49).
 """
 
 from __future__ import annotations
 
 import os
-import warnings
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 import httpx
-from choregos_core.compat import EXTERNAL_ALIAS_REMOVAL
 
 from .demo_cd import FakeDemoCd
 from .entra import FakeEntra
@@ -104,20 +102,8 @@ class DemoApplication:
 
 
 def demo_token() -> str:
-    """The token of the deployment: `CONNECTOR_DEMO_TOKEN`, else the former variable name."""
-    token = os.environ.get("CONNECTOR_DEMO_TOKEN")
-    if token is not None:
-        return token
-    former = os.environ.get("CONNECTOR_DEMO_JETON")  # lang: fr-ok alias:external
-    if former is None:
-        return ""
-    warnings.warn(
-        "CONNECTOR_DEMO_JETON is deprecated: use CONNECTOR_DEMO_TOKEN "  # lang: fr-ok alias:external
-        f"(removed in {EXTERNAL_ALIAS_REMOVAL}, ADR 0098)",
-        DeprecationWarning,
-        stacklevel=2,
-    )
-    return former
+    """The token of the deployment: `CONNECTOR_DEMO_TOKEN`, empty when unset."""
+    return os.environ.get("CONNECTOR_DEMO_TOKEN", "")
 
 
 def application() -> DemoApplication:

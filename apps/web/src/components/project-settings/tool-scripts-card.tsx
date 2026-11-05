@@ -11,13 +11,19 @@ import { useSession } from "@/lib/session";
 /** `max_concurrent_calls` when the policy does not say (policy.schema.json). */
 const DEFAULT_CONCURRENT_CALLS = 4;
 
+/** How the project's card names the organisation's switch (S57-05b). */
+const ORG_CHOICE_LABELS = { enabled: "enabled", disabled: "disabled", default: "the deployment's default" } as const;
+
 /**
- * Whether this project's agents may call their tools from a script (ADR 0122 §6, S57-10): the policy's
- * `tools` section and the organisation's ceiling, read-only. The policy is edited as YAML in the
- * guardrails; a form here would be a second editor of the same document.
+ * Whether this project's agents may call their tools from a script (ADR 0122 §6, S57-10): the
+ * organisation's switch (S57-05b), the policy's `tools` section and the organisation's ceiling,
+ * read-only. The policy is edited as YAML in the guardrails; a form here would be a second editor of the
+ * same document. The organisation's switch is its administrator's, in Administration.
  */
 export function ToolScriptsCard({ slug }: { slug: string }) {
-  const { org } = useSession();
+  const { org, orgs } = useSession();
+  const orgChoice = (orgs ?? []).find((o) => o.slug === org)?.tool_scripts ?? null;
+  const orgDisabled = orgChoice === "disabled";
   const policy = useQuery({ queryKey: ["policy", slug], queryFn: () => api.policy(slug) });
   const ceiling = useQuery({ queryKey: ["policy-ceiling", org], queryFn: () => api.policyCeiling(org), retry: false });
   const tools = policy.data?.json?.tools;
@@ -37,6 +43,12 @@ export function ToolScriptsCard({ slug }: { slug: string }) {
             tool bridge, and read only what the script prints. Each call is governed as the model&apos;s own: the same allowlist,
             cap, approvals and ledger.
           </p>
+          {orgDisabled && (
+            <Alert tone="warn" title="The organisation has tool scripts disabled">
+              No run of this project is offered them, whatever this policy says, until an organisation administrator switches
+              them on.
+            </Alert>
+          )}
           {forbidden && (
             <Alert tone="warn" title="The organisation forbids tool scripts">
               No run of this project is offered them, whatever this policy says: a policy that offers them is refused when it
@@ -46,8 +58,13 @@ export function ToolScriptsCard({ slug }: { slug: string }) {
           <dl className="grid grid-cols-[minmax(0,12rem)_minmax(0,1fr)] gap-x-4 gap-y-2">
             <dt className="text-ink-muted">Scripts</dt>
             <dd data-testid="tool-scripts-value">
-              <Badge tone={scripts === "offer" && !forbidden ? "info" : "neutral"}>{scripts}</Badge>
-              {forbidden && scripts === "offer" && <span className="ml-2 text-xs text-ink-muted">runs get off</span>}
+              <Badge tone={scripts === "offer" && !forbidden && !orgDisabled ? "info" : "neutral"}>{scripts}</Badge>
+              {(forbidden || orgDisabled) && scripts === "offer" && <span className="ml-2 text-xs text-ink-muted">runs get off</span>}
+            </dd>
+            <dt className="text-ink-muted">Organisation</dt>
+            <dd data-testid="tool-scripts-org">
+              {ORG_CHOICE_LABELS[orgChoice ?? "default"]}
+              {orgChoice === null && <span className="block text-xs text-ink-muted">its operator&apos;s choice, which this page does not see</span>}
             </dd>
             <dt className="text-ink-muted">Calls at once</dt>
             <dd className="tabular-nums" data-testid="tool-scripts-concurrency">
@@ -83,6 +100,8 @@ export function ToolScriptsCard({ slug }: { slug: string }) {
           <p className="text-xs text-ink-muted" data-testid="tool-scripts-edit">
             {forbidden ? (
               <>Only an organisation administrator can lift the ban, in the organisation&apos;s policy ceiling.</>
+            ) : orgDisabled ? (
+              <>Only an organisation administrator can switch them on, in Administration (Tool scripts).</>
             ) : (
               <>
                 Set in the project&apos;s policy, <Code>tools.scripts</Code>, <Code>tools.max_concurrent_calls</Code> and{" "}
@@ -93,7 +112,7 @@ export function ToolScriptsCard({ slug }: { slug: string }) {
                 .
               </>
             )}{" "}
-            The deployment can also turn tool scripts off for every project; this page does not see that switch.
+            The deployment&apos;s operator can also refuse them to every organisation; this page does not see that brake.
           </p>
         </div>
       )}

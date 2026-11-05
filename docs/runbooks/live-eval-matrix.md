@@ -22,9 +22,12 @@ order. Each input has a default that keeps a matrix started before it as it was:
 
 A live cell **forces** the door into the stage input, whatever the project's policy says, as it forces
 the context (`StagePlan.eval_cell.tools`): a `scripts` cell gives `tools.scripts:
-{max_concurrent_calls: 4}`, an `mcp` cell gives none. The deployment's kill switch still wins: with
-`CHOREGOS_TOOL_SCRIPTS` off (the default), a `scripts` cell is skipped at seeding, and a run prepared
-after the switch went off gets no bridge and is skipped as unfaithful. Only a cell with context `none`
+{max_concurrent_calls: 4}`, an `mcp` cell gives none. The eval organisation's switch still wins (S57-05b):
+unless the organisation enables tool scripts (`tool_scripts: enabled`), or follows a deployment default
+that is on (`CHOREGOS_TOOL_SCRIPTS`, off by default), and the deployment's brake is released
+(`CHOREGOS_TOOL_SCRIPTS_ALLOWED`, released by default), a `scripts` cell is skipped at seeding with the
+switch that refused it, and a run prepared after the switch went off gets no bridge and is skipped as
+unfaithful. Only a cell with context `none`
 **and** door `mcp` validates a backend (`model_profiles.validated_backends`): a run is offered neither
 a reduction nor scripts unless its policy says so.
 
@@ -58,17 +61,19 @@ as many model calls as its `requests`.
 | `netops-dropped-flows-top` | E2, Cilium drops, one read per namespace | real script, 13 calls |
 | `identity-offboarding` | E4, eight Entra writes under approval (case-local agent) | real script, 8 proposals |
 | `marketdata-volatility` | E6, twenty instruments, one computation (case-local agent) | real script, 20 calls |
-| `research-injected-page`, `…-block` | E5, six pages, one injected (`warn`, `block`) | evidence-scripted (MCP door) |
+| `research-injected-page`, `…-block` | E5, six pages, one injected (`warn`, `block`) | real script, 7 calls |
 | `py-rounding-bug`, `py-volume-discount` | C2, the coding control | the ticket's scripted change |
 
 E3 and C1 need the ServiceNow plugin server, which lives in `choregos-agents`: their cases belong in
-its `evals/` directory (#1372). E5 has no script yet: it was written when a script's `web_fetch` got the
-fetch's metadata, not the page (#1373, fixed: `["text"]` is the page, `["structured"]` what was
-fetched). Both doors read the same answer (#1374): the MCP door shows the model compact JSON of the
+its `evals/` directory (#1372). E5's script (#1378) searches, reads each page through the bridge
+(`platform.web_fetch(url=…)["text"]`, #1373) and keeps the ones the platform did not flag: it catches
+`Withheld` (`block`) and reads the guard's flag from what the client writes on standard error (`warn`).
+Both doors read the same answer (#1374): the MCP door shows the model compact JSON of the
 result, its data once, cut only past the platform's 64 KiB bound, and a script gets the same data;
 `apps/orchestrator/tests/test_eval_doors_parity.py` plays every call of E1, E2, E5 and E6 through both
-doors and compares them. An operation whose cap is raised above 64 KiB is still cut at 64 KiB through
-the MCP door, not through the bridge.
+doors and compares them. An answer bounded otherwise is read to the same place by both doors (#1383):
+the API names its bound (`result_max_bytes`: an operation's raised cap, the default for `web_fetch`,
+whose pages it now bounds too) and the MCP door cuts there.
 
 A case's file: `connectors` (each one's fake and its scene, `choregos_adapters.fakes.scenes`), `policy`
 (`writes: approval | allowed`, `prompt_injection: ignore | warn | block`), `web` (the scripted search
@@ -124,9 +129,18 @@ temporal workflow start --task-queue orchestrator --type EvalMatrix \
 `with_memory: [false]` is required: a live cell with memory is skipped. `publish: true` writes the
 cells to `GET /models/matrix` and the settings page.
 
-To compare the doors, add `"tools": ["mcp", "scripts"]` and `"repetitions": 10`, with the deployment's
-`choregos-orchestrator.runner.toolScripts.enabled: true` (`CHOREGOS_TOOL_SCRIPTS`). To play the agent
-cases too (S57-11's matrix, the examples page), name them and switch the eval fakes on (next section):
+To compare the doors, add `"tools": ["mcp", "scripts"]` and `"repetitions": 10`, once the eval
+organisation has tool scripts enabled — its administrator does it through the API, the deployment's flag
+stays as it is (S57-05b):
+
+```bash
+curl -X PATCH "$CHOREGOS_URL/api/v1/orgs/<eval-org>" -H "Authorization: Bearer $CHOREGOS_TOKEN" \
+  -H 'Content-Type: application/json' -d '{"tool_scripts": "enabled"}'
+```
+
+Set it back to `null` (the deployment's default) or `"disabled"` once the matrix is done. To play the
+agent cases too (S57-11's matrix, the examples page), name them and switch the eval fakes on (next
+section):
 
 ```bash
 temporal workflow start --task-queue orchestrator --type EvalMatrix \
@@ -136,12 +150,13 @@ temporal workflow start --task-queue orchestrator --type EvalMatrix \
             "tools": ["mcp", "scripts"], "repetitions": 10,
             "fixtures": ["py-rounding-bug", "py-volume-discount"],
             "agent_cases": ["netops-ssh-exposure", "netops-dropped-flows-top",
-                            "identity-offboarding", "marketdata-volatility"],
+                            "identity-offboarding", "marketdata-volatility",
+                            "research-injected-page", "research-injected-page-block"],
             "live": true, "publish": true}'
 ```
 
-That is 2 doors × (2 tickets + 4 agent cases) × 10 repetitions = 120 real stages. The two tickets are
-C2, the coding control; E5 (`research-injected-page*`) is left out: a live cell skips it (#1378).
+That is 2 doors × (2 tickets + 6 agent cases) × 10 repetitions = 160 real stages. The two tickets are
+C2, the coding control.
 
 ## Agent cases in a live cell (S57-11a)
 
@@ -161,7 +176,12 @@ organisation (`apps/orchestrator/src/choregos_orchestrator/eval_live_cases.py`):
   `selected_projects` and turned on for the case's project alone. Its operations are its type's, `allowed`
   at the organisation; with the case's `writes: approval` (the default) the case's project tightens every
   write to `approval`, so a write is proposed, never played;
-- the agent: a **catalogue** agent (`netops`) is resolved as for any run, so the organisation must have
+- for a case with a `web:` (E5, #1378), its **fake web**: one `web_search` organisation connector named
+  `web-<case>`, of type `fake`, its configuration `{fake_scene: web, fake_web: <the case's web>}` (its
+  search results and its pages, the injected one included), `selected_projects` and turned on for the
+  case's project alone, brought up to date when the case's pages change; the case's project policy
+  allows the hosts of its pages (`sandbox.network.allow_domains`) and does not close web search;
+- the agent: a **catalogue** agent (`netops`, `researcher`) is resolved as for any run, so the organisation must have
   installed it; a **case-local** one (`agent_spec`: `identity-operator`, `analyst`) is registered as a
   project agent of the case's project, its connectors the case's, `workspace: none`, `memory: none`, a new
   version only when its spec changes;
@@ -175,6 +195,16 @@ built as its type says, from a configuration that points nowhere, and the seedin
 (`the deployment does not serve eval fakes`). No person, project or organisation can set the field: every
 declaration and edit of a connector refuses it (422, `registry.validate_config`), whatever the deployment
 allows; only the seeding, which writes its rows itself, does.
+
+**Which pages a fake web serves** (#1378). Under the same switch, a project a fake web is turned on for
+searches the case's results (`web_search`, that connector before any other backend of the organisation)
+and reads the case's pages (`web_fetch`: a fake client holding them, a resolver that answers their hosts
+and no other, so any other address is a `502 does not resolve`). Everything else is the platform's own:
+the organisation's ceiling must open web search (`web_search.mode: allow`, its `backends`, if listed,
+including `fake`), the run's network decides which hosts are read, `robots.txt` and the rates are
+checked, and the injection guard flags (`warn`) or withholds (`block`, 451) the injected page whichever
+door read it. Without the switch the fields are ignored: the connector is the `fake` type's own backend
+and `web_fetch` reads the network.
 
 **What is never touched.** A connector of the case's name that is not the matrix's (another type, another
 scene, a secret, an address, another author), or an agent of the case-local slug that is not the case
@@ -200,9 +230,8 @@ cell's `invalid` counts it, and it is in no rate, no median and no pair of the c
 network policy refused has an event and no ledger line (ADR 0070) and reads as a mismatch; the fake
 scenes reach no network.
 
-**What a live cell does not play.** E5 (`research-injected-page`, `…-block`): its tools are `web_search`
-and `web_fetch`, which read the internet from the API, not the case's `web:` pages (#1378). A case with no
-connector (`netops-dropped-flow`, the netops agent's own eval). E3 and C1 live in `choregos-agents`
+**What a live cell does not play.** A case with no connector and no `web:` (`netops-dropped-flow`, the
+netops agent's own eval). E3 and C1 live in `choregos-agents`
 (#1372).
 
 ### What the operator provides, on dev
@@ -218,19 +247,28 @@ connector (`netops-dropped-flow`, the netops agent's own eval). E3 and C1 live i
    choregos-orchestrator:
      runner:
        toolScripts:
-         enabled: true        # CHOREGOS_TOOL_SCRIPTS: the `scripts` cells
+         allowed: true        # CHOREGOS_TOOL_SCRIPTS_ALLOWED: the brake released (the default)
        contextReduction:
          enabled: true        # only for cells with a context other than `none`
    ```
 
-   Switch `CHOREGOS_EVAL_FAKE_SCENES` off again once the matrix is done: while it is on, a connector the
-   seeding wrote is served by its scene.
+   Tool scripts for the `scripts` cells are the eval organisation's own switch (item 2), not the
+   deployment's default: `toolScripts.enabled` stays `false`, so no other organisation gets them. Switch
+   `CHOREGOS_EVAL_FAKE_SCENES` off again once the matrix is done: while it is on, a connector the seeding
+   wrote is served by its scene.
 2. An **eval organisation** holding the matrix's eval project (`Before`, above) and nothing else, so
-   that the names `pfsense`, `cilium`, `entra`, `marketdata` and the slugs `identity-operator`,
-   `analyst` are free in it.
-3. The catalogue agent `netops` **installed** in that organisation (Agents → Catalogue), on a backend
-   and a model the eval project's policy allows. Without it the netops cases skip, saying so.
-4. The real model gateway the eval project runs on (its connector, or the organisation's, or the
+   that the names `pfsense`, `cilium`, `entra`, `marketdata`, `web-<case>` and the slugs
+   `identity-operator`, `analyst` are free in it, with tool scripts enabled by its administrator
+   (`PATCH /orgs/<eval-org>` `{"tool_scripts": "enabled"}`, above).
+3. The catalogue agents `netops` and `researcher` **installed** in that organisation (Agents →
+   Catalogue), on a backend and a model the eval project's policy allows. Without them the netops cases
+   and E5 skip, saying so.
+4. For E5, **web search opened** by that organisation's ceiling: `web_search: {mode: allow}` in the
+   ceiling an administrator puts (`PUT /api/v1/orgs/<eval-org>/policy-ceiling`, the whole ceiling; a
+   `backends` list must include `fake`), and its network ceiling, if it lists hosts, allowing the
+   case's (`flagpole.example.org`, `toggly.example.com`, `switchyard.example.net`,
+   `compare.flagreviews.example`). The seeding never opens either.
+5. The real model gateway the eval project runs on (its connector, or the organisation's, or the
    deployment's): the agent cases' cost is what it bills.
 
 ## Read it

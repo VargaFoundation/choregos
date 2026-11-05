@@ -300,12 +300,12 @@ async def test_a_new_organisation_gets_the_default_plugins(
     from choregos_api import edition
 
     configure(DEFAULT, server=False)
-    edition.declarer(edition.ENTREPRISE, fonctions=frozenset({"multi-org"}))
+    edition.declare(edition.ENTERPRISE, features=frozenset({"multi-org"}))
     try:
         created = await client.post("/api/v1/orgs", json={"slug": "second", "name": "Second"})
         assert created.status_code == 201, created.text
     finally:
-        edition.reinitialiser()
+        edition.reset()
     listed = (await client.get("/api/v1/orgs/second/plugins")).json()["items"]
     assert [(p["name"], p["default"]) for p in listed] == [("hello", True)]
     assert (await client.get(f"{ORG}/plugins")).json()["items"] == [], "the other one waits for start-up"

@@ -30,7 +30,7 @@ import httpx
 from choregos_core import utcnow
 from choregos_core.egress import EgressRefusedError, host_port_of
 from choregos_core.mcp import INVALID_PARAMS, METHOD_NOT_FOUND
-from choregos_core.secrets import SecretIntrouvable
+from choregos_core.secrets import SecretNotFound
 from sqlalchemy import exists, func, or_, select
 
 from ..config import get_settings
@@ -288,7 +288,7 @@ async def _deliver(session: Any, config: A2aPushConfig) -> bool:
         return False
     try:
         sealed = await get_secret_store().get_many(session, org.id, [secret_name(config)])
-    except (SecretIntrouvable, SecretStoreUnavailable) as lost:
+    except (SecretNotFound, SecretStoreUnavailable) as lost:
         _end(config, f"the signing secret cannot be read: {lost}")
         return False
     stored = json.loads(sealed[secret_name(config)])

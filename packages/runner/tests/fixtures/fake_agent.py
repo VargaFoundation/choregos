@@ -295,6 +295,8 @@ def main() -> int:
                     _write(target, write)
 
             outgoing_id = _report_tool_calls(session_id, plan.get("tool_calls", []), outgoing_id)
+            outgoing_id = _fs_writes(session_id, plan.get("fs_writes", []), outgoing_id)
+            outgoing_id = _shell(session_id, plan.get("shell", []), workspace, outgoing_id)
             _unasked(plan.get("unasked", []))
             _http(plan.get("http", []))
             _scripts(plan.get("scripts", []), workspace)
@@ -365,6 +367,95 @@ def _report_tool_calls(session_id: str, calls: list[dict[str, Any]], outgoing_id
                     "params": {"sessionId": session_id, "update": update},
                 }
             )
+    return outgoing_id
+
+
+def _fs_writes(session_id: str, writes: list[dict[str, Any]], outgoing_id: int) -> int:
+    """`fs_writes`: writes the way a file-write tool makes them when the client serves the file system
+    (Claude Code's Write through the ACP adapter): the permission first, then `fs/write_text_file`. Each
+    outcome — `refused`, `written` or the client's error — goes to `$HOME/fs_writes.json`, in order."""
+    if not writes:
+        return outgoing_id
+    outcomes: list[str] = []
+    for write in writes:
+        outgoing_id += 1
+        path, content = write["path"], write.get("content", "")
+        response = request(
+            outgoing_id,
+            "session/request_permission",
+            {
+                "sessionId": session_id,
+                "toolCall": {
+                    "toolCallId": f"tc-{outgoing_id}",
+                    "title": f"Write {path}",
+                    "kind": "edit",
+                    "rawInput": {"file_path": path, "content": content},
+                },
+                "options": [
+                    {"optionId": "allow_once", "name": "Allow", "kind": "allow_once"},
+                    {"optionId": "reject_once", "name": "Reject", "kind": "reject_once"},
+                ],
+            },
+        )
+        if not _is_allowed(response):
+            outcomes.append("refused")
+            continue
+        outgoing_id += 1
+        answer = request(
+            outgoing_id, "fs/write_text_file", {"sessionId": session_id, "path": path, "content": content}
+        )
+        error = (answer or {}).get("error")
+        outcomes.append(
+            "written" if answer is not None and error is None else str((error or {}).get("message"))
+        )
+    (Path(os.environ["HOME"]) / "fs_writes.json").write_text(json.dumps(outcomes), encoding="utf-8")
+    return outgoing_id
+
+
+def _shell(session_id: str, commands: list[list[str]], workspace: Path, outgoing_id: int) -> int:
+    """`shell`: commands an agent's own shell tool runs, without asking (ADR 0094), reported the way a
+    shell tool's call is: announced, then its output — stdout and stderr together — as the call's
+    content, and its exit code, `failed` when it is not 0."""
+    for command in commands:
+        outgoing_id += 1
+        call_id = f"tc-{outgoing_id}"
+        announced = {"toolCallId": call_id, "title": " ".join(command), "kind": "execute"}
+        send(
+            {
+                "jsonrpc": "2.0",
+                "method": "session/update",
+                "params": {
+                    "sessionId": session_id,
+                    "update": {
+                        "sessionUpdate": "tool_call",
+                        **announced,
+                        "status": "pending",
+                        "rawInput": {"command": " ".join(command)},
+                    },
+                },
+            }
+        )
+        completed = subprocess.run(
+            command, cwd=workspace, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False
+        )
+        send(
+            {
+                "jsonrpc": "2.0",
+                "method": "session/update",
+                "params": {
+                    "sessionId": session_id,
+                    "update": {
+                        "sessionUpdate": "tool_call_update",
+                        "toolCallId": call_id,
+                        "status": "completed" if completed.returncode == 0 else "failed",
+                        "content": [
+                            {"type": "content", "content": {"type": "text", "text": completed.stdout}}
+                        ],
+                        "rawOutput": {"exit_code": completed.returncode},
+                    },
+                },
+            }
+        )
     return outgoing_id
 
 

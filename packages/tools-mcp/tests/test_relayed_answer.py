@@ -253,6 +253,44 @@ async def test_an_answer_over_the_bound_is_cut_past_the_platform_s_bound_and_kee
     assert "structuredContent" not in result, "half an object is not the object"
 
 
+async def test_an_answer_whose_bound_is_raised_is_read_up_to_it(
+    relay: tuple[McpServer, RelayingClient],
+) -> None:
+    """#1383: the API names the bound it held the result to (an operation's 256 KiB cap); the tool
+    server reads the result up to it, as a script's client does, and does not tell the model the bound."""
+    raw = _rules(1_000)  # 147 KB: over the default bound, under the operation's
+    answer = {"status_code": 200, "result": _wrapped(raw), "remaining": 2, "result_max_bytes": 262_144}
+    result = await _call(relay, answer)
+
+    text = _text(result)
+    body, tail = _parts(text)
+    assert len(body) > RESULT_MAX_BYTES and "[cut by the tool server" not in text, "whole"
+    assert json.loads(body) == {"structuredContent": raw} and tail == "Tool calls left in this run: 2."
+    small = await _call(relay, {**answer, "result": {"ok": 1}})
+    assert small["structuredContent"] == {
+        "notices": [tail],
+        "status_code": 200,
+        "result": {"ok": 1},
+        "remaining": 2,
+    }
+    assert "result_max_bytes" not in json.dumps(small), "the bound is the tool server's business"
+
+    bigger = _rules(2_000)  # 295 KB: over the operation's bound too
+    cut = _text(await _call(relay, {**answer, "result": _wrapped(bigger)}))
+    shown = int(cut.rsplit("[cut by the tool server: the first ", 1)[1].split(" ", 1)[0])
+    assert shown >= 262_144 and len(cut) <= 262_144 + MAX_NOTICES, "cut past the named bound, not before"
+
+
+@pytest.mark.parametrize("named", [None, True, 0, -1, "262144", 2.5e5])
+async def test_a_bound_that_is_not_a_positive_integer_is_the_platform_s_default(
+    relay: tuple[McpServer, RelayingClient], named: Any
+) -> None:
+    raw = _rules(1_000)
+    text = _text(await _call(relay, {"status_code": 200, "result": _wrapped(raw), "result_max_bytes": named}))
+    shown = int(text.rsplit("[cut by the tool server: the first ", 1)[1].split(" ", 1)[0])
+    assert len(text) <= MAX_TEXT and shown >= RESULT_MAX_BYTES, "cut at the platform's default bound"
+
+
 async def test_a_text_the_structure_does_not_hold_is_read_beside_it(
     relay: tuple[McpServer, RelayingClient],
 ) -> None:
@@ -268,12 +306,13 @@ async def test_a_text_the_structure_does_not_hold_is_read_beside_it(
 
 def test_the_platform_s_notices_fit_their_room() -> None:
     """The body has at least `RESULT_MAX_BYTES` when the notices fit `MAX_NOTICES`: the largest the
-    platform writes — every reason the injection guard names, an unfinished write, the calls left."""
+    platform writes — every reason the injection guard names, an unfinished write (or, where the
+    channel has no error flag, a failure: #1399), the calls left."""
     from choregos_core.injection import MOTIFS
-    from choregos_tools_mcp.answer import _compose, _flagged, _unfinished
+    from choregos_core.tool_answer import compose, failed, flagged, unfinished
 
     suspicions = [{"motif": label, "extrait": "x" * 120} for _, label in MOTIFS]
     running = {**PROPOSED, "action": "a" * 64, "status": "running", "decision_path": "/p/" + "s" * 64}
-    head = [_flagged(suspicions), _unfinished(202, running)]
-    notices = _compose([line for line in head if line], "", [f"Tool calls left in this run: {10**9}."])
-    assert len(notices) <= MAX_NOTICES, len(notices)
+    for head in ([flagged(suspicions), unfinished(202, running)], [failed(599), flagged(suspicions)]):
+        notices = compose([line for line in head if line], "", [f"Tool calls left in this run: {10**9}."])
+        assert len(notices) <= MAX_NOTICES, len(notices)

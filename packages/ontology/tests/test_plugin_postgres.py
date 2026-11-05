@@ -2,7 +2,7 @@
 """Are the plugin's tables REALLY isolated by organisation on PostgreSQL?
 
 On SQLite there is no RLS: this test runs only against a real PostgreSQL (`CHOREGOS_TEST_DATABASE_URL`,
-set by CI). The schema is the one of `python -m choregos_api.migrer` with the plugin installed — the
+set by CI). The schema is the one of `python -m choregos_api.migrate` with the plugin installed — the
 `ontology` branch included — and the session is the NON-superuser application role's, without which RLS
 would not apply.
 """
@@ -50,7 +50,7 @@ async def migrated_database(plugin: None, monkeypatch: pytest.MonkeyPatch) -> As
     from alembic import command
     from choregos_api.config import reset_settings_cache
     from choregos_api.db import session as db_session
-    from choregos_api.migrer import configuration
+    from choregos_api.migrate import configuration
 
     await _admin(
         "DROP SCHEMA public CASCADE",
@@ -145,7 +145,7 @@ async def test_onto0003_copies_the_proposals_under_forced_rls(
     from alembic import command
     from choregos_api.config import reset_settings_cache
     from choregos_api.db import session as db_session
-    from choregos_api.migrer import configuration
+    from choregos_api.migrate import configuration
 
     await _admin(
         "DROP SCHEMA public CASCADE",
