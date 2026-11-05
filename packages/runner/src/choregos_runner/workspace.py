@@ -8,8 +8,9 @@ identity. No credential is written into the image: the token is mounted in memor
 from __future__ import annotations
 
 import asyncio
+import re
 import tempfile
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar
@@ -36,7 +37,58 @@ GIT_ENV = {
     "GIT_TERMINAL_PROMPT": "0",
     "GIT_ASKPASS": "/bin/true",
     "GIT_CONFIG_NOSYSTEM": "1",
+    # No user/global config either: the runner's git needs none, and a `~/.gitconfig` (with its
+    # `include`/`includeIf`) is not the workspace's own configuration (#1345).
+    "GIT_CONFIG_GLOBAL": "/dev/null",
 }
+
+
+#: Config the runner forces on EVERY git command it runs itself, so the repository's own
+#: configuration cannot make git run a program (#1345). The agent can write `.git/config`,
+#: `.git/hooks/*` and `.git/info/attributes` from its shell — the confinement's write roots are the
+#: workspace, the temporary directory and `/dev` (ADR 0094) — and the runner's git runs as the
+#: runner, OUTSIDE that confinement; worse, the push carries the run's git token in
+#: `GIT_CONFIG_PARAMETERS` (`-c http.extraHeader`, S22-07), which every child git spawns would see,
+#: so no repository-controlled program may run while it is set (ADR 0115).
+#:
+#: Passed as command-line `-c`: the highest-precedence configuration source, so each entry wins over
+#: `.git/config` and over anything an `include`/`includeIf` pulls in. One entry per execution vector
+#: a repository config can carry, for the commands the runner actually runs (`commit`/`add`, `push`,
+#: and the `diff`/`status`/`log`/`checkout` of the scope check and the evidence):
+#:   - `core.hooksPath=/dev/null`  no `.git/hooks/*` runs (pre-commit, pre-push, post-checkout, …);
+#:   - `core.fsmonitor=false`      no fsmonitor program on `status`/`diff`/`add`;
+#:   - `core.sshCommand=false`     the runner only reaches the remote over https (S22-07) or a local
+#:                                 path (fakes); it never uses the ssh transport, so this is purely
+#:                                 defensive — a repository-set ssh command can never run;
+#:   - `diff.external=`            no external diff driver on `git diff`;
+#:   - `core.pager=cat`            output is captured through a pipe, never a tty, so git spawns no
+#:                                 pager; set defensively all the same;
+#:   - `credential.helper=`        the token travels in `http.extraHeader`, so no helper is needed;
+#:                                 an empty value resets the helper list, so a repository-set helper
+#:                                 never runs (it could otherwise read the token at push time).
+#: The per-driver `filter.<name>.{clean,smudge,process}` and `diff.<name>.{textconv,command}` carry
+#: an arbitrary name, so they cannot be listed here: `_driver_overrides` reads them from the
+#: effective config (which costs no code execution) and neutralises each one.
+RUNNER_GIT_HARDENING: tuple[tuple[str, str], ...] = (
+    ("core.hooksPath", "/dev/null"),
+    ("core.fsmonitor", "false"),
+    ("core.sshCommand", "false"),
+    ("diff.external", ""),
+    ("core.pager", "cat"),
+    ("credential.helper", ""),
+)
+
+#: A `filter`/`diff` driver key whose value git runs as a program (`git config --list --name-only`
+#: lowercases the section and the final key and keeps the subsection's case, so match that way).
+_DRIVER_KEY = re.compile(r"^(?:filter|diff)\..+\.(?:clean|smudge|process|textconv|command)$", re.I)
+
+
+def _config_flags(pairs: Iterable[tuple[str, str]]) -> list[str]:
+    """`-c key=value …`: command-line config, the source git reads last and trusts most."""
+    flags: list[str] = []
+    for key, value in pairs:
+        flags += ["-c", f"{key}={value}"]
+    return flags
 
 
 #: Variables that make git ignore where it is run and act on ANOTHER repository. A parent that
@@ -186,7 +238,33 @@ class Workspace:
         self.runner_paths: list[str] = list(RUNNER_FILES)
 
     async def git(self, *args: str, timeout: float = 300.0) -> CommandResult:
-        return await run_command(["git", *args], cwd=self.path, timeout=timeout)
+        """A git command of the RUNNER's, hardened so the repository's own configuration cannot make
+        it run a program (#1345): the static overrides plus a fresh sweep of the config's own
+        `filter`/`diff` drivers. Re-read every call, never cached: the agent may add a driver
+        between two of the runner's commands, and the sweep must then still catch it."""
+        flags = [*_config_flags(RUNNER_GIT_HARDENING), *await self._driver_overrides()]
+        return await run_command(["git", *flags, *args], cwd=self.path, timeout=timeout)
+
+    async def _git_hardened(self, *args: str, timeout: float = 300.0) -> CommandResult:
+        """The static overrides only, without the driver sweep: this is the git command the sweep
+        itself runs (`config --list`), so it must not call `_driver_overrides` and loop. Listing the
+        config runs no repository code — it touches no working-tree file — so it is safe without the
+        sweep."""
+        flags = _config_flags(RUNNER_GIT_HARDENING)
+        return await run_command(["git", *flags, *args], cwd=self.path, timeout=timeout)
+
+    async def _driver_overrides(self) -> list[str]:
+        """`-c filter.<n>.clean= …` for every `filter`/`diff` driver the effective config defines:
+        their values are programs git runs (clean/smudge on `add`/`commit`/`status`/`diff`/`checkout`,
+        textconv on `diff`), under names the agent chose, so we read them (no code runs) and set each
+        to empty. Before the repository exists (the first `init` of `prepare`), the listing fails and
+        there is nothing to neutralise yet."""
+        listing = await self._git_hardened("config", "--list", "--name-only", timeout=30.0)
+        if not listing.ok:
+            return []
+        names = (line.strip() for line in listing.stdout.splitlines())
+        keys = sorted({name for name in names if _DRIVER_KEY.match(name)})
+        return _config_flags((key, "") for key in keys)
 
     async def prepare(self, stage_input: StageInput, *, token: str | None = None) -> None:
         """Prepare the repository and the working branch.
@@ -381,7 +459,9 @@ class Workspace:
             return None
         await self.git("add", "-A")
         await self._unstage_runner_files()
-        result = await self.git("commit", "-m", message)
+        # `--no-verify` on top of `core.hooksPath=/dev/null`: a second lock on the commit hooks
+        # (pre-commit, commit-msg), which are the agent's to write and the runner's to run (#1345).
+        result = await self.git("commit", "--no-verify", "-m", message)
         if not result.ok:
             return None
         sha = await self.git("rev-parse", "HEAD")
@@ -403,8 +483,11 @@ class Workspace:
         return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
     async def push(self, branch: str, token: str | None = None) -> CommandResult:
+        # `--no-verify` on top of `core.hooksPath=/dev/null`: the `pre-push` hook is the one that
+        # read the token through `GIT_CONFIG_PARAMETERS` (#1345), so it must not run under any
+        # circumstance while the push carries `-c http.extraHeader` (S22-07).
         outcome = await self.git(
-            *_auth_header(token), "push", "--set-upstream", "origin", branch, timeout=300.0
+            *_auth_header(token), "push", "--no-verify", "--set-upstream", "origin", branch, timeout=300.0
         )
         return CommandResult(outcome.code, _redact(outcome.stdout, token), _redact(outcome.stderr, token))
 
