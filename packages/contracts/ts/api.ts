@@ -2288,7 +2288,7 @@ export type ThresholdPoint = {
 /** One question's calibration, for one source, model and model version (ADR 0121 §7). */
 export type QuestionCalibration = {
   question: string;
-  source: "decision_model" | "agent";
+  source: "decision_model" | "agent" | "router";
   model: string;
   model_version?: string | null;
   /** Every recorded decision. */
@@ -2312,6 +2312,16 @@ export type StepCalibration = {
   workflow: string;
   /** The state the step runs from. */
   step: string;
+  target_accuracy: number;
+  /** The observed decisions below which no threshold is suggested. */
+  min_observed: number;
+  questions?: Array<QuestionCalibration>;
+};
+
+/** A project's routing by a decision model, measured from the ledger (ADR 0123 §4): a routing is right when the workflow it answered is the one a person re-routed the work item to, or the one it ended in. */
+export type RoutingCalibration = {
+  /** The probability below which the default workflow takes the work item. */
+  min_confidence?: number | null;
   target_accuracy: number;
   /** The observed decisions below which no threshold is suggested. */
   min_observed: number;
@@ -3897,8 +3907,10 @@ export type HumanRequest = {
 };
 
 export type WorkItemAction = {
-  action: "pause" | "resume" | "stop" | "migrate" | "rerun_stage" | "mark_agent_ready";
+  action: "pause" | "resume" | "stop" | "migrate" | "rerun_stage" | "mark_agent_ready" | "reroute";
   workflow_def_id?: string | null;
+  /** `reroute`: the name of the workflow the work item moves to, at its initial state (ADR 0123). Accepted while a person is asked; 409 while a run is in progress or once the work item ended. */
+  workflow?: string | null;
   state_mapping?: {
     [key: string]: string;
   };
@@ -4654,6 +4666,7 @@ export interface Operations {
   getProvisionStatus: { method: "GET"; path: "/projects/{id}/provision"; body: never; response: ProvisionStatus };
   getRelayOutboundProxy: { method: "GET"; path: "/internal/orgs/{org}/outbound-proxy/{kind}"; body: never; response: RelayOutboundProxy };
   getRelease: { method: "GET"; path: "/releases/{id}"; body: never; response: Release };
+  getRoutingCalibration: { method: "GET"; path: "/projects/{id}/workflow-routing/calibration"; body: never; response: RoutingCalibration };
   getRun: { method: "GET"; path: "/runs/{id}"; body: never; response: Run };
   getRunAccess: { method: "GET"; path: "/runs/{id}/access"; body: never; response: {
   /** Log events scanned */
