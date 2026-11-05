@@ -557,3 +557,19 @@ async def test_the_fake_api_bounds_a_result_as_the_platform_does() -> None:
     refused = await api.call("pfsense__list_firewall_rules", {"interface": 3})
     assert refused.status_code == 400 and "schema" in refused.json()["detail"]
     assert (await api.call("pfsense__open_everything", {})).status_code == 404
+
+
+async def test_the_fake_api_cuts_a_long_page_as_the_platform_does() -> None:
+    """#1383: the API bounds `web_fetch` and names the bound; a page over it keeps its text up to it,
+    with the marker, and what was fetched beside it."""
+    case = evals.load_agent_case("research-injected-page")
+    assert case is not None
+    url = next(iter(case["web"]["pages"]))
+    case["web"]["pages"][url] = {**case["web"]["pages"][url], "text": "a line of a long page\n" * 5_000}
+    answer = (await eval_doors.EvalApi(case).call("web_fetch", {"url": url})).json()
+    result = answer["result"]
+    assert answer["result_max_bytes"] == eval_doors.RESULT_MAX_BYTES, "the bound, named as the API names it"
+    assert result["truncated"]["total_bytes"] > eval_doors.RESULT_MAX_BYTES
+    assert result["content"][0]["text"].startswith("a line of a long page\n")
+    assert result["content"][0]["text"].endswith("bytes; ask for less]")
+    assert result["structuredContent"]["url"] == url, "what was fetched, kept beside the cut page"

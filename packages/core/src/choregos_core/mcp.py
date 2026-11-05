@@ -22,9 +22,13 @@ VERSIONS: Final = ("2025-11-25", "2025-06-18", "2025-03-26")
 
 #: How much of one tool result an agent reads, in bytes of JSON, its data counted once (#755, #1374):
 #: the default of the API's `CHOREGOS_BROKER_RESULT_MAX_BYTES`, and the bound of what the run's tool
-#: server shows the model of a relayed result, so that a result the API passes whole reaches the
-#: model whole, as it reaches a script through the tool bridge (ADR 0122 §8).
+#: server shows the model of a relayed result whose answer names no bound of its own, so that a
+#: result the API passes whole reaches the model whole, as it reaches a script through the tool
+#: bridge (ADR 0122 §8). An answer bounded otherwise says so (`result_max_bytes`, #1383).
 RESULT_MAX_BYTES: Final = 65_536
+#: The most a declared cap may raise a result's bound to: the default of the API's
+#: `CHOREGOS_BROKER_RESULT_CEILING_BYTES`, and what the prompt loop lets through of one tool answer.
+RESULT_CEILING_BYTES: Final = 1_048_576
 
 #: JSON-RPC 2.0 codes used by MCP.
 PARSE_ERROR: Final = -32700

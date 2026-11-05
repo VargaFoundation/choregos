@@ -19,7 +19,9 @@ makes the request:
   `choregos_core.redaction`, as written and percent-decoded, and an address that redaction would change
   is refused (422 `url_redacted`) before any DNS lookup or robots.txt request: nothing is rewritten, nothing
   is sent. The tool sends no request body;
-- the answer is capped (2 MiB) and only text, HTML (as text), JSON and markdown come back;
+- the answer is capped (2 MiB read) and only text, HTML (as text), JSON and markdown come back; what
+  the agent reads of it is bounded like any tool result (`broker.bounded_result`, the platform's
+  default bound: the page's text up to it, with the marker, and what was fetched, #1383);
 - what comes back is third-party text: it goes through the injection guard like a connector's answer.
 
 The network is behind `WebClient`; `FakeWebClient` serves scripted pages to the tests and to
@@ -90,7 +92,8 @@ def announcement() -> dict[str, Any]:
         "description": (
             "Read a web page (GET or HEAD) through the platform. Only the hosts this run's network allows; "
             "robots.txt is obeyed and a host is never called faster than its rate: when told to wait, wait. "
-            "Text, HTML (returned as text), JSON and markdown only, at most 2 MiB."
+            "Text, HTML (returned as text), JSON and markdown only, at most 2 MiB read; a page longer "
+            "than the platform's bound on a tool result is cut, its end marked."
         ),
         "inputSchema": INPUT_SCHEMA,
     }

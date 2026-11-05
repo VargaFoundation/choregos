@@ -8,7 +8,7 @@ from functools import lru_cache
 from typing import Any, Literal
 
 from choregos_core.images import check_image_map
-from choregos_core.mcp import RESULT_MAX_BYTES
+from choregos_core.mcp import RESULT_CEILING_BYTES, RESULT_MAX_BYTES
 from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -165,8 +165,9 @@ class Settings(BaseSettings):
     #: the bound the run's tool server shows the model (`choregos_core.mcp.RESULT_MAX_BYTES`).
     broker_result_max_bytes: int = Field(default=RESULT_MAX_BYTES, ge=1024)
     #: The most an operation or a catalogue tool may raise its own cap to (S40-17): an organisation
-    #: that needs one large answer opens it for that operation, never for the whole platform.
-    broker_result_ceiling_bytes: int = Field(default=1048576, ge=1024)
+    #: that needs one large answer opens it for that operation, never for the whole platform. The
+    #: default is what the prompt loop lets through of one tool answer (`RESULT_CEILING_BYTES`).
+    broker_result_ceiling_bytes: int = Field(default=RESULT_CEILING_BYTES, ge=1024)
     allowed_agent_backends: list[str] = Field(default_factory=list)
     #: The hosts the API pod may reach, as the deployment's network policy lets it (`*.` wildcards
     #: allowed). Empty means the deployment does not say: the MCP catalogue then answers `unknown`

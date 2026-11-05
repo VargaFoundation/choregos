@@ -3813,6 +3813,11 @@ paths:
                   status_code: { type: integer }
                   result: {}
                   remaining: { type: integer, nullable: true }
+                  result_max_bytes:
+                    type: integer
+                    minimum: 1
+                    nullable: true
+                    description: "The bound the API held `result` to, in bytes of JSON, its data counted once (#1383): the operation's, catalogue entry's or plugin tool's own cap, else `CHOREGOS_BROKER_RESULT_MAX_BYTES` (a page of `web_fetch`, a search), never above `CHOREGOS_BROKER_RESULT_CEILING_BYTES`. The run's tool server shows the model the result up to it, so that both doors read the same amount of it (ADR 0122 §8). `null` when nothing was bounded: a proposal (202 under approval), a job step's read (masked, never cut)."
         "400": { description: "Arguments refused by the tool's schema, or an origin header that is not one of the values above or that the run contradicts (`job` from a run that is not a job step)", content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
         "404": { description: "Unknown tool, or not allowed for the project", content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }
         "429": { description: Tool call cap reached, content: { application/problem+json: { schema: { $ref: "#/components/schemas/Problem" } } } }

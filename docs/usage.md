@@ -1148,7 +1148,7 @@ what lands in the agent's context, so the broker holds every result, read or wri
 | :-- | :-- |
 | The server declares an `outputSchema` for the operation (captured at discovery) and its `structuredContent` does not match it, or is missing | `422`, `type: output_schema`, naming where and which rule failed — never the payload. A governed write is never refused this way: its effect already happened |
 | The result holds a secret (known token shapes, bearer/basic credentials, URL user-info, values of secret-named keys) | the value masked as `[REDACTED]`, in text blocks, embedded text resources and the strings of `structuredContent` |
-| The result weighs more than the operation's cap as JSON, its data counted once: a text block that serializes its `structuredContent` (how a connector that is not MCP is answered, what MCP asks a server to write) is not counted again, a text that says something else (`web_fetch`'s page) is (#1374) | its text, cut, ending with `[truncated by the platform: …]`, and `truncated: {returned_bytes, total_bytes}`; `structuredContent` is dropped |
+| The result weighs more than the operation's cap as JSON, its data counted once: a text block that serializes its `structuredContent` (how a connector that is not MCP is answered, what MCP asks a server to write) is not counted again, a text that says something else (`web_fetch`'s page) is (#1374) | its text, cut, ending with `[truncated by the platform: …]`, and `truncated: {returned_bytes, total_bytes}`; a `structuredContent` the text serializes is dropped (half an object is not the object); one the text does not say (what `web_fetch` fetched) stays whole beside the cut text when both fit the cap (#1383) |
 
 **The cap is per operation** (S40-17). By default it is the deployment's
 `CHOREGOS_BROKER_RESULT_MAX_BYTES` (64 KiB). An organisation administrator sets another for one
@@ -1194,8 +1194,12 @@ its data once — a text block that serializes its `structuredContent` is left o
 something else (`web_fetch`'s page) stays — and cut only past the platform's own bound, 65,536
 characters (`CHOREGOS_BROKER_RESULT_MAX_BYTES`' default, `choregos_core.mcp.RESULT_MAX_BYTES`), the
 notices outside the cut; a status of 400 or more is still `isError`. A result the API passes under the
-default bound therefore reaches the model whole; one whose operation raises its cap above 64 KiB is
-still cut there.
+default bound therefore reaches the model whole. The API says the bound it held the result to,
+`result_max_bytes` in its answer (#1383): an operation's, a catalogue entry's or a plugin tool's own
+cap (the ontology's 256 KiB pages), the default for `web_fetch` and `web_search`. The tool server
+reads the result up to that bound instead of its 65,536, and does not show it to the model; the
+prompt backend's loop lets through up to `CHOREGOS_BROKER_RESULT_CEILING_BYTES`' default (1 MiB,
+`choregos_core.mcp.RESULT_CEILING_BYTES`) and the notices.
 `structuredContent` carries the API's answer as it came, `status_code` included, with the same lines
 under `notices`, when its JSON fits the same bound. A hosted session's tools say the same around the
 text its model reads (#1349, [hosted agents](hosted-agents.md)). An ontology proposal does too (#1350): its
@@ -2615,8 +2619,11 @@ answers 429 (or 503 with `Retry-After`).
 - at most three redirects, each target going through every check above (a redirect to a host the run may
   not reach stops there);
 - the answer is text, HTML (returned as text, scripts and styles dropped), JSON or markdown, cut at
-  `max_bytes`; anything else is a `415`. What comes back is third-party text: it goes through the
-  prompt-injection guard like a connector's answer.
+  `max_bytes`; anything else is a `415`. What comes back is third-party text: it is masked and bounded
+  like any tool result (#1383), at `CHOREGOS_BROKER_RESULT_MAX_BYTES` (64 KiB by default) — a longer
+  page keeps its text up to the bound, ending with `[truncated by the platform: …]`, and what was
+  fetched beside it, so the model and a script read the same cut; a job step's page is masked, never
+  cut —, then goes through the prompt-injection guard like a connector's answer.
 
 The address is checked like a search query (ADR 0083 §5): if its path or query (as written or
 percent-decoded) holds what redaction would change, a remembered secret or a token or credential
@@ -2752,7 +2759,7 @@ what it gives the script is typed so that a script cannot read one outcome as an
 | `451` | `Withheld` raised: the result was withheld as a suspected injection, its `suspicions` named |
 | any other status of 400 or more, or an MCP result marked `isError` | `ToolError(status, body)` raised (`CapReached` and `Withheld` are `ToolError`s too) |
 | `suspicions` beside a result | the result, and one line per reason on standard error: `[choregos] result of <tool> flagged as a suspected injection: <reason>` |
-| a result the platform cut to its size bound | its text, and a line on standard error that says so: ask for less |
+| a result the platform cut to its size bound | its text (a page cut: `{"text", "structured"}`, the text ending with the platform's marker), and a line on standard error that says so: ask for less |
 
 `remaining()` gives the calls the run's cap still allows, after the last answer. A `503` from the run's
 tool server (a sidecar that has not yet read whether the run is offered scripts) and a tool server that
