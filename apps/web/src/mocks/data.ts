@@ -86,7 +86,17 @@ import type {
 } from "@/lib/types";
 import { normalizeSpec } from "@/lib/agent-diff";
 import { ApiError } from "@/lib/api";
-import type { McpGatewayPut, McpGatewayState, OutboundProxyPut, OutboundProxyState, StepCalibration, WorkflowAdopt, WorkflowCatalogueEntry } from "@/lib/types";
+import type {
+  McpGatewayPut,
+  McpGatewayState,
+  OutboundProxyPut,
+  OutboundProxyState,
+  QuestionCalibration,
+  RoutingCalibration,
+  StepCalibration,
+  WorkflowAdopt,
+  WorkflowCatalogueEntry,
+} from "@/lib/types";
 import { readSandboxNetwork } from "@/lib/policy-network";
 import { journeyInProgress, journeyFinished, journeyOf } from "./journey";
 import { egressApi } from "./egress";
@@ -2938,6 +2948,17 @@ function stepCalibrationDemo(workflow: string, step: string): StepCalibration {
   };
 }
 
+/**
+ * The routing's calibration (ADR 0123 §4, S52-12): the decision model's `workflow` answers, measured
+ * like a step's `route`, beside a minimum confidence set below the suggested threshold.
+ */
+function routingCalibrationDemo(): RoutingCalibration {
+  const { target_accuracy, min_observed, questions = [] } = stepCalibrationDemo("", "");
+  // `router` is what the API answers for a routing record (S52-11); the contract's type does not name it yet.
+  const routed = { ...questions[0]!, question: "workflow", source: "router" as string as QuestionCalibration["source"] };
+  return { min_confidence: 0.5, target_accuracy, min_observed, questions: [routed] };
+}
+
 const mockNetworkActivity: NetworkActivity = {
   rows: [
     { host: "api.stripe.com", layer: "proxy", decision: "denied", reason: "not_allowed", count: 14, runs: 3, projects: ["billing-api"], agents: ["architect"], last_at: iso(35) },
@@ -3219,6 +3240,24 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       writtenConnectors.set(project, [...current.filter((c) => c.kind !== kind), saved]);
       return saved as T;
     }
+  }
+  if (method === "GET" && /^\/projects\/[^/]+\/workflow-routing\/calibration$/.test(chemin ?? ""))
+    return routingCalibrationDemo() as T;
+  // A ticket changes workflow (ADR 0123): the API's refusals, played in the same order.
+  const rerouted = /^\/work-items\/([^/]+)\/actions$/.exec(chemin ?? "");
+  if (method === "POST" && rerouted && (body as { action?: string } | undefined)?.action === "reroute") {
+    const ticket = ticketDetaille(rerouted[1]!);
+    const workflow = (body as { workflow?: string }).workflow;
+    if (!workflow) throw new ApiError(422, { detail: "reroute needs workflow: the name of the workflow to move the work item to" });
+    if (ticket.closed_at) throw new ApiError(409, { detail: "the work item has ended: it can no longer change workflow" });
+    if (!workflowSummaries.some((w) => w.name === workflow))
+      throw new ApiError(422, { detail: `workflow \`${workflow}\` is unknown or inactive in this project` });
+    if (ticket.workflow_name === workflow) throw new ApiError(409, { detail: `the work item already follows \`${workflow}\`` });
+    if (ticket.current_run && ["queued", "running"].includes(ticket.current_run.status))
+      throw new ApiError(409, {
+        detail: "a run of this work item is in progress: stop the work item or let the run finish, then change its workflow",
+      });
+    return { status: "accepted", action: "reroute" } as T;
   }
   // Routing and deactivation change the demo's state for the time of the page: the screens re-read
   // as on the real API, and the same refusals play out there (S23-13).

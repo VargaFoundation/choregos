@@ -53,3 +53,16 @@ export function membershipGroups(
   });
   return groups.filter((group) => group.lines.length > 0);
 }
+
+/**
+ * Whether the person may control the work items of a project — pause, stop, change their workflow:
+ * the API's `item:control`, held by every role but `viewer`, on the organisation or on the project
+ * (`Principal.permissions` adds the organisation role to the project's). The API stays the judge.
+ */
+export function canControlItems(
+  memberships: Array<Pick<Membership, "org" | "project_slug" | "role">>,
+  org: string,
+  project: string,
+): boolean {
+  return memberships.some((m) => m.org === org && m.role !== "viewer" && (!m.project_slug || m.project_slug === project));
+}

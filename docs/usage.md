@@ -671,7 +671,10 @@ curl         $API/projects/acme:hr/workflows                                    
   judge its routing (a declined access request was not misrouted). Not detected: a person who handles a
   misrouted item in the wrong workflow without re-routing it (read as agreement), a move by hand in the
   tracker. `GET /projects/{id}/workflow-routing/calibration?target=0.9` measures it as a step's
-  calibration below, beside the project's `min_confidence`.
+  calibration below, beside the project's `min_confidence`. In the console (S52-12), an open ticket's
+  page offers **Change workflow** beside Pause and Stop to whoever holds a role above viewer, with the
+  API's refusal shown in place; the project's **Workflows** page shows **How good the routing is** once
+  the strategy asks a model, the minimum confidence compared with the suggested threshold.
 
   ```bash
   curl -X POST $API/work-items/$ID/actions -d '{"action": "reroute", "workflow": "offboarding",
