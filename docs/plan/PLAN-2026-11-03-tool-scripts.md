@@ -86,6 +86,7 @@ Waves are the backlog's `sprint`: a story only depends on stories of an earlier 
 | S57-08 | 5 | Runner: the generated client `choregos_tools`, its index and the instructions; shell backends wired | 07 |
 | S57-09 | 6 | Evals: a `tools` dimension, connector scenarios, new assertions, a paired bootstrap interval in the matrix | 01, 08 |
 | S57-10 | 5 | Console: a run's calls grouped by script, the script's text; spend by origin; the policy switch | 06, 07 |
+| S57-11a | 7 | Agent cases run live in the matrix: fake-scene connectors per eval project, governance parity (added after S57-09) | 09 |
 | S57-11 | 7 | Live matrix on dev, per-agent default, STATUS and ADR 0122 accepted or amended | 08, 09, 10 |
 | S57-12 | 8 | Phase 2 — on-demand disclosure (`tools.disclosure`), measured | 11 |
 | S57-13 | 8 | Phase 2 — a script that worked becomes a proposed skill (ADR 0050 gate) | 11 |

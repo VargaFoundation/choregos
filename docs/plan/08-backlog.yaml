@@ -4329,3 +4329,11 @@ stories:
     size: S
     depends_on: [S57-11]
     notes: "Through the loopback MCP proxy of ADR 0080; only if S57-11 passes its gate."
+  - id: S57-11a
+    title: "feat(evals): agent cases run live in the matrix"
+    stream: S57
+    sprint: 7
+    priority: 1
+    size: M
+    depends_on: [S57-09]
+    notes: "What S57-09 left for S57-11: eval projects per case with fake-scene connectors (deployment flag CHOREGOS_EVAL_FAKE_SCENES), per-case policy, case-local agents, the seed skip replaced, governance parity per live run."
