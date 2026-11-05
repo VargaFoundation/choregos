@@ -16,7 +16,7 @@ order. Each input has a default that keeps a matrix started before it as it was:
 | `contexts` | `none`, `rtk`, `headroom`, `rtk+headroom` | `["none"]` | the context reduction (ADR 0055) |
 | `tools` | `mcp`, `scripts` | `["mcp"]` | the door of the run's tools (ADR 0122): `mcp`, the model's MCP tools only; `scripts`, those and the tool bridge with the generated client `choregos_tools` |
 | `fixtures` | reference tickets (`tests/fixtures/tickets`) | all of them | |
-| `agent_cases` | agent cases (`packages/playbooks/src/choregos_playbooks/evals/agent_cases`) | `[]` | scripted cells (below), and live cells on fake scenes since S57-11a ([Agent cases in a live cell](#agent-cases-in-a-live-cell-s57-11a)) |
+| `agent_cases` | agent cases (`packages/playbooks/src/choregos_playbooks/evals/agent_cases`), and a plugin's as `plugin:<plugin>/<case>` ([A plugin's cases](#a-plugins-cases-1372)) | `[]` | scripted cells (below), and live cells on fake scenes since S57-11a ([Agent cases in a live cell](#agent-cases-in-a-live-cell-s57-11a)) |
 | `repetitions` | 1 to 100 | `1` | each case played that many times: the bootstrap's pairs |
 | `live` | | `false` | real stages on the eval project's executor |
 
@@ -62,10 +62,12 @@ as many model calls as its `requests`.
 | `identity-offboarding` | E4, eight Entra writes under approval (case-local agent) | real script, 8 proposals |
 | `marketdata-volatility` | E6, twenty instruments, one computation (case-local agent) | real script, 20 calls |
 | `research-injected-page`, `…-block` | E5, six pages, one injected (`warn`, `block`) | real script, 7 calls |
+| `plugin:servicenow/itsm-triage-similar-incidents` | E3, ITSM triage with a fan-out (the servicenow plugin) | real script, 25 calls, one write executed, one proposed |
+| `plugin:servicenow/itsm-triage-vague-incident` | C1, the ITSM control: nothing is resolved | no script: the MCP door |
 | `py-rounding-bug`, `py-volume-discount` | C2, the coding control | the ticket's scripted change |
 
-E3 and C1 need the ServiceNow plugin server, which lives in `choregos-agents`: their cases belong in
-its `evals/` directory (#1372). E5's script (#1378) searches, reads each page through the bridge
+E3 and C1 are the servicenow plugin's matrix cases (#1372, choregos-agents#8); their connector is the
+plugin's server ([A plugin's cases](#a-plugins-cases-1372)). E5's script (#1378) searches, reads each page through the bridge
 (`platform.web_fetch(url=…)["text"]`, #1373) and keeps the ones the platform did not flag: it catches
 `Withheld` (`block`) and reads the guard's flag from what the client writes on standard error (`warn`).
 Both doors read the same answer (#1374): the MCP door shows the model compact JSON of the
@@ -75,7 +77,8 @@ doors and compares them. An answer bounded otherwise is read to the same place b
 the API names its bound (`result_max_bytes`: an operation's raised cap, the default for `web_fetch`,
 whose pages it now bounds too) and the MCP door cuts there.
 
-A case's file: `connectors` (each one's fake and its scene, `choregos_adapters.fakes.scenes`), `policy`
+A case's file: `connectors` (each one's fake and its scene, `choregos_adapters.fakes.scenes`, or a
+plugin's server, `plugin:<plugin>/<server>`), `policy`
 (`writes: approval | allowed`, `prompt_injection: ignore | warn | block`), `web` (the scripted search
 results and pages of `web_search` and `web_fetch`), `agent_spec` (a case-local agent's instructions),
 `tools_cells`, `scripted_usage` per door, `scripted_script`, `reference_answer` (the `mcp` cell's), and
@@ -99,6 +102,58 @@ assertion with a `cell` is checked in that cell only; `count` is exact, `min` an
 
 A case passes when its score reaches `min_score` **and** every assertion holds.
 
+### A plugin's cases (#1372)
+
+A plugin ships agent cases in this same format, declared in its manifest's `contents.matrix_cases`
+(`docs/plugins.md`, "Matrix cases"); the matrix names one `plugin:<plugin>/<file stem>`. A scripted cell
+loads it from the offline plugins (`CHOREGOS_PLUGINS_OFFLINE`, else `plugins/offline/`); a live cell
+from the eval organisation's installed version of the plugin (its kept file), else from the offline
+plugins. Its agent is the plugin's own. A connector of the case may be one of the plugin's servers,
+named after the server:
+
+```yaml
+connectors:
+  servicenow: { kind: "plugin:servicenow/servicenow", scene: default }
+```
+
+**In a scripted cell**, the fake API reaches the server as the broker does, over MCP with a bearer
+token (`PluginServerClient`), on a fake **registered** for it in the process
+(`choregos_adapters.fakes.plugin_servers.use_fake_plugin_server`): a plugin's own CI registers its
+server in-process on its fake instance (an `httpx.ASGITransport` over the server's app), the core's CI
+registers `FakePluginServer`, which answers from a recording of that server's fake
+(`tests/fixtures/plugin_fakes/servicenow.json`). The server's declaration governs its tools: the
+operations its file declares and the server lists, nothing else; a read allowed; a write executed as a
+governed action when the case allows writes, with the platform's arguments filled (`action_key`),
+proposed otherwise; a `human_approval` operation always proposed. Without a registered fake, the case
+is skipped with its reason, never failed.
+
+**In a live cell**, the eval organisation installs the plugin, so its server is the organisation
+connector named after it; the seeding **binds** that connector to the server's **eval instance**
+(`fake_scene: <scene>`, refused on every declaration and edit, honoured only under
+`CHOREGOS_EVAL_FAKE_SCENES`), makes it available to the selected projects, turns it on for the case's
+eval project and applies the case's `writes` (`human_approval` never lowered). The eval instance is the
+API's: for a server whose file declares its `fake` (the variables that switch it to its fake, the
+scenes it serves), the API runs, under the same switch only, the server's image with those variables
+and the platform's token, nothing of the configuration and no egress (`docs/plugins.md`, "On its
+fake"). The server's own instance is left as it is: the seeding binds only a connector nobody
+configured, and skips the case otherwise. A case is skipped, saying why, when the plugin is not
+installed, when its server declares no fake of the case's scene, when the eval instance does not run
+(the plugin was installed before the switch was on: upgrade or reinstall it), and while the server's
+tools were never discovered (a model would call them without their schemas: the first seeding binds the
+connector and asks for the discovery).
+
+**Until servicenow is published with them.** The servicenow release of choregos-agents#8 (0.1.1) does not
+declare `contents.matrix_cases` nor its server's `fake` (choregos-agents#9 asks for both), and it is not
+in `plugins/offline/`. The core's tests read a fixture copy instead (`tests/fixtures/plugins/servicenow`,
+mirrored from that PR's commit with both declarations added), and the recording of its server's fake.
+Once a release declares both, a maintainer moves the lock to it with the network
+(`uv run python -m tools.plugins.update_lock --plugin servicenow@<version>`, which adds it to
+`plugins/offline/plugins.lock` and commits its signed archive), points the tests at `plugins/offline/`,
+and deletes the fixture plugin. The recording stays: a published plugin holds no server code, so the
+scripted matrix in the core's CI still answers from it; re-record it when the server's fake changes.
+Putting servicenow in the offline directory also puts `itsm-triager` in every organisation's agent
+catalogue: that is the maintainers' call, not the matrix's.
+
 ## Before
 
 1. An **eval project**, used for nothing else:
@@ -113,7 +168,8 @@ A case passes when its score reaches `min_score` **and** every assertion holds.
    With it off, every cell but `none` is skipped, and says why.
 3. The runner image carries rtk and headroom (`docker/runner.Dockerfile`, built by `make images`; ADR 0055).
 4. For the agent cases: an eval organisation of its own, `CHOREGOS_EVAL_FAKE_SCENES=1` on the API and
-   the workers, and `netops` installed ([What the operator provides](#what-the-operator-provides-on-dev)).
+   the workers, `netops` installed, and for E3 and C1 the servicenow plugin installed after the switch is
+   on ([What the operator provides](#what-the-operator-provides-on-dev)).
 
 ## Run
 
@@ -231,8 +287,8 @@ network policy refused has an event and no ledger line (ADR 0070) and reads as a
 scenes reach no network.
 
 **What a live cell does not play.** A case with no connector and no `web:` (`netops-dropped-flow`, the
-netops agent's own eval). E3 and C1 live in `choregos-agents`
-(#1372).
+netops agent's own eval). E3 and C1 need a servicenow release whose server declares its `fake`: the one of
+choregos-agents#8 (0.1.1) does not yet, so their live cells skip with that reason (#1372).
 
 ### What the operator provides, on dev
 
@@ -270,6 +326,31 @@ netops agent's own eval). E3 and C1 live in `choregos-agents`
    `compare.flagreviews.example`). The seeding never opens either.
 5. The real model gateway the eval project runs on (its connector, or the organisation's, or the
    deployment's): the agent cases' cost is what it bills.
+6. For E3 and C1 (`plugin:servicenow/…`), the **servicenow plugin installed** in that organisation
+   **after** `CHOREGOS_EVAL_FAKE_SCENES` is on (item 1), from a source that publishes a version whose
+   server file declares `fake` and whose manifest declares `matrix_cases`: Settings → Plugins, or
+   `POST /api/v1/orgs/<eval-org>/plugins/install` `{"source": …, "name": "servicenow", "version": …}`,
+   then a second administrator's approval (it brings a server). The API then runs the server's eval
+   instance beside it. Do **not** configure the server (no instance address, no credentials): a
+   configured server is never bound. A plugin installed before the switch was on gets its eval instance
+   at its next upgrade or reinstall. Then play the matrix once with E3 or C1: the seeding binds the
+   connector and skips the case, asking for the discovery; discover the server's tools on its eval
+   instance (`POST /api/v1/orgs/<eval-org>/connectors/servicenow/discover`, as an administrator), and
+   play the matrix again:
+
+   ```bash
+   temporal workflow start --task-queue orchestrator --type EvalMatrix \
+     --workflow-id evals-live-itsm-$(date +%Y%m%d) \
+     --input '{"project_slug": "evals", "backends": ["claude-code"],
+               "models": ["platform/standard"], "with_memory": [false], "contexts": ["none"],
+               "tools": ["mcp", "scripts"], "repetitions": 10,
+               "agent_cases": ["plugin:servicenow/itsm-triage-similar-incidents",
+                               "plugin:servicenow/itsm-triage-vague-incident"],
+               "live": true, "publish": true}'
+   ```
+
+   Once the matrix is done and the switch is off, the API deletes the eval instance at the server's next
+   reconcile (an upgrade, or an edit of its connector).
 
 ## Read it
 

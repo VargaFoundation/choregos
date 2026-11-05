@@ -1,0 +1,171 @@
+# SPDX-License-Identifier: Apache-2.0
+# E3 of the core's tool-script matrix, in the core's agent-case format (S57-09: the examples page
+# PLAN-2026-11-03-tool-scripts-examples.md, the runbook live-eval-matrix.md; core issue #1372). Not a
+# `contents.evals` suite: plugin-evals.schema.json is closed to this format, so it is not packed. Played
+# offline by server/tests/test_matrix_cases.py through the core's doors and judged by the core's judge.
+agent: itsm-triager
+description: >
+  E3 of the tool-script matrix: ITSM triage with a fan-out. INC0012345, the Lyon site's VPN;
+  `similar_incidents` returns ten, each read with `get_record` and `get_journal` although only how it was
+  resolved matters; two of them were resolved by the same change, CHG0003311 (MTU on the Lyon
+  concentrator), which the published KB0010042 documents. Then one allowed write (the work note, executed
+  as a governed action) and one a person approves (the comment to the caller, proposed only).
+output: itsm_triage_markdown
+task: >
+  Triage INC0012345: find similar past incidents and how they were resolved, cite the knowledge base, add a
+  work note with your findings, and propose a reply to the caller.
+tools_cells: [mcp, scripts]
+#: The plugin's server on its fake instance (`SERVICENOW_FAKE=1`, server/src/choregos_servicenow/fake.py):
+#: `plugin:<plugin>/<server>`, as a template names a plugin's server. The core's door player and live
+#: seeding resolve scene kinds only (`choregos_adapters.fakes.scenes`), not this one, yet (#1372).
+connectors:
+  servicenow: { kind: "plugin:servicenow/servicenow", scene: default }
+#: Writes allowed by the project: `add_work_note` runs as a governed action; `add_comment` and
+#: `resolve_incident` carry `human_approval` in servers/servicenow.yaml, which no policy lowers.
+policy: { writes: allowed }
+#: What the model calls, one tool call at a time, in the `mcp` cell. A sys_id is the seed's
+#: `sys_id_of(<number>)`; the ten similar incidents in the order `similar_incidents` ranks them.
+evidence:
+  - { tool: servicenow__get_record, arguments: { table: incident, number: INC0012345 } }
+  - { tool: servicenow__similar_incidents, arguments: { sys_id: 4cf228998fe835fd4694475612ed8445, limit: 10 } }
+  - { tool: servicenow__get_record, arguments: { table: incident, sys_id: c5d9b461abcb7b5fbd2da3d0c624fcf3 } }  # INC0012102
+  - { tool: servicenow__get_journal, arguments: { table: incident, sys_id: c5d9b461abcb7b5fbd2da3d0c624fcf3 } }
+  - { tool: servicenow__get_record, arguments: { table: incident, sys_id: 6b2de52866a5185642982209dd0e1edb } }  # INC0012240
+  - { tool: servicenow__get_journal, arguments: { table: incident, sys_id: 6b2de52866a5185642982209dd0e1edb } }
+  - { tool: servicenow__get_record, arguments: { table: incident, sys_id: 1a1818e9e8d944fb96e8b25cfc3567fd } }  # INC0012160
+  - { tool: servicenow__get_journal, arguments: { table: incident, sys_id: 1a1818e9e8d944fb96e8b25cfc3567fd } }
+  - { tool: servicenow__get_record, arguments: { table: incident, sys_id: 4925e750117e456776ab064f6f3b12c6 } }  # INC0012268
+  - { tool: servicenow__get_journal, arguments: { table: incident, sys_id: 4925e750117e456776ab064f6f3b12c6 } }
+  - { tool: servicenow__get_record, arguments: { table: incident, sys_id: 78078583f0098c7bf4a5cba2322ed699 } }  # INC0012291
+  - { tool: servicenow__get_journal, arguments: { table: incident, sys_id: 78078583f0098c7bf4a5cba2322ed699 } }
+  - { tool: servicenow__get_record, arguments: { table: incident, sys_id: 5b5014b9045bd056ce67338153316737 } }  # INC0012203
+  - { tool: servicenow__get_journal, arguments: { table: incident, sys_id: 5b5014b9045bd056ce67338153316737 } }
+  - { tool: servicenow__get_record, arguments: { table: incident, sys_id: c0e6a233c138b4c9ffdcfaa29faf884e } }  # INC0012187
+  - { tool: servicenow__get_journal, arguments: { table: incident, sys_id: c0e6a233c138b4c9ffdcfaa29faf884e } }
+  - { tool: servicenow__get_record, arguments: { table: incident, sys_id: bebc9c2e036b433c22008235526ce108 } }  # INC0012318
+  - { tool: servicenow__get_journal, arguments: { table: incident, sys_id: bebc9c2e036b433c22008235526ce108 } }
+  - { tool: servicenow__get_record, arguments: { table: incident, sys_id: 9874a95e4dfcebd212f1decf0e96374c } }  # INC0012219
+  - { tool: servicenow__get_journal, arguments: { table: incident, sys_id: 9874a95e4dfcebd212f1decf0e96374c } }
+  - { tool: servicenow__get_record, arguments: { table: incident, sys_id: 9052332e93ee504d50ff3fa375cf2a47 } }  # INC0010007
+  - { tool: servicenow__get_journal, arguments: { table: incident, sys_id: 9052332e93ee504d50ff3fa375cf2a47 } }
+  - { tool: servicenow__search_knowledge, arguments: { terms: [VPN, Lyon, MTU] } }
+  - tool: servicenow__add_work_note
+    arguments:
+      table: incident
+      sys_id: 4cf228998fe835fd4694475612ed8445
+      text: >-
+        Ten similar incidents resolved in the last 90 days. INC0012102 and INC0012160 were resolved by
+        CHG0003311, the MTU lowered to 1400 on the Lyon concentrator; KB0010042: a firmware upgrade resets
+        it to 1500, and the concentrator was upgraded last weekend. Next step for Network: check the MTU on
+        vpn-lyon-01 and set it back to 1400 through a change.
+  - tool: servicenow__add_comment
+    arguments:
+      table: incident
+      sys_id: 4cf228998fe835fd4694475612ed8445
+      text: >-
+        We found a known cause for the VPN drops at the Lyon site (KB0010042): a setting of the site's VPN
+        concentrator. The network team is checking it and will update this incident.
+instructions_must_contain:
+  - servicenow__similar_incidents
+  - servicenow__search_knowledge
+  - by its number
+  - only when a published fix exists
+  - itsm_triage_markdown
+answer_must_contain: [CHG0003311, KB0010042, MTU]
+answer_must_not_contain: [comment sent, comment posted]
+answer_sections: ["## Findings", "## Proposed classification", "## Proposed actions", "## Confidence"]
+min_score: 1.0
+assertions:
+  - { kind: executed_actions, tool: servicenow__add_work_note, count: 1 }   # allowed: a governed action
+  - { kind: proposed_actions, tool: servicenow__add_comment, count: 1 }     # the caller sees it: a person
+  - { kind: executed_actions, tool: servicenow__add_comment, count: 0 }     # approves, nothing is sent
+  - { kind: calls_by_origin, cell: mcp, origin: script, count: 0 }
+  - { kind: calls_by_origin, cell: scripts, origin: script, min: 22 }
+  - { kind: max_model_requests, cell: scripts, max: 5 }
+#: Illustrative numbers (the examples page), billed on the fake gateway by the scripted matrix; the live
+#: matrix (S57-11) measures them.
+scripted_usage:
+  mcp: { requests: 25, tokens_in: 980000, tokens_cached: 830000, tokens_out: 6100, turns: 25 }
+  scripts: { requests: 5, tokens_in: 78000, tokens_cached: 52000, tokens_out: 4400, turns: 5 }
+#: What the scripted agent runs in the `scripts` cell, through the real tool bridge: 25 calls, and it prints
+#: only how each similar incident was resolved. Its answer is `answer` with the output for `<<stdout>>`.
+scripted_script:
+  name: similar_incidents.py
+  text: |
+    import re
+
+    from choregos_tools import Proposal, servicenow
+
+    incident = servicenow.get_record(table="incident", number="INC0012345")
+    sys_id = incident["sys_id"]
+    similar = servicenow.similar_incidents(sys_id=sys_id, limit=10)["incidents"]
+    by_change = {}
+    print(f"{len(similar)} similar incidents resolved or closed in the last 90 days, and how:")
+    for found in similar:
+        record = servicenow.get_record(table="incident", sys_id=found["sys_id"])["fields"]
+        journal = servicenow.get_journal(table="incident", sys_id=found["sys_id"])["entries"]
+        said = " ".join([record["close_notes"], *(entry["value"] for entry in journal)])
+        for change in sorted(set(re.findall(r"CHG[0-9]{7}", said))):
+            by_change.setdefault(change, []).append(record["number"])
+        print(f"- {record['number']}: {record['close_notes']}")
+    shared = {change: numbers for change, numbers in sorted(by_change.items()) if len(numbers) > 1}
+    for change, numbers in shared.items():
+        print(f"{change} resolved {len(numbers)} of them: {', '.join(numbers)}")
+    articles = servicenow.search_knowledge(terms=["VPN", "Lyon", "MTU"])["articles"]
+    for article in articles:
+        print(f"{article['fields']['number']}: {article['fields']['short_description']}")
+
+    changes = "; ".join(f"{change} resolved {', '.join(numbers)}" for change, numbers in shared.items())
+    knowledge = ", ".join(article["fields"]["number"] for article in articles)
+    note = servicenow.add_work_note(
+        table="incident",
+        sys_id=sys_id,
+        text=f"{len(similar)} similar incidents resolved in the last 90 days. {changes}. Knowledge: {knowledge}. "
+        "Next step for Network: check the MTU on vpn-lyon-01 and set it back to 1400 through a change.",
+    )
+    comment = servicenow.add_comment(
+        table="incident",
+        sys_id=sys_id,
+        text=f"We found a known cause for the VPN drops at the Lyon site ({knowledge}): a setting of the site's "
+        "VPN concentrator. The network team is checking it and will update this incident.",
+    )
+    for tool, outcome in (("servicenow__add_work_note", note), ("servicenow__add_comment", comment)):
+        print(f"- {tool}: {outcome}" if isinstance(outcome, Proposal) else f"- {tool}: written")
+  answer:
+    itsm_triage_markdown: |
+      ## Findings
+
+      INC0012345 (CI vpn-lyon-01, Network): the remote staff of the Lyon site lose the VPN about every ten minutes
+      since Monday; the Lyon concentrator's firmware was upgraded last weekend (its work note).
+
+      <<stdout>>
+
+      KB0010042 says a firmware upgrade resets the Lyon concentrator's MTU to 1500: the cause CHG0003311 fixed is
+      likely back.
+
+      ## Proposed classification
+
+      - Category: network, as it is.
+      - Impact 2: the remote staff of a whole site, on a CI the site depends on.
+      - Urgency 2: degraded work, the tunnel comes back by itself.
+      - Assignment group: Network, the support group of vpn-lyon-01 and the group that resolved INC0012102 and
+        INC0012160.
+
+      The incident already carries these values: no `servicenow__update_record`.
+
+      ## Proposed actions
+
+      - `servicenow__add_work_note`: the findings above and the next step for Network, check the MTU on
+        vpn-lyon-01 (its outcome is printed above).
+      - `servicenow__add_comment`: tells the caller a known cause is being checked, citing KB0010042; it waits
+        for the service desk's approval at its decision path above.
+      - No `servicenow__resolve_incident`: the fix is a change on the concentrator that is not made yet.
+
+      ## Confidence
+
+      High: two incidents on the same CI were resolved by CHG0003311, KB0010042 names a firmware upgrade as what
+      undoes it, and the concentrator was upgraded last weekend. An MTU still at 1400 on vpn-lyon-01 would change
+      my mind.
+#: The `mcp` cell's answer, written from the evidence.
+reference_answer: |
+  {"itsm_triage_markdown": "## Findings\n\nINC0012345 (caller David Miller, CI vpn-lyon-01, Network, In Progress): the remote staff of the Lyon site\nlose the VPN about every ten minutes since Monday, large transfers first. Its work note: the Lyon\nconcentrator's firmware was upgraded last weekend.\n\n`servicenow__similar_incidents` finds 10 incidents resolved or closed in the last 90 days:\n\n- INC0012102: \"Fixed by CHG0003311: MTU lowered to 1400 on the Lyon concentrator.\"\n- INC0012160: \"Same cause as INC0012102, fixed by CHG0003311 (MTU 1400 on the Lyon concentrator).\"\n- the eight others were resolved otherwise: the concentrator's certificate (INC0012240), a home router\n  (INC0012268 and its duplicate INC0012291), a laptop driver (INC0012203), an expired password\n  (INC0012187), a client reinstall (INC0012318), the site's internet link (INC0012219), keep-alive in the\n  client profile (INC0010007, KB0010002). None is a site-wide drop on the concentrator.\n\nCHG0003311 resolved two of them, INC0012102 and INC0012160, on the same CI.\n\nKB0010042 (published), \"VPN to the Lyon site drops: check the MTU on the Lyon concentrator\": \"A firmware\nupgrade of the concentrator resets the MTU to 1500: check it after each upgrade.\" Last weekend's upgrade\nfits: the cause CHG0003311 fixed is likely back.\n\n## Proposed classification\n\n- Category: network, as it is.\n- Impact 2: the remote staff of a whole site, on a CI the site depends on.\n- Urgency 2: degraded work, the tunnel comes back by itself.\n- Assignment group: Network, the support group of vpn-lyon-01 and the group that resolved INC0012102 and\n  INC0012160.\n\nThe incident already carries these values: no `servicenow__update_record`.\n\n## Proposed actions\n\n- `servicenow__add_work_note`: the similar incidents, CHG0003311 and KB0010042, and the next step for\n  Network: check the MTU on vpn-lyon-01 and set it back to 1400 through a change. Written as a governed\n  action.\n- `servicenow__add_comment`: tells the caller a known cause is being checked (KB0010042); it waits for the\n  service desk's approval.\n- No `servicenow__resolve_incident`: the fix is a change on the concentrator that is not made yet.\n\n## Confidence\n\nHigh: two incidents on the same CI were resolved by CHG0003311, KB0010042 names a firmware upgrade as what\nundoes it, and the concentrator was upgraded last weekend. An MTU still at 1400 on vpn-lyon-01 would change\nmy mind.\n"}
