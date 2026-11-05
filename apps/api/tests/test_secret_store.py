@@ -20,7 +20,7 @@ from choregos_api.secret_store import (
     unseal,
 )
 from choregos_core.redaction import forget_secrets, redact
-from choregos_core.secrets import SecretIntrouvable
+from choregos_core.secrets import SecretNotFound
 
 
 def _key() -> str:
@@ -118,7 +118,7 @@ async def test_a_value_is_stored_sealed_replaced_and_read(app: Any, org: str) ->
         row = (await session.execute(select(OrgSecret))).scalar_one()
         assert row.version == 2 and row.updated_by == "d@e.f" and row.created_by == "a@b.c"
         assert b"second-value" not in row.ciphertext
-        with pytest.raises(SecretIntrouvable, match="no value is stored"):
+        with pytest.raises(SecretNotFound, match="no value is stored"):
             await store.get_many(session, org_id, ["connector/jira/missing"])
         assert await store.delete(session, org_id, "connector/jira/api_token") is True
         assert await store.delete(session, org_id, "connector/jira/api_token") is False
@@ -150,7 +150,7 @@ async def test_a_rewrap_moves_the_data_keys_to_the_active_key_and_keeps_the_valu
             "connector/a/b": "keep-this-value"
         }
         # the old key alone no longer opens it: k2 is what it was re-wrapped under
-        with pytest.raises(SecretIntrouvable, match="no longer lists"):
+        with pytest.raises(SecretNotFound, match="no longer lists"):
             await SealedDbSecretStore(old).get_many(session, org_id, ["connector/a/b"])
 
 
@@ -165,7 +165,7 @@ async def test_without_a_key_a_write_is_refused_and_a_read_says_why(
     async with session_scope() as session:
         with pytest.raises(SecretStoreUnavailable, match=ENV_KEKS):
             await store.put(session, "org-1", "connector/a/b", "value-123", None)
-        with pytest.raises(SecretIntrouvable, match=ENV_KEKS):
+        with pytest.raises(SecretNotFound, match=ENV_KEKS):
             await store.get_many(session, "org-1", ["connector/a/b"])
 
 

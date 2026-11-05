@@ -460,7 +460,7 @@ async def test_the_plugin_gesture_check_can_refuse_a_release(client: AsyncClient
     from choregos_api import extensions
 
     def refuse(_session: Any, demand: Any) -> None:
-        assert demand.cible["channel"] == "stable" and demand.cible["kind"] == "promote"
+        assert demand.target["channel"] == "stable" and demand.target["kind"] == "promote"
         raise extensions.GestureRefused("the organisation says no")
 
     await as_user(client, ADMIN)

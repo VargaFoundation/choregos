@@ -45,7 +45,7 @@ def attach():
 """
 
 OVERLAPPING_CATALOGUE = """
-outils:  # lang: fr-ok (the catalogue's file key)
+tools:
   - name: internal_directory
     description: The same name, on the catalogue side.
     provider: directory

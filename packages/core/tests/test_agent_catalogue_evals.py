@@ -74,14 +74,15 @@ def test_netops_is_not_duplicated_here() -> None:
     assert [e.slug for e in entries()].count("netops") <= 1
 
 
-def test_former_evals_module_runs() -> None:
-    """`python -m choregos_core.catalogue_d_agents.evals --all` still runs, as the nightly job did."""
-    former = "choregos_core.catalogue_d_agents.evals"  # lang: fr-ok alias:external
+def test_the_former_evals_module_no_longer_runs() -> None:
+    """The nightly job runs `python -m choregos_core.agent_catalogue.evals`; the former module was
+    removed in 0.24.0 (S45-49)."""
+    former = "choregos_core.catalogue_d_agents.evals"  # lang: fr-ok - removed, asserted gone
     done = subprocess.run(
         [sys.executable, "-m", former, "--all"],
         capture_output=True,
         text=True,
         check=False,
     )
-    assert done.returncode == 0, done.stdout + done.stderr
-    assert "28 agent eval(s) green." in done.stdout
+    assert done.returncode != 0
+    assert "No module named" in done.stderr

@@ -20,7 +20,7 @@ import jwt
 from choregos_adapters.errors import ConfigurationError
 from choregos_core import utcnow
 from choregos_core.redaction import remember_secret
-from choregos_core.secrets import SecretIntrouvable
+from choregos_core.secrets import SecretNotFound
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -220,7 +220,7 @@ async def signing_key(
     name = _secret_name(current)
     try:
         pem = (await (store or get_secret_store()).get_many(session, organisation.id, [name]))[name]
-    except (SecretIntrouvable, SecretStoreUnavailable) as lost:
+    except (SecretNotFound, SecretStoreUnavailable) as lost:
         raise missing from lost
     remember_secret(pem)
     return current, pem

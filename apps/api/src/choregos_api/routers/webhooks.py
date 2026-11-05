@@ -527,21 +527,17 @@ async def tekton_webhook(
     """CloudEvents `dev.tekton.event.pipelinerun.{successful,failed}.v1`.
 
     Authenticated by the shared secret, in the `X-Choregos-Secret` header OR in the sink URL
-    (`?token=`): Tekton's CloudEvents sink is configured with a URL and adds no header. `?jeton=`,
-    the former spelling, is still accepted (S45-02). There used to be NO check: harmless while
-    row-level security hid everything from this route on PostgreSQL, an anonymous write path as
-    soon as it sees the projects ("CI passed" on any work item).
+    (`?token=`): Tekton's CloudEvents sink is configured with a URL and adds no header. The former
+    spelling of the parameter was removed in 0.24.0 (S45-49): it authenticates nothing. There used
+    to be NO check: harmless while row-level security hid everything from this route on PostgreSQL,
+    an anonymous write path as soon as it sees the projects ("CI passed" on any work item).
     """
     settings = get_settings()
-    fourni = (
-        x_choregos_secret
-        or request.query_params.get("token")
-        or request.query_params.get("jeton", "")  # lang: fr-ok alias:external
-    )
+    supplied = x_choregos_secret or request.query_params.get("token", "")
     if not settings.generic_webhook_secret:
         if settings.deployed:
             raise unauthorized("Tekton webhook not configured: CHOREGOS_GENERIC_WEBHOOK_SECRET is missing")
-    elif not verify_shared_secret(settings.generic_webhook_secret, fourni):
+    elif not verify_shared_secret(settings.generic_webhook_secret, supplied):
         raise unauthorized("invalid shared secret")
     body = await request.body()
     if await _already_seen(session, "tekton", ce_id or body_digest(body), ce_type, body):

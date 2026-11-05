@@ -37,8 +37,9 @@ answer through its MCP tools, once:
   itself. An MCP result marked `isError` raises `ToolError`;
 - any other JSON (a catalogue tool's answer) is returned as it is.
 
-A result over the platform's size bound comes back cut: it has no `structuredContent`, its text ends
-with the platform's marker, and a line on standard error says so — ask for less (a filter, a page).
+A result over the platform's size bound comes back cut: its text ends with the platform's marker, and
+a line on standard error says so — ask for less (a filter, a page). It has no `structuredContent`,
+unless its text says something else: a page cut keeps what was fetched in `["structured"]`.
 
 The first call of a process sends the running script's text to the bridge once, then its SHA-256
 with every call, so that the run's journal says which script made which calls (ADR 0122 §4); a
@@ -298,14 +299,6 @@ def unwrapped(tool: str, result: _Any) -> _Any:
         for block in result["content"]
         if block.get("type") == "text" and isinstance(block.get("text"), str)
     ]
-    structured = result.get("structuredContent")
-    if structured is not None:
-        # What the text says that the structure does not: nothing, when it is the structure serialized.
-        said = [text for text in texts if not _serializes(text, structured)]
-        if not said or _declares_output(tool):
-            return structured
-        return {"text": "\n".join(said), "structured": structured}
-    text = "\n".join(texts)
     cut = result.get("truncated")
     if cut is not None:
         sizes = (
@@ -314,6 +307,14 @@ def unwrapped(tool: str, result: _Any) -> _Any:
             else ""
         )
         _warn(f"result of {tool} was cut by the platform{sizes}: ask for less (a filter, a page)")
+    structured = result.get("structuredContent")
+    if structured is not None:
+        # What the text says that the structure does not: nothing, when it is the structure serialized.
+        said = [text for text in texts if not _serializes(text, structured)]
+        if not said or _declares_output(tool):
+            return structured
+        return {"text": "\n".join(said), "structured": structured}
+    text = "\n".join(texts)
     try:
         return _json.loads(text)
     except ValueError:

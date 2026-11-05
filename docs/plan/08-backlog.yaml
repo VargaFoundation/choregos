@@ -4337,6 +4337,14 @@ stories:
     size: M
     depends_on: [S57-09]
     notes: "What S57-09 left for S57-11: eval projects per case with fake-scene connectors (deployment flag CHOREGOS_EVAL_FAKE_SCENES), per-case policy, case-local agents, the seed skip replaced, governance parity per live run."
+  - id: S57-05b
+    title: "feat: tool scripts are switched on per organisation"
+    stream: S57
+    sprint: 3
+    priority: 1
+    size: S
+    depends_on: [S57-05]
+    notes: "Organisation setting tool_scripts enabled|disabled|null on Org and OrgUpdate (PATCH /orgs/{org}, org_admin only, audited); the orchestrator reads it in the bundle; CHOREGOS_TOOL_SCRIPTS becomes the default of an organisation that does not choose; hard brake CHOREGOS_TOOL_SCRIPTS_ALLOWED (Helm toolScripts.allowed, default true); console switch on Administration and the project card's warning; ADR 0122 section 6 amended."
 
   # ───────────── S52 — routing measured, re-routing (ADR 0123) ─────────────
   - id: S52-10

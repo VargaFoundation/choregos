@@ -185,8 +185,8 @@ async def _prepare_postgres() -> None:
 
 
 async def _migrate() -> None:
-    """The schema through `python -m choregos_api.migrer`, the command of the chart's Job."""
-    from choregos_api.migrer import configuration
+    """The schema through `python -m choregos_api.migrate`, the command of the chart's Job."""
+    from choregos_api.migrate import configuration
 
     await asyncio.to_thread(command.upgrade, configuration(), "heads")
 
@@ -206,9 +206,9 @@ async def pg_app(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Any]:
     monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "admin@a.test")
     reset_settings_cache()
     await db_session.dispose_engine()
-    # The configuration of `python -m choregos_api.migrer`, the chart Job's: this PostgreSQL bench
+    # The configuration of `python -m choregos_api.migrate`, the chart Job's: this PostgreSQL bench
     # therefore proves the command that is deployed, not a test variant.
-    from choregos_api.migrer import configuration
+    from choregos_api.migrate import configuration
 
     config = configuration()
     # `migrations/env.py` calls `asyncio.run()`: forbidden from a running loop, hence a separate

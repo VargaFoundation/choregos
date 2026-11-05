@@ -1,7 +1,7 @@
 # The runner image: an agent's workspace.
 #
 # Three principles:
-#   1. **no credential** — no kubectl, no cloud, no registry; the shims refuse and log;
+#   1. **no credential** — no kubectl, no cloud, no registry; the shims refuse, the runner journals it;
 #   2. **pinned versions** — the ACP agents come from `versions.lock`, Renovate proposes the
 #      bumps, the conformance suite validates them;
 #   3. **non-root, no capability** — the cluster's sandbox does the rest.
@@ -35,12 +35,12 @@ RUN set -eux; \
     apt-get update && apt-get install -y --no-install-recommends curl ca-certificates; \
     case "${TARGETARCH:-${host}}" in \
       amd64) \
-        curl -fsSL -o rtk.tar.gz "${release}/releases/download/v${rtk}/rtk-x86_64-unknown-linux-musl.tar.gz"; \
+        curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 -o rtk.tar.gz "${release}/releases/download/v${rtk}/rtk-x86_64-unknown-linux-musl.tar.gz"; \
         echo "$(version rtk-sha256-x86_64-unknown-linux-musl)  rtk.tar.gz" | sha256sum -c -; \
         tar xzf rtk.tar.gz rtk; \
         install -m 0755 rtk /usr/local/bin/rtk ;; \
       arm64) \
-        curl -fsSL -o rtk.tar.gz "${release}/archive/refs/tags/v${rtk}.tar.gz"; \
+        curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 -o rtk.tar.gz "${release}/archive/refs/tags/v${rtk}.tar.gz"; \
         echo "$(version rtk-sha256-source)  rtk.tar.gz" | sha256sum -c -; \
         tar xzf rtk.tar.gz --strip-components=1; \
         if [ "${host}" != arm64 ]; then \
@@ -196,7 +196,8 @@ RUN set -eux; \
     timeout 60 stryker --version >/dev/null
 
 # Shims: defence in depth. No credential exists anyway, but an agent that tries must be
-# **refused and traced**, not silently ignored.
+# **refused and traced**, not silently ignored: the runner reads the shim's line in the call's output
+# and journals `shim.refused` (`choregos_runner.refusal_shims.SHIMMED` lists the same tools).
 COPY docker/shims/refuse.sh /usr/local/bin/choregos-refuse
 RUN chmod +x /usr/local/bin/choregos-refuse \
  && for binary in kubectl helm terraform az gcloud aws docker podman; do \

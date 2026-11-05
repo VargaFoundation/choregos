@@ -552,9 +552,9 @@ did not write never matches, so an agent that says nothing takes the default. Th
 have a `when` (`when.no_default`).
 
 Validation codes are English (ADR 0046). The window in which `workflow.implicit_effect` and
-`gate.nothing_to_check` also carried their former spellings ended in S45-02. The last renamed code,
-`role.playbook_not_found`, carries its former spelling (`role.playbook_introuvable`) in
-`deprecated_code` until 0.23.0; match on `code`.
+`gate.nothing_to_check` also carried their former spellings ended in S45-02. The last one, for
+`role.playbook_not_found`, ended with 0.23.0: since 0.24.0 an issue carries no `deprecated_code`;
+match on `code`.
 
 The console's **workflows** tab (`/p/<slug>/workflows/<name>`) shows each workflow four ways:
 the process (each transition in plain words), the map (one lane per kind of actor), the YAML
@@ -1172,7 +1172,7 @@ what lands in the agent's context, so the broker holds every result, read or wri
 | :-- | :-- |
 | The server declares an `outputSchema` for the operation (captured at discovery) and its `structuredContent` does not match it, or is missing | `422`, `type: output_schema`, naming where and which rule failed — never the payload. A governed write is never refused this way: its effect already happened |
 | The result holds a secret (known token shapes, bearer/basic credentials, URL user-info, values of secret-named keys) | the value masked as `[REDACTED]`, in text blocks, embedded text resources and the strings of `structuredContent` |
-| The result weighs more than the operation's cap as JSON, its data counted once: a text block that serializes its `structuredContent` (how a connector that is not MCP is answered, what MCP asks a server to write) is not counted again, a text that says something else (`web_fetch`'s page) is (#1374) | its text, cut, ending with `[truncated by the platform: …]`, and `truncated: {returned_bytes, total_bytes}`; `structuredContent` is dropped |
+| The result weighs more than the operation's cap as JSON, its data counted once: a text block that serializes its `structuredContent` (how a connector that is not MCP is answered, what MCP asks a server to write) is not counted again, a text that says something else (`web_fetch`'s page) is (#1374) | its text, cut, ending with `[truncated by the platform: …]`, and `truncated: {returned_bytes, total_bytes}`; a `structuredContent` the text serializes is dropped (half an object is not the object); one the text does not say (what `web_fetch` fetched) stays whole beside the cut text when both fit the cap (#1383) |
 
 **The cap is per operation** (S40-17). By default it is the deployment's
 `CHOREGOS_BROKER_RESULT_MAX_BYTES` (64 KiB). An organisation administrator sets another for one
@@ -1218,11 +1218,23 @@ its data once — a text block that serializes its `structuredContent` is left o
 something else (`web_fetch`'s page) stays — and cut only past the platform's own bound, 65,536
 characters (`CHOREGOS_BROKER_RESULT_MAX_BYTES`' default, `choregos_core.mcp.RESULT_MAX_BYTES`), the
 notices outside the cut; a status of 400 or more is still `isError`. A result the API passes under the
-default bound therefore reaches the model whole; one whose operation raises its cap above 64 KiB is
-still cut there.
+default bound therefore reaches the model whole. The API says the bound it held the result to,
+`result_max_bytes` in its answer (#1383): an operation's, a catalogue entry's or a plugin tool's own
+cap (the ontology's 256 KiB pages), the default for `web_fetch` and `web_search`. The tool server
+reads the result up to that bound instead of its 65,536, and does not show it to the model; the
+prompt backend's loop lets through up to `CHOREGOS_BROKER_RESULT_CEILING_BYTES`' default (1 MiB,
+`choregos_core.mcp.RESULT_CEILING_BYTES`) and the notices.
 `structuredContent` carries the API's answer as it came, `status_code` included, with the same lines
-under `notices`, when its JSON fits the same bound. A hosted session's tools do not say these yet
-(#1349), nor does an ontology proposal, which answers `201` (#1350).
+under `notices`, when its JSON fits the same bound. A hosted session's tools say the same around the
+text its model reads (#1349, [hosted agents](hosted-agents.md)), and so do a prompt session's tool
+messages and a realtime session's `function_call_output`s (#1399), which have no error flag: there a
+status of 400 or more is a first line, `FAILED (status <code>): the call did not succeed; what follows
+is its error, not a result.`, and the calls left are `Tool calls left in this session: <n>.`. Every door
+composes these lines in one place, `choregos_core.tool_answer`. An ontology proposal says it was not
+executed (#1350): its
+`action_<name>` tools are `approval` tools and answer as every one does, `202` naming the core action the
+proposal is (`action`, `status`, `decision_path`, `message`, beside the proposal's own file); one the policy
+approves (`approve: auto`) reads `NOT FINISHED YET` until Temporal has played it.
 
 The run's tool list (`GET /internal/runs/{id}/tools`) says what a call of each tool does (S57-05,
 [ADR 0122](adr/0122-an-agent-may-call-its-run-s-tools-from-a-script.md)): MCP's own
@@ -2636,8 +2648,11 @@ answers 429 (or 503 with `Retry-After`).
 - at most three redirects, each target going through every check above (a redirect to a host the run may
   not reach stops there);
 - the answer is text, HTML (returned as text, scripts and styles dropped), JSON or markdown, cut at
-  `max_bytes`; anything else is a `415`. What comes back is third-party text: it goes through the
-  prompt-injection guard like a connector's answer.
+  `max_bytes`; anything else is a `415`. What comes back is third-party text: it is masked and bounded
+  like any tool result (#1383), at `CHOREGOS_BROKER_RESULT_MAX_BYTES` (64 KiB by default) — a longer
+  page keeps its text up to the bound, ending with `[truncated by the platform: …]`, and what was
+  fetched beside it, so the model and a script read the same cut; a job step's page is masked, never
+  cut —, then goes through the prompt-injection guard like a connector's answer.
 
 The address is checked like a search query (ADR 0083 §5): if its path or query (as written or
 percent-decoded) holds what redaction would change, a remembered secret or a token or credential
@@ -2717,8 +2732,20 @@ The contract carries these switches; the runner does not act on them yet (stream
 **Tool scripts** ([ADR 0122](adr/0122-an-agent-may-call-its-run-s-tools-from-a-script.md)) let the agent
 call its run's tools from a script it writes, through the runner's tool bridge, so that chained calls
 and their raw results stay out of the model's context. They are off unless the policy offers them; the
-organisation's ceiling can forbid them, and the deployment refuses them unless it turns them on
-(`CHOREGOS_TOOL_SCRIPTS`, off by default):
+organisation's ceiling can forbid them; and the organisation switches them for all its runs (S57-05b):
+its setting `tool_scripts` is `enabled`, `disabled`, or `null` to follow the deployment's default
+(`CHOREGOS_TOOL_SCRIPTS`, off unless the operator turns it on). The operator also keeps a brake
+(`CHOREGOS_TOOL_SCRIPTS_ALLOWED`) that refuses them to every organisation, whatever its setting says
+([the deployment guide](deployment.md)). An organisation administrator switches them on with
+
+```bash
+curl -X PATCH "$CHOREGOS_URL/api/v1/orgs/<org>" -H "Authorization: Bearer $CHOREGOS_TOKEN" \
+  -H 'Content-Type: application/json' -d '{"tool_scripts": "enabled"}'
+```
+
+(`"disabled"` switches them off, `null` returns to the deployment's default; anyone else gets `403`, and
+each change is audited as `org.update` with its before and after), or on *Administration → Tool scripts*.
+Then each project's policy offers them:
 
 ```yaml
 tools:
@@ -2747,8 +2774,9 @@ name, `search("<words>")` finds one, and `$CHOREGOS_TOOLS_DIR/INDEX.md` lists th
 the standard library only (Python 3.9 or later), so any interpreter of the agent's runs it. The task
 the agent reads gains a section, "Calling tools from a script", that says when a script pays (three or
 more dependent calls, a loop, a result to filter or join), to print only what the next decision needs
-and never a secret, to write scripts under `$TMPDIR`, never in the repository, and that a write may come
-back as a proposal; a stage that is not offered scripts gets neither the library nor the section, and
+and never a secret, to write scripts in `$TMPDIR/choregos/scripts/`, never in the repository, and that a write
+may come back as a proposal; the agent may write a script there with its file-write tool as well as from its
+shell, the one place outside the workspace its write guards allow, and only when the stage is offered scripts; a stage that is not offered scripts gets neither the library nor the section, and
 its agent's environment is unchanged. Each call is a call of the bridge, governed as any other, and
 what it gives the script is typed so that a script cannot read one outcome as another:
 
@@ -2760,7 +2788,7 @@ what it gives the script is typed so that a script cannot read one outcome as an
 | `451` | `Withheld` raised: the result was withheld as a suspected injection, its `suspicions` named |
 | any other status of 400 or more, or an MCP result marked `isError` | `ToolError(status, body)` raised (`CapReached` and `Withheld` are `ToolError`s too) |
 | `suspicions` beside a result | the result, and one line per reason on standard error: `[choregos] result of <tool> flagged as a suspected injection: <reason>` |
-| a result the platform cut to its size bound | its text, and a line on standard error that says so: ask for less |
+| a result the platform cut to its size bound | its text (a page cut: `{"text", "structured"}`, the text ending with the platform's marker), and a line on standard error that says so: ask for less |
 
 `remaining()` gives the calls the run's cap still allows, after the last answer. A `503` from the run's
 tool server (a sidecar that has not yet read whether the run is offered scripts) and a tool server that
@@ -2966,6 +2994,9 @@ its description saying it needs a human approval. Calling it reaches **nothing**
 governed action in the agent's name (`agent:<slug>`, origin `tool`), returns its id and the
 console path where it is decided, and counts against the run's `tool_calls_per_run` — an agent
 in a loop does not fill the box. The agent's **owner** does not approve its agent's writes.
+A job step (ADR 0056) has no registry agent: what it proposes is in the name of the workflow actor
+that runs it (`job:<actor>`, "the job step <actor>" in the console). No person owns a job — its
+command and its `tools:` are the workflow's, reviewed with it —, so nobody is kept out of deciding.
 
 **Approvals** (top bar) lists what waits across the organisation's projects
 (`GET /orgs/{org}/actions?status=pending_approval`); a project's **actions** tab lists its actions,
@@ -3202,6 +3233,13 @@ once. Only a **platform administrator** also sees *Change the slug*: it opens a 
 the change breaks, asks for the new slug to be typed (lowercase letters, digits and dashes) and, on
 success, switches the console to the new slug and reloads *Administration*. A refusal (`403`, or `409`
 when the slug is taken) is shown on the card.
+
+**The Tool scripts card.** *Administration* also has a **Tool scripts** card (S57-05b): *Deployment
+default*, *Enabled* or *Disabled*, saved by the organisation's administrator (`PATCH /orgs/{org}` with
+`tool_scripts` only; anyone else sees it read-only), with what the choice means for the organisation's
+runs. The deployment's default and its brake are the operator's and the card does not see them. A
+project's *Agents → Tool scripts* card says the organisation's choice, and warns when it has tool scripts
+disabled: none of the project's runs is offered them, whatever its policy says.
 
 **Renaming an organisation.** `PATCH /orgs/{org}` changes its `name` (its administrator) or its
 `slug` (the platform administrator only: the slug is in every console URL, every qualified id

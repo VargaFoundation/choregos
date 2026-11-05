@@ -119,7 +119,7 @@ describe("the flat map: the layout (S21-07)", () => {
   it("edge labels are passed through: only the retry bound is rephrased, a former French label comes out as written", () => {
     expect(secondaryLabel({ from: "a", to: "b", kind: "retry", label: "on failure (≤2)" })).toBe("on failure (up to 2 retries)");
     expect(secondaryLabel({ from: "a", to: "b", kind: "escalate", label: "when retries run out" })).toBe("when retries run out");
-    expect(secondaryLabel({ from: "a", to: "b", kind: "reject", label: "rejet" })).toBe("rejet"); // lang: fr-ok alias:external
+    expect(secondaryLabel({ from: "a", to: "b", kind: "reject", label: "rejet" })).toBe("rejet"); // lang: fr-ok - a label written in French passes through
     expect(secondaryLabel({ from: "a", to: "b", kind: "default", label: "question" })).toBe("question");
     expect(defaults(simple)).toEqual([
       { label: "question", to: "NEEDS_HUMAN", from: ["INBOX", "DEV"] },

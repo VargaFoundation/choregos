@@ -265,3 +265,29 @@ async def test_the_last_notice_of_an_error_answer_reaches_the_model(
     assert read.startswith("the tool reported an error: ")
     assert read.endswith("Tool calls left in this run: 2."), read[-80:]
     assert read == "the tool reported an error: " + rendered, "the loop cuts nothing the server let through"
+
+
+async def test_an_answer_read_up_to_a_raised_bound_reaches_the_model_whole(
+    stage_input: StageInput, runner_settings: Any
+) -> None:
+    """#1383: the tool server reads a result up to the bound the API names (an operation's cap, up to
+    the deployment's ceiling); the loop lets through as much, the last notice included."""
+    from choregos_core.mcp import RESULT_CEILING_BYTES
+    from choregos_tools_mcp.answer import MAX_NOTICES, render_answer
+
+    page = {"objects": ["o" * 200] * 1_000, "next_cursor": "after"}  # 200 KB: a 256 KiB page
+    rendered = render_answer(
+        {"status_code": 200, "result": page, "remaining": 2, "result_max_bytes": 262_144}
+    )["content"][0]["text"]
+    assert len(rendered) > 200_000 and "[cut by the tool server" not in rendered
+
+    crm = FakeMcpServer(tools=[{"name": "lookup", "description": "", "inputSchema": {"type": "object"}}])
+    crm.answers["lookup"] = rendered
+    model = FakeModelServer(key=KEY).call("crm__lookup", {}).say("Read.")
+    stage = _prompt(stage_input, tools=ToolsRef(mcp={"crm": McpServerRef(url=CRM)}))
+    await _run(stage, model, runner_settings, crm)
+
+    assert model.requests[1][1]["messages"][-1]["content"] == rendered, "whole, the calls left included"
+    from choregos_runner import prompt
+
+    assert prompt._MAX_TOOL_TEXT == RESULT_CEILING_BYTES + MAX_NOTICES, "the most the tool server writes"

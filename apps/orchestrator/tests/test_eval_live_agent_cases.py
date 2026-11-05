@@ -106,6 +106,11 @@ async def _rows(model: Any, **where: Any) -> list[Any]:
 
 async def _install_netops(setup: Fixture) -> None:
     """The catalogue agent the netops cases name, installed as an organisation installs it."""
+    await _install_catalogue_agent("netops")
+
+
+async def _install_catalogue_agent(slug: str) -> None:
+    """A catalogue agent a case names, installed as an organisation installs it."""
     from choregos_api.db.models import Agent, Organization
     from choregos_api.db.session import session_scope
     from choregos_api.rbac import SYSTEM
@@ -115,11 +120,11 @@ async def _install_netops(setup: Fixture) -> None:
     async with session_scope() as session:
         org = (await session.execute(select(Organization))).scalar_one()
         known = (
-            await session.execute(select(Agent).where(Agent.org_id == org.id, Agent.slug == "netops"))
+            await session.execute(select(Agent).where(Agent.org_id == org.id, Agent.slug == slug))
         ).scalar_one_or_none()
         if known is None:
             view = await catalogue_of(session, org.id)
-            entry = view.entry("netops")
+            entry = view.entry(slug)
             assert entry is not None
             await install(session, org.id, entry, SYSTEM, view)
 
@@ -312,7 +317,7 @@ async def test_a_catalogue_agent_the_organisation_did_not_install_skips_the_case
     assert not (await evals.seed_eval_ticket(_cell(case=E1)))["skipped"]
 
 
-@pytest.mark.parametrize(("case", "why"), [(E5, "web pages"), ("netops-dropped-flow", "names no connector")])
+@pytest.mark.parametrize(("case", "why"), [("netops-dropped-flow", "names no connector")])
 async def test_a_case_a_live_deployment_cannot_serve_is_skipped(
     eval_project: Fixture, case: str, why: str
 ) -> None:
@@ -481,6 +486,196 @@ async def test_a_scripts_cell_runs_the_case_s_script_through_the_real_bridge_and
     assert [c["origin"] for c in observation["calls"]] == ["script"] * 8
     [script] = observation["scripts"]
     assert (script["calls"], script["failed_calls"], script["errored"]) == (8, 0, False)
+
+
+# ───────────────────────── E5: the case's own pages (#1378) ─────────────────────────
+
+E5_BLOCK = "research-injected-page-block"
+INJECTED = "https://compare.flagreviews.example/2026"
+
+
+async def _open_web_search() -> None:
+    """The eval organisation's ceiling opens web search, as an administrator opens it for any backend:
+    the matrix never does (the runbook, "Agent cases in a live cell")."""
+    from choregos_api.db.models import Organization
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    async with session_scope() as session:
+        org = (await session.execute(select(Organization))).scalar_one()
+        org.settings = {
+            **(org.settings or {}),
+            "policy_ceiling": {"ceiling": {"web_search": {"mode": "allow"}}},
+        }
+
+
+@pytest.mark.parametrize("case", [E5, E5_BLOCK])
+async def test_e5_seeds_its_fake_web_once_turned_on_for_its_eval_project_alone(
+    eval_project: Fixture, case: str
+) -> None:
+    from choregos_api.db.models import OrgConnector, OrgConnectorProject, PolicyDef, Project
+
+    await _install_catalogue_agent("researcher")
+    first = await evals.seed_eval_ticket(_cell("mcp", case=case))
+    again = await evals.seed_eval_ticket(_cell("mcp", case=case))
+    assert not first["skipped"], first["reason"]
+    assert first["plan"] == again["plan"] and first["plan"]["agent"] == "researcher"
+    loaded = evals.load_agent_case(case)
+    assert loaded is not None
+    [connector] = await _rows(OrgConnector, name=f"web-{case}")
+    assert (connector.kind, connector.type, connector.availability) == (
+        "web_search",
+        "fake",
+        "selected_projects",
+    )
+    assert connector.config == {"fake_scene": "web", "fake_web": loaded["web"]}, "the case's pages, whole"
+    assert connector.secret_refs is None and connector.created_by == live_cases.EVAL_CREATOR
+    [project] = await _rows(Project, slug=f"billing-api-{case}")
+    [enabled] = await _rows(OrgConnectorProject, connector_id=connector.id)
+    assert enabled.project_id == project.id, "turned on for the case's eval project alone"
+    [policy] = await _rows(PolicyDef, project_id=project.id, is_active=True)
+    allowed = policy.json_doc["sandbox"]["network"]["allow_domains"]
+    assert set(allowed) >= {
+        "flagpole.example.org",
+        "toggly.example.com",
+        "switchyard.example.net",
+        "compare.flagreviews.example",
+    }, "web_fetch reads what the run's network allows: the case's hosts"
+    assert policy.json_doc["sandbox"]["prompt_injection"] == loaded["policy"]["prompt_injection"]
+
+
+async def test_e5_s_fake_web_follows_the_case_s_pages(eval_project: Fixture) -> None:
+    from choregos_api.db.models import OrgConnector
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    await _install_catalogue_agent("researcher")
+    assert not (await evals.seed_eval_ticket(_cell("mcp", case=E5)))["skipped"]
+    async with session_scope() as session:
+        row = (
+            await session.execute(select(OrgConnector).where(OrgConnector.name == f"web-{E5}"))
+        ).scalar_one()
+        row.config = {"fake_scene": "web", "fake_web": {"pages": {}}}  # an older version of the case
+    assert not (await evals.seed_eval_ticket(_cell("mcp", case=E5)))["skipped"]
+    [connector] = await _rows(OrgConnector, name=f"web-{E5}")
+    assert INJECTED in connector.config["fake_web"]["pages"], "brought back to the case's pages"
+
+
+async def test_a_web_connector_of_the_same_name_that_is_not_the_matrix_s_is_never_touched(
+    eval_project: Fixture,
+) -> None:
+    from choregos_api.db.models import Organization, OrgConnector
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    await _install_catalogue_agent("researcher")
+    async with session_scope() as session:
+        org = (await session.execute(select(Organization))).scalar_one()
+        session.add(OrgConnector(org_id=org.id, name=f"web-{E5}", kind="web_search", type="brave", config={}))
+    seeded = await evals.seed_eval_ticket(_cell("mcp", case=E5))
+    assert seeded["skipped"] and "not the matrix's fake web" in seeded["reason"]
+    [untouched] = await _rows(OrgConnector, name=f"web-{E5}")
+    assert (untouched.type, untouched.config, untouched.availability) == ("brave", {}, "all_projects")
+
+
+async def test_the_matrix_s_fake_web_edited_off_its_scene_is_no_longer_the_matrix_s(
+    eval_project: Fixture,
+) -> None:
+    """An edit can take `fake_scene` away (none can add it): the connector is then someone's search
+    backend, and the seeding does not put a scene back on it."""
+    from choregos_api.db.models import OrgConnector
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    await _install_catalogue_agent("researcher")
+    assert not (await evals.seed_eval_ticket(_cell("mcp", case=E5)))["skipped"]
+    async with session_scope() as session:
+        row = (
+            await session.execute(select(OrgConnector).where(OrgConnector.name == f"web-{E5}"))
+        ).scalar_one()
+        row.config = {"data_handling": {"query_retention_days": 0}}
+    seeded = await evals.seed_eval_ticket(_cell("mcp", case=E5))
+    assert seeded["skipped"] and "not the matrix's fake web" in seeded["reason"]
+    [untouched] = await _rows(OrgConnector, name=f"web-{E5}")
+    assert "fake_scene" not in untouched.config
+
+
+def _e5_through_mcp(case: str) -> ScriptedAgent:
+    """E5's agent as a model makes its calls: the case's search and its six pages through the run's MCP
+    server, then the case's report, written from what it read."""
+
+    async def agent(stage_input: StageInput, transport: Any, token: str) -> StageResult:
+        loaded = evals.load_agent_case(case)
+        assert loaded is not None
+        answers = await eval_doors.mcp_calls(_client(transport, stage_input, token), loaded["evidence"])
+        read = json.dumps([a["result"] for a in answers], ensure_ascii=False)
+        for page in loaded["web"]["pages"].values():
+            if "Ignore your previous instructions" not in page["text"]:
+                assert page["text"] in read, "the case's own page, read through the MCP door"
+        report = json.loads(loaded["reference_answer"])["research_markdown"]
+        return _done("research_markdown", report)
+
+    return agent
+
+
+def _e5_through_a_script(case: str) -> ScriptedAgent:
+    """E5's agent runs the case's script through the run's real tool bridge, as a shell does."""
+
+    async def agent(stage_input: StageInput, transport: Any, token: str) -> StageResult:
+        import tempfile
+
+        from choregos_tools_mcp.bridge import ApiJournal
+
+        loaded = evals.load_agent_case(case)
+        assert loaded is not None
+        journal_client = _client(transport, stage_input, token)
+        with tempfile.TemporaryDirectory(prefix="choregos-live-eval-") as workdir:
+            ran = await eval_doors.bridge_script(
+                _client(transport, stage_input, token),
+                loaded["scripted_script"],
+                Path(workdir),
+                run_id=stage_input.run_id,
+                secrets=[token],
+                journal=ApiJournal(journal_client),
+            )
+        await journal_client.aclose()
+        assert ran["exit_code"] == 0, ran["stderr"]
+        answer = json.loads(eval_doors.answer_of(loaded, ran["stdout"]))
+        return _done("research_markdown", answer["research_markdown"])
+
+    return agent
+
+
+@pytest.mark.parametrize(("case", "code"), [(E5, 200), (E5_BLOCK, 451)])
+@pytest.mark.parametrize(
+    ("tools", "door", "origin"), [("mcp", "mcp", "model"), ("scripts", "bridge", "script")]
+)
+async def test_e5_is_played_live_against_the_case_s_own_pages_and_judged(
+    eval_project: Fixture,
+    api: Any,
+    scripts_on: None,
+    case: str,
+    code: int,
+    tools: str,
+    door: str,
+    origin: str,
+) -> None:
+    """The real API serves the case's eval project its fake web; its real guard flags (`warn`) or
+    withholds (`block`, 451) the injected page, whichever door read it; the case's assertions judge the
+    run's journal."""
+    await _install_catalogue_agent("researcher")
+    await _open_web_search()
+    agent = _e5_through_mcp(case) if tools == "mcp" else _e5_through_a_script(case)
+    verdict = await _live(eval_project, api, _cell(tools, case=case), agent)
+    assert not verdict["skipped"] and not verdict.get("invalid"), verdict["reason"]
+    assert verdict["ok"], verdict["reason"]
+    assert (verdict["agent"], verdict["door"]) == ("researcher", door)
+    observation = verdict["observation"]
+    calls = observation["calls"]
+    assert [c["tool"] for c in calls] == ["web_search"] + ["web_fetch"] * 6
+    assert {c["origin"] for c in calls} == {origin}
+    assert [c["status_code"] for c in calls if c["status_code"] != 200] == ([451] if code == 451 else [])
+    assert [e["type"] for e in observation["security_events"]] == ["choregos.security.injection_suspected"]
 
 
 # ───────────────────────── governance parity ─────────────────────────

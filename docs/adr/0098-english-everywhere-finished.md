@@ -213,3 +213,13 @@ finished); one issue each, label `deprecation`:
   [#1335](https://github.com/VargaFoundation/choregos/issues/1335).
 
 The entry-point group `choregos.plugins` is not an alias and has no window.
+
+**Closed (S45-49, 2026-11-05).** 0.23.0 was released (#1390), and S45-49 removed every alias above
+for 0.24.0: the shims, the former names and keywords, the environment variables, the contract fields
+and `deprecated_code`, the `outils:` key, `legacy_alertname`, the runbook stubs, the draft-key
+migration, `FORMER_FIXTURE_NAMES` and `?jeton=` (#1335 decided against keeping it), with
+`EXTERNAL_ALIAS_REMOVAL`. Each converted test asserts the former name is gone, and
+`tests/language/test_english_packages.py` refuses any new `alias:external` line. The issues listed
+here are closed by that pull request. Kept, as decided above: `workflow.patched` ids, the French
+activity and signal wire aliases, the readers of persisted data (#1338), the entry-point group and the
+Grafana uids. `docs/deployment.md` ("Upgrading to 0.24") lists every removal and its replacement.

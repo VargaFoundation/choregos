@@ -21,7 +21,7 @@ _HOST = "https://api.tickets.example"
 def _catalogue(*, read_only: bool) -> str:
     flag = "    read_only: true\n" if read_only else ""
     return f"""
-outils:
+tools:
   - name: create_ticket
     description: Creates a ticket.
     provider: tickets

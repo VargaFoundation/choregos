@@ -28,6 +28,14 @@ ever served by a fake:
 - it is honoured only when the deployment serves eval fakes (`CHOREGOS_EVAL_FAKE_SCENES=1`, given to the
   API and the orchestrator); otherwise it is ignored and the connector is built as its type says, from its
   configuration, which holds no address: it reaches nothing.
+
+#1378: a case's built-in web tools read the case's own pages the same way. Its fake web is a `web_search`
+organisation connector of type `fake` whose configuration holds `fake_scene: web` and the case's `web:`
+(`fake_web`: the search results by query, the pages by address); `bound_web_scene` is what the API serves
+both tools from, for the projects that connector is turned on for — `web_search` the case's results,
+`web_fetch` the case's pages, the injected one included, each host resolving to `WEB_ADDRESS` and no other
+host resolving at all. The same two guards hold: `fake_scene` is refused on every declaration and edit, and
+the scene is honoured only where the deployment serves eval fakes.
 """
 
 from __future__ import annotations
@@ -42,6 +50,14 @@ from ..registry import FAKE_SCENE_FIELD, OperationSpec, spec_of
 
 #: The deployment's switch: the API serves a `fake_scene` connector from its scene only when it is on.
 EVAL_FAKE_SCENES_ENV = "CHOREGOS_EVAL_FAKE_SCENES"
+#: The scene of a case's fake web (#1378), on a `web_search` connector: served by the web tools, not by
+#: the broker.
+WEB_SCENE = "web"
+#: The configuration field beside `fake_scene: web` that holds the case's `web:` (`search`, `pages`).
+WEB_FIELD = "fake_web"
+#: The address every host of a fake web resolves to: a public one, so that the API checks a page's host as
+#: it checks any; the scene's client never connects to it.
+WEB_ADDRESS = "93.184.216.34"
 
 
 @dataclass
@@ -140,6 +156,60 @@ def scene_type(kind: str) -> str:
     return _KINDS[kind][0]
 
 
+@dataclass
+class WebScene:
+    """A case's fake web: what `web_search` finds (`search`, a `FakeSearchBackend` holding the case's
+    results by query) and what `web_fetch` reads (`pages`: address -> `{title, text}`), nothing else."""
+
+    search: Any
+    pages: dict[str, dict[str, str]]
+
+    @property
+    def hosts(self) -> list[str]:
+        """The hosts of its pages: the only ones that resolve."""
+        from urllib.parse import urlsplit
+
+        return sorted({host for url in self.pages if (host := urlsplit(url).hostname)})
+
+
+def web_scene(web: Mapping[str, Any]) -> WebScene:
+    """A case's `web:` (`{search: {query: [{title, url, snippet}]}, pages: {url: {title, text}}}`) as a
+    fresh fake web: the scripted matrix's and the live matrix's are built the same way."""
+    from ..web_search.base import result
+    from .web_search import FakeSearchBackend
+
+    backend = FakeSearchBackend()
+    backend.results = {
+        str(asked): [
+            made
+            for hit in hits or []
+            if (made := result(hit.get("title"), hit.get("url"), hit.get("snippet"))) is not None
+        ]
+        for asked, hits in (web.get("search") or {}).items()
+    }
+    pages = {
+        str(url): {"title": str((page or {}).get("title", "")), "text": str((page or {}).get("text", ""))}
+        for url, page in (web.get("pages") or {}).items()
+    }
+    return WebScene(backend, pages)
+
+
+def binds_web_scene(config: Mapping[str, Any] | None) -> bool:
+    """Whether a `web_search` connector's configuration binds its projects' web tools to a case's fake
+    web, and the deployment honours it (`CHOREGOS_EVAL_FAKE_SCENES`)."""
+    return (config or {}).get(FAKE_SCENE_FIELD) == WEB_SCENE and eval_fake_scenes_allowed()
+
+
+def bound_web_scene(config: Mapping[str, Any] | None) -> WebScene | None:
+    """The fake web a `web_search` connector's configuration binds its projects to (`fake_scene: web`,
+    the case's `web:` in `fake_web`), built anew; `None` when it binds none, and when the deployment does
+    not serve eval fakes — the fields are then ignored (#1378)."""
+    if not binds_web_scene(config):
+        return None
+    web = (config or {}).get(WEB_FIELD)
+    return web_scene(web if isinstance(web, Mapping) else {})
+
+
 def eval_fake_scenes_allowed() -> bool:
     """Whether this deployment serves eval fakes (`CHOREGOS_EVAL_FAKE_SCENES=1`); off by default."""
     return os.environ.get(EVAL_FAKE_SCENES_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
@@ -150,7 +220,8 @@ def bound_scene(kind: str, config: Mapping[str, Any] | None) -> Scene | None:
     configuration names none, and when the deployment does not serve eval fakes — the field is then
     ignored, and the connector is built from its configuration as its type says (S57-11a)."""
     name = (config or {}).get(FAKE_SCENE_FIELD)
-    if not name or not eval_fake_scenes_allowed():
+    if not name or name == WEB_SCENE or not eval_fake_scenes_allowed():
+        # A fake web is served by the web tools (`bound_web_scene`), not by the broker.
         return None
     return scene(kind, str(name))
 
@@ -158,10 +229,17 @@ def bound_scene(kind: str, config: Mapping[str, Any] | None) -> Scene | None:
 __all__ = [
     "EVAL_FAKE_SCENES_ENV",
     "FAKE_SCENE_FIELD",
+    "WEB_ADDRESS",
+    "WEB_FIELD",
+    "WEB_SCENE",
     "Scene",
+    "WebScene",
+    "binds_web_scene",
     "bound_scene",
+    "bound_web_scene",
     "eval_fake_scenes_allowed",
     "scene",
     "scene_type",
     "scenes",
+    "web_scene",
 ]

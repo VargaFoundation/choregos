@@ -184,10 +184,14 @@ spec:
             # to every run, whatever a project's policy asks.
             - name: CHOREGOS_CONTEXT_REDUCTION
               value: {{ ternary "on" "off" (ne $root.Values.runner.contextReduction.enabled false) | quote }}
-            # The kill switch for tool scripts (ADR 0122): "off" (the default) offers the tool
-            # bridge to no run, whatever a project's policy asks.
+            # Tool scripts (ADR 0122, S57-05b): the DEFAULT of an organisation that does not choose
+            # ("off", the default, offers its runs no tool bridge); its `tool_scripts` setting wins.
             - name: CHOREGOS_TOOL_SCRIPTS
               value: {{ ternary "on" "off" (eq ((($root.Values.runner.toolScripts | default dict).enabled) | default false) true) | quote }}
+            # The hard brake: "off" offers the tool bridge to no run of any organisation, whatever
+            # its setting says. On unless `allowed: false` is written.
+            - name: CHOREGOS_TOOL_SCRIPTS_ALLOWED
+              value: {{ ternary "on" "off" (ne (($root.Values.runner.toolScripts | default dict).allowed) false) | quote }}
             - name: CHOREGOS_GATEWAY_MASTER_KEY
               valueFrom: { secretKeyRef: { name: {{ include "choregos.gatewaySecret" $root }}, key: master-key } }
           resources: {{- toYaml .resources | nindent 12 }}

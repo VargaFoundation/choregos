@@ -107,10 +107,10 @@ def catalogue_instructions(slug: str) -> str | None:
     """The instructions the catalogue (the offline plugins, ADR 0093 §6) ships for `slug` — `None` when
     the catalogue is unreachable or no plugin ships it."""
     try:
-        from choregos_core.catalogue_d_agents import entree
+        from choregos_core.agent_catalogue import entry
     except ImportError:
         return None
-    found = entree(slug)
+    found = entry(slug)
     return None if found is None else str(found.document["spec"].get("instructions", ""))
 
 

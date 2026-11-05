@@ -12,6 +12,10 @@ a false promise made to the agent:
 - foreign-key links between two `table` types;
 - `action_<name>` of the actions whose effects are all served (`actions.SERVED_EFFECTS`), which only
   **propose** (item 4), and `action_status`, `action_list`.
+
+An action tool is announced `x-choregos-access: approval`, and answers as every `approval` tool answers
+`callRunTool` (#1350, `as_an_approval`): `202` while nothing is done, naming the core action the
+proposal is. A person's door (the route, the MCP gate of ADR 0030) keeps the proposal's own answer.
 """
 
 from __future__ import annotations
@@ -44,6 +48,13 @@ RESULT_CAPS: dict[str, int] = {
 #: The key, in an announced tool, that tells the core's MCP gate the tool writes (read by
 #: `choregos_api.mcp`: a protocol key, not prose).
 WRITES_KEY = "write"
+#: What an action tool's answer says of a proposal with no outcome yet, in the broker's words for a
+#: connector operation under approval and for a governed write still running (ADR 0035).
+PROPOSED_MESSAGE = "proposed: a person approves it in the console before anything is done"
+RUNNING_MESSAGE = (
+    "approved by the policy: the action runs as a governed action and is not finished yet: its "
+    "outcome will be in the action's journal"
+)
 
 
 def _is_table(ir: dict[str, Any], type_name: str) -> bool:
@@ -149,7 +160,10 @@ async def call_tool(
     try:
         if tool["kind"] == "action":
             agent = actions.Actor(kind="agent", id=f"agent:{actions.AGENT_IDENTITY}", run_id=run.id)
-            return await actions.propose(session, project, version, str(tool["source"]), arguments, agent)
+            code, proposal = await actions.propose(
+                session, project, version, str(tool["source"]), arguments, agent
+            )
+            return as_an_approval(project, code, proposal)
         if tool["kind"] in {"status", "list"}:
             return 200, await _proposals(session, project, tool["kind"], arguments)
         return 200, await _dispatch(session, project.id, ir, tool, arguments)
@@ -157,6 +171,23 @@ async def call_tool(
         return refusal.code, {"error": str(refusal)}
     except actions.Refusal as refusal:
         return refusal.code, refusal.body
+
+
+def as_an_approval(project: Any, code: int, proposal: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+    """A proposal as an `approval` tool answers `callRunTool` (#1350): `202` while nothing is done,
+    naming its `action` — the core action the proposal is, under the same id (ADR 0035) —, its
+    `status`, its `decision_path` and a `message`, as the broker answers a connector operation under
+    approval. The agent's tool server then says `PROPOSED, NOT EXECUTED` (or `NOT FINISHED YET` for
+    one the policy approved, still running), a script's client returns a `Proposal`, and the tool
+    bridge journals the action. The proposal's own file is kept whole (`proposal`, `approval`, …);
+    a replayed proposal that already succeeded keeps its `200`."""
+    action = str(proposal["proposal"])
+    status = str(proposal.get("status") or "")
+    shaped = {**proposal, "action": action, "decision_path": f"/p/{project.slug}/actions/{action}"}
+    if status in actions.TERMINAL:
+        return code, shaped
+    message = PROPOSED_MESSAGE if status == actions.PENDING else RUNNING_MESSAGE
+    return 202, {**shaped, "message": message}
 
 
 async def _proposals(

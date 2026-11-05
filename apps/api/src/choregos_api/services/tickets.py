@@ -12,7 +12,7 @@ from choregos_adapters.errors import AdapterError
 from choregos_contracts import EventType
 from choregos_core.domain import NewItem
 from choregos_core.restricted import RESTRICTED_TITLE, WITHHELD, mark
-from choregos_core.secrets import SecretIntrouvable
+from choregos_core.secrets import SecretNotFound
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -338,7 +338,7 @@ async def project_tracker(session: AsyncSession, project: Project) -> tuple[Conn
         pinned = await pin_plugin_tracker(session, project.org_id, "tracker", row.type, pinned)
         config = resolved_configuration("tracker", row.type, pinned, row.secret_refs, row.secret_ref)
         return row, build("tracker", row.type, config)
-    except (AdapterError, SecretIntrouvable, ValueError, KeyError) as error:
+    except (AdapterError, SecretNotFound, ValueError, KeyError) as error:
         raise upstream(row.type, f"the tracker connector cannot be built: {error}") from error
 
 
@@ -509,7 +509,7 @@ async def _file_in_tracker(
     labels = [*dict.fromkeys([*request.labels, FILED_LABEL])]
     try:
         key = str(await adapter.create_item(NewItem(title=request.title, body=body, labels=labels)))
-    except (AdapterError, SecretIntrouvable, httpx.HTTPError) as error:
+    except (AdapterError, SecretNotFound, httpx.HTTPError) as error:
         raise upstream(
             tracker_type,
             f"the tracker {tracker_type} refused the issue: {error}. Nothing was created in Choregos.",

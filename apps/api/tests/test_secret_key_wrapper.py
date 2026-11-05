@@ -17,7 +17,7 @@ from choregos_api.secret_store import (
     SecretStoreUnavailable,
     parse_keyring,
 )
-from choregos_core.secrets import SecretIntrouvable
+from choregos_core.secrets import SecretNotFound
 
 
 class FakeKms:
@@ -129,7 +129,7 @@ async def test_rewrap_moves_rows_to_the_wrapper(app: Any, org: str) -> None:
         assert await SealedDbSecretStore(wrapper=kms).get_many(session, org_id, ["connector/a/b"]) == {
             "connector/a/b": "move-me"
         }
-        with pytest.raises(SecretIntrouvable, match="no longer lists"):
+        with pytest.raises(SecretNotFound, match="no longer lists"):
             await SealedDbSecretStore(wrapper=EnvKeyWrapper(ring)).get_many(
                 session, org_id, ["connector/a/b"]
             )

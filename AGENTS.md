@@ -21,9 +21,9 @@ There is no French in the repository; the ratchet is at zero (ADR 0098): every f
 --all`) fails on any French finding and on any stale entry (`--lenient` is for a local run).
 `make lint` and CI refuse French in new or modified lines (`tools/check_english.py`); a line that
 must stay French (a `workflow.patched` id, a French alias kept for running workflows, a test fixture
-whose accents are the point) carries `lang: fr-ok` in a comment. A compatibility shim for an external
-consumer carries `lang: fr-ok-file alias:external`, an alias line `lang: fr-ok alias:external`, and
-each window has a removal issue (ADR 0098, 'Windows'); there is no internal alias any more.
+whose accents are the point) carries `lang: fr-ok` in a comment. There is no alias any more, internal
+or external: the external aliases' window closed with 0.23.0 and S45-49 removed them (ADR 0098,
+'Windows'; `docs/deployment.md`, "Upgrading to 0.24").
 
 ## Commands (the CI's, no others)
 - Everything that blocks a PR: `make ci` = `lint` + `typecheck` + `test-cov` + `contracts-check` + `procedures-check` + `charts-lint`.

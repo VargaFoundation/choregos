@@ -190,8 +190,9 @@ class ToolsOverride(Strict):
 class ToolsPolicy(Strict):
     """How a run's agent may call its tools (ADR 0122): `offer` lets it call them from a script too,
     through the runner's tool bridge, under the same governance as the model's calls. Off unless the
-    policy offers it; the organisation's ceiling can forbid it, and the deployment's kill switch
-    (`CHOREGOS_TOOL_SCRIPTS`, off by default) wins over both."""
+    policy offers it; the organisation's ceiling can forbid it, and the organisation's switch wins over
+    both (S57-05b: its `tool_scripts` setting, else the deployment's default `CHOREGOS_TOOL_SCRIPTS`, off by
+    default, never past the deployment's brake `CHOREGOS_TOOL_SCRIPTS_ALLOWED`)."""
 
     scripts: ToolScriptsMode = "off"
     #: Calls of one run the bridge relays at once.
@@ -200,7 +201,7 @@ class ToolsPolicy(Strict):
     per_role: dict[str, ToolsOverride] = Field(default_factory=dict)
 
     def for_role(self, role: str) -> ToolScripts | None:
-        """The policy's tool scripts for one role, before the deployment's kill switch: `None` when off."""
+        """The policy's tool scripts for one role, before the organisation's switch: `None` when off."""
         override = self.per_role.get(role, ToolsOverride())
         if (override.scripts or self.scripts) == "off":
             return None

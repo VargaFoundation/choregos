@@ -29,7 +29,7 @@ from choregos_adapters import build, fakes_enabled
 from choregos_adapters.http.egress import guarded
 from choregos_adapters.mcp import McpError
 from choregos_core.redaction import remember_secret
-from choregos_core.secrets import SecretIntrouvable
+from choregos_core.secrets import SecretNotFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import Organization, OrgConnector
@@ -377,7 +377,7 @@ async def _oauth_token(org_id: str, setting: GatewaySetting, client_secret: str,
 async def _credential(session: AsyncSession, organisation: Organization, store: SecretStore | None) -> str:
     try:
         values = await (store or get_secret_store()).get_many(session, organisation.id, [SECRET_NAME])
-    except (SecretIntrouvable, SecretStoreUnavailable) as lost:
+    except (SecretNotFound, SecretStoreUnavailable) as lost:
         raise GatewayCredentialMissing(
             f"the credential of the MCP gateway of {organisation.slug} is not available: "
             "an administrator sets it again on the Administration page"

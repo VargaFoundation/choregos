@@ -17,8 +17,8 @@ without a retry, and the reason is what the work item shows: it must say what to
 raises ANYTHING ELSE is not a refusal, it is a failure; it goes up as it is and the activity is
 retried, rather than passing for a decision.
 
-The French names this module had before 0.21 (`declarer_une_admission`, `AdmissionRefusee`...) keep
-working until 0.23.0 and warn (ADR 0098 §3 (f)).
+The French names this module had before 0.21 (`declarer_une_admission`, `AdmissionRefusee`...) were
+removed in 0.24.0 (S45-49).
 """
 
 from __future__ import annotations
@@ -26,8 +26,6 @@ from __future__ import annotations
 import inspect
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-
-from .compat import EXTERNAL_ALIAS_REMOVAL, alias_names
 
 
 @dataclass(frozen=True)
@@ -81,26 +79,3 @@ async def check(request: RunRequest) -> None:
 def reset() -> None:
     """For tests: no admission declared."""
     _CHECKS.clear()
-
-
-DemandeDeRun = RunRequest  # lang: fr-ok alias:external
-AdmissionRefusee = AdmissionRefused  # lang: fr-ok alias:external
-Controle = AdmissionCheck  # lang: fr-ok alias:external
-declarer_une_admission = declare_admission  # lang: fr-ok alias:external
-admissions_declarees = declared_admissions  # lang: fr-ok alias:external
-verifier = check  # lang: fr-ok alias:external
-reinitialiser = reset  # lang: fr-ok alias:external
-
-alias_names(
-    __name__,
-    {
-        "DemandeDeRun": "RunRequest",  # lang: fr-ok alias:external
-        "AdmissionRefusee": "AdmissionRefused",  # lang: fr-ok alias:external
-        "Controle": "AdmissionCheck",  # lang: fr-ok alias:external
-        "declarer_une_admission": "declare_admission",  # lang: fr-ok alias:external
-        "admissions_declarees": "declared_admissions",  # lang: fr-ok alias:external
-        "verifier": "check",  # lang: fr-ok alias:external
-        "reinitialiser": "reset",  # lang: fr-ok alias:external
-    },
-    removed_in=EXTERNAL_ALIAS_REMOVAL,
-)
