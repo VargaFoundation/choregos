@@ -1,7 +1,7 @@
 # 0085 — The approved row is the outbox of a governed action, and a workflow without one runs nothing
 
 - **Status**: accepted, 2026-10-22 — implemented by S40-19; amended 2026-11-05 (the tool route commits
-  before each external call, #1354)
+  before each external call, #1354; so do an agent session's model and tool calls, #1376)
 - **Concerns**: the API (`db/session.py`, `deps.py`, `services/actions.py`, `services/action_relay.py`,
   `main.py`), the ontology plugin (`service/actions.py`), the orchestrator (`activities/actions.py`);
   builds on [ADR 0008](0008-idempotence-and-run-id.md) (idempotence),
@@ -122,4 +122,28 @@ back, the budget's alerts and its event, whose `pg_notify` leaves with the same 
 transaction after the call, committed by the route. A booking that fails after the call answers 500, is
 logged as `tool_call.not_booked` with what the line would have held, and leaves the call's place under
 the cap committed, so the cap still counts it until the sweep. A session nobody marked — every other
-route, and the agent sessions' calls through the broker (#1376) — still commits once at exit.
+route but the agent sessions' (below) — still commits once at exit.
+
+## Amendment — 2026-11-05: an agent session's model and tool calls (#1376)
+
+The same mechanism serves the agent sessions (S41-09, S41-11), whose request held one transaction for a
+whole response: up to `max_turns` model calls of up to 300 s each, its tool calls, and, for a session's
+first response, the budget's advisory lock taken at its opening. `respond` marks its session and runs each
+model call in `outside_the_transaction`; a tool call goes through the broker's wrapped server call, from
+the response, from a hosted pod (`callAgentSessionTool`, which marks its session) and from a voice
+relay's write (which marks its own). A hosted response commits its turn with `release_connection` before
+the orchestrator is asked, so its wait for the pod holds nothing (the scope it set again right after the
+commit began, on PostgreSQL, the transaction the wait then held).
+
+- A session's tool call is booked after the call — its count, its ledger line, its events with their
+  `pg_notify` — in one transaction committed by `answer_session_tool`; a booking that fails is logged as
+  `tool_call.not_booked` (with `session_id`) and the caller gets the error.
+- A response's journal commits turn by turn, at each model call: a call that was made, and paid on the
+  key, stays written when the response then fails. The history (`record.messages`), the response count
+  and the `response.*` line commit together at the end of the response; when that transaction fails the
+  caller gets a 500 and `agent_session.response_not_booked` says how many model and tool calls the
+  response made. The next response sends the model the history as it was: never half of a turn.
+- Opening a session (its reservation under the budget's lock, its key minted, its `gateway_keys` row) and
+  closing one (the key's spend read and booked, the key revoked, the session closed) still call the
+  gateway inside their transaction: each must stay one transaction, or the lock would be released before
+  the reservation is written, and a spend booked twice.

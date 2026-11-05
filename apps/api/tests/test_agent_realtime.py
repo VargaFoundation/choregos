@@ -316,6 +316,39 @@ async def test_a_granted_read_goes_through_the_broker_and_anything_else_is_refus
     assert tool_line.session_id == read["id"]
 
 
+async def test_a_voice_models_function_output_says_the_flag_the_failure_and_the_calls_left(
+    client: AsyncClient, project: dict[str, Any], voice: Voice, supplier: Any
+) -> None:
+    """A realtime session's `function_call_output` says what a hosted session's container reads
+    (#1399): the guard's reasons first, the calls left last, and a status of 400 or more, which the
+    output has no flag for, said first."""
+    from .test_agent_sessions import FLAG, INJECTION, _policy, _refuses, _supplier
+
+    await _policy(client, project, budgets={"tool_calls_per_run": 2})
+    supplier.answers["suivi_commande"] = INJECTION
+    supplier.gestures["stock"] = _refuses
+    await _supplier(client)
+    await _agent(client, mcp_servers=[{"connector": "fournisseur", "tools": ["suivi_*", "stock"]}])
+    voice.model.say(GREETING)
+    voice.model.call("fournisseur__suivi_commande", {"numero": "42"}).say("It is on its way.")
+    voice.model.call("fournisseur__stock", {}).say("It is out of stock.")
+    async with _socket(client) as socket:
+        await socket.until("response.done")
+        for _ in range(2):
+            await socket.send_json({"type": "response.create"})
+            await socket.until("response.function_call_arguments.done")
+            await socket.until("response.output_audio_transcript.done")
+        await socket.hang_up()
+
+    outputs = [e["item"]["output"].split("\n\n") for e in voice.model.sent("conversation.item.create")]
+    flagged, refused = outputs
+    assert flagged[0].startswith(FLAG) and flagged[1] == INJECTION
+    assert flagged[-1] == "Tool calls left in this session: 1."
+    assert refused[0].startswith("FAILED (status 422): the call did not succeed")
+    assert "no stock for this item" in refused[1]
+    assert refused[-1] == "Tool calls left in this session: 0."
+
+
 # ───────────────────────── limits ─────────────────────────
 
 

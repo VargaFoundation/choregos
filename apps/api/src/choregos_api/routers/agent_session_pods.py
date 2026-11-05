@@ -24,7 +24,7 @@ from fastapi import APIRouter, Depends, Header, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import AgentSessionRecord, Project
-from ..db.session import ALL_ORGS, limit_to_organisations, session_scope
+from ..db.session import ALL_ORGS, allow_release_during_calls, limit_to_organisations, session_scope
 from ..deps import Db
 from ..errors import ApiError, forbidden, not_found, unauthorized
 from ..schemas.agent_sessions import (
@@ -224,6 +224,10 @@ async def call_tool(
     tools = await session_tools(session, await _spec(session, record, project), project)
     if name not in tools:
         raise not_found("Tool of the session", name)
+    # The connector is awaited with no connection of this request held (#1376): the broker commits
+    # what was read above before the call leaves, and the call is booked after it, in a transaction
+    # of its own under the token's scope (`answer_session_tool`).
+    allow_release_during_calls(session)
     answer = await answer_session_tool(session, record, project, tools[name], body.arguments)
     return AgentSessionToolAnswer(
         text=answer.text,
