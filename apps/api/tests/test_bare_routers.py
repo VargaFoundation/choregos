@@ -804,9 +804,9 @@ async def test_choregos_admin_mints_a_token_and_replays_the_bootstrap(
 ) -> None:
     import asyncio
 
+    from choregos_api.admin_cli import app as cli
     from choregos_api.config import get_settings
     from choregos_api.db import session as db_session
-    from choregos_api.outils import app as cli
     from typer.testing import CliRunner
 
     runner = CliRunner()
@@ -837,11 +837,11 @@ async def test_choregos_admin_mints_a_token_and_replays_the_bootstrap(
     db_session._sessionmaker = None
 
 
-async def test_tekton_webhook_accepts_token_and_jeton(  # lang: fr-ok: the `?jeton=` alias
+async def test_tekton_webhook_accepts_token_and_no_longer_the_former_parameter(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """It had no check at all. Tekton's CloudEvents sink adds no header: the secret also travels in the
-    URL (`?token=`; the former `?jeton=` is still accepted)."""
+    URL (`?token=`). The former parameter, removed in 0.24.0 (S45-49), authenticates nothing."""
     from choregos_api.config import reset_settings_cache
 
     monkeypatch.setenv("CHOREGOS_GENERIC_WEBHOOK_SECRET", "s3cret-tekton")
@@ -863,9 +863,9 @@ async def test_tekton_webhook_accepts_token_and_jeton(  # lang: fr-ok: the `?jet
             json=body,
             headers={**headers, "ce-id": "t-3", "x-choregos-secret": "s3cret-tekton"},
         )
-        in_the_url = await client.post(
+        former_parameter = await client.post(
             "/api/v1/webhooks/tekton",
-            params={"jeton": "s3cret-tekton"},
+            params={"jeton": "s3cret-tekton"},  # lang: fr-ok - removed, asserted gone
             json=body,
             headers={**headers, "ce-id": "t-4"},
         )
@@ -881,15 +881,9 @@ async def test_tekton_webhook_accepts_token_and_jeton(  # lang: fr-ok: the `?jet
             json=body,
             headers={**headers, "ce-id": "t-6"},
         )
-        wrong_former_param = await client.post(
-            "/api/v1/webhooks/tekton",
-            params={"jeton": "non"},
-            json=body,
-            headers={**headers, "ce-id": "t-7"},
-        )
-        assert header.status_code == 202 and in_the_url.status_code == 202
-        assert with_token.status_code == 202
-        assert wrong_token.status_code == 401 and wrong_former_param.status_code == 401
+        assert header.status_code == 202 and with_token.status_code == 202
+        assert former_parameter.status_code == 401, "the former parameter carries no secret any more"
+        assert wrong_token.status_code == 401
     finally:
         reset_settings_cache()
 

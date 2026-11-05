@@ -2,7 +2,7 @@
 """The look of the console, as data (S39-03, ADR 0064).
 
 The community edition serves ONE theme: its default, which is the console's own `theme.css`. A
-plugin may provide another through `greffons.declare_theme_provider`; whatever it provides is
+plugin may provide another through `extensions.declare_theme_provider`; whatever it provides is
 validated here — schema, then the console's contrast budget on the EFFECTIVE colours (the console
 defaults, overridden by the theme) — before it reaches the console. An invalid theme is never
 served: the route answers the default theme instead, so a theme can never break the console.
@@ -28,7 +28,7 @@ from typing import Any, Literal
 import structlog
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
-from .greffons import theme_provider
+from .extensions import theme_provider
 
 logger = structlog.get_logger(__name__)
 

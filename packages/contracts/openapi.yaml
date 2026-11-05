@@ -614,7 +614,7 @@ paths:
     post:
       tags: [actions]
       operationId: proposeAction
-      description: A governed action awaiting a decision (ADR 0035). Its effects must be declared (`declarer_un_effet`); nothing runs before the approval.
+      description: A governed action awaiting a decision (ADR 0035). Its effects must be declared (`declare_effect`); nothing runs before the approval.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/ActionCreate" } } }
@@ -1324,18 +1324,10 @@ paths:
                 required: [events, refusals, access]
                 properties:
                   events: { type: integer, description: Log events scanned }
-                  evenements:
-                    type: integer
-                    deprecated: true
-                    description: Former name of `events`, emitted for one release (ADR 0046, S45-02)
                   inferred:
                     type: integer
                     description: >-
                       Permission decisions whose kind was inferred because the agent did not state it
-                  deduites:
-                    type: integer
-                    deprecated: true
-                    description: Former name of `inferred`, emitted for one release (ADR 0046, S45-02)
                   refusals: { type: integer, description: Total number of denied requests }
                   tool_cost_eur: { type: number, description: "What the catalogue tools called by the run cost, in euros" }
                   chain:
@@ -1378,19 +1370,6 @@ paths:
                         requests: { type: integer, description: How many times the agent asked for it }
                         refusals: { type: integer, description: How many of those requests were denied }
                         reasons: { type: array, items: { type: string } }
-                  acces:
-                    type: array
-                    deprecated: true
-                    description: Former name of `access`, emitted for one release (ADR 0046, S45-02)
-                    items:
-                      type: object
-                      required: [nature, target, requests, refusals]
-                      properties:
-                        nature: { type: string, enum: [read, write, execute, network, tool, autre] }  # lang: fr-ok alias:external
-                        target: { type: string }
-                        requests: { type: integer }
-                        refusals: { type: integer }
-                        motifs: { type: array, items: { type: string } }
   /runs/{id}/transcript:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -3615,7 +3594,6 @@ paths:
         - { name: ce-id, in: header, required: true, schema: { type: string } }
         - { name: X-Choregos-Secret, in: header, required: false, schema: { type: string }, description: "The shared webhook secret; `token` may carry it instead" }
         - { name: token, in: query, required: false, schema: { type: string }, description: "The shared webhook secret, for a sink that is set by a URL and adds no header" }
-        - { name: jeton, in: query, required: false, deprecated: true, schema: { type: string }, description: "Former name of `token`; still accepted" }  # lang: fr-ok alias:external
       requestBody: { required: true, content: { application/json: { schema: { type: object, additionalProperties: true } } } }
       responses: { "202": { description: Accepted, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookAck" } } } } }
   /webhooks/argocd:
@@ -4566,10 +4544,6 @@ components:
               loc: { type: array, items: { type: string } }
               msg: { type: string }
               code: { type: string, description: Machine code of a workflow or policy issue }
-              deprecated_code:
-                type: string
-                deprecated: true
-                description: Former spelling of a code renamed to English, emitted for one release (ADR 0046)
               line: { type: integer }
               column: { type: integer }
         retry_after: { type: integer }
@@ -7142,12 +7116,6 @@ components:
         path: { type: [string, "null"] }
         line: { type: [integer, "null"] }
         column: { type: [integer, "null"] }
-        deprecated_code:
-          type: [string, "null"]
-          deprecated: true
-          description: >-
-            Former spelling of a code renamed to English (`role.playbook_introuvable` is now
-            `role.playbook_not_found`), emitted for one release (ADR 0046, S45-02)
     WorkflowGraph:
       type: object
       required: [nodes, edges]
@@ -8626,7 +8594,6 @@ components:
               loc: { type: array, items: { type: string } }
               msg: { type: string }
               code: { type: string }
-              deprecated_code: { type: string, deprecated: true }
               line: { type: integer }
               column: { type: integer }
         retry_after: { type: integer }

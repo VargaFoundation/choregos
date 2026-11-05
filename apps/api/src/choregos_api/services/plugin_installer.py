@@ -40,7 +40,7 @@ from typing import Any
 
 import yaml
 from choregos_core import procedures as core_procedures
-from choregos_core.agent_catalogue import EntreeDuCatalogue, entry_of
+from choregos_core.agent_catalogue import CatalogueEntry, entry_of
 from choregos_core.agent_catalogue.evals import evaluate
 from choregos_core.paths import PathOutsideError, SymlinkRefusedError, files_under, inside
 from choregos_core.plugins import Plugin
@@ -97,7 +97,7 @@ def _ours(created_by: str | None, plugin: str) -> bool:
 @dataclass
 class _Prepared:
     plugin: Plugin
-    agents: dict[str, EntreeDuCatalogue] = field(default_factory=dict)
+    agents: dict[str, CatalogueEntry] = field(default_factory=dict)
     specs: dict[str, AgentCreate] = field(default_factory=dict)
     skills: dict[str, dict[str, str]] = field(default_factory=dict)
     templates: dict[str, str] = field(default_factory=dict)

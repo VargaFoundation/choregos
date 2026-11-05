@@ -151,8 +151,8 @@ def test_migrations_ship_in_the_api_wheel(wheels: dict[str, pathlib.Path]) -> No
         "choregos_api/migrations/env.py",
         "choregos_api/migrations/script.py.mako",
         "choregos_api/migrate.py",
-        "choregos_api/migrer.py",  # lang: fr-ok alias:external
     }
     names = set(zipfile.ZipFile(wheels["choregos-api"]).namelist())
     manquants = sorted(attendus - names)
     assert not manquants, f"choregos-api: migrations missing from the wheel: {manquants}"
+    assert "choregos_api/migrer.py" not in names, "the former module was removed in 0.24.0"  # lang: fr-ok

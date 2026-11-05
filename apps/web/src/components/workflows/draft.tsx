@@ -41,55 +41,15 @@ export function draftKey(slug: string, name: string): string {
   return `choregos.draft.${slug}.${name}`;
 }
 
-/** The key a draft was kept under before S45-27: read once, moved to `draftKey`, then removed. */
-function legacyDraftKey(slug: string, name: string): string {
-  return `choregos.brouillon.${slug}.${name}`; // lang: fr-ok alias:external
-}
-
-/** What a draft looked like in the tab's storage before its fields were renamed (S45-27). */
-type LegacyDraft = {
-  yaml?: unknown;
-  resultat?: DraftState["result"]; // lang: fr-ok alias:external
-  diff?: unknown;
-  gestes?: unknown; // lang: fr-ok alias:external
-  versionDeBase?: unknown; // lang: fr-ok alias:external
-};
-
-function parseLegacyDraft(raw: string): DraftState | null {
-  const old = JSON.parse(raw) as LegacyDraft;
-  if (typeof old?.yaml !== "string" || typeof old.versionDeBase !== "number" || !Array.isArray(old.gestes)) return null; // lang: fr-ok alias:external
-  const gestures = (old.gestes as Record<string, unknown>[]).map((gesture) => // lang: fr-ok alias:external
-    typeof gesture.texteAvant === "string" // lang: fr-ok alias:external
-      ? ({ textBefore: gesture.texteAvant } as Gesture) // lang: fr-ok alias:external
-      : ({ inverse: (gesture.inverse ?? []) as WorkflowOperation[] } as Gesture),
-  );
-  return {
-    yaml: old.yaml,
-    result: old.resultat ?? null, // lang: fr-ok alias:external
-    diff: typeof old.diff === "string" ? old.diff : "",
-    gestures,
-    baseVersion: old.versionDeBase, // lang: fr-ok alias:external
-    typing: false,
-  };
-}
-
-function readDraft(key: string, legacyKey: string): DraftState | null {
+function readDraft(key: string): DraftState | null {
+  // The key and the fields a draft had before S45-27 are no longer read (removed in 0.24.0, S45-49).
   try {
-    const storage = window.sessionStorage;
-    const raw = storage.getItem(key);
-    if (raw) {
-      const parsed = JSON.parse(raw) as DraftState;
-      return typeof parsed?.yaml === "string" && typeof parsed.baseVersion === "number" && Array.isArray(parsed.gestures)
-        ? { ...parsed, typing: false }
-        : null;
-    }
-    const legacy = storage.getItem(legacyKey);
-    if (!legacy) return null;
-    // Moved, not copied: a draft lives under one key, and the former one must not come back.
-    const moved = parseLegacyDraft(legacy);
-    if (moved) storage.setItem(key, JSON.stringify(moved));
-    storage.removeItem(legacyKey);
-    return moved;
+    const raw = window.sessionStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as DraftState;
+    return typeof parsed?.yaml === "string" && typeof parsed.baseVersion === "number" && Array.isArray(parsed.gestures)
+      ? { ...parsed, typing: false }
+      : null;
   } catch {
     return null;
   }
@@ -126,7 +86,6 @@ function useDraftInternal(slug: string, name: string) {
   // `undefined` until the kept draft is read: before that, writing "nothing" would erase it.
   const [resumed, setResumed] = useState<DraftState | null | undefined>(undefined);
   const key = draftKey(slug, name);
-  const legacyKey = legacyDraftKey(slug, name);
   const base = definition.data?.yaml ?? "";
   const yaml = state?.yaml ?? base;
 
@@ -177,12 +136,12 @@ function useDraftInternal(slug: string, name: string) {
 
   // Storage only exists in the browser: the resumption waits for the mount.
   useEffect(() => {
-    const kept = readDraft(key, legacyKey);
+    const kept = readDraft(key);
     // eslint-disable-next-line react-hooks/set-state-in-effect -- read once, at mount, outside server rendering
     setState(kept);
     setResumed(kept);
     if (kept) validate(kept.yaml);
-  }, [key, legacyKey, validate]);
+  }, [key, validate]);
 
   useEffect(() => {
     if (resumed !== undefined) keepDraft(key, state);

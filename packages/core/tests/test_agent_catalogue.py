@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import importlib
+
 import pytest
 import yaml
 from choregos_core.agent_catalogue import catalogue_skills, entries, entry, skill_files
@@ -168,26 +170,26 @@ def test_the_context_file_has_its_new_name() -> None:
     assert not (FOLDER / "_contexte.md").exists()  # lang: fr-ok
 
 
-def test_former_package_is_the_new_one(monkeypatch: pytest.MonkeyPatch) -> None:
-    """`choregos_core.catalogue_d_agents` is the same module: a patch of a former name is seen by the
-    English functions."""
-    import choregos_core.agent_catalogue as new
-    import choregos_core.catalogue_d_agents as former  # lang: fr-ok alias:external
-
-    assert former is new
-    architect = tuple(e for e in new.entries() if e.slug == "architect")
-    monkeypatch.setattr(former, "entrees", lambda: architect)  # lang: fr-ok alias:external
-    assert [e.slug for e in new.entries()] == ["architect"]
-    assert new.entry("architect") is architect[0]
-    assert new.entry("developer") is None, "entry() reads what entries() gives"
+def test_former_package_is_gone() -> None:
+    """`choregos_core.catalogue_d_agents` was removed in 0.24.0 (S45-49)."""
+    with pytest.raises(ImportError):
+        importlib.import_module("choregos_core.catalogue_d_agents")  # lang: fr-ok - removed, asserted gone
+    with pytest.raises(ImportError):
+        importlib.import_module("choregos_core.catalogue_d_agents.evals")  # lang: fr-ok - asserted gone
 
 
-def test_former_names_resolve_to_the_new_ones() -> None:
-    from choregos_core import agent_catalogue as new
-    from choregos_core import catalogue_d_agents as former  # lang: fr-ok alias:external
+@pytest.mark.parametrize(
+    "former",
+    [
+        "EntreeDuCatalogue",  # lang: fr-ok - removed, asserted gone
+        "DOSSIER",  # lang: fr-ok - removed, asserted gone
+        "entrees",  # lang: fr-ok - removed, asserted gone
+        "entree",  # lang: fr-ok - removed, asserted gone
+        "skills_du_catalogue",  # lang: fr-ok - removed, asserted gone
+        "fichiers_de_la_skill",  # lang: fr-ok - removed, asserted gone
+    ],
+)
+def test_former_names_are_gone(former: str) -> None:
+    from choregos_core import agent_catalogue
 
-    assert former.EntreeDuCatalogue is new.CatalogueEntry  # lang: fr-ok alias:external
-    assert former.DOSSIER == new.FOLDER  # lang: fr-ok alias:external
-    assert former.skills_du_catalogue is new.catalogue_skills  # lang: fr-ok alias:external
-    assert former.fichiers_de_la_skill is new.skill_files  # lang: fr-ok alias:external
-    assert former.entree("architect") == new.entry("architect")  # lang: fr-ok alias:external
+    assert not hasattr(agent_catalogue, former)

@@ -19,8 +19,8 @@ For the person who operates the platform. Procedure `connector.ci.tekton`, versi
    and `choregos/run-id` are also mapped back to their work item.
 2. Point Tekton's CloudEvents sink at the platform:
    `<api_url>/api/v1/webhooks/tekton?token=<the shared webhook secret>`. Tekton's sink is configured by URL and
-   cannot add a header, which is why the secret travels in the query string. `?jeton=` is still
-   accepted, so a sink URL set up earlier keeps working.
+   cannot add a header, which is why the secret travels in the query string. The parameter is
+   `token`: the former spelling was removed in 0.24.0, so a sink URL set up with it is refused (401).
 
 ## Permissions
 

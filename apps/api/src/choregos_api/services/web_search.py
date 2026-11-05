@@ -196,7 +196,7 @@ async def search(
     from choregos_adapters import build
     from choregos_adapters.errors import AdapterError
     from choregos_adapters.registry import egress_hosts
-    from choregos_core.secrets import SecretIntrouvable
+    from choregos_core.secrets import SecretNotFound
 
     from ..secret_store import resolved_configuration
     from .egress import egress_scope_for_org
@@ -256,7 +256,7 @@ async def search(
         )
     except AdapterError as failed:
         return (*_refusal(502, "upstream", redact(str(failed))), backend)
-    except SecretIntrouvable as missing:
+    except SecretNotFound as missing:
         return (*_refusal(502, "upstream", redact(f"{connector.name}: {missing}")), backend)
     except OutboundProxyError as unusable:
         # Fail closed (ADR 0087 §2): the proxy applies and cannot be built, so nothing is sent.

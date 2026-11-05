@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import logging
-
 import pytest
-from choregos_core import catalogue as catalogue_module
 from choregos_core.catalogue import ArgumentRefusedError, build_request, load_catalogue
 
 CATALOGUE = """
@@ -216,27 +213,13 @@ def test_a_catalogue_tool_declares_its_result_cap_and_no_cap_below_one_kibibyte(
         load_catalogue(CATALOGUE + "    result_max_bytes: 512\n")
 
 
-def test_catalogue_reads_tools_and_former_outils_key(  # lang: fr-ok
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    """The operators' YAML key is `tools:`; the former `outils:` still loads the same tools, with a
-    one-time warning that it is deprecated until 0.23.0, and a bare list maps to the tools."""
-    former = CATALOGUE.replace("tools:", "outils:", 1)  # lang: fr-ok
-    catalogue_module._former_key_warned.clear()
-    with caplog.at_level(logging.WARNING, logger="choregos.catalogue"):
-        from_former = load_catalogue(former)
-        load_catalogue(former)  # the second read does not warn again
-    assert from_former.tools == load_catalogue(CATALOGUE).tools
-    assert [t.name for t in from_former.tools] == ["search_profiles"]
-    warnings = [r for r in caplog.records if "deprecated" in r.getMessage()]
-    assert len(warnings) == 1 and "0.23.0" in warnings[0].getMessage()
-
-    caplog.clear()
-    assert load_catalogue(CATALOGUE).tools  # the new key does not warn
-    assert not caplog.records
+def test_catalogue_reads_tools_and_refuses_the_former_key() -> None:
+    """The operators' YAML key is `tools:`; the former key, removed in 0.24.0 (S45-49), is refused
+    rather than read as an empty catalogue. A bare list maps to the tools."""
+    former = CATALOGUE.replace("tools:", "outils:", 1)  # lang: fr-ok - removed, asserted gone
+    with pytest.raises(ValueError, match="outils"):  # lang: fr-ok - removed, asserted gone
+        load_catalogue(former)
+    assert [t.name for t in load_catalogue(CATALOGUE).tools] == ["search_profiles"]
 
     as_a_list = "- {name: bare_list, description: d, provider: p, http: {url: 'https://example.test'}}\n"
     assert [t.name for t in load_catalogue(as_a_list).tools] == ["bare_list"]
-
-    with pytest.raises(ValueError, match="not both"):
-        load_catalogue("tools: []\noutils: []\n")  # lang: fr-ok

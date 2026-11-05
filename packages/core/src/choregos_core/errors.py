@@ -5,8 +5,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from choregos_contracts.issue_codes import deprecated_issue_code
-
 
 @dataclass(slots=True, frozen=True)
 class Issue:
@@ -26,9 +24,6 @@ class Issue:
             "line": self.line,
             "column": self.column,
         }
-        # A renamed code also carries its former spelling, for one release (ADR 0046).
-        if (former := deprecated_issue_code(self.code)) is not None:
-            issue["deprecated_code"] = former
         return issue
 
     def format(self) -> str:

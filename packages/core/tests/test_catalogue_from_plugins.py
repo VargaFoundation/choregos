@@ -11,8 +11,8 @@ import shutil
 from pathlib import Path
 
 import pytest
-from choregos_core import catalogue_d_agents as catalogue
-from choregos_core.catalogue_d_agents import Catalogue, entree, entrees, load, offline_directory
+from choregos_core import agent_catalogue as catalogue
+from choregos_core.agent_catalogue import Catalogue, entries, entry, load, offline_directory
 
 ROOT = Path(__file__).resolve().parents[3]
 OFFLINE = ROOT / "plugins" / "offline"
@@ -54,28 +54,28 @@ def test_the_offline_directory_of_a_source_tree_is_the_repositorys() -> None:
 
 def test_every_agent_comes_from_its_plugin() -> None:
     counted: dict[str, int] = {}
-    for entry in entrees():
-        counted[entry.plugin] = counted.get(entry.plugin, 0) + 1
-        assert entry.plugin_version == PLUGIN_VERSIONS.get(entry.plugin, "1.0.0")
-        expected = 2 if entry.slug in VERSION_TWO else 1
-        assert entry.provenance == f"plugin:{entry.plugin}/{entry.slug}@{expected}"
+    for found in entries():
+        counted[found.plugin] = counted.get(found.plugin, 0) + 1
+        assert found.plugin_version == PLUGIN_VERSIONS.get(found.plugin, "1.0.0")
+        expected = 2 if found.slug in VERSION_TWO else 1
+        assert found.provenance == f"plugin:{found.plugin}/{found.slug}@{expected}"
     assert counted == PLUGINS
 
 
 @pytest.mark.parametrize("slug", sorted(FINGERPRINTS))
 def test_the_documents_are_the_cores_byte_for_byte(slug: str) -> None:
-    found = entree(slug)
+    found = entry(slug)
     assert found is not None and found.digest == FINGERPRINTS[slug]
 
 
 def test_the_context_is_prepended_once() -> None:
     context = (Path(catalogue.__file__).parent / "_context.md").read_text(encoding="utf-8")
-    instructions = entree("developer").document["spec"]["instructions"]  # type: ignore[union-attr]
+    instructions = entry("developer").document["spec"]["instructions"]  # type: ignore[union-attr]
     assert instructions.startswith(context) and instructions.count(context) == 1
 
 
 def test_a_client_keeps_its_client_and_reach() -> None:
-    claude = entree("claude-ai")
+    claude = entry("claude-ai")
     assert claude is not None and (claude.client, claude.reach) == ("claude-ai", "cloud")
 
 
@@ -94,7 +94,7 @@ def test_without_an_offline_directory_the_catalogue_is_empty(tmp_path: Path) -> 
 def test_the_environment_names_the_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     shutil.copy(OFFLINE / "netops-1.0.0.tar.gz", tmp_path)
     monkeypatch.setenv("CHOREGOS_PLUGINS_OFFLINE", str(tmp_path))
-    assert [e.slug for e in entrees()] == ["netops"]
+    assert [e.slug for e in entries()] == ["netops"]
 
 
 def test_an_installed_plugin_replaces_the_offline_one_whole() -> None:

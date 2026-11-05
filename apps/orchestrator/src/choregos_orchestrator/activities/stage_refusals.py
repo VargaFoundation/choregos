@@ -43,10 +43,10 @@ async def _admettre(
     change nothing as long as the rule holds, and the work item is marked dead with the reason,
     which a human reads.
     """
-    from choregos_core.admission import AdmissionRefusee, DemandeDeRun, verifier
+    from choregos_core.admission import AdmissionRefused, RunRequest, check
     from temporalio.exceptions import ApplicationError
 
-    admission_request = DemandeDeRun(
+    admission_request = RunRequest(
         org=bundle.org_slug,
         project=bundle.slug,
         work_item=item.tracker_key,
@@ -56,8 +56,8 @@ async def _admettre(
         budget_usd=budget_usd,
     )
     try:
-        await verifier(admission_request)
-    except AdmissionRefusee as refusal:
+        await check(admission_request)
+    except AdmissionRefused as refusal:
         raise ApplicationError(
             f"run refused before it started — {refusal}", type="admission_refused", non_retryable=True
         ) from refusal
