@@ -11,7 +11,8 @@ import type { PolicyCeilingState, PolicyDef } from "@/lib/types";
  * ADR 0122 §6): the policy's `tools` section, and the organisation's ceiling when it forbids them.
  * Read-only: the policy is edited as YAML in the guardrails.
  */
-vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme", me: null }) }));
+const session = vi.hoisted(() => ({ orgs: [] as { slug: string; name: string; tool_scripts?: "enabled" | "disabled" | null }[] }));
+vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme", me: null, orgs: session.orgs }) }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
   return { ...real, api: { ...real.api, projectTools: vi.fn(), policy: vi.fn(), policyCeiling: vi.fn() } };
@@ -42,7 +43,10 @@ async function show(def: PolicyDef, state: PolicyCeilingState = { ceiling: null 
   return screen.findByTestId("tool-scripts");
 }
 
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+  vi.clearAllMocks();
+  session.orgs = [];
+});
 
 describe("tool scripts in the project's Agents settings", () => {
   it("lives in the Agents group, beside the tool catalogue", () => {
@@ -82,5 +86,39 @@ describe("tool scripts in the project's Agents settings", () => {
     expect(within(card).getByTestId("tool-scripts-clamps")).toHaveTextContent("tools.scripts: `offer` is refused");
     expect(within(card).queryByRole("link", { name: "edit the policy" })).toBeNull();
     expect(within(card).getByTestId("tool-scripts-edit")).toHaveTextContent("Only an organisation administrator can lift the ban");
+  });
+
+  describe("the organisation's switch (S57-05b)", () => {
+    const withChoice = (tool_scripts: "enabled" | "disabled" | null) => {
+      session.orgs = [{ slug: "acme", name: "Acme", tool_scripts }];
+    };
+
+    it("says when the organisation has them disabled, and that runs get none", async () => {
+      withChoice("disabled");
+      const card = await show(policy({ scripts: "offer" }), ceiling(null));
+      expect(within(card).getByRole("status")).toHaveTextContent("The organisation has tool scripts disabled");
+      expect(within(card).getByRole("status")).toHaveTextContent("No run of this project is offered them");
+      expect(within(card).getByTestId("tool-scripts-org")).toHaveTextContent("disabled");
+      expect(within(card).getByTestId("tool-scripts-value")).toHaveTextContent("runs get off");
+      expect(within(card).getByTestId("tool-scripts-edit")).toHaveTextContent("Only an organisation administrator can switch them on");
+      expect(within(card).queryByRole("link", { name: "edit the policy" })).toBeNull();
+    });
+
+    it("an organisation that enables them leaves the policy to decide", async () => {
+      withChoice("enabled");
+      const card = await show(policy({ scripts: "offer" }), ceiling(null));
+      expect(within(card).queryByText("The organisation has tool scripts disabled")).toBeNull();
+      expect(within(card).getByTestId("tool-scripts-org")).toHaveTextContent("enabled");
+      expect(within(card).getByTestId("tool-scripts-value")).not.toHaveTextContent("runs get off");
+      expect(within(card).getByRole("link", { name: "edit the policy" })).toBeTruthy();
+    });
+
+    it("an organisation that does not choose follows the deployment's default, which the page does not see", async () => {
+      withChoice(null);
+      const card = await show(policy({ scripts: "offer" }), ceiling(null));
+      expect(within(card).queryByText("The organisation has tool scripts disabled")).toBeNull();
+      expect(within(card).getByTestId("tool-scripts-org")).toHaveTextContent("the deployment's default");
+      expect(within(card).getByTestId("tool-scripts-org")).toHaveTextContent("which this page does not see");
+    });
   });
 });

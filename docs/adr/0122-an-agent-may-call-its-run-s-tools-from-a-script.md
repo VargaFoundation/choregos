@@ -3,7 +3,8 @@
 - **Status**: proposed, 2026-11-03 (product owner: "instead of 36 round trips between the MCP servers and the
   model, the agent writes a piece of code, runs it all, and the model analyses the final answer — is it worth
   it in Choregos?"); plan [`PLAN-2026-11-03-tool-scripts.md`](../plan/PLAN-2026-11-03-tool-scripts.md), stream
-  S57 — not implemented
+  S57 — not implemented; §6 amended 2026-11-05 (S57-05b: the organisation decides, the deployment's
+  switch is its default, a hard brake stays)
 - **Concerns**: `policy.schema.json` (a top-level `tools` section), `stage-input.schema.json`
   (`tools.scripts`), `getRunTools` (tool annotations) and `callRunTool` (the origin headers), the
   `choregos.tool.called` event (`origin`, `script_sha256`, `response_bytes`), the runner's local tool server
@@ -112,6 +113,24 @@ What exists today, on `main`:
    - the policy: `tools.scripts: off | offer`, `tools.max_concurrent_calls` (default 4), and `per_role`
      overrides; an absent `tools` is `off`. The orchestrator resolves it into `StageInput.tools.scripts`,
      and leaves the key out when it is off, so an older runner never sees it.
+
+   **Amended 2026-11-05** (S57-05b; product owner: "make `runner.toolScripts.enabled` configurable at the
+   organisation level"). The first switch is now the **organisation's**: its setting `tool_scripts`
+   (`enabled`, `disabled`, or absent), a key of `Organization.settings` written by its administrator alone
+   with `PATCH /orgs/{org}` (a platform administrator who is not one is refused) and audited in `org.update`.
+   Absent, the organisation follows the deployment's `CHOREGOS_TOOL_SCRIPTS` (Helm
+   `choregos-orchestrator.runner.toolScripts.enabled`), which becomes the **default** of an organisation that
+   does not choose — still off unless the operator turns it on. So an organisation's `enabled` wins over a
+   default that is off, and its `disabled` over a default that is on: on that switch the strictest no longer
+   wins, the organisation decides. A **hard brake** stays with the operator: `CHOREGOS_TOOL_SCRIPTS_ALLOWED=off`
+   (Helm `…toolScripts.allowed: false`; `true` by default) refuses tool scripts to every organisation whatever
+   its setting says — an emergency stop, and the protection of a deployment whose runner image predates the
+   bridge. Past the switch the ceiling (which only forbids) and the policy (`offer`, per role) apply as
+   before, and an eval cell's door never runs against it. The orchestrator reads the setting with the
+   project's organisation, in the bundle it already loads for every stage, so the choice costs no query;
+   the API and the orchestrator read and write it through one module (`choregos_core.tool_scripts_switch`).
+   The API does not know the deployment's default: the console says "the deployment's default" without
+   its value.
 7. **Bounded where it can be.** The bridge runs at most `max_concurrent_calls` calls of a run at once. The
    API takes a per-run transaction lock before it counts the run's tool calls, so the cap holds under
    concurrency. Money is still capped where it is counted: the run's gateway key for the model (ADR 0004),

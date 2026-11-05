@@ -2693,8 +2693,20 @@ The contract carries these switches; the runner does not act on them yet (stream
 **Tool scripts** ([ADR 0122](adr/0122-an-agent-may-call-its-run-s-tools-from-a-script.md)) let the agent
 call its run's tools from a script it writes, through the runner's tool bridge, so that chained calls
 and their raw results stay out of the model's context. They are off unless the policy offers them; the
-organisation's ceiling can forbid them, and the deployment refuses them unless it turns them on
-(`CHOREGOS_TOOL_SCRIPTS`, off by default):
+organisation's ceiling can forbid them; and the organisation switches them for all its runs (S57-05b):
+its setting `tool_scripts` is `enabled`, `disabled`, or `null` to follow the deployment's default
+(`CHOREGOS_TOOL_SCRIPTS`, off unless the operator turns it on). The operator also keeps a brake
+(`CHOREGOS_TOOL_SCRIPTS_ALLOWED`) that refuses them to every organisation, whatever its setting says
+([the deployment guide](deployment.md)). An organisation administrator switches them on with
+
+```bash
+curl -X PATCH "$CHOREGOS_URL/api/v1/orgs/<org>" -H "Authorization: Bearer $CHOREGOS_TOKEN" \
+  -H 'Content-Type: application/json' -d '{"tool_scripts": "enabled"}'
+```
+
+(`"disabled"` switches them off, `null` returns to the deployment's default; anyone else gets `403`, and
+each change is audited as `org.update` with its before and after), or on *Administration → Tool scripts*.
+Then each project's policy offers them:
 
 ```yaml
 tools:
@@ -3181,6 +3193,13 @@ once. Only a **platform administrator** also sees *Change the slug*: it opens a 
 the change breaks, asks for the new slug to be typed (lowercase letters, digits and dashes) and, on
 success, switches the console to the new slug and reloads *Administration*. A refusal (`403`, or `409`
 when the slug is taken) is shown on the card.
+
+**The Tool scripts card.** *Administration* also has a **Tool scripts** card (S57-05b): *Deployment
+default*, *Enabled* or *Disabled*, saved by the organisation's administrator (`PATCH /orgs/{org}` with
+`tool_scripts` only; anyone else sees it read-only), with what the choice means for the organisation's
+runs. The deployment's default and its brake are the operator's and the card does not see them. A
+project's *Agents → Tool scripts* card says the organisation's choice, and warns when it has tool scripts
+disabled: none of the project's runs is offered them, whatever its policy says.
 
 **Renaming an organisation.** `PATCH /orgs/{org}` changes its `name` (its administrator) or its
 `slug` (the platform administrator only: the slug is in every console URL, every qualified id

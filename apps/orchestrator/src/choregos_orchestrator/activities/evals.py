@@ -77,6 +77,7 @@ from choregos_api.services import (
 from choregos_api.services.initiator import initiator
 from choregos_contracts import EventType
 from choregos_core import elapsed_seconds, utcnow
+from choregos_core.tool_scripts_switch import tool_scripts_refusal
 from sqlalchemy import select
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
@@ -85,7 +86,7 @@ from .. import eval_live_cases as live_cases
 from ..config import get_settings
 from ..eval_comparison import compare_cells
 from . import eval_doors
-from .base import db, project_bundle
+from .base import ProjectBundle, db, project_bundle
 from .gates import _repo_slug
 
 MIN_SUCCESS_RATE = 0.7
@@ -490,6 +491,17 @@ def _skip(reason: str) -> dict[str, Any]:
     return {"ok": False, "skipped": True, "reason": reason, "usage": None, "duration_s": 0.0}
 
 
+def _tool_scripts_refusal(bundle: ProjectBundle) -> str | None:
+    """Why a `scripts` cell of this eval project cannot be offered the bridge (S57-05b): the deployment's
+    brake, the organisation's `disabled`, or no choice and the deployment's default off. `None`: it can."""
+    settings = get_settings()
+    return tool_scripts_refusal(
+        bundle.org_tool_scripts,
+        deployment_default=settings.tool_scripts,
+        deployment_allowed=settings.tool_scripts_allowed,
+    )
+
+
 def load_agent_case(name: str) -> dict[str, Any] | None:
     """An agent case of `choregos_playbooks/evals/agent_cases` by its file name, `None` when absent."""
     from choregos_playbooks.evals.agents import AGENT_CASES_DIR, load_case
@@ -671,8 +683,8 @@ async def seed_eval_ticket(payload: dict[str, Any]) -> dict[str, Any]:
             return _skip(f"the eval project {bundle.slug} has memory on: its cells would not be without it")
         if context != "none" and not get_settings().context_reduction:
             return _skip("the deployment refuses context reduction (CHOREGOS_CONTEXT_REDUCTION)")
-        if tools == "scripts" and not get_settings().tool_scripts:
-            return _skip("the deployment refuses tool scripts (CHOREGOS_TOOL_SCRIPTS)")
+        if tools == "scripts" and (scripts_refused := _tool_scripts_refusal(bundle)):
+            return _skip(scripts_refused)
 
         files = _toy_files(toy)
         digest = sha256(repr(sorted(files.items())).encode()).hexdigest()[:10]
@@ -817,8 +829,6 @@ async def _seed_agent_case(payload: dict[str, Any], context: str, tools: str) ->
         )
     if context != "none" and not get_settings().context_reduction:
         return _skip("the deployment refuses context reduction (CHOREGOS_CONTEXT_REDUCTION)")
-    if tools == "scripts" and not get_settings().tool_scripts:
-        return _skip("the deployment refuses tool scripts (CHOREGOS_TOOL_SCRIPTS)")
     try:
         connectors = live_cases.case_connectors(case)
     except AdapterError as unknown:
@@ -829,6 +839,9 @@ async def _seed_agent_case(payload: dict[str, Any], context: str, tools: str) ->
             return _skip(f"the eval project {bundle.slug} has an external tracker: eval tickets stay inside")
         if bundle.engine.memory_enabled():
             return _skip(f"the eval project {bundle.slug} has memory on: its cells would not be without it")
+        # The case's project is created in the eval project's organisation: its switch is this one.
+        if tools == "scripts" and (scripts_refused := _tool_scripts_refusal(bundle)):
+            return _skip(scripts_refused)
         project = await _case_project(session, bundle.project, case)
         refusal = await _case_connectors(session, project, case, connectors)
         if not refusal:

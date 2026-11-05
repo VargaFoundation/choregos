@@ -12,6 +12,7 @@ import { ROLE_LABELS } from "@/components/members";
 import { isMultiOrg, membershipGroups } from "@/lib/memberships";
 import { OrganisationCard } from "@/components/admin/organisation-card";
 import { PolicyCeilingCard } from "@/components/admin/policy-ceiling";
+import { OrgToolScriptsCard } from "@/components/admin/tool-scripts";
 import { ConfirmedGesture } from "@/components/confirmed-gesture";
 
 /**
@@ -142,6 +143,7 @@ export default function AdminPage() {
           {tokens.data?.length === 0 && <Empty>No token</Empty>}
         </Card>
         <PolicyCeilingCard org={org} canEdit={orgAdmin} />
+        <OrgToolScriptsCard org={org} canEdit={orgAdmin} />
       </div>
     </div>
   );

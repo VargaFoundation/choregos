@@ -84,10 +84,15 @@ class OrchestratorSettings(BaseSettings):
     #: off for every run, whatever a policy asks. `on` (the default) lets the policy decide, and a
     #: policy without `context` reduces nothing.
     context_reduction: bool = True
-    #: The deployment's kill switch for tool scripts (ADR 0122 §6): off (the default) offers no run the
-    #: tool bridge, whatever a policy asks; `on` lets the organisation's ceiling and the policy decide,
-    #: and a policy without `tools` offers nothing. `CHOREGOS_TOOL_SCRIPTS`.
+    #: The deployment's DEFAULT for tool scripts (ADR 0122 §6, amended 2026-11-05): what an organisation
+    #: that does not choose gets (its `tool_scripts` setting absent). Off (the default) offers its runs no
+    #: tool bridge; `on` lets its ceiling and each policy decide, and a policy without `tools` offers
+    #: nothing. An organisation's `enabled` or `disabled` wins over it. `CHOREGOS_TOOL_SCRIPTS`.
     tool_scripts: bool = False
+    #: The deployment's hard brake on tool scripts (S57-05b): off, no run of any organisation is offered
+    #: the bridge, whatever its setting says — an operator's emergency stop, and the protection of a
+    #: deployment whose runner image predates the bridge. `CHOREGOS_TOOL_SCRIPTS_ALLOWED`, on by default.
+    tool_scripts_allowed: bool = True
 
     @model_validator(mode="after")
     def _images_named_by_the_operator(self) -> OrchestratorSettings:

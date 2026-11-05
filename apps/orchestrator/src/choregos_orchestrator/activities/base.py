@@ -25,6 +25,7 @@ from choregos_contracts import Policy, ProjectConfig, Workflow
 from choregos_core import Message, PolicyEngine
 from choregos_core.memory_scope import memory_key
 from choregos_core.policy_ceiling import PolicyCeiling, clamp
+from choregos_core.tool_scripts_switch import OrgToolScripts, org_tool_scripts
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from temporalio import activity
@@ -64,6 +65,9 @@ class ProjectBundle:
     #: The tracker the workflow's bookkeeping writes to, and the account it writes under (ADR 0107
     #: point 4): `{"type", "account"}`, recorded on each tracker event; `None` for an internal tracker.
     tracker_via: dict[str, Any] | None = None
+    #: The organisation's choice on tool scripts (S57-05b, ADR 0122 §6): `enabled`, `disabled`, or `None`
+    #: to follow the deployment's default. Read with the organisation, so a stage costs no extra query.
+    org_tool_scripts: OrgToolScripts | None = None
 
     @property
     def engine(self) -> PolicyEngine:
@@ -155,6 +159,7 @@ async def load_project(session: AsyncSession, project_id: str) -> ProjectBundle:
         adapters=AdapterSet.from_connectors(specs),
         gateway_url=gateway_url,
         tracker_via=tracker_via_of(connectors),
+        org_tool_scripts=org_tool_scripts(org.settings if org else None),
     )
 
 

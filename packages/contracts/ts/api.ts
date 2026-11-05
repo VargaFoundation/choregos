@@ -3491,6 +3491,8 @@ export type Org = {
   currency?: "EUR" | "USD";
   /** the slugs the organisation had before; they still resolve to it (ADR 0090). The organisation's id never changes, its slug is an address. */
   aliases?: Array<string>;
+  /** whether the organisation's runs may be offered tool scripts (S57-05b, ADR 0122 §6): `enabled`, `disabled`, or null to follow the deployment's default (`CHOREGOS_TOOL_SCRIPTS`). Past it, the organisation's ceiling and each project's policy (`tools.scripts: offer`) decide; the deployment's brake (`CHOREGOS_TOOL_SCRIPTS_ALLOWED`) wins over it. */
+  tool_scripts?: "enabled" | "disabled" | null;
 };
 
 export type OrgCreate = {
@@ -3504,6 +3506,8 @@ export type OrgUpdate = {
   name?: string | null;
   /** the currency spend is shown in; org_admin */
   currency?: "EUR" | "USD" | null;
+  /** the organisation's switch for tool scripts (S57-05b); org_admin only, a platform administrator who is not one is refused (403). Absent: unchanged; `enabled` or `disabled`: the organisation's choice; null: back to the deployment's default. Audited in `org.update`. */
+  tool_scripts?: "enabled" | "disabled" | null;
 };
 
 export type WorkItemCreate = {

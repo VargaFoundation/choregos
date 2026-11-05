@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Literal
 
 from choregos_contracts import Role
+from choregos_core.tool_scripts_switch import OrgToolScripts
 from pydantic import Field
 
 from .base import Dto
@@ -79,6 +80,9 @@ class OrgDto(Dto):
     currency: Literal["EUR", "USD"] = "EUR"
     #: The slugs the organisation had: they still resolve to it (ADR 0090).
     aliases: list[str] = Field(default_factory=list)
+    #: Whether the organisation's runs may be offered tool scripts (S57-05b, ADR 0122 §6): `enabled`,
+    #: `disabled`, or `None` to follow the deployment's default. Its administrator changes it.
+    tool_scripts: OrgToolScripts | None = None
 
 
 class OrgCreate(Dto):
@@ -87,11 +91,14 @@ class OrgCreate(Dto):
 
 
 class OrgUpdate(Dto):
-    """What changes on an organisation: its name, its slug, either one or both."""
+    """What changes on an organisation: its name, its slug, its currency, its tool scripts."""
 
     slug: str | None = Field(default=None, pattern=r"^[a-z0-9][a-z0-9-]{0,62}$")
     name: str | None = Field(default=None, min_length=1, max_length=200)
     currency: Literal["EUR", "USD"] | None = None
+    #: Absent: unchanged. `enabled` or `disabled`: the organisation's choice. `null`: back to the
+    #: deployment's default (S57-05b) — unlike the other fields, where `null` changes nothing.
+    tool_scripts: OrgToolScripts | None = None
 
 
 class OAuthClientDto(Dto):

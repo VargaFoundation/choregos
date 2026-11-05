@@ -81,6 +81,7 @@ Waves are the backlog's `sprint`: a story only depends on stories of an earlier 
 | S57-03 | 2 | The tool-call cap holds under concurrent calls | 00 |
 | S57-04 | 2 | The MCP route keeps the answer's meaning: proposal, remaining, suspicions | 00 |
 | S57-05 | 3 | contract-change: `Policy.tools`, the ceiling, `StageInput.tools.scripts`, tool annotations, origin headers and event fields | 01 |
+| S57-05b | 3 | Tool scripts are switched on per organisation: the deployment's switch becomes the default, a hard brake stays (added 2026-11-05) | 05 |
 | S57-06 | 4 | API: origin and script digest on the ledger, the event and the span; costs grouped by origin | 03, 05 |
 | S57-07 | 4 | Runner: the tool bridge on the local tool server, journaled, bounded | 02, 04, 05 |
 | S57-08 | 5 | Runner: the generated client `choregos_tools`, its index and the instructions; shell backends wired | 07 |
@@ -159,6 +160,23 @@ index and the STATUS total tests. **Does not prove**: anything about the code.
   are documented in `docs/usage.md`).
 - **Tests that fail without it**: schema and model declare the same fields; the ceiling refuses `offer` under
   `off`; an inactive setting is absent from the payload; a run of `review` with `per_role` off gets none.
+
+### S57-05b · feat: tool scripts are switched on per organisation
+Added 2026-11-05 (product owner: "make `runner.toolScripts.enabled` configurable at the organisation level");
+ADR 0122 §6 amended.
+- An organisation setting `tool_scripts: enabled | disabled | null` (`Organization.settings`), on `Org` and
+  `OrgUpdate` (`PATCH /orgs/{org}`, additive contract change): its administrator alone writes it, audited in
+  `org.update` (before and after); every member reads it in `GET /orgs`.
+- The orchestrator reads it with the project's organisation, in the bundle (no extra query): the switch is the
+  organisation's choice, else `CHOREGOS_TOOL_SCRIPTS` (now the default), never past the new hard brake
+  `CHOREGOS_TOOL_SCRIPTS_ALLOWED` (Helm `…toolScripts.allowed`, default `true`); then the ceiling and the
+  policy as before. An eval `scripts` cell is skipped naming the switch that refuses it.
+- Console: *Administration → Tool scripts* (Deployment default / Enabled / Disabled); the project's Tool
+  scripts card says the organisation's choice and warns when it is `disabled`.
+- **Tests that fail without it**: org enabled with the default off → offered; org disabled with the default
+  on → none; no choice → the default; brake off → none whatever the organisation; the ceiling still
+  forbids; a non-administrator gets 403 and each change is audited; the chart renders both variables; the
+  console's switch and the project card's warning.
 
 ### S57-06 · feat(api): calls are attributed to their door
 - The origin and script digest land in the ledger row's dimensions (two columns, `cost_ledger.origin` and

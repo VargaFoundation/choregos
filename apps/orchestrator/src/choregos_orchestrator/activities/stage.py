@@ -57,6 +57,7 @@ from ..context_reduction import (
     resolve_context,
     resolve_tool_scripts,
     stage_input_payload,
+    tool_scripts_on_for,
 )
 from ..org_egress import org_runner_hosts
 from .base import db, load_work_item, org_memory, project_bundle, without_secrets
@@ -350,16 +351,20 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             playbook=PlaybookRef(ref=playbook_ref, prompt=playbook_prompt),
             tools=ToolsRef(
                 mcp={} if remote_runtime is not None else _mcp_servers(settings, memory_scope),
-                # The tool bridge (ADR 0122): the deployment, the ceiling (the bundle's policy is
-                # already clamped to it), the policy and the role. An eval cell's door is the cell's
-                # (S57-09): on in a `scripts` cell, off in an `mcp` cell, whatever the policy says, and
-                # never against the deployment's kill switch.
+                # The tool bridge (ADR 0122): the organisation's switch (its setting, else the
+                # deployment's default, never past the deployment's brake; S57-05b), the ceiling (the
+                # bundle's policy is already clamped to it), the policy and the role. An eval cell's
+                # door is the cell's (S57-09): on in a `scripts` cell, off in an `mcp` cell, whatever
+                # the policy says, and never against the organisation's switch.
                 scripts=resolve_tool_scripts(
-                    bundle.policy.tools, plan.role, allowed_by_deployment=settings.tool_scripts
+                    bundle.policy.tools,
+                    plan.role,
+                    switched_on=tool_scripts_on_for(bundle.org_tool_scripts, settings),
                 )
                 if plan.eval_cell is None
                 else forced_tool_scripts(
-                    plan.eval_cell.get("tools"), allowed_by_deployment=settings.tool_scripts
+                    plan.eval_cell.get("tools"),
+                    switched_on=tool_scripts_on_for(bundle.org_tool_scripts, settings),
                 ),
             ),
             memory_scope=memory_scope,
