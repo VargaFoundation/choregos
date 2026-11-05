@@ -19,6 +19,13 @@ Written by the orchestrator, where each event already passes — never by a poll
   dispatch): GitHub's `reopened`, GitLab's `reopen`, a Jira status change out of a status a terminal
   state maps to.
 
+- **a routing** (ADR 0123) — a work item's birth routed by a decision model writes one record without a
+  run (`record_routing`, `source = router`). Its `overridden` says the model's answer is not the workflow
+  a person re-routed the work item to (`record_reroute`, the first re-route), or, without a re-route,
+  the one it ended in (`record_terminal_outcome`, except a cancelled end). A human step's verdict never
+  judges it, and a step's calibration does not count it: the project's routing has its own
+  (`routing_calibration`).
+
 Not detected, and said so in `docs/usage.md`: a move by hand in the tracker (the interpreter applies one
 only in a state with no way out, where a person is expected to route the work item), a person who edits
 the fields or answers a question, an escalation's approval (not a human step of the workflow).
@@ -31,21 +38,30 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from choregos_contracts import ROUTING_QUESTION, ROUTING_STEP
 from choregos_core import utcnow
 from choregos_core.calibration import DEFAULT_TARGET, MIN_ABOVE, MIN_OBSERVED, calibrate
-from choregos_core.decision_ledger import Answered, is_right
+from choregos_core.decision_ledger import Answered, is_right, routing_is_right
 from choregos_core.domain import aware
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from ..db.base import uuid7
-from ..db.models import DecisionRecordRow
-from ..schemas.definitions import QuestionCalibration, ReliabilityBin, StepCalibration, ThresholdPoint
+from ..db.models import DecisionRecordRow, WorkflowDef, WorkItem
+from ..schemas.definitions import (
+    QuestionCalibration,
+    ReliabilityBin,
+    RoutingCalibration,
+    StepCalibration,
+    ThresholdPoint,
+)
 from .definitions import work_item_workflow, workflow_model
 
 DECISION_MODEL = "decision_model"
 AGENT = "agent"
+#: A work item's routing by a decision model, at its birth (ADR 0123).
+ROUTER = "router"
 #: The outcome of a work item stopped outside a terminal state: dropped, as the A2A door says.
 CANCELLED = "cancelled"
 
@@ -59,7 +75,8 @@ class DecidedBy:
     project_slug: str
     work_item_id: str
     work_item_key: str
-    run_id: str
+    #: `None` for a routing, which happens before any run (ADR 0123).
+    run_id: str | None
     workflow: str
     workflow_version: int | None
     #: The state the step ran from, and its transition.
@@ -107,8 +124,85 @@ async def record_decisions(session: Any, decided: DecidedBy, answers: Sequence[A
         statement = postgresql_insert(DecisionRecordRow).values(rows)
     else:
         statement = sqlite_insert(DecisionRecordRow).values(rows)
-    result = await session.execute(statement.on_conflict_do_nothing(index_elements=["run_id", "question"]))
+    if decided.run_id is None:  # a routing: one per work item and question (the partial unique index)
+        statement = statement.on_conflict_do_nothing(
+            index_elements=["work_item_id", "question"], index_where=text("run_id IS NULL")
+        )
+    else:
+        statement = statement.on_conflict_do_nothing(index_elements=["run_id", "question"])
+    result = await session.execute(statement)
     return int(getattr(result, "rowcount", 0) or 0)
+
+
+async def record_routing(
+    session: Any,
+    project: Any,
+    item: WorkItem,
+    *,
+    workflow: WorkflowDef | None,
+    model: str,
+    choice: str,
+    probability: float,
+) -> int:
+    """The decision model that routed a work item at its birth (ADR 0123 §2): its answer and its
+    probability, with the workflow the work item was given — the answer, or the default below the
+    project's threshold. Written with the work item; a second write for it adds nothing."""
+    given = workflow.name if workflow is not None else choice
+    decided = DecidedBy(
+        org_id=project.org_id,
+        project_id=project.id,
+        project_slug=project.slug,
+        work_item_id=item.id,
+        work_item_key=item.tracker_key,
+        run_id=None,
+        workflow=given,
+        workflow_version=workflow.version if workflow is not None else None,
+        step=ROUTING_STEP,
+        transition_id=None,
+        source=ROUTER,
+        model=model,
+        model_version=None,
+        decided_at=utcnow(),
+    )
+    added = await record_decisions(session, decided, [Answered(ROUTING_QUESTION, choice, probability)])
+    await session.execute(
+        update(DecisionRecordRow)
+        .where(
+            DecisionRecordRow.work_item_id == item.id,
+            DecisionRecordRow.source == ROUTER,
+            DecisionRecordRow.transition.is_(None),
+        )
+        .values(transition=given[:64])
+    )
+    return added
+
+
+async def _routing_records(session: Any, work_item_id: str) -> list[Any]:
+    """The work item's routing records not judged yet."""
+    rows = await session.execute(
+        select(DecisionRecordRow).where(
+            DecisionRecordRow.work_item_id == work_item_id,
+            DecisionRecordRow.source == ROUTER,
+            DecisionRecordRow.overridden.is_(None),
+        )
+    )
+    return list(rows.scalars().all())
+
+
+def _judge_routing(rows: Iterable[Any], workflow: str) -> int:
+    """Overridden when the model answered another workflow than `workflow`, the right one."""
+    now, judged = utcnow(), 0
+    for row in rows:
+        row.overridden = row.answer != workflow
+        row.observed_at = now
+        judged += 1
+    return judged
+
+
+async def record_reroute(session: Any, work_item_id: str, workflow: str) -> int:
+    """A person re-routed the work item to `workflow` (ADR 0123 §3): the first re-route judges its
+    routing — right when the model had answered that workflow, even below the threshold."""
+    return _judge_routing(await _routing_records(session, work_item_id), workflow)
 
 
 async def record_transition_taken(session: Any, run_id: str, state: str) -> int:
@@ -132,7 +226,10 @@ async def record_human_verdict(
         (
             await session.execute(
                 select(DecisionRecordRow).where(
-                    DecisionRecordRow.work_item_id == work_item_id, DecisionRecordRow.overridden.is_(None)
+                    DecisionRecordRow.work_item_id == work_item_id,
+                    DecisionRecordRow.overridden.is_(None),
+                    # A human step judges the decisions of its workflow, never the routing (ADR 0123).
+                    DecisionRecordRow.source != ROUTER,
                 )
             )
         )
@@ -151,12 +248,24 @@ async def record_human_verdict(
 
 
 async def record_terminal_outcome(session: Any, work_item_id: str, outcome: str) -> int:
-    """How the work item ended, on every record of it that does not know yet."""
+    """How the work item ended, on every record of it that does not know yet.
+
+    A routing no one re-routed is judged by the workflow the work item ended in (ADR 0123 §3): no one
+    moved it, so that workflow was acceptable. A cancelled end judges nothing: cancelling may be the
+    correction."""
     result = await session.execute(
         update(DecisionRecordRow)
         .where(DecisionRecordRow.work_item_id == work_item_id, DecisionRecordRow.terminal.is_(None))
         .values(terminal=outcome, observed_at=utcnow())
     )
+    if outcome != CANCELLED:
+        routing = await _routing_records(session, work_item_id)
+        item = await session.get(WorkItem, work_item_id) if routing else None
+        pinned = (
+            await session.get(WorkflowDef, item.workflow_def_id) if item and item.workflow_def_id else None
+        )
+        if pinned is not None:
+            _judge_routing(routing, pinned.name)
     return int(result.rowcount or 0)
 
 
@@ -201,31 +310,17 @@ async def observe_reopening(session: Any, item: Any, event_type: str, payload: d
     return await record_reopened(session, item.id)
 
 
-async def step_calibration(
-    session: Any, project_id: str, workflow: str, step: str, target: float = DEFAULT_TARGET
-) -> StepCalibration:
-    """A step's decisions measured from the ledger, per question, source, model and model version."""
-    rows = (
-        (
-            await session.execute(
-                select(DecisionRecordRow)
-                .where(
-                    DecisionRecordRow.project_id == project_id,
-                    DecisionRecordRow.workflow == workflow,
-                    DecisionRecordRow.step == step,
-                )
-                .order_by(DecisionRecordRow.decided_at)
-            )
-        )
-        .scalars()
-        .all()
-    )
+def _question_calibrations(rows: Iterable[Any], target: float) -> list[QuestionCalibration]:
+    """The calibration of each (question, source, model, model version) among `rows`."""
     groups: dict[tuple[str, str, str, str | None], list[tuple[float, bool | None]]] = {}
     for row in rows:
         key = (row.question, row.source, row.model, row.model_version)
-        groups.setdefault(key, []).append(
-            (float(row.probability), is_right(row.overridden, row.terminal, bool(row.reopened)))
+        right = (
+            routing_is_right(row.overridden)
+            if row.source == ROUTER
+            else is_right(row.overridden, row.terminal, bool(row.reopened))
         )
+        groups.setdefault(key, []).append((float(row.probability), right))
     questions = []
     for (question, source, model, model_version), decisions in sorted(
         groups.items(), key=lambda item: (item[0][0], item[0][1], item[0][2], item[0][3] or "")
@@ -234,7 +329,7 @@ async def step_calibration(
         questions.append(
             QuestionCalibration(
                 question=question,
-                source=AGENT if source == AGENT else DECISION_MODEL,
+                source=source if source in (AGENT, ROUTER) else DECISION_MODEL,
                 model=model,
                 model_version=model_version,
                 count=measured.count,
@@ -261,12 +356,60 @@ async def step_calibration(
                 suggestion_reason=measured.suggestion_reason,
             )
         )
+    return questions
+
+
+async def step_calibration(
+    session: Any, project_id: str, workflow: str, step: str, target: float = DEFAULT_TARGET
+) -> StepCalibration:
+    """A step's decisions measured from the ledger, per question, source, model and model version.
+    A routing record is the project's, not a step's: a state named `routing` does not count it."""
+    rows = (
+        (
+            await session.execute(
+                select(DecisionRecordRow)
+                .where(
+                    DecisionRecordRow.project_id == project_id,
+                    DecisionRecordRow.workflow == workflow,
+                    DecisionRecordRow.step == step,
+                    DecisionRecordRow.source != ROUTER,
+                )
+                .order_by(DecisionRecordRow.decided_at)
+            )
+        )
+        .scalars()
+        .all()
+    )
     return StepCalibration(
         workflow=workflow,
         step=step,
         target_accuracy=target,
         min_observed=MIN_OBSERVED,
-        questions=questions,
+        questions=_question_calibrations(rows, target),
+    )
+
+
+async def routing_calibration(
+    session: Any, project_id: str, min_confidence: float | None, target: float = DEFAULT_TARGET
+) -> RoutingCalibration:
+    """The project's routing by a decision model, measured from its records (ADR 0123 §4), beside the
+    threshold the project holds it to."""
+    rows = (
+        (
+            await session.execute(
+                select(DecisionRecordRow)
+                .where(DecisionRecordRow.project_id == project_id, DecisionRecordRow.source == ROUTER)
+                .order_by(DecisionRecordRow.decided_at)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return RoutingCalibration(
+        min_confidence=min_confidence,
+        target_accuracy=target,
+        min_observed=MIN_OBSERVED,
+        questions=_question_calibrations(rows, target),
     )
 
 
@@ -274,13 +417,17 @@ __all__ = [
     "AGENT",
     "CANCELLED",
     "DECISION_MODEL",
+    "ROUTER",
     "DecidedBy",
     "observe_reopening",
     "record_decisions",
     "record_human_verdict",
     "record_reopened",
+    "record_reroute",
+    "record_routing",
     "record_terminal_outcome",
     "record_transition_taken",
+    "routing_calibration",
     "step_calibration",
     "tracker_says_reopened",
 ]

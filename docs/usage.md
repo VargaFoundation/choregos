@@ -656,6 +656,27 @@ curl         $API/projects/acme:hr/workflows                                    
   probability of 0.42, below the project's minimum of 0.50`). A chat model answers no probability
   and is never held to the minimum. `documents.routing` and the preview carry `confidence`. A `PUT`
   that leaves out `min_confidence` keeps it; `null` clears it.
+- **Re-routing, and how good the routing is** ([ADR 0123](adr/0123-a-work-item-may-change-workflow-and-routing-is-measured.md),
+  S52-11). `POST /work-items/{id}/actions {"action": "reroute", "workflow": "offboarding", "reason": …}`
+  moves a work item to another active workflow of its project, at that workflow's initial state
+  (developer role, audited `workitem.reroute`). It is accepted while a person is asked — the request is
+  closed as superseded, judging nothing — and before the work item started; it is refused (409) while a
+  run is in progress (stop the work item or let the run finish), once the work item ended, and to the
+  workflow it already follows. A routing by a decision model is recorded in the decision ledger
+  (`source: router`, `step: routing`, `question: workflow`, no run): the model's answer, its probability
+  and the workflow the item was given. It is **right** when the answer is the workflow a person
+  re-routed the item to (the first re-route) or, with no re-route, the one it ended in. A re-route to the
+  model's answer after the threshold sent the item to the default counts the model right: the threshold
+  was too high. A work item cancelled without a re-route is not observed, and how an item ended does not
+  judge its routing (a declined access request was not misrouted). Not detected: a person who handles a
+  misrouted item in the wrong workflow without re-routing it (read as agreement), a move by hand in the
+  tracker. `GET /projects/{id}/workflow-routing/calibration?target=0.9` measures it as a step's
+  calibration below, beside the project's `min_confidence`.
+
+  ```bash
+  curl -X POST $API/work-items/$ID/actions -d '{"action": "reroute", "workflow": "offboarding",
+    "reason": "a departure, not an arrival"}'
+  ```
 
   ```bash
   curl -X POST $API/orgs/acme/models -d '{"model_name": "platform/decide", "usages": ["route", "decide"]}'

@@ -17,6 +17,8 @@ from .decision_ledger import (
     record_decisions,
     record_human_verdict,
     record_reopened,
+    record_reroute,
+    record_routing,
     record_terminal_outcome,
     record_transition_taken,
 )
@@ -120,6 +122,8 @@ __all__ = [
     "record_human_verdict",
     "record_labels",
     "record_reopened",
+    "record_reroute",
+    "record_routing",
     "record_terminal_outcome",
     "record_transition_taken",
     "release_dto",

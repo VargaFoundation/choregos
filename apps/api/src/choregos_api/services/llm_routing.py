@@ -318,6 +318,9 @@ class Decision:
     called: bool = False
     #: The decision model's probability for its choice; `None` from a chat model.
     confidence: float | None = None
+    #: The active workflow the model answered, even below the threshold; `None` otherwise. With
+    #: `confidence`, what the decision ledger records of a routing (ADR 0123).
+    choice: str | None = None
     tokens_in: int = 0
     tokens_out: int = 0
     cost_usd: float = 0.0
@@ -429,8 +432,22 @@ async def _ask(
     threshold = project.routing_min_confidence
     if answer.workflow is None:
         decision.reason = answer.reason or "no workflow clearly fits"
-    elif answer.workflow not in names:
+        return decision
+    if answer.workflow not in names:
         decision.reason = f"the model answered `{answer.workflow}`, which is not an active workflow"
+        return decision
+    decision.choice = answer.workflow
+    if threshold is not None and answer.confidence is not None and answer.confidence < threshold:
+        decision.reason = (
+            f"the decision model chose `{answer.workflow}` with a probability of {answer.confidence:.2f}, "
+            f"below the project's minimum of {threshold:.2f}"
+        )
+    else:
+        decision.workflow = answer.workflow
+    return decision
+    decision.choice = answer.workflow
+    if answer.workflow is None:
+        pass
     elif threshold is not None and answer.confidence is not None and answer.confidence < threshold:
         decision.reason = (
             f"the decision model chose `{answer.workflow}` with a probability of {answer.confidence:.2f}, "

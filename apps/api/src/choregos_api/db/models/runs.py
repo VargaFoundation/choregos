@@ -17,6 +17,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     false,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -117,8 +118,9 @@ class TriggerToken(Base, PkMixin):
 class DecisionRecordRow(Base, PkMixin):
     """One answered question and what followed it: the decision ledger (ADR 0121 §6, S52-05).
 
-    A decision step's answer (`source = decision_model`) or the confidence an agent declared
-    (`source = agent`), one row per run and question, written once when the run's result is written.
+    A decision step's answer (`source = decision_model`), the confidence an agent declared
+    (`source = agent`), one row per run and question, or a work item's routing by a decision model
+    (`source = router`, no run, one row per work item: ADR 0123), written once.
     `transition` is filled when the workflow selects its next transition; the outcome fields when they
     become known — a person's verdict (`overridden`), the work item's end (`terminal`), its return
     (`reopened`). Calibration is computed from these rows (`services.decision_ledger`)."""
@@ -127,12 +129,24 @@ class DecisionRecordRow(Base, PkMixin):
     __table_args__ = (
         UniqueConstraint("run_id", "question", name="uq_decision_records_run_question"),
         Index("ix_decision_records_step", "project_id", "workflow", "step"),
+        # A routing's record has no run (ADR 0123): one per work item and question.
+        Index(
+            "uq_decision_records_work_item_question_without_run",
+            "work_item_id",
+            "question",
+            unique=True,
+            postgresql_where=text("run_id IS NULL"),
+            sqlite_where=text("run_id IS NULL"),
+        ),
     )
 
     org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
     work_item_id: Mapped[str] = mapped_column(ForeignKey("work_items.id", ondelete="CASCADE"), index=True)
-    run_id: Mapped[str] = mapped_column(ForeignKey("runs.id", ondelete="CASCADE"), index=True)
+    #: `None` for a work item's routing, recorded at its birth before any run (ADR 0123).
+    run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("runs.id", ondelete="CASCADE"), index=True, nullable=True
+    )
     #: The work item's tracker key and the project's slug, as the contract names them.
     work_item_key: Mapped[str] = mapped_column(String(255))
     project_slug: Mapped[str] = mapped_column(String(64))

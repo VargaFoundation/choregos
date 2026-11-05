@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import Project, WorkflowDef, WorkItem
 from ..errors import unprocessable
+from .decision_ledger import record_routing
 from .definitions import active_workflow_named, default_workflow, policy_engine, workflow_model
 from .initiator import initiator
 from .llm_routing import Decision, Item, ask_the_model, book, routing_record
@@ -238,7 +239,27 @@ async def new_work_item(session: AsyncSession, project: Project, birth: WorkItem
     await session.flush()
     if routed.decision is not None:
         await book(session, project, routed.decision, item.id)
+        await _record_the_routing(session, project, item, row, routed.decision)
     return item
+
+
+async def _record_the_routing(
+    session: AsyncSession, project: Project, item: WorkItem, row: WorkflowDef | None, decision: Decision
+) -> None:
+    """A routing by a decision model goes to the decision ledger (ADR 0123 §2): its answer and its
+    probability, beside the workflow the work item was given. A chat model's answer carries no
+    probability, and an answer outside the active workflows is no routing: neither is recorded."""
+    if decision.choice is None or decision.confidence is None:
+        return
+    await record_routing(
+        session,
+        project,
+        item,
+        workflow=row,
+        model=decision.model,
+        choice=decision.choice,
+        probability=decision.confidence,
+    )
 
 
 async def new_trial_work_item(

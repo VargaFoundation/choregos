@@ -472,7 +472,8 @@ class QuestionCalibration(Dto):
     """One question's calibration, for one source, model and model version (ADR 0121 §7)."""
 
     question: str
-    source: Literal["decision_model", "agent"]
+    #: `router`: the project's routing by a decision model (ADR 0123).
+    source: Literal["decision_model", "agent", "router"]
     model: str
     model_version: str | None = None
     #: Every recorded decision, and those whose outcome is observed.
@@ -498,5 +499,17 @@ class StepCalibration(Dto):
     step: str
     target_accuracy: float
     #: The observed decisions below which no threshold is suggested.
+    min_observed: int
+    questions: list[QuestionCalibration] = Field(default_factory=list)
+
+
+class RoutingCalibration(Dto):
+    """A project's routing by a decision model, measured from the ledger (ADR 0123 §4): a routing is
+    right when the workflow it answered is the one a person re-routed the work item to, or the one it
+    ended in."""
+
+    #: The probability below which the default workflow takes the work item, `None` when unset.
+    min_confidence: float | None = None
+    target_accuracy: float
     min_observed: int
     questions: list[QuestionCalibration] = Field(default_factory=list)

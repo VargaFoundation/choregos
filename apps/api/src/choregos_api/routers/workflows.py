@@ -27,6 +27,7 @@ from ..schemas import (
     PolicyCeilingPut,
     PolicyDto,
     PolicyPut,
+    RoutingCalibration,
     RoutingPreviewDto,
     RoutingPreviewRequest,
     StateActivity,
@@ -54,6 +55,7 @@ from ..services import (
     publish_workflow,
     report_unenforced_policy,
 )
+from ..services.decision_ledger import routing_calibration as measure_routing
 from ..services.decision_ledger import step_calibration as measure_step
 from ..services.definitions import CEILING_KEY, ceiling_of, policy_engine, policy_model
 from ..services.llm_routing import book
@@ -535,6 +537,23 @@ async def put_routing(ctx: ProjectCtx, body: WorkflowRoutingDto, session: Db) ->
             "min_confidence": ctx.project.routing_min_confidence,
         }
     )
+
+
+@router.get(
+    "/projects/{id}/workflow-routing/calibration",
+    response_model=RoutingCalibration,
+    operation_id="getRoutingCalibration",
+)
+async def routing_calibration(
+    ctx: ProjectCtx,
+    session: Db,
+    target: Annotated[float, Query(gt=0, le=1)] = DEFAULT_TARGET,
+) -> RoutingCalibration:
+    """How well the decision model that routes the project's work items predicted the workflow they
+    needed (ADR 0123 §4): a routing is right when the workflow it answered is the one a person
+    re-routed the work item to, or the one it ended in. The measure of a step's calibration, beside
+    the project's `min_confidence`. Read only."""
+    return await measure_routing(session, ctx.id, ctx.project.routing_min_confidence, target)
 
 
 @router.post(
