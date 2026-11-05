@@ -21,6 +21,11 @@ cut. A provider's 4xx is an answer, not an outage: it is flagged as an error, it
 `structuredContent` is the API's answer as it came, `status_code` included, plus the same `notices`
 for a client that hands the model the structure rather than the text, when its JSON fits `MAX_TEXT`:
 half an object is not the object (the broker's rule), so a cut answer has none.
+
+A hosted session's call (#1349) is answered by `POST /internal/agent-sessions/{id}/tools/{name}` with
+`{status_code, text, remaining, suspicions}`: the text is already what the session's model reads (the
+courtier's text, S40-18c), so `render_session_answer` puts the same notices around it, with the same
+error flag; the calls left are the session's, which the cap counts.
 """
 
 from __future__ import annotations
@@ -44,12 +49,28 @@ _CUT = "\n[cut by the tool server: the first {shown} of {total} characters]"
 
 def render_answer(answer: Mapping[str, Any]) -> dict[str, Any]:
     """The MCP `tools/call` result of a relayed call: its notices, its result as JSON, the calls left."""
+    body = json.dumps(
+        _read_once(answer.get("result")), ensure_ascii=False, separators=(",", ":"), default=str
+    )
+    return _rendered(answer, body, "run")
+
+
+def render_session_answer(answer: Mapping[str, Any]) -> dict[str, Any]:
+    """The MCP `tools/call` result of a hosted session's call (#1349): the API's text, with the same
+    notices and the same error flag as a run's call. An answer without `status_code` (an API before
+    #1349) has no notice and is not an error: its text, as before."""
+    return _rendered(answer, str(answer.get("text") or ""), "session")
+
+
+def _rendered(answer: Mapping[str, Any], body: str, caller: str) -> dict[str, Any]:
+    """`body` between the answer's notices: the flags and an unfinished write first, the calls the
+    `caller`'s cap leaves last; `isError` for a status of 400 or more."""
     code = int(answer.get("status_code") or 0)
-    result = answer.get("result")
-    head = [line for line in (_flagged(answer.get("suspicions")), _unfinished(code, result)) if line]
+    head = [
+        line for line in (_flagged(answer.get("suspicions")), _unfinished(code, answer.get("result"))) if line
+    ]
     remaining = answer.get("remaining")
-    tail = [] if remaining is None else [f"Tool calls left in this run: {remaining}."]
-    body = json.dumps(_read_once(result), ensure_ascii=False, separators=(",", ":"), default=str)
+    tail = [] if remaining is None else [f"Tool calls left in this {caller}: {remaining}."]
     # The room the body has once the notices are placed: a one-character body, minus that character.
     # Notices within `MAX_NOTICES` leave it at least `RESULT_MAX_BYTES`.
     room = MAX_TEXT - (len(_compose(head, "-", tail)) - 1)

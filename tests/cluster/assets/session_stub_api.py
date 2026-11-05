@@ -81,7 +81,9 @@ class Handler(BaseHTTPRequestHandler):
         authorized = self.headers.get("authorization") == f"Bearer {TOKEN}"
         if path == f"{PREFIX}/tools/search_tickets":
             log("tools.call", authorized=authorized, arguments=body.get("arguments"))
-            self._send(200, {"text": "3 tickets found."})
+            # `AgentSessionToolAnswer` (#1349): a read, a 200, no cap, no flag.
+            answer = {"text": "3 tickets found.", "status_code": 200, "remaining": None, "suspicions": []}
+            self._send(200, answer)
         elif path.startswith(f"{PREFIX}/turns/"):
             log("turn.answered", authorized=authorized, turn=path.rsplit("/", 1)[-1], answer=body)
             with LOCK:

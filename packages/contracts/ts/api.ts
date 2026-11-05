@@ -1459,7 +1459,16 @@ export type AgentSessionToolCall = {
 };
 
 export type AgentSessionToolAnswer = {
+  /** What the model reads back: the courtier's text, or why the call was refused. */
   text: string;
+  /** How the call ended, as `callRunTool`'s `status_code`: the server's status (a provider's answer of 400 or more is an error, its body in `text`), `400` for arguments the tool's schema refuses, `429` past the cap, `451` for a result withheld as a suspected injection (`sandbox.prompt_injection: block`). */
+  status_code: number;
+  /** The calls the policy's cap (`budgets.tool_calls_per_run`) leaves the session; `null` without a cap. */
+  remaining: number | null;
+  /** The injection guard's flags on the result (`warn`: the result is in `text`; `block`: it is withheld), empty when none. */
+  suspicions: Array<{
+    [key: string]: unknown;
+  }>;
 };
 
 /** What a remote agent costs, as the organisation declares it - A2A reports no figure; booked in the ledger as `external`. */
