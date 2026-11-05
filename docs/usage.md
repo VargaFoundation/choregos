@@ -2723,8 +2723,9 @@ name, `search("<words>")` finds one, and `$CHOREGOS_TOOLS_DIR/INDEX.md` lists th
 the standard library only (Python 3.9 or later), so any interpreter of the agent's runs it. The task
 the agent reads gains a section, "Calling tools from a script", that says when a script pays (three or
 more dependent calls, a loop, a result to filter or join), to print only what the next decision needs
-and never a secret, to write scripts under `$TMPDIR`, never in the repository, and that a write may come
-back as a proposal; a stage that is not offered scripts gets neither the library nor the section, and
+and never a secret, to write scripts in `$TMPDIR/choregos/scripts/`, never in the repository, and that a write
+may come back as a proposal; the agent may write a script there with its file-write tool as well as from its
+shell, the one place outside the workspace its write guards allow, and only when the stage is offered scripts; a stage that is not offered scripts gets neither the library nor the section, and
 its agent's environment is unchanged. Each call is a call of the bridge, governed as any other, and
 what it gives the script is typed so that a script cannot read one outcome as another:
 
