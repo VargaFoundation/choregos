@@ -295,6 +295,7 @@ def main() -> int:
                     _write(target, write)
 
             outgoing_id = _report_tool_calls(session_id, plan.get("tool_calls", []), outgoing_id)
+            outgoing_id = _shell(session_id, plan.get("shell", []), workspace, outgoing_id)
             _unasked(plan.get("unasked", []))
             _http(plan.get("http", []))
             _scripts(plan.get("scripts", []), workspace)
@@ -365,6 +366,53 @@ def _report_tool_calls(session_id: str, calls: list[dict[str, Any]], outgoing_id
                     "params": {"sessionId": session_id, "update": update},
                 }
             )
+    return outgoing_id
+
+
+def _shell(session_id: str, commands: list[list[str]], workspace: Path, outgoing_id: int) -> int:
+    """`shell`: commands an agent's own shell tool runs, without asking (ADR 0094), reported the way a
+    shell tool's call is: announced, then its output — stdout and stderr together — as the call's
+    content, and its exit code, `failed` when it is not 0."""
+    for command in commands:
+        outgoing_id += 1
+        call_id = f"tc-{outgoing_id}"
+        announced = {"toolCallId": call_id, "title": " ".join(command), "kind": "execute"}
+        send(
+            {
+                "jsonrpc": "2.0",
+                "method": "session/update",
+                "params": {
+                    "sessionId": session_id,
+                    "update": {
+                        "sessionUpdate": "tool_call",
+                        **announced,
+                        "status": "pending",
+                        "rawInput": {"command": " ".join(command)},
+                    },
+                },
+            }
+        )
+        completed = subprocess.run(
+            command, cwd=workspace, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False
+        )
+        send(
+            {
+                "jsonrpc": "2.0",
+                "method": "session/update",
+                "params": {
+                    "sessionId": session_id,
+                    "update": {
+                        "sessionUpdate": "tool_call_update",
+                        "toolCallId": call_id,
+                        "status": "completed" if completed.returncode == 0 else "failed",
+                        "content": [
+                            {"type": "content", "content": {"type": "text", "text": completed.stdout}}
+                        ],
+                        "rawOutput": {"exit_code": completed.returncode},
+                    },
+                },
+            }
+        )
     return outgoing_id
 
 

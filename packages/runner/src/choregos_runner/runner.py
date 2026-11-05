@@ -60,6 +60,8 @@ from .loopback.mcp import McpProxy
 from .loopback.model import ModelProxy
 from .outputs import OUTPUTS_DIR, expected_files, outputs_markdown, store_outputs
 from .prompt import run_prompt
+from .refusal_shims import EVENT as SHIM_REFUSED
+from .refusal_shims import ShimRefusals
 from .remote import (
     REPORT_CARD,
     REPORT_ENDPOINT,
@@ -138,6 +140,14 @@ class EventJournal:
         # A lost journal must never make a run fail: the result takes precedence.
         with contextlib.suppress(Exception):
             await self.client.post_events(batch)
+
+
+async def _journal_update(journal: EventJournal, refusals: ShimRefusals, params: dict[str, Any]) -> None:
+    """An ACP `session/update`, then what a refusal shim printed in the call's output (#1346): the
+    shim holds no credential to post it with (ADR 0115), the runner journals it after the call."""
+    await journal.record("session/update", params)
+    for refusal in refusals.of(params):
+        await journal.record(SHIM_REFUSED, refusal)
 
 
 #: Git's "empty tree" object: the reference when there is no earlier history.
@@ -326,8 +336,10 @@ class Runner:
         if refusal is not None:
             return refusal
 
+        shim_refusals = ShimRefusals()
+
         async def on_update(params: dict[str, Any]) -> None:
-            await journal.record("session/update", params)
+            await _journal_update(journal, shim_refusals, params)
 
         async def on_permission(params: dict[str, Any]) -> tuple[bool, str]:
             decision = guards.decide(params)
