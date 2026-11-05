@@ -5,7 +5,6 @@
   "description": "One answered question of a decision (ADR 0121): what was decided, with which probability, by which model, which transition followed, and what was observed afterwards. Calibration is measured from these records, never declared.",
   "type": "object",
   "required": [
-    "run_id",
     "work_item",
     "project",
     "workflow",
@@ -20,8 +19,13 @@
   "additionalProperties": false,
   "properties": {
     "run_id": {
-      "type": "string",
-      "minLength": 1
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1,
+      "default": null,
+      "description": "The run that answered; `null` for a work item's routing (`source: router`), which happens before any run (ADR 0123)."
     },
     "work_item": {
       "type": "string",
@@ -48,9 +52,10 @@
       "type": "string",
       "enum": [
         "decision_model",
-        "agent"
+        "agent",
+        "router"
       ],
-      "description": "`decision_model`: a decision step's answer; `agent`: the `confidence` an agent declared (ADR 0106), recorded to be measured on the same footing."
+      "description": "`decision_model`: a decision step's answer; `agent`: the `confidence` an agent declared (ADR 0106), recorded to be measured on the same footing; `router`: the decision model that routed a work item at its birth (ADR 0116, ADR 0123), with `step: routing` and `question: workflow`."
     },
     "model": {
       "type": "string",
@@ -109,7 +114,7 @@
             "null"
           ],
           "default": null,
-          "description": "A later human step on the work item contradicted the decision."
+          "description": "A later human step on the work item contradicted the decision; for a routing, the workflow a person re-routed it to, or the one it ended in, is not the one the model answered (ADR 0123)."
         },
         "terminal": {
           "type": [

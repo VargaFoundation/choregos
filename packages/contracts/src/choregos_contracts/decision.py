@@ -17,16 +17,21 @@ from pydantic import Field
 
 from .workflow import DecisionName, Strict
 
-#: Where a recorded probability comes from: a decision step's model, or the `confidence` an agent
-#: declared (ADR 0106), recorded so that both are measured on the same footing.
-DecisionSource = Literal["decision_model", "agent"]
+#: Where a recorded probability comes from: a decision step's model, the `confidence` an agent
+#: declared (ADR 0106), recorded so that both are measured on the same footing, or the decision model
+#: that routed a work item at its birth (ADR 0116, ADR 0123).
+DecisionSource = Literal["decision_model", "agent", "router"]
+#: A routing's record: the step and the question it is filed under (ADR 0123).
+ROUTING_STEP = "routing"
+ROUTING_QUESTION = "workflow"
 NonEmpty = Annotated[str, Field(min_length=1)]
 
 
 class DecisionOutcome(Strict):
     """What was observed after the decision; each field is filled in when it becomes known."""
 
-    #: A later human step on the work item contradicted the decision.
+    #: A later human step on the work item contradicted the decision; for a routing, the workflow a
+    #: person re-routed it to, or the one it ended in, is not the one the model answered (ADR 0123).
     overridden: bool | None = None
     #: The work item's terminal outcome.
     terminal: Literal["success", "declined", "cancelled"] | None = None
@@ -38,7 +43,8 @@ class DecisionOutcome(Strict):
 class DecisionRecord(Strict):
     """One answered question of a decision."""
 
-    run_id: NonEmpty
+    #: The run that answered; `None` for a work item's routing, which happens before any run (ADR 0123).
+    run_id: NonEmpty | None = None
     work_item: NonEmpty
     project: NonEmpty
     workflow: NonEmpty
