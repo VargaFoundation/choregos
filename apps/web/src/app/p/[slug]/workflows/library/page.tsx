@@ -51,7 +51,7 @@ export default function WorkflowCataloguePage({ params }: { params: Promise<{ sl
             Workflow library
           </Heading>
           <p className="max-w-2xl text-sm text-ink-muted">
-          Workflows this project can adopt. Adopting copies one into the project — later changes to the catalogue are
+          Workflows this project can adopt. Adopting copies one into the project — later changes to the library are
           offered, never applied — and installs the agents the platform provides. A plugin is never installed from here.
           </p>
         </div>

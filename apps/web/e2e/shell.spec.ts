@@ -53,13 +53,13 @@ test("the bar folds into a rail, the fold is kept, and applies without the appli
   expect((await barre.boundingBox())?.width).toBe(52);
 });
 
-test("Integrations is in the Organisation group, not in the Catalogue (S40-08)", async ({ page }) => {
+test("Integrations is in the Organisation group, not in the Library (S40-08)", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/");
   const navigation = page.getByRole("complementary", { name: "Sidebar" }).getByRole("navigation", { name: "Main navigation" });
   const lien = navigation.getByRole("list", { name: "Organisation" }).getByRole("link", { name: "Integrations" });
   await expect(lien).toHaveAttribute("href", "/integrations");
-  await expect(navigation.getByRole("list", { name: "Catalogue" }).getByRole("link", { name: "Integrations" })).toHaveCount(0);
+  await expect(navigation.getByRole("list", { name: "Library" }).getByRole("link", { name: "Integrations" })).toHaveCount(0);
 });
 
 test("About opens a panel with the deployed version, from the sidebar and from the rail (S42-12)", async ({ page }) => {

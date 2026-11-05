@@ -7,16 +7,16 @@ test("browse, filter, install and land on the connector", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("navigation").getByRole("link", { name: "MCP servers" }).click();
   await expect(page).toHaveURL(/\/library\/mcp-servers$/);
-  await expect(page.getByTestId("catalogue-version")).toContainText("Catalogue 2026.10.0");
+  await expect(page.getByTestId("catalogue-version")).toContainText("Library 2026.10.0");
 
   // The facets narrow the grid; an OAuth server stays listed, with its reason, and cannot be installed.
-  await page.getByLabel("Search the catalogue").fill("notion");
+  await page.getByLabel("Search the library").fill("notion");
   const notion = page.getByTestId("entry-notion");
   await expect(notion).toContainText("Needs OAuth");
   await expect(notion.getByRole("button", { name: "Install" })).toBeDisabled();
   await page.getByLabel("Installable only").check();
   await expect(page.getByText("Nothing matches")).toBeVisible();
-  await page.getByLabel("Search the catalogue").fill("github");
+  await page.getByLabel("Search the library").fill("github");
   await expect(page.getByTestId("entry-github")).toBeVisible();
 
   // The drawer: a name and the organisation's token, typed once and sealed by the platform (S39-06e).
@@ -36,14 +36,14 @@ test("browse, filter, install and land on the connector", async ({ page }) => {
 
   // It lands on the connector, which exists and offers its discovery.
   await expect(page).toHaveURL(/\/admin\/connectors\?name=github/);
-  await expect(page.getByTestId("installed-from-catalogue")).toContainText("Installed github from the catalogue");
+  await expect(page.getByTestId("installed-from-catalogue")).toContainText("Installed github from the library");
   const card = page.getByTestId("connector-github");
   await expect(card).toBeVisible();
   await expect(card.getByRole("button", { name: "Discover" })).toBeVisible();
 
   // And the catalogue now says so.
   await page.getByRole("link", { name: "MCP servers" }).first().click();
-  await page.getByLabel("Search the catalogue").fill("github");
+  await page.getByLabel("Search the library").fill("github");
   const github = page.getByTestId("entry-github");
   await expect(github).toContainText("Installed");
 

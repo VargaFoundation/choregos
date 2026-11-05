@@ -40,6 +40,11 @@ if TYPE_CHECKING:
 MAX_FILES = 256
 MAX_BYTES = 5 * 1024 * 1024
 NAME = re.compile(r"^[a-z][a-z0-9-]{1,62}$")
+#: Slugs a NEW skill may not take (S55-17): a skill's page is `/skills/<slug>`, and the console's own
+#: pages there win over it — `library` is the skills library, `catalogue` redirects to it (S55-15).
+#: The console's import says so first (`apps/web/src/lib/skill-slug.ts`). A skill that already has one
+#: keeps publishing its next versions.
+RESERVED_SKILL_SLUGS = frozenset({"library", "catalogue"})
 
 
 class SkillRefused(ValueError):  # noqa: N818 - a reasoned refusal, rendered as 422
@@ -214,6 +219,18 @@ async def publish_version(  # noqa: PLR0913 - the old `_publier`, moved, plus on
     skill = (
         await session.execute(select(Skill).where(Skill.org_id == organisation.id, Skill.slug == head.name))
     ).scalar_one_or_none()
+    if skill is None and head.name in RESERVED_SKILL_SLUGS:
+        raise unprocessable(
+            f"`{head.name}` is reserved: the console has a page at that address. "
+            "Rename the skill in its SKILL.md",
+            [
+                {
+                    "loc": ["SKILL.md", "name"],
+                    "msg": f"`{head.name}` is reserved",
+                    "code": "skill.slug_reserved",
+                }
+            ],
+        )
     assessment = skill_gate.assess(files, executables=executables or [], repo_licences=repo_licences)
     if scan is not None:
         assessment = skill_scanner.with_scan(assessment, scan)

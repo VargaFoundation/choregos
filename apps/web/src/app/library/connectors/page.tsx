@@ -48,12 +48,12 @@ export default function ConnectorCataloguePage() {
         turned on for the projects that need it; a project connector is configured in the project&apos;s settings.
         MCP servers have{" "}
         <Link href="/library/mcp-servers" className="underline">
-          their own catalogue
+          their own library
         </Link>
         .
       </p>
       <CataloguePurpose kind="connectors" />
-      <ReadState lecture={catalogue} quoi="the catalogue" />
+      <ReadState lecture={catalogue} quoi="the library" />
       {catalogue.data && (
         <>
           <CatalogueFacets

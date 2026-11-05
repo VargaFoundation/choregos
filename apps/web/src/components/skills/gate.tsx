@@ -5,6 +5,7 @@ import { useState } from "react";
 import { egressFlag, useEgressGuard } from "@/components/egress/egress-provider";
 import { Badge, Button, ErrorNote, Field, Input, type Tone } from "@/components/ui";
 import { api } from "@/lib/api";
+import { skillSlugError } from "@/lib/skill-slug";
 import type { Skill, SkillCandidate, SkillFinding, SkillGitPreview, SkillUpdate, SkillVersion } from "@/lib/types";
 
 /**
@@ -72,9 +73,19 @@ export function Findings({ findings }: { findings: SkillFinding[] | null | undef
   );
 }
 
+/**
+ * Why a candidate cannot be imported: the API's problem, or a new skill's reserved slug (S55-17) — a
+ * skill the organisation already has under that slug keeps taking its next versions.
+ */
+export function candidateProblem(candidate: SkillCandidate): string | undefined {
+  if (candidate.problem) return candidate.problem;
+  if (candidate.name && !candidate.existing_version) return skillSlugError(candidate.name);
+  return undefined;
+}
+
 /** A candidate can be picked when it passed the checks and has a name. */
 export function importable(candidate: SkillCandidate): boolean {
-  return !candidate.problem && !!candidate.name;
+  return !candidateProblem(candidate) && !!candidate.name;
 }
 
 /**
@@ -196,8 +207,8 @@ export function GitImport({ org, onImported }: { org: string; onImported?: (skil
                       {candidate.existing_version ? ` · next version of v${candidate.existing_version}` : ""}
                     </span>
                   </label>
-                  {candidate.problem ? (
-                    <p className="text-xs text-danger">{candidate.problem}</p>
+                  {candidateProblem(candidate) ? (
+                    <p className="text-xs text-danger">{candidateProblem(candidate)}</p>
                   ) : (
                     <Findings findings={candidate.findings} />
                   )}

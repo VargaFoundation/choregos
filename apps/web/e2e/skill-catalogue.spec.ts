@@ -7,9 +7,9 @@ test("install a bundled skill and read its provenance in the library", async ({ 
   await page.goto("/skills");
   await page.getByRole("link", { name: "Library", exact: true }).click();
   await expect(page).toHaveURL(/\/skills\/library$/);
-  await expect(page.getByTestId("catalogue-version")).toContainText("Catalogue 2026.10.0");
+  await expect(page.getByTestId("catalogue-version")).toContainText("Library 2026.10.0");
 
-  await page.getByLabel("Search the catalogue").fill("write spec");
+  await page.getByLabel("Search the library").fill("write spec");
   const card = page.getByTestId("entry-write-spec");
   await expect(card).toContainText("Low risk");
   await expect(card).toContainText("Permissive · Apache-2.0");
@@ -30,13 +30,13 @@ test("install a bundled skill and read its provenance in the library", async ({ 
   await page.getByRole("complementary", { name: "Sidebar" }).getByRole("link", { name: "Skills" }).click();
   await expect(page.getByTestId("installed-skills")).toContainText("write-spec");
   await page.getByRole("link", { name: "Library", exact: true }).click();
-  await page.getByLabel("Search the catalogue").fill("write spec");
+  await page.getByLabel("Search the library").fill("write spec");
   await expect(page.getByTestId("entry-write-spec")).toContainText("Installed, version 1");
 });
 
 test("a high-risk git skill says a second administrator will have to approve it, and waits", async ({ page }) => {
   await page.goto("/skills/library");
-  await page.getByLabel("Search the catalogue").fill("systematic debugging");
+  await page.getByLabel("Search the library").fill("systematic debugging");
   const card = page.getByTestId("entry-systematic-debugging");
   await expect(card).toContainText("High risk");
   await card.getByRole("button", { name: "Install" }).click();

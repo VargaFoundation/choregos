@@ -226,14 +226,14 @@ function WorkflowCard({
         // Shown only when the server says so (ADR 0074); sharing copies this version (ADR 0111 §4).
         <div className="mt-3 border-t border-line pt-3">
           <ConfirmedGesture
-            question={`Share ${name} v${workflow.version} to the organisation's catalogue? Every project of ${org} can then adopt a copy; later changes here reach the catalogue only when shared again.`}
+            question={`Share ${name} v${workflow.version} to the organisation's library? Every project of ${org} can then adopt a copy; later changes here reach the library only when shared again.`}
             confirmer={`Share ${name}`}
             action={async () => {
               await api.shareWorkflow(org, { project: slug, name: name });
               await onChange();
             }}
           >
-            Share to the catalogue
+            Share to the library
           </ConfirmedGesture>
         </div>
       )}
