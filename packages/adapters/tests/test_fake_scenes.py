@@ -12,7 +12,10 @@ from choregos_adapters.fakes import entra, netops
 from choregos_adapters.fakes.scenes import (
     EVAL_FAKE_SCENES_ENV,
     FAKE_SCENE_FIELD,
+    WEB_FIELD,
+    WEB_SCENE,
     bound_scene,
+    bound_web_scene,
     eval_fake_scenes_allowed,
     scene,
     scene_type,
@@ -120,6 +123,37 @@ def test_the_field_is_ignored_where_the_deployment_does_not_allow_eval_fakes(
     assert bound_scene("firewall", {FAKE_SCENE_FIELD: "ssh-exposure"}) is None
 
 
+#: A case's `web:` (#1378): what the search finds, the pages it reads.
+WEB = {
+    "search": {"flags": [{"title": "Flags", "url": "https://flags.example.org/l", "snippet": "Apache-2.0"}]},
+    "pages": {
+        "https://flags.example.org/l": {"title": "Flags", "text": "Apache-2.0."},
+        "https://reviews.example.net/2026": {"title": "Reviews", "text": "Compared."},
+    },
+}
+
+
+async def test_a_web_search_connector_bound_to_a_fake_web_holds_the_case_s_results_and_pages(
+    eval_fakes: None,
+) -> None:
+    bound = bound_web_scene({FAKE_SCENE_FIELD: WEB_SCENE, WEB_FIELD: WEB})
+    assert bound is not None
+    assert [hit["url"] for hit in await bound.search.search("flags")] == ["https://flags.example.org/l"]
+    assert bound.pages == WEB["pages"] and bound.hosts == ["flags.example.org", "reviews.example.net"]
+    again = bound_web_scene({FAKE_SCENE_FIELD: WEB_SCENE, WEB_FIELD: WEB})
+    assert again is not None and again.search is not bound.search, "built anew each time"
+    assert bound_web_scene({FAKE_SCENE_FIELD: "ssh-exposure"}) is None, "another scene binds no web"
+    assert bound_web_scene({WEB_FIELD: WEB}) is None, "the pages alone bind nothing"
+    assert bound_scene("web_search", {FAKE_SCENE_FIELD: WEB_SCENE}) is None, "the broker never serves it"
+
+
+def test_a_fake_web_is_ignored_where_the_deployment_does_not_allow_eval_fakes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(EVAL_FAKE_SCENES_ENV, raising=False)
+    assert bound_web_scene({FAKE_SCENE_FIELD: WEB_SCENE, WEB_FIELD: WEB}) is None
+
+
 @pytest.mark.parametrize(
     ("kind", "type_name"),
     [
@@ -128,6 +162,8 @@ def test_the_field_is_ignored_where_the_deployment_does_not_allow_eval_fakes(
         ("mcp", "mcp"),
         ("tracker", "jira"),
         ("runtime", "fake"),
+        ("web_search", "fake"),
+        ("web_search", "brave"),
     ],
 )
 def test_no_declaration_or_edit_may_bind_a_connector_to_a_fake(

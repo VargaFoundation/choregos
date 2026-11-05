@@ -100,15 +100,16 @@ def test_no_internal_alias_remains_under_apps() -> None:
 
 
 @pytest.mark.skipif(not _in_a_git_checkout(), reason="not a git checkout: the search reads `git grep`")
-def test_no_internal_alias_remains_anywhere() -> None:
-    """The track is closed: no `alias:internal` is left outside the pages that explain the escape.
-    An external alias (`alias:external`) stays until its window closes (ADR 0098 'Windows')."""
+@pytest.mark.parametrize("marker", ["alias:internal", "alias:external"])
+def test_no_alias_remains_anywhere(marker: str) -> None:
+    """Both tracks are closed: no `alias:internal` is left, and the external aliases' window closed
+    with 0.23.0 (S45-49, ADR 0098 'Windows'), outside the pages that explain the escape."""
     found = subprocess.run(
         [
             "git",
             "grep",
             "-n",
-            "alias:internal",
+            marker,
             "--",
             ".",
             ":(exclude)docs",
@@ -116,6 +117,7 @@ def test_no_internal_alias_remains_anywhere() -> None:
             ":(exclude)tests/language",
             ":(exclude)tests/web",
             ":(exclude)tools",
+            ":(exclude)packages/core/src/choregos_core/compat.py",
         ],
         check=False,
         cwd=ROOT,

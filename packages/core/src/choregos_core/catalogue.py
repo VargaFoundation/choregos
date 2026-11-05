@@ -24,25 +24,21 @@ Not a directory of thousands of tools. A catalogue is a **short, chosen** list, 
 deploys, reviewed like code. The day one wants the breadth of a public directory, a catalogue tool
 leads there, not a dependency of the platform.
 
-The operators' YAML key is `tools:`; the former `outils:` is still read until 0.23.0 (ADR 0098 §3 (f)).
+The operators' YAML key is `tools:`; the former key was removed in 0.24.0 and is refused (S45-49).
 """
 
 from __future__ import annotations
 
-import logging
 import posixpath
 import re
 from typing import Any, Literal
 from urllib.parse import quote, urlsplit, urlunsplit
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .errors import ChoregosError
 
 PLACEHOLDER = re.compile(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}")
-
-_logger = logging.getLogger("choregos.catalogue")
-_former_key_warned: set[str] = set()  # the key is warned about once per process
 
 
 class Model(BaseModel):
@@ -141,25 +137,8 @@ class CatalogueTool(Model):
 class Catalogue(Model):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
-    #: The YAML key is `tools:`; the former `outils:` is read until 0.23.0 (ADR 0098 §3 (f)).
-    tools: list[CatalogueTool] = Field(
-        default_factory=list,
-        validation_alias=AliasChoices("tools", "outils"),  # lang: fr-ok alias:external
-    )
-
-    @model_validator(mode="before")
-    @classmethod
-    def _warn_about_the_former_key(cls, data: Any) -> Any:
-        if isinstance(data, dict) and "outils" in data:  # lang: fr-ok alias:external
-            if "tools" in data:
-                raise ValueError("a catalogue declares `tools:` or the former `outils:`, not both")
-            if not _former_key_warned:
-                _former_key_warned.add("outils")  # lang: fr-ok alias:external
-                _logger.warning(
-                    "the catalogue key `outils:` is deprecated: write `tools:` "  # lang: fr-ok alias:external
-                    "(the former key is removed in 0.23.0)"
-                )
-        return data
+    #: The YAML key is `tools:`; any other key, the former one of before 0.21 included, is refused.
+    tools: list[CatalogueTool] = Field(default_factory=list)
 
     def by_name(self, name: str) -> CatalogueTool | None:
         return next((t for t in self.tools if t.name == name), None)

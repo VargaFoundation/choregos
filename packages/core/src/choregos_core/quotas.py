@@ -11,19 +11,16 @@ Without an extension, or if the extension returns `None`, the historical default
 is written in the GitOps repository: it takes effect at the project's NEXT provisioning, not
 retroactively.
 
-The French names this module had before 0.21 (`declarer_un_quota`, `Quota(memoire=...)`...) keep
-working until 0.23.0 and warn (ADR 0098 §3 (f)).
+The French names this module had before 0.21 (`declarer_un_quota`, `Quota(memoire=...)`...) were
+removed in 0.24.0 (S45-49).
 """
 
 from __future__ import annotations
 
 import inspect
 import re
-import warnings
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-
-from .compat import EXTERNAL_ALIAS_REMOVAL, alias_names
 
 _CPU = re.compile(r"^\d+(\.\d+)?m?$")
 _MEMORY = re.compile(r"^\d+(Ki|Mi|Gi|Ti)?$")
@@ -40,17 +37,7 @@ class Quota:
         cpu: str = "32",
         memory: str = "96Gi",
         pods: int = 40,
-        *,
-        memoire: str | None = None,  # lang: fr-ok alias:external
     ) -> None:
-        if memoire is not None:  # lang: fr-ok alias:external
-            warnings.warn(
-                "Quota(memoire=...) is deprecated: use memory= "  # lang: fr-ok alias:external
-                f"(removed in {EXTERNAL_ALIAS_REMOVAL}, ADR 0098)",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            memory = memoire  # lang: fr-ok alias:external
         # A badly written quota only shows when Argo CD refuses to apply it: we refuse here.
         if not _CPU.match(cpu):
             raise ValueError(f"unreadable CPU quota: {cpu!r} (e.g. `8`, `500m`)")
@@ -61,11 +48,6 @@ class Quota:
         object.__setattr__(self, "cpu", cpu)
         object.__setattr__(self, "memory", memory)
         object.__setattr__(self, "pods", pods)
-
-    @property
-    def memoire(self) -> str:  # lang: fr-ok alias:external
-        """Former name of `memory`."""
-        return self.memory
 
 
 DEFAULT = Quota()
@@ -92,22 +74,3 @@ async def quota_for(org: str, project: str) -> Quota:
 
 def reset() -> None:
     _PROVIDERS.clear()
-
-
-DEFAUT = DEFAULT  # lang: fr-ok alias:external
-Fournisseur = QuotaProvider  # lang: fr-ok alias:external
-declarer_un_quota = declare_quota  # lang: fr-ok alias:external
-quota_pour = quota_for  # lang: fr-ok alias:external
-reinitialiser = reset  # lang: fr-ok alias:external
-
-alias_names(
-    __name__,
-    {
-        "DEFAUT": "DEFAULT",  # lang: fr-ok alias:external
-        "Fournisseur": "QuotaProvider",  # lang: fr-ok alias:external
-        "declarer_un_quota": "declare_quota",  # lang: fr-ok alias:external
-        "quota_pour": "quota_for",  # lang: fr-ok alias:external
-        "reinitialiser": "reset",  # lang: fr-ok alias:external
-    },
-    removed_in=EXTERNAL_ALIAS_REMOVAL,
-)

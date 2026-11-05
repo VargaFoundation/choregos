@@ -34,7 +34,7 @@ from choregos_core import utcnow
 from choregos_core.redaction import remember_secret
 from choregos_core.secrets import (
     STORE_SCHEME,
-    SecretIntrouvable,
+    SecretNotFound,
     is_store_reference,
 )
 from cryptography.exceptions import InvalidTag
@@ -273,19 +273,17 @@ class SealedDbSecretStore:
             return {}
         wrapper = self._wrapper()
         if wrapper is None:
-            raise SecretIntrouvable(NO_KEY_MESSAGE)
+            raise SecretNotFound(NO_KEY_MESSAGE)
         rows = {r.name: r for r in await _rows(session, org_id, names)}
         out: dict[str, str] = {}
         for name in names:
             row = rows.get(name)
             if row is None:
-                raise SecretIntrouvable(
-                    f"`{STORE_SCHEME}:{name}`: no value is stored (cleared, or never set)"
-                )
+                raise SecretNotFound(f"`{STORE_SCHEME}:{name}`: no value is stored (cleared, or never set)")
             try:
                 out[name] = unseal(row, wrapper)
             except SecretStoreUnavailable as refus:
-                raise SecretIntrouvable(str(refus)) from refus
+                raise SecretNotFound(str(refus)) from refus
         return out
 
     async def meta(self, session: AsyncSession, org_id: str, names: Sequence[str]) -> dict[str, SecretMeta]:
@@ -365,9 +363,7 @@ class FakeSecretStore:
         out: dict[str, str] = {}
         for name in names:
             if (org_id, name) not in self.values:
-                raise SecretIntrouvable(
-                    f"`{STORE_SCHEME}:{name}`: no value is stored (cleared, or never set)"
-                )
+                raise SecretNotFound(f"`{STORE_SCHEME}:{name}`: no value is stored (cleared, or never set)")
             out[name] = self.values[(org_id, name)][0]
         return out
 
@@ -467,7 +463,7 @@ async def resolve_store_fields(
     store: SecretStore | None = None,
 ) -> dict[str, str]:
     """field -> value for the `store:` references of a connector, read with the organisation's
-    context in one query. A missing value raises `SecretIntrouvable`, naming the reference."""
+    context in one query. A missing value raises `SecretNotFound`, naming the reference."""
     from choregos_adapters.registry import secret_references
 
     names = store_names(secret_references(kind, type_name, dict(secret_refs or {}), secret_ref))

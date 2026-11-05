@@ -5,8 +5,8 @@ A runbook is read at 3 a.m. by someone who did not write the code. Each one star
 
 English is the reference language since 2026-09-24; the French originals were deleted in 0.21
 (ADR 0098). Seven runbooks were
-renamed in 0.21 (ADR 0098). The former file names stay as one-line redirect stubs, because deployed
-alerts carry their `runbook_url`; the stubs go in 0.23.0.
+renamed in 0.21 (ADR 0098). Their former file names were redirect stubs until 0.23.0; the stubs were
+removed in 0.24.0 (S45-49).
 
 | Runbook | When |
 | :-- | :-- |

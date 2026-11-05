@@ -7,7 +7,6 @@ import re
 import uuid
 from typing import Any
 
-from choregos_contracts.issue_codes import deprecated_issue_code
 from choregos_core import ChoregosError, ValidationError
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -16,15 +15,6 @@ from fastapi.responses import JSONResponse
 PROBLEM_JSON = "application/problem+json"
 #: A client `X-Request-Id` is used only when it is a short token; anything else is replaced.
 REQUEST_ID_PATTERN = re.compile(r"[A-Za-z0-9._:-]{1,64}")
-
-
-def former_code(code: str) -> dict[str, str]:
-    """`{"deprecated_code": ...}` for a code renamed to English, empty otherwise (ADR 0046).
-
-    Spread into an issue so that a client matching the former code keeps working for one release.
-    """
-    former = deprecated_issue_code(code)
-    return {"deprecated_code": former} if former is not None else {}
 
 
 class ApiError(Exception):
@@ -151,7 +141,6 @@ def install_error_handlers(app: FastAPI) -> None:
                     "code": issue.code,
                     "line": issue.line,
                     "column": issue.column,
-                    **former_code(issue.code),
                 }
                 for issue in exc.issues
             ],

@@ -17,6 +17,8 @@ from choregos_core import matches_any
 from choregos_core.network import allowed as host_allowed
 from choregos_core.network import validate_pattern
 
+from .tool_scripts import is_under
+
 DANGEROUS_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\brm\s+-rf\s+/(?!\w)", "recursive deletion of the root"),
     (r":\(\)\s*\{\s*:\|:&\s*\};:", "fork bomb"),
@@ -117,6 +119,9 @@ class GuardRails:
     #: the scope is written relative (`src/**`). Without removing it, everything is "out of
     #: scope", which nobody had seen, since `check_write` never ran.
     workspace: str = "/workspace"
+    #: The run's script directory when it is offered tool scripts (`tool_scripts.offered_script_directory`,
+    #: ADR 0122), `""` otherwise: the one place outside the workspace a write is allowed (#1365).
+    scripts_dir: str = ""
 
     def __post_init__(self) -> None:
         if not self.allowed_paths:
@@ -193,6 +198,14 @@ class GuardRails:
         normalized = self._relatif(path)
         if any(normalized.endswith(pattern) or pattern in normalized for pattern in SECRET_FILE_PATTERNS):
             return Decision(False, f"writing to a sensitive file is forbidden: {path}", "write", path)
+        if self._is_script(path):
+            return Decision(
+                True,
+                "writing a script in the run's script directory: allowed (outside the workspace, "
+                "never committed)",
+                "write",
+                path,
+            )
         if normalized == ".choregos/result.json":
             return Decision(True, "writing the step's result: allowed", "write", path)
         if normalized.startswith(".choregos/outputs/") and ".." not in normalized.split("/"):
@@ -217,6 +230,14 @@ class GuardRails:
             "write",
             path,
         )
+
+    def _is_script(self, path: str) -> bool:
+        """A file of the run's script directory (#1365), when the run is offered tool scripts: outside the
+        workspace — a path under it is the scope's to judge —, so nothing written there reaches a commit.
+        Elsewhere outside the workspace, the client's directory included, the scope refuses as before."""
+        root = self.workspace.rstrip("/")
+        inside = bool(root) and (path == root or path.startswith(root + "/"))
+        return not inside and is_under(path, self.scripts_dir)
 
     def _relatif(self, path: str) -> str:
         """The path as the scope names it: relative to the workspace root."""

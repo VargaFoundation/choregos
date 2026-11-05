@@ -383,6 +383,32 @@ def test_a_result_the_platform_cut_says_so_on_standard_error(
     assert captured.out == ""
 
 
+def test_a_page_the_platform_cut_keeps_what_was_fetched_and_says_so(
+    tools: ModuleType, bridge: ScriptedBridge, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """#1383: the API bounds `web_fetch`'s answer; a page cut keeps what was fetched beside it, so a
+    script's `["text"]` is still the page, cut, and standard error says so."""
+    cut = PAGE[:20] + "\n[truncated by the platform: 20 of 70000 bytes; ask for less]"
+    bridge.answer(
+        "web_fetch",
+        _answer(
+            {
+                "content": [{"type": "text", "text": cut}],
+                "structuredContent": FETCHED,
+                "truncated": {"returned_bytes": 20, "total_bytes": 70000},
+            }
+        ),
+    )
+
+    page = _module("platform").web_fetch(url=FETCHED["url"])
+
+    assert page == {"text": cut, "structured": FETCHED}
+    assert capsys.readouterr().err == (
+        "[choregos] result of web_fetch was cut by the platform (20 of 70000 bytes): "
+        "ask for less (a filter, a page)\n"
+    )
+
+
 def test_a_proposal_is_never_a_result(tools: ModuleType, bridge: ScriptedBridge) -> None:
     bridge.answer("pfsense__delete_firewall_rule", _answer(PROPOSED, 202, remaining=4))
     bridge.answer("entra__disable_user", _answer(RUNNING, 202))

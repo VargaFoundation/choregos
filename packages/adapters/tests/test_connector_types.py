@@ -19,7 +19,7 @@ from choregos_adapters import (
     spec_of,
 )
 from choregos_adapters.registry import _REGISTRY, _SPECS
-from choregos_core.secrets import SecretIntrouvable
+from choregos_core.secrets import SecretNotFound
 
 
 def test_every_shipped_type_declares_itself_and_no_fake_is_shown() -> None:
@@ -61,14 +61,14 @@ def test_a_preresolved_field_is_not_resolved_again(monkeypatch: pytest.MonkeyPat
     refs = {"api_token": "store:connector/jira/api_token", "webhook_secret": "env:CONNECTOR_JIRA_EMAIL_TOKEN"}
     config = resolved_configuration("tracker", "jira", {}, refs, preresolved={"api_token": "sealed"})
     assert config == {"api_token": "sealed", "webhook_secret": "from-env"}
-    with pytest.raises(SecretIntrouvable, match="resolved by the platform"):
+    with pytest.raises(SecretNotFound, match="resolved by the platform"):
         resolved_configuration("tracker", "jira", {}, refs)
 
 
 def test_an_unresolvable_reference_stops_the_construction(monkeypatch: pytest.MonkeyPatch) -> None:
     """Better than an adapter that silently falls back to its default value."""
     monkeypatch.delenv("CONNECTOR_ARGO_TOKEN", raising=False)
-    with pytest.raises(SecretIntrouvable, match="CONNECTOR_ARGO_TOKEN"):
+    with pytest.raises(SecretNotFound, match="CONNECTOR_ARGO_TOKEN"):
         resolved_configuration("cd", "argocd", {}, {"token": "env:CONNECTOR_ARGO_TOKEN"})
 
 

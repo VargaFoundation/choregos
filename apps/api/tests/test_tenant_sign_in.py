@@ -59,7 +59,7 @@ class Directory:
 
 @pytest.fixture
 def directory() -> Iterator[Directory]:
-    from choregos_api.edition import reinitialiser
+    from choregos_api.edition import reset
     from choregos_api.tenant_sign_in import declare_sign_in_resolver
 
     found = Directory()
@@ -67,7 +67,7 @@ def directory() -> Iterator[Directory]:
     try:
         yield found
     finally:
-        reinitialiser()
+        reset()
 
 
 @pytest.fixture

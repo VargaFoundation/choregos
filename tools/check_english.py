@@ -121,11 +121,6 @@ FROZEN_PATHS = {
     "apps/web/src/types/assets.d.ts": "`.d.ts` is TypeScript's declaration suffix",
     # `a_d` is the letter range of the file names it covers, not French words.
     "apps/api/tests/test_api_tests_a_d_in_english.py": "`a_d` is the range of letters a to d",
-    # Former module paths kept as aliases until 0.23.0 (ADR 0098 §3 (a)); each carries `lang: fr-ok-file`.
-    "packages/core/src/choregos_core/catalogue_d_agents/__init__.py": "alias of agent_catalogue",
-    "packages/core/src/choregos_core/catalogue_d_agents/evals.py": "alias of agent_catalogue.evals",
-    # The former runbook name stays as a redirect: deployed alerts' `runbook_url` point at it.
-    "docs/runbooks/perte-de-noeud.md": "redirect stub for the former name of node-loss.md",
     # The 1.x joiners-leavers template is French on purpose: what S39-11c's script migrates (EXCLUDED).
     **{
         f"apps/api/tests/fixtures/joiners-leavers-v1/joiners-leavers/{name}": "French 1.x fixture (S39-11c)"

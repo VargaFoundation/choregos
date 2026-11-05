@@ -7,7 +7,6 @@ still read; what is written from now on is English.
 
 from __future__ import annotations
 
-import asyncio
 import json
 from types import SimpleNamespace
 from typing import Any
@@ -130,23 +129,27 @@ async def test_proposed_action_refusal_is_english(
         handle = await _start_interpreter(temporal_env, setup)
         status = await _wait_for(handle, lambda s: s["state"] == "to_review", "the work item is to review")
         await handle.signal("control", {"action": "stop"})
+        # The query answers `to_review` as soon as the interpreter has decided; the event is written by
+        # the `mirror_state` activity scheduled in the same breath, which the workers stopped at the end
+        # of this block would never run (#1360). The interpreter returns only once it is done.
+        result = await handle.result()
+    assert result["state"] == "to_review" and result["stopped"]
     assert status["attempts"] == {"t-accounts": 1}
     # The interpreter read `refusal` and failed the transition: no action was ever proposed.
     from choregos_api.db.models import Event
     from choregos_api.db.session import session_scope
+    from choregos_contracts import EventType
     from sqlalchemy import select
 
-    # The event is written by an activity that may end after the state query saw `to_review` (on
-    # PostgreSQL the read came back empty once, run 41882317486): read until it is there, ten seconds at most.
-    reasons: list[str] = []
-    for _ in range(100):
-        async with session_scope() as session:
-            rows = (
-                await session.execute(select(Event).where(Event.work_item_id == setup.work_item_id))
-            ).scalars()
-            reasons = [str((e.payload or {}).get("reason")) for e in rows]
-        if reasons:
-            break
-        await asyncio.sleep(0.1)
+    async with session_scope() as session:
+        rows = (
+            await session.execute(
+                select(Event).where(
+                    Event.work_item_id == setup.work_item_id,
+                    Event.type == str(EventType.WORKITEM_STATE_CHANGED),
+                )
+            )
+        ).scalars()
+        reasons = [str((e.payload or {}).get("reason")) for e in rows]
     assert reasons == ["failing gates: action_succeeded"], reasons
     assert done_effects == []

@@ -1,5 +1,6 @@
-"""An extension's tool is a write tool when it says `write`, or `ecriture` as extensions declared it
-before S45-03; the daily write budget counts the audit rows under both keys (ADR 0098 §4).
+"""An extension's tool is a write tool when it says `write`; the former key extensions declared before
+S45-03 has no effect since 0.24.0 (S45-49). The daily write budget still counts the audit rows
+persisted under both keys (ADR 0098 §4).
 
 The MCP door of external clients (ADR 0030) only announces a write tool to an `mcp:write` token:
 a tool an extension marks with the English key must not slip through to an `mcp:read` one.
@@ -29,7 +30,7 @@ async def _tools(client: AsyncClient, token: str) -> dict[str, Any]:
     return {tool["name"]: tool for tool in response.json()["result"]["tools"]}
 
 
-async def test_extension_tool_marked_write_or_ecriture_is_a_write_tool(  # lang: fr-ok - names the key
+async def test_extension_tool_marked_write_is_a_write_tool_and_the_former_key_is_ignored(
     client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from choregos_api import extensions
@@ -38,7 +39,8 @@ async def test_extension_tool_marked_write_or_ecriture_is_a_write_tool(  # lang:
         return [
             {"name": "ext_read", "description": "Reads."},
             {"name": "ext_write", "description": "Writes.", "write": True},
-            {"name": "ext_former_write", "description": "Writes.", "ecriture": True},  # lang: fr-ok
+            # The former key (removed in 0.24.0): no effect, the tool is announced as a read.
+            {"name": "ext_former_write", "description": "Writes.", "ecriture": True},  # lang: fr-ok - gone
         ]
 
     async def call_tool(*_arguments: Any) -> tuple[int, dict[str, Any]]:
@@ -52,14 +54,15 @@ async def test_extension_tool_marked_write_or_ecriture_is_a_write_tool(  # lang:
 
     read = await _tools(client, read_token)
     assert "ext_read" in read, "the extension's tools are announced on the project's door"
-    assert not {"ext_write", "ext_former_write"} & set(read), "a write tool is hidden from mcp:read"
+    assert "ext_write" not in read, "a write tool is hidden from mcp:read"
+    assert "ext_former_write" in read, "the former key no longer makes a write tool"
 
     write = await _tools(client, write_token)
     hints = {
         name: write[name]["annotations"]["readOnlyHint"]
         for name in ("ext_read", "ext_write", "ext_former_write")
     }
-    assert hints == {"ext_read": True, "ext_write": False, "ext_former_write": False}
+    assert hints == {"ext_read": True, "ext_write": False, "ext_former_write": True}
 
 
 async def test_writes_today_counts_write_and_ecriture(  # lang: fr-ok - names the persisted audit key

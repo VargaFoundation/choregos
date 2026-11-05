@@ -78,11 +78,11 @@ async def test_a_lost_sealed_value_fails_that_connector_only_and_loudly(
     setup: Fixture, probes: dict[str, dict[str, Any]]
 ) -> None:
     from choregos_api.db.session import session_scope
-    from choregos_core.secrets import SecretIntrouvable
+    from choregos_core.secrets import SecretNotFound
     from choregos_orchestrator.activities.base import load_project
 
     await _declare(setup, {"api_token": "store:project/billing-api/tracker/api_token"}, None)
-    with pytest.raises(SecretIntrouvable, match="resolved by the platform"):
+    with pytest.raises(SecretNotFound, match="resolved by the platform"):
         async with session_scope(orgs="*") as session:
             await load_project(session, setup.project_id)
     assert "tracker" not in probes, "never an adapter built without its key"

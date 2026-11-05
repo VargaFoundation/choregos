@@ -22,8 +22,9 @@ import httpx
 from choregos_adapters.mcp.client import McpClient
 from choregos_contracts import StageInput, StageResult
 from choregos_core.egress import use_policy
+from choregos_core.mcp import RESULT_CEILING_BYTES
 from choregos_core.prompt_loop import LoopOutcome, LoopRequest, LoopTool, run_loop
-from choregos_tools_mcp.answer import MAX_TEXT
+from choregos_tools_mcp.answer import MAX_NOTICES
 
 from .budget import gateway_budget_refusal
 from .egress import step_policy
@@ -42,9 +43,10 @@ SYSTEM = (
 #: How often a model that answers in text without submitting is reminded to submit.
 MAX_REMINDERS = 2
 _NAME = re.compile(r"[^a-zA-Z0-9_-]")
-#: What a tool answer the model reads can hold: the platform's tool server's own bound on a relayed
-#: answer, notices included, so that the loop never cuts what that server let through (#1374).
-_MAX_TOOL_TEXT = MAX_TEXT
+#: What a tool answer the model reads can hold: the most the platform's tool server lets through of a
+#: relayed answer — the bound the API names, an operation's cap up to the default ceiling (#1383) —
+#: notices included, so that the loop never cuts what that server let through (#1374).
+_MAX_TOOL_TEXT = RESULT_CEILING_BYTES + MAX_NOTICES
 _MAX_FILE_BYTES = 200_000
 
 

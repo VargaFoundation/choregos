@@ -11,7 +11,7 @@ import pytest
 #: A catalogue with one HTTP tool. `run_with_catalogue` reads this module global at call time, so a
 #: test that needs another entry patches `kits.tool_catalogue.CATALOGUE`.
 CATALOGUE = """
-outils:
+tools:
   - name: recherche_profils
     description: Searches profiles.
     provider: annuaire
@@ -26,7 +26,7 @@ outils:
 """
 
 MCP_CATALOGUE = """
-outils:
+tools:
   - name: rechercher_entreprise
     description: Looks a company up at a third-party provider.
     provider: annuaire-externe

@@ -47,9 +47,9 @@ def _porteurs(rendu: str, name: str) -> tuple[set[str], set[str]]:
 
 
 def test_the_variable_reaches_every_process_of_the_platform() -> None:
-    rendu = _render("global.extraEnv[0].name=CHOREGOS_ESSAI_ONTOLOGIE", "global.extraEnv[0].value=1")
+    rendu = _render("global.extraEnv[0].name=CHOREGOS_ONTOLOGY_TRIAL", "global.extraEnv[0].value=1")
     assert rendu.returncode == 0, rendu.stderr[-400:]
-    readers, porteurs = _porteurs(rendu.stdout, "CHOREGOS_ESSAI_ONTOLOGIE")
+    readers, porteurs = _porteurs(rendu.stdout, "CHOREGOS_ONTOLOGY_TRIAL")
     assert any("migration" in name for name in readers), f"the migration Job is not seen: {readers}"
     assert porteurs == readers, f"sans la variable : {sorted(readers - porteurs)}"
     assert 'value: "1"' in rendu.stdout
@@ -58,7 +58,7 @@ def test_the_variable_reaches_every_process_of_the_platform() -> None:
 def test_without_a_value_nothing_is_added() -> None:
     rendu = _render()
     assert rendu.returncode == 0, rendu.stderr[-400:]
-    assert "CHOREGOS_ESSAI_ONTOLOGIE" not in rendu.stdout
+    assert "CHOREGOS_ONTOLOGY_TRIAL" not in rendu.stdout
 
 
 def test_a_variable_already_set_by_the_chart_is_refused() -> None:

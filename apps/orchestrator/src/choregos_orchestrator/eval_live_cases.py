@@ -13,10 +13,18 @@ project's: its connectors, its policy, its agent.
   API serves it from the scene when the deployment serves eval fakes (`CHOREGOS_EVAL_FAKE_SCENES`); a
   connector of the same name that is not the matrix's, or that holds another scene, is never touched: the
   case is skipped and says why.
-- **Policy.** The matrix's eval project's policy, memory off, the case's `prompt_injection`; the tools door
-  stays the cell's (`StagePlan.eval_cell.tools`). The case's `writes` is the project's: an operation that
-  writes is `allowed` on the connector and tightened to `approval` in the case's project when the case
-  says `writes: approval` (the default), the way any project tightens what its organisation allows.
+- **Web.** A case's `web:` (its search results and pages, #1378) is a fake web: one `web_search`
+  organisation connector of type `fake` per case (`case_web`), its configuration `{fake_scene: web,
+  fake_web: <the case's web>}`, available to the selected projects only and turned on for the case's eval
+  project alone. Where the deployment serves eval fakes the API serves that project's `web_search` from
+  the case's results and its `web_fetch` from the case's pages (their hosts resolve, no other does); the
+  project's policy allows those hosts. The organisation's ceiling must open web search, as for any
+  backend: the matrix does not open it.
+- **Policy.** The matrix's eval project's policy, memory off, the case's `prompt_injection`, the hosts of its
+  pages allowed when it has a `web:`; the tools door stays the cell's (`StagePlan.eval_cell.tools`). The
+  case's `writes` is the project's: an operation that writes is `allowed` on the connector and tightened
+  to `approval` in the case's project when the case says `writes: approval` (the default), the way any
+  project tightens what its organisation allows.
 - **Agent.** A catalogue agent (`netops`, `researcher`) is resolved as for any run: the organisation
   installs it. A case-local agent (`agent_spec`) is registered as a PROJECT agent of the case's eval
   project, one version per distinct spec, its connectors the case's (`case_agent_spec`).
@@ -70,6 +78,41 @@ class CaseConnector:
         return {FAKE_SCENE_FIELD: self.scene}
 
 
+@dataclass(frozen=True)
+class CaseWeb:
+    """A case's fake web, as its eval project's organisation declares it (#1378)."""
+
+    name: str
+    web: str  # the case's `web:`, canonical JSON (a frozen value)
+
+    kind = "web_search"
+    type = "fake"
+
+    @property
+    def config(self) -> dict[str, Any]:
+        from choregos_adapters.fakes.scenes import FAKE_SCENE_FIELD, WEB_FIELD, WEB_SCENE
+
+        return {FAKE_SCENE_FIELD: WEB_SCENE, WEB_FIELD: json.loads(self.web)}
+
+    @property
+    def hosts(self) -> list[str]:
+        from choregos_adapters.fakes.scenes import web_scene
+
+        return web_scene(json.loads(self.web)).hosts
+
+
+def case_web(case: Mapping[str, Any]) -> CaseWeb | None:
+    """The case's fake web, `None` for a case without `web:`: a connector named `web-<case>` (or
+    `web-<digest>` when that is not a name), so that two cases never share one."""
+    web = case.get("web")
+    if not web:
+        return None
+    name = f"web-{case['name']}"
+    if not _SLUG.fullmatch(name):
+        name = "web-" + hashlib.sha256(str(case["name"]).encode()).hexdigest()[:10]
+    return CaseWeb(name, json.dumps(web, sort_keys=True, ensure_ascii=False))
+
+
 def case_project_slug(eval_slug: str, case_name: str) -> str:
     """The case's eval project: `<eval>-<case>`, or `<eval>-<digest>` when that is not a slug."""
     slug = f"{eval_slug}-{case_name}"
@@ -81,14 +124,8 @@ def case_project_slug(eval_slug: str, case_name: str) -> str:
 
 def live_refusal(case: Mapping[str, Any]) -> str:
     """Why a live cell cannot play the case, `""` when it can."""
-    if case.get("web"):
-        # `web_search` and `web_fetch` read the internet from the API: the case's scripted pages are not
-        # served by a live deployment (#1378).
-        return (
-            "a live cell does not serve the case's web pages yet (its `web:`): it is played in scripted cells"
-        )
-    if not case.get("connectors"):
-        return "the case names no connector: a live cell has nothing to bind to a fake scene"
+    if not case.get("connectors") and not case.get("web"):
+        return "the case names no connector and no web: a live cell has nothing to bind to a fake scene"
     return ""
 
 
@@ -119,6 +156,16 @@ def case_policy(eval_policy: Mapping[str, Any], case: Mapping[str, Any]) -> dict
     injection = (case.get("policy") or {}).get("prompt_injection")
     if injection is not None:
         document["sandbox"] = {**(document.get("sandbox") or {}), "prompt_injection": str(injection)}
+    web = case_web(case)
+    if web is not None:
+        # `web_fetch` reads what the run's network allows: the hosts of the case's pages, and the tool is
+        # offered (#1378).
+        sandbox = dict(document.get("sandbox") or {})
+        network = dict(sandbox.get("network") or {})
+        network["allow_domains"] = sorted({*(network.get("allow_domains") or []), *web.hosts})
+        sandbox["network"] = network
+        document["sandbox"] = sandbox
+        document["web_search"] = {**(document.get("web_search") or {}), "mode": "allow"}
     return document
 
 
@@ -225,11 +272,13 @@ __all__ = [
     "LIVE_ROLE",
     "SCRIPTED_PROJECT",
     "CaseConnector",
+    "CaseWeb",
     "case_agent_slug",
     "case_agent_spec",
     "case_connectors",
     "case_policy",
     "case_project_slug",
+    "case_web",
     "live_answer",
     "live_refusal",
     "parity",

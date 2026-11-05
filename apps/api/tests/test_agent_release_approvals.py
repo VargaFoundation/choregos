@@ -297,8 +297,8 @@ async def test_the_gesture_check_sees_each_approval(client: AsyncClient) -> None
     seen: list[dict[str, Any]] = []
 
     def refuse_approvals(_session: Any, demand: Any) -> None:
-        seen.append(demand.cible)
-        if demand.cible.get("decision") == "approve":
+        seen.append(demand.target)
+        if demand.target.get("decision") == "approve":
             raise extensions.GestureRefused("approvals are closed this week")
 
     await org_admins(client, DAVE)
