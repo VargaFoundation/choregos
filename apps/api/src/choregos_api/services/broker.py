@@ -66,6 +66,7 @@ __all__ = [
     "is_job_step",
     "output_refusal",
     "propose_call",
+    "proposer_of",
     "readable_text",
     "result_limit",
     "result_text",
@@ -206,8 +207,9 @@ async def propose_call(
     session: AsyncSession, run: Run, project: Project, tool: BrokerTool, arguments: dict[str, Any]
 ) -> dict[str, Any]:
     """A tool under approval, called: a governed action, proposed in the name of the run's agent
-    (`agent:<slug>`). Nothing reaches the server before a re-authenticated human approves it —
-    and whoever owns the agent does not approve it (separation of roles)."""
+    (`agent:<slug>`), or of its job step (`job:<actor>`, `proposer_of`). Nothing reaches the server
+    before a re-authenticated human approves it — and whoever owns the agent does not approve it
+    (separation of roles)."""
     from ..errors import ApiError
 
     # ADR 0105: the route is judged BEFORE the action exists, so a refused connector (mode `required`,
@@ -242,7 +244,7 @@ async def _propose_tool_action(
     arguments: dict[str, Any],
     action_id: str | None = None,
 ) -> Any:
-    """A tool call's action: a `connector.call` effect, in the name of the run's agent."""
+    """A tool call's action: a `connector.call` effect, in the name of the run's proposer (`proposer_of`)."""
     from choregos_contracts import ActionOrigin
 
     from ..rbac import SYSTEM
@@ -272,10 +274,11 @@ async def _propose_tool_action(
         if tool.operation.approver_group
         else ApprovalSpec()
     )
+    proposed_by, justification = proposer_of(run)
     body = ActionCreate(
         kind=f"{tool.connector.name}.{tool.operation.name}",
         title=f"{tool.operation.description or tool.operation.name} ({tool.connector.name})",
-        justification=f"proposed by the agent {run.agent_slug} in run {run.id}",
+        justification=justification,
         params={"arguments": arguments},
         effects=[ActionEffectSpec.model_validate(effect)],
         approval=approval,
@@ -286,10 +289,31 @@ async def _propose_tool_action(
         project,
         body,
         origin=ActionOrigin.TOOL.value,
-        proposed_by={"kind": "agent", "id": f"agent:{run.agent_slug}", "run_id": run.id},
+        proposed_by=proposed_by,
         principal=SYSTEM,
         run_id=run.id,
         action_id=action_id,
+    )
+
+
+def proposer_of(run: Run) -> tuple[dict[str, Any], str]:
+    """Who proposes a run's tool action, and the justification that says it (#1364).
+
+    A run of a registry agent proposes as that agent (`agent:<slug>`), whose owner does not decide.
+    A job step (ADR 0056) has no registry agent: it proposes as the workflow actor that runs it
+    (`job:<actor>`), the name the workflow gives the step. No person owns a job — its command and
+    its `tools:` are the workflow's, reviewed with it, like a transition's action (`kind: system`) —
+    so the separation of roles excludes nobody (`services/actions.py::_agent_owner`).
+    """
+    if is_job_step(run):
+        name = run.actor or run.transition_id or "job"
+        return (
+            {"kind": "job", "id": f"job:{name}", "run_id": run.id},
+            f"proposed by the job step {name} in run {run.id}",
+        )
+    return (
+        {"kind": "agent", "id": f"agent:{run.agent_slug}", "run_id": run.id},
+        f"proposed by the agent {run.agent_slug} in run {run.id}",
     )
 
 

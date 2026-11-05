@@ -103,3 +103,37 @@ async def test_a_proposal_counts_towards_the_runs_ceiling(
     assert (
         await client.post(f"{base}/fournisseur__commander_poste", headers=headers, json={})
     ).status_code == 429
+
+
+async def test_a_job_steps_proposal_names_its_job_and_no_agent_owner_is_kept_out(
+    client: AsyncClient, project: dict[str, Any], supplier: Any
+) -> None:
+    """#1364: a job step (ADR 0056) has no registry agent. What it proposes names the workflow actor that
+    runs it (`job:<actor>`), not `agent:None`; and since no person owns a job — its command and its
+    `tools:` are the workflow's —, the separation of roles keeps nobody out: the person who owns the
+    agent of the run's former life approves it."""
+    from choregos_api.db.models import Run
+    from choregos_api.db.session import session_scope
+
+    base, headers = await _prepare(client, project, ["*"])
+    async with session_scope() as session:
+        run = await session.get(Run, "run-courtier-1")
+        assert run is not None
+        # What `prepare_job` writes: `backend: job`, the job's spec, the workflow actor; no agent.
+        run.backend, run.actor, run.agent_slug, run.agent_version = "job", "snapshot", None, None
+        run.stage_input = {"job": {"command": ["python", "snapshot.py"], "tools": {"fournisseur": ["*"]}}}
+
+    call = await client.post(
+        f"{base}/fournisseur__commander_poste", headers=headers, json={"model": "portable-14"}
+    )
+    assert call.status_code == 200 and call.json()["status_code"] == 202, call.text
+    action_id = call.json()["result"]["action"]
+    inbox = (await client.get("/api/v1/orgs/varga/actions", params={"status": "pending_approval"})).json()
+    (waiting,) = [a for a in inbox if a["id"] == action_id]
+    assert waiting["proposed_by"] == {"kind": "job", "id": "job:snapshot", "run_id": "run-courtier-1"}
+    assert waiting["justification"] == "proposed by the job step snapshot in run run-courtier-1"
+
+    decision_url = f"/api/v1/projects/{project['id']}/actions/{action_id}/decision"
+    approved = await client.post(decision_url, json={"decision": "approve"})
+    assert approved.status_code == 200 and approved.json()["status"] == "approved", approved.text
+    assert supplier.calls == [], "approved: Temporal runs it, not the request"
