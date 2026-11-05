@@ -16,20 +16,20 @@ tools cell, through the platform's REAL doors, against a fake API and the connec
   through the MCP door in this cell too, as a model that did not use the door it was offered; the
   outcome says which (`door`: `bridge` or `mcp`).
 
-`EvalApi` is the fake API: the run's two internal routes, `GET /runs/{id}/tools` (as `getRunTools`
-lists them: description, schema, `readOnlyHint`, `x-choregos-access`) and `POST /runs/{id}/tools/{name}`
-(as `callRunTool` answers: `{status_code, result, remaining}`), behind `httpx.MockTransport`, so that
-both doors' real clients talk to it. It governs as `callRunTool` does for what the cases need, and no
-more: the run token; the origin header (absent: `model`); arguments checked against the operation's
-schema (400); a write under approval PROPOSED (202, an action `pending_approval`, its decision path
-`/p/<project>/actions/<id>`, the id `uuid5(run, tool, arguments)` as `broker.call_id` makes it); an
-allowed write executed as an action (`succeeded`); the injection guard on every result
-(`choregos_core.injection.suspicions` over the text the agent reads: `warn` adds `suspicions` and a
-security event, `block` answers 451); the 64 KiB bound on a connector's result, its data counted once
-(`broker.bounded_result`, `choregos_core.mcp.data_once`: past it, the text is cut, `structuredContent`
-dropped). It has no cap, no rate limit, no masking and no
-network policy: the live matrix (S57-11) meets those on the real API. It cannot import the API's own
-helpers: the orchestrator's imports of `choregos_api` are frozen (ADR 0099).
+`EvalApi` is the fake API: the run's two internal routes, `GET /runs/{id}/tools` (as `getRunTools` lists
+them: description, schema, `readOnlyHint`, `x-choregos-access`) and `POST /runs/{id}/tools/{name}` (as
+`callRunTool` answers: `{status_code, result, remaining, result_max_bytes}`), behind
+`httpx.MockTransport`, so that both doors' real clients talk to it. It governs as `callRunTool` does for
+what the cases need, and no more: the run token; the origin header (absent: `model`); arguments checked
+against the operation's schema (400); a write under approval PROPOSED (202, an action
+`pending_approval`, its decision path `/p/<project>/actions/<id>`, the id `uuid5(run, tool, arguments)`
+as `broker.call_id` makes it); an allowed write executed as an action (`succeeded`); the injection guard
+on every result (`choregos_core.injection.suspicions` over the text the agent reads: `warn` adds
+`suspicions` and a security event, `block` answers 451); the 64 KiB bound on a result, its data counted
+once (`broker.bounded_result`, `choregos_core.mcp.data_once`: past it, the text is cut, a
+`structuredContent` it serializes dropped), named in the answer. It has no cap, no rate limit, no
+masking and no network policy: the live matrix (S57-11) meets those on the real API. It cannot import
+the API's own helpers: the orchestrator's imports of `choregos_api` are frozen (ADR 0099).
 
 `mcp_calls` and `bridge_script` are the two doors with any run's `InternalClient`: the live matrix's
 tests (S57-11a) play a case through them against the real API, whose connectors are fake scenes.
@@ -213,6 +213,8 @@ class EvalApi:
         body: dict[str, Any] = {"status_code": code, "result": result, "remaining": None}
         if suspicions:
             body["suspicions"] = suspicions
+        # The bound the result was held to, as `callRunTool` says it (#1383): none for a proposal.
+        body["result_max_bytes"] = None if tool.access == "approval" else RESULT_MAX_BYTES
         return httpx.Response(200, json=body)
 
     # ───────────────────────── governance ─────────────────────────
@@ -329,12 +331,24 @@ def _json(value: Any) -> str:
 def _bounded(result: dict[str, Any], limit: int = RESULT_MAX_BYTES) -> dict[str, Any]:
     """`broker.bounded_result`'s size rule: a result larger than `limit` as JSON, its data counted once
     (a text block that serializes its `structuredContent` is not counted again), keeps its text, cut,
-    with the platform's marker, and loses `structuredContent` — half an object is not the object."""
+    with the platform's marker, and loses `structuredContent` when a text block serializes it — half
+    an object is not the object —; a structure the text does not say (`web_fetch`'s fetch beside its
+    page) stays beside the cut text when both fit (#1383)."""
     total = len(_json(mcp.data_once(result)).encode("utf-8"))
     if total <= limit:
         return result
     text = "\n".join(str(b.get("text", "")) for b in result.get("content") or [] if b.get("type") == "text")
     kept = {k: v for k, v in result.items() if k not in ("content", "structuredContent")}
+    structured = result.get("structuredContent")
+    if structured is not None and not any(mcp.serializes(b, structured) for b in result.get("content") or []):
+        beside = _cut(text, {**kept, "structuredContent": structured}, total, limit)
+        if len(_json(beside).encode("utf-8")) <= limit:
+            return beside
+    return _cut(text, kept, total, limit)
+
+
+def _cut(text: str, kept: dict[str, Any], total: int, limit: int) -> dict[str, Any]:
+    """`kept` with `text` cut and the platform's marker, no larger than `limit` as JSON."""
     whole, room = text.encode("utf-8"), limit
     while True:
         shown = whole[:room].decode("utf-8", errors="ignore")

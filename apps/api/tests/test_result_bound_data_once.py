@@ -96,7 +96,24 @@ async def test_a_text_that_says_something_else_is_counted_with_the_structure() -
     fetched = {"url": "https://docs.example.com/guide", "notes": "y" * 37_000}
     answer = {"content": [{"type": "text", "text": page}], "structuredContent": fetched}
     assert _size(fetched) < result_limit() < _size(answer)
-    assert "structuredContent" not in bounded_result(answer), "74 KB of two things: cut"
+    cut = bounded_result(answer)
+    assert cut["truncated"]["total_bytes"] > result_limit(), "74 KB of two things: cut"
+    # What is cut is the text; the structure is another datum, whole beside it when both fit (#1383).
+    assert cut["structuredContent"] == fetched and _size(cut) <= result_limit()
+    assert page.startswith(cut["content"][0]["text"].rsplit("\n[truncated by the platform", 1)[0])
+
+    larger = {**answer, "structuredContent": {**fetched, "notes": "y" * 70_000}}
+    assert "structuredContent" not in bounded_result(larger), "a structure that cannot fit is dropped"
+
+    # A structure a text block serializes is cut with that text: never kept beside it, even if it fits.
+    small = {"url": "https://docs.example.com/guide", "notes": "y" * 20_000}
+    summary = "line of a summary\n" * 2_800  # 50 KB
+    serialized = {
+        "content": [{"type": "text", "text": json.dumps(small)}, {"type": "text", "text": summary}],
+        "structuredContent": small,
+    }
+    assert result_limit() < _size(small) + len(summary)
+    assert "structuredContent" not in bounded_result(serialized), "half an object is not the object"
 
 
 # ───────────────────────── through the API, and through both doors ─────────────────────────

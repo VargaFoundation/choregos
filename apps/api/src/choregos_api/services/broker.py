@@ -594,8 +594,11 @@ def bounded_result(
     is not counted again, since an agent reads one or the other (the run's tool server shows the
     model the structure, a script gets the structure); a text that says something else
     (`web_fetch`'s page, a server's summary) is counted with it. A larger one keeps its text, cut,
-    with `TRUNCATED` at the end; its `structuredContent` is dropped, since half an object is not the
-    object. `cut=False` masks only: a job reads the answer, not a model (S40-13b)."""
+    with `TRUNCATED` at the end. Its `structuredContent` is dropped when a text block serializes it:
+    cutting the text cuts it, and half an object is not the object. When the text says something
+    else, the structure is another datum, whole: it stays beside the cut text when both fit the bound
+    (`web_fetch`'s page cut, what was fetched kept, #1383). `cut=False` masks only: a job reads the
+    answer, not a model (S40-13b)."""
     masked = _masked(result)
     if not cut:
         return masked
@@ -604,12 +607,22 @@ def bounded_result(
     if total <= limit:
         return masked
     kept = {k: v for k, v in masked.items() if k not in ("content", "structuredContent")}
-    return _cut(
-        result_text(masked),
-        lambda note: {**kept, "content": [{"type": "text", "text": note}]},
-        total,
-        limit,
-    )
+    text = result_text(masked)
+    structured = masked.get("structuredContent")
+    if structured is not None and not _serialized_in_text(masked, structured):
+        beside = _cut(
+            text,
+            lambda note: {
+                **kept,
+                "content": [{"type": "text", "text": note}],
+                "structuredContent": structured,
+            },
+            total,
+            limit,
+        )
+        if len(_json(beside).encode("utf-8")) <= limit:
+            return beside
+    return _cut(text, lambda note: {**kept, "content": [{"type": "text", "text": note}]}, total, limit)
 
 
 def bounded_payload(payload: Any, declared: int | None = None) -> Any:

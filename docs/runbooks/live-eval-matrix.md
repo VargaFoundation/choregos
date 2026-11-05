@@ -70,8 +70,9 @@ fetch's metadata, not the page (#1373, fixed: `["text"]` is the page, `["structu
 fetched). Both doors read the same answer (#1374): the MCP door shows the model compact JSON of the
 result, its data once, cut only past the platform's 64 KiB bound, and a script gets the same data;
 `apps/orchestrator/tests/test_eval_doors_parity.py` plays every call of E1, E2, E5 and E6 through both
-doors and compares them. An operation whose cap is raised above 64 KiB is still cut at 64 KiB through
-the MCP door, not through the bridge.
+doors and compares them. An answer bounded otherwise is read to the same place by both doors (#1383):
+the API names its bound (`result_max_bytes`: an operation's raised cap, the default for `web_fetch`,
+whose pages it now bounds too) and the MCP door cuts there.
 
 A case's file: `connectors` (each one's fake and its scene, `choregos_adapters.fakes.scenes`), `policy`
 (`writes: approval | allowed`, `prompt_injection: ignore | warn | block`), `web` (the scripted search

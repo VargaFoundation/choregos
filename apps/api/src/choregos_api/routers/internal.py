@@ -1104,12 +1104,14 @@ async def call_tool(
                 session, run, project, body or {}
             )
             price_eur = 0.0
+            result_body = _bounded_web(run, result_body)
             code, result_body, suspicions = await _injection_guard(
                 session, run, project, SimpleNamespace(name=name), code, result_body
             )
         elif is_web:
             code, result_body, provider = await _web_fetch(session, run, project, body or {})
             price_eur = 0.0
+            result_body = _bounded_web(run, result_body)
             code, result_body, suspicions = await _injection_guard(
                 session, run, project, SimpleNamespace(name=name), code, result_body
             )
@@ -1153,6 +1155,7 @@ async def call_tool(
         # A call that fails is not booked, as it never was: its place is given back.
         await slot.give_back(session)
         raise
+    bound = _result_bound(run, name, catalogue_tool, brokered, from_extensions)
     # A call the organisation's network policy stopped never reached the server: it is not counted
     # against the per-host rate either, or an agent that keeps retrying would never recover (ADR 0070).
     # A search query or a fetch address refused for what it holds was not sent either (ADR 0083 §5).
@@ -1244,7 +1247,49 @@ async def call_tool(
         "result": result_body,
         "remaining": max(0, cap - already_called - 1) if cap else None,
         **({"suspicions": suspicions} if suspicions else {}),
+        # Said for every call, `null` when nothing was bounded: what a caller reads does not change
+        # shape with its door (ADR 0122 §2).
+        "result_max_bytes": bound,
     }
+
+
+def _bounded_web(run: Run, result_body: Any) -> Any:
+    """A built-in web tool's answer as the agent may read it (#1383): a page or a search's results are
+    third-party text, masked and bounded like a broker read (`bounded_result`, the platform's default
+    bound, the page's text kept up to it with the marker), a job step's masked only (S40-13b); a
+    refusal, the platform's own JSON, as it is."""
+    from ..services.broker import bounded_result
+
+    if isinstance(result_body, dict) and isinstance(result_body.get("content"), list):
+        return bounded_result(result_body, cut=run.backend != "job")
+    return result_body
+
+
+def _result_bound(
+    run: Run,
+    name: str,
+    catalogue_tool: Any,
+    brokered: dict[str, Any],
+    from_extensions: dict[str, tuple[str, dict[str, Any]]],
+) -> int | None:
+    """The bound the API held a call's result to, which its answer states (`result_max_bytes`, #1383),
+    so that the run's tool server cuts what it shows the model where a script's client stops reading:
+    the cap of the catalogue entry, the operation or the plugin tool (`result_limit`), the platform's
+    default for a built-in web tool. None when nothing was bounded: a proposal under approval is the
+    platform's own words, a job step's read is masked, never cut (S40-13b)."""
+    from ..services.broker import result_limit
+
+    if catalogue_tool is not None:
+        return result_limit(catalogue_tool.result_max_bytes)
+    if name in brokered:
+        tool = brokered[name]
+        if tool.needs_approval or (not tool.is_write and run.backend == "job"):
+            return None
+        return result_limit(tool.operation.result_max_bytes)
+    if name in from_extensions:
+        extension, declared = from_extensions[name]
+        return result_limit(_extension_result_cap(extension, declared))
+    return None if run.backend == "job" else result_limit()
 
 
 async def _web_fetch(
