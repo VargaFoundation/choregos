@@ -34,14 +34,16 @@ from ..schemas import (
     WorkItemUpdate,
 )
 from ..services import (
-    create_work_item as file_work_item,
-)
-from ..services import (
+    active_workflow_named,
     human_request_dto,
     persist_event,
+    record_reroute,
     work_item_dto,
     work_item_workflow,
     workflow_model,
+)
+from ..services import (
+    create_work_item as file_work_item,
 )
 from ..services import (
     journey as journey_of,
@@ -465,6 +467,61 @@ async def _migration_target(
     return target.model_dump(mode="json", by_alias=True, exclude_none=True)
 
 
+async def _reroute(
+    session: Any, principal: Any, project: Project, item: WorkItem, body: WorkItemAction
+) -> None:
+    """The work item moves to another workflow of its project, at that workflow's initial state
+    (ADR 0123 §1): ADR 0031's `migrate`, with the mapping computed here. Accepted while a person is
+    asked — the interpreter closes the request as superseded — and before the interpreter started (the
+    pin and the state change here); refused while a run is in progress and once the work item ended.
+    The first re-route judges the routing that chose the workflow (`record_reroute`)."""
+    if not body.workflow:
+        raise unprocessable("reroute needs workflow: the name of the workflow to move the work item to")
+    if item.closed_at is not None:
+        raise conflict("the work item has ended: it can no longer change workflow")
+    target_row = await active_workflow_named(session, project.id, body.workflow)
+    if target_row is None:
+        raise unprocessable(f"workflow `{body.workflow}` is unknown or inactive in this project")
+    current = workflow_model(await work_item_workflow(session, item)).metadata.name
+    if current == target_row.name:
+        raise conflict(f"the work item already follows `{current}`")
+    running = select(Run.id).where(Run.work_item_id == item.id, Run.status.in_(("queued", "running")))
+    if (await session.execute(running.limit(1))).first() is not None:
+        raise conflict(
+            "a run of this work item is in progress: stop the work item or let the run finish, "
+            "then change its workflow"
+        )
+    target = workflow_model(target_row)
+    initial = WorkflowEngine(target).initial_state
+    if item.temporal_wf_id is None:
+        item.workflow_def_id, item.state = target_row.id, initial
+    else:
+        control = Control(
+            action="migrate",
+            workflow_def_id=target_row.id,
+            workflow=target.model_dump(mode="json", by_alias=True, exclude_none=True),
+            state_mapping={item.state: initial},
+            reason=body.reason,
+            by=principal.email,
+        )
+        try:
+            await deliver_control(project.slug, item.tracker_key, control)
+        except InterpreterNotRunningError as gone:
+            raise await _control_not_delivered(item, body.action, gone) from gone
+    await record_reroute(session, item.id, target_row.name)
+    await record(
+        session,
+        principal,
+        "workitem.reroute",
+        org_id=project.org_id,
+        target_type="work_item",
+        target_id=item.id,
+        reason=body.reason,
+        from_workflow=current,
+        to_workflow=target_row.name,
+    )
+
+
 async def _grant_top_up(
     session: Any, principal: Any, project: Project, item: WorkItem, top_up_usd: float | None
 ) -> None:
@@ -545,12 +602,15 @@ async def _control_not_delivered(item: WorkItem, action: str, gone: InterpreterN
     "/work-items/{id}/actions", status_code=status.HTTP_202_ACCEPTED, operation_id="postWorkItemAction"
 )
 async def post_action(id: str, body: WorkItemAction, session: Db, principal: Me) -> dict[str, str]:
-    """pause, resume, stop, migrate, rerun_stage, mark_agent_ready."""
+    """pause, resume, stop, migrate, rerun_stage, mark_agent_ready, reroute (ADR 0123)."""
     item, project = await _load(session, id, principal)
     _, org_slug = await resolve_project(session, project.id)
     if not principal.can(Permission.ITEM_CONTROL, org_slug, project.slug):
         raise forbidden("controlling a work item needs at least the developer role")
 
+    if body.action == "reroute":
+        await _reroute(session, principal, project, item, body)
+        return {"status": "accepted", "action": body.action}
     if body.action == "mark_agent_ready":
         payload = {
             "project_id": project.id,

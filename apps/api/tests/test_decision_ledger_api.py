@@ -108,7 +108,11 @@ async def test_the_contract_declares_the_calibration_route() -> None:
         "target_accuracy",
         "min_observed",
     }
-    assert schemas["QuestionCalibration"]["properties"]["source"]["enum"] == ["decision_model", "agent"]
+    assert schemas["QuestionCalibration"]["properties"]["source"]["enum"] == [
+        "decision_model",
+        "agent",
+        "router",
+    ]
     from choregos_api.schemas import QuestionCalibration, StepCalibration
 
     assert set(StepCalibration.model_fields) == set(schemas["StepCalibration"]["properties"])

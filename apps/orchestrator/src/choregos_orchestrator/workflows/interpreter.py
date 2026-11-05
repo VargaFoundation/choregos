@@ -128,6 +128,10 @@ ALREADY_FIXED_ON_EVIDENCE = "already-fixed-on-evidence"
 #: agent's declared confidence — is written on its ledger records (ADR 0121 §6, S52-05): one more
 #: activity, `note_transition_taken`. Before this marker no ledger existed.
 DECISION_LEDGER = "decision-ledger"
+#: A migration — a re-route (ADR 0123) — requested while a human step waits is played at once: the
+#: pending request is closed as superseded (it judges no decision) and the loop migrates. Before this
+#: marker the human wait did not see it; the API refused such a migration.
+HUMAN_WAIT_YIELDS_TO_MIGRATION = "human-wait-yields-to-migration"
 
 
 def _attempts_ceiling(context: dict[str, Any], actor: Any) -> int | None:

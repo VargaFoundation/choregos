@@ -17,7 +17,7 @@ with workflow.unsafe.imports_passed_through():
 
     from ...activities import tracker as tracker_activities
 
-from ..interpreter import HUMAN_TASKS
+from ..interpreter import HUMAN_TASKS, HUMAN_WAIT_YIELDS_TO_MIGRATION
 from .base import InterpreterBase
 from .helpers import DEFAULT_RETRY, NO_RETRY, InterpreterInput, _decision, wait_signal
 
@@ -53,12 +53,22 @@ class HumansMixin(InterpreterBase):
         reminder_sent = False
         waited = timedelta()
         step = timedelta(hours=1)
+        # Asked once, before the first wait: an older history never woke on a migration here.
+        yields = workflow.patched(HUMAN_WAIT_YIELDS_TO_MIGRATION)
         while waited < timeout:
             got = await wait_signal(
-                lambda: bool(self.decisions) or self.stopped or self._rerun_playable(),
+                lambda: (
+                    bool(self.decisions)
+                    or self.stopped
+                    or self._rerun_playable()
+                    or (yields and bool(self.migration))
+                ),
                 min(step, timeout - waited),
             )
             if self.stopped:
+                return None
+            if yields and self.migration:
+                await self._yield_to_migration()
                 return None
             if self._suspension_left() == timedelta(0):
                 # `sandbox.suspend_max_hours` passed: the sandbox goes (the executor's platform
@@ -102,6 +112,24 @@ class HumansMixin(InterpreterBase):
             if transition.on_reject
             else _decision(escalate, "no human decision in time")
         )
+
+    async def _yield_to_migration(self) -> None:
+        """A re-route (ADR 0123) arrived while a person was asked: the request is closed as superseded
+        — it judges no decision, leaves no feedback — a suspended sandbox is released, and the main
+        loop migrates (`_migrate_by_definition`)."""
+        by = str(self.migration.get("by") or "the platform")
+        await execute_on_its_queue(
+            tracker_activities.close_human_request,
+            {
+                "request_id": self.pending_request,
+                "decided_by": by,
+                "decision": {"approved": False, "superseded": "the work item changed workflow"},
+            },
+            start_to_close_timeout=timedelta(seconds=30),
+            retry_policy=DEFAULT_RETRY,
+        )
+        self.pending_request = None
+        await self._release_suspension()
 
     async def _remind(self, params: InterpreterInput, actor: Any, transition: Any) -> None:
         from choregos_core import Message

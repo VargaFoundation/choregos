@@ -219,3 +219,68 @@ async def test_recording_the_same_migration_twice_does_not_double_it(setup: Fixt
     assert (await record_migration(recorded_migration))["recorded"] is True
     assert (await record_migration(recorded_migration))["recorded"] is False
     assert len(await _events(setup)) == 1
+
+
+#: A ticket a person must approve first: the human wait a re-route must not wait behind (ADR 0123).
+REVIEW: dict[str, Any] = {
+    "apiVersion": "choregos/v1",
+    "kind": "Workflow",
+    "metadata": {"name": "support", "version": 1},
+    "initial": "review",
+    "actors": {"agent_desk": {"type": "human", "group": "support"}},
+    "states": {
+        "review": {"display": "Review"},
+        "answered": {"display": "Answered", "terminal": True},
+    },
+    "transitions": [{"id": "t-answer", "from": "review", "to": "answered", "by": "agent_desk"}],
+}
+
+
+async def test_a_reroute_does_not_wait_for_the_person_who_was_asked(
+    setup: Fixture, temporal_env: Any, worker_factory: Any
+) -> None:
+    """ADR 0123 §1: a misrouted ticket is seen when a person is asked. The re-route — a `migrate` to the
+    target's initial state — closes the request as superseded and plays the new workflow at once."""
+    from choregos_api.db.models import HumanRequest, WorkItem
+    from choregos_api.db.session import session_scope
+    from choregos_orchestrator.workflows import ALL_WORKFLOWS
+    from temporalio.worker import Replayer
+
+    review, _ = await _define(setup, REVIEW)
+    async with session_scope() as session:
+        item = await session.get(WorkItem, setup.work_item_id)
+        assert item is not None
+        item.workflow_def_id, item.state = review, "review"
+    arrival, signal = await _define(setup, ARRIVAL)
+    async with worker_factory():
+        handle = await _start(temporal_env, setup)
+        asked = await _wait_for(handle, lambda s: s["pending_request"] is not None, "a person is asked")
+        await handle.signal(
+            "control",
+            {
+                "action": "migrate",
+                "workflow_def_id": arrival,
+                "workflow": signal,
+                "state_mapping": {"review": "request"},
+                "by": "lead@varga.dev",
+            },
+        )
+        result = await asyncio.wait_for(handle.result(), timeout=120)
+        history = await handle.fetch_history()
+
+    assert result["state"] == "done", "the request did not hold it: the new workflow played"
+    async with session_scope() as session:
+        request = await session.get(HumanRequest, asked["pending_request"])
+        assert request is not None and request.decided_at is not None
+        assert (request.decided_by, request.decision["superseded"]) == (
+            "lead@varga.dev",
+            "the work item changed workflow",
+        )
+        item = await session.get(WorkItem, setup.work_item_id)
+        assert item is not None and item.workflow_def_id == arrival
+        assert "human_feedback" not in (item.documents or {}), "a superseded request leaves no feedback"
+
+    await Replayer(workflows=ALL_WORKFLOWS).replay_workflow(history)
+    if recording_history():
+        target = HISTORIES / "wi-reroute-while-a-person-is-asked-S52-11.json"
+        target.write_text(json.dumps(json.loads(history.to_json()), indent=1) + "\n", encoding="utf-8")

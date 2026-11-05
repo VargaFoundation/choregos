@@ -322,8 +322,10 @@ class DecisionRequest(Dto):
 
 
 class WorkItemAction(Dto):
-    action: Literal["pause", "resume", "stop", "migrate", "rerun_stage", "mark_agent_ready"]
+    action: Literal["pause", "resume", "stop", "migrate", "rerun_stage", "mark_agent_ready", "reroute"]
     workflow_def_id: str | None = None
+    #: `reroute`: the name of the workflow the work item moves to, at its initial state (ADR 0123).
+    workflow: str | None = Field(default=None, min_length=1, max_length=100)
     state_mapping: dict[str, str] = Field(default_factory=dict)
     run_id: str | None = None
     reason: str | None = None

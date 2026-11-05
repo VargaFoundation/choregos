@@ -131,6 +131,13 @@ def is_right(overridden: bool | None, terminal: str | None, reopened: bool) -> b
     return overridden is not True and terminal == SUCCESS and not reopened
 
 
+def routing_is_right(overridden: bool | None) -> bool | None:
+    """A routing (ADR 0123) is right when the workflow it answered is the one a person re-routed the
+    work item to, or the one it ended in: `overridden` says the opposite, and stays `None` until one of
+    them is known. How the work item ended does not judge it — a declined request was not misrouted."""
+    return None if overridden is None else not overridden
+
+
 __all__ = [
     "CONFIDENCE",
     "CONFIDENCE_SUFFIX",
@@ -142,4 +149,5 @@ __all__ = [
     "is_observed",
     "is_right",
     "probability_of",
+    "routing_is_right",
 ]

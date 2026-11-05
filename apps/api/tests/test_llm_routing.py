@@ -549,3 +549,217 @@ async def test_a_wrong_or_failed_decision_leaves_the_item_to_the_default(
     item = await _born(client, pid, "Bob leaves")
     assert item["workflow_name"] == "onboarding"
     assert reason in (await _documents(item["id"]))["routing"]["reason"]
+
+
+# ADR 0123: a routing by a decision model is a decision record without a run, judged by the workflow a
+# person re-routed the work item to, or the one it ended in.
+
+
+async def _routing_records() -> list[Any]:
+    from choregos_api.db.models import DecisionRecordRow
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    async with session_scope() as session:
+        rows = await session.execute(select(DecisionRecordRow).order_by(DecisionRecordRow.decided_at))
+        return list(rows.scalars())
+
+
+async def _reroute(client: AsyncClient, item: dict[str, Any], **body: Any) -> Any:
+    return await client.post(f"/api/v1/work-items/{item['id']}/actions", json={"action": "reroute", **body})
+
+
+async def _item(item_id: str) -> Any:
+    from choregos_api.db.models import WorkItem
+    from choregos_api.db.session import session_scope
+
+    async with session_scope() as session:
+        return await session.get(WorkItem, item_id)
+
+
+async def test_a_routing_by_a_decision_model_is_recorded_with_the_work_item(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    pid = project["id"]
+    await _two_workflows(client, pid)
+    await _routing(client, pid, "rules_then_llm")
+    await _born(client, pid, "Bob leaves on Friday")
+    assert await _routing_records() == [], "a chat model answers no probability: nothing to measure"
+
+    await _decider(client, "route", "decide")
+    await _born(client, pid, "Alice leaves", labels=["leaver"])
+    assert await _routing_records() == [], "a rule routed it: no model answered"
+
+    item = await _born(client, pid, "Bob leaves on Friday")
+    (record,) = await _routing_records()
+    assert (record.work_item_id, record.run_id, record.source) == (item["id"], None, "router")
+    assert (record.step, record.question, record.model) == ("routing", "workflow", "fake/decide")
+    assert (record.answer, record.probability) == ("offboarding", pytest.approx(0.6))
+    assert (record.workflow, record.transition, record.workflow_version) == ("offboarding", "offboarding", 1)
+    assert record.overridden is None and record.terminal is None
+
+
+async def test_below_the_threshold_the_record_keeps_the_answer_beside_the_default(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    pid = project["id"]
+    await _two_workflows(client, pid)
+    await _decider(client, "route", "decide")
+    await _routing(client, pid, "llm", min_confidence=0.7)
+    held = await _born(client, pid, "Bob leaves on Friday")
+    assert held["workflow_name"] == "onboarding"
+    (record,) = await _routing_records()
+    assert (record.answer, record.workflow, record.transition) == ("offboarding", "onboarding", "onboarding")
+
+
+async def test_a_reroute_moves_the_work_item_and_judges_its_routing(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    from choregos_api.db.models import AuditLog
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    pid = project["id"]
+    await _two_workflows(client, pid)
+    await _decider(client, "route", "decide")
+    await _routing(client, pid, "llm", min_confidence=0.7)
+    held = await _born(client, pid, "Bob leaves on Friday")
+    assert (held["workflow_name"], held["state"]) == ("onboarding", "arrival")
+
+    moved = await _reroute(client, held, workflow="offboarding", reason="a departure, not an arrival")
+    assert moved.status_code == 202, moved.text
+    item = (await client.get(f"/api/v1/work-items/{held['id']}")).json()
+    assert (item["workflow_name"], item["state"]) == ("offboarding", "departure"), "the initial state"
+    (record,) = await _routing_records()
+    assert record.overridden is False, "the model answered offboarding: the threshold was wrong, not it"
+    assert record.observed_at is not None
+    async with session_scope() as session:
+        (audit,) = (
+            await session.execute(select(AuditLog).where(AuditLog.action == "workitem.reroute"))
+        ).scalars()
+    assert (audit.payload["from_workflow"], audit.payload["to_workflow"]) == ("onboarding", "offboarding")
+    assert audit.payload["reason"] == "a departure, not an arrival"
+
+    back = await _reroute(client, held, workflow="onboarding")
+    assert back.status_code == 202, back.text
+    (record,) = await _routing_records()
+    assert record.overridden is False, "only the first re-route judges the routing"
+
+    same = await _reroute(client, held, workflow="onboarding")
+    assert same.status_code == 409 and "already follows" in same.text, same.text
+    unknown = await _reroute(client, held, workflow="payroll")
+    assert unknown.status_code == 422, unknown.text
+    nameless = await _reroute(client, held)
+    assert nameless.status_code == 422, nameless.text
+
+
+async def test_a_reroute_against_the_model_overrides_it(client: AsyncClient, project: dict[str, Any]) -> None:
+    pid = project["id"]
+    await _two_workflows(client, pid)
+    await _decider(client, "route", "decide")
+    await _routing(client, pid, "llm")
+    item = await _born(client, pid, "Bob leaves on Friday")
+    assert item["workflow_name"] == "offboarding"
+    assert (await _reroute(client, item, workflow="onboarding")).status_code == 202
+    (record,) = await _routing_records()
+    assert record.overridden is True, "the model answered offboarding, a person chose onboarding"
+
+
+async def test_a_started_work_item_is_rerouted_by_its_interpreter_even_while_a_person_is_asked(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    from choregos_api.db.models import HumanRequest, Run, WorkItem
+    from choregos_api.db.session import session_scope
+    from choregos_api.temporal import get_temporal
+    from choregos_core import utcnow
+
+    pid = project["id"]
+    await _two_workflows(client, pid)
+    await _routing(client, pid, "labels")
+    item = await _born(client, pid, "Bob leaves on Friday")
+    async with session_scope() as session:
+        row = await session.get(WorkItem, item["id"])
+        assert row is not None
+        row.temporal_wf_id = "wi-running"
+        session.add(
+            HumanRequest(project_id=pid, work_item_id=item["id"], kind="approval", requested_at=utcnow())
+        )
+
+    moved = await _reroute(client, item, workflow="offboarding")
+    assert moved.status_code == 202, moved.text
+    (control,) = [s[2] for s in get_temporal().signals if s[1] == "control"]  # type: ignore[attr-defined]
+    assert control["action"] == "migrate"
+    assert control["workflow"]["metadata"]["name"] == "offboarding"
+    assert control["state_mapping"] == {"arrival": "departure"}, "to the target's initial state"
+    pinned = await _item(item["id"])
+    assert pinned.state == "arrival", "the interpreter moves it, and the pin follows its migration"
+    assert await _routing_records() == [], "a routing by labels is not measured"
+
+    async with session_scope() as session:
+        session.add(Run(project_id=pid, work_item_id=item["id"], status="running", stage_role="build"))
+    busy = await _reroute(client, item, workflow="offboarding")
+    assert busy.status_code == 409 and "run" in busy.text, busy.text
+
+    async with session_scope() as session:
+        row = await session.get(WorkItem, item["id"])
+        assert row is not None
+        row.closed_at = utcnow()
+    ended = await _reroute(client, item, workflow="offboarding")
+    assert ended.status_code == 409 and "ended" in ended.text, ended.text
+
+
+async def test_the_end_judges_a_routing_no_one_moved_and_a_human_step_never_does(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    from choregos_api.db.session import session_scope
+    from choregos_api.services import record_human_verdict, record_terminal_outcome
+
+    pid = project["id"]
+    await _two_workflows(client, pid)
+    await _decider(client, "route", "decide")
+    await _routing(client, pid, "llm", min_confidence=0.7)
+    held = await _born(client, pid, "Bob leaves on Friday")
+    sure = await _born(client, pid, "An employee leaves: close the accounts")
+    cancelled = await _born(client, pid, "An employee leaves: close the accounts now")
+
+    async with session_scope() as session:
+        assert await record_human_verdict(session, held["id"], None, approved=False) == 0
+    assert {r.overridden for r in await _routing_records()} == {None}, "a human step judges no routing"
+
+    async with session_scope() as session:
+        await record_terminal_outcome(session, held["id"], "success")
+        await record_terminal_outcome(session, sure["id"], "declined")
+        await record_terminal_outcome(session, cancelled["id"], "cancelled")
+    by_item = {r.work_item_id: r for r in await _routing_records()}
+    assert by_item[held["id"]].overridden is True, (
+        "it ended in the default: the model's answer was not needed"
+    )
+    assert by_item[sure["id"]].overridden is False, "declined, but in the workflow the model chose"
+    assert by_item[cancelled["id"]].overridden is None, "cancelling may be the correction: unobserved"
+    assert by_item[cancelled["id"]].terminal == "cancelled"
+
+
+async def test_the_routing_has_its_own_calibration(client: AsyncClient, project: dict[str, Any]) -> None:
+    pid = project["id"]
+    await _two_workflows(client, pid)
+    await _decider(client, "route", "decide")
+    await _routing(client, pid, "llm", min_confidence=0.7)
+    empty = await client.get(f"/api/v1/projects/{pid}/workflow-routing/calibration")
+    assert empty.status_code == 200, empty.text
+    assert (empty.json()["questions"], empty.json()["min_confidence"]) == ([], 0.7)
+
+    held = await _born(client, pid, "Bob leaves on Friday")
+    await _born(client, pid, "An employee leaves: close the accounts")
+    assert (await _reroute(client, held, workflow="offboarding")).status_code == 202
+    measured = (await client.get(f"/api/v1/projects/{pid}/workflow-routing/calibration")).json()
+    (question,) = measured["questions"]
+    assert (question["question"], question["source"], question["model"]) == (
+        "workflow",
+        "router",
+        "fake/decide",
+    )
+    assert (question["count"], question["observed"], question["accuracy"]) == (2, 1, 1.0)
+
+    step = await client.get(f"/api/v1/projects/{pid}/workflows/offboarding/steps/routing/calibration")
+    assert step.status_code == 200, step.text
+    assert step.json()["questions"] == [], "a state named routing does not count the project's routing"

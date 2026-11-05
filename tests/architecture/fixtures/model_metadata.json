@@ -3063,7 +3063,7 @@
    {
     "default": null,
     "name": "run_id",
-    "nullable": false,
+    "nullable": true,
     "server_default": null,
     "type": "String(length=128)"
    },
@@ -3284,6 +3284,14 @@
      "decision_records.work_item_id"
     ],
     false
+   ],
+   [
+    "uq_decision_records_work_item_question_without_run",
+    [
+     "decision_records.work_item_id",
+     "decision_records.question"
+    ],
+    true
    ]
   ],
   "primary_key": [
