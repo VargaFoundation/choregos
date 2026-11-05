@@ -147,7 +147,11 @@ async def run_eval_cell(payload: dict[str, Any]) -> dict[str, Any]:
                     "fixture": _current_fixture_name(name),
                     "repetition": repetition,
                     "agent": _ticket_agent(spec),
-                    "observation": outcome.get("observation") or _no_tool_use(tools),
+                    # The scripted change calls no platform tool; its model calls are the gateway's.
+                    "observation": {
+                        **_no_tool_use(tools),
+                        "requests": (outcome.get("usage") or {}).get("requests"),
+                    },
                     "door": "mcp",
                 }
             )
