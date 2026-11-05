@@ -172,3 +172,21 @@ Found by the first real plugin (`servicenow`, choregos-agents PR #2):
 - **Not proved here**: the plugins' `core` range is `>=0.21.0`; the tree reports 0.20.6 until the
   release that bumps it, so a deployment built from main between this merge and 0.21.0 logs the four
   defaults as refused by the `core` check (the catalogue routes still read the offline directory).
+
+## Precisions (#1372, 2026-11-05): a plugin ships matrix cases
+
+- **A seventh content, `contents.matrix_cases`** (`plugin.schema.json`, additive): the plugin's agent cases
+  of the core's eval matrix, in the format of the core's own (`choregos_playbooks/evals/agent_cases`),
+  named `plugin:<plugin>/<file stem>` by the matrix. They are not a `contents.evals` suite: an eval suite
+  is the installer's (level 1 and its deterministic cases are played at every install, and a failure
+  refuses the plugin), a matrix case is the matrix's (it needs the doors, a fake server and a gateway,
+  and is never played at install). Folding the second format into `plugin-evals.schema.json` would have
+  made the installer and every reader of `Catalogue.evals` branch on a file's shape; a separate list
+  keeps both formats as their readers know them.
+- **What the loader checks** is only what the matrix needs to find its pieces: a mapping with a `task`,
+  an agent of the plugin (or the case's own `agent_spec`), `tools_cells` among `mcp` and `scripts`, each
+  connector `plugin:<plugin>/<server>` naming this plugin and one of its servers, under the server's name
+  (an agent's tools are `<server>__<operation>`). The rest is the agent-case format, which the matrix
+  reads as it reads the core's. The digest covers the cases and `pack` writes them; the installer keeps
+  them in `org_plugin_files`; the catalogue view offers them (`Catalogue.matrix_case`) with the servers'
+  declarations (`Catalogue.server`), an organisation's installed version over the image's.

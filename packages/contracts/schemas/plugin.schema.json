@@ -186,6 +186,14 @@
           "items": {
             "$ref": "#/$defs/path"
           }
+        },
+        "matrix_cases": {
+          "type": "array",
+          "uniqueItems": true,
+          "description": "agent cases of the core's eval matrix (#1372): YAML files in the core's agent-case format (`choregos_playbooks.evals.agents`, the runbook `live-eval-matrix.md`), named `plugin:<plugin>/<file stem>` by the matrix and played by it, never at install. A case names an agent of this plugin (or carries its own `agent_spec`), and a connector `plugin:<plugin>/<server>` names this plugin and a server it ships",
+          "items": {
+            "$ref": "#/$defs/path"
+          }
         }
       }
     }

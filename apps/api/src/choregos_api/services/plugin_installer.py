@@ -14,8 +14,9 @@ The plugin arrives already loaded and validated by `choregos_core.plugins` (S43-
   `plugin:<plugin>/<slug>@<catalogue version>` for an agent and `plugin:<plugin>/<skill>@<plugin version>`
   for a skill. An object of that name the organisation already has, and that the plugin did not
   install, wins and is left untouched (ADR 0040 §4);
-- keeps the files the platform serves again (templates with their files, eval suites, procedures, and
-  since S43-09 its agents and skills, which the organisation's agent catalogue reads) in
+- keeps the files the platform serves again (templates with their files, eval suites, procedures, since
+  S43-09 its agents and skills, which the organisation's agent catalogue reads, and since #1372 its matrix
+  cases, which the live eval matrix reads and nothing plays at install) in
   `org_plugin_files`, under the plugin's content digest and the organisation's RLS; an external client's
   `catalogue.client` and `catalogue.reach` are kept in the row's `details.clients` too;
 - runs the plugin's servers and governs them as organisation connectors (`plugin_servers.py`, ADR 0096):
@@ -155,7 +156,7 @@ async def _prepare(
         for name, path in paths.items():
             prepared.files[f"{ref}/{name}"] = path.read_bytes()
 
-    for ref in contents.get("agents", []):
+    for ref in [*contents.get("agents", []), *contents.get("matrix_cases", [])]:
         prepared.files[ref] = inside(root, ref).read_bytes()
 
     for slug, document in sorted(plugin.agents.items()):
