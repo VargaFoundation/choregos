@@ -49,4 +49,8 @@ describe("deciding on a governed action (ADR 0035, S20-02)", () => {
     expect(propose({ kind: "agent", id: "agent:coordinateur" })).toBe("the agent coordinateur");
     expect(propose({ kind: "user", id: "lea@acme.dev" })).toBe("lea@acme.dev");
   });
+
+  it("a job step that proposes is named as a job, not as an agent (#1364)", () => {
+    expect(propose({ kind: "job", id: "job:snapshot", run_id: "r1" })).toBe("the job step snapshot");
+  });
 });

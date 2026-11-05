@@ -2943,6 +2943,9 @@ its description saying it needs a human approval. Calling it reaches **nothing**
 governed action in the agent's name (`agent:<slug>`, origin `tool`), returns its id and the
 console path where it is decided, and counts against the run's `tool_calls_per_run` — an agent
 in a loop does not fill the box. The agent's **owner** does not approve its agent's writes.
+A job step (ADR 0056) has no registry agent: what it proposes is in the name of the workflow actor
+that runs it (`job:<actor>`, "the job step <actor>" in the console). No person owns a job — its
+command and its `tools:` are the workflow's, reviewed with it —, so nobody is kept out of deciding.
 
 **Approvals** (top bar) lists what waits across the organisation's projects
 (`GET /orgs/{org}/actions?status=pending_approval`); a project's **actions** tab lists its actions,

@@ -1,7 +1,7 @@
 # The runner image: an agent's workspace.
 #
 # Three principles:
-#   1. **no credential** — no kubectl, no cloud, no registry; the shims refuse and log;
+#   1. **no credential** — no kubectl, no cloud, no registry; the shims refuse, the runner journals it;
 #   2. **pinned versions** — the ACP agents come from `versions.lock`, Renovate proposes the
 #      bumps, the conformance suite validates them;
 #   3. **non-root, no capability** — the cluster's sandbox does the rest.
@@ -196,7 +196,8 @@ RUN set -eux; \
     timeout 60 stryker --version >/dev/null
 
 # Shims: defence in depth. No credential exists anyway, but an agent that tries must be
-# **refused and traced**, not silently ignored.
+# **refused and traced**, not silently ignored: the runner reads the shim's line in the call's output
+# and journals `shim.refused` (`choregos_runner.refusal_shims.SHIMMED` lists the same tools).
 COPY docker/shims/refuse.sh /usr/local/bin/choregos-refuse
 RUN chmod +x /usr/local/bin/choregos-refuse \
  && for binary in kubectl helm terraform az gcloud aws docker podman; do \
