@@ -60,8 +60,9 @@ def test_an_unknown_nature_stays_visible() -> None:
     assert report.lines[0].target == "somewhere"
 
 
-def test_access_report_keys_unchanged() -> None:
-    """The keys the API serves are the S45-02 contract: English, plus the former ones for one release."""
+def test_access_report_serves_the_english_keys_only() -> None:
+    """The keys the API serves are the S45-02 contract, in English; the former ones, emitted for one
+    release, are gone since 0.24.0 (S45-49)."""
     report = access_report(
         [
             _permission("write", "/workspace/.env", allowed=False, reason="sensitive file"),
@@ -69,12 +70,12 @@ def test_access_report_keys_unchanged() -> None:
         ]
     )
     served = report.to_dict()
-    former_keys = {"evenements", "deduites", "acces"}  # lang: fr-ok
-    assert set(served) == {"events", "inferred", "refusals", "access"} | former_keys
+    assert set(served) == {"events", "inferred", "refusals", "access"}
+    for former in ("evenements", "deduites", "acces"):  # lang: fr-ok - removed, asserted gone
+        assert former not in served, former
     assert set(served["access"][0]) == {"nature", "target", "requests", "refusals", "reasons"}
-    assert set(served["acces"][0]) == {"nature", "target", "requests", "refusals", "motifs"}  # lang: fr-ok
-    assert served["events"] == served["evenements"] == 2  # lang: fr-ok
-    assert served["inferred"] == served["deduites"] == 0  # lang: fr-ok
+    assert served["events"] == 2
+    assert served["inferred"] == 0
     assert served["refusals"] == 1
     assert served["access"][0] == {
         "nature": "write",
@@ -84,6 +85,4 @@ def test_access_report_keys_unchanged() -> None:
         "reasons": ["sensitive file"],
     }
     assert served["access"][1]["nature"] == "other"
-    assert served["acces"][1]["nature"] == "autre"  # lang: fr-ok
-    assert served["acces"][0]["motifs"] == ["sensitive file"]  # lang: fr-ok
-    assert "cible" not in served["acces"][0]  # lang: fr-ok
+    assert not hasattr(report.lines[0], "former_dict")

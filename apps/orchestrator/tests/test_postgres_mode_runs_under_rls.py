@@ -21,7 +21,7 @@ SRC = pathlib.Path(__file__).resolve().parents[1] / "src"
 async def test_the_suite_connects_as_a_role_that_is_not_superuser(setup: Fixture) -> None:
     from alembic.script import ScriptDirectory
     from choregos_api.db import session as db_session
-    from choregos_api.migrer import configuration
+    from choregos_api.migrate import configuration
 
     async with db_session.session_scope() as session:
         role = (

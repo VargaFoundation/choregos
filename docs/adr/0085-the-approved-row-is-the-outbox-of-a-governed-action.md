@@ -136,7 +136,7 @@ the orchestrator is asked, so its wait for the pod holds nothing (the scope it s
 commit began, on PostgreSQL, the transaction the wait then held).
 
 - A session's tool call is booked after the call — its count, its ledger line, its events with their
-  `pg_notify` — in one transaction committed by `call_session_tool`; a booking that fails is logged as
+  `pg_notify` — in one transaction committed by `answer_session_tool`; a booking that fails is logged as
   `tool_call.not_booked` (with `session_id`) and the caller gets the error.
 - A response's journal commits turn by turn, at each model call: a call that was made, and paid on the
   key, stays written when the response then fails. The history (`record.messages`), the response count

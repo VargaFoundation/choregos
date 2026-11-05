@@ -33,6 +33,7 @@ async def test_the_slug_changes_and_the_projects_follow(
         "role": "org_admin",
         "currency": "EUR",
         "aliases": ["varga"],
+        "tool_scripts": None,
     }
     # The old slug is an alias now (ADR 0090): the old address still resolves.
     assert (await client.get(f"{ORG}/varga/projects")).status_code == 200
@@ -46,11 +47,13 @@ async def test_the_slug_changes_and_the_projects_follow(
         "slug": "varga",
         "name": "Varga Foundation",
         "currency": "EUR",
+        "tool_scripts": None,
     }
     assert row["payload"]["after"] == {
         "slug": "trust",
         "name": "Varga Trust",
         "currency": "EUR",
+        "tool_scripts": None,
     }
 
 
@@ -140,6 +143,7 @@ async def test_a_platform_administrator_who_is_not_a_member_renames_name_and_slu
             "role": None,
             "currency": "EUR",
             "aliases": ["varga"],
+            "tool_scripts": None,
         }
         await login(client, "admin@varga.dev")
         assert {(o["slug"], o["name"]) for o in (await client.get(ORG)).json()} == {
@@ -153,6 +157,7 @@ async def test_a_platform_administrator_who_is_not_a_member_renames_name_and_slu
             "slug": "diametral",
             "name": "Diametral",
             "currency": "EUR",
+            "tool_scripts": None,
         }
     finally:
         reset()

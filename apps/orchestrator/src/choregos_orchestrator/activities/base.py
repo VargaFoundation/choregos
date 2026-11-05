@@ -25,6 +25,7 @@ from choregos_contracts import Policy, ProjectConfig, Workflow
 from choregos_core import Message, PolicyEngine
 from choregos_core.memory_scope import memory_key
 from choregos_core.policy_ceiling import PolicyCeiling, clamp
+from choregos_core.tool_scripts_switch import OrgToolScripts, org_tool_scripts
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from temporalio import activity
@@ -64,6 +65,9 @@ class ProjectBundle:
     #: The tracker the workflow's bookkeeping writes to, and the account it writes under (ADR 0107
     #: point 4): `{"type", "account"}`, recorded on each tracker event; `None` for an internal tracker.
     tracker_via: dict[str, Any] | None = None
+    #: The organisation's choice on tool scripts (S57-05b, ADR 0122 §6): `enabled`, `disabled`, or `None`
+    #: to follow the deployment's default. Read with the organisation, so a stage costs no extra query.
+    org_tool_scripts: OrgToolScripts | None = None
 
     @property
     def engine(self) -> PolicyEngine:
@@ -155,6 +159,7 @@ async def load_project(session: AsyncSession, project_id: str) -> ProjectBundle:
         adapters=AdapterSet.from_connectors(specs),
         gateway_url=gateway_url,
         tracker_via=tracker_via_of(connectors),
+        org_tool_scripts=org_tool_scripts(org.settings if org else None),
     )
 
 
@@ -176,7 +181,7 @@ async def org_gateway_spec(session: AsyncSession, org_id: str) -> dict[str, Any]
     first by name otherwise, as the API's `org_gateway` reads it.
     """
     from choregos_api.secret_store import resolve_store_fields
-    from choregos_core.secrets import SecretIntrouvable
+    from choregos_core.secrets import SecretNotFound
 
     connector = (
         (
@@ -196,7 +201,7 @@ async def org_gateway_spec(session: AsyncSession, org_id: str) -> dict[str, Any]
         resolved = await resolve_store_fields(
             session, org_id, "gateway", connector.type, connector.secret_refs
         )
-    except SecretIntrouvable:
+    except SecretNotFound:
         resolved = {}  # the build then fails on that reference, naming it
     return {
         "type": connector.type,
@@ -212,13 +217,13 @@ async def _sealed_values(session: AsyncSession, org_id: str, connector: Connecto
     out: the adapter's build then fails loudly on that reference, for that connector only — the
     other connectors of the project stay usable."""
     from choregos_api.secret_store import resolve_store_fields
-    from choregos_core.secrets import SecretIntrouvable
+    from choregos_core.secrets import SecretNotFound
 
     try:
         return await resolve_store_fields(
             session, org_id, connector.kind, connector.type, connector.secret_refs, connector.secret_ref
         )
-    except SecretIntrouvable:
+    except SecretNotFound:
         return {}
 
 
@@ -316,13 +321,13 @@ async def org_memory(session: AsyncSession, bundle: ProjectBundle) -> Any:
 
 async def _sealed_org_values(session: AsyncSession, org_id: str, connector: Any) -> dict[str, str]:
     from choregos_api.secret_store import resolve_store_fields
-    from choregos_core.secrets import SecretIntrouvable
+    from choregos_core.secrets import SecretNotFound
 
     try:
         return await resolve_store_fields(
             session, org_id, connector.kind, connector.type, connector.secret_refs, None
         )
-    except SecretIntrouvable:
+    except SecretNotFound:
         return {}
 
 

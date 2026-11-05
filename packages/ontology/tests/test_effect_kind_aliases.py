@@ -16,7 +16,7 @@ import pytest
 def test_both_effect_kinds_resolve(plugin: None, monkeypatch: pytest.MonkeyPatch) -> None:
     """With the ontology extension active, each effect resolves under its English kind and its
     former one, to the same executor, under the same policy."""
-    from choregos_api import effects, effets
+    from choregos_api import effects
     from choregos_ontology.service import actions
     from choregos_ontology.service.plugin import register
 
@@ -30,14 +30,16 @@ def test_both_effect_kinds_resolve(plugin: None, monkeypatch: pytest.MonkeyPatch
         "ontology.effet",  # lang: fr-ok
         "ontology.preuve",  # lang: fr-ok
     )
-    assert effets.effet("ontology.effect") is effets.effet(actions.FORMER_EFFECT) is actions.ontology_effect
     assert (
-        effets.effet("ontology.evidence")
-        is effets.effet(actions.FORMER_EVIDENCE)
+        effects.effect("ontology.effect") is effects.effect(actions.FORMER_EFFECT) is actions.ontology_effect
+    )
+    assert (
+        effects.effect("ontology.evidence")
+        is effects.effect(actions.FORMER_EVIDENCE)
         is actions.ontology_evidence
     )
     for kind in ("ontology.effect", "ontology.evidence", actions.FORMER_EFFECT, actions.FORMER_EVIDENCE):
-        assert effets.politique_de_l_effet(kind) == "approval", kind
+        assert effects.effect_policy(kind) == "approval", kind
 
 
 def test_params_read_ontology_then_ontologie() -> None:  # lang: fr-ok - names the persisted key

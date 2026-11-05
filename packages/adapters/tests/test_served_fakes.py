@@ -8,7 +8,6 @@ see the same fleet, the same directory.
 
 from __future__ import annotations
 
-from contextlib import nullcontext
 from typing import Any
 
 import httpx
@@ -78,30 +77,22 @@ async def _gates(app: DemoApplication) -> tuple[bool, bool]:
     return refusal.value.code == 401, answered["state"] == "unknown"
 
 
-@pytest.mark.parametrize("variable", ["CONNECTOR_DEMO_TOKEN", "CONNECTOR_DEMO_JETON"])  # lang: fr-ok
-async def test_demo_token_reads_english_and_former_variable(
-    monkeypatch: pytest.MonkeyPatch, variable: str
-) -> None:
-    """Each variable gates the MCP endpoints; the English one wins when both are set."""
+async def test_demo_token_reads_the_english_variable_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`CONNECTOR_DEMO_TOKEN` gates the MCP endpoints; the former variable, removed in 0.24.0
+    (S45-49), has no effect."""
+    former = "CONNECTOR_DEMO_JETON"  # lang: fr-ok - removed, asserted gone
     monkeypatch.delenv("CONNECTOR_DEMO_TOKEN", raising=False)
-    monkeypatch.delenv("CONNECTOR_DEMO_JETON", raising=False)  # lang: fr-ok
-    monkeypatch.setenv(variable, TOKEN)
-    expected = (
-        pytest.warns(DeprecationWarning, match="removed in 0.23.0")
-        if variable.endswith("JETON")
-        else nullcontext()
-    )
-    with expected:
-        app = application()
-    assert await _gates(app) == (True, True)
-    monkeypatch.setenv("CONNECTOR_DEMO_TOKEN", TOKEN)
-    monkeypatch.setenv("CONNECTOR_DEMO_JETON", "ignored-former-value")  # lang: fr-ok
-    assert await _gates(application()) == (True, True), "the English variable wins"
-    monkeypatch.delenv("CONNECTOR_DEMO_TOKEN")
-    monkeypatch.delenv("CONNECTOR_DEMO_JETON")  # lang: fr-ok
+    monkeypatch.setenv(former, TOKEN)
     assert (await _desk(application(), "mdm", token="").execute("device_status", {"serial": "PC-1"}))[
         "state"
-    ] == "unknown", "neither variable set: no token asked"
+    ] == "unknown", "the former variable alone asks for no token"
+    monkeypatch.setenv("CONNECTOR_DEMO_TOKEN", TOKEN)
+    assert await _gates(application()) == (True, True)
+    monkeypatch.delenv("CONNECTOR_DEMO_TOKEN")
+    monkeypatch.delenv(former)
+    assert (await _desk(application(), "mdm", token="").execute("device_status", {"serial": "PC-1"}))[
+        "state"
+    ] == "unknown", "no variable set: no token asked"
 
 
 def test_a_demo_connector_that_carries_a_url_reaches_the_fakes_process(

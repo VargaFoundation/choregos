@@ -2,11 +2,11 @@
 """Former names that keep working after a rename (ADR 0098 §3).
 
 A renamed name that only gets imported keeps a typed alias in the module that defines it, and
-nothing else (an external one, `# lang: fr-ok alias:external`; an internal one is deleted once
-its last user has switched):
+nothing else (an external one is marked `alias:external` next to `lang: fr-ok`; an internal one
+is deleted once its last user has switched):
 
     NewName = ...
-    OldName = NewName  # lang: fr-ok alias:external
+    OldName = NewName  # lang: fr-ok, marked as an external alias
 
 A plain alias does not forward a patch: `monkeypatch.setattr(module, "OldName", fake)` rebinds
 `OldName` and leaves `NewName`, which the module's own code reads, untouched. A module whose former
@@ -20,7 +20,7 @@ The property reads, writes and deletes the English name in the module `__dict__`
 descriptor on the type wins over the instance dict, so `module.OldName`, `from module import
 OldName`, `monkeypatch.setattr(module, "OldName", ...)` and its undo all reach `NewName`, and a
 patch of `NewName` is seen through `OldName`. An external former name (ADR 0098 §3 (f)) passes
-`removed_in=EXTERNAL_ALIAS_REMOVAL` and warns, with `DeprecationWarning`, each time it is read.
+`removed_in=<release>` and warns, with `DeprecationWarning`, each time it is read.
 `unittest.mock.patch` of a former name works too, but it takes the value it restores from the
 module `__dict__`, where the typed alias still holds the import-time object: inside a patch of
 `NewName`, patch `OldName` with `monkeypatch`.
@@ -47,10 +47,8 @@ from collections.abc import Mapping
 from types import ModuleType
 from typing import cast
 
-# The window moved from 0.22.0 because 0.22.x shipped before the renames finished
-# (owner decision, 2026-11-04).
-EXTERNAL_ALIAS_REMOVAL = "0.23.0"
-"""The release that removes the external former names (`alias:external`, ADR 0098 §3 (f))."""
+# The window of the 0.21 renames closed with 0.23.0 and its aliases were removed in S45-49; the
+# release constant they cited went with them. A future external alias passes its own release.
 
 _MARKER = "__choregos_aliases__"
 
@@ -88,7 +86,7 @@ def alias_names(module: str, aliases: Mapping[str, str], *, removed_in: str | No
     `module` is the dotted name of a module already in `sys.modules`; the module calls this once,
     at its end, with `__name__`. A second call on the same module extends the class the first one
     installed, so several stories can each add their former names. `removed_in` is set for an
-    external former name only (`EXTERNAL_ALIAS_REMOVAL`): reading it then warns.
+    external former name only (the release that removes it): reading it then warns.
 
     Raises `ValueError`, before changing anything, when a former name equals its English name,
     when the English name is not defined in the module, when a former name is already aliased to

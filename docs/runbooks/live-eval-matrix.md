@@ -22,9 +22,12 @@ order. Each input has a default that keeps a matrix started before it as it was:
 
 A live cell **forces** the door into the stage input, whatever the project's policy says, as it forces
 the context (`StagePlan.eval_cell.tools`): a `scripts` cell gives `tools.scripts:
-{max_concurrent_calls: 4}`, an `mcp` cell gives none. The deployment's kill switch still wins: with
-`CHOREGOS_TOOL_SCRIPTS` off (the default), a `scripts` cell is skipped at seeding, and a run prepared
-after the switch went off gets no bridge and is skipped as unfaithful. Only a cell with context `none`
+{max_concurrent_calls: 4}`, an `mcp` cell gives none. The eval organisation's switch still wins (S57-05b):
+unless the organisation enables tool scripts (`tool_scripts: enabled`), or follows a deployment default
+that is on (`CHOREGOS_TOOL_SCRIPTS`, off by default), and the deployment's brake is released
+(`CHOREGOS_TOOL_SCRIPTS_ALLOWED`, released by default), a `scripts` cell is skipped at seeding with the
+switch that refused it, and a run prepared after the switch went off gets no bridge and is skipped as
+unfaithful. Only a cell with context `none`
 **and** door `mcp` validates a backend (`model_profiles.validated_backends`): a run is offered neither
 a reduction nor scripts unless its policy says so.
 
@@ -124,9 +127,18 @@ temporal workflow start --task-queue orchestrator --type EvalMatrix \
 `with_memory: [false]` is required: a live cell with memory is skipped. `publish: true` writes the
 cells to `GET /models/matrix` and the settings page.
 
-To compare the doors, add `"tools": ["mcp", "scripts"]` and `"repetitions": 10`, with the deployment's
-`choregos-orchestrator.runner.toolScripts.enabled: true` (`CHOREGOS_TOOL_SCRIPTS`). To play the agent
-cases too (S57-11's matrix, the examples page), name them and switch the eval fakes on (next section):
+To compare the doors, add `"tools": ["mcp", "scripts"]` and `"repetitions": 10`, once the eval
+organisation has tool scripts enabled — its administrator does it through the API, the deployment's flag
+stays as it is (S57-05b):
+
+```bash
+curl -X PATCH "$CHOREGOS_URL/api/v1/orgs/<eval-org>" -H "Authorization: Bearer $CHOREGOS_TOKEN" \
+  -H 'Content-Type: application/json' -d '{"tool_scripts": "enabled"}'
+```
+
+Set it back to `null` (the deployment's default) or `"disabled"` once the matrix is done. To play the
+agent cases too (S57-11's matrix, the examples page), name them and switch the eval fakes on (next
+section):
 
 ```bash
 temporal workflow start --task-queue orchestrator --type EvalMatrix \
@@ -218,16 +230,19 @@ connector (`netops-dropped-flow`, the netops agent's own eval). E3 and C1 live i
    choregos-orchestrator:
      runner:
        toolScripts:
-         enabled: true        # CHOREGOS_TOOL_SCRIPTS: the `scripts` cells
+         allowed: true        # CHOREGOS_TOOL_SCRIPTS_ALLOWED: the brake released (the default)
        contextReduction:
          enabled: true        # only for cells with a context other than `none`
    ```
 
-   Switch `CHOREGOS_EVAL_FAKE_SCENES` off again once the matrix is done: while it is on, a connector the
-   seeding wrote is served by its scene.
+   Tool scripts for the `scripts` cells are the eval organisation's own switch (item 2), not the
+   deployment's default: `toolScripts.enabled` stays `false`, so no other organisation gets them. Switch
+   `CHOREGOS_EVAL_FAKE_SCENES` off again once the matrix is done: while it is on, a connector the seeding
+   wrote is served by its scene.
 2. An **eval organisation** holding the matrix's eval project (`Before`, above) and nothing else, so
    that the names `pfsense`, `cilium`, `entra`, `marketdata` and the slugs `identity-operator`,
-   `analyst` are free in it.
+   `analyst` are free in it, with tool scripts enabled by its administrator
+   (`PATCH /orgs/<eval-org>` `{"tool_scripts": "enabled"}`, above).
 3. The catalogue agent `netops` **installed** in that organisation (Agents → Catalogue), on a backend
    and a model the eval project's policy allows. Without it the netops cases skip, saying so.
 4. The real model gateway the eval project runs on (its connector, or the organisation's, or the

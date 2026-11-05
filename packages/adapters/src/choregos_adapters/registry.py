@@ -221,7 +221,7 @@ def resolved_configuration(
     preresolved: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """The configuration with its secrets RESOLVED: enough to build the adapter, never to save or
-    return. An unresolvable reference raises `SecretIntrouvable`: a connector in error beats an
+    return. An unresolvable reference raises `SecretNotFound`: a connector in error beats an
     adapter that silently falls back to its default value.
 
     `preresolved` (field -> value): the fields the platform already read with the organisation's

@@ -10,6 +10,11 @@ workspace (`$TMPDIR/choregos/tools`, named by `CHOREGOS_TOOLS_DIR` and put on `P
   docstring the tool's description, its access and its input schema;
 - `choregos_tools/_index.json`, what `search` reads, and `INDEX.md`, one line per tool.
 
+It also creates the run's script directory, `$TMPDIR/choregos/scripts`, where the instructions tell the
+agent to write its scripts (#1365): the runner's two write guards (`GuardRails.check_write` and Claude
+Code's scope hook) and the ACP client's file system let the agent's file-write tool write there, and only
+there outside the workspace — never in the client's directory, which the runner wrote.
+
 The list comes from `client.relay_tools()`: the very answer the tool bridge hands back for
 `GET /bridge/v1/tools`, read by the runner's own client — no hop through the loopback, and the same
 list whether the runner or a Tekton sidecar serves the bridge. Names are made identifiers here, not
@@ -29,10 +34,13 @@ import shutil
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
 from . import tool_client
+
+if TYPE_CHECKING:
+    from choregos_contracts import StageInput
 
 PACKAGE = "choregos_tools"
 DIRECTORY_VARIABLE = tool_client.DIRECTORY_VARIABLE
@@ -66,9 +74,9 @@ or a result you would only filter, count or join. Call a tool directly when the 
 reading the result yourself.
 
 - Print only what your next decision needs: counts, the rows that matter, identifiers. Never print a secret.
-- Write scripts under `$TMPDIR`, never in the repository: from your shell
-  (`cat > "$TMPDIR/check.py" <<'EOF'`), then run the file (`python3 "$TMPDIR/check.py"`), so that the run
-  records which script made which calls.
+- Write scripts in `$TMPDIR/choregos/scripts/`, never in the repository, with your file-write tool or from
+  your shell; then run the file (`python3 "$TMPDIR/choregos/scripts/check.py"`), so that the run records
+  which script made which calls.
 - A call returns the tool's data; when its text says more than its structure, `{"text", "structured"}`:
   `platform.web_fetch(url=...)["text"]` is the page.
 - A write returns a `Proposal` when a person must approve it: it is NOT done. Report its decision path.
@@ -120,6 +128,28 @@ class ToolClient:
 def client_directory() -> Path:
     """`$TMPDIR/choregos/tools`: outside the workspace, so nothing written there reaches a commit."""
     return Path(tempfile.gettempdir()) / "choregos" / "tools"
+
+
+def script_directory() -> Path:
+    """`$TMPDIR/choregos/scripts`, where the agent writes its scripts (#1365): outside the workspace, so
+    nothing written there reaches a commit, and beside the client's directory, not in it."""
+    return Path(tempfile.gettempdir()) / "choregos" / "scripts"
+
+
+def offered_script_directory(stage_input: StageInput) -> str:
+    """The run's script directory when the run is offered tool scripts, `""` otherwise: what the write
+    guards let the agent's file-write tool write outside the workspace."""
+    return str(script_directory()) if stage_input.tools.scripts is not None else ""
+
+
+def is_under(path: str, directory: str) -> bool:
+    """Whether `path` names a file beneath `directory`, read as it is written: absolute, strictly below
+    it, and with no `.` or `..` segment, which would make it name another place. Both write guards
+    judge a script's path by this one rule (the scope hook spells it in shell)."""
+    root = directory.rstrip("/")
+    if not root or not path.startswith(root + "/") or len(path) == len(root) + 1:
+        return False
+    return not any(part in {".", ".."} for part in path.split("/"))
 
 
 def bridge_url(tools_url: str) -> str:

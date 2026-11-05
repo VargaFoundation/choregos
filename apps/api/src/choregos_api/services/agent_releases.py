@@ -228,7 +228,7 @@ def _check(
 
 
 def is_human_session(principal: Principal) -> bool:
-    return principal.kind == "user" and principal.authentifie_le is not None
+    return principal.kind == "user" and principal.authenticated_at is not None
 
 
 def _gated(agent: Agent, channel: str, kind: str, percent: int) -> bool:

@@ -581,7 +581,7 @@ async def _record_failure(ctx: Any, kind: str, index: int, entry: dict[str, Any]
 async def ontology_effect(ctx: Any, params: dict[str, Any]) -> dict[str, Any]:
     """`ontology.effect`: effect `index` of the ontology's action, rendered with the results of the
     effects already done. A failing effect fails the action, without hiding the error."""
-    from choregos_api.effets import EffetRefuse
+    from choregos_api.effects import EffectRefused
 
     index = int(params["index"])
     meta, action, _, variables = await _context(ctx)
@@ -594,7 +594,7 @@ async def ontology_effect(ctx: Any, params: dict[str, Any]) -> dict[str, Any]:
         )
     except Exception as error:  # a failing effect fails the action, without hiding the error
         await _record_failure(ctx, "effects", index, {"type": effect["type"], "error": str(error)[:500]})
-        raise EffetRefuse(f"effect {effect['type']} failed: {error}") from error
+        raise EffectRefused(f"effect {effect['type']} failed: {error}") from error
     entry = {"type": effect["type"], **result}
     _record(ctx.action, "effects", index, entry)
     return entry
@@ -606,7 +606,7 @@ async def ontology_effect(ctx: Any, params: dict[str, Any]) -> dict[str, Any]:
 async def ontology_evidence(ctx: Any, params: dict[str, Any]) -> dict[str, Any]:
     """`ontology.evidence`: evidence `index`. `object.reread` and `connector.query` are judged here;
     `collector.rerun` makes the action wait for the collector's next report, or the timeout."""
-    from choregos_api.effets import EffetRefuse
+    from choregos_api.effects import EffectRefused
 
     index, position = int(params["index"]), int(params["position"])
     _, action, targets, variables = await _context(ctx)
@@ -636,7 +636,7 @@ async def ontology_evidence(ctx: Any, params: dict[str, Any]) -> dict[str, Any]:
         entry.update({"status": "failed", "error": str(error)[:500]})
     if entry["status"] == "failed":
         await _record_failure(ctx, "evidence", index, entry)
-        raise EffetRefuse(f"evidence {item['name']} failed: {entry.get('error') or entry.get('result')}")
+        raise EffectRefused(f"evidence {item['name']} failed: {entry.get('error') or entry.get('result')}")
     _record(ctx.action, "evidence", index, entry)
     return entry
 

@@ -161,8 +161,6 @@ export type Problem = {
     msg?: string;
     /** Machine code of a workflow or policy issue */
     code?: string;
-    /** @deprecated Former spelling of a code renamed to English, emitted for one release (ADR 0046) */
-    deprecated_code?: string;
     line?: number;
     column?: number;
   }>;
@@ -1459,7 +1457,16 @@ export type AgentSessionToolCall = {
 };
 
 export type AgentSessionToolAnswer = {
+  /** What the model reads back: the courtier's text, or why the call was refused. */
   text: string;
+  /** How the call ended, as `callRunTool`'s `status_code`: the server's status (a provider's answer of 400 or more is an error, its body in `text`), `400` for arguments the tool's schema refuses, `429` past the cap, `451` for a result withheld as a suspected injection (`sandbox.prompt_injection: block`). */
+  status_code: number;
+  /** The calls the policy's cap (`budgets.tool_calls_per_run`) leaves the session; `null` without a cap. */
+  remaining: number | null;
+  /** The injection guard's flags on the result (`warn`: the result is in `text`; `block`: it is withheld), empty when none. */
+  suspicions: Array<{
+    [key: string]: unknown;
+  }>;
 };
 
 /** What a remote agent costs, as the organisation declares it - A2A reports no figure; booked in the ledger as `external`. */
@@ -2879,8 +2886,6 @@ export type WorkflowIssue = {
   path?: string | null;
   line?: number | null;
   column?: number | null;
-  /** @deprecated Former spelling of a code renamed to English (`role.playbook_introuvable` is now `role.playbook_not_found`), emitted for one release (ADR 0046, S45-02) */
-  deprecated_code?: string | null;
 };
 
 export type WorkflowGraph = {
@@ -3491,6 +3496,8 @@ export type Org = {
   currency?: "EUR" | "USD";
   /** the slugs the organisation had before; they still resolve to it (ADR 0090). The organisation's id never changes, its slug is an address. */
   aliases?: Array<string>;
+  /** whether the organisation's runs may be offered tool scripts (S57-05b, ADR 0122 §6): `enabled`, `disabled`, or null to follow the deployment's default (`CHOREGOS_TOOL_SCRIPTS`). Past it, the organisation's ceiling and each project's policy (`tools.scripts: offer`) decide; the deployment's brake (`CHOREGOS_TOOL_SCRIPTS_ALLOWED`) wins over it. */
+  tool_scripts?: "enabled" | "disabled" | null;
 };
 
 export type OrgCreate = {
@@ -3504,6 +3511,8 @@ export type OrgUpdate = {
   name?: string | null;
   /** the currency spend is shown in; org_admin */
   currency?: "EUR" | "USD" | null;
+  /** the organisation's switch for tool scripts (S57-05b); org_admin only, a platform administrator who is not one is refused (403). Absent: unchanged; `enabled` or `disabled`: the organisation's choice; null: back to the deployment's default. Audited in `org.update`. */
+  tool_scripts?: "enabled" | "disabled" | null;
 };
 
 export type WorkItemCreate = {
@@ -4215,8 +4224,6 @@ export type McpGatewayConflict = {
     loc?: Array<string>;
     msg?: string;
     code?: string;
-    /** @deprecated */
-    deprecated_code?: string;
     line?: number;
     column?: number;
   }>;
@@ -4658,12 +4665,8 @@ export interface Operations {
   getRunAccess: { method: "GET"; path: "/runs/{id}/access"; body: never; response: {
   /** Log events scanned */
   events: number;
-  /** @deprecated Former name of `events`, emitted for one release (ADR 0046, S45-02) */
-  evenements?: number;
   /** Permission decisions whose kind was inferred because the agent did not state it */
   inferred?: number;
-  /** @deprecated Former name of `inferred`, emitted for one release (ADR 0046, S45-02) */
-  deduites?: number;
   /** Total number of denied requests */
   refusals: number;
   /** What the catalogue tools called by the run cost, in euros */
@@ -4691,14 +4694,6 @@ export interface Operations {
     /** How many of those requests were denied */
     refusals: number;
     reasons?: Array<string>;
-  }>;
-  /** @deprecated Former name of `access`, emitted for one release (ADR 0046, S45-02) */
-  acces?: Array<{
-    nature: "read" | "write" | "execute" | "network" | "tool" | "autre";
-    target: string;
-    requests: number;
-    refusals: number;
-    motifs?: Array<string>;
   }>;
 } };
   getRunCiLogs: { method: "GET"; path: "/internal/runs/{id}/ci-logs"; body: never; response: {

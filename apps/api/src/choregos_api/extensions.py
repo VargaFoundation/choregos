@@ -15,36 +15,19 @@ Starlette serves the first route that matches: the extension would be ignored wi
 the order ever changed, would silently replace a core route, an authentication route included. A
 replacement is not an addition; it is asked for through a named seam, like the group mapper.
 
-The French names this module had before 0.21 (`greffons.py`, `declarer_un_routeur`...) keep working
-until 0.23.0 and warn (ADR 0098 §3 (f)); `docs/development.md` lists them.
+The French names this module had before 0.21 (`greffons.py`, `declarer_un_routeur`...) were removed
+in 0.24.0 (S45-49); `docs/deployment.md` ("Upgrading to 0.24") lists their replacements.
 """
 
 from __future__ import annotations
 
-import warnings
 from dataclasses import dataclass, field
 from typing import Any
 
-from choregos_core.compat import EXTERNAL_ALIAS_REMOVAL, alias_names
 from fastapi import APIRouter
 from fastapi.routing import APIRoute, APIWebSocketRoute
 
 _ROUTERS: list[APIRouter] = []
-
-
-def _former_keyword(current: Any, former: Any, former_name: str, current_name: str, owner: str) -> Any:
-    """The value of a keyword that was renamed: the English one, or the former one with a warning."""
-    if former is None:
-        return current
-    warnings.warn(
-        f"{owner}({former_name}=...) is deprecated: use {current_name}= "
-        f"(removed in {EXTERNAL_ALIAS_REMOVAL}, ADR 0098)",
-        DeprecationWarning,
-        stacklevel=3,
-    )
-    if current is not None and current is not former:
-        raise TypeError(f"{owner}: {former_name} and {current_name} are the same argument, pass one")
-    return former
 
 
 def declare_router(router: APIRouter) -> None:
@@ -179,7 +162,7 @@ def section_paths(manifest: dict[str, Any]) -> list[tuple[str, str]]:
 # provider receives the run and its project, already verified, never the token.
 
 
-@dataclass(frozen=True, init=False)
+@dataclass(frozen=True)
 class ToolProvider:
     """`list_tools(session, run, project)` returns tools in the MCP format (`name`, `description`,
     `inputSchema`); `call_tool(session, run, project, name, arguments)` returns `(HTTP code, body)`.
@@ -195,70 +178,18 @@ class ToolProvider:
     pooled connection while the extension works. What it reads or writes begins a transaction under the
     run token's scope, kept with the call's ledger line; a provider that reads first and then calls out
     wraps that call in `choregos_api.db.session.outside_the_transaction(session)`, or it holds a
-    connection for as long as its call takes.
-
-    The keywords `lister` and `appeler` are the former names of `list_tools` and `call_tool`: they
-    keep working until 0.23.0 and warn."""
+    connection for as long as its call takes."""
 
     list_tools: Any
     call_tool: Any
-
-    def __init__(
-        self,
-        list_tools: Any = None,
-        call_tool: Any = None,
-        *,
-        lister: Any = None,  # lang: fr-ok alias:external
-        appeler: Any = None,  # lang: fr-ok alias:external
-    ) -> None:
-        list_tools = _former_keyword(
-            list_tools,
-            lister,  # lang: fr-ok alias:external
-            "lister",  # lang: fr-ok alias:external
-            "list_tools",
-            "ToolProvider",
-        )
-        call_tool = _former_keyword(
-            call_tool,
-            appeler,  # lang: fr-ok alias:external
-            "appeler",  # lang: fr-ok alias:external
-            "call_tool",
-            "ToolProvider",
-        )
-        if list_tools is None or call_tool is None:
-            raise TypeError("ToolProvider needs list_tools and call_tool")
-        object.__setattr__(self, "list_tools", list_tools)
-        object.__setattr__(self, "call_tool", call_tool)
-
-    @property
-    def lister(self) -> Any:  # lang: fr-ok alias:external
-        """Former name of `list_tools`."""
-        return self.list_tools
-
-    @property
-    def appeler(self) -> Any:  # lang: fr-ok alias:external
-        """Former name of `call_tool`."""
-        return self.call_tool
 
 
 _TOOL_PROVIDERS: dict[str, ToolProvider] = {}
 
 
-def declare_tool_provider(
-    name: str,
-    list_tools: Any = None,
-    call_tool: Any = None,
-    *,
-    lister: Any = None,  # lang: fr-ok alias:external
-    appeler: Any = None,  # lang: fr-ok alias:external
-) -> None:
+def declare_tool_provider(name: str, list_tools: Any, call_tool: Any) -> None:
     """Called by an extension when it loads. Two extensions do not declare the same name."""
-    provider = ToolProvider(
-        list_tools,
-        call_tool,
-        lister=lister,  # lang: fr-ok alias:external
-        appeler=appeler,  # lang: fr-ok alias:external
-    )
+    provider = ToolProvider(list_tools, call_tool)
     if name in _TOOL_PROVIDERS and _TOOL_PROVIDERS[name] != provider:
         raise ValueError(f"tool provider “{name}” already declared")
     _TOOL_PROVIDERS[name] = provider
@@ -271,7 +202,7 @@ def tool_providers() -> dict[str, ToolProvider]:
 # ───────────────────────────── tools served to humans, through the MCP door ─────────────────────────────
 
 
-@dataclass(frozen=True, init=False)
+@dataclass(frozen=True)
 class HumanToolProvider:
     """The tools an extension serves at the MCP door of external clients (ADR 0030), with the rights
     of the HUMAN who minted the token, never those of a platform agent.
@@ -286,91 +217,19 @@ class HumanToolProvider:
       `decision_path` is the console path where the decision is taken.
 
     An extension's tool never takes the name of a core tool: the gate would discard it.
-
-    The keywords `lister`, `appeler` and `en_attente` are the former names of `list_tools`,
-    `call_tool` and `pending`: they keep working until 0.23.0 and warn.
     """
 
     list_tools: Any
     call_tool: Any
     pending: Any = None
 
-    def __init__(
-        self,
-        list_tools: Any = None,
-        call_tool: Any = None,
-        pending: Any = None,
-        *,
-        lister: Any = None,  # lang: fr-ok alias:external
-        appeler: Any = None,  # lang: fr-ok alias:external
-        en_attente: Any = None,  # lang: fr-ok alias:external
-    ) -> None:
-        owner = "HumanToolProvider"
-        list_tools = _former_keyword(
-            list_tools,
-            lister,  # lang: fr-ok alias:external
-            "lister",  # lang: fr-ok alias:external
-            "list_tools",
-            owner,
-        )
-        call_tool = _former_keyword(
-            call_tool,
-            appeler,  # lang: fr-ok alias:external
-            "appeler",  # lang: fr-ok alias:external
-            "call_tool",
-            owner,
-        )
-        pending = _former_keyword(
-            pending,
-            en_attente,  # lang: fr-ok alias:external
-            "en_attente",  # lang: fr-ok alias:external
-            "pending",
-            owner,
-        )
-        if list_tools is None or call_tool is None:
-            raise TypeError("HumanToolProvider needs list_tools and call_tool")
-        object.__setattr__(self, "list_tools", list_tools)
-        object.__setattr__(self, "call_tool", call_tool)
-        object.__setattr__(self, "pending", pending)
-
-    @property
-    def lister(self) -> Any:  # lang: fr-ok alias:external
-        """Former name of `list_tools`."""
-        return self.list_tools
-
-    @property
-    def appeler(self) -> Any:  # lang: fr-ok alias:external
-        """Former name of `call_tool`."""
-        return self.call_tool
-
-    @property
-    def en_attente(self) -> Any:  # lang: fr-ok alias:external
-        """Former name of `pending`."""
-        return self.pending
-
 
 _HUMAN_TOOL_PROVIDERS: dict[str, HumanToolProvider] = {}
 
 
-def declare_human_tools(
-    name: str,
-    list_tools: Any = None,
-    call_tool: Any = None,
-    pending: Any = None,
-    *,
-    lister: Any = None,  # lang: fr-ok alias:external
-    appeler: Any = None,  # lang: fr-ok alias:external
-    en_attente: Any = None,  # lang: fr-ok alias:external
-) -> None:
+def declare_human_tools(name: str, list_tools: Any, call_tool: Any, pending: Any = None) -> None:
     """Called by an extension when it loads. Two extensions do not declare the same name."""
-    provider = HumanToolProvider(
-        list_tools,
-        call_tool,
-        pending,
-        lister=lister,  # lang: fr-ok alias:external
-        appeler=appeler,  # lang: fr-ok alias:external
-        en_attente=en_attente,  # lang: fr-ok alias:external
-    )
+    provider = HumanToolProvider(list_tools, call_tool, pending)
     if name in _HUMAN_TOOL_PROVIDERS and _HUMAN_TOOL_PROVIDERS[name] != provider:
         raise ValueError(f"human tool provider “{name}” already declared")
     _HUMAN_TOOL_PROVIDERS[name] = provider
@@ -431,46 +290,19 @@ class GestureRequest:
     principal: Any
     target: dict[str, Any] = field(default_factory=dict)
 
-    @property
-    def geste(self) -> str:  # lang: fr-ok alias:external
-        """Former name of `gesture`."""
-        return self.gesture
-
-    @property
-    def cible(self) -> dict[str, Any]:  # lang: fr-ok alias:external
-        """Former name of `target`."""
-        return self.target
-
 
 _NATURES = {"forbidden", "conflict", "reauth"}
-#: The natures of the French API: they map to the English ones, with a warning.
-_FORMER_NATURES = {"interdit": "forbidden", "conflit": "conflict"}  # lang: fr-ok alias:external
 
 
 class GestureRefused(Exception):  # noqa: N818 - a decision, not an error
     """`nature` picks the answer: `forbidden` (403), `conflict` (409), `reauth` (401: sign in again
-    with `GET /api/v1/auth/login?reauth=1`, then the gesture). `interdit` and `conflit` are the former
-    names of the first two: they keep working until 0.23.0 and warn."""
+    with `GET /api/v1/auth/login?reauth=1`, then the gesture)."""
 
     def __init__(self, reason: str, nature: str = "forbidden") -> None:
-        if nature in _FORMER_NATURES:
-            current = _FORMER_NATURES[nature]
-            warnings.warn(
-                f"GestureRefused nature {nature!r} is deprecated: use {current!r} "
-                f"(removed in {EXTERNAL_ALIAS_REMOVAL}, ADR 0098)",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            nature = current
         if nature not in _NATURES:
             raise ValueError(f"unknown nature: {nature!r}")
         super().__init__(reason)
         self.nature = nature
-
-    @property
-    def raison(self) -> str:  # lang: fr-ok alias:external
-        """Former name of the reason, `str(refusal)`."""
-        return str(self)
 
 
 _GESTURE_CHECKS: dict[str, dict[str, Any]] = {gesture: {} for gesture in GESTURES}
@@ -534,36 +366,3 @@ def declare_theme_provider(provider: Any) -> None:
 
 def theme_provider() -> Any | None:
     return _THEME_PROVIDER[0] if _THEME_PROVIDER else None
-
-
-# ───────────────────────────── the former names (removed in 0.23.0) ─────────────────────────────
-
-_FORMER = {
-    "declarer_un_routeur": "declare_router",  # lang: fr-ok alias:external
-    "routeurs_declares": "declared_routers",  # lang: fr-ok alias:external
-    "reinitialiser": "reset",  # lang: fr-ok alias:external
-    "declarer_une_section_d_administration": "declare_admin_section",  # lang: fr-ok alias:external
-    "sections_declarees": "declared_sections",  # lang: fr-ok alias:external
-    "chemins_d_une_section": "section_paths",  # lang: fr-ok alias:external
-    "FournisseurDOutils": "ToolProvider",  # lang: fr-ok alias:external
-    "declarer_un_fournisseur_d_outils": "declare_tool_provider",  # lang: fr-ok alias:external
-    "fournisseurs_d_outils": "tool_providers",  # lang: fr-ok alias:external
-    "FournisseurHumain": "HumanToolProvider",  # lang: fr-ok alias:external
-    "declarer_des_outils_pour_les_humains": "declare_human_tools",  # lang: fr-ok alias:external
-    "fournisseurs_humains": "human_tool_providers",  # lang: fr-ok alias:external
-    "declarer_un_installateur_de_gabarit": "declare_template_installer",  # lang: fr-ok alias:external
-    "installateurs_de_gabarit": "template_installers",  # lang: fr-ok alias:external
-    "GESTES": "GESTURES",  # lang: fr-ok alias:external
-    "DemandeDeGeste": "GestureRequest",  # lang: fr-ok alias:external
-    "GesteRefuse": "GestureRefused",  # lang: fr-ok alias:external
-    "declarer_un_controle_de_geste": "declare_gesture_check",  # lang: fr-ok alias:external
-    "controler": "check_gesture",  # lang: fr-ok alias:external
-    "reinitialiser_les_controles": "reset_gesture_checks",  # lang: fr-ok alias:external
-    "_ROUTEURS": "_ROUTERS",  # lang: fr-ok alias:external
-    "_FOURNISSEURS_D_OUTILS": "_TOOL_PROVIDERS",  # lang: fr-ok alias:external
-    "_FOURNISSEURS_HUMAINS": "_HUMAN_TOOL_PROVIDERS",  # lang: fr-ok alias:external
-    "_INSTALLATEURS": "_INSTALLERS",  # lang: fr-ok alias:external
-    "_CONTROLES": "_GESTURE_CHECKS",  # lang: fr-ok alias:external
-    "_televersements": "_uploads",  # lang: fr-ok alias:external
-}
-alias_names(__name__, _FORMER, removed_in=EXTERNAL_ALIAS_REMOVAL)

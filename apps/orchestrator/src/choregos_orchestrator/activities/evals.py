@@ -77,6 +77,7 @@ from choregos_api.services import (
 from choregos_api.services.initiator import initiator
 from choregos_contracts import EventType
 from choregos_core import elapsed_seconds, utcnow
+from choregos_core.tool_scripts_switch import tool_scripts_refusal
 from sqlalchemy import select
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
@@ -85,7 +86,7 @@ from .. import eval_live_cases as live_cases
 from ..config import get_settings
 from ..eval_comparison import compare_cells
 from . import eval_doors
-from .base import db, project_bundle
+from .base import ProjectBundle, db, project_bundle
 from .gates import _repo_slug
 
 MIN_SUCCESS_RATE = 0.7
@@ -111,16 +112,6 @@ LIVE_TOOLS: dict[str, dict[str, int] | None] = {"mcp": None, "scripts": {"max_co
 #: The journal's events of the tool scripts (S57-07, S57-08).
 CLIENT_EVENT, SCRIPT_EVENT, SCRIPT_CALL_EVENT = "tools.client", "tools.script", "tools.script.call"
 EVAL_BRANCH_PREFIX = "choregos-evals"
-#: The fixtures' French names (before S45-24) and the English name each one answers to: a stored
-#: matrix or a schedule that names one still plays the same ticket (ADR 0098 §4, removed in 0.23.0).
-FORMER_FIXTURE_NAMES: dict[str, str] = {  # lang: fr-ok alias:external
-    "node-slug-longueur": "node-slug-length",  # lang: fr-ok
-    "py-bug-arrondi": "py-rounding-bug",  # lang: fr-ok
-    "py-hors-perimetre": "py-out-of-scope",  # lang: fr-ok
-    "py-refactor-sans-regression": "py-refactor-without-regression",  # lang: fr-ok
-    "py-remise-volume": "py-volume-discount",  # lang: fr-ok
-    "py-test-manquant": "py-missing-test",  # lang: fr-ok
-}
 _NOT_TOY = {"__pycache__", ".pytest_cache", "node_modules", ".venv"}
 
 
@@ -174,7 +165,7 @@ async def run_eval_cell(payload: dict[str, Any]) -> dict[str, Any]:
             outcomes.append(
                 {
                     **outcome,
-                    "fixture": _current_fixture_name(name),
+                    "fixture": name,
                     "repetition": repetition,
                     "agent": _ticket_agent(spec),
                     # The scripted change calls no platform tool; its model calls are the gateway's.
@@ -355,15 +346,10 @@ def _median(usages: list[dict[str, Any]], key: str) -> float | None:
     return round(statistics.median(values), 1) if values else None
 
 
-def _current_fixture_name(name: str) -> str:
-    """The fixture's English name: a former French one resolves to the ticket that replaced it."""
-    return FORMER_FIXTURE_NAMES.get(name, name)
-
-
 def _load_spec(name: str) -> dict[str, Any] | None:
     import yaml
 
-    path = TICKETS / f"{_current_fixture_name(name)}.yaml"
+    path = TICKETS / f"{name}.yaml"
     if not path.exists():
         return None
     spec = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -488,6 +474,17 @@ async def _ledger(gateway: Any, key_id: str, turns: int | None) -> dict[str, Any
 
 def _skip(reason: str) -> dict[str, Any]:
     return {"ok": False, "skipped": True, "reason": reason, "usage": None, "duration_s": 0.0}
+
+
+def _tool_scripts_refusal(bundle: ProjectBundle) -> str | None:
+    """Why a `scripts` cell of this eval project cannot be offered the bridge (S57-05b): the deployment's
+    brake, the organisation's `disabled`, or no choice and the deployment's default off. `None`: it can."""
+    settings = get_settings()
+    return tool_scripts_refusal(
+        bundle.org_tool_scripts,
+        deployment_default=settings.tool_scripts,
+        deployment_allowed=settings.tool_scripts_allowed,
+    )
 
 
 def load_agent_case(name: str) -> dict[str, Any] | None:
@@ -651,7 +648,7 @@ async def seed_eval_ticket(payload: dict[str, Any]) -> dict[str, Any]:
     tools = _tools(payload)
     if payload.get("agent_case"):
         return await _seed_agent_case(payload, context, tools)
-    fixture = _current_fixture_name(str(payload["fixture"]))
+    fixture = str(payload["fixture"])
     spec = _load_spec(fixture)
     if spec is None:
         return _skip(f"no reference ticket {fixture}")
@@ -671,8 +668,8 @@ async def seed_eval_ticket(payload: dict[str, Any]) -> dict[str, Any]:
             return _skip(f"the eval project {bundle.slug} has memory on: its cells would not be without it")
         if context != "none" and not get_settings().context_reduction:
             return _skip("the deployment refuses context reduction (CHOREGOS_CONTEXT_REDUCTION)")
-        if tools == "scripts" and not get_settings().tool_scripts:
-            return _skip("the deployment refuses tool scripts (CHOREGOS_TOOL_SCRIPTS)")
+        if tools == "scripts" and (scripts_refused := _tool_scripts_refusal(bundle)):
+            return _skip(scripts_refused)
 
         files = _toy_files(toy)
         digest = sha256(repr(sorted(files.items())).encode()).hexdigest()[:10]
@@ -817,8 +814,6 @@ async def _seed_agent_case(payload: dict[str, Any], context: str, tools: str) ->
         )
     if context != "none" and not get_settings().context_reduction:
         return _skip("the deployment refuses context reduction (CHOREGOS_CONTEXT_REDUCTION)")
-    if tools == "scripts" and not get_settings().tool_scripts:
-        return _skip("the deployment refuses tool scripts (CHOREGOS_TOOL_SCRIPTS)")
     try:
         connectors = live_cases.case_connectors(case)
     except AdapterError as unknown:
@@ -829,6 +824,9 @@ async def _seed_agent_case(payload: dict[str, Any], context: str, tools: str) ->
             return _skip(f"the eval project {bundle.slug} has an external tracker: eval tickets stay inside")
         if bundle.engine.memory_enabled():
             return _skip(f"the eval project {bundle.slug} has memory on: its cells would not be without it")
+        # The case's project is created in the eval project's organisation: its switch is this one.
+        if tools == "scripts" and (scripts_refused := _tool_scripts_refusal(bundle)):
+            return _skip(scripts_refused)
         project = await _case_project(session, bundle.project, case)
         refusal = await _case_connectors(session, project, case, connectors)
         if not refusal:
@@ -1184,7 +1182,7 @@ async def judge_eval_run(payload: dict[str, Any]) -> dict[str, Any]:
     assertions (`choregos_playbooks.evals.agents.judge`), once its governance parity holds
     (`eval_live_cases.parity`): a run whose ledger, events and bridge lines disagree is `invalid`."""
     agent_case = str(payload.get("agent_case") or "")
-    fixture = agent_case or _current_fixture_name(str(payload["fixture"]))
+    fixture = agent_case or str(payload["fixture"])
     spec = {} if agent_case else (_load_spec(fixture) or {})
     async with db() as session:
         run = await session.get(Run, payload["run_id"])

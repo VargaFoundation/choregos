@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from choregos_core.catalogue_d_agents import entree
+from choregos_core.agent_catalogue import entry
 
 DOCKERFILE = Path(__file__).resolve().parents[2] / "docker" / "runner.Dockerfile"
 
@@ -25,6 +25,6 @@ def test_mutmut_and_stryker_are_pinned_and_called_at_build_time() -> None:
 
 
 def test_the_qa_agent_names_the_tools_the_image_carries() -> None:
-    qa = entree("qa")
+    qa = entry("qa")
     assert qa is not None
     assert {"runner:mutmut", "runner:stryker"} <= set(qa.tools)
