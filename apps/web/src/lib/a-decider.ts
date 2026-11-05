@@ -138,8 +138,10 @@ export function useADecider(org: string, project?: string) {
     pret:
       (!!project || !!projects.data) &&
       tickets.every((lecture) => !lecture.isPending) &&
-      !!actions.data &&
-      !!budgets.data &&
+      // A list that could not be read is said in `erreur`, not waited for: one refused read used to
+      // hold every panel of the inbox on "Reading…" (agentic.diametral.com, 2026-11-05).
+      (!!actions.data || !!actions.error) &&
+      (!!budgets.data || !!budgets.error) &&
       (!!project || !!egress.data || !!egress.error),
     // Only those who can decide are told: a request someone else must answer is not their inbox.
     total: waiting.length + narrowed.actions.length + narrowed.budgets.length + (canDecideEgress ? egressRequests.length : 0),
