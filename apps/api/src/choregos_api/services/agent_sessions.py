@@ -32,6 +32,7 @@ from choregos_contracts import EventType, ProjectConfig
 from choregos_core import GatewayModel, ModelResolutionError, ModelResolver, Spend, utcnow
 from choregos_core.domain import aware
 from choregos_core.prompt_loop import LoopOutcome, LoopRequest, LoopTool, run_loop
+from choregos_core.tool_answer import render_text
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -580,6 +581,12 @@ class SessionToolAnswer:
     remaining: int | None = None
     suspicions: list[dict[str, Any]] = field(default_factory=list)
 
+    def for_the_model(self) -> str:
+        """The text with its notices, for a channel with no error flag (#1399), composed as a hosted
+        session's runner composes its MCP result (`choregos_core.tool_answer`)."""
+        answer = {"status_code": self.status_code, "remaining": self.remaining, "suspicions": self.suspicions}
+        return render_text(answer, self.text, "session")
+
 
 def _calls_left(cap: int, record: AgentSessionRecord) -> int | None:
     return max(0, cap - record.tool_calls) if cap else None
@@ -592,9 +599,12 @@ async def call_session_tool(
     tool: BrokerTool,
     arguments: dict[str, Any],
 ) -> str:
-    """The text of `answer_session_tool`: what a loop that gives its model text reads (a prompt
-    session's, a realtime session's)."""
-    return (await answer_session_tool(session, record, project, tool, arguments)).text
+    """What a loop that gives its model text reads of `answer_session_tool` (a prompt session's tool
+    message, a realtime session's `function_call_output`): the courtier's text between the same
+    notices a hosted session's runner says (#1399) — the injection guard's flags first, the calls the
+    cap leaves the session last — and, since neither channel has an error flag, a status of 400 or
+    more said first (`choregos_core.tool_answer.render_text`)."""
+    return (await answer_session_tool(session, record, project, tool, arguments)).for_the_model()
 
 
 async def answer_session_tool(

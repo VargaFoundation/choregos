@@ -306,12 +306,13 @@ async def test_a_text_the_structure_does_not_hold_is_read_beside_it(
 
 def test_the_platform_s_notices_fit_their_room() -> None:
     """The body has at least `RESULT_MAX_BYTES` when the notices fit `MAX_NOTICES`: the largest the
-    platform writes — every reason the injection guard names, an unfinished write, the calls left."""
+    platform writes — every reason the injection guard names, an unfinished write (or, where the
+    channel has no error flag, a failure: #1399), the calls left."""
     from choregos_core.injection import MOTIFS
-    from choregos_tools_mcp.answer import _compose, _flagged, _unfinished
+    from choregos_core.tool_answer import compose, failed, flagged, unfinished
 
     suspicions = [{"motif": label, "extrait": "x" * 120} for _, label in MOTIFS]
     running = {**PROPOSED, "action": "a" * 64, "status": "running", "decision_path": "/p/" + "s" * 64}
-    head = [_flagged(suspicions), _unfinished(202, running)]
-    notices = _compose([line for line in head if line], "", [f"Tool calls left in this run: {10**9}."])
-    assert len(notices) <= MAX_NOTICES, len(notices)
+    for head in ([flagged(suspicions), unfinished(202, running)], [failed(599), flagged(suspicions)]):
+        notices = compose([line for line in head if line], "", [f"Tool calls left in this run: {10**9}."])
+        assert len(notices) <= MAX_NOTICES, len(notices)
