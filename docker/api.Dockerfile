@@ -101,7 +101,7 @@ RUN set -eu; \
       *) echo "no cosign for ${TARGETARCH}" >&2; exit 1 ;; \
     esac; \
     mkdir -p /out; \
-    curl -fsSL --retry 5 --retry-all-errors --retry-delay 5 -o /out/cosign \
+    curl -fsSL --retry 10 --retry-all-errors --retry-delay 20 -o /out/cosign \
       "https://github.com/sigstore/cosign/releases/download/${COSIGN_VERSION}/cosign-linux-${TARGETARCH:-amd64}"; \
     echo "${sum}  /out/cosign" | sha256sum -c -; \
     chmod 0755 /out/cosign
