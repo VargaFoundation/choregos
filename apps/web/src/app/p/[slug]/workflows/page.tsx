@@ -6,14 +6,16 @@ import { DEFAULT_WORKFLOW_HINT } from "@/components/workflows/timing";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { use, useState } from "react";
 import { ConfirmedGesture } from "@/components/confirmed-gesture";
+import { moveWorkflow } from "@/components/workflows/rename";
 import { RoutingCalibrationCard } from "@/components/workflows/routing-calibration";
 import { cn } from "@/lib/cn";
 import { workflowHueClasses } from "@/lib/workflow-hue";
 import { Workflow as WorkflowIcon } from "lucide-react";
-import { Badge, Button, buttonClasses, Card, Empty, ErrorNote, ReadState, Input, EngineSentence, Select, Textarea } from "@/components/ui";
+import { Badge, Button, buttonClasses, Card, Empty, ErrorNote, Field, ReadState, Input, EngineSentence, Select, Textarea } from "@/components/ui";
 import { api } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import type { RoutingPreview, WorkflowRouting, WorkflowSummary } from "@/lib/types";
+import { RESERVED_WORKFLOW_NAMES, workflowNameError } from "@/lib/workflow-name";
 
 type Rule = WorkflowRouting["rules"][number];
 type Strategy = NonNullable<WorkflowRouting["strategy"]>;
@@ -101,6 +103,7 @@ export default function WorkflowsPage({ params }: { params: Promise<{ slug: stri
               slug={slug}
               org={project.data?.org ?? ""}
               workflow={workflow}
+              taken={workflows.data?.map((w) => w.name) ?? []}
               routing={routing.data}
               routed={rules.filter((rule) => rule.workflow === workflow.name)}
               onChange={relire}
@@ -143,6 +146,7 @@ function WorkflowCard({
   slug,
   org,
   workflow,
+  taken,
   routing,
   routed,
   onChange,
@@ -150,11 +154,14 @@ function WorkflowCard({
   slug: string;
   org: string;
   workflow: WorkflowSummary;
+  taken: string[];
   routing: WorkflowRouting | undefined;
   routed: Rule[];
   onChange: () => Promise<void>;
 }) {
   const name = workflow.name;
+  // A console page took its name (S55-15): its link would open that page, never this workflow.
+  const hidden = RESERVED_WORKFLOW_NAMES.includes(name);
   // What the API would refuse, said beforehand: the default and a rule's target cannot be deactivated.
   const whyNot = workflow.is_default
     ? "The default cannot be deactivated — make another one the default first"
@@ -168,9 +175,13 @@ function WorkflowCard({
       title={
         <span className="inline-flex items-center gap-2">
           <span aria-hidden className={cn("size-2.5 shrink-0 rounded-full", workflowHueClasses(name).solid)} />
-          <Link href={`/p/${slug}/workflows/${encodeURIComponent(name)}`} className="hover:underline">
-            {name}
-          </Link>
+          {hidden ? (
+            <span data-verbatim>{name}</span>
+          ) : (
+            <Link href={`/p/${slug}/workflows/${encodeURIComponent(name)}`} className="hover:underline">
+              {name}
+            </Link>
+          )}
         </span>
       }
       action={workflow.is_default ? <Badge tone="neutral" title={DEFAULT_WORKFLOW_HINT}>Default</Badge> : undefined}
@@ -197,6 +208,7 @@ function WorkflowCard({
           </>
         )}
       </dl>
+      {hidden && <RenameHidden slug={slug} name={name} taken={taken} onChange={onChange} />}
       {!workflow.is_default && (
         <div className="mt-4 flex flex-wrap items-start gap-2 border-t border-line pt-3">
           {routing && (
@@ -245,6 +257,69 @@ function WorkflowCard({
         </div>
       )}
     </Card>
+  );
+}
+
+/**
+ * The way out for a workflow published under a name a console page now takes (S55-18): its page cannot
+ * be opened, so it is renamed from here — published under the new name, its routing moved, the old
+ * name deactivated (`moveWorkflow`).
+ */
+function RenameHidden({
+  slug,
+  name,
+  taken,
+  onChange,
+}: {
+  slug: string;
+  name: string;
+  taken: string[];
+  onChange: () => Promise<void>;
+}) {
+  const [next, setNext] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const problem = next
+    ? (workflowNameError(next) ?? (taken.includes(next) ? `A workflow named ${next} already exists` : undefined))
+    : undefined;
+  async function submit() {
+    if (!next || problem) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await moveWorkflow(slug, name, next);
+      await onChange();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "rename refused");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <form
+      className="mt-4 space-y-2 border-t border-line pt-3 text-sm"
+      aria-label={`Rename ${name}`}
+      onSubmit={(event) => {
+        event.preventDefault();
+        void submit();
+      }}
+    >
+      <p data-testid={`workflow-hidden-${name}`}>
+        This name is now used by a console page: rename it to open it. The new name takes its routing; its open
+        tickets finish on their version.
+      </p>
+      <Field label="New name" error={problem}>
+        {(props) => <Input {...props} value={next} onChange={(event) => setNext(event.target.value)} />}
+      </Field>
+      <Button size="sm" type="submit" disabled={busy || !next || Boolean(problem)}>
+        Rename {name}
+      </Button>
+      {error && (
+        <ErrorNote>
+          <EngineSentence text={error} />
+        </ErrorNote>
+      )}
+    </form>
   );
 }
 

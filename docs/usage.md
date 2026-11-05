@@ -631,7 +631,10 @@ curl         $API/projects/acme:hr/workflows                                    
   `/p/<slug>/workflows/library` and `/p/<slug>/workflows/new` (and `catalogue` redirects to the
   library), so a workflow of that name could never be opened. Creating or adopting one is a 422
   (`workflow.name_reserved` on `metadata.name`); a workflow already published under one of them keeps
-  its next versions.
+  its next versions. Its page cannot be opened, so the workflows list says so on its card and renames it
+  there (S55-18): the active version is published under the new name, the routing that named the old one
+  (default, rules, hints) names the new one, and the old name is deactivated — its open tickets finish
+  on their version, its history stays under the old name.
 - A work item is bound at birth — an explicit `workflow`, else the first routing rule that
   matches its labels or its tracker type, else the default — and **pinned to that version**:
   publishing a new version never moves a running item.
@@ -1495,6 +1498,13 @@ owner (`skill:import`) imports new skills from the organisation's **allowlist**
 (`GET|PUT /orgs/{org}/skill-sources`; by default `github.com/anthropics/skills` and the GitHub
 owners of your connected repositories); another source, or the next version of an existing skill,
 needs an administrator. Checking for an update never applies it: importing the proposed SHA does.
+
+`library` and `catalogue` are reserved skill slugs (S55-17): `/skills/library` is the skills library and
+`/skills/catalogue` redirects to it, so a skill of that name could never be opened. A new one is a 422
+(`skill.slug_reserved` on `SKILL.md`'s `name`), whether a person publishes it or a plugin, a template or
+the agent catalogue installs it — the install is refused before anything is written (S55-18). A skill
+already published under one of them keeps its next versions; the skills list links it to
+`/skills?skill=<slug>`, which shows it in place of the list.
 
 **The skills catalogue** ([ADR 0065](adr/0065-catalogues-of-mcp-servers-and-skills.md)) offers the
 most used skills of public repositories, so `/skills` is not empty on day one:

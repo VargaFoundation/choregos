@@ -28,7 +28,7 @@ from .agents import version_errors
 from .hosted_images import pin_hosted_runtime
 from .network import check_agent_network
 from .skill_gate import platform_columns
-from .skills import SkillRefused, digest, validate
+from .skills import SkillRefused, digest, refuse_reserved_slug, validate
 
 logger = get_logger("choregos.templates")
 
@@ -94,11 +94,17 @@ async def install_skills_and_agents(
     audit trail (`via`).
     """
     installed: dict[str, list[str]] = {"skills": [], "agents": []}
+    heads = []
     for files in skills:
         try:
             head = validate(files)
         except SkillRefused as refusal:
             raise unprocessable(f"{what} delivers a refused skill: {refusal}") from refusal
+        # A new skill under a console page's slug could never be opened (S55-18): the install is refused
+        # before any of its skills is written, as a person's own version is (S55-17).
+        await refuse_reserved_slug(session, org_id, head.name, what=what)
+        heads.append(head)
+    for files, head in zip(skills, heads, strict=True):
         if (
             await session.execute(select(Skill.id).where(Skill.org_id == org_id, Skill.slug == head.name))
         ).first():

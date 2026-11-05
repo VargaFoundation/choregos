@@ -17,6 +17,7 @@ import { categoriesOf, NO_FILTERS, stars, type CatalogueFilters } from "@/lib/ca
 import { confirmationLines, filterSkillEntries, installAction } from "@/lib/skill-catalogue";
 import { useSession } from "@/lib/session";
 import type { SkillCatalogueEntry } from "@/lib/types";
+import { skillHref } from "@/lib/skill-slug";
 
 const TOGGLES = [
   { key: "bundled", label: "Bundled only" },
@@ -167,7 +168,7 @@ function Confirm({ org, entry, onDone }: { org: string; entry: SkillCatalogueEnt
       await client.invalidateQueries({ queryKey: ["skills", org] });
       await client.invalidateQueries({ queryKey: ["skill-catalogue", org] });
       onDone();
-      router.push(`/skills/${skill.slug}`);
+      router.push(skillHref(skill.slug));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "refused");
       setBusy(false);

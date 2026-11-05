@@ -1,0 +1,136 @@
+// SPDX-License-Identifier: Apache-2.0
+"use client";
+
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
+import { useState } from "react";
+import { UpdateCheck, VersionGate } from "@/components/skills/gate";
+import { Breadcrumbs, Card, Empty, ErrorNote, Select } from "@/components/ui";
+import { OrgPageHeader } from "@/components/org-page-header";
+import { api } from "@/lib/api";
+import { relative } from "@/lib/format";
+import { skillFileLabel } from "@/lib/skill-files";
+import { useSession } from "@/lib/session";
+
+/**
+ * A skill: its versions, the files of each, and the agents that carry it. Shown by its page
+ * (`/skills/<slug>`), and by the skills list for a skill whose slug a console page took (S55-18).
+ */
+export function SkillView({ slug }: { slug: string }) {
+  const { org, me } = useSession();
+  const client = useQueryClient();
+  const skill = useQuery({ queryKey: ["skill", org, slug], queryFn: () => api.skill(org, slug) });
+  const [chosen, setChosen] = useState<number | null>(null);
+  const versionNumber = chosen ?? skill.data?.latest_version ?? null;
+  const version = useQuery({
+    queryKey: ["skill-version", org, slug, versionNumber],
+    queryFn: () => api.skillVersion(org, slug, versionNumber ?? 1),
+    enabled: versionNumber !== null,
+  });
+  const [picked, setPicked] = useState<string | null>(null);
+  if (skill.error) return <ErrorNote>{String(skill.error)}</ErrorNote>;
+  if (!skill.data) return <Empty>Reading the skill…</Empty>;
+  const files = Object.keys(version.data?.files ?? {}).sort();
+  const shown = picked && files.includes(picked) ? picked : (files.find((f) => f === "SKILL.md") ?? files[0]);
+  return (
+    <div className="space-y-6">
+      <Breadcrumbs steps={[{ href: "/skills", label: "Skills" }, { label: <span data-verbatim>{skill.data.slug}</span> }]} />
+      <OrgPageHeader
+        title={<span data-verbatim>{skill.data.slug}</span>}
+        eyebrow={`Version ${skill.data.latest_version}`}
+        description={skill.data.description || undefined}
+      />
+      {version.data && (
+        <Card title={`Gate of v${version.data.version}`}>
+          <VersionGate
+            org={org}
+            slug={slug}
+            version={version.data}
+            me={me?.email}
+            onChanged={() => {
+              void client.invalidateQueries({ queryKey: ["skill", org, slug] });
+              void client.invalidateQueries({ queryKey: ["skill-version", org, slug] });
+            }}
+          />
+          {version.data.source && (
+            <div className="mt-3 border-t border-line pt-3">
+              <UpdateCheck org={org} slug={slug} />
+            </div>
+          )}
+        </Card>
+      )}
+      <Card
+        title="Files"
+        action={
+          (skill.data.versions ?? []).length > 1 ? (
+            <label className="flex items-center gap-2 text-xs">
+              <span className="text-ink-muted">Version</span>
+              <Select
+                aria-label="Version to see"
+                className="w-auto"
+                value={versionNumber ?? ""}
+                onChange={(e) => setChosen(Number(e.target.value))}
+              >
+                {[...(skill.data.versions ?? [])]
+                  .sort((a, b) => b.version - a.version)
+                  .map((v) => (
+                    <option key={v.version} value={v.version}>
+                      v{v.version}
+                    </option>
+                  ))}
+              </Select>
+            </label>
+          ) : undefined
+        }
+      >
+        {!version.data ? (
+          <p className="text-sm text-ink-muted">Reading the files…</p>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-[14rem_1fr]" data-testid="files">
+            <ul className="space-y-1 text-xs">
+              {files.map((name) => (
+                <li key={name}>
+                  <button
+                    type="button"
+                    aria-current={name === shown ? "true" : undefined}
+                    className={`text-left hover:underline ${name === shown ? "font-semibold" : ""}`}
+                    onClick={() => setPicked(name)}
+                  >
+                    {name}
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <div className="space-y-2">
+              <p className="text-xs text-ink-muted">
+                {version.data.digest.slice(0, 23)}…
+                {version.data.created_by ? ` · ${version.data.created_by}` : ""}
+                {version.data.created_at ? ` · ${relative(version.data.created_at)}` : ""}
+              </p>
+              {shown && (
+                <pre aria-label={shown} className="whitespace-pre-wrap break-words rounded bg-surface-muted p-3 text-xs">
+                  {skillFileLabel(shown, version.data.files?.[shown]) ?? version.data.files?.[shown]}
+                </pre>
+              )}
+            </div>
+          </div>
+        )}
+      </Card>
+      <Card title="Carried by">
+        {(skill.data.used_by ?? []).length === 0 ? (
+          <p className="text-sm text-ink-muted">No agent names it yet.</p>
+        ) : (
+          <ul className="flex flex-wrap gap-3 text-sm">
+            {(skill.data.used_by ?? []).map((agent) => (
+              <li key={agent}>
+                <Link href={`/agents/${agent.split("@")[0]}`} className="underline">
+                  {agent}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+    </div>
+  );
+}

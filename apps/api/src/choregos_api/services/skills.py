@@ -43,7 +43,7 @@ NAME = re.compile(r"^[a-z][a-z0-9-]{1,62}$")
 #: Slugs a NEW skill may not take (S55-17): a skill's page is `/skills/<slug>`, and the console's own
 #: pages there win over it — `library` is the skills library, `catalogue` redirects to it (S55-15).
 #: The console's import says so first (`apps/web/src/lib/skill-slug.ts`). A skill that already has one
-#: keeps publishing its next versions.
+#: keeps publishing its next versions. Every write that creates a skill asks `refuse_reserved_slug`.
 RESERVED_SKILL_SLUGS = frozenset({"library", "catalogue"})
 
 
@@ -180,6 +180,29 @@ def validate(files: dict[str, str], slug: str | None = None) -> FrontMatter:
     return FrontMatter(name=name, description=description.strip())
 
 
+async def refuse_reserved_slug(
+    session: AsyncSession, org_id: object, name: str, *, what: str | None = None
+) -> None:
+    """422 `skill.slug_reserved` when `name` would be a NEW skill of the organisation under a reserved
+    slug (S55-17); a skill it already has under one keeps its next versions.
+
+    The one check of every path that creates a skill (S55-18): a person's version (`publish_version`),
+    and what a template, a plugin or the agent catalogue installs (`install_skills_and_agents`, and the
+    plugin installer's checks before anything is written). `what` names what ships the skill."""
+    if name not in RESERVED_SKILL_SLUGS:
+        return
+    from ..db.models import Skill
+    from ..errors import unprocessable
+
+    if (await session.execute(select(Skill.id).where(Skill.org_id == org_id, Skill.slug == name))).first():
+        return
+    shipped = f"{what} ships the skill `{name}`, and `{name}`" if what else f"`{name}`"
+    raise unprocessable(
+        f"{shipped} is reserved: the console has a page at that address. Rename the skill in its SKILL.md",
+        [{"loc": ["SKILL.md", "name"], "msg": f"`{name}` is reserved", "code": "skill.slug_reserved"}],
+    )
+
+
 def digest(files: dict[str, str]) -> str:
     """The digest of a version: the runner recomputes it before laying the files down."""
     return skill_digest(files)
@@ -219,18 +242,8 @@ async def publish_version(  # noqa: PLR0913 - the old `_publier`, moved, plus on
     skill = (
         await session.execute(select(Skill).where(Skill.org_id == organisation.id, Skill.slug == head.name))
     ).scalar_one_or_none()
-    if skill is None and head.name in RESERVED_SKILL_SLUGS:
-        raise unprocessable(
-            f"`{head.name}` is reserved: the console has a page at that address. "
-            "Rename the skill in its SKILL.md",
-            [
-                {
-                    "loc": ["SKILL.md", "name"],
-                    "msg": f"`{head.name}` is reserved",
-                    "code": "skill.slug_reserved",
-                }
-            ],
-        )
+    if skill is None:
+        await refuse_reserved_slug(session, organisation.id, head.name)
     assessment = skill_gate.assess(files, executables=executables or [], repo_licences=repo_licences)
     if scan is not None:
         assessment = skill_scanner.with_scan(assessment, scan)
