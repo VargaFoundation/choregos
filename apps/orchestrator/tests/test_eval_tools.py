@@ -543,13 +543,17 @@ async def test_the_fake_api_bounds_a_result_as_the_platform_does() -> None:
     case = evals.load_agent_case(E1)
     assert case is not None
     api = eval_doors.EvalApi(case)
+    # The data counted once (#1374): E1's whole list, 44 KB of data and 94 KB as a result, is whole.
     whole = (await api.call("pfsense__list_firewall_rules", {})).json()["result"]
-    assert (
-        "structuredContent" not in whole and whole["truncated"]["total_bytes"] > eval_doors.RESULT_MAX_BYTES
-    )
-    assert whole["content"][0]["text"].endswith("bytes; ask for less]")
+    assert whole["structuredContent"]["count"] == 184 and "truncated" not in whole
     one = (await api.call("pfsense__list_firewall_rules", {"interface": "lan"})).json()["result"]
     assert one["structuredContent"]["count"] == 96 and "truncated" not in one
+    firewall = api.scenes["pfsense"].fake
+    firewall.rules += [{**rule, "tracker": f"9{rule['tracker']}"} for rule in firewall.rules[:120]]
+    grown = (await api.call("pfsense__list_firewall_rules", {})).json()["result"]
+    assert "structuredContent" not in grown, "72 KB of data: over the bound"
+    assert eval_doors.RESULT_MAX_BYTES < grown["truncated"]["total_bytes"] < 80_000, "counted once"
+    assert grown["content"][0]["text"].endswith("bytes; ask for less]")
     refused = await api.call("pfsense__list_firewall_rules", {"interface": 3})
     assert refused.status_code == 400 and "schema" in refused.json()["detail"]
     assert (await api.call("pfsense__open_everything", {})).status_code == 404

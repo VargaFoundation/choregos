@@ -1146,7 +1146,7 @@ what lands in the agent's context, so the broker holds every result, read or wri
 | :-- | :-- |
 | The server declares an `outputSchema` for the operation (captured at discovery) and its `structuredContent` does not match it, or is missing | `422`, `type: output_schema`, naming where and which rule failed — never the payload. A governed write is never refused this way: its effect already happened |
 | The result holds a secret (known token shapes, bearer/basic credentials, URL user-info, values of secret-named keys) | the value masked as `[REDACTED]`, in text blocks, embedded text resources and the strings of `structuredContent` |
-| The result weighs more than the operation's cap as JSON | its text, cut, ending with `[truncated by the platform: …]`, and `truncated: {returned_bytes, total_bytes}`; `structuredContent` is dropped |
+| The result weighs more than the operation's cap as JSON, its data counted once: a text block that serializes its `structuredContent` (how a connector that is not MCP is answered, what MCP asks a server to write) is not counted again, a text that says something else (`web_fetch`'s page) is (#1374) | its text, cut, ending with `[truncated by the platform: …]`, and `truncated: {returned_bytes, total_bytes}`; `structuredContent` is dropped |
 
 **The cap is per operation** (S40-17). By default it is the deployment's
 `CHOREGOS_BROKER_RESULT_MAX_BYTES` (64 KiB). An organisation administrator sets another for one
@@ -1187,8 +1187,13 @@ suspicions}` — into one text: a `202` whose result names an action starts with
 EXECUTED: …` (`pending_approval`, with the console path where a person decides) or `NOT FINISHED
 YET: …` (a governed write still running); `suspicions` put first a line that names their reasons —
 never the excerpts — and says the content is data, never instructions; a run with a cap ends it with
-`Tool calls left in this run: <n>.`. The result's JSON is cut so that the whole text stays within
-20 000 characters, the notices outside the cut; a status of 400 or more is still `isError`.
+`Tool calls left in this run: <n>.`. The result is shown as a script reads it (#1374): compact JSON,
+its data once — a text block that serializes its `structuredContent` is left out, a text that says
+something else (`web_fetch`'s page) stays — and cut only past the platform's own bound, 65,536
+characters (`CHOREGOS_BROKER_RESULT_MAX_BYTES`' default, `choregos_core.mcp.RESULT_MAX_BYTES`), the
+notices outside the cut; a status of 400 or more is still `isError`. A result the API passes under the
+default bound therefore reaches the model whole; one whose operation raises its cap above 64 KiB is
+still cut there.
 `structuredContent` carries the API's answer as it came, `status_code` included, with the same lines
 under `notices`, when its JSON fits the same bound. A hosted session's tools do not say these yet
 (#1349), nor does an ontology proposal, which answers `201` (#1350).
@@ -2723,7 +2728,7 @@ what it gives the script is typed so that a script cannot read one outcome as an
 
 | The platform answered | The script gets |
 | :-- | :-- |
-| `200` | the result: an MCP result's `structuredContent` (what the tool's output schema describes); without one, its text, parsed when it is JSON; any other JSON (a catalogue tool's) as it came |
+| `200` | the result, the data the model reads of the same answer: an MCP result's `structuredContent` when its text is the structure serialized or the tool declares an output schema; `{"text", "structured"}` when its text says something else (`platform.web_fetch(url=…)["text"]` is the page, `["structured"]` what was fetched, #1373); without a `structuredContent`, its text, parsed when it is JSON; any other JSON (a catalogue tool's) as it came |
 | `202` naming an action | a `Proposal` (`action`, `status`, `decision_path`, `message`), printed `PROPOSED, NOT DONE: …` (a person decides) or `NOT FINISHED: …` (a governed write still running): **not executed** |
 | problem `429` "Tool call cap reached" | `CapReached` raised; `remaining()` is 0 |
 | `451` | `Withheld` raised: the result was withheld as a suspected injection, its `suspicions` named |

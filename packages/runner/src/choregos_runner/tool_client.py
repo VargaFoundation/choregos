@@ -24,12 +24,17 @@ What a call gives the script:
                                        answer included
     `suspicions` beside a result       the result, and one line per suspicion on standard error
 
-A result is unwrapped by one rule:
+A result is unwrapped by one rule, which gives the script the data the model reads of the same
+answer through its MCP tools, once:
 
 - an MCP result (`{"content": [...], ...}`, what a connector, `web_fetch` and `web_search` return)
-  gives its `structuredContent` when it has one — what the tool's output schema describes; otherwise
-  its text, parsed as JSON when the text is JSON, else the text itself. An MCP result marked
-  `isError` raises `ToolError`;
+  with a `structuredContent` gives it when its text says nothing else — the text is the structure
+  serialized, as a connector's answer and `web_search`'s are — or when the tool declares an output
+  schema (what its docstring says it returns); when its text says something else, it gives both,
+  `{"text": <that text>, "structured": <the structuredContent>}`: `web_fetch` gives the page's text in
+  `["text"]` and what was fetched (`url`, `status`, `content_type`, `title`, ...) in `["structured"]`;
+- an MCP result without one gives its text, parsed as JSON when the text is JSON, else the text
+  itself. An MCP result marked `isError` raises `ToolError`;
 - any other JSON (a catalogue tool's answer) is returned as it is.
 
 A result over the platform's size bound comes back cut: it has no `structuredContent`, its text ends
@@ -288,13 +293,19 @@ def unwrapped(tool: str, result: _Any) -> _Any:
         return result
     if result.get("isError") is True:
         raise ToolError(200, result, tool)
-    if result.get("structuredContent") is not None:
-        return result["structuredContent"]
-    text = "\n".join(
+    texts = [
         block["text"]
         for block in result["content"]
         if block.get("type") == "text" and isinstance(block.get("text"), str)
-    )
+    ]
+    structured = result.get("structuredContent")
+    if structured is not None:
+        # What the text says that the structure does not: nothing, when it is the structure serialized.
+        said = [text for text in texts if not _serializes(text, structured)]
+        if not said or _declares_output(tool):
+            return structured
+        return {"text": "\n".join(said), "structured": structured}
+    text = "\n".join(texts)
     cut = result.get("truncated")
     if cut is not None:
         sizes = (
@@ -358,6 +369,21 @@ def _index() -> list[dict[str, _Any]]:
     except (OSError, ValueError):
         return []
     return [entry for entry in entries if isinstance(entry, dict)] if isinstance(entries, list) else []
+
+
+def _serializes(text: str, structured: _Any) -> bool:
+    """Whether `text` is `structured` serialized: its JSON is the same value
+    (`choregos_core.mcp.serializes`, the rule the platform bounds a result by)."""
+    try:
+        return bool(_json.loads(text) == structured)
+    except (ValueError, RecursionError):
+        return False
+
+
+def _declares_output(tool: str) -> bool:
+    """Whether the run's tool list gives `tool` an output schema: its `structuredContent` is then what
+    the schema describes, and what its docstring says it returns."""
+    return any(entry.get("tool") == tool and "outputSchema" in entry for entry in _index())
 
 
 def _is_mcp(result: _Any) -> bool:

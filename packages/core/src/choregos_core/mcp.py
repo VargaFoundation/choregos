@@ -13,11 +13,18 @@ sessions, notifications from the server to the client.
 
 from __future__ import annotations
 
+import json
 from typing import Any, Final
 
 #: The versions understood, the most recent first. A client that asks for another one gets the
 #: most recent: the protocol lets it choose to disconnect.
 VERSIONS: Final = ("2025-11-25", "2025-06-18", "2025-03-26")
+
+#: How much of one tool result an agent reads, in bytes of JSON, its data counted once (#755, #1374):
+#: the default of the API's `CHOREGOS_BROKER_RESULT_MAX_BYTES`, and the bound of what the run's tool
+#: server shows the model of a relayed result, so that a result the API passes whole reaches the
+#: model whole, as it reaches a script through the tool bridge (ADR 0122 §8).
+RESULT_MAX_BYTES: Final = 65_536
 
 #: JSON-RPC 2.0 codes used by MCP.
 PARSE_ERROR: Final = -32700
@@ -59,6 +66,33 @@ def text_result(
     if structured is not None:
         result["structuredContent"] = structured
     return result
+
+
+def serializes(block: Any, structured: Any) -> bool:
+    """Whether a content block is `structured` serialized: a text block whose JSON is the same value,
+    as MCP asks a server that returns structured content to write, and as the broker wraps the answer
+    of a connector that is not MCP. A text that is not JSON, or another value, says something else."""
+    if structured is None or not isinstance(block, dict) or block.get("type") != "text":
+        return False
+    text = block.get("text")
+    if not isinstance(text, str):
+        return False
+    try:
+        return bool(json.loads(text) == structured)
+    except (ValueError, RecursionError):
+        return False
+
+
+def data_once(result: dict[str, Any]) -> dict[str, Any]:
+    """An MCP result with its data once (#1374): the text blocks that serialize its
+    `structuredContent` left out, since the structure says what they say. A text that says something
+    else stays: `web_fetch`'s page beside what was fetched, a server's own summary. What the platform
+    bounds, and what the run's tool server shows the model, are measured on this."""
+    blocks = result.get("content")
+    if result.get("structuredContent") is None or not isinstance(blocks, list):
+        return result
+    kept = [block for block in blocks if not serializes(block, result["structuredContent"])]
+    return result if len(kept) == len(blocks) else {**result, "content": kept}
 
 
 def is_notification(message: dict[str, Any]) -> bool:

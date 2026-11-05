@@ -241,13 +241,16 @@ async def test_the_last_notice_of_an_error_answer_reaches_the_model(
     stage_input: StageInput, runner_settings: Any
 ) -> None:
     """The platform's tool server ends a relayed answer with the calls left under the cap, within the
-    loop's own bound (S57-04); the loop's error prefix must not push that line out of the cut."""
+    loop's own bound (S57-04); the loop's error prefix must not push that line out of the cut, and the
+    loop reads as much as that server lets through: past the platform's bound on a result (#1374)."""
     from choregos_adapters.errors import AdapterError
-    from choregos_tools_mcp.answer import render_answer
+    from choregos_core.mcp import RESULT_MAX_BYTES
+    from choregos_tools_mcp.answer import MAX_TEXT, render_answer
 
-    answer = render_answer({"status_code": 404, "result": {"error": "x" * 50_000}, "remaining": 2})
+    answer = render_answer({"status_code": 404, "result": {"error": "x" * 100_000}, "remaining": 2})
     rendered = answer["content"][0]["text"]
     assert answer["isError"] and rendered.endswith("Tool calls left in this run: 2.")
+    assert RESULT_MAX_BYTES < len(rendered) <= MAX_TEXT, "the tool server's own cut, past the bound"
 
     def refuse(arguments: dict[str, Any]) -> dict[str, Any]:
         raise AdapterError(rendered)
@@ -261,3 +264,4 @@ async def test_the_last_notice_of_an_error_answer_reaches_the_model(
     read = model.requests[1][1]["messages"][-1]["content"]
     assert read.startswith("the tool reported an error: ")
     assert read.endswith("Tool calls left in this run: 2."), read[-80:]
+    assert read == "the tool reported an error: " + rendered, "the loop cuts nothing the server let through"

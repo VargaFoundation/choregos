@@ -69,6 +69,8 @@ reading the result yourself.
 - Write scripts under `$TMPDIR`, never in the repository: from your shell
   (`cat > "$TMPDIR/check.py" <<'EOF'`), then run the file (`python3 "$TMPDIR/check.py"`), so that the run
   records which script made which calls.
+- A call returns the tool's data; when its text says more than its structure, `{"text", "structured"}`:
+  `platform.web_fetch(url=...)["text"]` is the page.
 - A write returns a `Proposal` when a person must approve it: it is NOT done. Report its decision path.
 - `CapReached`, `Withheld` and `ToolError` are raised: let them surface, read them, decide.
 - Warnings on standard error come from the platform (for instance a result flagged as a suspected

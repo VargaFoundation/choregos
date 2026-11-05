@@ -8,6 +8,7 @@ from functools import lru_cache
 from typing import Any, Literal
 
 from choregos_core.images import check_image_map
+from choregos_core.mcp import RESULT_MAX_BYTES
 from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -159,8 +160,10 @@ class Settings(BaseSettings):
     courtier_attente_ecriture_s: float = 30.0  # lang: fr-ok environment variable name
     #: The most a broker tool result may weigh, as JSON bytes, when it reaches the agent (#755): a
     #: larger one is cut to its text with a marker that says so. A third-party server does not decide
-    #: how much of the agent's context, and of its token budget, it fills.
-    broker_result_max_bytes: int = Field(default=65536, ge=1024)
+    #: how much of the agent's context, and of its token budget, it fills. Its data is counted once: a
+    #: text block that serializes its `structuredContent` is not counted again (#1374). The default is
+    #: the bound the run's tool server shows the model (`choregos_core.mcp.RESULT_MAX_BYTES`).
+    broker_result_max_bytes: int = Field(default=RESULT_MAX_BYTES, ge=1024)
     #: The most an operation or a catalogue tool may raise its own cap to (S40-17): an organisation
     #: that needs one large answer opens it for that operation, never for the whole platform.
     broker_result_ceiling_bytes: int = Field(default=1048576, ge=1024)

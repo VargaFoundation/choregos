@@ -48,7 +48,7 @@ platform's **real** doors on the fakes (`activities/eval_doors.py`):
 Both doors' `InternalClient` talk to a fake API that governs as `callRunTool` does for what the cases
 need: the run token, the origin header, the operation's input schema, writes under approval proposed
 (202, an action and its decision path), allowed writes executed as an action, the injection guard
-(`warn`, `block`), the 64 KiB bound on a result. It has no cap, rate limit, masking or network policy:
+(`warn`, `block`), the 64 KiB bound on a result, its data counted once. It has no cap, rate limit, masking or network policy:
 the live matrix meets those. The case's `scripted_usage` for the cell is billed on the fake gateway,
 as many model calls as its `requests`.
 
@@ -62,9 +62,13 @@ as many model calls as its `requests`.
 | `py-rounding-bug`, `py-volume-discount` | C2, the coding control | the ticket's scripted change |
 
 E3 and C1 need the ServiceNow plugin server, which lives in `choregos-agents`: their cases belong in
-its `evals/` directory (#1372). E5 has no script because a script's `web_fetch` gets the fetch's
-metadata, not the page (#1373); the MCP door shows a model less of a large answer than a script reads
-(#1374), which S57-11 must keep in mind when it reads the `mcp` cells' success rates.
+its `evals/` directory (#1372). E5 has no script yet: it was written when a script's `web_fetch` got the
+fetch's metadata, not the page (#1373, fixed: `["text"]` is the page, `["structured"]` what was
+fetched). Both doors read the same answer (#1374): the MCP door shows the model compact JSON of the
+result, its data once, cut only past the platform's 64 KiB bound, and a script gets the same data;
+`apps/orchestrator/tests/test_eval_doors_parity.py` plays every call of E1, E2, E5 and E6 through both
+doors and compares them. An operation whose cap is raised above 64 KiB is still cut at 64 KiB through
+the MCP door, not through the bridge.
 
 A case's file: `connectors` (each one's fake and its scene, `choregos_adapters.fakes.scenes`), `policy`
 (`writes: approval | allowed`, `prompt_injection: ignore | warn | block`), `web` (the scripted search

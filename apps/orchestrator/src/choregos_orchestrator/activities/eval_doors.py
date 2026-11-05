@@ -25,8 +25,9 @@ schema (400); a write under approval PROPOSED (202, an action `pending_approval`
 `/p/<project>/actions/<id>`, the id `uuid5(run, tool, arguments)` as `broker.call_id` makes it); an
 allowed write executed as an action (`succeeded`); the injection guard on every result
 (`choregos_core.injection.suspicions` over the text the agent reads: `warn` adds `suspicions` and a
-security event, `block` answers 451); the 64 KiB bound on a connector's result (`broker.bounded_result`:
-past it, the text is cut, `structuredContent` dropped). It has no cap, no rate limit, no masking and no
+security event, `block` answers 451); the 64 KiB bound on a connector's result, its data counted once
+(`broker.bounded_result`, `choregos_core.mcp.data_once`: past it, the text is cut, `structuredContent`
+dropped). It has no cap, no rate limit, no masking and no
 network policy: the live matrix (S57-11) meets those on the real API. It cannot import the API's own
 helpers: the orchestrator's imports of `choregos_api` are frozen (ADR 0099).
 
@@ -50,6 +51,7 @@ from typing import Any
 from urllib.parse import unquote
 
 import httpx
+from choregos_core import mcp
 
 #: The doors a cell may give a run's tools (ADR 0122).
 TOOLS = ("mcp", "scripts")
@@ -57,9 +59,9 @@ TOOLS = ("mcp", "scripts")
 RUN_ID = "eval-run"
 PROJECT = "evals"
 API_BASE = "http://api.eval.invalid/internal"
-#: The platform's bound on a connector's result, text and `structuredContent` together
-#: (`broker_result_max_bytes`, `services/broker.bounded_result`).
-RESULT_MAX_BYTES = 65536
+#: The platform's bound on a connector's result, its data counted once (`broker_result_max_bytes`'s
+#: default, `services/broker.bounded_result`).
+RESULT_MAX_BYTES = mcp.RESULT_MAX_BYTES
 TRUNCATED = "[truncated by the platform: {returned} of {total} bytes; ask for less]"
 #: `broker.call_id`'s namespace: the same call is the same action.
 CALL_NAMESPACE = uuid.UUID("6f1c4b7e-5a3d-4c2b-9e8f-0a1b2c3d4e5f")
@@ -325,9 +327,10 @@ def _json(value: Any) -> str:
 
 
 def _bounded(result: dict[str, Any], limit: int = RESULT_MAX_BYTES) -> dict[str, Any]:
-    """`broker.bounded_result`'s size rule: a result larger than `limit` as JSON keeps its text, cut,
+    """`broker.bounded_result`'s size rule: a result larger than `limit` as JSON, its data counted once
+    (a text block that serializes its `structuredContent` is not counted again), keeps its text, cut,
     with the platform's marker, and loses `structuredContent` — half an object is not the object."""
-    total = len(_json(result).encode("utf-8"))
+    total = len(_json(mcp.data_once(result)).encode("utf-8"))
     if total <= limit:
         return result
     text = "\n".join(str(b.get("text", "")) for b in result.get("content") or [] if b.get("type") == "text")
