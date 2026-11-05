@@ -650,7 +650,7 @@ export type Policy = {
       };
     };
   };
-  /** How a run's agent may call its tools (ADR 0122): `offer` lets it call them from a script too, through the runner's tool bridge, under the same governance as the model's calls. Absent = off; the organisation's ceiling can forbid it and the deployment's kill switch wins over the policy. */
+  /** How a run's agent may call its tools (ADR 0122): `offer` lets it call them from a script too, through the runner's tool bridge, under the same governance as the model's calls. Absent = off; the organisation's ceiling can forbid it, and the organisation's switch (its `tool_scripts` setting, else the deployment's default, never past the deployment's brake) wins over the policy. */
   tools?: {
     scripts?: "off" | "offer";
     /** Calls of one run the tool bridge relays at once; the next waits. */

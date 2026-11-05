@@ -958,7 +958,14 @@ this bench does **not** prove.
 
 **Context reduction kill switch.** `choregos-orchestrator.runner.contextReduction.enabled: false` (env `CHOREGOS_CONTEXT_REDUCTION=off`) refuses rtk and headroom to every run, whatever a project's policy asks ([ADR 0055](adr/0055-fewer-tokens-per-run.md)). Left at `true`, each policy decides, and a policy without `context` reduces nothing.
 
-**Tool scripts kill switch.** `choregos-orchestrator.runner.toolScripts.enabled` (env `CHOREGOS_TOOL_SCRIPTS`) is `false` by default: no run is offered the tool bridge, whatever a project's policy asks ([ADR 0122](adr/0122-an-agent-may-call-its-run-s-tools-from-a-script.md) §6). Set to `true`, the organisation's ceiling and each policy decide, and a policy without `tools` offers nothing. Turn it on only once the runner image serves the bridge (S57-07): an older runner refuses a stage input that carries `tools.scripts`.
+**Tool scripts: the organisation decides, the deployment sets the default and keeps a brake.** Each organisation switches tool scripts for its runs ([ADR 0122](adr/0122-an-agent-may-call-its-run-s-tools-from-a-script.md) §6, amended 2026-11-05, S57-05b): its administrator sets `tool_scripts` to `enabled` or `disabled` with `PATCH /orgs/{org}` (or on *Administration → Tool scripts*), or to `null` to follow the deployment. Two orchestrator values, read by every worker:
+
+| Value | Env | Default | Meaning |
+|:--|:--|:--|:--|
+| `choregos-orchestrator.runner.toolScripts.enabled` | `CHOREGOS_TOOL_SCRIPTS` | `false` | The **default** of an organisation that does not choose. `false`: its runs are offered no tool bridge; `true`: its ceiling and each project's policy decide, and a policy without `tools` offers nothing. An organisation's `enabled` or `disabled` wins over it. |
+| `choregos-orchestrator.runner.toolScripts.allowed` | `CHOREGOS_TOOL_SCRIPTS_ALLOWED` | `true` | The **hard brake**. `false`: no run of any organisation is offered tool scripts, whatever its setting says. |
+
+Before S57-05b, `enabled: false` refused tool scripts to every run; it now only sets the default, and an organisation administrator can enable them for their organisation. To keep them refused everywhere — while the runner image predates the bridge (S57-07: an older runner refuses a stage input that carries `tools.scripts`), or in an emergency — set `allowed: false`. The API does not know these values: the console says "the deployment's default" without saying which.
 
 ## The first organisation, and the first token
 

@@ -137,7 +137,9 @@ paths:
       description: >-
         A new slug leaves the old one as an alias (`Org.aliases`): old URLs, MCP and A2A addresses,
         qualified ids and IdP group names keep resolving to the organisation (ADR 0090). 409 when the
-        slug is another organisation's slug or alias.
+        slug is another organisation's slug or alias. `tool_scripts` switches tool scripts for the
+        organisation's runs (S57-05b), by its administrator only: `null` returns it to the
+        deployment's default.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/OrgUpdate" } } }
@@ -7831,6 +7833,7 @@ components:
         role: { oneOf: [{ $ref: "#/components/schemas/Role" }, { type: "null" }] }
         currency: { type: string, enum: [EUR, USD], default: EUR, description: "the currency the console shows spend in (S29-03); an organisation setting" }
         aliases: { type: array, items: { type: string }, default: [], description: "the slugs the organisation had before; they still resolve to it (ADR 0090). The organisation's id never changes, its slug is an address." }
+        tool_scripts: { type: [string, "null"], enum: [enabled, disabled, null], default: null, description: "whether the organisation's runs may be offered tool scripts (S57-05b, ADR 0122 §6): `enabled`, `disabled`, or null to follow the deployment's default (`CHOREGOS_TOOL_SCRIPTS`). Past it, the organisation's ceiling and each project's policy (`tools.scripts: offer`) decide; the deployment's brake (`CHOREGOS_TOOL_SCRIPTS_ALLOWED`) wins over it." }
     OrgCreate:
       type: object
       required: [slug, name]
@@ -7844,6 +7847,7 @@ components:
         slug: { type: [string, "null"], pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
         name: { type: [string, "null"], minLength: 1, maxLength: 200 }
         currency: { type: [string, "null"], enum: [EUR, USD, null], description: "the currency spend is shown in; org_admin" }
+        tool_scripts: { type: [string, "null"], enum: [enabled, disabled, null], description: "the organisation's switch for tool scripts (S57-05b); org_admin only, a platform administrator who is not one is refused (403). Absent: unchanged; `enabled` or `disabled`: the organisation's choice; null: back to the deployment's default. Audited in `org.update`." }
     WorkItemCreate:
       type: object
       required: [title]

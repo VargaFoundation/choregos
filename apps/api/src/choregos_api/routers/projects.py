@@ -8,6 +8,8 @@ from typing import Annotated, Any
 from choregos_contracts import EventType, ProjectConfig, Role
 from choregos_core import utcnow
 from choregos_core.memory_scope import MEMORY_KEY_SETTING, memory_key
+from choregos_core.tool_scripts_switch import ORG_SETTING as TOOL_SCRIPTS_SETTING
+from choregos_core.tool_scripts_switch import org_tool_scripts
 from fastapi import APIRouter, Path, Request, status
 from sqlalchemy import func, select
 from sse_starlette.sse import EventSourceResponse
@@ -58,6 +60,7 @@ async def list_orgs(session: Db, principal: Me) -> list[OrgDto]:
                 role=principal.org_roles.get(o.slug),
                 currency=moneta(o),
                 aliases=aliases[o.id],
+                tool_scripts=org_tool_scripts(o.settings),
             )
             for o in rows
         ),
@@ -118,6 +121,16 @@ def moneta(organisation: Organization) -> Any:
     return "USD" if (organisation.settings or {}).get("currency") == "USD" else "EUR"
 
 
+def _audited(organisation: Organization) -> dict[str, Any]:
+    """What `org.update` records before and after the change."""
+    return {
+        "slug": organisation.slug,
+        "name": organisation.name,
+        "currency": moneta(organisation),
+        "tool_scripts": org_tool_scripts(organisation.settings),
+    }
+
+
 @router.patch("/orgs/{org}", response_model=OrgDto, operation_id="updateOrg")
 async def update_org(org: str, body: OrgUpdate, session: Db, principal: Me) -> OrgDto:
     """Renames an organisation. Its NAME, its administrator changes. Its SLUG, only the platform
@@ -136,8 +149,17 @@ async def update_org(org: str, body: OrgUpdate, session: Db, principal: Me) -> O
     qualified ids (`resolve_project`), the IdP group mapping, the bootstrap and the payloads waiting in
     a workflow (`session_scope`). A slug that is taken, or an alias of ANOTHER organisation, is refused
     (409); the platform administrator releases an alias with `DELETE /orgs/{org}/aliases/{alias}`.
+
+    `tool_scripts` (S57-05b, ADR 0122 §6) switches tool scripts on (`enabled`) or off (`disabled`) for
+    every run of the organisation, or back to the deployment's default (`null`); its administrator only.
+    The ceiling and each project's policy still decide past it, and the deployment's brake wins over it.
     """
     is_admin = principal.org_roles.get(org) == Role.ORG_ADMIN
+    # Whether the organisation's runs may be offered tool scripts (S57-05b) is its administrator's
+    # choice alone, like its policy ceiling: a platform administrator who is not one is refused, before
+    # anything else of the request is applied.
+    if "tool_scripts" in body.model_fields_set and not is_admin:
+        raise forbidden(f"the tool scripts of {org} are switched by its org_admin")
     if not is_admin:
         # A platform administrator (granted by an edition plugin) renames an organisation they are
         # not a member of. The instance right is checked BEFORE the lookup: under PostgreSQL RLS, a
@@ -145,7 +167,7 @@ async def update_org(org: str, body: OrgUpdate, session: Db, principal: Me) -> O
         await require_platform_admin(session, principal)
         await limit_to_organisations(session, ALL_ORGS)
     organisation = await organisation_by_slug(session, org)
-    org_before = {"slug": organisation.slug, "name": organisation.name, "currency": moneta(organisation)}
+    org_before = _audited(organisation)
     if body.slug is not None and body.slug != organisation.slug:
         await require_platform_admin(session, principal)
         # The RLS compares SLUGS (`slug = ANY(choregos_current_orgs())`): bounded to the old one, the
@@ -183,8 +205,16 @@ async def update_org(org: str, body: OrgUpdate, session: Db, principal: Me) -> O
         organisation.name = body.name
     if body.currency is not None:
         organisation.settings = {**(organisation.settings or {}), "currency": body.currency}
+    if "tool_scripts" in body.model_fields_set:
+        # `null` takes the organisation back to the deployment's default: the key is removed, so the
+        # orchestrator reads no choice (`choregos_core.tool_scripts_switch`).
+        settings = {**(organisation.settings or {})}
+        settings.pop(TOOL_SCRIPTS_SETTING, None)
+        if body.tool_scripts is not None:
+            settings[TOOL_SCRIPTS_SETTING] = body.tool_scripts
+        organisation.settings = settings
     await session.flush()
-    org_after = {"slug": organisation.slug, "name": organisation.name, "currency": moneta(organisation)}
+    org_after = _audited(organisation)
     await record(
         session,
         principal,
@@ -201,6 +231,7 @@ async def update_org(org: str, body: OrgUpdate, session: Db, principal: Me) -> O
         role=Role.ORG_ADMIN if is_admin else None,  # a non-member platform admin has no role here
         currency=moneta(organisation),
         aliases=await aliases_of(session, organisation.id),
+        tool_scripts=org_tool_scripts(organisation.settings),
     )
 
 
