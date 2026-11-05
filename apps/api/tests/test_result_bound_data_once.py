@@ -21,7 +21,9 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-from .test_netops_connectors import PFSENSE_KEY, READER_TOKEN, _declare, _run
+from .kits.netops import PFSENSE_KEY, READER_TOKEN
+from .kits.netops import declare_netops_connectors as _declare
+from .kits.netops import netops_run as _run
 from .test_web_fetch_tool import HTML, PAGE, _ready, web  # noqa: F401 - `web` is a fixture
 
 pytestmark = pytest.mark.asyncio
