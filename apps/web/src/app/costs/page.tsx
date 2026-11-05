@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { CostGraph } from "@/components/cost-graph";
 import { BreakdownCard, csvUrl, fetchReport, reportKey, type Scope } from "@/components/spend/breakdown";
+import { ToolCallsByDoorCard } from "@/components/spend/doors";
 import { MonthPanel } from "@/components/spend/month";
 import { Card, Empty, ErrorNote, ReadState, Select } from "@/components/ui";
 import { OrgPageHeader } from "@/components/org-page-header";
@@ -28,8 +29,9 @@ function depuis(periode: Periode, now: Date): string {
 
 /**
  * Where the money goes (S29-03): spend over time, this month against its budget with a forecast,
- * the agents, workflows and work items that cost the most, models and tools apart, and the CSV of
- * each breakdown. The organisation by default; `?project=<slug>` narrows it to one project.
+ * the agents, workflows and work items that cost the most, models and tools apart, the tool calls by
+ * the door they came through (S57-10), and the CSV of each breakdown. The organisation by default;
+ * `?project=<slug>` narrows it to one project.
  */
 function Spend() {
   const { org, orgs } = useSession();
@@ -123,6 +125,7 @@ function Spend() {
         {!project && <BreakdownCard scope={scope} currency={currency} title="Projects" group="project" filtre={filtre} />}
         <BreakdownCard scope={scope} currency={currency} title="By model" group="model" filtre={{ ...filtre, kind: "model" }} />
         <BreakdownCard scope={scope} currency={currency} title="By tool" group="model" filtre={{ ...filtre, kind: "tool" }} />
+        <ToolCallsByDoorCard scope={scope} currency={currency} filtre={filtre} />
         <BreakdownCard scope={scope} currency={currency} title="Knowledge distillations" group="model" filtre={{ ...filtre, kind: "distill" }} />
       </div>
     </div>

@@ -4,6 +4,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { SettingsSection } from "@/components/project-settings/section";
+import { ToolScriptsCard } from "@/components/project-settings/tool-scripts-card";
 import { Button, Card, Empty, ErrorNote } from "@/components/ui";
 import { api } from "@/lib/api";
 import { eur } from "@/lib/format";
@@ -111,6 +112,7 @@ export function ToolsSection({ slug }: { slug: string }) {
           <code>tools:grant</code> can change them.
         </p>
       </Card>
+      <ToolScriptsCard slug={slug} />
     </SettingsSection>
   );
 }

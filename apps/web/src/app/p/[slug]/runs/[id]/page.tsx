@@ -4,6 +4,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { use, useState } from "react";
 import { RunActivityView } from "@/components/run-activity";
+import { RunScriptsCard } from "@/components/run-scripts";
 import { ContextReductionCard } from "@/components/context-reduction";
 import { LiveLog } from "@/components/live-log";
 import { AgentPlanView } from "@/components/agent-plan";
@@ -17,6 +18,7 @@ import { api } from "@/lib/api";
 import { duration, tokens, usd } from "@/lib/format";
 import { runActivity } from "@/lib/run-activity";
 import { contextReductionOf } from "@/lib/context-reduction";
+import { runScriptsOf } from "@/lib/run-scripts";
 import { RemoteTaskCard } from "@/components/remote/remote-task";
 import { remoteTask } from "@/lib/remote-run";
 import { agentPlan } from "@/lib/agent-plan";
@@ -181,6 +183,9 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
           <RunActivityView activite={activity} />
         </Card>
       )}
+
+      {/* The calls a script made through the tool bridge, under their script (ADR 0122 §4, S57-10). */}
+      <RunScriptsCard scripts={runScriptsOf(events)} slug={slug} />
 
       <Card
         title={
