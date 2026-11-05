@@ -229,6 +229,35 @@ async def test_a_case_whose_spec_or_policy_changed_is_brought_up_to_date(
     assert sorted(v.version for v in versions) == [1, 2] and agent.stable_version == 2
 
 
+@pytest.mark.parametrize(
+    ("case", "connector", "scene", "agent"),
+    [
+        (E1, "pfsense", "ssh-exposure", "netops"),
+        ("netops-dropped-flows-top", "cilium", "dropped-flows", "netops"),
+        (E4, "entra", "offboarding", "identity-operator"),
+        ("marketdata-volatility", "marketdata", "default", "analyst"),
+    ],
+)
+async def test_every_case_of_the_live_matrix_seeds_and_its_stage_is_prepared(
+    eval_project: Fixture, scripts_on: None, case: str, connector: str, scene: str, agent: str
+) -> None:
+    """The four cases the runbook's launch names: their connectors on their scenes, their agent resolved
+    by `prepare_stage` as for any run, the cell's door in the stage input, no repository."""
+    await _install_netops(eval_project)
+    seeded = await evals.seed_eval_ticket(_cell("scripts", case=case))
+    assert not seeded["skipped"], seeded["reason"]
+    prepared = await stage_activities.prepare_stage(seeded["plan"])
+    stage_input = prepared["stage_input"]
+    assert stage_input["tools"]["scripts"] == {"max_concurrent_calls": 4}
+    assert stage_input.get("repo") is None and stage_input["project"]["fact_commands"] == {}
+    from choregos_api.db.models import OrgConnector, Run
+
+    [row] = await _rows(OrgConnector, name=connector)
+    assert row.config == {"fake_scene": scene}
+    [run] = await _rows(Run, id=prepared["run_id"])
+    assert run.agent_slug == agent
+
+
 # ───────────────────────── what a live cell does not play ─────────────────────────
 
 
