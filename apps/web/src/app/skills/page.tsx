@@ -3,14 +3,17 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useRef, useState } from "react";
 import { Glossary } from "@/components/glossary";
 import { GitImport, RiskBadge } from "@/components/skills/gate";
+import { SkillView } from "@/components/skills/skill-view";
 import { SkillTabs } from "@/components/skills/tabs";
 import { Card, Empty, ErrorNote } from "@/components/ui";
 import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
+import { RESERVED_SKILL_SLUGS, skillHref } from "@/lib/skill-slug";
 
 /**
  * The organisation's skill library (ADR 0033): a folder whose `SKILL.md` says when
@@ -18,6 +21,23 @@ import { useSession } from "@/lib/session";
  * what the agent can do is said by its version, and the runner checks each skill's fingerprint.
  */
 export default function SkillsPage() {
+  return (
+    <Suspense fallback={<Empty>Reading the skills…</Empty>}>
+      <SkillsOrOne />
+    </Suspense>
+  );
+}
+
+/**
+ * `?skill=<slug>` shows that skill in place of the list (S55-18): the way to open a skill published
+ * under a slug a console page took before S55-17, whose own page is that console page.
+ */
+function SkillsOrOne() {
+  const shown = useSearchParams().get("skill");
+  return shown ? <SkillView slug={shown} /> : <Skills />;
+}
+
+function Skills() {
   const { org } = useSession();
   const client = useQueryClient();
   const skills = useQuery({ queryKey: ["skills", org], queryFn: () => api.skills(org) });
@@ -86,10 +106,16 @@ export default function SkillsPage() {
                 {skills.data.map((skill) => (
                   <tr key={skill.slug} className="border-t border-line">
                     <td className="py-2">
-                      <Link href={`/skills/${skill.slug}`} className="font-medium hover:underline">
+                      <Link href={skillHref(skill.slug)} className="font-medium hover:underline">
                         {skill.slug}
                       </Link>
                       {skill.description && <p className="text-xs text-ink-muted">{skill.description}</p>}
+                      {RESERVED_SKILL_SLUGS.includes(skill.slug) && (
+                        <p className="text-xs text-ink-muted" data-testid={`skill-hidden-${skill.slug}`}>
+                          This name is now used by a console page: the skill opens here, on the list. To give it a
+                          page of its own, publish it under another name in its SKILL.md.
+                        </p>
+                      )}
                     </td>
                     <td>v{skill.latest_version}</td>
                     <td>

@@ -76,7 +76,7 @@ from .installation import install_skills_and_agents
 from .network import check_agent_network
 from .plugin_supply import PluginSupply, semver_key
 from .skill_gate import platform_columns
-from .skills import SkillRefused, validate
+from .skills import SkillRefused, refuse_reserved_slug, validate
 from .skills import digest as skill_digest
 
 PREFIX = "plugin:"
@@ -153,6 +153,8 @@ async def _prepare(
             head = validate(files)
         except SkillRefused as refusal:
             raise unprocessable(f"`{ref}`: the skill is refused: {refusal}") from refusal
+        # Before a second approval is asked and before anything is written (S55-18).
+        await refuse_reserved_slug(session, org_id, head.name, what=f"the plugin `{plugin.name}`")
         prepared.skills[head.name] = files
         for name, path in paths.items():
             prepared.files[f"{ref}/{name}"] = path.read_bytes()

@@ -15,3 +15,12 @@ export function skillSlugError(slug: string): string | undefined {
   }
   return undefined;
 }
+
+/**
+ * Where a skill opens (S55-18): its own page, `/skills/<slug>`, except for a skill published under a
+ * reserved slug before S55-17. That address is a console page, so such a skill opens on the skills
+ * list, which shows it in place of the list (`/skills?skill=<slug>`).
+ */
+export function skillHref(slug: string): string {
+  return RESERVED_SKILL_SLUGS.includes(slug) ? `/skills?skill=${encodeURIComponent(slug)}` : `/skills/${slug}`;
+}

@@ -13,6 +13,7 @@ import { api } from "@/lib/api";
 import { relative } from "@/lib/format";
 import { distillationLabel, permissionsOf, scopeLabel, statusSummary, stillConverting } from "@/lib/knowledge";
 import { useSession } from "@/lib/session";
+import { skillHref } from "@/lib/skill-slug";
 
 // Only an `index` base shows the search and eval panel: loaded when needed, outside the page's chunk.
 const KnowledgeIndex = dynamic(() => import("@/components/knowledge-index").then((m) => m.KnowledgeIndex), {
@@ -124,7 +125,7 @@ export function KnowledgeBaseView({
       <div className="text-sm" data-testid="knowledge-distillation">
         Principles skill: {distillationLabel(base.data.distillation)}
         {base.data.distillation?.skill ? (
-          <Link href={`/skills/${String(base.data.distillation.skill)}`} className="ml-2 underline">
+          <Link href={skillHref(String(base.data.distillation.skill))} className="ml-2 underline">
             Review
           </Link>
         ) : null}

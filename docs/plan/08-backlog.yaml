@@ -4217,6 +4217,14 @@ stories:
     size: S
     depends_on: [S55-15]
     notes: "Acceptance: the sidebar group and the library pages' copy read Library, not Catalogue (labels only, no data, API name or identifier); a new skill slugged library or catalogue is refused by the console's repository import and by the API (422 skill.slug_reserved, no contract change); an existing one keeps its next versions."
+  - id: S55-18
+    title: "feat(web,api): a plugin cannot install a skill under a console page's slug, and a workflow or a skill already under one has a way out"
+    stream: S55
+    sprint: 3
+    priority: 2
+    size: S
+    depends_on: [S55-15, S55-17]
+    notes: "Acceptance: what a plugin, a template or the agent catalogue installs goes through the same reserved-slug check as a person's skill, and an install shipping a new skill slugged library or catalogue is refused before anything is written (422 skill.slug_reserved, no contract change); the workflows list says a workflow named library, new or catalogue cannot be opened, links nowhere, and renames it there (copy published, routing moved, old name deactivated); the skills list links a skill slugged library or catalogue to /skills?skill=<slug>, which shows it."
   - id: S57-00
     title: "docs(adr): an agent may call its run's tools from a script (ADR 0122)"
     stream: S57

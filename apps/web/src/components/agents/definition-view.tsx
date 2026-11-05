@@ -16,6 +16,7 @@ import { relative, usd } from "@/lib/format";
 import { describe, effectiveBindings, writesTo } from "@/lib/memories";
 import type { Agent, AgentSpec, AgentVersion } from "@/lib/types";
 import { workspaceLine } from "@/lib/workspace";
+import { skillHref } from "@/lib/skill-slug";
 import { AgentDetailsCard } from "./details";
 import { RestoreDialog } from "./history";
 import { RuntimeRow } from "./runtime-row";
@@ -348,7 +349,7 @@ export function DefinitionView({ org, agent, version }: { org: string; agent: Ag
               {(spec.skills ?? []).length === 0
                 ? "None"
                 : (spec.skills ?? []).map((s) => (
-                    <Link key={s.slug} href={`/skills/${s.slug}`} className="mr-2 underline">
+                    <Link key={s.slug} href={skillHref(s.slug)} className="mr-2 underline">
                       {s.slug}
                       {s.version ? `@${s.version}` : ""}
                     </Link>
