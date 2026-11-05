@@ -90,8 +90,8 @@ VERIFICATION = """
 from choregos_api.main import create_app
 create_app()
 import choregos_orchestrator.activities.base
-from choregos_api.edition import courante, fonctions
-print(courante(), ",".join(sorted(fonctions())))
+from choregos_api.edition import current, features
+print(current(), ",".join(sorted(features())))
 """
 
 

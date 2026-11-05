@@ -331,7 +331,7 @@ def test_the_contract_lists_the_groupings_the_api_accepts() -> None:
 # ───────────────────────── the door never authorises ─────────────────────────
 
 _WRITING_CATALOGUE = """
-outils:
+tools:
   - name: create_ticket
     description: Creates a ticket.
     provider: tickets

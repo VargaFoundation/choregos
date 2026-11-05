@@ -548,22 +548,21 @@ async def test_without_activation_the_plugin_is_inert(monkeypatch: pytest.Monkey
     """Shipped in every image, the plugin does nothing until `CHOREGOS_ONTOLOGY_TRIAL` is set."""
     import os
 
-    from choregos_api.greffons import reinitialiser, routeurs_declares
+    from choregos_api.extensions import declared_routers, reset
     from choregos_api.main import create_app
     from choregos_ontology.service.plugin import MIGRATIONS
 
     monkeypatch.delenv("CHOREGOS_ONTOLOGY_TRIAL", raising=False)
-    monkeypatch.delenv("CHOREGOS_ESSAI_ONTOLOGIE", raising=False)  # lang: fr-ok alias:external
-    reinitialiser()
+    reset()
     try:
         paths = create_app().openapi()["paths"]
         assert "/api/v1/projects/{id}/ontology" not in paths
-        assert routeurs_declares() == ()
+        assert declared_routers() == ()
         assert os.fspath(MIGRATIONS).endswith("inactive"), "inactive, the migration branch is empty"
         monkeypatch.setenv("CHOREGOS_ONTOLOGY_TRIAL", "1")
         assert os.fspath(MIGRATIONS).endswith("versions")
     finally:
-        reinitialiser()
+        reset()
 
 
 def test_without_activation_no_plugin_table(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -572,7 +571,6 @@ def test_without_activation_no_plugin_table(tmp_path: pathlib.Path, monkeypatch:
     from sqlalchemy import create_engine, inspect
 
     monkeypatch.delenv("CHOREGOS_ONTOLOGY_TRIAL", raising=False)
-    monkeypatch.delenv("CHOREGOS_ESSAI_ONTOLOGIE", raising=False)  # lang: fr-ok alias:external
     database = tmp_path / "without-plugin.db"
     monkeypatch.setenv("CHOREGOS_DATABASE_URL", f"sqlite+aiosqlite:///{database}")
     reset_settings_cache()
@@ -587,28 +585,16 @@ def test_without_activation_no_plugin_table(tmp_path: pathlib.Path, monkeypatch:
         reset_settings_cache()
 
 
-def test_former_activation_variable_still_activates(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
-    """Both `CHOREGOS_ONTOLOGY_TRIAL=1` and the former `CHOREGOS_ESSAI_ONTOLOGIE=1` activate the
-    ontology extension until 0.23.0; only the former one logs a deprecation warning."""
-    import logging
-
+def test_former_activation_variable_has_no_effect(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`CHOREGOS_ONTOLOGY_TRIAL=1` activates the ontology extension; the former variable, removed in
+    0.24.0 (S45-49), activates nothing."""
     from choregos_ontology.service import plugin as module
 
-    former = "CHOREGOS_ESSAI_ONTOLOGIE"  # lang: fr-ok alias:external
+    former = "CHOREGOS_ESSAI_ONTOLOGIE"  # lang: fr-ok - removed, asserted gone
     monkeypatch.delenv("CHOREGOS_ONTOLOGY_TRIAL", raising=False)
-    monkeypatch.delenv(former, raising=False)
-    assert not module.active()
+    monkeypatch.setenv(former, "1")
+    assert not module.active(), "the former variable is ignored"
+    assert not hasattr(module, "FORMER_ACTIVATION")
 
     monkeypatch.setenv("CHOREGOS_ONTOLOGY_TRIAL", "1")
-    with caplog.at_level(logging.WARNING, logger=module.__name__):
-        assert module.active()
-    assert not caplog.records, "the English name does not warn"
-
-    monkeypatch.delenv("CHOREGOS_ONTOLOGY_TRIAL")
-    monkeypatch.setenv(former, "1")
-    monkeypatch.setattr(module, "_warned", [])
-    with caplog.at_level(logging.WARNING, logger=module.__name__):
-        assert module.active()
-    assert [r for r in caplog.records if "CHOREGOS_ONTOLOGY_TRIAL" in r.getMessage()], "the former one warns"
+    assert module.active()

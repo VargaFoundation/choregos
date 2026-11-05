@@ -112,7 +112,7 @@ def test_demo_catalogue_uses_tools() -> None:
     text = path.read_text(encoding="utf-8")
     document = yaml.safe_load(text)
     assert isinstance(document, dict)
-    assert "outils" not in document, "the key is `tools:`; `outils:` is read only until 0.23.0"
+    assert "outils" not in document, "the key is `tools:`; the former one is refused since 0.24.0"
     assert "tools" in document
     catalogue = load_catalogue(text)
     assert [tool.name for tool in catalogue.tools] == ["verifier_adresse"]

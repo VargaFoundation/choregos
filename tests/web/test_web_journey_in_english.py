@@ -85,4 +85,4 @@ def test_the_former_paths_are_gone() -> None:
 
 def test_the_french_edge_label_fallback_is_gone() -> None:
     source = (ROOT / WEB / "src/components/workflows/map/layout.ts").read_text(encoding="utf-8")
-    assert "échec" not in source and "rejet" not in source  # lang: fr-ok alias:external
+    assert "échec" not in source and "rejet" not in source  # lang: fr-ok - asserted gone

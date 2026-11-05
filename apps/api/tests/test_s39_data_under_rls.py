@@ -21,7 +21,7 @@ import pytest
 from alembic import command
 from alembic.config import Config
 from choregos_api.config import get_settings
-from choregos_core.catalogue_d_agents import entrees
+from choregos_core.agent_catalogue import entries
 from sqlalchemy import create_engine, text
 
 from .conftest import PG_URL, _app_url, _prepare_postgres, without_postgres
@@ -50,7 +50,7 @@ def _row(connection: object, table: str, **columns: object) -> None:
 
 def _left_behind(connection: object) -> str:
     """What the three migrations left on the dev tenant; returns the catalogue slug used."""
-    entry = next(iter(entrees()))
+    entry = next(iter(entries()))
     _row(connection, "organizations", id="o1", slug="varga", name="V", settings="{}")
     _row(
         connection,
@@ -88,7 +88,7 @@ def _left_behind(connection: object) -> str:
         created_by="template:github-software-delivery@1.0.0",
     )
     # A catalogue agent installed directly, whose scope the S39-09 backfill never reached.
-    other = next(e for e in entrees() if e.slug != entry.slug)
+    other = next(e for e in entries() if e.slug != entry.slug)
     _row(
         connection,
         "agents",

@@ -45,8 +45,6 @@ class AccessLine:
     def refused(self) -> bool:
         return self.refusals > 0
 
-    # Former member names (ADR 0098 §3 (d)): read-only views of the renamed fields.
-
     def to_dict(self) -> dict[str, Any]:
         return {
             "nature": self.nature,
@@ -54,16 +52,6 @@ class AccessLine:
             "requests": self.requests,
             "refusals": self.refusals,
             "reasons": self.reasons,
-        }
-
-    def former_dict(self) -> dict[str, Any]:
-        """The line as it was served before S45-02: only `nature` and `motifs` differ."""
-        return {
-            "nature": "autre" if self.nature == "other" else self.nature,  # lang: fr-ok alias:external
-            "target": self.target,
-            "requests": self.requests,
-            "refusals": self.refusals,
-            "motifs": self.reasons,  # lang: fr-ok alias:external
         }
 
 
@@ -82,18 +70,12 @@ class AccessReport:
     def by_nature(self, nature: str) -> list[AccessLine]:
         return [line for line in self.lines if line.nature == nature]
 
-    # Former member names (ADR 0098 §3 (d)).
-
     def to_dict(self) -> dict[str, Any]:
         return {
             "events": self.events,
             "inferred": self.inferred,
             "refusals": sum(line.refusals for line in self.lines),
             "access": [line.to_dict() for line in self.lines],
-            # Former names, emitted for one release (ADR 0046, S45-02).
-            "evenements": self.events,  # lang: fr-ok alias:external
-            "deduites": self.inferred,  # lang: fr-ok alias:external
-            "acces": [line.former_dict() for line in self.lines],  # lang: fr-ok alias:external
         }
 
 

@@ -13,18 +13,16 @@ parameters are rendered in isolated Jinja, with those of the action (`params`) a
 the effects already done (`effects`): an onboarding's second effect adds to the groups the account
 the first one created.
 
-The French names this module had before 0.21 (`effets.py`, `declarer_un_effet`...) keep working
-until 0.23.0 and warn (ADR 0098 §3 (f)).
+The French names this module had before 0.21 (`effets.py`, `declarer_un_effet`...) were removed in
+0.24.0 (S45-49).
 """
 
 from __future__ import annotations
 
-import warnings
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
-from choregos_core.compat import EXTERNAL_ALIAS_REMOVAL, alias_names
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -54,28 +52,13 @@ _EFFECTS: dict[str, Execute] = {}
 _POLICIES: dict[str, str] = {}
 
 
-def declare_effect(
-    name: str,
-    execute: Execute,
-    *,
-    policy: str = "approval",
-    politique: str | None = None,  # lang: fr-ok alias:external
-) -> None:
+def declare_effect(name: str, execute: Execute, *, policy: str = "approval") -> None:
     """Called by an extension when it loads. The same effect declared again passes; another one does not.
 
     `policy`: what a workflow action needs to play it: `approval` (a person decides, the default),
-    `allowed` (the transition is enough) or `forbidden`. `politique=` is the former name of
-    `policy=`: it keeps working until 0.23.0 and warns."""
+    `allowed` (the transition is enough) or `forbidden`."""
     from choregos_adapters import POLICIES
 
-    if politique is not None:  # lang: fr-ok alias:external
-        warnings.warn(
-            "declare_effect(politique=...) is deprecated: use policy= "  # lang: fr-ok alias:external
-            f"(removed in {EXTERNAL_ALIAS_REMOVAL}, ADR 0098)",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        policy = politique  # lang: fr-ok alias:external
     if policy not in POLICIES:
         raise ValueError(f"unknown policy for the effect {name}: {policy} (known: {POLICIES})")
     if name in _EFFECTS and _EFFECTS[name] is not execute:
@@ -293,19 +276,3 @@ def reset() -> None:
 
 
 reset()
-
-
-# ───────────────────────────── the former names (removed in 0.23.0) ─────────────────────────────
-
-_FORMER = {
-    "EffetRefuse": "EffectRefused",  # lang: fr-ok alias:external
-    "ContexteEffet": "EffectContext",  # lang: fr-ok alias:external
-    "Executer": "Execute",  # lang: fr-ok alias:external
-    "declarer_un_effet": "declare_effect",  # lang: fr-ok alias:external
-    "politique_de_l_effet": "effect_policy",  # lang: fr-ok alias:external
-    "effet": "effect",  # lang: fr-ok alias:external
-    "effets_declares": "declared_effects",  # lang: fr-ok alias:external
-    "rendre": "render",  # lang: fr-ok alias:external
-    "reinitialiser": "reset",  # lang: fr-ok alias:external
-}
-alias_names(__name__, _FORMER, removed_in=EXTERNAL_ALIAS_REMOVAL)

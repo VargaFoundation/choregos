@@ -353,8 +353,7 @@ affinity:
 {{/*
 The alert rules, written once and served in both flavours (PrometheusRule and VMRule).
 The PromQL is the same; only the packaging changes. Since 0.21 (ADR 0098) four alerts have English
-names; each carries its former name in `legacy_alertname` until 0.23.0, so a route or a silence can
-still match it.
+names; the `legacy_alertname` label that carried their former names was removed in 0.24.0 (S45-49).
 */}}
 {{- define "choregos.alertRules" -}}
 - alert: ChoregosApi5xxErrors
@@ -362,7 +361,7 @@ still match it.
     sum(rate(http_requests_total{job="choregos-api",status=~"5.."}[5m]))
     / clamp_min(sum(rate(http_requests_total{job="choregos-api"}[5m])), 0.001) > 0.01
   for: 10m
-  labels: { severity: critical, legacy_alertname: ChoregosApiErreurs5xx }
+  labels: { severity: critical }
   annotations:
     summary: "More than 1 % of 5xx on the Choregos API"
     runbook_url: "https://github.com/VargaFoundation/choregos/blob/main/docs/runbooks/api-5xx.md"
@@ -375,19 +374,19 @@ still match it.
 - alert: ChoregosRunPending
   expr: sum(kube_pod_status_phase{phase="Pending",namespace=~"proj-.*-runners"}) > 0
   for: 15m
-  labels: { severity: warning, legacy_alertname: ChoregosRunEnAttente }
+  labels: { severity: warning }
   annotations:
     summary: "A PipelineRun has been waiting for 15 min (autoscaling down?)"
 - alert: ChoregosDailyBudgetHigh
   expr: choregos_project_daily_cost_usd / choregos_project_daily_budget_usd > 0.8
   for: 5m
-  labels: { severity: warning, legacy_alertname: ChoregosBudgetJournalier }
+  labels: { severity: warning }
   annotations:
     summary: "A project's daily budget is more than 80 % consumed"
 - alert: ChoregosTrainFrozen
   expr: choregos_train_frozen == 1
   for: 2h
-  labels: { severity: warning, legacy_alertname: ChoregosTrainGele }
+  labels: { severity: warning }
   annotations:
     summary: "A release train has been frozen for 2 hours"
     runbook_url: "https://github.com/VargaFoundation/choregos/blob/main/docs/runbooks/train-frozen.md"

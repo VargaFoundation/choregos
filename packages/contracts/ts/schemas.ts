@@ -191,7 +191,7 @@ export type PluginEvalsCase = {
   max_cost_usd?: number | null;
 };
 
-/** An eval suite a plugin ships for one of its agents, a file of `contents.evals` (ADR 0093, ADR 0020). Level 1 is the shape of the core catalogue's `eval_cases/` (`choregos_core.catalogue_d_agents.evals`): the agent's rendered instructions, lower-cased, hold every `must_contain` and no `must_not_contain`; the installer refuses a plugin whose own suite fails. `cases` are in the `AgentEvalCase` shape of the API (S32-03, S40-02d): a deterministic one (`live: false`) is played by the installer on its sample input; a `live` one is validated, never run at install. */
+/** An eval suite a plugin ships for one of its agents, a file of `contents.evals` (ADR 0093, ADR 0020). Level 1 is the shape of the core catalogue's `eval_cases/` (`choregos_core.agent_catalogue.evals`): the agent's rendered instructions, lower-cased, hold every `must_contain` and no `must_not_contain`; the installer refuses a plugin whose own suite fails. `cases` are in the `AgentEvalCase` shape of the API (S32-03, S40-02d): a deterministic one (`live: false`) is played by the installer on its sample input; a `live` one is validated, never run at install. */
 export type PluginEvals = unknown | unknown;
 
 /** one published version: exactly one of `oci` or `git` */

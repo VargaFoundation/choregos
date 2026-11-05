@@ -49,14 +49,14 @@ def mutate(core_ref: Path) -> Mutate:
 @pytest.fixture
 def plugin(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """The plugin, active for the duration of the test: its entry points come from the installed
-    package, and `CHOREGOS_ESSAI_ONTOLOGIE=1` switches it on — exactly as in a deployment."""
-    from choregos_api.greffons import reinitialiser
+    package, and `CHOREGOS_ONTOLOGY_TRIAL=1` switches it on — exactly as in a deployment."""
+    from choregos_api.extensions import reset
 
-    monkeypatch.setenv("CHOREGOS_ESSAI_ONTOLOGIE", "1")
+    monkeypatch.setenv("CHOREGOS_ONTOLOGY_TRIAL", "1")
     try:
         yield
     finally:
-        reinitialiser()
+        reset()
 
 
 @pytest.fixture

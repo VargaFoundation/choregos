@@ -11,7 +11,7 @@ from typing import Any
 
 import yaml
 from choregos_contracts import Policy, ProjectConfig
-from choregos_core.quotas import DEFAUT, Quota
+from choregos_core.quotas import DEFAULT, Quota
 
 
 def _dump(documents: list[dict[str, Any]]) -> str:
@@ -189,7 +189,7 @@ def render_project_manifests(
     policy: Policy,
     *,
     egress_image: str = EGRESS_IMAGE,
-    quota: Quota = DEFAUT,
+    quota: Quota = DEFAULT,
     org_allow_domains: list[str] | None = None,
 ) -> dict[str, str]:
     """Render a project's files: namespaces, quotas, netpol, RBAC, egress, Tekton, Argo.
@@ -202,7 +202,7 @@ def render_project_manifests(
     runners = f"proj-{slug}-runners"
     ci = f"proj-{slug}-ci"
     quota_cpu = quota.cpu
-    quota_memory = quota.memoire
+    quota_memory = quota.memory
     gvisor = policy.sandbox.runtime == "gvisor"
 
     namespaces = _dump(

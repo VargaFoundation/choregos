@@ -485,7 +485,7 @@ async def _call(
     from choregos_adapters.errors import AdapterError
     from choregos_adapters.mcp import McpError
     from choregos_core.redaction import redact
-    from choregos_core.secrets import SecretIntrouvable
+    from choregos_core.secrets import SecretNotFound
 
     instance = tool.connector
     # ADR 0105: how the connector is reached is decided first; a gateway refusal leaves nothing behind.
@@ -532,7 +532,7 @@ async def _call(
         return 403, {"error": str(refused), "type": "network_policy", "code": refused.code}
     except AdapterError as adapter_refusal:
         return 422, {"error": redact(str(adapter_refusal))}
-    except (SecretIntrouvable, httpx.HTTPError) as failure:
+    except (SecretNotFound, httpx.HTTPError) as failure:
         return 502, {"error": redact(f"{instance.name} unreachable: {failure}")}
     refusal = output_refusal(tool, result)
     if refusal is not None:

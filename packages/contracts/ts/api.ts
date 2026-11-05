@@ -161,8 +161,6 @@ export type Problem = {
     msg?: string;
     /** Machine code of a workflow or policy issue */
     code?: string;
-    /** @deprecated Former spelling of a code renamed to English, emitted for one release (ADR 0046) */
-    deprecated_code?: string;
     line?: number;
     column?: number;
   }>;
@@ -2888,8 +2886,6 @@ export type WorkflowIssue = {
   path?: string | null;
   line?: number | null;
   column?: number | null;
-  /** @deprecated Former spelling of a code renamed to English (`role.playbook_introuvable` is now `role.playbook_not_found`), emitted for one release (ADR 0046, S45-02) */
-  deprecated_code?: string | null;
 };
 
 export type WorkflowGraph = {
@@ -4228,8 +4224,6 @@ export type McpGatewayConflict = {
     loc?: Array<string>;
     msg?: string;
     code?: string;
-    /** @deprecated */
-    deprecated_code?: string;
     line?: number;
     column?: number;
   }>;
@@ -4671,12 +4665,8 @@ export interface Operations {
   getRunAccess: { method: "GET"; path: "/runs/{id}/access"; body: never; response: {
   /** Log events scanned */
   events: number;
-  /** @deprecated Former name of `events`, emitted for one release (ADR 0046, S45-02) */
-  evenements?: number;
   /** Permission decisions whose kind was inferred because the agent did not state it */
   inferred?: number;
-  /** @deprecated Former name of `inferred`, emitted for one release (ADR 0046, S45-02) */
-  deduites?: number;
   /** Total number of denied requests */
   refusals: number;
   /** What the catalogue tools called by the run cost, in euros */
@@ -4704,14 +4694,6 @@ export interface Operations {
     /** How many of those requests were denied */
     refusals: number;
     reasons?: Array<string>;
-  }>;
-  /** @deprecated Former name of `access`, emitted for one release (ADR 0046, S45-02) */
-  acces?: Array<{
-    nature: "read" | "write" | "execute" | "network" | "tool" | "autre";
-    target: string;
-    requests: number;
-    refusals: number;
-    motifs?: Array<string>;
   }>;
 } };
   getRunCiLogs: { method: "GET"; path: "/internal/runs/{id}/ci-logs"; body: never; response: {

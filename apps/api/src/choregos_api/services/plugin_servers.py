@@ -474,13 +474,13 @@ async def reconcile(session: AsyncSession, instance: OrgConnector, settings: Set
     found = runtime(settings)
     if server is None or found is None:
         return instance.status
-    from choregos_core.secrets import SecretIntrouvable
+    from choregos_core.secrets import SecretNotFound
 
     try:
         resolved = await resolved_configuration(
             session, instance.org_id, KIND, TYPE, instance.config, instance.secret_refs
         )
-    except SecretIntrouvable as missing:
+    except SecretNotFound as missing:
         raise unprocessable(
             f"the server `{instance.name}` cannot read its configuration: {missing}"
         ) from missing

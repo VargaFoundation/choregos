@@ -17,18 +17,14 @@ and the access control is the `imagePullSecret`. A key signed offline will be th
 customer hosts it themselves (ADR 0024, decision 5).
 
 This module is the extension API of the edition (an entry-point package of the `choregos.plugins`
-group is an *extension*). Its French names of before 0.21 keep working until 0.23.0 and warn
-(ADR 0098 §3 (f)).
+group is an *extension*). Its French names of before 0.21 were removed in 0.24.0 (S45-49).
 """
 
 from __future__ import annotations
 
 import re
-import warnings
 from collections.abc import Iterable
 from typing import Any, Final
-
-from choregos_core.compat import EXTERNAL_ALIAS_REMOVAL, alias_names
 
 from . import tenant_sign_in
 
@@ -60,7 +56,6 @@ def declare(
     publisher: str | None = None,
     version: str | None = None,
     licence: str | None = None,
-    fonctions: Iterable[str] | None = None,  # lang: fr-ok alias:external
 ) -> None:
     """Called by the enterprise edition when it loads. The core never calls it.
 
@@ -69,18 +64,8 @@ def declare(
     edition's publisher itself. Both are optional, and refused for the community edition, which has
     neither. `licence` is the licence the edition extension is distributed under, announced the same
     way (a free label such as an SPDX identifier, 1 to 80 characters), shown in the console's About
-    panel. `fonctions=` is the former name of `features=`: it still works and warns.
+    panel.
     """
-    if fonctions is not None:
-        warnings.warn(
-            "declare(fonctions=...) is deprecated: use features= "
-            f"(removed in {EXTERNAL_ALIAS_REMOVAL}, ADR 0098)",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        if features is not None:
-            raise TypeError("declare: fonctions and features are the same argument, pass one")
-        features = fonctions
     if name not in (COMMUNITY, ENTERPRISE):
         raise ValueError(f"unknown edition: {name!r}")
     if publisher is not None:
@@ -228,41 +213,3 @@ def reset() -> None:
     _SESSION_VALIDATIONS.clear()
     _PLATFORM_ADMINISTRATORS.clear()
     tenant_sign_in.reset()
-
-
-# ───────────────────────────── the former names (removed in 0.23.0) ─────────────────────────────
-
-_FORMER = {
-    "COMMUNAUTAIRE": "COMMUNITY",  # lang: fr-ok alias:external
-    "ENTREPRISE": "ENTERPRISE",  # lang: fr-ok alias:external
-    "declarer": "declare",  # lang: fr-ok alias:external
-    "declarer_le_mappeur_de_groupes": "declare_group_mapper",  # lang: fr-ok alias:external
-    "mappeur_de_groupes": "group_mapper",  # lang: fr-ok alias:external
-    "courante": "current",  # lang: fr-ok alias:external
-    "fonctions": "features",  # lang: fr-ok alias:external
-    "est_entreprise": "is_enterprise",  # lang: fr-ok alias:external
-    "SessionRefusee": "SessionRefused",  # lang: fr-ok alias:external
-    "declarer_une_validation_de_session": "declare_session_validation",  # lang: fr-ok alias:external
-    "validations_de_session": "session_validations",  # lang: fr-ok alias:external
-    "declarer_un_administrateur_de_plateforme": (  # lang: fr-ok alias:external
-        "declare_platform_administrator"
-    ),
-    "administrateurs_de_plateforme": "platform_administrators",  # lang: fr-ok alias:external
-    "reinitialiser": "reset",  # lang: fr-ok alias:external
-}
-COMMUNAUTAIRE = COMMUNITY  # lang: fr-ok alias:external
-ENTREPRISE = ENTERPRISE  # lang: fr-ok alias:external
-declarer = declare  # lang: fr-ok alias:external
-declarer_le_mappeur_de_groupes = declare_group_mapper  # lang: fr-ok alias:external
-mappeur_de_groupes = group_mapper  # lang: fr-ok alias:external
-courante = current  # lang: fr-ok alias:external
-fonctions = features  # lang: fr-ok alias:external
-est_entreprise = is_enterprise  # lang: fr-ok alias:external
-SessionRefusee = SessionRefused  # lang: fr-ok alias:external
-declarer_une_validation_de_session = declare_session_validation  # lang: fr-ok alias:external
-validations_de_session = session_validations  # lang: fr-ok alias:external
-declarer_un_administrateur_de_plateforme = declare_platform_administrator  # lang: fr-ok alias:external
-administrateurs_de_plateforme = platform_administrators  # lang: fr-ok alias:external
-reinitialiser = reset  # lang: fr-ok alias:external
-
-alias_names(__name__, _FORMER, removed_in=EXTERNAL_ALIAS_REMOVAL)

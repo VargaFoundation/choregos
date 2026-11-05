@@ -30,7 +30,7 @@ from ..db.models import (
     WorkflowDef,
     WorkItem,
 )
-from ..errors import conflict, former_code, unprocessable
+from ..errors import conflict, unprocessable
 from ..logging import get_logger
 
 DEFAULT_WORKFLOW = "default-simple"
@@ -242,7 +242,6 @@ async def publish_workflow(  # noqa: PLR0913 - the only write path: its options 
                     "code": i.code,
                     "line": i.line,
                     "column": i.column,
-                    **former_code(i.code),
                 }
                 for i in report.errors
             ],
@@ -417,10 +416,7 @@ async def _publish_what_template_delivers(
         if not report.valid:
             raise unprocessable(
                 f"template `{project.template_ref}` ships an invalid workflow",
-                [
-                    {"loc": [i.path or ""], "msg": i.message, "code": i.code, **former_code(i.code)}
-                    for i in report.errors
-                ],
+                [{"loc": [i.path or ""], "msg": i.message, "code": i.code} for i in report.errors],
             )
         name = parsed.metadata.name
         if name in rows:
