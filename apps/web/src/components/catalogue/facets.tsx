@@ -30,7 +30,7 @@ export function CatalogueFacets({
     <div className="space-y-3" data-testid="catalogue-facets">
       <div className="grid gap-3 md:grid-cols-[2fr_1fr]">
         <label className="space-y-1">
-          <span className="text-xs text-ink-muted">Search the catalogue</span>
+          <span className="text-xs text-ink-muted">Search the library</span>
           <Input
             type="search"
             className="w-full"

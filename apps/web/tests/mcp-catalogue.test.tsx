@@ -109,15 +109,15 @@ describe("the catalogue page", () => {
     const total = catalogue.entries.length;
     expect(screen.getByText(`${total} servers`)).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Search the catalogue"), { target: { value: "grafana" } });
+    fireEvent.change(screen.getByLabelText("Search the library"), { target: { value: "grafana" } });
     expect(screen.getByTestId("entry-grafana")).toBeInTheDocument();
     expect(screen.queryByTestId("entry-github")).toBeNull();
-    fireEvent.change(screen.getByLabelText("Search the catalogue"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("Search the library"), { target: { value: "" } });
 
     fireEvent.click(screen.getByLabelText("Installable only"));
     expect(screen.queryByTestId("entry-notion")).toBeNull();
     expect(screen.getByTestId("entry-github")).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Search the catalogue"), { target: { value: "no-such-server-anywhere" } });
+    fireEvent.change(screen.getByLabelText("Search the library"), { target: { value: "no-such-server-anywhere" } });
     expect(screen.getByText("Nothing matches")).toBeInTheDocument();
   });
 

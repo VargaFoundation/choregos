@@ -91,7 +91,7 @@ describe("the catalogue page", () => {
     fireEvent.click(screen.getByLabelText("Hide high risk"));
     expect(screen.queryByTestId("entry-systematic-debugging")).toBeNull();
     fireEvent.click(screen.getByLabelText("Hide high risk"));
-    fireEvent.change(screen.getByLabelText("Search the catalogue"), { target: { value: "no-such-skill-anywhere" } });
+    fireEvent.change(screen.getByLabelText("Search the library"), { target: { value: "no-such-skill-anywhere" } });
     expect(screen.getByText("Nothing matches")).toBeInTheDocument();
   });
 

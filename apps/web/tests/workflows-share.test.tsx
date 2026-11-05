@@ -35,8 +35,8 @@ describe("sharing a workflow to the organisation's catalogue (S49-07b)", () => {
     });
     await screen.findByTestId("workflow-card-onboarding");
     const cards = screen.getByRole("list", { name: "Workflows" });
-    await waitFor(() => expect(within(cards).getAllByRole("button", { name: "Share to the catalogue" })).toHaveLength(1));
-    fireEvent.click(within(cards).getByRole("button", { name: "Share to the catalogue" }));
+    await waitFor(() => expect(within(cards).getAllByRole("button", { name: "Share to the library" })).toHaveLength(1));
+    fireEvent.click(within(cards).getByRole("button", { name: "Share to the library" }));
     fireEvent.click(await screen.findByRole("button", { name: "Share onboarding" }));
     await waitFor(() => expect(api.shareWorkflow).toHaveBeenCalledWith("acme", { project: "hr", name: "onboarding" }));
   });

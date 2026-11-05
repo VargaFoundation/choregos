@@ -55,7 +55,7 @@ type Outcome =
 const why = (cause: unknown) => (cause instanceof Error ? cause.message : "refused");
 
 /**
- * Catalogue → Plugins (S43-08, ADR 0093): the sources the deployment declares and what their indexes
+ * Library → Plugins (S43-08, ADR 0093): the sources the deployment declares and what their indexes
  * offer, the plugins installed in the organisation with what each brought, and the installs that wait
  * for a second administrator (ADR 0050). Every member reads; installing, upgrading, uninstalling and
  * approving are an organisation administrator's (ADR 0074), and the API refuses the administrator who

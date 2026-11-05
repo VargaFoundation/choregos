@@ -944,9 +944,9 @@ function SkillsSection({
           </Button>
         </div>
         <p className="text-xs text-ink-muted">
-          Not in the library yet?{" "}
+          Not installed yet?{" "}
           <Link href="/skills/library" className="underline">
-            Browse the skills catalogue
+            Browse the skills library
           </Link>
           .
         </p>
@@ -1033,7 +1033,7 @@ function McpSection({
         <p className="text-xs text-ink-muted">
           No MCP connector in the organisation yet: an administrator declares one, or installs one from{" "}
           <Link href="/library/mcp-servers" className="underline">
-            the MCP catalogue
+            the library
           </Link>
           .
         </p>

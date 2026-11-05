@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-/** Plugins as the console reads them (ADR 0093, S43-08): the pure parts of Catalogue → Plugins. */
+/** Plugins as the console reads them (ADR 0093, S43-08): the pure parts of Library → Plugins. */
 import type {
   InstalledPlugin,
   MeDto,

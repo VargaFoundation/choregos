@@ -51,7 +51,7 @@ describe("the sidebar (S24-03, ADR 0043)", () => {
         .getAllByRole("link")
         .map((lien) => lien.textContent);
     expect(names("Work")).toEqual(["Projects", "Inbox"]);
-    expect(names("Catalogue")).toEqual(["Agents", "Skills", "Knowledge", "Memories", "MCP servers", "Connector types", "Plugins"]);
+    expect(names("Library")).toEqual(["Agents", "Skills", "Knowledge", "Memories", "MCP servers", "Connector types", "Plugins"]);
     expect(names("Organisation")).toEqual(["Integrations", "Spend", "Admin"]);
   });
 
