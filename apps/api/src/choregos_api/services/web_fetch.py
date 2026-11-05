@@ -23,7 +23,10 @@ makes the request:
 - what comes back is third-party text: it goes through the injection guard like a connector's answer.
 
 The network is behind `WebClient`; `FakeWebClient` serves scripted pages to the tests and to
-`CHOREGOS_FAKES=1` (ADR 0005).
+`CHOREGOS_FAKES=1` (ADR 0005). A project the live eval matrix bound to a case's fake web
+(`web_search.eval_web_scene`, honoured only under `CHOREGOS_EVAL_FAKE_SCENES`, #1378) reads the case's
+pages instead: a `FakeWebClient` holding them and a resolver that answers their hosts alone. Every check
+above still runs on them, and what comes back goes through the same guard.
 """
 
 from __future__ import annotations
@@ -35,7 +38,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import timedelta
 from html.parser import HTMLParser
-from typing import Any, ClassVar, Protocol
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol
 from urllib.parse import unquote, urljoin, urlsplit
 from urllib.robotparser import RobotFileParser
 
@@ -55,6 +58,9 @@ from ..db.session import outside_the_transaction
 from .network import run_network
 from .outbound_proxy import outbound_proxy_for
 from .platform_network import calls_to_host, journal, user_agent
+
+if TYPE_CHECKING:
+    from choregos_adapters.fakes.scenes import WebScene
 
 TOOL_NAME = "web_fetch"
 ROBOTS_TOKEN = "Choregos"  # noqa: S105 - the user-agent token robots.txt addresses, not a secret
@@ -239,6 +245,33 @@ class FakeWebClient:
         if method == "HEAD":
             data = b""
         return WebResponse(status, dict(answer_headers), data[:max_bytes], len(data) > max_bytes)
+
+
+def scene_client(scene: WebScene) -> FakeWebClient:
+    """The pages of a case's fake web (`choregos_adapters.fakes.scenes.WebScene`, #1378), served as HTML:
+    each its title and its text, read back as any page is."""
+    from html import escape
+
+    client = FakeWebClient()
+    for url, page in scene.pages.items():
+        client.add(
+            url,
+            f"<html><head><title>{escape(page['title'])}</title></head>"
+            f"<body><p>{escape(page['text'])}</p></body></html>",
+        )
+    return client
+
+
+def scene_resolver(scene: WebScene) -> Resolver:
+    """A resolver that answers the hosts of a case's fake web, and no other (#1378)."""
+    from choregos_adapters.fakes.scenes import WEB_ADDRESS
+
+    hosts = set(scene.hosts)
+
+    async def resolve(host: str) -> list[str]:
+        return [WEB_ADDRESS] if host in hosts else []
+
+    return resolve
 
 
 _CLIENT: dict[str, WebClient] = {}
@@ -619,7 +652,10 @@ async def fetch(
 ) -> tuple[int, dict[str, Any], str]:
     """Reads one page. Returns (status code, result, provider) — the provider (`web:<host>`) is what the
     ledger and the per-host rate count, the host of the page asked for."""
+    from .web_search import eval_web_scene
+
     network = await run_network(session, run)
+    scene = await eval_web_scene(session, project)
     try:
         proxy = await outbound_proxy_for(session, project.org_id, TOOL_NAME)
     except OutboundProxyError as unusable:
@@ -630,9 +666,9 @@ async def fetch(
         session=session,
         run=run,
         project=project,
-        client=get_web_client(fakes),
+        client=scene_client(scene) if scene is not None else get_web_client(fakes),
         proxy=proxy,
-        resolver=get_resolver(),
+        resolver=scene_resolver(scene) if scene is not None else get_resolver(),
         agent=await user_agent(session, project.org_id),
         allow=[*network.allow, *network.implied],
         deny=network.deny,

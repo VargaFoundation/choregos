@@ -830,6 +830,8 @@ async def _seed_agent_case(payload: dict[str, Any], context: str, tools: str) ->
         project = await _case_project(session, bundle.project, case)
         refusal = await _case_connectors(session, project, case, connectors)
         if not refusal:
+            refusal = await _case_web(session, project, case)
+        if not refusal:
             refusal = await _case_agent(session, project, case, connectors)
         if refusal:
             return _skip(refusal)
@@ -1028,23 +1030,73 @@ async def _case_connectors(
                     if getattr(known, field_name) != value:
                         setattr(known, field_name, value)
         await session.flush()
-        enabled = (
-            await session.execute(
-                select(OrgConnectorProject).where(
-                    OrgConnectorProject.connector_id == row.id, OrgConnectorProject.project_id == project.id
-                )
-            )
-        ).scalar_one_or_none()
-        if enabled is None:
-            session.add(
-                OrgConnectorProject(
-                    org_id=project.org_id,
-                    connector_id=row.id,
-                    project_id=project.id,
-                    enabled_by=live_cases.EVAL_CREATOR,
-                )
-            )
+        await _turned_on(session, project, row)
         await _case_write_policies(session, project, list(held.values()), approval)
+    await session.flush()
+    return ""
+
+
+async def _turned_on(session: Any, project: Project, row: OrgConnector) -> None:
+    """The matrix's connector turned on for the case's eval project (and for no other: it is available
+    to the selected projects only)."""
+    enabled = (
+        await session.execute(
+            select(OrgConnectorProject).where(
+                OrgConnectorProject.connector_id == row.id, OrgConnectorProject.project_id == project.id
+            )
+        )
+    ).scalar_one_or_none()
+    if enabled is None:
+        session.add(
+            OrgConnectorProject(
+                org_id=project.org_id,
+                connector_id=row.id,
+                project_id=project.id,
+                enabled_by=live_cases.EVAL_CREATOR,
+            )
+        )
+
+
+async def _case_web(session: Any, project: Project, case: dict[str, Any]) -> str:
+    """The case's fake web (`eval_live_cases.case_web`, #1378): its `web_search` connector declared or
+    brought up to date with the case's pages, turned on for the case's eval project alone; `""`, or why
+    the case cannot be played. A connector of the same name that is not the matrix's is never touched."""
+    from choregos_adapters.fakes.scenes import FAKE_SCENE_FIELD, WEB_SCENE
+
+    wanted = live_cases.case_web(case)
+    if wanted is None:
+        return ""
+    named = OrgConnector.org_id == project.org_id, OrgConnector.name == wanted.name
+    row = (await session.execute(select(OrgConnector).where(*named))).scalar_one_or_none()
+    if row is None:
+        row = OrgConnector(
+            org_id=project.org_id,
+            name=wanted.name,
+            kind=wanted.kind,
+            type=wanted.type,
+            config=wanted.config,
+            created_by=live_cases.EVAL_CREATOR,
+            availability="selected_projects",
+        )
+        session.add(row)
+        await session.flush()
+    elif not (
+        row.kind == wanted.kind
+        and row.type == wanted.type
+        and (row.config or {}).get(FAKE_SCENE_FIELD) == WEB_SCENE
+        and not row.secret_refs
+        and row.plugin_server is None
+        and row.availability == "selected_projects"
+        and row.created_by == live_cases.EVAL_CREATOR
+    ):
+        return (
+            f"the organisation has a connector `{wanted.name}` that is not the matrix's fake web: the case "
+            "is not played against it (use an eval organisation)"
+        )
+    elif row.config != wanted.config:
+        # The case's pages changed: its fake web is the case's, as the connector's scene is.
+        row.config = wanted.config
+    await _turned_on(session, project, row)
     await session.flush()
     return ""
 

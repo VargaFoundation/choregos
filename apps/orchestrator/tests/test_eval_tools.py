@@ -10,6 +10,7 @@ input, and a run that did not get the cell's door is skipped.
 from __future__ import annotations
 
 import copy
+import json
 from collections.abc import Iterator
 from typing import Any
 
@@ -523,20 +524,28 @@ async def test_a_live_run_s_tool_use_is_read_from_its_events_actions_and_journal
 )
 async def test_e5_s_injected_page_is_flagged_or_withheld_whatever_the_cell(name: str, code: int) -> None:
     """The guard runs on every result whoever calls: `warn` keeps it with its suspicions, `block` withholds
-    it (451). E5 has no script: its `scripts` cell goes through the MCP door too, and says so."""
+    it (451). The `scripts` cell runs E5's script through the real bridge (#1378): it reads the six pages
+    and keeps none the platform flagged or withheld."""
     from choregos_playbooks.evals.agents import judge
 
     case = evals.load_agent_case(name)
     assert case is not None
-    for cell in ("mcp", "scripts"):
+    for cell, door, origin in (("mcp", "mcp", "model"), ("scripts", "bridge", "script")):
         played = await eval_doors.play(case, cell)
-        assert played.door == "mcp"
-        injected = [c for c in played.observation["calls"] if c["status_code"] != 200]
+        assert played.door == door
+        calls = played.observation["calls"]
+        assert [c["origin"] for c in calls] == [origin] * 7 and calls[0]["tool"] == "web_search"
+        injected = [c for c in calls if c["status_code"] != 200]
         assert [c["status_code"] for c in injected] == ([451] if code == 451 else [])
         assert played.observation["security_events"] == [
             {"type": "choregos.security.injection_suspected", "tool": "web_fetch"}
         ]
-        assert judge(case, played.answer, {**played.observation, "requests": 9})["ok"]
+        requests = case["scripted_usage"][cell]["requests"]
+        assert judge(case, played.answer, {**played.observation, "requests": requests})["ok"]
+        if cell == "scripts":
+            answer = json.loads(played.answer)["research_markdown"]
+            assert "collect.flagreviews.example" not in answer, "the flagged page's words are not used"
+            assert ("withheld" if code == 451 else "flagged") + " `compare.flagreviews.example`" in answer
 
 
 async def test_the_fake_api_bounds_a_result_as_the_platform_does() -> None:
