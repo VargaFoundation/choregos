@@ -1,6 +1,7 @@
 # 0085 — The approved row is the outbox of a governed action, and a workflow without one runs nothing
 
-- **Status**: accepted, 2026-10-22 — implemented by S40-19
+- **Status**: accepted, 2026-10-22 — implemented by S40-19; amended 2026-11-05 (the tool route commits
+  before each external call, #1354)
 - **Concerns**: the API (`db/session.py`, `deps.py`, `services/actions.py`, `services/action_relay.py`,
   `main.py`), the ontology plugin (`service/actions.py`), the orchestrator (`activities/actions.py`);
   builds on [ADR 0008](0008-idempotence-and-run-id.md) (idempotence),
@@ -103,3 +104,22 @@ what happened next to the thing that happened.
     measurements, not audit records; making them durable is its own story;
   - the relay's cadence and grace are constants, not settings;
   - no metric counts relayed starts yet; the relay logs `action.relay.started`.
+
+## Amendment — 2026-11-05: the tool route commits before each external call (#1354)
+
+`callRunTool` no longer keeps one transaction from the run-token check to its exit: on PostgreSQL each
+call in flight held a pooled connection `idle in transaction` for as long as its external call took, and
+a few scripting runs (ADR 0122 §7) filled a replica's pool. The route marks its session
+(`db/session.py::allow_release_during_calls`) and each external call — the catalogue, an extension, a
+connector, a governed write's start and wait, `web_fetch`'s resolver, robots.txt and page, `web_search`'s
+backend — runs in `outside_the_transaction`, which commits first (`release_connection`). The callbacks
+that commit released run at once (decision 1 holds: never before their row is written), and the
+session's next transaction begins in the same RLS scope and with the same user (an `after_begin`
+listener), as `set_config(..., true)` would otherwise lose them.
+
+What this ADR relies on still holds for the call itself: its ledger line, its place under the cap given
+back, the budget's alerts and its event, whose `pg_notify` leaves with the same commit, are one
+transaction after the call, committed by the route. A booking that fails after the call answers 500, is
+logged as `tool_call.not_booked` with what the line would have held, and leaves the call's place under
+the cap committed, so the cap still counts it until the sweep. A session nobody marked — every other
+route, and the agent sessions' calls through the broker (#1376) — still commits once at exit.

@@ -191,6 +191,12 @@ class ToolProvider:
     which the run's tool list announces (ADR 0122); without it, a tool annotated `readOnlyHint: true`
     is a read and any other a write.
 
+    `call_tool` is handed the request's session with no transaction open (#1354): the request holds no
+    pooled connection while the extension works. What it reads or writes begins a transaction under the
+    run token's scope, kept with the call's ledger line; a provider that reads first and then calls out
+    wraps that call in `choregos_api.db.session.outside_the_transaction(session)`, or it holds a
+    connection for as long as its call takes.
+
     The keywords `lister` and `appeler` are the former names of `list_tools` and `call_tool`: they
     keep working until 0.23.0 and warn."""
 

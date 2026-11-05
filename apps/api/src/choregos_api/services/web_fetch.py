@@ -51,6 +51,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import CostLedger, Project, Run
+from ..db.session import outside_the_transaction
 from .network import run_network
 from .outbound_proxy import outbound_proxy_for
 from .platform_network import calls_to_host, journal, user_agent
@@ -466,7 +467,8 @@ async def _check_host(ctx: Context, host: str, *, hop: str = "") -> str:
             "ask an administrator to allow it",
         )
     try:
-        addresses = await ctx.resolver(host)
+        async with outside_the_transaction(ctx.session):
+            addresses = await ctx.resolver(host)
     except OSError as bad:
         raise Refused(502, "unreachable", f"`{host}` does not resolve: {bad}") from bad
     if not addresses:
@@ -505,14 +507,15 @@ async def _robots(ctx: Context, scheme: str, host: str, address: str) -> Robots:
     headers = {"User-Agent": ctx.agent, "Accept": "text/plain"}
     entry: Robots
     try:
-        response = await ctx.client.request(
-            "GET",
-            f"{origin}/robots.txt",
-            headers=headers,
-            address=address,
-            max_bytes=512 * 1024,
-            proxy=ctx.proxy,
-        )
+        async with outside_the_transaction(ctx.session):
+            response = await ctx.client.request(
+                "GET",
+                f"{origin}/robots.txt",
+                headers=headers,
+                address=address,
+                max_bytes=512 * 1024,
+                proxy=ctx.proxy,
+            )
     except (httpx.HTTPError, OSError) as bad:
         entry = Robots(
             None,
@@ -667,9 +670,12 @@ async def fetch(
                 "Accept-Encoding": "identity",
             }
             try:
-                response = await ctx.client.request(
-                    method, url, headers=headers, address=address, max_bytes=cap, proxy=ctx.proxy
-                )
+                # A page, like its robots.txt and its host's address, is read with no connection of
+                # the caller's transaction held, when the caller allows it (#1354).
+                async with outside_the_transaction(ctx.session):
+                    response = await ctx.client.request(
+                        method, url, headers=headers, address=address, max_bytes=cap, proxy=ctx.proxy
+                    )
             except (httpx.HTTPError, OSError) as bad:
                 await _refuse_journal(ctx, host, "unreachable", type(bad).__name__)
                 if isinstance(bad, OutboundProxyError):

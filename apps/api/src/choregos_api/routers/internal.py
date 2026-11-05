@@ -44,8 +44,10 @@ from ..db.models import (
     WorkItem,
 )
 from ..db.models import Finding as FindingRow
+from ..db.session import allow_release_during_calls, outside_the_transaction
 from ..deps import Db, NetworkAuth, RunAuth
 from ..errors import ApiError, conflict, not_found, unprocessable
+from ..logging import get_logger
 from ..object_store import object_store
 from ..schemas import (
     CiLogs,
@@ -89,6 +91,7 @@ from ..services.tool_call_cap import take_tool_call_slot
 from ..temporal import get_temporal, interpreter_id
 
 router = APIRouter(tags=["internal"], prefix="/internal")
+logger = get_logger("choregos.internal")
 
 #: The `run_id` a hosted session's pod speaks as (`session_run_id`).
 SESSION_RUN_PREFIX = "session-"
@@ -1090,6 +1093,11 @@ async def call_tool(
     price_usd = 0.0
     #: What the event says of a search query: its fingerprint and its length, never its text (ADR 0015).
     about_query: dict[str, Any] = {}
+    # Every external call below runs with no connection of this request (#1354): the request's
+    # transaction commits before the call leaves (`outside_the_transaction`) — the place above is
+    # committed already, and nothing read or written since needs the call's outcome to be kept —, and
+    # the call's line is booked after it, in the transaction its return begins, under the same scope.
+    allow_release_during_calls(session)
     try:
         if is_search:
             code, result_body, provider, price_usd, about_query = await _web_search(
@@ -1106,27 +1114,8 @@ async def call_tool(
                 session, run, project, SimpleNamespace(name=name), code, result_body
             )
         elif catalogue_tool is not None:
-            if catalogue_tool.may_write:
-                detail = (
-                    f"catalogue tool `{name}` may write (an http POST or a remote MCP tool) and catalogue "
-                    "calls are not governed actions: the deployment marks it `read_only: true` if it only "
-                    "reads, or the organisation declares the server as an MCP connector, whose writes are "
-                    "governed (ADR 0034)"
-                )
-                raise ApiError(
-                    status.HTTP_409_CONFLICT,
-                    "Catalogue write refused",
-                    detail,
-                    errors=[{"code": "catalogue_write_refused", "msg": detail}],
-                )
-            from ..services.broker import bounded_payload
-
-            code, result_body = await call_catalogue_tool(catalogue_tool, body or {})
-            # A catalogue provider writes what the agent reads, as the broker's servers do (#759).
-            result_body = bounded_payload(result_body, catalogue_tool.result_max_bytes)
-            # ... and what it writes may be an injection, read by the same guard (S40-18).
-            code, result_body, suspicions = await _injection_guard(
-                session, run, project, SimpleNamespace(name=name), code, result_body
+            code, result_body, suspicions = await _call_the_catalogue(
+                session, run, project, catalogue_tool, body or {}
             )
             provider, price_eur = catalogue_tool.provider, catalogue_tool.price_eur
         elif name in brokered and brokered[name].needs_approval:
@@ -1155,16 +1144,9 @@ async def call_tool(
             provider, price_eur = f"mcp:{brokered[name].connector.name}", 0.0
             price_usd = brokered[name].operation.price_usd or 0.0
         else:
-            from ..extensions import tool_providers
-            from ..services.broker import bounded_payload
-
             extension, extension_tool = from_extensions[name]
-            code, result_body = await tool_providers()[extension].call_tool(
-                session, run, project, name, body or {}
-            )
-            result_body = bounded_payload(result_body, _extension_result_cap(extension, extension_tool))
-            code, result_body, suspicions = await _injection_guard(
-                session, run, project, SimpleNamespace(name=name), code, result_body
+            code, result_body, suspicions = await _call_the_extension(
+                session, run, project, name, extension, extension_tool, body or {}
             )
             provider, price_eur = f"greffon:{extension}", 0.0  # lang: fr-ok — persisted cost provider, S45-39
     except BaseException:
@@ -1180,53 +1162,76 @@ async def call_tool(
         "query_redacted",
         "url_redacted",
     }
-    if not refused_by_network:
-        session.add(
-            CostLedger(
-                project_id=project.id,
-                work_item_id=item.id,
-                run_id=run.id,
-                # `ts` has no model-side default: the column is NOT NULL and forgetting it
-                # fails the INSERT, not the read.
-                ts=utcnow(),
-                kind="tool",
-                provider=provider,
-                model=name,
-                cost_eur=price_eur,
-                cost_usd=price_usd,
-                stage_role=run.stage_role,
-                **await dimensions_of(session, run.id),
-                # Which door the call came through (S57-06, ADR 0122 §4): what `group_by=origin` reads.
-                origin=origin,
-                script_sha256=script_sha256,
+    # The booking commits here: the call's line, its place given back, the budget's alerts and the
+    # event, whose `pg_notify` leaves with the same commit (ADR 0085); all are kept or none. After an
+    # external call it is a transaction of its own, begun in the scope the call left with (#1354).
+    try:
+        if not refused_by_network:
+            session.add(
+                CostLedger(
+                    project_id=project.id,
+                    work_item_id=item.id,
+                    run_id=run.id,
+                    # `ts` has no model-side default: the column is NOT NULL and forgetting it
+                    # fails the INSERT, not the read.
+                    ts=utcnow(),
+                    kind="tool",
+                    provider=provider,
+                    model=name,
+                    cost_eur=price_eur,
+                    cost_usd=price_usd,
+                    stage_role=run.stage_role,
+                    **await dimensions_of(session, run.id),
+                    # Which door the call came through (S57-06, ADR 0122 §4): what `group_by=origin`
+                    # reads.
+                    origin=origin,
+                    script_sha256=script_sha256,
+                )
             )
+        # The provisional line goes with this transaction, which holds the call's own line (if any).
+        await slot.settle(session)
+        await check_after_spend(session, run.id)
+        served = canonical_json(result_body)
+        await persist_event(
+            session,
+            EventType.TOOL_CALLED,
+            project_id=project.id,
+            work_item_id=item.id,
+            project_slug=project.slug,
+            subject=run.id,
+            tool=name,
+            provider=provider,
+            status_code=code,
+            # Provenance: WHAT went in and WHAT came back, as digests of the canonical JSON — the event
+            # keeps no payload, but a result that is later disputed can be matched to the bytes served.
+            request_sha256=json_sha256(body or {}),
+            response_sha256=hashlib.sha256(served).hexdigest(),
+            # What the answer weighs (S57-01, ADR 0122): the size of the same canonical bytes, the
+            # measure of what a round trip puts back into the model's context.
+            response_bytes=len(served),
+            # Which door the call came through (ADR 0122 §4), and the script's digest when one made it.
+            origin=origin,
+            **({"script_sha256": script_sha256} if script_sha256 is not None else {}),
+            **about_query,
         )
-    # The provisional line goes with this transaction, which holds the call's own line (if any).
-    await slot.settle(session)
-    await check_after_spend(session, run.id)
-    served = canonical_json(result_body)
-    await persist_event(
-        session,
-        EventType.TOOL_CALLED,
-        project_id=project.id,
-        work_item_id=item.id,
-        project_slug=project.slug,
-        subject=run.id,
-        tool=name,
-        provider=provider,
-        status_code=code,
-        # Provenance: WHAT went in and WHAT came back, as digests of the canonical JSON — the event
-        # keeps no payload, but a result that is later disputed can be matched to the bytes served.
-        request_sha256=json_sha256(body or {}),
-        response_sha256=hashlib.sha256(served).hexdigest(),
-        # What the answer weighs (S57-01, ADR 0122): the size of the same canonical bytes, the
-        # measure of what a round trip puts back into the model's context.
-        response_bytes=len(served),
-        # Which door the call came through (ADR 0122 §4), and the script's digest when one made it.
-        origin=origin,
-        **({"script_sha256": script_sha256} if script_sha256 is not None else {}),
-        **about_query,
-    )
+        await session.commit()
+    except Exception as failure:
+        # The call was made and its line is not booked: said here, with what the line would have
+        # held, besides the 500 the caller gets. The place taken before the call stays committed, so
+        # the run's cap still counts the call until the sweep (`IN_FLIGHT_STALE_AFTER`): one call
+        # fewer for the run, never one more (S57-03).
+        logger.warning(
+            "tool_call.not_booked",
+            run_id=run.id,
+            project=project.slug,
+            tool=name,
+            provider=provider,
+            status_code=code,
+            cost_eur=price_eur,
+            cost_usd=price_usd,
+            error=type(failure).__name__,
+        )
+        raise
     telemetry.record_tool_call(
         status_code=code,
         provider=provider,
@@ -1317,6 +1322,59 @@ async def _write_by_the_broker(
     code, result_body, created = await write_through_action(session, run, project, tool, arguments)
     code, result_body, suspicions = await _injection_guard(session, run, project, tool, code, result_body)
     return code, result_body, suspicions, created
+
+
+async def _call_the_catalogue(
+    session: Any, run: Run, project: Project, tool: Any, arguments: dict[str, Any]
+) -> tuple[int, Any, list[dict[str, str]]]:
+    """A catalogue tool, called: refused when it may write, made with no connection of the request held
+    (#1354), what the provider returns bounded and passed to the injection guard."""
+    if tool.may_write:
+        detail = (
+            f"catalogue tool `{tool.name}` may write (an http POST or a remote MCP tool) and catalogue "
+            "calls are not governed actions: the deployment marks it `read_only: true` if it only "
+            "reads, or the organisation declares the server as an MCP connector, whose writes are "
+            "governed (ADR 0034)"
+        )
+        raise ApiError(
+            status.HTTP_409_CONFLICT,
+            "Catalogue write refused",
+            detail,
+            errors=[{"code": "catalogue_write_refused", "msg": detail}],
+        )
+    from ..services.broker import bounded_payload
+
+    async with outside_the_transaction(session):
+        code, result_body = await call_catalogue_tool(tool, arguments)
+    # A catalogue provider writes what the agent reads, as the broker's servers do (#759).
+    result_body = bounded_payload(result_body, tool.result_max_bytes)
+    # ... and what it writes may be an injection, read by the same guard (S40-18).
+    return await _injection_guard(session, run, project, SimpleNamespace(name=tool.name), code, result_body)
+
+
+async def _call_the_extension(
+    session: Any,
+    run: Run,
+    project: Project,
+    name: str,
+    extension: str,
+    tool: dict[str, Any],
+    arguments: dict[str, Any],
+) -> tuple[int, Any, list[dict[str, str]]]:
+    """An extension's tool, called, its answer bounded as the extension declares and guarded.
+
+    The extension is handed the session with no transaction open (#1354): what it reads first begins
+    one under the run token's scope, which holds a connection until the call answers unless the
+    extension wraps its own external call in `outside_the_transaction` (`ToolProvider`)."""
+    from ..extensions import tool_providers
+    from ..services.broker import bounded_payload
+
+    async with outside_the_transaction(session):
+        code, result_body = await tool_providers()[extension].call_tool(
+            session, run, project, name, arguments
+        )
+    result_body = bounded_payload(result_body, _extension_result_cap(extension, tool))
+    return await _injection_guard(session, run, project, SimpleNamespace(name=name), code, result_body)
 
 
 async def _injection_guard(
