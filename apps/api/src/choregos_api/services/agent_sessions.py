@@ -20,6 +20,7 @@ idempotent: a session closed twice is closed once.
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Literal
 from uuid import uuid4
@@ -508,6 +509,24 @@ async def session_tools(session: AsyncSession, spec: AgentSpec, project: Project
     return {name: tool for name, tool in granted.items() if not tool.is_write and not tool.needs_approval}
 
 
+@dataclass(frozen=True, slots=True)
+class SessionToolAnswer:
+    """A session's tool call, answered (`AgentSessionToolAnswer`): the text the model reads, and what
+    changes its meaning, as a run's call says it (`callRunTool`, #1349) — the status the call ended
+    with (the server's, `400` for arguments the schema refuses, `429` past the cap, `451` for a result
+    withheld), the calls the cap leaves the session (`None` without a cap), the injection guard's
+    flags (`sandbox.prompt_injection` `warn` or `block`)."""
+
+    text: str
+    status_code: int = 200
+    remaining: int | None = None
+    suspicions: list[dict[str, Any]] = field(default_factory=list)
+
+
+def _calls_left(cap: int, record: AgentSessionRecord) -> int | None:
+    return max(0, cap - record.tool_calls) if cap else None
+
+
 async def call_session_tool(
     session: AsyncSession,
     record: AgentSessionRecord,
@@ -515,6 +534,18 @@ async def call_session_tool(
     tool: BrokerTool,
     arguments: dict[str, Any],
 ) -> str:
+    """The text of `answer_session_tool`: what a loop that gives its model text reads (a prompt
+    session's, a realtime session's)."""
+    return (await answer_session_tool(session, record, project, tool, arguments)).text
+
+
+async def answer_session_tool(
+    session: AsyncSession,
+    record: AgentSessionRecord,
+    project: Project,
+    tool: BrokerTool,
+    arguments: dict[str, Any],
+) -> SessionToolAnswer:
     """One read through the courtier, as a run's: the policy's cap, the schema, the connector's key
     resolved here, the injection guard, a ledger line. What the model reads back is text: the text
     blocks and, when they do not serialize it, the `structuredContent` (S40-18c), guarded as read."""
@@ -527,11 +558,12 @@ async def call_session_tool(
     engine = PolicyEngine(await effective_policy(session, project.id))
     cap = engine.max_tool_calls_per_run()
     if cap and record.tool_calls >= cap:
-        return f"tool call cap reached: this session already called {record.tool_calls} tools (cap {cap})"
+        text = f"tool call cap reached: this session already called {record.tool_calls} tools (cap {cap})"
+        return SessionToolAnswer(text, 429, 0)
     try:
         check_arguments(tool, arguments)
     except ArgumentsRefused as refusal:
-        return str(refusal)
+        return SessionToolAnswer(str(refusal), 400, _calls_left(cap, record))
     code, body = await call(session, tool, arguments, project=project)
     refused_by_network = isinstance(body, dict) and body.get("type") in {"network_policy", "rate_limited"}
     text = session_text(body) if code < 400 else json.dumps(body, default=str)[:2000]
@@ -550,6 +582,7 @@ async def call_session_tool(
         )
         if mode == "block":
             text = f"result of {tool.name} withheld: suspected injection — a human reviews it"
+    answered = 451 if found and mode == "block" else code
     if not refused_by_network:
         record.tool_calls += 1
         session.add(
@@ -576,7 +609,8 @@ async def call_session_tool(
         provider=f"mcp:{tool.connector.name}",
         status_code=code,
     )
-    return text
+    flagged = [s.to_dict() for s in found]
+    return SessionToolAnswer(text, answered, _calls_left(cap, record), flagged)
 
 
 # ───────────────────────────── closing ─────────────────────────────
@@ -762,6 +796,8 @@ async def session_dto(session: AsyncSession, record: AgentSessionRecord, project
 __all__ = [
     "DEFAULT_SESSION_USD",
     "SESSION_TTL_S",
+    "SessionToolAnswer",
+    "answer_session_tool",
     "budget_refusal",
     "call_session_tool",
     "close_session",

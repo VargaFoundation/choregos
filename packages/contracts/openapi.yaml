@@ -4071,7 +4071,9 @@ paths:
       operationId: callAgentSessionTool
       description: >-
         One of the container's tool calls, through the courtier, the injection guard and the ledger, as a prompt
-        session's. A tool the session is not granted is 404.
+        session's. A tool the session is not granted is 404. The answer says what a run's call says beside its
+        result (`callRunTool`, #1349): the status the call ended with, the calls the cap leaves the session, the
+        injection guard's flags; the runner puts them in what the container's model reads.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/AgentSessionToolCall" } } }
@@ -5818,9 +5820,20 @@ components:
         arguments: { type: object, additionalProperties: true }
     AgentSessionToolAnswer:
       type: object
-      required: [text]
+      required: [text, status_code, remaining, suspicions]
       properties:
-        text: { type: string }
+        text: { type: string, description: "What the model reads back: the courtier's text, or why the call was refused." }
+        status_code:
+          type: integer
+          description: "How the call ended, as `callRunTool`'s `status_code`: the server's status (a provider's answer of 400 or more is an error, its body in `text`), `400` for arguments the tool's schema refuses, `429` past the cap, `451` for a result withheld as a suspected injection (`sandbox.prompt_injection: block`)."
+        remaining:
+          type: [integer, "null"]
+          minimum: 0
+          description: "The calls the policy's cap (`budgets.tool_calls_per_run`) leaves the session; `null` without a cap."
+        suspicions:
+          type: array
+          items: { type: object, additionalProperties: true }
+          description: "The injection guard's flags on the result (`warn`: the result is in `text`; `block`: it is withheld), empty when none."
     A2aDeclaredCost:
       type: object
       description: What a remote agent costs, as the organisation declares it - A2A reports no figure; booked in the ledger as `external`.

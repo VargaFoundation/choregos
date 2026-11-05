@@ -40,7 +40,7 @@ from ..schemas.agent_sessions import (
 from ..security import verify_run_token
 from ..services.agent_hosted_sessions import POLL_S, answer_turn, next_turn, session_run_id
 from ..services.agent_session_sockets import record_out, socket_frames, write
-from ..services.agent_sessions import call_session_tool, session_tools
+from ..services.agent_sessions import answer_session_tool, session_tools
 
 router = APIRouter(tags=["internal"], prefix="/internal")
 
@@ -216,13 +216,18 @@ async def call_tool(
     id: str, name: str, body: AgentSessionToolCall, session: Db, record: SessionPod
 ) -> AgentSessionToolAnswer:
     """One of the container's tool calls, through the courtier: a tool the session is not granted
-    is answered 404, as one that does not exist."""
+    is answered 404, as one that does not exist. The answer says what a run's call says beside its
+    result (#1349): the status the call ended with, the calls left, the injection guard's flags."""
     if record.status != "open":
         raise _gone(record)
     project = await _project(session, record)
     tools = await session_tools(session, await _spec(session, record, project), project)
     if name not in tools:
         raise not_found("Tool of the session", name)
+    answer = await answer_session_tool(session, record, project, tools[name], body.arguments)
     return AgentSessionToolAnswer(
-        text=await call_session_tool(session, record, project, tools[name], body.arguments)
+        text=answer.text,
+        status_code=answer.status_code,
+        remaining=answer.remaining,
+        suspicions=answer.suspicions,
     )

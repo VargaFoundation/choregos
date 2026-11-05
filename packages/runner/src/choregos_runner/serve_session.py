@@ -31,6 +31,7 @@ from choregos_adapters.realtime_ws import WebsocketsConnector
 from choregos_contracts import StageInput
 from choregos_core.hosted import CONNECT_PORT, MCP_PORT, MODEL_PORT
 from choregos_core.mcp import METHOD_NOT_FOUND, error, negotiate, ok, text_result
+from choregos_tools_mcp.answer import render_session_answer
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -125,9 +126,10 @@ class SessionClient:
     async def list_tools(self) -> list[dict[str, Any]]:
         return list((await self._request("GET", "/tools")).json().get("tools") or [])
 
-    async def call_tool(self, name: str, arguments: dict[str, Any]) -> str:
-        answer = await self._request("POST", f"/tools/{name}", json={"arguments": arguments})
-        return str(answer.json().get("text") or "")
+    async def call_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        """The API's answer (`AgentSessionToolAnswer`): `{status_code, text, remaining, suspicions}`."""
+        answer = (await self._request("POST", f"/tools/{name}", json={"arguments": arguments})).json()
+        return dict(answer) if isinstance(answer, dict) else {"text": ""}
 
 
 Record = Callable[[str, dict[str, Any]], Awaitable[None]]
@@ -136,7 +138,12 @@ Record = Callable[[str, dict[str, Any]], Awaitable[None]]
 class SessionToolsMcp:
     """The session's tools on the loopback MCP listener, `/mcp/choregos`: a stateless MCP server
     whose `tools/list` and `tools/call` go through the internal API. Each call is judged by the guard
-    rails first, as a step's MCP calls are; a refusal never reaches the API."""
+    rails first, as a step's MCP calls are; a refusal never reaches the API.
+
+    The API's answer keeps its meaning on the way to the container (#1349), as a run's does through
+    its tool server (S57-04): the injection guard's flags are said before the text, a status of 400
+    or more is `isError`, the calls the cap leaves the session are said last (`render_session_answer`).
+    """
 
     def __init__(self, client: SessionClient, guards: GuardRails, record: Record) -> None:
         self.client = client
@@ -198,7 +205,7 @@ class SessionToolsMcp:
         if not decision.allowed:
             return text_result(f"refused by the session's guard rails: {decision.reason}", is_error=True)
         try:
-            return text_result(await self.client.call_tool(tool, arguments))
+            return render_session_answer(await self.client.call_tool(tool, arguments))
         except SessionApiError as refusal:
             if refusal.status_code == 404:
                 return text_result(f"no tool named `{tool[:100]}` is granted to this session", is_error=True)

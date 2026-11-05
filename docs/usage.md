@@ -1197,11 +1197,11 @@ notices outside the cut; a status of 400 or more is still `isError`. A result th
 default bound therefore reaches the model whole; one whose operation raises its cap above 64 KiB is
 still cut there.
 `structuredContent` carries the API's answer as it came, `status_code` included, with the same lines
-under `notices`, when its JSON fits the same bound. A hosted session's tools do not say these yet
-(#1349). An ontology proposal does (#1350): its `action_<name>` tools are `approval` tools and answer
-as every one does, `202` naming the core action the proposal is (`action`, `status`, `decision_path`,
-`message`, beside the proposal's own file); one the policy approves (`approve: auto`) reads `NOT
-FINISHED YET` until Temporal has played it.
+under `notices`, when its JSON fits the same bound. A hosted session's tools say the same around the
+text its model reads (#1349, [hosted agents](hosted-agents.md)). An ontology proposal does too (#1350): its
+`action_<name>` tools are `approval` tools and answer as every one does, `202` naming the core action the
+proposal is (`action`, `status`, `decision_path`, `message`, beside the proposal's own file); one the policy
+approves (`approve: auto`) reads `NOT FINISHED YET` until Temporal has played it.
 
 The run's tool list (`GET /internal/runs/{id}/tools`) says what a call of each tool does (S57-05,
 [ADR 0122](adr/0122-an-agent-may-call-its-run-s-tools-from-a-script.md)): MCP's own
