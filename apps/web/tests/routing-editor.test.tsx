@@ -18,6 +18,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       project: vi.fn().mockResolvedValue({ slug: "fon", org: "acme" }),
       putWorkflowRouting: vi.fn(async (_slug: string, routing: unknown) => routing),
       previewWorkflowRouting: vi.fn(),
+      routingCalibration: vi.fn().mockResolvedValue({ min_confidence: null, target_accuracy: 0.9, min_observed: 30, questions: [] }),
     },
   };
 });

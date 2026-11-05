@@ -31,6 +31,7 @@ import { Passages } from "@/components/passages";
 import { Provenance } from "@/components/provenance";
 import { TrackerCard } from "@/components/who-writes";
 import { viaInWords } from "@/lib/who-writes";
+import { ChangeWorkflow } from "@/components/ticket/change-workflow";
 import { NextStepBanner } from "@/components/ticket/next-step-banner";
 import { LongText, RequestCard } from "@/components/ticket/request-card";
 import { WorkflowChip } from "@/components/workflow-chip";
@@ -119,6 +120,17 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
           >
             Stop
           </ConfirmedGesture>
+          <ChangeWorkflow
+            slug={slug}
+            itemId={id}
+            current={data.workflow_name}
+            ended={Boolean(data.closed_at)}
+            onDone={() =>
+              Promise.all(
+                [["item", id], ["journey", id], ["timeline", id]].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+              )
+            }
+          />
         </div>
       </div>
 

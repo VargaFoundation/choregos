@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, type UseQueryResult } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 import { ReadState } from "@/components/ui";
 import { DECISION_HUE } from "@/components/workflows/map/layout";
 import { CONFIDENCE_SUFFIX, transitions, type WorkflowDocument } from "@/components/workflows/document";
@@ -64,11 +65,46 @@ export function useStepCalibration(project: string, workflow: string, step: stri
   });
 }
 
-/** The read of a step's calibration, as `useStepCalibration` returns it. */
-export type CalibrationRead = ReturnType<typeof useStepCalibration>;
+/** What the ledger measures, a step's or the routing's (ADR 0123 §4): the questions, the target, the floor. */
+export type MeasuredDecisions = Pick<StepCalibration, "target_accuracy" | "min_observed" | "questions">;
+
+/** The read of a calibration, as `useStepCalibration` (or the routing's) returns it. */
+export type CalibrationRead = UseQueryResult<MeasuredDecisions>;
+
+/**
+ * What the card says about the threshold a decision is held to, and when nothing is recorded: a
+ * step's is the `when` of its workflow, the routing's the project's minimum confidence.
+ */
+export type ThresholdWording = {
+  /** The start of the sentence that says where the threshold lets an answer through. */
+  lets: (output: ReactNode, value: string) => ReactNode;
+  /** No threshold is set. */
+  none: (output: ReactNode) => ReactNode;
+  /** The threshold, named at the start of a sentence: "The workflow's threshold". */
+  named: string;
+  /** Nothing recorded yet. */
+  empty: string;
+};
+
+/** A decision step's wording: its threshold is the workflow's `when`. */
+export const STEP_WORDING: ThresholdWording = {
+  lets: (output, value) => (
+    <>
+      The workflow lets an answer through from {output} ≥ {value}
+    </>
+  ),
+  none: (output) => (
+    <>
+      The workflow&apos;s <code>when</code> sets no threshold on {output}.
+    </>
+  ),
+  named: "The workflow's threshold",
+  empty:
+    "No decision recorded yet: the ledger measures this step once it has decided and the outcome of a work item is known. Until then a threshold on the probability is a guess.",
+};
 
 /** Whether the ledger observed the outcome of at least one of the step's decisions. */
-export function isMeasured(calibration: StepCalibration | undefined): boolean {
+export function isMeasured(calibration: MeasuredDecisions | undefined): boolean {
   return (calibration?.questions ?? []).some((question) => question.observed > 0);
 }
 
@@ -78,7 +114,7 @@ export const MEASURED_SENTENCE =
   "The probability is measured against what happened next: how often the answers were right at each threshold is under Calibration.";
 
 /** What a threshold on the probability is worth: a guess, until the ledger has observed an outcome. */
-export function ProbabilityNote({ calibration }: { calibration: StepCalibration | undefined }) {
+export function ProbabilityNote({ calibration }: { calibration: MeasuredDecisions | undefined }) {
   return <>{isMeasured(calibration) ? MEASURED_SENTENCE : GUESS_SENTENCE}</>;
 }
 
@@ -97,21 +133,24 @@ function whoAnswered(question: QuestionCalibration): string {
   return question.source === "agent" ? `declared by ${question.model}${version}` : `answered by ${question.model}${version}`;
 }
 
-/** What the workflow's own threshold keeps, and how it compares with the suggested one. */
-function WorkflowThreshold({ question, value }: { question: QuestionCalibration; value: number | undefined }) {
-  const output = `${question.question}${CONFIDENCE_SUFFIX}`;
-  if (value === undefined)
-    return (
-      <p className="text-ink-muted">
-        The workflow&apos;s <code>when</code> sets no threshold on <code>{output}</code>.
-      </p>
-    );
+/** What the threshold in force keeps (the workflow's, or the routing's), and how it compares with the suggested one. */
+function WorkflowThreshold({
+  question,
+  value,
+  wording,
+}: {
+  question: QuestionCalibration;
+  value: number | undefined;
+  wording: ThresholdWording;
+}) {
+  const output = <code>{`${question.question}${CONFIDENCE_SUFFIX}`}</code>;
+  if (value === undefined) return <p className="text-ink-muted">{wording.none(output)}</p>;
   const measured = pointAt(question, value);
   const suggested = typeof question.suggested_threshold === "number" ? question.suggested_threshold : null;
   return (
     <>
       <p data-testid={`workflow-threshold-${question.question}`}>
-        The workflow lets an answer through from <code>{output}</code> ≥ {threshold(value)}
+        {wording.lets(output, threshold(value))}
         {measured && measured.point.count > 0 ? (
           <>
             {measured.exact ? ": " : ` (measured at ${threshold(measured.point.threshold)}, the nearest threshold below): `}
@@ -124,7 +163,7 @@ function WorkflowThreshold({ question, value }: { question: QuestionCalibration;
       </p>
       {suggested !== null && value < suggested - 1e-9 && (
         <p className="font-medium text-retrying-ink" data-testid={`threshold-below-${question.question}`}>
-          The workflow&apos;s threshold, {threshold(value)}, is below the suggested {threshold(suggested)}: answers between the two are
+          {wording.named}, {threshold(value)}, is below the suggested {threshold(suggested)}: answers between the two are
           let through although, measured, they are right less often than the target.
         </p>
       )}
@@ -190,11 +229,12 @@ export function noSuggestionReason(question: QuestionCalibration, minObserved: n
   return question.suggestion_reason ?? "no threshold reaches the target accuracy";
 }
 
-function QuestionCard({ question, target, minObserved, workflowThreshold }: {
+function QuestionCard({ question, target, minObserved, workflowThreshold, wording }: {
   question: QuestionCalibration;
   target: number;
   minObserved: number;
   workflowThreshold: number | undefined;
+  wording: ThresholdWording;
 }) {
   return (
     <section
@@ -224,7 +264,7 @@ function QuestionCard({ question, target, minObserved, workflowThreshold }: {
           No threshold suggested: {noSuggestionReason(question, minObserved)}.
         </p>
       )}
-      <WorkflowThreshold question={question} value={workflowThreshold} />
+      <WorkflowThreshold question={question} value={workflowThreshold} wording={wording} />
       {question.observed > 0 && <Reliability question={question} />}
     </section>
   );
@@ -234,16 +274,24 @@ function QuestionCard({ question, target, minObserved, workflowThreshold }: {
  * A decision step's calibration (ADR 0121 §7, S52-06b): for each question, how many decisions the
  * ledger recorded and observed, how often they were right, the expected calibration error, ten
  * reliability bins, what the workflow's own threshold keeps, and the threshold the ledger suggests
- * for the target accuracy — or why it suggests none. Measured, never declared.
+ * for the target accuracy — or why it suggests none. Measured, never declared. The routing's
+ * calibration (ADR 0123 §4) is the same card, its threshold the project's minimum confidence (`wording`).
  */
-export function DecisionCalibration({ read, thresholds }: { read: CalibrationRead; thresholds?: Record<string, number> }) {
+export function DecisionCalibration({
+  read,
+  thresholds,
+  wording = STEP_WORDING,
+}: {
+  read: CalibrationRead;
+  thresholds?: Record<string, number>;
+  wording?: ThresholdWording;
+}) {
   if (!read.data) return <ReadState lecture={read} quoi="the calibration" />;
   const { questions = [], target_accuracy: target, min_observed: minObserved } = read.data;
   if (questions.length === 0)
     return (
       <p className="text-ink-muted" data-testid="calibration-empty">
-        No decision recorded yet: the ledger measures this step once it has decided and the outcome of a work item is known. Until
-        then a threshold on the probability is a guess.
+        {wording.empty}
       </p>
     );
   return (
@@ -255,6 +303,7 @@ export function DecisionCalibration({ read, thresholds }: { read: CalibrationRea
           target={target}
           minObserved={minObserved}
           workflowThreshold={thresholds?.[question.question]}
+          wording={wording}
         />
       ))}
     </div>
