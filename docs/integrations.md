@@ -431,7 +431,7 @@ servers. Any gateway product can be that gateway; none is required or recommende
    (sealed, write-only), then **Test the gateway**. Give the gateway the issuer and the JWKS URL the
    page shows. The issuer is stored with the first key, so renaming the organisation does not change it
    (ADR 0090; the former JWKS URL keeps resolving through `org_alias_middleware.py`).
-3. **Administration → Catalogue** (MCP servers, *Through your MCP gateway*) or **Connectors** (type
+3. **Library → MCP servers** (*Through your MCP gateway*) or **Connectors** (type
    `mcp-gateway`, with the server's name at the gateway).
 4. Operators: the chart values and egress rules are in
    [Deployment](deployment.md#an-mcp-gateway-adr-0105); a local try-out with a fake gateway is in

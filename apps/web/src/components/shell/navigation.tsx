@@ -85,7 +85,7 @@ export const GROUP_HUES = { work: 1, define: 2, configure: 7 } as const satisfie
 /** The entries, grouped: the work, what agents use, the organisation (S40-08). */
 export const GROUPS: { titre: string; hue: Hue; entrees: string[] }[] = [
   { titre: "Work", hue: GROUP_HUES.work, entrees: ["/", "/inbox"] },
-  { titre: "Catalogue", hue: GROUP_HUES.define, entrees: ["/agents", "/skills", "/knowledge", "/memories", "/library/mcp-servers", "/library/connectors", "/library/plugins"] },
+  { titre: "Library", hue: GROUP_HUES.define, entrees: ["/agents", "/skills", "/knowledge", "/memories", "/library/mcp-servers", "/library/connectors", "/library/plugins"] },
   { titre: "Organisation", hue: GROUP_HUES.configure, entrees: ["/integrations", "/costs", "/admin"] },
 ];
 

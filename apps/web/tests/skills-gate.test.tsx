@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { Findings, GitImport, importable, RiskBadge, sortFindings, toneOfRisk } from "@/components/skills/gate";
 import { api } from "@/lib/api";
+import { RESERVED_SKILL_SLUGS, skillSlugError } from "@/lib/skill-slug";
 import type { SkillCandidate, SkillGitPreview } from "@/lib/types";
 
 const SHA = "a".repeat(40);
@@ -82,5 +83,36 @@ describe("the gate of a skill, in the console (S32-06)", () => {
       path: "skills",
       skills: ["pdf"],
     });
+  });
+});
+
+describe("a skill cannot take the slug of a console page (S55-17)", () => {
+  it("library and catalogue are reserved, a slug that only starts like one is free", () => {
+    expect(RESERVED_SKILL_SLUGS).toEqual(["library", "catalogue"]);
+    expect(skillSlugError("library")).toMatch(/^library is reserved/);
+    expect(skillSlugError("catalogue")).toMatch(/^catalogue is reserved/);
+    expect(skillSlugError("library-tools")).toBeUndefined();
+  });
+
+  it.each(["library", "catalogue"])("a new skill named %s cannot be picked; one the organisation has can", (name) => {
+    expect(importable(candidate({ name }))).toBe(false);
+    expect(importable(candidate({ name, existing_version: 2 }))).toBe(true);
+  });
+
+  it("the preview says why, and leaves the box unticked", async () => {
+    vi.mocked(api.previewSkillsFromGit).mockResolvedValue({
+      repo: "https://github.com/anthropics/skills",
+      ref: "main",
+      sha: SHA,
+      path: "skills",
+      allowed: true,
+      skills: [candidate({ name: "library", path: "skills/library" }), candidate({ name: "pdf", path: "skills/pdf" })],
+    });
+    render(<GitImport org="varga" />);
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    await waitFor(() => expect(screen.getByTestId("preview")).toBeTruthy());
+    const boxes = screen.getAllByRole("checkbox") as HTMLInputElement[];
+    expect(boxes.map((box) => box.disabled)).toEqual([true, false]);
+    expect(screen.getByText(/library is reserved: the console has a page at that address/)).toBeInTheDocument();
   });
 });

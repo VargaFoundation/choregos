@@ -44,16 +44,16 @@ export default function SkillCataloguePage() {
       </div>
       <p className="max-w-3xl text-sm text-ink-muted">
         Default skills from public repositories, each pinned to a commit and under an open licence. Installing one adds
-        it to the library; it is assessed again on the way in, and a high-risk one waits for a second administrator.
+        it to the installed skills; it is assessed again on the way in, and a high-risk one waits for a second administrator.
         Nothing is installed for you and nothing follows upstream.
       </p>
       {catalogue.data && (
         <p className="text-xs text-ink-muted" data-testid="catalogue-version">
-          Catalogue {catalogue.data.meta.catalogue_version}, generated {catalogue.data.meta.generated_at.slice(0, 10)}.
+          Library {catalogue.data.meta.catalogue_version}, generated {catalogue.data.meta.generated_at.slice(0, 10)}.
           Stars are a snapshot.
         </p>
       )}
-      <ReadState lecture={catalogue} quoi="the catalogue" />
+      <ReadState lecture={catalogue} quoi="the library" />
       {catalogue.data && (
         <>
           <CatalogueFacets
@@ -90,7 +90,7 @@ function Entry({ entry, onInstall }: { entry: SkillCatalogueEntry; onInstall: ()
       : entry.state === "installed"
         ? `Installed, version ${entry.installed_version}.`
         : entry.state === "update"
-          ? `Version ${entry.installed_version} is installed; the catalogue pins a newer one.`
+          ? `Version ${entry.installed_version} is installed; the library pins a newer one.`
           : entry.state === "pending_review"
             ? "Installed, waiting for a second administrator to approve it."
             : null;

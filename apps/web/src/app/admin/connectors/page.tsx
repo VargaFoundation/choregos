@@ -52,7 +52,7 @@ export default function OrgConnectorsPage() {
   // Landing from the catalogue (ADR 0065): the connector just installed is marked, with what its
   // first discovery found.
   const arrival = useArrival();
-  // Arriving from Catalogue → Plugins (S43-08): the server's connector is marked and its settings open.
+  // Arriving from Library → Plugins (S43-08): the server's connector is marked and its settings open.
   const focus = useFocus();
   const { metier, mcp } = groupConnectors(instances.data ?? []);
   const lecture = instances.error ? (
@@ -69,10 +69,10 @@ export default function OrgConnectorsPage() {
       </p>
       <aside
         className="max-w-3xl rounded border border-line bg-surface px-3 py-2 text-sm"
-        aria-label="Add from the catalogues"
+        aria-label="Add from the library"
         data-testid="add-from-catalogues"
       >
-        <strong>Add from the catalogues</strong>
+        <strong>Add from the library</strong>
         <span className="text-ink-muted"> — </span>
         <Link href="/library/mcp-servers" className="underline">
           Browse MCP servers
@@ -84,7 +84,7 @@ export default function OrgConnectorsPage() {
       </aside>
       {arrival && (
         <p className="max-w-3xl text-sm" role="status" data-testid="installed-from-catalogue">
-          Installed <strong data-verbatim>{arrival.name}</strong> from the catalogue.
+          Installed <strong data-verbatim>{arrival.name}</strong> from the library.
           {arrival.discovery ? ` Tools: ${arrival.discovery}.` : ""} Open the tools your agents need below.
         </p>
       )}
@@ -133,11 +133,11 @@ export default function OrgConnectorsPage() {
               title="No MCP server yet"
               action={
                 <Link href="/library/mcp-servers" className="text-sm underline">
-                  Browse the MCP catalogue
+                  Browse MCP servers in the library
                 </Link>
               }
             >
-              Pick one from the catalogue, or declare one below, type “MCP server”.
+              Pick one from the library, or declare one below, type “MCP server”.
             </Empty>
           ) : (
             mcp.map((instance) => (

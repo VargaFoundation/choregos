@@ -48,7 +48,7 @@ export default function McpCataloguePage() {
       <p className="max-w-3xl text-sm text-ink-muted">
         Well-known MCP servers, ready to declare. Installing one creates an MCP connector of the organisation: its
         tools are discovered after the install and each one is born closed, so nothing runs until you open it. The
-        catalogue enables nothing by itself.
+        library enables nothing by itself.
         {entries.some((entry) => entry.can.install) && (
           <>
             {" "}
@@ -63,11 +63,11 @@ export default function McpCataloguePage() {
       <CataloguePurpose kind="mcp-servers" />
       {catalogue.data && (
         <p className="text-xs text-ink-muted" data-testid="catalogue-version">
-          Catalogue {catalogue.data.meta.catalogue_version}, generated {catalogue.data.meta.generated_at.slice(0, 10)}.
+          Library {catalogue.data.meta.catalogue_version}, generated {catalogue.data.meta.generated_at.slice(0, 10)}.
           Stars are a snapshot.
         </p>
       )}
-      <ReadState lecture={catalogue} quoi="the catalogue" />
+      <ReadState lecture={catalogue} quoi="the library" />
       {catalogue.data && (
         <>
           <CatalogueFacets

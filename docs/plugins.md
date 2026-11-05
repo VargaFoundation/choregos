@@ -230,7 +230,7 @@ GET    /api/v1/orgs/{org}/plugin-approvals
 POST   /api/v1/orgs/{org}/plugin-approvals/{id}/approve
 ```
 
-In the console: **Catalogue → Plugins** (sources, what they offer, what is installed, the requests waiting
+In the console: **Library → Plugins** (sources, what they offer, what is installed, the requests waiting
 for a second administrator).
 
 `source` is one the deployment declares ([Sources and trust](#sources-and-trust)), or `offline`; the

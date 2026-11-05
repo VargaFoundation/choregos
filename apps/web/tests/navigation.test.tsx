@@ -50,9 +50,13 @@ describe("la navigation (S21-03, S24-03)", () => {
     expect([...rangees].sort()).toEqual(NAV.map((entry) => entry.href).sort());
   });
 
-  it("Integrations is not in the Catalogue group and is named like the project's entry (S40-08)", () => {
-    const catalogue = GROUPS.find((group) => group.titre === "Catalogue")!;
-    expect(catalogue.entrees).not.toContain("/integrations");
+  it("the group of what agents use reads Library, like the addresses of its pages (S55-17)", () => {
+    expect(GROUPS.map((group) => group.titre)).toEqual(["Work", "Library", "Organisation"]);
+  });
+
+  it("Integrations is not in the Library group and is named like the project's entry (S40-08)", () => {
+    const library = GROUPS.find((group) => group.titre === "Library")!;
+    expect(library.entrees).not.toContain("/integrations");
     const organisation = GROUPS.find((group) => group.titre === "Organisation")!;
     expect(organisation.entrees[0]).toBe("/integrations");
     const project = projectGroups("x")
@@ -81,7 +85,7 @@ describe("la navigation (S21-03, S24-03)", () => {
     // The six entries are there, in their groups, and the current page's one is marked.
     expect(panel?.querySelectorAll("a")).toHaveLength(NAV.length + 1); // + « sign in »
     expect(panel?.querySelector('a[aria-current="page"]')?.textContent).toBe("Projects");
-    expect(within(panel!).getByRole("list", { name: "Catalogue" })).toBeInTheDocument();
+    expect(within(panel!).getByRole("list", { name: "Library" })).toBeInTheDocument();
     // The theme choice is there too: below 1280 px, the header no longer shows it elsewhere.
     expect(within(panel!).getByRole("group", { name: "Theme" })).toBeInTheDocument();
 

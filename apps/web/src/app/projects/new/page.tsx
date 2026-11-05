@@ -240,7 +240,7 @@ export default function NewProjectPage() {
                   ))}
                 </Select>
                 <span className="block text-xs text-ink-muted">
-                  From the workflow catalogue; it becomes the project&apos;s default. More can be adopted later.
+                  From the workflow library; it becomes the project&apos;s default. More can be adopted later.
                 </span>
               </label>
             )}
