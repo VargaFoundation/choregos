@@ -353,7 +353,24 @@ process (API, workers): nothing is shared.
   install its administrator is the platform administrator, so nothing changes there. Before S39-06b,
   a role allowed to write a connector could point a secret field at a platform variable.
 - External Secrets Operator ↔ the provider's vault; one hand-made `ClusterSecretStore`.
-- Git token minted **per run**, repository scope, 1 h TTL, injected in memory.
+- Git token minted **per run**, repository scope, 1 h TTL, injected in memory. It travels in
+  `-c http.extraHeader`, command by command, never in `.git/config` nor on disk (S22-07).
+- **The runner's own git runs no repository-controlled code** (#1345). The agent can write
+  `.git/config`, `.git/hooks/*` and `.git/info/attributes` from its shell — those are the workspace,
+  a write root of the confinement (ADR 0094) — and the runner's `git` (`commit`, `push`, the
+  `diff`/`status`/`log`/`checkout` of the scope check) runs as the runner, outside that confinement;
+  worse, the push carries the git token in `GIT_CONFIG_PARAMETERS`, which git exports to every child
+  it spawns. So the runner forces, on each of its own git commands (`Workspace.git`, `_git_env`,
+  never the agent's `agent_git_env`), command-line `-c` overrides that beat `.git/config` and any
+  `include`/`includeIf`: `core.hooksPath=/dev/null` (plus `--no-verify` on `commit` and `push`) so no
+  hook runs; `core.fsmonitor=false`, `diff.external=`, `core.pager=cat` and the per-driver
+  `filter.<n>.{clean,smudge,process}` / `diff.<n>.{textconv,command}` (read from the effective config
+  and each set to empty) so no filter, textconv or external diff/fsmonitor program runs;
+  `credential.helper=` so no helper reads the token at push time; `GIT_CONFIG_NOSYSTEM` +
+  `GIT_CONFIG_GLOBAL=/dev/null` so no system or user config (nor its includes) is read. The ssh
+  transport is never used (https or a local path), so `core.sshCommand=false` is only defence in
+  depth. A `pre-push` hook the agent wrote read the token before this (`packages/runner/src/
+  choregos_runner/workspace.py`, `packages/runner/tests/test_runner_git_hooks.py`).
 - Run token: ES256 JWT, `aud=internal`, `sub=run_id`, TTL `max_minutes + 15`, renewed while
   the run waits for a slot. Minted by `start_run` for the run's Secret only: never stored in
   `runs.stage_input`, never carried by a Temporal payload (#519). The runner reads it, and the
