@@ -373,13 +373,24 @@ def _report_tool_calls(session_id: str, calls: list[dict[str, Any]], outgoing_id
 def _fs_writes(session_id: str, writes: list[dict[str, Any]], outgoing_id: int) -> int:
     """`fs_writes`: writes the way a file-write tool makes them when the client serves the file system
     (Claude Code's Write through the ACP adapter): the permission first, then `fs/write_text_file`. Each
-    outcome — `refused`, `written` or the client's error — goes to `$HOME/fs_writes.json`, in order."""
+    outcome — `refused`, `written` or the client's error — goes to `$HOME/fs_writes.json`, in order.
+    `ask: false` skips the permission, as an agent that writes through the client without asking."""
     if not writes:
         return outgoing_id
     outcomes: list[str] = []
     for write in writes:
-        outgoing_id += 1
         path, content = write["path"], write.get("content", "")
+        if write.get("ask", True) is False:
+            outgoing_id += 1
+            answer = request(
+                outgoing_id, "fs/write_text_file", {"sessionId": session_id, "path": path, "content": content}
+            )
+            error = (answer or {}).get("error")
+            outcomes.append(
+                "written" if answer is not None and error is None else str((error or {}).get("message"))
+            )
+            continue
+        outgoing_id += 1
         response = request(
             outgoing_id,
             "session/request_permission",

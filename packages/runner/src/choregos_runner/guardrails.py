@@ -219,6 +219,8 @@ class GuardRails:
                 "write",
                 path,
             )
+        if (denied := self.denied_by(normalized)) is not None:
+            return Decision(False, denied_reason(path, denied), "write", path)
         if not self.allowed_paths:
             return Decision(True, "no scope declared: write allowed", "write", path)
         if matches_any(normalized, self.allowed_paths):
@@ -230,6 +232,12 @@ class GuardRails:
             "write",
             path,
         )
+
+    def denied_by(self, relative: str) -> str | None:
+        """The policy's `scope.deny_paths` pattern that forbids this workspace path, or nothing. A
+        deny wins over the allowed paths: a work item's scope, or a granted widening, never reopens
+        it (the API refuses to grant one, `PolicyEngine.path_denied`)."""
+        return next((p for p in self.permissions.deny_paths if matches_any(relative, [p])), None)
 
     def _is_script(self, path: str) -> bool:
         """A file of the run's script directory (#1365), when the run is offered tool scripts: outside the
@@ -306,6 +314,14 @@ class GuardRails:
     @property
     def denials(self) -> int:
         return sum(1 for decision in self.decisions if not decision.allowed)
+
+
+def denied_reason(path: str, pattern: str) -> str:
+    """Why a write under `scope.deny_paths` is refused, in the words every guard uses (C2)."""
+    return (
+        f"`{path}` is forbidden by the project's policy (scope.deny_paths: `{pattern}`), whatever "
+        "the allowed paths say, and no scope change grants it. Use `report_finding` if it needs a change."
+    )
 
 
 def _first_str(payload: Any, keys: tuple[str, ...]) -> str:

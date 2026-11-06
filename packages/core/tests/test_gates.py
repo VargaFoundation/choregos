@@ -57,6 +57,32 @@ def test_scope_respected(changed: list[str], allowed: list[str], expected: bool)
     assert out.passed is expected
 
 
+@pytest.mark.parametrize(
+    ("changed", "allowed", "expected"),
+    [
+        ([".github/workflows/ci.yml", "src/a.py"], ["**"], False),
+        (["src/generated/client.py"], ["src/**"], False),
+        ([".github/workflows/ci.yml"], [], False),
+        ([".github/CODEOWNERS", "src/a.py"], ["**"], True),
+    ],
+    ids=["denied-inside-the-scope", "denied-under-an-allowed-folder", "denied-without-a-scope", "beside"],
+)
+def test_scope_respected_fails_on_a_path_the_policy_denies(
+    changed: list[str], allowed: list[str], expected: bool
+) -> None:
+    """`scope.deny_paths` wins over the allowed paths, and holds when none is declared (C2)."""
+    denied = [".github/workflows/**", "src/generated/**"]
+    out = evaluate(
+        "scope_respected", GateContext(changed_files=changed, allowed_paths=allowed, denied_paths=denied)
+    )
+    assert out.passed is expected, out.detail
+    if not expected:
+        assert "scope.deny_paths" in out.detail
+        assert list(out.annotations) == [
+            p for p in changed if p.startswith((".github/workflows/", "src/generated/"))
+        ]
+
+
 def test_evidence_present() -> None:
     ctx = GateContext(result=result(tests_passed=True, tests_run=12))
     assert evaluate("evidence_present", ctx).passed

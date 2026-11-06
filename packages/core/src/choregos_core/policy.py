@@ -126,6 +126,11 @@ class PolicyEngine:
     def path_denied(self, path: str) -> bool:
         return matches_any(path, self.policy.scope.deny_paths)
 
+    def deny_paths(self) -> list[str]:
+        """The paths no run may write (`scope.deny_paths`): the runner refuses them and
+        `scope_respected` fails on them, whatever the work item's allowed paths say (C2)."""
+        return list(self.policy.scope.deny_paths)
+
     def deny_commands(self) -> list[str]:
         return list(self.policy.sandbox.deny_commands)
 

@@ -74,7 +74,9 @@ class ClaudeCodeBackend(Backend):
         files = {
             ".mcp.json": self.mcp_config_json(stage_input),
             ".claude/settings.json": json.dumps(settings, indent=2, ensure_ascii=False),
-            ".choregos/hooks/check_scope.sh": _scope_hook(offered_script_directory(stage_input)),
+            ".choregos/hooks/check_scope.sh": _scope_hook(
+                offered_script_directory(stage_input), list(stage_input.permissions.deny_paths)
+            ),
             "CLAUDE.md": _claude_md(stage_input),
         }
         files.update(stage_input.agent.launch.files)
@@ -132,66 +134,93 @@ def _rtk_config(stage_input: StageInput) -> str:
     )
 
 
-def _scope_hook(scripts_dir: str = "") -> str:
+def _scope_hook(scripts_dir: str = "", deny_paths: list[str] | None = None) -> str:
     """Local safety net: the real check remains the diff verification.
 
     The script is dropped into the agent's workspace, which can read it: its comments
-    are in English (ADR 0039). The history of the `.choregos/**` exception is here: it belongs
-    to the PLATFORM, not to the ticket's scope. That is where the agent must write its
-    `result.json`, required by the output contract. Refusing it put the agent in front of a
-    contradiction; it wrote it in black and white in its transcript ("there is a contradiction
-    between the allowed scope and the obligation to write result.json"), then it gave up, and
-    the step failed on a missing result.
+    are in English (ADR 0039). It answers as `GuardRails.check_write` does, rule for rule and in
+    the same order (C2, `tests/test_write_guards_agree.py`): a secret-looking file, the run's script
+    directory, the platform's own files under `.choregos/`, the policy's `scope.deny_paths`, then
+    the allowed paths. The history of the `.choregos/` exception: `result.json` belongs to the
+    PLATFORM, not to the ticket's scope. That is where the agent must write it, as the output
+    contract requires. Refusing it put the agent in front of a contradiction; it wrote it in black
+    and white in its transcript ("there is a contradiction between the allowed scope and the
+    obligation to write result.json"), then it gave up, and the step failed on a missing result.
+    Its neighbours (the allowed paths, this very hook) are the platform's too, and are refused.
 
     `scripts_dir` is the run's script directory when it is offered tool scripts (#1365), written in
     by the runner, not read from the agent's environment. A write there is allowed as
     `GuardRails.check_write` allows it: beneath it, with no `.` or `..` segment
-    (`tool_scripts.is_under`), outside the workspace, not a secret-looking file.
+    (`tool_scripts.is_under`), outside the workspace, not a secret-looking file. `deny_paths` are
+    written in the same way, from the run's permissions.
     """
     secrets = "|".join(f'*"{pattern}"*' for pattern in SECRET_FILE_PATTERNS)
-    return _SCOPE_HOOK.replace("@SCRIPTS_DIR@", shlex.quote(scripts_dir)).replace("@SECRETS@", secrets)
+    denied = " ".join(shlex.quote(pattern) for pattern in deny_paths or [])
+    return (
+        _SCOPE_HOOK.replace("@SCRIPTS_DIR@", shlex.quote(scripts_dir))
+        .replace("@SECRETS@", secrets)
+        .replace("@DENY_PATHS@", denied)
+    )
 
 
-_SCOPE_HOOK = """#!/usr/bin/env bash
-# Fallback hook: refuses a write outside the allowed paths.
+_SCOPE_HOOK = r"""#!/usr/bin/env bash
+# Fallback hook: refuses a write the runner's guardrails refuse.
 # It is not the guarantee (the runner checks the diff); it is a useful shortcut.
 set -euo pipefail
 payload=$(cat)
 path=$(printf '%s' "$payload" | grep -o '"file_path"[^,]*' | head -1 | cut -d'"' -f4 || true)
 [ -z "${path:-}" ] && exit 0
-rel_precoce=${path#"$PWD/"}
-# `.choregos/**` belongs to the platform, not to the work item's scope: the agent must
-# write its `result.json` there, as the output contract requires.
-case "$rel_precoce" in
-  .choregos/*) exit 0 ;;
+rel=${path#"$PWD/"}
+refuse() { echo "$1" >&2; exit 2; }
+# A pattern covers a path as the platform reads it: `src/**` covers `src` and all beneath it.
+covers() {
+  case "$1" in $2) return 0 ;; esac
+  case "$2" in */\*\*) [ "$1" = "${2%/\*\*}" ] && return 0 ;; esac
+  case "$2" in *\*\*) case "$1" in "${2%\*\*}"*) return 0 ;; esac ;; esac
+  return 1
+}
+case "$rel" in
+  @SECRETS@) refuse "writing to a sensitive file is forbidden: $path" ;;
 esac
 # The run's script directory, when the run is offered tool scripts: outside the workspace,
 # so nothing written there reaches a commit. A path with a `.` or `..` segment names
 # another place, and the scope below judges it; so does the client's directory beside it.
 scripts_dir=@SCRIPTS_DIR@
-if [ -n "$scripts_dir" ] && [ "$rel_precoce" = "$path" ]; then
+if [ -n "$scripts_dir" ] && [ "$rel" = "$path" ]; then
   case "$path" in
     */./*|*/../*|*/.|*/..) ;;
-    "$scripts_dir"/?*)
-      case "$path" in
-        @SECRETS@)
-          echo "writing to a sensitive file is forbidden: $path" >&2
-          exit 2 ;;
-      esac
-      exit 0 ;;
+    "$scripts_dir"/?*) exit 0 ;;
   esac
 fi
+# `.choregos/` belongs to the platform, not to the work item's scope: the agent writes its
+# `result.json` there, as the output contract requires, and its deliverables under `outputs/`.
+case "$rel" in
+  .choregos/result.json) exit 0 ;;
+  .choregos/outputs/*)
+    case "/$rel/" in */../*) ;; *) exit 0 ;; esac ;;
+esac
+case "$rel" in
+  .choregos/*)
+    refuse "the agent cannot change the Choregos configuration (only .choregos/result.json is expected)" ;;
+esac
+# The project's policy forbids these paths whatever the allowed paths say (scope.deny_paths).
+for pattern in @DENY_PATHS@; do
+  if covers "$rel" "$pattern"; then
+    refuse "$rel is forbidden by the project's policy (scope.deny_paths: $pattern), whatever the scope"
+  fi
+done
 allowed_file=".choregos/allowed_paths.txt"
 [ -f "$allowed_file" ] || exit 0
-rel=${path#"$PWD/"}
+declared=0
 while read -r pattern; do
   [ -z "$pattern" ] && continue
-  case "$rel" in
-    $pattern) exit 0 ;;
-  esac
+  declared=1
+  if covers "$rel" "$pattern"; then
+    exit 0
+  fi
 done < "$allowed_file"
-echo "path outside the allowed paths: $rel (see .choregos/allowed_paths.txt)" >&2
-exit 2
+[ "$declared" = 0 ] && exit 0
+refuse "path outside the allowed paths: $rel (see .choregos/allowed_paths.txt)"
 """
 
 

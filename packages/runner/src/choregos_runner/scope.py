@@ -31,7 +31,8 @@ class ScopeCheck:
     def prompt(self) -> str:
         return "\n".join(
             [
-                "Files outside the allowed paths were changed; I reverted them:",
+                "Files outside the allowed paths, or under a path the project's policy forbids "
+                "(scope.deny_paths), were changed; I reverted them:",
                 *[f"- `{path}`" for path in self.reverted],
                 "",
                 "If one of them is essential, call `request_scope_change(paths, justification)`.",
@@ -41,22 +42,37 @@ class ScopeCheck:
         )
 
 
+def outside_scope(path: str, allowed_paths: list[str], denied_paths: list[str]) -> bool:
+    """Whether a changed file is beyond the scope: under a path the policy forbids
+    (`scope.deny_paths`, C2), whatever the allowed paths say, or outside the allowed paths when
+    there are some."""
+    if matches_any(path, denied_paths):
+        return True
+    return bool(allowed_paths) and not matches_any(path, allowed_paths)
+
+
 async def check_scope(
-    workspace: Workspace, base: str, allowed_paths: list[str], *, revert: bool = True
+    workspace: Workspace,
+    base: str,
+    allowed_paths: list[str],
+    *,
+    revert: bool = True,
+    denied_paths: list[str] | None = None,
 ) -> ScopeCheck:
     """Compare the diff to the authorised scope and revert the overflows."""
     changed = await workspace.changed_files(base)
     ignored = set(RUNNER_FILES)
+    denied = list(denied_paths or [])
     candidates = [path for path in changed if path not in ignored]
-    if not allowed_paths:
+    if not allowed_paths and not denied:
         return ScopeCheck(changed=candidates)
-    out_of_scope = [path for path in candidates if not matches_any(path, allowed_paths)]
+    out_of_scope = [path for path in candidates if outside_scope(path, allowed_paths, denied)]
     check = ScopeCheck(changed=candidates, out_of_scope=out_of_scope)
     if out_of_scope and revert:
         check.reverted = await workspace.revert_paths(out_of_scope, base)
         still = await workspace.changed_files(base)
         check.remaining = [
-            path for path in still if path not in ignored and not matches_any(path, allowed_paths)
+            path for path in still if path not in ignored and outside_scope(path, allowed_paths, denied)
         ]
     elif out_of_scope:
         check.remaining = list(out_of_scope)

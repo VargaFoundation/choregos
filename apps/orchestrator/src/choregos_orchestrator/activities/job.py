@@ -135,6 +135,7 @@ async def prepare_job(
         permissions=network_permissions(
             run_network(bundle, None, settings, await org_runner_hosts(session, bundle.project.org_id)),
             write_paths=allowed_paths,
+            deny_paths=engine.deny_paths(),
             deny_commands=engine.deny_commands(),
             dod_iterations=0,
             max_findings=engine.max_findings_per_run(),

@@ -386,6 +386,7 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
                     with_repo=repo is not None,
                 ),
                 write_paths=allowed_paths,
+                deny_paths=engine.deny_paths(),
                 deny_commands=engine.deny_commands(),
                 dod_iterations=engine.dod_iterations(),
                 max_findings=engine.max_findings_per_run(),

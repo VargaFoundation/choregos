@@ -907,6 +907,8 @@ export type StageInput = {
   };
   permissions?: {
     write_paths?: Array<string>;
+    /** Paths the run must never write, the project policy's scope.deny_paths: a deny wins over write_paths, and no scope change grants one. */
+    deny_paths?: Array<string>;
     deny_commands?: Array<string>;
     allow_domains?: Array<string>;
     deny_domains?: Array<string>;
