@@ -44,9 +44,15 @@ def target_or_none(bundle: Any, item: Any) -> Target | None:
         return None
 
 
-def fix(bundle: Any, item: Any, found: Target) -> None:
+def fix(bundle: Any, item: Any, found: Target, declared: Iterable[str] = ()) -> None:
     """Record the target at the work item's first git activity (ADR 0124 §3); a no-op afterwards and
-    on a project with one repository."""
+    on a project with one repository.
+
+    A no-op too for a step that declares `repository` among its outputs (`declared`): it names the
+    target itself. It reads the current one without fixing it, or the one it names would be refused
+    at the next step."""
+    if REPOSITORY_FIELD in set(declared):
+        return
     documents = fixing(bundle.config, item.documents, found)
     if documents is not None:
         item.documents = documents

@@ -158,7 +158,7 @@ async def prepare_job(
         ),
     )
     if found is not None:
-        fix(bundle, item, found)
+        fix(bundle, item, found, plan.outputs or [])
     payload = stage_input.model_dump(mode="json", by_alias=True)
     run = existing or Run(id=run_id, work_item_id=item.id, project_id=bundle.project.id)
     run.transition_id = plan.transition_id

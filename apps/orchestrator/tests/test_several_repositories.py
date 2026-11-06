@@ -273,6 +273,32 @@ async def test_a_declared_repository_output_becomes_the_target(setup: Fixture) -
     assert (await _prepared(setup))["repo"]["url"] == DIAMCTL["url"], "the next stage clones it"
 
 
+@pytest.mark.parametrize("step", ["job", "agent"])
+async def test_a_step_that_names_the_repository_does_not_fix_the_one_it_reads(
+    setup: Fixture, step: str
+) -> None:
+    """A context job reads the primary, then names the repository the finding lives in: fixing the
+    primary while it runs would refuse the one it names at the next step."""
+    from choregos_orchestrator.activities.outcome import record_run_outcome
+    from choregos_orchestrator.activities.stage import prepare_stage
+
+    await _scene(setup)
+    await _allow_only_pypi(setup)
+    plan = {**_plan(setup), "outputs": ["repository"]}
+    if step == "job":
+        plan["job"] = {"command": ["make", "context"]}
+    prepared = await prepare_stage(plan)
+    assert prepared["stage_input"]["repo"]["url"] == PRIMARY_URL, "it reads the current target"
+    assert "repository_fixed" not in ((await _item(setup)).documents or {}), "nothing is fixed yet"
+
+    result = await _run_with_outputs(setup, "run-context", {"repository": "diamctl"}, ["repository"])
+    await record_run_outcome({"project_id": setup.project_id, "run_id": "run-context", "result": result})
+    # The next stage (another attempt: the same plan returns the run it already prepared).
+    nxt = (await prepare_stage({**_plan(setup), "attempt": 2}))["stage_input"]
+    assert nxt["repo"]["url"] == DIAMCTL["url"], "the next stage clones the named one"
+    assert (await _item(setup)).documents["repository_fixed"] == "diamctl"
+
+
 async def test_an_undeclared_repository_output_changes_nothing(setup: Fixture) -> None:
     from choregos_orchestrator.activities.outcome import record_run_outcome
 
