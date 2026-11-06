@@ -708,6 +708,8 @@ export type Project = {
   display_name?: string;
   template_ref?: string;
   repo?: {
+    /** The repository's name in its project, what a work item's `fields.repository` names (ADR 0124); the primary is named after its URL's last segment when absent. */
+    name?: string;
     url: string;
     default_branch: string;
     language?: "python" | "node" | "go" | "java" | "dotnet" | "rust" | "other";
@@ -717,6 +719,19 @@ export type Project = {
     lint_command?: string;
     typecheck_command?: string;
   };
+  /** The project's other repositories (ADR 0124): `repo` stays the primary, the one a work item that names none works on. Refused without `repo`, with two equal names and with two names for one URL. */
+  repositories?: Array<{
+    /** The repository's name in its project, what a work item's `fields.repository` names (ADR 0124). */
+    name: string;
+    url: string;
+    default_branch?: string;
+    language?: "python" | "node" | "go" | "java" | "dotnet" | "rust" | "other";
+    clone_depth?: number;
+    branch_prefix?: string;
+    test_command?: string;
+    lint_command?: string;
+    typecheck_command?: string;
+  }>;
   envs?: Array<string>;
   agent?: {
     default_backend?: string;

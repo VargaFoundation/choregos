@@ -15,7 +15,7 @@ from typing import Any, Literal
 from uuid import uuid4
 
 from choregos_core import WorkflowEngine
-from choregos_core.domain import TRACKER_FIELD
+from choregos_core.domain import REPOSITORY_FIELD, TRACKER_FIELD
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import Project, WorkflowDef, WorkItem
@@ -24,6 +24,7 @@ from .decision_ledger import record_routing
 from .definitions import active_workflow_named, default_workflow, policy_engine, workflow_model
 from .initiator import initiator
 from .llm_routing import Decision, Item, ask_the_model, book, routing_record
+from .work_item_repository import birth_fields
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,9 +138,10 @@ def with_tracker(fields: dict[str, Any], tracker: Any) -> dict[str, Any]:
 def validate_fields(schema: dict[str, Any] | None, fields: dict[str, Any], workflow: str) -> None:
     """A field outside the schema, or a required field missing: 422, with its path.
 
-    `fields.tracker` is the platform's (S51-04), not the workflow's: it is left out of the check, so a
-    workflow whose inputs forbid extra properties still accepts a work item filed from Jira."""
-    fields = {k: v for k, v in fields.items() if k != TRACKER_FIELD}
+    `fields.tracker` (S51-04) and `fields.repository` (ADR 0124) are the platform's, not the workflow's:
+    they are left out of the check, so a workflow whose inputs forbid extra properties still accepts a
+    work item filed from Jira, or one that names its repository. The project validates the second."""
+    fields = {k: v for k, v in fields.items() if k not in (TRACKER_FIELD, REPOSITORY_FIELD)}
     if schema is None:
         if fields:
             raise unprocessable(f"workflow `{workflow}` declares no field (`metadata.inputs`)")
@@ -194,19 +196,22 @@ async def verify_birth(session: AsyncSession, project: Project, birth: WorkItemB
     a budget wider than allowed. Nothing is written, so a caller can run it BEFORE a side effect
     it could not take back (the issue created in an external tracker, S39-16)."""
     refuse_reserved_fields(birth.fields)
+    fields = birth_fields(project, birth.fields, birth.labels)
     row = await choose_workflow(session, project, birth)
     workflow = workflow_model(row)
-    validate_fields(workflow.metadata.inputs, birth.fields, workflow.metadata.name)
+    validate_fields(workflow.metadata.inputs, fields, workflow.metadata.name)
     await _budget_at_launch(session, project, workflow, birth)
 
 
 async def new_work_item(session: AsyncSession, project: Project, birth: WorkItemBirth) -> WorkItem:
     """The only constructor: the initial state OF the chosen workflow, and the pin of its version."""
     refuse_reserved_fields(birth.fields)
+    # The repository it works on (ADR 0124): a given one is checked, a `repository:<name>` label copied.
+    fields = birth_fields(project, birth.fields, birth.labels)
     routed = await route(session, project, birth)
     row = routed.row
     workflow = workflow_model(row)
-    validate_fields(workflow.metadata.inputs, birth.fields, workflow.metadata.name)
+    validate_fields(workflow.metadata.inputs, fields, workflow.metadata.name)
     item = WorkItem(  # the only `WorkItem(` of the production code (the single-constructor guard test)
         project_id=project.id,
         tracker_key=birth.tracker_key,
@@ -221,7 +226,7 @@ async def new_work_item(session: AsyncSession, project: Project, birth: WorkItem
         reporter=birth.reporter,
         initiated_by=birth.initiated_by,
         allowed_paths=list(birth.allowed_paths),
-        fields=with_tracker(birth.fields, birth.tracker),
+        fields=with_tracker(fields, birth.tracker),
         budget_usd=await _budget_at_launch(session, project, workflow, birth),
     )
     if birth.item_id is not None:

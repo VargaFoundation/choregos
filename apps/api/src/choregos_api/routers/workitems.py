@@ -63,6 +63,7 @@ from ..services.human_groups import decider_group_verdict, group_of_the_step
 from ..services.receipts import work_item_handoffs
 from ..services.routing import refuse_reserved_fields, validate_fields
 from ..services.work_item_controls import apply_control
+from ..services.work_item_repository import refuse_repository_change
 from ..temporal import (
     InterpreterNotRunningError,
     deliver_control,
@@ -162,6 +163,8 @@ async def update_work_item(id: str, body: WorkItemUpdate, session: Db, principal
         raise forbidden("changing the fields of a work item needs at least the developer role")
     # What the tracker says about the ticket stays the tracker's (S51-04): kept, never written here.
     refuse_reserved_fields(body.fields)
+    # The repository it works on (ADR 0124): one the project holds, and not another once it is fixed.
+    await refuse_repository_change(session, project, item, body.fields)
     workflow = workflow_model(await work_item_workflow(session, item))
     field_values = {k: v for k, v in {**(item.fields or {}), **body.fields}.items() if v is not None}
     validate_fields(workflow.metadata.inputs, field_values, workflow.metadata.name)
@@ -277,7 +280,7 @@ async def journey(id: str, session: Db, principal: Me) -> WorkItemJourney:
 
 
 async def _complete_the_task(
-    session: Any, item: WorkItem, human_request: HumanRequest, body: DecisionRequest
+    session: Any, project: Project, item: WorkItem, human_request: HumanRequest, body: DecisionRequest
 ) -> tuple[dict[str, Any], str | None]:
     """A task done (S20-06): its values validated by ITS form — nothing that is not in it —,
     the attestation when it asks for one, then the values poured into the ticket's fields,
@@ -302,6 +305,7 @@ async def _complete_the_task(
         raise unprocessable(f"the task asks you to attest: “{attest}”")
     workflow = workflow_model(await work_item_workflow(session, item))
     refuse_reserved_fields(body.values)
+    await refuse_repository_change(session, project, item, body.values)
     field_values = {**(item.fields or {}), **body.values}
     validate_fields(workflow.metadata.inputs, field_values, workflow.metadata.name)
     item.fields = field_values
@@ -376,7 +380,9 @@ async def post_decision(id: str, body: DecisionRequest, session: Db, principal: 
     if is_task and body.kind not in {"complete", "reject"}:
         raise unprocessable("a task is completed (`complete`, with its values) or sent back (`reject`)")
     values, attested_sentence = (
-        await _complete_the_task(session, item, request_row, body) if body.kind == "complete" else ({}, None)
+        await _complete_the_task(session, project, item, request_row, body)
+        if body.kind == "complete"
+        else ({}, None)
     )
 
     kind_map = {
