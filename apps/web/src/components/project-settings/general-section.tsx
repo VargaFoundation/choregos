@@ -7,6 +7,7 @@ import { SettingsSection } from "@/components/project-settings/section";
 import { Button, Card, ErrorNote, Field, Input, Select } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useProjectConfigPatch, type ProjectConfigValue } from "@/lib/project-config";
+import { nameOfUrl } from "@/lib/repositories";
 import type { ProjectDto, TemplateSummary } from "@/lib/types";
 
 const LANGUAGES = ["python", "node", "go", "java", "dotnet", "rust", "other"] as const;
@@ -32,6 +33,52 @@ const toRows = (record: Record<string, string> | undefined): Row[] => Object.ent
 const fromRows = (rows: Row[]): Record<string, string> =>
   Object.fromEntries(rows.filter((r) => r.key.trim()).map((r) => [r.key.trim(), r.value]));
 const blank = (value: string): string | undefined => (value.trim() === "" ? undefined : value.trim());
+
+type NamedRepository = NonNullable<ProjectConfigValue["repositories"]>[number];
+/** Another repository of the project (ADR 0124), as the card edits it; the fields it does not show are kept. */
+type RepoRow = {
+  name: string;
+  url: string;
+  branch: string;
+  test: string;
+  lint: string;
+  typecheck: string;
+  rest: Partial<NamedRepository>;
+};
+const SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/;
+
+const toRepoRows = (list: NamedRepository[] | undefined): RepoRow[] =>
+  (list ?? []).map((r) => ({
+    name: r.name,
+    url: r.url,
+    branch: r.default_branch ?? "main",
+    test: r.test_command ?? "",
+    lint: r.lint_command ?? "",
+    typecheck: r.typecheck_command ?? "",
+    rest: r,
+  }));
+const fromRepoRows = (rows: RepoRow[]): NamedRepository[] =>
+  rows.map((r) => ({
+    ...r.rest,
+    name: r.name.trim(),
+    url: r.url.trim(),
+    default_branch: blank(r.branch) ?? "main",
+    test_command: blank(r.test),
+    lint_command: blank(r.lint),
+    typecheck_command: blank(r.typecheck),
+  }));
+
+/** Why the repositories cannot be saved as they are, or `null`: the API refuses the same. */
+export function repositoriesProblem(primary: string | null, rows: RepoRow[]): string | null {
+  if (rows.length === 0) return null;
+  if (primary === null) return "Set the primary repository's URL: the other repositories need a primary.";
+  if (rows.some((r) => !r.url.trim())) return "Each repository needs its URL.";
+  if (rows.some((r) => !SLUG.test(r.name.trim())))
+    return "Each repository needs a name: lowercase letters, digits and dashes.";
+  const names = [primary, ...rows.map((r) => r.name.trim())];
+  const twice = names.find((name, index) => names.indexOf(name) !== index);
+  return twice ? `Two repositories are named ${twice}: a ticket names one.` : null;
+}
 
 /** The project's name, repository, measured checks, environments, labels and definition-of-done facts. */
 export function GeneralSection({ slug }: { slug: string }) {
@@ -134,10 +181,43 @@ function GeneralForm({
   const [testCommand, setTestCommand] = useState(config.repo?.test_command ?? "");
   const [lintCommand, setLintCommand] = useState(config.repo?.lint_command ?? "");
   const [typecheckCommand, setTypecheckCommand] = useState(config.repo?.typecheck_command ?? "");
+  const [repoName, setRepoName] = useState(config.repo?.name ?? "");
+  const [others, setOthers] = useState<RepoRow[]>(toRepoRows(config.repositories));
   const [facts, setFacts] = useState<Row[]>(toRows(config.dod?.facts));
   const newer = newerTemplateVersion(project.template_ref ?? config.template_ref, templates);
   const hasRepo = url.trim() !== "";
   const checksWithoutRepo = !hasRepo && [testCommand, lintCommand, typecheckCommand].some((c) => c.trim());
+  const primary = hasRepo ? blank(repoName) ?? nameOfUrl(url) : null;
+  const othersProblem = repositoriesProblem(primary, others);
+
+  /** The other repository at `index` becomes the primary, and the primary takes its place in the list. */
+  function makePrimary(index: number) {
+    const row = others[index];
+    if (!row || primary === null) return;
+    const former: RepoRow = {
+      name: primary,
+      url,
+      branch,
+      test: testCommand,
+      lint: lintCommand,
+      typecheck: typecheckCommand,
+      rest: {
+        language: (blank(language) as Language | undefined) ?? undefined,
+        branch_prefix: blank(prefix),
+        clone_depth: depth.trim() ? Number.parseInt(depth, 10) : undefined,
+      },
+    };
+    setOthers(others.map((r, i) => (i === index ? former : r)));
+    setRepoName(row.name);
+    setUrl(row.url);
+    setBranch(row.branch);
+    setTestCommand(row.test);
+    setLintCommand(row.lint);
+    setTypecheckCommand(row.typecheck);
+    setLanguage(row.rest.language ?? "");
+    setPrefix(row.rest.branch_prefix ?? "");
+    setDepth(row.rest.clone_depth ? String(row.rest.clone_depth) : "");
+  }
 
   function addEnv() {
     const env = newEnv.trim();
@@ -153,6 +233,7 @@ function GeneralForm({
         repo: hasRepo
           ? {
               ...latest.repo,
+              name: blank(repoName),
               url: url.trim(),
               default_branch: blank(branch) ?? "main",
               language: (blank(language) as Language | undefined) ?? undefined,
@@ -163,6 +244,7 @@ function GeneralForm({
               typecheck_command: blank(typecheckCommand),
             }
           : undefined,
+        repositories: others.length > 0 ? fromRepoRows(others) : undefined,
         dod:
           Object.keys(fromRows(facts)).length > 0 || Object.keys(latest.dod ?? {}).some((k) => k !== "facts")
             ? { ...latest.dod, facts: fromRows(facts) }
@@ -253,7 +335,65 @@ function GeneralForm({
           <Field label="Clone depth" hint="Default 50">
             {(p) => <Input {...p} type="number" min={1} value={depth} disabled={!hasRepo} onChange={(e) => setDepth(e.target.value)} />}
           </Field>
+          <Field label="Name in the project" hint={`What a ticket's repository field names; default ${hasRepo ? nameOfUrl(url) : "its URL's last segment"}`}>
+            {(p) => <Input {...p} value={repoName} disabled={!hasRepo} placeholder={hasRepo ? nameOfUrl(url) : ""} onChange={(e) => setRepoName(e.target.value)} />}
+          </Field>
         </div>
+      </Card>
+
+      <Card title="Other repositories">
+        <p className="mb-3 text-xs text-ink-muted">
+          A ticket works on one repository: the one its <code>repository</code> field names, else the primary above. Its branch, pull request,
+          checks and measured commands are that repository&apos;s. A change across several repositories is one child ticket per repository.
+        </p>
+        <ul className="space-y-3" aria-label="Other repositories">
+          {others.map((row, index) => {
+            const set = (change: Partial<RepoRow>) => setOthers(others.map((r, i) => (i === index ? { ...r, ...change } : r)));
+            return (
+              <li key={index} className="space-y-2 rounded-md border border-line p-3">
+                <div className="grid gap-2 md:grid-cols-3">
+                  <Input aria-label={`Repository name ${index + 1}`} value={row.name} placeholder="diamctl" onChange={(e) => set({ name: e.target.value })} />
+                  <Input
+                    aria-label={`Repository URL ${index + 1}`}
+                    value={row.url}
+                    className="md:col-span-2"
+                    placeholder="https://github.com/owner/repo.git"
+                    onChange={(e) => set({ url: e.target.value })}
+                  />
+                  <Input aria-label={`Default branch ${index + 1}`} value={row.branch} onChange={(e) => set({ branch: e.target.value })} />
+                  <Input aria-label={`Test command ${index + 1}`} value={row.test} placeholder="test command" onChange={(e) => set({ test: e.target.value })} />
+                  <Input aria-label={`Lint command ${index + 1}`} value={row.lint} placeholder="lint command" onChange={(e) => set({ lint: e.target.value })} />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    aria-label={`Make ${row.name || `repository ${index + 1}`} the primary`}
+                    onClick={() => makePrimary(index)}
+                    disabled={primary === null}
+                  >
+                    Make primary
+                  </Button>
+                  <Button
+                    size="sm"
+                    aria-label={`Remove ${row.name || `repository ${index + 1}`}`}
+                    onClick={() => setOthers(others.filter((_, i) => i !== index))}
+                  >
+                    Remove
+                  </Button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+        <div className="mt-3">
+          <Button
+            size="sm"
+            onClick={() => setOthers([...others, { name: "", url: "", branch: "main", test: "", lint: "", typecheck: "", rest: {} }])}
+          >
+            Add a repository
+          </Button>
+        </div>
+        {othersProblem && <p className="mt-2 text-xs text-warn">{othersProblem}</p>}
       </Card>
 
       <Card title="Measured checks">
@@ -291,7 +431,7 @@ function GeneralForm({
           </p>
         )}
         {error && <ErrorNote>{error}</ErrorNote>}
-        <Button tone="primary" type="submit" disabled={pending || checksWithoutRepo}>
+        <Button tone="primary" type="submit" disabled={pending || checksWithoutRepo || othersProblem !== null}>
           Save general settings
         </Button>
       </div>

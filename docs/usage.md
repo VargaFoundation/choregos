@@ -576,8 +576,9 @@ list from `lg` up): **Readiness** (on top), **General**, **Connections**, **Agen
   platform operator, or "done outside Choregos") instead of the link. The overview's *Getting started* card
   is the same list and disappears when nothing is to do.
 - **General**: name, template (read-only, with "a newer version exists" when the manifest has one),
-  environments, labels, the repository (URL, default branch, language, branch prefix, clone depth), the
-  measured checks (test, lint, typecheck commands) and definition-of-done facts (a fact name and the command
+  environments, labels, the repository (URL, default branch, language, branch prefix, clone depth, its name in
+  the project), the other repositories (see [A project with several repositories](#a-project-with-several-repositories)),
+  the measured checks (test, lint, typecheck commands) and definition-of-done facts (a fact name and the command
   that proves it). One Save for the section.
 - **Notifications**: the notify connector's state (it is configured in Connections), the Slack channel and
   the e-mail addresses (`notify.slack_channel`, `notify.emails`).
@@ -611,6 +612,61 @@ row the same way, and every `project.update` audit entry lists the top-level con
 - **Guardrails** holds the project's policy (YAML behind a disclosure, with a one-line summary of the
   budget and release trains) and the operations of the organisation's connectors.
 - **Tools** is the tool catalogue.
+
+### A project with several repositories
+
+A team whose work spans several repositories (a platform team's `infra`, `diamctl`, `fondation`,
+`choregos-deploy`) keeps one project — one policy, one budget, one set of agents — and declares the others
+beside its repository ([ADR 0124](adr/0124-a-project-may-hold-several-repositories-a-work-item-works-on-one.md)):
+
+```yaml
+repo:                       # the primary: a ticket that names no repository works on it
+  url: https://github.com/acme/infra.git
+  name: infra               # optional: the URL's last segment otherwise
+repositories:
+  - name: diamctl
+    url: https://github.com/acme/diamctl.git
+    test_command: go test ./...
+  - name: fondation
+    url: https://github.com/acme/fondation.git
+    default_branch: trunk
+```
+
+Each entry takes the fields of `repo` (default branch, language, clone depth, branch prefix, test, lint and
+typecheck commands) and a `name`. The configuration is refused with `repositories` but no `repo`, with two
+repositories of one name (the primary's derived name included: give `repo.name`) and with one URL under two
+names. The console edits them in *General*, *Other repositories*: add, remove, *Make primary*.
+
+**A ticket works on one repository: `fields.repository`.** The field holds a repository's name; absent, the
+ticket works on the primary. Everything that talks to git follows it: what the run clones, its branch (with
+that repository's prefix) and its pull request, the checks and the review the guarantees read, the diff of
+`scope_respected` and `diff_size_max`, the DoD commands the runner measures, the App token (minted for that
+repository, through the installation the organisation claimed on its owner) and the repository host the run's
+network implies — never another repository's. The field is the platform's, like `fields.tracker`: a workflow's
+`metadata.inputs` does not validate it, and no workflow may declare an input named `repository`
+(`inputs.reserved`). A ticket gets it
+
+- **at birth**, from whoever files it: the console, the API, the MCP and A2A doors, an HTTP trigger
+  (`fields: {repository: /finding/repository}`), a schedule's `fields`, a fan-out child
+  (`fields: {repository: "{{ item.repository }}"}`). A name the project does not hold is refused (`422`);
+- **from its tracker**, with a label `repository:<name>` when its fields say nothing;
+- **from a step**: an agent or job transition that declares `outputs: [repository]`, or a decision step with
+  a question named `repository`, sets it when the step succeeds;
+- **from a person**, on the ticket's page (*About this ticket*, *Repository*) or `PATCH /work-items/{id}`
+  with `{"fields": {"repository": "diamctl"}}`.
+
+The first step that touches git — a stage that clones, the branch, the pull request — **fixes** the ticket to
+its repository (`documents.repository_fixed`; the page then says "Fixed"): one ticket, one repository, one
+branch. A person who names another one afterwards is refused (`409`). A tracker label or a step's output
+cannot be answered, so an unknown name from them, or one that differs from the fixed repository, is refused
+at the next stage instead: the ticket escalates with a configuration refusal that names the repositories the
+project holds; set the field, then replay the stage. A change across several repositories is one child per
+repository ([One child work item per element](#one-child-work-item-per-element-then-a-join)).
+
+Not covered: a run sees its target only (no read-only mount of the others); a GitHub pull request or check
+event of a repository whose name is not the project's slug is not routed to the project (the guarantees read
+its pull request from the SCM when they poll); the readiness, a template's knowledge bases and the eval cells
+use the primary.
 
 ### Several workflows in one project
 
