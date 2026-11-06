@@ -136,7 +136,7 @@ async def _reservation(
             left["agent_month"] = agent.spec.budget.monthly_usd - month - held
     left["ticket"] = (
         ticket_budget(engine, item)
-        - await ticket_spent(session, item.id)
+        - await ticket_spent(session, item.id, item.recurred_at)
         - await open_reservations(session, work_item_id=item.id, exclude_run=run_id)
     )
     if (day := engine.daily_budget()) is not None:

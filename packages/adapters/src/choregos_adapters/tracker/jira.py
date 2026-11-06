@@ -16,6 +16,7 @@ goes through the gateway, `api.atlassian.com/ex/jira/<cloud_id>` (`JiraGatewayCl
 from __future__ import annotations
 
 from collections.abc import Mapping
+from datetime import datetime
 from typing import Any, Literal
 
 from choregos_contracts import InboundEvent, ProjectConfig, Risk, Size, StartRule
@@ -132,6 +133,7 @@ class JiraTracker:
             risk=_parse_enum(Risk, fields, self._present_name(RISK, fields)),
             assignees=[a for a in [((fields.get("assignee") or {}).get("displayName"))] if a],
             author=person_of(fields.get("reporter")),
+            reopened_at=_back_to_work_at(fields),
             fields={TRACKER_FIELD: tracker},
             comments=[
                 Comment(
@@ -378,6 +380,19 @@ def _refusal(status_code: int | None, project_key: str) -> str:
     if status_code == 404:
         return f"404: no project {project_key}, or the account cannot browse it: add it to the project"
     return f"{status_code}: Jira refused to read the project {project_key}"
+
+
+def _back_to_work_at(fields: dict[str, Any]) -> datetime | None:
+    """When the issue entered the To Do or In Progress category it is in now (C1): Jira's
+    `statuscategorychangedate`, read only while the issue is not in a Done status."""
+    category = ((fields.get("status") or {}).get("statusCategory") or {}).get("key")
+    changed = fields.get("statuscategorychangedate")
+    if category == "done" or not isinstance(changed, str) or not changed:
+        return None
+    try:
+        return datetime.fromisoformat(changed)
+    except ValueError:
+        return None
 
 
 def _parse_enum(enum: Any, fields: dict[str, Any], name: str) -> Any:

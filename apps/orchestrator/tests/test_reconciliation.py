@@ -95,7 +95,7 @@ async def test_a_finished_or_paused_ticket_is_left_alone(setup: Fixture) -> None
 async def test_without_a_candidate_the_catch_up_does_nothing(setup: Fixture) -> None:
     clear_fake_signals()
     result = await tracker_activities.reconcile_tracker({"project_slug": setup.project_slug})
-    assert result == {"candidates": 0, "created": [], "started": [], "skipped": []}
+    assert result == {"candidates": 0, "created": [], "started": [], "reopened": [], "skipped": []}
     assert fake_starts() == {}
 
 

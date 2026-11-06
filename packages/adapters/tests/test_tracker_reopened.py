@@ -56,3 +56,83 @@ def test_a_gitlab_update_does_not_say_it_reopened() -> None:
     (event,) = parse_gitlab_event("Issue Hook", "u-2", _gitlab("update"))
     assert event.type is InboundEventType.ITEM_UPDATED
     assert "reopened" not in event.payload
+
+
+# ───────────────────────── C1: when the ticket came back ─────────────────────────
+
+
+async def test_github_dates_a_reopened_issue_by_its_last_reopened_event_only() -> None:
+    from datetime import UTC, datetime
+
+    from choregos_adapters.github.client import GitHubClient
+    from choregos_adapters.tracker.github import GitHubTracker
+
+    from ._transport import Wire
+
+    issue = {"title": "Kernel", "state": "open", "labels": []}
+    wire = Wire(
+        {
+            ("GET", f"/repos/{REPO}/issues/12"): [
+                (200, {**issue, "state_reason": "reopened"}),
+                (200, {**issue, "state_reason": None}),
+            ],
+            ("GET", f"/repos/{REPO}/issues/12/comments"): (200, []),
+            ("GET", f"/repos/{REPO}/issues/12/events"): (
+                200,
+                [
+                    {"event": "reopened", "created_at": "2026-11-01T08:00:00Z"},
+                    {"event": "closed", "created_at": "2026-11-02T08:00:00Z"},
+                    {"event": "reopened", "created_at": "2026-11-05T08:00:00Z"},
+                    {"event": "labeled", "created_at": "2026-11-06T08:00:00Z"},
+                ],
+            ),
+        }
+    )
+    client = GitHubClient(token="t", base_url="https://api.github.test", client=wire.client())
+    tracker = GitHubTracker(client, REPO)
+
+    reopened = await tracker.fetch_item(f"{REPO}#12")
+    assert reopened.reopened_at == datetime(2026, 11, 5, 8, 0, tzinfo=UTC)
+    plain = await tracker.fetch_item(f"{REPO}#12")
+    assert plain.reopened_at is None
+    assert wire.sent("GET").count(("GET", f"/repos/{REPO}/issues/12/events")) == 1, "only the reopened one"
+
+
+async def test_jira_dates_an_open_issue_by_its_status_category_change() -> None:
+    from datetime import UTC, datetime
+
+    import httpx
+    from choregos_adapters.http import RestClient
+    from choregos_adapters.tracker.jira import JiraTracker
+
+    category = {"key": "new"}
+
+    def reply(request: httpx.Request) -> httpx.Response:
+        fields = {
+            "summary": "Kernel",
+            "status": {"name": "To Do", "statusCategory": category},
+            "statuscategorychangedate": "2026-11-05T08:00:00.000+0000",
+        }
+        return httpx.Response(200, json={"key": "BILL-7", "fields": fields, "names": {}})
+
+    http = httpx.AsyncClient(transport=httpx.MockTransport(reply))
+    jira = JiraTracker(RestClient("https://varga.atlassian.net", client=http, service="jira"), "BILL")
+    assert (await jira.fetch_item("BILL-7")).reopened_at == datetime(2026, 11, 5, 8, 0, tzinfo=UTC)
+    category["key"] = "done"
+    assert (await jira.fetch_item("BILL-7")).reopened_at is None, "a Done issue has not come back"
+
+
+def test_a_jira_move_says_the_category_of_the_status_it_enters() -> None:
+    from choregos_adapters.tracker.jira_events import parse_jira_event
+
+    payload = {
+        "webhookEvent": "jira:issue_updated",
+        "issue": {
+            "key": "BILL-7",
+            "fields": {"status": {"name": "Closed", "statusCategory": {"key": "done"}}},
+        },
+        "changelog": {"items": [{"field": "status", "fromString": "Fixed (proof)", "toString": "Closed"}]},
+    }
+    (event,) = parse_jira_event("j-1", payload)
+    assert event.type is InboundEventType.ITEM_MOVED
+    assert event.payload["status_category"] == "done"
