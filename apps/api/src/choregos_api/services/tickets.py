@@ -50,6 +50,7 @@ from .definitions import work_item_workflow, workflow_model
 from .events import persist_event
 from .initiator import of_principal
 from .routing import WorkItemBirth, new_work_item, verify_birth
+from .work_item_repository import repository_view
 
 
 def _decision_detail(decision: dict[str, Any]) -> str:
@@ -200,6 +201,7 @@ async def work_item_dto(
     ).one()
     if booked[0] is not None:
         totals = totals.model_copy(update={"cost_usd": float(booked[0]), "cost_eur": float(booked[1] or 0.0)})
+    repository, repository_fixed = await repository_view(session, project, item)
     return WorkItemDto(
         id=item.id,
         fields=dict(item.fields or {}),
@@ -222,6 +224,8 @@ async def work_item_dto(
         current_run=run_summary(current) if current else None,
         pending_request=human_request_dto(pending) if pending else None,
         pr_url=item.pr_url,
+        repository=repository,
+        repository_fixed=repository_fixed,
         totals=totals,
         budget_usd=item.budget_usd,
         estimate=await estimate_cost(session, project.id, item),

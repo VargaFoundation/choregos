@@ -1,6 +1,6 @@
 # Choregos — complete execution plan (v3)
 
-> Current plans (English): [PLAN-2026-10-12](PLAN-2026-10-12.md), [PLAN-2026-10-15](PLAN-2026-10-15.md) (stream S39), [PLAN-2026-10-16](PLAN-2026-10-16.md) (stream S40), [PLAN-2026-10-27-servicenow](PLAN-2026-10-27-servicenow.md) (stream S43, agents as plugins), [PLAN-2026-10-27](PLAN-2026-10-27.md) (streams S45-S47: English, MCP gateway, hardening), [PLAN-2026-11-03-tool-scripts](PLAN-2026-11-03-tool-scripts.md) (stream S57: an agent calls its run's tools from a script, ADR 0122).
+> Current plans (English): [PLAN-2026-10-12](PLAN-2026-10-12.md), [PLAN-2026-10-15](PLAN-2026-10-15.md) (stream S39), [PLAN-2026-10-16](PLAN-2026-10-16.md) (stream S40), [PLAN-2026-10-27-servicenow](PLAN-2026-10-27-servicenow.md) (stream S43, agents as plugins), [PLAN-2026-10-27](PLAN-2026-10-27.md) (streams S45-S47: English, MCP gateway, hardening), [PLAN-2026-11-03-tool-scripts](PLAN-2026-11-03-tool-scripts.md) (stream S57: an agent calls its run's tools from a script, ADR 0122), [PLAN-2026-11-06-several-repositories](PLAN-2026-11-06-several-repositories.md) (stream S58: a project may hold several repositories, ADR 0124).
 
 > Agentic delivery platform of the **Varga Foundation**: a ticket goes in, a controlled production release comes out. This document is written to be **handed as is to Claude Code** (or to any ACP agent) as the single source: architecture, contracts, backlog, conventions, deployment. Version 3 — 18 September 2026.
 

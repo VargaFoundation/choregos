@@ -127,6 +127,11 @@ class WorkItemDto(Dto):
     current_run: RunSummary | None = None
     pending_request: HumanRequestDto | None = None
     pr_url: str | None = None
+    #: The repository it works on (ADR 0124): the one it is fixed to, else `fields.repository`, else the
+    #: project's primary; `None` for a project without a repository.
+    repository: str | None = None
+    #: Whether a step touched its repository, so `fields.repository` may no longer name another one.
+    repository_fixed: bool = False
     totals: Totals = Field(default_factory=Totals)
     #: The budget given at launch (or by the workflow), if any; the policy's applies otherwise.
     budget_usd: float | None = None

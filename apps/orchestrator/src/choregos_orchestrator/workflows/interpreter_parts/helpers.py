@@ -54,6 +54,7 @@ CONFIGURATION_REFUSALS = frozenset(
         "KnowledgeRefused",
         "BackendDisabled",  # S42-07c: the platform administrator switched the backend off
         "DecisionRefused",  # ADR 0121: no `/v1/systemone` on the gateway, no `decide` in the catalogue
+        "RepositoryRefused",  # ADR 0124: the work item names a repository its project does not serve
         *both_names("AgentUnavailable", "InvalidInstructions", "SkillMissing"),
     }
 )

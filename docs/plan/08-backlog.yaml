@@ -4388,3 +4388,36 @@ stories:
     depends_on: [S52-11]
     notes: "ADR 0123: a Change workflow action on the ticket page, the routing calibration card in the project's routing settings"
 
+  # ───────────── S58 — several repositories in one project (ADR 0124) ─────────────
+  - id: S58-00
+    title: "docs(adr): a project may hold several repositories; a work item works on one of them (ADR 0124)"
+    stream: S58
+    sprint: 1
+    priority: 1
+    size: S
+    depends_on: []
+    notes: "ADR 0124 proposed, the plan PLAN-2026-11-06-several-repositories.md, these stories."
+  - id: S58-01
+    title: "contract(schemas): a project's repositories, and the reserved field `fields.repository` (ADR 0124)"
+    stream: S58
+    sprint: 2
+    priority: 1
+    size: M
+    depends_on: [S58-00]
+    notes: "ProjectConfig.repositories (NamedRepository), RepoConfig.name, unique names and URLs, refused without repo; choregos_core.repositories (target, refusal); REPOSITORY_FIELD; inputs.reserved; WorkItem.repository and repository_fixed in OpenAPI; make contracts."
+  - id: S58-02
+    title: "feat(orchestrator,api): everything that talks to git works on the work item's target repository (ADR 0124)"
+    stream: S58
+    sprint: 3
+    priority: 1
+    size: L
+    depends_on: [S58-01]
+    notes: "StageInput.repo, branch, DoD commands, ensure_branch, open_pull_request, enqueue_merge, collect_run_artifacts, gates and scope checks on the target; the target fixed at first use; RepositoryRefused escalates (a recorded history); the SCM adapter re-pinned per target owner; the run's network and the proxy's list on the target's host; outputs and decision answers named `repository` copied into fields."
+  - id: S58-03
+    title: "feat(api,web): a project's repositories in its settings, a work item's target on its page (ADR 0124)"
+    stream: S58
+    sprint: 4
+    priority: 1
+    size: M
+    depends_on: [S58-02]
+    notes: "Birth validation of fields.repository (422), the repository:<name> label, PATCH refused once fixed (409), WorkItem.repository and repository_fixed; console: repositories card (add, remove, make primary), the ticket's target and its setter; docs/usage.md."
