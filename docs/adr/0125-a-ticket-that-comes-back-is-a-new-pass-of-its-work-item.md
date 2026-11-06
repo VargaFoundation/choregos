@@ -28,7 +28,9 @@ D2C plan): "one key, one issue, one work item". The work item had ended — `res
 2. **A comeback is** an ended work item (`closed_at` set) whose ticket is reopened — GitHub's `reopened`,
    GitLab's `reopen`, a Jira move into a status no terminal state maps to, out of one a terminal state maps to
    or one no state of the workflow works in, and never into a status of Jira's Done category — or whose start
-   label is applied again, or whose key a trigger delivery names. The catch-up sees one when the tracker dates a
+   label is applied again, or whose key a trigger delivery names. A tracker that names no status category (a
+   GitHub board column, a plugin tracker) brings one back by its issue state or its start label, never by a
+   column: archiving a card is not a comeback. The catch-up sees one when the tracker dates a
    return to work after the end (GitHub's last `reopened` event, Jira's `statuscategorychangedate` while the
    issue is not Done) by more than a clock margin, and the ticket is not in a terminal state's status.
 3. **The pass is claimed in one conditional update**: the work item still ended and still at the recurrence the
@@ -53,6 +55,8 @@ D2C plan): "one key, one issue, one work item". The work item had ended — `res
 - `ReceivedEvent.outcome` and `TriggerAck.outcome` gain `reopened` (additive); the console labels it.
 - The catch-up reads an ended work item's ticket again while it is a candidate (one tracker read per pass for
   an ended work item whose issue stays open with its start label).
-- Not seen: a GitLab or plugin tracker's comeback by the catch-up (the webhook sees GitLab's `reopen`; their
-  `fetch_item` dates nothing); a person who moves an ended Jira ticket between two working statuses (not a
-  comeback); a branch of an earlier pass left on the repository is checked out again by the runner.
+- Not seen: a GitLab or plugin tracker's comeback by the catch-up (their `fetch_item` dates nothing; GitLab's
+  webhook sees its `reopen`); a plugin tracker's state change (it names no status category: its event must say
+  `reopened`, or the start label is applied again); a person who moves an ended Jira ticket between two working
+  statuses (not a comeback); a branch of an earlier pass left on the repository is checked out again by the
+  runner.

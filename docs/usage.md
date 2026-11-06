@@ -3213,7 +3213,9 @@ again under the same id. The runs, events and decisions of the earlier passes st
 decisions are marked `reopened`; the new pass's runs are numbered after them, and its attempts, its ticket
 budget and the outputs its `when` branches read count from the pass's start. One comeback starts one pass:
 a replayed delivery, a second door or a second catch-up pass finds it running. The event that started it
-is recorded `reopened`. Not seen by the catch-up: GitLab and plugin trackers (their webhook is).
+is recorded `reopened`. Not seen by the catch-up: GitLab and plugin trackers. GitLab's webhook sees its
+`reopen`; a plugin tracker (ServiceNow) brings a work item back when its event says `reopened`, or by its
+start label, not by a state change, since it names no status category.
 
 **Received events.** The project's *Received events* card lists every webhook event, trigger call
 and schedule firing that reached it, and what the platform did: `created_work_item`, `already_open`,
