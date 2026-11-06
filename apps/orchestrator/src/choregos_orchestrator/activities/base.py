@@ -12,7 +12,14 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
 
-from choregos_adapters import AdapterSet, account_of, load_extensions
+from choregos_adapters import (
+    AdapterSet,
+    account_of,
+    build,
+    fakes_enabled,
+    load_extensions,
+    resolved_configuration,
+)
 from choregos_api.adapter_wiring import attach_lexical_memory
 from choregos_api.db.models import Connector, Organization, OrgConnector, PolicyDef, Project, WorkItem
 from choregos_api.db.session import ALL_ORGS, session_scope
@@ -68,6 +75,9 @@ class ProjectBundle:
     #: The organisation's choice on tool scripts (S57-05b, ADR 0122 §6): `enabled`, `disabled`, or `None`
     #: to follow the deployment's default. Read with the organisation, so a stage costs no extra query.
     org_tool_scripts: OrgToolScripts | None = None
+    #: The project's `scm` connector as stored (`type`, `config`, secret references, sealed values), to
+    #: rebuild its adapter for a target repository of another owner (ADR 0124 §5); `None` without one.
+    scm_connector: dict[str, Any] | None = None
 
     @property
     def engine(self) -> PolicyEngine:
@@ -160,6 +170,20 @@ async def load_project(session: AsyncSession, project_id: str) -> ProjectBundle:
         gateway_url=gateway_url,
         tracker_via=tracker_via_of(connectors),
         org_tool_scripts=org_tool_scripts(org.settings if org else None),
+        scm_connector=next(
+            (
+                {
+                    "type": c.type,
+                    "config": dict(c.config or {}),
+                    "secret_refs": c.secret_refs or {},
+                    "secret_ref": c.secret_ref,
+                    "resolved": sealed[c.kind],
+                }
+                for c in connectors
+                if c.kind == "scm"
+            ),
+            None,
+        ),
     )
 
 
@@ -270,6 +294,33 @@ def set_adapters_override(adapters: AdapterSet | None) -> None:
 
 def adapters_override() -> AdapterSet | None:
     return _ADAPTERS_OVERRIDE
+
+
+async def scm_for(session: AsyncSession, bundle: ProjectBundle, repository_url: str) -> Any:
+    """The SCM adapter that talks to a work item's target repository (ADR 0124 §5).
+
+    The project's own adapter is pinned to the installation its organisation claimed on the owner of
+    the connector's repository (ADR 0073); a target under another GitHub owner gets the adapter rebuilt
+    with that owner's claimed installation, refused on a multi-organisation instance without a claim, as
+    the connector itself is. Fakes, another SCM type and the same owner keep the project's adapter."""
+    spec = bundle.scm_connector
+    if spec is None or spec.get("type") != "github" or fakes_enabled() or adapters_override() is not None:
+        return bundle.adapters.scm
+    trimmed = repository_url.removesuffix(".git").rstrip("/").split("/")
+    target = "/".join(trimmed[-2:])
+    configured = str(spec["config"].get("repo") or "")
+    if configured.split("/", 1)[0].lower() == target.split("/", 1)[0].lower():
+        return bundle.adapters.scm
+    pinned = await pin_for_runtime(
+        session, bundle.project.org_id, "scm", "github", {**spec["config"], "repo": target}
+    )
+    return build(
+        "scm",
+        "github",
+        resolved_configuration(
+            "scm", "github", pinned, spec["secret_refs"], spec["secret_ref"], preresolved=spec["resolved"]
+        ),
+    )
 
 
 async def project_bundle(session: AsyncSession, project_id: str) -> ProjectBundle:

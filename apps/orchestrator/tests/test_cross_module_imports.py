@@ -26,6 +26,7 @@ ALLOWED_SOURCES = {
     "test_code_agent_step",
     "test_dated_action",
     "test_decision_branch",
+    "test_decision_step",
     "test_fan_out",
     "test_gateway_key_through_the_secret",
     "test_interpreter",

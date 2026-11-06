@@ -78,15 +78,17 @@ async def project_effective_network(
     agent_net: AgentNetwork | None = None,
     *,
     with_repo: bool = True,
+    repo_url: str | None = None,
 ) -> tuple[EffectiveNetwork, PolicyCeiling | None]:
     """The network a run of this project gets (with the agent's narrowing, when it has one).
-    `with_repo`: whether the run clones the repository; one that does not gets no repository host."""
+    `with_repo`: whether the run clones the repository; one that does not gets no repository host.
+    `repo_url`: the repository it clones, the work item's target (ADR 0124); the primary when absent."""
     policy = await effective_policy(session, project.id)
     ceiling = ceiling_of(await session.get(Organization, project.org_id))
     # The repository's host, and what the organisation opened for its runners (S39-22d): the same
     # implied hosts the orchestrator writes into the run's permissions (ADR 0070, amended). A run
     # that clones nothing (`workspace: none`, ADR 0119) gets no repository host.
-    repo = project_repo_host(project) if with_repo else None
+    repo = (repo_host(repo_url) if repo_url else project_repo_host(project)) if with_repo else None
     implied = [h for h in [repo] if h] + await org_runner_hosts(session, project.org_id)
     effective = effective_network(
         policy.sandbox.network,
@@ -131,8 +133,15 @@ async def run_network(session: AsyncSession, run: Run) -> RunNetwork:
     project = await session.get(Project, run.project_id)
     assert project is not None
     organisation = await session.get(Organization, project.org_id)
+    # The host of the repository the run clones, as its `StageInput` recorded it: the work item's
+    # target (ADR 0124), never another repository of the project.
+    cloned = ((run.stage_input or {}).get("repo") or {}).get("url")
     effective, _ = await project_effective_network(
-        session, project, await _agent_network_of(session, run), with_repo=run_clones_the_repository(run)
+        session,
+        project,
+        await _agent_network_of(session, run),
+        with_repo=run_clones_the_repository(run),
+        repo_url=cloned if isinstance(cloned, str) else None,
     )
     return RunNetwork(
         run_id=run.id,

@@ -81,6 +81,7 @@ def test_configuration_refusals_accept_both_names() -> None:
         "KnowledgeRefused",
         "BackendDisabled",
         "DecisionRefused",
+        "RepositoryRefused",
     }
     assert english | former | others == CONFIGURATION_REFUSALS
 

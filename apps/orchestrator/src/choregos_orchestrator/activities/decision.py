@@ -51,6 +51,7 @@ from ..config import get_settings
 from .base import db, load_work_item, project_bundle, work_item_workflow
 from .injection_guard import guard_sources
 from .outcome import book_spend, ticket_view
+from .repositories import adopt
 from .run_key import mint_key, record_step_key, revoke
 
 logger = structlog.get_logger("choregos.decision")
@@ -161,6 +162,9 @@ async def decide(payload: dict[str, Any]) -> dict[str, Any]:
         result = await _ask_through_the_gateway(
             session, bundle, item, run, decision, state, settings, step=str(payload.get("from_state") or "")
         )
+        if result.status is StageStatus.DONE:
+            # A question named `repository` answers the work item's target (ADR 0124 §2).
+            adopt(item, result.outputs.model_dump(mode="json", exclude_none=True), list(decision.questions))
         await persist_event(
             session,
             EventType.RUN_FINISHED,

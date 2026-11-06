@@ -32,9 +32,16 @@ def instance_deny(settings: Any) -> list[str]:
 
 
 def _implied_hosts(
-    bundle: ProjectBundle, org_hosts: Iterable[str] = (), *, with_repo: bool = True
+    bundle: ProjectBundle,
+    org_hosts: Iterable[str] = (),
+    *,
+    with_repo: bool = True,
+    repo_url: str | None = None,
 ) -> list[str]:
-    host = repo_host(bundle.config.repo.url if bundle.config.repo and with_repo else None)
+    """The repository's host — the work item's target's when given (ADR 0124), else the primary's —
+    and what the organisation opened for its runners."""
+    primary = bundle.config.repo.url if bundle.config.repo else None
+    host = repo_host((repo_url or primary) if with_repo else None)
     return list(dict.fromkeys([*([host] if host else []), *org_hosts]))
 
 
@@ -45,16 +52,18 @@ def run_network(
     org_hosts: Iterable[str] = (),
     *,
     with_repo: bool = True,
+    repo_url: str | None = None,
 ) -> EffectiveNetwork:
     """The network of a run of this project, with the agent's narrowing when the stage has an agent.
     `org_hosts`: what the organisation opened for its runners (`org_egress.org_runner_hosts`).
-    `with_repo`: whether the run clones the repository; a run that does not gets no repository host."""
+    `with_repo`: whether the run clones the repository; a run that does not gets no repository host.
+    `repo_url`: the repository it clones, the work item's target (ADR 0124); the primary when absent."""
     ceiling = bundle.ceiling.network if bundle.ceiling else None
     return effective_network(
         bundle.policy.sandbox.network,
         agent_net,
         ceiling,
-        implied_hosts=_implied_hosts(bundle, org_hosts, with_repo=with_repo),
+        implied_hosts=_implied_hosts(bundle, org_hosts, with_repo=with_repo, repo_url=repo_url),
         instance_deny=instance_deny(settings),
     )
 
@@ -66,6 +75,7 @@ def admit_network(
     org_hosts: Iterable[str] = (),
     *,
     with_repo: bool = True,
+    repo_url: str | None = None,
 ) -> None:
     """Refuse, before any key is minted and without a retry, an agent that needs a host its project
     or the organisation does not allow: retrying would not change the policy. A host the
@@ -78,7 +88,7 @@ def admit_network(
         agent.spec.network,
         bundle.policy.sandbox.network,
         ceiling,
-        implied_hosts=_implied_hosts(bundle, org_hosts, with_repo=with_repo),
+        implied_hosts=_implied_hosts(bundle, org_hosts, with_repo=with_repo, repo_url=repo_url),
         instance_deny=instance_deny(settings),
     )
     if missing:
