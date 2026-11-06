@@ -36,7 +36,7 @@ from pydantic import ValidationError
 
 from . import compression, confine, tool_scripts
 from .acp import AcpClient, AgentUnreachableError
-from .acp.client import PromptOutcome
+from .acp.client import PromptOutcome, WriteGuard
 from .acp.guard import TurnGuard
 from .backends import get_backend
 from .budget import BUDGET_REASON, gateway_budget_refusal
@@ -165,6 +165,19 @@ def with_gateway_key(stage_input: StageInput, gateway_key: str) -> StageInput:
     if not gateway_key:
         return stage_input
     return stage_input.model_copy(update={"gateway_key": gateway_key})
+
+
+def file_system_guard(guards: GuardRails) -> WriteGuard:
+    """What the ACP client's file system asks before it writes (C2): the permission request's own
+    `check_write`, so it writes what the agent was allowed and no more. A refusal counts as a denial."""
+
+    def guard(path: str) -> tuple[bool, str]:
+        decision = guards.check_write(path)
+        if not decision.allowed:
+            guards.decisions.append(decision)
+        return decision.allowed, decision.reason
+
+    return guard
 
 
 class Runner:
@@ -365,6 +378,7 @@ class Runner:
                 env=env,
                 on_update=on_update,
                 on_permission=on_permission,
+                write_guard=file_system_guard(guards),
                 # Enforced, not only prompted (S27-07): past max_turns tool calls, or one call
                 # repeated `loop_threshold` times in a row, the session is cancelled.
                 guard=TurnGuard(
@@ -399,11 +413,15 @@ class Runner:
                     report = await run_checks(stage_input, workspace.path)
 
                 # 9. scope
-                scope_result = await check_scope(workspace, start_ref, guards.allowed_paths)
+                scope_result = await check_scope(
+                    workspace, start_ref, guards.allowed_paths, denied_paths=guards.permissions.deny_paths
+                )
                 if scope_result.reverted and not refused and agent.outcome.guard is None:
                     await journal.record("scope.reverted", {"paths": scope_result.reverted})
                     refused = await _turn(agent, scope_result.prompt(), self._remaining(budget_seconds))
-                    scope_result = await check_scope(workspace, start_ref, guards.allowed_paths)
+                    scope_result = await check_scope(
+                        workspace, start_ref, guards.allowed_paths, denied_paths=guards.permissions.deny_paths
+                    )
 
                 # 10. result — or the runner's own, when it stopped the agent (S27-07)
                 if agent.outcome.guard is not None:
@@ -926,7 +944,9 @@ class Runner:
                 "hosted.workspace.imported", {"written": imported.written, "deleted": imported.deleted}
             )
             # The net behind the guard rails, as for an ACP agent: what is out of scope is reverted.
-            scope = await check_scope(workspace, start_ref, guards.allowed_paths)
+            scope = await check_scope(
+                workspace, start_ref, guards.allowed_paths, denied_paths=guards.permissions.deny_paths
+            )
             if scope.reverted:
                 await journal.record("scope.reverted", {"paths": scope.reverted})
             scope_blocked = scope.remaining

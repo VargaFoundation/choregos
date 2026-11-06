@@ -401,6 +401,13 @@
             "type": "string"
           }
         },
+        "deny_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Paths the run must never write, the project policy's scope.deny_paths: a deny wins over write_paths, and no scope change grants one."
+        },
         "deny_commands": {
           "type": "array",
           "items": {

@@ -35,6 +35,9 @@ class GateContext:
     additions: int = 0
     deletions: int = 0
     allowed_paths: list[str] = field(default_factory=list)
+    #: The paths the project's policy forbids (`scope.deny_paths`): `scope_respected` fails on a change
+    #: under one of them, whatever the allowed paths say (C2).
+    denied_paths: list[str] = field(default_factory=list)
     secrets_found: list[str] = field(default_factory=list)
     ci_status: str | None = None
     review_state: str | None = None
@@ -176,6 +179,14 @@ def _without_diff(name: str) -> GateOutcome:
 def _scope_respected(ctx: GateContext, params: dict[str, Any]) -> GateOutcome:
     if not ctx.diff_available:
         return _without_diff("scope_respected")
+    denied = [p for p in ctx.changed_files if matches_any(p, ctx.denied_paths)]
+    if denied:
+        return GateOutcome(
+            "scope_respected",
+            False,
+            detail=f"{len(denied)} file(s) under a path the project's policy forbids (scope.deny_paths)",
+            annotations=denied,
+        )
     allowed = params.get("paths") or ctx.allowed_paths
     if not allowed:
         return GateOutcome("scope_respected", True, detail="no allowed paths declared")

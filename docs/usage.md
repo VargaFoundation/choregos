@@ -2475,6 +2475,7 @@ budgets:
   daily_project_usd: 50
 scope:
   max_diff_files: 60
+  deny_paths: [".choregos/**", ".github/workflows/**", "charts/**"]   # never written, whatever the scope
 sandbox:
   unknown_requests: reject      # refuse what the runner cannot classify (default: allow + journal)
   prompt_injection: block       # warn (default) journals; block stops the stage before any run
@@ -2483,6 +2484,14 @@ sandbox:
 ```
 
 Three presets ship (`solo`, `team`, `regulated`) and are a reasonable starting point.
+
+`scope.deny_paths` bounds every run's writes, whatever the work item's allowed paths say: the runner refuses
+a write there (the permission request, Claude Code's scope hook and the ACP file system answer alike),
+reverts one a shell made anyway, and `scope_respected` fails on a change under a denied path, even when no
+allowed path is declared. No scope change grants one. The step's own files, `.choregos/result.json` and
+`.choregos/outputs/`, stay writable under a denied `.choregos/**`. The default list is
+`.choregos/**`, `.github/workflows/**` and `charts/**`: a project whose agents change its charts lists
+its own.
 
 **An organisation sets a ceiling that every project policy may only tighten**
 (`PUT /orgs/{org}/policy-ceiling`, `org_admin`; **policy ceiling** on the admin page):
@@ -3279,7 +3288,7 @@ decision itself.
 | An agent pod refused with no message | `runner.limits` above the namespace `LimitRange` |
 | Spend drifting | `budgets.daily_project_usd`, `ticket_usd`, alert at `alert_at_ratio` |
 | Third-party API spend | `budgets.tool_calls_per_run`, cost report grouped by `kind` |
-| An agent wandering outside its scope | `scope.max_diff_files`, gate `scope_respected` |
+| An agent wandering outside its scope | `scope.max_diff_files`, `scope.deny_paths`, gate `scope_respected` |
 | Too many findings from one run | `findings.max_per_run` |
 
 Costs export as CSV from the project overview, grouped by day, stage, model, backend, size

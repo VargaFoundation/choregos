@@ -144,6 +144,7 @@ async def prepare_job(
                 repo_url=depot.url if depot else None,
             ),
             write_paths=allowed_paths,
+            deny_paths=engine.deny_paths(),
             deny_commands=engine.deny_commands(),
             dod_iterations=0,
             max_findings=engine.max_findings_per_run(),

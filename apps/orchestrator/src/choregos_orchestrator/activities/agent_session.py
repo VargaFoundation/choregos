@@ -121,6 +121,7 @@ async def start_session_pod(payload: dict[str, Any]) -> dict[str, Any]:
             playbook=PlaybookRef(ref=f"session:{served}"),
             permissions=network_permissions(
                 run_network(bundle, agent.spec.network, settings, org_hosts),
+                deny_paths=list(bundle.policy.scope.deny_paths),
                 unknown_requests=bundle.policy.sandbox.unknown_requests,
             ),
             callbacks=Callbacks(api_url=f"{settings.callback_url}/api/v1/internal", run_token=REDACTED),

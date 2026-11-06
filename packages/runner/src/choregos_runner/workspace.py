@@ -527,6 +527,16 @@ def _task_markdown(stage_input: StageInput) -> str:
         "## Allowed paths",
         *[f"- `{path}`" for path in stage_input.allowed_paths],
         "",
+        *(
+            [
+                "## Forbidden paths",
+                "The project's policy forbids writing these, whatever the allowed paths say:",
+                *[f"- `{path}`" for path in stage_input.permissions.deny_paths],
+                "",
+            ]
+            if stage_input.permissions.deny_paths
+            else []
+        ),
         "## Budget",
         f"- {stage_input.budget.usd:.2f} USD · {stage_input.budget.max_turns} turns · "
         f"{stage_input.budget.max_minutes} minutes",
