@@ -32,7 +32,7 @@ from choregos_contracts.workflow import (
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
 
-from ..domain import TRACKER_FIELD
+from ..domain import REPOSITORY_FIELD, TRACKER_FIELD
 from ..errors import Issue
 from ..gates import ALREADY_FIXED_GATE, known_gates
 from .dates import field_of
@@ -167,6 +167,16 @@ def _check_inputs(wf: Workflow, report: ValidationReport, source: Any) -> None:
             f"`{TRACKER_FIELD}` is reserved: the platform puts there what the tracker says about the "
             "ticket (`ticket.fields.tracker`); name the field otherwise",
             ["metadata", "inputs", "properties", TRACKER_FIELD],
+            source,
+        )
+    if REPOSITORY_FIELD in (schema.get("properties") or {}) or REPOSITORY_FIELD in (
+        schema.get("required") or []
+    ):
+        report.error(
+            "inputs.reserved",
+            f"`{REPOSITORY_FIELD}` is reserved: it names the project's repository the work item works on "
+            "(ADR 0124), which the project validates, not the workflow; name the field otherwise",
+            ["metadata", "inputs", "properties", REPOSITORY_FIELD],
             source,
         )
 
