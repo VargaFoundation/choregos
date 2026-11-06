@@ -795,3 +795,82 @@ def test_a_trigger_filters_and_signs_and_a_start_rule_needs_a_condition() -> Non
         assert list(validator.iter_errors(bad)), bad
         with pytest.raises(ValueError):
             ProjectConfig.model_validate(bad)
+
+
+def test_a_project_s_repositories_are_declared_the_same_in_the_schema_and_the_model() -> None:
+    """S58-01 (ADR 0124): the repositories beside the primary, in the schema as in the model."""
+    from choregos_contracts import NamedRepository, RepoConfig
+
+    gaps: list[str] = []
+    properties = contracts.load_schema("project.schema.json")["properties"]
+    _compare("project.repo", properties["repo"], RepoConfig, gaps)
+    _compare("project.repositories", properties["repositories"]["items"], NamedRepository, gaps)
+    assert not gaps, "\n".join(gaps)
+
+    validator = _validator("project.schema.json")
+    base = _load("project.example.json")
+    diamctl = {"name": "diamctl", "url": "https://github.com/acme/diamctl.git", "test_command": "make test"}
+    good = base | {"repositories": [diamctl]}
+    assert not list(validator.iter_errors(good))
+    assert ProjectConfig.model_validate(good).repositories[0].name == "diamctl"
+    assert ProjectConfig.model_validate(base).repositories == [], "a project that says nothing holds one"
+    for bad in (
+        {k: v for k, v in good.items() if k != "repo"},  # no primary
+        base | {"repositories": [diamctl | {"name": "Diamctl"}]},
+        base | {"repositories": [{"name": "diamctl"}]},
+        base | {"repositories": [diamctl | {"token": "s3cret"}]},
+        base | {"repo": base["repo"] | {"name": "not a slug"}},
+    ):
+        assert list(validator.iter_errors(bad)), bad
+        with pytest.raises(ValueError):
+            ProjectConfig.model_validate(bad)
+
+
+def test_a_repository_name_designates_one_repository_and_a_url_has_one_name() -> None:
+    """ADR 0124 §1: what the schema cannot say, the model refuses, naming the way out."""
+    base = _load("project.example.json")
+    diamctl = {"name": "diamctl", "url": "https://github.com/acme/diamctl.git"}
+    with pytest.raises(ValueError, match="two repositories named `diamctl`"):
+        ProjectConfig.model_validate(base | {"repositories": [diamctl, diamctl | {"url": "https://x/y.git"}]})
+    with pytest.raises(ValueError, match=r"named `billing-api` after its URL: give `repo.name`"):
+        ProjectConfig.model_validate(base | {"repositories": [diamctl | {"name": "billing-api"}]})
+    with pytest.raises(ValueError, match="one repository under two names"):
+        ProjectConfig.model_validate(
+            base
+            | {"repositories": [diamctl | {"name": "billing", "url": "https://github.com/ACME/billing-api/"}]}
+        )
+    with pytest.raises(ValueError, match="`repositories` without `repo`"):
+        ProjectConfig.model_validate({"slug": "p", "org": "o", "repositories": [diamctl]})
+    named = ProjectConfig.model_validate(
+        base | {"repo": base["repo"] | {"name": "api"}, "repositories": [diamctl | {"name": "billing-api"}]}
+    )
+    assert named.repository_names() == ["api", "billing-api"], "a named primary frees its URL's name"
+
+
+def test_the_primary_is_named_after_its_url_and_a_branch_takes_its_repository_s_prefix() -> None:
+    """ADR 0124 §1 and §4: names, lookups and branch names."""
+    from choregos_contracts.project import name_of_url
+
+    assert name_of_url("https://github.com/acme/Infra.git") == "infra"
+    assert name_of_url("git@github.com:acme/choregos_deploy.git") == "choregos-deploy"
+    assert name_of_url("https://github.com/acme/..git") == "primary"
+    config = ProjectConfig.model_validate(
+        {
+            "slug": "platform",
+            "org": "acme",
+            "repo": {"url": "https://github.com/acme/infra.git"},
+            "repositories": [
+                {"name": "diamctl", "url": "https://github.com/acme/diamctl.git", "branch_prefix": "fix/"}
+            ],
+        }
+    )
+    assert config.primary_name == "infra"
+    assert config.repository_names() == ["infra", "diamctl"]
+    assert config.repository_named(None) is config.repo
+    assert config.repository_named("infra") is config.repo
+    diamctl = config.repository_named("diamctl")
+    assert diamctl is not None and diamctl.url.endswith("/diamctl.git")
+    assert config.repository_named("fondation") is None
+    assert config.branch_for("PLAT-7") == "choregos/PLAT-7", "the primary's prefix, as before"
+    assert config.branch_for("PLAT-7", repo=diamctl) == "fix/PLAT-7"
+    assert ProjectConfig.model_validate({"slug": "p", "org": "o"}).repository_names() == []
