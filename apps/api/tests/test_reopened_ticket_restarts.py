@@ -15,9 +15,6 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 
-from .test_triggers import SNOW, _call, _token
-from .test_triggers import _project as _desk
-
 REPO = {"full_name": "varga/billing-api"}
 KEY = "varga/billing-api#7"
 JIRA_KEY = "BILL-42"
@@ -271,6 +268,53 @@ def test_a_move_brings_a_work_item_back_only_into_a_to_do_or_in_progress_categor
 
 # ───────────────────────── triggers ─────────────────────────
 
+INCIDENT = """apiVersion: choregos/v1
+kind: Workflow
+metadata: { name: incident, version: 1 }
+actors:
+  desk: { type: human, group: service-desk }
+states:
+  triage: { display: Triage, kind: wait }
+  done: { display: Done, terminal: true }
+transitions:
+  - { id: t-close, from: triage, to: done, by: desk }
+"""
+SNOW = {"sys_id": "9d385017c611228701d22104cc95c371", "number": "INC0010042"}
+
+
+async def _desk(client: AsyncClient) -> dict[str, Any]:
+    """A project with an internal tracker and one keyed trigger, `incident`."""
+    trigger = {"name": "incident", "title": "{/number}", "key": "/sys_id", "workflow": "incident"}
+    created = await client.post(
+        "/api/v1/orgs/varga/projects",
+        json={
+            "slug": "desk",
+            "name": "desk",
+            "config": {"slug": "desk", "org": "varga", "triggers": [trigger]},
+        },
+    )
+    assert created.status_code == 201, created.text
+    project = dict(created.json())
+    published = await client.put(
+        f"/api/v1/projects/{project['id']}/workflows/incident", json={"yaml": INCIDENT}
+    )
+    assert published.status_code in {200, 201}, published.text
+    return project
+
+
+async def _token(client: AsyncClient, project: dict[str, Any]) -> str:
+    minted = await client.post(f"/api/v1/projects/{project['id']}/triggers/incident/token")
+    assert minted.status_code == 201, minted.text
+    return str(minted.json()["token"])
+
+
+async def _call(client: AsyncClient, token: str, payload: dict[str, Any]) -> Any:
+    return await client.post(
+        "/api/v1/webhooks/triggers/varga/desk/incident",
+        json=payload,
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
 
 async def _end(project_id: str, key: str) -> None:
     from choregos_api.db.models import WorkItem
@@ -290,23 +334,23 @@ async def test_a_trigger_delivery_for_a_finished_key_restarts_it_and_an_open_key
     client: AsyncClient, admin: str
 ) -> None:
     project = await _desk(client)
-    token = (await _token(client, project, "incident"))["token"]
-    first = (await _call(client, "incident", token, SNOW)).json()
+    token = await _token(client, project)
+    first = (await _call(client, token, SNOW)).json()
     key = first["work_item_key"]
 
-    again = await _call(client, "incident", token, {**SNOW, "number": "INC0010043"})
+    again = await _call(client, token, {**SNOW, "number": "INC0010043"})
     assert again.json()["outcome"] == "already_open", "an open key is still answered `already_open`"
 
     await _end(project["id"], key)
     restarted = len(_temporal().restarted)
-    back = await _call(client, "incident", token, {**SNOW, "number": "INC0010044"})
+    back = await _call(client, token, {**SNOW, "number": "INC0010044"})
     assert back.status_code == 202, back.text
     assert back.json()["outcome"] == "reopened" and back.json()["work_item_key"] == key
     item = await _row(first["work_item_id"])
     assert (item.recurrence, item.state, item.closed_at) == (1, "triage", None)
     assert len(_temporal().restarted) == restarted + 1
 
-    later = await _call(client, "incident", token, {**SNOW, "number": "INC0010045"})
+    later = await _call(client, token, {**SNOW, "number": "INC0010045"})
     assert later.json()["outcome"] == "already_open", "the new pass runs: the next call is a call again"
     assert len(_temporal().restarted) == restarted + 1
     assert await _outcomes(client, project["id"]) == [
