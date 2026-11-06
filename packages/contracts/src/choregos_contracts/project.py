@@ -43,8 +43,13 @@ class DodConfig(Strict):
 
         dod:
           facts:
-            constat_resolu: "ops/healthcheck/collectors/20-k3s.sh | grep -qv CLE-DU-CONSTAT"
-            piece_identite: "test -f dossier/identite.pdf"
+            finding_resolved: 'out=$(ops/collectors/20-k3s.sh) && ! echo "$out" | grep -q FINDING-KEY'
+            identity_document: "test -f case/identity.pdf"
+
+    `finding_resolved` is true when the collector ran and no line of its output names the key:
+    `! … | grep -q KEY`. Not `grep -qv KEY`, which succeeds as soon as ONE line lacks the key, so
+    almost always. The collector runs first on its own: a bare `! collector | grep -q KEY` would
+    read a collector that fails, or does not exist, as a resolved finding.
     """
 
     facts: dict[str, str] = Field(default_factory=dict)
