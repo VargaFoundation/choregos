@@ -9,7 +9,9 @@ labels (`trigger:<name>` first). The same mapping serves a person who fires the 
 
 What makes it safe to call twice: the delivery is de-duplicated (`Idempotency-Key`, else the body's
 digest), and a trigger with a `key` opens one work item per value of the payload's identifier — a
-second call for the same incident finds the first work item and says `already_open`.
+second call for the same incident finds the first work item and says `already_open`. Once that work
+item has ended, the same key brings it back: a new pass of the same work item, `reopened` (C1,
+`services/recurrence.py`).
 
 Every call that reaches a project leaves a row in `received_events`, refused ones included, with a
 summary built from what the platform decided (trigger, workflow, key, refused field names), never
@@ -285,6 +287,8 @@ def _summary(
             parts.append("at " + ", ".join(names[:5]))
     elif outcome == "already_open":
         parts.append("already open")
+    elif outcome == "reopened":
+        parts.append("ended work item started again")
     elif outcome == "ignored":
         parts.append("did not match `when`")
     return " · ".join(parts)
@@ -343,6 +347,7 @@ async def _open(
     principal: Principal,
     initiated_by: str,
 ) -> Firing:
+    from .recurrence import restart_work_item
     from .tickets import create_work_item, internal_work_item_key, tracker_is_internal
 
     if not await _first_delivery(session, project, trigger.name, delivery_id):
@@ -367,6 +372,12 @@ async def _open(
             )
         ).scalar_one_or_none()
         if existing is not None:
+            # Ended, its key coming back starts a new pass (C1); a door that claimed it first, or a
+            # work item still running, leaves it as it is.
+            if existing.closed_at is not None and await restart_work_item(
+                session, project, existing, door=f"trigger:{trigger.name}", reason=initiated_by
+            ):
+                return Firing("reopened", existing)
             return Firing("already_open", existing)
     item = await create_work_item(
         session,

@@ -144,6 +144,7 @@ async def prepare_job(
                 repo_url=depot.url if depot else None,
             ),
             write_paths=allowed_paths,
+            deny_paths=engine.deny_paths(),
             deny_commands=engine.deny_commands(),
             dod_iterations=0,
             max_findings=engine.max_findings_per_run(),
@@ -158,7 +159,7 @@ async def prepare_job(
         ),
     )
     if found is not None:
-        fix(bundle, item, found)
+        fix(bundle, item, found, plan.outputs or [])
     payload = stage_input.model_dump(mode="json", by_alias=True)
     run = existing or Run(id=run_id, work_item_id=item.id, project_id=bundle.project.id)
     run.transition_id = plan.transition_id

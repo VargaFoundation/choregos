@@ -161,6 +161,9 @@ class ToolsRef(Strict):
 
 class Permissions(Strict):
     write_paths: list[str] = Field(default_factory=list)
+    #: Paths the run must never write: the project policy's `scope.deny_paths`. A deny wins over
+    #: `write_paths`, and no scope change grants one (C2).
+    deny_paths: list[str] = Field(default_factory=list)
     deny_commands: list[str] = Field(default_factory=list)
     allow_domains: list[str] = Field(default_factory=list)
     #: Hosts the run must never reach: a deny always wins over `allow_domains` (ADR 0070).

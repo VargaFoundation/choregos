@@ -31,7 +31,9 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // under 2100: main measures 2125 kB, and the routing card's minimum confidence adds 1 kB.
 // 2026-11-05 (S57-10): 2150 -> 2175 kB. The run's tool-scripts card, the spend by door and the tool-scripts
 // policy card bring main to 2155 kB (CI of #1370), 5 kB over the line.
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2175);
+// 2026-11-06 (C1, D2C): 2175 -> 2200 kB. S58-03's repository settings bring main to the 2175 kB line; the
+// received events' and the triggers' `reopened` label tip it over by a fraction of a kilobyte.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2200);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* files(dir) {

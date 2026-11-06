@@ -15,7 +15,7 @@ from choregos_api.services import persist_event, work_item_workflow, workflow_mo
 from choregos_api.services.budgets import ticket_budget, ticket_spent
 from choregos_contracts import EventType
 from choregos_core import utcnow
-from sqlalchemy import select
+from sqlalchemy import func, select
 from temporalio import activity
 from temporalio.exceptions import ActivityError, ApplicationError
 
@@ -48,8 +48,9 @@ async def load_context(payload: dict[str, Any]) -> dict[str, Any]:
             "workflow_def_id": item.workflow_def_id,
             "state": state,
             "ticket_budget_usd": ticket_budget(bundle.engine, item),
-            # What the ticket has cost so far, models and tools (S27-03): a restart keeps it.
-            "ticket_cost_usd": await ticket_spent(session, item.id),
+            # What the ticket has cost so far, models and tools (S27-03): a restart keeps it. A new
+            # pass of a ticket that came back counts from its start (C1).
+            "ticket_cost_usd": await ticket_spent(session, item.id, item.recurred_at),
             # The policy's ceiling on a transition's attempts, by role (S27-08).
             "attempts_ceilings": bundle.engine.attempts_ceilings(),
             "tracker_key": item.tracker_key,
@@ -59,22 +60,30 @@ async def load_context(payload: dict[str, Any]) -> dict[str, Any]:
             "fields": dict(item.fields or {}),
             # The attempts each transition already spent, read from its runs (#550).
             "attempts_spent": spent,
-            # What the last stage answered: a transition's `when` chooses on it (S48-01).
-            "last_outputs": await last_outputs(session, item.id),
+            # What the last stage answered: a transition's `when` chooses on it (S48-01). A new pass
+            # reads none of the pass before (C1).
+            "last_outputs": await last_outputs(session, item.id, item.recurred_at),
+            # The attempts of the passes before this one (C1): run numbers go on past them, the
+            # attempts budget does not count them.
+            **(
+                {"attempts_before_pass": await attempts_before(session, item.id, item.recurred_at)}
+                if item.recurred_at is not None
+                else {}
+            ),
         }
 
 
-async def last_outputs(session: Any, work_item_id: str) -> dict[str, Any] | None:
+async def last_outputs(session: Any, work_item_id: str, since: Any = None) -> dict[str, Any] | None:
     """The outputs of the work item's last finished run with a result, for a restarted interpreter
     (S48-01). A run still queued or running has none yet; the interpreter reads its result when it
-    awaits it, and takes its outputs from there."""
+    awaits it, and takes its outputs from there. `since`: the start of the current pass (C1)."""
+    query = select(Run.result).where(
+        Run.work_item_id == work_item_id, Run.result.is_not(None), Run.ended_at.is_not(None)
+    )
+    if since is not None:
+        query = query.where(Run.created_at >= since)
     row = (
-        await session.execute(
-            select(Run.result)
-            .where(Run.work_item_id == work_item_id, Run.result.is_not(None), Run.ended_at.is_not(None))
-            .order_by(Run.ended_at.desc(), Run.id.desc())
-            .limit(1)
-        )
+        await session.execute(query.order_by(Run.ended_at.desc(), Run.id.desc()).limit(1))
     ).scalar_one_or_none()
     outputs = row.get("outputs") if isinstance(row, dict) else None
     if not isinstance(outputs, dict):
@@ -140,6 +149,17 @@ async def attempts_spent(session: Any, work_item_id: str) -> dict[str, int]:
             last[str(transition)] = (int(attempt), read_back)
     spent = {key: attempt - 1 if read_back else attempt for key, (attempt, read_back) in last.items()}
     return {key: count for key, count in spent.items() if count > 0}
+
+
+async def attempts_before(session: Any, work_item_id: str, since: Any) -> dict[str, int]:
+    """The highest attempt of each transition among the runs of the passes before `since` (C1), every
+    status counted: a run number names a run, and a new pass never reuses one."""
+    rows = await session.execute(
+        select(Run.transition_id, func.max(Run.attempt))
+        .where(Run.work_item_id == work_item_id, Run.transition_id.is_not(None), Run.created_at < since)
+        .group_by(Run.transition_id)
+    )
+    return {str(transition): int(attempt) for transition, attempt in rows.all() if attempt}
 
 
 @activity.defn(name="record_workflow_failure")

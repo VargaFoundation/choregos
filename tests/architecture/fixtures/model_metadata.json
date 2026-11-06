@@ -9780,6 +9780,20 @@
     "type": "DateTime(timezone=True)"
    },
    {
+    "default": "0",
+    "name": "recurrence",
+    "nullable": false,
+    "server_default": "'0'",
+    "type": "Integer()"
+   },
+   {
+    "default": null,
+    "name": "recurred_at",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
     "default": "<function dict>",
     "name": "totals",
     "nullable": false,

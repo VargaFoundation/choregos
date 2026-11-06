@@ -207,7 +207,7 @@ async def ticket_view(session: Any, bundle: Any, work_item_id: str) -> dict[str,
     stands now — its size may have changed since the interpreter started (S27-03)."""
     item = await load_work_item(session, work_item_id)
     return {
-        "ticket_cost_usd": await ticket_spent(session, work_item_id),
+        "ticket_cost_usd": await ticket_spent(session, work_item_id, item.recurred_at),
         "ticket_budget_usd": ticket_budget(bundle.engine, item),
     }
 

@@ -2475,6 +2475,7 @@ budgets:
   daily_project_usd: 50
 scope:
   max_diff_files: 60
+  deny_paths: [".choregos/**", ".github/workflows/**", "charts/**"]   # never written, whatever the scope
 sandbox:
   unknown_requests: reject      # refuse what the runner cannot classify (default: allow + journal)
   prompt_injection: block       # warn (default) journals; block stops the stage before any run
@@ -2483,6 +2484,14 @@ sandbox:
 ```
 
 Three presets ship (`solo`, `team`, `regulated`) and are a reasonable starting point.
+
+`scope.deny_paths` bounds every run's writes, whatever the work item's allowed paths say: the runner refuses
+a write there (the permission request, Claude Code's scope hook and the ACP file system answer alike),
+reverts one a shell made anyway, and `scope_respected` fails on a change under a denied path, even when no
+allowed path is declared. No scope change grants one. The step's own files, `.choregos/result.json` and
+`.choregos/outputs/`, stay writable under a denied `.choregos/**`. The default list is
+`.choregos/**`, `.github/workflows/**` and `charts/**`: a project whose agents change its charts lists
+its own.
 
 **An organisation sets a ceiling that every project policy may only tighten**
 (`PUT /orgs/{org}/policy-ceiling`, `org_admin`; **policy ceiling** on the admin page):
@@ -3165,7 +3174,8 @@ The work item starts in `workflow`, or in the workflow the project's routing pic
 (`trigger:<name>` and the rendered ones), or in the default. A sender that can only set a URL passes
 `?token=`; `X-Choregos-Token` works too. A replayed delivery (same `Idempotency-Key`, else the same
 body) answers `duplicate`; with `key`, a second call for the same value answers `already_open` and
-starts nothing. A payload without the key, or fields the workflow refuses, answers 422 with the
+starts nothing while that work item runs. Once it has ended, the same value answers `reopened`: the
+work item starts a new pass (see *A ticket that comes back*, below). A payload without the key, or fields the workflow refuses, answers 422 with the
 reason. `POST /projects/{id}/triggers/{name}/fire` runs the same trigger with a payload you type, to
 try it before handing the URL out. With an external tracker, a trigger answers 409: use the
 tracker's own webhook.
@@ -3200,9 +3210,29 @@ and state compare without case. The backup poll that catches lost webhooks asks 
 by JQL, GitHub and GitLab by the labels a rule names (a rule on a type or a state is caught by the
 webhook only). Both lists can be edited as JSON in the project's *Triggers* card.
 
+### A ticket that comes back
+
+A work item that ended — delivered, declined, abandoned — starts again when its ticket comes back
+(C1, [ADR 0125](adr/0125-a-ticket-that-comes-back-is-a-new-pass-of-its-work-item.md)): its issue is
+reopened (GitHub, GitLab), a Jira status change sends it back to work — into a To Do or In Progress
+status no terminal state maps to, out of the status the work item ended in or one the workflow does not
+work in, so a healthcheck that closes the ticket in its own Done status does not count —, its start
+label is applied again, or a trigger delivery names its key. The tracker catch-up sees it too when the
+webhook was lost: GitHub's last `reopened` event, or Jira's status-category change, dated after the end.
+
+It is a **new pass of the same work item**, never a second work item under the same key: the work item
+goes back to its workflow's start state, its pass number (`recurrence`) goes up, and its interpreter starts
+again under the same id. The runs, events and decisions of the earlier passes stay on its page, and those
+decisions are marked `reopened`; the new pass's runs are numbered after them, and its attempts, its ticket
+budget and the outputs its `when` branches read count from the pass's start. One comeback starts one pass:
+a replayed delivery, a second door or a second catch-up pass finds it running. The event that started it
+is recorded `reopened`. Not seen by the catch-up: GitLab and plugin trackers. GitLab's webhook sees its
+`reopen`; a plugin tracker (ServiceNow) brings a work item back when its event says `reopened`, or by its
+start label, not by a state change, since it names no status category.
+
 **Received events.** The project's *Received events* card lists every webhook event, trigger call
 and schedule firing that reached it, and what the platform did: `created_work_item`, `already_open`,
-`ignored`, `refused` (with the platform's reason, never the payload), and the tracker outcomes.
+`reopened`, `ignored`, `refused` (with the platform's reason, never the payload), and the tracker outcomes.
 
 ### One child work item per element, then a join
 
@@ -3283,7 +3313,7 @@ decision itself.
 | An agent pod refused with no message | `runner.limits` above the namespace `LimitRange` |
 | Spend drifting | `budgets.daily_project_usd`, `ticket_usd`, alert at `alert_at_ratio` |
 | Third-party API spend | `budgets.tool_calls_per_run`, cost report grouped by `kind` |
-| An agent wandering outside its scope | `scope.max_diff_files`, gate `scope_respected` |
+| An agent wandering outside its scope | `scope.max_diff_files`, `scope.deny_paths`, gate `scope_respected` |
 | Too many findings from one run | `findings.max_per_run` |
 
 Costs export as CSV from the project overview, grouped by day, stage, model, backend, size

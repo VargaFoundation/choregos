@@ -42,6 +42,9 @@ SAID_KEPT = 20
 MAX_MESSAGE_BYTES = 64 * 1024 * 1024
 
 PermissionHandler = Callable[[dict[str, Any]], Awaitable[tuple[bool, str]]]
+#: Whether a file of the workspace may be written, and why: the runner's `GuardRails.check_write`,
+#: asked with the path relative to the workspace (or the absolute path beneath the script directory).
+WriteGuard = Callable[[str], tuple[bool, str]]
 UpdateHandler = Callable[[dict[str, Any]], Awaitable[None]]
 
 
@@ -110,9 +113,13 @@ class AcpClient:
         guard: TurnGuard | None = None,
         max_message_bytes: int = MAX_MESSAGE_BYTES,
         scripts_dir: str = "",
+        write_guard: WriteGuard | None = None,
     ) -> None:
         self.command = command
         self.cwd = cwd
+        #: Asked before `fs/write_text_file` writes (C2): the same answer as the permission request and
+        #: Claude Code's scope hook, so a write the agent was refused there is not written here.
+        self.write_guard = write_guard
         #: The run's script directory when it is offered tool scripts (#1365): the one place outside
         #: the workspace its file system reads and writes, `""` otherwise.
         self.scripts_dir = scripts_dir
@@ -482,6 +489,13 @@ class AcpClient:
             return target
         return None
 
+    def _judged(self, target: Path, raw: str) -> str:
+        """The path the write guard judges: where the write lands, links followed, relative to the
+        workspace (a link inside it that points at a path the scope refuses is judged as that path);
+        beneath the script directory, the path as the agent named it."""
+        root = Path(self.cwd).resolve()
+        return target.relative_to(root).as_posix() if root in target.parents else raw
+
     async def _read_text_file(self, request: Request) -> None:
         params = request.params or {}
         target = self._resolve(params.get("path"))
@@ -505,6 +519,12 @@ class AcpClient:
         if target is None:
             await self.respond(error_response(request.id, PERMISSION_DENIED, "path outside the workspace"))
             return
+        if self.write_guard is not None:
+            allowed, reason = self.write_guard(self._judged(target, str(params["path"])))
+            if not allowed:
+                self.outcome.permission_denials += 1
+                await self.respond(error_response(request.id, PERMISSION_DENIED, reason))
+                return
         try:
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(str(params.get("content", "")), encoding="utf-8")

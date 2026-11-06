@@ -392,6 +392,7 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
                     repo_url=repo.url if repo is not None else None,
                 ),
                 write_paths=allowed_paths,
+                deny_paths=engine.deny_paths(),
                 deny_commands=engine.deny_commands(),
                 dod_iterations=engine.dod_iterations(),
                 max_findings=engine.max_findings_per_run(),
@@ -480,7 +481,7 @@ def _repo_ref(
     A remote agent edits no repository: nothing to clone, nothing to push (ADR 0062); nor does a
     hosted one published with `workspace: none` (S41-18), nor any agent that declares
     `workspace: none` (ADR 0119). What it clones is the work item's target (ADR 0124), `found`; the
-    first stage that clones it fixes the work item to it."""
+    first stage that clones it fixes the work item to it, unless it names the target itself."""
     repo_config = found.repo if found is not None else None
     if (
         not repo_config
@@ -489,7 +490,7 @@ def _repo_ref(
         or (hosted is not None and hosted.workspace == "none")
     ):
         return None
-    fix(bundle, item, found)
+    fix(bundle, item, found, plan.outputs or [])
     return RepoRef(
         url=repo_config.url,
         base_branch=repo_config.default_branch

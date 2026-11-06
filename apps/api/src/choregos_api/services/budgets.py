@@ -101,21 +101,21 @@ async def ticket_left(session: AsyncSession, engine: Any, item: Any, exclude_run
     """What the work item may still spend: its budget, minus the ledger, minus its open keys."""
     return (
         ticket_budget(engine, item)
-        - await ticket_spent(session, item.id)
+        - await ticket_spent(session, item.id, item.recurred_at)
         - await open_reservations(session, work_item_id=item.id, exclude_run=exclude_run)
     )
 
 
-async def ticket_spent(session: AsyncSession, work_item_id: str) -> float:
-    """What the work item has cost, read from the ledger: model calls AND tool calls."""
-    total = (
-        await session.execute(
-            select(func.coalesce(func.sum(CostLedger.cost_usd), 0.0)).where(
-                CostLedger.work_item_id == work_item_id
-            )
-        )
-    ).scalar_one()
-    return float(total)
+async def ticket_spent(session: AsyncSession, work_item_id: str, since: datetime | None = None) -> float:
+    """What the work item has cost, read from the ledger: model calls AND tool calls. `since`: the
+    start of its current pass (`work_items.recurred_at`, C1), so a ticket that came back spends a
+    budget of its own; the work item's totals keep every pass."""
+    query = select(func.coalesce(func.sum(CostLedger.cost_usd), 0.0)).where(
+        CostLedger.work_item_id == work_item_id
+    )
+    if since is not None:
+        query = query.where(CostLedger.ts >= since)
+    return float((await session.execute(query)).scalar_one())
 
 
 async def project_spent_since(session: AsyncSession, project_id: str, since: datetime) -> float:

@@ -121,6 +121,7 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
             additions=additions,
             deletions=deletions,
             allowed_paths=allowed,
+            denied_paths=bundle.engine.deny_paths(),
             secrets_found=sorted(set(secrets)),
             ci_status=ci_status,
             review_state=review_state,
@@ -343,9 +344,10 @@ async def check_scope_violations(payload: dict[str, Any]) -> list[str]:
         bundle = await project_bundle(session, payload["project_id"])
         item = await load_work_item(session, payload["work_item_id"])
         allowed = list(item.allowed_paths or [])
+        denied = bundle.engine.deny_paths()
         found = target_or_none(bundle, item)
         repo_config = found.repo if found is not None else None
-        if not allowed or repo_config is None:
+        if not (allowed or denied) or repo_config is None:
             # Without a repository there are no files to compare: no violation to report. That is
             # an absence of material, not an absence of violation, and the `scope_respected`
             # guarantee refuses (`diff_available`).
@@ -354,7 +356,11 @@ async def check_scope_violations(payload: dict[str, Any]) -> list[str]:
         branch = bundle.config.branch_for(item.tracker_key, repo=repo_config)
         scm = await scm_for(session, bundle, repo_config.url)
         diff = await scm.compare(repo, repo_config.default_branch, branch)
-        return [path for path in diff.paths() if not matches_any(path, allowed)]
+        return [
+            path
+            for path in diff.paths()
+            if matches_any(path, denied) or (allowed and not matches_any(path, allowed))
+        ]
 
 
 def _provenance(checks: list[Any]) -> bool | None:
