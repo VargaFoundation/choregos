@@ -10,6 +10,7 @@ not have creates nothing.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from datetime import datetime
 from typing import Any, Literal
 
 from choregos_contracts import InboundEvent, ProjectConfig, Risk, Size
@@ -168,6 +169,7 @@ class GitHubTracker:
             risk=_parse_risk(issue.get("labels", [])),
             assignees=[a["login"] for a in issue.get("assignees", [])],
             author=(issue.get("user") or {}).get("login"),
+            reopened_at=await self._reopened_at(number, issue),
             comments=[
                 Comment(
                     id=str(c.get("id")),
@@ -178,6 +180,15 @@ class GitHubTracker:
                 for c in comments
             ],
         )
+
+    async def _reopened_at(self, number: int, issue: dict[str, Any]) -> datetime | None:
+        """When an open issue was last reopened (C1): its last `reopened` event. Read only for an issue
+        GitHub marks reopened (`state_reason`), so a plain issue costs no extra call."""
+        if issue.get("state") != "open" or issue.get("state_reason") != "reopened":
+            return None
+        events = await self.client.paginate(f"/repos/{self.repo}/issues/{number}/events", repo=self.repo)
+        stamps = [_github_time(e.get("created_at")) for e in events if e.get("event") == "reopened"]
+        return max((stamp for stamp in stamps if stamp is not None), default=None)
 
     async def list_candidates(self, project: ProjectConfig) -> list[str]:
         """Backup polling: the open `agent-ready` issues (S3-06), and those a start rule
@@ -472,6 +483,16 @@ class GitHubTracker:
                 checks["ok"] = False
                 checks["project_error"] = str(exc)[:200]
         return checks
+
+
+def _github_time(value: Any) -> datetime | None:
+    """A GitHub timestamp (`2026-11-06T10:00:00Z`), or nothing."""
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
 
 
 def _parse_size(labels: list[dict[str, Any]]) -> Size | None:

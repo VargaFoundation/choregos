@@ -20,6 +20,7 @@ const OUTCOME: Record<string, { label: string; tone: Tone }> = {
   already_open: { label: "already open: same key", tone: "neutral" },
   refused: { label: "refused", tone: "warn" },
   ignored: { label: "ignored: did not match the trigger's filter", tone: "neutral" },
+  reopened: { label: "reopened: the ended work item started again", tone: "ok" },
 };
 
 /**

@@ -13,6 +13,7 @@ const OUTCOME: Record<string, string> = {
   created_work_item: "started a new work item",
   already_open: "already open: same key",
   ignored: "ignored: the payload does not match `when`",
+  reopened: "reopened: the ended work item started again",
 };
 
 /**

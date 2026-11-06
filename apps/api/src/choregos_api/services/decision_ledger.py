@@ -279,12 +279,21 @@ async def record_reopened(session: Any, work_item_id: str) -> int:
     return int(result.rowcount or 0)
 
 
-def tracker_says_reopened(event_type: str, payload: dict[str, Any], terminal_statuses: Iterable[str]) -> bool:
+def tracker_says_reopened(
+    event_type: str,
+    payload: dict[str, Any],
+    terminal_statuses: Iterable[str],
+    working_statuses: Iterable[str] | None = None,
+) -> bool:
     """Whether a tracker event says an ended work item's issue is open again.
 
     GitHub's `reopened` and GitLab's `reopen` arrive as `tracker.item.updated` marked `reopened`; a
-    Jira status change (`tracker.item.moved`) reopens when it leaves a status a terminal state of the
-    workflow maps to for one no terminal state maps to. Status names compare case-blind."""
+    Jira status change (`tracker.item.moved`) reopens when it enters a status no terminal state of the
+    workflow maps to, out of a status a terminal state maps to — or, when the workflow's working
+    statuses are given, out of any status none of them is (a Done that someone else set, C1). A move
+    into a status of Jira's Done category (`status_category: done`) never reopens: the healthcheck
+    closing a ticket the platform left in "Fixed (proof)" is its end, not a comeback. Status names
+    compare case-blind."""
     if event_type == "tracker.item.updated":
         return payload.get("reopened") is True
     if event_type != "tracker.item.moved":
@@ -292,7 +301,15 @@ def tracker_says_reopened(event_type: str, payload: dict[str, Any], terminal_sta
     terminal = {str(status).strip().casefold() for status in terminal_statuses if status}
     left = str(payload.get("from_status") or "").strip().casefold()
     entered = str(payload.get("to_status") or "").strip().casefold()
-    return bool(left) and left in terminal and bool(entered) and entered not in terminal
+    if not left or not entered or entered in terminal:
+        return False
+    if str(payload.get("status_category") or "").casefold() == "done":
+        return False
+    if left in terminal:
+        return True
+    if working_statuses is None:
+        return False
+    return left not in {str(status).strip().casefold() for status in working_statuses if status}
 
 
 async def observe_reopening(session: Any, item: Any, event_type: str, payload: dict[str, Any]) -> int:
@@ -301,13 +318,24 @@ async def observe_reopening(session: Any, item: Any, event_type: str, payload: d
     changes nothing."""
     if item.closed_at is None or event_type not in ("tracker.item.updated", "tracker.item.moved"):
         return 0
-    workflow = workflow_model(await work_item_workflow(session, item))
-    statuses = [
-        state.tracker.status for state in workflow.states.values() if state.terminal and state.tracker
-    ]
-    if not tracker_says_reopened(event_type, payload, [status for status in statuses if status]):
+    if not await ended_issue_reopened(session, item, event_type, payload):
         return 0
     return await record_reopened(session, item.id)
+
+
+async def ended_issue_reopened(session: Any, item: Any, event_type: str, payload: dict[str, Any]) -> bool:
+    """`tracker_says_reopened` for an ended work item, with its own workflow's statuses."""
+    if item.closed_at is None:
+        return False
+    workflow = workflow_model(await work_item_workflow(session, item))
+    terminal = [s.tracker.status for s in workflow.states.values() if s.terminal and s.tracker]
+    working = [s.tracker.status for s in workflow.states.values() if not s.terminal and s.tracker]
+    return tracker_says_reopened(
+        event_type,
+        payload,
+        [status for status in terminal if status],
+        [status for status in working if status],
+    )
 
 
 def _question_calibrations(rows: Iterable[Any], target: float) -> list[QuestionCalibration]:
@@ -419,6 +447,7 @@ __all__ = [
     "DECISION_MODEL",
     "ROUTER",
     "DecidedBy",
+    "ended_issue_reopened",
     "observe_reopening",
     "record_decisions",
     "record_human_verdict",

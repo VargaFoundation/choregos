@@ -57,6 +57,11 @@ from .projects import (
     project_dto,
     project_stats,
 )
+from .recurrence import (
+    came_back_since,
+    reopen_work_item,
+    restart_payload,
+)
 from .routing import (
     WorkItemBirth,
     choose_workflow,
@@ -94,6 +99,7 @@ __all__ = [
     "active_policy",
     "active_workflow",
     "active_workflow_named",
+    "came_back_since",
     "choose_workflow",
     "create_work_item",
     "default_workflow",
@@ -127,7 +133,9 @@ __all__ = [
     "record_terminal_outcome",
     "record_transition_taken",
     "release_dto",
+    "reopen_work_item",
     "report_unenforced_policy",
+    "restart_payload",
     "run_dto",
     "run_summary",
     "store_outputs",

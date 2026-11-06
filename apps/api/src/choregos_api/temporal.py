@@ -84,6 +84,11 @@ QUERY_TIMEOUT_S = 3.0
 
 class TemporalGateway(Protocol):
     async def start_interpreter(self, workflow_id: str, payload: dict[str, Any]) -> str: ...
+    async def restart_interpreter(self, workflow_id: str, payload: dict[str, Any]) -> str:
+        """A new pass of an ENDED work item (C1): the next run of the same id, even after a completed
+        one. Only `services.recurrence` calls it, once it claimed the pass."""
+        ...
+
     async def signal(self, workflow_id: str, name: str, payload: Any) -> None: ...
     async def query(self, workflow_id: str, name: str) -> Any:
         """The query's answer, or None when the workflow does not exist or does not answer in time."""
@@ -128,12 +133,22 @@ class FakeTemporal:
     gone: set[str] = field(default_factory=set)
     #: every `start_session_pod` call, a repeated id included
     start_calls: list[str] = field(default_factory=list)
+    #: every new pass of an ended work item (`restart_interpreter`, C1), in order
+    restarted: list[str] = field(default_factory=list)
 
     async def start_interpreter(self, workflow_id: str, payload: dict[str, Any]) -> str:
         self.started.setdefault(workflow_id, payload)  # deterministic ID => idempotent start
         state = self.described.get(workflow_id)
         if state is None or state.status != "COMPLETED":  # ALLOW_DUPLICATE_FAILED_ONLY, as the real one
             self.gone.discard(workflow_id)
+        return workflow_id
+
+    async def restart_interpreter(self, workflow_id: str, payload: dict[str, Any]) -> str:
+        """`ALLOW_DUPLICATE`, as the real one: the id's next run, whatever the last one did."""
+        self.started[workflow_id] = payload
+        self.restarted.append(workflow_id)
+        self.described.pop(workflow_id, None)
+        self.gone.discard(workflow_id)
         return workflow_id
 
     async def describe(self, workflow_id: str) -> WorkflowState | None:
@@ -273,6 +288,22 @@ class RealTemporal:
 
     async def start_interpreter(self, workflow_id: str, payload: dict[str, Any]) -> str:
         return await self._start("WorkflowInterpreter", workflow_id, payload)
+
+    async def restart_interpreter(self, workflow_id: str, payload: dict[str, Any]) -> str:
+        """The id's next run even after a COMPLETED one (C1). A run still finishing — the work item is
+        ended, so it is past its close-out — is terminated rather than left to swallow the new pass."""
+        from temporalio.common import WorkflowIDConflictPolicy, WorkflowIDReusePolicy
+
+        client = await self.client()
+        handle = await client.start_workflow(
+            "WorkflowInterpreter",
+            payload,
+            id=workflow_id,
+            task_queue=self.task_queue,
+            id_reuse_policy=WorkflowIDReusePolicy.ALLOW_DUPLICATE,
+            id_conflict_policy=WorkflowIDConflictPolicy.TERMINATE_EXISTING,
+        )
+        return str(handle.id)
 
     async def start_train(self, workflow_id: str, payload: dict[str, Any]) -> str:
         return await self._start("ReleaseTrain", workflow_id, payload)

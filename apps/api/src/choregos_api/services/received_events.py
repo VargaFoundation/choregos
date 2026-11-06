@@ -34,6 +34,8 @@ OUTCOMES = frozenset(
         "ignored",
         "already_open",
         "refused",
+        # An ended work item's ticket came back, and this event started its new pass (C1).
+        "reopened",
     }
 )
 
