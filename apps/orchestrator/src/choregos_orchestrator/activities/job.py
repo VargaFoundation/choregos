@@ -38,6 +38,7 @@ from ..org_egress import org_runner_hosts
 from .base import without_secrets
 from .images import named_image
 from .plan import StagePlan
+from .repositories import fix, target_of
 from .run_network import network_permissions, run_network
 
 #: What `agent.backend` and `run.backend` say for a job: there is no agent backend.
@@ -82,7 +83,9 @@ async def prepare_job(
     await admit(bundle, item, run_id, plan, JOB_BACKEND, budget.usd)
     allowed_paths = list(item.allowed_paths or []) or ["**"]
     documents = item.documents or {}
-    depot = bundle.config.repo
+    # The work item's target repository (ADR 0124): a job clones it, as an agent step does.
+    found = target_of(bundle, item)
+    depot = found.repo if found is not None else None
     stage_input = StageInput(
         run_id=run_id,
         # The stage span's context, derived from the run id (ADR 0018): the runner's span hangs off it.
@@ -121,7 +124,7 @@ async def prepare_job(
         repo=RepoRef(
             url=depot.url,
             base_branch=depot.default_branch,
-            work_branch=bundle.config.branch_for(item.tracker_key),
+            work_branch=bundle.config.branch_for(item.tracker_key, repo=depot),
             clone_depth=depot.clone_depth,
         )
         if depot
@@ -133,7 +136,13 @@ async def prepare_job(
         allowed_paths=allowed_paths,
         playbook=PlaybookRef(ref=job_ref(command, image)),
         permissions=network_permissions(
-            run_network(bundle, None, settings, await org_runner_hosts(session, bundle.project.org_id)),
+            run_network(
+                bundle,
+                None,
+                settings,
+                await org_runner_hosts(session, bundle.project.org_id),
+                repo_url=depot.url if depot else None,
+            ),
             write_paths=allowed_paths,
             deny_commands=engine.deny_commands(),
             dod_iterations=0,
@@ -148,6 +157,8 @@ async def prepare_job(
             tools={str(c): [str(o) for o in ops] for c, ops in dict(job.get("tools") or {}).items()},
         ),
     )
+    if found is not None:
+        fix(bundle, item, found)
     payload = stage_input.model_dump(mode="json", by_alias=True)
     run = existing or Run(id=run_id, work_item_id=item.id, project_id=bundle.project.id)
     run.transition_id = plan.transition_id
