@@ -28,19 +28,20 @@ evidence:
   - { tool: cilium__get_flows, kind: network_policy, operation: get_flows, arguments: { namespace: ingress, verdict: DROPPED, last: 2000 } }
   - { tool: cilium__list_network_policies, kind: network_policy, operation: list_network_policies, arguments: { namespace: payments } }
 instructions_must_contain: ["cilium__get_flows", "cilium__list_network_policies", "denies by default", "netops_report_markdown"]
+#: The task's facts, whichever door read them and however the answer words them (S57-11b): the top pair
+#: with its port and its count on one line, the policy that drops it, and a fix that admits its source.
 answer_must_contain:
-  - "shop/frontend → payments/api:8443: 42 dropped"
-  - "orders/worker → inventory/api:9090: 31 dropped"
-  - "search/indexer → catalog/db:5432: 24 dropped"
-  - "notifications/sender → auth/api:8080: 17 dropped"
-  - "analytics/collector → monitoring/grafana:3000: 9 dropped"
-  - "payments-ingress"
-  - "fromEndpoints"
+  - { fact: "the top pair shop/frontend → payments/api:8443, 42 dropped", tokens: ["shop/frontend", "payments/api", "8443", "42"] }
+  - { fact: "the policy payments-ingress", tokens: ["payments-ingress"] }
+  - { fact: "a fix by fromEndpoints", tokens: ["fromEndpoints"] }
 answer_must_not_contain: ["monitoring/prometheus → shipping/api", "kubectl apply", "fromEntities"]
 answer_sections: ["## Findings", "## Proposed change", "## Risk", "## Rollback"]
 min_score: 1.0
+#: What must hold through either door: a diagnosis applies nothing.
 assertions:
   - { kind: executed_actions, count: 0 }
+#: What the comparison of the doors measures (S57-11b): recorded beside the verdict, never a pass criterion.
+measures:
   - { kind: calls_by_origin, cell: mcp, origin: model, count: 13 }
   - { kind: calls_by_origin, cell: scripts, origin: script, count: 13 }
   - { kind: max_model_requests, cell: scripts, max: 4 }

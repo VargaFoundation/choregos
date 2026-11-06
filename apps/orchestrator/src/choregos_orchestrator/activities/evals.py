@@ -33,6 +33,10 @@ eval project beside the matrix's (its connectors on fake scenes, its policy, its
 `eval_live_cases`) and files the case's task there; the run is a stage like any other, and
 `judge_eval_run` scores its answer and journal with the case's assertions, once its governance parity
 holds: a run whose ledger, events and bridge lines disagree is `invalid`, reported and never counted.
+
+S57-11b: a case's line says the CELL's door (`door`, what the run was offered) and how many scripts the
+run wrote (`scripts_used`); a case is judged on its task and its guarantees, and what it expected of its
+door and the run did not do is said beside the verdict (`expectations`), never failed.
 """
 
 from __future__ import annotations
@@ -176,7 +180,6 @@ async def run_eval_cell(payload: dict[str, Any]) -> dict[str, Any]:
                         **_no_tool_use(tools),
                         "requests": (outcome.get("usage") or {}).get("requests"),
                     },
-                    "door": "mcp",
                 }
             )
             with contextlib.suppress(RuntimeError):
@@ -247,12 +250,15 @@ def _cell(payload: dict[str, Any], context: str, outcomes: list[dict[str, Any]])
     metered: list[dict[str, Any]] = []
     details: list[dict[str, Any]] = []
     observed: list[dict[str, Any]] = []
+    door = str(payload.get("tools", "mcp"))
     for outcome in outcomes:
         name = outcome["fixture"]
         unit = {
             "fixture": name,
             "repetition": int(outcome.get("repetition", 0)),
             "agent": outcome.get("agent"),
+            # The cell's door: what the run was OFFERED (S57-11b). Whether it used it is `scripts_used`.
+            "door": door,
         }
         if outcome.get("invalid"):
             # Its governance parity is broken (S57-11a): reported, never counted, never paired.
@@ -275,7 +281,11 @@ def _cell(payload: dict[str, Any], context: str, outcomes: list[dict[str, Any]])
                 "reason": outcome["reason"],
                 # `None`: the gateway counted nothing; its cost is unknown, never paired as free (S57-09).
                 "cost_usd": round(float(outcome["usage"]["cost_usd"]), 6) if outcome["usage"] else None,
-                **({"door": outcome["door"]} if outcome.get("door") else {}),
+                # The scripts the run wrote (a digest the bridge journaled): 0 in a `scripts` cell is a run
+                # that was offered the door and did not use it, which `script_adoption` counts.
+                "scripts_used": len((outcome.get("observation") or {}).get("scripts") or []),
+                # What the case expected of its door and the run did not do (S57-11b): measured, not failed.
+                **({"expectations": outcome["expectations"]} if outcome.get("expectations") else {}),
             }
         )
     rate = (sum(1 for s in successes if s) / len(successes)) if successes else 0.0
@@ -585,11 +595,13 @@ async def _play_agent_case(name: str, payload: dict[str, Any], tools: str) -> di
         "ok": verdict["ok"],
         "skipped": False,
         "reason": verdict["reason"],
+        "expectations": verdict["expectations"],
         "usage": usage,
         "duration_s": float(case.get("expected_duration_s", 60.0)),
         **unit,
         "observation": observation,
-        "door": played.door,
+        "door": tools,
+        "scripts_used": len(observation.get("scripts") or []),
     }
 
 
@@ -1390,7 +1402,9 @@ async def judge_eval_run(payload: dict[str, Any]) -> dict[str, Any]:
         verdict = _agent_case_verdict(
             case, run.result, observation, project.slug if project else "", str(payload.get("failure") or "")
         )
-    return {**verdict, **measured, "door": "bridge" if observation["scripts"] else "mcp"}
+    # The cell's door, what the run was offered (S57-11b): the first live matrix said `mcp` for every run
+    # of its `scripts` cell, which had been offered the bridge and wrote no script.
+    return {**verdict, **measured, "door": tools, "scripts_used": len(observation["scripts"])}
 
 
 def _usage_of(run: Run) -> dict[str, Any] | None:
@@ -1425,7 +1439,12 @@ def _agent_case_verdict(
     if not result:
         return {"ok": False, "skipped": False, "reason": failure or "the run posted no result"}
     verdict = judge(case, live_cases.live_answer(case, result, project_slug), observation)
-    return {"ok": verdict["ok"], "skipped": False, "reason": verdict["reason"]}
+    return {
+        "ok": verdict["ok"],
+        "skipped": False,
+        "reason": verdict["reason"],
+        "expectations": verdict["expectations"],
+    }
 
 
 async def _parity_of(session: Any, run: Run, events: list[RunEvent]) -> str:

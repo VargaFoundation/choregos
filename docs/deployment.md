@@ -565,14 +565,15 @@ Tekton sidecar serves the bridge); the package's code is `packages/runner/src/ch
 copied, and only the per-server modules and the index are generated. The agent's environment gains
 `CHOREGOS_TOOLS_DIR` (that directory), `CHOREGOS_TOOLS_BRIDGE` (`http://<the tool server's host:port>/bridge/v1`),
 `PYTHONPATH` (the directory first, an existing value kept after it) and `TMPDIR` (the runner's temporary
-directory, which the confinement lets the agent write), for every shell backend; its task gains the section
-"Calling tools from a script". The runner creates `$TMPDIR/choregos/scripts`, where that section tells the agent
+directory, which the confinement lets the agent write), for every shell backend; its first prompt gains the
+section "Calling tools from a script", after the agent's instructions and before the task (S57-11b), and the
+journal says `tools.instructions` (`included`: the prompt holds it, `bytes`: its size). The runner creates `$TMPDIR/choregos/scripts`, where that section tells the agent
 to write its scripts: its write guards (`GuardRails.check_write`, Claude Code's `check_scope.sh`) and the ACP
 client's file system let the agent's file-write tool write beneath it — no `.` or `..` segment, no
 secret-looking file —, and nowhere else outside the workspace, the client's directory included (#1365). The run's journal says `tools.client` (`written`, `tools`, `modules`, and
 `error` when the tool list could not be read: the client is then written without modules, `call` reaching a
 tool by its name); a client that cannot be written (`written: false`) leaves the run without it and without
-the section. A run that is not offered scripts gets none of it.
+the section (and without `tools.instructions`). A run that is not offered scripts gets none of it.
 
 No new port and no new credential: the routes are on the port the agent's MCP client already uses, so the
 confinement's port list is the same with and without scripts, and the run token stays with the runner (or the

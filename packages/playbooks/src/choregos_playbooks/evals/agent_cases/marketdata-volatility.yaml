@@ -47,15 +47,25 @@ evidence:
   - { tool: marketdata__get_bars, arguments: { symbol: AMD, start: "2026-07-01", end: "2026-10-30" } }
 instructions_must_contain: ["marketdata__get_bars", "never estimate", "analysis_markdown"]
 #: The fake's bars give a known answer: `test_agent_cases_doors.py` recomputes it from them.
-answer_must_contain: ["1. AAPL 24.3 %", "2. GOOGL 22.7 %", "3. MA 22.1 %", "4. JPM 21.8 %", "5. AMZN 21.7 %"]
+#: The task's facts, however the answer lays them out (S57-11b): each of the five, on one line with its
+#: volatility to one decimal (a number token is read by value: 24.30 and 24.31 are 24.3).
+answer_must_contain:
+  - { fact: "AAPL at 24.3 %", tokens: ["AAPL", "24.3"] }
+  - { fact: "GOOGL at 22.7 %", tokens: ["GOOGL", "22.7"] }
+  - { fact: "MA at 22.1 %", tokens: ["MA", "22.1"] }
+  - { fact: "JPM at 21.8 %", tokens: ["JPM", "21.8"] }
+  - { fact: "AMZN at 21.7 %", tokens: ["AMZN", "21.7"] }
 answer_must_not_contain: ["PEP 20.6", "KO 20.6"]
 answer_sections: ["## Result", "## Method"]
 min_score: 1.0
+#: What must hold through either door: a computation applies nothing.
 assertions:
+  - { kind: executed_actions, count: 0 }
+#: What the comparison of the doors measures (S57-11b): recorded beside the verdict, never a pass criterion.
+measures:
   - { kind: calls_by_origin, cell: mcp, origin: model, count: 20 }
   - { kind: calls_by_origin, cell: scripts, origin: script, min: 20 }
   - { kind: max_model_requests, cell: scripts, max: 3 }
-  - { kind: executed_actions, count: 0 }
 scripted_usage:            # illustrative (the examples page)
   mcp: { requests: 22, tokens_in: 1250000, tokens_cached: 1080000, tokens_out: 3300, turns: 22 }
   scripts: { requests: 3, tokens_in: 28000, tokens_cached: 17000, tokens_out: 2400, turns: 3 }

@@ -4421,3 +4421,11 @@ stories:
     size: M
     depends_on: [S58-02]
     notes: "Birth validation of fields.repository (422), the repository:<name> label, PATCH refused once fixed (409), WorkItem.repository and repository_fixed; console: repositories card (add, remove, make primary), the ticket's target and its setter; docs/usage.md."
+  - id: S57-11b
+    title: "fix(evals): the live matrix offers scripts in the first prompt and judges the task, not the door"
+    stream: S57
+    sprint: 7
+    priority: 1
+    size: S
+    depends_on: [S57-11a]
+    notes: "What the first live tools matrix (2026-11-06, opencode, platform/standard) showed: no scripts-cell run wrote a script, the judge labelled them door mcp, and right answers failed on door-specific wording and call counts. The scripts section moves from the task's tail into the first prompt, after the agent's instructions (journal tools.instructions); a detail's door is the cell's, with scripts_used; facts are door-neutral tokens and patterns, calls_by_origin and max_model_requests are measures (expectations), only guarantees fail a run."

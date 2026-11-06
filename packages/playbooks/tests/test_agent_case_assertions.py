@@ -15,6 +15,8 @@ import pytest
 from choregos_playbooks.evals.agents import (
     AGENT_CASES_DIR,
     ASSERTION_KINDS,
+    GUARANTEE_KINDS,
+    MEASURE_KINDS,
     agent_cases,
     case_instructions,
     check_assertions,
@@ -22,6 +24,7 @@ from choregos_playbooks.evals.agents import (
     judge,
     load_case,
     report_of,
+    unmet,
 )
 
 NEW_CASES = (
@@ -121,9 +124,8 @@ FIXTURES: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any], str]] = [
 def test_each_assertion_holds_on_its_fixture_and_fails_on_the_other(
     assertion: dict[str, Any], holds: dict[str, Any], fails: dict[str, Any], says: str
 ) -> None:
-    case = {"assertions": [assertion]}
-    assert check_assertions(case, holds) == []
-    [failure] = check_assertions(case, fails)
+    assert unmet([assertion], holds) == []
+    [failure] = unmet([assertion], fails)
     assert says in failure
 
 
@@ -132,12 +134,12 @@ def test_every_assertion_kind_has_its_fixtures() -> None:
 
 
 def test_an_assertion_with_a_cell_is_checked_in_that_cell_only() -> None:
-    case = {"assertions": [{"kind": "max_model_requests", "cell": "scripts", "max": 1}]}
-    assert check_assertions(case, _observation("mcp", requests=40)) == [], "not the mcp cell's bound"
-    assert check_assertions(case, _observation("scripts", requests=40)) != []
-    unknown = {"assertions": [{"kind": "max_model_requests", "cell": "both", "max": 1}, {"kind": "vibes"}]}
+    bound = [{"kind": "executed_actions", "cell": "scripts", "max": 0}]
+    assert unmet(bound, _observation("mcp")) == [], "not the mcp cell's bound"
+    assert unmet(bound, _observation("scripts")) != []
+    unknown = {"assertions": [{"kind": "executed_actions", "cell": "both", "max": 1}, {"kind": "vibes"}]}
     assert [f.split(":")[0] for f in check_assertions(unknown, _observation())] == [
-        "max_model_requests",
+        "executed_actions",
         "unknown assertion",
     ]
 
@@ -176,7 +178,11 @@ def test_each_scenario_is_well_formed_and_its_reference_answer_passes(name: str)
     assert all(
         {"requests", "tokens_in", "tokens_out", "turns"} <= set(u) for u in case["scripted_usage"].values()
     )
-    assert {a["kind"] for a in case["assertions"]} <= set(ASSERTION_KINDS)
+    # S57-11b: what passes or fails a run holds through either door; what a door costs is measured.
+    assert {a["kind"] for a in case["assertions"]} <= set(GUARANTEE_KINDS)
+    assert case["measures"] and {m["kind"] for m in case["measures"]} <= MEASURE_KINDS
+    for fact in [*case["answer_must_contain"], *case["answer_must_not_contain"]]:
+        assert isinstance(fact, str) or (fact.get("fact") and ({"tokens", "pattern"} & set(fact))), fact
     result = evaluate_agent_case(path, answer=case["reference_answer"])
     assert result.instructions_passed, result.instructions_missing
     assert result.answer == "passed", result.to_dict()
@@ -214,7 +220,8 @@ def test_e1_s_exposures_are_what_the_firewall_holds() -> None:
         ):
             exposed.append(f"`{interface}#{positions[interface]}`")
     case = load_case(AGENT_CASES_DIR / "netops-ssh-exposure.yaml")
-    assert sorted(exposed) == sorted(f for f in case["answer_must_contain"] if f.startswith("`"))
+    named = [f"`{fact['tokens'][0]}`" for fact in case["answer_must_contain"] if "#" in fact["tokens"][0]]
+    assert sorted(exposed) == sorted(named)
     assert len(rules) == 184 and len(aliases) == 41
 
 
@@ -245,8 +252,10 @@ def test_e2_s_top_five_is_what_the_trace_holds() -> None:
 
     pairs = asyncio.run(count())
     case = load_case(AGENT_CASES_DIR / "netops-dropped-flows-top.yaml")
-    top = [f"{pair}: {n} dropped" for pair, n in pairs.most_common(5)]
-    assert top == [fact for fact in case["answer_must_contain"] if fact.endswith("dropped")]
+    [(first, n), *_] = pairs.most_common(5)
+    source, destination = first.split(" → ")
+    target, port = destination.split(":")
+    assert case["answer_must_contain"][0]["tokens"] == [source, target, port, str(n)]
     assert sum(pairs.values()) == 132
 
 
@@ -267,8 +276,8 @@ def test_e6_s_volatilities_are_what_the_bars_give() -> None:
     symbols = [call["arguments"]["symbol"] for call in case["evidence"]]
     found = {symbol: asyncio.run(volatility(symbol)) for symbol in symbols}
     ranked = sorted(found.items(), key=lambda item: -item[1])
-    assert [f"{n}. {s} {v:.1f} %" for n, (s, v) in enumerate(ranked[:5], start=1)] == case[
-        "answer_must_contain"
+    assert [[s, f"{v:.1f}"] for s, v in ranked[:5]] == [
+        fact["tokens"] for fact in case["answer_must_contain"]
     ]
     assert f"{ranked[4][1]:.1f}" != f"{ranked[5][1]:.1f}", "no tie at the fifth place"
 

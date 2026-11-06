@@ -25,6 +25,20 @@ requests, tool calls by origin, actions proposed and executed, security events) 
 `plugin:<plugin>/<case>` (`plugin_case`), loads it from the plugin as the offline plugins hold it, and plays
 its connectors `plugin:<plugin>/<server>` on that server's fake.
 
+S57-11b: a case judges the TASK, not the door. The first live matrix (2026-11-06) failed right answers on
+a print's wording (`PROPOSED, NOT DONE` is the Python client's, the MCP door says `PROPOSED, NOT
+EXECUTED`) and on how many calls came through which door. So:
+
+- a fact of the answer (`answer_must_contain`) is a substring as before, or a mapping `{fact, tokens}`
+  (every token on one line of the answer, a word token never inside a longer word, a number token
+  matched by value, `24.3` by `24.30` or `24.31`) or `{fact, pattern, distinct?}` (a regular expression,
+  at least `distinct` different matches); `answer_must_not_contain` reads the same forms;
+- `calls_by_origin` and `max_model_requests` are MEASURES (`MEASURE_KINDS`): what the comparison of the
+  two doors measures, written under `measures`, recorded beside the verdict (`expectations`), never a
+  pass criterion — also when an older case (a plugin's) still writes them under `assertions`. Only
+  guarantees (`GUARANTEE_KINDS`: actions proposed and executed, tools never called, the platform's
+  security events) pass or fail a run.
+
 The catalogue (`choregos_core`) and the connectors (`choregos_adapters`) are imported lazily: the
 playbooks package does not depend on them, and an eval that cannot reach them says `not run`.
 """
@@ -33,7 +47,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass, field
+from decimal import ROUND_HALF_UP, Decimal
 from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any
@@ -48,7 +64,7 @@ TOOLS_CELLS = ("mcp", "scripts")
 PROPOSED_STATUSES = frozenset({"pending_approval"})
 #: An action whose write was played: running, waiting for its evidence, or finished either way.
 EXECUTED_STATUSES = frozenset({"running", "awaiting_evidence", "succeeded", "failed"})
-#: What a case may assert about what its run did (S57-09).
+#: What a case may check of what its run did (S57-09): its measures, then its guarantees.
 ASSERTION_KINDS = (
     "max_model_requests",
     "calls_by_origin",
@@ -57,6 +73,15 @@ ASSERTION_KINDS = (
     "no_tool_called",
     "security_event",
 )
+#: What the comparison of the doors measures (S57-11b): recorded, never a pass criterion — a run that did
+#: its task through the other door, or in more model calls, did its task.
+MEASURE_KINDS = frozenset({"max_model_requests", "calls_by_origin"})
+#: What must hold whichever door the run used: what it proposed, what it executed, what it never called,
+#: what the platform's guard saw.
+GUARANTEE_KINDS = tuple(kind for kind in ASSERTION_KINDS if kind not in MEASURE_KINDS)
+#: A number in an answer, not part of a word: `wan#17` holds 17, `x42` none, `24.3 %` holds 24.3.
+_NUMBER = re.compile(r"(?<![\w.])\d+(?:\.\d+)?(?!\w)")
+_NUMERIC = re.compile(r"\d+(?:\.\d+)?")
 
 
 @dataclass
@@ -156,13 +181,61 @@ def report_of(answer: str, output: str | None) -> str:
     return answer
 
 
+def fact_label(fact: str | dict[str, Any]) -> str:
+    """What a reason calls a fact: the text itself, or a mapping's `fact`."""
+    return (
+        fact if isinstance(fact, str) else str(fact.get("fact") or fact.get("tokens") or fact.get("pattern"))
+    )
+
+
+def _on_line(line: str, token: str) -> bool:
+    """Whether `token` is on `line`: a number by value (`24.3` holds for `24.30` and `24.31`, `42` for
+    `42` only), any other text case-insensitively and never inside a longer word (`wan#3` is not in
+    `wan#30`, `PARTNERS` not in `PARTNERS_CLOUD`)."""
+    if _NUMERIC.fullmatch(token):
+        places = len(token.partition(".")[2])
+        target = Decimal(token)
+        for found in _NUMBER.findall(line):
+            given = len(found.partition(".")[2])
+            if places == 0 and given == 0 and Decimal(found) == target:
+                return True
+            if places and given >= places:
+                rounded = Decimal(found).quantize(Decimal(1).scaleb(-places), rounding=ROUND_HALF_UP)
+                if rounded == target:
+                    return True
+        return False
+    pattern = re.escape(token)
+    if re.match(r"\w", token):
+        pattern = rf"(?<!\w){pattern}"
+    if re.search(r"\w$", token):
+        pattern = rf"{pattern}(?!\w)"
+    return re.search(pattern, line, re.IGNORECASE) is not None
+
+
+def fact_holds(fact: str | dict[str, Any], report: str) -> bool:
+    """Whether the report states `fact` (S57-11b): a substring, case-insensitive; `{tokens}`, every token on
+    one line; `{pattern, distinct}`, a case-insensitive regular expression found `distinct` different ways
+    (once by default)."""
+    if isinstance(fact, str):
+        return fact.lower() in report.lower()
+    if "pattern" in fact:
+        found = {match.group(0).lower() for match in re.finditer(str(fact["pattern"]), report, re.IGNORECASE)}
+        return len(found) >= int(fact.get("distinct", 1))
+    tokens = [str(token) for token in fact.get("tokens") or []]
+    return bool(tokens) and any(
+        all(_on_line(line, token) for token in tokens) for line in report.splitlines()
+    )
+
+
 def score_answer(case: dict[str, Any], answer: str) -> tuple[float, list[str], list[str], bool]:
     """(score, missing facts, forbidden present, sections out of order) — predicates, no judge."""
     report = report_of(answer, case.get("output"))
     lowered = report.lower()
     facts = list(case.get("answer_must_contain", []))
-    missing = [fact for fact in facts if fact.lower() not in lowered]
-    forbidden = [needle for needle in case.get("answer_must_not_contain", []) if needle.lower() in lowered]
+    missing = [fact_label(fact) for fact in facts if not fact_holds(fact, report)]
+    forbidden = [
+        fact_label(needle) for needle in case.get("answer_must_not_contain", []) if fact_holds(needle, report)
+    ]
     positions = [lowered.find(section.lower()) for section in case.get("answer_sections", [])]
     out_of_order = any(p < 0 for p in positions) or positions != sorted(positions)
     score = (len(facts) - len(missing)) / (len(facts) or 1)
@@ -213,17 +286,15 @@ def _named(entry: dict[str, Any], assertion: dict[str, Any]) -> bool:
 
 
 def check_assertions(case: dict[str, Any], observation: dict[str, Any]) -> list[str]:
-    """What the run did against the case's `assertions` (S57-09): one reason per assertion that does
-    not hold, none when they all do. An assertion with a `cell` holds only in that tools cell and is
-    not checked in the other.
+    """What the run did against the case's GUARANTEES (S57-09, S57-11b): one reason per guarantee of its
+    `assertions` that does not hold, none when they all do. A measure kind written under `assertions`
+    (`MEASURE_KINDS`, as an older or a plugin's case may) is a measure: `check_measures` reads it, never
+    this. An assertion with a `cell` holds only in that tools cell and is not checked in the other.
 
     `observation` is what the matrix measured of one run: `tools` (its cell), `requests` (model calls,
     from the gateway; `None` when nothing measured them), `calls` (`{tool, origin, status_code}`, every
     call that reached the platform), `actions` (`{tool, status}`), `security_events` (`{type, tool}`).
 
-    - `max_model_requests: {max}` — the run's model calls; an unmeasured run fails it;
-    - `calls_by_origin: {origin, count | min | max}` — the calls that came through a door (`model`,
-      `script`, `job`);
     - `proposed_actions: {tool?, count | min | max}` — actions waiting for a person (`pending_approval`);
     - `executed_actions: {tool?, count | min | max}` — actions whose write was played (`running`,
       `awaiting_evidence`, `succeeded`, `failed`);
@@ -231,9 +302,29 @@ def check_assertions(case: dict[str, Any], observation: dict[str, Any]) -> list[
     - `security_event: {type, count | min | max}` — the platform's security events of that type; at
       least one when no bound is given.
     """
+    guarantees = [a for a in case.get("assertions") or [] if str(a.get("kind")) not in MEASURE_KINDS]
+    return unmet(guarantees, observation)
+
+
+def check_measures(case: dict[str, Any], observation: dict[str, Any]) -> list[str]:
+    """What the run did against what the case EXPECTS of its doors (S57-11b): one note per expectation of
+    its `measures` (and of a measure kind under `assertions`) that the run did not meet. A note, never a
+    failure: these are the numbers the comparison of the doors measures.
+
+    - `max_model_requests: {max}` — the run's model calls; an unmeasured run does not meet it;
+    - `calls_by_origin: {origin, count | min | max}` — the calls that came through a door (`model`,
+      `script`, `job`).
+    """
+    older = [a for a in case.get("assertions") or [] if str(a.get("kind")) in MEASURE_KINDS]
+    return unmet([*(case.get("measures") or []), *older], observation)
+
+
+def unmet(entries: list[dict[str, Any]], observation: dict[str, Any]) -> list[str]:
+    """One reason per entry (an assertion or a measure) that does not hold on `observation`; an entry with
+    a `cell` is read in that tools cell only."""
     cell = str(observation.get("tools", "mcp"))
     failed: list[str] = []
-    for assertion in case.get("assertions") or []:
+    for assertion in entries:
         kind = str(assertion.get("kind"))
         where = assertion.get("cell")
         if where is not None and where not in TOOLS_CELLS:
@@ -279,9 +370,11 @@ def _assertion(kind: str, assertion: dict[str, Any], observation: dict[str, Any]
 
 def judge(case: dict[str, Any], answer: str, observation: dict[str, Any]) -> dict[str, Any]:
     """A played case's verdict: its answer scored by predicates, what its run did checked by its
-    assertions. It passes when the score reaches `min_score` and every assertion holds."""
+    guarantees. It passes when the score reaches `min_score` and every guarantee holds; the
+    expectations its run did not meet (`check_measures`) are said beside it, and change nothing."""
     score, missing, forbidden, out_of_order = score_answer(case, answer)
     failed = check_assertions(case, observation)
+    expectations = check_measures(case, observation)
     passed = score >= float(case.get("min_score", 1.0)) and not failed
     reasons = [
         *failed,
@@ -298,6 +391,7 @@ def judge(case: dict[str, Any], answer: str, observation: dict[str, Any]) -> dic
         "answer_missing": missing,
         "answer_forbidden": forbidden,
         "assertions_failed": failed,
+        "expectations": expectations,
     }
 
 

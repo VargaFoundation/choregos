@@ -28,13 +28,23 @@ instructions_must_contain:
   - "pfsense__list_firewall_rules"
   - "pfsense__list_aliases"
   - "netops_report_markdown"
-answer_must_contain: ["`wan#17`", "`opt2#4`", "`lan#88`", "PARTNERS", "MGMT_PORTS", "3 of 184 rules"]
+#: The task's facts, whichever door read them and however the answer words them (S57-11b): the three rules
+#: that expose SSH, by the name the task asks for, and the two aliases they expose it through.
+answer_must_contain:
+  - { fact: "the rule wan#17", tokens: ["wan#17"] }
+  - { fact: "the rule opt2#4", tokens: ["opt2#4"] }
+  - { fact: "the rule lan#88", tokens: ["lan#88"] }
+  - { fact: "the alias PARTNERS", tokens: ["PARTNERS"] }
+  - { fact: "the alias MGMT_PORTS", tokens: ["MGMT_PORTS"] }
 #: The decoys: another port, a block, a disabled rule, a restricted source, a protocol without ports.
 answer_must_not_contain: ["`wan#3`", "`wan#30`", "`lan#2`", "`lan#5`", "`opt3#7`", "`opt4#2`"]
 answer_sections: ["## Findings", "## Proposed change", "## Risk", "## Rollback"]
 min_score: 1.0
+#: What must hold through either door: an audit applies nothing.
 assertions:
   - { kind: executed_actions, count: 0 }
+#: What the comparison of the doors measures (S57-11b): recorded beside the verdict, never a pass criterion.
+measures:
   - { kind: calls_by_origin, cell: mcp, origin: model, count: 8 }
   - { kind: calls_by_origin, cell: mcp, origin: script, count: 0 }
   - { kind: calls_by_origin, cell: scripts, origin: script, min: 3 }

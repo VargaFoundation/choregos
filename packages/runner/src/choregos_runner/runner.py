@@ -201,6 +201,9 @@ class Runner:
         self.skills_index = ""
         #: Where the knowledge bases lie in the workspace (ADR 0051), added to the prompt.
         self.knowledge_index = ""
+        #: "Calling tools from a script" (ADR 0122 §5), added to the first prompt when the run was offered
+        #: tool scripts and its client was written (S57-11b).
+        self.tool_instructions = ""
         #: The run's git token (S22-07): in memory only, for the clone and the push.
         self.git_token: str | None = None
         #: The run's compression proxy (ADR 0055), when it runs one.
@@ -344,7 +347,7 @@ class Runner:
             **workspace_env(stage_input),
         }
         # The client a script imports (ADR 0122 §3), for every shell backend: its environment only.
-        env.update(await self._tool_client(client, journal, stage_input, workspace, env))
+        env.update(await self._tool_client(client, journal, stage_input, env))
         # The agent reads its repository with its own git: the same `safe.directory` as the
         # runner, counted on the environment it will really receive (the runner's without the run's
         # credentials, ADR 0115, then its own).
@@ -390,6 +393,7 @@ class Runner:
 
                 # 7. premier tour
                 prompt = self._prompt(stage_input, workspace.path)
+                await self._record_tool_instructions(journal, prompt)
                 budget_seconds = stage_input.budget.max_minutes * 60
                 # A key the gateway refuses for budget refuses every further turn too: no DoD
                 # retry, no reminder, no repair — each would only be refused again (S27-01).
@@ -549,20 +553,15 @@ class Runner:
             return None
 
     async def _tool_client(
-        self,
-        client: InternalClient,
-        journal: EventJournal,
-        stage_input: StageInput,
-        workspace: Workspace,
-        env: dict[str, str],
+        self, client: InternalClient, journal: EventJournal, stage_input: StageInput, env: dict[str, str]
     ) -> dict[str, str]:
         """When the run is offered tool scripts (ADR 0122 §3, §5): the client a script imports, written
         outside the workspace from the tool list the bridge hands back (`relay_tools`, read by the
-        runner's own client), the instructions that say when a script pays, added to the task, and
-        what the agent's environment gains (`env` is the launch environment so far). Nothing at all
-        otherwise: the agent's environment and its prompt are those of a run without scripts. A client
-        that cannot be written leaves the run without it, and without the instructions, and the
-        journal says why."""
+        runner's own client), the instructions that say when a script pays, kept for the first prompt
+        (`_prompt`, S57-11b), and what the agent's environment gains (`env` is the launch environment so
+        far). Nothing at all otherwise: the agent's environment and its prompt are those of a run without
+        scripts. A client that cannot be written leaves the run without it, and without the
+        instructions, and the journal says why."""
         if stage_input.tools.scripts is None:
             return {}
         announced = stage_input.tools.mcp.get("choregos")
@@ -580,8 +579,7 @@ class Runner:
         except OSError as exc:
             await journal.record("tools.client", {"written": False, "error": str(exc)[:300]})
             return {}
-        task = workspace.path / ".choregos" / "task.md"
-        task.write_text(task.read_text(encoding="utf-8") + tool_scripts.INSTRUCTIONS, encoding="utf-8")
+        self.tool_instructions = tool_scripts.instructions(written)
         await journal.record(
             "tools.client",
             {
@@ -1146,7 +1144,13 @@ class Runner:
             return None
 
     def _prompt(self, stage_input: StageInput, workspace: Path) -> str:
-        """Rendered playbook + task. The playbook comes from the orchestrator, never from the repository."""
+        """Rendered playbook + task. The playbook comes from the orchestrator, never from the repository.
+
+        What the run gives the agent follows the playbook, before the task: its skills, its knowledge
+        bases, and, when it was offered tool scripts, "Calling tools from a script" (S57-11b). That
+        section was the tail of `task.md` until the first live matrix (2026-11-06): after the task's
+        output contract, and after agent instructions that name each MCP tool to read, no model of it
+        wrote a script."""
         playbook = stage_input.playbook.prompt or ""
         if not playbook and stage_input.playbook.prompt_url:
             playbook = f"(playbook: {stage_input.playbook.ref})"
@@ -1155,7 +1159,22 @@ class Runner:
             playbook = f"{playbook}\n\n{self.skills_index}"
         if self.knowledge_index:
             playbook = f"{playbook}\n\n{self.knowledge_index}"
+        if self.tool_instructions:
+            playbook = f"{playbook}\n\n{self.tool_instructions}"
         return f"{playbook}\n\n---\n\n{task}"
+
+    async def _record_tool_instructions(self, journal: EventJournal, prompt: str) -> None:
+        """`tools.instructions`: whether the first prompt holds the scripts section, and its size — what
+        the run page and the live matrix read, instead of guessing from a model that wrote no script."""
+        if not self.tool_instructions:
+            return
+        await journal.record(
+            "tools.instructions",
+            {
+                "included": self.tool_instructions in prompt,
+                "bytes": len(self.tool_instructions.encode("utf-8")),
+            },
+        )
 
     def _remaining(self, budget_seconds: int) -> float:
         elapsed = time.monotonic() - self.started

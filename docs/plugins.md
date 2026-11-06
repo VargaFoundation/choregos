@@ -197,6 +197,12 @@ The installer keeps matrix cases and never plays them: the matrix does, in a scr
 server's fake (in the core's CI, a fake registered for the server) and in a live cell against the
 server's eval instance.
 
+A case judges the task, not the door (S57-11b, [What a case checks of its
+run](runbooks/live-eval-matrix.md#what-a-case-checks-of-its-run)): its facts are the answer's, its
+guarantees the run's (actions proposed and executed, tools never called, security events). What a door
+costs — `calls_by_origin`, `max_model_requests` — is a measure, written under `measures`; a case that
+still writes it under `assertions` has it read as a measure, never as a pass criterion.
+
 ## Pack and index
 
 ```

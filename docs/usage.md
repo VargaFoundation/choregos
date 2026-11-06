@@ -2846,9 +2846,13 @@ one module per server (the part of a tool's name before `__`; `web_fetch`, `web_
 tools are in `platform`), one function per tool, whose docstring is the tool's description, its access
 (`read`, `write`, `approval`) and its input schema; `call("<tool>", **arguments)` reaches a tool by its
 name, `search("<words>")` finds one, and `$CHOREGOS_TOOLS_DIR/INDEX.md` lists them all. The library is
-the standard library only (Python 3.9 or later), so any interpreter of the agent's runs it. The task
-the agent reads gains a section, "Calling tools from a script", that says when a script pays (three or
-more dependent calls, a loop, a result to filter or join), to print only what the next decision needs
+the standard library only (Python 3.9 or later), so any interpreter of the agent's runs it. The agent's
+first prompt gains a section, "Calling tools from a script", after its own instructions and before the
+task (S57-11b: at the tail of the task, after its output contract, no model of the first live matrix used
+the library); it says that a tool `<server>__<tool>` is the function `<server>.<tool>(...)`, names the
+run's modules and one of its tools under both names, says when a script pays (three or
+more dependent calls, a loop, a result to filter or join, also when the agent's instructions name the tools
+to read), to print only what the next decision needs
 and never a secret, to write scripts in `$TMPDIR/choregos/scripts/`, never in the repository, and that a write
 may come back as a proposal; the agent may write a script there with its file-write tool as well as from its
 shell, the one place outside the workspace its write guards allow, and only when the stage is offered scripts; a stage that is not offered scripts gets neither the library nor the section, and

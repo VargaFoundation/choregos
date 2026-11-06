@@ -222,7 +222,11 @@ async def test_the_scripted_matrix_plays_e3_and_c1_in_both_cells(
             (C1, "itsm-triager", True),
         ], (tools, [d["reason"] for d in cell["details"]])
         assert (cell["cases"], cell["skipped"], cell["success_rate"]) == (2, 0, 1.0)
-    assert [d["door"] for d in cells["scripts"]["details"]] == ["bridge", "mcp"], "C1 has no script"
+    # The cell's door, what both runs were offered (S57-11b); C1 has no script, so it used none.
+    assert [(d["door"], d["scripts_used"]) for d in cells["scripts"]["details"]] == [
+        ("scripts", 1),
+        ("scripts", 0),
+    ]
     assert cells["scripts"]["calls_by_origin"] == {"script": 25, "model": 5}
     assert (cells["mcp"]["proposed_actions"], cells["mcp"]["executed_actions"]) == (2, 1)
 
