@@ -90,7 +90,7 @@ from ..config import get_settings
 from ..eval_comparison import compare_cells
 from . import eval_doors
 from .base import ProjectBundle, db, project_bundle
-from .gates import _repo_slug
+from .repositories import repo_slug as _repo_slug
 
 MIN_SUCCESS_RATE = 0.7
 ASSERTION_TIMEOUT_S = 300.0

@@ -3544,7 +3544,7 @@ export type WorkItemCreate = {
 };
 
 export type WorkItemUpdate = {
-  /** The fields that change; `null` removes one. */
+  /** The fields that change; `null` removes one. `repository` (ADR 0124) must name a repository of the project (422), and may not change once the work item is fixed to one (409). */
   fields: {
     [key: string]: unknown;
   };
@@ -3676,6 +3676,10 @@ export type WorkItem = {
   current_run?: RunSummary | null;
   pending_request?: HumanRequest | null;
   pr_url?: string | null;
+  /** The repository the work item works on (ADR 0124): the one it is fixed to, else its `fields.repository`, else the project's primary; null for a project without a repository. */
+  repository?: string | null;
+  /** Whether the target is fixed (ADR 0124 §3): a step touched its repository, so `fields.repository` may no longer name another one. */
+  repository_fixed?: boolean;
   totals: Totals;
   /** The budget given at launch or by the workflow (ADR 0047); the policy's applies otherwise. */
   budget_usd?: number | null;

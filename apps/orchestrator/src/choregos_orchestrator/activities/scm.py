@@ -14,8 +14,8 @@ from choregos_core.restricted import WITHHELD, is_marked
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
-from .base import db, load_work_item, project_bundle
-from .gates import _repo_slug
+from .base import db, load_work_item, project_bundle, scm_for
+from .repositories import fix, repo_slug, target_of, target_or_none
 
 #: The error type `open_pull_request` raises when the work item has no branch to open a pull request
 #: from (S22-46): the implementation changed nothing, so nothing was pushed. Non-retryable — a retry
@@ -23,19 +23,21 @@ from .gates import _repo_slug
 NO_BRANCH = "NoBranch"
 
 
-def _repo_of(bundle: Any) -> Any:
-    """The project's repository, or an error that names the cause.
+def _target(bundle: Any, item: Any) -> Any:
+    """The work item's target repository (ADR 0124), or an error that names the cause.
 
     These activities assume a repository: opening a PR, pushing a branch, reading checks.
     A project without a repository (ADR 0012) simply has no transition that triggers them, but if
-    one did, better to fail here, saying why, than three layers further down on an empty URL.
+    one did, better to fail here, saying why, than three layers further down on an empty URL. A target
+    the project does not serve is a non-retryable `RepositoryRefused` (`target_of`).
     """
-    if bundle.config.repo is None:
+    found = target_of(bundle, item)
+    if found is None:
         raise ValueError(
             f"the project {bundle.slug} has no repository: this step needs an SCM "
             "(pull request, branch, checks). Remove the transition, or declare a repository."
         )
-    return bundle.config.repo
+    return found
 
 
 @activity.defn(name="open_pull_request")
@@ -44,16 +46,19 @@ async def open_pull_request(payload: dict[str, Any]) -> dict[str, Any]:
     async with db() as session:
         bundle = await project_bundle(session, payload["project_id"])
         item = await load_work_item(session, payload["work_item_id"])
-        repo = _repo_slug(_repo_of(bundle).url)
-        branch = bundle.config.branch_for(item.tracker_key)
-        base = _repo_of(bundle).default_branch
+        found = _target(bundle, item)
+        scm = await scm_for(session, bundle, found.repo.url)
+        repo = repo_slug(found.repo.url)
+        branch = bundle.config.branch_for(item.tracker_key, repo=found.repo)
+        base = found.repo.default_branch
+        fix(bundle, item, found)
         documents = item.documents or {}
         # A marked work item's documents stay in the console; the code is still delivered (ADR 0114, C).
         body = _withheld_pr_body(item, bundle.slug) if is_marked(item) else _pr_body(item, documents)
         # Without a pushed branch GitHub answers 422 `head invalid`, retried then fatal (#539, on
         # sandbox-dev#21). Refused here instead, with a reason a person can read. Any error reading
         # the branch (403, 5xx) is raised as it is, and retried as before.
-        if not await bundle.adapters.scm.branch_exists(repo, branch):
+        if not await scm.branch_exists(repo, branch):
             raise ApplicationError(
                 f"no branch: the implementation changed nothing — `{branch}` was never pushed to "
                 f"{repo}, so there is no pull request to open",
@@ -64,12 +69,12 @@ async def open_pull_request(payload: dict[str, Any]) -> dict[str, Any]:
         # and one already open on the branch keeps its state (a person may have marked it ready).
         # Without it, as before: ready for review, and marked so.
         draft = bool(payload.get("draft", False))
-        ref = await bundle.adapters.scm.open_pr(repo, branch, base, item.title, body, draft=draft)
-        await bundle.adapters.scm.update_pr(ref, body=body, draft=None if draft else False)
+        ref = await scm.open_pr(repo, branch, base, item.title, body, draft=draft)
+        await scm.update_pr(ref, body=body, draft=None if draft else False)
         item.pr_url = ref.url or item.pr_url
         reviewers = payload.get("reviewers") or []
         if reviewers:
-            await bundle.adapters.scm.request_review(ref, list(reviewers))
+            await scm.request_review(ref, list(reviewers))
         return {"pr_url": item.pr_url, "number": ref.number}
 
 
@@ -102,9 +107,10 @@ async def enqueue_merge(payload: dict[str, Any]) -> dict[str, Any]:
         item = await load_work_item(session, payload["work_item_id"])
         if not item.pr_url:
             return {"enqueued": False, "reason": "no pull request"}
-        repo = _repo_slug(_repo_of(bundle).url)
+        found = _target(bundle, item)
         number = int(item.pr_url.rsplit("/", 1)[-1])
-        await bundle.adapters.scm.enqueue_merge(PrRef(repo=repo, number=number))
+        scm = await scm_for(session, bundle, found.repo.url)
+        await scm.enqueue_merge(PrRef(repo=repo_slug(found.repo.url), number=number))
         return {"enqueued": True, "pr_url": item.pr_url}
 
 
@@ -113,9 +119,11 @@ async def ensure_branch(payload: dict[str, Any]) -> dict[str, str]:
     async with db() as session:
         bundle = await project_bundle(session, payload["project_id"])
         item = await load_work_item(session, payload["work_item_id"])
-        repo = _repo_slug(_repo_of(bundle).url)
-        branch = bundle.config.branch_for(item.tracker_key)
-        await bundle.adapters.scm.ensure_branch(repo, branch, _repo_of(bundle).default_branch)
+        found = _target(bundle, item)
+        branch = bundle.config.branch_for(item.tracker_key, repo=found.repo)
+        scm = await scm_for(session, bundle, found.repo.url)
+        await scm.ensure_branch(repo_slug(found.repo.url), branch, found.repo.default_branch)
+        fix(bundle, item, found)
         return {"branch": branch}
 
 
@@ -128,16 +136,19 @@ async def collect_run_artifacts(payload: dict[str, Any]) -> dict[str, Any]:
         run = await session.get(Run, payload["run_id"])
         if run is None or not run.result:
             return {"files": 0}
-        if bundle.config.repo is None:
+        found = target_or_none(bundle, item)
+        if found is None:
             # A project without a repository: there is no diff to file, and that is not an
             # error. This activity is called after EVERY agent step, including those of a trade that
             # writes no code file; failing killed the work item right after a successful step. Seen on
             # the bench of 2026-09-24: the HR sourcing succeeded, then the workflow died on "no repository".
+            # A target the project does not serve has no diff either; the next stage says why.
             return {"files": 0}
-        repo = _repo_slug(_repo_of(bundle).url)
-        branch = bundle.config.branch_for(item.tracker_key)
+        repo = repo_slug(found.repo.url)
+        branch = bundle.config.branch_for(item.tracker_key, repo=found.repo)
         try:
-            diff = await bundle.adapters.scm.compare(repo, _repo_of(bundle).default_branch, branch)
+            scm = await scm_for(session, bundle, found.repo.url)
+            diff = await scm.compare(repo, found.repo.default_branch, branch)
         except Exception:
             return {"files": 0}
         result = StageResult.model_validate(run.result)
@@ -147,7 +158,7 @@ async def collect_run_artifacts(payload: dict[str, Any]) -> dict[str, Any]:
                 for f in diff.files
             ]
         )
-        result.artifacts.reports["base"] = _repo_of(bundle).default_branch
+        result.artifacts.reports["base"] = found.repo.default_branch
         result.evidence.diff_files = len(diff.files)
         result.evidence.diff_lines = diff.additions + diff.deletions
         run.result = result.model_dump(mode="json", by_alias=True)

@@ -30,6 +30,7 @@ from ..train_client import signal_findings
 from .base import db, load_work_item, notification_target, project_bundle, work_item_workflow
 from .job import JOB_BACKEND
 from .remote import declared_cost_usd
+from .repositories import adopt
 from .run_key import release_run_key
 
 logger = structlog.get_logger("choregos.outcome")
@@ -232,6 +233,10 @@ async def record_run_outcome(payload: dict[str, Any]) -> dict[str, Any]:
         if outputs.allowed_paths:
             item.allowed_paths = list(outputs.allowed_paths)
         declared_outputs = list(((run.stage_input or {}).get("transition") or {}).get("outputs") or [])
+        if result.status == StageStatus.DONE:
+            # The repository a step names, when its transition declares it (ADR 0124 §2): the work
+            # item's target from now on, checked at the next stage that touches git.
+            adopt(item, outputs.model_dump(mode="json", exclude_none=True), declared_outputs)
         documents = store_outputs(item, outputs, declared_outputs)
         # An infrastructure PR declared by the agent (`artifacts.reports["infra_pr"]`) follows the
         # work item to the train, which triggers its Atlantis `apply` after approval.

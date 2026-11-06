@@ -15,7 +15,9 @@ from choregos_core.domain import DiffSummary, PrRef
 from choregos_core.gates import ADR_PATTERN, ALREADY_FIXED_GATE, DIFF_GATES, unchanged_run
 from temporalio import activity
 
-from .base import db, load_work_item, project_bundle
+from .base import db, load_work_item, project_bundle, scm_for
+from .repositories import repo_slug as _repo_slug
+from .repositories import target_or_none
 
 
 @activity.defn(name="evaluate_gates")
@@ -42,15 +44,22 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
         added: dict[str, str] = {}
         needs_diff = any(g["name"] in DIFF_GATES for g in gates)
         # Without a repository there is no diff, and no error either: the guarantee refuses by
-        # itself (`diff_available`), which is exactly what we want it to do.
-        repo_config = bundle.config.repo
+        # itself (`diff_available`), which is exactly what we want it to do. The repository is the
+        # work item's target (ADR 0124); one the project does not serve has no diff either.
+        found = target_or_none(bundle, item)
+        repo_config = found.repo if found is not None else None
+        scm = (
+            await scm_for(session, bundle, repo_config.url)
+            if repo_config is not None
+            else bundle.adapters.scm
+        )
+        branch = (result.artifacts.branch if result else None) or (
+            bundle.config.branch_for(item.tracker_key, repo=repo_config) if repo_config is not None else ""
+        )
         if needs_diff and repo_config is not None:
-            branch = (result.artifacts.branch if result else None) or bundle.config.branch_for(
-                item.tracker_key
-            )
             repo = _repo_slug(repo_config.url)
             try:
-                diff = await bundle.adapters.scm.compare(repo, repo_config.default_branch, branch)
+                diff = await scm.compare(repo, repo_config.default_branch, branch)
             except Exception as exc:
                 # A run that changed nothing pushed no branch: its diff is EMPTY, not unreadable
                 # (#536). Any other failure stays "diff unavailable" and the guarantee refuses.
@@ -65,7 +74,7 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
                         secrets.extend(scan_secrets(file.patch))
                         added[file.path] = added_text_of(file.patch)
 
-        branch_pushed = await _branch_pushed(bundle, item, result) if _reads_branch(gates) else None
+        branch_pushed = await _branch_pushed(scm, repo_config, branch) if _reads_branch(gates) else None
 
         ci_status = None
         review_state = None
@@ -76,7 +85,7 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
             number = int(item.pr_url.rsplit("/", 1)[-1]) if item.pr_url.rsplit("/", 1)[-1].isdigit() else 0
             if number:
                 try:
-                    pr = await bundle.adapters.scm.get_pr(PrRef(repo=repo, number=number))
+                    pr = await scm.get_pr(PrRef(repo=repo, number=number))
                     ci_status = pr.checks_conclusion()
                     review_state = pr.review_conclusion()
                     scans = {
@@ -104,7 +113,7 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
         # The scope is judged on what the RUN wrote, since the commit where it began (S22-11): from
         # the base, it counted the work of the earlier steps. On the dev tenant, on 10/09, the ADR of
         # study #5 turned red on the Makefile that the framing step had pushed.
-        run_scope = await _run_diff(bundle, result, branch, gates) if diff is not None else None
+        run_scope = await _run_diff(scm, repo_config, result, branch, gates) if diff is not None else None
         context = GateContext(
             result=result,
             tool_calls=calls,
@@ -129,9 +138,12 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
             parent_documents=await _parent_documents(session, item),
             branch_pushed=branch_pushed,
         )
-        outcomes = [await _judge(gate, context, bundle, diff is not None, run_scope) for gate in gates]
+        outcomes = [
+            await _judge(gate, context, bundle, (scm, repo_config), diff is not None, run_scope)
+            for gate in gates
+        ]
 
-        await _publish_check_runs(bundle, item, outcomes, result)
+        await _publish_check_runs(scm, repo_config, item, outcomes, result)
         if run is not None:
             await _journal(session, run, outcomes)
         return [
@@ -195,31 +207,30 @@ def _reads_branch(gates: list[dict[str, Any]]) -> bool:
     return any(g["name"] == ALREADY_FIXED_GATE for g in gates)
 
 
-async def _branch_pushed(bundle: Any, item: Any, result: StageResult | None) -> bool | None:
-    """Whether the work item's branch exists on the SCM (S22-47), for `already_fixed_proven`.
+async def _branch_pushed(scm: Any, repo_config: Any, branch: str) -> bool | None:
+    """Whether the work item's branch exists on its target repository (S22-47, ADR 0124), for
+    `already_fixed_proven`.
 
     `None` — the guarantee refuses — without a repository, or when the SCM cannot answer: a 403 or
     an outage proves nothing either way."""
-    repo_config = bundle.config.repo
     if repo_config is None:
         return None
-    branch = (result.artifacts.branch if result else None) or bundle.config.branch_for(item.tracker_key)
     try:
-        return bool(await bundle.adapters.scm.branch_exists(_repo_slug(repo_config.url), branch))
+        return bool(await scm.branch_exists(_repo_slug(repo_config.url), branch))
     except Exception:
         return None
 
 
 async def _run_diff(
-    bundle: Any, result: StageResult | None, branch: str, gates: list[dict[str, Any]]
+    scm: Any, repo_config: Any, result: StageResult | None, branch: str, gates: list[dict[str, Any]]
 ) -> list[str] | None:
     """The files the run changed, since the commit where it began; `None` when the run does not
     say (a runner older than S22-11) or the comparison fails: the work item's diff then holds."""
     start = (result.artifacts.reports.get("start_commit") if result else None) or ""
-    if not start or not any(g["name"] == "scope_respected" for g in gates) or bundle.config.repo is None:
+    if not start or not any(g["name"] == "scope_respected" for g in gates) or repo_config is None:
         return None
     try:
-        diff = await bundle.adapters.scm.compare(_repo_slug(bundle.config.repo.url), start, branch)
+        diff = await scm.compare(_repo_slug(repo_config.url), start, branch)
     except Exception:
         return None
     return list(diff.paths())
@@ -229,6 +240,7 @@ async def _judge(
     gate: dict[str, Any],
     context: GateContext,
     bundle: Any,
+    target: tuple[Any, Any],
     diff_obtained: bool,
     run_scope: list[str] | None,
 ) -> GateOutcome:
@@ -239,19 +251,18 @@ async def _judge(
         params.setdefault("files", max_files)
         params.setdefault("lines", max_lines)
     if gate["name"] == "adr_number_free" and diff_obtained:
-        already_there = await _default_branch_files(bundle, params)
+        already_there = await _default_branch_files(*target, params)
         return evaluate(gate["name"], replace(context, default_branch_files=already_there), params)
     if gate["name"] == "scope_respected" and run_scope is not None:
         return evaluate(gate["name"], replace(context, changed_files=run_scope), params)
     return evaluate(gate["name"], context, params)
 
 
-async def _default_branch_files(bundle: Any, params: dict[str, Any]) -> list[str] | None:
-    """The files already on the default branch, in the folder of the pattern of `adr_number_free`
-    (`docs/adr/[0-9]...` gives `docs/adr`); `None` when the connector cannot list or fails: the
-    guarantee then refuses rather than declare free a number it could not compare."""
-    repo_config = bundle.config.repo
-    list_files = getattr(bundle.adapters.scm, "list_files", None)
+async def _default_branch_files(scm: Any, repo_config: Any, params: dict[str, Any]) -> list[str] | None:
+    """The files already on the target's default branch, in the folder of the pattern of
+    `adr_number_free` (`docs/adr/[0-9]...` gives `docs/adr`); `None` when the connector cannot list or
+    fails: the guarantee then refuses rather than declare free a number it could not compare."""
+    list_files = getattr(scm, "list_files", None)
     if repo_config is None or list_files is None:
         return None
     pattern = str(params.get("pattern") or ADR_PATTERN)
@@ -303,18 +314,21 @@ async def _journal(session: Any, run: Run, outcomes: list[GateOutcome]) -> None:
         )
 
 
-async def _publish_check_runs(bundle: Any, item: Any, outcomes: list[GateOutcome], result: Any) -> None:
-    """Check-runs `choregos/scope` and `choregos/evidence` (S3-05): the verdict is visible in the PR."""
-    if not item.pr_url or not hasattr(bundle.adapters.scm, "create_check_run"):
+async def _publish_check_runs(
+    scm: Any, repo_config: Any, item: Any, outcomes: list[GateOutcome], result: Any
+) -> None:
+    """Check-runs `choregos/scope` and `choregos/evidence` (S3-05): the verdict is visible in the PR,
+    on the work item's target repository (ADR 0124)."""
+    if not item.pr_url or repo_config is None or not hasattr(scm, "create_check_run"):
         return
-    repo = _repo_slug(bundle.config.repo.url)
+    repo = _repo_slug(repo_config.url)
     sha = (result.artifacts.commits[-1] if result and result.artifacts.commits else None) or "HEAD"
     mapping = {"scope_respected": "choregos/scope", "evidence_present": "choregos/evidence"}
     for outcome in outcomes:
         name = mapping.get(outcome.name)
         if name is None:
             continue
-        await bundle.adapters.scm.create_check_run(
+        await scm.create_check_run(
             repo,
             sha,
             name,
@@ -324,13 +338,6 @@ async def _publish_check_runs(bundle: Any, item: Any, outcomes: list[GateOutcome
         )
 
 
-def _repo_slug(url: str) -> str:
-    """`https://github.com/acme/billing.git` → `acme/billing`."""
-    trimmed = url.removesuffix(".git").rstrip("/")
-    parts = trimmed.split("/")
-    return "/".join(parts[-2:]) if len(parts) >= 2 else trimmed
-
-
 @activity.defn(name="check_scope_violations")
 async def check_scope_violations(payload: dict[str, Any]) -> list[str]:
     async with db() as session:
@@ -338,15 +345,17 @@ async def check_scope_violations(payload: dict[str, Any]) -> list[str]:
         item = await load_work_item(session, payload["work_item_id"])
         allowed = list(item.allowed_paths or [])
         denied = bundle.engine.deny_paths()
-        repo_config = bundle.config.repo
+        found = target_or_none(bundle, item)
+        repo_config = found.repo if found is not None else None
         if not (allowed or denied) or repo_config is None:
             # Without a repository there are no files to compare: no violation to report. That is
             # an absence of material, not an absence of violation, and the `scope_respected`
             # guarantee refuses (`diff_available`).
             return []
         repo = _repo_slug(repo_config.url)
-        branch = bundle.config.branch_for(item.tracker_key)
-        diff = await bundle.adapters.scm.compare(repo, repo_config.default_branch, branch)
+        branch = bundle.config.branch_for(item.tracker_key, repo=repo_config)
+        scm = await scm_for(session, bundle, repo_config.url)
+        diff = await scm.compare(repo, repo_config.default_branch, branch)
         return [
             path
             for path in diff.paths()

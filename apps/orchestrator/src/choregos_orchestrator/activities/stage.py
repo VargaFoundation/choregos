@@ -75,6 +75,7 @@ from .job import NO_MODEL, prepare_job
 from .outcome import collect_spend, record_run_outcome
 from .plan import StagePlan
 from .remote import A2A_BACKEND, a2a_runtime, check_remote_agent, remote_budget, remote_call
+from .repositories import fix, target_of, target_or_none
 from .run_key import reserve_key
 from .run_network import admit_network, network_permissions, run_network
 from .stage_backend import (
@@ -185,13 +186,16 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         # runners (S39-22d) joins the run as implied hosts; every deny list still wins.
         # The workspace the agent declares (ADR 0119): `none` clones nothing and opens no repository
         # host, `read` clones what it cannot change, `write` (the default) is today's run.
+        # The work item's target repository (ADR 0124): refused here, before any budget, when it names
+        # one the project does not serve — unless the stage clones nothing, and so needs none.
+        workspace, found = _workspace_and_target(bundle, item, agent)
         admit_network(
             bundle,
             agent,
             settings,
             org_hosts := await org_runner_hosts(session, bundle.project.org_id),
-            with_repo=(workspace := agent.spec.effective_workspace() if agent is not None else "write")
-            != "none",
+            with_repo=workspace != "none",
+            repo_url=found.repo.url if found is not None else None,
         )
         if agent is not None:
             plan = _agent_plan(plan, agent.spec)
@@ -290,8 +294,9 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
         playbook_ref = _playbook_ref(plan, agent, playbook_prompt)
         # A `read` agent writes no repository file: its scope matches only its deliverables (ADR 0119).
         allowed_paths = write_paths_for(workspace, list(item.allowed_paths or []))
-        repo_config = bundle.config.repo
-        repo = _repo_ref(bundle, item, plan, workspace, remote=remote_runtime is not None, hosted=hosted)
+        repo = _repo_ref(
+            bundle, item, plan, workspace, remote=remote_runtime is not None, hosted=hosted, found=found
+        )
         stage_input = StageInput(
             run_id=run_id,
             # The stage span's context, derived from the run id (ADR 0018): the runner's span hangs off it.
@@ -300,9 +305,8 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             project=ProjectRef(
                 slug=bundle.slug,
                 org=bundle.org_slug,
-                test_command=repo_config.test_command if repo_config else "",
-                lint_command=repo_config.lint_command if repo_config else "",
-                typecheck_command=repo_config.typecheck_command if repo_config else "",
+                # The DoD commands of the repository the work item works on (ADR 0124).
+                **_dod_commands(found.repo if found is not None else bundle.config.repo),
                 # The fact commands come from the ROOT of the configuration, not from `repo`: a
                 # project without a repository must be able to prove something (ADR 0012).
                 fact_commands=dict(bundle.config.dod.facts)
@@ -382,8 +386,10 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
                     agent.spec.network if agent is not None else None,
                     settings,
                     org_hosts,
-                    # A run that clones nothing reaches no repository host (ADR 0119).
+                    # A run that clones nothing reaches no repository host (ADR 0119); one that clones
+                    # reaches its target's host, never another repository's (ADR 0124).
                     with_repo=repo is not None,
+                    repo_url=repo.url if repo is not None else None,
                 ),
                 write_paths=allowed_paths,
                 deny_paths=engine.deny_paths(),
@@ -460,15 +466,23 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _repo_ref(
-    bundle: Any, item: Any, plan: StagePlan, workspace: str, *, remote: bool, hosted: HostedCall | None
+    bundle: Any,
+    item: Any,
+    plan: StagePlan,
+    workspace: str,
+    *,
+    remote: bool,
+    hosted: HostedCall | None,
+    found: Any = None,
 ) -> RepoRef | None:
     """What the runner clones, or `None`: it then prepares an empty directory. A dummy repository, as
     we used to send, faked a workspace that did not exist and promised a branch nobody would read.
 
     A remote agent edits no repository: nothing to clone, nothing to push (ADR 0062); nor does a
     hosted one published with `workspace: none` (S41-18), nor any agent that declares
-    `workspace: none` (ADR 0119)."""
-    repo_config = bundle.config.repo
+    `workspace: none` (ADR 0119). What it clones is the work item's target (ADR 0124), `found`; the
+    first stage that clones it fixes the work item to it."""
+    repo_config = found.repo if found is not None else None
     if (
         not repo_config
         or workspace == "none"
@@ -476,14 +490,28 @@ def _repo_ref(
         or (hosted is not None and hosted.workspace == "none")
     ):
         return None
+    fix(bundle, item, found)
     return RepoRef(
         url=repo_config.url,
         base_branch=repo_config.default_branch
         if plan.eval_cell is None
         else str(plan.eval_cell["base_branch"]),
-        work_branch=bundle.config.branch_for(item.tracker_key),
+        work_branch=bundle.config.branch_for(item.tracker_key, repo=repo_config),
         clone_depth=repo_config.clone_depth,
     )
+
+
+def _workspace_and_target(bundle: Any, item: Any, agent: Any) -> tuple[str, Any]:
+    """The workspace the agent declares (ADR 0119) and the repository the work item works on (ADR
+    0124): `RepositoryRefused` for a target the project does not serve, unless nothing is cloned."""
+    workspace = agent.spec.effective_workspace() if agent is not None else "write"
+    return workspace, target_of(bundle, item) if workspace != "none" else target_or_none(bundle, item)
+
+
+def _dod_commands(repo: Any) -> dict[str, str]:
+    """The commands the runner measures after the stage, from the repository it works in."""
+    names = ("test_command", "lint_command", "typecheck_command")
+    return {name: (getattr(repo, name) or "") if repo is not None else "" for name in names}
 
 
 def _stage_budget(engine: Any, plan: StagePlan, item: Any, resolved: Any) -> Budget:
