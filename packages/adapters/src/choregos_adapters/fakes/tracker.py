@@ -72,6 +72,22 @@ class FakeTracker:
             payload={"from_status": previous, "to_status": to_status},
         )
 
+    def reopen(self, key: str, to_status: str = "Todo", actor: str = "healthcheck") -> InboundEvent:
+        """The ticket comes back (C1): open again, dated, as GitHub's `reopened` says it."""
+        item = self.items[key]
+        item.state = to_status
+        item.closed_at = None
+        item.reopened_at = utcnow()
+        return InboundEvent(
+            type=InboundEventType.ITEM_UPDATED,
+            source="fake",
+            delivery_id=f"reopen-{key}-{item.reopened_at.isoformat()}",
+            project_slug=self.project_slug,
+            work_item_key=key,
+            actor=actor,
+            payload={"reopened": True, "state": to_status},
+        )
+
     def status_comment(self, key: str, marker: str = "<!-- choregos:status -->") -> str | None:
         for comment in reversed(self.items[key].comments):
             if comment.marker == marker:

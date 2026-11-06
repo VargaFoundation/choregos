@@ -9,11 +9,14 @@ from choregos_api.db.models import Deployment, Finding, HumanRequest, Release, R
 from choregos_api.logging import get_logger
 from choregos_api.services import (
     WorkItemBirth,
+    came_back_since,
     new_human_request,
     new_work_item,
     persist_event,
     record_human_verdict,
     record_terminal_outcome,
+    reopen_work_item,
+    restart_payload,
 )
 from choregos_api.services.initiator import initiator
 from choregos_contracts import EventType, HumanActor, HumanRequestKind, StageResult
@@ -591,7 +594,9 @@ async def reconcile_tracker(payload: dict[str, Any]) -> dict[str, Any]:
     A webhook can get lost: failed delivery, unreachable platform, changed secret. The tracker is
     then the only source of truth: its candidates are read again and what is missing is created.
     The start goes through a deterministic identifier, so a work item already handled never starts
-    a second time.
+    a second time. An ENDED work item whose ticket the tracker says came back after the end (reopened,
+    moved back to work) starts its new pass (C1), once: the pass is claimed in the database, so the
+    next pass finds it running.
     """
     from choregos_api.temporal import interpreter_id
 
@@ -599,6 +604,7 @@ async def reconcile_tracker(payload: dict[str, Any]) -> dict[str, Any]:
 
     created: list[str] = []
     started: list[str] = []
+    reopened: list[str] = []
     skipped: list[str] = []
     async with db() as session:
         bundle = await project_bundle(session, payload["project_slug"])
@@ -659,6 +665,10 @@ async def reconcile_tracker(payload: dict[str, Any]) -> dict[str, Any]:
                     ),
                 )
                 created.append(key)
+            elif item.closed_at is not None:
+                if await _restart_if_back(session, bundle, item, interpreter_id(bundle.slug, key)):
+                    reopened.append(key)
+                continue
             state = (await work_item_workflow(session, item)).states.get(item.state)
             if item.paused or item.closed_at is not None or (state is not None and state.terminal):
                 continue
@@ -676,7 +686,7 @@ async def reconcile_tracker(payload: dict[str, Any]) -> dict[str, Any]:
             if fresh:
                 item.temporal_wf_id = workflow_id
                 started.append(key)
-        if created or started:
+        if created or started or reopened:
             await persist_event(
                 session,
                 EventType.WORKITEM_CREATED,
@@ -686,5 +696,35 @@ async def reconcile_tracker(payload: dict[str, Any]) -> dict[str, Any]:
                 source="reconciliation",
                 created=created,
                 started=started,
+                reopened=reopened,
             )
-    return {"candidates": len(candidates), "created": created, "started": started, "skipped": skipped}
+    return {
+        "candidates": len(candidates),
+        "created": created,
+        "started": started,
+        "reopened": reopened,
+        "skipped": skipped,
+    }
+
+
+async def _restart_if_back(session: Any, bundle: Any, item: WorkItem, workflow_id: str) -> bool:
+    """An ended work item among the candidates: its ticket is read again, and if it came back after the
+    end (`came_back_since`), the pass is claimed and its interpreter started on the same id (C1)."""
+    from ..train_client import restart_interpreter
+
+    try:
+        data = await bundle.adapters.tracker.fetch_item(item.tracker_key)
+    # Deliberately broad: a ticket the tracker cannot answer for must not stop the catch-up of the others.
+    except Exception as exc:
+        logger.warning("ended work item's ticket not read again", key=item.tracker_key, error=str(exc)[:300])
+        return False
+    if not came_back_since(item, data, await work_item_workflow(session, item)):
+        return False
+    recurrence = await reopen_work_item(
+        session, bundle.project, item, door="tracker:sync", reason="the tracker says the ticket came back"
+    )
+    if recurrence is None:
+        return False
+    await restart_interpreter(workflow_id, restart_payload(bundle.project, item))
+    item.temporal_wf_id = workflow_id
+    return True

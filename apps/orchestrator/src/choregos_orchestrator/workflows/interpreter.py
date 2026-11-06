@@ -128,6 +128,10 @@ ALREADY_FIXED_ON_EVIDENCE = "already-fixed-on-evidence"
 #: agent's declared confidence — is written on its ledger records (ADR 0121 §6, S52-05): one more
 #: activity, `note_transition_taken`. Before this marker no ledger existed.
 DECISION_LEDGER = "decision-ledger"
+#: A new pass of a work item whose ticket came back (C1) numbers its runs past those of the passes
+#: before it, and starts its attempts budget at zero (`attempts_before_pass`). No history before this
+#: marker holds a pass after the first.
+FRESH_ATTEMPTS_EACH_RECURRENCE = "fresh-attempts-each-recurrence"
 #: A migration — a re-route (ADR 0123) — requested while a human step waits is played at once: the
 #: pending request is closed as superseded (it judges no decision) and the loop migrates. Before this
 #: marker the human wait did not see it; the API refused such a migration.
@@ -473,3 +477,10 @@ class WorkflowInterpreter(
         if behind and workflow.patched(ATTEMPTS_FROM_RUNS):
             for key, count in behind.items():  # `Counter.update` would add them
                 self.attempts[key] = count
+        # A new pass (C1): its runs are numbered past the earlier passes', and those count for nothing
+        # in its budget. `max`: across a `continue_as_new`, the pass's own attempts stay counted.
+        earlier = {str(k): int(v) for k, v in (context.get("attempts_before_pass") or {}).items()}
+        if earlier and workflow.patched(FRESH_ATTEMPTS_EACH_RECURRENCE):
+            for key, count in earlier.items():
+                self.attempts[key] = max(self.attempts[key], count)
+                self.attempt_resets[key] = max(self.attempt_resets[key], count)

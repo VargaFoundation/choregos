@@ -36,8 +36,9 @@ from ..services import (
     work_item_workflow,
     workflow_model,
 )
-from ..services.decision_ledger import observe_reopening
+from ..services.decision_ledger import ended_issue_reopened, observe_reopening
 from ..services.initiator import initiator
+from ..services.recurrence import restart_work_item, says_back_to_work
 from ..services.routing import with_tracker
 from ..services.work_item_controls import apply_control
 from ..temporal import (
@@ -335,12 +336,15 @@ async def _dispatch(
             continue
         if tracker is not None and not created:
             item.fields = with_tracker(dict(item.fields or {}), tracker)
+        label_list = _current_labels(item, event)
+        if not created and await _came_back(session, project, item, event, should_start):
+            # An ended work item whose ticket came back starts a new pass (C1): its decisions were not
+            # right (ADR 0121 §6). The event is the restart: it is not also delivered to the new pass.
+            received_events.record(session, project, event, "reopened", item)
+            delivered += 1
+            continue
         # An ended work item whose issue is open again: its decisions were not right (ADR 0121 §6).
         await observe_reopening(session, item, str(event.type), event.payload)
-        label_list = event.payload.get("labels")
-        if event.type in LABEL_STATE_EVENTS and isinstance(label_list, list):
-            # The current state of the labels, added or removed: the express lane reads them (#279).
-            record_labels(item, label_list)
         if should_start:
             workflow_id = interpreter_id(project.slug, key)
             await get_temporal().start_interpreter(
@@ -376,6 +380,35 @@ async def _dispatch(
         )
         delivered += 1
     return delivered
+
+
+def _current_labels(item: WorkItem, event: InboundEvent) -> Any:
+    """The labels the event carries; on an event that carries the CURRENT list, they are recorded on the
+    work item, added or removed: the express lane reads them (#279)."""
+    label_list = event.payload.get("labels")
+    if event.type in LABEL_STATE_EVENTS and isinstance(label_list, list):
+        record_labels(item, label_list)
+    return label_list
+
+
+async def _came_back(
+    session: Any, project: Project, item: WorkItem, event: InboundEvent, should_start: bool
+) -> bool:
+    """Whether the event brings an ENDED work item back — its issue reopened (`ended_issue_reopened`:
+    GitHub's `reopened`, GitLab's `reopen`, a Jira move back to work), or its start label applied again —
+    and this delivery claimed its new pass (C1, `services/recurrence.py`). A second delivery, or another
+    door that claimed it first, finds the work item running: false, and the event goes on as usual."""
+    if item.closed_at is None:
+        return False
+    kind = str(event.type)
+    if not should_start and not (
+        says_back_to_work(kind, event.payload)
+        and await ended_issue_reopened(session, item, kind, event.payload)
+    ):
+        return False
+    why = "start label applied again" if should_start else "issue reopened"
+    door = f"tracker:{event.source}"
+    return await restart_work_item(session, project, item, door=door, reason=why) is not None
 
 
 #: The events that may start an item the project does not hold yet, by a start rule (S56-03).

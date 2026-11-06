@@ -92,6 +92,10 @@ class InterpreterInput:
     #: The outputs of the last stage, which a transition's `when` reads (S48-01), across a
     #: `continue_as_new`.
     last_outputs: dict[str, Any] | None = None
+    #: The pass of the work item this run plays: 0 for its first, n once its ticket came back n times
+    #: (C1, `services/recurrence.py`). Said in the start payload and the Temporal history, so a pass
+    #: reads as one; its attempts budget comes from `load_context` (`attempts_before_pass`).
+    recurrence: int = 0
 
 
 @dataclass

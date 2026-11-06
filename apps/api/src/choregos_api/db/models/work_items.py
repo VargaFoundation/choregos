@@ -66,6 +66,13 @@ class WorkItem(Base, PkMixin, TimestampMixin):
     fields: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
     pr_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: How many times the work item came back after it ended (C1): its ticket reopened, its start label
+    #: applied again, a trigger delivery for its key. Each comeback is a new pass of the same work item
+    #: and the next run of the same interpreter id; the runs, events and decisions of the earlier passes
+    #: stay where they are (`services/recurrence.py`).
+    recurrence: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    #: When the current pass began: its attempts budget and its ticket spend count from there.
+    recurred_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     totals: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
     documents: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)  # spec_markdown, plan_markdown…
     #: What people granted on top of the ticket budget, in USD (S27-04, ADR 0047). Each grant is in

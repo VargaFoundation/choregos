@@ -3671,7 +3671,8 @@ paths:
         (`Authorization: Bearer`, `X-Choregos-Token` or `?token=`). The JSON object is mapped onto a work item (title,
         description, labels with `trigger:<name>`, fields by JSON pointer) that starts in the trigger's workflow or the
         one the project's routing picks. A replayed delivery (`Idempotency-Key`, else the body's digest) answers
-        `duplicate`; a trigger with a `key` opens one work item per value and answers `already_open` after. Every call
+        `duplicate`; a trigger with a `key` opens one work item per value and answers `already_open` after, or
+        `reopened` once that work item has ended: the key starts its new pass (C1). Every call
         past the token leaves a received event, refused ones included; a payload its `when` does not match is
         acknowledged as `ignored` (S56-05). A trigger with `auth: signature` takes `X-Choregos-Signature` instead of the
         token (S56-04). 404 when the trigger does not exist or has no token, 401 on a wrong token or signature.
@@ -8100,7 +8101,8 @@ components:
         delivery_id: { type: [string, "null"] }
         outcome:
           type: string
-          enum: [created_work_item, started, signalled, boarded, labels_updated, ignored_no_item_key, ignored_not_agent_ready, already_open, refused, ignored]
+          enum: [created_work_item, started, signalled, boarded, labels_updated, ignored_no_item_key, ignored_not_agent_ready, already_open, refused, ignored, reopened]
+          description: "`reopened`: an ended work item's ticket came back (reopened, its start label applied again, a trigger delivery for its key) and this event started its new pass (C1)."
         work_item_key: { type: [string, "null"] }
         work_item_id: { type: [string, "null"] }
         summary: { type: string, description: "Built from typed fields only: key, label, from → to, PR number, conclusion." }
@@ -8136,7 +8138,7 @@ components:
       properties:
         accepted: { type: boolean }
         duplicate: { type: boolean, default: false }
-        outcome: { type: [string, "null"], enum: [created_work_item, already_open, ignored, null] }
+        outcome: { type: [string, "null"], enum: [created_work_item, already_open, ignored, reopened, null] }
         work_item_id: { type: [string, "null"] }
         work_item_key: { type: [string, "null"] }
         workflow: { type: [string, "null"] }

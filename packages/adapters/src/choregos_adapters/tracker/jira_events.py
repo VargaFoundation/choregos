@@ -68,6 +68,9 @@ def _body(payload: dict[str, Any]) -> dict[str, Any]:
         "labels": list(fields.get("labels") or []),
         "item_type": ((fields.get("issuetype") or {}).get("name")),
         "state": ((fields.get("status") or {}).get("name")),
+        # The category of the status the issue is in now (`new`, `indeterminate`, `done`): a move into
+        # a Done status never brings an ended work item back, whatever its name (C1).
+        "status_category": (((fields.get("status") or {}).get("statusCategory") or {}).get("key")),
         # Who filed the issue: an agent whose rules depend on the requester reads it (#1179).
         "reporter": person_of(fields.get("reporter")),
     }

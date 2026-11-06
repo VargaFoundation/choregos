@@ -14,6 +14,7 @@ from .config import get_settings
 
 _FAKE_SIGNALS: dict[str, list[tuple[str, dict[str, Any]]]] = defaultdict(list)
 _FAKE_STARTS: dict[str, dict[str, Any]] = {}
+_FAKE_RESTARTS: list[str] = []
 
 
 def fake_signals(workflow_id: str | None = None) -> Any:
@@ -26,9 +27,15 @@ def fake_starts() -> dict[str, dict[str, Any]]:
     return dict(_FAKE_STARTS)
 
 
+def fake_restarts() -> list[str]:
+    """The ids `restart_interpreter` started a new pass under, in order (C1)."""
+    return list(_FAKE_RESTARTS)
+
+
 def clear_fake_signals() -> None:
     _FAKE_SIGNALS.clear()
     _FAKE_STARTS.clear()
+    _FAKE_RESTARTS.clear()
 
 
 async def start_workflow_once(
@@ -71,6 +78,29 @@ async def start_workflow_once(
     except WorkflowAlreadyStartedError:
         return False
     return True
+
+
+async def restart_interpreter(workflow_id: str, payload: dict[str, Any]) -> None:
+    """A new pass of an ENDED work item (C1): the next run of its interpreter id, even after a completed
+    one (`ALLOW_DUPLICATE`). Called only once `services.recurrence.reopen_work_item` claimed the pass,
+    so a second caller never gets here. A run still finishing is past its close-out: terminated."""
+    settings = get_settings()
+    if settings.fakes:
+        _FAKE_STARTS[workflow_id] = payload
+        _FAKE_RESTARTS.append(workflow_id)
+        return
+    from temporalio.client import Client
+    from temporalio.common import WorkflowIDConflictPolicy, WorkflowIDReusePolicy
+
+    client = await Client.connect(settings.temporal_address, namespace=settings.temporal_namespace)
+    await client.start_workflow(
+        "WorkflowInterpreter",
+        payload,
+        id=workflow_id,
+        task_queue="orchestrator",
+        id_reuse_policy=WorkflowIDReusePolicy.ALLOW_DUPLICATE,
+        id_conflict_policy=WorkflowIDConflictPolicy.TERMINATE_EXISTING,
+    )
 
 
 async def start_reconciliation_loop(project_slug: str) -> bool:

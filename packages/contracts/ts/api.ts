@@ -3724,7 +3724,8 @@ export type ReceivedEvent = {
   source: string;
   event_type: string;
   delivery_id?: string | null;
-  outcome: "created_work_item" | "started" | "signalled" | "boarded" | "labels_updated" | "ignored_no_item_key" | "ignored_not_agent_ready" | "already_open" | "refused" | "ignored";
+  /** `reopened`: an ended work item's ticket came back (reopened, its start label applied again, a trigger delivery for its key) and this event started its new pass (C1). */
+  outcome: "created_work_item" | "started" | "signalled" | "boarded" | "labels_updated" | "ignored_no_item_key" | "ignored_not_agent_ready" | "already_open" | "refused" | "ignored" | "reopened";
   work_item_key?: string | null;
   work_item_id?: string | null;
   /** Built from typed fields only: key, label, from → to, PR number, conclusion. */
@@ -3764,7 +3765,7 @@ export type TriggerToken = {
 export type TriggerAck = {
   accepted: boolean;
   duplicate?: boolean;
-  outcome?: "created_work_item" | "already_open" | "ignored" | null;
+  outcome?: "created_work_item" | "already_open" | "ignored" | "reopened" | null;
   work_item_id?: string | null;
   work_item_key?: string | null;
   workflow?: string | null;

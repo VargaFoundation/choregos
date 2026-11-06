@@ -74,6 +74,10 @@ class WorkItemData(Model):
     created_at: datetime | None = None
     updated_at: datetime | None = None
     closed_at: datetime | None = None
+    #: When the tracker last brought the item back to work, when it says so (C1): GitHub's last
+    #: `reopened` event of an open issue, Jira's move into a To Do or In Progress status. The tracker
+    #: catch-up restarts an ended work item whose ticket came back after it ended.
+    reopened_at: datetime | None = None
     fields: dict[str, Any] = Field(default_factory=dict)
     comments: list[Comment] = Field(default_factory=list)
 
