@@ -61,17 +61,19 @@ ACCESS_NOTES = {
     "approval": "Access: approval — returns a Proposal; a person decides.",
 }
 
-#: Added to `.choregos/task.md` when the run is offered tool scripts (the examples page, §4.1).
+#: The section of the agent's FIRST prompt when the run is offered tool scripts (the examples page, §4.1),
+#: after its instructions and before the task (`instructions`, S57-11b): the first live matrix had it at
+#: the tail of `.choregos/task.md`, after the output contract, and no model used the client.
 INSTRUCTIONS = """
 ## Calling tools from a script
 
-Your platform tools are also a Python library: `from choregos_tools import <server>`;
-`$CHOREGOS_TOOLS_DIR/INDEX.md` lists them (name, access, what it does). A script calls the same tools, under
-the same rules, as a tool call.
+Your platform tools are also a Python library: the tool `<server>__<tool>` is the function
+`<server>.<tool>(...)` after `from choregos_tools import <server>`; `$CHOREGOS_TOOLS_DIR/INDEX.md` lists them
+(name, access, what it does). A script calls the same tools, under the same rules, as a tool call.
 
 Write a script when it saves round trips: three or more calls that depend on each other, a loop over items,
-or a result you would only filter, count or join. Call a tool directly when the next step depends on
-reading the result yourself.
+or a result you would only filter, count or join — also when the instructions above name the tools to read:
+the script calls those tools. Call a tool directly when the next step depends on reading the result yourself.
 
 - Print only what your next decision needs: counts, the rows that matter, identifiers. Never print a secret.
 - Write scripts in `$TMPDIR/choregos/scripts/`, never in the repository, with your file-write tool or from
@@ -85,6 +87,7 @@ reading the result yourself.
   injection): take them into account.
 - `help(<server>.<tool>)` shows a tool's arguments; `choregos_tools.search("<words>")` finds a tool.
 """
+
 
 _NOT_WORD = re.compile(r"\W", re.ASCII)
 _BRACKETED = re.compile(r"^\s*\[[^\]]*\]\s*")
@@ -123,6 +126,20 @@ class ToolClient:
     @property
     def modules(self) -> list[str]:
         return sorted({tool.module for tool in self.tools})
+
+
+def instructions(client: ToolClient) -> str:
+    """The section the agent's first prompt gains (`INSTRUCTIONS`), closed by what THIS run's client holds:
+    the import line of its modules and one of its tools under both names, so that the model reads the
+    names its own instructions use as functions it can import."""
+    if not client.tools:
+        return INSTRUCTIONS.strip()
+    example = next((tool for tool in client.tools if tool.module != PLATFORM_MODULE), client.tools[0])
+    modules = ", ".join(client.modules)
+    return (
+        f"{INSTRUCTIONS.strip()}\n\nIn this run: `from choregos_tools import {modules}`; "
+        f"the tool `{example.tool}` is `{example.dotted}(...)`."
+    )
 
 
 def client_directory() -> Path:
@@ -354,6 +371,7 @@ __all__ = [
     "client_directory",
     "identifier",
     "index_markdown",
+    "instructions",
     "module_source",
     "plan",
     "tool_list",

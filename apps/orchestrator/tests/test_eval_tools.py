@@ -150,9 +150,9 @@ async def test_a_scripted_matrix_plays_the_agent_cases_in_both_cells_and_bills_e
     assert (mcp["cases"], scripts["cases"]) == (4, 4) and mcp["success_rate"] == scripts[
         "success_rate"
     ] == 1.0
-    assert {d["door"] for d in scripts["details"]} == {"bridge"} and {d["door"] for d in mcp["details"]} == {
-        "mcp"
-    }
+    # Each line says its cell's door and the scripts its run wrote (S57-11b).
+    assert {(d["door"], d["scripts_used"]) for d in scripts["details"]} == {("scripts", 1)}
+    assert {(d["door"], d["scripts_used"]) for d in mcp["details"]} == {("mcp", 0)}
     # The round trips the cases script, as the gateway counted them: 7 and 10 by MCP, 3 and 3 by script.
     assert (mcp["median_requests"], scripts["median_requests"]) == (8.5, 3.0)
     assert mcp["calls_by_origin"] == {"model": 32} and scripts["calls_by_origin"] == {"script": 32}

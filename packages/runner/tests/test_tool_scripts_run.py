@@ -95,6 +95,9 @@ async def _run(
     # `-S`: the script imports the standard library and `PYTHONPATH`, nothing of the runner's venv.
     scripts = [{"name": "audit.py", "text": script, "python": [sys.executable, "-S"]}]
     stage_input.agent.launch.env["PYTHONPATH"] = "/opt/agent-own"
+    # Every prompt the agent received, in order, where the confined agent may write.
+    received = agent_home(stage_input) / "prompts.json"
+    stage_input.agent.launch.env["FAKE_AGENT_PROMPTS"] = str(received)
     agent_script({"turns": [{"scripts": scripts, "result": valid_result()}]}, stage_input, settings.workspace)
     client = FakeInternalClient(stage_input)
     client.run_tools = RUN_TOOLS
@@ -106,6 +109,7 @@ async def _run(
     outcome = await Runner(settings, client).execute(stage_input, client)  # type: ignore[arg-type]
     assert outcome.exit_code is Exit.OK, outcome.detail
     ran = json.loads((agent_home(stage_input) / "scripts.json").read_text(encoding="utf-8"))
+    ran["prompts"] = json.loads(received.read_text(encoding="utf-8"))
     return client, ran
 
 
@@ -173,12 +177,42 @@ async def test_the_agent_gets_the_client_its_environment_and_the_instructions(
     }
     assert (directory / "choregos_tools" / "pfsense.py").is_file()
     assert "- pfsense.list_aliases — read — List aliases." in (directory / "INDEX.md").read_text()
-    task = (settings.workspace / ".choregos" / "task.md").read_text(encoding="utf-8")
-    assert task.endswith(tool_scripts.INSTRUCTIONS) and task.count(HEADING) == 1
-    assert len(tool_scripts.INSTRUCTIONS.strip().splitlines()) <= 25
+    assert len(tool_scripts.instructions(tool_scripts.ToolClient(Path(), "")).splitlines()) <= 25
     # Outside the workspace: nothing of the client is in the tree, nor in what the run committed.
     workspace = settings.workspace
     assert not [p for p in workspace.rglob("*") if "choregos_tools" in p.parts or p.name == "INDEX.md"]
+
+
+@pytest.mark.parametrize("offered", [True, False], ids=["offered", "off"])
+@pytest.mark.parametrize("backend", SHELL_BACKENDS)
+async def test_the_first_prompt_carries_the_scripts_section_when_the_run_is_offered_scripts(
+    stage_input: StageInput, settings: RunnerSettings, backend: str, offered: bool
+) -> None:
+    """S57-11b: the first live matrix (2026-11-06, opencode) saw no model use the client. The section is
+    the agent's FIRST prompt, read before the task with its own instructions, and the journal says so —
+    not a file it may never open."""
+    stage_input.agent.backend = backend
+    stage_input.model.provider_model = "anthropic/claude-sonnet-5"  # what claude-code requires
+    stage_input.tools.scripts = ToolScripts() if offered else None
+    client, ran = await _run(stage_input, settings, "print('hello')\n")
+
+    first = ran["prompts"][0]
+    if not offered:
+        assert HEADING not in first and "choregos_tools" not in first and "CHOREGOS_TOOLS" not in first
+        assert _events(client, "tools.instructions") == []
+        return
+    section = tool_scripts.instructions(tool_scripts.ToolClient(Path(), "", tool_scripts.plan(RUN_TOOLS)))
+    assert first.count(HEADING) == 1 and section in first
+    # With the agent's instructions, before the task and its output contract: not a tail it reads last.
+    assert first.index(HEADING) < first.index(f"# {stage_input.work_item.key}")
+    assert "`from choregos_tools import pfsense`" in first, "the run's own modules are named"
+    assert "`pfsense__list_interfaces` is `pfsense.list_interfaces(...)`" in first
+    assert _events(client, "tools.instructions") == [
+        {"included": True, "bytes": len(section.encode("utf-8"))}
+    ]
+    # Once: the task is the task, the section is not repeated at its tail.
+    task = (settings.workspace / ".choregos" / "task.md").read_text(encoding="utf-8")
+    assert HEADING not in task
 
 
 async def test_without_scripts_the_agent_gets_nothing_new(
@@ -210,3 +244,4 @@ async def test_a_client_that_cannot_be_written_leaves_the_run_without_it(
     assert event["written"] is False and event["error"]
     assert ran["env"]["CHOREGOS_TOOLS_DIR"] is None
     assert HEADING not in (settings.workspace / ".choregos" / "task.md").read_text(encoding="utf-8")
+    assert HEADING not in ran["prompts"][0] and _events(client, "tools.instructions") == []

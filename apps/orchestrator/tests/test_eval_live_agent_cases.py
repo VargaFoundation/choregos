@@ -419,6 +419,7 @@ async def test_a_live_agent_case_is_played_and_judged_not_skipped(eval_project: 
     # Its answer names the case project's decision paths, read as `/p/evals/actions/…`: the facts hold.
     assert verdict["ok"], verdict["reason"]
     assert (verdict["fixture"], verdict["agent"], verdict["door"]) == (E4, "identity-operator", "mcp")
+    assert verdict["scripts_used"] == 0
     observation = verdict["observation"]
     assert [c["origin"] for c in observation["calls"]] == ["model"] * 8, "the API booked each call"
     assert [a["status"] for a in observation["actions"]] == ["pending_approval"] * 8, "proposed, not done"
@@ -444,6 +445,28 @@ async def test_the_case_s_assertions_judge_what_the_run_did_not_what_it_said(
     verdict = await _live(eval_project, api, _cell("mcp"), seven)
     assert not verdict["skipped"] and not verdict.get("invalid"), verdict["reason"]
     assert not verdict["ok"] and "proposed_actions: 7, expected 8" in verdict["reason"]
+
+
+async def test_a_scripts_run_whose_model_used_the_mcp_door_is_judged_on_its_task_under_its_cell_s_door(
+    eval_project: Fixture, api: Any, scripts_on: None
+) -> None:
+    """S57-11b, the first live matrix's `scripts` cell (2026-11-06): the run was offered the bridge, its
+    client was written, its model made every call through the MCP door. Its door is the cell's, `scripts`,
+    with no script used; its task was done, so it passes; what the case expected of the door is said."""
+
+    async def ignores_the_client(stage_input: StageInput, transport: Any, token: str) -> StageResult:
+        journal = _client(transport, stage_input, token)
+        written = {"written": True, "tools": 8, "modules": ["entra"]}
+        event = {"seq": 1, "type": "tools.client", "ts": "2026-11-06T09:00:00+00:00", "payload": written}
+        await journal.post_events([event])
+        await journal.aclose()
+        return await offboarding_through_mcp(stage_input, transport, token)
+
+    verdict = await _live(eval_project, api, _cell("scripts"), ignores_the_client)
+    assert not verdict["skipped"] and not verdict.get("invalid"), verdict["reason"]
+    assert (verdict["door"], verdict["scripts_used"]) == ("scripts", 0)
+    assert verdict["ok"], verdict["reason"]
+    assert verdict["expectations"] == ["calls_by_origin script: 0, expected 8"]
 
 
 async def ssh_exposure_through_a_script(stage_input: StageInput, transport: Any, token: str) -> StageResult:
@@ -481,7 +504,7 @@ async def test_a_scripts_cell_runs_the_case_s_script_through_the_real_bridge_and
     verdict = await _live(eval_project, api, _cell("scripts", case=E1), ssh_exposure_through_a_script)
     assert not verdict["skipped"] and not verdict.get("invalid"), verdict["reason"]
     assert verdict["ok"], verdict["reason"]
-    assert verdict["door"] == "bridge"
+    assert (verdict["door"], verdict["scripts_used"]) == ("scripts", 1)
     observation = verdict["observation"]
     assert [c["origin"] for c in observation["calls"]] == ["script"] * 8
     [script] = observation["scripts"]
@@ -648,7 +671,7 @@ def _e5_through_a_script(case: str) -> ScriptedAgent:
 
 @pytest.mark.parametrize(("case", "code"), [(E5, 200), (E5_BLOCK, 451)])
 @pytest.mark.parametrize(
-    ("tools", "door", "origin"), [("mcp", "mcp", "model"), ("scripts", "bridge", "script")]
+    ("tools", "door", "origin"), [("mcp", "mcp", "model"), ("scripts", "scripts", "script")]
 )
 async def test_e5_is_played_live_against_the_case_s_own_pages_and_judged(
     eval_project: Fixture,

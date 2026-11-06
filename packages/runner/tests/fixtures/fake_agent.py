@@ -203,6 +203,18 @@ def _scripts(scripts: list[dict[str, Any]], workspace: Path) -> None:
     )
 
 
+def _record_prompt(message: dict[str, Any]) -> None:
+    """Every prompt the agent receives, in order, as the text a model would read: a JSON list in the
+    file `FAKE_AGENT_PROMPTS` names, when it names one."""
+    if not (target := os.environ.get("FAKE_AGENT_PROMPTS")):
+        return
+    parts = (message.get("params") or {}).get("prompt") or []
+    text = "".join(str(part.get("text", "")) for part in parts if isinstance(part, dict))
+    path = Path(target)
+    seen = json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
+    path.write_text(json.dumps([*seen, text], ensure_ascii=False), encoding="utf-8")
+
+
 def _say(session_id: str, notes: list[str]) -> None:
     for note in notes:
         send(
@@ -247,6 +259,7 @@ def main() -> int:
             continue
 
         if method == "session/prompt":
+            _record_prompt(message)
             prompts_seen += 1
             plan = _plan_for(script, prompts_seen)
             session_id = (message.get("params") or {}).get("sessionId", "sess-fake-1")
