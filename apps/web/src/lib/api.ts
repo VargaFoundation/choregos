@@ -982,6 +982,9 @@ export const api = {
     return allWorkItems((params) => this.workItems(id, params), cap);
   },
   workItem: (id: string) => request<WorkItemDto>(`/work-items/${id}`),
+  /** `PATCH /work-items/{id}`: the fields that change, `null` removing one (its repository: ADR 0124). */
+  updateWorkItem: (id: string, fields: Record<string, unknown>) =>
+    request<WorkItemDto>(`/work-items/${id}`, { method: "PATCH", body: JSON.stringify({ fields }) }),
   /** The webhook events a project received and what the platform did with each (S42-06f), newest first. */
   receivedEvents: (id: string, params?: Record<string, string>) =>
     request<ReceivedEventPage>(`/projects/${qualify(id)}/received-events${query(params)}`),

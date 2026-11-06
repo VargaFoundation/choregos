@@ -33,6 +33,7 @@ import { TrackerCard } from "@/components/who-writes";
 import { viaInWords } from "@/lib/who-writes";
 import { ChangeWorkflow } from "@/components/ticket/change-workflow";
 import { NextStepBanner } from "@/components/ticket/next-step-banner";
+import { TargetRepository } from "@/components/ticket/target-repository";
 import { LongText, RequestCard } from "@/components/ticket/request-card";
 import { WorkflowChip } from "@/components/workflow-chip";
 import { fieldTitles } from "@/components/workflows/fields";
@@ -226,6 +227,11 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
                 </dd>
               </>
             )}
+            <TargetRepository
+              slug={slug}
+              item={data}
+              onDone={() => queryClient.invalidateQueries({ queryKey: ["item", id] })}
+            />
             {data.pr_url && (
               <>
                 <dt className="text-ink-muted">Pull request</dt>
