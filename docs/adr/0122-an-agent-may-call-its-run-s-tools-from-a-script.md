@@ -1,10 +1,13 @@
 # 0122 — An agent may call its run's tools from a script: the runner relays, the API governs each call, the model reads what the script prints
 
-- **Status**: proposed, 2026-11-03 (product owner: "instead of 36 round trips between the MCP servers and the
-  model, the agent writes a piece of code, runs it all, and the model analyses the final answer — is it worth
-  it in Choregos?"); plan [`PLAN-2026-11-03-tool-scripts.md`](../plan/PLAN-2026-11-03-tool-scripts.md), stream
-  S57 — not implemented; §6 amended 2026-11-05 (S57-05b: the organisation decides, the deployment's
-  switch is its default, a hard brake stays)
+- **Status**: accepted, 2026-11-07 (product owner, on the measurement of S57-11: tool scripts on by default for
+  the agents that passed the gate of §9, netops alone, and off for identity-operator and the write-heavy agents);
+  proposed 2026-11-03 (product owner: "instead of 36 round trips between the MCP servers and the model, the
+  agent writes a piece of code, runs it all, and the model analyses the final answer — is it worth it in
+  Choregos?"); plan [`PLAN-2026-11-03-tool-scripts.md`](../plan/PLAN-2026-11-03-tool-scripts.md), stream S57,
+  implemented by S57-01 to S57-11c; §6 amended 2026-11-05 (S57-05b: the organisation decides, the deployment's
+  switch is its default, a hard brake stays); §9 amended 2026-11-07 (S57-15: the measurement, the per-agent
+  default and its precedence)
 - **Concerns**: `policy.schema.json` (a top-level `tools` section), `stage-input.schema.json`
   (`tools.scripts`), `getRunTools` (tool annotations) and `callRunTool` (the origin headers), the
   `choregos.tool.called` event (`origin`, `script_sha256`, `response_bytes`), the runner's local tool server
@@ -111,7 +114,8 @@ What exists today, on `main`:
      turns it off whatever a policy says;
    - the organisation's ceiling may forbid it (`tools.scripts: off` in the ceiling);
    - the policy: `tools.scripts: off | offer`, `tools.max_concurrent_calls` (default 4), and `per_role`
-     overrides; an absent `tools` is `off`. The orchestrator resolves it into `StageInput.tools.scripts`,
+     overrides; an absent `tools` is `off` (since §9's amendment of 2026-11-07: an absent `scripts` leaves
+     the agent's default, else `off`). The orchestrator resolves it into `StageInput.tools.scripts`,
      and leaves the key out when it is off, so an older runner never sees it.
 
    **Amended 2026-11-05** (S57-05b; product owner: "make `runner.toolScripts.enabled` configurable at the
@@ -147,6 +151,45 @@ What exists today, on `main`:
    show, with a paired bootstrap 95 % confidence interval computed by the matrix itself, a lower cost per
    successful run **and** a success rate that is not lower. Until then nothing changes for a project that
    does not ask.
+
+   **Amended 2026-11-07** (S57-11, S57-15; the product owner approved the decisions below). **The
+   measurement.** Matrix `evals-live-tools-s57-11-20261107` on dev: core 0.24.0, `opencode`,
+   `platform/claude-opus`, no memory, no context reduction, the `mcp` and `scripts` cells, ten repetitions of
+   E1 `netops-ssh-exposure`, E2 `netops-dropped-flows-top`, E4 `identity-offboarding` and the coding control
+   `py-volume-discount` (80 runs). Governance parity held in every run; no script failed; 120 actions were
+   proposed and none executed in each cell. The comparisons the matrix published on dev predate S57-11c,
+   whose rules stopped failing right answers that named a decoy as what it is; the numbers below are those
+   outcomes re-judged with S57-11c's rules (`compare_cells`, the paired bootstrap of plan §5.2), not the
+   published ones:
+
+   | Agent | Cost per successful run, `scripts` vs `mcp` (95 % CI) | Success rate | Verdict |
+   | :-- | :-- | :-- | :-- |
+   | `netops` (E1 + E2) | −38.0 % [−49.3 %, −23.3 %] | +0 [0, 0] | `better`: passes the gate |
+   | — E2 `netops-dropped-flows-top` | −58.4 % [−63.8 %, −52.6 %] | +0 | `better` |
+   | — E1 `netops-ssh-exposure` | −1.3 % [−13.3 %, +12.0 %] | +0 | `not_worse` |
+   | `identity-operator` (E4) | +13.1 % [+2.6 %, +24.9 %] | +0 | `worse`: fails it |
+   | coding control | +0.2 % [−8.8 %, +8.3 %] | +0 | `not_worse` |
+
+   **The decision, per agent.** `netops` makes `offer` its default (its plugin's 1.1.0, `spec.tools: {scripts:
+   offer}`); `identity-operator` and the write-heavy agents do not (its eight proposed writes cost more
+   through a script); every other agent stays without a default until its own cells pass. What was not
+   measured: any other model or backend (`claude-code` is not served on dev), cases E3, E5, E6, C1 and C2,
+   production. A later matrix on another model may revise a default; a default is changed in the agent's
+   plugin, not in the core.
+
+   **The mechanism.** An agent version may declare `spec.tools: {scripts: off | offer}` (absent: no default;
+   `off` is the same as absent), left out of its stored spec while unset so no published version's digest
+   moves, and refused with an `a2a` runtime. For each stage the orchestrator decides, strictest first: the
+   deployment's brake; the organisation's switch (§6, as amended); the organisation's ceiling when it forbids
+   them, asked of the run itself because a policy that says nothing is not clamped; **the policy when it says
+   something for the stage's role** — its `per_role.<role>.scripts`, else its `tools.scripts`; the agent's
+   default; else off. `max_concurrent_calls` is the policy's (its role's, else 4). An eval cell's door is the
+   cell's, whatever the policy or the agent says. To say nothing, the policy's `tools.scripts` now defaults to
+   `null` (absent) instead of `off`, and is never written out when `null`. Nothing a stored policy says
+   changes: one stored by 0.23.0 to 0.24.0 holds the `off` that was then the default, written out whether or
+   not its author wrote it, and that `off` still beats an agent's `offer` until the policy is saved again from
+   a YAML that does not write `scripts`. A plugin that ships the field requires a core that knows it
+   (`core: ">=0.24.1"`), since an older core refuses an unknown spec field.
 10. **Phase 2 is a separate decision.** Listing only a few tools to the model and letting it discover the
     rest from the client (`tools.disclosure: on_demand`), turning a script that worked into a proposed skill
     (through the gate of ADR 0050), and offering the bridge to hosted runtimes (ADR 0080, through the loopback

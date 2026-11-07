@@ -2531,8 +2531,9 @@ settings page) lists each clamp.
 The ceiling's `tools` section can only forbid tool scripts ([ADR 0122](adr/0122-an-agent-may-call-its-run-s-tools-from-a-script.md) §6):
 `{"tools": {"scripts": "off"}}` refuses a project policy that offers them — `tools.scripts: offer` or a
 role's `per_role.<role>.scripts: offer`, each named (``tools.scripts: `offer` is refused, the
-organisation forbids tool scripts``) — and clamps a policy saved earlier to `off`. `offer`, `null` or no
-section leaves each project to choose. The form has no row for it yet: **Advanced: raw JSON**.
+organisation forbids tool scripts``) — and clamps a policy saved earlier to `off`; no agent's own default
+(S57-15) goes past it either. `offer`, `null` or no section leaves each project to choose. The form has no
+row for it yet: **Advanced: raw JSON**.
 
 **The ceiling's `network` section bounds what projects and agents may reach**
 ([ADR 0070](adr/0070-network-access-is-bounded-and-enforced-per-run.md)):
@@ -2806,7 +2807,8 @@ The contract carries these switches; the runner does not act on them yet (stream
 
 **Tool scripts** ([ADR 0122](adr/0122-an-agent-may-call-its-run-s-tools-from-a-script.md)) let the agent
 call its run's tools from a script it writes, through the runner's tool bridge, so that chained calls
-and their raw results stay out of the model's context. They are off unless the policy offers them; the
+and their raw results stay out of the model's context. They are off unless the policy offers them or the
+run's agent makes them its default (below); the
 organisation's ceiling can forbid them; and the organisation switches them for all its runs (S57-05b):
 its setting `tool_scripts` is `enabled`, `disabled`, or `null` to follow the deployment's default
 (`CHOREGOS_TOOL_SCRIPTS`, off unless the operator turns it on). The operator also keeps a brake
@@ -2824,13 +2826,37 @@ Then each project's policy offers them:
 
 ```yaml
 tools:
-  scripts: offer                # off (default) | offer
+  scripts: offer                # off | offer; absent: the agent's default, else off
   max_concurrent_calls: 4       # 1-16: calls of one run the bridge relays at once
   per_role:
     review: { scripts: off }    # a reviewer reads every result itself
 ```
 
-An unquoted `off` is read as `off` (YAML 1.1 reads it as `false`). A call from a script is governed
+An unquoted `off` is read as `off` (YAML 1.1 reads it as `false`).
+
+**An agent's measured default** (S57-15, [ADR 0122](adr/0122-an-agent-may-call-its-run-s-tools-from-a-script.md)
+§9). An agent's catalogue entry may make tool scripts its default, in its plugin's agent file
+(`agent.spec.tools`), once the eval matrix measured that its runs cost less per success and succeed as often
+with them; `netops` does from its plugin's 1.1.0:
+
+```yaml
+agent:
+  slug: netops
+  spec:
+    tools: { scripts: offer }   # off, or no `tools`: no default
+```
+
+It is a default, never a right. For each stage the orchestrator decides, strictest first: the deployment's
+brake, the organisation's switch, the organisation's ceiling (`off` forbids them); then **the policy when it
+says something for the stage's role** — that role's `per_role.<role>.scripts`, else `tools.scripts`; then
+the agent's default; else off. So `tools: {scripts: off}` keeps every agent's default out of the project,
+`per_role: {review: {scripts: off}}` keeps it out of one role, and a policy that writes no `scripts` lets
+it in. `max_concurrent_calls` is always the policy's (4 when it says nothing). An eval cell's door ignores
+the agent's default, as it ignores the policy. A policy saved by 0.23.0 to 0.24.0 stored `scripts: off`
+whether or not its author wrote it (the default then was written out): it still says `off`, and keeps the
+agent's default out until it is saved again from a YAML that does not write `scripts`. The agent's
+definition page shows the default under **Other fields** (`tools`); the project's **Tools** card says when
+the policy sets nothing. A call from a script is governed
 exactly as the model's: the same allowlist, cap, approvals, ledger row and `tool.called` event. The
 orchestrator resolves the setting per role into the stage input's `tools.scripts`
 (`{max_concurrent_calls: n}`), and leaves the key out when it is off, so a runner older than ADR 0122

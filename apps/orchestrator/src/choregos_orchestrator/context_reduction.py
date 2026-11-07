@@ -1,13 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 """The context reduction (ADR 0055) and the tool scripts (ADR 0122) a run starts with.
 
-Three switches each, the strictest wins. Context reduction: the deployment
-(`CHOREGOS_CONTEXT_REDUCTION`, Helm `runner.contextReduction.enabled`) can refuse it whatever the policy
-says. Tool scripts: the organisation's switch (`tool_scripts_switched_on`: its `tool_scripts` setting,
-else the deployment's default `CHOREGOS_TOOL_SCRIPTS`, never past the deployment's brake
-`CHOREGOS_TOOL_SCRIPTS_ALLOWED`; S57-05b); the organisation's ceiling can forbid them (the policy the
-orchestrator reads is already brought down to it). Then the policy turns it on, per role if it wants.
-The stage input carries the result, so a run says what it ran with.
+Context reduction: the deployment (`CHOREGOS_CONTEXT_REDUCTION`, Helm `runner.contextReduction.enabled`)
+can refuse it whatever the policy says. Tool scripts, strictest first: the organisation's switch
+(`tool_scripts_switched_on`: the deployment's brake `CHOREGOS_TOOL_SCRIPTS_ALLOWED`, then its `tool_scripts`
+setting, else the deployment's default `CHOREGOS_TOOL_SCRIPTS`; S57-05b); the organisation's ceiling,
+which can forbid them; what the policy says for the role (its `per_role` override, else its
+`tools.scripts`); the run's agent's default (its catalogue entry's `spec.tools.scripts`, ADR 0122 §9,
+S57-15); else off. The stage input carries the result, so a run says what it ran with.
 """
 
 from __future__ import annotations
@@ -15,6 +15,8 @@ from __future__ import annotations
 from typing import Any
 
 from choregos_contracts import ContextPolicy, StageContext, StageInput, ToolScripts, ToolsPolicy
+from choregos_contracts.policy import ToolScriptsMode
+from choregos_core.policy_ceiling import PolicyCeiling, forbids_tool_scripts
 from choregos_core.tool_scripts_switch import OrgToolScripts, tool_scripts_switched_on
 
 from .config import OrchestratorSettings
@@ -43,13 +45,22 @@ def tool_scripts_on_for(choice: OrgToolScripts | None, settings: OrchestratorSet
     )
 
 
-def resolve_tool_scripts(policy_tools: ToolsPolicy, role: str, *, switched_on: bool) -> ToolScripts | None:
-    """Whether this role's agent may call its tools from a script, and how many calls at once:
-    `None` (off) when the organisation's switch is off (`tool_scripts_on_for`), or when the policy does
-    not offer it to the role."""
-    if not switched_on:
+def resolve_tool_scripts(
+    policy_tools: ToolsPolicy,
+    role: str,
+    *,
+    switched_on: bool,
+    ceiling: PolicyCeiling | None,
+    agent_default: ToolScriptsMode | None,
+) -> ToolScripts | None:
+    """Whether this role's agent may call its tools from a script, and how many calls at once (the
+    policy's `max_concurrent_calls`, its role's if it sets one). `None` (off) when the organisation's switch
+    is off (`tool_scripts_on_for`) or its ceiling forbids them; otherwise what the policy says for the role
+    decides, and when it says nothing, the agent's default (S57-15), else off. The ceiling is asked here
+    and not only through the clamped policy: a policy that says nothing is not clamped."""
+    if not switched_on or forbids_tool_scripts(ceiling):
         return None
-    return policy_tools.for_role(role)
+    return policy_tools.for_role(role, default=agent_default)
 
 
 def forced_tool_scripts(values: dict[str, Any] | None, *, switched_on: bool) -> ToolScripts | None:
