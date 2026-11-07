@@ -72,7 +72,8 @@ async def test_e1_s_script_chains_its_reads_through_the_bridge_and_the_mcp_cell_
         "errored": False,
     }, "the bridge journaled the script and each of its calls"
     # The model reads what the script printed, not the 184 rules.
-    assert scripted.script["stdout"].count("\n") == 4 and "3 of 184 rules" in scripted.script["stdout"]
+    assert scripted.script["stdout"].count("\n") == 5 and "3 of 184 rules" in scripted.script["stdout"]
+    assert "Exposed: wan#17, lan#88, opt2#4" in scripted.script["stdout"], "the line judged (S57-11c)"
     assert "`wan#17`" in scripted.answer and "Temporary vendor SSH" in scripted.answer
 
     through_mcp = await eval_doors.play(case, "mcp")
