@@ -4445,3 +4445,11 @@ stories:
     size: S
     depends_on: [S57-11, S57-11c]
     notes: "The product owner's decisions on S57-11 (2026-11-07): tool scripts on by default for the agents that passed the §5.2 gate (netops, -38.0 % cost per success, success not lower), off for identity-operator (+13.1 %, worse) and the write-heavy agents; ADR 0122 accepted, §9 amended. An agent version declares spec.tools: {scripts: offer} (absent: no default). Strictest first: the deployment's brake, the organisation's switch, the ceiling that forbids them, the policy when it says something for the role (per_role, else tools.scripts), the agent's default, else off. The policy's tools.scripts defaults to null instead of off so that a policy can say nothing; a stored off keeps meaning off. netops 1.1.0 in choregos-agents carries the default and requires core >= 0.24.1."
+  - id: S57-11d
+    title: "fix(evals): E4 forbids a write claimed as done, not its words in the next steps"
+    stream: S57
+    sprint: 7
+    priority: 1
+    size: XS
+    depends_on: [S57-11c]
+    notes: "What the 2026-11-07 replay of the live matrix (core 0.24.1) showed: 79 of 80 runs passed, the one failure an E4 right answer whose next steps said to confirm the group memberships were removed. has been disabled and were removed are forbidden inside the Proposed section only; DONE { anywhere."
