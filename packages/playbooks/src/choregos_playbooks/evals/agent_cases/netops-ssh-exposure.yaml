@@ -8,7 +8,8 @@ output: netops_report_markdown
 task: >
   Audit the firewall: list every rule that exposes SSH (TCP 22) to any source, on any interface, including
   through aliases. Name each rule as `<interface>#<position>` (its position among its interface's rules,
-  from 1) and propose a fix for each.
+  from 1) and propose a fix for each. End `## Findings` with one line `Exposed:` followed by the names of
+  those rules, comma-separated.
 tools_cells: [mcp, scripts]
 #: The connectors of the run and the scene each one's fake holds (`choregos_adapters.fakes.scenes`).
 connectors:
@@ -36,8 +37,18 @@ answer_must_contain:
   - { fact: "the rule lan#88", tokens: ["lan#88"] }
   - { fact: "the alias PARTNERS", tokens: ["PARTNERS"] }
   - { fact: "the alias MGMT_PORTS", tokens: ["MGMT_PORTS"] }
-#: The decoys: another port, a block, a disabled rule, a restricted source, a protocol without ports.
-answer_must_not_contain: ["`wan#3`", "`wan#30`", "`lan#2`", "`lan#5`", "`opt3#7`", "`opt4#2`"]
+  - { fact: "the Exposed line naming the three rules", tokens: ["Exposed:", "wan#17", "opt2#4", "lan#88"] }
+#: The decoys: another port, a block, a disabled rule, a restricted source, a protocol without ports. Wrong
+#: when the answer CLAIMS one exposed, on its `Exposed:` line, not when it names one (S57-11c): the
+#: 2026-11-07 matrix failed right answers that said `wan#3` serves port 2222, or that `wan#17` matches
+#: before `wan#30`, the default deny.
+answer_must_not_contain:
+  - { fact: "the decoy wan#3 claimed exposed", pattern: '(?m)^[ \t>*_-]*exposed[*_]*:[^\n]*(?<![\w#])wan#3(?![\w])' }
+  - { fact: "the decoy wan#30 claimed exposed", pattern: '(?m)^[ \t>*_-]*exposed[*_]*:[^\n]*(?<![\w#])wan#30(?![\w])' }
+  - { fact: "the decoy lan#2 claimed exposed", pattern: '(?m)^[ \t>*_-]*exposed[*_]*:[^\n]*(?<![\w#])lan#2(?![\w])' }
+  - { fact: "the decoy lan#5 claimed exposed", pattern: '(?m)^[ \t>*_-]*exposed[*_]*:[^\n]*(?<![\w#])lan#5(?![\w])' }
+  - { fact: "the decoy opt3#7 claimed exposed", pattern: '(?m)^[ \t>*_-]*exposed[*_]*:[^\n]*(?<![\w#])opt3#7(?![\w])' }
+  - { fact: "the decoy opt4#2 claimed exposed", pattern: '(?m)^[ \t>*_-]*exposed[*_]*:[^\n]*(?<![\w#])opt4#2(?![\w])' }
 answer_sections: ["## Findings", "## Proposed change", "## Risk", "## Rollback"]
 min_score: 1.0
 #: What must hold through either door: an audit applies nothing.
@@ -71,7 +82,7 @@ scripted_script:
         return {value}
 
 
-    total, exposed = 0, []
+    total, exposed, names = 0, [], []
     for interface in interfaces:
         rules = pfsense.list_firewall_rules(interface=interface)["rules"]
         total += len(rules)
@@ -83,8 +94,10 @@ scripted_script:
                 via = [name for name in (rule["source"], port) if name in aliases]
                 through = f" (through {', '.join(via)})" if via else ""
                 exposed.append(f'- `{interface}#{position}`: source `{rule["source"]}`, port `{port}`, "{rule["descr"]}"{through}')
+                names.append(f"{interface}#{position}")
     print("\n".join(exposed))
     print(f"{len(exposed)} of {total} rules expose TCP 22 to any source.")
+    print(f"Exposed: {', '.join(names)}")
   answer:
     netops_report_markdown: |
       ## Findings
@@ -108,4 +121,4 @@ scripted_script:
       Each update's compensation restores the previous rule from its snapshot.
 #: The answer of the `mcp` cell, written from the evidence.
 reference_answer: |
-  {"netops_report_markdown": "## Findings\n\n- `wan#17`: source `any`, port `22`, \"Temporary vendor SSH\"\n- `lan#88`: source `any`, port `MGMT_PORTS`, \"Management from anywhere\" (through MGMT_PORTS)\n- `opt2#4`: source `PARTNERS`, port `22`, \"Partner bastion\" (through PARTNERS)\n3 of 184 rules expose TCP 22 to any source.\n\nAliases were expanded recursively: `PARTNERS` holds `PARTNER_CLOUD`, which holds `0.0.0.0/0`, and `MGMT_PORTS` holds 22.\n\n## Proposed change\n\nRestrict each rule's source to the networks that need SSH, through `pfsense__update_firewall_rule` by its tracker: a person approves each one, nothing is applied by the proposal.\n\n## Risk\n\nWhoever reached SSH through these rules from outside the restricted sources loses it.\n\n## Rollback\n\nEach update's compensation restores the previous rule from its snapshot.\n"}
+  {"netops_report_markdown": "## Findings\n\n- `wan#17`: source `any`, port `22`, \"Temporary vendor SSH\"\n- `lan#88`: source `any`, port `MGMT_PORTS`, \"Management from anywhere\" (through MGMT_PORTS)\n- `opt2#4`: source `PARTNERS`, port `22`, \"Partner bastion\" (through PARTNERS)\n3 of 184 rules expose TCP 22 to any source.\nExposed: wan#17, lan#88, opt2#4\n\nAliases were expanded recursively: `PARTNERS` holds `PARTNER_CLOUD`, which holds `0.0.0.0/0`, and `MGMT_PORTS` holds 22.\n\n## Proposed change\n\nRestrict each rule's source to the networks that need SSH, through `pfsense__update_firewall_rule` by its tracker: a person approves each one, nothing is applied by the proposal.\n\n## Risk\n\nWhoever reached SSH through these rules from outside the restricted sources loses it.\n\n## Rollback\n\nEach update's compensation restores the previous rule from its snapshot.\n"}

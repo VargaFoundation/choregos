@@ -97,6 +97,8 @@ def test_e4_fails_when_the_answer_drops_a_decision_path() -> None:
 
 # ───────────────────────── E1: three rules, two aliases ─────────────────────────
 
+EXPOSED_LINE = "the Exposed line naming the three rules"
+
 E1_REWORDED = """## Findings
 
 | Rule | Source | Port | Why |
@@ -104,6 +106,8 @@ E1_REWORDED = """## Findings
 | wan#17 | any | 22 | "Temporary vendor SSH" |
 | opt2#4 | PARTNERS (holds PARTNER_CLOUD, which holds 0.0.0.0/0) | 22 | partner bastion |
 | lan#88 | any | MGMT_PORTS (includes 22) | management from anywhere |
+
+Exposed: wan#17, opt2#4, lan#88
 
 ## Proposed change
 
@@ -133,31 +137,61 @@ def test_e1_passes_a_reworded_answer_holding_its_facts() -> None:
 @pytest.mark.parametrize(
     ("change", "missing"),
     [
-        (lambda r: r.replace("| opt2#4 |", "| opt2 rule 4 |"), "the rule opt2#4"),
-        (lambda r: r.replace("MGMT_PORTS", "a port alias"), "the alias MGMT_PORTS"),
-        (lambda r: r.replace("wan#17", "wan#170"), "the rule wan#17"),
+        (lambda r: r.replace("opt2#4", "opt2 rule 4"), ["the rule opt2#4", EXPOSED_LINE]),
+        (lambda r: r.replace("MGMT_PORTS", "a port alias"), ["the alias MGMT_PORTS"]),
+        (lambda r: r.replace("wan#17", "wan#170"), ["the rule wan#17", EXPOSED_LINE]),
+        (lambda r: r.replace("Exposed: wan#17, opt2#4,", "Exposed: wan#17,"), [EXPOSED_LINE]),
     ],
 )  # fmt: skip
-def test_e1_fails_when_a_fact_is_missing(change: Any, missing: str) -> None:
+def test_e1_fails_when_a_fact_is_missing(change: Any, missing: list[str]) -> None:
     case = _case("netops-ssh-exposure")
     verdict = judge(case, _answer(case, change(E1_REWORDED)), _observation("mcp"))
-    assert not verdict["ok"] and verdict["answer_missing"] == [missing]
+    assert not verdict["ok"] and verdict["answer_missing"] == missing
 
 
-def test_e1_still_refuses_a_decoy_named_as_a_finding() -> None:
+@pytest.mark.parametrize(
+    ("exposed", "forbidden"),
+    [
+        ("Exposed: wan#3, wan#17, opt2#4, lan#88", ["the decoy wan#3 claimed exposed"]),
+        ("- **Exposed:** wan#17, opt2#4, lan#88, `wan#30`", ["the decoy wan#30 claimed exposed"]),
+    ],
+)  # fmt: skip
+def test_e1_still_refuses_a_decoy_claimed_exposed(exposed: str, forbidden: list[str]) -> None:
+    """A decoy on the `Exposed:` line is a wrong finding; `wan#30` there is not `wan#3` (S57-11c)."""
     case = _case("netops-ssh-exposure")
-    decoy = E1_REWORDED.replace("| lan#88 |", "| `wan#3` | any | 2222 | decoy |\n| lan#88 |")
-    assert judge(case, _answer(case, decoy), _observation("mcp"))["answer_forbidden"] == ["`wan#3`"]
+    decoy = E1_REWORDED.replace("Exposed: wan#17, opt2#4, lan#88", exposed)
+    verdict = judge(case, _answer(case, decoy), _observation("mcp"))
+    assert not verdict["ok"] and verdict["answer_forbidden"] == forbidden
+
+
+def test_e1_passes_an_answer_that_names_a_decoy_as_what_it_is() -> None:
+    """The two right answers the 2026-11-07 matrix failed (S57-11c), in their words: a decoy named as the rule
+    an exposure matches before, and as a rule that serves another port."""
+    case = _case("netops-ssh-exposure")
+    before = '| "Temporary vendor SSH"; it matches before `wan#30`, "Default deny on WAN" |'
+    other_port = '- `wan#3` ("SFTP gateway", port 2222) does not involve port 22.\n\n'
+    report = E1_REWORDED.replace('| "Temporary vendor SSH" |', before).replace(
+        "Exposed: wan#17", other_port + "Exposed: wan#17"
+    )
+    verdict = judge(case, _answer(case, report), _observation("mcp"))
+    assert verdict["ok"], verdict["reason"]
+
+
+def test_e1_fails_without_its_exposed_line() -> None:
+    case = _case("netops-ssh-exposure")
+    report = E1_REWORDED.replace("Exposed: wan#17, opt2#4, lan#88\n", "")
+    verdict = judge(case, _answer(case, report), _observation("mcp"))
+    assert not verdict["ok"] and verdict["answer_missing"] == [EXPOSED_LINE]
 
 
 # ───────────────────────── E2: the top pair, its count, its policy ─────────────────────────
 
 E2_REWORDED = """## Findings
 
-| Source | Destination | Port | Drops | Dropped by |
-|:--|:--|:--|--:|:--|
-| shop/frontend | payments/api | 8443 | 42 | payments-ingress |
-| orders/worker | inventory/api | 9090 | 31 | inventory-ingress |
+| # | Source | Destination | Port | Drops | Dropped by |
+|--:|:--|:--|:--|--:|:--|
+| 1 | shop/frontend | payments/api | 8443 | 42 | payments-ingress |
+| 2 | orders/worker | inventory/api | 9090 | 31 | inventory-ingress |
 
 The policy that selects `payments/api` admits only `checkout`: Cilium denies by default the rest.
 
@@ -180,6 +214,11 @@ Revert the pull request.
 
 
 TOP_PAIR = "the top pair shop/frontend → payments/api:8443, 42 dropped"
+RANKED_FIRST = "the top pair ranked first"
+SIXTH_RANKED = "the sixth pair monitoring/prometheus → shipping/api ranked in the top five"
+SIXTH_RANKED_2 = "| 2 | monitoring/prometheus | shipping/api | 9100 | 8 | x |\n"
+WORLD = "  - fromEntities:\n      - world\n"
+APPLY = "```bash\nkubectl apply -f payments-ingress.yaml\n```\n\n"
 
 
 def test_e2_passes_a_reworded_answer_holding_its_facts() -> None:
@@ -195,15 +234,57 @@ def test_e2_passes_a_reworded_answer_holding_its_facts() -> None:
 @pytest.mark.parametrize(
     ("change", "missing"),
     [
-        (lambda r: r.replace("| 8443 | 42 |", "| 8443 | 41 |"), TOP_PAIR),
-        (lambda r: r.replace("| payments/api | 8443", "| payments/web | 8443"), TOP_PAIR),
-        (lambda r: r.replace("payments-ingress", "a payments policy"), "the policy payments-ingress"),
+        (lambda r: r.replace("| 8443 | 42 |", "| 8443 | 41 |"), [TOP_PAIR]),
+        (lambda r: r.replace("| payments/api | 8443", "| payments/web | 8443"), [TOP_PAIR, RANKED_FIRST]),
+        (lambda r: r.replace("payments-ingress", "a payments policy"), ["the policy payments-ingress"]),
     ],
 )  # fmt: skip
-def test_e2_fails_when_a_fact_is_missing(change: Any, missing: str) -> None:
+def test_e2_fails_when_a_fact_is_missing(change: Any, missing: list[str]) -> None:
     case = _case("netops-dropped-flows-top")
     verdict = judge(case, _answer(case, change(E2_REWORDED)), _observation("mcp"))
-    assert not verdict["ok"] and verdict["answer_missing"] == [missing]
+    assert not verdict["ok"] and verdict["answer_missing"] == missing
+
+
+def test_e2_fails_when_the_top_pair_is_not_ranked_first() -> None:
+    case = _case("netops-dropped-flows-top")
+    report = E2_REWORDED.replace("| 1 | shop/", "| 2 | shop/").replace("| 2 | orders/", "| 1 | orders/")
+    verdict = judge(case, _answer(case, report), _observation("mcp"))
+    assert not verdict["ok"] and verdict["answer_missing"] == [RANKED_FIRST]
+
+
+def test_e2_passes_an_answer_that_names_the_sixth_pair_and_the_wrong_fix_as_what_they_are() -> None:
+    """The right answers the 2026-11-07 matrix failed (S57-11c), in their words: the sixth pair below the top
+    five, and a fix that says it uses no `fromEntities` and runs no `kubectl apply`."""
+    case = _case("netops-dropped-flows-top")
+    below = (
+        "Below the top five:\n\n"
+        "- monitoring/prometheus → shipping/api:9100: 4 flows, dropped by `shipping-ingress`.\n"
+        "| 6 | monitoring/prometheus | shipping/api | 9100/TCP | 4 | shipping-ingress |\n\n"
+    )
+    negated = (
+        "It does not use `fromEntities`, a CIDR or a namespace-wide selector; "
+        "nothing runs `kubectl apply`.\n\n"
+    )
+    report = E2_REWORDED.replace("The policy that selects", below + "The policy that selects").replace(
+        "## Risk\n", negated + "## Risk\n"
+    )
+    verdict = judge(case, _answer(case, report), _observation("mcp"))
+    assert verdict["ok"], verdict["reason"]
+
+
+@pytest.mark.parametrize(
+    ("change", "forbidden"),
+    [
+        (lambda r: r.replace("| 2 | orders/worker", SIXTH_RANKED_2 + "| 3 | orders/worker"), SIXTH_RANKED),
+        (lambda r: r + "\n5. monitoring/prometheus → shipping/api:9100: 8 dropped\n", SIXTH_RANKED),
+        (lambda r: r.replace("  - fromEndpoints:", WORLD + "  - fromEndpoints:"), "a fix by fromEntities"),
+        (lambda r: r.replace("## Risk\n", APPLY + "## Risk\n"), "a kubectl apply command"),
+    ],
+)  # fmt: skip
+def test_e2_still_refuses_what_would_be_wrong(change: Any, forbidden: str) -> None:
+    case = _case("netops-dropped-flows-top")
+    verdict = judge(case, _answer(case, change(E2_REWORDED)), _observation("mcp"))
+    assert not verdict["ok"] and verdict["answer_forbidden"] == [forbidden]
 
 
 # ───────────────────────── E5 and E6, the same way ─────────────────────────

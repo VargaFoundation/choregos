@@ -4429,3 +4429,11 @@ stories:
     size: S
     depends_on: [S57-11a]
     notes: "What the first live tools matrix (2026-11-06, opencode, platform/standard) showed: no scripts-cell run wrote a script, the judge labelled them door mcp, and right answers failed on door-specific wording and call counts. The scripts section moves from the task's tail into the first prompt, after the agent's instructions (journal tools.instructions); a detail's door is the cell's, with scripts_used; facts are door-neutral tokens and patterns, calls_by_origin and max_model_requests are measures (expectations), only guarantees fail a run."
+  - id: S57-11c
+    title: "fix(evals): a case forbids a wrong claim, not the mention of a decoy"
+    stream: S57
+    sprint: 7
+    priority: 1
+    size: XS
+    depends_on: [S57-11b]
+    notes: "What the 2026-11-07 live matrix (opencode, platform/claude-opus, ten repetitions) showed: all of its 13 failures were right answers that named a decoy as what it is (E1 wan#3 serving 2222, wan#30 the default deny after wan#17; E2 the sixth pair below the top five, a fix using no fromEntities). E1 asks for an Exposed: line and forbids a decoy on it; E2 asks for the top five numbered and forbids the sixth pair ranked 1 to 5, a fromEntities: key and a kubectl apply command line. Re-judged with these rules, the matrix's 80 runs all pass."
