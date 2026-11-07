@@ -345,10 +345,17 @@ def _scripts_off(role: str | None) -> Callable[[Policy], None]:
     return lower
 
 
+def forbids_tool_scripts(ceiling: PolicyCeiling | None) -> bool:
+    """Whether the organisation's ceiling forbids tool scripts (ADR 0122 §6). The orchestrator asks it
+    of every run, not only of the clamped policy: a policy that says nothing is not clamped, and the run's
+    agent's own default (S57-15) never goes past the ceiling either."""
+    return ceiling is not None and ceiling.tools.scripts == "off"
+
+
 def _tools_excesses(policy: Policy, ceiling: PolicyCeiling) -> Iterator[Excess]:
     """Under a ceiling that forbids tool scripts, every place the policy offers them is an excess: the
     project's value and each role's override. A role that inherits `offer` is settled by the first."""
-    if ceiling.tools.scripts != "off":
+    if not forbids_tool_scripts(ceiling):
         return
     refused = "`offer` is refused, the organisation forbids tool scripts"
     tools = policy.tools
@@ -395,4 +402,12 @@ def clamp(policy: Policy, ceiling: PolicyCeiling | None) -> tuple[Policy, list[s
     return clamped, said
 
 
-__all__ = ["CeilingNetwork", "CeilingTools", "CeilingWebSearch", "PolicyCeiling", "clamp", "widenings"]
+__all__ = [
+    "CeilingNetwork",
+    "CeilingTools",
+    "CeilingWebSearch",
+    "PolicyCeiling",
+    "clamp",
+    "forbids_tool_scripts",
+    "widenings",
+]

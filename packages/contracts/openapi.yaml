@@ -5515,6 +5515,22 @@ components:
             - { type: string, enum: [none, read, write] }
             - { type: "null" }
           description: "The workspace a run gets (S51-03, ADR 0119); the repository is the project's. `none`: nothing is cloned and the repository's host is not on the run's network. `read`: the repository is cloned and no file of it may be written (only the step's deliverables in `.choregos/outputs/`). `write`: today's run. Absent (left out of the stored spec, so no digest moves): `write`, or the `hosted` runtime's `workspace`. Refused with an `a2a` runtime, and with a `hosted` one when it differs from `runtime.workspace`."
+        tools:
+          oneOf:
+            - { $ref: "#/components/schemas/AgentTools" }
+            - { type: "null" }
+          description: "The agent's measured default for tool scripts (ADR 0122 §9, S57-15). Absent (left out of the stored spec, so no digest moves): no default. Refused with an `a2a` runtime."
+    AgentTools:
+      type: object
+      description: >-
+        How a run of this agent calls its tools by default (ADR 0122 §9, S57-15): a default, never a right. Strictest
+        first, the deployment's brake, the organisation's switch (its `tool_scripts` setting, else the deployment's
+        default), the organisation's ceiling, and the project's policy whenever it says something for the stage's
+        role (`tools.per_role.<role>.scripts`, else `tools.scripts`) decide before it; a policy that says nothing
+        leaves it. An eval cell's door ignores it.
+      required: [scripts]
+      properties:
+        scripts: { type: string, enum: ["off", offer], description: "`offer`: a run is offered tool scripts unless something above says otherwise; `off`: no default, as absent" }
     AcpRuntime:
       type: object
       description: A coding agent that speaks ACP (ADR 0002), one of the backends the runner ships.

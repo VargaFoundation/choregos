@@ -8,6 +8,7 @@ import re
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
+from choregos_contracts.policy import ToolScriptsMode
 from choregos_core.memory_bindings import Binding, binding_problems, effective_bindings
 from choregos_core.network import validate_pattern
 from choregos_core.workspace import AgentWorkspace
@@ -411,6 +412,17 @@ class AgentNetwork(Dto):
         return list(dict.fromkeys(patterns))
 
 
+class AgentTools(Dto):
+    """How a run of this agent calls its tools by default (ADR 0122 §9, S57-15). A default, never a right:
+    the deployment's brake, the organisation's switch and its ceiling, and the project's policy whenever it
+    says something for the stage's role, all decide before it. An agent's catalogue entry says `offer` only
+    when the eval matrix measured it cheaper per successful run and not less successful."""
+
+    #: `offer`: the run is offered tool scripts unless the policy says otherwise; `off`: no default, the
+    #: same as leaving `tools` out. YAML's unquoted `off` (read as `false`) is `off`.
+    scripts: ToolScriptsMode
+
+
 class AgentSpec(Dto):
     """What an agent version IS. It never changes: a change publishes the next one."""
 
@@ -442,6 +454,9 @@ class AgentSpec(Dto):
     #: hosted runtime's `workspace` says. The repository itself is the project's, never the agent's.
     workspace: AgentWorkspace | None = None
 
+    #: The agent's measured default for tool scripts (ADR 0122 §9, S57-15); absent: no default.
+    tools: AgentTools | None = None
+
     @model_validator(mode="after")
     def _memories_are_coherent(self) -> AgentSpec:
         if self.memories is None:
@@ -454,10 +469,10 @@ class AgentSpec(Dto):
 
     @model_serializer(mode="wrap")
     def _leave_out_absent_fields(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
-        """`memories` and `workspace` are left out while unset: a version published before the fields
-        existed keeps its stored spec, its digest and its response byte for byte."""
+        """`memories`, `workspace` and `tools` are left out while unset: a version published before the
+        fields existed keeps its stored spec, its digest and its response byte for byte."""
         data: dict[str, object] = handler(self)
-        for name in ("memories", "workspace"):
+        for name in ("memories", "workspace", "tools"):
             if data.get(name) is None:
                 data.pop(name, None)
         return data
@@ -470,6 +485,10 @@ class AgentSpec(Dto):
         if isinstance(self.runtime, HostedRuntime):
             return self.runtime.workspace
         return self.workspace or "write"
+
+    def tool_scripts_default(self) -> ToolScriptsMode | None:
+        """The agent's default for tool scripts (S57-15), `None` when it declares none."""
+        return None if self.tools is None else self.tools.scripts
 
     def effective_memories(self) -> list[AgentMemoryBinding]:
         """What a run binds: `memories`, or what the legacy `memory` means."""
@@ -496,6 +515,8 @@ class AgentSpec(Dto):
                 )
             if self.workspace is not None:
                 raise ValueError("an `a2a` runtime runs elsewhere: it gets no workspace, drop `workspace`")
+            if self.tools is not None:
+                raise ValueError("an `a2a` runtime runs elsewhere: it gets no tool scripts, drop `tools`")
         if (
             isinstance(self.runtime, HostedRuntime)
             and self.workspace is not None

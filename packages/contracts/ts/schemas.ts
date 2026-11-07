@@ -661,9 +661,10 @@ export type Policy = {
       };
     };
   };
-  /** How a run's agent may call its tools (ADR 0122): `offer` lets it call them from a script too, through the runner's tool bridge, under the same governance as the model's calls. Absent = off; the organisation's ceiling can forbid it, and the organisation's switch (its `tool_scripts` setting, else the deployment's default, never past the deployment's brake) wins over the policy. */
+  /** How a run's agent may call its tools (ADR 0122): `offer` lets it call them from a script too, through the runner's tool bridge, under the same governance as the model's calls. What the policy says for a role (its `per_role` override, else `scripts`) wins over the run's agent's default (its catalogue entry's `spec.tools.scripts`, ADR 0122 §9); absent, the agent's default decides, else off. The organisation's ceiling can forbid it, and the organisation's switch (its `tool_scripts` setting, else the deployment's default, never past the deployment's brake) wins over both. */
   tools?: {
-    scripts?: "off" | "offer";
+    /** Absent or null: the policy says nothing, the run's agent's default decides (S57-15), else off. */
+    scripts?: "off" | "offer" | null;
     /** Calls of one run the tool bridge relays at once; the next waits. */
     max_concurrent_calls?: number;
     /** Per stage role, what changes from the project's values; an absent field keeps them. */

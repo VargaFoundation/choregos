@@ -27,7 +27,9 @@ export function ToolScriptsCard({ slug }: { slug: string }) {
   const policy = useQuery({ queryKey: ["policy", slug], queryFn: () => api.policy(slug) });
   const ceiling = useQuery({ queryKey: ["policy-ceiling", org], queryFn: () => api.policyCeiling(org), retry: false });
   const tools = policy.data?.json?.tools;
-  const scripts = tools?.scripts ?? "off";
+  // Absent: the policy says nothing, and an agent whose catalogue entry offers them by default gets them (S57-15).
+  const said = tools?.scripts ?? null;
+  const scripts = said ?? "off";
   const concurrent = tools?.max_concurrent_calls;
   const roles = Object.entries(tools?.per_role ?? {});
   const forbidden = ceiling.data?.ceiling?.tools?.scripts === "off";
@@ -60,6 +62,11 @@ export function ToolScriptsCard({ slug }: { slug: string }) {
             <dd data-testid="tool-scripts-value">
               <Badge tone={scripts === "offer" && !forbidden && !orgDisabled ? "info" : "neutral"}>{scripts}</Badge>
               {(forbidden || orgDisabled) && scripts === "offer" && <span className="ml-2 text-xs text-ink-muted">runs get off</span>}
+              {said === null && !forbidden && !orgDisabled && (
+                <span className="block text-xs text-ink-muted" data-testid="tool-scripts-agent-default">
+                  not set: an agent whose catalogue entry offers them by default still gets them
+                </span>
+              )}
             </dd>
             <dt className="text-ink-muted">Organisation</dt>
             <dd data-testid="tool-scripts-org">

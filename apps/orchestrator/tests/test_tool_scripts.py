@@ -19,6 +19,8 @@ from choregos_orchestrator.context_reduction import resolve_tool_scripts, stage_
 from .conftest import Fixture
 
 OFFERED = {"scripts": "offer", "per_role": {"review": {"scripts": "off"}}}
+#: No ceiling and an agent that declares no default: the resolver as it was before S57-15.
+NO_DEFAULT: dict[str, Any] = {"ceiling": None, "agent_default": None}
 
 
 @pytest.fixture
@@ -85,18 +87,24 @@ async def _tools_of(setup: Fixture, role: str) -> dict[str, Any]:
 
 def test_the_kill_switch_gives_none_whatever_the_policy() -> None:
     offered = ToolsPolicy.model_validate({"scripts": "offer"})
-    assert resolve_tool_scripts(offered, "implement", switched_on=False) is None
-    assert resolve_tool_scripts(offered, "implement", switched_on=True) == ToolScripts(max_concurrent_calls=4)
+    assert resolve_tool_scripts(offered, "implement", switched_on=False, **NO_DEFAULT) is None
+    assert resolve_tool_scripts(offered, "implement", switched_on=True, **NO_DEFAULT) == ToolScripts(
+        max_concurrent_calls=4
+    )
 
 
 def test_a_role_turned_off_gets_none_and_the_others_the_project_s_bound() -> None:
     tools = ToolsPolicy.model_validate(
         {**OFFERED, "per_role": {**OFFERED["per_role"], "triage": {"max_concurrent_calls": 2}}}
     )
-    assert resolve_tool_scripts(tools, "review", switched_on=True) is None
-    assert resolve_tool_scripts(tools, "implement", switched_on=True) == ToolScripts(max_concurrent_calls=4)
-    assert resolve_tool_scripts(tools, "triage", switched_on=True) == ToolScripts(max_concurrent_calls=2)
-    assert resolve_tool_scripts(ToolsPolicy(), "implement", switched_on=True) is None
+    assert resolve_tool_scripts(tools, "review", switched_on=True, **NO_DEFAULT) is None
+    assert resolve_tool_scripts(tools, "implement", switched_on=True, **NO_DEFAULT) == ToolScripts(
+        max_concurrent_calls=4
+    )
+    assert resolve_tool_scripts(tools, "triage", switched_on=True, **NO_DEFAULT) == ToolScripts(
+        max_concurrent_calls=2
+    )
+    assert resolve_tool_scripts(ToolsPolicy(), "implement", switched_on=True, **NO_DEFAULT) is None
 
 
 def test_an_inactive_setting_is_absent_from_the_payload_an_active_one_present(
@@ -378,3 +386,175 @@ async def test_a_scripts_cell_is_skipped_naming_the_switch_that_refuses_it(
     deployment(default=True, allowed=False)
     braked = await evals.seed_eval_ticket(_scripts_cell())
     assert braked["skipped"] and "CHOREGOS_TOOL_SCRIPTS_ALLOWED" in braked["reason"]
+
+
+# ───────────────────────── the agent's measured default (S57-15, ADR 0122 §9) ─────────────────────────
+
+AGENT = "net-analyst"
+
+
+async def _agent_with(setup: Fixture, tools: dict[str, Any] | None) -> None:
+    """A registry agent of the project's organisation; `tools` is its spec's `tools` (`None`: no default)."""
+    from choregos_api.db.models import Agent, AgentVersion, Project
+    from choregos_api.db.session import session_scope
+
+    async with session_scope() as session:
+        project = await session.get(Project, setup.project_id)
+        assert project is not None
+        agent = Agent(
+            org_id=project.org_id,
+            slug=AGENT,
+            kind="internal",
+            display_name=AGENT,
+            status="active",
+            scope="org",
+        )
+        session.add(agent)
+        await session.flush()
+        spec: dict[str, Any] = {"instructions": "Diagnose the network.", "model": "profile:standard"}
+        if tools is not None:
+            spec["tools"] = tools
+        session.add(
+            AgentVersion(agent_id=agent.id, org_id=project.org_id, version=1, spec=spec, checksum="sha256:v1")
+        )
+
+
+async def _agent_tools_of(setup: Fixture, role: str = "implement") -> dict[str, Any]:
+    """The stage input's `tools` of a new run of `AGENT` in `role`."""
+    plan = {**_plan(setup, role), "agent": AGENT, "attempt": next(_ATTEMPTS)}
+    prepared = await stage_activities.prepare_stage(plan)
+    assert not prepared.get("reused"), "a new run, prepared now"
+    tools = prepared["stage_input"]["tools"]
+    assert isinstance(tools, dict)
+    return tools
+
+
+OFFERS = {"scripts": "offer"}
+FOUR = {"max_concurrent_calls": 4}
+
+
+@pytest.mark.parametrize(
+    ("policy_tools", "agent_tools", "role", "expected"),
+    [
+        (None, OFFERS, "implement", FOUR),
+        ({"max_concurrent_calls": 2}, OFFERS, "implement", {"max_concurrent_calls": 2}),
+        ({"scripts": "off"}, OFFERS, "implement", None),
+        ({"scripts": "offer"}, None, "implement", FOUR),
+        (
+            {"scripts": "offer", "max_concurrent_calls": 3},
+            {"scripts": "off"},
+            "implement",
+            {"max_concurrent_calls": 3},
+        ),
+        (None, None, "implement", None),
+        (None, {"scripts": "off"}, "implement", None),
+        ({"per_role": {"review": {"scripts": "off"}}}, OFFERS, "review", None),
+        ({"per_role": {"review": {"scripts": "off"}}}, OFFERS, "implement", FOUR),
+        ({"scripts": "off", "per_role": {"plan": {"scripts": "offer"}}}, None, "plan", FOUR),
+        (
+            {"per_role": {"triage": {"max_concurrent_calls": 2}}},
+            OFFERS,
+            "triage",
+            {"max_concurrent_calls": 2},
+        ),
+        ({"scripts": "off", "per_role": {"triage": {"max_concurrent_calls": 2}}}, OFFERS, "triage", None),
+    ],
+    ids=[
+        "policy-silent-agent-offers",
+        "policy-silent-bounds-the-agent-s-offer",
+        "policy-off-beats-agent-offer",
+        "policy-offers-agent-silent-as-before",
+        "policy-offers-agent-off",
+        "both-silent-off",
+        "agent-off-is-no-default",
+        "role-off-beats-agent-offer",
+        "other-role-keeps-agent-offer",
+        "role-offers-over-project-off",
+        "role-bound-alone-says-nothing",
+        "role-bound-under-project-off",
+    ],
+)
+async def test_the_policy_decides_where_it_says_something_the_agent_s_default_elsewhere(
+    setup: Fixture,
+    deployment: Any,
+    policy_tools: dict[str, Any] | None,
+    agent_tools: dict[str, Any] | None,
+    role: str,
+    expected: dict[str, Any] | None,
+) -> None:
+    deployment(default=True)
+    await _set_tools(setup.project_id, policy_tools)
+    await _agent_with(setup, agent_tools)
+    tools = await _agent_tools_of(setup, role)
+    assert tools.get("scripts") == expected, tools
+
+
+@pytest.mark.parametrize(
+    ("default", "allowed", "choice", "offered"),
+    [
+        (False, True, None, False),
+        (True, True, "disabled", False),
+        (False, True, "enabled", True),
+        (True, False, "enabled", False),
+    ],
+    ids=["deployment-default-off", "organisation-disabled", "organisation-enabled", "deployment-brake"],
+)
+async def test_the_agent_s_default_never_passes_the_organisation_s_switch(
+    setup: Fixture, deployment: Any, default: bool, allowed: bool, choice: str | None, offered: bool
+) -> None:
+    await _set_tools(setup.project_id, None)
+    await _agent_with(setup, OFFERS)
+    deployment(default=default, allowed=allowed)
+    await _set_org_choice(setup.project_id, choice)
+    assert (await _agent_tools_of(setup)).get("scripts") == (FOUR if offered else None)
+
+
+async def test_the_agent_s_default_never_passes_the_ceiling(setup: Fixture, deployment: Any) -> None:
+    """A policy that says nothing is not clamped (`clamp` lowers only an `offer`): the ceiling is asked of
+    the run itself."""
+    deployment(default=True)
+    await _set_tools(setup.project_id, None)
+    await _agent_with(setup, OFFERS)
+    assert (await _agent_tools_of(setup))["scripts"] == FOUR
+    await _set_ceiling(setup.project_id, {"tools": {"scripts": "off"}})
+    assert "scripts" not in await _agent_tools_of(setup)
+    await _set_ceiling(setup.project_id, {"tools": {"scripts": "offer"}})
+    assert (await _agent_tools_of(setup))["scripts"] == FOUR, "a ceiling that allows forbids nothing"
+
+
+async def test_a_policy_stored_by_0_24_0_keeps_its_off_and_one_stored_now_says_nothing(
+    setup: Fixture, deployment: Any
+) -> None:
+    """0.23.0 to 0.24.0 wrote the default `off` into every stored policy: it still says `off`. A policy saved
+    now from a YAML that does not write `scripts` is stored without it, and the agent's default applies."""
+    from choregos_api.db.session import session_scope
+    from choregos_api.services import active_policy
+    from choregos_core.policy import parse_policy
+
+    deployment(default=True)
+    await _agent_with(setup, OFFERS)
+    await _set_tools(setup.project_id, {"scripts": "off", "max_concurrent_calls": 4, "per_role": {}})
+    assert "scripts" not in await _agent_tools_of(setup), "the stored `off` holds"
+    async with session_scope() as session:
+        row = await active_policy(session, setup.project_id)
+        assert row is not None
+        # What `PUT /projects/{id}/policy` stores (`routers/workflows.py`): the YAML, parsed and dumped.
+        row.json_doc = parse_policy(row.yaml).model_dump(mode="json", exclude_none=True)
+        assert "scripts" not in row.json_doc.get("tools", {}), "the YAML says nothing of scripts"
+    assert (await _agent_tools_of(setup))["scripts"] == FOUR
+
+
+async def test_an_mcp_cell_ignores_the_agent_s_default(setup: Fixture, deployment: Any) -> None:
+    """An eval cell's door is the cell's (S57-09): the agent's `offer` does not reach an `mcp` cell."""
+    deployment()
+    await _eval_project(setup)
+    await _set_org_choice(setup.project_id, "enabled")
+    await _agent_with(setup, OFFERS)
+    seeded = await evals.seed_eval_ticket({**_scripts_cell(), "tools": "mcp"})
+    assert not seeded["skipped"], seeded["reason"]
+    prepared = await stage_activities.prepare_stage({**seeded["plan"], "agent": AGENT})
+    assert "scripts" not in prepared["stage_input"]["tools"]
+    scripts = await evals.seed_eval_ticket(_scripts_cell())
+    assert not scripts["skipped"], scripts["reason"]
+    offered = await stage_activities.prepare_stage({**scripts["plan"], "agent": AGENT})
+    assert offered["stage_input"]["tools"]["scripts"] == FOUR, "a `scripts` cell keeps its door"

@@ -58,6 +58,13 @@ describe("tool scripts in the project's Agents settings", () => {
     expect(within(card).getByTestId("tool-scripts-value")).toHaveTextContent("off");
     expect(within(card).getByTestId("tool-scripts-concurrency")).toHaveTextContent("4 (the default)");
     expect(within(card).queryByText("The organisation forbids tool scripts")).toBeNull();
+    expect(within(card).getByTestId("tool-scripts-agent-default")).toHaveTextContent("an agent whose catalogue entry offers them");
+  });
+
+  it("a policy that says `off` leaves no agent's default (S57-15)", async () => {
+    const card = await show(policy({ scripts: "off" }));
+    expect(within(card).getByTestId("tool-scripts-value")).toHaveTextContent("off");
+    expect(within(card).queryByTestId("tool-scripts-agent-default")).toBeNull();
   });
 
   it("shows what the policy offers, per role, and where to change it", async () => {

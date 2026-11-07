@@ -189,22 +189,36 @@ class ToolsOverride(Strict):
 
 class ToolsPolicy(Strict):
     """How a run's agent may call its tools (ADR 0122): `offer` lets it call them from a script too,
-    through the runner's tool bridge, under the same governance as the model's calls. Off unless the
-    policy offers it; the organisation's ceiling can forbid it, and the organisation's switch wins over
-    both (S57-05b: its `tool_scripts` setting, else the deployment's default `CHOREGOS_TOOL_SCRIPTS`, off by
-    default, never past the deployment's brake `CHOREGOS_TOOL_SCRIPTS_ALLOWED`)."""
+    through the runner's tool bridge, under the same governance as the model's calls. What the policy
+    says for a role wins over the run's agent's default (its catalogue entry's `spec.tools.scripts`, ADR
+    0122 §9, S57-15); a policy that says nothing leaves that default, else off. The organisation's ceiling
+    can forbid them, and the organisation's switch wins over all (S57-05b: its `tool_scripts` setting, else
+    the deployment's default `CHOREGOS_TOOL_SCRIPTS`, off by default, never past the deployment's brake
+    `CHOREGOS_TOOL_SCRIPTS_ALLOWED`)."""
 
-    scripts: ToolScriptsMode = "off"
+    #: `off`, `offer`, or `None`: the policy says nothing (S57-15). `None` is never written out, so a policy
+    #: that does not write `scripts` stores none. One stored by 0.23.0 to 0.24.0 holds the `off` that was
+    #: then the default, written out whether or not its author wrote it: it still says `off`.
+    scripts: ToolScriptsMode | None = None
     #: Calls of one run the bridge relays at once.
     max_concurrent_calls: int = Field(default=4, ge=1, le=MAX_CONCURRENT_TOOL_CALLS)
     #: {stage role: override}, e.g. `{"review": {"scripts": "off"}}` so a reviewer reads every result.
     per_role: dict[str, ToolsOverride] = Field(default_factory=dict)
 
-    def for_role(self, role: str) -> ToolScripts | None:
-        """The policy's tool scripts for one role, before the organisation's switch: `None` when off."""
-        override = self.per_role.get(role, ToolsOverride())
-        if (override.scripts or self.scripts) == "off":
+    def said_for(self, role: str) -> ToolScriptsMode | None:
+        """What the policy says of one role's tool scripts: the role's override, else the project's
+        `scripts`; `None` when it says nothing of them."""
+        override = self.per_role.get(role)
+        if override is not None and override.scripts is not None:
+            return override.scripts
+        return self.scripts
+
+    def for_role(self, role: str, *, default: ToolScriptsMode | None = None) -> ToolScripts | None:
+        """The tool scripts of one role, before the organisation's switch and its ceiling: what the policy
+        says, else `default` (the run's agent's, S57-15), else off. `None` when off."""
+        if (self.said_for(role) or default) != "offer":
             return None
+        override = self.per_role.get(role, ToolsOverride())
         return ToolScripts(max_concurrent_calls=override.max_concurrent_calls or self.max_concurrent_calls)
 
 

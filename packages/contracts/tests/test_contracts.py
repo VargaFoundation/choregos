@@ -298,9 +298,11 @@ def test_an_unknown_reduction_is_refused_by_the_schema_and_the_model() -> None:
 def test_a_policy_without_tools_offers_no_scripts() -> None:
     assert "tools" not in _load("policy.solo.json")
     policy = Policy.model_validate(_load("policy.solo.json"))
-    assert policy.tools.scripts == "off" and policy.tools.max_concurrent_calls == 4
+    assert policy.tools.scripts is None, "it says nothing (S57-15)"
+    assert policy.tools.max_concurrent_calls == 4
     for role in ("implement", "review", "triage"):
         assert policy.tools.for_role(role) is None
+        assert policy.tools.said_for(role) is None
     stage_input = StageInput.model_validate(_load("stage-input.example.json"))
     assert stage_input.tools.scripts is None
 
@@ -325,6 +327,63 @@ def test_a_role_override_turns_scripts_off_or_bounds_them_for_that_role_only() -
     assert only.tools.for_role("implement") is None, "the project's `off` holds for the other roles"
 
 
+def test_what_the_policy_says_for_a_role_wins_over_the_agent_s_default() -> None:
+    """S57-15 (ADR 0122 §9): the agent's default applies only where the policy says nothing for the role."""
+    silent = ToolsPolicy()
+    assert silent.for_role("implement", default="offer") == ToolScripts(max_concurrent_calls=4)
+    assert silent.for_role("implement", default="off") is None
+    assert silent.for_role("implement") is None, "no default: off, as before"
+    said_off = ToolsPolicy.model_validate({"scripts": "off"})
+    assert said_off.said_for("implement") == "off"
+    assert said_off.for_role("implement", default="offer") is None, "an explicit off beats the agent's offer"
+    said_offer = ToolsPolicy.model_validate({"scripts": "offer", "max_concurrent_calls": 3})
+    assert said_offer.for_role("implement") == ToolScripts(max_concurrent_calls=3), "as before S57-15"
+    assert said_offer.for_role("implement", default="off") == ToolScripts(max_concurrent_calls=3)
+    per_role = ToolsPolicy.model_validate(
+        {
+            "per_role": {
+                "review": {"scripts": "off"},
+                "plan": {"scripts": "offer"},
+                "triage": {"max_concurrent_calls": 2},
+            }
+        }
+    )
+    assert per_role.for_role("review", default="offer") is None, "the role's own off beats the agent's offer"
+    assert per_role.for_role("plan", default="off") == ToolScripts(max_concurrent_calls=4)
+    assert per_role.said_for("triage") is None, "a bound alone says nothing of the door"
+    assert per_role.for_role("triage", default="offer") == ToolScripts(max_concurrent_calls=2)
+    assert per_role.for_role("implement", default="offer") == ToolScripts(max_concurrent_calls=4)
+
+
+def test_a_stored_policy_means_what_it_meant() -> None:
+    """S57-15 changes the default of `tools.scripts` from `off` to "says nothing", and nothing a stored
+    policy says: a document stored by 0.23.0 to 0.24.0 (`model_dump(exclude_none=True)` with the old default
+    written out) still says `off`; one stored before 0.23.0 (no `tools`) or by 0.24.1 without `scripts` says
+    nothing, and without an agent's default both are off, as they were. A policy that does not write
+    `scripts` is stored without it, and one that writes `off` keeps it."""
+    as_0_24_0 = _load("policy.solo.json") | {
+        "tools": {"scripts": "off", "max_concurrent_calls": 4, "per_role": {}}
+    }
+    old = Policy.model_validate(as_0_24_0).tools
+    assert old.said_for("implement") == "off" and old.for_role("implement", default="offer") is None
+    before_tools = Policy.model_validate(_load("policy.solo.json")).tools
+    assert before_tools.said_for("implement") is None and before_tools.for_role("implement") is None
+    silent = Policy.model_validate(_load("policy.solo.json") | {"tools": {"max_concurrent_calls": 2}})
+    stored = silent.model_dump(mode="json", exclude_none=True)["tools"]
+    assert stored == {"max_concurrent_calls": 2, "per_role": {}}, "`None` is never written out"
+    assert (
+        Policy.model_validate(_load("policy.solo.json") | {"tools": stored}).tools.said_for("implement")
+        is None
+    )
+    explicit = Policy.model_validate(_load("policy.solo.json") | {"tools": {"scripts": "off"}})
+    assert explicit.model_dump(mode="json", exclude_none=True)["tools"]["scripts"] == "off"
+    for document in (as_0_24_0, _load("policy.solo.json") | {"tools": stored}):
+        assert not list(_validator("policy.schema.json").iter_errors(document))
+    nulled = _load("policy.solo.json") | {"tools": {"scripts": None}}
+    assert not list(_validator("policy.schema.json").iter_errors(nulled)), "a full dump writes `null`"
+    assert Policy.model_validate(nulled).tools.said_for("implement") is None
+
+
 def test_the_tools_schema_and_model_declare_the_same_fields() -> None:
     """The policy's `tools` block, overrides included, and the stage input's `tools.scripts`; the whole
     policy and stage input are compared above."""
@@ -341,7 +400,8 @@ def test_the_tools_schema_and_model_declare_the_same_fields() -> None:
     assert not gaps, "\n".join(gaps)
     node = contracts.load_schema("policy.schema.json")["properties"]["tools"]["properties"]
     assert set(node) == {"scripts", "max_concurrent_calls", "per_role"}
-    assert node["scripts"]["default"] == ToolsPolicy().scripts == "off"
+    assert "default" not in node["scripts"] and ToolsPolicy().scripts is None, "absent: it says nothing"
+    assert node["scripts"]["enum"] == ["off", "offer", None]
     bound = node["max_concurrent_calls"]
     assert (bound["minimum"], bound["maximum"], bound["default"]) == (1, MAX_CONCURRENT_TOOL_CALLS, 4)
     scripts = contracts.load_schema("stage-input.schema.json")["properties"]["tools"]["properties"]["scripts"]

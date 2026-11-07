@@ -4437,3 +4437,11 @@ stories:
     size: XS
     depends_on: [S57-11b]
     notes: "What the 2026-11-07 live matrix (opencode, platform/claude-opus, ten repetitions) showed: all of its 13 failures were right answers that named a decoy as what it is (E1 wan#3 serving 2222, wan#30 the default deny after wan#17; E2 the sixth pair below the top five, a fix using no fromEntities). E1 asks for an Exposed: line and forbids a decoy on it; E2 asks for the top five numbered and forbids the sixth pair ranked 1 to 5, a fromEntities: key and a kubectl apply command line. Re-judged with these rules, the matrix's 80 runs all pass."
+  - id: S57-15
+    title: "feat: an agent's catalogue entry makes tool scripts its default (ADR 0122 §9)"
+    stream: S57
+    sprint: 7
+    priority: 1
+    size: S
+    depends_on: [S57-11, S57-11c]
+    notes: "The product owner's decisions on S57-11 (2026-11-07): tool scripts on by default for the agents that passed the §5.2 gate (netops, -38.0 % cost per success, success not lower), off for identity-operator (+13.1 %, worse) and the write-heavy agents; ADR 0122 accepted, §9 amended. An agent version declares spec.tools: {scripts: offer} (absent: no default). Strictest first: the deployment's brake, the organisation's switch, the ceiling that forbids them, the policy when it says something for the role (per_role, else tools.scripts), the agent's default, else off. The policy's tools.scripts defaults to null instead of off so that a policy can say nothing; a stored off keeps meaning off. netops 1.1.0 in choregos-agents carries the default and requires core >= 0.24.1."

@@ -355,15 +355,18 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
             playbook=PlaybookRef(ref=playbook_ref, prompt=playbook_prompt),
             tools=ToolsRef(
                 mcp={} if remote_runtime is not None else _mcp_servers(settings, memory_scope),
-                # The tool bridge (ADR 0122): the organisation's switch (its setting, else the
-                # deployment's default, never past the deployment's brake; S57-05b), the ceiling (the
-                # bundle's policy is already clamped to it), the policy and the role. An eval cell's
-                # door is the cell's (S57-09): on in a `scripts` cell, off in an `mcp` cell, whatever
-                # the policy says, and never against the organisation's switch.
+                # The tool bridge (ADR 0122), strictest first: the organisation's switch (the
+                # deployment's brake, then its setting, else the deployment's default; S57-05b), the
+                # ceiling that forbids them, what the policy says for the role, then the agent's own
+                # measured default (its catalogue entry's `spec.tools`, ADR 0122 §9, S57-15), else off.
+                # An eval cell's door is the cell's (S57-09): on in a `scripts` cell, off in an `mcp`
+                # cell, whatever the policy or the agent says, and never against the organisation's switch.
                 scripts=resolve_tool_scripts(
                     bundle.policy.tools,
                     plan.role,
                     switched_on=tool_scripts_on_for(bundle.org_tool_scripts, settings),
+                    ceiling=bundle.ceiling,
+                    agent_default=agent.spec.tool_scripts_default() if agent is not None else None,
                 )
                 if plan.eval_cell is None
                 else forced_tool_scripts(
