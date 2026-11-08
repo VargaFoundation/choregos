@@ -55,3 +55,14 @@ ADR 0029).
   (`spec`, `merge`) that belong to software delivery only.
 - **Removing the keys from the schema now**: every existing policy that sets them would be refused
   on its next save, for a field that changed nothing.
+
+## Amendment — 2026-11-08 (S59-01): a group may name the project
+
+A human actor's `group` may carry `{project}`, the project's slug, resolved where a person answers
+(`group_of_the_step`), where the people of a step are listed (`GET /projects/{id}/groups/{group}/members`)
+and where a group nobody carries is warned about (validation in a project, readiness). One workflow
+shared to the organisation (ADR 0111) then addresses each project's own people, as the identity provider
+already names them (`iris-maintainers`). Without a project (an organisation-level listing), a
+per-project group counts as known when some project's group matches it. `{project}` is the only
+placeholder (`actor.group_placeholder` refuses any other brace), and a train's approval group cannot
+take it: the release train reads that group for a departure, not for a project step (ADR 0041).

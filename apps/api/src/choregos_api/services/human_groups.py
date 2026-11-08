@@ -20,10 +20,11 @@ from collections.abc import Iterable
 from typing import Any
 
 from choregos_contracts import HumanActor, Role
+from choregos_core.dsl.groups import group_for, matches_some
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..db.models import Membership, Organization, User, WorkItem
+from ..db.models import Membership, Organization, Project, User, WorkItem
 from ..rbac import Principal
 from .definitions import work_item_workflow, workflow_model
 
@@ -47,7 +48,8 @@ def groups_for_org(groups: Iterable[Any] | None, org_slug: str) -> set[str]:
 
 
 async def group_of_the_step(session: AsyncSession, item: WorkItem, transition_id: str | None) -> str | None:
-    """The group the transition's human actor names — `None` when the step is not addressed to one."""
+    """The group the transition's human actor names — `None` when the step is not addressed to one —
+    for the work item's project: `{project}-maintainers` is that project's maintainers (S59-01)."""
     if not transition_id:
         return None
     workflow = workflow_model(await work_item_workflow(session, item))
@@ -55,7 +57,10 @@ async def group_of_the_step(session: AsyncSession, item: WorkItem, transition_id
         if transition.key == transition_id:
             actor = workflow.actor_of(transition)
             if isinstance(actor, HumanActor) and actor.group.strip():
-                return actor.group.strip()
+                slug = (
+                    await session.execute(select(Project.slug).where(Project.id == item.project_id))
+                ).scalar_one_or_none()
+                return group_for(actor.group, slug)
     return None
 
 
@@ -88,23 +93,30 @@ async def groups_known_in(session: AsyncSession, org_id: str) -> set[str]:
     return known
 
 
-def unknown_group_warnings(workflow: Any, known: set[str]) -> list[dict[str, Any]]:
+def unknown_group_warnings(
+    workflow: Any, known: set[str], project_slug: str | None = None
+) -> list[dict[str, Any]]:
     """A human actor whose group nobody in the organisation has ever carried: the ticket would wait
-    for someone who cannot exist (product review, point 5)."""
+    for someone who cannot exist (product review, point 5). In a project, `{project}` is its slug;
+    without one, a per-project group counts as known when some project's group matches it (S59-01)."""
     issues = []
     for actor_id, actor in workflow.actors.items():
-        if isinstance(actor, HumanActor) and actor.group.strip() and actor.group.strip() not in known:
-            issues.append(
-                {
-                    "code": "actor.group_unknown",
-                    "message": (
-                        f"the group `{actor.group}` of actor `{actor_id}` is carried by nobody in this "
-                        "organisation (identity-provider groups, as of their last sign-in): a step "
-                        "addressed to it waits until an organisation administrator answers"
-                    ),
-                    "path": f"/actors/{actor_id}/group",
-                }
-            )
+        if not isinstance(actor, HumanActor) or not actor.group.strip():
+            continue
+        group = group_for(actor.group, project_slug)
+        if (group in known) if project_slug else matches_some(group, known):
+            continue
+        issues.append(
+            {
+                "code": "actor.group_unknown",
+                "message": (
+                    f"the group `{group}` of actor `{actor_id}` is carried by nobody in this "
+                    "organisation (identity-provider groups, as of their last sign-in): a step "
+                    "addressed to it waits until an organisation administrator answers"
+                ),
+                "path": f"/actors/{actor_id}/group",
+            }
+        )
     return issues
 
 
