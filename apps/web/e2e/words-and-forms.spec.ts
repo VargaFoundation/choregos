@@ -18,7 +18,7 @@ test("a state reads in words, and an engine sentence has no backticks", async ({
 });
 
 const FIELDS: [string, string][] = [
-  ["/admin", "Token name"],
+  ["/account", "Token name"],
   ["/admin/members", "Member e-mail"],
   ["/admin/audit", "Actor"],
   ["/p/billing-api/memory", "Search the memory"],
