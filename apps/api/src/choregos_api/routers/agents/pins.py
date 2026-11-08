@@ -292,12 +292,16 @@ async def list_group_members(
     """Who a person step addressed to `group` waits for: the organisation's members carrying that
     identity-provider group, and whether each may answer in this project. Empty means the step waits
     for an organisation administrator. Needs `member:read` on the project, like its members list."""
+    from choregos_core.dsl.groups import group_for
+
     from ...services.human_groups import members_of_group
 
     ctx.require(Permission.MEMBER_READ)
-    members = await members_of_group(session, ctx.project.org_id, ctx.org_slug, ctx.project.id, group.strip())
+    # A per-project group (`{project}-maintainers`, S59-01) is this project's.
+    group = group_for(group, ctx.project.slug)
+    members = await members_of_group(session, ctx.project.org_id, ctx.org_slug, ctx.project.id, group)
     return GroupMembers(
-        group=group.strip(),
+        group=group,
         members=[
             GroupMember(email=user.email, display_name=user.display_name or "", can_decide=decides)
             for user, decides in members

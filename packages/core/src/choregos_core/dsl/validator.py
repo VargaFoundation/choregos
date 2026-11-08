@@ -36,6 +36,7 @@ from ..domain import REPOSITORY_FIELD, TRACKER_FIELD
 from ..errors import Issue
 from ..gates import ALREADY_FIXED_GATE, known_gates
 from .dates import field_of
+from .groups import is_per_project, placeholder_error
 from .legacy import legacy_outputs
 from .yamlsource import json_pointer, locate
 
@@ -878,7 +879,20 @@ def _check_warnings(wf: Workflow, report: ValidationReport, source: Any) -> None
             ["transitions"],
             source,
         )
+    train_approvers = {str(t.train.approval) for t in wf.transitions if t.train and t.train.approval}
     for actor_id, declared in wf.actors.items():
+        if isinstance(declared, HumanActor):
+            refused = placeholder_error(declared.group)
+            if refused is not None:
+                report.error("actor.group_placeholder", refused, ["actors", actor_id, "group"], source)
+            elif is_per_project(declared.group) and actor_id in train_approvers:
+                report.error(
+                    "actor.group_placeholder",
+                    f"human actor `{actor_id}` approves a train: its group cannot name `{{project}}` "
+                    "(a train's approval group is the release train's, not a project step's)",
+                    ["actors", actor_id, "group"],
+                    source,
+                )
         if isinstance(declared, HumanActor) and not declared.group.strip():
             report.warn(
                 "actor.group_empty",

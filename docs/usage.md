@@ -471,6 +471,12 @@ defaults:
     on_timeout: needs_human
 ```
 
+A person's `group` is the identity provider's. It may name the project the workflow runs in:
+`group: "{project}-maintainers"` is answered, in project `iris`, by the people carrying
+`iris-maintainers`, and in `graal` by `graal-maintainers`. One workflow shared to the organisation's
+catalogue then serves every project, each with its own approvers (S59-01). `{project}` is the only
+placeholder; a train's approval group (`train.approval`) cannot take it.
+
 Validate before you commit it:
 
 ```bash

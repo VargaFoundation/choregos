@@ -134,7 +134,9 @@ async def validate_for_project(
     source = body.yaml or yaml_lib.safe_dump(body.json_doc or {}, sort_keys=False, allow_unicode=True)
     workflow, _ = parse_workflow(source, strict=False)
     known = await groups_known_in(session, ctx.project.org_id)
-    validation.warnings += [WorkflowIssue(**issue) for issue in unknown_group_warnings(workflow, known)]
+    validation.warnings += [
+        WorkflowIssue(**issue) for issue in unknown_group_warnings(workflow, known, ctx.project.slug)
+    ]
     # An agent that asks for memory the project's policy disables gets none: said, not refused (S51-01).
     engine = await policy_engine(session, ctx.id)
     for issue in await memory_disabled_warnings(

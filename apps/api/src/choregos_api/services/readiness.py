@@ -1038,7 +1038,7 @@ async def load_facts(session: AsyncSession, project: Project, org_slug: str) -> 
         {
             str(issue["message"]).split("`")[1]
             for workflow in workflows
-            for issue in unknown_group_warnings(workflow, known_groups)
+            for issue in unknown_group_warnings(workflow, known_groups, project.slug)
         }
     )
     memberships = (
