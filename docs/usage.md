@@ -643,6 +643,13 @@ typecheck commands) and a `name`. The configuration is refused with `repositorie
 repositories of one name (the primary's derived name included: give `repo.name`) and with one URL under two
 names. The console edits them in *General*, *Other repositories*: add, remove, *Make primary*.
 
+**The checks the runner measures** are the repository's `test_command`, `lint_command` and
+`typecheck_command`; one left empty falls back to the language's convention (`make test`, `make lint`,
+`make typecheck` for Python). A repository that has no such check writes `"-"`: the check is skipped,
+not sent to a target the repository lacks (S59-04). The runner image carries `uv` and a Python 3.13 it
+manages beside its own 3.12, so a project that develops with uv is checked as its CI checks it
+(`uv run pytest -q test/unit`, `uv run ruff check .`); no interpreter is downloaded during a run.
+
 **A ticket works on one repository: `fields.repository`.** The field holds a repository's name; absent, the
 ticket works on the primary. Everything that talks to git follows it: what the run clones, its branch (with
 that repository's prefix) and its pull request, the checks and the review the guarantees read, the diff of

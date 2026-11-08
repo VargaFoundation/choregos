@@ -192,6 +192,21 @@ def test_the_project_commands_take_precedence(tmp_path: Path) -> None:
     assert commands["tests"] == "make test"
 
 
+def test_a_dash_skips_a_check_the_project_does_not_have(tmp_path: Path) -> None:
+    """S59-04: `typecheck_command: "-"` skips the check instead of falling back to `make typecheck`."""
+    from choregos_contracts import ProjectRef
+
+    (tmp_path / "pyproject.toml").write_text("[project]\nname = 'x'\n", encoding="utf-8")
+    stage_input = _minimal_stage_input(tmp_path)
+    stage_input.project = ProjectRef(
+        slug="demo", org="varga", typecheck_command="-", lint_command="ruff check ."
+    )
+    commands = commands_for(stage_input, tmp_path)
+    assert commands["typecheck"] == "", commands
+    assert commands["lint"] == "ruff check ."
+    assert commands["tests"] == "make test", "an undeclared command keeps the language's default"
+
+
 async def test_an_absent_command_is_skipped_not_ok(tmp_path: Path) -> None:
     from choregos_contracts import ProjectRef
 
