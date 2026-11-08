@@ -305,7 +305,7 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
                     <td className="max-w-96 text-xs">
                       <RunOutcomeChip run={run} />
                       {run.result?.summary ? (
-                        <p className="mt-1 line-clamp-3 text-ink-muted" title={run.result.summary}>
+                        <p className="mt-1 line-clamp-3 text-ink-muted" title={run.result.summary} data-verbatim>
                           {run.result.summary}
                         </p>
                       ) : null}
