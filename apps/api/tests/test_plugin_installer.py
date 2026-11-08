@@ -615,3 +615,29 @@ async def test_an_unresolved_agent_names_the_plugin_that_ships_it(
         found = await resolutions(session, org_id, {"greeter", "nobody-here"})
     assert (found["greeter"].resolution, found["greeter"].plugin) == ("unresolved", "hello 1.1.0 (offline)")
     assert (found["nobody-here"].resolution, found["nobody-here"].plugin) == ("unresolved", None)
+
+
+async def test_upgrading_to_the_installed_version_installs_the_agents_the_organisation_lacks(
+    client: AsyncClient, admin: str, offline: Path
+) -> None:
+    """S59-06: a plugin row that names fewer agents than its version ships (the S43-09 migration wrote only
+    the agents an organisation had then) is repaired by upgrading to the installed version: the missing
+    agent is installed, an existing one is left as it is, and the audit says what was added."""
+    from choregos_api.db.models import Agent, OrgPlugin
+    from choregos_api.db.session import session_scope
+
+    await _install(client)
+    async with session_scope() as session:
+        await session.execute(delete(Agent).where(Agent.slug == "greeter"))
+        row = (await session.execute(select(OrgPlugin).where(OrgPlugin.name == "hello"))).scalar_one()
+        row.contents = {**(row.contents or {}), "agents": []}
+    repaired = await client.post(f"{ORG}/plugins/hello/upgrade", json={"version": "1.0.0"})
+    assert repaired.status_code == 200, repaired.text
+    async with session_scope() as session:
+        assert (
+            await session.execute(select(Agent.slug).where(Agent.slug == "greeter"))
+        ).scalar_one() == "greeter"
+        row = (await session.execute(select(OrgPlugin).where(OrgPlugin.name == "hello"))).scalar_one()
+        assert "greeter" in row.contents["agents"]
+    audit = (await client.get("/api/v1/audit")).json()["items"]
+    assert [a["payload"]["added"]["agents"] for a in audit if a["action"] == "plugin.repair"] == [["greeter"]]

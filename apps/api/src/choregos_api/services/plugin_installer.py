@@ -640,6 +640,9 @@ async def upgrade(
         if any(done.get("created") or done.get("served") for done in knowledge.values()):
             await record(session, principal, "plugin.knowledge", org_id=org_id, target_type="plugin",
                          target_id=row.name, version=row.version, knowledge=knowledge)  # fmt: skip
+        # And the agents and skills of this version the organisation does not have: a row written
+        # by the S43-09 migration names only the agents the organisation had then (S59-06).
+        await _install_what_is_missing(session, org_id, row, plugin, settings, principal)
         return previous, []
     prepared = await _prepare(session, org_id, plugin, settings, replacing=row)
     offered: list[str] = []
@@ -701,6 +704,42 @@ async def upgrade(
                  digest=plugin.digest, offered=offered, kept=kept,
                  servers=contents.servers, knowledge=knowledge)  # fmt: skip
     return previous, offered
+
+
+async def _install_what_is_missing(
+    session: AsyncSession,
+    org_id: str,
+    row: OrgPlugin,
+    plugin: Plugin,
+    settings: Settings,
+    principal: Principal,
+) -> None:
+    """The plugin's agents and skills that exist nowhere in the organisation, installed as an install
+    would (S59-06). An agent or skill the organisation has under that name, the plugin's or its own, is
+    left as it is: a repair adds, it never rewrites."""
+    prepared = await _prepare(session, org_id, plugin, settings, replacing=row)
+    contents = PluginContents.model_validate(row.contents or {})
+    added: dict[str, list[str]] = {"skills": [], "agents": []}
+    for name in sorted(prepared.skills):
+        if name not in contents.skills and (await _skill_and_versions(session, org_id, name))[0] is None:
+            await _install_skill(session, org_id, prepared, name, [])
+            added["skills"].append(name)
+    for slug in sorted(prepared.agents):
+        if slug not in contents.agents and (await _agent_and_versions(session, org_id, slug))[0] is None:
+            await _install_agent(session, org_id, prepared, slug, [])
+            added["agents"].append(slug)
+    if not (added["skills"] or added["agents"]):
+        return
+    row.contents = contents.model_copy(
+        update={
+            "skills": sorted({*contents.skills, *added["skills"]}),
+            "agents": sorted({*contents.agents, *added["agents"]}),
+        }
+    ).model_dump()
+    await _store_files(session, org_id, plugin.digest, prepared.files)
+    await session.flush()
+    await record(session, principal, "plugin.repair", org_id=org_id, target_type="plugin",
+                 target_id=row.name, version=row.version, added=added)  # fmt: skip
 
 
 async def _projects_receive_template_knowledge(
