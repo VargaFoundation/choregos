@@ -7,11 +7,14 @@ import Link from "next/link";
 import { useRef, useState } from "react";
 import { KnowledgeAccess } from "@/components/knowledge-access";
 import { KnowledgeDistill } from "@/components/knowledge-distill";
+import { KnowledgeServing, KnowledgeStatusBanner, KnowledgeUsedBy } from "@/components/knowledge-overview";
 import { KnowledgeSources } from "@/components/knowledge-sources";
-import { Badge, Card, Empty, ErrorNote, Heading, Select, buttonClasses, type Tone } from "@/components/ui";
+import { Badge, Card, Dot, Empty, ErrorNote, Heading, buttonClasses, type Tone } from "@/components/ui";
+import { FileText, Upload } from "lucide-react";
 import { api } from "@/lib/api";
+import { cn } from "@/lib/cn";
 import { relative } from "@/lib/format";
-import { distillationLabel, permissionsOf, scopeLabel, statusSummary, stillConverting } from "@/lib/knowledge";
+import { DOCUMENT_STATUS, distillationLabel, permissionsOf, stillConverting } from "@/lib/knowledge";
 import { useSession } from "@/lib/session";
 import { skillHref } from "@/lib/skill-slug";
 
@@ -21,10 +24,22 @@ const KnowledgeIndex = dynamic(() => import("@/components/knowledge-index").then
   loading: () => <p className="text-sm text-ink-muted">Loading the index…</p>,
 });
 
-const TONE: Record<string, Tone> = { ready: "ok", failed: "danger", pending: "neutral", converting: "neutral" };
+type Filter = "all" | "ready" | "working" | "failed";
+/** The documents list's filters: pending and converting are one group, work still running. */
+const FILTERS: { key: Filter; label: string; tone?: Tone }[] = [
+  { key: "all", label: "All" },
+  { key: "ready", label: "Ready", tone: "ok" },
+  { key: "working", label: "Converting", tone: "running" },
+  { key: "failed", label: "Failed", tone: "danger" },
+];
+const statusGroup = (status: string): Filter => (status === "pending" || status === "converting" ? "working" : (status as Filter));
+const countOf = (counts: Record<string, number>, key: Filter): number =>
+  key === "working" ? (counts.pending ?? 0) + (counts.converting ?? 0) : (counts[key] ?? 0);
 
 /**
- * One knowledge base: its documents and where each conversion stands; upload, retry, read. Shown
+ * One knowledge base: first whether it can be used now (a status banner), which agents read it and
+ * who reads it, how runs are served it; then its documents with where each conversion stands
+ * (upload, retry, read), its sources, its index, and who holds a role on it. Shown
  * by the organisation's registry (`/knowledge/<kb>`) and inside a project (`/p/<p>/knowledge/<kb>`,
  * S39-14): `back` says where the crumb leads, `headingLevel` keeps one h1 per page (a project's
  * layout already prints the project name as the h1).
@@ -56,6 +71,7 @@ export function KnowledgeBaseView({
   const file = useRef<HTMLInputElement>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<Filter>("all");
   const refresh = () => client.invalidateQueries({ queryKey: ["knowledge-base", org, slug] });
   async function upload(files: FileList) {
     setError(null);
@@ -86,154 +102,207 @@ export function KnowledgeBaseView({
   const can = permissionsOf(base.data);
   // The server's sentence for what this person may not do: shown where the gesture would be.
   const why = base.data.cannot_reason ?? undefined;
+  const counts: Record<string, number> = {};
+  for (const doc of documents) counts[doc.status] = (counts[doc.status] ?? 0) + 1;
+  // A filter whose last document left (converted, deleted) falls back to all of them.
+  const active: Filter = filter !== "all" && countOf(counts, filter) === 0 ? "all" : filter;
+  const listed = active === "all" ? documents : documents.filter((doc) => statusGroup(doc.status) === active);
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-baseline gap-3">
-        <Link href={back.href} className="text-sm text-ink-muted hover:underline">
-          {back.label}
-        </Link>
-        <span aria-hidden className="text-ink-muted">
-          /
-        </span>
-        <Heading as={headingLevel} size="lg">
-          {base.data.name}
-        </Heading>
-        <span className="font-mono text-xs text-ink-muted">{base.data.slug}</span>
-      </div>
-      <p className="text-sm text-ink-muted">
-        {scopeLabel(base.data)} · served as {base.data.serving_mode} · {statusSummary(base.data.documents_by_status)}
-        {base.data.status !== "active" && ` · ${base.data.status}`}
-      </p>
-      {base.data.description && <p className="max-w-3xl text-sm">{base.data.description}</p>}
-      <div className="space-y-1 text-sm" data-testid="knowledge-serving">
-        <label className="flex flex-wrap items-center gap-2">
-          <span>Serving mode</span>
-          <Select
-            aria-label="serving mode"
-            className="w-auto"
-            value={base.data.serving_mode}
-            onChange={(e) =>
-              void act(() => api.updateKnowledgeBase(org, slug, { serving_mode: e.target.value as "files" | "index" }))
-            }
-          >
-            <option value="files">files</option>
-            <option value="index">index</option>
-          </Select>
-        </label>
-        <p className="text-xs text-ink-muted">index: agents search and cite; recommended above ~200k tokens.</p>
-      </div>
-      <div className="text-sm" data-testid="knowledge-distillation">
-        Principles skill: {distillationLabel(base.data.distillation)}
-        {base.data.distillation?.skill ? (
-          <Link href={skillHref(String(base.data.distillation.skill))} className="ml-2 underline">
-            Review
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-baseline gap-3">
+          <Link href={back.href} className="text-sm text-ink-muted hover:underline">
+            {back.label}
           </Link>
-        ) : null}
-        {can.distill ? (
-          <KnowledgeDistill org={org} slug={slug} onStarted={refresh} distillation={base.data.distillation} />
-        ) : (
-          <button type="button" className="ml-2 text-ink-subtle underline" disabled title={why}>
-            Distill
-          </button>
-        )}
+          <span aria-hidden className="text-ink-muted">
+            /
+          </span>
+          <Heading as={headingLevel} size="lg">
+            {base.data.name}
+          </Heading>
+          <span className="font-mono text-xs text-ink-muted">{base.data.slug}</span>
+        </div>
+        {base.data.description && <p className="max-w-3xl text-sm text-ink-muted">{base.data.description}</p>}
       </div>
-      <Card title="Documents">
-        {documents.length === 0 ? (
-          <Empty title="No document yet">Upload the corpus below.</Empty>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm" data-testid="knowledge-documents">
-              <thead className="text-left text-xs text-ink-muted">
-                <tr>
-                  <th className="py-1 font-normal">Document</th>
-                  <th className="py-1 font-normal">Status</th>
-                  <th className="py-1 font-normal">Uploaded</th>
-                  <th className="py-1 font-normal" />
-                </tr>
-              </thead>
-              <tbody>
-                {documents.map((doc) => (
-                  <tr key={doc.id} className="border-t border-line align-top">
-                    <td className="py-2">
-                      <button type="button" className="text-left font-medium hover:underline" onClick={() => setShown(doc.id)}>
-                        {doc.title}
-                      </button>
-                      <p className="font-mono text-xs text-ink-muted">
-                        {doc.filename} · {Math.max(1, Math.round(doc.size_bytes / 1024))} KiB
-                        {doc.source_url && (
-                          <>
-                            {" · "}
-                            <a href={doc.source_url} className="underline" target="_blank" rel="noreferrer">
-                              at the source
-                            </a>
-                          </>
-                        )}
-                      </p>
-                      {doc.error && <p className="text-xs text-danger">{doc.error}</p>}
-                      {(doc.warnings ?? []).length > 0 && (
-                        <ul className="text-xs text-warn" data-testid={`document-warnings-${doc.id}`}>
-                          {(doc.warnings ?? []).map((warning) => (
-                            <li key={warning}>Cut: {warning}</li>
-                          ))}
-                        </ul>
-                      )}
-                    </td>
-                    <td>
-                      <Badge tone={TONE[doc.status] ?? "neutral"}>{doc.status}</Badge>
-                    </td>
-                    <td className="text-xs text-ink-muted">{doc.created_at ? relative(doc.created_at) : "—"}</td>
-                    <td className="space-x-2 text-right text-xs">
-                      {doc.status === "failed" && can.edit && (
-                        <button type="button" className="underline" onClick={() => void act(() => api.convertKnowledgeDocument(org, slug, doc.id))}>
-                          Convert again
-                        </button>
-                      )}
-                      {can.edit ? (
-                        <button type="button" className="underline" onClick={() => void act(() => api.deleteKnowledgeDocument(org, slug, doc.id))}>
-                          Delete
-                        </button>
-                      ) : (
-                        <button type="button" className="text-ink-subtle underline" disabled title={why}>
-                          Delete
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      <KnowledgeStatusBanner base={base.data} />
+      <div className="grid gap-6 lg:grid-cols-2">
+        <KnowledgeUsedBy base={base.data} />
+        <KnowledgeServing
+          base={base.data}
+          canEdit={can.edit}
+          why={why}
+          onChange={(mode) => void act(() => api.updateKnowledgeBase(org, slug, { serving_mode: mode }))}
+        >
+          <div className="space-y-1 border-t border-line pt-3" data-testid="knowledge-distillation">
+            <p className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-ink-muted">Principles skill</span>
+              <span>{distillationLabel(base.data.distillation)}</span>
+              {base.data.distillation?.skill ? (
+                <Link href={skillHref(String(base.data.distillation.skill))} className="underline">
+                  Review
+                </Link>
+              ) : null}
+            </p>
+            <p className="text-xs text-ink-muted">
+              A skill of short principles distilled from the documents, each citing its source, for agents to load.
+            </p>
+            {/* The run and the estimate are cards: each takes a line of its own under the buttons. */}
+            <div className="flex flex-wrap items-center gap-2 [&>div]:basis-full [&>section]:basis-full">
+              {can.distill ? (
+                <KnowledgeDistill org={org} slug={slug} onStarted={refresh} distillation={base.data.distillation} />
+              ) : (
+                <>
+                  <button type="button" className={buttonClasses("secondary", "sm")} disabled title={why}>
+                    Distill
+                  </button>
+                  {why && <span className="text-xs text-ink-muted">{why}</span>}
+                </>
+              )}
+            </div>
           </div>
-        )}
-      </Card>
-      {base.data.serving_mode === "index" && <KnowledgeIndex org={org} base={base.data} onChange={() => void refresh()} canEdit={can.edit} />}
-      <KnowledgeSources org={org} slug={slug} sources={base.data.sources ?? []} onChange={() => void refresh()} canEdit={can.edit} />
-      <KnowledgeAccess org={org} base={base.data} onChange={() => void refresh()} />
-      {can.edit ? (
-      <Card title="Upload documents">
-        <div className="space-y-2 text-sm">
-          <p className="text-ink-muted">
-            Office, PDF, HTML, markdown or text, converted in the background; a scanned PDF fails (no OCR).
-          </p>
-          <input
-            ref={file}
-            type="file"
-            multiple
-            aria-label="Documents to upload"
-            className="min-w-0 max-w-full"
-            accept=".docx,.pptx,.xlsx,.pdf,.md,.markdown,.html,.htm,.txt,.yaml,.yml,.json,.toml"
-            onChange={(event) => {
-              if (event.target.files?.length) void upload(event.target.files);
-            }}
-          />
-          {notice && <p role="status">{notice}</p>}
+        </KnowledgeServing>
+      </div>
+      <Card
+        title="Documents"
+        icon={FileText}
+        action={
+          can.edit ? (
+            <label className={cn(buttonClasses("primary", "sm"), "cursor-pointer focus-within:outline-2 focus-within:outline-accent")}>
+              <Upload aria-hidden className="size-3.5" strokeWidth={2} />
+              Upload documents
+              <input
+                ref={file}
+                type="file"
+                multiple
+                aria-label="Documents to upload"
+                className="sr-only"
+                accept=".docx,.pptx,.xlsx,.pdf,.md,.markdown,.html,.htm,.txt,.yaml,.yml,.json,.toml"
+                onChange={(event) => {
+                  if (event.target.files?.length) void upload(event.target.files);
+                }}
+              />
+            </label>
+          ) : undefined
+        }
+      >
+        <div className="space-y-3">
+          {can.edit ? (
+            <p className="text-xs text-ink-muted">
+              Office, PDF, HTML, markdown or text, converted in the background; a scanned PDF fails (no OCR).
+            </p>
+          ) : (
+            <p className="text-sm text-ink-muted" data-testid="knowledge-read-only">
+              {why ?? "You can read this knowledge base but not change it."}
+            </p>
+          )}
+          {notice && <p role="status" className="text-sm">{notice}</p>}
           {error && <ErrorNote>{error}</ErrorNote>}
+          {documents.length === 0 ? (
+            <Empty title="No document yet">
+              {can.edit ? "Upload files above, or add a source below." : "Nobody has added a document yet."}
+            </Empty>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-2" role="group" aria-label="Filter documents by status" data-testid="knowledge-document-filter">
+                {FILTERS.filter((f) => f.key === "all" || countOf(counts, f.key) > 0).map((f) => (
+                  <button
+                    key={f.key}
+                    type="button"
+                    aria-pressed={active === f.key}
+                    onClick={() => setFilter(f.key)}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium",
+                      active === f.key ? "border-line-strong bg-surface-muted text-ink" : "border-line text-ink-muted hover:text-ink",
+                    )}
+                  >
+                    {f.tone && <Dot tone={f.tone} />}
+                    {f.label}
+                    <span className="font-mono tabular-nums">{f.key === "all" ? documents.length : countOf(counts, f.key)}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm" data-testid="knowledge-documents">
+                  <thead className="text-left text-xs text-ink-muted">
+                    <tr>
+                      <th className="py-1 font-normal">Document</th>
+                      <th className="py-1 font-normal">Status</th>
+                      <th className="py-1 font-normal">Uploaded</th>
+                      <th className="py-1 font-normal" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {listed.map((doc) => {
+                      const status = DOCUMENT_STATUS[doc.status] ?? { label: doc.status, tone: "neutral" as const };
+                      return (
+                        <tr key={doc.id} className="border-t border-line align-top" data-status={doc.status}>
+                          <td className="py-2 pr-3">
+                            <button type="button" className="text-left font-medium hover:underline" onClick={() => setShown(doc.id)}>
+                              {doc.title}
+                            </button>
+                            <p className="font-mono text-xs text-ink-muted">
+                              {doc.filename} · {Math.max(1, Math.round(doc.size_bytes / 1024))} KiB
+                              {doc.source_url && (
+                                <>
+                                  {" · "}
+                                  <a href={doc.source_url} className="underline" target="_blank" rel="noreferrer">
+                                    at the source
+                                  </a>
+                                </>
+                              )}
+                            </p>
+                            {doc.error && <p className="mt-1 text-xs text-failed-ink">{doc.error}</p>}
+                            {(doc.warnings ?? []).length > 0 && (
+                              <ul className="mt-1 text-xs text-waiting-ink" data-testid={`document-warnings-${doc.id}`}>
+                                {(doc.warnings ?? []).map((warning) => (
+                                  <li key={warning}>Cut: {warning}</li>
+                                ))}
+                              </ul>
+                            )}
+                          </td>
+                          <td className="py-2 pr-3">
+                            <Badge tone={status.tone}>{status.label}</Badge>
+                          </td>
+                          <td className="py-2 pr-3 text-xs text-ink-muted">{doc.created_at ? relative(doc.created_at) : "—"}</td>
+                          <td className="py-2">
+                            <div className="flex justify-end gap-2">
+                              {doc.status === "failed" && can.edit && (
+                                <button
+                                  type="button"
+                                  className={buttonClasses("secondary", "sm")}
+                                  onClick={() => void act(() => api.convertKnowledgeDocument(org, slug, doc.id))}
+                                >
+                                  Convert again
+                                </button>
+                              )}
+                              {can.edit ? (
+                                <button
+                                  type="button"
+                                  className={buttonClasses("danger", "sm")}
+                                  onClick={() => void act(() => api.deleteKnowledgeDocument(org, slug, doc.id))}
+                                >
+                                  Delete
+                                </button>
+                              ) : (
+                                <button type="button" className={buttonClasses("danger", "sm")} disabled title={why}>
+                                  Delete
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </div>
       </Card>
-      ) : (
-        <p className="text-sm text-ink-muted" data-testid="knowledge-read-only">
-          {why ?? "You can read this knowledge base but not change it."}
-        </p>
-      )}
+      <KnowledgeSources org={org} slug={slug} sources={base.data.sources ?? []} onChange={() => void refresh()} canEdit={can.edit} />
+      {base.data.serving_mode === "index" && <KnowledgeIndex org={org} base={base.data} onChange={() => void refresh()} canEdit={can.edit} />}
+      <KnowledgeAccess org={org} base={base.data} onChange={() => void refresh()} />
       {shown && (
         <Card
           title={document.data?.title ?? "Document"}

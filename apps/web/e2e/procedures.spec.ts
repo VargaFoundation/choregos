@@ -36,6 +36,8 @@ test("choosing Entra ID shows what to grant, and what stays unproven", async ({ 
 
 test("adding a Confluence source opens its procedure, and the connector's is one click away", async ({ page }) => {
   await page.goto("/knowledge/architecture-framework");
+  // The sources come first; the form opens from its button, on a kind the organisation can sync.
+  await page.getByRole("button", { name: "Add a source" }).click();
   await page.getByLabel("source kind").selectOption("confluence");
   const panel = page.getByTestId("procedure-panel");
   await expect(panel.getByRole("heading", { level: 2 })).toHaveText("Add a Confluence space or page tree to a knowledge base");

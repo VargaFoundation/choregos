@@ -2313,7 +2313,25 @@ served to this project's runs only (there is no scope to choose), owned by the p
 where you upload documents or add a source. **From the organisation**: **Knowledge** (`/knowledge`) is
 the registry of every base, filterable by scope (organisation-wide, project, group), with who uses
 each one; its creation form is where a base is shared with several projects (picked from a list) or
-with groups. A base's page uploads documents and follows each conversion. Its **Access** card shows who is served the base and who reads it, and, to those who may share it, the grants table (a role per member, e-mail, group or project; **Save access** replaces the list); an administrator also restricts the base there. Buttons the caller may not use are disabled and carry the server's reason.
+with groups. A base's page opens on a **status banner** that says whether the base can be used now:
+*Ready* (green), *Converting: N of M documents ready* or *Syncing …* (blue, with a progress bar; the
+page follows the work), *Needs attention* (red: a document failed to convert or a source failed to
+sync — what is ready is still served), *Empty* (what to do next) or *Archived*. Under it, **Who uses it**
+lists the agents whose current revision (production, else the latest; never a draft or retired agent)
+names the base (`used_by` on `GET /orgs/{org}/knowledge/{slug}`), or says that none does yet — a run is
+served a base only through its agent, and a direct conversation with an agent (`/agents/{slug}/responses`)
+is served none; the runs it may be served to; and who reads it, said precisely: an organisation base is
+read by everyone with a role in the organisation (people who only belong to projects do not), a project
+base also by that project's members, a group base by the group's members who hold an organisation role,
+and a restricted one only by the people granted a role (amber lock). **How runs read it** explains both
+serving modes as choices, never as a limit, and, for an index, what it holds. The **Documents** card
+colours each status and filters by it; **Sources** lists each source with its state (*Up to date*,
+*Syncing*, *Sync failed* with the error, *Never synced*) and its gestures, and **Add a source** opens
+the form on a kind the organisation can sync (a connected kind only when a connector of that kind is
+declared). Its **Access** card shows who reads the base and, to those who may share it, the grants
+table (a role per member, e-mail, group or project, each role with what it lets one do; **Save access**
+replaces the list); an administrator also restricts the base there. Buttons the caller may not use are
+disabled and carry the server's reason.
 
 An agent version reads a base by naming it: `"knowledge": [{"slug": "architecture"}]` in its spec.
 When a run is prepared, each named base must exist and be served to the run's project — otherwise
@@ -2337,7 +2355,7 @@ base's page shows it, per question.
 
 A base also **syncs from sources** (`POST …/sources`), each on its own Temporal loop
 (`KnowledgeSync`; the refresh is set per source, see below; now with `POST …/sources/{id}/sync`, or
-for the whole base with `POST …/knowledge/{slug}/sync`, **sync all now** on the page):
+for the whole base with `POST …/knowledge/{slug}/sync`, **Sync all now** on the page):
 
 - **SharePoint or OneDrive**: create an organisation connector of capability `documents`, type
   `sharepoint` (`tenant_id`, `client_id`, `secret_refs.client_secret`), for an Entra application
@@ -2422,8 +2440,9 @@ feed it from several places at once, each one a source or an upload.
    **Include linked documents** to also read the PDF, Word, PowerPoint and Excel files it links to.
 5. **Size it.** Add up the converted text: the base's page shows each document's size. Up to about 200k
    tokens, **files** is enough and exact; above that, switch the base to **index** (the *Serving mode*
-   row on its page, or `PATCH … {"serving_mode": "index"}`; the chunks are built at once), so agents
-   search and cite instead of loading everything.
+   of its *How runs read it* card, or `PATCH … {"serving_mode": "index"}`; the chunks are built at
+   once), so agents search and cite instead of loading everything. 200k is advice, not a ceiling:
+   an index has none.
 6. **Check it**: write a few questions and the documents expected to answer them (the eval set) and run
    it; read the converted documents of the decks and workbooks before trusting them.
 

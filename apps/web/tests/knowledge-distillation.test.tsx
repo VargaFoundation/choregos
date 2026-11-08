@@ -190,7 +190,7 @@ describe("distillation (S33-05)", () => {
       );
     });
     const row = await screen.findByTestId("knowledge-serving");
-    expect(row).toHaveTextContent("recommended above ~200k tokens");
+    expect(row).toHaveTextContent("No size ceiling");
     fireEvent.change(screen.getByLabelText("serving mode"), { target: { value: "index" } });
     await waitFor(() => expect(api.updateKnowledgeBase).toHaveBeenCalledWith("varga", "architecture", { serving_mode: "index" }));
   });

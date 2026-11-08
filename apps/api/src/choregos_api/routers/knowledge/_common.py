@@ -10,6 +10,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...db.models import (
+    Agent,
+    AgentVersion,
     KnowledgeBase,
     KnowledgeChunk,
     KnowledgeDocument,
@@ -32,11 +34,13 @@ from ...knowledge.access import (
 from ...knowledge.index import search_mode
 from ...schemas.knowledge import (
     KnowledgeBaseDto,
+    KnowledgeBaseUser,
     KnowledgeDocumentDto,
     KnowledgeGrantDto,
     KnowledgePermissions,
     KnowledgeSourceDto,
 )
+from ...services.agent_governance import visible_clause
 from ...services.organisations import organisation_by_slug
 
 
@@ -209,7 +213,50 @@ async def _dto(
         cannot_reason=allowed[KnowledgeAction.EDIT].reason,
         my_role=role_of(principal, org, base, held),
         grants=shown,
+        used_by=await _used_by(session, principal, org, base) if with_documents else None,
     )
+
+
+async def _used_by(
+    session: AsyncSession, principal: Me, org: str, base: KnowledgeBase
+) -> list[KnowledgeBaseUser]:
+    """The agents the caller sees whose CURRENT revision names the base (`spec.knowledge`).
+
+    Current is the revision a project is served by default: production (`stable_version`), else the
+    latest (`agent_releases.served`). Only an agent that runs reads it: a draft does not run yet, a
+    retired one never again (S32-04); a deprecated one still runs. One query over the organisation's
+    agents; the spec is JSON, filtered here rather than in SQL (SQLite and PostgreSQL read JSON
+    differently).
+    """
+    organisation = await organisation_by_slug(session, org)
+    latest = (
+        select(AgentVersion.agent_id, func.max(AgentVersion.version).label("version"))
+        .where(AgentVersion.org_id == organisation.id)
+        .group_by(AgentVersion.agent_id)
+        .subquery()
+    )
+    current = func.coalesce(Agent.stable_version, latest.c.version)
+    rows = (
+        await session.execute(
+            select(Agent.slug, Agent.display_name, AgentVersion.version, AgentVersion.spec)
+            .join(latest, latest.c.agent_id == Agent.id)
+            .join(AgentVersion, (AgentVersion.agent_id == Agent.id) & (AgentVersion.version == current))
+            .where(
+                Agent.org_id == organisation.id,
+                Agent.lifecycle.in_(("active", "deprecated")),
+                await visible_clause(session, principal, organisation),
+            )
+            .order_by(Agent.slug)
+        )
+    ).tuples()
+    return [
+        KnowledgeBaseUser(agent=slug, display_name=name, version=int(version))
+        for slug, name, version, spec in rows
+        if any(
+            isinstance(ref, dict) and ref.get("slug") == base.slug
+            for ref in (spec or {}).get("knowledge") or []
+        )
+    ]
 
 
 async def _sources(session: AsyncSession, base: KnowledgeBase) -> list[KnowledgeSource]:

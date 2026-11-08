@@ -2804,6 +2804,14 @@ export type KnowledgeDistillEstimate = {
   }>;
 };
 
+/** An agent whose current revision reads a knowledge base. */
+export type KnowledgeBaseUser = {
+  agent: string;
+  display_name: string;
+  /** the revision that names the base: production, else the latest */
+  version: number;
+};
+
 export type KnowledgeBase = {
   slug: string;
   name: string;
@@ -2841,6 +2849,8 @@ export type KnowledgeBase = {
   my_role?: "viewer" | "editor" | "owner" | null;
   /** returned by the reading of one base */
   grants?: Array<KnowledgeGrant> | null;
+  /** returned by the reading of one base: the agents the caller sees whose current revision (production, else the latest; an active or deprecated agent, never a draft or a retired one) names the base in `spec.knowledge`. A run is served a base only through such an agent; a direct conversation with an agent is served none. */
+  used_by?: Array<KnowledgeBaseUser> | null;
   /** the last distillation: `status` (running, pending_review, failed, stopped), `skill`, `version`, `principles`, `dropped` (principles citing nothing of the base), `error`, `at`; `code` when failed or stopped (`too_large`, `over_budget`, `no_document`, `gateway`, `model_refused`, `nothing_cited`, `cancelled`); while running or after, `phase` (`plan`, `map`, `reduce`, `publish`), `parts_done`, `parts_total`, `spent_usd` and `started_at` (a run older than 30 minutes without an end is dead and no longer blocks a new one); `history` holds the runs before it, `stopped_by` who stopped it, `exclude` and `max_usd` what a relaunch reuses */
   distillation?: {
     status?: "running" | "pending_review" | "approved" | "rejected" | "failed" | "stopped";

@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { KnowledgeSources } from "@/components/knowledge-sources";
 import { api } from "@/lib/api";
-import { describeRefresh, draftOf, headersOf, nextSyncLabel, pageIdsOf, refreshBody, refreshLabel, sourceConfig, syncSummary } from "@/lib/knowledge";
+import { describeRefresh, draftOf, firstUsableKind, intervalLabel, headersOf, nextSyncLabel, pageIdsOf, refreshBody, refreshLabel, sourceConfig, sourceState, syncSummary } from "@/lib/knowledge";
 import type { KnowledgeSource, OrgConnector } from "@/lib/types";
 
 vi.mock("@/lib/api", async (importOriginal) => {
@@ -32,6 +32,12 @@ const view = (sources: KnowledgeSource[] = [], onChange = vi.fn()) =>
       <KnowledgeSources org="varga" slug="framework" sources={sources} onChange={onChange} />
     </QueryClientProvider>,
   );
+/** The form is behind a button: the existing sources come first. */
+const adding = (sources: KnowledgeSource[] = [], onChange = vi.fn()) => {
+  const rendered = view(sources, onChange);
+  fireEvent.click(screen.getByRole("button", { name: "Add a source" }));
+  return rendered;
+};
 
 describe("what a source says", () => {
   it("summarises a sync and builds its configuration", () => {
@@ -80,19 +86,19 @@ describe("the sources of a base (S33-04)", () => {
     expect(list).toHaveTextContent("Architecture site");
     expect(list).toHaveTextContent("2 added · 1 deleted");
     expect(list).toHaveTextContent("token refused (401)");
-    fireEvent.click(screen.getByRole("button", { name: "sync now" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sync now" }));
     await waitFor(() => expect(api.syncKnowledgeSource).toHaveBeenCalledWith("varga", "framework", "src-1"));
     expect(onChange).toHaveBeenCalled();
   });
 
   it("adds a single page, or a crawl with linked documents (S42-09b)", async () => {
     vi.mocked(api.createKnowledgeSource).mockResolvedValue(source);
-    view();
+    adding();
     fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "web" } });
     fireEvent.change(screen.getByLabelText("url"), { target: { value: "https://example.com/offer" } });
     fireEvent.click(screen.getByLabelText("This page only (no links followed)"));
     expect(screen.queryByLabelText("crawl depth")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "add source" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add source" }));
     await waitFor(() =>
       expect(api.createKnowledgeSource).toHaveBeenCalledWith(
         "varga",
@@ -100,10 +106,14 @@ describe("the sources of a base (S33-04)", () => {
         expect.objectContaining({ kind: "web", config: { url: "https://example.com/offer", max_depth: 0, max_pages: 1 } }),
       ),
     );
-    fireEvent.click(screen.getByLabelText("This page only (no links followed)"));
+    // Added, the form closed; opened again, it starts afresh: a crawl, not a single page.
+    await waitFor(() => expect(screen.queryByRole("form", { name: "Add a source" })).toBeNull());
+    fireEvent.click(screen.getByRole("button", { name: "Add a source" }));
+    fireEvent.change(screen.getByLabelText("url"), { target: { value: "https://example.com/offer" } });
+    expect(screen.getByLabelText("This page only (no links followed)")).not.toBeChecked();
     fireEvent.change(screen.getByLabelText("crawl depth"), { target: { value: "1" } });
     fireEvent.click(screen.getByLabelText("Include linked documents (PDF, Word, PowerPoint, Excel)"));
-    fireEvent.click(screen.getByRole("button", { name: "add source" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add source" }));
     await waitFor(() =>
       expect(api.createKnowledgeSource).toHaveBeenLastCalledWith(
         "varga",
@@ -116,11 +126,11 @@ describe("the sources of a base (S33-04)", () => {
   it("adds a SharePoint source through its connector", async () => {
     vi.mocked(api.createKnowledgeSource).mockResolvedValue(source);
     vi.mocked(api.orgConnectors).mockResolvedValue([connector("sharepoint", "documents", "sharepoint")]);
-    view();
+    adding();
     await screen.findByRole("option", { name: "sharepoint" });
     fireEvent.change(screen.getByLabelText("documents connector"), { target: { value: "sharepoint" } });
     fireEvent.change(screen.getByLabelText("site or drive id"), { target: { value: "acme.sharepoint.com,1,2" } });
-    fireEvent.click(screen.getByRole("button", { name: "add source" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add source" }));
     await waitFor(() =>
       expect(api.createKnowledgeSource).toHaveBeenCalledWith("varga", "framework", {
         kind: "sharepoint",
@@ -139,7 +149,7 @@ describe("the sources of a base (S33-04)", () => {
       connector("entra-acme", "identity", "entra"),
       connector("wiki", "documents", "confluence"),
     ]);
-    view();
+    adding();
     await screen.findByRole("option", { name: "diametral" });
     const list = screen.getByLabelText("documents connector");
     expect(list.tagName).toBe("SELECT");
@@ -148,10 +158,13 @@ describe("the sources of a base (S33-04)", () => {
 
   it("says so, with a link to declare one, when the organisation has none", async () => {
     vi.mocked(api.orgConnectors).mockResolvedValue([connector("entra-acme", "identity", "entra")]);
-    view();
+    adding();
+    await screen.findByRole("option", { name: "SharePoint / OneDrive — no connector yet" });
+    fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "sharepoint" } });
     const note = await screen.findByTestId("no-documents-connector");
     expect(screen.queryByLabelText("documents connector")).toBeNull();
     expect(within(note).getByRole("link")).toHaveAttribute("href", "/admin/connectors?type=documents/sharepoint");
+    expect(screen.getByRole("button", { name: "Add source" })).toBeDisabled();
   });
 
   it("says how each source refreshes and when it syncs next", () => {
@@ -171,6 +184,8 @@ describe("the sources of a base (S33-04)", () => {
       "cron */15 9-17 * * * (UTC)",
     );
     expect(nextSyncLabel({ refresh_mode: "manual" })).toBe("—");
+    expect(refreshLabel({ ...source, refresh_mode: "interval", interval_minutes: 1440 })).toBe("every day");
+    expect([15, 60, 360, 2880].map(intervalLabel)).toEqual(["every 15 minutes", "every hour", "every 6 hours", "every 2 days"]);
     expect(refreshBody({ ...draftOf(), mode: "manual" })).toEqual({ refresh_mode: "manual" });
   });
 
@@ -178,19 +193,19 @@ describe("the sources of a base (S33-04)", () => {
     vi.mocked(api.updateKnowledgeSource).mockResolvedValue(source);
     const other = { ...source, id: "src-2", name: "Other" };
     view([source, other]);
-    fireEvent.click(screen.getAllByRole("button", { name: "edit refresh" })[0]!);
-    fireEvent.change(within(screen.getByRole("form", { name: "edit refresh" })).getByLabelText("refresh mode"), { target: { value: "manual" } });
-    fireEvent.click(screen.getByRole("button", { name: "save refresh" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Edit refresh" })[0]!);
+    fireEvent.change(within(screen.getByRole("form", { name: "Edit refresh" })).getByLabelText("refresh mode"), { target: { value: "manual" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save refresh" }));
     await waitFor(() =>
       expect(api.updateKnowledgeSource).toHaveBeenCalledWith("varga", "framework", "src-1", { refresh_mode: "manual" }),
     );
     expect(api.updateKnowledgeSource).toHaveBeenCalledTimes(1);
 
     vi.mocked(api.updateKnowledgeSource).mockClear();
-    fireEvent.click(screen.getAllByRole("button", { name: "edit refresh" })[0]!);
-    fireEvent.change(within(screen.getByRole("form", { name: "edit refresh" })).getByLabelText("refresh mode"), { target: { value: "manual" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Edit refresh" })[0]!);
+    fireEvent.change(within(screen.getByRole("form", { name: "Edit refresh" })).getByLabelText("refresh mode"), { target: { value: "manual" } });
     fireEvent.click(screen.getByLabelText("apply to all sources"));
-    fireEvent.click(screen.getByRole("button", { name: "save refresh" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save refresh" }));
     await waitFor(() => expect(api.updateKnowledgeSource).toHaveBeenCalledTimes(2));
   });
 
@@ -218,15 +233,15 @@ describe("the sources of a base (S33-04)", () => {
   it("edits a refresh to chosen days of the week, and says it in words", async () => {
     vi.mocked(api.updateKnowledgeSource).mockResolvedValue(source);
     view([source]);
-    fireEvent.click(screen.getByRole("button", { name: "edit refresh" }));
-    const form = within(screen.getByRole("form", { name: "edit refresh" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit refresh" }));
+    const form = within(screen.getByRole("form", { name: "Edit refresh" }));
     fireEvent.change(form.getByLabelText("refresh mode"), { target: { value: "weekly" } });
     expect(form.queryByLabelText("cron expression")).toBeNull();
     fireEvent.click(form.getByLabelText("Thu"));
     fireEvent.change(form.getByLabelText("time of day"), { target: { value: "18:30" } });
     fireEvent.change(form.getByLabelText("time zone"), { target: { value: "UTC" } });
     expect(form.getByTestId("refresh-summary")).toHaveTextContent("Syncs every Monday and Thursday at 18:30, UTC time.");
-    fireEvent.click(screen.getByRole("button", { name: "save refresh" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save refresh" }));
     await waitFor(() =>
       expect(api.updateKnowledgeSource).toHaveBeenCalledWith("varga", "framework", "src-1", {
         refresh_mode: "cron",
@@ -239,17 +254,17 @@ describe("the sources of a base (S33-04)", () => {
   it("shows the API's reason when a cron is refused", async () => {
     vi.mocked(api.updateKnowledgeSource).mockRejectedValue(new Error("`*/1 * * * *` fires every 1 min: the minimum is 5"));
     view([source]);
-    fireEvent.click(screen.getByRole("button", { name: "edit refresh" }));
-    fireEvent.change(within(screen.getByRole("form", { name: "edit refresh" })).getByLabelText("refresh mode"), { target: { value: "cron" } });
-    fireEvent.change(within(screen.getByRole("form", { name: "edit refresh" })).getByLabelText("cron expression"), { target: { value: "*/1 * * * *" } });
-    fireEvent.click(screen.getByRole("button", { name: "save refresh" }));
+    fireEvent.click(screen.getByRole("button", { name: "Edit refresh" }));
+    fireEvent.change(within(screen.getByRole("form", { name: "Edit refresh" })).getByLabelText("refresh mode"), { target: { value: "cron" } });
+    fireEvent.change(within(screen.getByRole("form", { name: "Edit refresh" })).getByLabelText("cron expression"), { target: { value: "*/1 * * * *" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save refresh" }));
     expect(await screen.findByText(/the minimum is 5/)).toBeInTheDocument();
   });
 
   it("syncs a whole base at once", async () => {
     vi.mocked(api.syncKnowledgeBase).mockResolvedValue({} as never);
     view([source]);
-    fireEvent.click(screen.getByRole("button", { name: "sync all now" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sync all now" }));
     await waitFor(() => expect(api.syncKnowledgeBase).toHaveBeenCalledWith("varga", "framework"));
   });
 
@@ -259,7 +274,7 @@ describe("the sources of a base (S33-04)", () => {
       connector("diametral", "documents", "sharepoint"),
       connector("wiki", "documents", "confluence"),
     ]);
-    view();
+    adding();
     fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "confluence" } });
     await screen.findByRole("option", { name: "wiki" });
     expect(screen.queryByRole("option", { name: "diametral" })).toBeNull();
@@ -267,7 +282,8 @@ describe("the sources of a base (S33-04)", () => {
     fireEvent.change(screen.getByLabelText("documents connector"), { target: { value: "wiki" } });
     fireEvent.change(screen.getByLabelText("space key"), { target: { value: "ENG" } });
     fireEvent.change(screen.getByLabelText("page ids"), { target: { value: " 12345 " } });
-    fireEvent.click(screen.getByRole("button", { name: "add source" }));
+    expect(screen.getByText(/everything the connector/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Add source" }));
     await waitFor(() =>
       expect(api.createKnowledgeSource).toHaveBeenCalledWith("varga", "framework", {
         kind: "confluence",
@@ -278,7 +294,8 @@ describe("the sources of a base (S33-04)", () => {
         interval_minutes: 60,
       }),
     );
-    expect(screen.getByText(/everything the connector/)).toBeInTheDocument();
+    // Added: the form closes, and the sources list is what the card shows again.
+    await waitFor(() => expect(screen.queryByRole("form", { name: "Add a source" })).toBeNull());
   });
 
   it("extracts page ids from numbers and pasted Confluence URLs (S42-09d)", () => {
@@ -296,14 +313,14 @@ describe("the sources of a base (S33-04)", () => {
   it("sends the chosen pages without their sub-pages when the box is cleared", async () => {
     vi.mocked(api.createKnowledgeSource).mockResolvedValue(source);
     vi.mocked(api.orgConnectors).mockResolvedValue([connector("wiki", "documents", "confluence")]);
-    view();
+    adding();
     fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "confluence" } });
     await screen.findByRole("option", { name: "wiki" });
     fireEvent.change(screen.getByLabelText("documents connector"), { target: { value: "wiki" } });
     fireEvent.change(screen.getByLabelText("space key"), { target: { value: "ENG" } });
     fireEvent.change(screen.getByLabelText("page ids"), { target: { value: "1, 2" } });
     fireEvent.click(screen.getByLabelText("and its sub-pages"));
-    fireEvent.click(screen.getByRole("button", { name: "add source" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add source" }));
     await waitFor(() =>
       expect(api.createKnowledgeSource).toHaveBeenCalledWith(
         "varga",
@@ -322,12 +339,12 @@ describe("the sources of a base (S33-04)", () => {
   it("adds a git source, through a git connector when the repository is private", async () => {
     vi.mocked(api.createKnowledgeSource).mockResolvedValue(source);
     vi.mocked(api.orgConnectors).mockResolvedValue([connector("acme-github", "documents", "git")]);
-    view();
+    adding();
     fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "git" } });
     fireEvent.change(screen.getByLabelText("url"), { target: { value: "https://github.com/acme/private.git" } });
     await screen.findByRole("option", { name: "acme-github" });
     fireEvent.change(screen.getByLabelText("git connector"), { target: { value: "acme-github" } });
-    fireEvent.click(screen.getByRole("button", { name: "add source" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add source" }));
     await waitFor(() =>
       expect(api.createKnowledgeSource).toHaveBeenCalledWith(
         "varga",
@@ -343,7 +360,7 @@ describe("the sources of a base (S33-04)", () => {
       connector("intranet", "documents", "web"),
       connector("acme-github", "documents", "git"),
     ]);
-    view();
+    adding();
     fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "web" } });
     fireEvent.change(screen.getByLabelText("url"), { target: { value: "https://intranet.example.com/docs/" } });
     await screen.findByRole("option", { name: "intranet" });
@@ -351,7 +368,7 @@ describe("the sources of a base (S33-04)", () => {
     fireEvent.change(screen.getByLabelText("web connector"), { target: { value: "intranet" } });
     fireEvent.change(screen.getByLabelText("http headers"), { target: { value: "Accept-Language: fr" } });
     expect(screen.queryByTestId("secret-header")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "add source" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add source" }));
     await waitFor(() =>
       expect(api.createKnowledgeSource).toHaveBeenCalledWith(
         "varga",
@@ -367,16 +384,91 @@ describe("the sources of a base (S33-04)", () => {
 
   it("flags a credential typed as a plain header, and sends an anonymous crawl without a connector", async () => {
     vi.mocked(api.createKnowledgeSource).mockResolvedValue(source);
-    view();
+    adding();
     fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "web" } });
     fireEvent.change(screen.getByLabelText("url"), { target: { value: "https://example.com/" } });
     fireEvent.change(screen.getByLabelText("http headers"), { target: { value: "Authorization: Bearer abc" } });
     expect(screen.getByTestId("secret-header")).toHaveTextContent("Authorization looks like a credential");
     expect(await screen.findByTestId("no-web-connector")).toHaveAttribute("href", "/admin/connectors?type=documents/web");
     fireEvent.change(screen.getByLabelText("http headers"), { target: { value: "" } });
-    fireEvent.click(screen.getByRole("button", { name: "add source" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add source" }));
     await waitFor(() =>
       expect(api.createKnowledgeSource).toHaveBeenCalledWith("varga", "framework", expect.objectContaining({ kind: "web", connector: null })),
     );
+  });
+});
+
+describe("a readable sources card", () => {
+  beforeEach(() => {
+    vi.mocked(api.orgConnectors).mockResolvedValue([]);
+  });
+
+  it("lists the sources first; the form to add one opens from a button, never by itself", async () => {
+    view([{ ...source, status: "idle", last_error: null }]);
+    expect(screen.getByTestId("knowledge-sources")).toHaveTextContent("Architecture site");
+    expect(screen.queryByLabelText("source kind")).toBeNull();
+    expect(screen.queryByTestId("no-documents-connector")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Add a source" }));
+    expect(screen.getByRole("form", { name: "Add a source" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByLabelText("source kind")).toBeNull();
+  });
+
+  it("opens on a kind the organisation can sync: a web site without a connector, else the first connected kind it has", async () => {
+    expect(firstUsableKind([])).toBe("web");
+    expect(firstUsableKind([connector("wiki", "documents", "confluence")])).toBe("confluence");
+    expect(firstUsableKind([connector("sp", "documents", "sharepoint"), connector("wiki", "documents", "confluence")])).toBe("sharepoint");
+    expect(firstUsableKind([connector("entra-acme", "identity", "entra")])).toBe("web");
+    adding();
+    await screen.findByRole("option", { name: "SharePoint / OneDrive — no connector yet" });
+    expect(screen.getByLabelText("source kind")).toHaveValue("web");
+    expect(screen.queryByTestId("no-documents-connector")).toBeNull();
+    expect(screen.getByRole("button", { name: "Add source" })).toBeEnabled();
+  });
+
+  it("opens on Confluence when that is the connector the organisation has", async () => {
+    vi.mocked(api.orgConnectors).mockResolvedValue([connector("wiki", "documents", "confluence")]);
+    adding();
+    await screen.findByRole("option", { name: "wiki" });
+    expect(screen.getByLabelText("source kind")).toHaveValue("confluence");
+  });
+
+  it("says each source's state in words and colour: up to date, syncing, failed with its error, never synced", () => {
+    expect(sourceState({ status: "idle", last_synced_at: "2026-11-01T08:00:00Z", last_error: null })).toEqual({ label: "Up to date", tone: "ok" });
+    expect(sourceState({ status: "syncing", last_synced_at: null, last_error: null })).toEqual({ label: "Syncing", tone: "running" });
+    expect(sourceState({ status: "failed", last_synced_at: null, last_error: "401" })).toEqual({ label: "Sync failed", tone: "danger" });
+    expect(sourceState({ status: "idle", last_synced_at: null, last_error: null })).toEqual({ label: "Never synced", tone: "neutral" });
+    view([
+      { ...source, id: "ok", status: "idle", last_error: null },
+      { ...source, id: "busy", status: "syncing", last_error: null },
+      source,
+      { ...source, id: "new", status: "idle", last_error: null, last_synced_at: null, last_summary: null },
+    ]);
+    expect(screen.getByTestId("source-state-ok")).toHaveTextContent("Up to date");
+    expect(screen.getByTestId("source-state-ok").className).toContain("text-succeeded-ink");
+    expect(screen.getByTestId("source-state-busy").className).toContain("text-running-ink");
+    expect(screen.getByTestId("source-state-src-1")).toHaveTextContent("Sync failed");
+    expect(screen.getByTestId("source-state-src-1").className).toContain("text-failed-ink");
+    expect(screen.getByTestId("source-error-src-1")).toHaveTextContent("token refused (401)");
+    expect(screen.getByTestId("source-state-new")).toHaveTextContent("Never synced");
+    expect(screen.getByTestId("source-state-new").className).toContain("text-neutral-ink");
+  });
+
+  it("removing is the danger tone, syncing is secondary, adding is the card's primary action", () => {
+    view([source]);
+    expect(screen.getByRole("button", { name: "Remove Architecture site" }).className).toContain("text-failed-ink");
+    expect(screen.getByRole("button", { name: "Sync now" }).className).toContain("bg-raised");
+    expect(screen.getByRole("button", { name: "Add a source" }).className).toContain("bg-inverse");
+  });
+
+  it("a reader sees the sources and no gesture", () => {
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <KnowledgeSources org="varga" slug="framework" sources={[source]} onChange={vi.fn()} canEdit={false} />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByTestId("knowledge-sources")).toHaveTextContent("Architecture site");
+    expect(screen.queryByRole("button", { name: "Add a source" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Sync now" })).toBeNull();
   });
 });

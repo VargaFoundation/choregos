@@ -7205,6 +7205,14 @@ components:
             properties:
               filename: { type: string }
               characters: { type: integer }
+    KnowledgeBaseUser:
+      type: object
+      description: An agent whose current revision reads a knowledge base.
+      required: [agent, display_name, version]
+      properties:
+        agent: { type: string }
+        display_name: { type: string }
+        version: { type: integer, description: "the revision that names the base: production, else the latest" }
     KnowledgeBase:
       type: object
       required: [slug, name, scope, serving_mode, status]
@@ -7238,6 +7246,10 @@ components:
         cannot_reason: { type: [string, "null"], description: "the server's sentence when the caller may not edit: shown as is, never guessed from roles" }
         my_role: { type: [string, "null"], enum: [viewer, editor, owner, null], description: "the caller's role on the base through grants or ownership; null for a plain reader through the reach" }
         grants: { type: [array, "null"], items: { $ref: "#/components/schemas/KnowledgeGrant" }, description: returned by the reading of one base, to a caller who may share it }
+        used_by:
+          type: [array, "null"]
+          items: { $ref: "#/components/schemas/KnowledgeBaseUser" }
+          description: "returned by the reading of one base: the agents the caller sees whose current revision (production, else the latest; an active or deprecated agent, never a draft or a retired one) names the base in `spec.knowledge`. A run is served a base only through such an agent; a direct conversation with an agent is served none."
         distillation:
           type: [object, "null"]
           properties:

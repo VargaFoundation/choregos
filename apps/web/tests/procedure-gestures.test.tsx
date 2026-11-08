@@ -107,7 +107,8 @@ describe("the procedure at every add gesture (S39-23b)", () => {
   it("a knowledge source: choosing Confluence opens the source procedure, and the connector's is one click away", async () => {
     api.orgConnectors.mockResolvedValue([]);
     wrap(<KnowledgeSources org="acme" slug="framework" sources={[]} onChange={vi.fn()} />);
-    // Not when the page loads: only once a kind has been chosen.
+    fireEvent.click(screen.getByRole("button", { name: "Add a source" }));
+    // Not when the form opens: only once a kind has been chosen.
     await screen.findByRole("button", { name: "How to set this up" });
     expect(screen.queryByTestId("procedure-panel")).toBeNull();
     fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "confluence" } });
@@ -120,7 +121,10 @@ describe("the procedure at every add gesture (S39-23b)", () => {
 
   it("a web source has its own procedure and no connector button", async () => {
     wrap(<KnowledgeSources org="acme" slug="framework" sources={[]} onChange={vi.fn()} />);
-    fireEvent.change(await screen.findByLabelText("source kind"), { target: { value: "web" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add a source" }));
+    // The form opens on a web site already (no connector needed): choosing it again after git opens its procedure.
+    fireEvent.change(await screen.findByLabelText("source kind"), { target: { value: "git" } });
+    fireEvent.change(screen.getByLabelText("source kind"), { target: { value: "web" } });
     expect(await screen.findByTestId("procedure-panel")).toHaveTextContent("Add a web site to a knowledge base");
     expect(screen.queryByRole("button", { name: "Set up the connector" })).toBeNull();
   });
