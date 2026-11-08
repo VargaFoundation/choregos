@@ -104,10 +104,21 @@ def commands_for(stage_input: StageInput, workspace: Path) -> dict[str, str]:
     project = stage_input.project
     defaults = LANGUAGE_DEFAULTS.get(_detect_language(workspace), {})
     return {
-        "tests": project.test_command or defaults.get("test", ""),
-        "lint": project.lint_command or defaults.get("lint", ""),
-        "typecheck": project.typecheck_command or defaults.get("typecheck", ""),
+        "tests": _command(project.test_command, defaults.get("test", "")),
+        "lint": _command(project.lint_command, defaults.get("lint", "")),
+        "typecheck": _command(project.typecheck_command, defaults.get("typecheck", "")),
     }
+
+
+#: A project command set to this skips the check (S59-04): a repository without a type checker is not
+#: sent to `make typecheck`, a target it lacks, which failed every step and sent agents to "fix" it.
+NO_COMMAND = "-"
+
+
+def _command(declared: str | None, default: str) -> str:
+    if declared is not None and declared.strip() == NO_COMMAND:
+        return ""
+    return declared or default
 
 
 def _detect_language(workspace: Path) -> str:

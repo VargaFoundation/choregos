@@ -195,6 +195,25 @@ RUN set -eux; \
     timeout 30 mutmut --version >/dev/null; \
     timeout 60 stryker --version >/dev/null
 
+# uv, and the Pythons it manages (S59-04): a project that develops with uv (its `uv.lock`, a
+# `requires-python` the image's 3.12 does not meet) is checked the way its own CI checks it —
+# `uv run pytest`, `uv run ruff check .`. uv is pinned; Python 3.13 is installed HERE, at build time,
+# under `/opt/uv-python`, readable by uid 1000, and `UV_PYTHON_DOWNLOADS=never` keeps a run from
+# fetching an interpreter (the sandbox reaches package registries at most, never GitHub's releases).
+# `python3` stays the image's 3.12 (#713): uv picks 3.13 only for a project that asks for it.
+COPY --from=ghcr.io/astral-sh/uv:0.9.18 /uv /uvx /usr/local/bin/
+ENV UV_PYTHON_INSTALL_DIR=/opt/uv-python UV_PYTHON_BIN_DIR=/opt/uv-python/bin
+RUN set -eux; \
+    export UV_CACHE_DIR=/tmp/uv-build-cache; \
+    uv python install 3.13; \
+    chmod -R a+rX /opt/uv-python; \
+    test "$(command -v python3)" = /usr/local/bin/python3; \
+    uv --version; \
+    UV_PYTHON_DOWNLOADS=never uv python find 3.13; \
+    rm -rf /tmp/uv-build-cache; \
+    test ! -e /workspace/.local/bin/python3.13 && test ! -e /workspace/.cache/uv
+ENV UV_PYTHON_DOWNLOADS=never
+
 # Shims: defence in depth. No credential exists anyway, but an agent that tries must be
 # **refused and traced**, not silently ignored: the runner reads the shim's line in the call's output
 # and journals `shim.refused` (`choregos_runner.refusal_shims.SHIMMED` lists the same tools).
