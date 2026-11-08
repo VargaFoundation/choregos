@@ -16,7 +16,7 @@ function sansDialogueNatif(page: Page) {
 }
 
 test("revoking a token is confirmed; Escape cancels and gives back the focus", async ({ page }) => {
-  await page.goto("/admin");
+  await page.goto("/account");
   const tokens = page.getByTestId("confirmation");
   await page.getByRole("button", { name: "Revoke" }).first().click();
   await expect(tokens).toContainText("a token does not come back");

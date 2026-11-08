@@ -24,6 +24,7 @@ const PAGES = [
   "/p/billing-api/workflows/default-simple/yaml",
   "/p/billing-api/workflows/default-simple/history",
   "/login",
+  "/account",
   "/admin",
   "/admin/connectors",
   "/library/mcp-servers",
@@ -188,9 +189,9 @@ test("the header fits on one line at 1280 px, without horizontal scrolling", asy
   for (const path of ["/", "/skills", "/costs", "/integrations", "/admin"]) {
     await page.goto(path);
     await expect(page.getByRole("complementary", { name: "Sidebar" })).toBeVisible();
-    // The session arrives after the page: the header carries its real weight (organisation, person,
-    // sign-out) only once it is there.
-    await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+    // The session arrives after the page: the header carries its real weight (organisation, the
+    // person's menu) only once it is there.
+    await expect(page.getByRole("button", { name: /^Account of / })).toBeVisible();
     // Measuring before the fonts load is measuring the fallback font: narrower, it breaks nothing.
     await page.evaluate(() => document.fonts.ready);
     const measured = await page.evaluate(() => ({

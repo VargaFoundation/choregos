@@ -170,7 +170,7 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
                   It opens the MCP door only: the REST API refuses it, and it can never decide. Connected this way,{" "}
                   {info.label} acts as you. To give it a name, limits and an audit trail of its own, connect it from{" "}
                   <Link href="/agents">Agents</Link> instead: it becomes an external agent. Every token is listed, and
-                  revoked, in <Link href="/admin">Admin › My access tokens</Link>.
+                  revoked, in <Link href="/account#tokens">My account › Access tokens</Link>.
                 </p>
               </div>
             )}

@@ -68,7 +68,7 @@ export function A2aAgent({ org }: { org: string }) {
           <Button onClick={() => void issue()}>Create an A2A token</Button>
         )}
         <p className="text-xs text-ink-muted">
-          It opens the A2A door only: the REST API and the MCP door refuse it. Revoke it in Admin › My access tokens.
+          It opens the A2A door only: the REST API and the MCP door refuse it. Revoke it in My account › Access tokens.
         </p>
       </div>
     </Card>

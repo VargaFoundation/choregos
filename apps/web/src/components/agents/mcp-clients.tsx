@@ -37,7 +37,7 @@ export function McpClients({ org, clients, agents }: { org: string; clients: Api
       <p className="mb-3 text-xs text-ink-muted">
         Your access tokens for the MCP door, and the AI client behind each once it has called. Registering one
         makes it an external agent of the registry. Every token is listed, and revoked, in{" "}
-        <Link href="/admin">Admin › My access tokens</Link>.
+        <Link href="/account#tokens">My account › Access tokens</Link>.
       </p>
       {clients.length === 0 ? (
         <Empty title="No AI client">Connect Claude Code or another client above: it appears here once it has called.</Empty>

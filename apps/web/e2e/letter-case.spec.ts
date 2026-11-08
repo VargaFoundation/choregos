@@ -48,6 +48,7 @@ const PAGES = [
   "/memories/security-lessons",
   "/integrations",
   "/integrations/claude-code",
+  "/account",
   "/admin",
   "/admin/connectors",
   "/library/mcp-servers",
