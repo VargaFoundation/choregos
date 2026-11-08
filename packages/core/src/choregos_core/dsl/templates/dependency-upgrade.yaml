@@ -1,0 +1,118 @@
+# A dependency upgrade (S59-02): the developer moves the versions and adapts the code to them, the tester
+# runs the full checks, the supply-chain review scans the branch (vulnerabilities, licences, SBOM, secrets)
+# and must approve; a maintainer approves the pull request and the release train ships it.
+apiVersion: choregos/v1
+kind: Workflow
+metadata:
+  name: dependency-upgrade
+  version: 1
+  catalogue:
+    title: Dependency upgrade
+    summary: "Move one or more dependencies to newer versions: the upgrade and the code it needs, the full checks, a supply-chain scan of the branch that must approve, a pull request approved by a maintainer, the release train to production and a production check."
+    tags: [software, maintenance, dependencies, security, production]
+  description: "Dependency upgrade: upgrade, tests, supply-chain scan, pull request approved by a maintainer, release train, production check."
+initial: inbox
+actors:
+  developer: { type: agent, role: implement, agent: developer, model: "profile:standard" }
+  tester: { type: agent, role: verify, agent: tester, model: "profile:standard" }
+  reviewer: { type: agent, role: review, agent: secops, model: "profile:standard", fresh_context: true }
+  responder: { type: agent, role: address_review, agent: review-responder, model: "profile:standard" }
+  ci_fixer: { type: agent, role: fix_ci, agent: ci-fixer, model: "profile:standard" }
+  prod_verifier: { type: agent, role: verify_prod, agent: prod-verifier, model: "profile:standard" }
+  platform: { type: system }
+  maintainers: { type: human, group: maintainers, sla_hours: 24 }
+states:
+  inbox: { display: To upgrade, kind: wait, tracker: { status: Todo } }
+  implemented: { display: Upgraded, tracker: { status: In progress } }
+  tested: { display: Tested, tracker: { status: In progress } }
+  reviewed: { display: Supply chain reviewed, tracker: { status: In review } }
+  addressing_review: { display: Addressing the review, tracker: { status: In progress } }
+  awaiting_pr_approval: { display: Pull request to approve, kind: wait, tracker: { status: In review } }
+  pr_approved: { display: Pull request approved, tracker: { status: In review } }
+  fixing_ci: { display: Fixing the CI, tracker: { status: In progress } }
+  integrated: { display: Merged, tracker: { status: Merged } }
+  live: { display: In production, production: true, tracker: { status: Deployed } }
+  verified: { display: Verified in production, terminal: true, tracker: { status: Done } }
+  needs_human: { display: Needs a human, kind: wait, tracker: { status: Blocked } }
+  abandoned: { display: Abandoned, terminal: true, tracker: { status: Cancelled } }
+transitions:
+  - id: t-implement
+    from: inbox
+    to: implemented
+    by: developer
+    inputs: [test_report, human_feedback]
+    gates: [scope_respected, no_secrets, { name: diff_size_max, params: { files: 40, lines: 3000 } }]
+    on_fail: { to: inbox, max_attempts: 2, escalate_to: needs_human }
+  - id: t-test
+    from: implemented
+    to: tested
+    by: tester
+    outputs: [test_report]
+    gates: [evidence_present]
+    on_fail: { to: inbox, max_attempts: 2, escalate_to: needs_human }
+  - id: t-review
+    from: tested
+    to: reviewed
+    by: reviewer
+    outputs: [secops_report, sarif, verdict]
+    gates: [{ name: outputs_in, params: { values: { verdict: [approve] } } }]
+    on_changes_requested: { to: addressing_review, max_attempts: 2, escalate_to: needs_human }
+  - id: t-address-review
+    from: addressing_review
+    to: implemented
+    by: responder
+    inputs: [secops_report, human_feedback]
+    outputs: [review_markdown]
+    gates: [scope_respected, no_secrets]
+    on_fail: { to: addressing_review, max_attempts: 1, escalate_to: needs_human }
+  - id: t-open-pr
+    from: reviewed
+    to: awaiting_pr_approval
+    by: platform
+    does: open_pr
+    on_fail: { to: reviewed, max_attempts: 2, escalate_to: needs_human }
+  - id: t-approve-pr
+    from: awaiting_pr_approval
+    to: pr_approved
+    by: maintainers
+    on_reject: addressing_review
+  - id: t-merge
+    from: pr_approved
+    to: integrated
+    by: platform
+    does: merge_pr
+    gates: [ci_green]
+    timeout_hours: 24
+    on_fail: { to: fixing_ci, max_attempts: 2, escalate_to: needs_human }
+  - id: t-fix-ci
+    from: fixing_ci
+    to: awaiting_pr_approval
+    by: ci_fixer
+    gates: [scope_respected, no_secrets]
+    on_fail: { to: fixing_ci, max_attempts: 1, escalate_to: needs_human }
+  - id: t-release
+    from: integrated
+    to: live
+    via: release_train
+    train: { env: prod }
+    timeout_hours: 72
+  - id: t-verify-prod
+    from: live
+    to: verified
+    by: prod_verifier
+    outputs: [verdict]
+    gates: [{ name: outputs_in, params: { values: { verdict: [approve] } } }, { name: evidence_facts, params: { keys: [smoke_ok], must_be_true: [smoke_ok] } }]
+    on_fail: { to: live, max_attempts: 1, escalate_to: needs_human }
+  - id: t-abandon
+    from: needs_human
+    to: abandoned
+    by: maintainers
+    timeout_hours: 168
+defaults:
+  from_any_agent_state:
+    on_question: needs_human
+    on_budget_exceeded: needs_human
+    on_timeout: needs_human
+  needs_human:
+    on_answer: resume
+    on_abandon: abandoned

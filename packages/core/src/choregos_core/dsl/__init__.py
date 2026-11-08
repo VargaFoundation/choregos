@@ -19,7 +19,42 @@ from .validator import ValidationReport, validate_workflow
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 #: The templates SHIPPED with the package. This is no longer the list of what is available:
 #: a deployment can bring others (see `extra_templates_dirs`).
-TEMPLATE_NAMES = ("default-simple", "full-auto", "advanced", "default-request", "blank", "decision-triage")
+#: The core's workflows, in the order the console lists them: the six of the first releases, then the
+#: catalogue of S59-02 (development, audit, decision, documentation, operations; ADR 0111).
+TEMPLATE_NAMES = (
+    "default-simple",
+    "full-auto",
+    "advanced",
+    "default-request",
+    "blank",
+    "decision-triage",
+    "dev-feature",
+    "dev-fix",
+    "hotfix",
+    "refactoring",
+    "dependency-upgrade",
+    "vulnerability-fix",
+    "code-audit",
+    "security-audit",
+    "ux-audit",
+    "documentation",
+    "architecture-decision",
+    "spike",
+    "incident-postmortem",
+)
+#: The core's workflows that ship nothing to production: they need no release train (`cd`).
+NOT_DEPLOYED = (
+    "default-request",
+    "blank",
+    "decision-triage",
+    "code-audit",
+    "security-audit",
+    "ux-audit",
+    "documentation",
+    "architecture-decision",
+    "spike",
+    "incident-postmortem",
+)
 
 
 def extra_templates_dirs() -> list[Path]:
@@ -82,6 +117,7 @@ def template_yaml(name: str) -> str:
 
 __all__ = [
     "CONTEXT_DOCUMENTS",
+    "NOT_DEPLOYED",
     "PULL_REQUEST_SECTIONS",
     "RESUMES",
     "TEMPLATES_DIR",

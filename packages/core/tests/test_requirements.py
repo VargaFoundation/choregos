@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 from choregos_core import parse_workflow
-from choregos_core.dsl import TEMPLATE_NAMES, template_yaml
+from choregos_core.dsl import NOT_DEPLOYED, TEMPLATE_NAMES, template_yaml
 from choregos_core.dsl.requirements import requirements
 from choregos_core.gates import gate_needs, known_gates
 
@@ -36,11 +36,9 @@ def _capabilities(*texts: str) -> list[str]:
     return [e.capability for e in requirements(parse_workflow(t)[0] for t in texts)]
 
 
-#: The core workflows that deliver code; `default-request` (ADR 0110) and the `blank` skeleton (ADR 0112)
-#: do not.
-SOFTWARE_TEMPLATES = [
-    name for name in TEMPLATE_NAMES if name not in {"default-request", "blank", "decision-triage"}
-]
+#: The core workflows that deliver code to production; `default-request` (ADR 0110), the `blank`
+#: skeleton (ADR 0112) and the catalogue's audits, studies and documentation (S59-02) do not.
+SOFTWARE_TEMPLATES = [name for name in TEMPLATE_NAMES if name not in NOT_DEPLOYED]
 
 
 @pytest.mark.parametrize("name", SOFTWARE_TEMPLATES)

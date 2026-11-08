@@ -1,0 +1,70 @@
+# A security audit (S59-02): read-only. The supply-chain review runs the scanners of the runner image on
+# the repository (vulnerabilities, SBOM, secrets, container and IaC misconfigurations) and interprets
+# them; the security reviewer audits the code (injection, authorization, data exposure); the compliance
+# review covers licences and personal data. The security team accepts the three reports together.
+apiVersion: choregos/v1
+kind: Workflow
+metadata:
+  name: security-audit
+  version: 1
+  catalogue:
+    title: Security audit
+    summary: "A security audit of a repository: scanners interpreted (vulnerabilities, SBOM, secrets, container and IaC), a code security review, a licence and personal-data review, accepted together by the security team. Changes no file."
+    tags: [software, audit, security, compliance]
+  description: "Security audit: supply-chain scan, code security review, compliance review, acceptance by the security team. Read-only."
+initial: inbox
+actors:
+  scanner: { type: agent, role: review, agent: secops, model: "profile:standard" }
+  reviewer: { type: agent, role: review, agent: security-reviewer, model: "profile:standard", fresh_context: true }
+  compliance: { type: agent, role: review, agent: compliance, model: "profile:standard", fresh_context: true }
+  security: { type: human, group: security, sla_hours: 48 }
+states:
+  inbox: { display: To audit, kind: wait, tracker: { status: Todo } }
+  scanned: { display: Scanned, tracker: { status: In progress } }
+  reviewed: { display: Security reviewed, tracker: { status: In progress } }
+  awaiting_acceptance: { display: Audit to accept, kind: wait, tracker: { status: Needs review } }
+  accepted: { display: Audit accepted, terminal: true, tracker: { status: Done } }
+  needs_human: { display: Needs a human, kind: wait, tracker: { status: Blocked } }
+  abandoned: { display: Abandoned, terminal: true, tracker: { status: Cancelled } }
+transitions:
+  - id: t-scan
+    from: inbox
+    to: scanned
+    by: scanner
+    inputs: [human_feedback]
+    outputs: [secops_report, sarif]
+    gates: [outputs_present, { name: diff_size_max, params: { files: 0 } }]
+    on_fail: { to: inbox, max_attempts: 2, escalate_to: needs_human }
+  - id: t-review
+    from: scanned
+    to: reviewed
+    by: reviewer
+    inputs: [secops_report]
+    outputs: [security_review_markdown]
+    gates: [outputs_present, { name: diff_size_max, params: { files: 0 } }]
+    on_fail: { to: scanned, max_attempts: 2, escalate_to: needs_human }
+  - id: t-compliance
+    from: reviewed
+    to: awaiting_acceptance
+    by: compliance
+    outputs: [compliance_review]
+    gates: [outputs_present, { name: diff_size_max, params: { files: 0 } }]
+    on_fail: { to: reviewed, max_attempts: 2, escalate_to: needs_human }
+  - id: t-accept
+    from: awaiting_acceptance
+    to: accepted
+    by: security
+    on_reject: inbox
+  - id: t-abandon
+    from: needs_human
+    to: abandoned
+    by: security
+    timeout_hours: 168
+defaults:
+  from_any_agent_state:
+    on_question: needs_human
+    on_budget_exceeded: needs_human
+    on_timeout: needs_human
+  needs_human:
+    on_answer: resume
+    on_abandon: abandoned

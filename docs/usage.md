@@ -807,6 +807,29 @@ every workflow of the deployment's templates (`template:<name>`), those of the t
 plugins brought (`plugin:<name>`, the external catalogues) and the ones it shared from its projects
 (`org`).
 
+The core's own catalogue (S59-02) is ready to adopt; each workflow names agents of the built-in
+catalogue (the `software-delivery` plugin the platform ships), installed on adoption:
+
+| Workflow | For | Human decisions | Production |
+|---|---|---|---|
+| `dev-feature` | a feature, end to end: specification, plan, implementation, tests, documentation, code and security reviews, release notes | specification (`product-owners`), pull request (`maintainers`), production (`release-captains`) | staging, then production by the release train, checked by an agent |
+| `dev-fix` | a small, low-risk bug fix | none unless something goes wrong | release train, checked by an agent |
+| `hotfix` | an urgent production fix | pull request (`maintainers`, 2 h), production (`release-captains`, 1 h) | release train, checked by an agent |
+| `refactoring` | technical debt without behaviour change: plan, QA with mutation testing | pull request (`maintainers`) | release train, checked by an agent |
+| `dependency-upgrade` | newer versions of dependencies, with a supply-chain scan that must approve | pull request (`maintainers`) | release train, checked by an agent |
+| `vulnerability-fix` | a CVE, a secret, an exploitable flaw: supply-chain scan and security review both approve | pull request (`maintainers`), production (`release-captains`) | release train, checked by an agent |
+| `code-audit` | architecture, quality, tests, debt and risks, with evidence; read-only | acceptance (`product-owners`) | — |
+| `security-audit` | scanners interpreted, code security review, licences and personal data; read-only | acceptance (`security`) | — |
+| `ux-audit` | screens or a journey against the design system and WCAG; read-only | acceptance (`product-owners`) | — |
+| `documentation` | documentation written, checked to have really changed, reviewed | pull request (`maintainers`) | — (merged) |
+| `architecture-decision` | one ADR in MADR 4 format, researched and critiqued | decision (`architects`) | — (merged) |
+| `spike` | a question answered with options and evidence; read-only | acceptance (`product-owners`) | — |
+| `incident-postmortem` | timeline, root causes and actions, blameless; read-only | acceptance (`maintainers`) | — |
+
+`default-simple`, `full-auto`, `advanced`, `default-request`, `blank` and `decision-triage` stay
+as they were. A group may name the project (`{project}-maintainers`, S59-01): an organisation that
+shares one of these with its own groups serves every project with its own people.
+
 ```bash
 curl $API/orgs/acme/workflow-catalogue                    # any member
 curl -X POST $API/projects/acme:hr/workflow-adoptions \

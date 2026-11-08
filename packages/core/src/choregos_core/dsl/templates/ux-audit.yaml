@@ -1,0 +1,50 @@
+# A UX and accessibility audit (S59-02): read-only. The UX reviewer audits the user-facing part a work
+# item names against the organisation's design system (a skill or a knowledge base) and WCAG; a product
+# owner accepts the review. Nothing in the repository changes.
+apiVersion: choregos/v1
+kind: Workflow
+metadata:
+  name: ux-audit
+  version: 1
+  catalogue:
+    title: UX and accessibility audit
+    summary: "An audit of screens or a user journey against the organisation's design system and accessibility rules (WCAG), each finding with where it is and how to fix it, accepted by a product owner. Changes no file."
+    tags: [software, audit, ux, accessibility]
+  description: "UX and accessibility audit: review against the design system and WCAG, acceptance by a product owner. Read-only."
+initial: inbox
+actors:
+  designer: { type: agent, role: review, agent: ux-designer, model: "profile:standard" }
+  owners: { type: human, group: product-owners, sla_hours: 48 }
+states:
+  inbox: { display: To audit, kind: wait, tracker: { status: Todo } }
+  awaiting_acceptance: { display: Review to accept, kind: wait, tracker: { status: Needs review } }
+  accepted: { display: Review accepted, terminal: true, tracker: { status: Done } }
+  needs_human: { display: Needs a human, kind: wait, tracker: { status: Blocked } }
+  abandoned: { display: Abandoned, terminal: true, tracker: { status: Cancelled } }
+transitions:
+  - id: t-review
+    from: inbox
+    to: awaiting_acceptance
+    by: designer
+    inputs: [human_feedback]
+    outputs: [ux_review, verdict]
+    gates: [outputs_present, { name: diff_size_max, params: { files: 0 } }]
+    on_fail: { to: inbox, max_attempts: 2, escalate_to: needs_human }
+  - id: t-accept
+    from: awaiting_acceptance
+    to: accepted
+    by: owners
+    on_reject: inbox
+  - id: t-abandon
+    from: needs_human
+    to: abandoned
+    by: owners
+    timeout_hours: 168
+defaults:
+  from_any_agent_state:
+    on_question: needs_human
+    on_budget_exceeded: needs_human
+    on_timeout: needs_human
+  needs_human:
+    on_answer: resume
+    on_abandon: abandoned
