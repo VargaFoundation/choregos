@@ -35,6 +35,7 @@ import { ChangeWorkflow } from "@/components/ticket/change-workflow";
 import { NextStepBanner } from "@/components/ticket/next-step-banner";
 import { TargetRepository } from "@/components/ticket/target-repository";
 import { LongText, RequestCard } from "@/components/ticket/request-card";
+import { runOutcome } from "@/components/ticket/run-outcome";
 import { WorkflowChip } from "@/components/workflow-chip";
 import { fieldTitles } from "@/components/workflows/fields";
 import { useWorkflowDefinition } from "@/components/workflows/use-workflow";
@@ -270,6 +271,11 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
       </Heading>
       <div className="grid gap-4 lg:grid-cols-3">
         <Card title="Cost per stage" className="lg:col-span-2" action={<Provenance de="observed" />}>
+          <p className="mb-3 text-xs text-ink-muted" data-testid="cost-explained">
+            One row per run. A run that did not finish is run again — by the workflow up to its limit, or
+            after a person answers — and each run reads the ticket and the repository again, so its cost
+            adds up.
+          </p>
           <div className="overflow-x-auto">
             <table>
               <thead>
@@ -296,7 +302,14 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
                       {tokens(run.tokens?.tokens_in)} / {tokens(run.tokens?.tokens_out)}
                     </td>
                     <td className="text-right">{usd(run.cost_usd)}</td>
-                    <td className="max-w-80 truncate text-xs text-ink-muted">{run.result?.summary ?? run.status}</td>
+                    <td className="max-w-96 text-xs">
+                      <RunOutcomeChip run={run} />
+                      {run.result?.summary ? (
+                        <p className="mt-1 line-clamp-3 text-ink-muted" title={run.result.summary}>
+                          {run.result.summary}
+                        </p>
+                      ) : null}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -372,5 +385,21 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
       )}
 
     </div>
+  );
+}
+
+/** A run's outcome as a chip: done, or why it did not finish (S59-07). */
+function RunOutcomeChip({ run }: { run: Parameters<typeof runOutcome>[0] }) {
+  const { tone, label } = runOutcome(run);
+  const colour =
+    tone === "ok"
+      ? "border-ok text-ok"
+      : tone === "bad"
+        ? "border-danger text-danger"
+        : "border-line text-ink-muted";
+  return (
+    <span className={`inline-block rounded-full border px-2 py-0.5 ${colour}`} data-testid="run-outcome">
+      {label}
+    </span>
   );
 }

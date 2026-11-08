@@ -753,9 +753,15 @@ function detailOf(step: Step, state: StepState, structural = false): string | nu
   return null;
 }
 
-function roundOf(step: Step, state: StepState): string | null {
+export function roundOf(step: Step, state: StepState): string | null {
   if (state.rounds < 2) return null;
-  const sur = step.maxRounds ? ` of ${step.maxRounds}` : "";
+  // The limit is per pass: a person who answers starts the step again, so the rounds of the whole
+  // ticket can exceed it ("round 5 of 2" read as a bug). Past the limit, say so instead (S59-07).
+  const sur = step.maxRounds
+    ? state.rounds <= step.maxRounds
+      ? ` of ${step.maxRounds}`
+      : ` (${step.maxRounds} per pass, resumed by a person)`
+    : "";
   if (state.status === "done")
     return `${state.verdict === "approve" || step.kind === "human" ? "approved" : "passed"} in round ${state.rounds}`;
   return `round ${state.rounds}${sur}`;
