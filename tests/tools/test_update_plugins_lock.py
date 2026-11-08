@@ -26,7 +26,7 @@ def test_the_archives_are_what_the_lock_says() -> None:
 def test_a_changed_archive_or_an_unlisted_one_is_caught(tmp_path: Path) -> None:
     shutil.copytree(OFFLINE, tmp_path / "offline")
     copy = tmp_path / "offline"
-    shutil.copy(copy / "netops-1.0.0.tar.gz", copy / "extra-1.0.0.tar.gz")
+    shutil.copy(copy / "netops-1.1.0.tar.gz", copy / "extra-1.0.0.tar.gz")
     with tarfile.open(OFFLINE / "authoring-1.0.0.tar.gz") as source:
         source.extractall(tmp_path / "authoring", filter="data")
     agent = tmp_path / "authoring" / "agents" / "agent-drafter.yaml"

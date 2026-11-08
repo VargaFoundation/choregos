@@ -18,7 +18,9 @@ ROOT = Path(__file__).resolve().parents[3]
 OFFLINE = ROOT / "plugins" / "offline"
 
 #: The plugin of each agent, and the catalogue version its provenance carries (MIGRATION-FROM-CORE.md).
-VERSION_TWO = {"architect", "netops", "prod-verifier", "spec-writer"}
+VERSION_TWO = {"architect", "prod-verifier", "spec-writer"}
+#: An agent whose catalogue entry moved past 2: netops 1.1.0 declares its tool-scripts default (S57-15).
+VERSION_THREE = {"netops"}
 PLUGINS = {
     "software-delivery": 19,
     "netops": 1,
@@ -27,7 +29,7 @@ PLUGINS = {
     "requests": 2,
 }
 #: The plugin version the offline directory holds, when it is not 1.0.0.
-PLUGIN_VERSIONS = {"requests": "1.0.1"}
+PLUGIN_VERSIONS = {"requests": "1.0.1", "netops": "1.1.0"}
 
 #: The fingerprints the core's own YAML had at 3156d12e (choregos-agents' MIGRATION-FROM-CORE.md): the
 #: plugins carry the same documents, so an installed agent's checksum does not move. They include the
@@ -36,7 +38,8 @@ PLUGIN_VERSIONS = {"requests": "1.0.1"}
 FINGERPRINTS = {
     "architect": "sha256:687e23ee5cfc454162ac4790c01fa5aa12c3302caa0c8359eaf5c7a12d9549a5",
     "developer": "sha256:c6969085476d0412ba8274d6286e6658183dbeccc93e3b4fd97b187e708409af",
-    "netops": "sha256:3e731940ccf5867561695e4fc392db9cbf81c46e211b2be80aaa2aa05a876ca6",
+    # netops 1.1.0 adds `spec.tools: {scripts: offer}` (S57-15): its document moved once, on purpose.
+    "netops": "sha256:b83b14d97c204780a556b4a977c0bd9646b5c743b0ada05303fc71e2a498d856",
     "agent-drafter": "sha256:ce17d429cab0d7b56ab229c33c8922d1a906849e370fdf6a612a9099902d44d8",
     "claude-ai": "sha256:56cbd162bc57f803e6e162baf922669d6a50a3d205a521a88b69efc2b3113496",
 }
@@ -57,7 +60,7 @@ def test_every_agent_comes_from_its_plugin() -> None:
     for found in entries():
         counted[found.plugin] = counted.get(found.plugin, 0) + 1
         assert found.plugin_version == PLUGIN_VERSIONS.get(found.plugin, "1.0.0")
-        expected = 2 if found.slug in VERSION_TWO else 1
+        expected = 3 if found.slug in VERSION_THREE else 2 if found.slug in VERSION_TWO else 1
         assert found.provenance == f"plugin:{found.plugin}/{found.slug}@{expected}"
     assert counted == PLUGINS
 
@@ -92,7 +95,7 @@ def test_without_an_offline_directory_the_catalogue_is_empty(tmp_path: Path) -> 
 
 
 def test_the_environment_names_the_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    shutil.copy(OFFLINE / "netops-1.0.0.tar.gz", tmp_path)
+    shutil.copy(OFFLINE / "netops-1.1.0.tar.gz", tmp_path)
     monkeypatch.setenv("CHOREGOS_PLUGINS_OFFLINE", str(tmp_path))
     assert [e.slug for e in entries()] == ["netops"]
 
