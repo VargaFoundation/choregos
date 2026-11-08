@@ -102,6 +102,99 @@ def test_the_connector_opens_a_source_with_the_chosen_pages() -> None:
     assert (whole.roots, whole.descendants) == (["100"], True)
 
 
+def _filed() -> FakeConfluence:
+    """The tree of `_site`, with a folder under the root holding pages, and a folder in that folder."""
+    site = _site()
+    site.put_folder("ENG", "900", "Operations", parent="100")
+    site.put_page("ENG", "110", "Incidents", "<p>page the on-call</p>", parent="900")
+    site.put_page("ENG", "111", "Postmortem", "<p>blameless</p>", parent="110")
+    site.put_folder("ENG", "901", "Archive", parent="900")
+    site.put_page("ENG", "112", "Old runbook", "<p>reboot</p>", parent="901")
+    return site
+
+
+def _folder_reads(site: FakeConfluence) -> list[str]:
+    return [r.url.path for r in site.requests if "/folders/" in r.url.path]
+
+
+async def test_a_page_tree_crosses_the_folders_under_it() -> None:
+    """Folders are not in the space's page listing: the tree used to stop at the first one."""
+    site = _filed()
+    source = _source(site, page_id="100")
+    changes = await source.changes(None)
+    refs = {i.ref for i in changes.items}
+    assert refs == {f"page:{n}" for n in (100, 101, 102, 110, 111, 112)}, "a folder is crossed, not listed"
+    by_ref = {i.ref: i for i in changes.items}
+    postmortem = (await source.fetch(by_ref["page:111"])).decode()
+    assert "<p>Path: Handbook / Operations / Incidents</p>" in postmortem
+    old = (await source.fetch(by_ref["page:112"])).decode()
+    assert "<p>Path: Handbook / Operations / Archive</p>" in old
+    assert not [p for p in _folder_reads(site) if not p.endswith("/descendants")], (
+        "the folders under the root come with its descendants: none is read on its own"
+    )
+    below = await _source(site, page_id="100", include_root=False).changes(None)
+    assert {i.ref for i in below.items} == {"page:101", "page:102", "page:110", "page:111", "page:112"}
+
+
+async def test_a_chosen_page_filed_in_a_folder_keeps_its_tree_and_the_folder_in_its_path() -> None:
+    site = _filed()
+    source = _source(site, page_ids=["110"])
+    changes = await source.changes(None)
+    assert {i.ref for i in changes.items} == {"page:110", "page:111"}
+    page = (await source.fetch(next(i for i in changes.items if i.ref == "page:110"))).decode()
+    assert "<p>Path: Handbook / Operations</p>" in page
+    alone = await _source(site, page_ids=["112"], descendants=False).changes(None)
+    assert {i.ref for i in alone.items} == {"page:112"}
+
+
+async def test_without_descendants_a_folder_under_the_root_is_not_crossed() -> None:
+    site = _filed()
+    one = await _source(site, page_id="100", descendants=False).changes(None)
+    assert {i.ref for i in one.items} == {"page:100"}
+    assert not any(r.url.path.endswith("/descendants") for r in site.requests)
+
+
+async def test_a_whole_space_names_the_folders_in_the_path_and_lists_no_folder() -> None:
+    site = _filed()
+    source = _source(site)
+    changes = await source.changes(None)
+    assert {i.ref for i in changes.items} == {f"page:{n}" for n in (100, 101, 102, 103, 110, 111, 112)}
+    page = (await source.fetch(next(i for i in changes.items if i.ref == "page:112"))).decode()
+    assert "<p>Path: Handbook / Operations / Archive</p>" in page
+    assert sorted(_folder_reads(site)) == ["/wiki/api/v2/folders/900", "/wiki/api/v2/folders/901"], (
+        "each folder is read once per sync"
+    )
+
+
+async def test_a_folder_the_account_cannot_read_ends_the_path_and_does_not_fail_the_sync() -> None:
+    site = _filed()
+    site.restrict("900")
+    source = _source(site, page_ids=["110"], descendants=False)
+    changes = await source.changes(None)
+    page = (await source.fetch(next(iter(changes.items)))).decode()
+    assert "Path:" not in page and "Operations" not in page
+    site.restrict("900", False)
+    site.fail_next("/folders/900", 401)  # a scoped token without `read:folder:confluence`
+    changes = await _source(site, page_ids=["110"], descendants=False).changes(None)
+    assert {i.ref for i in changes.items} == {"page:110"}
+
+
+async def test_a_tree_deeper_than_one_descendants_call_is_followed_to_the_end() -> None:
+    """One call reaches ten levels; the tree goes on from the tenth, here a folder."""
+    site = FakeConfluence()
+    site.add_space("ENG")
+    site.put_page("ENG", "300", "Level 0", "<p>x</p>")
+    for level in range(1, 10):  # pages 301 to 309, levels 1 to 9
+        site.put_page("ENG", str(300 + level), f"Level {level}", "<p>x</p>", parent=str(299 + level))
+    site.put_folder("ENG", "1300", "Level 10", parent="309")
+    site.put_page("ENG", "310", "Level 11", "<p>x</p>", parent="1300")
+    site.put_page("ENG", "311", "Level 12", "<p>x</p>", parent="310")
+    site.page_size = 3  # the descendants are paginated too, and the next link keeps its depth
+    changes = await _source(site, page_id="300").changes(None)
+    assert {i.ref for i in changes.items} == {f"page:{300 + n}" for n in range(12)}
+    assert any(r.url.path == "/wiki/api/v2/folders/1300/descendants" for r in site.requests)
+
+
 async def test_pagination_follows_the_next_links() -> None:
     site = FakeConfluence()
     site.add_space("ENG")

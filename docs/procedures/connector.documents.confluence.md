@@ -25,8 +25,9 @@ token**. It carries all of that user's rights: prefer a Confluence-only user.
 ## Permissions
 
 - Scopes for a scoped token: `read:space:confluence`, `read:page:confluence`,
-  `read:hierarchical-content:confluence`, plus `read:attachment:confluence` when the source indexes
-  attachments.
+  `read:hierarchical-content:confluence` (the pages under a page, through folders),
+  `read:folder:confluence` (a folder's name in the path of the pages it holds; without it the path
+  stops at the folder), plus `read:attachment:confluence` when the source indexes attachments.
 - Give the account **read** on the spaces to index (Space settings, Permissions) and nothing else.
 - A scoped token is only accepted through `https://api.atlassian.com/ex/confluence/<cloudId>/…`, with
   Basic authentication using the service account's email. Choregos does that when `auth` is `scoped`.

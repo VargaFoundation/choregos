@@ -14,7 +14,9 @@ For an organisation administrator. Procedure `source.confluence`, version 1, rev
 ## At Atlassian
 
 Nothing more than the connector's setup. To read a **sub-space**, open the branch's root page: its number
-is in the address, `…/wiki/spaces/ENG/pages/<id>/Title`.
+is in the address, `…/wiki/spaces/ENG/pages/<id>/Title`. The pages filed in **folders** under that page
+are read too; a folder is not a document (it has no content of its own), its name is in the path of
+the pages it holds. A folder has no page number: choose the page above it, or the pages in it.
 
 ## Permissions
 
@@ -30,7 +32,8 @@ the chosen tree or restricted against the account leaves the base at the next sy
 
 ## Test it
 
-Press **Sync now**. Each sync lists the space once and downloads only pages whose version changed.
+Press **Sync now**. Each sync lists the space once (and, for a page tree, what is under its root page)
+and downloads only pages whose version changed.
 
 ## When it fails
 
