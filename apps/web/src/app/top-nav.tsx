@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ThemePicker } from "@/components/theme-picker";
+import { AccountMenu, personName } from "@/components/account/account-menu";
 import { Count, NavigationList } from "@/components/shell/navigation";
 import { AboutEntry, EditionBadge } from "@/components/edition";
 import { Select } from "@/components/ui";
@@ -15,7 +16,10 @@ import { api } from "@/lib/api";
 import { useSession } from "@/lib/session";
 
 /**
- * The header: current organisation, who is signed in, the theme, and, below 1280 px, the navigation.
+ * The header: current organisation, who is signed in, and, below 1280 px, the navigation.
+ *
+ * Who is signed in is a menu under their name (`AccountMenu`): their account, their access tokens,
+ * the theme and signing out. Signed out, the theme stays in the header.
  *
  * From 1280 px, the navigation lives in the sidebar (`components/shell`, ADR 0043) and
  * the header keeps only what concerns the session. Below that, the navigation folds behind a
@@ -76,9 +80,18 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
       </span>
     );
 
-  const session = me ? (
+  // Below 1280 px, the panel lists the account's entries itself: a menu inside a menu would not fit.
+  const panelSession = me ? (
     <>
-      <span title={me.email}>{me.display_name || me.email}</span>
+      <span className="font-medium text-ink" title={me.email} data-verbatim>
+        {personName(me)}
+      </span>
+      <Link href="/account" className="text-ink-muted hover:text-ink">
+        My account
+      </Link>
+      <Link href="/account#tokens" className="text-ink-muted hover:text-ink">
+        My access tokens
+      </Link>
       <button type="button" onClick={() => void deconnecter()} className="text-ink-muted hover:text-ink">
         Sign out
       </button>
@@ -101,9 +114,17 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
       <div className="hidden items-center text-xs xl:flex">{orgChoice}</div>
       <div className="ml-auto hidden items-center gap-4 whitespace-nowrap text-xs xl:flex">
         {edition.data && <EditionBadge edition={edition.data.edition} publisher={edition.data.publisher} />}
-        {session}
         {badgeDemo}
-        <ThemePicker />
+        {me ? (
+          <AccountMenu me={me} onSignOut={() => void deconnecter()} />
+        ) : (
+          <>
+            <Link href="/login" className="text-ink-muted hover:text-ink">
+              Sign in
+            </Link>
+            <ThemePicker />
+          </>
+        )}
       </div>
       <nav className="ml-auto flex items-center xl:hidden" aria-label="Main navigation">
         <button
@@ -131,7 +152,7 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
             <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-line pt-4 text-xs">
               {edition.data && <EditionBadge edition={edition.data.edition} publisher={edition.data.publisher} />}
               {orgChoice}
-              {session}
+              {panelSession}
               {badgeDemo}
               <ThemePicker />
               <AboutEntry className="inline-flex min-h-11 items-center gap-2 rounded px-1 text-ink-muted hover:text-ink" />

@@ -113,7 +113,7 @@ def login(
     """Save the connection profile (`~/.config/choregos/config.json`).
 
     The CLI cannot issue the first token (`tokens create` itself needs one): get it from the
-    console, under `/admin` (API tokens), then pass it with `--token`.
+    console, under My account (the menu under your name, `/account`), then pass it with `--token`.
     """
     profile = Profile(api_url=api_url, token=token, org=org)
     path = profile.save()

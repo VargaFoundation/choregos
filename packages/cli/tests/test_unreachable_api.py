@@ -87,7 +87,7 @@ def test_login_help_says_the_first_token_comes_from_the_console() -> None:
     result = _run("login", "--help")
     flat = " ".join(result.output.split())
     assert "cannot issue the first token" in flat
-    assert "/admin" in flat
+    assert "/account" in flat
 
 
 def test_a_knowledge_command_fails_cleanly(api_url: str, tmp_path: Path) -> None:

@@ -109,7 +109,7 @@ platform itself (hot reload, a development cluster), see [development](developme
 | | Why |
 | :-- | :-- |
 | An **installed platform** with its first organisation and administrators | [`deployment.md`](deployment.md): the chart bootstraps both (`global.bootstrap.*`) |
-| An **API token** | issued by the person who will use it (`choregos tokens create`, or *Admin → Tokens*); the very first one from the server side (`choregos-admin tokens create`) |
+| An **API token** | issued by the person who will use it (`choregos tokens create`, or *My account → Access tokens*, in the menu under your name); the very first one from the server side (`choregos-admin tokens create`) |
 | The **application repository** (GitHub, GitLab) — *if the work is code* | it is what agents modify, on a branch, through a PR. A business project has none |
 | A **GitOps repository** — *for a templated stack* | provisioning writes the project's manifests there, Argo CD applies them |
 | A **board** (GitHub Projects v2, Jira) — *or nothing* | with `tracker: internal` the requests are filed in Choregos itself |

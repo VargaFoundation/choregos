@@ -127,16 +127,23 @@ test("sign-in: the page exists and says what it expects", async ({ page }) => {
   await expect(page.getByText(/Demo mode: the session/)).toBeVisible();
 });
 
-test("administration: members and tokens have a screen", async ({ page }) => {
+test("administration: members have a screen, my tokens are on my account", async ({ page }) => {
   await page.goto("/admin");
+  await expect(page.getByRole("heading", { name: "Organisation" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Create an API token/ })).toHaveCount(0);
+  // What belongs to the person is in the menu under their name.
+  await page.getByRole("button", { name: /^Account of / }).click();
+  await page.getByRole("link", { name: "My access tokens" }).click();
+  await expect(page).toHaveURL(/\/account#tokens$/);
   await expect(page.getByRole("button", { name: /Create an API token/ })).toBeVisible();
+  await page.goto("/admin");
   await page.getByRole("link", { name: "Members" }).click();
   await expect(page.getByText(/Members of/)).toBeVisible();
   await expect(page.getByRole("button", { name: /^Remove / }).first()).toBeVisible();
 });
 
-test("the administration lists my roles by scope (S40-07)", async ({ page }) => {
-  await page.goto("/admin");
+test("my account lists my roles by scope (S40-07)", async ({ page }) => {
+  await page.goto("/account");
   const roles = page.getByRole("list", { name: "Your roles" });
   await expect(roles).toContainText("platform : org_admin");
   await expect(roles).not.toContainText("acme :");
@@ -699,20 +706,20 @@ test("landmarks: the journey legend tells \"in progress\" and \"done\" apart oth
 });
 
 test("a token, a name, a place: the three pages speak of \"access token\" and lead to the list (S23-14)", async ({ page }) => {
-  await page.goto("/admin");
-  const checklist = page.getByRole("heading", { name: "My access tokens" });
+  await page.goto("/account");
+  const checklist = page.getByRole("heading", { name: "Access tokens" });
   await expect(checklist).toBeVisible();
   // The list says what each token opens: the API, or a client's MCP door.
   await expect(page.getByText(/· (API and CLI|AI client, (read-only|can open work items)) ·/).first()).toBeVisible();
 
   await page.goto("/integrations/claude-code");
   await expect(page.getByText(/Connected this way, Claude Code acts as you/)).toBeVisible();
-  await expect(page.getByRole("link", { name: "Admin › My access tokens" }).first()).toHaveAttribute("href", "/admin");
+  await expect(page.getByRole("link", { name: "My account › Access tokens" }).first()).toHaveAttribute("href", "/account#tokens");
 
   // The caller's AI clients are on the AI clients' page, under the connection steps (S30-04).
   await page.goto("/integrations");
   await expect(page.getByRole("heading", { name: "Your AI clients" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Admin › My access tokens" }).first()).toHaveAttribute("href", "/admin");
+  await expect(page.getByRole("link", { name: "My account › Access tokens" }).first()).toHaveAttribute("href", "/account#tokens");
   await expect(page.getByText(/To connect one simply as yourself/)).toBeVisible();
   await expect(page.locator("main")).not.toContainText(/your MCP clients|mint a token|API token/);
 });

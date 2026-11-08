@@ -58,6 +58,7 @@ const PAGES = [
   "/skills/onboarding-procedure",
   "/integrations",
   "/integrations/claude-code",
+  "/account",
   "/admin",
   "/admin/connectors",
   "/library/mcp-servers",

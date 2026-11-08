@@ -256,3 +256,34 @@ async def test_an_unreachable_discovery_url_is_a_503_not_a_500(
     reset_settings_cache()
     response = await client.get("/api/v1/auth/login")
     assert response.status_code == 503, response.text
+
+
+async def test_an_invited_account_takes_the_providers_name_at_sign_in(client: AsyncClient, org: str) -> None:
+    """An invitation names the account after the address's local part; the provider knows better."""
+    async with session_scope(orgs="*") as session:
+        session.add(User(email="vdevillers@varga.dev", display_name="vdevillers", oidc_sub=None))
+    userinfo = {"sub": "u-1", "email": "vdevillers@varga.dev", "email_verified": True}
+    response = await _sign_in(client, userinfo | {"name": "Vincent Devillers"})
+    assert response.status_code == 307, response.text
+    (user,) = await _users()
+    assert user.display_name == "Vincent Devillers"
+
+
+async def test_a_returning_subjects_name_follows_the_provider(client: AsyncClient, org: str) -> None:
+    async with session_scope(orgs="*") as session:
+        session.add(User(email="jo@varga.dev", display_name="jo", oidc_sub="u-1"))
+    response = await _sign_in(
+        client, {"sub": "u-1", "email": "jo@varga.dev", "given_name": "Jo", "family_name": "Martin"}
+    )
+    assert response.status_code == 307, response.text
+    (user,) = await _users()
+    assert user.display_name == "Jo Martin"
+
+
+async def test_a_provider_without_a_name_leaves_the_name_alone(client: AsyncClient, org: str) -> None:
+    async with session_scope(orgs="*") as session:
+        session.add(User(email="jo@varga.dev", display_name="Jo Martin", oidc_sub="u-1"))
+    response = await _sign_in(client, {"sub": "u-1", "email": "jo@varga.dev", "name": "  "})
+    assert response.status_code == 307, response.text
+    (user,) = await _users()
+    assert user.display_name == "Jo Martin"

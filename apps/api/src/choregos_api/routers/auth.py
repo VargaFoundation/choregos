@@ -349,6 +349,19 @@ async def _ensure_user(session: Any, email: str, display_name: str, sub: str | N
     return user
 
 
+def provider_name(info: dict[str, Any]) -> str:
+    """The person's name as the provider gives it: `name`, else `given_name` and `family_name`.
+
+    Empty when the provider gives none (the `profile` scope is missing): the account then keeps the
+    name it has. An account invited by e-mail is named after the address's local part until then.
+    """
+    full = str(info.get("name") or "").strip()
+    if full:
+        return full[:200]
+    parts = (str(info.get(claim) or "").strip() for claim in ("given_name", "family_name"))
+    return " ".join(part for part in parts if part)[:200]
+
+
 async def _ensure_oidc_user(
     session: Any,
     info: dict[str, Any],
@@ -375,12 +388,15 @@ async def _ensure_oidc_user(
     """
     sub = stored_sub or str(info["sub"])
     email = str(info["email"])
+    name = provider_name(info)
     unverified = settings.oidc_require_email_verified and info.get("email_verified") is False
     by_sub: User | None = (
         await session.execute(select(User).where(User.oidc_sub == sub))
     ).scalar_one_or_none()
     if by_sub is not None:
         by_sub.last_login_at = utcnow()
+        if name:
+            by_sub.display_name = name
         if by_sub.email != email and not unverified:
             taken = (await session.execute(select(User).where(User.email == email))).scalar_one_or_none()
             if taken is None:
@@ -410,12 +426,14 @@ async def _ensure_oidc_user(
             )
         by_email.oidc_sub = sub
         by_email.last_login_at = utcnow()
+        if name:
+            by_email.display_name = name
         return by_email
     if unverified:
         raise unauthorized("the provider says this e-mail is not verified")
     user = User(
         email=email,
-        display_name=str(info.get("name") or "") or email.split("@", maxsplit=1)[0],
+        display_name=name or email.split("@", maxsplit=1)[0],
         oidc_sub=sub,
         last_login_at=utcnow(),
     )
