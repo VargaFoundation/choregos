@@ -1,0 +1,86 @@
+# A documentation change (S59-02): the docs writer updates the user documentation, the changelog or the
+# API reference; the `docs_updated` guarantee checks that a documentation file really changed; a reviewer
+# and a maintainer approve; the pull request merges once its CI is green. Nothing is deployed.
+apiVersion: choregos/v1
+kind: Workflow
+metadata:
+  name: documentation
+  version: 1
+  catalogue:
+    title: Documentation update
+    summary: "Write or fix documentation: the docs writer changes the documentation files, a guarantee checks that one really changed, an agent reviews, a maintainer approves the pull request and it merges once its CI is green. Nothing is deployed."
+    tags: [software, documentation]
+  description: "Documentation: writing, agent review, pull request approved by a maintainer, merge. Nothing is deployed."
+initial: inbox
+actors:
+  writer: { type: agent, role: implement, agent: docs-writer, model: "profile:standard" }
+  checker: { type: agent, role: verify, agent: reviewer, model: "profile:standard", fresh_context: true }
+  responder: { type: agent, role: address_review, agent: review-responder, model: "profile:standard" }
+  platform: { type: system }
+  maintainers: { type: human, group: maintainers, sla_hours: 48 }
+states:
+  inbox: { display: To write, kind: wait, tracker: { status: Todo } }
+  written: { display: Written, tracker: { status: In progress } }
+  reviewed: { display: Reviewed by an agent, tracker: { status: In review } }
+  addressing_review: { display: Addressing the review, tracker: { status: In progress } }
+  awaiting_pr_approval: { display: Pull request to approve, kind: wait, tracker: { status: In review } }
+  pr_approved: { display: Pull request approved, tracker: { status: In review } }
+  merged: { display: Merged, terminal: true, tracker: { status: Done } }
+  needs_human: { display: Needs a human, kind: wait, tracker: { status: Blocked } }
+  abandoned: { display: Abandoned, terminal: true, tracker: { status: Cancelled } }
+transitions:
+  - id: t-write
+    from: inbox
+    to: written
+    by: writer
+    inputs: [human_feedback]
+    outputs: [docs_report]
+    gates: [scope_respected, no_secrets, docs_updated]
+    on_fail: { to: inbox, max_attempts: 2, escalate_to: needs_human }
+  - id: t-review
+    from: written
+    to: reviewed
+    by: checker
+    outputs: [review_markdown, verdict]
+    gates: [{ name: outputs_in, params: { values: { verdict: [approve] } } }]
+    on_changes_requested: { to: addressing_review, max_attempts: 2, escalate_to: needs_human }
+  - id: t-address-review
+    from: addressing_review
+    to: written
+    by: responder
+    inputs: [review_markdown, human_feedback]
+    outputs: [review_markdown]
+    gates: [scope_respected, no_secrets]
+    on_fail: { to: addressing_review, max_attempts: 2, escalate_to: needs_human }
+  - id: t-open-pr
+    from: reviewed
+    to: awaiting_pr_approval
+    by: platform
+    does: open_pr
+    on_fail: { to: reviewed, max_attempts: 2, escalate_to: needs_human }
+  - id: t-approve-pr
+    from: awaiting_pr_approval
+    to: pr_approved
+    by: maintainers
+    on_reject: addressing_review
+  - id: t-merge
+    from: pr_approved
+    to: merged
+    by: platform
+    does: merge_pr
+    gates: [ci_green]
+    timeout_hours: 24
+    on_fail: { to: needs_human, max_attempts: 1, escalate_to: needs_human }
+  - id: t-abandon
+    from: needs_human
+    to: abandoned
+    by: maintainers
+    timeout_hours: 168
+defaults:
+  from_any_agent_state:
+    on_question: needs_human
+    on_budget_exceeded: needs_human
+    on_timeout: needs_human
+  needs_human:
+    on_answer: resume
+    on_abandon: abandoned

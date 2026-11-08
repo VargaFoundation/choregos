@@ -1,0 +1,60 @@
+# A code audit (S59-02): read-only. A researcher audits the scope the work item names — architecture,
+# quality, tests, debt, risks — and writes the report with evidence; a reviewer critiques it with fresh
+# eyes; a product owner accepts it. Nothing in the repository changes (`diff_size_max: 0`).
+apiVersion: choregos/v1
+kind: Workflow
+metadata:
+  name: code-audit
+  version: 1
+  catalogue:
+    title: Code audit
+    summary: "An audit of a repository or of the part a work item names: architecture, quality, tests, technical debt and risks, each finding with its evidence and a recommendation, critiqued by a reviewer and accepted by a product owner. Changes no file."
+    tags: [software, audit, quality]
+  description: "Code audit: report with evidence, critique, acceptance by a product owner. Read-only."
+initial: inbox
+actors:
+  auditor: { type: agent, role: research, agent: researcher, model: "profile:standard" }
+  critic: { type: agent, role: review, agent: reviewer, model: "profile:standard", fresh_context: true }
+  owners: { type: human, group: product-owners, sla_hours: 48 }
+states:
+  inbox: { display: To audit, kind: wait, tracker: { status: Todo } }
+  audited: { display: Audited, tracker: { status: In progress } }
+  awaiting_acceptance: { display: Report to accept, kind: wait, tracker: { status: Needs review } }
+  accepted: { display: Report accepted, terminal: true, tracker: { status: Done } }
+  needs_human: { display: Needs a human, kind: wait, tracker: { status: Blocked } }
+  abandoned: { display: Abandoned, terminal: true, tracker: { status: Cancelled } }
+transitions:
+  - id: t-audit
+    from: inbox
+    to: audited
+    by: auditor
+    inputs: [review_markdown, human_feedback]
+    outputs: [research_markdown]
+    gates: [outputs_present, { name: diff_size_max, params: { files: 0 } }]
+    on_fail: { to: inbox, max_attempts: 2, escalate_to: needs_human }
+  - id: t-critique
+    from: audited
+    to: awaiting_acceptance
+    by: critic
+    inputs: [research_markdown]
+    outputs: [review_markdown, verdict]
+    gates: [{ name: outputs_in, params: { values: { verdict: [approve] } } }, { name: diff_size_max, params: { files: 0 } }]
+    on_changes_requested: { to: inbox, max_attempts: 2, escalate_to: needs_human }
+  - id: t-accept
+    from: awaiting_acceptance
+    to: accepted
+    by: owners
+    on_reject: inbox
+  - id: t-abandon
+    from: needs_human
+    to: abandoned
+    by: owners
+    timeout_hours: 168
+defaults:
+  from_any_agent_state:
+    on_question: needs_human
+    on_budget_exceeded: needs_human
+    on_timeout: needs_human
+  needs_human:
+    on_answer: resume
+    on_abandon: abandoned

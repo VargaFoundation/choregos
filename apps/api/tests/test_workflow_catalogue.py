@@ -170,3 +170,29 @@ def test_renaming_keeps_every_other_byte() -> None:
     source = template_yaml("default-request")
     out = renamed(source, "requests")
     assert out.replace("name: requests", "name: default-request", 1) == source
+
+
+async def test_the_core_catalogue_offers_development_and_audit_workflows_with_their_agents(
+    client: AsyncClient, project: dict[str, Any], admin: str
+) -> None:
+    """S59-02: the core ships a catalogue (development, audit, decision, documentation, operations), each
+    entry presented and its agents resolved; adopting an audit installs the agents it names."""
+    entries = (await client.get(BASE)).json()
+    core = {e["name"]: e for e in entries if e["source"] == "core"}
+    assert {"dev-feature", "dev-fix", "hotfix", "code-audit", "security-audit", "incident-postmortem"} <= set(
+        core
+    )
+    audit = core["security-audit"]
+    assert audit["title"] == "Security audit" and "audit" in audit["tags"]
+    assert {a["slug"] for a in audit["agents"]} == {"secops", "security-reviewer", "compliance"}
+    assert "unresolved" not in {a["resolution"] for a in audit["agents"]}, "every agent ships with the core"
+
+    adopted = await client.post(
+        f"/api/v1/projects/{project['id']}/workflow-adoptions",
+        json={"source": "core", "name": "security-audit"},
+    )
+    assert adopted.status_code == 201, adopted.text
+    assert adopted.json()["origin"] == "core/security-audit@1"
+    agents = (await client.get("/api/v1/orgs/varga/agents")).json()
+    listed = {a["slug"] for a in (agents["items"] if isinstance(agents, dict) else agents)}
+    assert {"secops", "security-reviewer", "compliance"} <= listed, "the adoption installed its agents"

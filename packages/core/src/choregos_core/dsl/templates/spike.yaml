@@ -1,0 +1,69 @@
+# A spike (S59-02): a time-boxed question answered with evidence, no code kept. The spec writer frames the
+# question, the researcher answers it from the code, the decisions and memory with options and evidence,
+# a reviewer critiques the answer and a product owner accepts it. Nothing in the repository changes.
+apiVersion: choregos/v1
+kind: Workflow
+metadata:
+  name: spike
+  version: 1
+  catalogue:
+    title: Spike, a question answered with evidence
+    summary: "A question to settle before deciding or building: framed, researched in the code, the existing decisions and memory, answered with options and evidence, critiqued by a reviewer and accepted by a product owner. Changes no file."
+    tags: [software, research, decision]
+  description: "Spike: question framed, research with options and evidence, critique, acceptance by a product owner. Read-only."
+initial: inbox
+actors:
+  framer: { type: agent, role: refine, agent: spec-writer, model: "profile:cheap" }
+  researcher: { type: agent, role: research, agent: researcher, model: "profile:standard" }
+  critic: { type: agent, role: review, agent: reviewer, model: "profile:standard", fresh_context: true }
+  owners: { type: human, group: product-owners, sla_hours: 48 }
+states:
+  inbox: { display: To frame, kind: wait, tracker: { status: Todo } }
+  framed: { display: Question framed, tracker: { status: In progress } }
+  researched: { display: Researched, tracker: { status: In progress } }
+  awaiting_acceptance: { display: Answer to accept, kind: wait, tracker: { status: Needs review } }
+  accepted: { display: Answer accepted, terminal: true, tracker: { status: Done } }
+  needs_human: { display: Needs a human, kind: wait, tracker: { status: Blocked } }
+  abandoned: { display: Abandoned, terminal: true, tracker: { status: Cancelled } }
+transitions:
+  - id: t-frame
+    from: inbox
+    to: framed
+    by: framer
+    inputs: [human_feedback]
+    outputs: [spec_markdown]
+    gates: [{ name: diff_size_max, params: { files: 0 } }]
+    on_fail: { to: inbox, max_attempts: 2, escalate_to: needs_human }
+  - id: t-research
+    from: framed
+    to: researched
+    by: researcher
+    inputs: [spec_markdown, review_markdown]
+    outputs: [research_markdown]
+    gates: [outputs_present, { name: diff_size_max, params: { files: 0 } }]
+    on_fail: { to: framed, max_attempts: 2, escalate_to: needs_human }
+  - id: t-critique
+    from: researched
+    to: awaiting_acceptance
+    by: critic
+    outputs: [review_markdown, verdict]
+    gates: [{ name: outputs_in, params: { values: { verdict: [approve] } } }, { name: diff_size_max, params: { files: 0 } }]
+    on_changes_requested: { to: framed, max_attempts: 2, escalate_to: needs_human }
+  - id: t-accept
+    from: awaiting_acceptance
+    to: accepted
+    by: owners
+    on_reject: framed
+  - id: t-abandon
+    from: needs_human
+    to: abandoned
+    by: owners
+    timeout_hours: 168
+defaults:
+  from_any_agent_state:
+    on_question: needs_human
+    on_budget_exceeded: needs_human
+    on_timeout: needs_human
+  needs_human:
+    on_answer: resume
+    on_abandon: abandoned
