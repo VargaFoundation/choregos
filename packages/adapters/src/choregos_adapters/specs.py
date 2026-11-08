@@ -213,6 +213,12 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
                     "within the project); empty: the issues labelled agent-ready",
                 },
                 "field_names": {"type": "object", "additionalProperties": {"type": "string"}},
+                "match_labels": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "when several projects share this Jira project, the labels that send "
+                    "an issue here (S59-03); a project without them takes the issues no other claims",
+                },
             },
             ("base_url", "email", "project_key"),
         ),

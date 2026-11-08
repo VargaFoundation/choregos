@@ -157,12 +157,29 @@ async def _jira_project_for(session: Any, payload: dict[str, Any]) -> tuple[Proj
     ]
     if len(matches) > 1 and (site := _host(issue.get("self"))):
         matches = [m for m in matches if _host((m[0].config or {}).get("base_url")) == site]
+    if len(matches) > 1:
+        matches = _by_labels(matches, issue)
     if len(matches) == 1:
         return matches[0][1], True
     if matches:
         logger.warning("jira event matches several projects, not routed", project_key=prefix)
         return None, True
     return None, False
+
+
+def _by_labels(matches: list[Any], issue: dict[str, Any]) -> list[Any]:
+    """Projects sharing one Jira project are told apart by labels (S59-03): an issue goes to the
+    connectors whose `match_labels` it carries; one that carries none of them goes to the connectors that
+    claim no label (the project that takes the rest)."""
+    raw = issue.get("fields")
+    fields: dict[str, Any] = raw if isinstance(raw, dict) else {}
+    labels = {str(label) for label in (fields.get("labels") or []) if isinstance(label, str)}
+
+    def claimed(match: Any) -> set[str]:
+        return {str(label) for label in ((match[0].config or {}).get("match_labels") or [])}
+
+    by_label = [m for m in matches if claimed(m) & labels]
+    return by_label or [m for m in matches if not claimed(m)]
 
 
 #: Verbs a tracker comment can carry. None is honoured (ADR 0102): a tracker login is not a principal.

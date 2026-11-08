@@ -32,7 +32,9 @@ async def _project(client: AsyncClient, slug: str) -> dict[str, Any]:
     return dict(created.json())
 
 
-async def _jira(client: AsyncClient, project: dict[str, Any], key: str, site: str) -> None:
+async def _jira(
+    client: AsyncClient, project: dict[str, Any], key: str, site: str, labels: list[str] | None = None
+) -> None:
     put = await client.put(
         f"/api/v1/projects/{project['id']}/connectors/tracker",
         json={
@@ -41,6 +43,7 @@ async def _jira(client: AsyncClient, project: dict[str, Any], key: str, site: st
                 "base_url": f"https://{site}.atlassian.net",
                 "email": "bot@acme.test",
                 "project_key": key,
+                **({"match_labels": labels} if labels is not None else {}),
             },
             "secret_refs": {"api_token": "env:CONNECTOR_JIRA_TEST_TOKEN"},
         },
@@ -48,14 +51,16 @@ async def _jira(client: AsyncClient, project: dict[str, Any], key: str, site: st
     assert put.status_code == 200, put.text
 
 
-async def _deliver(client: AsyncClient, key: str, site: str, delivery: str) -> dict[str, Any]:
+async def _deliver(
+    client: AsyncClient, key: str, site: str, delivery: str, labels: tuple[str, ...] = ()
+) -> dict[str, Any]:
     payload = {
         "webhookEvent": "jira:issue_updated",
         "user": {"displayName": "Vincent"},
         "issue": {
             "key": key,
             "self": f"https://{site}.atlassian.net/rest/api/3/issue/10001",
-            "fields": {"summary": "Refunds", "labels": ["agent-ready"]},
+            "fields": {"summary": "Refunds", "labels": ["agent-ready", *labels]},
         },
         "changelog": {"items": [{"field": "labels", "fromString": "", "toString": "agent-ready"}]},
     }
@@ -132,3 +137,20 @@ async def test_an_archived_project_no_longer_takes_the_key_of_its_successor(
 
     assert ack["events"] == 1, "the archived project's connector no longer makes the key ambiguous"
     assert await _keys(client, successor) == ["FON-12"]
+
+
+async def test_labels_tell_apart_two_projects_sharing_one_jira_project(
+    client: AsyncClient, admin: str
+) -> None:
+    """S59-03: one Jira project (FON) feeds two Choregos projects. The issue labelled `iris` goes to the
+    project whose connector claims that label; one without it goes to the project that claims none."""
+    fondation = await _project(client, "fon")
+    iris = await _project(client, "iris")
+    await _jira(client, fondation, "FON", "acme")
+    await _jira(client, iris, "FON", "acme", labels=["iris"])
+
+    await _deliver(client, "FON-301", "acme", "d-10", labels=("iris",))
+    await _deliver(client, "FON-302", "acme", "d-11")
+
+    assert await _keys(client, iris) == ["FON-301"]
+    assert await _keys(client, fondation) == ["FON-302"]
