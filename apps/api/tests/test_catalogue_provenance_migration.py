@@ -154,8 +154,16 @@ def test_the_mapping_is_the_offline_plugins() -> None:
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     shipped = catalogue()
+    from choregos_api.services.plugin_supply import semver_key
+
     for name, (version, _digest, agents, skills, _) in module.PLUGINS.items():
-        assert shipped.plugins[name] == version
+        # The migration records the version it wrote; a plugin shipped later moves on (netops 1.1.0,
+        # S57-15b) and must never go back below it.
+        assert semver_key(shipped.plugins[name]) >= semver_key(version), (
+            name,
+            shipped.plugins[name],
+            version,
+        )
         assert set(agents) == {e.slug for e in shipped.entries if e.plugin == name}, name
         assert set(skills) == {s for s, found in shipped.skills.items() if found.plugin == name}, name
     from choregos_core.plugins.sources import read_lock
@@ -163,7 +171,12 @@ def test_the_mapping_is_the_offline_plugins() -> None:
     locked = read_lock(pathlib.Path(__file__).resolve().parents[3] / "plugins" / "offline")
     assert locked is not None
     # The migration names the plugins the core's own agents moved to; a plugin locked later (`requests`,
-    # #1091) held no agent of the core's, so the migration has nothing to say about it.
-    assert {n: (v, d) for n, (v, d, *_) in module.PLUGINS.items()} == {
-        n: locked[n] for n in locked if n != "requests"
-    }
+    # #1091) held no agent of the core's, so the migration has nothing to say about it. A plugin the lock
+    # moved on since (netops 1.1.0, S57-15b) keeps the migration's pin only while its version is the same.
+    for n, (v, d, *_) in module.PLUGINS.items():
+        assert n in locked, n
+        if locked[n][0] == v:
+            assert locked[n] == (v, d), n
+        else:
+            assert semver_key(locked[n][0]) > semver_key(v), (n, locked[n], v)
+    assert set(locked) - set(module.PLUGINS) <= {"requests"}
