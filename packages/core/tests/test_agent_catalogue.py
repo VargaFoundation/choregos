@@ -25,7 +25,8 @@ RECORDED_DIGESTS = {
     "devops": "sha256:5602b90306956c67f30a3c254ebf3b1b88d3e756a98a5433d81f87cc1f8788f9",
     "docs-writer": "sha256:5281d3c41f5c5a330fb58cf337e9b8a3d9bf2c50a6c2470f19fdd1742079b737",
     "knowledge-distiller": "sha256:c57e523e597fca4c1cad72c8bd964dbb0c5d24ffb67f4a3996d7c079bf8dd82f",
-    "netops": "sha256:3e731940ccf5867561695e4fc392db9cbf81c46e211b2be80aaa2aa05a876ca6",
+    # netops 1.1.0 adds `spec.tools: {scripts: offer}` (S57-15): its document moved once, on purpose.
+    "netops": "sha256:b83b14d97c204780a556b4a977c0bd9646b5c743b0ada05303fc71e2a498d856",
     "planner": "sha256:bfabe1f2ea7a328d8a8d055970ed08c0b9666c62a62b50332978a40bc259b756",
     "prod-verifier": "sha256:ae1d31dc27b2e16ca5659ece30b8f997c1ceaa361ab59d9385d40366b8595232",
     "qa": "sha256:c7126abb73243a2e185181475d8a70c008e3186eb93c278fe12eb2512d76a82a",

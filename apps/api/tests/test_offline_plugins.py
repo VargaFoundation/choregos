@@ -46,7 +46,7 @@ def test_the_api_reads_the_offline_directory_against_its_lock() -> None:
     assert {name: sorted(v) for name, v in index.releases.items()} == {
         "authoring": ["1.0.0"],
         "mcp-clients": ["1.0.0"],
-        "netops": ["1.0.0"],
+        "netops": ["1.1.0"],
         "requests": ["1.0.1"],
         "software-delivery": ["1.0.0"],
     }
@@ -58,15 +58,15 @@ def test_the_api_reads_the_offline_directory_against_its_lock() -> None:
 @pytest.fixture
 def deployment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     """The chart's configuration: the `varga` source, the offline directory, these defaults; the core
-    reports the release that installs plugins (these plugins require `>=0.21.0`)."""
+    reports a release every offline plugin admits (netops 1.1.0 requires `>=0.24.1`, S57-15)."""
     from choregos_api.config import reset_settings_cache
     from choregos_api.services import plugin_sources
     from choregos_core.plugins import versions
 
     fake = plugin_sources.FakePluginSource()
     plugin_sources.set_backend(fake)
-    monkeypatch.setattr(plugin_sources, "core_version", lambda: "0.21.0")
-    monkeypatch.setattr(versions, "core_version", lambda: "0.21.0")
+    monkeypatch.setattr(plugin_sources, "core_version", lambda: "0.24.1")
+    monkeypatch.setattr(versions, "core_version", lambda: "0.24.1")
 
     def write(defaults: list[dict[str, Any]], offline: Path = OFFLINE) -> Any:
         path = tmp_path / "plugins.yaml"
@@ -199,19 +199,19 @@ async def test_an_installed_version_replaces_the_offline_one_in_the_catalogue(
 ) -> None:
     offline = tmp_path / "offline"
     offline.mkdir()
-    with tarfile.open(OFFLINE / "netops-1.0.0.tar.gz") as source:
+    with tarfile.open(OFFLINE / "netops-1.1.0.tar.gz") as source:
         source.extractall(offline / "netops", filter="data")
     manifest = offline / "netops" / "plugin.yaml"
     document = yaml.safe_load(manifest.read_text(encoding="utf-8"))
-    document["metadata"]["version"] = "1.1.0"
+    document["metadata"]["version"] = "1.2.0"
     manifest.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
     agent = offline / "netops" / "agents" / "netops.yaml"
     entry = yaml.safe_load(agent.read_text(encoding="utf-8"))
-    entry["catalogue"]["version"] = 3
+    entry["catalogue"]["version"] = 4
     agent.write_text(yaml.safe_dump(entry, sort_keys=False), encoding="utf-8")
     deployment([], offline)
     installed = await client.post(
-        f"{ORG}/plugins/install", json={"source": "offline", "name": "netops", "version": "1.1.0"}
+        f"{ORG}/plugins/install", json={"source": "offline", "name": "netops", "version": "1.2.0"}
     )
     assert installed.status_code == 201, installed.text
 
@@ -228,8 +228,8 @@ async def test_an_installed_version_replaces_the_offline_one_in_the_catalogue(
         ).scalar_one()
         view = await catalogue_of(session, org_id)
     found = view.entry("netops")
-    assert found is not None and (found.version, found.plugin_version) == (3, "1.1.0")
-    assert found.provenance == "plugin:netops/netops@3"
+    assert found is not None and (found.version, found.plugin_version) == (4, "1.2.0")
+    assert found.provenance == "plugin:netops/netops@4"
 
 
 async def test_without_the_authoring_plugin_the_drafter_says_what_to_install(
