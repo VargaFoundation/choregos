@@ -422,3 +422,38 @@ async def test_a_result_whose_post_fails_is_still_in_the_journal(
     assert outcome.result is not None
     assert (recovered.status, recovered.summary) == (outcome.result.status, outcome.result.summary)
     assert any(e["type"] == "result.post_failed" for e in client.events), "the failed post is journaled too"
+
+
+async def test_a_step_that_changed_nothing_is_not_asked_to_repair_red_checks(
+    stage_input: StageInput, runner_settings: Any
+) -> None:
+    """S59-05: the checks are red before the step (a baseline the step did not break) and the step writes
+    nothing — a triage, a review. They are measured and reported, but no repair turn is spent on them."""
+    stage_input.project.test_command = "echo '0 passed, 1 failed'; exit 1"
+    outcome, client = await execute(
+        stage_input, runner_settings, {"turns": [{"messages": ["sized"], "result": valid_result("triaged")}]}
+    )
+    types = [event["type"] for event in client.events]
+    assert "dod.retry" not in types, "nothing was written: nothing to repair"
+    assert "dod.not_repaired" in types
+    assert outcome.result is not None and outcome.result.evidence.tests_passed is False, "still measured"
+
+
+async def test_a_step_that_wrote_a_file_is_still_asked_to_repair(
+    stage_input: StageInput, runner_settings: Any
+) -> None:
+    stage_input.project.test_command = "echo '0 passed, 1 failed'; exit 1"
+    _, client = await execute(
+        stage_input,
+        runner_settings,
+        {
+            "turns": [
+                {
+                    "writes": [{"path": "src/orders.py", "content": "x = 1\n"}],
+                    "result": valid_result("first"),
+                },
+                {"messages": ["again"], "result": valid_result("second")},
+            ]
+        },
+    )
+    assert "dod.retry" in [event["type"] for event in client.events]

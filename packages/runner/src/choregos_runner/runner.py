@@ -180,6 +180,27 @@ def file_system_guard(guards: GuardRails) -> WriteGuard:
     return guard
 
 
+async def _repairable(
+    stage_input: StageInput, workspace: Any, start_ref: str, report: Any, journal: Any, max_iterations: int
+) -> bool:
+    """Whether red checks go back to the agent to repair (S59-05). A step that changed no file cannot
+    have broken them: they are measured and reported, never handed to it — a triager told to fix a red
+    baseline spent its turns on the repository's tooling instead of triaging."""
+    if report.ok:
+        return True
+    changed = (
+        [f for f in await workspace.changed_files(start_ref) if not f.startswith(".choregos/")]
+        if stage_input.repo
+        else []
+    )
+    if not changed and max_iterations:
+        await journal.record(
+            "dod.not_repaired",
+            {"reason": "the step changed no file", "failures": [c.name for c in report.failures()]},
+        )
+    return bool(changed)
+
+
 class Runner:
     """Run an agent step from end to end."""
 
@@ -402,8 +423,12 @@ class Runner:
                 # 8. boucle DoD
                 max_iterations = max(0, stage_input.permissions.dod_iterations)
                 report = await run_checks(stage_input, workspace.path)
+                repairable = await _repairable(
+                    stage_input, workspace, start_ref, report, journal, max_iterations
+                )
                 while (
                     not report.ok
+                    and repairable
                     and dod_iterations < max_iterations
                     and not refused
                     and agent.outcome.guard is None
