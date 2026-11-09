@@ -1128,7 +1128,7 @@ async def call_tool(
             try:
                 check_arguments(brokered[name], body or {})
             except ArgumentsRefused as refusal:
-                raise ApiError(status.HTTP_400_BAD_REQUEST, "Arguments refused", str(refusal)) from refusal
+                raise _arguments_problem(refusal) from refusal
             code, result_body = 202, await propose_call(session, run, project, brokered[name], body or {})
             provider, price_eur = f"mcp:{brokered[name].connector.name}", 0.0
         elif name in brokered and brokered[name].is_write:
@@ -1337,6 +1337,29 @@ async def _web_search(
     return code, result_body, backend.provider, price, about
 
 
+def _arguments_problem(refusal: Exception) -> ApiError:
+    """The 400 for arguments the broker refuses: a call outside a grant (S60-06) names the level and
+    the JSON path in a problem of its own, `arguments_outside_grant`; the schema's refusal stays plain."""
+    from ..services.broker import ArgumentsOutsideGrant
+
+    if isinstance(refusal, ArgumentsOutsideGrant):
+        return ApiError(
+            status.HTTP_400_BAD_REQUEST,
+            "Arguments outside the grant",
+            str(refusal),
+            type_=refusal.code,
+            errors=[
+                {
+                    "code": refusal.code,
+                    "loc": ["body", *refusal.path.strip("/").split("/")],
+                    "msg": str(refusal),
+                }
+            ],
+            extra={"code": refusal.code, "level": refusal.level, "path": refusal.path},
+        )
+    return ApiError(status.HTTP_400_BAD_REQUEST, "Arguments refused", str(refusal))
+
+
 async def _read_by_the_broker(
     session: Any, run: Run, project: Project, tool: Any, arguments: dict[str, Any]
 ) -> tuple[int, Any, list[dict[str, str]]]:
@@ -1348,7 +1371,7 @@ async def _read_by_the_broker(
     try:
         check_arguments(tool, arguments)
     except ArgumentsRefused as refusal:
-        raise ApiError(status.HTTP_400_BAD_REQUEST, "Arguments refused", str(refusal)) from refusal
+        raise _arguments_problem(refusal) from refusal
     code, result_body = await call(session, tool, arguments, run=run, project=project)
     return await _injection_guard(session, run, project, tool, code, result_body)
 
@@ -1363,7 +1386,7 @@ async def _write_by_the_broker(
     try:
         check_arguments(tool, arguments)
     except ArgumentsRefused as refusal:
-        raise ApiError(status.HTTP_400_BAD_REQUEST, "Arguments refused", str(refusal)) from refusal
+        raise _arguments_problem(refusal) from refusal
     code, result_body, created = await write_through_action(session, run, project, tool, arguments)
     code, result_body, suspicions = await _injection_guard(session, run, project, tool, code, result_body)
     return code, result_body, suspicions, created

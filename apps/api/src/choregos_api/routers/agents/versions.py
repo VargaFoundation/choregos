@@ -46,7 +46,7 @@ from ...services.hosted_images import pin_hosted_runtime
 from ...services.memory_access import check_bindings_at_publish
 from ...services.network import check_agent_network
 from ...services.remote_agents import pin_remote_runtime
-from ._common import _model_allowed, _skills_usable
+from ._common import _grants_bound, _model_allowed, _skills_usable
 from ._router import Slug, router
 
 
@@ -74,6 +74,9 @@ async def _append_version(  # noqa: PLR0913 - the actors and the three ways a ve
     await check_agent_network(session, organisation.id, spec)
     await _skills_usable(session, organisation, spec)
     await _model_allowed(session, organisation, spec)
+    if restored_from is None:
+        # A restore carries a version already published: its constraints were judged then.
+        await _grants_bound(session, organisation, spec)
     try:
         check_remote_kind(agent.kind, spec)
     except ValueError as erreur:

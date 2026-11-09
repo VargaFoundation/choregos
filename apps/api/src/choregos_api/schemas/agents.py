@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Annotated, Any, Literal
 
 from choregos_contracts.policy import ToolScriptsMode
+from choregos_core.argument_grants import constraint_error
 from choregos_core.memory_bindings import Binding, binding_problems, effective_bindings
 from choregos_core.network import validate_pattern
 from choregos_core.workspace import AgentWorkspace
@@ -69,11 +70,40 @@ class AgentSkillRef(Dto):
     version: int | None = Field(default=None, ge=1)
 
 
+class AgentToolGrant(Dto):
+    """A tool grant that binds the call's arguments (S60-06, ADR 0128): `sync_application` on the
+    application `shop` only, not on every application. The call's arguments must satisfy `arguments`
+    ON TOP OF the operation's own input schema."""
+
+    #: The operation, or a `prefix_*` pattern.
+    name: str = Field(min_length=1, max_length=128)
+    #: A JSON Schema (2020-12, no `$ref`, at most 8 KiB); `{project}` is the run's project slug.
+    arguments: dict[str, Any]
+
+    @field_validator("arguments")
+    @classmethod
+    def _writable(cls, value: dict[str, Any]) -> dict[str, Any]:
+        problem = constraint_error(value)
+        if problem is not None:
+            raise ValueError(problem)
+        return value
+
+
+def grant_name(tool: str | AgentToolGrant | dict[str, Any]) -> str:
+    """The name or pattern a grant names, whether it is a plain string or binds arguments."""
+    if isinstance(tool, str):
+        return tool
+    if isinstance(tool, dict):
+        return str(tool.get("name") or "")
+    return tool.name
+
+
 class AgentMcpServer(Dto):
     #: The `mcp` connector of the project or of the organisation (ADR 0034).
     connector: str
-    #: The tools the agent may call: names, or `prefix_*` patterns.
-    tools: list[str] = Field(default_factory=list)
+    #: The tools the agent may call: names, or `prefix_*` patterns — or, to bind the call's arguments,
+    #: `{name, arguments}` (S60-06, ADR 0128).
+    tools: list[str | AgentToolGrant] = Field(default_factory=list)
 
 
 class AgentKnowledgeRef(Dto):
