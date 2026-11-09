@@ -7,6 +7,8 @@ from typing import Annotated, Any
 
 from choregos_contracts import EventType, ProjectConfig, Role
 from choregos_core import utcnow
+from choregos_core.agent_completeness import ORG_SETTING as COMPLETE_AGENTS_SETTING
+from choregos_core.agent_completeness import org_requires_complete
 from choregos_core.memory_scope import MEMORY_KEY_SETTING, memory_key
 from choregos_core.tool_scripts_switch import ORG_SETTING as TOOL_SCRIPTS_SETTING
 from choregos_core.tool_scripts_switch import org_tool_scripts
@@ -61,6 +63,7 @@ async def list_orgs(session: Db, principal: Me) -> list[OrgDto]:
                 currency=moneta(o),
                 aliases=aliases[o.id],
                 tool_scripts=org_tool_scripts(o.settings),
+                complete_agents="required" if org_requires_complete(o.settings) else None,
             )
             for o in rows
         ),
@@ -128,7 +131,17 @@ def _audited(organisation: Organization) -> dict[str, Any]:
         "name": organisation.name,
         "currency": moneta(organisation),
         "tool_scripts": org_tool_scripts(organisation.settings),
+        "complete_agents": "required" if org_requires_complete(organisation.settings) else None,
     }
+
+
+def _refuse_admin_switches(org: str, body: OrgUpdate) -> None:
+    """The organisation's switches are its org_admin's alone, like its policy ceiling: tool scripts
+    (S57-05b) and complete agents (S60-05, ADR 0127)."""
+    if "tool_scripts" in body.model_fields_set:
+        raise forbidden(f"the tool scripts of {org} are switched by its org_admin")
+    if "complete_agents" in body.model_fields_set:
+        raise forbidden(f"whether {org} requires complete agents is its org_admin's choice")
 
 
 @router.patch("/orgs/{org}", response_model=OrgDto, operation_id="updateOrg")
@@ -158,8 +171,8 @@ async def update_org(org: str, body: OrgUpdate, session: Db, principal: Me) -> O
     # Whether the organisation's runs may be offered tool scripts (S57-05b) is its administrator's
     # choice alone, like its policy ceiling: a platform administrator who is not one is refused, before
     # anything else of the request is applied.
-    if "tool_scripts" in body.model_fields_set and not is_admin:
-        raise forbidden(f"the tool scripts of {org} are switched by its org_admin")
+    if not is_admin:
+        _refuse_admin_switches(org, body)
     if not is_admin:
         # A platform administrator (granted by an edition plugin) renames an organisation they are
         # not a member of. The instance right is checked BEFORE the lookup: under PostgreSQL RLS, a
@@ -205,14 +218,14 @@ async def update_org(org: str, body: OrgUpdate, session: Db, principal: Me) -> O
         organisation.name = body.name
     if body.currency is not None:
         organisation.settings = {**(organisation.settings or {}), "currency": body.currency}
-    if "tool_scripts" in body.model_fields_set:
-        # `null` takes the organisation back to the deployment's default: the key is removed, so the
-        # orchestrator reads no choice (`choregos_core.tool_scripts_switch`).
-        settings = {**(organisation.settings or {})}
-        settings.pop(TOOL_SCRIPTS_SETTING, None)
-        if body.tool_scripts is not None:
-            settings[TOOL_SCRIPTS_SETTING] = body.tool_scripts
-        organisation.settings = settings
+    # `null` takes the organisation back to no choice: the key is removed, so the orchestrator reads none
+    # (`choregos_core.tool_scripts_switch`), and nor does publication (`choregos_core.agent_completeness`).
+    for field, key in (("tool_scripts", TOOL_SCRIPTS_SETTING), ("complete_agents", COMPLETE_AGENTS_SETTING)):
+        if field in body.model_fields_set:
+            settings = {k: v for k, v in (organisation.settings or {}).items() if k != key}
+            if (choice := getattr(body, field)) is not None:
+                settings[key] = choice
+            organisation.settings = settings
     await session.flush()
     org_after = _audited(organisation)
     await record(
@@ -232,6 +245,7 @@ async def update_org(org: str, body: OrgUpdate, session: Db, principal: Me) -> O
         currency=moneta(organisation),
         aliases=await aliases_of(session, organisation.id),
         tool_scripts=org_tool_scripts(organisation.settings),
+        complete_agents="required" if org_requires_complete(organisation.settings) else None,
     )
 
 
