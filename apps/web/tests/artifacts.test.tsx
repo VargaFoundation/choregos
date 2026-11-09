@@ -160,4 +160,43 @@ describe("the artifacts of a work item (S31-04)", () => {
     expect(firstToOpen(groupArtifacts([artifact("verdict", 1, { size: 7 })]))?.name).toBe("verdict");
     expect(firstToOpen([])).toBeUndefined();
   });
+
+  it("reads a one-word value above the tabs, not in one of them", async () => {
+    vi.mocked(api.artifactContent).mockResolvedValue(new Blob(["# Spec"], { type: "text/markdown" }));
+    const level: Artifact["display"] = { type: "level", show: "tab", levels: [{ value: "approve", tone: "ok" }] };
+    renderArtifacts([artifact("verdict", 1, { value: "approve", display: level }), artifact("spec_markdown", 1, { size: 900 })]);
+    expect(screen.getByTestId("artifact-values")).toHaveTextContent("Approve");
+    expect(screen.queryByRole("tab", { name: "verdict" })).toBeNull();
+    expect(await screen.findByRole("heading", { name: "Spec" })).toBeInTheDocument();
+  });
+
+  it("does not repeat what the facts card shows, nor what the workflow hides", () => {
+    const facts: Artifact["display"] = { type: "level", show: "facts", levels: [{ value: "S" }] };
+    const hidden: Artifact["display"] = { type: "markdown", show: "hidden" };
+    renderArtifacts([artifact("severity", 1, { value: "S", display: facts }), artifact("notes", 1, { size: 900, display: hidden })]);
+    expect(screen.queryByTestId("artifact-values")).toBeNull();
+    expect(screen.queryByRole("tab")).toBeNull();
+  });
+
+  it("opens the tab a fact of the ticket asked for", async () => {
+    vi.mocked(api.artifactContent).mockResolvedValue(new Blob(["# Other"], { type: "text/markdown" }));
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Artifacts
+          itemId="w1"
+          slug="billing-api"
+          opened="b"
+          handOffs={[]}
+          artifacts={[artifact("a", 1, { size: 900, created_at: "2026-11-09T00:00:00Z" }), artifact("b", 1, { size: 900 })]}
+        />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByRole("tab", { name: "b" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("keeps what a step proposed for a ticket's size, which a person may have changed", () => {
+    const facts: Artifact["display"] = { type: "level", show: "facts", title: "Size", levels: [{ value: "S" }, { value: "M" }] };
+    renderArtifacts([artifact("size", 1, { value: "S", display: facts })]);
+    expect(screen.getByTestId("artifact-value-row-size")).toHaveTextContent("SizeS");
+  });
 });

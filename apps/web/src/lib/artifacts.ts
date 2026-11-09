@@ -35,6 +35,21 @@ export function factsOf(groups: ArtifactGroup[]): ArtifactGroup[] {
   });
 }
 
+/**
+ * What goes where on the Artifacts card (ADR 0129): a one-word value is read in a row above the tabs,
+ * unless the facts card already shows that very value, and what the workflow hides is nowhere.
+ */
+export function shelve(groups: ArtifactGroup[]): { values: ArtifactGroup[]; tabs: ArtifactGroup[] } {
+  const visible = groups.filter((group) => group.latest.display?.show !== "hidden");
+  const isValue = (group: ArtifactGroup) => viewerOf(group.latest) === "value";
+  return {
+    // A ticket's size and risk stay here as what the step proposed: the card shows the columns, which a
+    // person may have changed since (ADR 0129 §6).
+    values: visible.filter((group) => isValue(group) && (group.latest.display?.show !== "facts" || COLUMNS.has(group.name))),
+    tabs: visible.filter((group) => !isValue(group)),
+  };
+}
+
 /** What an output is called on screen: what the workflow titled it, or its name in words. */
 export function titleOf({ name, latest }: ArtifactGroup): string {
   if (latest.display?.title) return latest.display.title;

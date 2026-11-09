@@ -2,15 +2,27 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { Braces, File, FileText, GitCompare, Image as ImageIcon, type LucideIcon, ShieldAlert, Table2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { courte } from "@/components/passages";
+import { ArtifactValue } from "@/components/artifact-value";
 import { DiffView } from "@/components/diff-view";
 import { MarkdownView } from "@/components/markdown-view";
 import { CsvTable, JsonTree, KeyValueViewer, ValueViewer } from "@/components/typed-viewers";
 import { Badge, Empty, ErrorNote, Select } from "@/components/ui";
 import { api } from "@/lib/api";
-import { type ArtifactGroup, filenameOf, firstToOpen, groupArtifacts, humanSize, readersOf, viewerOf } from "@/lib/artifacts";
+import {
+  type ArtifactGroup,
+  filenameOf,
+  firstToOpen,
+  groupArtifacts,
+  humanSize,
+  readersOf,
+  shelve,
+  titleOf,
+  viewerOf,
+} from "@/lib/artifacts";
 import { shortDate } from "@/lib/format";
 import { sarifRows } from "@/lib/sarif";
 import type { Artifact, HandOff } from "@/lib/types";
@@ -36,35 +48,81 @@ export function Artifacts({
   opened?: string | null;
 }) {
   const groups = useMemo(() => groupArtifacts(artifacts), [artifacts]);
+  const { values, tabs } = useMemo(() => shelve(groups), [groups]);
   const [selected, setSelected] = useState<string | null>(opened);
-  const current = groups.find((g) => g.name === selected) ?? firstToOpen(groups);
-  if (!current) return <Empty>no artifact yet: the steps have not produced any output.</Empty>;
+  const current = tabs.find((g) => g.name === selected) ?? firstToOpen(tabs);
+  if (groups.length === 0) return <Empty>no artifact yet: the steps have not produced any output.</Empty>;
   return (
     <div className="space-y-3" data-testid="artifacts">
-      <div role="tablist" aria-label="artifacts" className="flex flex-wrap gap-1 border-b border-line">
-        {groups.map((group) => (
-          <button
-            key={group.name}
-            type="button"
-            role="tab"
-            id={`artifact-tab-${group.name}`}
-            aria-selected={group.name === current.name}
-            aria-controls={`artifact-panel-${group.name}`}
-            data-artifact={group.name}
-            data-verbatim
-            onClick={() => setSelected(group.name)}
-            className={
-              "min-h-11 px-3 font-mono text-xs " +
-              (group.name === current.name ? "border-b-2 border-accent text-ink" : "text-ink-muted hover:text-ink")
-            }
-          >
-            {group.name}
-          </button>
-        ))}
-      </div>
-      <ArtifactPanel key={current.name} group={current} itemId={itemId} slug={slug} handOffs={handOffs} />
+      {values.length > 0 && (
+        <dl className="flex flex-wrap gap-x-6 gap-y-2 text-sm" data-testid="artifact-values">
+          {values.map((group) => (
+            <div key={group.name} className="flex items-center gap-2" data-testid={`artifact-value-row-${group.name}`}>
+              <dt className="text-xs text-ink-muted" data-verbatim>
+                {titleOf(group)}
+              </dt>
+              <dd>
+                <ArtifactValue artifact={group.latest} />
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {current && (
+        <>
+          <div role="tablist" aria-label="artifacts" className="flex flex-wrap gap-1 border-b border-line">
+            {tabs.map((group) => {
+              const Icon = iconOf(group.latest);
+              return (
+                <button
+                  key={group.name}
+                  type="button"
+                  role="tab"
+                  id={`artifact-tab-${group.name}`}
+                  aria-selected={group.name === current.name}
+                  aria-controls={`artifact-panel-${group.name}`}
+                  data-artifact={group.name}
+                  data-verbatim
+                  onClick={() => setSelected(group.name)}
+                  className={
+                    "inline-flex min-h-11 items-center gap-1.5 px-3 font-mono text-xs " +
+                    (group.name === current.name ? "border-b-2 border-accent text-ink" : "text-ink-muted hover:text-ink")
+                  }
+                >
+                  <Icon aria-hidden className="size-3.5 shrink-0" strokeWidth={1.75} />
+                  {group.name}
+                </button>
+              );
+            })}
+          </div>
+          <ArtifactPanel key={current.name} group={current} itemId={itemId} slug={slug} handOffs={handOffs} />
+        </>
+      )}
     </div>
   );
+}
+
+/** What each tab holds, at a glance. */
+function iconOf(artifact: Artifact): LucideIcon {
+  switch (viewerOf(artifact)) {
+    case "diff":
+      return GitCompare;
+    case "csv":
+      return Table2;
+    case "json":
+    case "keyvalue":
+      return Braces;
+    case "sarif":
+      return ShieldAlert;
+    case "image":
+    case "video":
+      return ImageIcon;
+    case "markdown":
+    case "text":
+      return FileText;
+    default:
+      return File;
+  }
 }
 
 function ArtifactPanel({
