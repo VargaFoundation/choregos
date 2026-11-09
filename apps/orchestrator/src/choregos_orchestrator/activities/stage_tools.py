@@ -161,15 +161,20 @@ def production_indicator_sources(config: Any, agent: Any = None) -> list[str]:
     platform tells it, the agent does not guess.
 
     Two sources, the ones a run actually reaches: the deployment catalogue's tools the project may
-    call and that the deployment files under `observability`; the agent version's MCP servers named
-    after an observability tool. Empty = none.
+    call, that the version names when it closes its catalogue (ADR 0127), and that the deployment
+    files under `observability`; the agent version's MCP servers named after an observability tool.
+    Empty = none.
     """
-    from choregos_api.catalogue import project_tools
+    from choregos_api.catalogue import expand_names, project_tools
 
+    # A version that names its catalogue tools (`tools.catalogue`, ADR 0127) reads only those; one that
+    # does not keeps what the project opens.
+    named = getattr(getattr(getattr(agent, "spec", None), "tools", None), "catalogue", None)
+    closed = expand_names(list(named))[0] if named is not None else None
     sources = {
         tool.name
         for tool in project_tools(list(config.tools or []), list(config.groups or []))
-        if "observability" in tool.categories
+        if "observability" in tool.categories and (closed is None or tool.name in closed)
     }
     servers = getattr(getattr(agent, "spec", None), "mcp_servers", None) or []
     sources |= {
