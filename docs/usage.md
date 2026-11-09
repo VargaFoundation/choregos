@@ -1050,8 +1050,50 @@ complete example that runs on the same deployment as the software one, with no c
 A typed output is a file the agent writes in `.choregos/outputs/` (`budget.xlsx`, `deck.pptx`); a
 value written in `outputs` under the same name does not stand for it. The types are `markdown`,
 `json`, `mermaid`, `sarif`, `text`, `csv`, `html`, `pdf`, `docx`, `xlsx`, `pptx`, `png`, `jpeg`,
-`gif`, `webp`, `svg`, `mp4`, `webm` and `file`; the validator refuses an unknown type, a type for an
-output `outputs:` does not declare, and a name that cannot be a file name.
+`gif`, `webp`, `svg`, `mp4`, `webm`, `file`, `diff`, `keyvalue`, `level` and `metric`; the validator
+refuses an unknown type, a type for an output `outputs:` does not declare, and a name that cannot be a
+file name. A `level` or a `metric` is declared in `artifacts:`, below, which holds its scale or its unit.
+
+**What a value is, and where it is seen** ([ADR 0129](adr/0129-an-artifact-says-how-it-is-shown.md)).
+A workflow's top-level `artifacts:` block says, once per output name, what a value is and where it
+appears. It is optional, and a name that several steps produce is declared once:
+
+```yaml
+artifacts:
+  verdict:  { show: facts }                       # a scale the platform ships
+  diff:     { show: facts, title: Changes }       # measured by the platform, see below
+  coverage: { type: metric, unit: percent, min: 0, max: 100, better: higher, show: facts }
+  severity:
+    type: level
+    show: facts
+    levels: [{ value: sev3, tone: warn }, { value: sev2, tone: danger }, { value: sev1, tone: danger }]
+  details:  { type: keyvalue }
+  notes:    { show: hidden }
+```
+
+| Field | Means |
+| :-- | :-- |
+| `type` | `level` (one word of an ordered scale), `metric` (one finite number), `keyvalue` (a flat object). A document's format stays in the transition's `output_types`. |
+| `scale` | A scale the platform ships: `risk`, `size`, `verdict`. Or write `levels`, lowest first. |
+| `levels[].tone` | `neutral`, `info`, `ok`, `warn` or `danger`. A workflow never writes a colour. |
+| `unit`, `min`, `max`, `better` | A `metric`'s unit (`percent` is drawn `%`), bounds, and direction. |
+| `title` | What the console calls it; by default its name in words. |
+| `show` | `facts`: the *About this ticket* card, for what fits on one line (`level`, `metric`, `diff`), eight names at most. `tab`, the default. `hidden`: nowhere. |
+
+The console shows a ticket's **size and risk in *About this ticket* whatever its workflow declares**:
+they are the work item's columns. `size`, `risk`, `verdict` and `confidence` are typed by their name
+alone, in every workflow.
+
+The agent is told the values a typed output may take. A value off its scale, out of its bounds or of the
+wrong shape goes back to the agent like a missing output; what can be converted is (`"87%"`, `"0.9"`, a
+level's case). `outputs_in` remains the guard that routes: a scale says what a value may be, a guarantee
+says what this step accepts.
+
+**The diff is measured, never declared.** After each agent step, the platform compares the pushed
+branch with its base and records the artifact `diff`, a new revision only when the branch changed. The
+name is reserved: no output may take it, and what an agent writes under it is not recorded. A file whose
+patch holds a secret shape keeps only its name and counters, and the revision says which shape was found.
+A diff larger than `CHOREGOS_ARTIFACT_DIFF_MAX_BYTES` (1 MiB by default) is cut file by file, and says so.
 
 Every output is kept as an **artifact** of the ticket, revision by revision:
 `GET /work-items/{id}/artifacts` lists them (type, media type, size, sha256, the run and agent that
