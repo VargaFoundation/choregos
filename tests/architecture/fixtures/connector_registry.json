@@ -434,7 +434,7 @@
           "type": "object"
         },
         "match_labels": {
-          "description": "when several projects share this Jira project, the labels that send an issue here (S59-03); a project without them takes the issues no other claims",
+          "description": "when several projects share this Jira project, the labels that send an issue here; a project without them takes the issues no other claims",
           "items": {
             "type": "string"
           },
