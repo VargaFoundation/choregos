@@ -11,7 +11,8 @@ import {
   Breadcrumbs,
   type BreadcrumbStep,
 } from "@/components/ui";
-import { api } from "@/lib/api";
+import { api, qualify } from "@/lib/api";
+import { keyNames, useLiveRefresh } from "@/lib/live";
 
 export default function ProjectLayout({
   children,
@@ -28,6 +29,8 @@ export default function ProjectLayout({
     queryKey: ["project", slug],
     queryFn: () => api.project(slug),
   });
+  // Live (S59-08): what happens in the project refetches its board, inbox and overview.
+  useLiveRefresh(`/projects/${qualify(slug)}/events/stream`, keyNames(slug));
   const name = project.data?.name ?? slug;
   // No tab row any more (S30-03): the sidebar lists the project's sections, the trail says where one is.
   const base: BreadcrumbStep[] = [

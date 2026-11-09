@@ -64,6 +64,11 @@ class EventBus:
         run_id = event.data.get("run_id")
         if run_id:
             topics.append(f"run:{run_id}")
+        # By id, for the console's live pages (S59-08): a work item's page, a project's pages.
+        if project_id := event.data.get("project_id"):
+            topics.append(f"project-id:{project_id}")
+        if work_item_id := event.data.get("work_item_id"):
+            topics.append(f"work-item:{work_item_id}")
         return topics
 
     def replay(self, topic: str, after_id: str | None = None) -> list[ChoregosEvent]:
@@ -212,6 +217,33 @@ class PostgresRelay:
                 )
                 await asyncio.sleep(wait)
                 wait = min(wait * 2, 30.0)
+
+
+#: How often a live page's stream says it is still there, so that a proxy never closes it as idle.
+LIVE_PING_S = 15
+
+
+def live_signals(topic: str) -> Any:
+    """The SSE response a live page listens to (S59-08): what happens on `topic` from now on, as
+    `sse_signal` messages. Nothing is replayed: a page refetches what it shows."""
+    from sse_starlette.sse import EventSourceResponse
+
+    async def stream() -> AsyncIterator[dict[str, str]]:
+        with get_bus().listen(topic) as queue:
+            while True:
+                yield sse_signal(await queue.get())
+
+    return EventSourceResponse(stream(), ping=LIVE_PING_S)
+
+
+def sse_signal(event: ChoregosEvent) -> dict[str, str]:
+    """An event as an unnamed SSE message carrying what a page needs to refresh (S59-08): its type, its
+    subject and its run. A browser's `onmessage` receives only unnamed messages, and a page refetches
+    what it shows instead of reading the payload, which stays out of the stream."""
+    import json
+
+    signal = {"type": str(event.type), "subject": event.subject, "run_id": event.data.get("run_id")}
+    return {"id": event.id, "data": json.dumps(signal)}
 
 
 def sse_format(event: ChoregosEvent) -> dict[str, str]:

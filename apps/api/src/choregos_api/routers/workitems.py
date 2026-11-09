@@ -76,6 +76,20 @@ router = APIRouter(tags=["work-items"])
 logger = get_logger("choregos.work_items")
 
 
+@router.get(
+    "/work-items/{id}/events/stream",
+    operation_id="streamWorkItemEvents",
+    responses={200: {"content": {"text/event-stream": {}}}},
+)
+async def stream_work_item_events(id: str, session: Db, principal: Me) -> Any:
+    """What happens to the work item from now on, as unnamed SSE messages (`type`, `subject`, `run_id`):
+    its page refetches on each one instead of waiting for a reload (S59-08)."""
+    from ..events import live_signals
+
+    item, _ = await _load(session, id, principal)
+    return live_signals(f"work-item:{item.id}")
+
+
 async def _load(session: Any, item_id: str, principal: Any) -> tuple[WorkItem, Project]:
     """The work item and its project; a work item whose content the caller may not read (ADR 0114)
     does not exist for them, whatever they then ask of it."""

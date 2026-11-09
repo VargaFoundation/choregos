@@ -355,6 +355,19 @@ async def get_project(ctx: ProjectCtx, session: Db) -> ProjectDto:
     return await project_dto(session, ctx.project, ctx.org_slug)
 
 
+@router.get(
+    "/projects/{id}/events/stream",
+    operation_id="streamProjectEvents",
+    responses={200: {"content": {"text/event-stream": {}}}},
+)
+async def stream_project_events(ctx: ProjectCtx) -> Any:
+    """What happens in the project from now on, as unnamed SSE messages (`type`, `subject`, `run_id`):
+    its board, inbox and overview refetch on each one (S59-08)."""
+    from ..events import live_signals
+
+    return live_signals(f"project-id:{ctx.project.id}")
+
+
 @router.get("/projects/{id}/tools", operation_id="getProjectTools")
 async def get_project_tools(ctx: ProjectCtx, session: Db) -> dict[str, Any]:
     """The deployment catalogue, and what THIS project may call.
