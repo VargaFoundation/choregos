@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { courte } from "@/components/passages";
+import { DiffView } from "@/components/diff-view";
 import { MarkdownView } from "@/components/markdown-view";
 import { Badge, Empty, ErrorNote, Select } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -221,7 +222,14 @@ function Viewer({ artifact, blob, url }: { artifact: Artifact; blob: Blob; url: 
       </Empty>
     );
   }
+  if (kind === "diff") return <Diff artifact={artifact} blob={blob} />;
   return <TextViewer kind={kind} blob={blob} />;
+}
+
+function Diff({ artifact, blob }: { artifact: Artifact; blob: Blob }) {
+  const text = useText(blob);
+  if (text === null) return <Empty>reading…</Empty>;
+  return <DiffView text={text} stat={artifact.display?.diff} />;
 }
 
 function TextViewer({ kind, blob }: { kind: "markdown" | "sarif" | "json" | "text"; blob: Blob }) {

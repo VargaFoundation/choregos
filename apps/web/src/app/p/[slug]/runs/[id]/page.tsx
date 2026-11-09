@@ -9,6 +9,7 @@ import { ContextReductionCard } from "@/components/context-reduction";
 import { LiveLog } from "@/components/live-log";
 import { AgentPlanView } from "@/components/agent-plan";
 import { Provenance } from "@/components/provenance";
+import { StoredDiff } from "@/components/diff-view";
 import { Access } from "@/components/access";
 import { Guarantees, verdictsDe } from "@/components/guarantees";
 import { EvidencePanel } from "@/components/evidence";
@@ -41,6 +42,13 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
   const [relance, setRelance] = useState(false);
   const stored = useQuery({ queryKey: ["run-events", id], queryFn: () => api.runEvents(id) });
   const diff = useQuery({ queryKey: ["run-diff", id], queryFn: () => api.runDiff(id) });
+  // The patch this run left, when it changed the branch (ADR 0129 §7); a run that did not has only its counters.
+  const artifacts = useQuery({
+    queryKey: ["artifacts", idDuTicket],
+    queryFn: () => api.artifacts(idDuTicket!),
+    enabled: Boolean(idDuTicket),
+  });
+  const patch = artifacts.data?.find((a) => a.type === "diff" && a.name === "diff" && a.produced_by.run_id === id);
   // What the agent touched, folded from the journal: a run's 200 raw events
   // are not readable, and a journal nobody reads is not an audit.
   const access = useQuery({ queryKey: ["run-access", id], queryFn: () => api.runAccess(id) });
@@ -231,7 +239,13 @@ export default function RunPage({ params }: { params: Promise<{ slug: string; id
       </Card>
 
       <Card title="Diff" action={<Provenance de="observed" />}>
-        {(diff.data?.files ?? []).length === 0 ? (
+        {patch && idDuTicket ? (
+          <StoredDiff
+            itemId={idDuTicket}
+            artifact={patch}
+            isOutOfScope={(path) => diff.data?.files.find((f) => f.path === path)?.in_scope === false}
+          />
+        ) : (diff.data?.files ?? []).length === 0 ? (
           <Empty>No file changed</Empty>
         ) : (
           <div className="overflow-x-auto">

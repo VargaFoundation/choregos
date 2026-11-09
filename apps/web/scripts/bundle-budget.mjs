@@ -33,7 +33,9 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // policy card bring main to 2155 kB (CI of #1370), 5 kB over the line.
 // 2026-11-06 (C1, D2C): 2175 -> 2200 kB. S58-03's repository settings bring main to the 2175 kB line; the
 // received events' and the triggers' `reopened` label tip it over by a fraction of a kilobyte.
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2200);
+// 2026-11-09 (S61): 2200 -> 2225 kB. The typed artifacts' viewers (a diff, a CSV table, key/value pairs, a JSON
+// tree, the facts of a ticket) take the console to 2205 kB, with no new dependency.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2225);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* files(dir) {

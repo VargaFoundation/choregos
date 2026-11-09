@@ -347,6 +347,11 @@ function artifactOf(
 export const artifacts: Artifact[] = [
   artifactOf("spec_markdown", 1, "markdown", "markdown", "text/markdown", SPEC_V1.length, "r1", "refine", 235, ["analyst", 3]),
   artifactOf("spec_markdown", 2, "markdown", "markdown", "text/markdown", SPEC_V2.length, "r2", "refine", 130, ["analyst", 3]),
+  {
+    ...artifactOf("diff", 1, "diff", "diff", "text/x-diff", 512, "r3", "implement", 50),
+    storage_url: null,
+    display: { type: "diff", show: "tab", diff: { files: 2, additions: 5, deletions: 1, truncated: false, withheld: [] } },
+  },
   artifactOf("security_report", 1, "sarif", "report", "application/sarif+json", SARIF.length, "r3", "implement", 50),
   artifactOf("architecture.png", 1, "png", "file", "image/png", 68, "r3", "implement", 50),
   // Binary deliverables (S31-06): a deck from a skill, a report, a demo video from a gateway model.
@@ -357,7 +362,27 @@ export const artifacts: Artifact[] = [
   artifactOf("budget_summary", 1, "markdown", "markdown", "text/markdown", 120, "r3", "implement", 45),
 ];
 
+const DIFF_TEXT = `diff --git a/src/orders/total.py b/src/orders/total.py
+--- a/src/orders/total.py
++++ b/src/orders/total.py
+@@ -12,5 +12,7 @@ def total(order):
+     amount = sum(line.price for line in order.lines)
+-    return amount
++    credit = sum(note.amount for note in order.credit_notes)
++    return amount - credit
+ 
+ 
+diff --git a/tests/orders/test_total.py b/tests/orders/test_total.py
+--- /dev/null
++++ b/tests/orders/test_total.py
+@@ -0,0 +1,3 @@
++def test_a_credit_note_is_deducted(order):
++    order.credit_notes.append(note(10))
++    assert total(order) == 90
+`;
+
 const ARTIFACT_CONTENT: Record<string, [string, () => BlobPart]> = {
+  "diff@1": ["text/x-diff", () => DIFF_TEXT],
   "spec_markdown@1": ["text/markdown", () => SPEC_V1],
   "spec_markdown@2": ["text/markdown", () => SPEC_V2],
   "security_report@1": ["application/sarif+json", () => SARIF],

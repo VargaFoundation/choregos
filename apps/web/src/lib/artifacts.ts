@@ -48,9 +48,10 @@ export function firstToOpen(groups: ArtifactGroup[]): ArtifactGroup | undefined 
  * a PDF in the browser's viewer, a video in `<video>`. Everything else — office files included — is
  * downloaded.
  */
-export type ViewerKind = "markdown" | "sarif" | "json" | "text" | "image" | "pdf" | "video" | "download";
+export type ViewerKind = "markdown" | "sarif" | "json" | "text" | "diff" | "image" | "pdf" | "video" | "download";
 
 export function viewerOf(artifact: Pick<Artifact, "type" | "kind" | "media_type">): ViewerKind {
+  if (artifact.type === "diff") return "diff";
   if (artifact.type === "sarif") return "sarif";
   if (artifact.type === "markdown") return "markdown";
   if (artifact.type === "json") return "json";
@@ -83,6 +84,7 @@ const EXTENSIONS: Record<string, string> = {
   svg: "svg",
   mp4: "mp4",
   webm: "webm",
+  diff: "diff",
 };
 
 export function filenameOf(artifact: Pick<Artifact, "name" | "type">): string {
