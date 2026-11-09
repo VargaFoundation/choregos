@@ -918,6 +918,7 @@ that follows from it. Rule since that day: nothing is ✅ without a test that fa
 | S59-11 | S59 | ✅ | — | A governed tool's approver group may name the project: an organisation's operation rule `approver_group: "{project}-maintainers"` makes the action a run proposes approved by that project's group (`broker._propose_tool_action` stores the resolved group; `actions.decide` resolves a workflow action's `{project}` too), as S59-01 does for a workflow's people. One rule serves every project — the production sync of `diametral-deploy` is approved by each project's maintainers. **Proves** (`test_a_rule_naming_the_project_is_approved_by_that_projects_group`, red without the change): the action names `<slug>-maintainers`, another project's maintainers are refused, this project's approve. **Does not prove**: the operations page shows the rule as written, `{project}` unresolved (by design: it is the organisation's rule). |
 | S59-12 | S59 | ✅ | — | A pull request whose repository refuses auto-merge is merged directly (`GitHubScm.enqueue_merge`, `AUTO_MERGE_REFUSED`): GitHub refuses `enablePullRequestAutoMerge` on a repository that does not allow it (a private one without branch protection) and on a pull request already mergeable ("clean status"); the merge step runs after `ci_green`, so it merges with the configured method instead of failing. Found in production: iris#117 (FON-276) failed the merge five times after a green CI and ended `workflow_failed` (finding #1484). **Proves** (`test_a_repository_that_refuses_auto_merge_is_merged_directly`, red without the change; `test_another_graphql_refusal_is_not_merged_around`): the refusal leads to `PUT …/merge`, another refusal is raised and nothing is merged. **Does not prove**: a repository whose rules require the merge queue refuses the direct merge too (GitHub answers 405: the step fails as before, with GitHub's reason). |
 | S61-00 | S61 | ✅ | — | [ADR 0129](../adr/0129-an-artifact-says-how-it-is-shown.md) accepted (product owner, 2026-11-09: typed artifacts, what is visible in *About this ticket* said by the workflow, a git diff among the artifacts). Proves: the index lists it (`tests/docs/test_adr_index.py`). Does not prove anything about the code: S61-01 to S61-17 do. |
+| S61-01 | S61 | ✅ | — | A ticket's size and risk are in *About this ticket*, as the work item's columns ([ADR 0129](../adr/0129-an-artifact-says-how-it-is-shown.md) §6), whatever its workflow declares: `LevelBadge` tints a scale that judges (risk) and only ranks one that does not (size), the word always written. Proves: `apps/web/tests/ticket-page.test.tsx` (the two badges, their tones, the rank read aloud, nothing named when the ticket has neither). Does not prove: a rendering on a real ticket. |
 
 
 
@@ -927,7 +928,7 @@ that follows from it. Rule since that day: nothing is ✅ without a test that fa
 
 
 
-**Total**: 595 delivered, 294 partial, 8 not started.
+**Total**: 596 delivered, 294 partial, 8 not started.
 
 
 **2026-10-05 — ADR 0029: Choregos becomes a platform of governed agents, for general use; 0028 is

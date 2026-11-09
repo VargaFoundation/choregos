@@ -23,10 +23,12 @@ import {
 } from "@/components/ui";
 import { api } from "@/lib/api";
 import { libelleDeCode, relative, shortDate, tokens, usd } from "@/lib/format";
+import { RISK_LEVELS, SIZE_LEVELS } from "@/lib/levels";
 import type { WorkItemJourney } from "@/lib/types";
 import { ConfirmedGesture } from "@/components/confirmed-gesture";
 import { AgentProposal } from "@/components/agent-proposal";
 import { Artifacts } from "@/components/artifacts";
+import { LevelBadge } from "@/components/level-badge";
 import { Passages } from "@/components/passages";
 import { Provenance } from "@/components/provenance";
 import { TrackerCard } from "@/components/who-writes";
@@ -206,6 +208,23 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
         </div>
         <Card title="About this ticket" data-testid="ticket-facts" className="self-start">
           <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
+            {/* The work item's own columns (ADR 0129 §6): shown whatever its workflow declares. */}
+            {data.size && (
+              <>
+                <dt className="text-ink-muted">Size</dt>
+                <dd>
+                  <LevelBadge value={data.size} levels={SIZE_LEVELS} data-testid="ticket-size" />
+                </dd>
+              </>
+            )}
+            {data.risk && (
+              <>
+                <dt className="text-ink-muted">Risk</dt>
+                <dd>
+                  <LevelBadge value={data.risk} levels={RISK_LEVELS} data-testid="ticket-risk" />
+                </dd>
+              </>
+            )}
             <dt className="text-ink-muted">Filed</dt>
             <dd title={shortDate(data.created_at)}>{relative(data.created_at)}</dd>
             {data.closed_at && (
