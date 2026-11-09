@@ -497,7 +497,7 @@ test("an agent's page is in tabs: overview, definition, history, lifecycle, runs
   await expect(page).toHaveURL(/\/p\/billing-api\/runs\//);
 
   await page.goto("/agents/onboarding-coordinator?tab=access");
-  await expect(page.getByRole("heading", { name: "Tools and servers" })).toBeVisible();
+  await expect(page.getByTestId("agent-access")).toBeVisible();
 });
 
 test("agents: an external agent shows its client, and a project its implicit agents", async ({ page }) => {
