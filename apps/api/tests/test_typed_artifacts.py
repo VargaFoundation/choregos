@@ -6,7 +6,7 @@ from typing import Any
 
 from httpx import AsyncClient
 
-from .test_artifacts import _post, _rows, _run, _work_item
+from .kits.artifacts import _post, _rows, _run, _work_item
 
 SEVERITY = {
     "type": "level",
