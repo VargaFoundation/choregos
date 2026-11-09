@@ -4951,6 +4951,8 @@ export interface Operations {
   startAgentEvaluation: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/evaluations"; body: AgentEvaluationCreate; response: AgentEvaluation };
   startAgentTrial: { method: "POST"; path: "/orgs/{org}/agent-trials"; body: AgentTrialCreate; response: AgentTrial };
   stopKnowledgeDistillation: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/distill/stop"; body: never; response: KnowledgeBase };
+  streamProjectEvents: { method: "GET"; path: "/projects/{id}/events/stream"; body: never; response: void };
+  streamWorkItemEvents: { method: "GET"; path: "/work-items/{id}/events/stream"; body: never; response: void };
   suspendProject: { method: "POST"; path: "/projects/{id}/suspend"; body: never; response: Project };
   syncKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sync"; body: never; response: KnowledgeBase };
   syncKnowledgeSource: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}/sync"; body: never; response: KnowledgeSource };

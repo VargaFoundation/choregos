@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import pytest
 from choregos_api.events import EventBus, sse_signal
 from choregos_contracts import ChoregosEvent, EventType
 from httpx import AsyncClient
@@ -33,11 +34,20 @@ def test_the_signal_is_an_unnamed_message_without_the_payload() -> None:
     assert json.loads(signal["data"]) == {"type": str(event.type), "subject": "FON-276", "run_id": "r-1"}
 
 
-async def test_persist_event_carries_the_ids_to_the_bus(client: AsyncClient, project: dict[str, Any]) -> None:
+async def test_persist_event_carries_the_ids_to_the_bus(
+    client: AsyncClient, project: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
     from choregos_api.db.session import session_scope
     from choregos_api.events import get_bus
+    from choregos_api.services import events
     from choregos_api.services.events import persist_event
 
+    # What is under test is the event this path hands over. On PostgreSQL it would reach the bus through
+    # the LISTEN relay, which only the application's lifespan starts: the delivery has its own tests.
+    async def straight_to_the_bus(_session: object, event: ChoregosEvent) -> None:
+        get_bus().publish(event)
+
+    monkeypatch.setattr(events, "broadcast", straight_to_the_bus)
     created = await client.post(f"/api/v1/projects/{project['id']}/work-items", json={"title": "Live"})
     assert created.status_code == 201, created.text
     item_id = created.json()["id"]

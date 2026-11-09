@@ -117,7 +117,7 @@ the board.
 | `cloud_id` | leave empty: read from the site at the first call, and shown by Test |
 | `email` | the email of the account the API token belongs to (a service account's ends in @serviceaccount.atlassian.com) |
 | `field_names` | a map of the custom fields Choregos writes (Cost, Size, Risk, Run) to their names in your Jira |
-| `match_labels` | optional: when several projects share this Jira project, the labels that send an issue here; the project without them takes the rest (S59-03) |
+| `match_labels` | optional: when several projects share this Jira project, the labels that send an issue here; the project without them takes the rest |
 | `project_key` | the project's key, the prefix of its issue keys (BILL in BILL-42) |
 | `webhook_secret` | not used by the Jira webhook endpoint: the platform's shared webhook secret is |
 

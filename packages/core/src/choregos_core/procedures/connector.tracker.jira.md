@@ -17,7 +17,7 @@ fields:
   auth: "`scoped` for a service account's token, which carries the scopes read:jira-work and write:jira-work; `basic` for a classic token"
   cloud_id: "leave empty: read from the site at the first call, and shown by Test"
   candidates_jql: "optional: the JQL of the issues the platform takes on by itself, without a webhook (BILL issues matching it, not done)"
-  match_labels: "optional: when several projects share this Jira project, the labels that send an issue here; the project without them takes the rest (S59-03)"
+  match_labels: "optional: when several projects share this Jira project, the labels that send an issue here; the project without them takes the rest"
   project_key: "the project's key, the prefix of its issue keys (BILL in BILL-42)"
   field_names: "a map of the custom fields Choregos writes (Cost, Size, Risk, Run) to their names in your Jira"
   api_token: "the API token, typed once"

@@ -9,7 +9,7 @@ from typing import Any
 
 from httpx import AsyncClient
 
-from .test_human_actor_group import _decide, _member
+from .kits.human_actor import _decide, _member
 
 WORKFLOW = """
 apiVersion: choregos/v1
@@ -62,7 +62,7 @@ async def test_the_step_is_answered_by_this_projects_maintainers_only(
 ) -> None:
     slug = project["slug"]
     item_id = await _waiting(client, project["id"])
-    await _member(client, "other@varga.dev", "project_owner", ["graal-maintainers"])
+    await _member(client, "other@varga.dev", "project_owner", ["atlas-maintainers"])
     await _member(client, "lead@varga.dev", "project_owner", [f"{slug}-maintainers"])
 
     refused = await _decide(app, "other@varga.dev", item_id)
@@ -77,7 +77,7 @@ async def test_the_group_is_resolved_for_the_project_in_validation_and_members(
 ) -> None:
     slug, pid = project["slug"], project["id"]
     path = f"/api/v1/projects/{pid}/workflows/validate"
-    await _member(client, "other@varga.dev", "project_owner", ["graal-maintainers"])
+    await _member(client, "other@varga.dev", "project_owner", ["atlas-maintainers"])
     warned = (await client.post(path, json={"yaml": WORKFLOW})).json()
     unknown = [w for w in warned["warnings"] if w["code"] == "actor.group_unknown"]
     assert unknown and f"`{slug}-maintainers`" in unknown[0]["message"], warned["warnings"]

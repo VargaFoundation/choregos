@@ -1194,6 +1194,28 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /projects/{id}/events/stream:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [projects]
+      operationId: streamProjectEvents
+      summary: What happens in the project from now on, as server-sent events
+      responses:
+        "200":
+          description: OK
+          content:
+            text/event-stream: { schema: { type: string } }
+  /work-items/{id}/events/stream:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [work-items]
+      operationId: streamWorkItemEvents
+      summary: What happens to the work item from now on, as server-sent events
+      responses:
+        "200":
+          description: OK
+          content:
+            text/event-stream: { schema: { type: string } }
   /work-items/{id}/timeline:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
