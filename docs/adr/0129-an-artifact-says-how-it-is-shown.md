@@ -71,6 +71,13 @@ ADR 0049 typed artifacts by format, and a value nobody declared falls back on it
 11. **The list carries the values that fit on one line** (`level`, `metric`), after the same digest check
     as any read, so the card asks for one list instead of one request per fact. A value that no longer
     matches its digest is absent from the list.
+12. **An Office file is previewed, by the console itself** (S61-18). A `docx`, `pptx` or `xlsx` is a ZIP of
+    XML, read in the browser into plain data the console draws as its own elements: slides as positioned
+    boxes with their theme and the inheritance of placeholders, a document in reading order, sheets of
+    values. Nothing of the file runs: no markup or macro is used, an external link is never followed, a
+    picture is shown only if its bytes are raster, and inflating stops at a bound whatever the archive
+    declares. The page says it is a preview; the download remains the exact file. ADR 0049 §8 stands: the
+    platform generates nothing and no Office library enters the core.
 
 ## Consequences
 
@@ -102,5 +109,10 @@ ADR 0049 typed artifacts by format, and a value nobody declared falls back on it
   shown in an `<img>`: it works, and takes the console's JavaScript from about 2 MB to 7.2 MB, the largest
   chunk 1.4 MB, against a budget of 2.2 MB and 600 kB. A guard that exists to catch this is not raised for
   it. A `mermaid` artifact stays text; rendering it on the server is the way to reopen this.
+- **Converting Office files to PDF with LibreOffice.** The exact rendering, for an image about 600 MB larger
+  and a parser of agent-written files to isolate and keep patched. It is the way to reopen fidelity if a
+  preview is not enough.
+- **`mammoth`, SheetJS and a PPTX library in the browser.** Megabytes for three formats, against a 2.2 MB
+  budget, and no maintained PPTX renderer.
 - **A geographic map.** It needs a tile provider, a wider Content-Security-Policy, and sends what the
   map shows to that provider. Not without a use case.

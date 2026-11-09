@@ -78,8 +78,8 @@ export function firstToOpen(groups: ArtifactGroup[]): ArtifactGroup | undefined 
 /**
  * How an artifact is shown. Only formats the console can render without running the agent's
  * content: text as text, markdown by a renderer that builds elements (no HTML), images in `<img>`,
- * a PDF in the browser's viewer, a video in `<video>`. Everything else — office files included — is
- * downloaded.
+ * a PDF in the browser's viewer, a video in `<video>`, an Office file read into data the console
+ * draws itself. Everything else is downloaded.
  */
 export type ViewerKind =
   | "markdown"
@@ -88,6 +88,7 @@ export type ViewerKind =
   | "text"
   | "diff"
   | "csv"
+  | "office"
   | "keyvalue"
   | "value"
   | "image"
@@ -101,13 +102,14 @@ export function viewerOf(artifact: Pick<Artifact, "type" | "kind" | "media_type"
   if (artifact.display?.type && ["level", "metric"].includes(artifact.display.type) && artifact.value != null) return "value";
   if (artifact.type === "keyvalue") return "keyvalue";
   if (artifact.type === "csv") return "csv";
+  if (["docx", "pptx", "xlsx"].includes(artifact.type)) return "office";
   if (artifact.type === "sarif") return "sarif";
   if (artifact.type === "markdown") return "markdown";
   if (artifact.type === "json") return "json";
   if (["text", "mermaid", "level", "metric"].includes(artifact.type)) return "text";
   // SVG can carry script: shown as an image only, where a browser never runs it.
   if (artifact.media_type.startsWith("image/")) return "image";
-  // A PDF in the browser's viewer, a video in a player (S31-06); office files are downloaded.
+  // A PDF in the browser's viewer, a video in a player (S31-06).
   if (artifact.media_type === "application/pdf") return "pdf";
   if (artifact.media_type.startsWith("video/")) return "video";
   return "download";

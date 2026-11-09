@@ -1103,8 +1103,9 @@ produced each), `GET /work-items/{id}/artifacts/{name}` (or `{name}@{version}`) 
 On a work item's page, the **artifacts** card has one tab per output: its revisions, the run and
 agent that produced each one and the runs that read it (the hand-off receipts), a viewer — markdown
 rendered without HTML, a SARIF report as a table, an image, a PDF in the browser's own viewer, a
-video in a player — and a download. Office files (docx, xlsx, pptx) are downloaded, never rendered
-in the browser. A revision the API
+video in a player — and a download. An Office file (docx, xlsx, pptx) is shown as a preview: slides, a document, sheets of values, drawn by
+the console from the file's content, without running any of it. Fonts, charts and effects can differ
+from the application's rendering, and the page says so; the download is the exact file. A revision the API
 refuses to serve is said, not shown.
 A step's declared `inputs:` reach its agent as files too: the runner writes each one in
 `.choregos/inputs/<name>.<ext>` (`deck.pptx`, `profiles.json`, `spec_markdown.md`) after checking

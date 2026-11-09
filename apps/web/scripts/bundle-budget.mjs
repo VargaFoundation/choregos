@@ -35,7 +35,9 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // received events' and the triggers' `reopened` label tip it over by a fraction of a kilobyte.
 // 2026-11-09 (S61): 2200 -> 2225 kB. The typed artifacts' viewers (a diff, a CSV table, key/value pairs, a JSON
 // tree, the facts of a ticket) take the console to 2205 kB, with no new dependency.
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2225);
+// 2026-11-09 (S61-18): 2225 -> 2250 kB. Reading docx, pptx and xlsx in the page, by hand and loaded on demand,
+// brings 29 kB where a library would bring megabytes.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2250);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* files(dir) {

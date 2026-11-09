@@ -2,7 +2,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Braces, File, FileText, GitCompare, Image as ImageIcon, type LucideIcon, ShieldAlert, Table2 } from "lucide-react";
+import { Braces, File, FileText, GitCompare, Image as ImageIcon, type LucideIcon, Presentation, ShieldAlert, Table2 } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { courte } from "@/components/passages";
@@ -109,6 +110,8 @@ function iconOf(artifact: Artifact): LucideIcon {
       return GitCompare;
     case "csv":
       return Table2;
+    case "office":
+      return Presentation;
     case "json":
     case "keyvalue":
       return Braces;
@@ -246,8 +249,8 @@ function useText(blob: Blob): string | null {
   return text;
 }
 
-/** Office files are downloaded, never rendered in the browser (S31-06). */
-const OFFICE = new Set(["docx", "xlsx", "pptx"]);
+/** Read only when one is opened: the console does not carry it on every page. */
+const OfficeView = dynamic(() => import("@/components/office-view"), { ssr: false, loading: () => <Empty>Reading the file…</Empty> });
 
 function Viewer({ artifact, blob, url }: { artifact: Artifact; blob: Blob; url: string | null }) {
   const kind = viewerOf(artifact);
@@ -272,18 +275,13 @@ function Viewer({ artifact, blob, url }: { artifact: Artifact; blob: Blob; url: 
       </video>
     ) : null;
   }
-  if (kind === "download") {
-    const office = OFFICE.has(artifact.type);
-    return (
-      <Empty title={filenameOf(artifact)}>
-        <span data-testid="artifact-download-only">
-          {office
-            ? "An office file is downloaded and opened in its application; the console does not render it."
-            : "The console does not open this type; download it to read it."}
-        </span>
-      </Empty>
-    );
-  }
+  const downloadOnly = (
+    <Empty title={filenameOf(artifact)}>
+      <span data-testid="artifact-download-only">The console does not open this file; download it to read it.</span>
+    </Empty>
+  );
+  if (kind === "download") return downloadOnly;
+  if (kind === "office") return <OfficeView type={artifact.type} blob={blob} fallback={downloadOnly} />;
   if (kind === "diff") return <Diff artifact={artifact} blob={blob} />;
   if (kind === "value") return <ValueViewer artifact={artifact} />;
   return <TextViewer kind={kind} blob={blob} />;

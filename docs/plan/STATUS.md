@@ -935,6 +935,7 @@ that follows from it. Rule since that day: nothing is ✅ without a test that fa
 | S61-15 | S61 | 🟡 | — | What was proved of typed artifacts beyond the unit suites ([ADR 0129](../adr/0129-an-artifact-says-how-it-is-shown.md)), on 2026-11-09 from a workstation. Proves: GitHub's real comparison of two tags of this repository (37 files) goes through the adapter and `unified_diff`, and `git apply --check` accepts the result; GitLab's real comparison of a public project (64 files) comes out with one header per file; the migration, the API's typed artifacts and the orchestrator's diff pass on PostgreSQL 16 under forced RLS; the demo console draws the facts card, the diff, a CSV and key/value pairs in both themes, without a console error and without overflow at 390 px. Does not prove: a real agent step on a real ticket, which needs a release on a tenant; the secret withholding against a real secret-shaped commit. |
 | S61-16 | S61 | ✅ | — | contract-change: a risk may be `critical` ([ADR 0129](../adr/0129-an-artifact-says-how-it-is-shown.md)), everywhere one is written: `Risk`, a stage's outputs and its input, the creation of a ticket by the API and by MCP, the policy's enumerations, GitHub's field and `risk:` label, the triage prompt. It is drawn as a danger. The guarantees that route on a risk are allow lists (`outputs_in`), so a workflow that lists fewer sends a critical ticket to a person. Proves: `packages/contracts/tests/test_artifact_display.py`, `packages/adapters/tests/test_fake_typed_outputs.py`. Does not prove: a Jira or GitLab field holding the new word, which is each site's own configuration. |
 | S61-17 | S61 | ⬜ | — | Drawing a `mermaid` artifact in the console: not delivered. Built and measured with `mermaid` 12.2.0 loaded on demand (inert SVG in an `<img>`): 7244 kB of JavaScript against a budget of 2200 kB, and a 1447 kB chunk against 600 kB. Recorded in [ADR 0129](../adr/0129-an-artifact-says-how-it-is-shown.md); a `mermaid` artifact stays text. Reopening it means rendering on the server, or a decision to raise the budget. |
+| S61-18 | S61 | ✅ | — | A `docx`, `pptx` or `xlsx` artifact is shown in the page ([ADR 0129](../adr/0129-an-artifact-says-how-it-is-shown.md) §12; product owner, 2026-11-09, for a workflow whose deliverable is one): read in the browser from its own ZIP and XML, loaded on demand, no dependency added. Slides keep their position, theme colours, master and layout, pictures and tables; a document its headings, lists, formatting, pictures and tables; a workbook its sheets. Nothing of the file runs, an external link is not followed, only raster bytes are drawn, inflating is bounded. Proves: `apps/web/tests/office-view.test.tsx`, on files written by `python-pptx`, `python-docx` and `openpyxl`, and a rendering in the demo console without a console error. Does not prove: fidelity on a designed corporate deck; charts and SmartArt are not drawn, a placeholder stands in. The page says it is a preview. |
 
 
 
@@ -944,7 +945,7 @@ that follows from it. Rule since that day: nothing is ✅ without a test that fa
 
 
 
-**Total**: 611 delivered, 295 partial, 9 not started.
+**Total**: 612 delivered, 295 partial, 9 not started.
 
 
 **2026-10-05 — ADR 0029: Choregos becomes a platform of governed agents, for general use; 0028 is
