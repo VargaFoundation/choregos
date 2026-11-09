@@ -457,7 +457,10 @@ class Runner:
                     return await self._stopped_by_the_guard(
                         client, journal, workspace, stage_input, agent, report, (base, start_ref)
                     )
-                load = load_result(workspace.result_path(), inline_outputs(stage_input), _files(stage_input))
+                displays = stage_input.transition.artifact_displays
+                load = load_result(
+                    workspace.result_path(), inline_outputs(stage_input), _files(stage_input), displays
+                )
                 while not load.ok and repairs < MAX_RESULT_REPAIRS and not refused:
                     repairs += 1
                     await journal.record("result.repair", {"attempt": repairs, "error": load.error})
@@ -465,7 +468,7 @@ class Runner:
                         agent, repair_prompt(load, workspace.result_path()), self._remaining(budget_seconds)
                     )
                     load = load_result(
-                        workspace.result_path(), inline_outputs(stage_input), _files(stage_input)
+                        workspace.result_path(), inline_outputs(stage_input), _files(stage_input), displays
                     )
                 agent_result = load.result
                 diagnostics = Diagnostics(

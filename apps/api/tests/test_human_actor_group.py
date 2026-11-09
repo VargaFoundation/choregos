@@ -7,9 +7,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
 
-from .conftest import login
+from .kits.human_actor import _decide, _member
 
 GROUP = "release-captains"
 WORKFLOW = f"""
@@ -30,24 +30,6 @@ transitions:
     to: done
     by: captain
 """
-
-
-async def _member(client: AsyncClient, email: str, role: str, groups: list[str]) -> None:
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
-    from sqlalchemy import select
-
-    added = await client.post("/api/v1/orgs/varga/members", json={"email": email, "role": role})
-    assert added.status_code in {200, 201}, added.text
-    async with session_scope() as session:
-        user = (await session.execute(select(User).where(User.email == email))).scalar_one()
-        user.groups = groups
-
-
-async def _session(app: Any, email: str) -> AsyncClient:
-    other = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
-    await login(other, email)
-    return other
 
 
 async def _waiting_ticket(client: AsyncClient, pid: str) -> str:
@@ -75,14 +57,6 @@ async def _waiting_ticket(client: AsyncClient, pid: str) -> str:
             )
         )
     return item_id
-
-
-async def _decide(app: Any, email: str, item_id: str) -> Any:
-    session = await _session(app, email)
-    try:
-        return await session.post(f"/api/v1/work-items/{item_id}/decisions", json={"kind": "approve"})
-    finally:
-        await session.aclose()
 
 
 async def test_a_project_owner_outside_the_group_cannot_answer_its_step(

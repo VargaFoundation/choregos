@@ -17,4 +17,4 @@ If the request is ambiguous or a decision belongs to the requester, `ask_human` 
 
 {{ output_contract }}
 
-Expected `outputs`: `{"spec_markdown": "…", "size": "S|M|L|XL", "risk": "low|medium|high"}`.
+Expected `outputs`: `{"spec_markdown": "…", "size": "S|M|L|XL", "risk": "low|medium|high|critical"}`.

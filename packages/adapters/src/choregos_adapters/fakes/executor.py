@@ -8,7 +8,7 @@ import inspect
 from collections.abc import AsyncIterator, Callable
 from typing import Any
 
-from choregos_contracts import ExecutorKind, StageInput, StageResult, StageStatus
+from choregos_contracts import ExecutorKind, StageInput, StageResult, StageStatus, TransitionRef
 from choregos_core.domain import ExecRef, ExecStatus, StageJobSpec, utcnow
 from choregos_core.hosted import native_sidecars_refusal
 
@@ -188,6 +188,20 @@ class FakeExecutor:
 _PLACEHOLDERS: dict[str, Any] = {"size": "M", "risk": "low", "verdict": "approve", "allowed_paths": ["**"]}
 
 
+def _typed_placeholder(transition: TransitionRef, name: str, default: Any) -> Any:
+    """A value its declared type accepts (ADR 0129): the first level, the lowest bound, one pair."""
+    display = transition.artifact_displays.get(name)
+    if display is None:
+        return default
+    if display.type == "level" and display.levels:
+        return display.levels[0].value
+    if display.type == "metric":
+        return display.min if display.min is not None else 1
+    if display.type == "keyvalue":
+        return {"placeholder": name}
+    return default
+
+
 def _nothing_to_do(stage_input: StageInput | None) -> StageResult:
     """The default fake result: done, with every output the transition declares (S31-02) — a
     placeholder value, or an empty file for a typed one. An output an old core template declared
@@ -201,7 +215,7 @@ def _nothing_to_do(stage_input: StageInput | None) -> StageResult:
     legacy = set(legacy_outputs(transition.id, list(transition.outputs)))
     files = set(transition.file_outputs())
     outputs = {
-        name: _PLACEHOLDERS.get(name, f"fake {name}")
+        name: _typed_placeholder(transition, name, _PLACEHOLDERS.get(name, f"fake {name}"))
         for name in transition.outputs
         if name not in legacy and name not in files
     }
@@ -237,7 +251,10 @@ def simulated_stage(stage_input: StageInput) -> StageResult:
                 f"simulated agent: `{transition.role}` moved the work item from `{transition.from_}` "
                 f"to `{transition.to}` without calling a model (local install in fakes mode)"
             ),
-            "outputs": {name: f"(simulated {name}: no model key configured)" for name in transition.outputs},
+            "outputs": {
+                name: _typed_placeholder(transition, name, f"(simulated {name}: no model key configured)")
+                for name in transition.outputs
+            },
         }
     )
 

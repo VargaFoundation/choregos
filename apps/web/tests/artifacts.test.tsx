@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { Artifacts } from "@/components/artifacts";
 import { MarkdownView } from "@/components/markdown-view";
 import { api, ApiError } from "@/lib/api";
-import { filenameOf, groupArtifacts, readersOf, viewerOf } from "@/lib/artifacts";
+import { filenameOf, firstToOpen, groupArtifacts, readersOf, viewerOf } from "@/lib/artifacts";
 import { sarifRows } from "@/lib/sarif";
 import type { Artifact, HandOff } from "@/lib/types";
 
@@ -117,12 +117,9 @@ describe("the artifacts of a work item (S31-04)", () => {
     await waitFor(() => expect(screen.getByTestId("artifact-reader")).toHaveAttribute("href", "/p/billing-api/runs/r9"));
   });
 
-  it("previews a PDF, plays a video, downloads an office file (S31-06)", async () => {
+  it("previews a PDF, plays a video, offers the download of an office file it cannot read", async () => {
     expect(viewerOf({ type: "pdf", kind: "file", media_type: "application/pdf" })).toBe("pdf");
     expect(viewerOf({ type: "mp4", kind: "file", media_type: "video/mp4" })).toBe("video");
-    for (const type of ["docx", "xlsx", "pptx"] as const) {
-      expect(viewerOf({ type, kind: "file", media_type: "application/vnd.openxmlformats-officedocument" })).toBe("download");
-    }
     vi.mocked(api.artifactContent).mockResolvedValue(new Blob(["x"], { type: "application/octet-stream" }));
     const file = (name: string, type: Artifact["type"], media_type: string) =>
       artifact(name, 1, { type, kind: "file", media_type, storage_url: `s3://choregos/${name}` });
@@ -131,7 +128,8 @@ describe("the artifacts of a work item (S31-04)", () => {
       file("demo", "mp4", "video/mp4"),
       file("deck", "pptx", "application/vnd.openxmlformats-officedocument.presentationml.presentation"),
     ]);
-    expect(await screen.findByTestId("artifact-download-only")).toHaveTextContent("office file is downloaded");
+    expect(await screen.findByTestId("office-refused")).toHaveTextContent("not an Office file");
+    expect(await screen.findByTestId("artifact-download-only")).toHaveTextContent("download it to read it");
     expect(screen.getByTestId("artifact-download")).toHaveAttribute("download", "deck.pptx");
     fireEvent.click(screen.getByRole("tab", { name: "demo" }));
     expect(await screen.findByTestId("artifact-video")).toHaveAttribute("controls");
@@ -145,5 +143,58 @@ describe("the artifacts of a work item (S31-04)", () => {
     const refused = await screen.findByTestId("artifact-refused");
     expect(refused).toHaveTextContent("no longer matches its digest");
     expect(within(screen.getByRole("tabpanel")).queryByTestId("markdown-view")).toBeNull();
+  });
+
+  it("orders the tabs as the steps produced them, and opens the latest document, not a word", () => {
+    const at = (day: number) => `2026-11-0${day}T10:00:00Z`;
+    const groups = groupArtifacts([
+      artifact("allowed_paths", 1, { created_at: at(1), size: 13, kind: "json", type: "json" }),
+      artifact("verdict", 1, { created_at: at(4), size: 7 }),
+      artifact("spec_markdown", 1, { created_at: at(2), size: 3000 }),
+      artifact("test_report", 1, { created_at: at(3), size: 1700 }),
+    ]);
+    expect(groups.map((g) => g.name)).toEqual(["allowed_paths", "spec_markdown", "test_report", "verdict"]);
+    expect(firstToOpen(groups)?.name).toBe("test_report");
+    expect(firstToOpen(groupArtifacts([artifact("verdict", 1, { size: 7 })]))?.name).toBe("verdict");
+    expect(firstToOpen([])).toBeUndefined();
+  });
+
+  it("reads a one-word value above the tabs, not in one of them", async () => {
+    vi.mocked(api.artifactContent).mockResolvedValue(new Blob(["# Spec"], { type: "text/markdown" }));
+    const level: Artifact["display"] = { type: "level", show: "tab", levels: [{ value: "approve", tone: "ok" }] };
+    renderArtifacts([artifact("verdict", 1, { value: "approve", display: level }), artifact("spec_markdown", 1, { size: 900 })]);
+    expect(screen.getByTestId("artifact-values")).toHaveTextContent("Approve");
+    expect(screen.queryByRole("tab", { name: "verdict" })).toBeNull();
+    expect(await screen.findByRole("heading", { name: "Spec" })).toBeInTheDocument();
+  });
+
+  it("does not repeat what the facts card shows, nor what the workflow hides", () => {
+    const facts: Artifact["display"] = { type: "level", show: "facts", levels: [{ value: "S" }] };
+    const hidden: Artifact["display"] = { type: "markdown", show: "hidden" };
+    renderArtifacts([artifact("severity", 1, { value: "S", display: facts }), artifact("notes", 1, { size: 900, display: hidden })]);
+    expect(screen.queryByTestId("artifact-values")).toBeNull();
+    expect(screen.queryByRole("tab")).toBeNull();
+  });
+
+  it("opens the tab a fact of the ticket asked for", async () => {
+    vi.mocked(api.artifactContent).mockResolvedValue(new Blob(["# Other"], { type: "text/markdown" }));
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Artifacts
+          itemId="w1"
+          slug="billing-api"
+          opened="b"
+          handOffs={[]}
+          artifacts={[artifact("a", 1, { size: 900, created_at: "2026-11-09T00:00:00Z" }), artifact("b", 1, { size: 900 })]}
+        />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByRole("tab", { name: "b" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("keeps what a step proposed for a ticket's size, which a person may have changed", () => {
+    const facts: Artifact["display"] = { type: "level", show: "facts", title: "Size", levels: [{ value: "S" }, { value: "M" }] };
+    renderArtifacts([artifact("size", 1, { value: "S", display: facts })]);
+    expect(screen.getByTestId("artifact-value-row-size")).toHaveTextContent("SizeS");
   });
 });

@@ -207,7 +207,7 @@
       "properties": {
         "cross_backend": { "type": "boolean", "default": false,
           "description": "The review backend must differ from the implementation's." },
-        "require_human_for_risk": { "type": "array", "items": { "type": "string", "enum": ["low", "medium", "high"] },
+        "require_human_for_risk": { "type": "array", "items": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
           "default": ["high"] }
       }
     },
@@ -238,7 +238,7 @@
         "required": { "type": "string", "enum": ["always", "never", "by_size", "by_risk"] },
         "group": { "type": "string" },
         "sizes": { "type": "array", "items": { "type": "string", "enum": ["S", "M", "L", "XL"] } },
-        "risks": { "type": "array", "items": { "type": "string", "enum": ["low", "medium", "high"] } },
+        "risks": { "type": "array", "items": { "type": "string", "enum": ["low", "medium", "high", "critical"] } },
         "timeout_hours": { "type": "integer", "minimum": 1 }
       }
     },

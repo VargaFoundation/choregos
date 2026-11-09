@@ -710,7 +710,7 @@ test("a token, a name, a place: the three pages speak of \"access token\" and le
   const checklist = page.getByRole("heading", { name: "Access tokens" });
   await expect(checklist).toBeVisible();
   // The list says what each token opens: the API, or a client's MCP door.
-  await expect(page.getByText(/· (API and CLI|AI client, (read-only|can open work items)) ·/).first()).toBeVisible();
+  await expect(page.getByText(/^(API and CLI|AI client, (read-only|can open work items)) ·/).first()).toBeVisible();
 
   await page.goto("/integrations/claude-code");
   await expect(page.getByText(/Connected this way, Claude Code acts as you/)).toBeVisible();

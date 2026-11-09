@@ -184,7 +184,7 @@ export type Role = "org_admin" | "project_owner" | "developer" | "release_captai
 
 export type Size = "S" | "M" | "L" | "XL";
 
-export type Risk = "low" | "medium" | "high";
+export type Risk = "low" | "medium" | "high" | "critical";
 
 export type Me = {
   id: string;
@@ -3537,7 +3537,7 @@ export type WorkItemCreate = {
   title: string;
   body?: string;
   size?: "S" | "M" | "L" | "XL" | null;
-  risk?: "low" | "medium" | "high" | null;
+  risk?: "low" | "medium" | "high" | "critical" | null;
   start?: boolean;
   /** The workflow the ticket starts in; otherwise the routing, otherwise the default one (ADR 0031). */
   workflow?: string | null;
@@ -4974,6 +4974,8 @@ export interface Operations {
   startAgentEvaluation: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/evaluations"; body: AgentEvaluationCreate; response: AgentEvaluation };
   startAgentTrial: { method: "POST"; path: "/orgs/{org}/agent-trials"; body: AgentTrialCreate; response: AgentTrial };
   stopKnowledgeDistillation: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/distill/stop"; body: never; response: KnowledgeBase };
+  streamProjectEvents: { method: "GET"; path: "/projects/{id}/events/stream"; body: never; response: void };
+  streamWorkItemEvents: { method: "GET"; path: "/work-items/{id}/events/stream"; body: never; response: void };
   suspendProject: { method: "POST"; path: "/projects/{id}/suspend"; body: never; response: Project };
   syncKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sync"; body: never; response: KnowledgeBase };
   syncKnowledgeSource: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}/sync"; body: never; response: KnowledgeSource };

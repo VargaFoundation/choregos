@@ -508,6 +508,38 @@ class WorkflowA2a(Strict):
     input_modes: list[MediaType] = Field(default_factory=lambda: ["text/plain"], min_length=1)
 
 
+ArtifactTone = Literal["neutral", "info", "ok", "warn", "danger"]
+ArtifactShow = Literal["facts", "tab", "hidden"]
+ArtifactScale = Literal["risk", "size", "verdict"]
+
+
+class ArtifactLevel(Strict):
+    """One value of an ordered scale. A tone is a word of a closed list, never a colour (ADR 0129 §3)."""
+
+    value: str = Field(min_length=1, max_length=64)
+    tone: ArtifactTone = "neutral"
+    title: str | None = Field(default=None, min_length=1, max_length=64)
+
+
+class ArtifactSpec(Strict):
+    """What a workflow says of one output name: its type, its scale, where it is seen (ADR 0129).
+
+    Declared by name, not by transition: a name can have several producers.
+    """
+
+    #: `level`, `metric`, `keyvalue`; formats stay in a transition's `output_types`.
+    type: str | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=64)
+    show: ArtifactShow | None = None
+    #: A scale the platform ships, or `levels`: never both.
+    scale: ArtifactScale | None = None
+    levels: list[ArtifactLevel] | None = Field(default=None, min_length=2, max_length=12)
+    unit: str | None = Field(default=None, min_length=1, max_length=16)
+    min: float | None = None
+    max: float | None = None
+    better: Literal["higher", "lower"] | None = None
+
+
 class Workflow(Strict):
     """Complete definition of a workflow. Static validation lives in `choregos_core.dsl`."""
 
@@ -521,6 +553,8 @@ class Workflow(Strict):
     budget: WorkflowBudget | None = None
     #: Served as an A2A skill (ADR 0078); absent: not exposed.
     a2a: WorkflowA2a | None = None
+    #: How each output is typed and shown, by name (ADR 0129); absent: the platform's own defaults.
+    artifacts: dict[str, ArtifactSpec] | None = None
     #: Where the workflow starts. **Optional in the YAML**: the parser fills it with the first
     #: declared state, which remains the rule (§1.4). But it must be WRITTEN in the document, not
     #: deduced from the key order, because that order does not survive storage.

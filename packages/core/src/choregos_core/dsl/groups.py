@@ -3,7 +3,7 @@
 
 `group: "{project}-maintainers"` makes ONE workflow serve every project of an organisation, each step
 answered by that project's people: the identity provider already sends per-project groups
-(`iris-maintainers`, `graal-maintainers`), and a workflow shared to the organisation's catalogue
+(`iris-maintainers`, `atlas-maintainers`), and a workflow shared to the organisation's catalogue
 (ADR 0111) can now address them without a copy per project. `{project}` is the project's slug, read
 where a person answers or is looked for; no other placeholder exists, and a train's approval group
 (read by the release train of a project, ADR 0041) does not take one.

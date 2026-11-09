@@ -25,13 +25,22 @@ from choregos_adapters.storage import ObjectStore
 from choregos_contracts import (
     ARTIFACT_NAME_PATTERN,
     ARTIFACT_TYPES,
+    CHECKED_TYPES,
+    DIFF_ARTIFACT,
+    RESERVED_ARTIFACT_NAMES,
+    VALUE_TYPES,
     Artifact,
+    ArtifactDiffStat,
+    ArtifactDisplay,
     ArtifactProducer,
     artifact_digest,
     artifact_type,
+    coerce_value,
     inline_bytes,
+    resolve_display,
     type_of_value,
 )
+from choregos_core.unified_diff import UnifiedDiff
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -91,7 +100,7 @@ async def producing_runs(
         row = await latest(session, work_item_id, name)
         if row is None or row.run_id == reader or row.run_id in runs or sent_by_caller(row):
             continue
-        if name in documents and row.storage_key is None and row.content not in _as_recorded(documents[name]):
+        if name in documents and row.storage_key is None and not _is_recorded_as(row, documents[name]):
             continue
         runs.append(row.run_id)
     return runs
@@ -111,6 +120,7 @@ async def _record(  # noqa: PLR0913 - one row, field by field, keyword-only
     key: str | None = None,
     url: str | None = None,
     producer: str | None = None,
+    display: ArtifactDisplay | None = None,
 ) -> ArtifactRecord:
     entry = artifact_type(type_)
     produced_by = run.id if run is not None else producer
@@ -138,6 +148,7 @@ async def _record(  # noqa: PLR0913 - one row, field by field, keyword-only
             attempt=run.attempt if run is not None else None,
             agent_slug=run.agent_slug if run is not None else None,
             agent_version=run.agent_version if run is not None else None,
+            display=display.model_dump(mode="json", exclude_none=True) if display is not None else None,
         )
         try:
             async with session.begin_nested():
@@ -149,9 +160,43 @@ async def _record(  # noqa: PLR0913 - one row, field by field, keyword-only
     raise RuntimeError(f"artifact `{name}`: could not take a version after {_ROUNDS} attempts")
 
 
+def _is_recorded_as(row: ArtifactRecord, value: Any) -> bool:
+    """A document's value is this revision: as written, parsed, or converted to its type (ADR 0129 §10)."""
+    if row.content in _as_recorded(value):
+        return True
+    display = display_of(row)
+    if display is None or display.type not in CHECKED_TYPES:
+        return False
+    try:
+        return bool(coerce_value(display, value) == row.content)
+    except ValueError:
+        return False
+
+
+def value_for_receipt(row: ArtifactRecord, documents: dict[str, Any]) -> Any:
+    """The value a *read* receipt hashes: as the step wrote it, the form its *produced* receipt hashed,
+    when converting it gave this revision (ADR 0129 §10); otherwise what the revision holds."""
+    if row.name in documents and _is_recorded_as(row, documents[row.name]):
+        return documents[row.name]
+    return row.content
+
+
 def _as_recorded(value: Any) -> list[Any]:
     """A document's value as an inline revision may hold it: as written, or parsed when declared `json`."""
     return [value, _parsed(value)]
+
+
+def declared_displays(run: Run) -> dict[str, ArtifactDisplay]:
+    """What the run's workflow declares of its outputs, as the stage input carried it (ADR 0129)."""
+    raw = ((run.stage_input or {}).get("transition") or {}).get("artifact_displays") or {}
+    return {name: ArtifactDisplay.model_validate(value) for name, value in raw.items()}
+
+
+def display_of(row: ArtifactRecord) -> ArtifactDisplay | None:
+    """How a revision is shown: its snapshot, or what its name means when it predates ADR 0129 (§9)."""
+    if row.display:
+        return ArtifactDisplay.model_validate(row.display)
+    return resolve_display(row.name)
 
 
 def _parsed(raw: Any) -> Any:
@@ -177,19 +222,47 @@ async def record_inline_outputs(
 
     A declared inline type (`markdown`, `json`) is kept; a list declared `markdown` is JSON. Text
     declared `json` that parses is the document it spells, not a JSON string: a model often answers
-    JSON as text, `output_schema` validates it parsed, and the next step reads `<name>.json` (S38-13)."""
+    JSON as text, `output_schema` validates it parsed, and the next step reads `<name>.json` (S38-13).
+
+    A `level`, a `metric` or a `keyvalue` is converted to what it is, and snapshots how it is shown; one
+    that cannot be converted (an agent the runner does not supervise) keeps its plain type, without a
+    display, rather than being lost (ADR 0129 §10)."""
     recorded: list[ArtifactRecord] = []
+    displays = declared_displays(run)
     for name, raw in outputs.items():
         if not _present(raw):
             continue
         if not _NAME.fullmatch(name):
             log.warning("artifact name refused", work_item=item.tracker_key, name=name)
             continue
+        if name in RESERVED_ARTIFACT_NAMES:
+            # The diff is what the SCM says, not what an agent writes (ADR 0129 §7).
+            log.warning("output under a reserved name not recorded", work_item=item.tracker_key, name=name)
+            continue
         declared = (types or {}).get(name)
-        value = _parsed(raw) if declared == "json" else raw
-        type_ = declared if declared in {"markdown", "json"} else type_of_value(value)
-        if type_ == "markdown" and not isinstance(value, str):
-            type_ = "json"
+        display = displays.get(name) or resolve_display(name)
+        if display is None and declared in CHECKED_TYPES:
+            display = ArtifactDisplay(type=declared)
+        checked: str | None = None
+        value = raw
+        if display is not None and display.type in CHECKED_TYPES:
+            try:
+                value = coerce_value(display, raw)
+                checked = display.type
+            except ValueError as error:
+                log.warning(
+                    "typed output off its type", work_item=item.tracker_key, name=name, why=str(error)
+                )
+                display = None
+        if checked is not None:
+            type_ = checked
+        else:
+            value = _parsed(raw) if declared == "json" else raw
+            type_ = declared if declared in {"markdown", "json"} else type_of_value(value)
+            if type_ == "markdown" and not isinstance(value, str):
+                type_ = "json"
+        if display is not None:
+            display = display.model_copy(update={"type": type_})
         data = inline_bytes(value)
         recorded.append(
             await _record(
@@ -202,9 +275,47 @@ async def record_inline_outputs(
                 digest=artifact_digest(data),
                 size=len(data),
                 content=value,
+                display=display,
             )
         )
     return recorded
+
+
+async def record_diff(
+    session: AsyncSession,
+    *,
+    org_id: str,
+    item: WorkItem,
+    run: Run,
+    diff: UnifiedDiff,
+) -> ArtifactRecord:
+    """The branch's diff as an artifact: a new revision only when the branch changed (ADR 0129 §7)."""
+    data = inline_bytes(diff.text)
+    declared = declared_displays(run).get(DIFF_ARTIFACT) or resolve_display(DIFF_ARTIFACT)
+    shown = declared if declared is not None else ArtifactDisplay()
+    return await _record(
+        session,
+        org_id=org_id,
+        item=item,
+        run=run,
+        name=DIFF_ARTIFACT,
+        type_=DIFF_ARTIFACT,
+        digest=artifact_digest(data),
+        size=len(data),
+        content=diff.text,
+        display=shown.model_copy(
+            update={
+                "type": DIFF_ARTIFACT,
+                "diff": ArtifactDiffStat(
+                    files=diff.files,
+                    additions=diff.additions,
+                    deletions=diff.deletions,
+                    truncated=diff.truncated,
+                    withheld=diff.withheld,
+                ),
+            }
+        ),
+    )
 
 
 async def store_file(
@@ -221,6 +332,8 @@ async def store_file(
     """Writes a file artifact to the object store, then records it. Same bytes, same version."""
     if not _NAME.fullmatch(name):
         raise ValueError(f"artifact name `{name}` refused: {ARTIFACT_NAME_PATTERN}")
+    if name in RESERVED_ARTIFACT_NAMES:
+        raise ValueError(f"artifact name `{name}` refused: it is measured by the platform")
     entry = artifact_type(type_)
     digest = artifact_digest(data)
     previous = await latest(session, item.id, name)
@@ -228,6 +341,7 @@ async def store_file(
         return previous
     key = storage_key(org_id, item.id, name, digest)
     url = await store.put(key, data, entry.media_type)
+    declared = declared_displays(run).get(name)
     return await _record(
         session,
         org_id=org_id,
@@ -239,6 +353,7 @@ async def store_file(
         size=len(data),
         key=key,
         url=url,
+        display=declared.model_copy(update={"type": type_}) if declared is not None else None,
     )
 
 
@@ -322,7 +437,24 @@ async def read_content(store: ObjectStore, row: ArtifactRecord) -> bytes:
     return data
 
 
+def _checked_value(row: ArtifactRecord, display: ArtifactDisplay) -> str | int | float | None:
+    """A `level` or `metric` for the list, after the check any read makes (ADR 0049 §5, ADR 0129 §11)."""
+    if row.storage_key is not None or artifact_digest(inline_bytes(row.content)) != row.digest:
+        return None
+    try:
+        value = coerce_value(display, row.content)
+    except ValueError:
+        return None
+    return value if isinstance(value, str | int | float) else None
+
+
 def to_contract(row: ArtifactRecord) -> Artifact:
+    display = display_of(row)
+    value: str | int | float | None = None
+    if display is not None and display.type in VALUE_TYPES:
+        value = _checked_value(row, display)
+        if value is None:
+            display = None  # it cannot be drawn as what it should be: its bytes are read, or refused
     return Artifact.model_validate(
         {
             "name": row.name,
@@ -341,6 +473,8 @@ def to_contract(row: ArtifactRecord) -> Artifact:
             ),
             "storage_url": row.storage_url,
             "created_at": row.created_at,
+            "display": display,
+            "value": value,
         }
     )
 

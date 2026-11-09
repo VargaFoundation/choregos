@@ -217,7 +217,7 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
                     "type": "array",
                     "items": {"type": "string"},
                     "description": "when several projects share this Jira project, the labels that send "
-                    "an issue here (S59-03); a project without them takes the issues no other claims",
+                    "an issue here; a project without them takes the issues no other claims",
                 },
             },
             ("base_url", "email", "project_key"),

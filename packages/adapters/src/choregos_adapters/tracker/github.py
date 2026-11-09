@@ -117,7 +117,7 @@ mutation(
 FIELD_TYPES: dict[str, tuple[str, tuple[str, ...]]] = {
     COST: ("NUMBER", ()),
     SIZE: ("SINGLE_SELECT", ("S", "M", "L", "XL")),
-    RISK: ("SINGLE_SELECT", ("low", "medium", "high")),
+    RISK: ("SINGLE_SELECT", ("low", "medium", "high", "critical")),
     RUN: ("TEXT", ()),
 }
 NATIVE_FIELDS = frozenset({"Status", "Title", "Assignees", "Labels"})
@@ -510,6 +510,6 @@ def _parse_risk(labels: list[dict[str, Any]]) -> Risk | None:
         name = label.get("name", "")
         if name.startswith("risk:"):
             value = name.split(":", 1)[1].lower()
-            if value in {"low", "medium", "high"}:
+            if value in {"low", "medium", "high", "critical"}:
                 return Risk(value)
     return None

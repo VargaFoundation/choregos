@@ -7,7 +7,7 @@ from typing import Any, Literal
 
 from pydantic import Field, field_validator, model_validator
 
-from .artifact import ARTIFACT_TYPES
+from .artifact import ARTIFACT_TYPES, ArtifactDisplay
 from .enums import ApiFormat, FindingType, Severity, StageStatus
 from .workflow import Strict
 
@@ -65,7 +65,7 @@ class WorkItemRef(Strict):
     body: str = ""
     url: str | None = None
     size: Literal["S", "M", "L", "XL"] | None = None
-    risk: Literal["low", "medium", "high"] | None = None
+    risk: Literal["low", "medium", "high", "critical"] | None = None
     links: WorkItemLinks = Field(default_factory=WorkItemLinks)
 
 
@@ -78,6 +78,9 @@ class TransitionRef(Strict):
     inputs: list[str] = Field(default_factory=list)
     #: The declared type of each output (ADR 0049); a file type is written in `.choregos/outputs/`.
     output_types: dict[str, str] = Field(default_factory=dict)
+    #: What the workflow's `artifacts:` block declares of the step's outputs (ADR 0129): the runner
+    #: checks the values, the platform records how they are shown.
+    artifact_displays: dict[str, ArtifactDisplay] = Field(default_factory=dict)
 
     model_config = Strict.model_config | {"populate_by_name": True}
 
@@ -510,7 +513,7 @@ class StageOutputs(Strict):
     model_config = Strict.model_config | {"extra": "allow"}
 
     size: Literal["S", "M", "L", "XL"] | None = None
-    risk: Literal["low", "medium", "high"] | None = None
+    risk: Literal["low", "medium", "high", "critical"] | None = None
     allowed_paths: list[str] | None = None
     spec_markdown: str | None = None
     plan_markdown: str | None = None

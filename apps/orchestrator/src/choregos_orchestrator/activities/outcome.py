@@ -12,9 +12,9 @@ from urllib.parse import urlsplit
 
 import structlog
 from choregos_api.db.models import Finding as FindingRow
-from choregos_api.db.models import Project, Run
+from choregos_api.db.models import Project, Run, WorkItem
 from choregos_api.services import DecidedBy, persist_event, record_cost, record_decisions, store_outputs
-from choregos_api.services.artifacts import record_inline_outputs
+from choregos_api.services.artifacts import record_diff, record_inline_outputs
 from choregos_api.services.budget_alerts import unsent_month_alerts
 from choregos_api.services.budgets import ticket_budget, ticket_spent
 from choregos_api.services.model_catalogue import priced_spend
@@ -22,7 +22,10 @@ from choregos_api.services.tickets import outputs_to_store
 from choregos_contracts import EventType, StageInput, StageResult, StageStatus
 from choregos_core import Message, Spend, elapsed_seconds, utcnow
 from choregos_core.decision_ledger import declared_confidences
+from choregos_core.domain import DiffSummary
+from choregos_core.unified_diff import unified_diff
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from temporalio import activity
 
 from ..config import get_settings
@@ -269,6 +272,20 @@ async def record_run_outcome(payload: dict[str, Any]) -> dict[str, Any]:
     if outcome["status"] == "failed":
         await _keep_the_lesson(payload["run_id"])
     return outcome
+
+
+async def record_the_diff(session: AsyncSession, item: WorkItem, run: Run, diff: DiffSummary) -> None:
+    """The branch's patch, as an artifact (ADR 0129 §7). It serves the display: it never fails the
+    activity, whose counters the gates and the run page still need."""
+    rendered = unified_diff(diff, get_settings().artifact_diff_max_bytes)
+    if rendered is None:
+        return
+    try:
+        project = await session.get(Project, run.project_id)
+        if project is not None:
+            await record_diff(session, org_id=project.org_id, item=item, run=run, diff=rendered)
+    except Exception:
+        logger.exception("diff artifact not recorded", work_item=item.tracker_key, run_id=run.id)
 
 
 async def _keep_the_lesson(run_id: str) -> None:

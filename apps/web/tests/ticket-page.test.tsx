@@ -97,4 +97,32 @@ describe("a ticket's page, finished (S55-14)", () => {
     expect(fold).not.toHaveAttribute("open");
     expect(within(fold!).getByText("Replay this ticket")).toBeInTheDocument();
   });
+
+  it("shows a ticket's size and risk in its facts, in words, whatever its workflow declares (ADR 0129)", async () => {
+    vi.mocked(api.workItem).mockResolvedValue({ ...item, size: "M", risk: "high" });
+    vi.mocked(api.journey).mockResolvedValue(journeyInProgress(Date.parse("2026-11-04T12:00:00Z")));
+    vi.mocked(api.workflowNamed).mockResolvedValue(hotfix);
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <Suspense fallback={null}>
+          <WorkItemPage params={params} />
+        </Suspense>
+      </QueryClientProvider>,
+    );
+    const facts = await screen.findByTestId("ticket-facts");
+    const risk = within(facts).getByTestId("ticket-risk");
+    expect(risk).toHaveTextContent("High");
+    expect(risk.className).toContain("failed");
+    const size = within(facts).getByTestId("ticket-size");
+    expect(size).toHaveTextContent("M");
+    expect(size).toHaveAccessibleName("M, 2 of 4");
+    expect(size.className).not.toContain("failed");
+  });
+
+  it("names no size or risk a ticket does not have", async () => {
+    ticket();
+    const facts = await screen.findByTestId("ticket-facts");
+    expect(within(facts).queryByTestId("ticket-size")).toBeNull();
+    expect(within(facts).queryByText("Risk")).toBeNull();
+  });
 });

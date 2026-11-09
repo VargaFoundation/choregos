@@ -123,3 +123,19 @@ async def test_too_large_or_too_late_is_refused(
     posted = await client.post("/api/v1/internal/runs/run-present/result", headers=headers, json=result)
     assert posted.status_code == 200
     assert (await _put(client, "run-present", headers, DECK, DIGEST, "pptx")).status_code == 409
+
+
+async def test_a_file_cannot_take_the_name_of_the_diff(
+    client: AsyncClient, project: dict[str, Any], store: FakeObjectStore
+) -> None:
+    """ADR 0129 §7: the diff is measured; a file the agent writes under its name is not recorded."""
+    _, headers = await _run(client, project, "run-present")
+    refused = await client.put(
+        "/api/v1/internal/runs/run-present/outputs/diff",
+        params={"type": "file"},
+        headers={**headers, "x-choregos-digest": DIGEST},
+        content=DECK,
+    )
+    assert refused.status_code == 422, refused.text
+    assert "measured by the platform" in refused.text
+    assert store.puts == 0

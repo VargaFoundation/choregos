@@ -285,3 +285,5 @@ class ArtifactRecord(Base, PkMixin, TimestampMixin):
     attempt: Mapped[int | None] = mapped_column(Integer, nullable=True)
     agent_slug: Mapped[str | None] = mapped_column(String(64), nullable=True)
     agent_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: How the console shows it (ADR 0129), snapshotted when recorded; outside the digest.
+    display: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)

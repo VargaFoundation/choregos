@@ -106,6 +106,7 @@ import mcpCatalogueFile from "./mcp-catalogue.json";
 import { pluginsApi, serverConnectorOf } from "./plugins";
 import skillCatalogueFile from "./skill-catalogue.json";
 import { proceduresApi } from "./procedures";
+import { DECK, MEMO, WORKBOOK } from "./office-samples";
 
 export { peopleOpsFixtures };
 
@@ -301,6 +302,8 @@ const SARIF = JSON.stringify({
 const PNG_B64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
 const PPTX_TYPE = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+const DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const XLSX_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 /** A minimal one-page PDF. */
 const PDF = [
   "%PDF-1.4",
@@ -347,6 +350,46 @@ function artifactOf(
 export const artifacts: Artifact[] = [
   artifactOf("spec_markdown", 1, "markdown", "markdown", "text/markdown", SPEC_V1.length, "r1", "refine", 235, ["analyst", 3]),
   artifactOf("spec_markdown", 2, "markdown", "markdown", "text/markdown", SPEC_V2.length, "r2", "refine", 130, ["analyst", 3]),
+  {
+    ...artifactOf("diff", 1, "diff", "diff", "text/x-diff", 512, "r3", "implement", 50),
+    storage_url: null,
+    display: { type: "diff", show: "facts", title: "Changes", diff: { files: 2, additions: 5, deletions: 1, truncated: false, withheld: [] } },
+  },
+  {
+    ...artifactOf("verdict", 1, "level", "value", "text/plain", 7, "r3", "review", 30, ["reviewer", 2]),
+    storage_url: null,
+    value: "approve",
+    display: {
+      type: "level",
+      show: "facts",
+      title: "Verdict",
+      levels: [
+        { value: "approve", tone: "ok", title: "Approved" },
+        { value: "comment", tone: "info", title: "Comment" },
+        { value: "request_changes", tone: "warn", title: "Changes requested" },
+      ],
+    },
+  },
+  {
+    ...artifactOf("coverage", 1, "metric", "value", "application/json", 2, "r3", "verify", 35, ["tester", 1]),
+    storage_url: null,
+    value: 87,
+    display: { type: "metric", show: "facts", title: "Coverage", unit: "percent", min: 0, max: 100, better: "higher" },
+  },
+  {
+    ...artifactOf("confidence", 1, "metric", "value", "application/json", 3, "r3", "review", 30, ["reviewer", 2]),
+    storage_url: null,
+    value: 0.82,
+    display: { type: "metric", show: "tab", title: "Confidence", min: 0, max: 1, better: "higher" },
+  },
+  {
+    ...artifactOf("deployment", 1, "keyvalue", "json", "application/json", 60, "r3", "verify", 35),
+    storage_url: null,
+    display: { type: "keyvalue", show: "tab" },
+  },
+  artifactOf("invoices", 1, "csv", "file", "text/csv", 90, "r3", "verify", 35),
+  artifactOf("board_memo", 1, "docx", "file", DOCX_TYPE, 37321, "r3", "implement", 40),
+  artifactOf("forecast", 1, "xlsx", "file", XLSX_TYPE, 5369, "r3", "implement", 40),
   artifactOf("security_report", 1, "sarif", "report", "application/sarif+json", SARIF.length, "r3", "implement", 50),
   artifactOf("architecture.png", 1, "png", "file", "image/png", 68, "r3", "implement", 50),
   // Binary deliverables (S31-06): a deck from a skill, a report, a demo video from a gateway model.
@@ -357,12 +400,38 @@ export const artifacts: Artifact[] = [
   artifactOf("budget_summary", 1, "markdown", "markdown", "text/markdown", 120, "r3", "implement", 45),
 ];
 
+const DIFF_TEXT = `diff --git a/src/orders/total.py b/src/orders/total.py
+--- a/src/orders/total.py
++++ b/src/orders/total.py
+@@ -12,5 +12,7 @@ def total(order):
+     amount = sum(line.price for line in order.lines)
+-    return amount
++    credit = sum(note.amount for note in order.credit_notes)
++    return amount - credit
+ 
+ 
+diff --git a/tests/orders/test_total.py b/tests/orders/test_total.py
+--- /dev/null
++++ b/tests/orders/test_total.py
+@@ -0,0 +1,3 @@
++def test_a_credit_note_is_deducted(order):
++    order.credit_notes.append(note(10))
++    assert total(order) == 90
+`;
+
+const fromBase64 = (text: string) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
+
 const ARTIFACT_CONTENT: Record<string, [string, () => BlobPart]> = {
+  "diff@1": ["text/x-diff", () => DIFF_TEXT],
+  "deployment@1": ["application/json", () => '{"region":"eu-west-1","replicas":3,"canary":true}'],
+  "invoices@1": ["text/csv", () => 'invoice,customer,amount\nF-1042,"Acme, Inc",1200.50\nF-1043,Globex,88.00\n'],
   "spec_markdown@1": ["text/markdown", () => SPEC_V1],
   "spec_markdown@2": ["text/markdown", () => SPEC_V2],
   "security_report@1": ["application/sarif+json", () => SARIF],
   "architecture.png@1": ["image/png", () => Uint8Array.from(atob(PNG_B64), (c) => c.charCodeAt(0))],
-  "board_deck@1": [PPTX_TYPE, () => new Uint8Array([0x50, 0x4b, 0x03, 0x04, ...new Array<number>(4092).fill(0)])],
+  "board_deck@1": [PPTX_TYPE, () => fromBase64(DECK)],
+  "board_memo@1": [DOCX_TYPE, () => fromBase64(MEMO)],
+  "forecast@1": [XLSX_TYPE, () => fromBase64(WORKBOOK)],
   "quarterly_report@1": ["application/pdf", () => PDF],
   "demo@1": ["video/mp4", () => new Uint8Array(2048)],
 };

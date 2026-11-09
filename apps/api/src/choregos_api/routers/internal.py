@@ -80,6 +80,7 @@ from ..services.artifacts import (
     record_inline_outputs,
     store_file,
     to_contract,
+    value_for_receipt,
 )
 from ..services.artifacts import latest as latest_artifact
 from ..services.budget_alerts import check_after_spend
@@ -517,7 +518,7 @@ async def get_input_content(id: str, name: str, session: Db, claims: RunAuth) ->
             work_item_id=item.id,
             run_id=run.id,
             stage=run.stage_role,
-            outputs={name: row.content},
+            outputs={name: value_for_receipt(row, item.documents or {})},
             genre=READ,
         )
     else:

@@ -2,9 +2,9 @@ import { expect, test } from "@playwright/test";
 
 /**
  * Binary artifacts (S31-06, ADR 0049): a PDF opens in the browser's viewer, a video in a player,
- * an office file is downloaded — never rendered by the console.
+ * an office file is previewed by the console from its own content, and can be downloaded as it is.
  */
-test("a PDF is previewed, a video gets a player, an office file is downloaded (S31-06)", async ({ page }) => {
+test("a PDF is previewed, a video gets a player, an office file is previewed and downloaded", async ({ page }) => {
   await page.goto("/p/billing-api/items/w1");
   const tabs = page.getByRole("tablist", { name: "artifacts" });
 
@@ -22,7 +22,7 @@ test("a PDF is previewed, a video gets a player, an office file is downloaded (S
   await expect(video.locator("source")).toHaveAttribute("src", /^blob:/);
 
   await tabs.getByRole("tab", { name: "board_deck" }).click();
-  await expect(page.getByTestId("artifact-download-only")).toContainText("office file is downloaded");
+  await expect(page.getByTestId("office-note")).toContainText("preview");
   await expect(page.locator("iframe, video, [data-testid=artifact-image]")).toHaveCount(0);
   const download = page.getByTestId("artifact-download");
   await expect(download).toHaveAttribute("download", "board_deck.pptx");

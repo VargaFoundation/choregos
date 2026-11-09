@@ -128,6 +128,8 @@ class OrchestratorSettings(BaseSettings):
     log_json: bool = True
     fx_usd_eur: float = 0.92
     history_size_threshold: int = 20_000
+    #: A branch's diff is kept inline, so it is bounded far lower than a file (ADR 0129 §8).
+    artifact_diff_max_bytes: int = 1024 * 1024
     heartbeat_seconds: int = 60
     # The tracker's fallback polling (S3-06): 0 disables the catch-up.
     reconcile_interval_seconds: int = 60

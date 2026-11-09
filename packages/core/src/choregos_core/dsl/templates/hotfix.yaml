@@ -109,6 +109,10 @@ transitions:
     to: abandoned
     by: maintainers
     timeout_hours: 48
+# What *About this ticket* shows besides the ticket's size and risk (ADR 0129).
+artifacts:
+  verdict: { show: facts, title: Verdict }
+  diff: { show: facts, title: Changes }
 defaults:
   from_any_agent_state:
     on_question: needs_human

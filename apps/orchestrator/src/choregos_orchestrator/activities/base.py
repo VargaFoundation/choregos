@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
 
+import structlog
 from choregos_adapters import (
     AdapterSet,
     account_of,
@@ -28,7 +29,14 @@ from choregos_api.services import work_item_workflow as _workflow_du_ticket
 from choregos_api.services.definitions import ceiling_of
 from choregos_api.services.github_app import pin_for_runtime
 from choregos_api.services.plugin_tracker import pin_plugin_tracker
-from choregos_contracts import Policy, ProjectConfig, Workflow
+from choregos_contracts import (
+    DIFF_ARTIFACT,
+    ArtifactDisplay,
+    Policy,
+    ProjectConfig,
+    Workflow,
+    resolve_display,
+)
 from choregos_core import Message, PolicyEngine
 from choregos_core.memory_scope import memory_key
 from choregos_core.policy_ceiling import PolicyCeiling, clamp
@@ -36,6 +44,8 @@ from choregos_core.tool_scripts_switch import OrgToolScripts, org_tool_scripts
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from temporalio import activity
+
+logger = structlog.get_logger("choregos.activities.base")
 
 # The orchestrator owns the same tables as the API: it plugs in the same lexical fallback.
 attach_lexical_memory()
@@ -270,6 +280,23 @@ async def internal_ticket_key(session: AsyncSession, bundle: ProjectBundle) -> s
 async def work_item_workflow(session: AsyncSession, item: WorkItem) -> Workflow:
     """The workflow the work item was born in, at its version (ADR 0031); failing that, the project's."""
     return workflow_model(await _workflow_du_ticket(session, item))
+
+
+async def declared_artifact_displays(
+    session: AsyncSession, item: WorkItem, outputs: list[str]
+) -> dict[str, ArtifactDisplay]:
+    """What the work item's workflow declares of a step's outputs and of the diff (ADR 0129). It serves
+    the display and a repair: a workflow that cannot be read here must not cost the step."""
+    try:
+        declared = (await work_item_workflow(session, item)).artifacts or {}
+    except Exception:
+        logger.exception("artifact declarations not read", work_item=item.tracker_key)
+        return {}
+    displays: dict[str, ArtifactDisplay] = {}
+    for name in [*outputs, DIFF_ARTIFACT]:
+        if name in declared and (display := resolve_display(name, declared[name])) is not None:
+            displays[name] = display
+    return displays
 
 
 async def load_work_item(session: AsyncSession, work_item_id: str) -> WorkItem:

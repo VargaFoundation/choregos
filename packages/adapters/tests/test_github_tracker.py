@@ -365,7 +365,7 @@ async def test_an_older_template_naming_the_fields_in_french_gets_the_english_na
     mutations = [json.loads(r.content) for r in wire.requests][1:]
     assert [m["variables"]["name"] for m in mutations] == ["Risk"]
     assert mutations[0]["variables"]["options"] == [
-        {"name": n, "color": "GRAY", "description": ""} for n in ("low", "medium", "high")
+        {"name": n, "color": "GRAY", "description": ""} for n in ("low", "medium", "high", "critical")
     ]
     assert report == {"kept": ["Status", "Size"], "renamed": [], "created": ["Risk"]}
 

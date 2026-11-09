@@ -20,6 +20,7 @@ from typing import Any
 from choregos_contracts import (
     ARTIFACT_NAME_PATTERN,
     ARTIFACT_TYPES,
+    RESERVED_ARTIFACT_NAMES,
     ArtifactFile,
     StageInput,
     artifact_digest,
@@ -62,6 +63,8 @@ def collect(workspace: Path, stage_input: StageInput) -> tuple[list[tuple[str, s
         if path.name in declared:
             name = declared[path.name]
             kept.append((name, stage_input.transition.output_types[name], path))
+        elif path.name in RESERVED_ARTIFACT_NAMES:
+            refused.append(f"{path.name}: this name is measured by the platform")
         elif _NAME.fullmatch(path.name):
             kept.append((path.name, type_of_filename(path.name), path))
         else:

@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar
 
-from choregos_contracts import ContextPack, StageInput
+from choregos_contracts import ArtifactDisplay, ContextPack, StageInput
 
 from .config import agent_base_environment
 
@@ -551,8 +551,36 @@ def _task_markdown(stage_input: StageInput) -> str:
             if inline_outputs(stage_input)
             else []
         ),
+        *_typed_outputs_lines(stage_input),
     ]
     return "\n".join(lines) + "\n"
+
+
+def _typed_outputs_lines(stage_input: StageInput) -> list[str]:
+    """What each typed output may be: a value off its type goes back to the agent (ADR 0129 §10)."""
+    lines: list[str] = []
+    for name, display in stage_input.transition.artifact_displays.items():
+        if name not in stage_input.transition.outputs:
+            continue
+        if display.type == "level":
+            allowed = ", ".join(f"`{level.value}`" for level in display.levels or [])
+            lines.append(f"- `{name}`: exactly one of {allowed}.")
+        elif display.type == "metric":
+            lines.append(f"- `{name}`: a number{_bounds(display)}.")
+        elif display.type == "keyvalue":
+            lines.append(f"- `{name}`: a flat JSON object; its values are text, numbers or booleans.")
+    return ["", "Typed outputs:", *lines] if lines else []
+
+
+def _bounds(display: ArtifactDisplay) -> str:
+    unit = f" in {display.unit}" if display.unit else ""
+    if display.min is not None and display.max is not None:
+        return f"{unit}, from {display.min:g} to {display.max:g}"
+    if display.min is not None:
+        return f"{unit}, at least {display.min:g}"
+    if display.max is not None:
+        return f"{unit}, at most {display.max:g}"
+    return unit
 
 
 def inline_outputs(stage_input: StageInput) -> list[str]:
