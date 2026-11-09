@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 "use client";
 
-import { ChevronDown, KeyRound, LogOut, UserRound } from "lucide-react";
+import { ChevronDown, KeyRound, LogOut, MonitorSmartphone, UserRound } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
@@ -92,6 +92,12 @@ export function AccountMenu({ me, onSignOut }: { me: MeDto; onSignOut: () => voi
               <Link href="/account" className={ITEM} onClick={() => setOpen(false)}>
                 <UserRound aria-hidden className="size-4 text-ink-muted" strokeWidth={1.75} />
                 My account
+              </Link>
+            </li>
+            <li>
+              <Link href="/account#sessions" className={ITEM} onClick={() => setOpen(false)}>
+                <MonitorSmartphone aria-hidden className="size-4 text-ink-muted" strokeWidth={1.75} />
+                My sessions
               </Link>
             </li>
             <li>

@@ -33,6 +33,7 @@ from functools import lru_cache
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
+from starlette.requests import HTTPConnection
 
 from .config import Settings, get_settings
 
@@ -107,7 +108,7 @@ def _trusted(value: str, networks: tuple[Network, ...]) -> bool:
     return address is not None and any(address in network for network in networks)
 
 
-def client_address(request: Request, settings: Settings) -> str:
+def client_address(request: HTTPConnection, settings: Settings) -> str:
     """The limiter's key: the address the nearest trusted proxy saw.
 
     - With `trusted_proxy_cidrs`: a peer outside them is the client. Otherwise the

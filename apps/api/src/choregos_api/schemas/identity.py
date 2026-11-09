@@ -60,6 +60,27 @@ class ApiTokenDto(Dto):
     last_client: str | None = None
 
 
+class BrowserSessionDto(Dto):
+    """One of the caller's browser sessions that still holds (ADR 0130)."""
+
+    id: str
+    #: How it was opened: `oidc`, `saml`, `dev`...
+    channel: str
+    created_at: datetime
+    expires_at: datetime
+    last_seen_at: datetime | None = None
+    #: The `User-Agent` and the client address of its last request.
+    user_agent: str | None = None
+    ip: str | None = None
+    #: The session this request came with.
+    current: bool = False
+
+
+class EndedSessionsDto(Dto):
+    #: How many recorded sessions were ended.
+    ended: int
+
+
 class ApiTokenCreated(ApiTokenDto):
     #: The token in clear, returned ONCE. It is never stored.
     token: str

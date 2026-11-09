@@ -122,6 +122,9 @@ class Principal:
     #: or a session older than 0.10.0: a gate that demands a recent authentication treats them as
     #: too old.
     authenticated_at: int | None = None
+    #: The browser session the request came with (ADR 0130), `None` for an API token or a cookie
+    #: opened before sessions were recorded: what My account calls "this session".
+    session_id: str | None = None
 
     def role_for(self, org: str, project_slug: str | None = None) -> Role | None:
         if project_slug:

@@ -190,8 +190,12 @@ async def current_principal(
     user = await session.get(User, str(payload.get("sub", "")))
     if user is None:
         raise unauthorized("expired session")
+    from .browser_sessions import check_session
+
+    sid = await check_session(session, user, payload, request, settings)
     await _validate_session(session, user, payload)
     principal = await _principal_from_user(session, user)
+    principal.session_id = sid
     # The authentication time at the IdP (`auth_time`) when the session carries it; otherwise the
     # time the session was opened (`iat`), which overestimates it after a silent SSO reconnection.
     when = payload.get("auth_time", payload.get("iat"))

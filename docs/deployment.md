@@ -120,6 +120,12 @@ handshake, remote OAuth state and handshake): a value signed for one purpose is 
 The API still reads the session cookies issued by the previous release for one more release; they
 carry a 128-bit tag without a purpose and are accepted as sessions only.
 
+**Sessions are recorded** (ADR 0130): each sign-in writes a `user_sessions` row, and the cookie names
+it (`sid`). A person sees their sessions on *My account → Sessions* and ends one, or all the others;
+signing out ends the session on the server too. A cookie whose session was ended is refused at its next
+request. Cookies issued before the upgrade carry no `sid`: they hold until they expire (8 hours at most),
+unlisted, unless their owner ends their other sessions.
+
 To rotate it, move the old value to `session-secret-previous`, put the new one in `session-secret`,
 redeploy, and remove `session-secret-previous` once `session_max_age_s` (8 hours) has passed: until
 then a session signed with the old key still signs its holder in, and nothing new is signed with it.

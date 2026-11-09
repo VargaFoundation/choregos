@@ -46,6 +46,7 @@ import type {
   BuiltinAgent,
   ImplicitAgent,
   ApiToken,
+  BrowserSession,
   ProjectAgent,
   ProjectAgentPut,
   BudgetAlert,
@@ -2108,6 +2109,40 @@ export const agentCredentials: AgentCredential[] = [
   },
 ];
 
+/** The demo person's browser sessions (ADR 0130): this one, a phone, and a laptop left signed in. */
+let mySessions: BrowserSession[] = [
+  {
+    id: "ses-here",
+    channel: "oidc",
+    created_at: iso(95),
+    expires_at: iso(-385),
+    last_seen_at: iso(0),
+    user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+    ip: "203.0.113.24",
+    current: true,
+  },
+  {
+    id: "ses-phone",
+    channel: "oidc",
+    created_at: iso(240),
+    expires_at: iso(-240),
+    last_seen_at: iso(38),
+    user_agent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1",
+    ip: "198.51.100.7",
+    current: false,
+  },
+  {
+    id: "ses-laptop",
+    channel: "saml",
+    created_at: iso(420),
+    expires_at: iso(-60),
+    last_seen_at: iso(300),
+    user_agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_1) Gecko/20100101 Firefox/144.0",
+    ip: "192.0.2.51",
+    current: false,
+  },
+];
+
 export const myTokens: ApiToken[] = [
   {
     id: "tok-claude",
@@ -3159,6 +3194,16 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     // The secret exists only here, once: the console shows it and does not keep it.
     return { id: "t2", name: "okta", token: "scim_demo_shown_once" } as T;
   }
+  if (method === "POST" && path === "/me/sessions/end-others") {
+    const ended = mySessions.filter((s) => !s.current).length;
+    mySessions = mySessions.filter((s) => s.current);
+    return { ended } as T;
+  }
+  if (method === "DELETE" && /^\/me\/sessions\/[^/]+$/.test(path)) {
+    const id = decodeURIComponent(path.split("/").at(-1)!);
+    mySessions = mySessions.filter((s) => s.id !== id);
+    return undefined as T;
+  }
   if (method === "POST" && path === "/me/tokens") {
     // The token is returned only once, at creation: the Integrations page slips it into its snippets.
     const reqBody = JSON.parse(String(init.body ?? "{}")) as { name?: string; scopes?: string[]; project?: string | null };
@@ -3893,6 +3938,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       { mcp_url: "http://localhost:3000/mcp", protocol_versions: ["2025-11-25", "2025-06-18"], oauth: { enabled: false }, version: "0.13.1" },
     ],
     [/^\/me\/tokens$/, myTokens],
+    [/^\/me\/sessions$/, mySessions],
     [/^\/orgs\/[^/]+\/agents$/, agents.map(decorateAgent)],
     [/^\/orgs\/[^/]+\/agent-catalogue$/, agentCatalogue],
     [/^\/orgs\/[^/]+\/agents\/[^/]+\/metrics$/, agentMetrics],
