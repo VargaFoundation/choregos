@@ -181,6 +181,8 @@ class DiffFile(Model):
     additions: int = 0
     deletions: int = 0
     patch: str | None = None
+    #: The path before a rename.
+    old_path: str | None = None
 
 
 class DiffSummary(Model):

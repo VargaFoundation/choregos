@@ -35,7 +35,7 @@ from choregos_core.redaction import REDACTED
 from temporalio.exceptions import ApplicationError
 
 from ..org_egress import org_runner_hosts
-from .base import without_secrets
+from .base import declared_artifact_displays, without_secrets
 from .images import named_image
 from .plan import StagePlan
 from .repositories import fix, target_of
@@ -120,6 +120,7 @@ async def prepare_job(
             outputs=plan.outputs or [],
             inputs=plan.inputs or [],
             output_types=plan.output_types or {},
+            artifact_displays=await declared_artifact_displays(session, item, plan.outputs or []),
         ),
         repo=RepoRef(
             url=depot.url,

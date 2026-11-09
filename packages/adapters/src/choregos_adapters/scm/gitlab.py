@@ -253,6 +253,7 @@ class GitLabScm:
                     additions=_count(d.get("diff", ""), "+"),
                     deletions=_count(d.get("diff", ""), "-"),
                     patch=d.get("diff"),
+                    old_path=d.get("old_path") if d.get("renamed_file") else None,
                 )
                 for d in (payload or {}).get("diffs", [])
             ],

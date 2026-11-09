@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import structlog
 from choregos_api.db.models import Run
 from choregos_contracts import StageResult
 from choregos_core.domain import PrRef
@@ -15,7 +16,10 @@ from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
 from .base import db, load_work_item, project_bundle, scm_for
+from .outcome import record_the_diff
 from .repositories import fix, repo_slug, target_of, target_or_none
+
+log = structlog.get_logger(__name__)
 
 #: The error type `open_pull_request` raises when the work item has no branch to open a pull request
 #: from (S22-46): the implementation changed nothing, so nothing was pushed. Non-retryable — a retry
@@ -162,4 +166,5 @@ async def collect_run_artifacts(payload: dict[str, Any]) -> dict[str, Any]:
         result.evidence.diff_files = len(diff.files)
         result.evidence.diff_lines = diff.additions + diff.deletions
         run.result = result.model_dump(mode="json", by_alias=True)
+        await record_the_diff(session, item, run, diff)
         return {"files": len(diff.files)}

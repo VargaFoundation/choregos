@@ -60,7 +60,14 @@ from ..context_reduction import (
     tool_scripts_on_for,
 )
 from ..org_egress import org_runner_hosts
-from .base import db, load_work_item, org_memory, project_bundle, without_secrets
+from .base import (
+    db,
+    declared_artifact_displays,
+    load_work_item,
+    org_memory,
+    project_bundle,
+    without_secrets,
+)
 from .execution import (
     QUEUE_MAX_MINUTES,
     await_run,
@@ -334,6 +341,7 @@ async def prepare_stage(plan_data: dict[str, Any]) -> dict[str, Any]:
                 outputs=plan.outputs or [],
                 inputs=plan.inputs or [],
                 output_types=plan.output_types or {},
+                artifact_displays=await declared_artifact_displays(session, item, plan.outputs or []),
             ),
             repo=repo,
             agent=AgentRef(

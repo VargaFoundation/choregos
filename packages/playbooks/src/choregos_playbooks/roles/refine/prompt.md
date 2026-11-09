@@ -10,7 +10,7 @@ Produce a specification that fits on one page:
 3. **Out of scope** — what this work item will not do.
 4. **Test plan** — which tests, at which level, on which edge cases.
 5. **Risk and rollback** — what can break, how to go back.
-6. **Feature flag** — required if the risk is `high`; give its name.
+6. **Feature flag** — required if the risk is `high` or `critical`; give its name.
 7. **`allowed_paths`** — the **minimal** list of paths the implementation will be allowed to change,
    each justified in a few words. One path too many is one more review.
 

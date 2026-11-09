@@ -508,7 +508,7 @@ def core_tools(ctx: Context) -> list[Tool]:
                     "title": {"type": "string", "minLength": 1, "maxLength": 500},
                     "body": {"type": "string", "description": "What is asked, in Markdown."},
                     "size": {"type": "string", "enum": ["S", "M", "L", "XL"]},
-                    "risk": {"type": "string", "enum": ["low", "medium", "high"]},
+                    "risk": {"type": "string", "enum": ["low", "medium", "high", "critical"]},
                     "start": {"type": "boolean", "default": True},
                     "workflow": {
                         "type": "string",

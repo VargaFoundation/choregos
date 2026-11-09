@@ -9,17 +9,30 @@ test("the artifacts of a work item: markdown, SARIF, image, download, producer a
 }) => {
   await page.goto("/p/billing-api/items/w1");
   const tabs = page.getByRole("tablist", { name: "artifacts" });
-  await expect(tabs.getByRole("tab")).toHaveText([
+  await expect(tabs.getByRole("tab", { name: "spec_markdown" })).toBeVisible();
+  // In the order the steps produced them; steps of the same minute may come either way.
+  const names = await tabs.getByRole("tab").allInnerTexts();
+  expect(names[0]).toBe("spec_markdown");
+  expect([...names].sort()).toEqual([
     "architecture.png",
     "board_deck",
+    "board_memo",
     "budget_summary",
     "demo",
+    "deployment",
+    "diff",
+    "forecast",
+    "invoices",
     "quarterly_report",
     "security_report",
     "spec_markdown",
   ]);
 
+  // A value of one word is read above the tabs.
+  await expect(page.getByTestId("artifact-values")).toContainText("Confidence");
+
   // An image, decoded by the browser from the bytes the API served.
+  await tabs.getByRole("tab", { name: "architecture.png" }).click();
   const image = page.getByTestId("artifact-image");
   await expect(image).toBeVisible();
   await expect.poll(() => image.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
@@ -41,6 +54,19 @@ test("the artifacts of a work item: markdown, SARIF, image, download, producer a
   const results = page.getByRole("table", { name: "sarif results" });
   await expect(results.locator("tbody tr")).toHaveCount(2);
   await expect(results.locator('tr[data-level="error"]')).toContainText("src/orders/repository.py:88");
+
+  // An Office file is drawn in the page, and says it is a preview.
+  await tabs.getByRole("tab", { name: "board_deck" }).click();
+  await expect(page.getByTestId("office-slide")).toHaveCount(3);
+  await expect(page.getByTestId("office-pptx")).toContainText("Quarterly business review");
+  await tabs.getByRole("tab", { name: "board_memo" }).click();
+  await expect(page.getByTestId("office-docx")).toContainText("Board memo");
+  await tabs.getByRole("tab", { name: "forecast" }).click();
+  await expect(page.getByTestId("office-xlsx")).toContainText("EMEA");
+
+  // The diff the platform measured, file by file.
+  await tabs.getByRole("tab", { name: "diff" }).click();
+  await expect(page.getByTestId("diff-file")).toHaveCount(2);
 
   // Content that no longer matches its digest is refused, not shown.
   await tabs.getByRole("tab", { name: "budget_summary" }).click();

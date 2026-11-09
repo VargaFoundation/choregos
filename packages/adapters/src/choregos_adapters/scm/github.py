@@ -288,6 +288,7 @@ class GitHubScm:
                     additions=int(f.get("additions", 0)),
                     deletions=int(f.get("deletions", 0)),
                     patch=f.get("patch"),
+                    old_path=f.get("previous_filename"),
                 )
                 for f in payload.get("files", [])
             ],

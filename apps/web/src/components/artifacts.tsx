@@ -2,13 +2,28 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
+import { Braces, File, FileText, GitCompare, Image as ImageIcon, type LucideIcon, Presentation, ShieldAlert, Table2 } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { courte } from "@/components/passages";
+import { ArtifactValue } from "@/components/artifact-value";
+import { DiffView } from "@/components/diff-view";
 import { MarkdownView } from "@/components/markdown-view";
+import { CsvTable, JsonTree, KeyValueViewer, ValueViewer } from "@/components/typed-viewers";
 import { Badge, Empty, ErrorNote, Select } from "@/components/ui";
 import { api } from "@/lib/api";
-import { type ArtifactGroup, filenameOf, groupArtifacts, humanSize, readersOf, viewerOf } from "@/lib/artifacts";
+import {
+  type ArtifactGroup,
+  filenameOf,
+  firstToOpen,
+  groupArtifacts,
+  humanSize,
+  readersOf,
+  shelve,
+  titleOf,
+  viewerOf,
+} from "@/lib/artifacts";
 import { shortDate } from "@/lib/format";
 import { sarifRows } from "@/lib/sarif";
 import type { Artifact, HandOff } from "@/lib/types";
@@ -24,42 +39,93 @@ export function Artifacts({
   slug,
   artifacts,
   handOffs,
+  opened = null,
 }: {
   itemId: string;
   slug: string;
   artifacts: Artifact[];
   handOffs: HandOff[];
+  /** The tab to open first, when a fact of the ticket asked for it. */
+  opened?: string | null;
 }) {
   const groups = useMemo(() => groupArtifacts(artifacts), [artifacts]);
-  const [selected, setSelected] = useState<string | null>(null);
-  const current = groups.find((g) => g.name === selected) ?? groups[0];
-  if (!current) return <Empty>no artifact yet: the steps have not produced any output.</Empty>;
+  const { values, tabs } = useMemo(() => shelve(groups), [groups]);
+  const [selected, setSelected] = useState<string | null>(opened);
+  const current = tabs.find((g) => g.name === selected) ?? firstToOpen(tabs);
+  if (groups.length === 0) return <Empty>no artifact yet: the steps have not produced any output.</Empty>;
   return (
     <div className="space-y-3" data-testid="artifacts">
-      <div role="tablist" aria-label="artifacts" className="flex flex-wrap gap-1 border-b border-line">
-        {groups.map((group) => (
-          <button
-            key={group.name}
-            type="button"
-            role="tab"
-            id={`artifact-tab-${group.name}`}
-            aria-selected={group.name === current.name}
-            aria-controls={`artifact-panel-${group.name}`}
-            data-artifact={group.name}
-            data-verbatim
-            onClick={() => setSelected(group.name)}
-            className={
-              "min-h-11 px-3 font-mono text-xs " +
-              (group.name === current.name ? "border-b-2 border-accent text-ink" : "text-ink-muted hover:text-ink")
-            }
-          >
-            {group.name}
-          </button>
-        ))}
-      </div>
-      <ArtifactPanel key={current.name} group={current} itemId={itemId} slug={slug} handOffs={handOffs} />
+      {values.length > 0 && (
+        <dl className="flex flex-wrap gap-x-6 gap-y-2 text-sm" data-testid="artifact-values">
+          {values.map((group) => (
+            <div key={group.name} className="flex items-center gap-2" data-testid={`artifact-value-row-${group.name}`}>
+              <dt className="text-xs text-ink-muted" data-verbatim>
+                {titleOf(group)}
+              </dt>
+              <dd>
+                <ArtifactValue artifact={group.latest} />
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {current && (
+        <>
+          <div role="tablist" aria-label="artifacts" className="flex flex-wrap gap-1 border-b border-line">
+            {tabs.map((group) => {
+              const Icon = iconOf(group.latest);
+              return (
+                <button
+                  key={group.name}
+                  type="button"
+                  role="tab"
+                  id={`artifact-tab-${group.name}`}
+                  aria-selected={group.name === current.name}
+                  aria-controls={`artifact-panel-${group.name}`}
+                  data-artifact={group.name}
+                  data-verbatim
+                  onClick={() => setSelected(group.name)}
+                  className={
+                    "inline-flex min-h-11 items-center gap-1.5 px-3 font-mono text-xs " +
+                    (group.name === current.name ? "border-b-2 border-accent text-ink" : "text-ink-muted hover:text-ink")
+                  }
+                >
+                  <Icon aria-hidden className="size-3.5 shrink-0" strokeWidth={1.75} />
+                  {group.name}
+                </button>
+              );
+            })}
+          </div>
+          <ArtifactPanel key={current.name} group={current} itemId={itemId} slug={slug} handOffs={handOffs} />
+        </>
+      )}
     </div>
   );
+}
+
+/** What each tab holds, at a glance. */
+function iconOf(artifact: Artifact): LucideIcon {
+  switch (viewerOf(artifact)) {
+    case "diff":
+      return GitCompare;
+    case "csv":
+      return Table2;
+    case "office":
+      return Presentation;
+    case "json":
+    case "keyvalue":
+      return Braces;
+    case "sarif":
+      return ShieldAlert;
+    case "image":
+    case "video":
+      return ImageIcon;
+    case "markdown":
+    case "text":
+      return FileText;
+    default:
+      return File;
+  }
 }
 
 function ArtifactPanel({
@@ -183,8 +249,8 @@ function useText(blob: Blob): string | null {
   return text;
 }
 
-/** Office files are downloaded, never rendered in the browser (S31-06). */
-const OFFICE = new Set(["docx", "xlsx", "pptx"]);
+/** Read only when one is opened: the console does not carry it on every page. */
+const OfficeView = dynamic(() => import("@/components/office-view"), { ssr: false, loading: () => <Empty>Reading the file…</Empty> });
 
 function Viewer({ artifact, blob, url }: { artifact: Artifact; blob: Blob; url: string | null }) {
   const kind = viewerOf(artifact);
@@ -209,37 +275,35 @@ function Viewer({ artifact, blob, url }: { artifact: Artifact; blob: Blob; url: 
       </video>
     ) : null;
   }
-  if (kind === "download") {
-    const office = OFFICE.has(artifact.type);
-    return (
-      <Empty title={filenameOf(artifact)}>
-        <span data-testid="artifact-download-only">
-          {office
-            ? "An office file is downloaded and opened in its application; the console does not render it."
-            : "The console does not open this type; download it to read it."}
-        </span>
-      </Empty>
-    );
-  }
+  const downloadOnly = (
+    <Empty title={filenameOf(artifact)}>
+      <span data-testid="artifact-download-only">The console does not open this file; download it to read it.</span>
+    </Empty>
+  );
+  if (kind === "download") return downloadOnly;
+  if (kind === "office") return <OfficeView type={artifact.type} blob={blob} fallback={downloadOnly} />;
+  if (kind === "diff") return <Diff artifact={artifact} blob={blob} />;
+  if (kind === "value") return <ValueViewer artifact={artifact} />;
   return <TextViewer kind={kind} blob={blob} />;
 }
 
-function TextViewer({ kind, blob }: { kind: "markdown" | "sarif" | "json" | "text"; blob: Blob }) {
+function Diff({ artifact, blob }: { artifact: Artifact; blob: Blob }) {
+  const text = useText(blob);
+  if (text === null) return <Empty>reading…</Empty>;
+  return <DiffView text={text} stat={artifact.display?.diff} />;
+}
+
+function TextViewer({ kind, blob }: { kind: "markdown" | "sarif" | "json" | "text" | "csv" | "keyvalue"; blob: Blob }) {
   const text = useText(blob);
   if (text === null) return <Empty>reading…</Empty>;
   if (kind === "markdown") return <MarkdownView text={text} />;
   if (kind === "sarif") return <SarifTable text={text} />;
-  let shown = text;
-  if (kind === "json") {
-    try {
-      shown = JSON.stringify(JSON.parse(text), null, 2);
-    } catch {
-      shown = text;
-    }
-  }
+  if (kind === "csv") return <CsvTable text={text} />;
+  if (kind === "keyvalue") return <KeyValueViewer text={text} />;
+  if (kind === "json") return <JsonTree text={text} />;
   return (
     <pre className="max-h-[32rem] overflow-auto border border-line p-2 font-mono text-xs" data-testid="artifact-text">
-      {shown}
+      {text}
     </pre>
   );
 }

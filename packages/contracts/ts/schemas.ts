@@ -7,14 +7,43 @@
  */
 
 
+export type ArtifactDisplay = {
+  /** The type it is drawn as; null only in a stage's input, when its value will settle it. */
+  type?: string | null;
+  /** Where it is seen: the ticket's facts card, its tab, or nowhere. */
+  show?: "facts" | "tab" | "hidden";
+  title?: string | null;
+  diff?: null | ArtifactDiffStat;
+  /** A `level`'s scale, lowest first. */
+  levels?: Array<{
+    value: string;
+    tone?: "neutral" | "info" | "ok" | "warn" | "danger";
+    title?: string | null;
+  }> | null;
+  unit?: string | null;
+  min?: number | null;
+  max?: number | null;
+  better?: "higher" | "lower" | null;
+};
+
+export type ArtifactDiffStat = {
+  files: number;
+  additions: number;
+  deletions: number;
+  /** The diff was too large and was cut, file by file. */
+  truncated?: boolean;
+  /** The shapes of secret found: the patch was withheld. Never a value. */
+  withheld?: Array<string>;
+};
+
 /** One revision of a named output of a work item: typed, stored and traced (ADR 0049). */
 export type Artifact = {
   /** The output's name, as the transition declares it. */
   name: string;
   /** The declared type, or the type of the value or file. */
-  type: "markdown" | "json" | "mermaid" | "sarif" | "text" | "csv" | "html" | "pdf" | "docx" | "xlsx" | "pptx" | "png" | "jpeg" | "gif" | "webp" | "svg" | "mp4" | "webm" | "file";
+  type: "markdown" | "json" | "mermaid" | "sarif" | "text" | "csv" | "html" | "pdf" | "docx" | "xlsx" | "pptx" | "png" | "jpeg" | "gif" | "webp" | "svg" | "mp4" | "webm" | "file" | "diff" | "level" | "metric" | "keyvalue";
   /** How the platform handles it. */
-  kind: "markdown" | "json" | "diagram" | "report" | "file";
+  kind: "markdown" | "json" | "diagram" | "report" | "file" | "diff" | "value";
   /** The IANA media type the content is served with. */
   media_type: string;
   /** 1 for the first revision; a new content makes the next one. */
@@ -35,6 +64,10 @@ export type Artifact = {
   /** Where the bytes are in the object store; null for an inline artifact. */
   storage_url?: string | null;
   created_at?: string | null;
+  /** How the console shows this revision (ADR 0129); null when nothing is said beyond its type. Outside the digest. */
+  display?: null | ArtifactDisplay;
+  /** A `level` or a `metric`, once its digest checked (ADR 0129); anything else is read from its content. */
+  value?: string | number | null;
 };
 
 export type ContextPackMemory = {
@@ -505,7 +538,7 @@ export type PolicyApprovalRule = {
   required: "always" | "never" | "by_size" | "by_risk";
   group?: string;
   sizes?: Array<"S" | "M" | "L" | "XL">;
-  risks?: Array<"low" | "medium" | "high">;
+  risks?: Array<"low" | "medium" | "high" | "critical">;
   timeout_hours?: number;
 };
 
@@ -678,7 +711,7 @@ export type Policy = {
   review?: {
     /** The review backend must differ from the implementation's. */
     cross_backend?: boolean;
-    require_human_for_risk?: Array<"low" | "medium" | "high">;
+    require_human_for_risk?: Array<"low" | "medium" | "high" | "critical">;
   };
   /** Configuration per environment (docs/plan/05 §5.2). */
   release_train?: {
@@ -841,7 +874,7 @@ export type StageInput = {
     body?: string;
     url?: string;
     size?: "S" | "M" | "L" | "XL";
-    risk?: "low" | "medium" | "high";
+    risk?: "low" | "medium" | "high" | "critical";
     links?: {
       spec_comment?: string | null;
       plan_comment?: string | null;
@@ -858,6 +891,12 @@ export type StageInput = {
     /** The declared type of each output (ADR 0049); a file type is written in .choregos/outputs/. */
     output_types?: {
       [key: string]: string;
+    };
+    /** What the workflow's `artifacts:` block declares of the step's outputs, resolved (ADR 0129). See `#/$defs/display` of artifact.schema.json. */
+    artifact_displays?: {
+      [key: string]: {
+        [key: string]: unknown;
+      };
     };
   };
   repo?: {
@@ -1038,7 +1077,7 @@ export type StageResult = {
   summary: string;
   outputs?: {
     size?: "S" | "M" | "L" | "XL";
-    risk?: "low" | "medium" | "high";
+    risk?: "low" | "medium" | "high" | "critical";
     allowed_paths?: Array<string>;
     spec_markdown?: string;
     plan_markdown?: string;
@@ -1285,6 +1324,28 @@ export type UiManifest = {
   blocks: Array<UiManifestForm | UiManifestTable | UiManifestAction | UiManifestSecretOnce>;
 };
 
+/** What a workflow says of one output name: its type, its scale, where it is seen (ADR 0129). */
+export type WorkflowArtifactSpec = {
+  /** `level`, `metric` or `keyvalue`; formats stay in a transition's `output_types`. */
+  type?: string;
+  title?: string;
+  /** `facts`: the ticket's *About* card, for what fits on one line. `tab`, the default. `hidden`: nowhere. */
+  show?: "facts" | "tab" | "hidden";
+  /** A scale the platform ships, or `levels`: never both. */
+  scale?: "risk" | "size" | "verdict";
+  /** An ordered scale, lowest first. */
+  levels?: Array<{
+    value: string;
+    /** A word of a closed list, never a colour. */
+    tone?: "neutral" | "info" | "ok" | "warn" | "danger";
+    title?: string;
+  }>;
+  unit?: string;
+  min?: number;
+  max?: number;
+  better?: "higher" | "lower";
+};
+
 export type WorkflowSlug = string;
 
 export type WorkflowIdentifier = string;
@@ -1525,6 +1586,10 @@ export type Workflow = {
   transitions: Array<WorkflowTransition>;
   defaults?: WorkflowDefaults;
   budget?: WorkflowBudget;
+  /** How each output is typed and shown, by name (ADR 0129). Optional: the platform has defaults for its own outputs. */
+  artifacts?: {
+    [key: string]: WorkflowArtifactSpec;
+  };
   a2a?: WorkflowA2a;
   /** Where the workflow starts. Optional: the parser writes the first declared state there (§1.4). The field exists because the order of an object's keys does not survive jsonb storage, and a workflow that believes it starts at its terminal state closes the work item without doing anything. */
   initial?: string;

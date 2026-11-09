@@ -169,7 +169,9 @@ def result_of(stage_input: StageInput, workspace: Path, text: str) -> tuple[Stag
     path = workspace / ".choregos" / "result.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-    load = load_result(path, inline_outputs(stage_input), list(files.values()))
+    load = load_result(
+        path, inline_outputs(stage_input), list(files.values()), stage_input.transition.artifact_displays
+    )
     return load.result, load.error
 
 

@@ -5,6 +5,7 @@ import { useState } from "react";
 import { egressFlag, useEgressGuard } from "@/components/egress/egress-provider";
 import { Badge, Button, ErrorNote, Field, Input, type Tone } from "@/components/ui";
 import { api } from "@/lib/api";
+import { toneOfRisk } from "@/lib/levels";
 import { skillSlugError } from "@/lib/skill-slug";
 import type { Skill, SkillCandidate, SkillFinding, SkillGitPreview, SkillUpdate, SkillVersion } from "@/lib/types";
 
@@ -15,12 +16,7 @@ import type { Skill, SkillCandidate, SkillFinding, SkillGitPreview, SkillUpdate,
 
 export type Risk = "low" | "medium" | "high";
 
-export function toneOfRisk(risk: string | null | undefined): Tone {
-  if (risk === "low") return "ok";
-  if (risk === "medium") return "warn";
-  if (risk === "high") return "danger";
-  return "neutral";
-}
+export { toneOfRisk };
 
 /** The badge of a version: its risk, and `pending review` while a high-risk version waits. */
 export function RiskBadge({ risk, reviewStatus }: { risk?: string | null; reviewStatus?: string | null }) {

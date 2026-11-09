@@ -1963,148 +1963,157 @@
   "uniques": []
  },
  "artifacts": {
-  "checks": [],
   "columns": [
    {
-    "default": null,
     "name": "org_id",
+    "type": "String(length=36)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=36)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "work_item_id",
+    "type": "String(length=36)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=36)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "name",
+    "type": "String(length=128)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=128)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "version",
+    "type": "Integer()",
     "nullable": false,
-    "server_default": null,
-    "type": "Integer()"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "type",
+    "type": "String(length=16)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=16)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "kind",
+    "type": "String(length=16)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=16)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "media_type",
+    "type": "String(length=200)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=200)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "digest",
+    "type": "String(length=80)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=80)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "size",
+    "type": "Integer()",
     "nullable": false,
-    "server_default": null,
-    "type": "Integer()"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "content",
+    "type": "Json()",
     "nullable": true,
-    "server_default": null,
-    "type": "Json()"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "storage_key",
+    "type": "String(length=500)",
     "nullable": true,
-    "server_default": null,
-    "type": "String(length=500)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "storage_url",
+    "type": "String(length=700)",
     "nullable": true,
-    "server_default": null,
-    "type": "String(length=700)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "run_id",
+    "type": "String(length=128)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=128)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "stage",
+    "type": "String(length=64)",
     "nullable": true,
-    "server_default": null,
-    "type": "String(length=64)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "attempt",
+    "type": "Integer()",
     "nullable": true,
-    "server_default": null,
-    "type": "Integer()"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "agent_slug",
+    "type": "String(length=64)",
     "nullable": true,
-    "server_default": null,
-    "type": "String(length=64)"
-   },
-   {
     "default": null,
+    "server_default": null
+   },
+   {
     "name": "agent_version",
+    "type": "Integer()",
     "nullable": true,
-    "server_default": null,
-    "type": "Integer()"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": "<function uuid7>",
+    "name": "display",
+    "type": "Json()",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
     "name": "id",
+    "type": "String(length=36)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=36)"
+    "default": "<function uuid7>",
+    "server_default": null
    },
    {
-    "default": "<function utcnow>",
     "name": "created_at",
+    "type": "DateTime(timezone=True)",
     "nullable": false,
-    "server_default": "<sqlalchemy.sql.functions.now; now>",
-    "type": "DateTime(timezone=True)"
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
    },
    {
-    "default": "<function utcnow>",
     "name": "updated_at",
+    "type": "DateTime(timezone=True)",
     "nullable": false,
-    "server_default": "<sqlalchemy.sql.functions.now; now>",
-    "type": "DateTime(timezone=True)"
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
    }
+  ],
+  "primary_key": [
+   "id"
   ],
   "foreign_keys": [
    [
@@ -2130,6 +2139,17 @@
     "fk_artifacts_work_item_id_work_items"
    ]
   ],
+  "uniques": [
+   [
+    "uq_artifacts_version",
+    [
+     "work_item_id",
+     "name",
+     "version"
+    ]
+   ]
+  ],
+  "checks": [],
   "indexes": [
    [
     "ix_artifacts_org_id",
@@ -2144,19 +2164,6 @@
      "artifacts.work_item_id"
     ],
     false
-   ]
-  ],
-  "primary_key": [
-   "id"
-  ],
-  "uniques": [
-   [
-    "uq_artifacts_version",
-    [
-     "work_item_id",
-     "name",
-     "version"
-    ]
    ]
   ]
  },

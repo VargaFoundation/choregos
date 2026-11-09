@@ -10,10 +10,10 @@
     "name": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$", "description": "The output's name, as the transition declares it." },
     "type": {
       "type": "string",
-      "enum": ["markdown", "json", "mermaid", "sarif", "text", "csv", "html", "pdf", "docx", "xlsx", "pptx", "png", "jpeg", "gif", "webp", "svg", "mp4", "webm", "file"],
+      "enum": ["markdown", "json", "mermaid", "sarif", "text", "csv", "html", "pdf", "docx", "xlsx", "pptx", "png", "jpeg", "gif", "webp", "svg", "mp4", "webm", "file", "diff", "level", "metric", "keyvalue"],
       "description": "The declared type, or the type of the value or file."
     },
-    "kind": { "type": "string", "enum": ["markdown", "json", "diagram", "report", "file"], "description": "How the platform handles it." },
+    "kind": { "type": "string", "enum": ["markdown", "json", "diagram", "report", "file", "diff", "value"], "description": "How the platform handles it." },
     "media_type": { "type": "string", "description": "The IANA media type the content is served with." },
     "version": { "type": "integer", "minimum": 1, "description": "1 for the first revision; a new content makes the next one." },
     "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$", "description": "sha256 of the bytes served on download, checked again on every read." },
@@ -32,6 +32,56 @@
       }
     },
     "storage_url": { "type": ["string", "null"], "description": "Where the bytes are in the object store; null for an inline artifact." },
-    "created_at": { "type": ["string", "null"], "format": "date-time" }
+    "created_at": { "type": ["string", "null"], "format": "date-time" },
+    "display": {
+      "description": "How the console shows this revision (ADR 0129); null when nothing is said beyond its type. Outside the digest.",
+      "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/display" }]
+    },
+    "value": {
+      "type": ["string", "number", "null"],
+      "description": "A `level` or a `metric`, once its digest checked (ADR 0129); anything else is read from its content."
+    }
+  },
+  "$defs": {
+    "display": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": { "type": ["string", "null"], "description": "The type it is drawn as; null only in a stage's input, when its value will settle it." },
+        "show": { "type": "string", "enum": ["facts", "tab", "hidden"], "default": "tab", "description": "Where it is seen: the ticket's facts card, its tab, or nowhere." },
+        "title": { "type": ["string", "null"] },
+        "diff": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/diffStat" }] },
+        "levels": {
+          "type": ["array", "null"],
+          "description": "A `level`'s scale, lowest first.",
+          "items": {
+            "type": "object",
+            "required": ["value"],
+            "additionalProperties": false,
+            "properties": {
+              "value": { "type": "string" },
+              "tone": { "type": "string", "enum": ["neutral", "info", "ok", "warn", "danger"], "default": "neutral" },
+              "title": { "type": ["string", "null"] }
+            }
+          }
+        },
+        "unit": { "type": ["string", "null"] },
+        "min": { "type": ["number", "null"] },
+        "max": { "type": ["number", "null"] },
+        "better": { "type": ["string", "null"], "enum": ["higher", "lower", null] }
+      }
+    },
+    "diffStat": {
+      "type": "object",
+      "required": ["files", "additions", "deletions"],
+      "additionalProperties": false,
+      "properties": {
+        "files": { "type": "integer", "minimum": 0 },
+        "additions": { "type": "integer", "minimum": 0 },
+        "deletions": { "type": "integer", "minimum": 0 },
+        "truncated": { "type": "boolean", "default": false, "description": "The diff was too large and was cut, file by file." },
+        "withheld": { "type": "array", "items": { "type": "string" }, "description": "The shapes of secret found: the patch was withheld. Never a value." }
+      }
+    }
   }
 }

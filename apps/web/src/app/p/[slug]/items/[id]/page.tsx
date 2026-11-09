@@ -22,11 +22,15 @@ import {
   tonDActeur,
 } from "@/components/ui";
 import { api } from "@/lib/api";
+import { factsOf, groupArtifacts } from "@/lib/artifacts";
 import { libelleDeCode, relative, shortDate, tokens, usd } from "@/lib/format";
+import { RISK_LEVELS, SIZE_LEVELS } from "@/lib/levels";
 import type { WorkItemJourney } from "@/lib/types";
 import { ConfirmedGesture } from "@/components/confirmed-gesture";
 import { AgentProposal } from "@/components/agent-proposal";
+import { ArtifactFacts } from "@/components/artifact-value";
 import { Artifacts } from "@/components/artifacts";
+import { LevelBadge } from "@/components/level-badge";
 import { Passages } from "@/components/passages";
 import { Provenance } from "@/components/provenance";
 import { TrackerCard } from "@/components/who-writes";
@@ -54,6 +58,8 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
   const { slug, id } = use(params);
   const queryClient = useQueryClient();
   const [erreurDeControle, setErreurDeControle] = useState<string | null>(null);
+  // The artifact a fact of the card asked to open (ADR 0129): the tab is opened by mounting on it.
+  const [artifactAsked, setArtifactAsked] = useState<{ name: string; times: number } | null>(null);
   // Live (S59-08): what happens to the ticket refetches the page, decisions and runs included.
   useLiveRefresh(`/work-items/${encodeURIComponent(id)}/events/stream`, keyNames(id));
   const item = useQuery({ queryKey: ["item", id], queryFn: () => api.workItem(id) });
@@ -206,6 +212,31 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
         </div>
         <Card title="About this ticket" data-testid="ticket-facts" className="self-start">
           <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
+            {/* The work item's own columns (ADR 0129 §6): shown whatever its workflow declares. */}
+            {data.size && (
+              <>
+                <dt className="text-ink-muted">Size</dt>
+                <dd>
+                  <LevelBadge value={data.size} levels={SIZE_LEVELS} data-testid="ticket-size" />
+                </dd>
+              </>
+            )}
+            {data.risk && (
+              <>
+                <dt className="text-ink-muted">Risk</dt>
+                <dd>
+                  <LevelBadge value={data.risk} levels={RISK_LEVELS} data-testid="ticket-risk" />
+                </dd>
+              </>
+            )}
+            {/* What the workflow's `artifacts:` block puts here (ADR 0129 §5). */}
+            <ArtifactFacts
+              facts={factsOf(groupArtifacts(artifacts.data ?? []))}
+              onOpen={(name) => {
+                setArtifactAsked((asked) => ({ name, times: (asked?.times ?? 0) + 1 }));
+                document.getElementById("artifacts")?.scrollIntoView();
+              }}
+            />
             <dt className="text-ink-muted">Filed</dt>
             <dd title={shortDate(data.created_at)}>{relative(data.created_at)}</dd>
             {data.closed_at && (
@@ -371,11 +402,18 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
         fields={data.fields}
       />
 
-      <Card title="Artifacts" action={<Provenance de="observed" />}>
+      <Card id="artifacts" title="Artifacts" action={<Provenance de="observed" />}>
         {artifacts.error ? (
           <p className="text-sm text-ink-muted">the artifacts cannot be read: {(artifacts.error as Error).message}</p>
         ) : artifacts.data ? (
-          <Artifacts itemId={id} slug={slug} artifacts={artifacts.data} handOffs={passages.data ?? []} />
+          <Artifacts
+            key={artifactAsked?.times ?? 0}
+            itemId={id}
+            slug={slug}
+            artifacts={artifacts.data}
+            handOffs={passages.data ?? []}
+            opened={artifactAsked?.name ?? null}
+          />
         ) : (
           <Empty>loading the artifacts…</Empty>
         )}
