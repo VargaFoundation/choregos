@@ -52,11 +52,15 @@ def _config(tools: list[str]) -> ProjectConfig:
     )
 
 
-def _verifier(mcp_servers: list[dict[str, Any]] | None = None) -> Any:
+def _verifier(mcp_servers: list[dict[str, Any]] | None = None, tools: dict[str, Any] | None = None) -> Any:
     catalogue_entry = entry("prod-verifier")
     assert catalogue_entry is not None
     spec = AgentSpec.model_validate(
-        {"instructions": catalogue_entry.document["spec"]["instructions"], "mcp_servers": mcp_servers or []}
+        {
+            "instructions": catalogue_entry.document["spec"]["instructions"],
+            "mcp_servers": mcp_servers or [],
+            **({"tools": tools} if tools is not None else {}),
+        }
     )
     return SimpleNamespace(agent=SimpleNamespace(slug="prod-verifier"), version=2, spec=spec)
 
@@ -104,3 +108,15 @@ def test_an_observability_mcp_server_of_the_agent_counts(tool_catalogue: Any) ->
     # A server that is not an observability tool is not an indicator source.
     other = _verifier([{"connector": "github", "tools": ["get_issue"]}])
     assert production_indicator_sources(_config([]), other) == []
+
+
+def test_a_version_that_closes_its_catalogue_reads_only_what_it_names(tool_catalogue: Any) -> None:
+    """ADR 0127: the project opens `grafana_query`, the version names none of the catalogue's tools."""
+    config = _config(["grafana_query"])
+    assert production_indicator_sources(config, _verifier(tools={"catalogue": []})) == []
+    assert production_indicator_sources(config, _verifier(tools={"catalogue": ["address_check"]})) == []
+    assert production_indicator_sources(config, _verifier(tools={"catalogue": ["grafana_query"]})) == [
+        "grafana_query"
+    ]
+    # A version that leaves the list out keeps the project's behaviour.
+    assert production_indicator_sources(config, _verifier(tools={"web": []})) == ["grafana_query"]

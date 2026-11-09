@@ -24,6 +24,7 @@ import type {
   AgentScopeChange,
   AgentEvalCase,
   AgentEvalResult,
+  AgentAccess,
   AgentSpec,
   AgentTrialCreate,
   ConnectorType,
@@ -2998,6 +2999,27 @@ const mockTriggerAck = {
   workflow: "default-simple",
 };
 
+/** A version that closes its catalogue and web, and leaves its model, extensions and memories to the project. */
+function agentAccessFixture(agent: string, project: string): AgentAccess {
+  return {
+    agent,
+    version: 1,
+    project,
+    complete: false,
+    inherits: ["model", "memory"],
+    model: { requested: "profile:standard", resolved: "platform/standard", origin: "project" },
+    tools: [
+      { name: "run_step", source: "frame", origin: "frame" },
+      { name: "read_file", source: "catalogue", origin: "agent", access: "read" },
+      { name: "shell", source: "catalogue", origin: "refused", access: "write", reason: "the project does not open shell" },
+      { name: "track_order", source: "connector", origin: "project", access: "read" },
+      { name: "fetch", source: "web", origin: "agent" },
+    ],
+    knowledge: [{ name: "billing-runbooks", origin: "agent" }],
+    memories: [{ name: "project:shared", origin: "project", mode: "write" }],
+  };
+}
+
 export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method ?? "GET").toUpperCase();
   await new Promise((resolve) => setTimeout(resolve, 40));
@@ -3008,6 +3030,11 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   const hr = peopleOpsApi(method, path.split("?")[0] ?? path, body);
   if (hr !== undefined) return hr as T;
   const bare = path.split("?")[0] ?? path;
+  // What a version reaches in a project (S60-03, ADR 0127): the five components, each with its origin.
+  if (method === "GET" && /^\/orgs\/[^/]+\/agents\/[^/]+\/access$/.test(bare)) {
+    const query = new URLSearchParams(path.split("?")[1] ?? "");
+    return structuredClone(agentAccessFixture(decodeURIComponent(bare.split("/")[4] ?? ""), query.get("project") ?? "")) as T;
+  }
   // The platform administrator's switch on a coding-agent backend (S42-07): the list answers with it.
   if (method === "PUT" && bare === "/platform/backends") {
     const update = body as { name: string; enabled: boolean; disabled_reason?: string | null };

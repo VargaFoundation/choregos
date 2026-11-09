@@ -17,6 +17,7 @@ import {
   ScopePanel,
   UpstreamBanner,
 } from "@/components/agents/governance";
+import { AgentAccessCard } from "@/components/agents/access-view";
 import { DefinitionView } from "@/components/agents/definition-view";
 import { AgentDetailsCard } from "@/components/agents/details";
 import { History } from "@/components/agents/history";
@@ -49,7 +50,6 @@ import { canEdit, currentVersion, parseCompare, versionOf } from "@/lib/agent-ve
 import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
 import { percent, relative, shortDate, usd } from "@/lib/format";
-import { toolsLabel } from "@/lib/mcp-tools";
 import { useSession } from "@/lib/session";
 import type { Agent } from "@/lib/types";
 
@@ -164,7 +164,12 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
       {onglet === "runs" && <Runs org={org} slug={slug} />}
       {onglet === "access" && (
         <>
-          <AgentAccess agent={a} />
+          <AgentAccessCard
+            org={org}
+            slug={slug}
+            project={search.get("project")}
+            version={search.get("version") ? Number(search.get("version")) : undefined}
+          />
           {a.kind === "external" && <Clients org={org} slug={slug} />}
         </>
       )}
@@ -416,31 +421,6 @@ function Runs({ org, slug }: { org: string; slug: string }) {
           ))}
         </TBody>
       </Table>
-    </Card>
-  );
-}
-
-/** What the agent may reach: the tools and servers its current version names, and its skills. */
-function AgentAccess({ agent }: { agent: Agent }) {
-  const courante = [...(agent.versions ?? [])].sort((a, b) => b.version - a.version)[0];
-  const serveurs = courante?.spec.mcp_servers ?? [];
-  return (
-    <Card title="Tools and servers">
-      {serveurs.length === 0 ? (
-        <p className="text-sm text-ink-muted">
-          Its version names no server: it reaches what the platform gives a run of its project
-          {agent.kind === "external" ? ", within its human's rights" : ""}.
-        </p>
-      ) : (
-        <ul className="space-y-1 text-sm" data-testid="agent-access">
-          {serveurs.map((s) => (
-            <li key={s.connector}>
-              <span className="font-mono">{s.connector}</span>
-              <span className="text-ink-muted"> — {toolsLabel(s.tools)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
     </Card>
   );
 }

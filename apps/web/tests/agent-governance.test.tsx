@@ -95,19 +95,7 @@ describe("the helpers", () => {
   });
 });
 
-describe("the Access tab", () => {
-  it("says a server named without a tool opens none, as the broker does (S51-07)", async () => {
-    const search = vi.spyOn(URLSearchParams.prototype, "get").mockImplementation((k) => (k === "tab" ? "access" : null));
-    const spec = { mcp_servers: [{ connector: "rovo", tools: ["search"] }, { connector: "sentry", tools: [] }] };
-    vi.mocked(api.agent).mockResolvedValue(common({ versions: [{ version: 3, spec, checksum: "sha256:abc" }] }));
-    await open(page());
-    const access = await screen.findByTestId("agent-access");
-    expect(access).toHaveTextContent("rovo — search");
-    expect(access).toHaveTextContent("sentry — no tool — name tools, or * for all");
-    expect(access).not.toHaveTextContent("every tool");
-    search.mockRestore();
-  });
-});
+// The Access tab is read in tests/agent-access.test.tsx (S60-03): it says what the API resolves, no longer the version's MCP servers.
 
 describe("an agent the caller may not change", () => {
   it("disables the edit and says why in the page, with the server's sentence", async () => {
