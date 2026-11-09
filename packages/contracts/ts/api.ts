@@ -184,7 +184,7 @@ export type Role = "org_admin" | "project_owner" | "developer" | "release_captai
 
 export type Size = "S" | "M" | "L" | "XL";
 
-export type Risk = "low" | "medium" | "high";
+export type Risk = "low" | "medium" | "high" | "critical";
 
 export type Me = {
   id: string;
@@ -3537,7 +3537,7 @@ export type WorkItemCreate = {
   title: string;
   body?: string;
   size?: "S" | "M" | "L" | "XL" | null;
-  risk?: "low" | "medium" | "high" | null;
+  risk?: "low" | "medium" | "high" | "critical" | null;
   start?: boolean;
   /** The workflow the ticket starts in; otherwise the routing, otherwise the default one (ADR 0031). */
   workflow?: string | null;

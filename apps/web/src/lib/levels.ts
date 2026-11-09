@@ -11,6 +11,7 @@ export const RISK_LEVELS: Level[] = [
   { value: "low", tone: "ok" },
   { value: "medium", tone: "warn" },
   { value: "high", tone: "danger" },
+  { value: "critical", tone: "danger" },
 ];
 
 /** A size is neither good nor bad: its scale is neutral, and its position says how large it is. */

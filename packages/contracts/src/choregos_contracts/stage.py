@@ -65,7 +65,7 @@ class WorkItemRef(Strict):
     body: str = ""
     url: str | None = None
     size: Literal["S", "M", "L", "XL"] | None = None
-    risk: Literal["low", "medium", "high"] | None = None
+    risk: Literal["low", "medium", "high", "critical"] | None = None
     links: WorkItemLinks = Field(default_factory=WorkItemLinks)
 
 
@@ -513,7 +513,7 @@ class StageOutputs(Strict):
     model_config = Strict.model_config | {"extra": "allow"}
 
     size: Literal["S", "M", "L", "XL"] | None = None
-    risk: Literal["low", "medium", "high"] | None = None
+    risk: Literal["low", "medium", "high", "critical"] | None = None
     allowed_paths: list[str] | None = None
     spec_markdown: str | None = None
     plan_markdown: str | None = None

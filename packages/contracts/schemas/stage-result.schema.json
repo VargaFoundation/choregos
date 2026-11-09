@@ -53,7 +53,8 @@
           "enum": [
             "low",
             "medium",
-            "high"
+            "high",
+            "critical"
           ]
         },
         "allowed_paths": {

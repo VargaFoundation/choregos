@@ -4639,7 +4639,7 @@ components:
       type: string
       enum: [org_admin, project_owner, developer, release_captain, viewer]
     Size: { type: string, enum: [S, M, L, XL] }
-    Risk: { type: string, enum: [low, medium, high] }
+    Risk: { type: string, enum: [low, medium, high, critical] }
     Me:
       type: object
       required: [id, email, display_name, memberships]
@@ -7938,7 +7938,7 @@ components:
         title: { type: string, minLength: 1, maxLength: 500 }
         body: { type: string, default: "" }
         size: { type: [string, "null"], enum: [S, M, L, XL, null] }
-        risk: { type: [string, "null"], enum: [low, medium, high, null] }
+        risk: { type: [string, "null"], enum: [low, medium, high, critical, null] }
         start: { type: boolean, default: true }
         workflow: { type: [string, "null"], description: "The workflow the ticket starts in; otherwise the routing, otherwise the default one (ADR 0031)." }
         labels: { type: array, items: { type: string }, description: "Read by the routing rules." }

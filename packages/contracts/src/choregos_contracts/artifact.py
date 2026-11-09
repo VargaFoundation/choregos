@@ -190,6 +190,7 @@ SCALES: dict[ArtifactScale, list[ArtifactLevel]] = {
         ArtifactLevel(value="low", tone="ok"),
         ArtifactLevel(value="medium", tone="warn"),
         ArtifactLevel(value="high", tone="danger"),
+        ArtifactLevel(value="critical", tone="danger"),
     ],
     "size": [
         ArtifactLevel(value="S"),

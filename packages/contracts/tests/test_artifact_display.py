@@ -34,8 +34,8 @@ def test_value_types_are_inline_and_a_level_is_plain_text() -> None:
 
 def test_risk_size_and_verdict_are_scales_not_types() -> None:
     assert "risk" not in ARTIFACT_TYPES and "size" not in ARTIFACT_TYPES
-    assert [level.value for level in SCALES["risk"]] == ["low", "medium", "high"]
-    assert [level.tone for level in SCALES["risk"]] == ["ok", "warn", "danger"]
+    assert [level.value for level in SCALES["risk"]] == ["low", "medium", "high", "critical"]
+    assert [level.tone for level in SCALES["risk"]] == ["ok", "warn", "danger", "danger"]
     assert {level.tone for level in SCALES["size"]} == {"neutral"}, "a size only ranks"
 
 
@@ -156,3 +156,15 @@ def test_a_whole_float_is_an_integer_so_it_hashes_the_same_after_jsonb() -> None
     assert contracts.inline_bytes(value) == b"10000000000000000000000"
     assert isinstance(coerce_value(ArtifactDisplay(type="metric"), 2.0), int)
     assert coerce_value(ArtifactDisplay(type="metric"), 0.5) == 0.5
+
+
+def test_a_critical_risk_is_a_risk_at_every_door() -> None:
+    """The four words have to agree where they are written: a value one door accepts and another
+    refuses is a ticket stuck between them."""
+    assert [level.value for level in SCALES["risk"]] == [member.value for member in contracts.Risk]
+    assert SCALES["risk"][-1].tone == "danger"
+    for name in ("stage-input.schema.json", "stage-result.schema.json"):
+        schema = contracts.load_schema(name)
+        properties = schema["properties"]["work_item" if "input" in name else "outputs"]["properties"]
+        assert properties["risk"]["enum"] == [member.value for member in contracts.Risk], name
+    assert contracts.StageOutputs(risk="critical").risk == "critical"

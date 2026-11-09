@@ -18,7 +18,7 @@ class WorkItemCreate(Dto):
     title: str = Field(min_length=1, max_length=500)
     body: str = ""
     size: Literal["S", "M", "L", "XL"] | None = None
-    risk: Literal["low", "medium", "high"] | None = None
+    risk: Literal["low", "medium", "high", "critical"] | None = None
     #: Start the interpreter right away (the equivalent of `mark_agent_ready`).
     start: bool = True
     #: The workflow where the ticket is born (ADR 0031); otherwise the project's routing, else its default.

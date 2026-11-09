@@ -26,3 +26,10 @@ def test_each_type_gets_a_value_it_accepts() -> None:
     assert _typed_placeholder(transition, "free", "x") == 1
     assert _typed_placeholder(transition, "pairs", "x") == {"placeholder": "pairs"}
     assert _typed_placeholder(transition, "plain", "x") == "x"
+
+
+def test_a_critical_risk_label_is_read_from_github() -> None:
+    from choregos_adapters.tracker.github import _parse_risk
+
+    assert _parse_risk([{"name": "risk:critical"}]) == "critical"
+    assert _parse_risk([{"name": "risk:unheard"}]) is None

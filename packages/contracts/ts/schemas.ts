@@ -538,7 +538,7 @@ export type PolicyApprovalRule = {
   required: "always" | "never" | "by_size" | "by_risk";
   group?: string;
   sizes?: Array<"S" | "M" | "L" | "XL">;
-  risks?: Array<"low" | "medium" | "high">;
+  risks?: Array<"low" | "medium" | "high" | "critical">;
   timeout_hours?: number;
 };
 
@@ -711,7 +711,7 @@ export type Policy = {
   review?: {
     /** The review backend must differ from the implementation's. */
     cross_backend?: boolean;
-    require_human_for_risk?: Array<"low" | "medium" | "high">;
+    require_human_for_risk?: Array<"low" | "medium" | "high" | "critical">;
   };
   /** Configuration per environment (docs/plan/05 §5.2). */
   release_train?: {
@@ -874,7 +874,7 @@ export type StageInput = {
     body?: string;
     url?: string;
     size?: "S" | "M" | "L" | "XL";
-    risk?: "low" | "medium" | "high";
+    risk?: "low" | "medium" | "high" | "critical";
     links?: {
       spec_comment?: string | null;
       plan_comment?: string | null;
@@ -1077,7 +1077,7 @@ export type StageResult = {
   summary: string;
   outputs?: {
     size?: "S" | "M" | "L" | "XL";
-    risk?: "low" | "medium" | "high";
+    risk?: "low" | "medium" | "high" | "critical";
     allowed_paths?: Array<string>;
     spec_markdown?: string;
     plan_markdown?: string;

@@ -933,6 +933,7 @@ that follows from it. Rule since that day: nothing is ✅ without a test that fa
 | S61-13 | S61 | ✅ | — | The workflows the platform ships use the block ([ADR 0129](../adr/0129-an-artifact-says-how-it-is-shown.md)): 20 workflows of the catalogue and of the templates put the diff, and a verdict when they have one, in *About this ticket*. Proves: `packages/core/tests/test_artifact_declarations.py` (every shipped workflow that writes code shows its changes). Does not prove: a project's installed copy, which keeps the version it has until it is upgraded. |
 | S61-14 | S61 | ✅ | — | `docs/usage.md` documents the `artifacts:` block, every field, what the console always shows, what the agent is told, and the measured diff with its bounds ([ADR 0129](../adr/0129-an-artifact-says-how-it-is-shown.md)). Proves: `tests/docs`. Does not prove: anything about the product. |
 | S61-15 | S61 | 🟡 | — | What was proved of typed artifacts beyond the unit suites ([ADR 0129](../adr/0129-an-artifact-says-how-it-is-shown.md)), on 2026-11-09 from a workstation. Proves: GitHub's real comparison of two tags of this repository (37 files) goes through the adapter and `unified_diff`, and `git apply --check` accepts the result; GitLab's real comparison of a public project (64 files) comes out with one header per file; the migration, the API's typed artifacts and the orchestrator's diff pass on PostgreSQL 16 under forced RLS; the demo console draws the facts card, the diff, a CSV and key/value pairs in both themes, without a console error and without overflow at 390 px. Does not prove: a real agent step on a real ticket, which needs a release on a tenant; the secret withholding against a real secret-shaped commit. |
+| S61-16 | S61 | ✅ | — | contract-change: a risk may be `critical` ([ADR 0129](../adr/0129-an-artifact-says-how-it-is-shown.md)), everywhere one is written: `Risk`, a stage's outputs and its input, the creation of a ticket by the API and by MCP, the policy's enumerations, GitHub's field and `risk:` label, the triage prompt. It is drawn as a danger. The guarantees that route on a risk are allow lists (`outputs_in`), so a workflow that lists fewer sends a critical ticket to a person. Proves: `packages/contracts/tests/test_artifact_display.py`, `packages/adapters/tests/test_fake_typed_outputs.py`. Does not prove: a Jira or GitLab field holding the new word, which is each site's own configuration. |
 
 
 
@@ -942,7 +943,7 @@ that follows from it. Rule since that day: nothing is ✅ without a test that fa
 
 
 
-**Total**: 609 delivered, 295 partial, 8 not started.
+**Total**: 610 delivered, 295 partial, 8 not started.
 
 
 **2026-10-05 — ADR 0029: Choregos becomes a platform of governed agents, for general use; 0028 is

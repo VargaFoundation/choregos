@@ -1082,7 +1082,8 @@ artifacts:
 
 The console shows a ticket's **size and risk in *About this ticket* whatever its workflow declares**:
 they are the work item's columns. `size`, `risk`, `verdict` and `confidence` are typed by their name
-alone, in every workflow.
+alone, in every workflow. A risk is `low`, `medium`, `high` or `critical`; a workflow whose `outputs_in`
+lists fewer stops the others there and hands them to a person.
 
 The agent is told the values a typed output may take. A value off its scale, out of its bounds or of the
 wrong shape goes back to the agent like a missing output; what can be converted is (`"87%"`, `"0.9"`, a
