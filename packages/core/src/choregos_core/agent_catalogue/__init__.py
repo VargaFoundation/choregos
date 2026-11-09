@@ -17,8 +17,8 @@ An entry is a plugin's agent file: `catalogue` (its version, the role it holds, 
 the document `POST /orgs/{org}/agents` accepts. An internal agent declares its five components (ADR 0127,
 S60-04): a `model` (a model or a `profile:<tier>`) and `tools.catalogue|extensions|web` and `memories`, each
 possibly empty, so that it inherits none of them from the project. It still fixes no runtime: the backend is
-the deployment's (`choregos_core.agent_completeness` says what an entry leaves out). Its instructions are preceded by
-the work item's context (`_context.md`) when loaded: the context is the core's contract with its own
+the deployment's (`choregos_core.agent_completeness` says what an entry leaves out). Its instructions
+are preceded by the work item's context (`_context.md`) when loaded: the context is the core's contract with its own
 runtime (what a run hands the agent), so it stays here and a plugin's author writes the task, not the
 plumbing.
 """
