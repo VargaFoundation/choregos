@@ -37,7 +37,7 @@ from ...services.memory_access import check_bindings_at_publish
 from ...services.network import check_agent_network
 from ...services.organisations import organisation_by_slug
 from ...services.routing import new_trial_work_item
-from ._common import _model_allowed
+from ._common import _grants_bound, _model_allowed
 from ._router import router
 
 #: The most a trial may spend, whatever is asked (S32-03).
@@ -71,6 +71,7 @@ async def start_agent_trial(org: str, body: AgentTrialCreate, session: Db, princ
     enforce_decision(decide(principal, org, subject, Action.TRIAL, project_slug=body.project))
     version_errors(body.spec)
     await _model_allowed(session, organisation, body.spec)
+    await _grants_bound(session, organisation, body.spec)
     await check_bindings_at_publish(session, principal, organisation, body.spec)
     await check_agent_network(session, organisation.id, body.spec)
     body.spec = await pin_hosted_runtime(session, organisation.id, body.spec)

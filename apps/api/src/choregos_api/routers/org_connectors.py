@@ -43,6 +43,7 @@ from ..schemas import (
 )
 from ..secret_store import secret_states
 from ..services import plugin_servers
+from ..services.argument_grants import refuse_constraint
 from ..services.catalogue_rights import (
     SELECTED_PROJECTS,
     CatalogueAction,
@@ -566,6 +567,10 @@ async def update_operation(
                 f" platform's ceiling ({ceiling} bytes, CHOREGOS_BROKER_RESULT_CEILING_BYTES)"
             )
         op_row.result_max_bytes = body.result_max_bytes
+    if "arguments" in body.model_fields_set:
+        if body.arguments is not None:
+            refuse_constraint(operation, op_row.input_schema, body.arguments, f"{name}.{operation}")
+        op_row.arguments = body.arguments
     await record(
         session,
         principal,
@@ -730,14 +735,17 @@ async def _project_operations(ctx: ProjectCtx, session: AsyncSession) -> list[Pr
             .order_by(OrgConnector.name, ConnectorOperation.name)
         )
     ).all()
-    tightened = {
-        p.operation_id: p.policy
-        for p in (
+    rows = (
+        (
             await session.execute(
                 select(ProjectOperationPolicy).where(ProjectOperationPolicy.project_id == ctx.id)
             )
-        ).scalars()
-    }
+        )
+        .scalars()
+        .all()
+    )
+    tightened = {p.operation_id: p.policy for p in rows}
+    narrowed_by = {p.operation_id: p.arguments for p in rows}
     allumes = await enabled_ids(session, ctx.project)
     closed_connectors = {
         row.id
@@ -759,6 +767,8 @@ async def _project_operations(ctx: ProjectCtx, session: AsyncSession) -> list[Pr
             project_policy=tightened.get(operation.id),
             effective_policy=stricter(operation.policy, tightened.get(operation.id)),
             description=operation.description,
+            org_arguments=operation.arguments,
+            project_arguments=narrowed_by.get(operation.id),
         )
         for operation, org_connector in op_rows
         if operation.connector_id not in closed_connectors
@@ -805,6 +815,8 @@ async def tighten_operation(
             )
         )
     ).scalar_one()
+    if body.arguments is not None:
+        refuse_constraint(operation, op_row.input_schema, body.arguments, f"{connector}.{operation}")
     resserre = (
         await session.execute(
             select(ProjectOperationPolicy).where(
@@ -818,6 +830,7 @@ async def tighten_operation(
         )
         session.add(resserre)
     resserre.policy = body.policy
+    resserre.arguments = body.arguments
     await session.flush()
     await record(
         session,
@@ -829,6 +842,7 @@ async def tighten_operation(
         connector=connector,
         operation=operation,
         policy=body.policy,
+        arguments=body.arguments,
     )
     return ProjectOperationDto(
         connector=connector,
@@ -838,6 +852,8 @@ async def tighten_operation(
         project_policy=body.policy,
         effective_policy=stricter(op_row.policy, body.policy),
         description=op_row.description,
+        org_arguments=op_row.arguments,
+        project_arguments=body.arguments,
     )
 
 

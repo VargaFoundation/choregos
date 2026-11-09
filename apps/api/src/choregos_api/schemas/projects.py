@@ -213,6 +213,9 @@ class OperationDto(Dto):
     approver_group: str | None = None
     #: the most one result may weigh when it reaches the agent; none: the platform's default (S40-17)
     result_max_bytes: int | None = None
+    #: a JSON Schema every call's arguments must also satisfy, whichever agent calls; `{project}` is the
+    #: run's project slug (S60-06, ADR 0128)
+    arguments: dict[str, Any] | None = None
 
 
 class OrgConnectorServer(Dto):
@@ -297,6 +300,9 @@ class OperationPatch(Dto):
     approver_group: str | None = Field(default=None, min_length=1, max_length=200)
     #: null (sent) clears it; absent leaves it; above the platform's ceiling is refused (S40-17)
     result_max_bytes: int | None = Field(default=None, ge=1024)
+    #: null (sent) clears it; absent leaves it; refused when it is not a schema the platform reads or
+    #: names an argument the operation does not have (S60-06, ADR 0128)
+    arguments: dict[str, Any] | None = None
 
 
 class ProjectOperationDto(Dto):
@@ -307,10 +313,15 @@ class ProjectOperationDto(Dto):
     project_policy: str | None = None
     effective_policy: str
     description: str | None = None
+    #: what the organisation binds of the call's arguments, and what this project binds on top (S60-06)
+    org_arguments: dict[str, Any] | None = None
+    project_arguments: dict[str, Any] | None = None
 
 
 class ProjectOperationPut(Dto):
     policy: OperationPolicy
+    #: binds the call's arguments on top of the organisation's; absent clears (S60-06, ADR 0128)
+    arguments: dict[str, Any] | None = None
 
 
 class ConnectorDiscovery(Dto):

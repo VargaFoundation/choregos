@@ -2532,6 +2532,13 @@
     "type": "Integer()"
    },
    {
+    "default": null,
+    "name": "arguments",
+    "nullable": true,
+    "server_default": null,
+    "type": "Json()"
+   },
+   {
     "default": "<function uuid7>",
     "name": "id",
     "nullable": false,
@@ -7835,6 +7842,13 @@
     "nullable": false,
     "server_default": null,
     "type": "String(length=16)"
+   },
+   {
+    "default": null,
+    "name": "arguments",
+    "nullable": true,
+    "server_default": null,
+    "type": "Json()"
    },
    {
     "default": "<function uuid7>",
