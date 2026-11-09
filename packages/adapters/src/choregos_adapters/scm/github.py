@@ -29,6 +29,10 @@ mutation($pullRequestId: ID!, $method: PullRequestMergeMethod!) {
 """
 
 
+#: What GitHub answers when auto-merge cannot be enabled, and a direct merge is the way (S59-12).
+AUTO_MERGE_REFUSED = ("Auto merge is not allowed", "clean status")
+
+
 class GitHubScm:
     """SCM GitHub via l'App `choregos-bot`."""
 
@@ -252,12 +256,19 @@ class GitHubScm:
         """Merge queue: `enablePullRequestAutoMerge`, otherwise a direct merge if the policy allows it."""
         pr = await self.client.request("GET", f"/repos/{ref.repo}/pulls/{ref.number}", repo=ref.repo)
         if self.use_merge_queue:
-            await self.client.graphql(
-                ENABLE_AUTO_MERGE,
-                {"pullRequestId": pr["node_id"], "method": self.merge_method},
-                repo=ref.repo,
-            )
-            return
+            try:
+                await self.client.graphql(
+                    ENABLE_AUTO_MERGE,
+                    {"pullRequestId": pr["node_id"], "method": self.merge_method},
+                    repo=ref.repo,
+                )
+                return
+            except UpstreamError as exc:
+                # A repository that does not allow auto-merge (a private one without branch
+                # protection), or a pull request already mergeable ("clean status"), refuses it: the
+                # merge step runs after `ci_green`, so the pull request is merged directly (S59-12).
+                if not any(reason in str(exc) for reason in AUTO_MERGE_REFUSED):
+                    raise
         await self.client.request(
             "PUT",
             f"/repos/{ref.repo}/pulls/{ref.number}/merge",
