@@ -310,3 +310,32 @@ async def test_a_failure_on_read_writes_nothing() -> None:
     with pytest.raises(UpstreamError):
         await scm(wire).commit_files(REPO, "b", {"x.yaml": "y"}, "m")
     assert wire.sent("PUT") == []
+
+
+async def test_commit_statuses_count_as_checks() -> None:
+    """S59-09: a CI that posts commit statuses (Tekton's `github-app-status`) is read like a check run:
+    pending while it runs, failed on `error` or `failure`, green on `success`."""
+    from choregos_core.domain import PrRef
+
+    def wire_with(states: list[str]) -> Wire:
+        return Wire(
+            {
+                ("GET", f"/repos/{REPO}/pulls/9"): (
+                    200,
+                    {"head": {"sha": "s9", "ref": "choregos/FON-276"}, "base": {"ref": "main"}},
+                ),
+                ("GET", f"/repos/{REPO}/commits/s9/check-runs"): (200, {"check_runs": []}),
+                ("GET", f"/repos/{REPO}/commits/s9/status"): (
+                    200,
+                    {"statuses": [{"context": f"tekton-{i}", "state": s} for i, s in enumerate(states)]},
+                ),
+                ("GET", f"/repos/{REPO}/pulls/9/reviews"): (200, []),
+                ("GET", f"/repos/{REPO}/pulls/9/files"): (200, []),
+            }
+        )
+
+    ref = PrRef(repo=REPO, number=9)
+    assert (await scm(wire_with(["success"])).get_pr(ref)).checks_conclusion() == "success"
+    assert (await scm(wire_with(["pending"])).get_pr(ref)).checks_conclusion() == "pending"
+    assert (await scm(wire_with(["success", "error"])).get_pr(ref)).checks_conclusion() == "failure"
+    assert (await scm(wire_with([])).get_pr(ref)).checks_conclusion() is None, "no CI at all is not green"
