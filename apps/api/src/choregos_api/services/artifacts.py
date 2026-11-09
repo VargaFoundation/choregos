@@ -25,13 +25,18 @@ from choregos_adapters.storage import ObjectStore
 from choregos_contracts import (
     ARTIFACT_NAME_PATTERN,
     ARTIFACT_TYPES,
+    DIFF_ARTIFACT,
+    RESERVED_ARTIFACT_NAMES,
     Artifact,
+    ArtifactDiffStat,
+    ArtifactDisplay,
     ArtifactProducer,
     artifact_digest,
     artifact_type,
     inline_bytes,
     type_of_value,
 )
+from choregos_core.unified_diff import UnifiedDiff
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -111,6 +116,7 @@ async def _record(  # noqa: PLR0913 - one row, field by field, keyword-only
     key: str | None = None,
     url: str | None = None,
     producer: str | None = None,
+    display: ArtifactDisplay | None = None,
 ) -> ArtifactRecord:
     entry = artifact_type(type_)
     produced_by = run.id if run is not None else producer
@@ -138,6 +144,7 @@ async def _record(  # noqa: PLR0913 - one row, field by field, keyword-only
             attempt=run.attempt if run is not None else None,
             agent_slug=run.agent_slug if run is not None else None,
             agent_version=run.agent_version if run is not None else None,
+            display=display.model_dump(mode="json", exclude_none=True) if display is not None else None,
         )
         try:
             async with session.begin_nested():
@@ -185,6 +192,10 @@ async def record_inline_outputs(
         if not _NAME.fullmatch(name):
             log.warning("artifact name refused", work_item=item.tracker_key, name=name)
             continue
+        if name in RESERVED_ARTIFACT_NAMES:
+            # The diff is what the SCM says, not what an agent writes (ADR 0129 §7).
+            log.warning("output under a reserved name not recorded", work_item=item.tracker_key, name=name)
+            continue
         declared = (types or {}).get(name)
         value = _parsed(raw) if declared == "json" else raw
         type_ = declared if declared in {"markdown", "json"} else type_of_value(value)
@@ -207,6 +218,39 @@ async def record_inline_outputs(
     return recorded
 
 
+async def record_diff(
+    session: AsyncSession,
+    *,
+    org_id: str,
+    item: WorkItem,
+    run: Run,
+    diff: UnifiedDiff,
+) -> ArtifactRecord:
+    """The branch's diff as an artifact: a new revision only when the branch changed (ADR 0129 §7)."""
+    data = inline_bytes(diff.text)
+    return await _record(
+        session,
+        org_id=org_id,
+        item=item,
+        run=run,
+        name=DIFF_ARTIFACT,
+        type_=DIFF_ARTIFACT,
+        digest=artifact_digest(data),
+        size=len(data),
+        content=diff.text,
+        display=ArtifactDisplay(
+            type=DIFF_ARTIFACT,
+            diff=ArtifactDiffStat(
+                files=diff.files,
+                additions=diff.additions,
+                deletions=diff.deletions,
+                truncated=diff.truncated,
+                withheld=diff.withheld,
+            ),
+        ),
+    )
+
+
 async def store_file(
     session: AsyncSession,
     store: ObjectStore,
@@ -221,6 +265,8 @@ async def store_file(
     """Writes a file artifact to the object store, then records it. Same bytes, same version."""
     if not _NAME.fullmatch(name):
         raise ValueError(f"artifact name `{name}` refused: {ARTIFACT_NAME_PATTERN}")
+    if name in RESERVED_ARTIFACT_NAMES:
+        raise ValueError(f"artifact name `{name}` refused: it is measured by the platform")
     entry = artifact_type(type_)
     digest = artifact_digest(data)
     previous = await latest(session, item.id, name)
@@ -341,6 +387,7 @@ def to_contract(row: ArtifactRecord) -> Artifact:
             ),
             "storage_url": row.storage_url,
             "created_at": row.created_at,
+            "display": row.display,
         }
     )
 
