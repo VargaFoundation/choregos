@@ -350,8 +350,41 @@ export const artifacts: Artifact[] = [
   {
     ...artifactOf("diff", 1, "diff", "diff", "text/x-diff", 512, "r3", "implement", 50),
     storage_url: null,
-    display: { type: "diff", show: "tab", diff: { files: 2, additions: 5, deletions: 1, truncated: false, withheld: [] } },
+    display: { type: "diff", show: "facts", title: "Changes", diff: { files: 2, additions: 5, deletions: 1, truncated: false, withheld: [] } },
   },
+  {
+    ...artifactOf("verdict", 1, "level", "value", "text/plain", 7, "r3", "review", 30, ["reviewer", 2]),
+    storage_url: null,
+    value: "approve",
+    display: {
+      type: "level",
+      show: "facts",
+      title: "Verdict",
+      levels: [
+        { value: "approve", tone: "ok", title: "Approved" },
+        { value: "comment", tone: "info", title: "Comment" },
+        { value: "request_changes", tone: "warn", title: "Changes requested" },
+      ],
+    },
+  },
+  {
+    ...artifactOf("coverage", 1, "metric", "value", "application/json", 2, "r3", "verify", 35, ["tester", 1]),
+    storage_url: null,
+    value: 87,
+    display: { type: "metric", show: "facts", title: "Coverage", unit: "percent", min: 0, max: 100, better: "higher" },
+  },
+  {
+    ...artifactOf("confidence", 1, "metric", "value", "application/json", 3, "r3", "review", 30, ["reviewer", 2]),
+    storage_url: null,
+    value: 0.82,
+    display: { type: "metric", show: "tab", title: "Confidence", min: 0, max: 1, better: "higher" },
+  },
+  {
+    ...artifactOf("deployment", 1, "keyvalue", "json", "application/json", 60, "r3", "verify", 35),
+    storage_url: null,
+    display: { type: "keyvalue", show: "tab" },
+  },
+  artifactOf("invoices", 1, "csv", "file", "text/csv", 90, "r3", "verify", 35),
   artifactOf("security_report", 1, "sarif", "report", "application/sarif+json", SARIF.length, "r3", "implement", 50),
   artifactOf("architecture.png", 1, "png", "file", "image/png", 68, "r3", "implement", 50),
   // Binary deliverables (S31-06): a deck from a skill, a report, a demo video from a gateway model.
@@ -383,6 +416,8 @@ diff --git a/tests/orders/test_total.py b/tests/orders/test_total.py
 
 const ARTIFACT_CONTENT: Record<string, [string, () => BlobPart]> = {
   "diff@1": ["text/x-diff", () => DIFF_TEXT],
+  "deployment@1": ["application/json", () => '{"region":"eu-west-1","replicas":3,"canary":true}'],
+  "invoices@1": ["text/csv", () => 'invoice,customer,amount\nF-1042,"Acme, Inc",1200.50\nF-1043,Globex,88.00\n'],
   "spec_markdown@1": ["text/markdown", () => SPEC_V1],
   "spec_markdown@2": ["text/markdown", () => SPEC_V2],
   "security_report@1": ["application/sarif+json", () => SARIF],
