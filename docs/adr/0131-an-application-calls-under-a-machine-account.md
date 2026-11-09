@@ -1,6 +1,6 @@
 # 0131 — An application calls under a machine account
 
-- **Status**: proposed, 2026-11-09; S62-01 implements it
+- **Status**: accepted, 2026-11-09; S62-01 implements it
 - **Concerns**: `/projects/{id}/machine-accounts`, the identity of a `chg_` token, the A2A door's
   budget; builds on [ADR 0030](0030-an-mcp-door-for-external-clients.md),
   [ADR 0033](0033-agent-registry-and-skill-library.md),
