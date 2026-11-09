@@ -269,8 +269,16 @@ async def _propose_tool_action(
         }
     # Who approves (ADR 0052): the members of the group the organisation named for this operation —
     # with at least a developer's rank on the project —, otherwise the project's owners (ADR 0035).
+    # `{project}-maintainers` is this project's maintainers (S59-11, as for a workflow's people, S59-01):
+    # one operation rule of the organisation serves every project, the action stores the resolved group.
+    from choregos_core.dsl.groups import group_for
+
     approval = (
-        ApprovalSpec(approvers=[Approver(role="developer", group=tool.operation.approver_group)])
+        ApprovalSpec(
+            approvers=[
+                Approver(role="developer", group=group_for(tool.operation.approver_group, project.slug))
+            ]
+        )
         if tool.operation.approver_group
         else ApprovalSpec()
     )

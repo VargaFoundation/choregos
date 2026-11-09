@@ -340,8 +340,14 @@ async def decide(
     # outside `netops-approvers` does not approve a firewall rule. The groups are the identity
     # provider's, as of the decider's last sign-in through it.
     my_groups = groups_for_org(principal.groups, org_slug)
-    if not any(not a.get("group") or str(a["group"]) in my_groups for a in high_enough):
-        groups = sorted({str(a["group"]) for a in high_enough if a.get("group")})
+    # A rule written `{project}-maintainers` (a workflow's action, S59-11) names this project's group.
+    from choregos_core.dsl.groups import group_for
+
+    def group_of(rule: dict[str, Any]) -> str:
+        return group_for(str(rule["group"]), project.slug)
+
+    if not any(not a.get("group") or group_of(a) in my_groups for a in high_enough):
+        groups = sorted({group_of(a) for a in high_enough if a.get("group")})
         raise forbidden(
             f"deciding this action needs membership of the group {' or '.join(groups)} "
             "(identity-provider groups, as of your last sign-in)"
