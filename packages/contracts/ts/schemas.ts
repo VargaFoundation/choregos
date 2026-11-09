@@ -7,14 +7,33 @@
  */
 
 
+export type ArtifactDisplay = {
+  /** The type it is drawn as. */
+  type: string;
+  /** Where it is seen: the ticket's facts card, its tab, or nowhere. */
+  show?: "facts" | "tab" | "hidden";
+  title?: string | null;
+  diff?: null | ArtifactDiffStat;
+};
+
+export type ArtifactDiffStat = {
+  files: number;
+  additions: number;
+  deletions: number;
+  /** The diff was too large and was cut, file by file. */
+  truncated?: boolean;
+  /** The shapes of secret found: the patch was withheld. Never a value. */
+  withheld?: Array<string>;
+};
+
 /** One revision of a named output of a work item: typed, stored and traced (ADR 0049). */
 export type Artifact = {
   /** The output's name, as the transition declares it. */
   name: string;
   /** The declared type, or the type of the value or file. */
-  type: "markdown" | "json" | "mermaid" | "sarif" | "text" | "csv" | "html" | "pdf" | "docx" | "xlsx" | "pptx" | "png" | "jpeg" | "gif" | "webp" | "svg" | "mp4" | "webm" | "file";
+  type: "markdown" | "json" | "mermaid" | "sarif" | "text" | "csv" | "html" | "pdf" | "docx" | "xlsx" | "pptx" | "png" | "jpeg" | "gif" | "webp" | "svg" | "mp4" | "webm" | "file" | "diff";
   /** How the platform handles it. */
-  kind: "markdown" | "json" | "diagram" | "report" | "file";
+  kind: "markdown" | "json" | "diagram" | "report" | "file" | "diff";
   /** The IANA media type the content is served with. */
   media_type: string;
   /** 1 for the first revision; a new content makes the next one. */
@@ -35,6 +54,8 @@ export type Artifact = {
   /** Where the bytes are in the object store; null for an inline artifact. */
   storage_url?: string | null;
   created_at?: string | null;
+  /** How the console shows this revision (ADR 0129); null when nothing is said beyond its type. Outside the digest. */
+  display?: null | ArtifactDisplay;
 };
 
 export type ContextPackMemory = {

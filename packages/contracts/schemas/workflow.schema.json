@@ -417,7 +417,8 @@
               "svg",
               "mp4",
               "webm",
-              "file"
+              "file",
+              "diff"
             ]
           }
         },

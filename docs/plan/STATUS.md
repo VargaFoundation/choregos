@@ -920,6 +920,7 @@ that follows from it. Rule since that day: nothing is ✅ without a test that fa
 | S61-00 | S61 | ✅ | — | [ADR 0129](../adr/0129-an-artifact-says-how-it-is-shown.md) accepted (product owner, 2026-11-09: typed artifacts, what is visible in *About this ticket* said by the workflow, a git diff among the artifacts). Proves: the index lists it (`tests/docs/test_adr_index.py`). Does not prove anything about the code: S61-01 to S61-17 do. |
 | S61-01 | S61 | ✅ | — | A ticket's size and risk are in *About this ticket*, as the work item's columns ([ADR 0129](../adr/0129-an-artifact-says-how-it-is-shown.md) §6), whatever its workflow declares: `LevelBadge` tints a scale that judges (risk) and only ranks one that does not (size), the word always written. Proves: `apps/web/tests/ticket-page.test.tsx` (the two badges, their tones, the rank read aloud, nothing named when the ticket has neither). Does not prove: a rendering on a real ticket. |
 | S61-02 | S61 | ✅ | — | The artifacts of a ticket come in the order the steps produced them, and the tab opened first is the latest document rather than whichever name sorts first, which was a 13-byte list on the first real ticket. Proves: `apps/web/tests/artifacts.test.tsx`. Does not prove: a rendering on a real ticket. |
+| S61-03 | S61 | ✅ | — | contract-change ([ADR 0129](../adr/0129-an-artifact-says-how-it-is-shown.md) §2, §7, §8): the artifact type `diff` (kind `diff`, inline, `text/x-diff`), the reserved name `diff`, `Artifact.display` with the diff's counters, `DiffFile.old_path` read from GitHub and GitLab, and `unified_diff`, which rebuilds the header the SCM leaves out, bounds the diff file by file, and keeps only the file list when `scan_secrets` finds a shape. Proves: `packages/contracts/tests/test_artifact.py`, `packages/core/tests/test_unified_diff.py`. Does not prove: nothing records a diff yet (S61-04). |
 
 
 
@@ -929,7 +930,7 @@ that follows from it. Rule since that day: nothing is ✅ without a test that fa
 
 
 
-**Total**: 597 delivered, 294 partial, 8 not started.
+**Total**: 598 delivered, 294 partial, 8 not started.
 
 
 **2026-10-05 — ADR 0029: Choregos becomes a platform of governed agents, for general use; 0028 is

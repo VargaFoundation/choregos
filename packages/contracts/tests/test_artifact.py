@@ -87,9 +87,23 @@ def test_the_type_of_a_file_comes_from_its_extension(filename: str, expected: st
     assert type_of_filename(filename) == expected
 
 
-def test_only_markdown_and_json_are_inline() -> None:
+def test_only_text_and_data_are_inline() -> None:
     inline = {name for name, entry in ARTIFACT_TYPES.items() if entry.inline}
-    assert inline == {"markdown", "json"}
+    assert inline == {"markdown", "json", "diff"}
     assert artifact_type("xlsx").media_type.endswith("spreadsheetml.sheet")
     with pytest.raises(KeyError, match="unknown artifact type"):
         artifact_type("exe")
+
+
+def test_a_diff_is_inline_and_its_name_is_the_platforms() -> None:
+    entry = artifact_type("diff")
+    assert entry.inline
+    assert entry.kind is ArtifactKind.DIFF
+    assert entry.media_type == "text/x-diff"
+    assert contracts.DIFF_ARTIFACT in contracts.RESERVED_ARTIFACT_NAMES
+
+
+def test_the_workflow_schema_knows_every_type() -> None:
+    schema = contracts.load_schema("workflow.schema.json")
+    transition = schema["$defs"]["transition"]["properties"]["output_types"]["additionalProperties"]
+    assert set(transition["enum"]) == set(ARTIFACT_TYPES)

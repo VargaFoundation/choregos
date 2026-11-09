@@ -19,7 +19,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field
 
@@ -38,6 +38,7 @@ class ArtifactKind(StrEnum):
     DIAGRAM = "diagram"
     REPORT = "report"
     FILE = "file"
+    DIFF = "diff"
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,8 +54,10 @@ class ArtifactType:
         """A declared output of an inline type is a value in the result's `outputs`, kept in the
         database; any other type is a file the agent writes in `.choregos/outputs/`, kept in the
         object store."""
-        return self.kind in {ArtifactKind.MARKDOWN, ArtifactKind.JSON}
+        return self.kind in _INLINE_KINDS
 
+
+_INLINE_KINDS = {ArtifactKind.MARKDOWN, ArtifactKind.JSON, ArtifactKind.DIFF}
 
 #: The types a transition may declare for an output (`output_types:`) and the runner recognises
 #: in `.choregos/outputs/`. `markdown` and `json` are inline; every other type is a file.
@@ -88,7 +91,13 @@ ARTIFACT_TYPES: dict[str, ArtifactType] = {
     "mp4": ArtifactType(ArtifactKind.FILE, "video/mp4", "mp4"),
     "webm": ArtifactType(ArtifactKind.FILE, "video/webm", "webm"),
     "file": ArtifactType(ArtifactKind.FILE, "application/octet-stream", ""),
+    "diff": ArtifactType(ArtifactKind.DIFF, "text/x-diff", "diff"),
 }
+
+#: The artifact the platform records after a step, from the SCM's comparison of the pushed branch
+#: (ADR 0129 §7). Measured, never declared: no output may take this name.
+DIFF_ARTIFACT = "diff"
+RESERVED_ARTIFACT_NAMES = frozenset({DIFF_ARTIFACT})
 
 #: Extensions that name the same type as another spelling.
 _EXTENSION_ALIASES = {"jpg": "jpeg", "md": "markdown", "mmd": "mermaid", "txt": "text", "htm": "html"}
@@ -142,6 +151,28 @@ class ArtifactProducer(Strict):
     agent_version: int | None = Field(default=None, ge=1)
 
 
+class ArtifactDiffStat(Strict):
+    """What a `diff` revision changes, so a one-line summary needs no read of its content."""
+
+    files: int = Field(ge=0)
+    additions: int = Field(ge=0)
+    deletions: int = Field(ge=0)
+    #: The diff was too large and was cut, file by file (ADR 0129 §8).
+    truncated: bool = False
+    #: The shapes of secret found: the patch was withheld, and only the files are kept. Never a value.
+    withheld: list[str] = Field(default_factory=list)
+
+
+class ArtifactDisplay(Strict):
+    """How the console shows a revision (ADR 0129). Snapshotted on it, outside its digest."""
+
+    #: The type it is drawn as; a revision older than ADR 0129 can be drawn as more than it is stored.
+    type: str
+    show: Literal["facts", "tab", "hidden"] = "tab"
+    title: str | None = None
+    diff: ArtifactDiffStat | None = None
+
+
 class Artifact(Strict):
     """One revision of a named output of a work item (ADR 0049)."""
 
@@ -159,3 +190,5 @@ class Artifact(Strict):
     #: Where the bytes are in the object store; `null` for an inline artifact kept in the database.
     storage_url: str | None = None
     created_at: datetime | None = None
+    #: How the console shows it (ADR 0129); `null` when nothing is said beyond its type.
+    display: ArtifactDisplay | None = None
