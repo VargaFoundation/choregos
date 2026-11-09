@@ -339,3 +339,44 @@ async def test_commit_statuses_count_as_checks() -> None:
     assert (await scm(wire_with(["pending"])).get_pr(ref)).checks_conclusion() == "pending"
     assert (await scm(wire_with(["success", "error"])).get_pr(ref)).checks_conclusion() == "failure"
     assert (await scm(wire_with([])).get_pr(ref)).checks_conclusion() is None, "no CI at all is not green"
+
+
+async def test_a_repository_that_refuses_auto_merge_is_merged_directly() -> None:
+    """S59-12: iris (private, no branch protection) refused `enablePullRequestAutoMerge` and the merge
+    step failed five times after a green CI; the pull request is now merged directly."""
+    from choregos_core.domain import PrRef
+
+    wire = Wire(
+        {
+            ("GET", f"/repos/{REPO}/pulls/8"): (200, {"node_id": "PR_x"}),
+            ("POST", "/graphql"): (
+                200,
+                {
+                    "errors": [
+                        {"type": "UNPROCESSABLE", "message": "Auto merge is not allowed for this repository"}
+                    ]
+                },
+            ),
+            ("PUT", f"/repos/{REPO}/pulls/8/merge"): (200, {"merged": True}),
+        }
+    )
+    await scm(wire).enqueue_merge(PrRef(repo=REPO, number=8))
+    assert ("PUT", f"/repos/{REPO}/pulls/8/merge") in wire.sent()
+    assert wire.body(-1) == {"merge_method": "squash"}
+
+
+async def test_another_graphql_refusal_is_not_merged_around() -> None:
+    from choregos_core.domain import PrRef
+
+    wire = Wire(
+        {
+            ("GET", f"/repos/{REPO}/pulls/8"): (200, {"node_id": "PR_x"}),
+            ("POST", "/graphql"): (
+                200,
+                {"errors": [{"type": "FORBIDDEN", "message": "Resource not accessible"}]},
+            ),
+        }
+    )
+    with pytest.raises(UpstreamError):
+        await scm(wire).enqueue_merge(PrRef(repo=REPO, number=8))
+    assert ("PUT", f"/repos/{REPO}/pulls/8/merge") not in wire.sent()
