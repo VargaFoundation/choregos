@@ -79,8 +79,15 @@ curl -s "$A2A/.well-known/agent-card.json" -H "Authorization: Bearer $TOKEN"
 The card's `skills` are the workflows this token may start. It needs the token because its content
 depends on who asks. An empty list means no workflow of a project you can read has opted in.
 
-The card names the skills, not their fields: **tell whoever writes the client what `metadata.inputs`
-requires**.
+A skill that takes `application/json` also says which fields it wants, as the JSON Schema of its
+`metadata.inputs`. A2A has no place for that on a skill, so it is in an optional extension of the card:
+
+```bash
+curl -s "$A2A/.well-known/agent-card.json" -H "Authorization: Bearer $TOKEN" | jq '.capabilities.extensions[]
+  | select(.uri == "https://choregos.dev/a2a/extensions/skill-fields/v1") | .params.skills'
+```
+
+A client that ignores the extension still reads the card.
 
 ### 4. Start the workflow
 
@@ -210,7 +217,7 @@ curl -s "$A2A" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/j
 | HTTP `404` | no such organisation, or none this token can see | check the organisation slug in the URL |
 | HTTP `429` | more than 120 calls a minute on this token | wait for `Retry-After` |
 | `-32602` `name the skill…`, `unknown skill` | several skills, or one this token cannot see | read the card, set `metadata.skill` |
-| `-32602` `fields refused by workflow …` | `metadata.inputs` refuses them; the message does not say which | compare what you sent with `metadata.inputs` |
+| `-32602` `fields refused by workflow …` | `metadata.inputs` refuses them; `error.data.errors` says which and why | send what the card's schema asks for |
 | `-32601` `unknown method` | a method name from A2A 1.0, such as `SendMessage` | use the 0.3.0 names of this page |
 | `-32005` | the skill does not list this media type | add it to `input_modes` |
 | `-32004` | a reply to an existing task: a decision belongs in the console | follow `decision_url` |
@@ -252,8 +259,6 @@ in [Usage](usage.md#work-items-opened-by-another-system-http-triggers) and
 
 - **A2A 0.3.0 only, inbound.** A client built only for 1.0, whose method names and part format differ,
   gets `-32601`. Outbound calls to remote agents already handle both.
-- **The card does not describe the fields, and a refusal does not name them.** A caller learns them from
-  whoever wrote the workflow.
 - **No account for a machine.** An `a2a` or `*` token acts as the person who created it, and stops when
   that person leaves. Only a trigger has no person behind it, and it follows nothing.
 - **No CLI verb for the A2A door.** `choregos items create` goes through REST, and takes no file.

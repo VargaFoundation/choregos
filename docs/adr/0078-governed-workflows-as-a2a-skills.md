@@ -63,6 +63,12 @@ already has that lifecycle, durably, in Temporal.
    - a file part sent by `uri` is refused: fetching a URL the caller chose would be a request the
      platform makes on a stranger's behalf, and the A2A door makes none.
 
+   **Amended 2026-11-09 (S40-23l, finding #1516).** A caller could not know which fields a skill takes:
+   A2A 0.3.0's `AgentSkill` has no input schema, and a refusal named no field. The card now carries, for
+   each skill that takes `application/json`, the JSON Schema of the workflow's `metadata.inputs` in an
+   extension (`capabilities.extensions`, `required: false`, so a client that ignores it reads the card as
+   before); a field refusal keeps its `errors` in the JSON-RPC `data`.
+
 ## Alternatives rejected
 
 - **Each registry agent as an A2A agent.** It would let a caller drive an agent outside any workflow,
