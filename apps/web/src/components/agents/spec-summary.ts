@@ -12,7 +12,35 @@ import { declaresWorkspace, effectiveWorkspace } from "@/lib/workspace";
 
 export type SectionId = "model" | "limits" | "skills" | "tools" | "network" | "knowledge" | "memory" | "evals" | "workspace";
 
+/** Where an agent leaves a component to its project, in the words the console uses everywhere (ADR 0127). */
+export const INHERITED = "Inherited from the project";
+
+export type ToolSourceId = "catalogue" | "extensions" | "web";
+
+/**
+ * The three tool sources a version may close (ADR 0127). `null` means the field is ABSENT: the source is
+ * left to the project. A list, even an empty one, closes it: the run gets what the version names.
+ */
+export function toolSources(spec: Pick<AgentSpec, "tools">): Array<{ id: ToolSourceId; label: string; named: string[] | null }> {
+  return [
+    { id: "catalogue", label: "Catalogue", named: spec.tools?.catalogue ?? null },
+    { id: "extensions", label: "Extensions", named: spec.tools?.extensions ?? null },
+    { id: "web", label: "Web", named: spec.tools?.web ?? null },
+  ];
+}
+
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+function toolsSummary(spec: AgentSpec, servers: number): string {
+  const named = toolSources(spec)
+    .filter((source) => source.named !== null)
+    .map((source) => `${source.id} ${source.named!.length === 0 ? "none" : source.named!.length}`);
+  const parts = [servers ? plural(servers, "MCP server", "MCP servers") : null, ...named].filter((part): part is string => part !== null);
+  return parts.length ? parts.join(" · ") : INHERITED.toLowerCase();
+}
+
+/** A version that says neither `memories` nor the legacy `memory` leaves the memories to its project. */
+export const inheritsMemory = (spec: Pick<AgentSpec, "memories" | "memory">): boolean => spec.memories == null && spec.memory == null;
 
 /** One line per folded section: what it holds now, so a closed section still tells. */
 export function sectionSummaries(spec: AgentSpec): Record<SectionId, string> {
@@ -28,13 +56,13 @@ export function sectionSummaries(spec: AgentSpec): Record<SectionId, string> {
   const bases = (spec.knowledge ?? []).length;
   const cases = (spec.evals ?? []).length;
   return {
-    model: `${spec.model || "the project's profile"} · ${spec.backend || "the project's backend"}`,
+    model: `${spec.model || INHERITED.toLowerCase()} · ${spec.backend || "the project's backend"}`,
     limits: limits.length ? limits.join(" · ") : "the role's defaults",
     skills: skills ? `${skills} attached` : "none",
-    tools: servers ? plural(servers, "MCP server", "MCP servers") : "none",
+    tools: toolsSummary(spec, servers),
     network: networkSummary(spec.network),
     knowledge: bases ? plural(bases, "knowledge base", "knowledge bases") : "none",
-    memory: summaryOf(effectiveBindings(spec)),
+    memory: inheritsMemory(spec) ? INHERITED.toLowerCase() : summaryOf(effectiveBindings(spec)),
     evals: plural(cases, "case", "cases"),
     workspace: `${effectiveWorkspace(spec)}${declaresWorkspace(spec) ? "" : " (default)"}`,
   };
@@ -47,7 +75,7 @@ export function openByDefault(spec: AgentSpec): Record<SectionId, boolean> {
     model: Boolean(spec.model || spec.backend),
     limits: spent.some((v) => v != null),
     skills: (spec.skills ?? []).length > 0,
-    tools: (spec.mcp_servers ?? []).length > 0,
+    tools: (spec.mcp_servers ?? []).length > 0 || toolSources(spec).some((source) => source.named !== null),
     network: !isDefaultNetwork(spec.network),
     knowledge: (spec.knowledge ?? []).length > 0,
     memory: !isLegacyDefault(effectiveBindings(spec)),
