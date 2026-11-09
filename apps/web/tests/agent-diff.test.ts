@@ -146,3 +146,21 @@ describe("lineDiff and parseCompare", () => {
     expect(parseCompare(null)).toBeNull();
   });
 });
+
+describe("tool sources (S60-03, ADR 0127)", () => {
+  it("sees no change between an absent source and a null one, nor in the order of a list", () => {
+    expect(diffSpecs({ tools: { catalogue: null } }, {})).toEqual([]);
+    expect(diffSpecs({ tools: { catalogue: ["b", "a"] } }, { tools: { catalogue: ["a", "b"] } })).toEqual([]);
+  });
+
+  it("says inherit, closed and named, so closing a source is a change", () => {
+    const changes = diffSpecs({}, { tools: { catalogue: ["read_file"], extensions: [], web: ["fetch"] } });
+    expect(changes.map((c) => [c.field, c.before, c.after])).toEqual([
+      ["tools.catalogue", "inherited from the project", "read_file"],
+      ["tools.extensions", "inherited from the project", "none (closed)"],
+      ["tools.web", "inherited from the project", "fetch"],
+    ]);
+    expect(changes.every((c) => c.group === "capabilities")).toBe(true);
+    expect(diffSpecs({ tools: { web: ["fetch"] } }, {})[0]).toMatchObject({ field: "tools.web", before: "fetch", after: "inherited from the project" });
+  });
+});
