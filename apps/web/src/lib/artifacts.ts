@@ -24,6 +24,24 @@ export function groupArtifacts(artifacts: Artifact[]): ArtifactGroup[] {
     );
 }
 
+/** A ticket's columns, always shown (ADR 0129 §6): their artifacts are history, not a second fact. */
+const COLUMNS = new Set(["size", "risk"]);
+
+/** What a workflow puts in *About this ticket*, in the order the steps produced it (ADR 0129 §5). */
+export function factsOf(groups: ArtifactGroup[]): ArtifactGroup[] {
+  return groups.filter(({ name, latest }) => {
+    if (latest.display?.show !== "facts" || COLUMNS.has(name)) return false;
+    return latest.display.type === "diff" ? Boolean(latest.display.diff) : latest.value !== null && latest.value !== undefined;
+  });
+}
+
+/** What an output is called on screen: what the workflow titled it, or its name in words. */
+export function titleOf({ name, latest }: ArtifactGroup): string {
+  if (latest.display?.title) return latest.display.title;
+  const words = name.replace(/[_.-]+/g, " ").trim();
+  return `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
+}
+
 /** Below this, an inline value is a word or a flag, not a document somebody opens first. */
 const WORD_BYTES = 64;
 

@@ -927,6 +927,7 @@ that follows from it. Rule since that day: nothing is ✅ without a test that fa
 | S61-07 | S61 | ✅ | — | A workflow's `artifacts:` block says only what the platform can honour, refused when written ([ADR 0129](../adr/0129-an-artifact-says-how-it-is-shown.md) §4, §5, §7): a name no step produces, a document format, a `level` without a scale, a report in the facts card, more than eight facts, a contradiction with `output_types`, an output named `diff`. Proves: `packages/core/tests/test_artifact_declarations.py`. Does not prove: the block changes nothing yet (S61-08). |
 | S61-08 | S61 | ✅ | — | Typed outputs are recorded as what they are ([ADR 0129](../adr/0129-an-artifact-says-how-it-is-shown.md) §6, §9 to §11): the activity that prepares a stage reads the pinned workflow's `artifacts:` block, the API converts (`"87%"`, a level's case), snapshots the display on the revision, and keeps a value it cannot convert under its plain type. The list carries a level or a metric once its digest is checked; a revision older than the ADR is read by its name, its row untouched. Proves: `apps/api/tests/test_typed_artifacts.py`. Does not prove: the runner's repair (S61-09). |
 | S61-09 | S61 | ✅ | — | A typed output's rules reach the agent ([ADR 0129](../adr/0129-an-artifact-says-how-it-is-shown.md) §10): `.choregos/task.md` names the values each typed output may take, and the runner sends a value off its scale, out of its bounds or of the wrong shape back to the agent, like a missing output. The fakes answer a value the type accepts. Proves: `packages/runner/tests/test_typed_outputs.py`, `packages/adapters/tests/test_fake_typed_outputs.py`. Does not prove: a real model's repair. |
+| S61-10 | S61 | ✅ | — | *About this ticket* shows what the workflow's `artifacts:` block puts there ([ADR 0129](../adr/0129-an-artifact-says-how-it-is-shown.md) §5): a level as its badge, a metric with its unit and the mark *Declared* when an agent reported it, a diff as `+12 −0 · 1 file`, which opens its tab. A value whose digest no longer matches is left out. Proves: `apps/web/tests/artifact-facts.test.tsx`. Does not prove: a rendering on a real ticket. |
 
 
 
@@ -936,7 +937,7 @@ that follows from it. Rule since that day: nothing is ✅ without a test that fa
 
 
 
-**Total**: 604 delivered, 294 partial, 8 not started.
+**Total**: 605 delivered, 294 partial, 8 not started.
 
 
 **2026-10-05 — ADR 0029: Choregos becomes a platform of governed agents, for general use; 0028 is

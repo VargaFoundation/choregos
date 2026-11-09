@@ -25,14 +25,17 @@ export function Artifacts({
   slug,
   artifacts,
   handOffs,
+  opened = null,
 }: {
   itemId: string;
   slug: string;
   artifacts: Artifact[];
   handOffs: HandOff[];
+  /** The tab to open first, when a fact of the ticket asked for it. */
+  opened?: string | null;
 }) {
   const groups = useMemo(() => groupArtifacts(artifacts), [artifacts]);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(opened);
   const current = groups.find((g) => g.name === selected) ?? firstToOpen(groups);
   if (!current) return <Empty>no artifact yet: the steps have not produced any output.</Empty>;
   return (
