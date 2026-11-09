@@ -100,6 +100,8 @@ import type {
   ApiToken,
   ApiTokenCreate,
   ApiTokenCreated,
+  BrowserSession,
+  EndedSessions,
   Artifact,
   ArtifactRef,
   AdminSection,
@@ -685,6 +687,9 @@ export const api = {
   createToken: (body: ApiTokenCreate) =>
     request<ApiTokenCreated>("/me/tokens", { method: "POST", body: JSON.stringify(body) }),
   revokeToken: (id: string) => request<void>(`/me/tokens/${id}`, { method: "DELETE" }),
+  mySessions: () => request<BrowserSession[]>("/me/sessions"),
+  endSession: (id: string) => request<void>(`/me/sessions/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  endOtherSessions: () => request<EndedSessions>("/me/sessions/end-others", { method: "POST" }),
   templates: () => request<TemplateSummary[]>("/templates"),
   connectorTypes: () => request<ConnectorType[]>("/connectors/types"),
   platformModels: () => request<GatewayModel[]>("/platform/models"),

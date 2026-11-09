@@ -3644,6 +3644,26 @@ export type ApiToken = {
   last_client?: string | null;
 };
 
+export type BrowserSession = {
+  id: string;
+  /** How the session was opened: `oidc`, `saml`, `dev`... */
+  channel: string;
+  created_at: string;
+  expires_at: string;
+  last_seen_at?: string | null;
+  /** The `User-Agent` of its last request, truncated. */
+  user_agent?: string | null;
+  /** The client address of its last request (an IPv6 client as its /64). */
+  ip?: string | null;
+  /** The session this request came with. */
+  current: boolean;
+};
+
+export type EndedSessions = {
+  /** How many recorded sessions were ended. */
+  ended: number;
+};
+
 export type ApiTokenCreated = ApiToken & {
   /** The plaintext token, returned only once. */
   token: string;
@@ -4623,6 +4643,8 @@ export interface Operations {
   };
 } };
   enableOrgConnector: { method: "PUT"; path: "/projects/{id}/org-connectors/{connector}/enablement"; body: never; response: ProjectOrgConnector };
+  endMyOtherSessions: { method: "POST"; path: "/me/sessions/end-others"; body: never; response: EndedSessions };
+  endMySession: { method: "DELETE"; path: "/me/sessions/{id}"; body: never; response: void };
   estimateKnowledgeDistillation: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/distill/estimate"; body: never; response: KnowledgeDistillEstimate };
   exportOrgCostsCsv: { method: "GET"; path: "/orgs/{org}/costs.csv"; body: never; response: void };
   exportProjectCostsCsv: { method: "GET"; path: "/projects/{id}/costs.csv"; body: never; response: void };
@@ -4823,6 +4845,7 @@ export interface Operations {
   listMcpCatalogue: { method: "GET"; path: "/orgs/{org}/mcp-catalogue"; body: never; response: McpCatalogue };
   listMembers: { method: "GET"; path: "/orgs/{org}/members"; body: never; response: Array<Membership> };
   listMemories: { method: "GET"; path: "/orgs/{org}/memories"; body: never; response: Array<MemoryStore> };
+  listMySessions: { method: "GET"; path: "/me/sessions"; body: never; response: Array<BrowserSession> };
   listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: Array<ApiToken> };
   listOrgActions: { method: "GET"; path: "/orgs/{org}/actions"; body: never; response: Array<Action> };
   listOrgAgentCredentials: { method: "GET"; path: "/orgs/{org}/agent-credentials"; body: never; response: Array<AgentCredential> };

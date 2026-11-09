@@ -62,6 +62,7 @@ describe("the account menu", () => {
     const panel = document.getElementById(accountButton().getAttribute("aria-controls")!)!;
     expect(within(panel).getByText("vdevillers@diametral.test")).toBeInTheDocument();
     expect(within(panel).getByRole("link", { name: "My account" })).toHaveAttribute("href", "/account");
+    expect(within(panel).getByRole("link", { name: "My sessions" })).toHaveAttribute("href", "/account#sessions");
     expect(within(panel).getByRole("link", { name: "My access tokens" })).toHaveAttribute("href", "/account#tokens");
     expect(within(panel).getByRole("radio", { name: "Light" })).toBeInTheDocument();
     fireEvent.click(within(panel).getByRole("button", { name: "Sign out" }));

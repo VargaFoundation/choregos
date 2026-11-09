@@ -24,7 +24,7 @@ import hashlib
 import json
 import secrets
 import time
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 from urllib.parse import quote, urlencode
 
@@ -35,6 +35,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import func, select
 
 from ..audit import record
+from ..browser_sessions import end_session, open_session
 from ..config import Settings, get_settings
 from ..db.models import ApiToken, Membership, Organization, User
 from ..db.org_aliases import current_slugs, organisation_by_slug_or_alias
@@ -759,13 +760,22 @@ async def callback(
             user = await _ensure_oidc_user(session, info, settings)
             await _map_groups_to_roles(session, user, list(info.get("groups", [])), settings)
 
-    response = await ouvrir_la_session(session, user, target, settings, canal="oidc", auth_time=auth_time)
+    response = await ouvrir_la_session(
+        session, user, target, settings, canal="oidc", auth_time=auth_time, request=request
+    )
     response.delete_cookie(OIDC_COOKIE)
     return response
 
 
 async def ouvrir_la_session(
-    session: Any, user: User, target: str, settings: Settings, *, canal: str, auth_time: int | None = None
+    session: Any,
+    user: User,
+    target: str,
+    settings: Settings,
+    *,
+    canal: str,
+    auth_time: int | None = None,
+    request: Request | None = None,
 ) -> RedirectResponse:
     """The end of ANY sign-in: audit trace, signed cookie with `iat`, bounded redirect.
 
@@ -781,7 +791,18 @@ async def ouvrir_la_session(
     # (`reauth=1`), and a server-side revocation ("any session older than …").
     issued_at = int(time.time())
     expires = issued_at + settings.session_max_age_s
-    session_claims: dict[str, Any] = {"sub": user.id, "iat": issued_at, "exp": expires}
+    # `sid`: the recorded session (ADR 0130), which its owner sees on My account and can end.
+    # `request`: the browser and address are recorded at once when the caller has them; otherwise
+    # with the session's first request.
+    recorded = await open_session(
+        session,
+        user,
+        channel=canal,
+        expires_at=datetime.fromtimestamp(expires, tz=UTC),
+        request=request,
+        settings=settings,
+    )
+    session_claims: dict[str, Any] = {"sub": user.id, "iat": issued_at, "exp": expires, "sid": recorded.id}
     # `auth_time`: when the user REALLY authenticated, if the IdP says so. A silent
     # SSO reconnection opens a new session (fresh `iat`) on an old authentication.
     if auth_time is not None:
@@ -837,7 +858,12 @@ async def terminer_la_connexion(  # noqa: PLR0913 - one sign-in, fact by fact, k
 
 
 @router.post("/auth/logout", status_code=status.HTTP_204_NO_CONTENT, operation_id="authLogout")
-async def logout(settings: Config, response: Response) -> Response:
+async def logout(request: Request, session: PlatformDb, settings: Config, response: Response) -> Response:
+    """Sign out: the cookie is cleared, and the session it named ends on the server too (ADR 0130),
+    so a copy of the cookie no longer opens anything."""
+    payload = read_session(request.cookies.get(settings.session_cookie, ""), settings)
+    if payload and isinstance(payload.get("sid"), str) and isinstance(payload.get("sub"), str):
+        await end_session(session, payload["sub"], payload["sid"])
     response.delete_cookie(settings.session_cookie)
     response.status_code = status.HTTP_204_NO_CONTENT
     return response

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Choregos API
-  version: 0.24.9
+  version: 0.24.10
   description: |
     The Choregos platform API. The console and the CLI use this API and nothing else.
     Auth: an OIDC session (cookie) or `Authorization: Bearer <api_token>`.
@@ -74,6 +74,33 @@ paths:
         "204": { description: Revoked }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /me/sessions:
+    get:
+      tags: [session]
+      operationId: listMySessions
+      summary: The caller's browser sessions that still hold, the most recently active first (ADR 0130)
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/BrowserSession" } } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /me/sessions/{id}:
+    delete:
+      tags: [session]
+      operationId: endMySession
+      summary: End one of the caller's sessions; its cookie is refused from its next request
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Ended }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /me/sessions/end-others:
+    post:
+      tags: [session]
+      operationId: endMyOtherSessions
+      summary: End every session of the caller but the one this request came with
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/EndedSessions" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
   /auth/login:
     get:
       tags: [session]
@@ -8033,6 +8060,23 @@ components:
         scopes: { type: array, items: { $ref: "#/components/schemas/TokenScope" } }
         project: { type: [string, "null"], description: "`org:slug` of the linked project, if there is one." }
         last_client: { type: [string, "null"], description: "The client of the last call (`User-Agent`, truncated)." }
+    BrowserSession:
+      type: object
+      required: [id, channel, created_at, expires_at, current]
+      properties:
+        id: { type: string }
+        channel: { type: string, description: "How the session was opened: `oidc`, `saml`, `dev`..." }
+        created_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        last_seen_at: { type: [string, "null"], format: date-time }
+        user_agent: { type: [string, "null"], description: "The `User-Agent` of its last request, truncated." }
+        ip: { type: [string, "null"], description: "The client address of its last request (an IPv6 client as its /64)." }
+        current: { type: boolean, description: "The session this request came with." }
+    EndedSessions:
+      type: object
+      required: [ended]
+      properties:
+        ended: { type: integer, description: "How many recorded sessions were ended." }
     ApiTokenCreated:
       allOf:
         - $ref: "#/components/schemas/ApiToken"

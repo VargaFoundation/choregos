@@ -4,5 +4,5 @@ description: >-
   Laya, a self-hosted decision model (ADR 0121), on CPU; only the embedded LiteLLM reaches it, and
   serves it as `platform/decide`.
 type: application
-version: 0.24.9
-appVersion: "0.24.9"
+version: 0.24.10
+appVersion: "0.24.10"

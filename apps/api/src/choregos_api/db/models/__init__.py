@@ -56,7 +56,7 @@ from .connectors import (
 )
 from .costs import BudgetAlert, CostLedger
 from .gateway import BackendRegistryRow, GatewayKeyRow, ModelCatalogueRow
-from .identity import ApiToken, Membership, Organization, OrgSlugAlias, TrackerIdentity, User
+from .identity import ApiToken, Membership, Organization, OrgSlugAlias, TrackerIdentity, User, UserSession
 from .knowledge import (
     KnowledgeBase,
     KnowledgeChunk,
@@ -228,6 +228,7 @@ __all__ = [
     "TriggerToken",
     "UniqueConstraint",
     "User",
+    "UserSession",
     "WebhookDelivery",
     "WorkItem",
     "WorkflowDef",
