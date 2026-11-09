@@ -20,7 +20,7 @@ import { skillHref } from "@/lib/skill-slug";
 import { AgentDetailsCard } from "./details";
 import { RestoreDialog } from "./history";
 import { RuntimeRow } from "./runtime-row";
-import { sectionSummaries } from "./spec-summary";
+import { INHERITED, inheritsMemory, sectionSummaries, toolSources } from "./spec-summary";
 
 /**
  * One version of an agent, read-only and grouped (S40-12, ADR 0076). People read an agent far more often
@@ -32,7 +32,7 @@ import { sectionSummaries } from "./spec-summary";
 /** Lines of instructions shown before "Show all". */
 export const INSTRUCTION_LINES = 12;
 
-const KNOWN_FIELDS = new Set(["instructions", "model", "backend", "runtime", "limits", "budget", "skills", "mcp_servers", "knowledge", "memory", "memories", "evals", "network", "workspace"]);
+const KNOWN_FIELDS = new Set(["instructions", "model", "backend", "runtime", "limits", "budget", "skills", "mcp_servers", "knowledge", "memory", "memories", "evals", "network", "workspace", "tools"]);
 
 const here = (slug: string, query: string) => `/agents/${slug}?${query}`;
 
@@ -63,6 +63,12 @@ function CodeRuntimeRow({ runtime }: { runtime: { image: string; command?: strin
 /** The memories a run of this version binds, in precedence order, and where it writes (S40-11, ADR 0075). */
 function MemoryList({ spec }: { spec: AgentSpec }) {
   const bindings = effectiveBindings(spec);
+  if (inheritsMemory(spec))
+    return (
+      <span data-testid="memory-bindings">
+        {INHERITED}
+      </span>
+    );
   if (bindings.length === 0) return <span data-testid="memory-bindings">None: it reads and writes nothing</span>;
   return (
     <div data-testid="memory-bindings">
@@ -305,12 +311,12 @@ export function DefinitionView({ org, agent, version }: { org: string; agent: Ag
           <InstructionsText text={spec.instructions ?? ""} />
         </Disclosure>
 
-        <Disclosure title="Model and runtime" summary={summaries.model}>
+        <Disclosure title="Model and runtime" summary={`${summaries.model} · workspace ${summaries.workspace}`}>
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
             <Row label="Model">
               {spec.model ?? (
                 <ProjectSetting agent={agent} section="agents-models" organisation={{ href: "/admin/models", label: "Organisation tiers" }}>
-                  The project&apos;s profile
+                  {INHERITED}
                 </ProjectSetting>
               )}
             </Row>
@@ -331,20 +337,40 @@ export function DefinitionView({ org, agent, version }: { org: string; agent: Ag
                 )}
               </Row>
             )}
-          </dl>
-        </Disclosure>
-
-        <Disclosure
-          title="Capabilities"
-          summary={`workspace ${summaries.workspace} · skills ${summaries.skills} · tools ${summaries.tools} · knowledge ${summaries.knowledge} · memory ${summaries.memory}`}
-        >
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
-            <Row label="Workspace">
+                      <Row label="Workspace">
               <span data-testid="agent-workspace-line">{workspaceLine(spec)}</span>
               <span className="block text-xs text-ink-muted" data-testid="agent-repository-source">
                 The repository comes from the project that runs the agent, never from the agent.
               </span>
             </Row>
+          </dl>
+        </Disclosure>
+
+        <Disclosure title="Tools" summary={summaries.tools}>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5" data-testid="tool-sources">
+            {toolSources(spec).map((source) => (
+              <Row key={source.id} label={source.label}>
+                <span data-testid={`tool-source-${source.id}`}>
+                  {source.named === null ? (
+                    <ProjectSetting agent={agent} section="tools">
+                      {INHERITED}
+                    </ProjectSetting>
+                  ) : source.named.length === 0 ? (
+                    "None: closed, the run gets nothing from it"
+                  ) : (
+                    <span className="font-mono">{source.named.join(", ")}</span>
+                  )}
+                </span>
+              </Row>
+            ))}
+            <Row label="MCP servers">
+              <AgentMcpServers servers={spec.mcp_servers ?? []} agent={agent} />
+            </Row>
+          </dl>
+        </Disclosure>
+
+        <Disclosure title="Knowledge and skills" summary={`skills ${summaries.skills} · knowledge ${summaries.knowledge}`}>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
             <Row label="Skills">
               {(spec.skills ?? []).length === 0
                 ? "None"
@@ -355,12 +381,14 @@ export function DefinitionView({ org, agent, version }: { org: string; agent: Ag
                     </Link>
                   ))}
             </Row>
-            <Row label="Tools">
-              <AgentMcpServers servers={spec.mcp_servers ?? []} agent={agent} />
-            </Row>
             <Row label="Knowledge">
               {(spec.knowledge ?? []).length === 0 ? "None" : (spec.knowledge ?? []).map((k) => k.slug).join(", ")}
             </Row>
+          </dl>
+        </Disclosure>
+
+        <Disclosure title="Memory" summary={summaries.memory}>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5">
             <Row label="Memory">
               <MemoryList spec={spec} />
             </Row>

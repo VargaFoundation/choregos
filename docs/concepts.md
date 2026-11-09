@@ -89,6 +89,18 @@ own — it tells you when the source moved on. An agent also carries **tags**, l
 they are metadata outside its versions, so editing them publishes nothing. A version carries a
 **message**, and going back to an older one **appends** a copy of it (ADR 0076): nothing is rewritten.
 
+## What an agent reaches
+
+An agent version is a **closed set** ([ADR 0127](adr/0127-an-agent-is-a-closed-set.md)). A list the
+version names (`tools.catalogue`, `tools.extensions`, `tools.web`) closes its source: the run is offered
+what the version names **and** what its project and the deployment allow, `group:<name>` standing for the
+tools of a group. A list the version leaves out keeps the project's behaviour, so a version published
+before the ADR runs as it did. The project only tightens; it never widens a version. A tool named but not
+allowed is not offered, and calling it answers 404 like an unknown tool. The platform's own tools (the
+frame) are always there. `GET /orgs/{org}/agents/{slug}/access?project=` shows the result with an origin
+for each item (`agent`, `project`, `frame`, `refused` and why), and which parts the version still
+inherits. The run and that page read the same function.
+
 ## Agent kinds and runtimes
 
 An agent of the registry has a **kind**: `internal` (the platform runs it), `external` (a client of the
