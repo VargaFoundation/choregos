@@ -55,6 +55,8 @@ def artifact_flow(wf: Workflow) -> list[dict[str, Any]]:
             first_producer.setdefault(name, index)
             if name in t.output_types:
                 types.setdefault(name, t.output_types[name])
+            elif wf.artifacts and name in wf.artifacts and wf.artifacts[name].type:
+                types.setdefault(name, str(wf.artifacts[name].type))
         for name in t.inputs:
             keys = read.setdefault(name, [])
             if t.key not in keys:

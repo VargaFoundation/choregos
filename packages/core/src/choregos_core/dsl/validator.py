@@ -13,12 +13,19 @@ from typing import Any
 from choregos_contracts import (
     ARTIFACT_NAME_PATTERN,
     ARTIFACT_TYPES,
+    CHECKED_TYPES,
+    FACT_TYPES,
+    MAX_FACTS,
+    RESERVED_ARTIFACT_NAMES,
     RUN_ACTORS,
+    VALUE_TYPES,
     AgentActor,
+    ArtifactSpec,
     DecisionActor,
     HumanActor,
     SystemActor,
     Workflow,
+    resolve_display,
 )
 from choregos_contracts.workflow import (
     AGENT_WILDCARD,
@@ -91,6 +98,7 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_spawns(wf, report, source)
     _check_effects(wf, report, source)
     _check_output_types(wf, report, source)
+    _check_artifact_declarations(wf, report, source)
     _check_unenforced_review(wf, report, source)
     _check_warnings(wf, report, source)
     return report
@@ -136,6 +144,130 @@ def _check_output_types(wf: Workflow, report: ValidationReport, source: Any) -> 
                     location,
                     source,
                 )
+
+
+#: Outputs a stage's result already types with its own words (`StageOutputs`): another scale could never
+#: be answered, and the step would fail however the agent replied.
+FIXED_SCALES = frozenset({"size", "risk", "verdict"})
+
+
+def _check_a_declaration(name: str, spec: ArtifactSpec, report: ValidationReport, source: Any) -> None:
+    """One entry of `artifacts:` says something the platform can honour (ADR 0129)."""
+    location: list[str | int] = ["artifacts", name]
+    resolved = resolve_display(name, spec)
+    type_ = resolved.type if resolved is not None else None
+    if name in RESERVED_ARTIFACT_NAMES and spec.type not in (None, name):
+        report.error(
+            "artifacts.reserved",
+            f"`{name}` is measured by the platform: a workflow says how it is shown, not what it is",
+            [*location, "type"],
+            source,
+        )
+    elif spec.type is not None and spec.type not in CHECKED_TYPES and name not in RESERVED_ARTIFACT_NAMES:
+        report.error(
+            "artifacts.format",
+            f"`{name}` declares the type `{spec.type}`: `artifacts:` says what a value is "
+            f"({', '.join(sorted(CHECKED_TYPES))}); a document's format stays in `output_types`",
+            [*location, "type"],
+            source,
+        )
+    if name in FIXED_SCALES and (spec.levels is not None or spec.scale not in (None, name)):
+        report.error(
+            "artifacts.scale",
+            f"`{name}` is a field of a stage's result, with its own words: its scale cannot be replaced",
+            location,
+            source,
+        )
+    if spec.scale is not None and spec.levels is not None:
+        report.error(
+            "artifacts.scale",
+            f"`{name}` names a scale and writes `levels`: one or the other",
+            location,
+            source,
+        )
+    if type_ == "level" and (resolved is None or not resolved.levels):
+        report.error(
+            "artifacts.scale", f"`{name}` is a `level`: it needs a `scale` or `levels`", location, source
+        )
+    if (spec.scale is not None or spec.levels is not None) and type_ != "level":
+        report.error("artifacts.scale", f"`{name}` has a scale, but it is not a `level`", location, source)
+    if spec.levels is not None and len({level.value for level in spec.levels}) != len(spec.levels):
+        report.error(
+            "artifacts.scale", f"`{name}` repeats a value in `levels`", [*location, "levels"], source
+        )
+    measures = (
+        spec.unit is not None or spec.min is not None or spec.max is not None or spec.better is not None
+    )
+    if measures and type_ != "metric":
+        report.error(
+            "artifacts.metric",
+            f"`{name}` has a unit, bounds or a direction, but it is not a `metric`",
+            location,
+            source,
+        )
+    if spec.min is not None and spec.max is not None and spec.min >= spec.max:
+        report.error("artifacts.metric", f"`{name}`: `min` must be below `max`", location, source)
+    if spec.show == "facts" and type_ not in FACT_TYPES:
+        report.error(
+            "artifacts.facts",
+            f"`{name}` cannot be shown in the ticket's facts: only what fits on one line can "
+            f"({', '.join(sorted(FACT_TYPES))})",
+            [*location, "show"],
+            source,
+        )
+
+
+def _check_artifact_declarations(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """`artifacts:` names what the workflow produces, says what it can honour, and leaves the reserved
+    names to the platform (ADR 0129 §4, §5, §7)."""
+    produced = {name for t in wf.transitions for name in t.outputs} | {
+        name
+        for t in wf.transitions
+        if isinstance(actor := wf.actor_of(t), DecisionActor)
+        for name in actor.outputs
+    }
+    for index, t in enumerate(wf.transitions):
+        for name in sorted(RESERVED_ARTIFACT_NAMES & set(t.outputs)):
+            report.error(
+                "outputs.reserved",
+                f"`{name}` is measured by the platform: no step may declare it as an output",
+                ["transitions", index, "outputs"],
+                source,
+            )
+        for name, type_ in t.output_types.items():
+            if type_ in VALUE_TYPES:
+                report.error(
+                    "output_types.value",
+                    f"`{name}` is a `{type_}`: declare it in `artifacts:`, which holds its scale or its unit",
+                    ["transitions", index, "output_types", name],
+                    source,
+                )
+    declared = wf.artifacts or {}
+    for name, spec in declared.items():
+        if name not in produced and name not in RESERVED_ARTIFACT_NAMES:
+            report.error(
+                "artifacts.undeclared",
+                f"`artifacts:` describes `{name}`, which no step of this workflow produces",
+                ["artifacts", name],
+                source,
+            )
+        for index, t in enumerate(wf.transitions):
+            if name in t.output_types and spec.type is not None and spec.type != t.output_types[name]:
+                report.error(
+                    "artifacts.conflict",
+                    f"`{name}` is `{spec.type}` in `artifacts:`, `{t.output_types[name]}` in `output_types`",
+                    ["transitions", index, "output_types", name],
+                    source,
+                )
+        _check_a_declaration(name, spec, report, source)
+    facts = [name for name, spec in declared.items() if spec.show == "facts"]
+    if len(facts) > MAX_FACTS:
+        report.error(
+            "artifacts.facts",
+            f"{len(facts)} names in the facts card: at most {MAX_FACTS}, or it stops being read",
+            ["artifacts"],
+            source,
+        )
 
 
 def _check_inputs(wf: Workflow, report: ValidationReport, source: Any) -> None:

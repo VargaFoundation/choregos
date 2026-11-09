@@ -924,6 +924,7 @@ that follows from it. Rule since that day: nothing is ✅ without a test that fa
 | S61-04 | S61 | ✅ | — | The platform records a branch's diff ([ADR 0129](../adr/0129-an-artifact-says-how-it-is-shown.md) §7, §8): `collect_run_artifacts` keeps the SCM's patches as the artifact `diff` of the step that left them, a new revision only when the branch changed; a secret shape keeps the file list only; a value an agent writes under that name is not recorded; a failure to record never costs the step. New column `artifacts.display`, new setting `CHOREGOS_ARTIFACT_DIFF_MAX_BYTES`. Proves: `apps/orchestrator/tests/test_diff_artifact.py`. Does not prove: the comparison of a real GitHub or GitLab branch (S61-15); a migration on PostgreSQL was not run here. |
 | S61-05 | S61 | ✅ | — | A branch's diff is read in the console ([ADR 0129](../adr/0129-an-artifact-says-how-it-is-shown.md)): a `diff` artifact opens file by file, with line numbers, additions and deletions tinted, renames, what was cut or withheld said in words, every line drawn as a text node. The run page shows the patch that run left, files out of scope marked; a run that changed nothing keeps its counters. Proves: `apps/web/tests/diff-view.test.tsx` (parsing, no markup from a patch, scope, withheld, cut, the line bound). Does not prove: the rendering on a real ticket. |
 | S61-06 | S61 | ✅ | — | contract-change ([ADR 0129](../adr/0129-an-artifact-says-how-it-is-shown.md) §1 to §5, §9 to §11): the types `level`, `metric`, `keyvalue` (kind `value` for the first two), the shipped scales `risk`, `size`, `verdict` as data with a closed list of tones, the workflow's top-level `artifacts:` block, `TransitionRef.artifact_displays`, `Artifact.value`, and `coerce_value` / `resolve_display`, which the runner and the API share. Proves: `packages/contracts/tests/test_artifact_display.py`. Does not prove: nothing reads the declaration yet (S61-07, S61-08). `StageInput` changed: the job images must be released before the chart. |
+| S61-07 | S61 | ✅ | — | A workflow's `artifacts:` block says only what the platform can honour, refused when written ([ADR 0129](../adr/0129-an-artifact-says-how-it-is-shown.md) §4, §5, §7): a name no step produces, a document format, a `level` without a scale, a report in the facts card, more than eight facts, a contradiction with `output_types`, an output named `diff`. Proves: `packages/core/tests/test_artifact_declarations.py`. Does not prove: the block changes nothing yet (S61-08). |
 
 
 
@@ -933,7 +934,7 @@ that follows from it. Rule since that day: nothing is ✅ without a test that fa
 
 
 
-**Total**: 601 delivered, 294 partial, 8 not started.
+**Total**: 602 delivered, 294 partial, 8 not started.
 
 
 **2026-10-05 — ADR 0029: Choregos becomes a platform of governed agents, for general use; 0028 is
