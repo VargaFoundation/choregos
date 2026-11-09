@@ -105,3 +105,18 @@ def test_the_scale_of_a_result_field_cannot_be_replaced(name: str) -> None:
     artifacts = f"  {name}: {{ levels: [{{ value: minor }}, {{ value: major }}] }}"
     assert "artifacts.scale" in _codes(artifacts, outputs=f"[{name}]")
     assert _codes(f"  {name}: {{ scale: {name} }}", outputs=f"[{name}]") == []
+
+
+def test_every_shipped_workflow_that_writes_code_shows_its_changes() -> None:
+    from choregos_core.dsl import TEMPLATE_NAMES, template_yaml
+
+    writing = 0
+    for name in TEMPLATE_NAMES:
+        workflow, report = parse_workflow(template_yaml(name), strict=False)
+        assert report.valid, (name, report.errors)
+        gates = {gate for t in workflow.transitions for gate in t.gate_names()}
+        if gates & {"scope_respected", "diff_size_max", "no_secrets"}:
+            writing += 1
+            assert workflow.artifacts is not None, name
+            assert workflow.artifacts["diff"].show == "facts", name
+    assert writing > 5, "the guard found nothing to check"
