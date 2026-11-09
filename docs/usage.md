@@ -1429,6 +1429,16 @@ gates:
 Agents also get `validate_result`, which checks their `.choregos/result.json` against the
 contract *before* they finish — the same validator the runner applies afterwards.
 
+### What a run is offered
+
+When an agent version names `tools.catalogue`, `tools.extensions` or `tools.web`, the run is offered
+only what it names and what the project and the deployment allow (`group:rh` stands for the catalogue
+tools of the group `rh`). A tool that is named but not open to the project is not offered, and
+calling it answers 404, as an unknown tool does. A version that leaves a list out keeps today's
+behaviour for that source. To see what a version reaches in a project, with the origin of each item and
+the reason of each refusal: `GET /api/v1/orgs/{org}/agents/{slug}/access?project={project}` (add
+`&version=` for a version other than the one the project is served).
+
 ## 3 ter. Register your agents
 
 An agent is an object of the organisation ([ADR 0033](adr/0033-agent-registry-and-skill-library.md)):
