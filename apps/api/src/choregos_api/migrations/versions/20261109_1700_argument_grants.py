@@ -6,8 +6,8 @@ satisfy, the organisation's rule. `project_operation_policies.arguments`: what a
 Both null on every existing row: no call is constrained that was not. The downgrade drops both.
 
 Revision ID: a6c8e0f2b4d7
-Revises: c1a3e5b7d9f2
-Create Date: 2026-11-09 10:00:00+00:00
+Revises: d2f4a6c8e0b1
+Create Date: 2026-11-09 17:00:00+00:00
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ from alembic import op
 from choregos_api.db.base import Json
 
 revision: str = "a6c8e0f2b4d7"
-down_revision: str | None = "c1a3e5b7d9f2"
+down_revision: str | None = "d2f4a6c8e0b1"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
