@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 import { courte } from "@/components/passages";
 import { DiffView } from "@/components/diff-view";
 import { MarkdownView } from "@/components/markdown-view";
+import { CsvTable, JsonTree, KeyValueViewer, ValueViewer } from "@/components/typed-viewers";
 import { Badge, Empty, ErrorNote, Select } from "@/components/ui";
 import { api } from "@/lib/api";
 import { type ArtifactGroup, filenameOf, firstToOpen, groupArtifacts, humanSize, readersOf, viewerOf } from "@/lib/artifacts";
@@ -226,6 +227,7 @@ function Viewer({ artifact, blob, url }: { artifact: Artifact; blob: Blob; url: 
     );
   }
   if (kind === "diff") return <Diff artifact={artifact} blob={blob} />;
+  if (kind === "value") return <ValueViewer artifact={artifact} />;
   return <TextViewer kind={kind} blob={blob} />;
 }
 
@@ -235,22 +237,17 @@ function Diff({ artifact, blob }: { artifact: Artifact; blob: Blob }) {
   return <DiffView text={text} stat={artifact.display?.diff} />;
 }
 
-function TextViewer({ kind, blob }: { kind: "markdown" | "sarif" | "json" | "text"; blob: Blob }) {
+function TextViewer({ kind, blob }: { kind: "markdown" | "sarif" | "json" | "text" | "csv" | "keyvalue"; blob: Blob }) {
   const text = useText(blob);
   if (text === null) return <Empty>reading…</Empty>;
   if (kind === "markdown") return <MarkdownView text={text} />;
   if (kind === "sarif") return <SarifTable text={text} />;
-  let shown = text;
-  if (kind === "json") {
-    try {
-      shown = JSON.stringify(JSON.parse(text), null, 2);
-    } catch {
-      shown = text;
-    }
-  }
+  if (kind === "csv") return <CsvTable text={text} />;
+  if (kind === "keyvalue") return <KeyValueViewer text={text} />;
+  if (kind === "json") return <JsonTree text={text} />;
   return (
     <pre className="max-h-[32rem] overflow-auto border border-line p-2 font-mono text-xs" data-testid="artifact-text">
-      {shown}
+      {text}
     </pre>
   );
 }

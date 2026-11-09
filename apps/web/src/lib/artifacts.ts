@@ -66,14 +66,30 @@ export function firstToOpen(groups: ArtifactGroup[]): ArtifactGroup | undefined 
  * a PDF in the browser's viewer, a video in `<video>`. Everything else — office files included — is
  * downloaded.
  */
-export type ViewerKind = "markdown" | "sarif" | "json" | "text" | "diff" | "image" | "pdf" | "video" | "download";
+export type ViewerKind =
+  | "markdown"
+  | "sarif"
+  | "json"
+  | "text"
+  | "diff"
+  | "csv"
+  | "keyvalue"
+  | "value"
+  | "image"
+  | "pdf"
+  | "video"
+  | "download";
 
-export function viewerOf(artifact: Pick<Artifact, "type" | "kind" | "media_type">): ViewerKind {
+export function viewerOf(artifact: Pick<Artifact, "type" | "kind" | "media_type" | "display" | "value">): ViewerKind {
   if (artifact.type === "diff") return "diff";
+  // A level or a metric the list could vouch for; otherwise its bytes are read like any other's.
+  if (artifact.display?.type && ["level", "metric"].includes(artifact.display.type) && artifact.value != null) return "value";
+  if (artifact.type === "keyvalue") return "keyvalue";
+  if (artifact.type === "csv") return "csv";
   if (artifact.type === "sarif") return "sarif";
   if (artifact.type === "markdown") return "markdown";
   if (artifact.type === "json") return "json";
-  if (artifact.type === "text" || artifact.type === "csv" || artifact.type === "mermaid") return "text";
+  if (["text", "mermaid", "level", "metric"].includes(artifact.type)) return "text";
   // SVG can carry script: shown as an image only, where a browser never runs it.
   if (artifact.media_type.startsWith("image/")) return "image";
   // A PDF in the browser's viewer, a video in a player (S31-06); office files are downloaded.
@@ -103,6 +119,9 @@ const EXTENSIONS: Record<string, string> = {
   mp4: "mp4",
   webm: "webm",
   diff: "diff",
+  level: "txt",
+  metric: "json",
+  keyvalue: "json",
 };
 
 export function filenameOf(artifact: Pick<Artifact, "name" | "type">): string {
