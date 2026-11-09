@@ -47,7 +47,7 @@ async def _session(app: Any, email: str) -> AsyncClient:
     return other
 
 
-async def _proposed_rule_change(client: AsyncClient, project: dict[str, Any]) -> str:
+async def _proposed_rule_change(client: AsyncClient, project: dict[str, Any], group: str = GROUP) -> str:
     """The pfSense connector, its update approved by `netops-approvers`, and a netops run proposing one."""
     from choregos_api.db.models import Run, WorkItem
     from choregos_api.db.session import session_scope
@@ -57,9 +57,9 @@ async def _proposed_rule_change(client: AsyncClient, project: dict[str, Any]) ->
             "secret_refs": {"api_key": "env:CONNECTOR_APPROVAL_TEST_PFSENSE_KEY"}}  # fmt: skip
     assert (await client.post(f"{ORG}/connectors", json=body)).status_code == 201
     named = await client.patch(
-        f"{ORG}/connectors/pfsense/operations/update_firewall_rule", json={"approver_group": GROUP}
+        f"{ORG}/connectors/pfsense/operations/update_firewall_rule", json={"approver_group": group}
     )
-    assert named.status_code == 200 and named.json()["approver_group"] == GROUP, named.text
+    assert named.status_code == 200 and named.json()["approver_group"] == group, named.text
     spec = {"mcp_servers": [{"connector": "pfsense", "tools": ["update_firewall_rule"]}]}
     agent = await client.post(
         f"{ORG}/agents", json={"slug": "netops", "display_name": "Netops", "spec": spec}
@@ -156,3 +156,30 @@ async def test_the_identity_provider_s_groups_are_kept_at_sign_in_and_replaced_a
     assert await sign_in(["choregos:varga:developers"]) == ["choregos:varga:developers"], (
         "a group withdrawn at the IdP is withdrawn at the next sign-in"
     )
+
+
+async def test_a_rule_naming_the_project_is_approved_by_that_projects_group(
+    client: AsyncClient, project: dict[str, Any], firewall: Any, app: Any
+) -> None:
+    """S59-11: one rule of the organisation, `{project}-maintainers`, serves every project: the action
+    names the project's own group, and only its members approve."""
+    action_id = await _proposed_rule_change(client, project, "{project}-maintainers")
+    path = f"/api/v1/projects/{project['id']}/actions/{action_id}"
+    resolved = f"{project['slug']}-maintainers"
+    action = (await client.get(path)).json()
+    assert action["approval"]["approvers"] == [{"role": "developer", "group": resolved, "min": 1}]
+
+    await _member(client, "other@varga.dev", "developer", ["graal-maintainers"])
+    await _member(client, "lead@varga.dev", "developer", [resolved])
+    other = await _session(app, "other@varga.dev")
+    try:
+        refused = await other.post(f"{path}/decision", json={"decision": "approve"})
+    finally:
+        await other.aclose()
+    assert refused.status_code == 403 and resolved in refused.text, refused.text
+    lead = await _session(app, "lead@varga.dev")
+    try:
+        approved = await lead.post(f"{path}/decision", json={"decision": "approve"})
+    finally:
+        await lead.aclose()
+    assert approved.status_code == 200 and approved.json()["status"] == "approved", approved.text
