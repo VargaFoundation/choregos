@@ -159,12 +159,42 @@ class GitHubScm:
         )
         return str(comment.get("html_url", ""))
 
+    async def _commit_statuses(self, repo: str, sha: str) -> list[CheckRun]:
+        """The commit statuses of `sha` as checks (S59-09). A CI that reports through the Statuses API
+        rather than the Checks API — Tekton's `github-app-status`, Jenkins, most CIs outside GitHub
+        Actions — was invisible: `ci_green` saw no check and waited for one forever. GitHub's combined
+        status keeps the latest status of each context; `pending` is a check still running, `error` and
+        `failure` a failed one."""
+        try:
+            combined = await self.client.request("GET", f"/repos/{repo}/commits/{sha}/status", repo=repo)
+        except UpstreamError as exc:
+            # 404: no endpoint; 403: an App installed without `statuses: read`. Either way the PR's
+            # check runs still decide, as before this read existed.
+            if exc.status_code in (403, 404):
+                return []
+            raise
+        checks: list[CheckRun] = []
+        for status in (combined or {}).get("statuses", []):
+            state = status.get("state")
+            checks.append(
+                CheckRun(
+                    name=status.get("context") or "status",
+                    status="in_progress" if state == "pending" else "completed",
+                    conclusion=None
+                    if state == "pending"
+                    else ("success" if state == "success" else "failure"),
+                    url=status.get("target_url"),
+                )
+            )
+        return checks
+
     async def get_pr(self, ref: PrRef) -> PrState:
         pr = await self.client.request("GET", f"/repos/{ref.repo}/pulls/{ref.number}", repo=ref.repo)
         sha = pr["head"]["sha"]
         checks_payload = await self.client.request(
             "GET", f"/repos/{ref.repo}/commits/{sha}/check-runs", repo=ref.repo
         )
+        statuses = await self._commit_statuses(ref.repo, sha)
         reviews = await self.client.paginate(f"/repos/{ref.repo}/pulls/{ref.number}/reviews", repo=ref.repo)
         files = await self.client.paginate(f"/repos/{ref.repo}/pulls/{ref.number}/files", repo=ref.repo)
         return PrState(
@@ -189,7 +219,8 @@ class GitHubScm:
                     url=check.get("html_url"),
                 )
                 for check in (checks_payload or {}).get("check_runs", [])
-            ],
+            ]
+            + statuses,
             reviews=[
                 ReviewState(
                     reviewer=(review.get("user") or {}).get("login", ""),
