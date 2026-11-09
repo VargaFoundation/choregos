@@ -20,6 +20,5 @@ test("the Access tab says what the version reaches in a project, with the origin
   await expect(access.getByTestId("tool-catalogue-shell")).toContainText("the project does not open shell");
   await expect(access.getByTestId("source-web")).toContainText("fetch");
   await expect(access.getByTestId("access-memories")).toContainText("project:shared");
-  await page.screenshot({ path: "/tmp/claude-1001/-home-devil-git-graalv2/3c70632d-288b-4841-8dee-7af5530a5750/scratchpad/access-tab.png", fullPage: true });
   expect(errors).toEqual([]);
 });
