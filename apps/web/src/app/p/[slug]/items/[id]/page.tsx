@@ -36,6 +36,7 @@ import { NextStepBanner } from "@/components/ticket/next-step-banner";
 import { TargetRepository } from "@/components/ticket/target-repository";
 import { LongText, RequestCard } from "@/components/ticket/request-card";
 import { runOutcome } from "@/components/ticket/run-outcome";
+import { keyNames, useLiveRefresh } from "@/lib/live";
 import { WorkflowChip } from "@/components/workflow-chip";
 import { fieldTitles } from "@/components/workflows/fields";
 import { useWorkflowDefinition } from "@/components/workflows/use-workflow";
@@ -53,6 +54,8 @@ export default function WorkItemPage({ params }: { params: Promise<{ slug: strin
   const { slug, id } = use(params);
   const queryClient = useQueryClient();
   const [erreurDeControle, setErreurDeControle] = useState<string | null>(null);
+  // Live (S59-08): what happens to the ticket refetches the page, decisions and runs included.
+  useLiveRefresh(`/work-items/${encodeURIComponent(id)}/events/stream`, keyNames(id));
   const item = useQuery({ queryKey: ["item", id], queryFn: () => api.workItem(id) });
   const timeline = useQuery({ queryKey: ["timeline", id], queryFn: () => api.timeline(id) });
   // The hand-off receipts (S25-04): who produced each step output, who read it, under which fingerprint.

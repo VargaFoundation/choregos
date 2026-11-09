@@ -41,6 +41,12 @@ async def persist_event(
     # not data, and the former `emit()` took it the same way.
     source = str(payload.get("source") or "/choregos/api")
     data = {k: v for k, v in payload.items() if k != "source"}
+    # The ids travel with the event, so that the bus files it under its project and its work item: the
+    # console's live pages listen to those (S59-08), whatever slug or subject the caller gave.
+    if project_id:
+        data.setdefault("project_id", project_id)
+    if work_item_id:
+        data.setdefault("work_item_id", work_item_id)
     await broadcast(
         session,
         ChoregosEvent.emit(type_, source=source, subject=subject, project_slug=project_slug, **data),
