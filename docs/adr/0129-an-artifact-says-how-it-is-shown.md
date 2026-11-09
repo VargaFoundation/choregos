@@ -53,7 +53,8 @@ ADR 0049 typed artifacts by format, and a value nobody declared falls back on it
 8. **No secret reaches a row that never changes.** The diff is recorded before the gates run, and a row
    is never modified. The patch and its paths are scanned first, wider than the `no_secrets` guarantee
    (fine-grained GitHub and GitLab tokens, any private key, a literal assigned to a secret-named key):
-   when a secret shape is found, only the list of files is kept, and the revision says the patch was withheld and which shapes were found, never
+   a file where a secret shape is found keeps only its name and counters, even its name hidden if the
+   secret is in the path, and the revision says the patch was withheld and which shapes were found, never
    their values. The patch is also bounded (`CHOREGOS_ARTIFACT_DIFF_MAX_BYTES`, 1 MiB by default), file
    by file, and says when it was cut.
 9. **A declaration is snapshotted on the revision** (a nullable `display` column), because a work item
@@ -97,5 +98,9 @@ ADR 0049 typed artifacts by format, and a value nobody declared falls back on it
 - **Declaring display on each transition.** See decision 4.
 - **A colour in the YAML.** The console's tones are tested for contrast in both themes; a free colour is
   not.
+- **Drawing Mermaid in the browser.** Tried on 2026-11-09 with `mermaid` 12.2.0, loaded on demand, its SVG
+  shown in an `<img>`: it works, and takes the console's JavaScript from about 2 MB to 7.2 MB, the largest
+  chunk 1.4 MB, against a budget of 2.2 MB and 600 kB. A guard that exists to catch this is not raised for
+  it. A `mermaid` artifact stays text; rendering it on the server is the way to reopen this.
 - **A geographic map.** It needs a tile provider, a wider Content-Security-Policy, and sends what the
   map shows to that provider. Not without a use case.
