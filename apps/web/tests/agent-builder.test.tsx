@@ -105,13 +105,13 @@ describe("the builder's rules", () => {
 describe("the folded sections", () => {
   it("say their value in one line, and open when it is not the default", () => {
     expect(sectionSummaries({})).toEqual({
-      model: "the project's profile · the project's backend",
+      model: "inherited from the project · the project's backend",
       limits: "the role's defaults",
       skills: "none",
-      tools: "none",
+      tools: "inherited from the project",
       network: "the project's hosts",
       knowledge: "none",
-      memory: "1 project · writes to the project's shared memory",
+      memory: "inherited from the project",
       evals: "0 cases",
       workspace: "write (default)",
     });
@@ -398,3 +398,65 @@ describe("the release section of a new agent (S40-02c)", () => {
   });
 });
 
+
+describe("the tool sources of a version (S60-03, ADR 0127)", () => {
+  const open = (start: AgentSpec = {}) =>
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <AgentBuilder
+          org="acme"
+          mode={{ kind: "create" }}
+          start={start}
+          initial={{ display_name: "Triage", scope: "org" }}
+          scopes={{ options: ["org"], projects: [] }}
+        />
+      </QueryClientProvider>,
+    );
+  const sent = async () => {
+    fireEvent.click(within(screen.getByTestId("agent-builder")).getByRole("button", { name: "Create and activate" }));
+    await waitFor(() => expect(api.createAgent).toHaveBeenCalledTimes(1));
+    return JSON.parse(JSON.stringify(vi.mocked(api.createAgent).mock.calls[0]![1])).spec as Record<string, unknown>;
+  };
+  beforeEach(() => {
+    vi.mocked(api.createAgent).mockClear();
+    vi.mocked(api.orgConnectors).mockResolvedValue([]);
+    vi.mocked(api.skills).mockResolvedValue([]);
+    vi.mocked(api.knowledgeBases).mockResolvedValue([]);
+  });
+
+  it("leaves every source out while each one inherits from the project: the digest does not move", async () => {
+    open();
+    const sources = within(screen.getByTestId("agent-builder")).getByTestId("tool-sources");
+    for (const id of ["catalogue", "extensions", "web"])
+      expect(within(within(sources).getByTestId(`tool-source-${id}`)).getByRole("combobox")).toHaveValue("inherit");
+    expect(await sent()).not.toHaveProperty("tools");
+  });
+
+  it("sends only the sources the author closed, an empty list included, and drops one set back to inherit", async () => {
+    open();
+    const sources = within(screen.getByTestId("agent-builder")).getByTestId("tool-sources");
+    const source = (id: string) => within(sources).getByTestId(`tool-source-${id}`);
+    fireEvent.change(within(source("catalogue")).getByRole("combobox"), { target: { value: "only" } });
+    fireEvent.change(within(source("catalogue")).getByLabelText(/Catalogue tools, one name/), { target: { value: "read_file, group:git" } });
+    fireEvent.change(within(source("extensions")).getByRole("combobox"), { target: { value: "only" } });
+    expect(within(source("extensions")).getByTestId("tool-source-extensions-empty")).toBeTruthy();
+    fireEvent.change(within(source("web")).getByRole("combobox"), { target: { value: "only" } });
+    fireEvent.click(within(source("web")).getByLabelText("fetch"));
+    const spec = await sent();
+    expect(spec.tools).toEqual({ catalogue: ["read_file", "group:git"], extensions: [], web: ["fetch"] });
+  });
+
+  it("a source set back to inherit leaves the field out again", async () => {
+    open({ tools: { catalogue: ["read_file"], web: ["search"] } });
+    const sources = within(screen.getByTestId("agent-builder")).getByTestId("tool-sources");
+    const catalogue = within(sources).getByTestId("tool-source-catalogue");
+    expect(within(catalogue).getByRole("combobox")).toHaveValue("only");
+    fireEvent.change(within(catalogue).getByRole("combobox"), { target: { value: "inherit" } });
+    expect((await sent()).tools).toEqual({ web: ["search"] });
+  });
+
+  it("cleanTools keeps scripts and drops null and absent sources", () => {
+    expect(cleanSpec({ tools: { scripts: "offer", catalogue: null, extensions: undefined } }).tools).toEqual({ scripts: "offer" });
+    expect(cleanSpec({ tools: { catalogue: null } }).tools).toBeUndefined();
+  });
+});

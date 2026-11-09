@@ -126,8 +126,8 @@ describe("the Definition tab", () => {
   it("shows every group with its summary, and what the old page left out", async () => {
     await open(page());
     const groups = await screen.findByTestId("definition-groups");
-    for (const title of ["About", "Instructions", "Model and runtime", "Capabilities", "Limits and budget", "Eval suite"])
-      expect(within(groups).getByText(title)).toBeTruthy();
+    for (const title of ["About", "Instructions", "Model and runtime", "Tools", "Knowledge and skills", "Memory", "Limits and budget", "Eval suite"])
+      expect(within(groups).getAllByText(title).length).toBeGreaterThan(0);
     expect(within(groups).getByText("20 lines")).toBeTruthy();
     expect(within(groups).getByText("1 case")).toBeTruthy();
     expect(groups.textContent).toContain("adr-framework");
@@ -178,7 +178,7 @@ describe("the Definition tab", () => {
     await open(page());
     groups = await screen.findByTestId("definition-groups");
     expect(within(groups).getByTestId("agent-workspace-line").textContent).toBe("none — never sees the repository");
-    expect(within(groups).getByText(/workspace none · skills/)).toBeTruthy();
+    expect(within(groups).getByText(/workspace none/)).toBeTruthy();
     expect(within(groups).queryByText("Other fields")).toBeNull();
   });
 
@@ -190,12 +190,29 @@ describe("the Definition tab", () => {
     await open(page());
     const groups = await screen.findByTestId("definition-groups");
     const href = (name: RegExp) => within(groups).getByRole("link", { name }).getAttribute("href");
-    expect(href(/The project's profile/)).toBe("/p/billing-api/settings#agents-models");
+    const inheritedHref = (testid: string) => within(within(groups).getAllByTestId(testid)[0]!).getByRole("link", { name: "Inherited from the project" }).getAttribute("href");
+    expect(inheritedHref("inherited-agents-models")).toBe("/p/billing-api/settings#agents-models");
+    for (const source of ["catalogue", "extensions", "web"])
+      expect(within(within(groups).getByTestId(`tool-source-${source}`)).getByRole("link", { name: "Inherited from the project" }).getAttribute("href")).toBe("/p/billing-api/settings#tools");
+    expect(within(groups).getByTestId("memory-bindings").textContent).toBe("Inherited from the project");
     expect(href(/^The project's$/)).toBe("/p/billing-api/settings#agents-models");
     expect(href(/Those of the platform/)).toBe("/p/billing-api/settings#tools");
     expect(href(/the project's hosts/)).toBe("/p/billing-api/settings#network");
     expect(href(/Organisation tiers/)).toBe("/admin/models");
     expect(href(/MCP servers/)).toBe("/library/mcp-servers");
+  });
+
+  it("says a tool source the version names, and that an empty list closes it, instead of None (S60-03)", async () => {
+    const spec = { instructions: "x", memory: "agent" as const, tools: { catalogue: ["group:git", "read_file"], extensions: [] as string[] } };
+    vi.mocked(api.agent).mockResolvedValue(architect({ versions: [{ version: 3, spec, checksum: "sha256:3", pinned_by: [] }] }));
+    await open(page());
+    const groups = await screen.findByTestId("definition-groups");
+    expect(within(groups).getByTestId("tool-source-catalogue").textContent).toBe("group:git, read_file");
+    expect(within(groups).getByTestId("tool-source-extensions").textContent).toContain("closed");
+    expect(within(groups).getByTestId("tool-source-web").textContent).toContain("Inherited from the project");
+    expect(within(groups).getByText(/catalogue 2 · extensions none/)).toBeTruthy();
+    // An explicit memory is said as itself, never as inherited.
+    expect(within(groups).getByTestId("memory-bindings").textContent).not.toContain("Inherited");
   });
 
   it("an organisation agent runs in any project: it says the value is set in each project's settings", async () => {
@@ -205,7 +222,7 @@ describe("the Definition tab", () => {
     await open(page());
     const groups = await screen.findByTestId("definition-groups");
     const model = within(groups).getAllByTestId("inherited-agents-models")[0]!;
-    expect(model.textContent).toContain("The project's profile — set in each project's settings");
+    expect(model.textContent).toContain("Inherited from the project — set in each project's settings");
     expect(within(model).getByRole("link", { name: "each project's settings" })).toHaveAttribute("href", "/");
   });
 
