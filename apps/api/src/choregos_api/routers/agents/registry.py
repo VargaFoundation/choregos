@@ -45,6 +45,7 @@ from ...services.agent_releases import (
 from ...services.agent_views import agent_dto
 from ...services.agents import (
     digest,
+    require_complete,
     version_errors,
 )
 from ...services.egress import egress_gate_for_remote_agent
@@ -112,6 +113,7 @@ async def create_agent(
     # Its own eval suite gates its version 1 (S32-03).
     gate(body.spec, None)
     organisation = await organisation_by_slug(session, org)
+    await require_complete(session, organisation.id, body.kind, body.spec)
     await check_agent_network(session, organisation.id, body.spec)
     project_row = await project_in_org(session, organisation, body.project) if body.project else None
     # A remote agent's card is read and pinned now (ADR 0062); any other spec comes back as it is.

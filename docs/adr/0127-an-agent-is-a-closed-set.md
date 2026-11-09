@@ -79,12 +79,15 @@ authorship attestation (ADR 0015) cannot see.
    rule. A remote (`a2a`) agent is complete by construction (it may declare none of them); a `voice`
    agent needs only its model, which its runtime already requires — a session reaches its MCP servers
    and nothing else; a `hosted` agent declares its model, tools and memories as any other.
-8. **Publication requires completeness (S60-05)**, once the catalogue plugins and the templates the
-   core ships declare everything (S60-04): a new version of an internal agent that leaves a component
-   out is a 422 `agent_incomplete`, naming the components. Published versions are immutable and keep
-   running as they are; the console marks them *inherits from the project* until their next version.
-   An external agent (a client of the MCP door) is not concerned: its rights are its human's,
-   intersected with its own (ADR 0033 §7).
+8. **An organisation requires completeness (S60-05)** by its setting `complete_agents: required`, which
+   its administrator switches (`PATCH /orgs/{org}`), as it switches to `curated` models (ADR 0060 §4):
+   nothing changes for an organisation until it does. Once required, a new version of an internal agent
+   that leaves a component out — at creation, at every new version, from a plugin, the catalogue or a
+   template — is a 422 `agent_incomplete` naming each component. A restore and a fork reproduce a
+   version already accepted and are not judged. Published versions are immutable and keep running as they
+   are; the console marks them *inherits from the project* until their next version. An external agent (a
+   client of the MCP door) is not concerned: its rights are its human's, intersected with its own
+   (ADR 0033 §7).
 
 ## Consequences
 
@@ -103,5 +106,8 @@ authorship attestation (ADR 0015) cannot see.
   projects would still run two different agents under one version.
 - **A new top-level field per source.** `tools` already holds what a run calls (ADR 0122 §9); one
   object per component keeps the five readable in a spec.
-- **Refuse incomplete versions at once.** Every catalogue agent and template would stop publishing the
-  day the contract lands; completeness is required only after they declare.
+- **Refuse incomplete versions everywhere at once.** Measured on S60-05's branch: 409 API tests in 80
+  files publish agents that inherit something, and the offline plugins a deployment installs at start
+  stay incomplete until they are signed again (S60-04). An organisation's switch lets the product
+  owner's organisation require it now; making it the default is a later decision, once the tests and
+  the plugins declare.

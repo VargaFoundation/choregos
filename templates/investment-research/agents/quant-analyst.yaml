@@ -36,3 +36,5 @@ spec:
   limits: { max_turns: 20, max_minutes: 15 }
   budget: { run_usd: 1.0, daily_usd: 10.0 }
   skills: [{ slug: reading-metrics }]
+  tools: { catalogue: [], extensions: [], web: [] }
+  memories: []

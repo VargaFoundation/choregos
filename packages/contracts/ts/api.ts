@@ -3601,6 +3601,8 @@ export type Org = {
   aliases?: Array<string>;
   /** whether the organisation's runs may be offered tool scripts (S57-05b, ADR 0122 §6): `enabled`, `disabled`, or null to follow the deployment's default (`CHOREGOS_TOOL_SCRIPTS`). Past it, the organisation's ceiling and each project's policy (`tools.scripts: offer`) decide; the deployment's brake (`CHOREGOS_TOOL_SCRIPTS_ALLOWED`) wins over it. */
   tool_scripts?: "enabled" | "disabled" | null;
+  /** whether a new version of an internal agent must inherit nothing from its project (S60-05, ADR 0127 §8): `required` refuses it with a 422 `agent_incomplete` naming the components it leaves out; null does not. A restore and a fork reproduce a version already accepted and are not judged. */
+  complete_agents?: "required" | null;
 };
 
 export type OrgCreate = {
@@ -3616,6 +3618,8 @@ export type OrgUpdate = {
   currency?: "EUR" | "USD" | null;
   /** the organisation's switch for tool scripts (S57-05b); org_admin only, a platform administrator who is not one is refused (403). Absent: unchanged; `enabled` or `disabled`: the organisation's choice; null: back to the deployment's default. Audited in `org.update`. */
   tool_scripts?: "enabled" | "disabled" | null;
+  /** require complete agents (S60-05, ADR 0127 §8); org_admin only (403 otherwise). Absent: unchanged; `required`: required; null: no longer required. Audited in `org.update`. */
+  complete_agents?: "required" | null;
 };
 
 export type WorkItemCreate = {
