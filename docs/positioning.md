@@ -94,10 +94,11 @@ the credentials of the servers it serves. It never replaces a gateway and never 
 - **ACP**: adopted (ADR 0002); more than fifty agents speak it.
 - **MCP 2026-07-28**: the sidecar predates it (stateless core, `tasks`, elicitation,
   OAuth resource servers); conformance is a P3 item.
-- **A2A**: a client surface ([ADR 0062](adr/0062-remote-agents-over-a2a.md)). A registry agent of kind
-  `remote` runs a workflow step over A2A (0.3 and 1.0), called from the runner pod, under the same
-  gates, budget and journal as any step. Choregos is not an A2A *server*: it cannot yet be called as
-  an agent by another platform (for example from Jira).
+- **A2A**: both ways. As a client ([ADR 0062](adr/0062-remote-agents-over-a2a.md)), a registry agent of
+  kind `remote` runs a workflow step over A2A (0.3 and 1.0), called from the runner pod, under the same
+  gates, budget and journal as any step. As a server ([ADR 0078](adr/0078-governed-workflows-as-a2a-skills.md)),
+  a workflow that opts in is a skill another agent or an application can start and follow, in A2A 0.3.0:
+  [Starting a workflow from outside](starting-a-workflow-from-outside.md).
 - **OpenTelemetry GenAI**: not emitted yet; the attributes are still "Development".
 - **SLSA / AI authorship**: ADR 0015.
 

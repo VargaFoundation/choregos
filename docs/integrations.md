@@ -206,7 +206,8 @@ read on **every call**: revoked, suspended or expired, the next call answers `40
 
 A workflow can be served to an outside agent as an **A2A skill** (A2A 0.3.0,
 [ADR 0078](adr/0078-governed-workflows-as-a2a-skills.md)). Nothing is served by default: the
-workflow opts in.
+workflow opts in. This section is the reference; for complete calls, in order, read
+[Starting a workflow from outside](starting-a-workflow-from-outside.md).
 
 ```yaml
 a2a:
