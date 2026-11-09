@@ -4,10 +4,11 @@
 import Link from "next/link";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Button, Card, Empty, ErrorNote, Input, ReadState } from "@/components/ui";
+import { KeyRound } from "lucide-react";
+import { Badge, Button, Card, Empty, ErrorNote, Input, ReadState } from "@/components/ui";
 import { ConfirmedGesture } from "@/components/confirmed-gesture";
 import { api } from "@/lib/api";
-import { shortDate } from "@/lib/format";
+import { relative, shortDate } from "@/lib/format";
 
 /**
  * The signed-in person's access tokens: the list, their creation and their revocation. They belong to
@@ -20,6 +21,8 @@ export function AccessTokensCard({ className }: { className?: string }) {
   const [error, setError] = useState<string | null>(null);
   const [tokenName, setTokenName] = useState("");
   const [tokenClair, setTokenClair] = useState<string | null>(null);
+  // The instant the page opened: a token is said expired against it, not against each render.
+  const [openedAt] = useState(() => Date.now());
 
   async function frapper() {
     setError(null);
@@ -51,7 +54,7 @@ export function AccessTokensCard({ className }: { className?: string }) {
         </div>
       )}
       <form
-        className="mb-3 flex flex-wrap items-end gap-2 text-sm"
+        className="mb-4 flex flex-wrap items-end gap-2 text-sm"
         onSubmit={(event) => {
           event.preventDefault();
           void frapper();
@@ -70,32 +73,49 @@ export function AccessTokensCard({ className }: { className?: string }) {
           Create an API token (90 days)
         </Button>
       </form>
-      <ul className="space-y-1 text-xs">
-        {(tokens.data ?? []).map((token) => (
-          <li key={token.id} className="flex items-center justify-between gap-2">
-            <span>
-              <span className="font-mono" data-verbatim>
-                {token.name}
-              </span>
-              <span className="text-ink-muted">
-                {" "}
-                · {tokenScopeSentence(token.scopes)} · expires {token.expires_at ? shortDate(token.expires_at) : "never"} · last used{" "}
-                {token.last_used_at ? shortDate(token.last_used_at) : "—"}
-              </span>
-            </span>
-            <ConfirmedGesture
-              tonDuBouton="danger"
-              question={`Revoke ${token.name}? Every client using it is refused from its next call — a token does not come back.`}
-              confirmer={`Revoke ${token.name}`}
-              action={async () => {
-                await api.revokeToken(token.id);
-                await queryClient.invalidateQueries({ queryKey: ["tokens"] });
-              }}
-            >
-              Revoke
-            </ConfirmedGesture>
-          </li>
-        ))}
+      <ul aria-label="Your access tokens" className="divide-y divide-line">
+        {(tokens.data ?? []).map((token) => {
+          const expired = token.expires_at != null && new Date(token.expires_at).getTime() <= openedAt;
+          return (
+            <li key={token.id} data-testid="token" className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
+              <KeyRound aria-hidden className="mt-0.5 size-4 shrink-0 text-ink-muted" strokeWidth={1.75} />
+              <div className="min-w-0 flex-1">
+                <p className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="font-mono" data-verbatim>
+                    {token.name}
+                  </span>
+                  {expired && (
+                    <Badge tone="warn" variant="soft">
+                      Expired
+                    </Badge>
+                  )}
+                </p>
+                <p className="text-xs text-ink-muted">
+                  {tokenScopeSentence(token.scopes)} · {expired ? "expired" : "expires"}{" "}
+                  {token.expires_at ? shortDate(token.expires_at) : "never"} · last used{" "}
+                  {token.last_used_at ? relative(token.last_used_at) : "never"}
+                  {token.last_client && (
+                    <>
+                      {" "}
+                      by <span data-verbatim>{token.last_client}</span>
+                    </>
+                  )}
+                </p>
+              </div>
+              <ConfirmedGesture
+                tonDuBouton="danger"
+                question={`Revoke ${token.name}? Every client using it is refused from its next call — a token does not come back.`}
+                confirmer={`Revoke ${token.name}`}
+                action={async () => {
+                  await api.revokeToken(token.id);
+                  await queryClient.invalidateQueries({ queryKey: ["tokens"] });
+                }}
+              >
+                Revoke
+              </ConfirmedGesture>
+            </li>
+          );
+        })}
       </ul>
       <ReadState lecture={tokens} quoi="your access tokens" />
       {tokens.data?.length === 0 && <Empty>No token</Empty>}

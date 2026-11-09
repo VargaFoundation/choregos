@@ -56,6 +56,7 @@ from .routers import (
     memory,
     model_catalogue,
     models,
+    my_sessions,
     org_connectors,
     outbound_proxy,
     platform_identity,
@@ -349,6 +350,7 @@ def create_app() -> FastAPI:
 
     core_routers = (
         auth.router,
+        my_sessions.router,
         ui.router,
         theme.router,
         integrations.router,

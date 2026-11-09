@@ -89,6 +89,9 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
       <Link href="/account" className="text-ink-muted hover:text-ink">
         My account
       </Link>
+      <Link href="/account#sessions" className="text-ink-muted hover:text-ink">
+        My sessions
+      </Link>
       <Link href="/account#tokens" className="text-ink-muted hover:text-ink">
         My access tokens
       </Link>

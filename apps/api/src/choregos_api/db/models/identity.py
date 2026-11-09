@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Identity: organisations, users, memberships, API tokens and tracker identities."""
+"""Identity: organisations, users, memberships, API tokens, browser sessions and tracker identities."""
 
 from __future__ import annotations
 
@@ -59,6 +59,9 @@ class User(Base, PkMixin, TimestampMixin):
     #: The identity provider's groups, as of the last sign-in through it — what an approval rule
     #: that names a group checks (ADR 0052). The IdP is authoritative: each sign-in replaces them.
     groups: Mapped[list[str]] = mapped_column(Json, default=list)
+    #: A session cookie without a session id (opened before ADR 0130) issued before this instant is
+    #: refused: "sign out my other sessions" reaches the cookies no row records.
+    sessions_not_before: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class Membership(Base, PkMixin, TimestampMixin):
@@ -93,6 +96,26 @@ class ApiToken(Base, PkMixin, TimestampMixin):
     )
     #: The client of the last call (`User-Agent`, truncated): the Integrations page says "connected".
     last_client: Mapped[str | None] = mapped_column(String(200), nullable=True)
+
+
+class UserSession(Base, PkMixin, TimestampMixin):
+    """A browser session (ADR 0130): what the signed cookie's `sid` names.
+
+    The cookie stays the proof (signed, bounded by `exp`); the row says whether it still holds, and
+    what its owner sees on My account: when it opened, its last activity, the browser and address of
+    its last request. Revoking sets `revoked_at`; the row is kept until it expires, for the list."""
+
+    __tablename__ = "user_sessions"
+
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    #: The sign-in channel: `oidc`, `saml`, `dev`... as `ouvrir_la_session` was told.
+    channel: Mapped[str] = mapped_column(String(32))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: The `User-Agent` and client address of the last request, truncated.
+    user_agent: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class TrackerIdentity(Base, PkMixin, TimestampMixin):
