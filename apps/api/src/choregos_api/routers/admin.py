@@ -213,7 +213,8 @@ async def list_members(
         select(Membership, User, Project)
         .join(User, Membership.user_id == User.id)
         .outerjoin(Project, Membership.project_id == Project.id)
-        .where(Membership.org_id == organization.id)
+        # A machine account is not a member one invites or removes (ADR 0131): its own page lists it.
+        .where(Membership.org_id == organization.id, User.is_service.is_(False))
     )
     if project:
         query = query.where(Project.slug == project)

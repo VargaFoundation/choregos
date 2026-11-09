@@ -3,6 +3,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
+import { MachineAccounts } from "@/components/project-settings/machine-accounts";
 import { SettingsSection } from "@/components/project-settings/section";
 import { Card } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -46,6 +47,7 @@ export function PeopleSection({ slug }: { slug: string }) {
           <Link href={`/p/${slug}/members`}>Open Members</Link>
         </p>
       </Card>
+      <MachineAccounts slug={slug} />
     </SettingsSection>
   );
 }

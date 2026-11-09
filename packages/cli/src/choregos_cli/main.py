@@ -28,11 +28,13 @@ workflow_app = typer.Typer(help="Workflows")
 dev_app = typer.Typer(help="Development environment")
 orgs_app = typer.Typer(help="Organisations")
 tokens_app = typer.Typer(help="API tokens")
+machines_app = typer.Typer(help="Applications that call the A2A door under their own name")
 admin_app = typer.Typer(help="Platform administration")
 secrets_app = typer.Typer(help="Sealed connector secrets")
 admin_app.add_typer(secrets_app, name="secrets")
 app.add_typer(orgs_app, name="orgs")
 app.add_typer(tokens_app, name="tokens")
+app.add_typer(machines_app, name="machines")
 app.add_typer(admin_app, name="admin")
 app.add_typer(projects_app, name="projects")
 app.add_typer(items_app, name="items")
@@ -188,6 +190,78 @@ def tokens_create(
         f", expires {token.get('expires_at') or 'never'})"
     )
     console.print(token["token"])
+
+
+def _machines(project: str) -> str:
+    return f"/projects/{project}/machine-accounts"
+
+
+@machines_app.command("list")
+def machines_list(project: str) -> None:
+    """A project's applications and their tokens, never a token's value."""
+    table = Table("application", "name", "writes a day", "token", "token id", "expires", "last used")
+    for account in client().get(_machines(project)):
+        tokens = account.get("tokens") or [{}]
+        for token in tokens:
+            table.add_row(
+                account["slug"],
+                account["display_name"],
+                str(account["writes_per_day"]),
+                token.get("name") or "—",
+                token.get("id") or "—",
+                token.get("expires_at") or "—",
+                token.get("last_used_at") or "—",
+            )
+    console.print(table)
+
+
+@machines_app.command("create")
+def machines_create(
+    project: str,
+    slug: str,
+    display_name: Annotated[str | None, typer.Option(help="what people read; the slug otherwise")] = None,
+    writes_per_day: Annotated[
+        int | None, typer.Option(help="the application's own daily budget, 500 by default")
+    ] = None,
+) -> None:
+    """Create an account an application calls the A2A door under. It never takes a decision."""
+    body: dict[str, object] = {"slug": slug}
+    if display_name:
+        body["display_name"] = display_name
+    if writes_per_day is not None:
+        body["writes_per_day"] = writes_per_day
+    account = client().post(_machines(project), json=body)
+    console.print(
+        f"[green]✓[/green] application `{account['slug']}`, {account['writes_per_day']} writes a day"
+    )
+
+
+@machines_app.command("token")
+def machines_token(
+    project: str,
+    slug: str,
+    name: Annotated[str, typer.Option(prompt=True)],
+    expires_in_days: Annotated[int, typer.Option(help="365 at most")] = 90,
+) -> None:
+    """Issue an `a2a` token for the application. The secret is shown HERE, once."""
+    body = {"name": name, "expires_in_days": expires_in_days}
+    token = client().post(f"{_machines(project)}/{slug}/tokens", json=body)
+    console.print(f"[green]✓[/green] token `{token['name']}`, expires {token['expires_at']}")
+    console.print(token["token"])
+
+
+@machines_app.command("revoke")
+def machines_revoke(project: str, slug: str, token_id: str) -> None:
+    """Revoke one of the application's tokens."""
+    client().delete(f"{_machines(project)}/{slug}/tokens/{token_id}")
+    console.print(f"[green]✓[/green] token {token_id} revoked")
+
+
+@machines_app.command("remove")
+def machines_remove(project: str, slug: str) -> None:
+    """End the application: its tokens stop working at once, and its name is not reused."""
+    client().delete(f"{_machines(project)}/{slug}")
+    console.print(f"[green]✓[/green] application `{slug}` removed")
 
 
 @tokens_app.command("list")
