@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -23,7 +24,7 @@ from typing import Any, Literal
 
 from pydantic import Field
 
-from .workflow import Strict
+from .workflow import ArtifactLevel, ArtifactScale, ArtifactShow, ArtifactSpec, Strict
 
 #: An artifact name: what a transition declares in `outputs:`. It becomes a file name in the
 #: downstream workspace (`.choregos/inputs/<name>.<ext>`), hence no slash and no leading dot.
@@ -39,6 +40,7 @@ class ArtifactKind(StrEnum):
     REPORT = "report"
     FILE = "file"
     DIFF = "diff"
+    VALUE = "value"
 
 
 @dataclass(frozen=True, slots=True)
@@ -57,7 +59,7 @@ class ArtifactType:
         return self.kind in _INLINE_KINDS
 
 
-_INLINE_KINDS = {ArtifactKind.MARKDOWN, ArtifactKind.JSON, ArtifactKind.DIFF}
+_INLINE_KINDS = {ArtifactKind.MARKDOWN, ArtifactKind.JSON, ArtifactKind.DIFF, ArtifactKind.VALUE}
 
 #: The types a transition may declare for an output (`output_types:`) and the runner recognises
 #: in `.choregos/outputs/`. `markdown` and `json` are inline; every other type is a file.
@@ -92,6 +94,9 @@ ARTIFACT_TYPES: dict[str, ArtifactType] = {
     "webm": ArtifactType(ArtifactKind.FILE, "video/webm", "webm"),
     "file": ArtifactType(ArtifactKind.FILE, "application/octet-stream", ""),
     "diff": ArtifactType(ArtifactKind.DIFF, "text/x-diff", "diff"),
+    "level": ArtifactType(ArtifactKind.VALUE, "text/plain", "txt"),
+    "metric": ArtifactType(ArtifactKind.VALUE, "application/json", "json"),
+    "keyvalue": ArtifactType(ArtifactKind.JSON, "application/json", "json"),
 }
 
 #: The artifact the platform records after a step, from the SCM's comparison of the pushed branch
@@ -167,10 +172,146 @@ class ArtifactDisplay(Strict):
     """How the console shows a revision (ADR 0129). Snapshotted on it, outside its digest."""
 
     #: The type it is drawn as; a revision older than ADR 0129 can be drawn as more than it is stored.
-    type: str
-    show: Literal["facts", "tab", "hidden"] = "tab"
+    #: `null` only in a stage's input: a place given to an output whose type its value will settle.
+    type: str | None = None
+    show: ArtifactShow = "tab"
     title: str | None = None
     diff: ArtifactDiffStat | None = None
+    levels: list[ArtifactLevel] | None = None
+    unit: str | None = None
+    min: float | None = None
+    max: float | None = None
+    better: Literal["higher", "lower"] | None = None
+
+
+#: The scales the platform ships (ADR 0129 §3). A size only ranks; a risk and a verdict judge.
+SCALES: dict[ArtifactScale, list[ArtifactLevel]] = {
+    "risk": [
+        ArtifactLevel(value="low", tone="ok"),
+        ArtifactLevel(value="medium", tone="warn"),
+        ArtifactLevel(value="high", tone="danger"),
+    ],
+    "size": [
+        ArtifactLevel(value="S"),
+        ArtifactLevel(value="M"),
+        ArtifactLevel(value="L"),
+        ArtifactLevel(value="XL"),
+    ],
+    "verdict": [
+        ArtifactLevel(value="approve", tone="ok", title="Approved"),
+        ArtifactLevel(value="comment", tone="info", title="Comment"),
+        ArtifactLevel(value="request_changes", tone="warn", title="Changes requested"),
+    ],
+}
+
+#: What the platform knows of an output by its name alone: every workflow, every older revision.
+WELL_KNOWN_ARTIFACTS: dict[str, ArtifactSpec] = {
+    "size": ArtifactSpec(type="level", scale="size", show="facts", title="Size"),
+    "risk": ArtifactSpec(type="level", scale="risk", show="facts", title="Risk"),
+    "verdict": ArtifactSpec(type="level", scale="verdict", title="Verdict"),
+    "confidence": ArtifactSpec(type="metric", min=0, max=1, better="higher", title="Confidence"),
+    DIFF_ARTIFACT: ArtifactSpec(type="diff", title="Changes"),
+}
+
+#: What fits on one line of a ticket's facts card (ADR 0129 §5).
+FACT_TYPES = frozenset({"level", "metric", "diff"})
+#: A typed value: what the list carries, and what is checked.
+VALUE_TYPES = frozenset({"level", "metric"})
+#: The types that say what a value is, as opposed to the format of a document.
+CHECKED_TYPES = VALUE_TYPES | {"keyvalue"}
+#: At most this many names in a ticket's facts card.
+MAX_FACTS = 8
+
+
+def resolve_display(name: str, spec: ArtifactSpec | None = None) -> ArtifactDisplay | None:
+    """What a declaration comes to, over what the platform knows of the name; `None` when neither speaks."""
+    known = WELL_KNOWN_ARTIFACTS.get(name)
+    if spec is None and known is None:
+        return None
+    declared = spec.model_dump(exclude_none=True) if spec is not None else {}
+    merged = ArtifactSpec.model_validate(
+        {**(known.model_dump(exclude_none=True) if known else {}), **declared}
+    )
+    if merged.scale is not None and merged.levels is None:
+        merged = merged.model_copy(update={"levels": SCALES[merged.scale]})
+    return ArtifactDisplay(
+        type=merged.type,
+        show=merged.show or "tab",
+        title=merged.title,
+        levels=merged.levels,
+        unit=merged.unit,
+        min=merged.min,
+        max=merged.max,
+        better=merged.better,
+    )
+
+
+def _level(display: ArtifactDisplay, raw: Any) -> str:
+    if not isinstance(raw, str | int | float) or isinstance(raw, bool):
+        raise ValueError("a level is one word")
+    allowed = display.levels or []
+    text = str(raw).strip().lower()
+    for level in allowed:
+        if level.value.lower() == text:
+            return level.value
+    raise ValueError(f"must be one of {', '.join(f'`{level.value}`' for level in allowed)}")
+
+
+def _metric(display: ArtifactDisplay, raw: Any) -> float | int:
+    if isinstance(raw, bool):
+        raise ValueError("a metric is a number")
+    number: float | int
+    if isinstance(raw, int | float):
+        number = raw
+    elif isinstance(raw, str):
+        text = raw.strip().removesuffix("%").strip()
+        if display.unit and text.endswith(display.unit):
+            text = text.removesuffix(display.unit).strip()
+        try:
+            number = int(text) if text.lstrip("+-").isdigit() else float(text)
+        except ValueError:
+            raise ValueError("a metric is a number") from None
+    else:
+        raise ValueError("a metric is a number")
+    try:
+        finite = math.isfinite(number)
+    except OverflowError:
+        finite = False
+    if not finite:
+        raise ValueError("a metric is a finite number")
+    if isinstance(number, float) and number.is_integer():
+        # PostgreSQL's `jsonb` hands `1e+22` back without its exponent: an integer hashes the same both ways.
+        number = int(number)
+    if display.min is not None and number < display.min:
+        raise ValueError(f"must be at least {display.min:g}")
+    if display.max is not None and number > display.max:
+        raise ValueError(f"must be at most {display.max:g}")
+    return number
+
+
+def _keyvalue(raw: Any) -> dict[str, Any]:
+    value = raw
+    if isinstance(raw, str):
+        try:
+            value = json.loads(raw)
+        except ValueError:
+            raise ValueError("a key/value output is a JSON object") from None
+    if not isinstance(value, dict) or not value:
+        raise ValueError("a key/value output is a JSON object")
+    if any(isinstance(v, dict | list) for v in value.values()):
+        raise ValueError("a key/value output is flat: its values are text, numbers or booleans")
+    return value
+
+
+def coerce_value(display: ArtifactDisplay, raw: Any) -> Any:
+    """The value a typed output comes to (`"0.9"`, `"87%"`, a level's case); `ValueError` says why not."""
+    if display.type == "level":
+        return _level(display, raw)
+    if display.type == "metric":
+        return _metric(display, raw)
+    if display.type == "keyvalue":
+        return _keyvalue(raw)
+    return raw
 
 
 class Artifact(Strict):
@@ -192,3 +333,5 @@ class Artifact(Strict):
     created_at: datetime | None = None
     #: How the console shows it (ADR 0129); `null` when nothing is said beyond its type.
     display: ArtifactDisplay | None = None
+    #: A `level` or a `metric`, once its digest checked (ADR 0129 §11); the rest is read from its content.
+    value: str | int | float | None = None

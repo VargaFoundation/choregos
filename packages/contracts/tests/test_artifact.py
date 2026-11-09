@@ -89,7 +89,7 @@ def test_the_type_of_a_file_comes_from_its_extension(filename: str, expected: st
 
 def test_only_text_and_data_are_inline() -> None:
     inline = {name for name, entry in ARTIFACT_TYPES.items() if entry.inline}
-    assert inline == {"markdown", "json", "diff"}
+    assert inline == {"markdown", "json", "diff", "level", "metric", "keyvalue"}
     assert artifact_type("xlsx").media_type.endswith("spreadsheetml.sheet")
     with pytest.raises(KeyError, match="unknown artifact type"):
         artifact_type("exe")
