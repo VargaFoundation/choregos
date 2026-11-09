@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Literal
 
 from choregos_contracts import Role
+from choregos_core.agent_completeness import OrgCompleteAgents
 from choregos_core.tool_scripts_switch import OrgToolScripts
 from pydantic import Field
 
@@ -83,6 +84,9 @@ class OrgDto(Dto):
     #: Whether the organisation's runs may be offered tool scripts (S57-05b, ADR 0122 §6): `enabled`,
     #: `disabled`, or `None` to follow the deployment's default. Its administrator changes it.
     tool_scripts: OrgToolScripts | None = None
+    #: Whether a new version of an internal agent must inherit nothing from its project (S60-05,
+    #: ADR 0127 §8): `required`, or `None`. Its administrator changes it.
+    complete_agents: OrgCompleteAgents | None = None
 
 
 class OrgCreate(Dto):
@@ -99,6 +103,8 @@ class OrgUpdate(Dto):
     #: Absent: unchanged. `enabled` or `disabled`: the organisation's choice. `null`: back to the
     #: deployment's default (S57-05b) — unlike the other fields, where `null` changes nothing.
     tool_scripts: OrgToolScripts | None = None
+    #: Absent: unchanged. `required`: new versions must be complete (ADR 0127). `null`: no longer required.
+    complete_agents: OrgCompleteAgents | None = None
 
 
 class OAuthClientDto(Dto):

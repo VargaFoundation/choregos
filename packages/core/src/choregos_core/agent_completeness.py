@@ -17,7 +17,20 @@ An external agent (a client of the MCP door, ADR 0033 §7) is not concerned: the
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Literal
+
+#: The key of `Organization.settings` by which an organisation requires complete versions (S60-05):
+#: `required`, or absent. Its administrator switches it, as `curated` models (ADR 0060 §4): nothing
+#: changes for an organisation until it does.
+ORG_SETTING = "complete_agents"
+OrgCompleteAgents = Literal["required"]
+
+
+def org_requires_complete(settings: Mapping[str, Any] | None) -> bool:
+    """Whether the organisation refuses a new version that inherits something. A stored value other
+    than `required` reads as no requirement."""
+    return (settings or {}).get(ORG_SETTING) == "required"
+
 
 #: The components a complete version declares, in the order `missing_components` reports them.
 COMPONENTS = ("model", "tools.catalogue", "tools.extensions", "tools.web", "memories")

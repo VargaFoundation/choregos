@@ -24,7 +24,7 @@ from ..rbac import SYSTEM
 from ..schemas.agents import AgentCreate
 from .agent_releases import after_publish
 from .agents import digest as agent_digest
-from .agents import version_errors
+from .agents import require_complete, version_errors
 from .hosted_images import pin_hosted_runtime
 from .network import check_agent_network
 from .skill_gate import platform_columns
@@ -129,6 +129,7 @@ async def install_skills_and_agents(
     for document in agents:
         body = AgentCreate.model_validate(document)
         version_errors(body.spec)
+        await require_complete(session, org_id, body.kind, body.spec)
         await check_agent_network(session, org_id, body.spec)
         if (
             await session.execute(select(Agent.id).where(Agent.org_id == org_id, Agent.slug == body.slug))
