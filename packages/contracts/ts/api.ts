@@ -1160,10 +1160,16 @@ export type AgentSpec = {
   tools?: AgentTools | null;
 };
 
-/** How a run of this agent calls its tools by default (ADR 0122 §9, S57-15): a default, never a right. Strictest first, the deployment's brake, the organisation's switch (its `tool_scripts` setting, else the deployment's default), the organisation's ceiling, and the project's policy whenever it says something for the stage's role (`tools.per_role.<role>.scripts`, else `tools.scripts`) decide before it; a policy that says nothing leaves it. An eval cell's door ignores it. */
+/** How a run of this agent calls its tools by default (ADR 0122 §9, S57-15): a default, never a right. Strictest first, the deployment's brake, the organisation's switch (its `tool_scripts` setting, else the deployment's default), the organisation's ceiling, and the project's policy whenever it says something for the stage's role (`tools.per_role.<role>.scripts`, else `tools.scripts`) decide before it; a policy that says nothing leaves it. An eval cell's door ignores it. Since ADR 0127 it also names the tools a run is offered, source by source: a list that is present, even empty, closes its source (a run gets what the version names AND its project and the deployment allow); a list that is absent leaves that source to the project, as before. */
 export type AgentTools = {
   /** `offer`: a run is offered tool scripts unless something above says otherwise; `off`: no default, as absent */
-  scripts: "off" | "offer";
+  scripts?: "off" | "offer";
+  /** The deployment catalogue's tools the version uses (ADR 0014), by name or as `group:<name>` (ADR 0127). Absent: every tool the project's `tools` and `groups` open */
+  catalogue?: Array<string> | null;
+  /** The extensions whose tools the version uses, by name (ADR 0127). Absent: every extension's tools */
+  extensions?: Array<string> | null;
+  /** The governed web tools the version uses: `fetch` (ADR 0070), `search` (ADR 0083) (ADR 0127). Absent: each one whenever the run's network or the project offers it */
+  web?: Array<"fetch" | "search"> | null;
 };
 
 /** A coding agent that speaks ACP (ADR 0002), one of the backends the runner ships. */
@@ -2164,6 +2170,54 @@ export type AgentLifecycleResult = {
 
 export type AgentOwnerChange = {
   email: string;
+};
+
+/** What a version reaches in a project (ADR 0127). */
+export type AgentAccess = {
+  agent: string;
+  version: number;
+  project: string;
+  /** true when the version inherits nothing from its project */
+  complete: boolean;
+  /** the components the version leaves to its project */
+  inherits: Array<AgentComponent>;
+  model: AgentAccessModel;
+  tools: Array<AgentAccessTool>;
+  knowledge: Array<AgentAccessItem>;
+  memories: Array<AgentAccessItem>;
+};
+
+export type AgentComponent = "instructions" | "model" | "tools" | "knowledge" | "memory";
+
+/** `agent`: the version names it; `project`: the version leaves it to the project; `frame`: the platform's own, every run has it; `refused`: the version names it and will not get it here */
+export type AgentAccessOrigin = "agent" | "project" | "frame" | "refused";
+
+export type AgentAccessModel = {
+  /** what the version (or, inherited, the workflow and the project) asks for: a model or `profile:<tier>` */
+  requested: string;
+  /** the model it resolves to in this project, null when it does not resolve */
+  resolved?: string | null;
+  origin: AgentAccessOrigin;
+  reason?: string | null;
+};
+
+export type AgentAccessTool = {
+  name: string;
+  /** where the tool comes from: the platform's frame, the deployment catalogue, an extension, a connector through the broker, the governed web tools */
+  source: "frame" | "catalogue" | "extension" | "connector" | "web";
+  origin: AgentAccessOrigin;
+  access?: "read" | "write" | "approval" | null;
+  /** why a named tool is refused */
+  reason?: string | null;
+};
+
+export type AgentAccessItem = {
+  /** a knowledge base's slug, or a memory binding as `scope:slug` */
+  name: string;
+  origin: AgentAccessOrigin;
+  /** a memory binding's mode (`read`, `write`) */
+  mode?: string | null;
+  reason?: string | null;
 };
 
 export type AgentMetrics = {
@@ -4657,6 +4711,7 @@ export interface Operations {
 }; response: void };
   getAction: { method: "GET"; path: "/projects/{id}/actions/{action_id}"; body: never; response: Action };
   getAgent: { method: "GET"; path: "/orgs/{org}/agents/{slug}"; body: never; response: Agent };
+  getAgentAccess: { method: "GET"; path: "/orgs/{org}/agents/{slug}/access"; body: never; response: AgentAccess };
   getAgentExposure: { method: "GET"; path: "/orgs/{org}/agents/{slug}/exposure"; body: never; response: AgentExposure };
   getAgentMetrics: { method: "GET"; path: "/orgs/{org}/agents/{slug}/metrics"; body: never; response: AgentMetrics };
   getAgentReleaseReadiness: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}/readiness"; body: never; response: AgentReleaseReadiness };

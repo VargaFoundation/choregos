@@ -2461,6 +2461,23 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentMetrics" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/agents/{slug}/access:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [agents]
+      operationId: getAgentAccess
+      description: >-
+        What one version of the agent reaches in one project, component by component, with the origin of each
+        (ADR 0127): the version's own, inherited from the project, the platform's frame, or named by the version and
+        refused, with the reason. Computed by the same function as a run's tool listing.
+      parameters:
+        - { name: project, in: query, required: true, schema: { type: string } }
+        - { name: version, in: query, required: false, description: "Absent: the version a run of the project takes (pin, channel, production)", schema: { type: integer, minimum: 1 } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentAccess" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/agent-trials:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     post:
@@ -5577,9 +5594,14 @@ components:
         default), the organisation's ceiling, and the project's policy whenever it says something for the stage's
         role (`tools.per_role.<role>.scripts`, else `tools.scripts`) decide before it; a policy that says nothing
         leaves it. An eval cell's door ignores it.
-      required: [scripts]
+        Since ADR 0127 it also names the tools a run is offered, source by source: a list that is present, even empty,
+        closes its source (a run gets what the version names AND its project and the deployment allow); a list that
+        is absent leaves that source to the project, as before.
       properties:
-        scripts: { type: string, enum: ["off", offer], description: "`offer`: a run is offered tool scripts unless something above says otherwise; `off`: no default, as absent" }
+        scripts: { type: string, enum: ["off", offer], default: "off", description: "`offer`: a run is offered tool scripts unless something above says otherwise; `off`: no default, as absent" }
+        catalogue: { type: [array, "null"], items: { type: string, pattern: "^(group:)?[a-z][a-z0-9_.-]{0,62}$" }, description: "The deployment catalogue's tools the version uses (ADR 0014), by name or as `group:<name>` (ADR 0127). Absent: every tool the project's `tools` and `groups` open" }
+        extensions: { type: [array, "null"], items: { type: string, pattern: "^[a-z][a-z0-9_.-]{0,62}$" }, description: "The extensions whose tools the version uses, by name (ADR 0127). Absent: every extension's tools" }
+        web: { type: [array, "null"], items: { type: string, enum: [fetch, search] }, uniqueItems: true, description: "The governed web tools the version uses: `fetch` (ADR 0070), `search` (ADR 0083) (ADR 0127). Absent: each one whenever the run's network or the project offers it" }
     AcpRuntime:
       type: object
       description: A coding agent that speaks ACP (ADR 0002), one of the backends the runner ships.
@@ -6534,6 +6556,52 @@ components:
       required: [email]
       properties:
         email: { type: string }
+    AgentAccess:
+      type: object
+      description: What a version reaches in a project (ADR 0127).
+      required: [agent, version, project, complete, inherits, model, tools, knowledge, memories]
+      properties:
+        agent: { type: string }
+        version: { type: integer }
+        project: { type: string }
+        complete: { type: boolean, description: "true when the version inherits nothing from its project" }
+        inherits: { type: array, items: { $ref: "#/components/schemas/AgentComponent" }, description: "the components the version leaves to its project" }
+        model: { $ref: "#/components/schemas/AgentAccessModel" }
+        tools: { type: array, items: { $ref: "#/components/schemas/AgentAccessTool" } }
+        knowledge: { type: array, items: { $ref: "#/components/schemas/AgentAccessItem" } }
+        memories: { type: array, items: { $ref: "#/components/schemas/AgentAccessItem" } }
+    AgentComponent:
+      type: string
+      enum: [instructions, model, tools, knowledge, memory]
+    AgentAccessOrigin:
+      type: string
+      description: "`agent`: the version names it; `project`: the version leaves it to the project; `frame`: the platform's own, every run has it; `refused`: the version names it and will not get it here"
+      enum: [agent, project, frame, refused]
+    AgentAccessModel:
+      type: object
+      required: [requested, origin]
+      properties:
+        requested: { type: string, description: "what the version (or, inherited, the workflow and the project) asks for: a model or `profile:<tier>`" }
+        resolved: { type: [string, "null"], description: "the model it resolves to in this project, null when it does not resolve" }
+        origin: { $ref: "#/components/schemas/AgentAccessOrigin" }
+        reason: { type: [string, "null"] }
+    AgentAccessTool:
+      type: object
+      required: [name, source, origin]
+      properties:
+        name: { type: string }
+        source: { type: string, enum: [frame, catalogue, extension, connector, web], description: "where the tool comes from: the platform's frame, the deployment catalogue, an extension, a connector through the broker, the governed web tools" }
+        origin: { $ref: "#/components/schemas/AgentAccessOrigin" }
+        access: { type: [string, "null"], enum: [read, write, approval, null] }
+        reason: { type: [string, "null"], description: "why a named tool is refused" }
+    AgentAccessItem:
+      type: object
+      required: [name, origin]
+      properties:
+        name: { type: string, description: "a knowledge base's slug, or a memory binding as `scope:slug`" }
+        origin: { $ref: "#/components/schemas/AgentAccessOrigin" }
+        mode: { type: [string, "null"], description: "a memory binding's mode (`read`, `write`)" }
+        reason: { type: [string, "null"] }
     AgentMetrics:
       type: object
       required: [agent, days, runs, succeeded, failed]
