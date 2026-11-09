@@ -8,7 +8,7 @@ import { courte } from "@/components/passages";
 import { MarkdownView } from "@/components/markdown-view";
 import { Badge, Empty, ErrorNote, Select } from "@/components/ui";
 import { api } from "@/lib/api";
-import { type ArtifactGroup, filenameOf, groupArtifacts, humanSize, readersOf, viewerOf } from "@/lib/artifacts";
+import { type ArtifactGroup, filenameOf, firstToOpen, groupArtifacts, humanSize, readersOf, viewerOf } from "@/lib/artifacts";
 import { shortDate } from "@/lib/format";
 import { sarifRows } from "@/lib/sarif";
 import type { Artifact, HandOff } from "@/lib/types";
@@ -32,7 +32,7 @@ export function Artifacts({
 }) {
   const groups = useMemo(() => groupArtifacts(artifacts), [artifacts]);
   const [selected, setSelected] = useState<string | null>(null);
-  const current = groups.find((g) => g.name === selected) ?? groups[0];
+  const current = groups.find((g) => g.name === selected) ?? firstToOpen(groups);
   if (!current) return <Empty>no artifact yet: the steps have not produced any output.</Empty>;
   return (
     <div className="space-y-3" data-testid="artifacts">

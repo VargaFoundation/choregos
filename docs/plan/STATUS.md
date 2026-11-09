@@ -919,6 +919,7 @@ that follows from it. Rule since that day: nothing is ✅ without a test that fa
 | S59-12 | S59 | ✅ | — | A pull request whose repository refuses auto-merge is merged directly (`GitHubScm.enqueue_merge`, `AUTO_MERGE_REFUSED`): GitHub refuses `enablePullRequestAutoMerge` on a repository that does not allow it (a private one without branch protection) and on a pull request already mergeable ("clean status"); the merge step runs after `ci_green`, so it merges with the configured method instead of failing. Found in production: iris#117 (FON-276) failed the merge five times after a green CI and ended `workflow_failed` (finding #1484). **Proves** (`test_a_repository_that_refuses_auto_merge_is_merged_directly`, red without the change; `test_another_graphql_refusal_is_not_merged_around`): the refusal leads to `PUT …/merge`, another refusal is raised and nothing is merged. **Does not prove**: a repository whose rules require the merge queue refuses the direct merge too (GitHub answers 405: the step fails as before, with GitHub's reason). |
 | S61-00 | S61 | ✅ | — | [ADR 0129](../adr/0129-an-artifact-says-how-it-is-shown.md) accepted (product owner, 2026-11-09: typed artifacts, what is visible in *About this ticket* said by the workflow, a git diff among the artifacts). Proves: the index lists it (`tests/docs/test_adr_index.py`). Does not prove anything about the code: S61-01 to S61-17 do. |
 | S61-01 | S61 | ✅ | — | A ticket's size and risk are in *About this ticket*, as the work item's columns ([ADR 0129](../adr/0129-an-artifact-says-how-it-is-shown.md) §6), whatever its workflow declares: `LevelBadge` tints a scale that judges (risk) and only ranks one that does not (size), the word always written. Proves: `apps/web/tests/ticket-page.test.tsx` (the two badges, their tones, the rank read aloud, nothing named when the ticket has neither). Does not prove: a rendering on a real ticket. |
+| S61-02 | S61 | ✅ | — | The artifacts of a ticket come in the order the steps produced them, and the tab opened first is the latest document rather than whichever name sorts first, which was a 13-byte list on the first real ticket. Proves: `apps/web/tests/artifacts.test.tsx`. Does not prove: a rendering on a real ticket. |
 
 
 
@@ -928,7 +929,7 @@ that follows from it. Rule since that day: nothing is ✅ without a test that fa
 
 
 
-**Total**: 596 delivered, 294 partial, 8 not started.
+**Total**: 597 delivered, 294 partial, 8 not started.
 
 
 **2026-10-05 — ADR 0029: Choregos becomes a platform of governed agents, for general use; 0028 is

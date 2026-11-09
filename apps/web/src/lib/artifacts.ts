@@ -5,7 +5,7 @@
  */
 import type { Artifact, HandOff } from "./types";
 
-/** One named output and all its revisions, latest last. */
+/** One named output and all its revisions, latest last. Groups come in the order they were produced. */
 export type ArtifactGroup = { name: string; latest: Artifact; revisions: Artifact[] };
 
 export function groupArtifacts(artifacts: Artifact[]): ArtifactGroup[] {
@@ -18,7 +18,28 @@ export function groupArtifacts(artifacts: Artifact[]): ArtifactGroup[] {
       const sorted = [...revisions].sort((a, b) => a.version - b.version);
       return { name, latest: sorted.at(-1)!, revisions: sorted };
     })
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort(
+      (a, b) =>
+        (a.revisions[0]!.created_at ?? "").localeCompare(b.revisions[0]!.created_at ?? "") || a.name.localeCompare(b.name),
+    );
+}
+
+/** Below this, an inline value is a word or a flag, not a document somebody opens first. */
+const WORD_BYTES = 64;
+
+function isDocument(group: ArtifactGroup): boolean {
+  return !(["markdown", "json"].includes(group.latest.kind) && group.latest.size < WORD_BYTES);
+}
+
+/** The tab opened first: the most recent document, not whichever name sorts first (a 13-byte list did). */
+export function firstToOpen(groups: ArtifactGroup[]): ArtifactGroup | undefined {
+  const documents = groups.filter(isDocument);
+  const candidates = documents.length > 0 ? documents : groups;
+  return candidates.reduce<ArtifactGroup | undefined>(
+    (best, group) =>
+      best === undefined || (group.latest.created_at ?? "") > (best.latest.created_at ?? "") ? group : best,
+    undefined,
+  );
 }
 
 /**

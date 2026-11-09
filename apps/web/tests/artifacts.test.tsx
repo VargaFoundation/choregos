@@ -4,7 +4,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { Artifacts } from "@/components/artifacts";
 import { MarkdownView } from "@/components/markdown-view";
 import { api, ApiError } from "@/lib/api";
-import { filenameOf, groupArtifacts, readersOf, viewerOf } from "@/lib/artifacts";
+import { filenameOf, firstToOpen, groupArtifacts, readersOf, viewerOf } from "@/lib/artifacts";
 import { sarifRows } from "@/lib/sarif";
 import type { Artifact, HandOff } from "@/lib/types";
 
@@ -145,5 +145,19 @@ describe("the artifacts of a work item (S31-04)", () => {
     const refused = await screen.findByTestId("artifact-refused");
     expect(refused).toHaveTextContent("no longer matches its digest");
     expect(within(screen.getByRole("tabpanel")).queryByTestId("markdown-view")).toBeNull();
+  });
+
+  it("orders the tabs as the steps produced them, and opens the latest document, not a word", () => {
+    const at = (day: number) => `2026-11-0${day}T10:00:00Z`;
+    const groups = groupArtifacts([
+      artifact("allowed_paths", 1, { created_at: at(1), size: 13, kind: "json", type: "json" }),
+      artifact("verdict", 1, { created_at: at(4), size: 7 }),
+      artifact("spec_markdown", 1, { created_at: at(2), size: 3000 }),
+      artifact("test_report", 1, { created_at: at(3), size: 1700 }),
+    ]);
+    expect(groups.map((g) => g.name)).toEqual(["allowed_paths", "spec_markdown", "test_report", "verdict"]);
+    expect(firstToOpen(groups)?.name).toBe("test_report");
+    expect(firstToOpen(groupArtifacts([artifact("verdict", 1, { size: 7 })]))?.name).toBe("verdict");
+    expect(firstToOpen([])).toBeUndefined();
   });
 });
