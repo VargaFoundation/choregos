@@ -43,6 +43,7 @@ from ...services.agent_releases import (
 from ...services.agent_views import agent_pins, agent_version_dto, agent_versions
 from ...services.agents import (
     digest,
+    require_complete,
     version_errors,
 )
 from ...services.egress import egress_gate_for_remote_agent
@@ -76,6 +77,8 @@ async def _append_version(  # noqa: PLR0913 - the actors and the three ways a ve
     A remote agent's card host is opened first (S39-22, ADR 0066), with `allow_egress`."""
     enforce_decision(decide(principal, org, subject, Action.PUBLISH))
     version_errors(spec)
+    if restored_from is None:
+        await require_complete(session, organisation.id, agent.kind, spec)
     await check_agent_network(session, organisation.id, spec)
     await _skills_usable(session, organisation, spec)
     await _model_allowed(session, organisation, spec)

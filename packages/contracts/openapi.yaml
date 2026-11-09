@@ -7985,6 +7985,7 @@ components:
         currency: { type: string, enum: [EUR, USD], default: EUR, description: "the currency the console shows spend in (S29-03); an organisation setting" }
         aliases: { type: array, items: { type: string }, default: [], description: "the slugs the organisation had before; they still resolve to it (ADR 0090). The organisation's id never changes, its slug is an address." }
         tool_scripts: { type: [string, "null"], enum: [enabled, disabled, null], default: null, description: "whether the organisation's runs may be offered tool scripts (S57-05b, ADR 0122 §6): `enabled`, `disabled`, or null to follow the deployment's default (`CHOREGOS_TOOL_SCRIPTS`). Past it, the organisation's ceiling and each project's policy (`tools.scripts: offer`) decide; the deployment's brake (`CHOREGOS_TOOL_SCRIPTS_ALLOWED`) wins over it." }
+        complete_agents: { type: [string, "null"], enum: [required, null], default: null, description: "whether a new version of an internal agent must inherit nothing from its project (S60-05, ADR 0127 §8): `required` refuses it with a 422 `agent_incomplete` naming the components it leaves out; null does not. A restore and a fork reproduce a version already accepted and are not judged." }
     OrgCreate:
       type: object
       required: [slug, name]
@@ -7999,6 +8000,7 @@ components:
         name: { type: [string, "null"], minLength: 1, maxLength: 200 }
         currency: { type: [string, "null"], enum: [EUR, USD, null], description: "the currency spend is shown in; org_admin" }
         tool_scripts: { type: [string, "null"], enum: [enabled, disabled, null], description: "the organisation's switch for tool scripts (S57-05b); org_admin only, a platform administrator who is not one is refused (403). Absent: unchanged; `enabled` or `disabled`: the organisation's choice; null: back to the deployment's default. Audited in `org.update`." }
+        complete_agents: { type: [string, "null"], enum: [required, null], description: "require complete agents (S60-05, ADR 0127 §8); org_admin only (403 otherwise). Absent: unchanged; `required`: required; null: no longer required. Audited in `org.update`." }
     WorkItemCreate:
       type: object
       required: [title]

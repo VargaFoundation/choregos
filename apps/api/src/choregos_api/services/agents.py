@@ -10,13 +10,14 @@ from dataclasses import dataclass
 from datetime import datetime, time
 
 from choregos_core import utcnow
+from choregos_core.agent_completeness import missing_components, org_requires_complete
 from choregos_core.hosted import native_sidecars_refusal
 from choregos_core.instructions import instruction_errors
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
-from ..db.models import Agent, AgentVersion, Project, ProjectAgent
+from ..db.models import Agent, AgentVersion, Organization, Project, ProjectAgent
 from ..deps import _aware
 from ..errors import unprocessable
 from ..schemas import AgentOverrides, AgentSpec, CodeRuntime, HostedImageSource, HostedRuntime
@@ -44,6 +45,31 @@ def digest(spec: AgentSpec) -> str:
         content.pop("network", None)
     blob = json.dumps(content, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return "sha256:" + hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+async def require_complete(session: AsyncSession, org_id: str, kind: str, spec: AgentSpec) -> None:
+    """A new version of an internal agent inherits nothing from its project, in an organisation that
+    requires it (ADR 0127 §8, S60-05: its `complete_agents` setting): its model, its tool sources and its
+    memories are named, even empty. An external agent's rights are its human's (ADR 0033 §7); a restore or
+    a fork reproduces a version already accepted and does not come here."""
+    if kind == "external":
+        return
+    missing = missing_components(spec.model_dump(mode="json"))
+    if not missing:
+        return
+    settings = (
+        await session.execute(select(Organization.settings).where(Organization.id == org_id))
+    ).scalar_one_or_none()
+    if not org_requires_complete(settings):
+        return
+    raise unprocessable(
+        f"the version leaves {', '.join(missing)} to its project, and the organisation requires complete "
+        "agents (its `complete_agents` setting, ADR 0127)",
+        [
+            {"code": "agent_incomplete", "loc": ["spec", *name.split(".")], "msg": "required"}
+            for name in missing
+        ],
+    )
 
 
 def version_errors(spec: AgentSpec) -> None:

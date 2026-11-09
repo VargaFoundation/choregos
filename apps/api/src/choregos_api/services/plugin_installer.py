@@ -71,7 +71,7 @@ from . import plugin_servers
 from .agent_catalogue import DIVERGE
 from .agent_evals import evaluate as evaluate_cases
 from .agent_releases import after_publish
-from .agents import digest, version_errors
+from .agents import digest, require_complete, version_errors
 from .installation import install_skills_and_agents
 from .network import check_agent_network
 from .plugin_supply import PluginSupply, semver_key
@@ -171,6 +171,7 @@ async def _prepare(
                 f"the agent `{slug}` of `{plugin.name}` is not a valid agent", _agent_errors(error)
             ) from error
         version_errors(body.spec)
+        await require_complete(session, org_id, body.kind, body.spec)
         await check_agent_network(session, org_id, body.spec)
         prepared.agents[slug], prepared.specs[slug] = entry, body
 
