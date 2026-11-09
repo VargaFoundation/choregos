@@ -24,3 +24,5 @@ spec:
   budget: { run_usd: 2.0, daily_usd: 20.0 }
   skills: [{ slug: onboarding-procedure }, { slug: access-profiles }]
   mcp_servers: [{ connector: directory, tools: [get_user] }]
+  tools: { catalogue: [], extensions: [], web: [] }
+  memories: [{ scope: project, slug: shared, mode: write }]
