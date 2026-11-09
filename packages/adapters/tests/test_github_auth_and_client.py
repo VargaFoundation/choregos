@@ -77,6 +77,31 @@ async def test_an_expired_token_is_requested_again(private_key: tuple[str, str])
     assert (first.token, second.token) == ("a", "b")
 
 
+async def test_a_token_asks_for_statuses_and_does_without_when_the_app_lacks_them(
+    private_key: tuple[str, str],
+) -> None:
+    """S59-10: the adapters' token asks for `statuses: read` (a Tekton CI's commit statuses). An App
+    installed before it was asked for refuses the whole token (422): it is asked again without it."""
+    from choregos_adapters.github.auth import DEFAULT_PERMISSIONS
+
+    pem, _ = private_key
+    assert DEFAULT_PERMISSIONS["statuses"] == "read"
+    wire = Wire(
+        {
+            ("POST", "/app/installations/7/access_tokens"): [
+                (422, {"message": "The permissions requested are not granted to this installation."}),
+                (201, {"token": "ghs_without_statuses"}),
+            ]
+        }
+    )
+    auth = GitHubAppAuth(app_id="1", private_key=pem, base_url=API)
+    async with wire.client() as client:
+        token = await auth.token_for(client, "varga/x", installation_id=7, permissions=DEFAULT_PERMISSIONS)
+    assert token.token == "ghs_without_statuses"
+    assert "statuses" in wire.body(0)["permissions"]
+    assert "statuses" not in wire.body(1)["permissions"], "asked again without the optional permission"
+
+
 async def test_the_client_replays_secondary_limits_and_5xx(monkeypatch: pytest.MonkeyPatch) -> None:
     waits = no_wait(monkeypatch, client_module)
     wire = Wire(

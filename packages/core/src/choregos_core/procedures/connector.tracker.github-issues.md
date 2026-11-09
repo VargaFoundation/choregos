@@ -47,6 +47,10 @@ Repository permissions:
 - `pull_requests`: write
 - `checks`: write
 - `metadata`: read
+- `statuses`: read
+
+`statuses` lets the platform read a CI that reports commit statuses (Tekton, Jenkins); an App without it
+keeps working, and those statuses are not read.
 
 Organization permissions, for the Projects v2 board:
 
