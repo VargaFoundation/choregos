@@ -13,11 +13,14 @@ from pathlib import Path
 from typing import Any
 
 from choregos_contracts import (
+    CHECKED_TYPES,
+    ArtifactDisplay,
     Artifacts,
     Diagnostics,
     Evidence,
     StageResult,
     StageStatus,
+    coerce_value,
 )
 from pydantic import ValidationError
 
@@ -37,7 +40,12 @@ class ResultLoad:
         return self.result is not None
 
 
-def load_result(path: Path, declared: list[str] | None = None, files: list[str] | None = None) -> ResultLoad:
+def load_result(
+    path: Path,
+    declared: list[str] | None = None,
+    files: list[str] | None = None,
+    displays: dict[str, ArtifactDisplay] | None = None,
+) -> ResultLoad:
     """Read and validate the file. Every error is worded to be sent back to the agent.
 
     `declared`: the outputs the transition declares. A `done` result that omits one
@@ -73,6 +81,12 @@ def load_result(path: Path, declared: list[str] | None = None, files: list[str] 
             ),
             raw=raw,
         )
+    # A value off its declared type goes back like a missing one (ADR 0129 §10).
+    off_type = _off_type(parsed, displays or {})
+    if off_type:
+        return ResultLoad(
+            None, error="\n".join(["`outputs` holds a value of the wrong kind:", *off_type]), raw=raw
+        )
     # `files`: the deliverables a `done` step declares (ADR 0049), expected beside this file in
     # `.choregos/outputs/`. A missing one goes back to the agent like a missing output.
     absent = [name for name in files or [] if not (path.parent / "outputs" / name).is_file()]
@@ -95,6 +109,22 @@ def _missing_outputs(parsed: StageResult, declared: list[str]) -> list[str]:
         return []
     written = parsed.outputs.model_dump(exclude_none=True)
     return [name for name in declared if written.get(name) in (None, "", [], {})]
+
+
+def _off_type(parsed: StageResult, displays: dict[str, ArtifactDisplay]) -> list[str]:
+    """What is wrong with the typed outputs of a `done` result, one line per output, for the agent."""
+    if parsed.status is not StageStatus.DONE:
+        return []
+    written = parsed.outputs.model_dump(exclude_none=True)
+    problems: list[str] = []
+    for name, display in displays.items():
+        if name not in written or display.type not in CHECKED_TYPES:
+            continue
+        try:
+            coerce_value(display, written[name])
+        except ValueError as error:
+            problems.append(f"- `{name}`: {error}.")
+    return problems
 
 
 def _explain(exc: ValidationError) -> str:

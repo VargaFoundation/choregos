@@ -275,7 +275,12 @@ class PromptRun:
     def _submit(self, payload: dict[str, Any]) -> str:
         self.result_path.parent.mkdir(parents=True, exist_ok=True)
         self.result_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
-        load = load_result(self.result_path, inline_outputs(self.stage_input), list(self.files.values()))
+        load = load_result(
+            self.result_path,
+            inline_outputs(self.stage_input),
+            list(self.files.values()),
+            self.stage_input.transition.artifact_displays,
+        )
         if load.result is None:
             self.last_error = load.error
             return f"the result is refused: {load.error}"
