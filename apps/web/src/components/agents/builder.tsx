@@ -33,7 +33,7 @@ import { describe, effectiveBindings, writesTo, labelOf, type Binding } from "@/
 import { EvalSuiteEditor, TrialBench } from "./trial";
 import { usableModels } from "@/lib/usable-models";
 import { usd } from "@/lib/format";
-import { NO_TOOL_LABEL } from "@/lib/mcp-tools";
+import { NO_TOOL_LABEL, grantNames, keepBounds, type ToolGrant } from "@/lib/mcp-tools";
 import { WORKSPACE_LABELS, type Workspace } from "@/lib/workspace";
 import type {
   Agent,
@@ -985,7 +985,7 @@ function McpSection({
 }) {
   const servers = spec.mcp_servers ?? [];
   const [adding, setAdding] = useState("");
-  const update = (index: number, tools: string[]) =>
+  const update = (index: number, tools: ToolGrant[]) =>
     set({ mcp_servers: servers.map((s, i) => (i === index ? { ...s, tools } : s)) });
   return (
     <Disclosure title="Tools (MCP servers)" summary={summary} defaultOpen={defaultOpen}>
@@ -1006,8 +1006,8 @@ function McpSection({
             <label className="block space-y-1">
               <span className="text-xs text-ink-muted">Tool patterns of {server.connector}</span>
               <Input
-                defaultValue={(server.tools ?? []).join(", ")}
-                onChange={(e) => update(index, parseTools(e.target.value))}
+                defaultValue={grantNames(server.tools).join(", ")}
+                onChange={(e) => update(index, keepBounds(server.tools, parseTools(e.target.value)))}
                 placeholder="track_*, search_orders"
                 className="font-mono"
               />
@@ -1496,7 +1496,7 @@ export function BuilderSummary({
         ) : (
           servers.map((server) => {
             const connector = connectors.find((c) => c.name === server.connector);
-            const reached = reachedOperations(connector, server.tools ?? []);
+            const reached = reachedOperations(connector, grantNames(server.tools));
             return (
               <div key={server.connector}>
                 <p className="font-mono text-xs">{server.connector}</p>

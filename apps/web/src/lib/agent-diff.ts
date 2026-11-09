@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe as describeBinding, effectiveBindings, labelOf, type Binding } from "@/lib/memories";
-import { toolsLabel } from "@/lib/mcp-tools";
+import { toolsLabel , type ToolGrant } from "@/lib/mcp-tools";
 import type { AgentSpec } from "@/lib/types";
 import { WORKSPACE_LABELS, effectiveWorkspace, type Workspace } from "@/lib/workspace";
 
@@ -250,8 +250,10 @@ export function diffSpecs(before: AgentSpec | null | undefined, after: AgentSpec
     (s) => `Tools of ${s.connector}`,
     (s) => toolsLabel(s.tools),
     (x, y) => {
-      const was = new Set(x.tools ?? []);
-      const now = new Set(y.tools ?? []);
+      // A grant with bound arguments (ADR 0128) compares by its name and its bound, not by identity.
+      const key = (t: ToolGrant) => (typeof t === "string" ? t : `${t.name} ${JSON.stringify(t.arguments)}`);
+      const was = new Set((x.tools ?? []).map(key));
+      const now = new Set((y.tools ?? []).map(key));
       const plus = [...now].filter((t) => !was.has(t)).map((t) => `+${t}`);
       const minus = [...was].filter((t) => !now.has(t)).map((t) => `−${t}`);
       return plus.length || minus.length ? { detail: [...plus, ...minus].join("  ") } : null;
