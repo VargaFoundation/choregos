@@ -744,8 +744,8 @@ async def _artifacts(door: Door, item: WorkItem, link: str) -> list[dict[str, An
 
 
 def _content_part(row: ArtifactRecord, data: bytes) -> dict[str, Any]:
-    """Markdown is text, a JSON object is data; anything else travels as a file, its bytes in base64."""
-    if row.storage_key is None and row.type == "markdown" and isinstance(row.content, str):
+    """Inline text is text, a JSON object is data; anything else travels as a file, in base64."""
+    if row.storage_key is None and isinstance(row.content, str):
         return {"kind": "text", "text": row.content}
     if row.storage_key is None and isinstance(row.content, dict):
         return {"kind": "data", "data": row.content}
