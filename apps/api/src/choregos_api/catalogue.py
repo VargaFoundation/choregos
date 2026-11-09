@@ -62,6 +62,26 @@ def project_tools(
     return [o for o in open_tools if o.name in permitted]
 
 
+GROUP_PREFIX = "group:"
+
+
+def expand_names(tokens: list[str]) -> tuple[set[str], list[str]]:
+    """The catalogue tools an agent version's `tools.catalogue` names (ADR 0127): a name stands for
+    itself, `group:<name>` for every tool of the catalogue filed under that group. Also the groups
+    that name no tool."""
+    names: set[str] = set()
+    empty: list[str] = []
+    for token in tokens:
+        if not token.startswith(GROUP_PREFIX):
+            names.add(token)
+            continue
+        members = {o.name for o in catalogue().tools if token.removeprefix(GROUP_PREFIX) in o.groups}
+        names |= members
+        if not members:
+            empty.append(token)
+    return names, empty
+
+
 async def call(tool: CatalogueTool, arguments: dict[str, Any]) -> tuple[int, Any]:
     """Calls the provider: direct HTTP or a remote MCP server.
 

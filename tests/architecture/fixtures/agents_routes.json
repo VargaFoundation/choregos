@@ -70,6 +70,13 @@
     "operation_id": "getAgentVersion"
   },
   {
+    "path": "/orgs/{org}/agents/{slug}/access",
+    "methods": [
+      "GET"
+    ],
+    "operation_id": "getAgentAccess"
+  },
+  {
     "path": "/orgs/{org}/agents/{slug}/metrics",
     "methods": [
       "GET"
