@@ -3,7 +3,9 @@
 
 from __future__ import annotations
 
-from fastapi import status
+from typing import Annotated
+
+from fastapi import Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,16 +17,18 @@ from ...db.models import (
 )
 from ...deps import Db, Me
 from ...errors import conflict, not_found, unprocessable
+from ...rbac import Permission
 from ...schemas import (
     AgentSpec,
     AgentVersionDto,
     AgentVersionPublish,
     AgentVersionRestore,
 )
-from ...schemas.agents import check_remote_kind
+from ...schemas.agents import AgentAccess, check_remote_kind
 from ...services.agent_access import (
     enforce_decision,
     load_visible_agent,
+    project_in_org,
 )
 from ...services.agent_evals import gate
 from ...services.agent_governance import (
@@ -32,6 +36,7 @@ from ...services.agent_governance import (
     Subject,
     decide,
 )
+from ...services.agent_reach import access_of, version_of_project
 from ...services.agent_releases import (
     after_publish,
 )
@@ -238,3 +243,35 @@ async def get_version(org: str, slug: Slug, version: int, session: Db, principal
         await agent_pins(session, principal, org, agent),
         await builds_for(session, agent.org_id, [db_row.spec]),
     )
+
+
+@router.get(
+    "/orgs/{org}/agents/{slug}/access",
+    response_model=AgentAccess,
+    operation_id="getAgentAccess",
+)
+async def get_access(
+    org: str,
+    slug: Slug,
+    session: Db,
+    principal: Me,
+    project: Annotated[str, Query(min_length=1, max_length=200)],
+    version: Annotated[int | None, Query(ge=1)] = None,
+) -> AgentAccess:
+    """What one version of the agent reaches in one project, each thing with its origin (ADR 0127).
+
+    The version is the one given, else the one a run of the project takes (pin, channel, production).
+    For whoever may read the agent AND the project; anyone else gets the 404 of the sibling routes."""
+    organisation, agent, _ = await load_visible_agent(session, principal, org, slug)
+    row = await project_in_org(session, organisation, project)
+    if not principal.can(Permission.PROJECT_READ, org, row.slug):
+        raise not_found("Project", f"{org}/{project}")
+    number = version if version is not None else await version_of_project(session, agent, row)
+    stored = (
+        await session.execute(
+            select(AgentVersion.spec).where(AgentVersion.agent_id == agent.id, AgentVersion.version == number)
+        )
+    ).scalar_one_or_none()
+    if stored is None:
+        raise not_found("Agent version", f"{slug}@{number}")
+    return await access_of(session, agent, number, AgentSpec.model_validate(stored), row)
