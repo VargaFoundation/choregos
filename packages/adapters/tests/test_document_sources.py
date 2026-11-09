@@ -6,14 +6,17 @@ import asyncio
 import subprocess
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qsl
 
 import httpx
 import pytest
 from choregos_adapters.documents import GitSource, GraphDriveSource, WebCrawlSource
 from choregos_adapters.documents.base import SourceRefusedError
+from choregos_adapters.errors import ConfigurationError, UpstreamError
 from choregos_adapters.fakes.documents import FakeDocumentSource
 
 GRAPH = "https://graph.microsoft.com/v1.0"
+PASSWORD = "account-password-AAAA-1111"
 
 
 def _graph_transport(pages: dict[str, dict[str, Any]], seen: list[httpx.Request]) -> httpx.MockTransport:
@@ -84,6 +87,164 @@ async def test_graph_resumes_from_its_delta_link() -> None:
     changes = await source.changes({"delta_link": link})
     assert changes.cursor is not None and changes.cursor["delta_link"].endswith("token=after")
     assert [str(r.url) for r in seen if "delta" in str(r.url)] == [link]
+
+
+def _sign_in(status: int, body: dict[str, Any] | str, seen: list[httpx.Request]) -> httpx.MockTransport:
+    """A token endpoint answering `status` with `body`, and a drive with one empty delta page."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        if request.url.path.endswith("/oauth2/v2.0/token"):
+            if isinstance(body, str):
+                return httpx.Response(status, text=body)
+            return httpx.Response(status, json=body)
+        return httpx.Response(200, json={"value": [], "@odata.deltaLink": f"{GRAPH}/delta?token=1"})
+
+    return httpx.MockTransport(handler)
+
+
+def _account(transport: httpx.MockTransport) -> GraphDriveSource:
+    return GraphDriveSource(
+        tenant_id="t",
+        client_id="c",
+        client_secret="app-secret",
+        username="reader@example.com",
+        password=PASSWORD,
+        drive_id="d1",
+        transport=transport,
+    )
+
+
+def _form(request: httpx.Request) -> dict[str, str]:
+    return dict(parse_qsl(request.content.decode()))
+
+
+async def test_a_service_account_signs_in_with_the_password_grant_and_keeps_its_token() -> None:
+    seen: list[httpx.Request] = []
+    source = _account(_sign_in(200, {"access_token": "tok", "expires_in": 3600}, seen))
+    await source.changes(None)
+    await source.changes(None)
+
+    tokens = [r for r in seen if r.url.path.endswith("/oauth2/v2.0/token")]
+    assert len(tokens) == 1, "the token is cached as in the application's sign-in"
+    assert str(tokens[0].url) == "https://login.microsoftonline.com/t/oauth2/v2.0/token"
+    assert _form(tokens[0]) == {
+        "grant_type": "password",
+        "client_id": "c",
+        "client_secret": "app-secret",
+        "username": "reader@example.com",
+        "password": PASSWORD,
+        "scope": "https://graph.microsoft.com/.default",
+    }
+    assert seen[-1].headers["authorization"] == "Bearer tok"
+
+
+async def test_without_a_username_the_application_signs_in_as_before() -> None:
+    seen: list[httpx.Request] = []
+    source = GraphDriveSource(
+        tenant_id="t",
+        client_id="c",
+        client_secret="app-secret",
+        drive_id="d1",
+        transport=_sign_in(200, {"access_token": "tok", "expires_in": 3600}, seen),
+    )
+    await source.changes(None)
+    assert _form(seen[0]) == {
+        "grant_type": "client_credentials",
+        "client_id": "c",
+        "client_secret": "app-secret",
+        "scope": "https://graph.microsoft.com/.default",
+    }
+
+
+@pytest.mark.parametrize(
+    ("code", "says"),
+    [(50126, "wrong user name or password"), (50076, "MFA")],
+)
+async def test_a_refused_sign_in_names_a_useful_code_and_never_the_password(code: int, says: str) -> None:
+    # An endpoint echoing the request is the worst case: nothing of its text may be repeated.
+    answer = {
+        "error": "invalid_grant",
+        "error_description": f"AADSTS{code}: refused for reader@example.com with {PASSWORD}",
+        "error_codes": [code],
+    }
+    source = _account(_sign_in(400, answer, []))
+    with pytest.raises(UpstreamError) as refused:
+        await source.changes(None)
+    message = str(refused.value)
+    assert f"token refused (400): AADSTS{code}" in message and says in message, message
+    assert refused.value.status_code == 400
+    assert PASSWORD not in message and "reader@example.com" not in message, message
+    assert PASSWORD not in repr(refused.value)
+
+
+@pytest.mark.parametrize(
+    "answer",
+    [
+        {"error": "invalid_grant", "error_codes": [90002], "error_description": PASSWORD},
+        {"error_codes": "50126"},
+        ["50126"],
+        f"<html>{PASSWORD}</html>",
+    ],
+)
+async def test_a_refusal_with_no_useful_code_is_only_its_status(answer: dict[str, Any] | str) -> None:
+    source = _account(_sign_in(400, answer, []))
+    with pytest.raises(UpstreamError) as refused:
+        await source.changes(None)
+    assert str(refused.value) == "[graph] token refused (400)"
+
+
+async def test_an_application_refused_sign_in_stays_its_status_alone() -> None:
+    source = GraphDriveSource(
+        tenant_id="t",
+        client_id="c",
+        client_secret="app-secret",
+        drive_id="d1",
+        transport=_sign_in(401, {"error_codes": [50126]}, []),
+    )
+    with pytest.raises(UpstreamError) as refused:
+        await source.changes(None)
+    assert str(refused.value) == "[graph] token refused (401)"
+
+
+@pytest.mark.parametrize(
+    "half", [{"username": "reader@example.com"}, {"password": PASSWORD}], ids=["no-password", "no-username"]
+)
+def test_half_a_service_account_is_refused_when_the_source_opens(half: dict[str, str]) -> None:
+    from choregos_adapters.documents.graph import GraphDocumentsConnector
+
+    connector = GraphDocumentsConnector({"tenant_id": "t", "client_id": "c", "client_secret": "s", **half})
+    with pytest.raises(ConfigurationError, match="both `username` and its `password`") as refused:
+        connector.source({"drive_id": "d1"}, key="src")
+    assert PASSWORD not in str(refused.value)
+
+
+def test_the_connector_opens_a_source_that_signs_in_as_its_account() -> None:
+    from choregos_adapters.documents.graph import GraphDocumentsConnector
+
+    opened = GraphDocumentsConnector(
+        {
+            "tenant_id": "t",
+            "client_id": "c",
+            "client_secret": "s",
+            "username": "reader@example.com",
+            "password": PASSWORD,
+        }
+    ).source({"drive_id": "d1"}, key="src")
+    assert opened._sign_in_form()["grant_type"] == "password"
+
+
+def test_the_sharepoint_type_declares_its_account_with_a_sealed_password() -> None:
+    from choregos_adapters.registry import secret_references, spec_of
+
+    spec = spec_of("documents", "sharepoint")
+    assert spec is not None
+    assert "username" in spec.config_schema["properties"]
+    assert "username" not in spec.config_schema["required"], "the application's sign-in stays the default"
+    assert "password" not in spec.config_schema["properties"], "a secret is never a configuration field"
+    assert spec.secret_fields == ("client_secret", "password")
+    # A single `secret_ref` stands for the FIRST secret field: it must stay the application's.
+    assert secret_references("documents", "sharepoint", None, "env:OLD") == {"client_secret": "env:OLD"}
 
 
 def _site(pages: dict[str, tuple[int, str]], robots: str = "") -> httpx.MockTransport:

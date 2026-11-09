@@ -17,7 +17,7 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | [Read pipeline status from Tekton](connector.ci.tekton.md) | the person who operates the platform | `ci/tekton` | 2026-10-16 |
 | [Connect Confluence Cloud](connector.documents.confluence.md) | an organisation administrator | `documents/confluence` | 2026-10-16 |
 | [Connect a private git repository as a documents source](connector.documents.git.md) | an organisation administrator | `documents/git` | 2026-10-16 |
-| [Connect SharePoint and OneDrive](connector.documents.sharepoint.md) | an organisation administrator | `documents/sharepoint` | 2026-10-16 |
+| [Connect SharePoint and OneDrive](connector.documents.sharepoint.md) | an organisation administrator | `documents/sharepoint` | 2026-11-09 |
 | [Connect a web site behind a login as a documents source](connector.documents.web.md) | an organisation administrator | `documents/web` | 2026-10-28 |
 | [Connect a pfSense firewall](connector.firewall.pfsense.md) | an organisation administrator | `firewall/pfsense` | 2026-10-16 |
 | [Use the direct gateway (development only)](connector.gateway.direct.md) | the person who operates the platform | `gateway/direct` | 2026-10-16 |

@@ -2,7 +2,7 @@
 
 # Connect SharePoint and OneDrive
 
-For an organisation administrator. Procedure `connector.documents.sharepoint`, version 1, reviewed 2026-10-16 against the vendor's own pages.
+For an organisation administrator. Procedure `connector.documents.sharepoint`, version 1, reviewed 2026-11-09 against the vendor's own pages.
 
 ## Before you start
 
@@ -38,6 +38,24 @@ Least privilege first: the app reads only the sites you name.
 
 Without step 2 the app is authorised and reads **nothing**: every site answers 403.
 
+### Or a read-only service account
+
+Use it when neither grant fits: a folder-level grant would break the site's permission inheritance, and
+a site-wide application grant would bypass its restricted folders. The connector then signs in as a
+directory user, and **reads only what that account may read**, through its group memberships.
+
+1. Create a dedicated user, with no administrator role, and put it in the groups that give it read
+   access. It needs a password that Microsoft Entra checks: an account federated to another identity
+   provider usually cannot sign in this way.
+2. On the same app, **API permissions**, **Add a permission**, **Microsoft Graph**, **Delegated
+   permissions**, `Sites.Read.All`, then **Grant admin consent**. Delegated, it opens nothing the account
+   cannot already read; the "never" above is about the application permission.
+3. The account must have **no interactive MFA requirement**, because this sign-in cannot answer a
+   challenge. Where you can, have a Conditional Access policy allow it only from the platform's network
+   location.
+
+Microsoft discourages this sign-in (the password grant): use `Sites.Selected` wherever a per-site read fits.
+
 ## In Choregos
 
 1. Administration, **Connectors**, **Declare**: capability **Documents**, type **SharePoint**, any name
@@ -45,8 +63,10 @@ Without step 2 the app is authorised and reads **nothing**: every site answers 4
 2. `tenant_id`: the Directory (tenant) ID. `client_id`: the Application (client) ID.
 3. `client_secret`: paste the secret's Value in the password field. It is sealed and never shown again;
    to rotate it, use **Replace**.
-4. Leave `graph_url` and `login_url` alone unless you use a sovereign cloud.
-5. Then **Knowledge**, a base, **Add source**, **SharePoint**: pick this connector, the site (or a
+4. For a service account, fill `username` and type its `password`, sealed like the secret. Set both or
+   neither: leaving both empty signs in as the application, and only one of them fails the sync.
+5. Leave `graph_url` and `login_url` alone unless you use a sovereign cloud.
+6. Then **Knowledge**, a base, **Add source**, **SharePoint**: pick this connector, the site (or a
    OneDrive's drive) and, if you want, a folder.
 
 ## Test it
@@ -59,7 +79,13 @@ the consent and the site grant at once.
 
 - `AADSTS7000215` (invalid client secret): the Secret **ID** was pasted instead of the **Value**.
 - `AADSTS700016` (application not found): wrong `client_id`, or wrong `tenant_id`.
-- `403 accessDenied` on a site: the site grant (Permissions, step 2) is missing for that site.
+- `403 accessDenied` on a site: the site grant (Permissions, step 2) is missing for that site or, with a
+  service account, the account's groups do not give it read access.
+- `AADSTS50126` (service account): wrong user name or password. `AADSTS50055`: the password has expired.
+  `AADSTS50053`: the account is locked.
+- `AADSTS50076` or `AADSTS50079` (service account): the account is asked for MFA, which this sign-in
+  cannot answer. `AADSTS53003`: a Conditional Access policy blocks it.
+- `AADSTS65001` (service account): the delegated `Sites.Read.All` has no admin consent.
 - `401` months after it worked: the client secret expired. Create a new one and **Replace** it.
 - A timeout: the API cannot reach `graph.microsoft.com` or `login.microsoftonline.com`; the
   network egress allowlist must open both.
@@ -70,7 +96,9 @@ the consent and the site grant at once.
 | :-- | :-- |
 | `client_id` | Application (client) ID, from the app's Overview page |
 | `client_secret` | the secret's Value (not its Secret ID), typed once |
+| `password` | the service account's password, typed once; only with `username`, and without leading or trailing spaces |
 | `tenant_id` | Directory (tenant) ID, from the app's Overview page |
+| `username` | optional: the service account's user principal name, to sign in as it instead of the application |
 
 ## Network egress
 
@@ -83,3 +111,4 @@ Hosts the platform must be allowed to reach:
 
 - [Register an application in Microsoft Entra ID](https://learn.microsoft.com/en-us/entra/identity-platform/quickstart-register-app)
 - [Controlling app access on specific SharePoint site collections](https://devblogs.microsoft.com/microsoft365dev/controlling-app-access-on-specific-sharepoint-site-collections/)
+- [OAuth 2.0 Resource Owner Password Credentials](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth-ropc)

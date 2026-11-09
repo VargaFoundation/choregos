@@ -2423,9 +2423,9 @@ export const connectorTypes: ConnectorType[] = [
     kind: "documents",
     type: "sharepoint",
     display: "SharePoint / OneDrive",
-    config_schema: objet({ tenant_id: { type: "string" }, client_id: { type: "string" } }, ["tenant_id", "client_id"]),
+    config_schema: objet({ tenant_id: { type: "string" }, client_id: { type: "string" }, username: { type: "string" } }, ["tenant_id", "client_id"]),
     capabilities: ["documents"],
-    secret_fields: ["client_secret"],
+    secret_fields: ["client_secret", "password"],
   },
   { kind: "mcp", type: "mcp", display: "MCP server (Streamable HTTP)", config_schema: objet({ url: { type: "string" } }, ["url"]), capabilities: ["mcp"], secret_fields: ["token"] },
   {
