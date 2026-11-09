@@ -114,6 +114,10 @@ A version also declares the **workspace** its runs need ([ADR 0119](adr/0119-an-
 or `write` (the default). The repository is never the agent's: it is the project's, and each project
 that runs the agent supplies its own, or none.
 
+Its **language** ([ADR 0126](adr/0126-an-agent-may-write-for-people-in-another-language.md)) is the
+one a person reads its output in: English unless the author names another (`fr`, `pt-BR`). Only what
+the agent writes follows it; the platform's own words and a result's machine fields stay English.
+
 ## Knowledge bases
 
 A knowledge base is a corpus a human curates and agents read. Its **reach** (`scope`) says which runs are

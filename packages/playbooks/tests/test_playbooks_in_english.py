@@ -136,6 +136,8 @@ def test_the_demonstration_playbooks_are_in_english(role: str, monkeypatch: pyte
         pytest.param("INVARIANTS", INVARIANTS, id="invariants"),
         pytest.param("OUTPUT_CONTRACT", OUTPUT_CONTRACT, id="output-contract"),
         pytest.param("frame", frame("Do the work described above."), id="registry-agent-frame"),
+        # An agent writing for people in another language (ADR 0126): the frame asking it is English.
+        pytest.param("frame", frame("Do the work described above.", "fr"), id="registry-agent-frame-fr"),
     ],
 )
 def test_the_invariants_the_contract_and_the_frame_are_in_english(name: str, text: str) -> None:

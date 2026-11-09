@@ -32,6 +32,9 @@ TAG = r"^[a-z0-9][a-z0-9-]{0,31}$"
 MAX_TAGS = 10
 AgentTag = Annotated[str, Field(pattern=TAG)]
 
+#: A language tag (ADR 0126): a primary language subtag (`fr`), optionally a region (`pt-BR`).
+LANGUAGE_TAG = r"^[a-z]{2,3}(-[A-Z]{2})?$"
+
 #: The longest message a version carries (S40-12).
 MESSAGE_MAX = 500
 
@@ -526,6 +529,10 @@ class AgentSpec(Dto):
     #: The agent's measured default for tool scripts (ADR 0122 §9, S57-15); absent: no default.
     tools: AgentTools | None = None
 
+    #: The language a person reads the agent's output in (ADR 0126): a tag such as `fr` or `pt-BR`.
+    #: Absent: English, the frame unchanged. The result's keys, identifiers and enum values stay English.
+    language: str | None = Field(default=None, pattern=LANGUAGE_TAG)
+
     @model_validator(mode="after")
     def _memories_are_coherent(self) -> AgentSpec:
         if self.memories is None:
@@ -538,10 +545,10 @@ class AgentSpec(Dto):
 
     @model_serializer(mode="wrap")
     def _leave_out_absent_fields(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
-        """`memories`, `workspace` and `tools` are left out while unset: a version published before the
-        fields existed keeps its stored spec, its digest and its response byte for byte."""
+        """`memories`, `workspace`, `tools` and `language` are left out while unset: a version published
+        before the fields existed keeps its stored spec, its digest and its response byte for byte."""
         data: dict[str, object] = handler(self)
-        for name in ("memories", "workspace", "tools"):
+        for name in ("memories", "workspace", "tools", "language"):
             if data.get(name) is None:
                 data.pop(name, None)
         return data

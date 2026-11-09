@@ -3,6 +3,7 @@ import { describe as describeBinding, effectiveBindings, labelOf, type Binding }
 import { toolsLabel , type ToolGrant } from "@/lib/mcp-tools";
 import type { AgentSpec } from "@/lib/types";
 import { WORKSPACE_LABELS, effectiveWorkspace, type Workspace } from "@/lib/workspace";
+import { effectiveLanguage, languageLabel } from "@/lib/language";
 
 /**
  * The difference between two specs, field by field (S40-12, ADR 0076). Pure: the console has both specs
@@ -41,7 +42,7 @@ export const GROUP_LABELS: Record<ChangeGroup, string> = {
 };
 export const GROUP_ORDER: ChangeGroup[] = ["instructions", "model", "capabilities", "limits", "evals", "other"];
 
-const KNOWN = new Set(["instructions", "model", "backend", "limits", "budget", "skills", "mcp_servers", "knowledge", "memory", "memories", "evals", "workspace", "tools"]);
+const KNOWN = new Set(["instructions", "model", "backend", "limits", "budget", "skills", "mcp_servers", "knowledge", "memory", "memories", "evals", "workspace", "tools", "language"]);
 
 /** A spec with absent, null and default values made the same, so none of them shows as a change. */
 export function normalizeSpec(spec: AgentSpec | null | undefined): Record<string, unknown> {
@@ -73,6 +74,8 @@ export function normalizeSpec(spec: AgentSpec | null | undefined): Record<string
     extensions: named(s.tools?.extensions),
     web: named(s.tools?.web),
   };
+  // What a run writes in: an absent `language` and `en` read the same.
+  out.language = effectiveLanguage(s);
   return out;
 }
 
@@ -182,6 +185,7 @@ export function diffSpecs(before: AgentSpec | null | undefined, after: AgentSpec
         : { lines: lineDiff(String(a.instructions), String(b.instructions)) }),
     });
   }
+  scalar(out, "instructions", "language", "Output language", a.language, b.language, "English", (v) => languageLabel(String(v)));
   scalar(out, "model", "model", "Model", a.model, b.model, "the project's profile");
   scalar(out, "model", "backend", "Backend", a.backend, b.backend, "the project's backend");
   scalar(out, "capabilities", "workspace", "Workspace", a.workspace, b.workspace, "write", (v) => WORKSPACE_LABELS[v as Workspace]);

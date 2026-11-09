@@ -1793,6 +1793,19 @@ differs is a `422`. On a run that never cloned, the diff guarantees read an empt
 branch does not exist (`diff_size_max files: 0` passes). The console shows the workspace on the
 agent's definition (Capabilities) and edits it in the builder's Workspace section.
 
+A version may also say **which language** a person reads its output in
+([ADR 0126](adr/0126-an-agent-may-write-for-people-in-another-language.md)), in `"language"`: a
+language tag such as `fr`, `de` or `pt-BR` (a primary subtag, optionally a region; anything else is a
+`422`). The platform's frame then asks the agent to write its summary, documents, questions and
+findings in that language, while the keys, identifiers and enum values of the result contract
+(`status`, `type`, `severity`) and the shape of `.choregos/result.json` stay as specified. Absent or
+`en`, the agent writes in English, as before, and an absent field is left out of the stored spec so no
+digest moves. The language is the agent's, not the organisation's: a code agent can keep writing pull
+requests in English while an assistant writes for people in theirs. A built-in role run without a
+registry agent writes in English. An interactive session gets the instructions without the frame, so
+`language` does not reach it.
+The console edits it under the instructions ("Output language") and shows it on the definition.
+
 A project **pins** a version and may only **tighten** it — a lower budget or limit, fewer tools;
 an override that widens is refused (`422`). A revocation is final.
 
