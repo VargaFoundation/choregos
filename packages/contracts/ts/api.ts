@@ -449,6 +449,10 @@ export type ConnectorOperation = {
   approver_group?: string | null;
   /** the most one result of this operation may weigh, as JSON bytes, when it reaches the agent; none: the platform's default. Never above the platform's ceiling */
   result_max_bytes?: number | null;
+  /** a JSON Schema (2020-12, no $ref, at most 8 KiB) the arguments of every call must also satisfy, whichever agent calls; `{project}` is the run's project slug (ADR 0128) */
+  arguments?: {
+    [key: string]: unknown;
+  } | null;
 };
 
 export type ConnectorDiscovery = {
@@ -737,6 +741,10 @@ export type OperationPatch = {
   approver_group?: string | null;
   /** the most one result may weigh, as JSON bytes; above the platform's ceiling is refused (422); null clears it */
   result_max_bytes?: number | null;
+  /** a JSON Schema the arguments of every call must also satisfy (ADR 0128); refused (422) when it is not a schema the platform reads (2020-12, no $ref, at most 8 KiB) or names an argument the operation does not have; null clears it */
+  arguments?: {
+    [key: string]: unknown;
+  } | null;
 };
 
 export type ProjectOperation = {
@@ -747,10 +755,22 @@ export type ProjectOperation = {
   project_policy?: string | null;
   effective_policy: string;
   description?: string | null;
+  /** what the organisation binds of the call's arguments (ADR 0128) */
+  org_arguments?: {
+    [key: string]: unknown;
+  } | null;
+  /** what this project binds of them, on top of the organisation's (ADR 0128) */
+  project_arguments?: {
+    [key: string]: unknown;
+  } | null;
 };
 
 export type ProjectOperationPut = {
   policy: "allowed" | "approval" | "forbidden";
+  /** binds the call's arguments on top of the organisation's rule and the agent's grant (ADR 0128); same refusals as the organisation's; absent or null clears it */
+  arguments?: {
+    [key: string]: unknown;
+  } | null;
 };
 
 export type ActionEffectSpec = {
@@ -1141,7 +1161,8 @@ export type AgentSpec = {
   }>;
   mcp_servers?: Array<{
     connector: string;
-    tools?: Array<string>;
+    /** operation names or `prefix_*` patterns; an object binds the call's arguments (ADR 0128) */
+    tools?: Array<string | AgentToolGrant>;
   }>;
   /** the knowledge bases the agent reads (ADR 0051); each must be served to the run's project */
   knowledge?: Array<{
@@ -2170,6 +2191,16 @@ export type AgentLifecycleResult = {
 
 export type AgentOwnerChange = {
   email: string;
+};
+
+/** A tool grant that binds the call's arguments (ADR 0128): `sync_application` on the application `shop` only. The call's arguments must satisfy `arguments` on top of the operation's input schema, and of the organisation's rule and the project's policy: all of them. A call outside is refused (400, problem `arguments_outside_grant`, naming the level and the JSON path). */
+export type AgentToolGrant = {
+  /** the operation, or a `prefix_*` pattern */
+  name: string;
+  /** a JSON Schema (2020-12, no $ref, no remote anything, at most 8 KiB); `{project}` is the run's project slug. It names only arguments the operation has, and the pattern must match an operation of an organisation connector (422 when the version is written) */
+  arguments: {
+    [key: string]: unknown;
+  };
 };
 
 /** What a version reaches in a project (ADR 0127). */

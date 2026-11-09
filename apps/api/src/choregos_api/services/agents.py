@@ -21,6 +21,7 @@ from ..db.models import Agent, AgentVersion, Organization, Project, ProjectAgent
 from ..deps import _aware
 from ..errors import unprocessable
 from ..schemas import AgentOverrides, AgentSpec, CodeRuntime, HostedImageSource, HostedRuntime
+from ..schemas.agents import grant_name
 from .agent_governance import usable_in_project
 from .agent_releases import served
 
@@ -126,7 +127,7 @@ def version_errors(spec: AgentSpec) -> None:
 
 
 def _tools(spec: AgentSpec) -> set[str]:
-    return {tool for server in spec.mcp_servers for tool in server.tools}
+    return {grant_name(tool) for server in spec.mcp_servers for tool in server.tools}
 
 
 def widenings(spec: AgentSpec, overrides: AgentOverrides) -> list[str]:
@@ -162,7 +163,7 @@ def effective(spec: AgentSpec, overrides: AgentOverrides) -> AgentSpec:
     if overrides.tools is not None:
         kept = set(overrides.tools)
         for server in result.mcp_servers:
-            server.tools = [tool for tool in server.tools if tool in kept]
+            server.tools = [tool for tool in server.tools if grant_name(tool) in kept]
     return result
 
 

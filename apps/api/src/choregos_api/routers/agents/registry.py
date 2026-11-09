@@ -62,7 +62,7 @@ from ...services.memory_access import check_bindings_at_publish
 from ...services.network import check_agent_network
 from ...services.organisations import organisation_by_slug
 from ...services.remote_agents import pin_remote_runtime
-from ._common import _model_allowed, _skills_usable
+from ._common import _grants_bound, _model_allowed, _skills_usable
 from ._router import Slug, router
 
 
@@ -122,6 +122,7 @@ async def create_agent(
     body.spec = await pin_hosted_runtime(session, organisation.id, body.spec)
     await _skills_usable(session, organisation, body.spec)
     await _model_allowed(session, organisation, body.spec)
+    await _grants_bound(session, organisation, body.spec)
     await check_bindings_at_publish(
         session,
         principal,

@@ -15,6 +15,7 @@ from ..db.models import ApiToken, Organization, Project, User
 from ..db.session import ALL_ORGS, limit_to_organisations
 from ..deps import _aware, _principal_from_user, record_usage
 from ..rbac import Principal
+from ..schemas.agents import grant_name
 from ..security import hash_api_token
 from .oauth import TokenRefused, issuer_of, validate
 
@@ -234,7 +235,7 @@ async def act_as_agent(
 
     spec = await production_spec(session, agent) or {}
     patterns = [
-        tool
+        grant_name(tool)
         for server in spec.get("mcp_servers", [])
         if server.get("connector") == "choregos"
         for tool in server.get("tools", [])

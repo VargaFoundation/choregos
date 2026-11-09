@@ -26,6 +26,13 @@ async def _skills_usable(session: AsyncSession, organisation: Organization, spec
         raise unprocessable("; ".join(problemes))
 
 
+async def _grants_bound(session: AsyncSession, organisation: Organization, spec: AgentSpec) -> None:
+    """A tool grant that binds arguments binds something that exists (S60-06, ADR 0128)."""
+    from ...services.argument_grants import check_agent_grants
+
+    await check_agent_grants(session, organisation.id, spec)
+
+
 async def _model_allowed(session: AsyncSession, organisation: Organization, spec: AgentSpec) -> None:
     """A version may not name a model the organisation's catalogue does not allow (ADR 0060)."""
     from ...services.model_catalogue import load_policy, refusal_for_spec
