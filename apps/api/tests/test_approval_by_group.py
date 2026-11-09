@@ -169,7 +169,7 @@ async def test_a_rule_naming_the_project_is_approved_by_that_projects_group(
     action = (await client.get(path)).json()
     assert action["approval"]["approvers"] == [{"role": "developer", "group": resolved, "min": 1}]
 
-    await _member(client, "other@varga.dev", "developer", ["graal-maintainers"])
+    await _member(client, "other@varga.dev", "developer", ["other-maintainers"])
     await _member(client, "lead@varga.dev", "developer", [resolved])
     other = await _session(app, "other@varga.dev")
     try:
