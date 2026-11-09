@@ -85,12 +85,13 @@ def test_the_ticket_context_precedes_an_internal_agents_instructions() -> None:
     assert "Input: human_feedback" not in rendered, "an empty input is not shown"
 
 
-def test_no_catalogue_agent_fixes_a_runtime_or_a_model() -> None:
-    """The model and the runtime come from the project and the deployment: an agent that required
-    `claude-code` would not run on a deployment that only serves opencode (S20-11)."""
+def test_no_catalogue_agent_fixes_a_runtime() -> None:
+    """The runtime comes from the deployment: an agent that required `claude-code` would not run on a
+    deployment that only serves opencode (S20-11). The model is the version's to name since ADR 0127
+    (a tier or a model; `tests/conformance/test_shipped_agents_are_complete.py` says which agents do)."""
     for agent in entries():
         spec = agent.document["spec"]
-        assert "model" not in spec and "backend" not in spec, agent.slug
+        assert "backend" not in spec and "runtime" not in spec, agent.slug
 
 
 def test_every_role_of_the_package_has_its_agent_in_the_catalogue() -> None:
