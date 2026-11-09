@@ -32,7 +32,6 @@ from fastapi import APIRouter, Header, Query, Request, Response, status
 from sqlalchemy import select
 
 from ..catalogue import call as call_catalogue_tool
-from ..catalogue import project_tools
 from ..config import get_settings
 from ..db.models import (
     AgentSessionRecord,
@@ -73,6 +72,7 @@ from ..services import (
     web_search,
 )
 from ..services.agent_hosted_sessions import session_network
+from ..services.agent_reach import spec_of_run, tool_reach
 from ..services.artifacts import (
     ArtifactCorruptedError,
     filename_of,
@@ -84,6 +84,12 @@ from ..services.artifacts import (
 from ..services.artifacts import latest as latest_artifact
 from ..services.budget_alerts import check_after_spend
 from ..services.costs import dimensions_of
+from ..services.extension_tools import (
+    ACCESS_KEY,
+    extension_access,
+    extension_result_cap,
+    extension_tools,
+)
 from ..services.network import record_decisions, run_network
 from ..services.receipts import PRODUCED, PROMPT_DOCUMENTS, READ, record, record_digests
 from ..services.tickets import outputs_to_store
@@ -800,91 +806,18 @@ async def get_ci_logs(
 # Its own egress stays closed.
 
 
-def _allowed_tools(project: Project) -> list[str]:
-    """What the project declares it can call (`tools` of its configuration)."""
-    return [str(t) for t in ((project.config or {}).get("tools") or [])]
-
-
-def _project_groups(project: Project) -> list[str]:
-    """The groups it belongs to: what the deployment opens to it."""
-    return [str(g) for g in ((project.config or {}).get("groups") or [])]
-
-
 async def _extension_tools(
     session: Any, run: Run, project: Project, taken: set[str]
 ) -> dict[str, tuple[str, dict[str, Any]]]:
-    """{name: (extension, MCP tool)} of the providers declared by the extensions (`extensions.py`).
-
-    A name already taken, by the catalogue or by another extension, is refused with a 409 rather
-    than served by one of the two: a tool masked in silence is an agent that believes it calls one
-    and calls the other.
-    """
-    from ..extensions import tool_providers
-
-    found: dict[str, tuple[str, dict[str, Any]]] = {}
-    for extension, provider in tool_providers().items():
-        for tool in await provider.list_tools(session, run, project):
-            tool_name = str(tool["name"])
-            if tool_name in taken or tool_name in found:
-                other = found[tool_name][0] if tool_name in found else "the catalogue"
-                raise conflict(f"tool `{tool_name}` declared by {other} and by the plugin `{extension}`")
-            _extension_result_cap(extension, tool)
-            _extension_access(extension, tool)
-            found[tool_name] = (extension, tool)
-    return found
-
-
-def _extension_result_cap(plugin: str, tool: dict[str, Any]) -> int | None:
-    """The result cap an extension's tool declares (S40-17b), as a catalogue entry does, or None.
-
-    `result_max_bytes` beside `name` in what the extension lists: an integer of at least 1024,
-    bounded by `CHOREGOS_BROKER_RESULT_CEILING_BYTES` like every cap. Anything else is an extension
-    bug, refused when the tools are listed rather than read as the default.
-    """
-    declared = tool.get("result_max_bytes")
-    if declared is None:
-        return None
-    if isinstance(declared, bool) or not isinstance(declared, int) or declared < 1024:
-        raise ApiError(
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-            "Plugin tool refused",
-            f"tool `{tool.get('name')}` of the plugin `{plugin}` declares result_max_bytes={declared!r}:"
-            " an integer of at least 1024 is expected",
-        )
-    return declared
-
-
-def _extension_access(plugin: str, tool: dict[str, Any]) -> str:
-    """What calling an extension's tool does (ADR 0122): the `x-choregos-access` it declares beside
-    its `name` (`read`, `write`, `approval` — a call that proposes what a person decides), else `read`
-    when it is annotated `readOnlyHint: true`, else `write`: the platform does not know what it does,
-    and MCP's own default is not read-only. Any other declaration is an extension bug, refused when
-    the tools are listed, as a bad `result_max_bytes` is."""
-    declared = tool.get(ACCESS_KEY)
-    if declared is not None:
-        if declared not in ACCESSES:
-            raise ApiError(
-                status.HTTP_500_INTERNAL_SERVER_ERROR,
-                "Plugin tool refused",
-                f"tool `{tool.get('name')}` of the plugin `{plugin}` declares {ACCESS_KEY}={declared!r}:"
-                f" one of {', '.join(ACCESSES)} is expected",
-            )
-        return str(declared)
-    annotations = tool.get("annotations")
-    reads = isinstance(annotations, dict) and annotations.get("readOnlyHint") is True
-    return "read" if reads else "write"
+    """{name: (extension, MCP tool)} of the providers the extensions declare (`services.extension_tools`).
+    Kept under this name: a patch on it (a test, an edition package) is seen by the run's tool routes."""
+    return await extension_tools(session, run, project, taken)
 
 
 def _announced(plugin: str, tool: dict[str, Any]) -> dict[str, Any]:
     """An extension's tool as the agent sees it: the platform's own keys are not the agent's business."""
     own = {k: v for k, v in tool.items() if k not in {"result_max_bytes", ACCESS_KEY}}
-    return _run_tool(own, _extension_access(plugin, tool))
-
-
-#: The platform's own key on an entry of the run's tool list (ADR 0122): what a call does. The run's
-#: tool server does not list it to the model, which reads it in the description and `readOnlyHint`.
-ACCESS_KEY = "x-choregos-access"
-ACCESSES = ("read", "write", "approval")
+    return _run_tool(own, extension_access(plugin, tool))
 
 
 def _run_tool(
@@ -917,21 +850,19 @@ async def get_tools(id: str, session: Db, claims: RunAuth) -> dict[str, Any]:
     `annotations.readOnlyHint`, its access (`x-choregos-access`: `read`, `write`, `approval`) and the
     `outputSchema` its operation declares (ADR 0122). A catalogue tool and the web tools read: a
     catalogue tool that may write is not listed, and its call is refused."""
-    from ..services.broker import broker_tools
-
     run, _item, project = await _run_and_item(session, id)
-    catalogue_tools = project_tools(_allowed_tools(project), _project_groups(project))
-    from_extensions = await _extension_tools(session, run, project, {o.name for o in catalogue_tools})
-    # The broker (ADR 0034): the operations of the organisation's connectors that the run's agent
-    # selects and that the policy allows. Their name (`connector__operation`) cannot meet that of
-    # a catalogue tool.
-    brokered = await broker_tools(session, run, project)
+    # What the run's agent version closes (ADR 0127) is decided in `tool_reach`, which the access
+    # endpoint reads too; a run with no registry agent keeps the project's tools.
+    reach = await tool_reach(
+        session, run, project, await spec_of_run(session, run, project), list_extensions=_extension_tools
+    )
+    catalogue_tools, from_extensions, brokered = reach.catalogue, reach.extensions, reach.brokered
     # The governed way to read the web (S40-01f, ADR 0070): offered when the run's network allows a host.
     # Its name cannot be taken by another tool: a masked tool is an agent calling the wrong one.
-    web = [web_fetch.announcement()] if await web_fetch.offered(session, run) else []
+    web = [web_fetch.announcement()] if reach.fetch else []
     # The governed way to search (S40-01g, ADR 0083): offered when a backend the ceiling accepts serves
     # the project. Its name is reserved the same way.
-    if await web_search.offered(session, project):
+    if reach.search:
         web.append(web_search.announcement())
     for builtin in web:
         taken = str(builtin["name"])
@@ -1056,14 +987,18 @@ async def call_tool(
     telemetry.record_tool_origin(origin, script_sha256)
     if run.result is not None:
         raise conflict("result already posted for this run")
-    from ..services.broker import broker_tools
-
-    from_catalogue = project_tools(_allowed_tools(project), _project_groups(project), include_writers=True)
+    reach = await tool_reach(
+        session,
+        run,
+        project,
+        await spec_of_run(session, run, project),
+        list_extensions=_extension_tools,
+        include_writers=True,
+    )
+    from_catalogue, from_extensions, brokered = reach.catalogue, reach.extensions, reach.brokered
     catalogue_tool = next((o for o in from_catalogue if o.name == name), None)
-    from_extensions = await _extension_tools(session, run, project, {o.name for o in from_catalogue})
-    brokered = await broker_tools(session, run, project)
-    is_web = name == web_fetch.TOOL_NAME and await web_fetch.offered(session, run)
-    is_search = name == web_search.TOOL_NAME and await web_search.offered(session, project)
+    is_web = name == web_fetch.TOOL_NAME and reach.fetch
+    is_search = name == web_search.TOOL_NAME and reach.search
     if (is_web or is_search) and (catalogue_tool is not None or name in from_extensions or name in brokered):
         raise conflict(f"tool `{name}` is built in: another tool cannot take its name")
     if (
@@ -1288,7 +1223,7 @@ def _result_bound(
         return result_limit(tool.operation.result_max_bytes)
     if name in from_extensions:
         extension, declared = from_extensions[name]
-        return result_limit(_extension_result_cap(extension, declared))
+        return result_limit(extension_result_cap(extension, declared))
     return None if run.backend == "job" else result_limit()
 
 
@@ -1418,7 +1353,7 @@ async def _call_the_extension(
         code, result_body = await tool_providers()[extension].call_tool(
             session, run, project, name, arguments
         )
-    result_body = bounded_payload(result_body, _extension_result_cap(extension, tool))
+    result_body = bounded_payload(result_body, extension_result_cap(extension, tool))
     return await _injection_guard(session, run, project, SimpleNamespace(name=name), code, result_body)
 
 
