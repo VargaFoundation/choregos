@@ -44,6 +44,7 @@ from ..schemas import (
     WorkItemCreate,
     WorkItemDto,
 )
+from ..secret_store import SecretStoreUnavailable, resolved_configuration
 from ..temporal import get_temporal, interpreter_id
 from .costs import estimate_cost
 from .definitions import work_item_workflow, workflow_model
@@ -331,18 +332,18 @@ async def project_tracker(session: AsyncSession, project: Project) -> tuple[Conn
     ).scalar_one_or_none()
     if row is None or row.type in {"internal", "fake"}:
         return row, None
-    from choregos_adapters import build, resolved_configuration
-
-    from .github_app import pin_installation
+    from choregos_adapters import build
 
     try:
         from .plugin_tracker import pin_plugin_tracker
 
-        pinned = await pin_installation(session, project.org_id, "tracker", row.type, row.config)
-        pinned = await pin_plugin_tracker(session, project.org_id, "tracker", row.type, pinned)
-        config = resolved_configuration("tracker", row.type, pinned, row.secret_refs, row.secret_ref)
+        pinned = await pin_plugin_tracker(session, project.org_id, "tracker", row.type, row.config)
+        # Through the platform's resolver: a token typed in the console is a sealed `store:` value.
+        config = await resolved_configuration(
+            session, project.org_id, "tracker", row.type, pinned, row.secret_refs, row.secret_ref
+        )
         return row, build("tracker", row.type, config)
-    except (AdapterError, SecretNotFound, ValueError, KeyError) as error:
+    except (AdapterError, SecretNotFound, SecretStoreUnavailable, ValueError, KeyError) as error:
         raise upstream(row.type, f"the tracker connector cannot be built: {error}") from error
 
 

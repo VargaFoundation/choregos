@@ -281,6 +281,51 @@ def probe(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[dict[str, Any]]]:
         _SPECS.pop(("tracker", "probe"), None)
 
 
+async def _project_tracker(project: dict[str, Any]) -> Any:
+    from choregos_api.db.models import Project
+    from choregos_api.db.session import session_scope
+    from choregos_api.services import tickets
+
+    async with session_scope(orgs="*") as session:
+        row = await session.get(Project, project["id"])
+        assert row is not None
+        return await tickets.project_tracker(session, row)
+
+
+async def _sealed_tracker(client: AsyncClient, project: dict[str, Any], probe: list[dict[str, Any]]) -> None:
+    put = await client.put(
+        f"/api/v1/projects/{project['id']}/connectors/tracker",
+        json={"type": "probe", "config": {}, "secret_values": {"api_token": VALUE_1}},
+    )
+    assert put.status_code == 200, put.text
+    probe.clear()
+
+
+async def test_the_tracker_that_files_a_work_item_reads_its_sealed_token(
+    client: AsyncClient, project: dict[str, Any], probe: list[dict[str, Any]]
+) -> None:
+    """`create_work_item` (console and MCP) and the tracker webhooks build the adapter here. With a
+    token typed in the console this was refused: the sync resolver does not read the store."""
+    await _sealed_tracker(client, project, probe)
+    row, adapter = await _project_tracker(project)
+    assert row.type == "probe" and adapter is not None
+    assert probe == [{"api_token": VALUE_1}]
+
+
+async def test_a_tracker_whose_store_is_unavailable_is_an_upstream_error(
+    client: AsyncClient, project: dict[str, Any], probe: list[dict[str, Any]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A named 502, as for any tracker that cannot be built, and no adapter without its key."""
+    from choregos_api.errors import ApiError
+
+    await _sealed_tracker(client, project, probe)
+    monkeypatch.delenv("CHOREGOS_SECRETS_KEKS")
+    with pytest.raises(ApiError, match="Error from the probe service") as refused:
+        await _project_tracker(project)
+    assert refused.value.status_code == 502
+    assert probe == []
+
+
 async def test_a_project_connector_stores_its_secret_and_the_test_resolves_it(
     client: AsyncClient, project: dict[str, Any], probe: list[dict[str, Any]]
 ) -> None:
