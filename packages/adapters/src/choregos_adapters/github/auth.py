@@ -141,6 +141,19 @@ class GitHubAppAuth:
             headers={"Authorization": f"Bearer {self.app_jwt()}", "Accept": "application/vnd.github+json"},
             json=body,
         )
+        optional = OPTIONAL_PERMISSIONS & set(body.get("permissions") or {})
+        if response.status_code == 422 and optional:
+            # An installation that was not granted an optional permission (an App created before
+            # it was asked for) refuses the whole token: ask again without it (S59-10).
+            body["permissions"] = {k: v for k, v in body["permissions"].items() if k not in optional}
+            response = await client.post(
+                f"{self.base_url}/app/installations/{installation_id}/access_tokens",
+                headers={
+                    "Authorization": f"Bearer {self.app_jwt()}",
+                    "Accept": "application/vnd.github+json",
+                },
+                json=body,
+            )
         response.raise_for_status()
         payload = response.json()
         token = InstallationToken(
@@ -158,7 +171,13 @@ DEFAULT_PERMISSIONS = {
     "pull_requests": "write",
     "checks": "write",
     "metadata": "read",
+    # A CI that reports commit statuses (Tekton, Jenkins) is read through them (S59-09, S59-10).
+    "statuses": "read",
 }
+
+#: Permissions a token asks for when the installation has them, and does without otherwise: an App
+#: set up before they were asked for keeps working, minus what they read.
+OPTIONAL_PERMISSIONS = frozenset({"statuses"})
 
 #: What the GitHub App must be granted for the adapters to work (ADR 0067). The setup procedure of
 #: the GitHub connectors renders this list and a test compares them, so a call the adapters start
@@ -171,6 +190,7 @@ APP_PERMISSIONS = {
     "checks": "write",
     "metadata": "read",
     "organization_projects": "write",
+    "statuses": "read",
 }
 
 #: The webhook events the platform parses (`tracker/github_events.py`).
