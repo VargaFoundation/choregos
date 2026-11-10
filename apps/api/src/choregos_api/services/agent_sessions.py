@@ -508,26 +508,12 @@ async def respond(
     # What the request wrote so far (the session it opened, its reservation, the input) need not wait
     # for the model's answer to be kept: the first call commits it, and releases the budget's lock.
     allow_release_during_calls(session)
-    if turn_key is not None:
-        # A conversation's turn: the key was minted for this turn alone, and is not in the secret store.
-        key = turn_key
-    else:
-        keys = await get_secret_store().get_many(session, record.org_id, [secret_name(record.id)])
-        key = keys.get(secret_name(record.id), "")
+    key = await _gateway_key(session, record, turn_key)
     tools = await session_tools(session, spec, project)
     messages = list(record.messages or [])
-    from .conversation_knowledge import (
-        KNOWLEDGE_TOOLS,
-        installation_bases,
-        serve,
-        tools_for,
-        with_citation_rule,
-    )
+    from .conversation_extras import conversation_extras
 
-    # S63-05: an assistant's conversation reads the knowledge of its installation, and of no other.
-    knowledge = await installation_bases(session, record)
-    if knowledge:
-        with_citation_rule(messages)
+    extras = await conversation_extras(session, record, messages)
     for text in inputs:
         messages.append({"role": "user", "content": text})
         await journal(session, record, "input.text", {"text": text[:2000]})
@@ -573,8 +559,8 @@ async def respond(
 
     async def call_tool(name: str, arguments: dict[str, Any]) -> str:
         made["tool_calls"] += 1
-        if knowledge and name in KNOWLEDGE_TOOLS:
-            return await serve(session, knowledge, name, arguments)
+        if extras.serves(name):
+            return await extras.call(session, name, arguments)
         return await call_session_tool(session, record, project, tools[name], arguments, identities)
 
     async def on_event(type_: str, payload: dict[str, Any]) -> None:
@@ -597,7 +583,7 @@ async def respond(
                     LoopTool(t.name, str(t.announcement().get("description") or ""), tool_parameters(t))
                     for t in tools.values()
                 ]
-                + tools_for(knowledge),
+                + extras.loop_tools,
                 complete,
                 call_tool,
                 on_event=on_event,
@@ -618,6 +604,15 @@ async def respond(
             **made,
         )
         raise
+
+
+async def _gateway_key(session: AsyncSession, record: AgentSessionRecord, turn_key: str | None) -> str:
+    """The key a response calls the model with: a conversation's turn has its own, minted for that turn
+    alone and never in the secret store; a session's is sealed under the session."""
+    if turn_key is not None:
+        return turn_key
+    keys = await get_secret_store().get_many(session, record.org_id, [secret_name(record.id)])
+    return keys.get(secret_name(record.id), "")
 
 
 async def _book_the_response(
@@ -856,6 +851,11 @@ async def _book_the_tool_call(  # noqa: PLR0913 - one call, fact by fact
         **(acting or Acting(SERVICE)).audit(tool.connector.name),
     )
     flagged = [s.to_dict() for s in found]
+    if answered < 400 and record.installation_id:
+        # The one place a conversation's tool results are booked: a resolver need's `subject` is recorded.
+        from .assistant_memory import note_resolved_subjects
+
+        await note_resolved_subjects(session, record, tool.connector.name, tool.operation.name, body)
     return SessionToolAnswer(text, answered, _calls_left(cap, record), flagged)
 
 

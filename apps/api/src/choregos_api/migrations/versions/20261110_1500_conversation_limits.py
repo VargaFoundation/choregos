@@ -4,7 +4,7 @@
 a summary in `messages`) and `turn_lease_until` (set while a turn runs: a second turn is refused).
 
 Revision ID: d4e6f8a0c2e4
-Revises: c4b6d8f0a2e3
+Revises: d5a7c9e1f3b5
 Create Date: 2026-11-10 15:00:00+00:00
 """
 
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "d4e6f8a0c2e4"
-down_revision: str | None = "c4b6d8f0a2e3"
+down_revision: str | None = "d5a7c9e1f3b5"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

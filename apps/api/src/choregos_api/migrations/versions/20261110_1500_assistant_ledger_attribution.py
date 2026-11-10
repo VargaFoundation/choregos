@@ -5,7 +5,7 @@ found through `session_id`, but deleting a conversation detaches its lines (`SET
 spent), and a cap that a delete resets is not a cap. The two columns stay on the line.
 
 Revision ID: d1f3a5b7c9e1
-Revises: c4b6d8f0a2e3
+Revises: c1e3a5c7e9b2
 Create Date: 2026-11-10 15:00:00+00:00
 """
 
@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "d1f3a5b7c9e1"
-down_revision: str | None = "c4b6d8f0a2e3"
+down_revision: str | None = "c1e3a5c7e9b2"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

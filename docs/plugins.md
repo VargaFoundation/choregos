@@ -364,6 +364,33 @@ person's spend on this installation since the first of the month, UTC) and `per_
 turn that has less than the floor left under any of them is a 409 before the model. The month sums read the
 ledger lines, which carry the installation and the person, so deleting a conversation does not give its spend
 back.
+#### Memory spaces of an assistant
+
+The `memory:` of an assistant ([ADR 0136](adr/0136-memory-spaces-of-a-person-and-a-subject.md), S63-09)
+declares its spaces: `installation` (one per installation, written by its owners only), `user` (one per
+person) and `user_subject` (one per person and subject). A store is created at its first write, from the
+manifest read again from the installed plugin, never by hand; a `user` or `user_subject` store (and its facts
+and profile versions) is read by its person alone, in the application and, on PostgreSQL, by a restrictive
+row-level policy.
+
+- **Subject.** A `user_subject` space opens in a conversation only for a subject (`{type, key}`) that a tool
+  of a need marked `subject_resolver: true` returned **in that conversation**: every `subject` object found
+  at the top level of the tool's `structuredContent`, or in a top-level list of objects (`relations[].subject`),
+  is recorded in the conversation's `resolved_subjects`. Any other subject is refused with
+  `subject_not_resolved`. A space that declares `resolver: none` accepts any well-formed key.
+- **Writes.** `agent` writes an active fact, `agent_proposes` a `proposed` one (the person confirms it on the
+  memory page), `user_only` refuses the agent, `owner_only` is never written by a conversation (the agent's
+  proposal waits, `proposed`). `max_facts` and `retention_days` bound a space: the oldest unpinned facts
+  expire first. A `profile_patch` is merged into the active document and validated against the space's schema
+  (`schema_violation`).
+- **Tools.** The agent of an assistant's conversation is offered `memory_search(space, query, subject?)`,
+  `memory_get_profile(space)` and `memory_propose(space, subject?, content | profile_patch, reason)`. A refusal
+  is typed JSON (`{"error": "subject_not_resolved", ...}`). A project policy with `memory.enabled: false` (that
+  of the person's personal space) turns every memory tool and the injection off.
+- **Injection.** The first turn of a conversation carries the active `user` profile and a few facts of the
+  `installation` and `user` spaces, framed as data, each space cut to its `inject_tokens` (300 by default).
+- **The page.** `GET, PATCH, DELETE /api/v1/me/assistants/{org}/{slug}/memory/{space}` and `.../{space}/{subject}`
+  list, confirm or reject a proposal, correct, pin and delete; they are the caller's own memory only.
 
 ## Pack and index
 
