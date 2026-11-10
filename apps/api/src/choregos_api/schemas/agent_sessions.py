@@ -145,6 +145,8 @@ class ConversationMessageCreate(Dto):
 
     input: str = Field(min_length=1, max_length=65_536)
     stream: bool = False
+
+
 class ConversationFeedbackCreate(Dto):
     """A thumb on one answer of a session (S63-17, ADR 0140)."""
 
