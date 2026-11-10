@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The card and the JSON-RPC endpoint of the A2A door, A2A 0.3.0 as ADR 0062 pins it (ADR 0078).
+"""The card and the JSON-RPC endpoint of the A2A door, A2A 0.3.0 and 1.0 (ADR 0078).
 
 `GET /a2a/orgs/{org}/.well-known/agent-card.json` and `POST /a2a/orgs/{org}`. The task IS the work
 item: `message/send` opens one through `create_work_item`, under an id derived from the
@@ -7,6 +7,9 @@ organisation, the client and the `messageId` (ADR 0008), and `tasks/get` reads i
 `message/stream` and `tasks/resubscribe` follow it over server-sent events: an event of the work
 item only wakes the stream up, the task is read again from the database each time. No state lives
 in this layer. Push notifications are `push.py`'s (ADR 0078 §5).
+
+A 1.0 call is the same call: `v1.py` translates its params on the way in and the answer on the way
+out, and the door decides in 0.3.0's terms in between, so each guard holds in both versions.
 """
 
 from __future__ import annotations
@@ -82,11 +85,13 @@ from ..services.artifacts import (
 )
 from ..services.tickets import start_work_item
 from ..temporal import InterpreterNotRunningError, deliver_control
+from . import v1
 
 router = APIRouter(include_in_schema=False)
 log = get_logger(__name__)
 
-#: The A2A version the platform speaks, the one ADR 0062 pins for outbound calls.
+#: The A2A version of the card's top-level fields, the one ADR 0062 pins for outbound calls. The card
+#: also lists a 1.0 interface at the same URL (`supportedInterfaces`).
 PROTOCOL_VERSION = "0.3.0"
 #: A message is a request for work, not a document drop: a few parts, a bounded text.
 MAX_PARTS = 20
@@ -105,6 +110,23 @@ CONTENT_TYPE_NOT_SUPPORTED = -32005
 BUDGET_EXHAUSTED = -32050
 #: Implementation-defined: too many streams open for one token.
 TOO_MANY_STREAMS = -32051
+#: A 1.0 error's `ErrorInfo`: its reason and domain, by code (A2A 1.0 §9.5).
+REASONS: dict[int, tuple[str, str]] = {
+    PARSE_ERROR: ("PARSE_ERROR", v1.DOMAIN),
+    INVALID_REQUEST: ("INVALID_REQUEST", v1.DOMAIN),
+    METHOD_NOT_FOUND: ("METHOD_NOT_FOUND", v1.DOMAIN),
+    INVALID_PARAMS: ("INVALID_PARAMS", v1.DOMAIN),
+    INTERNAL_ERROR: ("INTERNAL_ERROR", v1.DOMAIN),
+    TASK_NOT_FOUND: ("TASK_NOT_FOUND", v1.DOMAIN),
+    TASK_NOT_CANCELABLE: ("TASK_NOT_CANCELABLE", v1.DOMAIN),
+    PUSH_NOT_SUPPORTED: ("PUSH_NOTIFICATION_NOT_SUPPORTED", v1.DOMAIN),
+    UNSUPPORTED_OPERATION: ("UNSUPPORTED_OPERATION", v1.DOMAIN),
+    CONTENT_TYPE_NOT_SUPPORTED: ("CONTENT_TYPE_NOT_SUPPORTED", v1.DOMAIN),
+    v1.EXTENDED_CARD_NOT_CONFIGURED: ("EXTENDED_AGENT_CARD_NOT_CONFIGURED", v1.DOMAIN),
+    v1.VERSION_NOT_SUPPORTED: ("VERSION_NOT_SUPPORTED", v1.DOMAIN),
+    BUDGET_EXHAUSTED: ("BUDGET_EXHAUSTED", v1.OWN_DOMAIN),
+    TOO_MANY_STREAMS: ("TOO_MANY_STREAMS", v1.OWN_DOMAIN),
+}
 #: A stream holds a connection: a few per token, an hour at most, then the caller resubscribes.
 MAX_STREAMS = 5
 STREAM_LIFETIME = 3600.0
@@ -141,6 +163,25 @@ def file_limit(project: Project) -> int:
         return A2aConfig.model_validate((project.config or {}).get("a2a") or {}).max_file_bytes
     except ValidationError:
         return A2A_MAX_FILE_BYTES_DEFAULT
+
+
+@dataclass(frozen=True, slots=True)
+class Spelling:
+    """How a version names a file part's fields: the guards are the same, the words the caller's."""
+
+    content: str
+    uri: str
+    media_type: str
+    name: str
+    kinds: str
+
+
+SPELLINGS = {
+    v1.V03: Spelling("bytes", "uri", "mimeType", "name", "a part is `text`, `data` or `file`"),
+    v1.V10: Spelling(
+        "raw", "url", "mediaType", "filename", "a part carries exactly one of `text`, `raw`, `url` or `data`"
+    ),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -181,6 +222,8 @@ class Door:
     request: Request | None
     #: Set by a call that writes: the daily budget counts it.
     wrote: bool = False
+    #: The A2A version the call is in (`v1.V03` or `v1.V10`): the shape of what it reads and answers.
+    dialect: str = v1.V03
 
 
 # ───────────────────────── who and what ─────────────────────────
@@ -262,20 +305,32 @@ async def skills(door: Door) -> list[Skill]:
 
 
 def _card(door: Door, settings: Settings, served: list[Skill]) -> dict[str, Any]:
-    schemes: dict[str, Any] = {"bearer": {"type": "http", "scheme": "bearer"}}
+    # Each scheme in both spellings: 0.3.0's `type` and 1.0's wrapper; each version ignores the other's.
+    schemes: dict[str, Any] = {
+        "bearer": {"type": "http", "scheme": "bearer", "httpAuthSecurityScheme": {"scheme": "Bearer"}}
+    }
     if settings.mcp_oauth_enabled:
+        discovery = f"{issuer_of(settings)}/.well-known/openid-configuration"
         schemes["oidc"] = {
             "type": "openIdConnect",
-            "openIdConnectUrl": f"{issuer_of(settings)}/.well-known/openid-configuration",
+            "openIdConnectUrl": discovery,
+            "openIdConnectSecurityScheme": {"openIdConnectUrl": discovery},
         }
+    url = f"{door.console}/a2a/orgs/{door.org.slug}"
+    scopes = {name: ["a2a"] if name == "oidc" else [] for name in schemes}
     return {
+        # 1.0 reads its interfaces here, the first preferred; 0.3.0 reads the top-level fields below.
+        "supportedInterfaces": [
+            {"url": url, "protocolBinding": "JSONRPC", "protocolVersion": version}
+            for version in (v1.V10, v1.V03)
+        ],
         "protocolVersion": PROTOCOL_VERSION,
         "name": f"Choregos — {door.org.name}",
         "description": (
             f"The governed workflows of {door.org.name} that opted in as A2A skills. A task is a work "
             "item: it may wait for a person, who decides in the Choregos console, never over A2A."
         ),
-        "url": f"{door.console}/a2a/orgs/{door.org.slug}",
+        "url": url,
         "preferredTransport": "JSONRPC",
         "version": __version__,
         "provider": {"organization": "Choregos", "url": door.console},
@@ -288,7 +343,8 @@ def _card(door: Door, settings: Settings, served: list[Skill]) -> dict[str, Any]
         "defaultInputModes": ["text/plain"],
         "defaultOutputModes": ["text/plain", "application/json"],
         "securitySchemes": schemes,
-        "security": [{name: ["a2a"] if name == "oidc" else []} for name in schemes],
+        "security": [{name: listed} for name, listed in scopes.items()],
+        "securityRequirements": [{"schemes": {name: {"list": listed}}} for name, listed in scopes.items()],
         "skills": [
             {
                 "id": skill.id,
@@ -343,33 +399,78 @@ async def endpoint(org: str, request: Request, session: Db, settings: Config) ->
     body = await request.body()
     if len(body) > cap:
         return _http_refusal(413, f"message too large ({cap} bytes at most for this organisation)")
+    asked = v1.asked_version(request)
+    door.dialect = v1.V10 if asked == v1.V10 else v1.V03
     try:
         message = json.loads(body)
     except (json.JSONDecodeError, UnicodeDecodeError):
-        return JSONResponse(error(None, PARSE_ERROR, "unreadable body: JSON is expected"), status_code=400)
+        return JSONResponse(
+            _error(door, None, PARSE_ERROR, "unreadable body: JSON is expected"), status_code=400
+        )
     fault = message_defect(message)
     if fault is not None:
         ident = message.get("id") if isinstance(message, dict) else None
-        return JSONResponse(error(ident, INVALID_REQUEST, fault), status_code=400)
+        return JSONResponse(_error(door, ident, INVALID_REQUEST, fault), status_code=400)
     if is_notification(message):
         return Response(status_code=202)
     ident, method = message.get("id"), message["method"]
     params = message.get("params") or {}
     outcome = "ok"
     try:
+        served = _version(door, asked, method)
         if not isinstance(params, dict):
             raise Fault(INVALID_PARAMS, "`params` is an object")
-        if method in {"message/stream", "tasks/resubscribe"}:
-            stream = await _open_stream(door, settings, ident, method, params)
+        if door.dialect == v1.V10:
+            params = v1.params_in(method, params)
+        if served in {"message/stream", "tasks/resubscribe"}:
+            stream = await _open_stream(door, settings, ident, served, params)
             await _audit(door, method, outcome)
             await session.commit()
             return stream
-        answer = ok(ident, await _dispatch(door, method, params))
+        result = await _dispatch(door, served, params)
+        answer = ok(ident, v1.result_out(method, result) if door.dialect == v1.V10 else result)
     except Fault as refused:
         outcome = "refused"
-        answer = error(ident, refused.code, str(refused), refused.data)
+        answer = _error(door, ident, refused.code, str(refused), refused.data)
     await _audit(door, method, outcome)
     return JSONResponse(answer)
+
+
+def _version(door: Door, asked: str | None, method: str) -> str:
+    """The version of the call and the 0.3.0 method it is served as.
+
+    The two versions' method names do not overlap, so the name decides; a client that sends no
+    `A2A-Version` is served in the version of the method it calls (A2A 1.0 §3.6.2 would read a missing
+    header as 0.3, which would turn every 1.0 client that omits it away). A header that names another
+    version than the method's is refused, as one that names a version the door does not speak."""
+    if asked is not None and asked not in v1.VERSIONS:
+        door.dialect = v1.V10
+        raise Fault(
+            v1.VERSION_NOT_SUPPORTED,
+            f"A2A {asked[:20]} is not spoken here: {' and '.join(v1.VERSIONS)} are",
+            {"supportedVersions": ", ".join(v1.VERSIONS)},
+        )
+    door.dialect = asked or (v1.V10 if v1.is_v1(method) else v1.V03)
+    if door.dialect == v1.V03:
+        return method
+    if method == "GetExtendedAgentCard":
+        raise Fault(
+            v1.EXTENDED_CARD_NOT_CONFIGURED,
+            "no extended card: the card is already read with a token, and lists what that token may start",
+        )
+    if method == "ListTasks":
+        raise Fault(UNSUPPORTED_OPERATION, "ListTasks is not served: keep the ids SendMessage answers")
+    if method not in v1.METHODS:
+        raise Fault(METHOD_NOT_FOUND, f"unknown method in A2A 1.0: {method[:100]}")
+    return v1.METHODS[method]
+
+
+def _error(door: Door, ident: Any, code: int, message: str, data: Any = None) -> dict[str, Any]:
+    """A JSON-RPC error; in 1.0 its `data` is a list of details, an `ErrorInfo` first."""
+    if door.dialect == v1.V10:
+        reason, domain = REASONS.get(code, ("UNKNOWN", v1.OWN_DOMAIN))
+        data = v1.error_data(reason, domain, data)
+    return error(ident, code, message, data)
 
 
 async def _body_cap(door: Door) -> int:
@@ -437,38 +538,55 @@ def _type_of(media_type: str, name: str) -> str:
     return named or type_of_filename(name)
 
 
-def _read_file(part: dict[str, Any], skill: Skill, index: int, limit: int) -> SentFile:
-    """A file part (A2A 0.3.0 `FilePart`): its bytes in base64, a media type the skill takes."""
-    file = part.get("file")
+def _read_file(part: dict[str, Any], skill: Skill, index: int, limit: int, spelling: Spelling) -> SentFile:
+    """A file part: its bytes in base64, a media type the skill takes. 0.3.0 nests it in `file`
+    (`FilePart`), 1.0 puts its fields on the part (`raw` or `url`, `mediaType`, `filename`)."""
+    file = part.get("file") if spelling is SPELLINGS[v1.V03] else part
     if not isinstance(file, dict):
         raise Fault(INVALID_PARAMS, "a file part carries `file`, with its content in `bytes`")
-    if "bytes" not in file:
+    if spelling.content not in file:
         # Fetching a URL the caller chose would be a request made on a stranger's behalf.
-        raise Fault(INVALID_PARAMS, "a file part by `uri` is not fetched: send its content in `bytes`")
-    media_type = file.get("mimeType")
+        raise Fault(
+            INVALID_PARAMS,
+            f"a file part by `{spelling.uri}` is not fetched: send its content in `{spelling.content}`",
+        )
+    media_type = file.get(spelling.media_type)
     if not isinstance(media_type, str) or not media_type:
-        raise Fault(INVALID_PARAMS, "a file part names its `mimeType`")
+        raise Fault(INVALID_PARAMS, f"a file part names its `{spelling.media_type}`")
     if media_type not in skill.input_modes:
         raise Fault(CONTENT_TYPE_NOT_SUPPORTED, f"skill {skill.id} does not take {media_type}")
-    name = file.get("name") or f"attachment-{index}"
+    name = file.get(spelling.name) or f"attachment-{index}"
     if not isinstance(name, str) or not _ARTIFACT_NAME.fullmatch(name):
         raise Fault(
             INVALID_PARAMS,
             f"file name refused: {str(name)[:130]!r} (letters, digits, `_`, `.` and `-`, 128 at most)",
         )
-    raw = file["bytes"]
+    raw = file[spelling.content]
     if not isinstance(raw, str) or len(raw) > _encoded(limit):
         raise Fault(INVALID_PARAMS, f"file `{name}` too large: {limit} bytes at most for this project")
     try:
         data = base64.b64decode(raw, validate=True)
     except (binascii.Error, ValueError) as unreadable:
-        raise Fault(INVALID_PARAMS, f"file `{name}`: `bytes` is not base64") from unreadable
+        raise Fault(INVALID_PARAMS, f"file `{name}`: `{spelling.content}` is not base64") from unreadable
     if len(data) > limit:
         raise Fault(INVALID_PARAMS, f"file `{name}` too large: {limit} bytes at most for this project")
     return SentFile(name=name, media_type=media_type, type=_type_of(media_type, name), data=data)
 
 
-def _read_parts(parts: Any, skill: Skill) -> tuple[str, dict[str, Any], list[SentFile]]:
+def _kind_of(part: Any, spelling: Spelling) -> str | None:
+    """`text`, `data` or `file`: 0.3.0 says it in `kind`, 1.0 by the one content field a part carries."""
+    if not isinstance(part, dict):
+        return None
+    if spelling is SPELLINGS[v1.V03]:
+        kind = part.get("kind")
+        return kind if isinstance(kind, str) else None
+    present = [field for field in ("text", "raw", "url", "data") if field in part]
+    if len(present) != 1:
+        return None
+    return {"text": "text", "data": "data"}.get(present[0], "file")
+
+
+def _read_parts(parts: Any, skill: Skill, spelling: Spelling) -> tuple[str, dict[str, Any], list[SentFile]]:
     """The text parts become the work item's body, one data part its fields, each file an input
     artefact (ADR 0078 §6), within the project's limit for one part and for all of them."""
     if not isinstance(parts, list) or not parts:
@@ -480,7 +598,7 @@ def _read_parts(parts: Any, skill: Skill) -> tuple[str, dict[str, Any], list[Sen
     fields: dict[str, Any] = {}
     files: list[SentFile] = []
     for part in parts:
-        kind = part.get("kind") if isinstance(part, dict) else None
+        kind = _kind_of(part, spelling)
         if kind == "text" and isinstance(part.get("text"), str):
             if "text/plain" not in skill.input_modes:
                 raise Fault(CONTENT_TYPE_NOT_SUPPORTED, f"skill {skill.id} does not take text/plain")
@@ -492,7 +610,7 @@ def _read_parts(parts: Any, skill: Skill) -> tuple[str, dict[str, Any], list[Sen
                 raise Fault(INVALID_PARAMS, "one data part at most: it carries the work item's fields")
             fields = part["data"]
         elif kind == "file":
-            sent = _read_file(part, skill, len(files) + 1, limit)
+            sent = _read_file(part, skill, len(files) + 1, limit, spelling)
             if any(f.name == sent.name for f in files):
                 raise Fault(INVALID_PARAMS, f"two files named `{sent.name}`: a name is an artefact's")
             files.append(sent)
@@ -502,7 +620,7 @@ def _read_parts(parts: Any, skill: Skill) -> tuple[str, dict[str, Any], list[Sen
                     f"the files of a message: {limit} bytes at most together for this project",
                 )
         else:
-            raise Fault(INVALID_PARAMS, "a part is `text`, `data` or `file`")
+            raise Fault(INVALID_PARAMS, spelling.kinds)
     text = "\n\n".join(texts)
     if len(text) > MAX_TEXT:
         raise Fault(INVALID_PARAMS, f"message too long: {MAX_TEXT} characters of text at most")
@@ -521,10 +639,10 @@ async def _send(door: Door, params: dict[str, Any]) -> dict[str, Any]:
     configuration = params.get("configuration")
     if isinstance(configuration, dict) and configuration.get("pushNotificationConfig"):
         # Its secret would have nowhere to be shown: `set` is the one answer that carries it.
-        raise Fault(
-            INVALID_PARAMS,
-            "register push notifications with tasks/pushNotificationConfig/set once the task exists",
-        )
+        method = "tasks/pushNotificationConfig/set"
+        if door.dialect == v1.V10:
+            method = "CreateTaskPushNotificationConfig"
+        raise Fault(INVALID_PARAMS, f"register push notifications with {method} once the task exists")
     message_id = message.get("messageId")
     if not isinstance(message_id, str) or not message_id or len(message_id) > MAX_MESSAGE_ID:
         raise Fault(INVALID_PARAMS, f"`message.messageId` is a string of 1 to {MAX_MESSAGE_ID} characters")
@@ -547,7 +665,7 @@ async def _send(door: Door, params: dict[str, Any]) -> dict[str, Any]:
     project, principal = skill.project, door.caller.principal
     if not principal.can(Permission.ITEM_CONTROL, door.org.slug, project.slug):
         raise Fault(INVALID_PARAMS, f"you cannot open work items in {door.org.slug}:{project.slug}")
-    text, fields, files = _read_parts(message.get("parts"), skill)
+    text, fields, files = _read_parts(message.get("parts"), skill, SPELLINGS[door.dialect])
     budget = door.caller.writes_per_day or WRITES_PER_DAY
     if await writes_today(door.session, principal.user_id) >= budget:
         raise Fault(BUDGET_EXHAUSTED, f"budget_exhausted: {budget} writes a day through MCP and A2A")
@@ -834,8 +952,9 @@ async def _open_stream(
     return EventSourceResponse(events, ping=STREAM_PING)
 
 
-def _frame(ident: Any, result: dict[str, Any]) -> dict[str, str]:
-    return {"data": json.dumps(ok(ident, result))}
+def _frame(door: Door, ident: Any, result: dict[str, Any]) -> dict[str, str]:
+    """One server-sent event; in 1.0 a `StreamResponse` (`task`, `statusUpdate`, `artifactUpdate`)."""
+    return {"data": json.dumps(ok(ident, v1.event_out(result) if door.dialect == v1.V10 else result))}
 
 
 def _status_update(task: dict[str, Any], final: bool) -> dict[str, Any]:
@@ -861,13 +980,14 @@ async def _follow(
 ) -> AsyncIterator[dict[str, str]]:
     """The task, then a status each time it changes, its artefacts and a `final` status at the end.
 
+    In 1.0, which has no `final`, the stream closes after the last status: its end is the task's.
     An input-required status is not final: the decision is taken in the console, not by this
     caller, and the task goes on. A token revoked or a right lost ends the stream at the next read.
     """
     key = door.caller.key
     _STREAMS[key] += 1
     try:
-        yield _frame(ident, first)
+        yield _frame(door, ident, first)
         task, seen = first, _mark(first)
         deadline = _clock() + STREAM_LIFETIME
         with get_bus().listen(f"project:{project_slug}") as queue:
@@ -879,7 +999,7 @@ async def _follow(
                 try:
                     task = await _reread(door, settings, task["id"])
                 except Fault as lost:
-                    yield {"data": json.dumps(error(ident, lost.code, str(lost)))}
+                    yield {"data": json.dumps(_error(door, ident, lost.code, str(lost)))}
                     return
                 if _mark(task) == seen:
                     continue
@@ -887,6 +1007,7 @@ async def _follow(
                 final = task["status"]["state"] in TERMINAL
                 for artifact in task["artifacts"] if final else []:
                     yield _frame(
+                        door,
                         ident,
                         {
                             "kind": "artifact-update",
@@ -897,9 +1018,9 @@ async def _follow(
                             "lastChunk": True,
                         },
                     )
-                yield _frame(ident, _status_update(task, final))
-        if first["status"]["state"] in TERMINAL:
-            yield _frame(ident, _status_update(first, True))
+                yield _frame(door, ident, _status_update(task, final))
+        if first["status"]["state"] in TERMINAL and door.dialect == v1.V03:
+            yield _frame(door, ident, _status_update(first, True))
     finally:
         _STREAMS[key] -= 1
         if _STREAMS[key] <= 0:

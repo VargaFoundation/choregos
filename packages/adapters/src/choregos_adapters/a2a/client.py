@@ -134,7 +134,12 @@ def _artifact(raw: dict[str, Any]) -> A2aArtifact:
 
 
 def parse_task(raw: dict[str, Any]) -> A2aTask:
-    """A `Task`, or a bare `Message` (an agent that answers at once): the latter is a completed task."""
+    """A `Task`, or a bare `Message` (an agent that answers at once): the latter is a completed task.
+
+    A 1.0 `SendMessageResponse` wraps either in `task` or `message`."""
+    for wrapper in ("task", "message"):
+        if set(raw) == {wrapper} and isinstance(raw[wrapper], dict):
+            raw = raw[wrapper]
     kind = raw.get("kind")
     if kind == "message" or ("parts" in raw and "status" not in raw):
         parts = _parts(raw.get("parts"))
