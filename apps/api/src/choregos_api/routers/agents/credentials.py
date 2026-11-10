@@ -11,6 +11,7 @@ from ...db.models import (
     Agent,
     AgentCredential,
     ApiToken,
+    Membership,
 )
 from ...deps import Db, Me
 from ...errors import conflict, not_found, unprocessable
@@ -124,7 +125,21 @@ async def attach_credential(
             raise unprocessable("`token_id` is missing")
         async with in_platform_scope(session):
             api_token = await session.get(ApiToken, body.token_id)
-        if api_token is None or not set(api_token.scopes or []) & {"mcp:read", "mcp:write"}:
+            # A token is attached only if its owner belongs to this organisation (finding #1520): the
+            # id alone let an administrator elsewhere bind another person's token to their agent.
+            member = (
+                (
+                    await session.execute(
+                        select(Membership.id)
+                        .where(Membership.user_id == api_token.user_id, Membership.org_id == organisation.id)
+                        .limit(1)
+                    )
+                ).first()
+                if api_token is not None
+                else None
+            )
+        # One answer for a missing token and another person's: the id reveals nothing.
+        if api_token is None or member is None or not set(api_token.scopes or []) & {"mcp:read", "mcp:write"}:
             raise unprocessable("an existing `mcp:read` or `mcp:write` token is expected")
         existant = (
             await session.execute(
