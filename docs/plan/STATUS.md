@@ -957,7 +957,7 @@ that follows from it. Rule since that day: nothing is ✅ without a test that fa
 
 
 
-**Total**: 621 delivered, 298 partial, 9 not started.
+**Total**: counted from the table, not written by hand: `uv run python tools/status_total.py`.
 
 
 **2026-10-05 — ADR 0029: Choregos becomes a platform of governed agents, for general use; 0028 is

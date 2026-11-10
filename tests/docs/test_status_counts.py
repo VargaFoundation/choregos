@@ -1,35 +1,43 @@
-"""Is the total announced by STATUS the one of its own table?
+"""STATUS's total is read from its table, never written by hand.
 
 `docs/plan/STATUS.md` claimed "Total: 96 delivered, 6 partial" under a table that counted 92 and
-10. The figure was copied by hand and had stopped following. It is the kind of gap that hurts
-nobody the day it is born, and that makes the document unusable the day someone relies on it to
-decide.
-
-The total is now checked, not re-read.
+10. The figure was copied by hand and had stopped following; it was then checked here, and every PR
+that moved a story had to rewrite the same line. Two PRs merged on the same day conflicted on it, and
+each conflict re-ran a CI of several hours (#1523, 2026-11-10). The line now names the command that
+counts (`tools/status_total.py`), and carries no figure that could drift or conflict.
 """
 
 from __future__ import annotations
 
+import importlib.util
 import pathlib
 import re
 
-STATUS = pathlib.Path(__file__).resolve().parents[2] / "docs" / "plan" / "STATUS.md"
-# The total line of STATUS.md, parsed as it is written.
-TOTAL = re.compile(
-    r"\*\*Total\*\*: (\d+) delivered, (\d+) partial, (\d+) not started",
-    re.M,
-)
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+STATUS = ROOT / "docs" / "plan" / "STATUS.md"
+TOTAL_LINE = re.compile(r"^\*\*Total\*\*.*$", re.M)
 
 
-def test_the_total_matches_the_table() -> None:
+def _counts(text: str) -> dict[str, int]:
+    spec = importlib.util.spec_from_file_location("status_total", ROOT / "tools" / "status_total.py")
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return dict(module.counts(text))
+
+
+def test_the_total_line_names_the_count_and_holds_no_figure() -> None:
     text = STATUS.read_text(encoding="utf-8")
-    announced = TOTAL.search(text)
-    assert announced, "STATUS announces no total any more, or its shape changed without this test"
-    count = (text.count("| ✅ |"), text.count("| 🟡 |"), text.count("| ⬜ |"))
-    assert count[0] > 0, "no delivered story counted: the table changed shape"
-    assert tuple(int(n) for n in announced.groups()) == count, (
-        f"STATUS announces {announced.groups()} and its table says {count}"
-    )
+    lines = TOTAL_LINE.findall(text)
+    assert len(lines) == 1, f"STATUS must have one Total line, it has {len(lines)}: {lines}"
+    assert "tools/status_total.py" in lines[0], "the Total line no longer says how to count"
+    assert not re.search(r"\d", lines[0]), f"a figure came back on the Total line: {lines[0]}"
+
+
+def test_the_table_is_counted() -> None:
+    found = _counts(STATUS.read_text(encoding="utf-8"))
+    assert found["delivered"] > 0, "no delivered story counted: the table changed shape"
+    assert set(found) == {"delivered", "partial", "not started"}
 
 
 STORY_ROW = re.compile(r"^\| ([A-Z][A-Za-z0-9-]+) \| ", re.M)
