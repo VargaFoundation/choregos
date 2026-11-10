@@ -17,7 +17,7 @@ The downgrade drops the policies and the columns, and deletes the conversations 
 instance has no key per turn and would read them as sessions that never close.
 
 Revision ID: c4b6d8f0a2e3
-Revises: b1d3f5a7c9e2
+Revises: c2a4e6b8d0f1
 Create Date: 2026-11-10 14:00:00+00:00
 """
 
@@ -29,7 +29,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "c4b6d8f0a2e3"
-down_revision: str | None = "b1d3f5a7c9e2"
+down_revision: str | None = "c2a4e6b8d0f1"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
