@@ -149,3 +149,17 @@ in CI.
 The identity provider's exchange and offline tokens, the sources' MCP servers and fakes, the private
 plugin of the first assistant, the data protection impact assessment and the works council's opinion. The
 stories above advance on fakes until they exist.
+
+## 4. Schedule
+
+Waves follow the backlog's dependencies; the stories of one wave run in parallel, each on its own branch
+stacked on the wave's base, and the integrator chains their migrations (`down_revision`) and the STATUS
+total when merging.
+
+| Wave | Stories | Base | Needs |
+|:--|:--|:--|:--|
+| 0 | S63-00, S63-01, S63-03 | `main` | delivered (#1534, #1536, #1537) |
+| A | S63-02 install and readiness · S63-04 durable conversations · S63-07 `user_exchange` · S63-17 conversation evals (deterministic) | S63-03 | ADRs, the contract, the personal space |
+| B | S63-05 knowledge · S63-09 memory spaces · S63-11 MCP door · S63-15 rights and caps · S63-19 the genericity guard | wave A | installations and conversations |
+| C | S63-06 offered knowledge · S63-16 retention, journal, erasure · S63-18 console (lot 1 part) | wave B | knowledge and memory in conversations |
+| D (lot 2) | S63-08 connected accounts · S63-10 inline writes · S63-12 embedded component · S63-13 tasks · S63-14 delegation · S63-17 judge · S63-18 rest | wave C | the gates of lot 1 (CSE opinion, DPIA, security review of S63-07) |
