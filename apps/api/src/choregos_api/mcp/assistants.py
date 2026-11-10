@@ -123,7 +123,9 @@ _TURNS: dict[str, asyncio.Task[Outcome]] = {}
 _OUTCOMES: dict[str, Outcome] = {}
 
 
-def _answer(conversation_id: str, status: str, text: str) -> dict[str, Any]:
+def _answer(
+    conversation_id: str, status: str, text: str, pending: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
     """The door's answer. The three lists are empty until their sources exist: citations, the proposals of
     S63-05 and the accounts S63-07's exchange asks the person to connect."""
     return {
@@ -131,7 +133,7 @@ def _answer(conversation_id: str, status: str, text: str) -> dict[str, Any]:
         "status": status,
         "text": text,
         "citations": [],
-        "pending_actions": [],
+        "pending_actions": pending or [],
         "missing_accounts": [],
     }
 
@@ -231,17 +233,29 @@ def _last_answer(record: AgentSessionRecord) -> str | None:
     return None
 
 
+async def _pending(ctx: Context, conversation_id: str) -> list[dict[str, Any]]:
+    """The writes the assistant proposed and the person has not decided, each with the console link where
+    they decide. The door lists them; it never executes one (ADR 0030)."""
+    from ..services.conversation_actions import actions_of, confirm_url
+
+    return [
+        {"id": a.id, "summary": a.summary, "confirm_url": confirm_url(conversation_id, a.id)}
+        for a in await actions_of(ctx.session, conversation_id, status="proposed")
+    ]
+
+
 async def _read(ctx: Context, record: AgentSessionRecord) -> dict[str, Any]:
+    pending = await _pending(ctx, record.id)
     if (task := _TURNS.get(record.id)) is not None and not task.done():
-        return _answer(record.id, WORKING, "")
+        return _answer(record.id, WORKING, "", pending)
     if (kept := _OUTCOMES.get(record.id)) is not None:
-        return _answer(record.id, kept.status, kept.text)
+        return _answer(record.id, kept.status, kept.text, pending)
     if await _turn_in_flight(ctx, record):
-        return _answer(record.id, WORKING, "")
+        return _answer(record.id, WORKING, "", pending)
     said = _last_answer(record)
     if said is None and record.turns:
-        return _answer(record.id, FAILED, "the last turn left no answer")
-    return _answer(record.id, COMPLETED, said or "")
+        return _answer(record.id, FAILED, "the last turn left no answer", pending)
+    return _answer(record.id, COMPLETED, said or "", pending)
 
 
 # -- tools -----------------------------------------------------------------------------------------------
@@ -298,10 +312,11 @@ async def _ask(ctx: Context, door: Door, arguments: dict[str, Any]) -> tuple[str
     task = _start(door.org, principal.user_id, conversation_id, message)
     await asyncio.wait({task}, timeout=get_settings().mcp_assistant_wait_s)
     outcome = task.result() if task.done() else None
+    pending = await _pending(ctx, conversation_id)
     answer = (
-        _answer(conversation_id, outcome.status, outcome.text)
+        _answer(conversation_id, outcome.status, outcome.text, pending)
         if outcome is not None
-        else _answer(conversation_id, WORKING, "")
+        else _answer(conversation_id, WORKING, "", pending)
     )
     return _spoken(answer), answer
 

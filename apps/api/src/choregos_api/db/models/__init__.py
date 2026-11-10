@@ -45,7 +45,7 @@ from .agents import (
     HostedBuildRecord,
     ProjectAgent,
 )
-from .assistants import AssistantInstallation, AssistantToolBinding
+from .assistants import AssistantInstallation, AssistantToolBinding, ConversationAction
 from .audit import AuditLog, NetworkDecision
 from .connectors import (
     ConnectorOperation,
@@ -175,6 +175,7 @@ __all__ = [
     "ArtifactRecord",
     "AssistantInstallation",
     "AssistantToolBinding",
+    "ConversationAction",
     "AuditLog",
     "BackendRegistryRow",
     "Base",
