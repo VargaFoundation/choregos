@@ -2577,7 +2577,7 @@ paths:
     post:
       tags: [agents]
       operationId: sendMyConversationMessage
-      description: "One turn of a conversation, in the Responses API's shape. An idle conversation is reopened with its history. The turn mints its own gateway key at the smallest of what is left of the conversation's cap and the caps a run meets; a turn the cap refuses is 409, before the model is called. With `stream`, server-sent events `response.created`, `response.output_text.delta` (the whole text in one delta), `response.completed` or `response.failed`."
+      description: "One turn of a conversation, in the Responses API's shape. An idle conversation is reopened with its history. The turn mints its own gateway key at the smallest of what is left of the conversation's cap and the caps a run meets; a turn the cap refuses is 409, before the model is called. With `stream`, server-sent events `response.created`, `response.output_text.delta` (one per chunk the model streamed, every model call of the turn streams; tool calls are journaled as they happen), `response.completed` or `response.failed`. Refused with 409 before the model: a turn past the conversation's `max_turns`, and a turn while another of the same conversation runs. A cancelled turn ends `failed` with `error.code` `cancelled`."
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/ConversationMessageCreate" } } }
@@ -2620,6 +2620,20 @@ paths:
         "200": { description: The proposed candidates, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ConversationCandidate" } } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /me/conversations/{conversation_id}/cancel:
+    parameters:
+      - { name: conversation_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: cancelMyConversationTurn
+      description: "Interrupts the turn that runs (on the replica that serves it): the tool calls it already made stay journaled, its key is revoked and its spend booked before this answers. 409 when no turn is running."
+      responses:
+        "200":
+          description: The conversation, once the turn settled
+          content: { application/json: { schema: { $ref: "#/components/schemas/ConversationSummary" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /orgs/{org}/agents/{slug}/metrics:
     parameters:
       - { $ref: "#/components/parameters/Org" }

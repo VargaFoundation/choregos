@@ -95,6 +95,7 @@ NO_CLIENT_YET: dict[str, str] = {
     "/me/conversations/{conversation_id}/messages": "S63-18",
     "/orgs/{org}/agent-sessions/{session_id}/feedback": "S63-18",
     "/orgs/{org}/agents/{slug}/feedback-candidates": "S63-18",
+    "/me/conversations/{conversation_id}/cancel": "S63-18",
 }
 
 #: Paths the CLI calls and the console must not: an operator's command, not a screen.
