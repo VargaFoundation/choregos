@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from pydantic import Field
 
-from .base import Dto
+from .base import Dto, PageMeta
 
 SLUG = r"^[a-z0-9][a-z0-9-]{0,62}$"
 
@@ -89,7 +89,7 @@ class AgentSession(Dto):
     agent: str
     agent_version: int
     project: str
-    status: Literal["open", "closed", "failed"]
+    status: Literal["open", "idle", "closed", "failed"]
     reason: str | None = None
     model: str
     responses: int
@@ -99,6 +99,52 @@ class AgentSession(Dto):
     expires_at: datetime
     closed_at: datetime | None = None
     events: list[AgentSessionEventDto] = Field(default_factory=list)
+
+
+# ───────────── a durable conversation (S63-04, ADR 0134) ─────────────
+
+
+class ConversationSummary(Dto):
+    """A row of the caller's conversations."""
+
+    id: str
+    #: Generated from the first exchange; null before it.
+    title: str | None = None
+    agent: str
+    agent_version: int
+    #: The installation of the assistant, when it is one.
+    installation_id: str | None = None
+    #: `idle` is a conversation inactive past its `idle_close_minutes`: a new message reopens it.
+    status: Literal["open", "idle", "closed", "failed"]
+    turns: int
+    cost_usd: float
+    max_usd: float | None = None
+    created_at: datetime
+    last_activity_at: datetime
+
+
+class ConversationMessage(Dto):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class Conversation(ConversationSummary):
+    """A conversation with what was said in it (the system message and the tool traffic are not shown)."""
+
+    context: dict[str, Any] | None = None
+    messages: list[ConversationMessage] = Field(default_factory=list)
+
+
+class ConversationPage(Dto):
+    items: list[ConversationSummary]
+    meta: PageMeta
+
+
+class ConversationMessageCreate(Dto):
+    """One turn: what the person says, answered whole or as server-sent events."""
+
+    input: str = Field(min_length=1, max_length=65_536)
+    stream: bool = False
 
 
 # ───────────── a hosted session's pod, on the internal API (S41-11) ─────────────

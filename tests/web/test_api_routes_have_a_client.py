@@ -81,7 +81,11 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
 }
 
 #: Paths whose console screen is a story still to come: that story removes its entries.
-NO_CLIENT_YET: dict[str, str] = {}
+NO_CLIENT_YET: dict[str, str] = {
+    "/me/conversations": "S63-18",
+    "/me/conversations/{conversation_id}": "S63-18",
+    "/me/conversations/{conversation_id}/messages": "S63-18",
+}
 
 #: Paths the CLI calls and the console must not: an operator's command, not a screen.
 CLI_ONLY: dict[str, str] = {

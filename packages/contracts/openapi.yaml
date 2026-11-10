@@ -2512,6 +2512,54 @@ paths:
       responses:
         "204": { description: Closed }
         "404": { $ref: "#/components/responses/NotFound" }
+  /me/conversations:
+    get:
+      tags: [agents]
+      operationId: listMyConversations
+      description: "The caller's durable conversations (ADR 0134), the most recently active first: title, agent, last activity, status. Only the caller's own."
+      parameters: [{ $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ConversationPage" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /me/conversations/{conversation_id}:
+    parameters:
+      - { name: conversation_id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [agents]
+      operationId: getMyConversation
+      description: "A conversation and what was said in it. Only its opener reads it: anyone else is answered 404."
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Conversation" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [agents]
+      operationId: deleteMyConversation
+      description: "Erases the conversation and its transcript. Its ledger lines stay, detached from it."
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /me/conversations/{conversation_id}/messages:
+    parameters:
+      - { name: conversation_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: sendMyConversationMessage
+      description: "One turn of a conversation, in the Responses API's shape. An idle conversation is reopened with its history. The turn mints its own gateway key at the smallest of what is left of the conversation's cap and the caps a run meets; a turn the cap refuses is 409, before the model is called. With `stream`, server-sent events `response.created`, `response.output_text.delta` (the whole text in one delta), `response.completed` or `response.failed`."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ConversationMessageCreate" } } }
+      responses:
+        "200":
+          description: The response; `status` is `failed` with an `error` when the model or the budget stopped it
+          content:
+            application/json: { schema: { $ref: "#/components/schemas/AgentResponse" } }
+            text/event-stream: { schema: { type: string } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/agents/{slug}/metrics:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -5866,7 +5914,7 @@ components:
         agent: { type: string }
         agent_version: { type: integer }
         project: { type: string }
-        status: { type: string, enum: [open, closed, failed] }
+        status: { type: string, enum: [open, idle, closed, failed] }
         reason: { type: [string, "null"] }
         model: { type: string }
         responses: { type: integer }
@@ -5876,6 +5924,50 @@ components:
         expires_at: { type: string, format: date-time }
         closed_at: { type: [string, "null"], format: date-time }
         events: { type: array, items: { $ref: "#/components/schemas/AgentSessionEvent" } }
+    ConversationSummary:
+      type: object
+      description: "A row of the caller's conversations (ADR 0134). `idle` is inactive past its `idle_close_minutes`: a new message reopens it."
+      required: [id, agent, agent_version, status, turns, cost_usd, created_at, last_activity_at]
+      properties:
+        id: { type: string }
+        title: { type: [string, "null"], description: "cut from the first message; null before it" }
+        agent: { type: string }
+        agent_version: { type: integer }
+        installation_id: { type: [string, "null"] }
+        status: { type: string, enum: [open, idle, closed, failed] }
+        turns: { type: integer }
+        cost_usd: { type: number }
+        max_usd: { type: [number, "null"], description: "the conversation's own cap" }
+        created_at: { type: string, format: date-time }
+        last_activity_at: { type: string, format: date-time }
+    ConversationMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role: { type: string, enum: [user, assistant] }
+        content: { type: string }
+    Conversation:
+      description: "A conversation with what was said in it; the system message and the tool traffic are not shown."
+      allOf:
+        - { $ref: "#/components/schemas/ConversationSummary" }
+        - type: object
+          properties:
+            context: { type: [object, "null"], additionalProperties: true }
+            messages: { type: array, items: { $ref: "#/components/schemas/ConversationMessage" } }
+    ConversationPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ConversationSummary" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    ConversationMessageCreate:
+      type: object
+      description: "One turn of a conversation: what the person says."
+      required: [input]
+      additionalProperties: false
+      properties:
+        input: { type: string, minLength: 1, maxLength: 65536 }
+        stream: { type: boolean, default: false }
     AgentSessionTurn:
       type: object
       description: "A response a hosted session's person asked for, waiting for the session's pod (S41-11)."

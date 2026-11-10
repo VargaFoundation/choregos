@@ -13,7 +13,6 @@ arrives in one delta, not token by token.
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
 from typing import Any
 
 from fastapi import APIRouter, Response, status
@@ -23,10 +22,11 @@ from sse_starlette.sse import EventSourceResponse
 from ..db.models import AgentSessionRecord, Organization, Project
 from ..deps import Db, Me
 from ..errors import not_found, unprocessable
-from ..schemas.agent_sessions import AgentDelta, AgentResponse, AgentResponseCreate, AgentSession
+from ..schemas.agent_sessions import AgentResponse, AgentResponseCreate, AgentSession
 from ..services.agent_access import enforce_decision, load_visible_agent, project_in_org, require_agent_reader
 from ..services.agent_governance import Action, decide
 from ..services.agent_sessions import close_session, open_session, respond, session_dto
+from ..services.conversations import response_events
 from ..services.organisations import organisation_by_slug
 
 router = APIRouter(tags=["agents"])
@@ -36,7 +36,12 @@ async def _own_session(
     session: AsyncSession, principal: Me, organisation: Organization, session_id: str
 ) -> AgentSessionRecord:
     record = await session.get(AgentSessionRecord, session_id)
-    if record is None or record.org_id != organisation.id or record.user_id != principal.user_id:
+    if (
+        record is None
+        or record.kind != "session"  # a conversation is read and spoken to on /me/conversations
+        or record.org_id != organisation.id
+        or record.user_id != principal.user_id
+    ):
         raise not_found("Agent session", session_id)
     return record
 
@@ -68,18 +73,7 @@ async def create_agent_response(
     answer = await respond(session, record, project, inputs)
     if not body.stream:
         return answer
-    return EventSourceResponse(_events(answer))
-
-
-async def _events(answer: AgentResponse) -> AsyncIterator[dict[str, str]]:
-    created = answer.model_copy(update={"output": [], "output_text": ""})
-    yield {"event": "response.created", "data": created.model_dump_json()}
-    if answer.output_text:
-        yield {
-            "event": "response.output_text.delta",
-            "data": AgentDelta(response_id=answer.id, delta=answer.output_text).model_dump_json(),
-        }
-    yield {"event": f"response.{answer.status}", "data": answer.model_dump_json()}
+    return EventSourceResponse(response_events(answer))
 
 
 @router.get(

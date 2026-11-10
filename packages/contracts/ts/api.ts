@@ -1384,7 +1384,7 @@ export type AgentSession = {
   agent: string;
   agent_version: number;
   project: string;
-  status: "open" | "closed" | "failed";
+  status: "open" | "idle" | "closed" | "failed";
   reason?: string | null;
   model: string;
   responses: number;
@@ -1394,6 +1394,47 @@ export type AgentSession = {
   expires_at: string;
   closed_at?: string | null;
   events?: Array<AgentSessionEvent>;
+};
+
+/** A row of the caller's conversations (ADR 0134). `idle` is inactive past its `idle_close_minutes`: a new message reopens it. */
+export type ConversationSummary = {
+  id: string;
+  /** cut from the first message; null before it */
+  title?: string | null;
+  agent: string;
+  agent_version: number;
+  installation_id?: string | null;
+  status: "open" | "idle" | "closed" | "failed";
+  turns: number;
+  cost_usd: number;
+  /** the conversation's own cap */
+  max_usd?: number | null;
+  created_at: string;
+  last_activity_at: string;
+};
+
+export type ConversationMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+/** A conversation with what was said in it; the system message and the tool traffic are not shown. */
+export type Conversation = ConversationSummary & {
+  context?: {
+    [key: string]: unknown;
+  } | null;
+  messages?: Array<ConversationMessage>;
+};
+
+export type ConversationPage = {
+  items: Array<ConversationSummary>;
+  meta: PageMeta;
+};
+
+/** One turn of a conversation: what the person says. */
+export type ConversationMessageCreate = {
+  input: string;
+  stream?: boolean;
 };
 
 /** A response a hosted session's person asked for, waiting for the session's pod (S41-11). */
@@ -4733,6 +4774,7 @@ export interface Operations {
   deleteKnowledgeSource: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}"; body: never; response: void };
   deleteMcpGateway: { method: "DELETE"; path: "/orgs/{org}/mcp-gateway"; body: never; response: void };
   deleteModelCatalogueEntry: { method: "DELETE"; path: "/orgs/{org}/models/{entry_id}"; body: never; response: void };
+  deleteMyConversation: { method: "DELETE"; path: "/me/conversations/{conversation_id}"; body: never; response: void };
   deleteOrgConnector: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}"; body: never; response: void };
   deleteOutboundProxy: { method: "DELETE"; path: "/orgs/{org}/outbound-proxy"; body: never; response: void };
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
@@ -4799,6 +4841,7 @@ export interface Operations {
   getMemoryAbReport: { method: "GET"; path: "/orgs/{org}/memory/ab-report"; body: never; response: MemoryAbReport };
   getModelCatalogue: { method: "GET"; path: "/orgs/{org}/models"; body: never; response: ModelCatalogue };
   getModelMatrix: { method: "GET"; path: "/projects/{id}/models/matrix"; body: never; response: ModelMatrix };
+  getMyConversation: { method: "GET"; path: "/me/conversations/{conversation_id}"; body: never; response: Conversation };
   getNamedWorkflow: { method: "GET"; path: "/projects/{id}/workflows/{name}"; body: never; response: WorkflowDef };
   getNetworkActivity: { method: "GET"; path: "/orgs/{org}/network-activity"; body: never; response: NetworkActivity };
   getOrgConnector: { method: "GET"; path: "/orgs/{org}/connectors/{name}"; body: never; response: OrgConnector };
@@ -4970,6 +5013,7 @@ export interface Operations {
   listMcpCatalogue: { method: "GET"; path: "/orgs/{org}/mcp-catalogue"; body: never; response: McpCatalogue };
   listMembers: { method: "GET"; path: "/orgs/{org}/members"; body: never; response: Array<Membership> };
   listMemories: { method: "GET"; path: "/orgs/{org}/memories"; body: never; response: Array<MemoryStore> };
+  listMyConversations: { method: "GET"; path: "/me/conversations"; body: never; response: ConversationPage };
   listMySessions: { method: "GET"; path: "/me/sessions"; body: never; response: Array<BrowserSession> };
   listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: Array<ApiToken> };
   listOrgActions: { method: "GET"; path: "/orgs/{org}/actions"; body: never; response: Array<Action> };
@@ -5092,6 +5136,7 @@ export interface Operations {
   searchMemory: { method: "GET"; path: "/projects/{id}/memory/search"; body: never; response: Array<Memory> };
   searchRunKnowledge: { method: "POST"; path: "/internal/runs/{id}/knowledge/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
   searchRunMemory: { method: "POST"; path: "/internal/runs/{id}/memory/search"; body: RunMemorySearch; response: Array<RunMemoryHit> };
+  sendMyConversationMessage: { method: "POST"; path: "/me/conversations/{conversation_id}/messages"; body: ConversationMessageCreate; response: AgentResponse };
   setAgentReleasePolicy: { method: "PUT"; path: "/orgs/{org}/agents/{slug}/release-policy"; body: AgentReleasePolicy; response: Agent };
   setConnectorSecret: { method: "PUT"; path: "/projects/{id}/connectors/{kind}/secrets/{field}"; body: SecretValue; response: Connector };
   setOrgConnectorSecret: { method: "PUT"; path: "/orgs/{org}/connectors/{name}/secrets/{field}"; body: SecretValue; response: OrgConnector };
