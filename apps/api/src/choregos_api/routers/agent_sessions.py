@@ -22,13 +22,7 @@ from sse_starlette.sse import EventSourceResponse
 from ..db.models import AgentSessionRecord, Organization, Project
 from ..deps import Db, Me
 from ..errors import not_found, unprocessable
-from ..schemas.agent_sessions import AgentResponse, AgentResponseCreate, AgentSession
-from ..services.agent_access import enforce_decision, load_visible_agent, project_in_org, require_agent_reader
-from ..services.agent_governance import Action, decide
-from ..services.agent_sessions import close_session, open_session, respond, session_dto
-from ..services.conversations import response_events
 from ..schemas.agent_sessions import (
-    AgentDelta,
     AgentResponse,
     AgentResponseCreate,
     AgentSession,
@@ -40,6 +34,7 @@ from ..services.agent_access import enforce_decision, load_visible_agent, projec
 from ..services.agent_governance import Action, decide
 from ..services.agent_sessions import close_session, open_session, respond, session_dto
 from ..services.conversation_feedback import feedback_dto, give_feedback, proposed_candidates
+from ..services.conversations import response_events
 from ..services.organisations import organisation_by_slug
 
 router = APIRouter(tags=["agents"])

@@ -7,7 +7,7 @@ owners, in no suite until one of them adds it). The table is under forced organi
 session it hangs from.
 
 Revision ID: c1e3a5c7e9b2
-Revises: b1d3f5a7c9e2
+Revises: c4b6d8f0a2e3
 Create Date: 2026-11-10 13:00:00+00:00
 """
 
@@ -19,7 +19,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "c1e3a5c7e9b2"
-down_revision: str | None = "b1d3f5a7c9e2"
+down_revision: str | None = "c4b6d8f0a2e3"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

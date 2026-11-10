@@ -1435,6 +1435,8 @@ export type ConversationPage = {
 export type ConversationMessageCreate = {
   input: string;
   stream?: boolean;
+};
+
 /** A thumb on one answer of a session (S63-17, ADR 0140). */
 export type ConversationFeedbackCreate = {
   rating: "up" | "down";
