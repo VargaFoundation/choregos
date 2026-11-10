@@ -859,6 +859,11 @@ async def _book_the_tool_call(  # noqa: PLR0913 - one call, fact by fact
         from .assistant_memory import note_resolved_subjects
 
         await note_resolved_subjects(session, record, tool.connector.name, tool.operation.name, body)
+    if record.installation_id and not refused_by_network:
+        # The reads journal (S63-16): one line per call, the subject but never the content.
+        from .assistant_reads import journal_read
+
+        await journal_read(session, record, tool.connector.name, tool.operation.name, body)
     return SessionToolAnswer(text, answered, _calls_left(cap, record), flagged)
 
 
