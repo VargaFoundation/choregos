@@ -43,6 +43,7 @@ from .routers import (
     assistant_knowledge,
     assistant_data,
     assistant_memory,
+    assistant_tasks,
     assistants,
     auth,
     budget_alerts,
@@ -92,6 +93,7 @@ from .routers import (
 from .security import check_session_secret
 from .services.action_relay import relay_loop
 from .services.assistant_retention import retention_loop
+from .services.assistant_tasks import task_loop
 from .services.plugin_defaults import check_configuration, reconcile_in_background
 from .services.plugin_supply import warm_shipping
 from .services.skill_scanner import mirror_loop
@@ -129,6 +131,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     action_relay = asyncio.create_task(relay_loop())
     # A2A push notifications (ADR 0078 §5): read from the persisted events, at least once.
     a2a_push = asyncio.create_task(push_loop())
+    # Assistant tasks (ADR 0137): each subscriber's schedules and polls, then the delivery of their outputs.
+    assistant_task_loop = asyncio.create_task(task_loop())
     # The deployment's default plugins in every organisation (ADR 0093 §5), once the schema and the
     # bootstrap organisation exist. In the background: a slow source never holds the readiness probe.
     plugin_defaults = asyncio.create_task(reconcile_in_background(settings))
@@ -151,6 +155,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         osv_mirror,
         shipping_warmup,
         assistant_retention,
+        assistant_task_loop,
+        plugin_defaults,
+        osv_mirror,
+        shipping_warmup,
     ):
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
@@ -408,6 +416,7 @@ def create_app() -> FastAPI:
         conversations.router,
         conversation_actions.router,
         assistant_conversations.router,
+        assistant_tasks.router,
         agent_realtime.router,
         agent_session_pods.router,
         skills.router,

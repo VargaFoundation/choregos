@@ -11471,6 +11471,7 @@
  },
  "assistant_reads": {
  "conversation_actions": {
+ "task_subscriptions": {
   "columns": [
    {
     "name": "org_id",
@@ -11498,6 +11499,8 @@
     "name": "conversation_id",
     "type": "String(length=36)",
     "nullable": true,
+    "type": "String(length=36)",
+    "nullable": false,
     "default": null,
     "server_default": null
    },
@@ -11510,6 +11513,7 @@
    },
    {
     "name": "need",
+    "name": "task",
     "type": "String(length=63)",
     "nullable": false,
     "default": null,
@@ -11532,6 +11536,7 @@
    },
    {
     "name": "arguments",
+    "name": "trigger",
     "type": "Json()",
     "nullable": false,
     "default": "<function dict>",
@@ -11584,6 +11589,14 @@
     "type": "DateTime(timezone=True)",
     "nullable": false,
     "name": "confirmed_at",
+    "name": "enabled",
+    "type": "Boolean()",
+    "nullable": false,
+    "default": "True",
+    "server_default": "<sqlalchemy.sql.elements.True_ object>"
+   },
+   {
+    "name": "last_run_at",
     "type": "DateTime(timezone=True)",
     "nullable": true,
     "default": null,
@@ -11592,6 +11605,22 @@
    {
     "name": "executed_at",
     "type": "DateTime(timezone=True)",
+    "name": "last_window",
+    "type": "String(length=32)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "seen_keys",
+    "type": "Json()",
+    "nullable": false,
+    "default": "<function list>",
+    "server_default": null
+   },
+   {
+    "name": "last_refusal",
+    "type": "Text()",
     "nullable": true,
     "default": null,
     "server_default": null
@@ -11640,6 +11669,7 @@
     "CASCADE",
     null,
     "fk_conversation_actions_conversation_id_agent_sessions"
+    "fk_task_subscriptions_installation_id_assistant_installations"
    ],
    [
     [
@@ -11665,6 +11695,36 @@
     "ix_conversation_actions_conversation_id",
     [
      "conversation_actions.conversation_id"
+    "fk_task_subscriptions_org_id_organizations"
+   ],
+   [
+    [
+     "user_id"
+    ],
+    [
+     "users.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_task_subscriptions_user_id_users"
+   ]
+  ],
+  "uniques": [
+   [
+    "uq_task_subscriptions",
+    [
+     "installation_id",
+     "user_id",
+     "task"
+    ]
+   ]
+  ],
+  "checks": [],
+  "indexes": [
+   [
+    "ix_task_subscriptions_installation_id",
+    [
+     "task_subscriptions.installation_id"
     ],
     false
    ],
@@ -11675,6 +11735,9 @@
     "ix_conversation_actions_org_id",
     [
      "conversation_actions.org_id"
+    "ix_task_subscriptions_org_id",
+    [
+     "task_subscriptions.org_id"
     ],
     false
    ],
@@ -11701,6 +11764,9 @@
     "ix_conversation_actions_user_id",
     [
      "conversation_actions.user_id"
+    "ix_task_subscriptions_user_id",
+    [
+     "task_subscriptions.user_id"
     ],
     false
    ]

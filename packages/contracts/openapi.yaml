@@ -2543,6 +2543,68 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /me/assistants/{org}/{slug}/tasks/{task}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+      - { name: task, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [agents]
+      operationId: getMyTaskSubscription
+      description: "The caller's subscription to a task of an assistant they are in the audience of (ADR 0137). 404 when they have none, and for a caller outside the audience."
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TaskSubscription" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [agents]
+      operationId: putMyTaskSubscription
+      description: >-
+        Subscribes the caller to the task, or changes their trigger, time zone or switch. `kind` is one of the task's
+        triggers; a `schedule` declared with `user_timezone` is read in `timezone` (an IANA name, UTC by default) and
+        its cron may be changed by the person. A new schedule starts at the next window: it never runs one that passed
+        before. A task with `delegation: read_only` can be subscribed, but its scheduled and polled runs are refused,
+        with the reason in `last_refusal`, until the standing delegation of S63-14.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/TaskSubscriptionPut" } } }
+      responses:
+        "200": { description: Subscribed, content: { application/json: { schema: { $ref: "#/components/schemas/TaskSubscription" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [agents]
+      operationId: deleteMyTaskSubscription
+      description: "Unsubscribes the caller. What earlier runs delivered stays in their inbox."
+      responses:
+        "204": { description: Unsubscribed }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /me/assistants/{org}/{slug}/tasks/{task}/run:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+      - { name: task, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: runMyTask
+      description: "Runs the task now (its `on_demand` trigger), in the caller's personal space, as the caller: one work item per click. 409 when the installation is not ready, the task has no `on_demand` trigger or a monthly budget is spent."
+      responses:
+        "201": { description: Started, content: { application/json: { schema: { $ref: "#/components/schemas/TaskRun" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /me/inbox:
+    get:
+      tags: [agents]
+      operationId: listMyInbox
+      description: "The artifacts the caller's tasks delivered (the `inbox` channel is always on), newest first."
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/InboxList" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
   /me/assistants/{org}/{slug}/memory/{space}:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -8951,6 +9013,59 @@ components:
       required: [items]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/MyAssistant" } }
+    TaskSubscriptionPut:
+      type: object
+      properties:
+        kind: { type: string, enum: [on_demand, schedule, poll], default: schedule }
+        cron: { type: [string, "null"], maxLength: 128 }
+        timezone: { type: [string, "null"], maxLength: 64, description: "An IANA time zone, e.g. Europe/Paris." }
+        enabled: { type: boolean, default: true }
+    TaskTrigger:
+      type: object
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [on_demand, schedule, poll] }
+        cron: { type: [string, "null"] }
+        timezone: { type: string, default: UTC }
+    TaskSubscription:
+      type: object
+      required: [task, trigger, delegation, deliver, enabled, created_at]
+      properties:
+        task: { type: string }
+        trigger: { $ref: "#/components/schemas/TaskTrigger" }
+        delegation: { type: string, enum: [none, read_only] }
+        deliver: { type: array, items: { type: string } }
+        enabled: { type: boolean }
+        delegation_id: { type: [string, "null"] }
+        last_run_at: { type: [string, "null"], format: date-time }
+        last_refusal: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+    TaskRun:
+      type: object
+      required: [work_item_id, key, project]
+      properties:
+        work_item_id: { type: string }
+        key: { type: string }
+        project: { type: string }
+    InboxItem:
+      type: object
+      required: [id, task, installation, work_item_id, name, version, type, media_type, created_at]
+      properties:
+        id: { type: string }
+        task: { type: string }
+        installation: { type: string }
+        work_item_id: { type: string }
+        name: { type: string }
+        version: { type: integer }
+        type: { type: string }
+        media_type: { type: string }
+        content: {}
+        created_at: { type: string, format: date-time }
+    InboxList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/InboxItem" } }
     AssistantConversationOpen:
       type: object
       properties:

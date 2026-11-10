@@ -101,5 +101,6 @@
  "relationship",
  "text",
  "utcnow",
- "uuid7"
+ "uuid7",
+ "TaskSubscription"
 ]

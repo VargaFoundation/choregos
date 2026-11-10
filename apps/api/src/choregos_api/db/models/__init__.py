@@ -96,6 +96,7 @@ from .runs import (
 )
 from .secrets import OrgSecret, RemoteCredential
 from .skills import Skill, SkillVersion
+from .tasks import TaskSubscription
 from .work_items import Event, Finding, HumanRequest, Run, RunEvent, WorkItem
 
 ALL_TABLES = [
@@ -107,6 +108,7 @@ ALL_TABLES = [
     AssistantInstallation,
     AssistantRead,
     AssistantToolBinding,
+    TaskSubscription,
     Connector,
     WorkflowDef,
     PolicyDef,
@@ -247,6 +249,7 @@ __all__ = [
     "Skill",
     "SkillVersion",
     "String",
+    "TaskSubscription",
     "Template",
     "Text",
     "TimestampMixin",
