@@ -69,6 +69,23 @@ already has that lifecycle, durably, in Temporal.
    extension (`capabilities.extensions`, `required: false`, so a client that ignores it reads the card as
    before); a field refusal keeps its `errors` in the JSON-RPC `data`.
 
+   **Amended 2026-11-10 (S62-02).** The door also speaks **A2A 1.0**, at the same URL. The card lists
+   both in `supportedInterfaces` (1.0 first) and keeps its 0.3.0 top-level fields, so a 0.3.0 client reads
+   it unchanged; each security scheme carries both spellings. A 1.0 call (`SendMessage`,
+   `SendStreamingMessage`, `GetTask`, `CancelTask`, `SubscribeToTask`, the four
+   `…TaskPushNotificationConfig` methods) is translated on the way in and on the way out
+   (`a2a/v1.py`) and served by the 0.3.0 method, so every guard above applies to it as written: the
+   same `messageId` is the same task in either version. The method name decides the version, since the
+   two sets do not overlap; an `A2A-Version` header, when sent, must agree with it, and a version other
+   than 0.3 and 1.0 gets `-32009`. A missing header is not read as 0.3 (as the 1.0 specification would),
+   which would turn away every 1.0 client that omits it. A 1.0 file part carries `raw`, `mediaType` and
+   `filename`; by `url` it is refused as `uri` is. A 1.0 error's `data` is a list: a
+   `google.rpc.ErrorInfo` first (domain `a2a-protocol.org`, `choregos.dev` for the budget and the
+   streams cap), then a `google.rpc.BadRequest` naming the fields a workflow refused. A 1.0 stream has
+   no `final`: it closes after the last status. A push registered in 1.0 is notified as a
+   `StreamResponse` (`{"task": …}`); the version is sealed with the signing secret. `ListTasks` answers
+   `-32004` and `GetExtendedAgentCard` `-32007`: the card is already read with a token.
+
 ## Alternatives rejected
 
 - **Each registry agent as an A2A agent.** It would let a caller drive an agent outside any workflow,

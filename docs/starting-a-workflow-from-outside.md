@@ -22,8 +22,9 @@ person decides in the console.
 
 ## The A2A door, step by step
 
-The door speaks [A2A](https://a2a-protocol.org) **0.3.0**, JSON-RPC over HTTP, so any HTTP client can call
-it. The rules behind each call are in the [reference](integrations.md#another-agent-over-a2a) and
+The door speaks [A2A](https://a2a-protocol.org) **0.3.0** and **1.0**, JSON-RPC over HTTP, at the same URL,
+so any HTTP client can call it. This page uses the 0.3.0 names; [In A2A 1.0](#in-a2a-10) gives the other
+spelling. The rules behind each call are in the [reference](integrations.md#another-agent-over-a2a) and
 [ADR 0078](adr/0078-governed-workflows-as-a2a-skills.md).
 
 ### 1. Open the workflow to the door
@@ -229,10 +230,32 @@ curl -s "$A2A" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/j
 | HTTP `429` | more than 120 calls a minute on this token | wait for `Retry-After` |
 | `-32602` `name the skill…`, `unknown skill` | several skills, or one this token cannot see | read the card, set `metadata.skill` |
 | `-32602` `fields refused by workflow …` | `metadata.inputs` refuses them; `error.data.errors` says which and why | send what the card's schema asks for |
-| `-32601` `unknown method` | a method name from A2A 1.0, such as `SendMessage` | use the 0.3.0 names of this page |
+| `-32601` `unknown method` | a name neither version has, or an `A2A-Version` header that disagrees with the method | use the names of one version, and its header or none |
+| `-32009` | an `A2A-Version` other than `0.3` and `1.0` | send `0.3`, `1.0`, or no header |
 | `-32005` | the skill does not list this media type | add it to `input_modes` |
 | `-32004` | a reply to an existing task: a decision belongs in the console | follow `decision_url` |
 | `-32050` | the daily budget: 50 writes for a person, shared with the MCP door; 500 by default for an application | wait, or give the application a larger budget |
+
+### In A2A 1.0
+
+The same calls, under 1.0's names, at the same URL; the guards and the limits are the same, and the same
+`messageId` is the same task in either version. The method name says which version a call is in; an
+`A2A-Version: 1.0` header is optional, and must agree with it.
+
+| 0.3.0 | 1.0 |
+| --- | --- |
+| `message/send` | `SendMessage`, which answers `{"task": …}` |
+| `message/stream`, `tasks/resubscribe` | `SendStreamingMessage`, `SubscribeToTask`: each event is `{"task"}`, `{"statusUpdate"}` or `{"artifactUpdate"}`, and the stream closes after the last status (no `final`) |
+| `tasks/get`, `tasks/cancel` | `GetTask`, `CancelTask` |
+| `tasks/pushNotificationConfig/set` … | `CreateTaskPushNotificationConfig` …, flat (`taskId`, `id`, `url`, `token`); a notification is `{"task": …}` |
+| `{"kind": "text", "text": …}` | `{"text": …}` |
+| `{"kind": "data", "data": {…}}` | `{"data": {…}}` |
+| `{"kind": "file", "file": {"bytes", "mimeType", "name"}}` | `{"raw", "mediaType", "filename"}` |
+| `working`, `input-required` | `TASK_STATE_WORKING`, `TASK_STATE_INPUT_REQUIRED` |
+| `error.data`: `{"errors": […], "decision_url": …}` | `error.data`: a `google.rpc.ErrorInfo` (its `metadata` holds `decision_url`), then a `google.rpc.BadRequest` whose `fieldViolations` name the refused fields |
+
+`ListTasks` is not served (`-32004`): keep the ids `SendMessage` answers. There is no extended card
+(`-32007`): the card is already read with a token.
 
 ## From a terminal or a script
 
@@ -268,7 +291,7 @@ in [Usage](usage.md#work-items-opened-by-another-system-http-triggers) and
 
 ## What is not there yet
 
-- **A2A 0.3.0 only, inbound.** A client built only for 1.0, whose method names and part format differ,
-  gets `-32601`. Outbound calls to remote agents already handle both.
+- **No `ListTasks` and no signed card in A2A 1.0.** The 1.0 spelling is checked against the
+  specification's `a2a.proto` and the platform's own client, not yet against another vendor's 1.0 client.
 - **An application's account opens the A2A door only.** The REST API and the MCP door take a person's token.
 - **No CLI verb for the A2A door.** `choregos items create` goes through REST, and takes no file.

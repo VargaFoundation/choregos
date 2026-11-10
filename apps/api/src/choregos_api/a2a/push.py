@@ -14,6 +14,9 @@ only on a 2xx: a failed call is sent again on a later pass, with a growing delay
 Events in between are coalesced: the receiver gets the task as it is, not each step. An event that
 changes nothing the task says moves the cursor without a call. Once the final state is delivered the
 registration ends.
+
+A registration made in A2A 1.0 (`CreateTaskPushNotificationConfig`) is notified in 1.0's shape, a
+`StreamResponse` holding the task; the version is sealed with the secret, so no column records it.
 """
 
 from __future__ import annotations
@@ -39,6 +42,7 @@ from ..db.session import ALL_ORGS, session_scope
 from ..logging import get_logger
 from ..mcp.caller import SCOPES_A2A, Refusal, caller_of_token
 from ..secret_store import SecretStoreUnavailable, get_secret_store
+from . import v1
 from .door import PUSH_NOT_SUPPORTED, TASK_NOT_FOUND, Door, Fault, _task, task_of
 
 log = get_logger("choregos.a2a.push")
@@ -134,7 +138,7 @@ async def _set(door: Door, params: dict[str, Any]) -> dict[str, Any]:
     config.cursor_ts = config.cursor_event_id = config.last_view = config.next_attempt_at = None
     config.last_error = None
     signing = secrets.token_urlsafe(32)
-    sealed = json.dumps({"secret": signing, "token": token})
+    sealed = json.dumps({"secret": signing, "token": token, "version": door.dialect})
     try:
         await get_secret_store().put(door.session, door.org.id, secret_name(config), sealed, door.caller.key)
     except SecretStoreUnavailable as missing:
@@ -292,7 +296,8 @@ async def _deliver(session: Any, config: A2aPushConfig) -> bool:
         _end(config, f"the signing secret cannot be read: {lost}")
         return False
     stored = json.loads(sealed[secret_name(config)])
-    body = json.dumps(task, separators=(",", ":")).encode()
+    payload = {"task": v1.task_out(task)} if stored.get("version") == v1.V10 else task
+    body = json.dumps(payload, separators=(",", ":")).encode()
     stamp = str(int(time.time()))
     headers = {
         "Content-Type": "application/json",
