@@ -3457,6 +3457,20 @@
     "type": "String(length=36)"
    },
    {
+    "default": null,
+    "name": "installation_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "user_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
     "default": "<function uuid7>",
     "name": "id",
     "nullable": false,
@@ -3526,6 +3540,14 @@
     "ix_cost_ledger_agent_slug",
     [
      "cost_ledger.agent_slug"
+    ],
+    false
+   ],
+   [
+    "ix_cost_ledger_installation_id",
+    [
+     "cost_ledger.installation_id",
+     "cost_ledger.ts"
     ],
     false
    ],

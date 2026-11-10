@@ -28,6 +28,7 @@ from ..schemas.agent_sessions import (
     ConversationPage,
 )
 from ..schemas.base import PageMeta
+from ..services.assistant_conversations import require_audience
 from ..services.conversations import (
     conversation_of,
     converse,
@@ -112,6 +113,7 @@ async def send_my_conversation_message(
     conversation_id: str, body: ConversationMessageCreate, session: Db, principal: Me
 ) -> Any:
     record = await _mine(session, principal, conversation_id)
+    await require_audience(session, principal, record)
     answer = await converse(session, record, body.input)
     if not body.stream:
         return answer
