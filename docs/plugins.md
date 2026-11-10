@@ -258,8 +258,34 @@ policy:
 Names are unique within their list, a prompt's `{argument}` placeholders are its arguments, and every file
 the assistant names ships with the plugin: each knowledge seed (a directory holding a `knowledge.yaml` in
 the `kind: KnowledgeBase` shape, and its `corpus/`), each task workflow and each eval suite is a declared
-file, packed and digested like a template's. Installing an assistant, binding its needs and conversing with
-it come with the stories of stream S63 ([the plan](plan/PLAN-2026-11-10-assistants.md)).
+file, packed and digested like a template's. Conversing with an assistant comes with the other stories of
+stream S63 ([the plan](plan/PLAN-2026-11-10-assistants.md)).
+
+#### Installing an assistant and binding its needs
+
+Installing the plugin makes its assistants available; installing an assistant (S63-02) makes one of them an
+object of the organisation, for an audience. The manifest is never copied: it is read again from the
+installed plugin, so a plugin upgrade is seen at once.
+
+```
+POST  /api/v1/orgs/{org}/assistants      {"plugin": "investment-assistant", "assistant": "investment-assistant",
+                                          "slug": "invest", "config": {"house_name": "Varga"},
+                                          "owner_groups": ["investment-owners"], "audience_groups": ["grp-investors"]}
+GET   /api/v1/orgs/{org}/assistants                         # those you manage
+GET, PATCH, DELETE /api/v1/orgs/{org}/assistants/{slug}
+GET   /api/v1/orgs/{org}/assistants/{slug}/readiness        # what is missing, and who may fix it
+PUT   /api/v1/orgs/{org}/assistants/{slug}/bindings/{need}  {"connector": "news-feed"}
+```
+
+An installation is `incomplete` until its readiness has no item: each **required** need is bound to a
+connector of the organisation that serves every operation of the need (as discovered, with the same
+`access`) and can carry the need's identity mode, and each required key of `config_schema` has a value.
+`service` is always supported; `user_exchange` and `user_consent` only by a connector whose config declares
+them in `identity_modes`. A binding to a connector that cannot satisfy the need is a 422 naming why, and
+nothing changes. An optional need may stay unbound or be switched off (`"enabled": false`). The status is
+`suspended` while the plugin is uninstalled (installing it again resumes the assistant). Installing,
+uninstalling and changing the owners are the organisation administrator's; configuring and binding are also
+open to a member of an owner group (the identity provider's groups).
 
 ## Pack and index
 

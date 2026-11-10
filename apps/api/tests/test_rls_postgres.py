@@ -901,6 +901,58 @@ async def test_machine_accounts_stay_in_their_organisation(two_organisations: di
         assert (await session.execute(select(MachineAccount))).scalars().all() == [], "no scope, nothing"
 
 
+async def test_assistant_installations_stay_in_their_organisation(
+    two_organisations: dict[str, str],
+) -> None:
+    """Assistant installations and their bindings (ADR 0133): org `a` reads none of `b`'s, writes none into
+    it, and a session with no scope reads nothing."""
+    from choregos_api.db.models import (
+        AssistantInstallation,
+        AssistantToolBinding,
+        Organization,
+        OrgConnector,
+    )
+    from choregos_api.db.session import session_scope
+    from sqlalchemy.exc import DBAPIError
+
+    def installation(org_id: str, slug: str) -> AssistantInstallation:
+        return AssistantInstallation(
+            org_id=org_id,
+            slug=slug,
+            plugin="p",
+            plugin_version="1",
+            manifest_digest="sha256:0",
+            assistant_name="a",
+        )
+
+    async with session_scope(orgs="*") as session:
+        ids = {o.slug: o.id for o in (await session.execute(select(Organization))).scalars()}
+        for slug in ("a", "b"):
+            row = installation(ids[slug], f"assistant-{slug}")
+            connector = OrgConnector(org_id=ids[slug], name=f"c-{slug}", kind="mcp", type="mcp")
+            session.add_all([row, connector])
+            await session.flush()
+            session.add(
+                AssistantToolBinding(
+                    org_id=ids[slug],
+                    installation_id=row.id,
+                    need="n",
+                    connector_id=connector.id,
+                    operations=["o"],
+                    identity="service",
+                )
+            )
+    async with session_scope(orgs=["a"]) as session:
+        assert (await session.execute(select(AssistantInstallation.slug))).scalars().all() == ["assistant-a"]
+        assert len((await session.execute(select(AssistantToolBinding))).scalars().all()) == 1
+    with pytest.raises(DBAPIError):
+        async with session_scope(orgs=["a"]) as session:
+            session.add(installation(ids["b"], "stolen"))
+    async with session_scope() as session:
+        assert (await session.execute(select(AssistantInstallation))).scalars().all() == []
+        assert (await session.execute(select(AssistantToolBinding))).scalars().all() == []
+
+
 async def test_org_egress_rules_are_isolated(two_organisations: dict[str, str]) -> None:
     """The egress allowlist (S39-22): org `a` reads none of `b`'s rules, writes none into it, and a
     session without a scope sees nothing."""
