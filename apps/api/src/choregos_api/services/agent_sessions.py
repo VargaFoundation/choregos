@@ -517,6 +517,9 @@ async def respond(
     from .conversation_extras import conversation_extras
 
     extras = await conversation_extras(session, record, messages)
+    from .conversation_actions import proposable
+
+    extras.actions = await proposable(session, record, spec, project)
     for text in inputs:
         messages.append({"role": "user", "content": text})
         await journal(session, record, "input.text", {"text": text[:2000]})

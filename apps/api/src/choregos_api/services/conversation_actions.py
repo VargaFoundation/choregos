@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Writes proposed in a conversation, decided by the person (S63-10, ADR 0139 point 5, ADR 0030).
 
-An assistant conversation is offered the `inline` write needs of its installation, as `<need>__<operation>`.
+An assistant conversation is offered the `inline` write needs of its installation, as `<need>__<operation>`
+(the need-to-tool mapping is `conversation_needs`, shared with the read tools).
 Calling one executes NOTHING: it stores a `ConversationAction` (`proposed`, the arguments as the agent gave
 them, a readable summary) and tells the agent the action awaits the person's confirmation. The conversation's
 owner confirms it (`confirm`: the broker calls the source with THE PERSON'S identity, the source staying the
@@ -11,7 +12,8 @@ What is offered, and why not more:
 - only a binding whose approval is `inline`. A `console` approval means a governed action (ADR 0035), which
   needs a work item a conversation has not: such a need is NOT offered, so the agent never proposes it;
   an action proposed before the owners raised the approval is refused at confirmation with `approval_console`.
-- only the identity `user_exchange` (S63-07). `user_consent` (S63-08) is not offered until it can execute.
+- only the identity `user_exchange` (S63-07, `conversation_needs.EXECUTABLE_IDENTITIES`); `user_consent`
+  (S63-08) is not offered until it can execute.
 - an operation whose organisation policy is `approval` (a governed action already) is not offered either.
 - no dry run: the proposal carries no diff (the optional part of the story is not done).
 """
@@ -31,31 +33,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record as audit
 from ..config import get_settings
-from ..db.models import (
-    AgentSessionRecord,
-    AssistantToolBinding,
-    ConversationAction,
-    OrgConnector,
-    Project,
-    User,
-)
+from ..db.models import AgentSessionRecord, ConversationAction, Project, User
 from ..errors import ApiError, conflict, not_found
 from ..rbac import Principal
+from ..schemas import AgentSpec
 from ..schemas.conversation_actions import ConversationAction as ConversationActionDto
 from .agent_sessions import journal, tool_parameters
-from .broker import (
-    SEPARATOR,
-    ArgumentsOutsideGrant,
-    ArgumentsRefused,
-    BrokerTool,
-    call,
-    check_arguments,
-    tools_of_selection,
-)
+from .broker import ArgumentsOutsideGrant, ArgumentsRefused, BrokerTool, call, check_arguments
+from .conversation_needs import write_tools
 from .identity_exchange import USER_EXCHANGE, Acting
 
-#: Identities a confirmed action can be executed under today.
-EXECUTABLE_IDENTITIES = (USER_EXCHANGE,)
 #: A proposal nobody decided in this time is `expired`.
 EXPIRES_AFTER = timedelta(hours=24)
 SUMMARY_CHARS = 300
@@ -83,42 +70,17 @@ def summary_of(need: str, operation: str, arguments: dict[str, Any]) -> str:
     return text if len(text) <= SUMMARY_CHARS else text[: SUMMARY_CHARS - 1] + "..."
 
 
-async def _bound_tools(
-    session: AsyncSession, record: AgentSessionRecord, project: Project, *, approval: str
-) -> dict[str, Proposable]:
-    """The write operations of the installation's enabled bindings with this approval, as broker tools."""
-    if record.installation_id is None:
-        return {}
-    rows = (
-        await session.execute(
-            select(AssistantToolBinding, OrgConnector)
-            .join(OrgConnector, OrgConnector.id == AssistantToolBinding.connector_id)
-            .where(
-                AssistantToolBinding.installation_id == record.installation_id,
-                AssistantToolBinding.enabled.is_(True),
-                AssistantToolBinding.approval == approval,
-            )
-        )
-    ).all()
-    usable = [(b, c) for b, c in rows if b.identity in EXECUTABLE_IDENTITIES]
-    selection: dict[str, list[Any]] = {c.name: [str(o) for o in b.operations] for b, c in usable}
-    granted = await tools_of_selection(session, selection, project)
-    offered: dict[str, Proposable] = {}
-    for binding, connector in usable:
-        for operation in binding.operations:
-            tool = granted.get(f"{connector.name}{SEPARATOR}{operation}")
-            if tool is None or not tool.is_write or tool.needs_approval:
-                continue
-            name = f"{binding.need}{SEPARATOR}{operation}"
-            offered[name] = Proposable(name, binding.need, tool)
-    return offered
-
-
 async def proposable(
-    session: AsyncSession, record: AgentSessionRecord, project: Project
+    session: AsyncSession,
+    record: AgentSessionRecord,
+    spec: AgentSpec,
+    project: Project,
+    *,
+    approval: str = "inline",
 ) -> dict[str, Proposable]:
-    """What a turn may propose: the inline writes of the conversation's installation."""
-    return await _bound_tools(session, record, project, approval="inline")
+    """What a turn may propose: the writes of the needs `conversation_needs` maps, with this approval."""
+    found = await write_tools(session, record, spec, project, approval=approval)
+    return {name: Proposable(name, need, tool) for name, (need, tool) in found.items()}
 
 
 async def propose(
@@ -167,7 +129,7 @@ def to_dto(action: ConversationAction) -> ConversationActionDto:
         operation=action.operation,
         arguments=dict(action.arguments),
         summary=action.summary,
-        status=action.status,  # type: ignore[arg-type]
+        status=action.status,
         result=dict(action.result) if action.result is not None else None,
         confirmed_by=action.confirmed_by,
         confirmed_at=action.confirmed_at,
@@ -232,14 +194,20 @@ async def confirm(
     project = await session.get(Project, record.project_id) if record.project_id else None
     if project is None:
         raise _typed("the conversation has no space to act in", "no_project")
+    from .agents import resolve_agent
+
+    resolved = await resolve_agent(
+        session, record.org_id, project.id, f"{record.agent_slug}@{record.agent_version}"
+    )
+    spec: AgentSpec = resolved.spec
     # Read again at confirmation: the owners may have raised the approval or switched the need off since.
-    inline = await _bound_tools(session, record, project, approval="inline")
+    inline = await proposable(session, record, spec, project)
     entry = next(
         (e for e in inline.values() if e.need == action.need and e.tool.operation.name == action.operation),
         None,
     )
     if entry is None:
-        console = await _bound_tools(session, record, project, approval="console")
+        console = await proposable(session, record, spec, project, approval="console")
         if any(e.need == action.need for e in console.values()):
             raise _typed(
                 "this need now requires a console approval (a governed action), which a conversation "
@@ -283,8 +251,12 @@ async def confirm(
         target_id=action.id,
         status=action.status,
     )
-    outcome = "it was executed." if action.status == "executed" else f"the source answered {code}: not executed."
-    _tell_the_conversation(record, f"The person confirmed the action `{action.id}` ({action.summary}): {outcome}")
+    outcome = (
+        "it was executed." if action.status == "executed" else f"the source answered {code}: not executed."
+    )
+    _tell_the_conversation(
+        record, f"The person confirmed the action `{action.id}` ({action.summary}): {outcome}"
+    )
     await session.flush()
     return action
 

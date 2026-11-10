@@ -340,6 +340,23 @@ a `<need>__<operation>` of the assistant's tools. `choregos_core.conversation_ev
 required check `conversation_suite`. A thumb down on an answer (`POST /orgs/{org}/agent-sessions/{id}/feedback`)
 proposes a pseudonymised candidate case to the agent's managers (`GET /orgs/{org}/agents/{slug}/feedback-candidates`);
 it never enters a suite by itself. The judge that scores the `rubric` is not delivered yet.
+#### Writes in a conversation
+
+A write need with `approval: inline` is offered to the agent as `<need>__<operation>` (the agent's `mcp_servers`
+name the need), but calling it executes nothing
+([ADR 0139](adr/0139-an-assistant-through-the-mcp-door-and-an-embedded-component.md) point 5): it stores a
+pending action (`conversation_actions`: operation, arguments, a readable summary, `proposed`) and answers the
+agent that the action awaits the person. The conversation's owner decides, and only they:
+`GET /me/conversations/{id}/actions`, `POST .../actions/{action_id}/confirm` (the broker calls the source with a
+token exchanged for that person, `user_exchange`; the source stays the judge of the right to write; the result is
+kept, a second confirmation is 409 `action_executed`) and `POST .../refuse`. A proposal nobody decides in 24 hours
+expires. The MCP door lists them as `pending_actions[{id, summary, confirm_url}]` and never executes
+([ADR 0030](adr/0030-an-mcp-door-for-external-clients.md)). Owners may bind a write with
+`approval: console` (above the manifest's floor), never below it (422); a `console` need is not offered in a
+conversation (a governed action needs a work item a conversation has not) and a proposal made before the owners
+raised it is refused at confirmation with `approval_console`. `user_consent` writes wait for S63-08; no dry run
+diff is computed.
+
 ### Who may use an assistant, and what it may spend
 
 Three permissions (S63-15), decided in one place (`services/assistant_access.py`) from the groups the

@@ -36,6 +36,7 @@ from .test_user_exchange import (  # noqa: F401 - fixtures imported for their us
 ME = "/api/v1/me/conversations"
 AUDIENCE_GROUP = "grp-buyers"
 WRITE = "orders__commander_poste"
+NEEDS = [{"connector": "orders", "tools": ["commander_poste"]}]
 ARGUMENTS = {"item": "laptop", "quantity": 2}
 
 
@@ -66,7 +67,9 @@ async def _installation(*, approval: str = "inline") -> dict[str, str]:
         ).scalar_one()
         operation.policy = "allowed"
         # S63-15: only the audience's groups use an assistant, an administrator included.
-        (await session.execute(select(User).where(User.email == EMAIL))).scalar_one().groups = [AUDIENCE_GROUP]
+        (await session.execute(select(User).where(User.email == EMAIL))).scalar_one().groups = [
+            AUDIENCE_GROUP
+        ]
         installation = AssistantInstallation(
             org_id=org.id, slug="buyer", plugin="p", plugin_version="1", manifest_digest="sha256:0",
             assistant_name="buyer", status="ready", audience_groups=[AUDIENCE_GROUP],
@@ -89,9 +92,12 @@ async def _ready(client: AsyncClient, *, approval: str = "inline") -> dict[str, 
 
 
 async def _propose(
-    client: AsyncClient, admin: str, upstream: Upstream, ids: dict[str, str]  # noqa: F811
+    client: AsyncClient,
+    admin: str,
+    upstream: Upstream,  # noqa: F811
+    ids: dict[str, str],
 ) -> tuple[str, str]:
-    await _agent(client)
+    await _agent(client, mcp_servers=NEEDS)
     upstream.model.call(WRITE, ARGUMENTS).say("I proposed the order; please confirm it.")
     conversation = await _open("varga", admin, installation_id=ids["installation"])
     answer = await _say(client, conversation, "Order two laptops.")
@@ -226,7 +232,7 @@ async def test_a_read_conversation_without_installation_is_offered_no_write(
     idp: FakeIdentityProvider,  # noqa: F811
 ) -> None:
     await _ready(client)
-    await _agent(client)
+    await _agent(client, mcp_servers=NEEDS)
     upstream.model.say("hello")
     conversation = await _open("varga", admin)
     assert (await _say(client, conversation, "hi")).status_code == 200
@@ -271,7 +277,7 @@ async def test_the_mcp_door_lists_the_proposal_with_a_console_link_and_never_exe
 # ───────────────────────── the floor of an approval ─────────────────────────
 
 
-async def _variant(offline_root: Any) -> None:  # noqa: F811
+async def _variant(offline_root: Any) -> None:
     """The fixture plugin, with `orders` an inline-floor write and a console-floor write `refunds`."""
     import pathlib
 
@@ -282,7 +288,9 @@ async def _variant(offline_root: Any) -> None:  # noqa: F811
         "approval: console, required: false }",
         "approval: inline, required: false }\n  - { need: refunds, operations: [refund], access: write, "
         "identity: user_exchange, approval: console, required: false }",
-    ).replace("identity: user_consent,\n      approval: inline", "identity: user_exchange,\n      approval: inline")
+    ).replace(
+        "identity: user_consent,\n      approval: inline", "identity: user_exchange,\n      approval: inline"
+    )
     manifest.write_text(text)
     agent = next((root / "agents").glob("*.y*ml"))
     agent.write_text(
@@ -353,14 +361,16 @@ async def test_owners_raise_an_approval_but_never_go_below_the_manifests_floor(
     raised = await client.put(f"{bind}/orders", json={"connector": "orders-source", "approval": "console"})
     assert raised.status_code == 200 and stored(raised, "orders") == "console"
     # Binding again without a choice does not lower it below the floor either: it takes the floor.
-    assert stored(await client.put(f"{bind}/orders", json={"connector": "orders-source"}), "orders") == "inline"
+    assert (
+        stored(await client.put(f"{bind}/orders", json={"connector": "orders-source"}), "orders") == "inline"
+    )
     # A read has no approval to choose.
     news = await client.put(f"{bind}/news", json={"connector": "orders-source", "approval": "console"})
     assert news.status_code == 422
 
 
 @pytest.mark.parametrize("approval", ["none"])
-async def test_an_approval_of_none_is_not_a_choice(client: AsyncClient, org: str, approval: str) -> None:
+async def test_an_approval_of_none_is_not_a_choice(client: AsyncClient, admin: str, approval: str) -> None:
     refused = await client.put(
         f"{ORG}/assistants/x/bindings/orders", json={"connector": "c", "approval": approval}
     )

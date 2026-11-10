@@ -12,9 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..db.models import AgentSessionRecord, Organization
 from ..deps import Db, Me
 from ..errors import not_found
-from ..services.assistant_conversations import require_audience
 from ..schemas.conversation_actions import ConversationAction, ConversationActionList
 from ..services import conversation_actions as service
+from ..services.assistant_conversations import require_audience
 
 router = APIRouter(tags=["agents"])
 
@@ -50,7 +50,9 @@ async def list_actions(conversation_id: str, session: Db, principal: Me) -> Conv
     response_model=ConversationAction,
     operation_id="confirmMyConversationAction",
 )
-async def confirm_action(conversation_id: str, action_id: str, session: Db, principal: Me) -> ConversationAction:
+async def confirm_action(
+    conversation_id: str, action_id: str, session: Db, principal: Me
+) -> ConversationAction:
     record = await _mine(session, principal, conversation_id)
     # Leaving the audience cuts what the assistant may do for the person, a write included.
     await require_audience(session, principal, record)
@@ -62,6 +64,8 @@ async def confirm_action(conversation_id: str, action_id: str, session: Db, prin
     response_model=ConversationAction,
     operation_id="refuseMyConversationAction",
 )
-async def refuse_action(conversation_id: str, action_id: str, session: Db, principal: Me) -> ConversationAction:
+async def refuse_action(
+    conversation_id: str, action_id: str, session: Db, principal: Me
+) -> ConversationAction:
     record = await _mine(session, principal, conversation_id)
     return service.to_dto(await service.refuse(session, record, action_id, principal))
