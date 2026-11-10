@@ -150,11 +150,8 @@ async def test_a_token_of_someone_outside_the_organisation_cannot_be_attached(
         foreign_id = foreign.id
     refused = await _attach(client, foreign_id)
     assert refused.status_code == 422, refused.text
-    assert (
-        refused.json()
-        == (await _attach(client, "no-such-token")).json() | {"instance": refused.json().get("instance")}
-        or refused.json()["detail"] == (await _attach(client, "no-such-token")).json()["detail"]
-    )
+    missing = await _attach(client, "no-such-token")
+    assert refused.json()["detail"] == missing.json()["detail"], "the id must reveal nothing"
     # A member's token still attaches.
     token_id, _ = await _token(client)
     assert (await _attach(client, token_id)).status_code == 201
