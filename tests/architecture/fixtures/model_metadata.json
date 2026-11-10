@@ -1429,6 +1429,34 @@
     "type": "Integer()"
    },
    {
+    "default": null,
+    "name": "max_turns",
+    "nullable": true,
+    "server_default": null,
+    "type": "Integer()"
+   },
+   {
+    "default": null,
+    "name": "retention_days",
+    "nullable": true,
+    "server_default": null,
+    "type": "Integer()"
+   },
+   {
+    "default": "<function list>",
+    "name": "archived_messages",
+    "nullable": false,
+    "server_default": "'[]'",
+    "type": "Json()"
+   },
+   {
+    "default": null,
+    "name": "turn_lease_until",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
     "default": "<function uuid7>",
     "name": "id",
     "nullable": false,

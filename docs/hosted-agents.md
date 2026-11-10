@@ -415,9 +415,20 @@ answered 404, and on PostgreSQL a restrictive policy on `agent_sessions` and
 - **Title.** Cut from the first message (60 characters, at a word): deterministic, no model call.
 - **Opening** is the service `open_conversation` (it creates the personal space on first use);
   the route that opens an assistant's conversation comes with the installations (S63-02).
-- Not yet: the text is sent in one delta (the prompt loop does not stream), the history is not
-  summarised past a token threshold, `retention_until` is not set (no installation policy), a turn
-  cannot be cancelled, and `/responses` sessions keep their one key and their hour.
+- **Streaming (S63-04b).** With `stream`, every model call of the turn is requested with
+  `stream: true` and each text chunk is sent as it arrives, one `response.output_text.delta` per
+  chunk; tool calls are assembled from the stream and journaled by the loop as before. A turn the
+  conversation refuses (limit, running turn) is 409 before the stream opens.
+- **Limits (S63-04b).** `max_turns` (200 by default) refuses the turn past it with 409 before any
+  key or call. `retention_until` moves to now plus `retention_days` (30 by default) at each turn.
+  Past about 6000 estimated tokens (characters / 4) the oldest turns, all but the latest two, leave
+  what the model receives and become one system message, a deterministic cut (not written by the
+  model); the person still reads them. One turn runs at a time: a second is 409 (a row lock and a
+  lease), so turn numbers never repeat. `POST …/{id}/cancel` cancels the running turn: tool calls
+  already made stay journaled, the key is revoked and the spend booked. The cancel reaches turns
+  run by the same API process only.
+- Not yet: a model-written title or summary, the installation's policy as the source of these
+  defaults, and `/responses` sessions keep their one key and their hour.
 
 **A person speaks to a voice agent (S41-10).** `/orgs/{org}/agents/{slug}/realtime?project=…`
 (optional `max_usd`) is a WebSocket speaking the OpenAI Realtime events; the API relays it to the
