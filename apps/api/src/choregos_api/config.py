@@ -90,6 +90,9 @@ class Settings(BaseSettings):
     #: The MCP door also accepts OAuth tokens issued by the IdP (ADR 0030, RFC 9728): claude.ai and
     #: hosted clients cannot present a `chg_` token. Off by default.
     mcp_oauth_enabled: bool = False
+    #: How long an `ask` through the MCP door waits for the assistant's turn before answering `working`
+    #: (S63-11): the turn goes on in the background and `get_conversation` returns it when done.
+    mcp_assistant_wait_s: float = 25.0
     #: The issuer of the door's tokens; empty: that of the console's OIDC sign-in.
     mcp_oauth_issuer: str = ""
     #: The MANDATORY audience of a door token: on a shared realm, a token obtained by another

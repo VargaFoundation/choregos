@@ -36,6 +36,7 @@ from ..deps import Config, Db, resolve_project
 from ..errors import ApiError
 from ..logging import get_logger
 from ..rbac import Permission
+from .assistants import prompt_get, prompt_list, resolve_connector
 from .caller import Caller, Refusal, identify
 from .limits import RATE_LIMITER, WRITES_PER_DAY, truncate, writes_today
 from .oauth import metadata
@@ -93,6 +94,7 @@ def _fault(request_id: Any, code: int, message: str, status: int = 200) -> JSONR
 
 @router.api_route("/mcp", methods=["GET", "DELETE"])
 @router.api_route("/mcp/projects/{project}", methods=["GET", "DELETE"])
+@router.api_route("/mcp/assistants/{assistant}", methods=["GET", "DELETE"])
 async def no_stream_or_session() -> Response:
     """The door is stateless: no SSE stream to open, no session to close."""
     return Response(status_code=405, headers={"Allow": "POST"})
@@ -103,13 +105,23 @@ async def door(request: Request, session: Db, settings: Config) -> Response:
     return await _serve(request, session, settings, None)
 
 
+@router.post("/mcp/assistants/{assistant}")
+async def assistant_door(assistant: str, request: Request, session: Db, settings: Config) -> Response:
+    """One assistant installation as its own connector (S63-11): `ask`, `get_conversation`, prompts."""
+    return await _serve(request, session, settings, None, assistant)
+
+
 @router.post("/mcp/projects/{project}")
 async def project_door(project: str, request: Request, session: Db, settings: Config) -> Response:
     return await _serve(request, session, settings, project)
 
 
 async def _serve(
-    request: Request, session: Any, settings: Settings, requested_project: str | None
+    request: Request,
+    session: Any,
+    settings: Settings,
+    requested_project: str | None,
+    requested_assistant: str | None = None,
 ) -> Response:
     origin = request.headers.get("origin")
     if origin and origin not in _allowed_origins(settings):
@@ -142,6 +154,16 @@ async def _serve(
             return _http_refusal(403, f"this token is bound to project {org}:{project.slug}")
         project, org = target, target_org
 
+    ctx = Context(
+        session=session,
+        caller=caller,
+        project=project,
+        org=org,
+        console=settings.public_url.rstrip("/"),
+    )
+    if requested_assistant is not None and not await _pin_assistant(ctx, requested_assistant):
+        return _http_refusal(404, f"assistant `{requested_assistant}` not found")
+
     raw = await request.body()
     if len(raw) > MAX_BODY_SIZE:
         return _http_refusal(413, "message too large (1 MiB at most)")
@@ -156,15 +178,17 @@ async def _serve(
     if is_notification(message):
         return Response(status_code=202)
 
-    ctx = Context(
-        session=session,
-        caller=caller,
-        project=project,
-        org=org,
-        console=settings.public_url.rstrip("/"),
-    )
     response = await _answer(ctx, message, request)
     return JSONResponse(response)
+
+
+async def _pin_assistant(ctx: Context, reference: str) -> bool:
+    """The door is one assistant's (S63-11); outside the audience or not ready, it does not exist."""
+    ctx.assistant = await resolve_connector(ctx, reference)
+    if ctx.assistant is None:
+        return False
+    ctx.target_org_id = ctx.assistant.installation.org_id
+    return True
 
 
 async def _answer(ctx: Context, message: dict[str, Any], request: Request) -> dict[str, Any]:
@@ -176,7 +200,10 @@ async def _answer(ctx: Context, message: dict[str, Any], request: Request) -> di
             request_id,
             {
                 "protocolVersion": negotiate(params.get("protocolVersion")),
-                "capabilities": {"tools": {"listChanged": False}},
+                "capabilities": {
+                    "tools": {"listChanged": False},
+                    **({"prompts": {"listChanged": False}} if ctx.assistant is not None else {}),
+                },
                 "serverInfo": {"name": "choregos", "title": "Choregos", "version": __version__},
                 "instructions": INSTRUCTIONS,
             },
@@ -187,6 +214,13 @@ async def _answer(ctx: Context, message: dict[str, Any], request: Request) -> di
         return ok(request_id, {"tools": [tool.announcement() for tool in await announced_tools(ctx)]})
     if method == "tools/call":
         return await _call(ctx, request_id, params, request)
+    if method == "prompts/list" and ctx.assistant is not None:
+        return ok(request_id, {"prompts": await prompt_list(ctx)})
+    if method == "prompts/get" and ctx.assistant is not None:
+        rendered = await prompt_get(ctx, params)
+        if isinstance(rendered, str):
+            return error_response(request_id, INVALID_PARAMS, rendered)
+        return ok(request_id, rendered)
     return error_response(request_id, METHOD_NOT_FOUND, f"unknown method: {method}")
 
 
