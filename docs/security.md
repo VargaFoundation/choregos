@@ -279,6 +279,41 @@ username, a plugin's server; `null` when the configuration names none. Not yet: 
 who started the work (on-behalf-of, ADR 0107 stories 2 and 3, #756); every write above is the
 connector's account.
 
+## A tool call under the person's identity (ADR 0135)
+
+By default a connector is called with its own credential (`service`). A connector may instead be called
+as the person who talks to the assistant, so the source decides what that person reads
+([ADR 0135](adr/0135-a-tool-call-may-carry-the-person-s-identity.md), `services/identity_exchange.py`).
+
+**Declaring it.** In the connector's configuration:
+
+```yaml
+identity_modes: [service, user_exchange]   # absent: [service]
+token_exchange: {audience: iris-mcp}       # required for user_exchange
+```
+
+The agent version's `mcp_servers` entry picks the mode (`identity: user_exchange`; absent: `service`).
+Only conversations use it today; runs, realtime and pod sessions keep `service`.
+
+**What happens.** At each call the platform exchanges the person's token at the identity provider
+(RFC 8693: `subject_token` = the person's access token, `audience` = the connector's, `requested_actor`
+= `assistant:<slug>`) and calls the source with the exchanged token as bearer. The token serves one call;
+it is never stored, logged, journaled or handed to a run or a pod. The subject token is the bearer the MCP
+door validated for that person, or a refresh token the console's sign-in sealed per person
+(`user/<id>/oidc_refresh`, ADR 0058), forgotten at sign-out.
+
+**No fallback.** Without a valid subject token, a refused exchange, or a connector that does not declare
+the mode, the call fails with the typed tool error `identity_unavailable` and nothing reaches the source.
+The `TOOL_CALLED` event carries `as: person:<subject>` (or `assigned:<connector>`) and `identity_mode`.
+
+**What the identity provider must allow.** The exchange client (`CHOREGOS_TOKEN_EXCHANGE_CLIENT_ID` and
+`_SECRET`, `_ENDPOINT`; by default the console's client and token endpoint) needs the realm's standard
+token exchange enabled, permission to exchange towards each source's audience, and refresh tokens at sign-in (the realm's normal ones). Keycloak's standard exchange has no actor token and ignores
+`requested_actor`: `act` is in the issued token only if a protocol mapper adds it. Sources must accept
+tokens of their audience (`iris-mcp`, `insights360-mcp`, ...). Through an MCP gateway the mode is refused.
+
+A dedicated security review of this exchange is required before production (ADR 0135).
+
 ## MCP gateway
 
 An organisation may put its MCP servers behind a gateway it runs
