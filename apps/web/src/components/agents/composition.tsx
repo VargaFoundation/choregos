@@ -119,7 +119,7 @@ export function AgentComposition({ org, agent }: { org: string; agent: Agent }) 
         </dl>
         <p className="flex flex-wrap gap-x-4 text-sm">
           <Link href={`${base}?tab=definition`} className="underline" data-testid="composition-definition-link">
-            Open the definition
+            Every field of this version
           </Link>
           <Link href={`${base}?tab=access`} className="underline" data-testid="composition-access-link">
             What it reaches in a project
