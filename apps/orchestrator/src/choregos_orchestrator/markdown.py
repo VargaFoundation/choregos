@@ -42,7 +42,7 @@ class StageLine:
             cost = "—"
         duration = _duration(self.duration_s) if self.duration_s else "—"
         cells = [str(self.index), self.label, self.actor, engine, tokens, cost, duration, self.outcome]
-        return "| " + " | ".join(cells) + " |"
+        return "| " + " | ".join(_cell(cell) for cell in cells) + " |"
 
 
 @dataclass(slots=True)
@@ -191,3 +191,10 @@ def render_human_request(kind: str, payload: dict[str, object], public_url: str,
             f"Approve or refuse in the console: {public_url}",
         ]
     )
+
+
+def _cell(text: str) -> str:
+    """One table cell on one line (S62-06): a run's summary may hold line breaks (a contract error
+    lists its faults one per line) and a `|`; either breaks the row, and the broken table then sent
+    the Jira converter into a loop that killed the tracker worker (FON-277, 2026-11-10)."""
+    return " ".join((text or "").split()).replace("|", "\\|")
