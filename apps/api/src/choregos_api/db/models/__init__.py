@@ -46,7 +46,7 @@ from .agents import (
     ProjectAgent,
 )
 from .assistant_reads import AssistantRead
-from .assistants import AssistantInstallation, AssistantToolBinding, ConversationAction
+from .assistants import AssistantInstallation, AssistantToolBinding, ConnectedAccount, ConversationAction
 from .audit import AuditLog, NetworkDecision
 from .connectors import (
     ConnectorOperation,
@@ -109,6 +109,7 @@ ALL_TABLES = [
     AssistantRead,
     AssistantToolBinding,
     TaskSubscription,
+    ConnectedAccount,
     Connector,
     WorkflowDef,
     PolicyDef,
@@ -189,6 +190,7 @@ __all__ = [
     "Boolean",
     "BudgetAlert",
     "CheckConstraint",
+    "ConnectedAccount",
     "Connector",
     "ConnectorOperation",
     "ConversationAction",

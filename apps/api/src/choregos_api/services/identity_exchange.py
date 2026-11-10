@@ -33,10 +33,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..config import Settings, get_settings
 from ..secret_store import get_secret_store
 
-IdentityMode = Literal["service", "user_exchange"]
+IdentityMode = Literal["service", "user_exchange", "user_consent"]
 SERVICE: Final = "service"
 USER_EXCHANGE: Final = "user_exchange"
-MODES: Final = (SERVICE, USER_EXCHANGE)
+USER_CONSENT: Final = "user_consent"
+MODES: Final = (SERVICE, USER_EXCHANGE, USER_CONSENT)
 #: The typed tool error of a call in a person's mode that cannot go out under it.
 UNAVAILABLE: Final = "identity_unavailable"
 
@@ -180,7 +181,7 @@ class Acting:
 
     def audit(self, connector_name: str) -> dict[str, str]:
         """`as` and the mode, as the TOOL_CALLED event carries them (ADR 0107 point 8)."""
-        if self.mode == USER_EXCHANGE:
+        if self.mode in (USER_EXCHANGE, USER_CONSENT):
             return {"as": f"person:{self.subject or self.user_id}", "identity_mode": self.mode}
         return {"as": f"assigned:{connector_name}", "identity_mode": SERVICE}
 

@@ -6,7 +6,7 @@ subject, delegation, moment; never the content read), under forced RLS on the or
 drops the table and loses the journal.
 
 Revision ID: e1b3d5f7a9c1
-Revises: d9b1d3f5a7c9
+Revises: e6a8c0e2a4b6
 Create Date: 2026-11-10 16:00:00+00:00
 """
 
@@ -18,7 +18,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "e1b3d5f7a9c1"
-down_revision: str | None = "d9b1d3f5a7c9"
+down_revision: str | None = "e6a8c0e2a4b6"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

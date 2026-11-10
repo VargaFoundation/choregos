@@ -89,3 +89,30 @@ class ConversationAction(Base, PkMixin, TimestampMixin):
     confirmed_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class ConnectedAccount(Base, PkMixin, TimestampMixin):
+    """A person's account at a source that answers in their name (`user_consent`, ADR 0135 point 1).
+
+    The refresh token is never a column: `secret_ref` names its sealed secret (ADR 0058). Under forced RLS
+    on the organisation and a RESTRICTIVE policy that lets only the owner (and the platform scope) in."""
+
+    __tablename__ = "connected_accounts"
+    __table_args__ = (
+        UniqueConstraint("org_id", "user_id", "connector", name="uq_connected_accounts_member"),
+    )
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    #: The organisation connector's name.
+    connector: Mapped[str] = mapped_column(String(64))
+    mode: Mapped[str] = mapped_column(String(16), default="user_consent", server_default="user_consent")
+    #: `store:<name>` of the sealed refresh token.
+    secret_ref: Mapped[str] = mapped_column(String(300))
+    scopes: Mapped[list[str]] = mapped_column(Json, default=list)
+    #: The person's subject at the source, when the token response says it.
+    subject: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: `connected`, or `reconnect` once the source refused the refresh token.
+    status: Mapped[str] = mapped_column(String(16), default="connected", server_default="connected")
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -6,7 +6,7 @@ on the organisation, and on PostgreSQL a RESTRICTIVE policy lets only the platfo
 belongs to read it. The downgrade drops the table and loses the proposals and what became of them.
 
 Revision ID: e0d2f4a6c8e0
-Revises: d9b1d3f5a7c9
+Revises: e1b3d5f7a9c1
 Create Date: 2026-11-10 16:00:00+00:00
 """
 
@@ -19,7 +19,7 @@ from alembic import op
 from choregos_api.db.base import Json
 
 revision: str = "e0d2f4a6c8e0"
-down_revision: str | None = "d9b1d3f5a7c9"
+down_revision: str | None = "e1b3d5f7a9c1"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

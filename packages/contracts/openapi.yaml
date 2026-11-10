@@ -2605,6 +2605,52 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/InboxList" } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
+  /me/connected-accounts:
+    get:
+      tags: [connectors]
+      operationId: listMyConnectedAccounts
+      description: "The caller's own connected accounts (`user_consent`, ADR 0135 point 6): connector, scopes, status. Never a token; a person never sees another person's account."
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ConnectedAccountList" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /me/connected-accounts/callback:
+    get:
+      tags: [connectors]
+      operationId: completeMyAccountConnection
+      description: "Where the source's authorization server redirects the person's browser. Checks the signed `state` and the handshake cookie (PKCE verifier), exchanges the code, seals the refresh token (ADR 0058) and answers 303 to the console. The token is never returned."
+      parameters:
+        - { name: code, in: query, required: true, schema: { type: string } }
+        - { name: state, in: query, required: true, schema: { type: string } }
+      responses:
+        "303": { description: Connected; redirects to the console }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /me/connected-accounts/{connector}/connect:
+    parameters:
+      - { name: connector, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" } }
+      - { name: org, in: query, required: true, schema: { type: string } }
+    post:
+      tags: [connectors]
+      operationId: connectMyAccount
+      description: "Starts the consent at the source: returns its authorization URL (authorization code, PKCE S256, signed state) and sets the handshake cookie that holds the verifier. 422 when the connector does not declare `user_consent`."
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ConnectedAccountConnect" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /me/connected-accounts/{connector}:
+    parameters:
+      - { name: connector, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" } }
+      - { name: org, in: query, required: true, schema: { type: string } }
+    delete:
+      tags: [connectors]
+      operationId: disconnectMyAccount
+      description: "Deletes the caller's account and its sealed refresh token at once, and revokes the token at the source when its connector declares a `revocation_endpoint`. The next call in a conversation answers `account_not_connected`."
+      responses:
+        "204": { description: Disconnected }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /me/assistants/{org}/{slug}/memory/{space}:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -5622,6 +5668,39 @@ components:
         enablement: { type: array, items: { $ref: "#/components/schemas/ConnectorEnablement" }, description: "one per installed instance of this entry" }
         procedure: { type: [string, "null"], description: "the setup procedure its install shows (`GET /procedures/{id}`): its own, else the generic MCP one (ADR 0067)" }
         install_routes: { type: array, uniqueItems: true, items: { type: string, enum: [direct, gateway] }, description: "how THIS organisation can install the entry: direct (Choregos holds the credential) and/or gateway (through its MCP gateway, ADR 0105)" }
+    ConnectedAccount:
+      type: object
+      required: [org, connector, mode, scopes, status, created_at]
+      properties:
+        org: { type: string }
+        connector: { type: string }
+        mode: { type: string, enum: [user_consent] }
+        scopes: { type: array, items: { type: string } }
+        subject: { type: [string, "null"], description: "The person's subject at the source, when its token response named one." }
+        status: { type: string, enum: [connected, reconnect], description: "`reconnect`: the source stopped honouring the consent." }
+        expires_at: { type: [string, "null"], format: date-time }
+        last_used_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+    ConnectedAccountList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ConnectedAccount" } }
+    ConnectedAccountConnect:
+      type: object
+      required: [authorization_url]
+      properties:
+        authorization_url: { type: string }
+    McpCatalogueUserConsent:
+      type: object
+      required: [authorization_endpoint, token_endpoint, client_id]
+      properties:
+        authorization_endpoint: { type: string, minLength: 1, maxLength: 500 }
+        token_endpoint: { type: string, minLength: 1, maxLength: 500 }
+        client_id: { type: string, minLength: 1, maxLength: 300 }
+        client_secret: { type: [string, "null"], description: "The OAuth client secret typed once: sealed at rest, never returned (ADR 0058); none for a public client." }
+        scopes: { type: array, items: { type: string } }
+        revocation_endpoint: { type: [string, "null"], maxLength: 500 }
     McpCatalogueInstall:
       type: object
       properties:
@@ -5633,6 +5712,7 @@ components:
         allow_egress: { type: boolean, default: false, description: "open the hosts this needs in the organisation's egress allowlist, in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
         route: { type: [string, "null"], enum: [direct, gateway, null], description: "absent: gateway when the organisation's gateway is required, or when the entry cannot be installed directly and a gateway is available; else direct (ADR 0105)" }
         gateway_server: { type: [string, "null"], pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", description: "the server's name at the gateway; defaults to the entry id" }
+        user_consent: { anyOf: [{ $ref: "#/components/schemas/McpCatalogueUserConsent" }, { type: "null" }], description: "installs an `oauth` entry for each person's own consent (ADR 0135 point 6): the entry is then no longer `needs_oauth`; direct route only, no organisation credential" }
     SkillCatalogueInstall:
       type: object
       properties:
