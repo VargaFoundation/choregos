@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Annotated, Any, Literal
 
 from choregos_contracts.policy import ToolScriptsMode
+from choregos_core.argument_grants import constraint_error
 from choregos_core.memory_bindings import Binding, binding_problems, effective_bindings
 from choregos_core.network import validate_pattern
 from choregos_core.workspace import AgentWorkspace
@@ -69,11 +70,40 @@ class AgentSkillRef(Dto):
     version: int | None = Field(default=None, ge=1)
 
 
+class AgentToolGrant(Dto):
+    """A tool grant that binds the call's arguments (S60-06, ADR 0128): `sync_application` on the
+    application `shop` only, not on every application. The call's arguments must satisfy `arguments`
+    ON TOP OF the operation's own input schema."""
+
+    #: The operation, or a `prefix_*` pattern.
+    name: str = Field(min_length=1, max_length=128)
+    #: A JSON Schema (2020-12, no `$ref`, at most 8 KiB); `{project}` is the run's project slug.
+    arguments: dict[str, Any]
+
+    @field_validator("arguments")
+    @classmethod
+    def _writable(cls, value: dict[str, Any]) -> dict[str, Any]:
+        problem = constraint_error(value)
+        if problem is not None:
+            raise ValueError(problem)
+        return value
+
+
+def grant_name(tool: str | AgentToolGrant | dict[str, Any]) -> str:
+    """The name or pattern a grant names, whether it is a plain string or binds arguments."""
+    if isinstance(tool, str):
+        return tool
+    if isinstance(tool, dict):
+        return str(tool.get("name") or "")
+    return tool.name
+
+
 class AgentMcpServer(Dto):
     #: The `mcp` connector of the project or of the organisation (ADR 0034).
     connector: str
-    #: The tools the agent may call: names, or `prefix_*` patterns.
-    tools: list[str] = Field(default_factory=list)
+    #: The tools the agent may call: names, or `prefix_*` patterns — or, to bind the call's arguments,
+    #: `{name, arguments}` (S60-06, ADR 0128).
+    tools: list[str | AgentToolGrant] = Field(default_factory=list)
 
 
 class AgentKnowledgeRef(Dto):
@@ -412,6 +442,13 @@ class AgentNetwork(Dto):
         return list(dict.fromkeys(patterns))
 
 
+#: A deployment catalogue tool, or one of its groups (ADR 0127).
+CATALOGUE_TOOL = r"^(group:)?[a-z][a-z0-9_.-]{0,62}$"
+#: An extension's name (`choregos.extensions`).
+EXTENSION_NAME = r"^[a-z][a-z0-9_.-]{0,62}$"
+WebTool = Literal["fetch", "search"]
+
+
 class AgentTools(Dto):
     """How a run of this agent calls its tools by default (ADR 0122 §9, S57-15). A default, never a right:
     the deployment's brake, the organisation's switch and its ceiling, and the project's policy whenever it
@@ -420,7 +457,39 @@ class AgentTools(Dto):
 
     #: `offer`: the run is offered tool scripts unless the policy says otherwise; `off`: no default, the
     #: same as leaving `tools` out. YAML's unquoted `off` (read as `false`) is `off`.
-    scripts: ToolScriptsMode
+    scripts: ToolScriptsMode = "off"
+    #: The tools a run is offered, source by source (ADR 0127): a list that is present, even empty, closes
+    #: its source; an absent one leaves it to the project, and is left out of the stored spec.
+    #: The deployment catalogue's tools (ADR 0014), by name or `group:<name>`.
+    catalogue: list[Annotated[str, Field(pattern=CATALOGUE_TOOL)]] | None = None
+    #: The extensions whose tools the version uses, by name.
+    extensions: list[Annotated[str, Field(pattern=EXTENSION_NAME)]] | None = None
+    #: The governed web tools: `fetch` (ADR 0070), `search` (ADR 0083).
+    web: list[WebTool] | None = None
+
+    @model_validator(mode="after")
+    def _says_something(self) -> AgentTools:
+        if not self.model_fields_set:
+            raise ValueError(
+                "`tools` says nothing: name `scripts`, `catalogue`, `extensions` or `web`, or drop it"
+            )
+        return self
+
+    @field_validator("web")
+    @classmethod
+    def _web_once(cls, value: list[WebTool] | None) -> list[WebTool] | None:
+        if value is not None and len(set(value)) != len(value):
+            raise ValueError("`tools.web` names each web tool once")
+        return value
+
+    @model_serializer(mode="wrap")
+    def _leave_out_absent_sources(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        """An absent source is left out: a version published before ADR 0127 keeps its digest."""
+        data: dict[str, object] = handler(self)
+        for name in ("catalogue", "extensions", "web"):
+            if data.get(name) is None:
+                data.pop(name, None)
+        return data
 
 
 class AgentSpec(Dto):
@@ -1228,6 +1297,51 @@ class AgentVersionMetrics(Dto):
     failed: int = 0
     success_rate: float | None = None
     cost_usd: float = 0.0
+
+
+# ───────────────────────────── what a version reaches (ADR 0127) ─────────────────────────────
+
+AgentComponent = Literal["instructions", "model", "tools", "knowledge", "memory"]
+#: `agent`: the version names it; `project`: left to the project; `frame`: the platform's own;
+#: `refused`: the version names it and will not get it in this project.
+AccessOrigin = Literal["agent", "project", "frame", "refused"]
+
+
+class AgentAccessModel(Dto):
+    requested: str
+    resolved: str | None = None
+    origin: AccessOrigin
+    reason: str | None = None
+
+
+class AgentAccessTool(Dto):
+    name: str
+    source: Literal["frame", "catalogue", "extension", "connector", "web"]
+    origin: AccessOrigin
+    access: Literal["read", "write", "approval"] | None = None
+    reason: str | None = None
+
+
+class AgentAccessItem(Dto):
+    #: A knowledge base's slug, or a memory binding as `scope:slug`.
+    name: str
+    origin: AccessOrigin
+    mode: str | None = None
+    reason: str | None = None
+
+
+class AgentAccess(Dto):
+    """What one version reaches in one project, with the origin of each thing (ADR 0127)."""
+
+    agent: str
+    version: int
+    project: str
+    complete: bool
+    inherits: list[AgentComponent]
+    model: AgentAccessModel
+    tools: list[AgentAccessTool]
+    knowledge: list[AgentAccessItem]
+    memories: list[AgentAccessItem]
 
 
 class AgentMetrics(Dto):

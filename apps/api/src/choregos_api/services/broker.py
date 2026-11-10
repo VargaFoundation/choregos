@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from fnmatch import fnmatchcase
 from typing import Any, Literal
 
+from choregos_core.argument_grants import interpolate, narrowed, violation
 from choregos_core.mcp import data_once, serializes
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,6 +56,8 @@ from .platform_network import (
 __all__ = [
     "SEPARATOR",
     "TRUNCATED",
+    "ArgumentConstraint",
+    "ArgumentsOutsideGrant",
     "ArgumentsRefused",
     "BrokerTool",
     "bounded_payload",
@@ -83,12 +86,25 @@ _CALL_NAMESPACE = uuid.UUID("6b3f0f3e-6c0e-4f0a-9a52-0e3c8f1d2b41")
 
 
 @dataclass(frozen=True)
+class ArgumentConstraint:
+    """What one level binds of a call's arguments (S60-06, ADR 0128): `agent` (the version's grant),
+    `organisation` (the operation's rule) or `project` (what the project narrows). `schema` has its
+    `{project}` placeholders already replaced."""
+
+    level: Literal["agent", "organisation", "project"]
+    schema: dict[str, Any]
+
+
+@dataclass(frozen=True)
 class BrokerTool:
     name: str
     connector: OrgConnector
     operation: ConnectorOperation
     #: `approval`: the call PROPOSES a governed action (ADR 0035) instead of reaching the server.
     needs_approval: bool = False
+    #: Every level's constraint on the call's arguments: ALL must pass, on top of the operation's own
+    #: input schema (intersection, S60-06).
+    constraints: tuple[ArgumentConstraint, ...] = ()
 
     @property
     def is_write(self) -> bool:
@@ -114,7 +130,8 @@ class BrokerTool:
         return {
             "name": self.name,
             "description": f"[{self.connector.name}] {description}",
-            "inputSchema": self.operation.input_schema or {"type": "object"},
+            # What the model reads is what the broker enforces: the operation's schema AND the bounds.
+            "inputSchema": narrowed(self.operation.input_schema, [c.schema for c in self.constraints]),
             "annotations": {"readOnlyHint": self.access == "read"},
         }
 
@@ -148,12 +165,23 @@ async def _selection_of_run(session: AsyncSession, run: Run) -> dict[str, list[s
     return selection_of_spec(spec)
 
 
-def selection_of_spec(spec: dict[str, Any] | None) -> dict[str, list[str]]:
-    """{connector: patterns} a version's `mcp_servers` names (see `_selection_of_run`)."""
-    selection: dict[str, list[str]] = {}
+#: What a version grants of a connector: a pattern, or `{name, arguments}` to bind the call (S60-06).
+Selection = dict[str, list[Any]]
+
+
+def _pattern(grant: Any) -> str:
+    return str(grant.get("name") or "") if isinstance(grant, dict) else str(grant)
+
+
+def selection_of_spec(spec: dict[str, Any] | None) -> Selection:
+    """{connector: grants} a version's `mcp_servers` names (see `_selection_of_run`): a grant is a
+    pattern, or `{name, arguments}` when it binds the call's arguments."""
+    selection: Selection = {}
     for server in (spec or {}).get("mcp_servers") or []:
         if isinstance(server, dict) and server.get("connector"):
-            selection[str(server["connector"])] = [str(m) for m in server.get("tools") or []]
+            selection[str(server["connector"])] = [
+                m if isinstance(m, dict) else str(m) for m in server.get("tools") or []
+            ]
     return selection
 
 
@@ -162,7 +190,7 @@ async def broker_tools(session: AsyncSession, run: Run, project: Project) -> dic
 
 
 async def tools_of_selection(
-    session: AsyncSession, selection: dict[str, list[str]], project: Project
+    session: AsyncSession, selection: Selection, project: Project
 ) -> dict[str, BrokerTool]:
     """What a selection reaches in a project: the run's, or a session's agent's (S41-09)."""
     if not selection:
@@ -175,14 +203,15 @@ async def tools_of_selection(
             .where(OrgConnector.org_id == project.org_id, OrgConnector.name.in_(list(selection)))
         )
     ).all()
-    tightened = {
-        p.operation_id: p.policy
+    narrowing = {
+        p.operation_id: p
         for p in (
             await session.execute(
                 select(ProjectOperationPolicy).where(ProjectOperationPolicy.project_id == project.id)
             )
         ).scalars()
     }
+    tightened = {operation_id: p.policy for operation_id, p in narrowing.items()}
     enabled = await enabled_ids(session, project)
     tools: dict[str, BrokerTool] = {}
     for operation, connector in rows:
@@ -196,10 +225,33 @@ async def tools_of_selection(
             continue
         if operation.groups and not groups & set(operation.groups):
             continue
-        if not any(fnmatchcase(operation.name, m) for m in selection.get(connector.name, [])):
+        grants = [g for g in selection.get(connector.name, []) if fnmatchcase(operation.name, _pattern(g))]
+        if not grants:
             continue
+        # The grants that bind arguments ALL bind (a plain pattern that also matches does not lift
+        # them), then the organisation's rule, then the project's: the call must pass each (S60-06).
+        constraints = [
+            ArgumentConstraint("agent", interpolate(g["arguments"], project.slug))
+            for g in grants
+            if isinstance(g, dict) and g.get("arguments")
+        ]
+        if operation.arguments:
+            constraints.append(
+                ArgumentConstraint("organisation", interpolate(operation.arguments, project.slug))
+            )
+        project_rule = narrowing.get(operation.id)
+        if project_rule is not None and project_rule.arguments:
+            constraints.append(
+                ArgumentConstraint("project", interpolate(project_rule.arguments, project.slug))
+            )
         name = f"{connector.name}{SEPARATOR}{operation.name}"
-        tools[name] = BrokerTool(name, connector, operation, needs_approval=effective == "approval")
+        tools[name] = BrokerTool(
+            name,
+            connector,
+            operation,
+            needs_approval=effective == "approval",
+            constraints=tuple(constraints),
+        )
     return tools
 
 
@@ -444,20 +496,36 @@ class ArgumentsRefused(ValueError):  # noqa: N818 - a refusal with a reason, ans
     pass
 
 
+class ArgumentsOutsideGrant(ArgumentsRefused):
+    """The arguments satisfy the operation's schema but leave what a level grants (S60-06): answered as
+    the problem `arguments_outside_grant`, naming the level and the JSON path."""
+
+    code = "arguments_outside_grant"
+
+    def __init__(self, tool: str, level: str, path: str, message: str) -> None:
+        super().__init__(f"arguments outside the {level} grant of {tool} at {path}: {message}")
+        self.level = level
+        self.path = path
+
+
 def check_arguments(tool: BrokerTool, arguments: dict[str, Any]) -> None:
     """The announced schema is applied BEFORE the call: a paying provider does not receive a
-    malformed call, and the registry does not count it."""
-    if not tool.operation.input_schema:
-        return
-    import jsonschema
+    malformed call, and the registry does not count it. Then each level's constraint (S60-06): a call
+    the schema accepts may still leave what the agent, the organisation or the project grants."""
+    if tool.operation.input_schema:
+        import jsonschema
 
-    try:
-        jsonschema.validate(arguments, tool.operation.input_schema)
-    except jsonschema.ValidationError as exc:
-        path = "/".join(str(p) for p in exc.absolute_path) or "(root)"
-        raise ArgumentsRefused(
-            f"argument refused by the schema of {tool.name} at {path}: {exc.message}"
-        ) from exc
+        try:
+            jsonschema.validate(arguments, tool.operation.input_schema)
+        except jsonschema.ValidationError as exc:
+            path = "/".join(str(p) for p in exc.absolute_path) or "(root)"
+            raise ArgumentsRefused(
+                f"argument refused by the schema of {tool.name} at {path}: {exc.message}"
+            ) from exc
+    for constraint in tool.constraints:
+        found = violation(constraint.schema, arguments)
+        if found is not None:
+            raise ArgumentsOutsideGrant(tool.name, constraint.level, *found)
 
 
 async def call(

@@ -45,6 +45,7 @@ from ...services.agent_releases import (
 from ...services.agent_views import agent_dto
 from ...services.agents import (
     digest,
+    require_complete,
     version_errors,
 )
 from ...services.egress import egress_gate_for_remote_agent
@@ -61,7 +62,7 @@ from ...services.memory_access import check_bindings_at_publish
 from ...services.network import check_agent_network
 from ...services.organisations import organisation_by_slug
 from ...services.remote_agents import pin_remote_runtime
-from ._common import _model_allowed, _skills_usable
+from ._common import _grants_bound, _model_allowed, _skills_usable
 from ._router import Slug, router
 
 
@@ -112,6 +113,7 @@ async def create_agent(
     # Its own eval suite gates its version 1 (S32-03).
     gate(body.spec, None)
     organisation = await organisation_by_slug(session, org)
+    await require_complete(session, organisation.id, body.kind, body.spec)
     await check_agent_network(session, organisation.id, body.spec)
     project_row = await project_in_org(session, organisation, body.project) if body.project else None
     # A remote agent's card is read and pinned now (ADR 0062); any other spec comes back as it is.
@@ -120,6 +122,7 @@ async def create_agent(
     body.spec = await pin_hosted_runtime(session, organisation.id, body.spec)
     await _skills_usable(session, organisation, body.spec)
     await _model_allowed(session, organisation, body.spec)
+    await _grants_bound(session, organisation, body.spec)
     await check_bindings_at_publish(
         session,
         principal,

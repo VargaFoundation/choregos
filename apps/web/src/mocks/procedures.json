@@ -974,7 +974,7 @@
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "- Scopes for a scoped token: `read:space:confluence`, `read:page:confluence`,\n  `read:hierarchical-content:confluence`, plus `read:attachment:confluence` when the source indexes\n  attachments.\n- Give the account **read** on the spaces to index (Space settings, Permissions) and nothing else.\n- A scoped token is only accepted through `https://api.atlassian.com/ex/confluence/<cloudId>/…`, with\n  Basic authentication using the service account's email. Choregos does that when `auth` is `scoped`."
+        "markdown": "- Scopes for a scoped token: `read:space:confluence`, `read:page:confluence`,\n  `read:hierarchical-content:confluence` (the pages under a page, through folders),\n  `read:folder:confluence` (a folder's name in the path of the pages it holds; without it the path\n  stops at the folder), plus `read:attachment:confluence` when the source indexes attachments.\n- Give the account **read** on the spaces to index (Space settings, Permissions) and nothing else.\n- A scoped token is only accepted through `https://api.atlassian.com/ex/confluence/<cloudId>/…`, with\n  Basic authentication using the service account's email. Choregos does that when `auth` is `scoped`."
       },
       {
         "key": "in_choregos",
@@ -3453,7 +3453,7 @@
       {
         "key": "at",
         "title": "At Atlassian",
-        "markdown": "Nothing more than the connector's setup. To read a **sub-space**, open the branch's root page: its number\nis in the address, `…/wiki/spaces/ENG/pages/<id>/Title`."
+        "markdown": "Nothing more than the connector's setup. To read a **sub-space**, open the branch's root page: its number\nis in the address, `…/wiki/spaces/ENG/pages/<id>/Title`. The pages filed in **folders** under that page\nare read too; a folder is not a document (it has no content of its own), its name is in the path of\nthe pages it holds. A folder has no page number: choose the page above it, or the pages in it."
       },
       {
         "key": "permissions",
@@ -3468,7 +3468,7 @@
       {
         "key": "test",
         "title": "Test it",
-        "markdown": "Press **Sync now**. Each sync lists the space once and downloads only pages whose version changed."
+        "markdown": "Press **Sync now**. Each sync lists the space once (and, for a page tree, what is under its root page)\nand downloads only pages whose version changed."
       },
       {
         "key": "fails",

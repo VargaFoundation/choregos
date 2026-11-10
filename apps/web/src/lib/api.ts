@@ -43,6 +43,7 @@ import type {
   RemoteCredentialAuthorization,
   RemoteCredentialCreate,
   AgentCredential,
+  AgentAccess,
   AgentLifecycleChange,
   AgentLifecycleResult,
   AgentMetrics,
@@ -575,6 +576,12 @@ export const api = {
     request<AgentTrial>(`/orgs/${org}/agent-trials`, { method: "POST", body: JSON.stringify(body) }),
   /** An agent's latest runs (S30-05). */
   agentRuns: (org: string, slug: string, limit = 50) => request<Run[]>(`/orgs/${org}/agents/${slug}/runs?limit=${limit}`),
+  /** What a version of the agent reaches in one project, the five components of its definition (ADR 0127). */
+  agentAccess: (org: string, slug: string, project: string, version?: number) => {
+    const query = new URLSearchParams({ project });
+    if (version != null) query.set("version", String(version));
+    return request<AgentAccess>(`/orgs/${org}/agents/${slug}/access?${query}`);
+  },
   agentCredentials: (org: string, slug: string) =>
     request<AgentCredential[]>(`/orgs/${org}/agents/${slug}/credentials`),
   attachAgentToken: (org: string, slug: string, tokenId: string) =>

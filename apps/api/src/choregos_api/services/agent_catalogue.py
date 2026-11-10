@@ -33,7 +33,7 @@ from ..rbac import SYSTEM
 from ..schemas import AgentSpec
 from ..schemas.agents import MAX_TAGS
 from .agent_releases import after_publish
-from .agents import digest, version_errors
+from .agents import digest, require_complete, version_errors
 from .installation import install_skills_and_agents
 from .network import check_agent_network
 from .skill_gate import platform_columns
@@ -211,6 +211,7 @@ async def upgrade(
     ).scalar_one()
     spec = spec_of(entry)
     version_errors(spec)
+    await require_complete(session, org_id, agent.kind, spec)
     await check_agent_network(session, org_id, spec)
     latest = (
         (

@@ -98,6 +98,9 @@ class ConnectorOperation(Base, PkMixin, TimestampMixin):
     #: The most one of its results may weigh when it reaches the agent; none: the platform's default
     #: (S40-17). Never above the platform's ceiling.
     result_max_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: A JSON Schema every call's arguments must also satisfy, whichever agent calls (S60-06, ADR 0128);
+    #: `{project}` is the run's project slug. None: the operation's input schema alone.
+    arguments: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
 
 
 class ProjectOperationPolicy(Base, PkMixin, TimestampMixin):
@@ -112,6 +115,8 @@ class ProjectOperationPolicy(Base, PkMixin, TimestampMixin):
         ForeignKey("connector_operations.id", ondelete="CASCADE"), index=True
     )
     policy: Mapped[str] = mapped_column(String(16))
+    #: What the project narrows of the arguments, on top of the organisation's (S60-06, ADR 0128).
+    arguments: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
 
 
 class GitHubInstallation(Base, TimestampMixin):

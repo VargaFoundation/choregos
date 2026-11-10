@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import { describe as describeBinding, effectiveBindings, labelOf, type Binding } from "@/lib/memories";
-import { toolsLabel } from "@/lib/mcp-tools";
+import { toolsLabel , type ToolGrant } from "@/lib/mcp-tools";
 import type { AgentSpec } from "@/lib/types";
 import { WORKSPACE_LABELS, effectiveWorkspace, type Workspace } from "@/lib/workspace";
 
@@ -41,7 +41,7 @@ export const GROUP_LABELS: Record<ChangeGroup, string> = {
 };
 export const GROUP_ORDER: ChangeGroup[] = ["instructions", "model", "capabilities", "limits", "evals", "other"];
 
-const KNOWN = new Set(["instructions", "model", "backend", "limits", "budget", "skills", "mcp_servers", "knowledge", "memory", "memories", "evals", "workspace"]);
+const KNOWN = new Set(["instructions", "model", "backend", "limits", "budget", "skills", "mcp_servers", "knowledge", "memory", "memories", "evals", "workspace", "tools"]);
 
 /** A spec with absent, null and default values made the same, so none of them shows as a change. */
 export function normalizeSpec(spec: AgentSpec | null | undefined): Record<string, unknown> {
@@ -65,6 +65,14 @@ export function normalizeSpec(spec: AgentSpec | null | undefined): Record<string
   out.evals = (s.evals ?? []).filter((c) => c.name?.trim());
   // What a run gets: an absent `workspace` and `write` read the same (S51-03).
   out.workspace = effectiveWorkspace(s);
+  // A source left out is the project's (`null`); a list, even empty, closes it (ADR 0127). Order is not meaning.
+  const named = (list: string[] | null | undefined) => (list == null ? null : [...list].sort());
+  out.tools = {
+    scripts: s.tools?.scripts === "offer" ? "offer" : null,
+    catalogue: named(s.tools?.catalogue),
+    extensions: named(s.tools?.extensions),
+    web: named(s.tools?.web),
+  };
   return out;
 }
 
@@ -219,6 +227,18 @@ export function diffSpecs(before: AgentSpec | null | undefined, after: AgentSpec
     (s) => (s.version ? `version ${s.version}` : "latest version"),
     (x, y) => ((x.version ?? null) === (y.version ?? null) ? null : {}),
   );
+  const sources = (list: string[] | null) => (list === null ? "inherited from the project" : list.length === 0 ? "none (closed)" : list.join(", "));
+  for (const [key, label] of [
+    ["catalogue", "Catalogue tools"],
+    ["extensions", "Extension tools"],
+    ["web", "Web tools"],
+  ] as const) {
+    const was: string[] | null = a.tools[key];
+    const now: string[] | null = b.tools[key];
+    if (JSON.stringify(was) === JSON.stringify(now)) continue;
+    out.push({ group: "capabilities", field: `tools.${key}`, label, kind: "changed", before: sources(was), after: sources(now) });
+  }
+  scalar(out, "capabilities", "tools.scripts", "Tool scripts", a.tools.scripts, b.tools.scripts, "no default");
   type Server = { connector: string; tools?: string[] };
   keyed<Server>(
     out,
@@ -230,8 +250,10 @@ export function diffSpecs(before: AgentSpec | null | undefined, after: AgentSpec
     (s) => `Tools of ${s.connector}`,
     (s) => toolsLabel(s.tools),
     (x, y) => {
-      const was = new Set(x.tools ?? []);
-      const now = new Set(y.tools ?? []);
+      // A grant with bound arguments (ADR 0128) compares by its name and its bound, not by identity.
+      const key = (t: ToolGrant) => (typeof t === "string" ? t : `${t.name} ${JSON.stringify(t.arguments)}`);
+      const was = new Set((x.tools ?? []).map(key));
+      const now = new Set((y.tools ?? []).map(key));
       const plus = [...now].filter((t) => !was.has(t)).map((t) => `+${t}`);
       const minus = [...was].filter((t) => !now.has(t)).map((t) => `−${t}`);
       return plus.length || minus.length ? { detail: [...plus, ...minus].join("  ") } : null;

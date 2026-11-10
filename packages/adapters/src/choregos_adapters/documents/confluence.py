@@ -4,11 +4,17 @@
 The connector's account is a service account holding **read** on the chosen spaces only. The source
 mirrors what that account can read: a page restricted against it is not listed, and leaves the base.
 
-Each sync lists the space once (`/wiki/api/v2/spaces/{id}/pages`, no body, cursor pagination): the
-sub-tree of a `page_id` is computed locally from `parentId`. The listing is `full`, so what it no
-longer holds (deleted, archived, moved out of the tree, newly restricted) is deleted from the base,
-and the page `version.number` is the item version: the sync engine fetches a body only when it
-changed. A listing that fails part-way **raises**: a partial listing would read as deletions.
+Each sync lists the space once (`/wiki/api/v2/spaces/{id}/pages`, no body, cursor pagination). The
+sub-tree of a `page_id` comes from `/wiki/api/v2/pages/{id}/descendants` (ten levels per call): a
+page filed in a **folder** has the folder as its `parentId`, and folders are never in the space's
+page listing, so a tree rebuilt from that listing alone stopped at the first folder. A folder is not
+a document (it has no body); its title is in the path of the pages under it, and a folder that only
+the path needs is read once (`/wiki/api/v2/folders/{id}`).
+
+The listing is `full`, so what it no longer holds (deleted, archived, moved out of the tree, newly
+restricted) is deleted from the base, and the page `version.number` is the item version: the sync
+engine fetches a body only when it changed. A listing that fails part-way **raises**: a partial
+listing would read as deletions.
 
 Credentials: an Atlassian API token with the account's email, as HTTP Basic. A *scoped* token must
 go through the platform gateway (`api.atlassian.com/ex/confluence/{cloud_id}`). OAuth 2.0 (3LO) is
@@ -25,7 +31,7 @@ import re
 import unicodedata
 from collections import deque
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, NamedTuple
 from urllib.parse import urlsplit
 
 import httpx
@@ -45,6 +51,26 @@ TRANSPORT: httpx.AsyncBaseTransport | None = None
 #: Attachments worth converting (the formats of `choregos_api.knowledge.formats`).
 ATTACHMENT_SUFFIXES = (".pdf", ".docx", ".pptx", ".xlsx", ".md", ".txt", ".html")
 _SITE = re.compile(r"^https://[a-z0-9-]+\.atlassian\.net/?$")
+#: The deepest the `descendants` endpoint reaches in one call (its `depth` maximum).
+DESCENDANT_DEPTH = 10
+#: The content types that can hold pages, and their path in the API: each has a `descendants` endpoint.
+_CONTAINERS = {
+    "page": "pages",
+    "folder": "folders",
+    "whiteboard": "whiteboards",
+    "database": "databases",
+    "embed": "embeds",
+}
+#: How far up a page's path is followed.
+_TRAIL_DEPTH = 20
+
+
+class _Node(NamedTuple):
+    """A page or another piece of the content tree (a folder), as much as its path needs."""
+
+    title: str
+    parent: str | None
+    parent_type: str | None
 
 
 def slug(title: str) -> str:
@@ -81,6 +107,11 @@ def confluence_storage_to_html(xhtml: str) -> str:
     text = _ATTACHMENT.sub(lambda m: html.escape(html.unescape(m.group(1))), text)
     text = _CDATA.sub(lambda m: html.escape(m.group(1)), text)
     return _TAG.sub("", text)
+
+
+def _id(value: Any) -> str | None:
+    """A content id as a string (the API sends strings; a number is tolerated), `None` when absent."""
+    return str(value) if value else None
 
 
 def _document(title: str, trail: list[str], body: str, url: str) -> bytes:
@@ -132,6 +163,8 @@ class ConfluenceSource:
         self._client = httpx.AsyncClient(timeout=60.0, transport=guarded(transport or TRANSPORT))
         self._rest = RestClient(self.root, auth=self._auth, client=self._client, service="confluence")
         self._trails: dict[str, list[str]] = {}
+        #: Every page and folder met in this sync, by id; `None` for a folder the account cannot read.
+        self._nodes: dict[str, _Node | None] = {}
         self._titles: dict[str, str] = {}
         self._downloads: dict[str, str] = {}
 
@@ -182,6 +215,10 @@ class ConfluenceSource:
         )
         by_id = {str(p["id"]): p for p in pages}
         self._titles = {pid: str(p.get("title", pid)) for pid, p in by_id.items()}
+        self._nodes = {
+            pid: _Node(self._titles[pid], _id(p.get("parentId")), p.get("parentType"))
+            for pid, p in by_id.items()
+        }
         chosen: list[str]
         if not self.roots:
             chosen = list(by_id)
@@ -191,33 +228,91 @@ class ConfluenceSource:
                     raise SourceRefusedError(
                         f"page {root} is not in space `{self.space_key}`, or its account cannot read it"
                     )
-            children: dict[str, list[str]] = {}
-            for pid, page in by_id.items():
-                if page.get("parentId"):
-                    children.setdefault(str(page["parentId"]), []).append(pid)
-            chosen = []
-            seen: set[str] = set()
-            queue = deque(self.roots)
-            while queue:
-                current = queue.popleft()
-                if current in seen:
-                    continue  # a chosen page under another chosen page is listed once
-                seen.add(current)
-                chosen.append(current)
-                if self.descendants:
-                    queue.extend(children.get(current, []))
+            chosen = await self._tree(by_id)
             if not self.include_root:
                 chosen = [pid for pid in chosen if pid not in self.roots]
         if len(chosen) > MAX_PAGES:
             raise SourceRefusedError(f"{len(chosen)} pages, more than {MAX_PAGES}: name a page_id")
         for pid in chosen:
-            trail: list[str] = []
-            parent = by_id[pid].get("parentId")
-            while parent and str(parent) in by_id and len(trail) < 20:
-                trail.append(self._titles[str(parent)])
-                parent = by_id[str(parent)].get("parentId")
-            self._trails[pid] = list(reversed(trail))
+            self._trails[pid] = await self._trail(pid)
         return [by_id[pid] for pid in chosen]
+
+    async def _tree(self, by_id: dict[str, dict[str, Any]]) -> list[str]:
+        """The chosen pages and, with `descendants`, every listed page under them, through folders."""
+        children: dict[str, list[str]] = {}
+        if self.descendants:
+            reached: set[str] = set()
+            for root in self.roots:
+                if root in reached:
+                    continue  # already under another chosen page: its descendants are known
+                for entry in await self._descendants(root):
+                    eid, parent = str(entry["id"]), _id(entry.get("parentId"))
+                    reached.add(eid)
+                    if entry.get("status", "current") != "current" or not parent:
+                        continue  # archived: neither listed nor crossed
+                    if entry.get("type") != "page":
+                        self._nodes.setdefault(eid, _Node(str(entry.get("title", eid)), parent, None))
+                    elif eid not in by_id:
+                        continue  # a page the listing does not hold: not crossed, as before
+                    children.setdefault(parent, []).append(eid)
+        chosen: list[str] = []
+        seen: set[str] = set()
+        queue = deque(self.roots)
+        while queue:
+            current = queue.popleft()
+            if current in seen:
+                continue  # a chosen page under another chosen page is listed once
+            seen.add(current)
+            if current in by_id:
+                chosen.append(current)  # a folder is crossed, not listed: it has no body
+            queue.extend(children.get(current, []))
+        return chosen
+
+    async def _descendants(self, root: str) -> list[dict[str, Any]]:
+        """Everything under a page, folders included, top to bottom. One call reaches ten levels;
+        the tree goes on from each entry of the tenth, through the endpoint of its type."""
+        found: list[dict[str, Any]] = []
+        queue = deque([("page", root)])
+        while queue:
+            kind, cid = queue.popleft()
+            batch = await self._listing(
+                f"/wiki/api/v2/{_CONTAINERS[kind]}/{cid}/descendants",
+                limit=250,
+                depth=DESCENDANT_DEPTH,
+            )
+            found.extend(batch)
+            if len(found) > MAX_LISTED:
+                raise SourceRefusedError(f"more than {MAX_LISTED} entries under page {root}")
+            queue.extend(
+                (str(d["type"]), str(d["id"]))
+                for d in batch
+                if d.get("depth") == DESCENDANT_DEPTH and d.get("type") in _CONTAINERS
+            )
+        return found
+
+    async def _trail(self, pid: str) -> list[str]:
+        """The titles above a page, top first: pages and folders, up to the space."""
+        trail: list[str] = []
+        node = self._nodes[pid]
+        while node and node.parent and len(trail) < _TRAIL_DEPTH:
+            if node.parent not in self._nodes and node.parent_type == "folder":
+                self._nodes[node.parent] = await self._folder(node.parent)
+            node = self._nodes.get(node.parent)
+            if node:
+                trail.append(node.title)
+        return list(reversed(trail))
+
+    async def _folder(self, fid: str) -> _Node | None:
+        """A folder in a page's path, read once per sync. One the account cannot read, or a scoped
+        token without `read:folder:confluence` (401 on this call alone), ends the path there: a
+        path is not worth failing the sync."""
+        try:
+            folder = await self._get(f"/wiki/api/v2/folders/{fid}")
+        except UpstreamError as error:
+            if error.status_code in {401, 403, 404}:
+                return None
+            raise
+        return _Node(str(folder.get("title", fid)), _id(folder.get("parentId")), folder.get("parentType"))
 
     async def _labelled(self, pid: str) -> bool:
         found = await self._listing(f"/wiki/api/v2/pages/{pid}/labels", limit=250)

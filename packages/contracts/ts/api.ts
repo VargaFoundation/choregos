@@ -449,6 +449,10 @@ export type ConnectorOperation = {
   approver_group?: string | null;
   /** the most one result of this operation may weigh, as JSON bytes, when it reaches the agent; none: the platform's default. Never above the platform's ceiling */
   result_max_bytes?: number | null;
+  /** a JSON Schema (2020-12, no $ref, at most 8 KiB) the arguments of every call must also satisfy, whichever agent calls; `{project}` is the run's project slug (ADR 0128) */
+  arguments?: {
+    [key: string]: unknown;
+  } | null;
 };
 
 export type ConnectorDiscovery = {
@@ -737,6 +741,10 @@ export type OperationPatch = {
   approver_group?: string | null;
   /** the most one result may weigh, as JSON bytes; above the platform's ceiling is refused (422); null clears it */
   result_max_bytes?: number | null;
+  /** a JSON Schema the arguments of every call must also satisfy (ADR 0128); refused (422) when it is not a schema the platform reads (2020-12, no $ref, at most 8 KiB) or names an argument the operation does not have; null clears it */
+  arguments?: {
+    [key: string]: unknown;
+  } | null;
 };
 
 export type ProjectOperation = {
@@ -747,10 +755,22 @@ export type ProjectOperation = {
   project_policy?: string | null;
   effective_policy: string;
   description?: string | null;
+  /** what the organisation binds of the call's arguments (ADR 0128) */
+  org_arguments?: {
+    [key: string]: unknown;
+  } | null;
+  /** what this project binds of them, on top of the organisation's (ADR 0128) */
+  project_arguments?: {
+    [key: string]: unknown;
+  } | null;
 };
 
 export type ProjectOperationPut = {
   policy: "allowed" | "approval" | "forbidden";
+  /** binds the call's arguments on top of the organisation's rule and the agent's grant (ADR 0128); same refusals as the organisation's; absent or null clears it */
+  arguments?: {
+    [key: string]: unknown;
+  } | null;
 };
 
 export type ActionEffectSpec = {
@@ -1141,7 +1161,8 @@ export type AgentSpec = {
   }>;
   mcp_servers?: Array<{
     connector: string;
-    tools?: Array<string>;
+    /** operation names or `prefix_*` patterns; an object binds the call's arguments (ADR 0128) */
+    tools?: Array<string | AgentToolGrant>;
   }>;
   /** the knowledge bases the agent reads (ADR 0051); each must be served to the run's project */
   knowledge?: Array<{
@@ -1160,10 +1181,16 @@ export type AgentSpec = {
   tools?: AgentTools | null;
 };
 
-/** How a run of this agent calls its tools by default (ADR 0122 §9, S57-15): a default, never a right. Strictest first, the deployment's brake, the organisation's switch (its `tool_scripts` setting, else the deployment's default), the organisation's ceiling, and the project's policy whenever it says something for the stage's role (`tools.per_role.<role>.scripts`, else `tools.scripts`) decide before it; a policy that says nothing leaves it. An eval cell's door ignores it. */
+/** How a run of this agent calls its tools by default (ADR 0122 §9, S57-15): a default, never a right. Strictest first, the deployment's brake, the organisation's switch (its `tool_scripts` setting, else the deployment's default), the organisation's ceiling, and the project's policy whenever it says something for the stage's role (`tools.per_role.<role>.scripts`, else `tools.scripts`) decide before it; a policy that says nothing leaves it. An eval cell's door ignores it. Since ADR 0127 it also names the tools a run is offered, source by source: a list that is present, even empty, closes its source (a run gets what the version names AND its project and the deployment allow); a list that is absent leaves that source to the project, as before. */
 export type AgentTools = {
   /** `offer`: a run is offered tool scripts unless something above says otherwise; `off`: no default, as absent */
-  scripts: "off" | "offer";
+  scripts?: "off" | "offer";
+  /** The deployment catalogue's tools the version uses (ADR 0014), by name or as `group:<name>` (ADR 0127). Absent: every tool the project's `tools` and `groups` open */
+  catalogue?: Array<string> | null;
+  /** The extensions whose tools the version uses, by name (ADR 0127). Absent: every extension's tools */
+  extensions?: Array<string> | null;
+  /** The governed web tools the version uses: `fetch` (ADR 0070), `search` (ADR 0083) (ADR 0127). Absent: each one whenever the run's network or the project offers it */
+  web?: Array<"fetch" | "search"> | null;
 };
 
 /** A coding agent that speaks ACP (ADR 0002), one of the backends the runner ships. */
@@ -2164,6 +2191,64 @@ export type AgentLifecycleResult = {
 
 export type AgentOwnerChange = {
   email: string;
+};
+
+/** A tool grant that binds the call's arguments (ADR 0128): `sync_application` on the application `shop` only. The call's arguments must satisfy `arguments` on top of the operation's input schema, and of the organisation's rule and the project's policy: all of them. A call outside is refused (400, problem `arguments_outside_grant`, naming the level and the JSON path). */
+export type AgentToolGrant = {
+  /** the operation, or a `prefix_*` pattern */
+  name: string;
+  /** a JSON Schema (2020-12, no $ref, no remote anything, at most 8 KiB); `{project}` is the run's project slug. It names only arguments the operation has, and the pattern must match an operation of an organisation connector (422 when the version is written) */
+  arguments: {
+    [key: string]: unknown;
+  };
+};
+
+/** What a version reaches in a project (ADR 0127). */
+export type AgentAccess = {
+  agent: string;
+  version: number;
+  project: string;
+  /** true when the version inherits nothing from its project */
+  complete: boolean;
+  /** the components the version leaves to its project */
+  inherits: Array<AgentComponent>;
+  model: AgentAccessModel;
+  tools: Array<AgentAccessTool>;
+  knowledge: Array<AgentAccessItem>;
+  memories: Array<AgentAccessItem>;
+};
+
+export type AgentComponent = "instructions" | "model" | "tools" | "knowledge" | "memory";
+
+/** `agent`: the version names it; `project`: the version leaves it to the project; `frame`: the platform's own, every run has it; `refused`: the version names it and will not get it here */
+export type AgentAccessOrigin = "agent" | "project" | "frame" | "refused";
+
+export type AgentAccessModel = {
+  /** what the version (or, inherited, the workflow and the project) asks for: a model or `profile:<tier>` */
+  requested: string;
+  /** the model it resolves to in this project, null when it does not resolve */
+  resolved?: string | null;
+  origin: AgentAccessOrigin;
+  reason?: string | null;
+};
+
+export type AgentAccessTool = {
+  name: string;
+  /** where the tool comes from: the platform's frame, the deployment catalogue, an extension, a connector through the broker, the governed web tools */
+  source: "frame" | "catalogue" | "extension" | "connector" | "web";
+  origin: AgentAccessOrigin;
+  access?: "read" | "write" | "approval" | null;
+  /** why a named tool is refused */
+  reason?: string | null;
+};
+
+export type AgentAccessItem = {
+  /** a knowledge base's slug, or a memory binding as `scope:slug` */
+  name: string;
+  origin: AgentAccessOrigin;
+  /** a memory binding's mode (`read`, `write`) */
+  mode?: string | null;
+  reason?: string | null;
 };
 
 export type AgentMetrics = {
@@ -3516,6 +3601,8 @@ export type Org = {
   aliases?: Array<string>;
   /** whether the organisation's runs may be offered tool scripts (S57-05b, ADR 0122 §6): `enabled`, `disabled`, or null to follow the deployment's default (`CHOREGOS_TOOL_SCRIPTS`). Past it, the organisation's ceiling and each project's policy (`tools.scripts: offer`) decide; the deployment's brake (`CHOREGOS_TOOL_SCRIPTS_ALLOWED`) wins over it. */
   tool_scripts?: "enabled" | "disabled" | null;
+  /** whether a new version of an internal agent must inherit nothing from its project (S60-05, ADR 0127 §8): `required` refuses it with a 422 `agent_incomplete` naming the components it leaves out; null does not. A restore and a fork reproduce a version already accepted and are not judged. */
+  complete_agents?: "required" | null;
 };
 
 export type OrgCreate = {
@@ -3531,6 +3618,8 @@ export type OrgUpdate = {
   currency?: "EUR" | "USD" | null;
   /** the organisation's switch for tool scripts (S57-05b); org_admin only, a platform administrator who is not one is refused (403). Absent: unchanged; `enabled` or `disabled`: the organisation's choice; null: back to the deployment's default. Audited in `org.update`. */
   tool_scripts?: "enabled" | "disabled" | null;
+  /** require complete agents (S60-05, ADR 0127 §8); org_admin only (403 otherwise). Absent: unchanged; `required`: required; null: no longer required. Audited in `org.update`. */
+  complete_agents?: "required" | null;
 };
 
 export type WorkItemCreate = {
@@ -4681,6 +4770,7 @@ export interface Operations {
 }; response: void };
   getAction: { method: "GET"; path: "/projects/{id}/actions/{action_id}"; body: never; response: Action };
   getAgent: { method: "GET"; path: "/orgs/{org}/agents/{slug}"; body: never; response: Agent };
+  getAgentAccess: { method: "GET"; path: "/orgs/{org}/agents/{slug}/access"; body: never; response: AgentAccess };
   getAgentExposure: { method: "GET"; path: "/orgs/{org}/agents/{slug}/exposure"; body: never; response: AgentExposure };
   getAgentMetrics: { method: "GET"; path: "/orgs/{org}/agents/{slug}/metrics"; body: never; response: AgentMetrics };
   getAgentReleaseReadiness: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}/readiness"; body: never; response: AgentReleaseReadiness };

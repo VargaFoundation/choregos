@@ -2525,6 +2525,23 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentMetrics" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/agents/{slug}/access:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [agents]
+      operationId: getAgentAccess
+      description: >-
+        What one version of the agent reaches in one project, component by component, with the origin of each
+        (ADR 0127): the version's own, inherited from the project, the platform's frame, or named by the version and
+        refused, with the reason. Computed by the same function as a run's tool listing.
+      parameters:
+        - { name: project, in: query, required: true, schema: { type: string } }
+        - { name: version, in: query, required: false, description: "Absent: the version a run of the project takes (pin, channel, production)", schema: { type: integer, minimum: 1 } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AgentAccess" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/agent-trials:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     post:
@@ -4961,6 +4978,7 @@ components:
         description: { type: [string, "null"] }
         approver_group: { type: [string, "null"], description: "the identity-provider group whose members approve the actions this operation proposes; none: the project's owners" }
         result_max_bytes: { type: [integer, "null"], minimum: 1024, description: "the most one result of this operation may weigh, as JSON bytes, when it reaches the agent; none: the platform's default. Never above the platform's ceiling" }
+        arguments: { type: [object, "null"], additionalProperties: true, description: "a JSON Schema (2020-12, no $ref, at most 8 KiB) the arguments of every call must also satisfy, whichever agent calls; `{project}` is the run's project slug (ADR 0128)" }
     ConnectorDiscovery:
       type: object
       properties:
@@ -5189,6 +5207,7 @@ components:
         price_usd: { type: [number, "null"], minimum: 0 }
         approver_group: { type: [string, "null"], description: "an identity-provider group; null clears it" }
         result_max_bytes: { type: [integer, "null"], minimum: 1024, description: "the most one result may weigh, as JSON bytes; above the platform's ceiling is refused (422); null clears it" }
+        arguments: { type: [object, "null"], additionalProperties: true, description: "a JSON Schema the arguments of every call must also satisfy (ADR 0128); refused (422) when it is not a schema the platform reads (2020-12, no $ref, at most 8 KiB) or names an argument the operation does not have; null clears it" }
     ProjectOperation:
       type: object
       required: [connector, operation, access, org_policy, effective_policy]
@@ -5200,11 +5219,14 @@ components:
         project_policy: { type: [string, "null"] }
         effective_policy: { type: string }
         description: { type: [string, "null"] }
+        org_arguments: { type: [object, "null"], additionalProperties: true, description: "what the organisation binds of the call's arguments (ADR 0128)" }
+        project_arguments: { type: [object, "null"], additionalProperties: true, description: "what this project binds of them, on top of the organisation's (ADR 0128)" }
     ProjectOperationPut:
       type: object
       required: [policy]
       properties:
         policy: { type: string, enum: [allowed, approval, forbidden] }
+        arguments: { type: [object, "null"], additionalProperties: true, description: "binds the call's arguments on top of the organisation's rule and the agent's grant (ADR 0128); same refusals as the organisation's; absent or null clears it" }
     ActionEffectSpec:
       type: object
       required: [effect]
@@ -5613,7 +5635,7 @@ components:
         limits: { $ref: "#/components/schemas/AgentLimits" }
         budget: { $ref: "#/components/schemas/AgentBudget" }
         skills: { type: array, items: { type: object, required: [slug], properties: { slug: { type: string }, version: { type: [integer, "null"] } } } }
-        mcp_servers: { type: array, items: { type: object, required: [connector], properties: { connector: { type: string }, tools: { type: array, items: { type: string } } } } }
+        mcp_servers: { type: array, items: { type: object, required: [connector], properties: { connector: { type: string }, tools: { type: array, items: { oneOf: [ { type: string }, { $ref: "#/components/schemas/AgentToolGrant" } ] }, description: "operation names or `prefix_*` patterns; an object binds the call's arguments (ADR 0128)" } } } }
         knowledge: { type: array, description: "the knowledge bases the agent reads (ADR 0051); each must be served to the run's project", items: { type: object, required: [slug], properties: { slug: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" } } } }
         evals: { type: array, items: { $ref: "#/components/schemas/AgentEvalCase" }, description: "The agent's eval suite (S32-03): every case of the published version and of the new one must pass before the new one is published" }
         memory: { type: string, enum: [none, project, agent], default: project, description: "SUPERSEDED by `memories` (S40-11): read only when `memories` is absent. Whose memory a run reads and writes (S32-02): the project's shared memory, the agent's own within the project, or none" }
@@ -5641,9 +5663,14 @@ components:
         default), the organisation's ceiling, and the project's policy whenever it says something for the stage's
         role (`tools.per_role.<role>.scripts`, else `tools.scripts`) decide before it; a policy that says nothing
         leaves it. An eval cell's door ignores it.
-      required: [scripts]
+        Since ADR 0127 it also names the tools a run is offered, source by source: a list that is present, even empty,
+        closes its source (a run gets what the version names AND its project and the deployment allow); a list that
+        is absent leaves that source to the project, as before.
       properties:
-        scripts: { type: string, enum: ["off", offer], description: "`offer`: a run is offered tool scripts unless something above says otherwise; `off`: no default, as absent" }
+        scripts: { type: string, enum: ["off", offer], default: "off", description: "`offer`: a run is offered tool scripts unless something above says otherwise; `off`: no default, as absent" }
+        catalogue: { type: [array, "null"], items: { type: string, pattern: "^(group:)?[a-z][a-z0-9_.-]{0,62}$" }, description: "The deployment catalogue's tools the version uses (ADR 0014), by name or as `group:<name>` (ADR 0127). Absent: every tool the project's `tools` and `groups` open" }
+        extensions: { type: [array, "null"], items: { type: string, pattern: "^[a-z][a-z0-9_.-]{0,62}$" }, description: "The extensions whose tools the version uses, by name (ADR 0127). Absent: every extension's tools" }
+        web: { type: [array, "null"], items: { type: string, enum: [fetch, search] }, uniqueItems: true, description: "The governed web tools the version uses: `fetch` (ADR 0070), `search` (ADR 0083) (ADR 0127). Absent: each one whenever the run's network or the project offers it" }
     AcpRuntime:
       type: object
       description: A coding agent that speaks ACP (ADR 0002), one of the backends the runner ships.
@@ -6598,6 +6625,63 @@ components:
       required: [email]
       properties:
         email: { type: string }
+    AgentToolGrant:
+      type: object
+      description: >-
+        A tool grant that binds the call's arguments (ADR 0128): `sync_application` on the application `shop` only. The call's
+        arguments must satisfy `arguments` on top of the operation's input schema, and of the organisation's rule and the
+        project's policy: all of them. A call outside is refused (400, problem `arguments_outside_grant`, naming the level
+        and the JSON path).
+      required: [name, arguments]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 128, description: "the operation, or a `prefix_*` pattern" }
+        arguments: { type: object, additionalProperties: true, description: "a JSON Schema (2020-12, no $ref, no remote anything, at most 8 KiB); `{project}` is the run's project slug. It names only arguments the operation has, and the pattern must match an operation of an organisation connector (422 when the version is written)" }
+    AgentAccess:
+      type: object
+      description: What a version reaches in a project (ADR 0127).
+      required: [agent, version, project, complete, inherits, model, tools, knowledge, memories]
+      properties:
+        agent: { type: string }
+        version: { type: integer }
+        project: { type: string }
+        complete: { type: boolean, description: "true when the version inherits nothing from its project" }
+        inherits: { type: array, items: { $ref: "#/components/schemas/AgentComponent" }, description: "the components the version leaves to its project" }
+        model: { $ref: "#/components/schemas/AgentAccessModel" }
+        tools: { type: array, items: { $ref: "#/components/schemas/AgentAccessTool" } }
+        knowledge: { type: array, items: { $ref: "#/components/schemas/AgentAccessItem" } }
+        memories: { type: array, items: { $ref: "#/components/schemas/AgentAccessItem" } }
+    AgentComponent:
+      type: string
+      enum: [instructions, model, tools, knowledge, memory]
+    AgentAccessOrigin:
+      type: string
+      description: "`agent`: the version names it; `project`: the version leaves it to the project; `frame`: the platform's own, every run has it; `refused`: the version names it and will not get it here"
+      enum: [agent, project, frame, refused]
+    AgentAccessModel:
+      type: object
+      required: [requested, origin]
+      properties:
+        requested: { type: string, description: "what the version (or, inherited, the workflow and the project) asks for: a model or `profile:<tier>`" }
+        resolved: { type: [string, "null"], description: "the model it resolves to in this project, null when it does not resolve" }
+        origin: { $ref: "#/components/schemas/AgentAccessOrigin" }
+        reason: { type: [string, "null"] }
+    AgentAccessTool:
+      type: object
+      required: [name, source, origin]
+      properties:
+        name: { type: string }
+        source: { type: string, enum: [frame, catalogue, extension, connector, web], description: "where the tool comes from: the platform's frame, the deployment catalogue, an extension, a connector through the broker, the governed web tools" }
+        origin: { $ref: "#/components/schemas/AgentAccessOrigin" }
+        access: { type: [string, "null"], enum: [read, write, approval, null] }
+        reason: { type: [string, "null"], description: "why a named tool is refused" }
+    AgentAccessItem:
+      type: object
+      required: [name, origin]
+      properties:
+        name: { type: string, description: "a knowledge base's slug, or a memory binding as `scope:slug`" }
+        origin: { $ref: "#/components/schemas/AgentAccessOrigin" }
+        mode: { type: [string, "null"], description: "a memory binding's mode (`read`, `write`)" }
+        reason: { type: [string, "null"] }
     AgentMetrics:
       type: object
       required: [agent, days, runs, succeeded, failed]
@@ -7981,6 +8065,7 @@ components:
         currency: { type: string, enum: [EUR, USD], default: EUR, description: "the currency the console shows spend in (S29-03); an organisation setting" }
         aliases: { type: array, items: { type: string }, default: [], description: "the slugs the organisation had before; they still resolve to it (ADR 0090). The organisation's id never changes, its slug is an address." }
         tool_scripts: { type: [string, "null"], enum: [enabled, disabled, null], default: null, description: "whether the organisation's runs may be offered tool scripts (S57-05b, ADR 0122 §6): `enabled`, `disabled`, or null to follow the deployment's default (`CHOREGOS_TOOL_SCRIPTS`). Past it, the organisation's ceiling and each project's policy (`tools.scripts: offer`) decide; the deployment's brake (`CHOREGOS_TOOL_SCRIPTS_ALLOWED`) wins over it." }
+        complete_agents: { type: [string, "null"], enum: [required, null], default: null, description: "whether a new version of an internal agent must inherit nothing from its project (S60-05, ADR 0127 §8): `required` refuses it with a 422 `agent_incomplete` naming the components it leaves out; null does not. A restore and a fork reproduce a version already accepted and are not judged." }
     OrgCreate:
       type: object
       required: [slug, name]
@@ -7995,6 +8080,7 @@ components:
         name: { type: [string, "null"], minLength: 1, maxLength: 200 }
         currency: { type: [string, "null"], enum: [EUR, USD, null], description: "the currency spend is shown in; org_admin" }
         tool_scripts: { type: [string, "null"], enum: [enabled, disabled, null], description: "the organisation's switch for tool scripts (S57-05b); org_admin only, a platform administrator who is not one is refused (403). Absent: unchanged; `enabled` or `disabled`: the organisation's choice; null: back to the deployment's default. Audited in `org.update`." }
+        complete_agents: { type: [string, "null"], enum: [required, null], description: "require complete agents (S60-05, ADR 0127 §8); org_admin only (403 otherwise). Absent: unchanged; `required`: required; null: no longer required. Audited in `org.update`." }
     WorkItemCreate:
       type: object
       required: [title]

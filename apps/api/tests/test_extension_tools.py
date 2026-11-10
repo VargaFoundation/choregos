@@ -9,40 +9,16 @@ the same line in the cost ledger. A name already taken is refused, not masked.
 
 from __future__ import annotations
 
-import pathlib
-import sys
-from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest
 from httpx import AsyncClient
 
+from .kits import extension_tools as _kit
 from .kits.extension_tools import run_extension_tool
 
 pytestmark = pytest.mark.asyncio
-
-EXTENSION = """
-from choregos_api.extensions import declare_tool_provider
-
-TOOL = {
-    "name": "internal_directory",
-    "description": "Looks a person up in the project's directory.",
-    "inputSchema": {"type": "object", "properties": {"name": {"type": "string"}}},
-}
-
-
-async def list_tools(session, run, project):
-    return [TOOL]
-
-
-async def call_tool(session, run, project, name, arguments):
-    return 200, {"run": run.id, "project": project.slug, "tool": name, "arguments": arguments}
-
-
-def attach():
-    declare_tool_provider("extension_tools", list_tools, call_tool)
-"""
 
 OVERLAPPING_CATALOGUE = """
 tools:
@@ -52,29 +28,8 @@ tools:
     http: { method: GET, url: https://api.directory.example/v1/search }
 """
 
-
-@pytest.fixture
-def extension_tools(tmp_path: pathlib.Path) -> Iterator[None]:
-    from choregos_api.extensions import reset
-
-    root = tmp_path / "site"
-    root.mkdir()
-    (root / "extension_tools.py").write_text(EXTENSION, encoding="utf-8")
-    info = root / "extension_tools-0.1.0.dist-info"
-    info.mkdir()
-    (info / "METADATA").write_text(
-        "Metadata-Version: 2.1\nName: extension_tools\nVersion: 0.1.0\n", encoding="utf-8"
-    )
-    (info / "entry_points.txt").write_text(
-        "[choregos.plugins]\nextension_tools = extension_tools:attach\n", encoding="utf-8"
-    )
-    sys.path.insert(0, str(root))
-    try:
-        yield
-    finally:
-        sys.path.remove(str(root))
-        sys.modules.pop("extension_tools", None)
-        reset()
+#: The installed extension; a test asks for it BEFORE `client`.
+extension_tools = _kit.installed_extension
 
 
 async def test_the_extension_tool_is_announced_to_the_run(

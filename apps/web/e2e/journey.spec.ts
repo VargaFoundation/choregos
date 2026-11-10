@@ -346,7 +346,7 @@ test("agents: the registry, and a connected Claude Code that acts as an external
   await expect(page.getByTestId("measures")).toContainText("14 (12 succeeded, 2 failed)");
   await page.getByRole("link", { name: "Definition" }).click();
   await expect(page.getByTestId("definition-groups")).toContainText("onboarding-procedure@1");
-  await page.locator("summary", { hasText: "Capabilities" }).click();
+  await page.locator("summary", { hasText: "Knowledge and skills" }).click();
   await page.getByRole("link", { name: "onboarding-procedure@1" }).click();
   await expect(page.getByTestId("files")).toContainText("Entra accounts ten days before the start date");
 });
@@ -497,7 +497,7 @@ test("an agent's page is in tabs: overview, definition, history, lifecycle, runs
   await expect(page).toHaveURL(/\/p\/billing-api\/runs\//);
 
   await page.goto("/agents/onboarding-coordinator?tab=access");
-  await expect(page.getByRole("heading", { name: "Tools and servers" })).toBeVisible();
+  await expect(page.getByTestId("agent-access")).toBeVisible();
 });
 
 test("agents: an external agent shows its client, and a project its implicit agents", async ({ page }) => {

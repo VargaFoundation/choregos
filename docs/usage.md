@@ -253,6 +253,22 @@ the operation's price) and a `tool.called` event, and passes what the server ret
 injection guard: `warn` adds the suspicions to the answer, `block` withholds it (`451`). A tool
 outside the selection, `forbidden` or awaiting approval does not exist for the run (`404`).
 
+**A grant may bind the call's arguments** ([ADR 0128](adr/0128-a-tool-grant-may-bind-its-arguments.md)).
+Allowing an agent to `sync` every application of an Argo CD is too broad; allowing it on one is not.
+A tool in `mcp_servers` is a name or pattern, or `{name, arguments}` where `arguments` is a JSON Schema
+(2020-12, no `$ref`, at most 8 KiB) the call must also satisfy:
+`{"connector": "argo", "tools": [{"name": "sync_application", "arguments": {"properties": {"name": {"const": "shop"}}, "required": ["name"]}}]}`.
+`{project}` stands for the run's project slug (`{"const": "{project}"}`). The same constraint can be written
+by the organisation on the operation (`PATCH /orgs/{org}/connectors/{name}/operations/{op}`
+`{"arguments": {...}}`, for every agent) and by a project (`PUT /projects/{id}/operations/{connector}/{op}`
+`{"policy": "allowed", "arguments": {...}}`): each level only narrows, **all** of them must pass, on top of
+the operation's own schema. A call outside one is refused `400` with the problem `arguments_outside_grant`
+(`level`: `agent`, `organisation` or `project`; `path`: the JSON path), before an action is proposed or the
+server is called; the tool the run is announced carries the narrowed schema. A constraint that is not a
+valid schema, uses `$ref`, names an argument the operation does not have, or is on a pattern that matches
+no operation of an organisation connector is refused (`422`) when it is written. Not covered: catalogue,
+extension and web tools, and an application addressed by another argument than the one constrained.
+
 **The catalogues, and who may do what** ([ADR 0074](adr/0074-catalogue-rights.md)). Two read-only
 catalogues list what the platform offers (*Library → MCP servers* and *Library → Connector types* in the console; installing from either lands in *Administration → Installed connectors*): `GET /orgs/{org}/mcp-catalogue` and `GET /orgs/{org}/connector-catalogue`
 (the registry's connector types by family, organisation or project scope, where each is installed or
@@ -1429,6 +1445,16 @@ gates:
 Agents also get `validate_result`, which checks their `.choregos/result.json` against the
 contract *before* they finish — the same validator the runner applies afterwards.
 
+### What a run is offered
+
+When an agent version names `tools.catalogue`, `tools.extensions` or `tools.web`, the run is offered
+only what it names and what the project and the deployment allow (`group:rh` stands for the catalogue
+tools of the group `rh`). A tool that is named but not open to the project is not offered, and
+calling it answers 404, as an unknown tool does. A version that leaves a list out keeps today's
+behaviour for that source. To see what a version reaches in a project, with the origin of each item and
+the reason of each refusal: `GET /api/v1/orgs/{org}/agents/{slug}/access?project={project}` (add
+`&version=` for a version other than the one the project is served).
+
 ## 3 ter. Register your agents
 
 An agent is an object of the organisation ([ADR 0033](adr/0033-agent-registry-and-skill-library.md)):
@@ -2330,10 +2356,12 @@ for the whole base with `POST …/knowledge/{slug}/sync`, **sync all now** on th
   `id.atlassian.com/manage-profile/security/api-tokens`. A classic token works with `auth: basic`
   (the default). A *scoped* token needs `auth: scoped` and the site's `cloud_id` (the connector's
   **test** reports it) and the scopes `read:space:confluence`, `read:page:confluence`,
-  `read:hierarchical-content:confluence`, plus `read:attachment:confluence` when attachments are
+  `read:hierarchical-content:confluence`, `read:folder:confluence` (a folder's name in the path of
+  its pages), plus `read:attachment:confluence` when attachments are
   on. The source names a `space_key` (`ENG`; a personal space starts with `~`) and optionally a
-  `page_id`: that page **and everything under it** (`include_root: false` leaves the page itself
-  out). The page id is the number in the page's address, `…/wiki/spaces/ENG/pages/<id>/Title`.
+  `page_id`: that page **and everything under it**, pages filed in folders included (a folder is
+  crossed, not indexed: its name is in the path of its pages; `include_root: false` leaves the page
+  itself out). The page id is the number in the page's address, `…/wiki/spaces/ENG/pages/<id>/Title`.
   To read **chosen pages** instead, give `page_ids` (up to 50 numbers; not together with `page_id`; the
   console accepts pasted page addresses) and, to leave the pages under them out, `descendants: false`
   (`page_id` with `descendants: false` is one page). A chosen page that is missing or unreadable

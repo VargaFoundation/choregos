@@ -6,7 +6,7 @@ downgrade drops the table and loses which `users` rows were machine accounts' an
 `users` rows, their tokens and their memberships stay.
 
 Revision ID: a7c9e1b3d5f7
-Revises: d2f4a6c8e0b1
+Revises: a6c8e0f2b4d7
 Create Date: 2026-11-09 18:00:00+00:00
 """
 
@@ -18,7 +18,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "a7c9e1b3d5f7"
-down_revision: str | None = "d2f4a6c8e0b1"
+down_revision: str | None = "a6c8e0f2b4d7"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

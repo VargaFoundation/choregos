@@ -33,7 +33,7 @@ import { describe, effectiveBindings, writesTo, labelOf, type Binding } from "@/
 import { EvalSuiteEditor, TrialBench } from "./trial";
 import { usableModels } from "@/lib/usable-models";
 import { usd } from "@/lib/format";
-import { NO_TOOL_LABEL } from "@/lib/mcp-tools";
+import { NO_TOOL_LABEL, grantNames, keepBounds, type ToolGrant } from "@/lib/mcp-tools";
 import { WORKSPACE_LABELS, type Workspace } from "@/lib/workspace";
 import type {
   Agent,
@@ -142,7 +142,22 @@ export function cleanSpec(spec: AgentSpec): AgentSpec {
     network: isDefaultNetwork(spec.network) ? undefined : spec.network,
     // Left unsaid, a run writes as before and the digest does not move (S51-03, ADR 0119).
     workspace: spec.workspace ?? undefined,
+    tools: cleanTools(spec.tools),
   };
+}
+
+/**
+ * The tool sources as the API takes them (ADR 0127): a source the author left to the project is ABSENT,
+ * never `null` or `[]` (an empty list closes it), so an unchanged version keeps its digest.
+ */
+export function cleanTools(tools: AgentSpec["tools"]): AgentSpec["tools"] | undefined {
+  if (!tools) return undefined;
+  const out: NonNullable<AgentSpec["tools"]> = {};
+  if (tools.scripts != null) out.scripts = tools.scripts;
+  if (tools.catalogue != null) out.catalogue = tools.catalogue;
+  if (tools.extensions != null) out.extensions = tools.extensions;
+  if (tools.web != null) out.web = tools.web;
+  return Object.keys(out).length ? out : undefined;
 }
 
 /** Slugs a page of the console already uses: `/agents/new` is a static route (S39-05). */
@@ -970,10 +985,11 @@ function McpSection({
 }) {
   const servers = spec.mcp_servers ?? [];
   const [adding, setAdding] = useState("");
-  const update = (index: number, tools: string[]) =>
+  const update = (index: number, tools: ToolGrant[]) =>
     set({ mcp_servers: servers.map((s, i) => (i === index ? { ...s, tools } : s)) });
   return (
     <Disclosure title="Tools (MCP servers)" summary={summary} defaultOpen={defaultOpen}>
+      <ToolSources spec={spec} set={set} />
       <p className="text-xs text-ink-muted">
         The organisation&apos;s MCP connectors, and the tools of each the agent may call: names, or patterns such as{" "}
         <code>search_*</code>. None: the tools the platform gives a run of its project.
@@ -990,8 +1006,8 @@ function McpSection({
             <label className="block space-y-1">
               <span className="text-xs text-ink-muted">Tool patterns of {server.connector}</span>
               <Input
-                defaultValue={(server.tools ?? []).join(", ")}
-                onChange={(e) => update(index, parseTools(e.target.value))}
+                defaultValue={grantNames(server.tools).join(", ")}
+                onChange={(e) => update(index, keepBounds(server.tools, parseTools(e.target.value)))}
                 placeholder="track_*, search_orders"
                 className="font-mono"
               />
@@ -1039,6 +1055,117 @@ function McpSection({
         </p>
       )}
     </Disclosure>
+  );
+}
+
+/**
+ * One tool source, closed or left to the project (ADR 0127): "inherit" leaves the field absent, "only
+ * these" writes the list the author gives, possibly empty (nothing from that source).
+ */
+function SourceChoice({
+  id,
+  label,
+  hint,
+  named,
+  onChange,
+  children,
+}: {
+  id: string;
+  label: string;
+  hint: string;
+  named: string[] | null | undefined;
+  onChange: (value: string[] | undefined) => void;
+  children: (named: string[]) => ReactNode;
+}) {
+  const closed = named != null;
+  return (
+    <div className="space-y-1 rounded border border-line p-3" data-testid={`tool-source-${id}`}>
+      <Field label={label} hint={hint}>
+        {(fieldId) => (
+          <Select id={fieldId} value={closed ? "only" : "inherit"} onChange={(e) => onChange(e.target.value === "only" ? [] : undefined)}>
+            <option value="inherit">Inherit from the project</option>
+            <option value="only">Only these</option>
+          </Select>
+        )}
+      </Field>
+      {closed && children(named)}
+      {closed && named.length === 0 && (
+        <p className="text-xs text-warn" data-testid={`tool-source-${id}-empty`}>
+          Empty: a run gets nothing from this source.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** The sources of a version's tools besides its MCP servers: the deployment catalogue, extensions, the governed web tools. */
+function ToolSources({ spec, set }: { spec: AgentSpec; set: (patch: Partial<AgentSpec>) => void }) {
+  const tools = spec.tools ?? {};
+  const put = (patch: NonNullable<AgentSpec["tools"]>) => set({ tools: { ...tools, ...patch } });
+  const web = tools.web ?? [];
+  return (
+    <div className="space-y-3" data-testid="tool-sources">
+      <p className="text-xs text-ink-muted">
+        For each source, leave the choice to the project (the field stays out of the version) or name exactly what the agent uses. A run
+        gets what the version names AND its project and the deployment allow.
+      </p>
+      <SourceChoice
+        id="catalogue"
+        label="Catalogue tools"
+        hint="Names, or group:<name> for a group of the deployment's catalogue."
+        named={tools.catalogue}
+        onChange={(catalogue) => put({ catalogue })}
+      >
+        {(named) => (
+          <Input
+            aria-label="Catalogue tools, one name or group:<name> each"
+            defaultValue={named.join(", ")}
+            onChange={(e) => put({ catalogue: parseTools(e.target.value) })}
+            placeholder="read_file, group:git"
+            className="font-mono"
+          />
+        )}
+      </SourceChoice>
+      <SourceChoice
+        id="extensions"
+        label="Extension tools"
+        hint="The extensions whose tools the agent uses, by name."
+        named={tools.extensions}
+        onChange={(extensions) => put({ extensions })}
+      >
+        {(named) => (
+          <Input
+            aria-label="Extensions, by name"
+            defaultValue={named.join(", ")}
+            onChange={(e) => put({ extensions: parseTools(e.target.value) })}
+            placeholder="jira"
+            className="font-mono"
+          />
+        )}
+      </SourceChoice>
+      <SourceChoice
+        id="web"
+        label="Web tools"
+        hint="The governed web tools: fetch and search."
+        named={tools.web}
+        onChange={(next) => put({ web: next as Array<"fetch" | "search"> | undefined })}
+      >
+        {() => (
+          <div className="flex gap-4 text-sm">
+            {(["fetch", "search"] as const).map((name) => (
+              <label key={name} className="flex items-center gap-1.5">
+                <input
+                  type="checkbox"
+                  checked={web.includes(name)}
+                  onChange={(e) => put({ web: e.target.checked ? [...web.filter((w) => w !== name), name] : web.filter((w) => w !== name) })}
+                />
+                {name}
+              </label>
+            ))}
+          </div>
+        )}
+      </SourceChoice>
+    </div>
   );
 }
 
@@ -1369,7 +1496,7 @@ export function BuilderSummary({
         ) : (
           servers.map((server) => {
             const connector = connectors.find((c) => c.name === server.connector);
-            const reached = reachedOperations(connector, server.tools ?? []);
+            const reached = reachedOperations(connector, grantNames(server.tools));
             return (
               <div key={server.connector}>
                 <p className="font-mono text-xs">{server.connector}</p>

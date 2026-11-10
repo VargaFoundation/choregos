@@ -110,7 +110,7 @@ describe("the new agent's page", () => {
     expect(summary("Eval suite")).toHaveTextContent("0 cases");
     expect(summary("Network access")).toHaveTextContent("the project's hosts");
     expect(summary("Workspace")).toHaveTextContent("write (default)");
-    expect(summary("Model and runtime")).toHaveTextContent("the project's profile · the project's backend");
+    expect(summary("Model and runtime")).toHaveTextContent("inherited from the project · the project's backend");
   });
 
   it("'Save as draft' creates the agent as a draft, with its description", async () => {
