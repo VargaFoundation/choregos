@@ -251,6 +251,47 @@ class KnowledgeDocument(Base, PkMixin, TimestampMixin):
     source_ref: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     source_version: Mapped[str | None] = mapped_column(String(200), nullable=True)
     source_url: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    #: `local` (written by people: an upload, a sync, an edit) or `seed@<plugin version>` (the copy of a
+    #: plugin's seed document, S63-06, ADR 0138)
+    origin: Mapped[str] = mapped_column(String(200), default="local", server_default="local")
+    #: the digest of the seed file this document came from; kept when an owner edits it, so that an
+    #: upgrade compares the new seed with the one the copy was made from
+    seed_digest: Mapped[str | None] = mapped_column(String(80), nullable=True)
+
+
+class KnowledgeUpdateProposal(Base, PkMixin, TimestampMixin):
+    """An upstream change to a document of an installation's base, that its owners decide (S63-06,
+    ADR 0138 point 3). `kind`: add | update | remove. `status`: proposed | accepted | merged | refused."""
+
+    __tablename__ = "knowledge_update_proposals"
+    __table_args__ = (
+        CheckConstraint("kind IN ('add', 'update', 'remove')", name="ck_knowledge_update_proposals_kind"),
+        CheckConstraint(
+            "status IN ('proposed', 'accepted', 'merged', 'refused')",
+            name="ck_knowledge_update_proposals_status",
+        ),
+    )
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    installation_id: Mapped[str] = mapped_column(
+        ForeignKey("assistant_installations.id", ondelete="CASCADE"), index=True
+    )
+    knowledge_base_id: Mapped[str] = mapped_column(
+        ForeignKey("knowledge_bases.id", ondelete="CASCADE"), index=True
+    )
+    #: the document's file name in the base (its path in the seed's `corpus/`)
+    path: Mapped[str] = mapped_column(String(255))
+    kind: Mapped[str] = mapped_column(String(8))
+    #: unified diff, the local copy to the new seed (empty text for an add)
+    diff: Mapped[str] = mapped_column(Text, default="")
+    #: the new seed's text; none for a removal
+    proposed_content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: the new seed file's digest; none for a removal
+    seed_digest: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    plugin_version: Mapped[str] = mapped_column(String(128))
+    status: Mapped[str] = mapped_column(String(16), default="proposed")
+    decided_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class KnowledgeSource(Base, PkMixin, TimestampMixin):
