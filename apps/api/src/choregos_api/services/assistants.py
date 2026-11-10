@@ -41,7 +41,7 @@ from ..schemas.assistants import (
     AssistantReadinessItem,
     AssistantUpdate,
 )
-from . import offered_knowledge, plugin_installer
+from . import assistant_embed, offered_knowledge, plugin_installer
 from .assistant_access import holds
 from .connector_identity import supports_identity
 
@@ -293,9 +293,13 @@ async def to_dto(session: AsyncSession, row: AssistantInstallation) -> Assistant
 
 def _check_config(document: dict[str, Any], config: dict[str, Any]) -> None:
     """A value the schema refuses is a 422; a required key left out is a readiness item, not a refusal."""
+    assistant_embed.check_embed_origins(config)
+    # `embed_origins` belongs to the platform (S63-12), not to the manifest's schema: a schema closed with
+    # `additionalProperties: false` must not refuse it.
+    own = {k: v for k, v in config.items() if k != assistant_embed.KEY}
     errors = [
         {"loc": ["config", *map(str, error.absolute_path)], "msg": error.message}
-        for error in Draft202012Validator(document.get("config_schema") or {}).iter_errors(config)
+        for error in Draft202012Validator(document.get("config_schema") or {}).iter_errors(own)
         if error.validator != "required"
     ]
     if errors:

@@ -47,6 +47,47 @@ An answer is `{conversation_id, status, text, citations, pending_actions, missin
 is confirmed in the console. Until their sources land (citations, proposals S63-05, accounts to connect), the
 three lists are empty.
 
+### Embedding an assistant in your application (ADR 0139 point 6)
+
+A host application (an internal web app) shows an assistant in an iframe. The host holds no token, no model and
+no transcript: the person signs in to Choregos, and the conversation is theirs (`/me/conversations`).
+
+```html
+<iframe id="assistant" title="Assistant" width="480" height="520"
+  src="https://choregos.example.com/embed/assistants/<org>/<installation>?context=<base64url JSON>"></iframe>
+```
+
+- **`context`** (optional) is a JSON object, base64url-encoded (`btoa(JSON.stringify(obj))` with `+` `/` `=`
+  replaced by `-` `_` and nothing). Choregos validates it against the manifest's `surfaces.embed.context_schema`
+  (422 shown in the frame when it does not match, or when the assistant declares none) and gives it to the agent
+  as data, never as an instruction or a resolved subject. The frame resumes the person's conversation for the same
+  installation and context while the browser tab lives; otherwise it opens a new one.
+- **Who may frame it.** An administrator or owner of the installation sets `config.embed_origins` (a list of
+  origins, `https://app.example.com`: no path, no `*`; `http` only for `localhost`). The console answers the embed
+  page with `Content-Security-Policy: frame-ancestors <those origins>`; with none, or for an unknown installation,
+  `'none'`. Every other console page always refuses framing. The origins are served, to anyone, by
+  `GET /api/v1/public/assistants/{org}/{slug}/embed` (origins only: the console needs them before the visitor is
+  signed in).
+- **Sign-in.** If the frame has no session it asks the identity provider once, silently (`prompt=none`); if the
+  provider needs the person it shows a **Sign in** button that opens the provider in a popup. The console's session
+  cookie is `SameSite=Lax`, and Choregos does not weaken it for the embed: the frame carries the session only when
+  the host is on the **same site** as the console (for example `app.example.com` and `choregos.example.com`). A host
+  on another site gets the Sign in button but the frame stays signed out; it is not supported yet.
+- **Events.** The frame posts messages to the host with `postMessage`, to the allowed origin that framed it (never
+  `*`; your listener should check `event.origin` is the console's and `event.data.source === "choregos.assistant"`).
+  Every message is `{ source: "choregos.assistant", type, org, installation, ...payload }`:
+
+| `type` | When | Payload |
+|---|---|---|
+| `conversation.started` | The conversation is open (new or resumed) | `conversation_id`, `resumed` |
+| `action.confirmed` | The person confirmed a write the assistant proposed | `conversation_id`, `action_id`, `operation`, `status` |
+| `memory.updated` | A turn changed a memory space listed in `?memory=space1,space2` | `conversation_id`, `spaces` |
+| `resize` | The content's height changed: size the iframe to it | `height` (pixels) |
+
+`memory.updated` is opt-in because a turn does not report memory writes: the frame compares the listed spaces
+before and after each turn. The write actions the assistant proposes appear in the frame with Confirm and Refuse
+buttons (the same routes as the console: the broker executes with the person's identity).
+
 ## A token for each client
 
 The door takes a bearer token that **you** mint, with an MCP scope:
