@@ -26,6 +26,11 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
+from .kits.assistant_genericity import (
+    AUDIENCE,
+    TOOLS,
+    _served,
+)
 from .kits.assistant_install import (
     ORG,
     _bind,
@@ -34,15 +39,10 @@ from .kits.assistant_install import (
     _plugin,
     offline,  # noqa: F401
 )
+from .kits.assistant_rights import ME, OPEN, _as
 from .test_agent_sessions import Upstream, _ledger, upstream  # noqa: F401
-from .test_assistant_rights import ME, OPEN, _as
 
 ISIN = "FR0000120271"
-AUDIENCE = "investors"
-TOOLS = [
-    {"name": n, "description": n, "annotations": {"readOnlyHint": True}, "inputSchema": {"type": "object"}}
-    for n in ("search_news", "get_article", "get_quote", "get_history", "lookup_instrument")
-]
 
 
 @pytest.fixture
@@ -61,18 +61,6 @@ def sources(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
     monkeypatch.setenv("CONNECTOR_TEST_FEED_KEY", "feed-key")
     yield server
-
-
-async def _served(client: AsyncClient, name: str) -> None:
-    body = {"name": name, "type": "mcp", "config": {"url": f"https://{name}.test/mcp"},
-            "secret_refs": {"token": "env:CONNECTOR_TEST_FEED_KEY"}}  # fmt: skip
-    assert (await client.post(f"{ORG}/connectors", json=body)).status_code == 201
-    assert (await client.post(f"{ORG}/connectors/{name}/discover")).status_code == 200
-    for tool in TOOLS:
-        opened = await client.patch(
-            f"{ORG}/connectors/{name}/operations/{tool['name']}", json={"policy": "allowed"}
-        )
-        assert opened.status_code == 200, opened.text
 
 
 async def test_the_investment_assistant_converses_end_to_end(

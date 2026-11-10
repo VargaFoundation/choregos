@@ -6,9 +6,10 @@ Without a token of the person it fails with `identity_unavailable` and nothing r
 there is no fallback to the connector's own key.
 """
 
+# ruff: noqa: F811 - a fixture imported from a kit is redefined by the parameter that names it
+
 from __future__ import annotations
 
-from collections.abc import AsyncIterator, Iterator
 from typing import Any
 
 import pytest
@@ -16,6 +17,19 @@ from choregos_adapters.fakes.identity_provider import FakeIdentityProvider
 from choregos_adapters.token_exchange import claims_of
 from httpx import AsyncClient
 
+from .kits.user_exchange import (  # noqa: F401
+    AUDIENCE,
+    EMAIL,
+    REFRESH,
+    SUBJECT,
+    _calls,
+    _declare,
+    _person,
+    _sign_in_sealed,
+    _tool_events,
+    idp,
+    source,
+)
 from .test_agent_sessions import (  # noqa: F401 - fixtures imported for their use here
     ORG,
     Upstream,
@@ -23,83 +37,11 @@ from .test_agent_sessions import (  # noqa: F401 - fixtures imported for their u
     _ask,
     upstream,
 )
-from .test_broker import TOOLS
-
-AUDIENCE = "supplier-mcp"
-EMAIL = "admin@varga.dev"
-SUBJECT = f"dev|{EMAIL}"
-REFRESH = "refresh-of-the-person"
-
-
-@pytest.fixture
-def source(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
-    """The source: it accepts any bearer and records them, so a test reads WHICH one arrived."""
-    import choregos_adapters
-    from choregos_adapters.fakes.mcp import FakeMcpServer
-
-    server = FakeMcpServer(tools=[dict(o) for o in TOOLS], token="")
-    monkeypatch.setattr(choregos_adapters, "FAKE_MCP", server)
-    monkeypatch.setenv("CONNECTOR_TEST_SUPPLIER_KEY", "supplier-key")
-    yield server
-
-
-@pytest.fixture
-async def idp() -> AsyncIterator[FakeIdentityProvider]:
-    from choregos_api.services.identity_exchange import set_exchange_transport
-
-    provider = FakeIdentityProvider(refresh_tokens={REFRESH: SUBJECT})
-    set_exchange_transport(provider.transport())
-    yield provider
-    set_exchange_transport(None)
-
-
-async def _person() -> tuple[str, str]:
-    from choregos_api.db.models import Organization, User
-    from choregos_api.db.session import ALL_ORGS, session_scope
-    from sqlalchemy import select
-
-    async with session_scope(orgs=ALL_ORGS) as session:
-        user = (await session.execute(select(User).where(User.email == EMAIL))).scalar_one()
-        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
-        return user.id, org.id
-
-
-async def _sign_in_sealed(refresh: str = REFRESH) -> None:
-    """What the console's sign-in does with the provider's refresh token."""
-    from choregos_api.db.session import ALL_ORGS, session_scope
-    from choregos_api.services.identity_exchange import seal_refresh_token
-
-    user_id, org_id = await _person()
-    async with session_scope(orgs=ALL_ORGS) as session:
-        await seal_refresh_token(session, [org_id], user_id, refresh)
-
-
-async def _declare(client: AsyncClient, *, modes: list[str] | None = None, audience: bool = True) -> None:
-    config: dict[str, Any] = {
-        "url": "https://fournisseur.test/mcp",
-        "identity_modes": modes or ["service", "user_exchange"],
-    }
-    if audience:
-        config["token_exchange"] = {"audience": AUDIENCE}
-    body = {"name": "fournisseur", "type": "mcp", "config": config,
-            "secret_refs": {"token": "env:CONNECTOR_TEST_SUPPLIER_KEY"}}  # fmt: skip
-    created = await client.post(f"{ORG}/connectors", json=body)
-    assert created.status_code == 201, created.text
-    assert (await client.post(f"{ORG}/connectors/fournisseur/discover")).status_code == 200
-    opened = await client.patch(
-        f"{ORG}/connectors/fournisseur/operations/suivi_commande", json={"policy": "allowed"}
-    )
-    assert opened.status_code == 200, opened.text
-
-
-def _calls(source: Any) -> list[dict[str, str]]:
-    """The headers of every `tools/call` the source received."""
-    return [headers for method, headers, _ in source.received if method == "tools/call"]
 
 
 async def _converse(
     client: AsyncClient,
-    upstream: Upstream,  # noqa: F811 - the fixture imported above
+    upstream: Upstream,
     identity: str | None,
 ) -> dict[str, Any]:
     server: dict[str, Any] = {"connector": "fournisseur", "tools": ["suivi_*"]}
@@ -112,21 +54,10 @@ async def _converse(
     return answer  # type: ignore[no-any-return]
 
 
-async def _tool_events(session_id: str) -> list[dict[str, Any]]:
-    from choregos_api.db.models import Event
-    from choregos_api.db.session import session_scope
-    from choregos_contracts.enums import EventType
-    from sqlalchemy import select
-
-    async with session_scope() as db:
-        query = select(Event).where(Event.type == EventType.TOOL_CALLED.value, Event.subject == session_id)
-        return [dict(e.payload) for e in (await db.execute(query)).scalars()]
-
-
 async def test_the_source_receives_a_token_of_the_person_for_its_audience(
     client: AsyncClient,
     project: dict[str, Any],
-    upstream: Upstream,  # noqa: F811 - the fixture imported above
+    upstream: Upstream,
     source: Any,
     idp: FakeIdentityProvider,
 ) -> None:
@@ -150,7 +81,7 @@ async def test_the_source_receives_a_token_of_the_person_for_its_audience(
 async def test_each_call_exchanges_anew_and_the_token_is_not_kept(
     client: AsyncClient,
     project: dict[str, Any],
-    upstream: Upstream,  # noqa: F811 - the fixture imported above
+    upstream: Upstream,
     source: Any,
     idp: FakeIdentityProvider,
 ) -> None:
@@ -170,7 +101,7 @@ async def test_each_call_exchanges_anew_and_the_token_is_not_kept(
 async def test_without_a_token_of_the_person_nothing_is_called_under_the_connectors_identity(
     client: AsyncClient,
     project: dict[str, Any],
-    upstream: Upstream,  # noqa: F811 - the fixture imported above
+    upstream: Upstream,
     source: Any,
     idp: FakeIdentityProvider,
 ) -> None:
@@ -190,7 +121,7 @@ async def test_without_a_token_of_the_person_nothing_is_called_under_the_connect
 async def test_a_provider_that_refuses_the_audience_is_an_unavailable_identity_not_a_fallback(
     client: AsyncClient,
     project: dict[str, Any],
-    upstream: Upstream,  # noqa: F811 - the fixture imported above
+    upstream: Upstream,
     source: Any,
     idp: FakeIdentityProvider,
 ) -> None:
@@ -207,7 +138,7 @@ async def test_a_provider_that_refuses_the_audience_is_an_unavailable_identity_n
 async def test_a_connector_that_does_not_declare_the_mode_is_never_called_in_it(
     client: AsyncClient,
     project: dict[str, Any],
-    upstream: Upstream,  # noqa: F811 - the fixture imported above
+    upstream: Upstream,
     source: Any,
     idp: FakeIdentityProvider,
 ) -> None:
@@ -222,7 +153,7 @@ async def test_a_connector_that_does_not_declare_the_mode_is_never_called_in_it(
 async def test_an_agent_version_that_says_nothing_keeps_the_connectors_identity(
     client: AsyncClient,
     project: dict[str, Any],
-    upstream: Upstream,  # noqa: F811 - the fixture imported above
+    upstream: Upstream,
     source: Any,
     idp: FakeIdentityProvider,
 ) -> None:
