@@ -36,7 +36,9 @@ def _bodies() -> list[dict[str, Any]]:
     return found
 
 
-async def _publish(client: AsyncClient, project: dict[str, Any]) -> None:
+async def _publish(
+    client: AsyncClient, project: dict[str, Any], *, input_modes: list[str] | None = None
+) -> None:
     from choregos_core.dsl import template_yaml
 
     tracker = await client.put(
@@ -49,6 +51,8 @@ async def _publish(client: AsyncClient, project: dict[str, Any]) -> None:
     workflow = yaml.safe_load(template_yaml("default-simple"))
     workflow["metadata"]["inputs"] = opt_in["metadata"]["inputs"]
     workflow["a2a"] = opt_in["a2a"]
+    if input_modes:
+        workflow["a2a"]["input_modes"] = input_modes
     published = await client.put(
         f"/api/v1/projects/{project['id']}/workflow", json={"yaml": yaml.safe_dump(workflow, sort_keys=False)}
     )
@@ -144,6 +148,34 @@ async def test_the_fields_the_guide_declares_are_enforced(
     refused = (await client.post(ENDPOINT, json=body, headers={"Authorization": f"Bearer {token}"})).json()
     assert refused["error"]["code"] == -32602, refused
     assert refused["error"]["message"].startswith("fields refused by workflow"), refused
+    assert "'ticket' is a required property" in [e["msg"] for e in refused["error"]["data"]["errors"]], (
+        refused
+    )
+
+
+async def test_the_card_says_which_fields_a_skill_takes(client: AsyncClient, project: dict[str, Any]) -> None:
+    """A2A's skill has no input schema: the guide points at the card's extension, which carries it."""
+    from choregos_adapters.a2a import parse_card
+    from choregos_api.a2a.door import SKILL_FIELDS_EXTENSION
+
+    assert SKILL_FIELDS_EXTENSION in _page()
+    await _publish(client, project)
+    token = await _token(client)
+    raw = (await client.get(CARD, headers={"Authorization": f"Bearer {token}"})).json()
+    assert parse_card(raw).skills, "a client that ignores the extension must still read the card"
+    extension = raw["capabilities"]["extensions"][0]
+    assert extension["uri"] == SKILL_FIELDS_EXTENSION and extension["required"] is False
+    schema = extension["params"]["skills"]["billing-api/ship-a-change"]
+    assert schema["required"] == ["ticket"] and set(schema["properties"]) == {"ticket", "priority"}
+
+
+async def test_a_skill_that_takes_no_data_part_publishes_no_fields(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
+    await _publish(client, project, input_modes=["text/plain"])
+    token = await _token(client)
+    raw = (await client.get(CARD, headers={"Authorization": f"Bearer {token}"})).json()
+    assert "extensions" not in raw["capabilities"], raw["capabilities"]
 
 
 async def test_an_a2a_1_0_method_is_refused_as_the_guide_says(

@@ -6,7 +6,8 @@ start, shown at the head of the run's chain (`GET /runs/{id}/access`). Never sen
 every value here is built from what the API or the orchestrator already holds.
 
 The kinds: `person:<email>` (console, REST, API token), `mcp:<email>` (the MCP door),
-`a2a:<client>` (the inbound A2A door, S40-23), `schedule:<name>`, `trigger:<name>` (an HTTP trigger
+`a2a:<client>` (the inbound A2A door, S40-23), `machine:<address>` (an application under its own
+account, ADR 0131: no person stands behind it), `schedule:<name>`, `trigger:<name>` (an HTTP trigger
 called by another system, S56-01), `work_item:<key>` (a fan-out child), `tracker:<kind>` (a tracker
 event or sync), `finding:<id>`, `eval`, `demo`, `trial:<email>`, and `system` for a system principal
 on a door that names nothing better.
@@ -22,6 +23,7 @@ KINDS = frozenset(
         "person",
         "mcp",
         "a2a",
+        "machine",
         "schedule",
         "trigger",
         "work_item",
@@ -45,6 +47,8 @@ def initiator(kind: str, subject: str | None = None) -> str:
 
 def of_principal(principal: Principal, channel: str) -> str:
     """The initiator of a work item a principal creates through a door (`create_work_item`)."""
+    if principal.kind == "machine":
+        return initiator("machine", principal.email)
     if principal.kind != "user":
         return initiator("system")
     return initiator(channel if channel in ("mcp", "a2a") else "person", principal.email)

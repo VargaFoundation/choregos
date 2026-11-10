@@ -120,6 +120,8 @@ _STREAMS: Counter[str] = Counter()
 _clock = time.monotonic
 #: Derives a task id from (org, client, messageId): a resent message finds its work item.
 TASK_NAMESPACE = uuid5(NAMESPACE_URL, "https://choregos.dev/a2a/task")
+#: The card's extension that says which fields a skill takes: A2A's `AgentSkill` has no place for it.
+SKILL_FIELDS_EXTENSION = "https://choregos.dev/a2a/extensions/skill-fields/v1"
 _ARTIFACT_NAME = re.compile(ARTIFACT_NAME_PATTERN)
 
 
@@ -165,6 +167,8 @@ class Skill:
     workflow: str
     description: str
     input_modes: list[str]
+    #: The workflow's `metadata.inputs`, a JSON Schema; `None` when it declares none.
+    fields: dict[str, Any] | None = None
 
 
 @dataclass(slots=True)
@@ -240,7 +244,8 @@ async def skills(door: Door) -> list[Skill]:
             )
         ).scalars()
         for row in rows:
-            opt_in = workflow_model(row).a2a
+            model = workflow_model(row)
+            opt_in = model.a2a
             if opt_in is None:
                 continue
             found.append(
@@ -250,6 +255,7 @@ async def skills(door: Door) -> list[Skill]:
                     workflow=row.name,
                     description=opt_in.description,
                     input_modes=list(opt_in.input_modes),
+                    fields=model.metadata.inputs,
                 )
             )
     return found
@@ -273,7 +279,12 @@ def _card(door: Door, settings: Settings, served: list[Skill]) -> dict[str, Any]
         "preferredTransport": "JSONRPC",
         "version": __version__,
         "provider": {"organization": "Choregos", "url": door.console},
-        "capabilities": {"streaming": True, "pushNotifications": True, "stateTransitionHistory": False},
+        "capabilities": {
+            "streaming": True,
+            "pushNotifications": True,
+            "stateTransitionHistory": False,
+            **_extensions(served),
+        },
         "defaultInputModes": ["text/plain"],
         "defaultOutputModes": ["text/plain", "application/json"],
         "securitySchemes": schemes,
@@ -290,6 +301,20 @@ def _card(door: Door, settings: Settings, served: list[Skill]) -> dict[str, Any]
             for skill in served
         ],
     }
+
+
+def _extensions(served: list[Skill]) -> dict[str, Any]:
+    """The fields of the skills that take a data part, for a caller to send what the workflow wants."""
+    fields = {s.id: s.fields for s in served if s.fields is not None and "application/json" in s.input_modes}
+    if not fields:
+        return {}
+    extension = {
+        "uri": SKILL_FIELDS_EXTENSION,
+        "description": "params.skills maps a skill id to the JSON Schema of its data part.",
+        "required": False,
+        "params": {"skills": fields},
+    }
+    return {"extensions": [extension]}
 
 
 # ───────────────────────── routes ─────────────────────────
@@ -523,8 +548,9 @@ async def _send(door: Door, params: dict[str, Any]) -> dict[str, Any]:
     if not principal.can(Permission.ITEM_CONTROL, door.org.slug, project.slug):
         raise Fault(INVALID_PARAMS, f"you cannot open work items in {door.org.slug}:{project.slug}")
     text, fields, files = _read_parts(message.get("parts"), skill)
-    if await writes_today(door.session, principal.user_id) >= WRITES_PER_DAY:
-        raise Fault(BUDGET_EXHAUSTED, f"budget_exhausted: {WRITES_PER_DAY} writes a day through MCP and A2A")
+    budget = door.caller.writes_per_day or WRITES_PER_DAY
+    if await writes_today(door.session, principal.user_id) >= budget:
+        raise Fault(BUDGET_EXHAUSTED, f"budget_exhausted: {budget} writes a day through MCP and A2A")
     title = metadata.get("title") if isinstance(metadata.get("title"), str) else ""
     title = (title or next((line for line in text.splitlines() if line.strip()), "") or skill.id).strip()[
         :200
@@ -541,7 +567,9 @@ async def _send(door: Door, params: dict[str, Any]) -> dict[str, Any]:
     try:
         item = await create_work_item(door.session, principal, project, draft, canal="a2a", item_id=task_id)
     except ApiError as refused:
-        raise Fault(INVALID_PARAMS, refused.detail or refused.title) from refused
+        # `errors` says which field and why: the card's schema tells what to send, this what was wrong.
+        data = {"errors": refused.errors} if refused.errors else None
+        raise Fault(INVALID_PARAMS, refused.detail or refused.title, data) from refused
     for one in stored:
         row = await record_input_file(door.session, org_id=door.org.id, item=item, stored=one)
         await record(

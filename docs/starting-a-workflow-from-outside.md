@@ -11,7 +11,7 @@ example that stops being true turns the suite red.
 
 | You are | Take | Credential | Gives you back |
 | --- | --- | --- | --- |
-| an application or an agent that wants the result | [**the A2A door**](#the-a2a-door-step-by-step) | a person's token, scope `a2a` | a task: its state, a stream or push notifications, the artefacts at the end |
+| an application or an agent that wants the result | [**the A2A door**](#the-a2a-door-step-by-step) | an application's own token, or a person's, scope `a2a` | a task: its state, a stream or push notifications, the artefacts at the end |
 | a terminal, a script, a CI job | [**the CLI or the REST API**](#from-a-terminal-or-a-script) | a person's token, scope `*` | the work item, then whatever you read of it |
 | a system that can only send JSON: monitoring, a form, a CRM | [**an HTTP trigger**](#from-a-system-that-only-sends-json) | the trigger's own token, no person behind it | an acknowledgement and the work item's id; nothing follows |
 | an assistant: Claude, Cursor, VS Code | [the MCP door](integrations.md) (`create_work_item`) | a person's token, scope `mcp:write`, or OAuth | tools the assistant calls and reads |
@@ -56,14 +56,25 @@ The skill is now `billing-api/ship-a-change`, for callers who may read that proj
 
 ### 2. Get a token
 
-Either the console's **Integrations** page (*Create an A2A token*, 30 days, shown once), or:
+**For an application**, create its own account: it acts under its own name, on this project only, keeps
+working when you leave, and never takes a decision. You need to be able to manage the project's members.
 
 ```bash
-choregos tokens create --name partner-app --scope a2a --project acme:billing-api --expires-in-days 30
+choregos machines create acme:billing-api partner-app
+choregos machines token acme:billing-api partner-app --name production --expires-in-days 90
 ```
 
-`--project` keeps the token to that project. The token acts as the person who created it, with that
-person's rights: they must be able to control work items in the project.
+The console does the same under **Settings › People › Applications**. A token lasts 365 days at most. To
+rotate one, issue the next, switch the application to it, then `choregos machines revoke` the old one.
+
+**To try it yourself**, take a token that acts as you, from the console's **Integrations** page (*Create an
+A2A token*, 30 days, shown once) or:
+
+```bash
+choregos tokens create --name my-test --scope a2a --project acme:billing-api --expires-in-days 30
+```
+
+`--project` keeps the token to that project. You must be able to control work items in the project.
 
 ```bash
 export TOKEN=chg_...
@@ -79,8 +90,15 @@ curl -s "$A2A/.well-known/agent-card.json" -H "Authorization: Bearer $TOKEN"
 The card's `skills` are the workflows this token may start. It needs the token because its content
 depends on who asks. An empty list means no workflow of a project you can read has opted in.
 
-The card names the skills, not their fields: **tell whoever writes the client what `metadata.inputs`
-requires**.
+A skill that takes `application/json` also says which fields it wants, as the JSON Schema of its
+`metadata.inputs`. A2A has no place for that on a skill, so it is in an optional extension of the card:
+
+```bash
+curl -s "$A2A/.well-known/agent-card.json" -H "Authorization: Bearer $TOKEN" | jq '.capabilities.extensions[]
+  | select(.uri == "https://choregos.dev/a2a/extensions/skill-fields/v1") | .params.skills'
+```
+
+A client that ignores the extension still reads the card.
 
 ### 4. Start the workflow
 
@@ -210,11 +228,11 @@ curl -s "$A2A" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/j
 | HTTP `404` | no such organisation, or none this token can see | check the organisation slug in the URL |
 | HTTP `429` | more than 120 calls a minute on this token | wait for `Retry-After` |
 | `-32602` `name the skill…`, `unknown skill` | several skills, or one this token cannot see | read the card, set `metadata.skill` |
-| `-32602` `fields refused by workflow …` | `metadata.inputs` refuses them; the message does not say which | compare what you sent with `metadata.inputs` |
+| `-32602` `fields refused by workflow …` | `metadata.inputs` refuses them; `error.data.errors` says which and why | send what the card's schema asks for |
 | `-32601` `unknown method` | a method name from A2A 1.0, such as `SendMessage` | use the 0.3.0 names of this page |
 | `-32005` | the skill does not list this media type | add it to `input_modes` |
 | `-32004` | a reply to an existing task: a decision belongs in the console | follow `decision_url` |
-| `-32050` | 50 writes a day for this person, shared with the MCP door | wait until tomorrow, or use a trigger |
+| `-32050` | the daily budget: 50 writes for a person, shared with the MCP door; 500 by default for an application | wait, or give the application a larger budget |
 
 ## From a terminal or a script
 
@@ -252,8 +270,5 @@ in [Usage](usage.md#work-items-opened-by-another-system-http-triggers) and
 
 - **A2A 0.3.0 only, inbound.** A client built only for 1.0, whose method names and part format differ,
   gets `-32601`. Outbound calls to remote agents already handle both.
-- **The card does not describe the fields, and a refusal does not name them.** A caller learns them from
-  whoever wrote the workflow.
-- **No account for a machine.** An `a2a` or `*` token acts as the person who created it, and stops when
-  that person leaves. Only a trigger has no person behind it, and it follows nothing.
+- **An application's account opens the A2A door only.** The REST API and the MCP door take a person's token.
 - **No CLI verb for the A2A door.** `choregos items create` goes through REST, and takes no file.

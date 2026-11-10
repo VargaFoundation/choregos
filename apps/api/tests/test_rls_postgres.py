@@ -860,6 +860,47 @@ async def test_trigger_tokens_stay_in_their_organisation(two_organisations: dict
         assert (await session.execute(select(TriggerToken))).scalars().all() == [], "no scope, nothing"
 
 
+async def test_machine_accounts_stay_in_their_organisation(two_organisations: dict[str, str]) -> None:
+    """Machine accounts (ADR 0131): org `a` reads none of `b`'s, writes none into it, and a session
+    with no scope reads nothing."""
+    from choregos_api.db.models import MachineAccount, Organization, User
+    from choregos_api.db.session import session_scope
+    from sqlalchemy.exc import DBAPIError
+
+    async with session_scope(orgs="*") as session:
+        ids = {o.slug: o.id for o in (await session.execute(select(Organization))).scalars()}
+        owners = {}
+        for slug in ("a", "b"):
+            user = User(email=f"m.{slug}@machines.choregos.invalid", display_name=slug, is_service=True)
+            session.add(user)
+            await session.flush()
+            owners[slug] = user.id
+            session.add(
+                MachineAccount(
+                    org_id=ids[slug],
+                    project_id=two_organisations[slug],
+                    user_id=user.id,
+                    slug=f"app-{slug}",
+                    display_name=slug,
+                )
+            )
+    async with session_scope(orgs=["a"]) as session:
+        assert (await session.execute(select(MachineAccount.slug))).scalars().all() == ["app-a"]
+    with pytest.raises(DBAPIError):
+        async with session_scope(orgs=["a"]) as session:
+            session.add(
+                MachineAccount(
+                    org_id=ids["b"],
+                    project_id=two_organisations["b"],
+                    user_id=owners["b"],
+                    slug="stolen",
+                    display_name="stolen",
+                )
+            )
+    async with session_scope() as session:
+        assert (await session.execute(select(MachineAccount))).scalars().all() == [], "no scope, nothing"
+
+
 async def test_org_egress_rules_are_isolated(two_organisations: dict[str, str]) -> None:
     """The egress allowlist (S39-22): org `a` reads none of `b`'s rules, writes none into it, and a
     session without a scope sees nothing."""

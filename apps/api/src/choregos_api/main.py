@@ -50,6 +50,7 @@ from .routers import (
     integrations,
     internal,
     knowledge,
+    machine_accounts,
     mcp_catalogue,
     mcp_gateway,
     memories,
@@ -395,6 +396,7 @@ def create_app() -> FastAPI:
         knowledge.router,
         webhooks.router,
         received_events.router,
+        machine_accounts.router,
         triggers.router,
         internal.router,
     )

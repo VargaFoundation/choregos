@@ -285,6 +285,91 @@ Options:
   --help           Show this message and exit.
 ```
 
+## `choregos machines`
+
+Applications that call the A2A door under their own name
+
+### `choregos machines create`
+
+```text
+Usage: choregos machines create [OPTIONS] {project} {slug}
+
+  Create an account an application calls the A2A door under. It never takes a
+  decision.
+
+Arguments:
+  project  [required]
+  slug     [required]
+
+Options:
+  --display-name <str>    what people read; the slug otherwise
+  --writes-per-day <int>  the application's own daily budget, 500 by default
+  --help                  Show this message and exit.
+```
+
+### `choregos machines list`
+
+```text
+Usage: choregos machines list [OPTIONS] {project}
+
+  A project's applications and their tokens, never a token's value.
+
+Arguments:
+  project  [required]
+
+Options:
+  --help  Show this message and exit.
+```
+
+### `choregos machines remove`
+
+```text
+Usage: choregos machines remove [OPTIONS] {project} {slug}
+
+  End the application: its tokens stop working at once, and its name is not
+  reused.
+
+Arguments:
+  project  [required]
+  slug     [required]
+
+Options:
+  --help  Show this message and exit.
+```
+
+### `choregos machines revoke`
+
+```text
+Usage: choregos machines revoke [OPTIONS] {project} {slug} {token_id}
+
+  Revoke one of the application's tokens.
+
+Arguments:
+  project   [required]
+  slug      [required]
+  token_id  [required]
+
+Options:
+  --help  Show this message and exit.
+```
+
+### `choregos machines token`
+
+```text
+Usage: choregos machines token [OPTIONS] {project} {slug}
+
+  Issue an `a2a` token for the application. The secret is shown HERE, once.
+
+Arguments:
+  project  [required]
+  slug     [required]
+
+Options:
+  --name <str>             [required]
+  --expires-in-days <int>  365 at most  [default: 90]
+  --help                   Show this message and exit.
+```
+
 ## `choregos orgs`
 
 Organisations
