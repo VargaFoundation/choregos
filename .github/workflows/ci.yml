@@ -242,16 +242,40 @@ jobs:
       - name: typing
         run: uv run mypy packages/*/src apps/api/src apps/orchestrator/src tools
       - name: tests and coverage
-        run: uv run pytest --cov --cov-report=xml -q
+        run: uv run pytest -n 4 --cov --cov-report=xml -q
       - uses: actions/upload-artifact@v7
         if: always()
         with: { name: coverage, path: coverage.xml, if-no-files-found: ignore }
+
+  python-postgres:
+    # The suites' second run, on PostgreSQL under RLS, in a job of its own: it used to follow the
+    # `python` job's steps on the same runner and took about an hour and a half of the wall time.
+    # The two jobs now run side by side, each with its own service, and each pytest spreads over the
+    # runner's cores (one database per worker, `conftest.py` at the root).
+    needs: changes
+    if: needs.changes.outputs.python == 'true' || needs.changes.outputs.contracts == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.1-pg16
+        env: { POSTGRES_USER: choregos, POSTGRES_PASSWORD: choregos, POSTGRES_DB: choregos_test }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U choregos" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      CHOREGOS_TEST_DATABASE_URL: postgresql+asyncpg://choregos:choregos@localhost:5432/choregos_test
+      CHOREGOS_TEST_EXPECT_PGVECTOR: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with: { enable-cache: true }
+      - run: uv sync --frozen
       # The WHOLE API suite, a second time, on PostgreSQL under RLS (migrated schema, non-
       # superuser role). The first run plays it on SQLite, where RLS does not exist: three defects
       # only showed up there — webhooks that routed nothing, `POST /orgs` returning 500, and a
       # project role that became an organisation role (2026-09-29).
       - name: API suite on PostgreSQL
-        run: uv run pytest apps/api/tests -q
+        run: uv run pytest apps/api/tests -n 4 -q
         env:
           CHOREGOS_TEST_SUITE_ON_POSTGRES: "1"
       # The orchestrator's suite, on the same PostgreSQL. The orchestrator is the component that
@@ -262,7 +286,7 @@ jobs:
       # by the Alembic migrations and the suite runs as the non-superuser application role, so
       # forced RLS applies (S47-27).
       - name: orchestrator suite on PostgreSQL
-        run: uv run pytest apps/orchestrator/tests -q
+        run: uv run pytest apps/orchestrator/tests -n 4 -q
         env:
           CHOREGOS_TEST_ORCH_ON_POSTGRES: "1"
 
@@ -978,7 +1002,7 @@ jobs:
     # 2026-10-05, the hosted runners stopped acquiring jobs, `python` came back
     # `abandoned`, and a PR's gate was green without a single Python test having run. Whatever
     # GitHub invents tomorrow will close the gate too: we enumerate what passes, not what breaks.
-    needs: [changes, python, contracts, web, charts, conformance-backends, images, local-install, hosted-build, hosted-cosign, hosted-admission, hosted-gvisor, hosted-cluster, hosted-foundry, hosted-images, hosted-docker, llm-guard, decisions-live, skill-scanner, web-live, secrets, dco, english]
+    needs: [changes, python, python-postgres, contracts, web, charts, conformance-backends, images, local-install, hosted-build, hosted-cosign, hosted-admission, hosted-gvisor, hosted-cluster, hosted-foundry, hosted-images, hosted-docker, llm-guard, decisions-live, skill-scanner, web-live, secrets, dco, english]
     if: always()
     runs-on: ubuntu-latest
     steps:

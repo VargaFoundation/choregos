@@ -123,7 +123,8 @@ async def _idle_in_transaction() -> int:
     try:
         return int(
             await connection.fetchval(
-                "SELECT count(*) FROM pg_stat_activity WHERE usename = $1 AND state = 'idle in transaction'",
+                "SELECT count(*) FROM pg_stat_activity WHERE usename = $1 AND state = 'idle in transaction'"
+                " AND datname = current_database()",
                 APP_ROLE,
             )
         )

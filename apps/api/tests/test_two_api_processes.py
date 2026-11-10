@@ -186,7 +186,8 @@ async def _listeners() -> list[int]:
     conn = await asyncpg.connect(PG_URL.replace("postgresql+asyncpg://", "postgresql://"))
     try:
         rows = await conn.fetch(
-            "SELECT pid FROM pg_stat_activity WHERE application_name = $1", APPLICATION_NAME
+            "SELECT pid FROM pg_stat_activity WHERE application_name = $1 AND datname = current_database()",
+            APPLICATION_NAME,
         )
     finally:
         await conn.close()

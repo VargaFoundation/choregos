@@ -56,7 +56,8 @@ async def migrated_database(plugin: None, monkeypatch: pytest.MonkeyPatch) -> As
         "DROP SCHEMA public CASCADE",
         "CREATE SCHEMA public",
         f"DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{APP_ROLE}') THEN "
-        f"CREATE ROLE {APP_ROLE} LOGIN PASSWORD '{APP_PASSWORD}' NOSUPERUSER; END IF; END $$",
+        f"CREATE ROLE {APP_ROLE} LOGIN PASSWORD '{APP_PASSWORD}' NOSUPERUSER; END IF; "
+        "EXCEPTION WHEN duplicate_object OR unique_violation THEN NULL; END $$",
         f"GRANT USAGE, CREATE ON SCHEMA public TO {APP_ROLE}",
     )
     monkeypatch.setenv("CHOREGOS_DATABASE_URL", _app_url(PG_URL))
@@ -151,7 +152,8 @@ async def test_onto0003_copies_the_proposals_under_forced_rls(
         "DROP SCHEMA public CASCADE",
         "CREATE SCHEMA public",
         f"DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{APP_ROLE}') THEN "
-        f"CREATE ROLE {APP_ROLE} LOGIN PASSWORD '{APP_PASSWORD}' NOSUPERUSER; END IF; END $$",
+        f"CREATE ROLE {APP_ROLE} LOGIN PASSWORD '{APP_PASSWORD}' NOSUPERUSER; END IF; "
+        "EXCEPTION WHEN duplicate_object OR unique_violation THEN NULL; END $$",
         f"GRANT USAGE, CREATE ON SCHEMA public TO {APP_ROLE}",
     )
     monkeypatch.setenv("CHOREGOS_DATABASE_URL", _app_url(PG_URL))

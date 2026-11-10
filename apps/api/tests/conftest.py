@@ -15,6 +15,7 @@ from httpx import ASGITransport, AsyncClient
 
 # Shared fixtures of the kits: every test module of the directory can use them by name.
 from .kits.identity_seams import extended_client, identity_extension  # noqa: F401
+from .kits.sqlite_template import copy_schema_to
 
 os.environ.setdefault("CHOREGOS_ENV", "test")
 os.environ.setdefault("CHOREGOS_FAKES", "1")
@@ -45,7 +46,7 @@ async def app(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[A
     from choregos_api.temporal import FakeTemporal, set_temporal
 
     if SUITE_ON_POSTGRES:
-        await _prepare_postgres()
+        os.environ["CHOREGOS_DATABASE_URL"] = _app_url(PG_URL)
         # In the TESTS, `session_scope()` without a scope is a shortcut for "as the platform"
         # (setting the scene). The product code never calls it that way (checked with `grep`), so
         # translating it here hides no product defect, and `test_rls_postgres.py` (fixture
@@ -63,18 +64,14 @@ async def app(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[A
     reset_settings_cache()
     await db_session.dispose_engine()
     if SUITE_ON_POSTGRES:
-        await _migrate()
+        await _fresh_postgres()
     set_temporal(FakeTemporal())
     application = create_app()
     if not SUITE_ON_POSTGRES:
-        from choregos_api.db.session import create_all
-
-        await create_all()
+        await copy_schema_to(tmp_path / "test.db")
     yield application
     await db_session.dispose_engine()
     set_temporal(None)
-    if SUITE_ON_POSTGRES:
-        await _administer(PG_URL, "DROP SCHEMA public CASCADE", "CREATE SCHEMA public")
     reset_settings_cache()
 
 
@@ -172,7 +169,8 @@ async def _prepare_postgres() -> None:
         "DROP SCHEMA public CASCADE",
         "CREATE SCHEMA public",
         f"DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{APP_ROLE}') THEN "
-        f"CREATE ROLE {APP_ROLE} LOGIN PASSWORD '{APP_PASSWORD}' NOSUPERUSER; END IF; END $$",
+        f"CREATE ROLE {APP_ROLE} LOGIN PASSWORD '{APP_PASSWORD}' NOSUPERUSER; END IF; "
+        "EXCEPTION WHEN duplicate_object OR unique_violation THEN NULL; END $$",
         f"GRANT USAGE, CREATE ON SCHEMA public TO {APP_ROLE}",
     )
     os.environ["CHOREGOS_DATABASE_URL"] = _app_url(PG_URL)
@@ -191,36 +189,116 @@ async def _migrate() -> None:
     await asyncio.to_thread(command.upgrade, configuration(), "heads")
 
 
+#: What the schema looks like once Alembic has built it: relations, functions, policies, extensions and
+#: the revision. Taken once per process; a test that drops, adds or downgrades anything makes the
+#: next `_fresh_postgres()` differ from it and rebuild.
+_SCHEMA_FINGERPRINT = """
+SELECT coalesce(md5(string_agg(item, ',' ORDER BY item)), '') FROM (
+    SELECT 'r' || c.relkind::text || c.relname AS item FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'public'
+    UNION ALL SELECT 'f' || p.proname FROM pg_proc p
+        JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public'
+    UNION ALL SELECT 'p' || polrelid::regclass::text || polname FROM pg_policy
+    UNION ALL SELECT 'e' || extname FROM pg_extension
+    UNION ALL SELECT 'v' || version_num FROM alembic_version
+) AS parts
+"""
+
+#: Fails when a migration leaves rows behind in a fresh database (outside `alembic_version`).
+_FAIL_ON_MIGRATED_ROWS = """
+DO $$ DECLARE name text; found boolean; BEGIN
+    FOR name IN SELECT tablename FROM pg_tables
+        WHERE schemaname = 'public' AND tablename <> 'alembic_version' LOOP
+        EXECUTE format('SELECT EXISTS (SELECT 1 FROM public.%I)', name) INTO found;
+        IF found THEN RAISE EXCEPTION 'rows in %', name USING ERRCODE = 'P0001'; END IF;
+    END LOOP;
+END $$
+"""
+
+#: Every table but `alembic_version` emptied, sequences restarted: what dropping the schema and
+#: migrating again leaves, in one round trip instead of ninety-five migrations.
+_EMPTY_EVERY_TABLE = """
+DO $$ DECLARE tables text; BEGIN
+    SELECT string_agg(format('%I.%I', schemaname, tablename), ', ') INTO tables
+        FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'alembic_version';
+    IF tables IS NOT NULL THEN EXECUTE 'TRUNCATE ' || tables || ' RESTART IDENTITY CASCADE'; END IF;
+END $$
+"""
+
+#: Empty until this process has built the schema once; `False` when a migration seeds rows, which
+#: emptying the tables would remove: every test then rebuilds the schema, as it did before.
+_built: dict[str, str | bool] = {}
+
+
+async def _seeded(url: str) -> bool:
+    import asyncpg
+
+    try:
+        await _administer(url, _FAIL_ON_MIGRATED_ROWS)
+    except asyncpg.exceptions.RaiseError:
+        return True
+    return False
+
+
+async def _query(url: str, statement: str) -> Any:
+    import asyncpg
+
+    connection = await asyncpg.connect(url.replace("postgresql+asyncpg://", "postgresql://"))
+    try:
+        return await connection.fetchval(statement)
+    finally:
+        await connection.close()
+
+
+async def _fresh_postgres() -> None:
+    """An empty database, migrated by Alembic, the non-superuser role owning it.
+
+    The schema is built once per process (95 migrations, about four seconds) and the following tests
+    empty its tables. A test that drops or changes the schema (`_prepare_postgres()`, a downgrade)
+    makes it differ from what was built: the next call rebuilds it. The caller has set
+    `CHOREGOS_DATABASE_URL` and reset the settings and the engine.
+    """
+    fingerprint = _built.get("fingerprint")
+    if isinstance(fingerprint, str):
+        try:
+            current = await _query(PG_URL, _SCHEMA_FINGERPRINT)
+        except Exception:  # schema dropped: no `alembic_version`
+            current = None
+        if current == fingerprint:
+            await _administer(PG_URL, _EMPTY_EVERY_TABLE)
+            return
+    await _prepare_postgres()
+    from choregos_api.config import reset_settings_cache
+
+    reset_settings_cache()
+    await _migrate()
+    seeded = await _seeded(PG_URL)
+    _built["fingerprint"] = False if seeded else await _query(PG_URL, _SCHEMA_FINGERPRINT)
+
+
 @pytest.fixture
 async def pg_app(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Any]:
     """The application on a PostgreSQL migrated by Alembic (not `create_all`), as the
-    non-superuser application role, emptied at the end."""
+    non-superuser application role, emptied at the start."""
     from choregos_api.config import reset_settings_cache
     from choregos_api.db import session as db_session
     from choregos_api.main import create_app
     from choregos_api.temporal import FakeTemporal, set_temporal
 
-    await _prepare_postgres()
     monkeypatch.setenv("CHOREGOS_DATABASE_URL", _app_url(PG_URL))
     monkeypatch.setenv("CHOREGOS_OIDC_DEFAULT_ORG", "a")
     monkeypatch.setenv("CHOREGOS_DEV_ADMIN_EMAILS", "admin@a.test")
     reset_settings_cache()
     await db_session.dispose_engine()
-    # The configuration of `python -m choregos_api.migrate`, the chart Job's: this PostgreSQL bench
-    # therefore proves the command that is deployed, not a test variant.
-    from choregos_api.migrate import configuration
-
-    config = configuration()
-    # `migrations/env.py` calls `asyncio.run()`: forbidden from a running loop, hence a separate
-    # thread. The tables belong to the application role: `FORCE ROW LEVEL SECURITY` therefore
-    # applies to it too.
-    await asyncio.to_thread(command.upgrade, config, "heads")
+    # The schema is the one of `python -m choregos_api.migrate`, the chart Job's: this PostgreSQL bench
+    # therefore proves the command that is deployed, not a test variant. The tables belong to the
+    # application role: `FORCE ROW LEVEL SECURITY` therefore applies to it too.
+    await _fresh_postgres()
     set_temporal(FakeTemporal())
     try:
         yield create_app()
     finally:
         await db_session.dispose_engine()
-        await _administer(PG_URL, "DROP SCHEMA public CASCADE", "CREATE SCHEMA public")
         set_temporal(None)
         reset_settings_cache()
 
