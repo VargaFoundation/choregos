@@ -18,6 +18,7 @@ import {
   UpstreamBanner,
 } from "@/components/agents/governance";
 import { AgentAccessCard } from "@/components/agents/access-view";
+import { AgentComposition } from "@/components/agents/composition";
 import { DefinitionView } from "@/components/agents/definition-view";
 import { AgentDetailsCard } from "@/components/agents/details";
 import { History } from "@/components/agents/history";
@@ -134,6 +135,7 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
       {onglet === "overview" && (
         <>
           <AgentDetailsCard key={`${a.slug}-${a.display_name}-${a.description}-${(a.tags ?? []).join(",")}`} org={org} agent={a} />
+          {a.kind !== "external" && <AgentComposition org={org} agent={a} />}
           {a.kind === "remote" && <RemoteDrift org={org} slug={slug} />}
           <AgentStatus org={org} agent={a} />
           <DeleteAgent org={org} agent={a} onDeleted={() => router.push("/agents")} />
