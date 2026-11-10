@@ -2512,6 +2512,37 @@ paths:
       responses:
         "204": { description: Closed }
         "404": { $ref: "#/components/responses/NotFound" }
+  /me/assistants:
+    get:
+      tags: [agents]
+      operationId: listMyAssistants
+      description: "The assistant installations whose audience groups hold one of the caller's groups (`assistant:use`, ADR 0133): name, display name, description, status. An assistant the caller is not in the audience of is not listed."
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MyAssistantList" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /me/assistants/{org}/{slug}/conversations:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    post:
+      tags: [agents]
+      operationId: openMyAssistantConversation
+      description: >-
+        Opens a conversation of a `ready` assistant in the caller's personal space (ADR 0134). The optional `context`
+        is validated against the manifest's `surfaces.embed.context_schema` and given to the agent as data, never as
+        a resolved subject. The conversation's cap is the installation's `per_conversation_usd`. 409 with the
+        `readiness` when the installation is not ready; 404 for a caller outside the audience (it is not revealed).
+        Every later turn evaluates the audience again, and reserves under the conversation's, the person's month and
+        the installation's month caps.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AssistantConversationOpen" } } }
+      responses:
+        "201": { description: Opened, content: { application/json: { schema: { $ref: "#/components/schemas/Conversation" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /me/conversations:
     get:
       tags: [agents]
@@ -8472,6 +8503,25 @@ components:
       required: [items]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/Assistant" } }
+    MyAssistant:
+      type: object
+      required: [org, slug, name, status]
+      properties:
+        org: { type: string }
+        slug: { type: string }
+        name: { type: string }
+        display_name: { type: [string, "null"] }
+        description: { type: [string, "null"] }
+        status: { type: string, enum: [incomplete, ready, suspended] }
+    MyAssistantList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/MyAssistant" } }
+    AssistantConversationOpen:
+      type: object
+      properties:
+        context: { type: [object, "null"], additionalProperties: true, description: "Validated against `surfaces.embed.context_schema`; data for the agent, never a subject." }
     AssistantReadinessItem:
       type: object
       required: [kind, message, fix_by, groups]
