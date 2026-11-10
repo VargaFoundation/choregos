@@ -59,6 +59,10 @@ describe("the A2A card on the Integrations page (ADR 0078)", () => {
     );
     expect(await screen.findByText("https://choregos.example/a2a/orgs/varga/.well-known/agent-card.json")).toBeInTheDocument();
     expect(screen.getByTestId("a2a-endpoint")).toHaveTextContent("https://choregos.example/a2a/orgs/varga");
+    expect(screen.getByTestId("a2a-guide")).toHaveAttribute(
+      "href",
+      expect.stringMatching(/docs\/starting-a-workflow-from-outside\.md$/),
+    );
     fireEvent.click(screen.getByRole("button", { name: "Create an A2A token" }));
     expect(await screen.findByTestId("a2a-token")).toHaveTextContent("chg_a2a_once");
     expect(vi.mocked(api.createToken).mock.calls[0]![0].scopes).toEqual(["a2a"]);

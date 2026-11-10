@@ -9,6 +9,8 @@ import { api } from "@/lib/api";
 import { a2aCardUrl, a2aFileLimit, formatMiB } from "@/lib/integrations";
 import type { ApiTokenCreated } from "@/lib/types";
 
+const A2A_GUIDE = "https://github.com/VargaFoundation/choregos/blob/main/docs/starting-a-workflow-from-outside.md";
+
 /**
  * Another agent calls Choregos over A2A (ADR 0078): the organisation's card, its endpoint, and a
  * token of the `a2a` scope. Only the workflows that opted in are skills; a decision stays in the
@@ -36,7 +38,10 @@ export function A2aAgent({ org }: { org: string }) {
       <div className="space-y-2 text-sm">
         <p className="text-ink-muted">
           The workflows that opt in (<Code>a2a:</Code> in their definition) are skills of this organisation&apos;s
-          agent. A caller follows each task until a person decides in the console; it never decides itself.
+          agent. A caller follows each task until a person decides in the console; it never decides itself.{" "}
+          <a href={A2A_GUIDE} target="_blank" rel="noreferrer" data-testid="a2a-guide">
+            How to call it, step by step
+          </a>
         </p>
         <p className="break-all">
           Agent card <Code data-testid="a2a-card-url">{card}</Code>

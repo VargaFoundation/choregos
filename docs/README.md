@@ -19,7 +19,8 @@ it through a workflow you declare, and every step is bounded, evidenced and audi
 | [Usage](usage.md) | Onboarding a project, writing a workflow, tools, policy, reading a run, day-2 knobs |
 | [Development](development.md) | The three levels of a dev environment, the tests that touch the real world, pitfalls |
 | [Security](security.md) | What stops an agent from doing damage, and what is *not* a wall |
-| [Integrations](integrations.md) | Connecting Claude Code, Claude Desktop, Cursor, VS Code or any MCP client through the MCP door |
+| [Starting a workflow from outside](starting-a-workflow-from-outside.md) | From an application, a script or another agent: which door to take, and the A2A door step by step |
+| [Integrations](integrations.md) | Connecting Claude Code, Claude Desktop, Cursor, VS Code or any MCP client through the MCP door; the A2A door's reference |
 | [CLI reference](cli.md) | Every command, generated from the CLI itself |
 | [Contributing](CONTRIBUTING.md) | One story, one PR; the contract before the code; what CI checks |
 | [ADRs](adr/README.md) | The structural decisions |

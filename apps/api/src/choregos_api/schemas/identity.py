@@ -61,6 +61,27 @@ class ApiTokenDto(Dto):
     last_client: str | None = None
 
 
+class MachineAccountCreate(Dto):
+    slug: str = Field(pattern=r"^[a-z0-9][a-z0-9-]{0,62}$")
+    display_name: str | None = Field(default=None, max_length=200)
+    writes_per_day: int = Field(default=500, ge=1, le=10_000)
+
+
+class MachineTokenCreate(Dto):
+    name: str = Field(min_length=1, max_length=128)
+    expires_in_days: int = Field(default=90, ge=1, le=365)
+
+
+class MachineAccountDto(Dto):
+    slug: str
+    display_name: str
+    address: str
+    writes_per_day: int
+    created_by: str | None = None
+    created_at: datetime
+    tokens: list[ApiTokenDto] = Field(default_factory=list)
+
+
 class BrowserSessionDto(Dto):
     """One of the caller's browser sessions that still holds (ADR 0130)."""
 

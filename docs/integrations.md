@@ -206,7 +206,8 @@ read on **every call**: revoked, suspended or expired, the next call answers `40
 
 A workflow can be served to an outside agent as an **A2A skill** (A2A 0.3.0,
 [ADR 0078](adr/0078-governed-workflows-as-a2a-skills.md)). Nothing is served by default: the
-workflow opts in.
+workflow opts in. This section is the reference; for complete calls, in order, read
+[Starting a workflow from outside](starting-a-workflow-from-outside.md).
 
 ```yaml
 a2a:
@@ -224,7 +225,11 @@ refused, and an `a2a` token does not open the REST API):
 choregos tokens create --name partner-agent --scope a2a --project acme:billing-api --expires-in-days 30
 ```
 
-The card lists the opted-in workflows of the projects the token's person may read. What the door does:
+The card lists the opted-in workflows of the projects the token's person may read. A skill that takes
+`application/json` publishes its fields, the JSON Schema of the workflow's `metadata.inputs`, in the card's
+`capabilities.extensions` (`https://choregos.dev/a2a/extensions/skill-fields/v1`, `params.skills.<id>`).
+Fields the workflow refuses answer `-32602` with `error.data.errors`, each with its `loc` and `msg`. What
+the door does:
 
 - `message/send` opens a work item through the same path as the console, under an id derived from the
   organisation, the client and the `messageId`: a message sent twice is one work item. Text parts make

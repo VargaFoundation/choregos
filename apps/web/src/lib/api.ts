@@ -205,6 +205,9 @@ import type {
   Trigger,
   TriggerAck,
   TriggerToken,
+  MachineAccount,
+  MachineAccountCreate,
+  MachineTokenCreate,
 } from "./types";
 
 export const API_BASE = "/api/v1";
@@ -1000,6 +1003,22 @@ export const api = {
   /** The webhook events a project received and what the platform did with each (S42-06f), newest first. */
   receivedEvents: (id: string, params?: Record<string, string>) =>
     request<ReceivedEventPage>(`/projects/${qualify(id)}/received-events${query(params)}`),
+  /** The applications that call the A2A door under their own name (ADR 0131), and their tokens. */
+  machineAccounts: (id: string) => request<MachineAccount[]>(`/projects/${qualify(id)}/machine-accounts`),
+  createMachineAccount: (id: string, body: MachineAccountCreate) =>
+    request<MachineAccount>(`/projects/${qualify(id)}/machine-accounts`, { method: "POST", body: JSON.stringify(body) }),
+  removeMachineAccount: (id: string, slug: string) =>
+    request<void>(`/projects/${qualify(id)}/machine-accounts/${encodeURIComponent(slug)}`, { method: "DELETE" }),
+  /** Issues a token, shown once. */
+  createMachineToken: (id: string, slug: string, body: MachineTokenCreate) =>
+    request<ApiTokenCreated>(`/projects/${qualify(id)}/machine-accounts/${encodeURIComponent(slug)}/tokens`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  revokeMachineToken: (id: string, slug: string, tokenId: string) =>
+    request<void>(`/projects/${qualify(id)}/machine-accounts/${encodeURIComponent(slug)}/tokens/${tokenId}`, {
+      method: "DELETE",
+    }),
   /** The project's HTTP triggers (S56-01, ADR 0113): URL, workflow, whether a token exists. */
   triggers: (id: string) => request<Trigger[]>(`/projects/${qualify(id)}/triggers`),
   /** Mints a trigger's token and signing secret, shown once; the previous ones stop working. */

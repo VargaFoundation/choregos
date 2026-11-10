@@ -3733,6 +3733,28 @@ export type ApiToken = {
   last_client?: string | null;
 };
 
+export type MachineAccountCreate = {
+  slug: string;
+  display_name?: string | null;
+  writes_per_day?: number;
+};
+
+export type MachineAccount = {
+  slug: string;
+  display_name: string;
+  /** The account's reserved address: how the journal names it. */
+  address: string;
+  writes_per_day: number;
+  created_by?: string | null;
+  created_at: string;
+  tokens: Array<ApiToken>;
+};
+
+export type MachineTokenCreate = {
+  name: string;
+  expires_in_days?: number;
+};
+
 export type BrowserSession = {
   id: string;
   /** How the session was opened: `oidc`, `saml`, `dev`... */
@@ -4678,6 +4700,8 @@ export interface Operations {
   createGlobalMemory: { method: "POST"; path: "/orgs/{org}/memories"; body: MemoryStoreCreate; response: MemoryStore };
   createKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge"; body: KnowledgeBaseCreate; response: KnowledgeBase };
   createKnowledgeSource: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sources"; body: KnowledgeSourceCreate; response: KnowledgeSource };
+  createMachineAccount: { method: "POST"; path: "/projects/{id}/machine-accounts"; body: MachineAccountCreate; response: MachineAccount };
+  createMachineToken: { method: "POST"; path: "/projects/{id}/machine-accounts/{slug}/tokens"; body: MachineTokenCreate; response: ApiTokenCreated };
   createMyToken: { method: "POST"; path: "/me/tokens"; body: ApiTokenCreate; response: ApiTokenCreated };
   createOrg: { method: "POST"; path: "/orgs"; body: OrgCreate; response: Org };
   createOrgConnector: { method: "POST"; path: "/orgs/{org}/connectors"; body: OrgConnectorCreate; response: OrgConnector };
@@ -4932,6 +4956,7 @@ export interface Operations {
   listImplicitAgents: { method: "GET"; path: "/projects/{id}/implicit-agents"; body: never; response: Array<ImplicitAgent> };
   listKnowledgeBases: { method: "GET"; path: "/orgs/{org}/knowledge"; body: never; response: Array<KnowledgeBase> };
   listKnowledgeGrants: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/grants"; body: never; response: KnowledgeGrants };
+  listMachineAccounts: { method: "GET"; path: "/projects/{id}/machine-accounts"; body: never; response: Array<MachineAccount> };
   listMcpCatalogue: { method: "GET"; path: "/orgs/{org}/mcp-catalogue"; body: never; response: McpCatalogue };
   listMembers: { method: "GET"; path: "/orgs/{org}/members"; body: never; response: Array<Membership> };
   listMemories: { method: "GET"; path: "/orgs/{org}/memories"; body: never; response: Array<MemoryStore> };
@@ -5038,11 +5063,13 @@ export interface Operations {
   releaseAgentVersion: { method: "POST"; path: "/orgs/{org}/agents/{slug}/releases"; body: AgentReleaseCreate; response: AgentRelease };
   releaseOrgAlias: { method: "DELETE"; path: "/orgs/{org}/aliases/{alias}"; body: never; response: void };
   remoteCredentialCallback: { method: "GET"; path: "/remote-credentials/oauth/callback"; body: never; response: void };
+  removeMachineAccount: { method: "DELETE"; path: "/projects/{id}/machine-accounts/{slug}"; body: never; response: void };
   removeMember: { method: "DELETE"; path: "/orgs/{org}/members/{user_id}"; body: never; response: void };
   requestOrgEgress: { method: "POST"; path: "/orgs/{org}/egress/requests"; body: EgressRequestCreate; response: EgressRule };
   resolveProjectAgents: { method: "GET"; path: "/projects/{id}/agent-resolution"; body: never; response: Array<AgentResolution> };
   restoreAgentVersion: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/restore"; body: AgentVersionRestore; response: AgentVersion };
   restoreWorkflowVersion: { method: "POST"; path: "/projects/{id}/workflows/{name}/versions/{version}/restore"; body: never; response: WorkflowDef };
+  revokeMachineToken: { method: "DELETE"; path: "/projects/{id}/machine-accounts/{slug}/tokens/{token_id}"; body: never; response: void };
   revokeMyToken: { method: "DELETE"; path: "/me/tokens/{id}"; body: never; response: void };
   revokeOrgEgressRule: { method: "DELETE"; path: "/orgs/{org}/egress/rules/{rule_id}"; body: never; response: EgressRule };
   revokeRemoteCredential: { method: "DELETE"; path: "/orgs/{org}/remote-credentials/{name}"; body: never; response: void };

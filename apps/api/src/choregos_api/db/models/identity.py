@@ -10,6 +10,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Integer,
     String,
     UniqueConstraint,
     func,
@@ -79,6 +80,23 @@ class Membership(Base, PkMixin, TimestampMixin):
     source: Mapped[str] = mapped_column(String(16), default="manual", server_default="manual")
 
     user: Mapped[User] = relationship(lazy="joined")
+
+
+class MachineAccount(Base, PkMixin, TimestampMixin):
+    """An application that calls under its own name, on one project (ADR 0131)."""
+
+    __tablename__ = "machine_accounts"
+    __table_args__ = (UniqueConstraint("project_id", "slug", name="uq_machine_accounts_project_slug"),)
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    slug: Mapped[str] = mapped_column(String(63))
+    display_name: Mapped[str] = mapped_column(String(200), default="")
+    writes_per_day: Mapped[int] = mapped_column(Integer, default=500)
+    created_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    #: Set when the account ends: the row stays so that the journal still reads, its slug stays taken.
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class ApiToken(Base, PkMixin, TimestampMixin):

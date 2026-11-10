@@ -56,7 +56,16 @@ from .connectors import (
 )
 from .costs import BudgetAlert, CostLedger
 from .gateway import BackendRegistryRow, GatewayKeyRow, ModelCatalogueRow
-from .identity import ApiToken, Membership, Organization, OrgSlugAlias, TrackerIdentity, User, UserSession
+from .identity import (
+    ApiToken,
+    MachineAccount,
+    Membership,
+    Organization,
+    OrgSlugAlias,
+    TrackerIdentity,
+    User,
+    UserSession,
+)
 from .knowledge import (
     KnowledgeBase,
     KnowledgeChunk,
@@ -90,6 +99,7 @@ ALL_TABLES = [
     User,
     Membership,
     Project,
+    MachineAccount,
     Connector,
     WorkflowDef,
     PolicyDef,
@@ -191,6 +201,7 @@ __all__ = [
     "KnowledgeGrant",
     "KnowledgeSource",
     "LargeBinary",
+    "MachineAccount",
     "Mapped",
     "Membership",
     "MemoryFact",
