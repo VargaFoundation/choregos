@@ -18,9 +18,11 @@ ROOT = Path(__file__).resolve().parents[3]
 OFFLINE = ROOT / "plugins" / "offline"
 
 #: The plugin of each agent, and the catalogue version its provenance carries (MIGRATION-FROM-CORE.md).
-VERSION_TWO = {"architect", "prod-verifier", "spec-writer"}
-#: An agent whose catalogue entry moved past 2: netops 1.1.0 declares its tool-scripts default (S57-15).
-VERSION_THREE = {"netops"}
+#: Every internal agent moved one version when its plugin declared its five components (S60-04, ADR 0127);
+#: a client did not. netops had moved once before, for its tool-scripts default (S57-15); the researcher
+#: moved once more in software-delivery 1.1.1, which restored the web its eval E5 reads.
+VERSION_THREE = {"architect", "prod-verifier", "spec-writer", "researcher"}
+VERSION_FOUR = {"netops"}
 PLUGINS = {
     "software-delivery": 19,
     "netops": 1,
@@ -29,18 +31,18 @@ PLUGINS = {
     "requests": 2,
 }
 #: The plugin version the offline directory holds, when it is not 1.0.0.
-PLUGIN_VERSIONS = {"requests": "1.0.1", "netops": "1.1.0"}
+PLUGIN_VERSIONS = {"software-delivery": "1.1.1", "netops": "1.2.0", "authoring": "1.1.0", "requests": "1.1.0"}
 
 #: The fingerprints the core's own YAML had at 3156d12e (choregos-agents' MIGRATION-FROM-CORE.md): the
 #: plugins carry the same documents, so an installed agent's checksum does not move. They include the
 #: core's `_context.md`: S51-04 added its `fields.tracker` section, so every agent that prepends it
-#: moved once (an installed one is offered the update); `claude-ai`, a client, prepends none.
+#: moved once (an installed one is offered the update); `claude-ai`, a client, prepends none. Every
+#: internal agent's document moved once more, on purpose, when it declared its five components (S60-04).
 FINGERPRINTS = {
-    "architect": "sha256:687e23ee5cfc454162ac4790c01fa5aa12c3302caa0c8359eaf5c7a12d9549a5",
-    "developer": "sha256:c6969085476d0412ba8274d6286e6658183dbeccc93e3b4fd97b187e708409af",
-    # netops 1.1.0 adds `spec.tools: {scripts: offer}` (S57-15): its document moved once, on purpose.
-    "netops": "sha256:b83b14d97c204780a556b4a977c0bd9646b5c743b0ada05303fc71e2a498d856",
-    "agent-drafter": "sha256:ce17d429cab0d7b56ab229c33c8922d1a906849e370fdf6a612a9099902d44d8",
+    "architect": "sha256:eff0e642adb1912c3764c289654ca961f0068185b8ead70e3a0ebcb0452297b5",
+    "developer": "sha256:d5d0d1986526f3936938bd5ad589f329b153374d7305d78e20855011436f3425",
+    "netops": "sha256:7f6a8262fee61e909fc5cbeb78d2aa90eff5441868db3a2c150902c846af8718",
+    "agent-drafter": "sha256:28d4c5df5d91ed095358fe7990760eaa4b30f47ca3ed04c0d384ef39ed129734",
     "claude-ai": "sha256:56cbd162bc57f803e6e162baf922669d6a50a3d205a521a88b69efc2b3113496",
 }
 
@@ -60,7 +62,9 @@ def test_every_agent_comes_from_its_plugin() -> None:
     for found in entries():
         counted[found.plugin] = counted.get(found.plugin, 0) + 1
         assert found.plugin_version == PLUGIN_VERSIONS.get(found.plugin, "1.0.0")
-        expected = 3 if found.slug in VERSION_THREE else 2 if found.slug in VERSION_TWO else 1
+        expected = 4 if found.slug in VERSION_FOUR else 3 if found.slug in VERSION_THREE else 2
+        if found.kind != "internal":
+            expected = 1
         assert found.provenance == f"plugin:{found.plugin}/{found.slug}@{expected}"
     assert counted == PLUGINS
 
@@ -84,7 +88,7 @@ def test_a_client_keeps_its_client_and_reach() -> None:
 
 def test_madr_4_is_the_plugins_with_its_licence() -> None:
     skill = catalogue.catalogue().skills["madr-4"]
-    assert skill.provenance == "plugin:software-delivery/madr-4@1.0.0"
+    assert skill.provenance == "plugin:software-delivery/madr-4@1.1.1"
     assert {"SKILL.md", "LICENSE", "PROVENANCE.json"} <= set(skill.files)
 
 
@@ -95,7 +99,7 @@ def test_without_an_offline_directory_the_catalogue_is_empty(tmp_path: Path) -> 
 
 
 def test_the_environment_names_the_directory(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    shutil.copy(OFFLINE / "netops-1.1.0.tar.gz", tmp_path)
+    shutil.copy(OFFLINE / "netops-1.2.0.tar.gz", tmp_path)
     monkeypatch.setenv("CHOREGOS_PLUGINS_OFFLINE", str(tmp_path))
     assert [e.slug for e in entries()] == ["netops"]
 

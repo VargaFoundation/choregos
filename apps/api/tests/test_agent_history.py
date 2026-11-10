@@ -201,7 +201,7 @@ async def test_platform_written_versions_have_a_message(
     installed = await client.post(f"{ORG}/agent-catalogue/triager/install")
     assert (
         installed.json()["versions"][0]["message"]
-        == "Installed from the plugin software-delivery (triager@1)"
+        == "Installed from the plugin software-delivery (triager@2)"
     )
     forked = await client.post(f"{ORG}/agents/triager/fork", json={"slug": "triager-copy", "scope": "org"})
     assert forked.json()["versions"][0]["message"] == "Forked from triager@1"
@@ -213,14 +213,14 @@ async def test_platform_written_versions_have_a_message(
     old = entry("triager")
     assert old is not None
     document = {**old.document, "spec": {**old.document["spec"], "instructions": "Triage it, briefly."}}
-    new = dataclasses.replace(old, version=2, document=document)
+    new = dataclasses.replace(old, version=old.version + 1, document=document)
     others = tuple(e for e in entries() if e.slug != "triager")
     from choregos_api.services import agent_catalogue as service
 
     view = dataclasses.replace(service.offline_catalogue(), entries=(*others, new))
     monkeypatch.setattr(service, "offline_catalogue", lambda: view)
     upgraded = await client.post(f"{ORG}/agent-catalogue/triager/install", json={"upgrade": True})
-    assert upgraded.json()["versions"][0]["message"] == "Catalogue update to software-delivery/triager@2"
+    assert upgraded.json()["versions"][0]["message"] == "Catalogue update to software-delivery/triager@3"
 
 
 async def test_restore_copies_the_stored_bytes_not_a_re_serialisation(client: AsyncClient, org: str) -> None:
