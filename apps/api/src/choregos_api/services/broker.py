@@ -44,6 +44,13 @@ from ..db.models import (
 from ..db.session import outside_the_transaction
 from .catalogue_rights import SELECTED_PROJECTS, enabled_ids
 from .connectors import declared_operation, human_floor, stricter
+from .identity_exchange import (
+    UNAVAILABLE,
+    USER_EXCHANGE,
+    Acting,
+    IdentityUnavailable,
+    exchanged_token,
+)
 from .mcp_gateway import connector_client, route_of
 from .mcp_gateway_identity import GatewayRefusal, identity_of_run
 from .platform_network import (
@@ -535,8 +542,13 @@ async def call(
     *,
     run: Run | None = None,
     project: Project | None = None,
+    acting: Acting | None = None,
 ) -> tuple[int, dict[str, Any]]:
     """`tools/call` on the server, with the connector's key resolved HERE, never in the pod.
+
+    `acting` (ADR 0135): `None` or `service` is the connector's own identity, as ever; `user_exchange`
+    calls it with a token exchanged for the person, and fails with `identity_unavailable` (422, no
+    call made) when that token cannot be had — never under the connector's identity.
 
     Two halves of one network policy hold it (ADR 0070, amended): the organisation's network bounds
     are read FIRST, so a host its ceiling refuses (403) or that the organisation already called too
@@ -546,7 +558,7 @@ async def call(
     from .egress import egress_scope_for_org
 
     async with egress_scope_for_org(session, tool.connector.org_id, "api", f"mcp:{tool.connector.name}"):
-        return await _call(session, tool, arguments, run=run, project=project)
+        return await _call(session, tool, arguments, run=run, project=project, acting=acting)
 
 
 async def _call(
@@ -556,6 +568,7 @@ async def _call(
     *,
     run: Run | None = None,
     project: Project | None = None,
+    acting: Acting | None = None,
 ) -> tuple[int, dict[str, Any]]:
     import httpx
     from choregos_adapters.errors import AdapterError
@@ -587,11 +600,22 @@ async def _call(
     try:
         # A gateway connector (ADR 0105) goes through the gateway, signed with this call's identity; a
         # plugin's server (ADR 0096), its Service and bearer token; any other, its type's adapter.
-        client: Any = await connector_client(
-            session,
-            instance,
-            lambda: identity_of_run(session, run, project, instance, tool.operation.name),
-        )
+        client: Any
+        if acting is not None and acting.mode == USER_EXCHANGE:
+            if route.via_gateway:
+                raise IdentityUnavailable("the `user_exchange` identity does not go through an MCP gateway")
+            from .plugin_servers import connector_client as direct_client
+
+            # One call's token: exchanged here, handed to this client, forgotten with it.
+            client = await direct_client(
+                session, instance, bearer=await exchanged_token(session, instance, acting)
+            )
+        else:
+            client = await connector_client(
+                session,
+                instance,
+                lambda: identity_of_run(session, run, project, instance, tool.operation.name),
+            )
         # A server may take thirty seconds to answer: the caller's transaction, when it allows it,
         # does not wait for it on a pooled connection (#1354).
         async with outside_the_transaction(session):
@@ -602,6 +626,8 @@ async def _call(
                 # returned in the format of an MCP result — the agent reads the same everywhere.
                 raw = await client.execute(tool.operation.name, arguments)
                 result = {"content": [{"type": "text", "text": _json(raw)}], "structuredContent": raw}
+    except IdentityUnavailable as unavailable:
+        return 422, {"error": str(unavailable), "type": UNAVAILABLE}
     except McpError as mcp_error:
         return 502, {"error": redact(str(mcp_error))}
     except GatewayRefusal as refused:  # a lost assertion key or credential: refused, never a 500

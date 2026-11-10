@@ -21,6 +21,7 @@ idempotent: a session closed twice is closed once.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Literal
@@ -45,6 +46,7 @@ from ..db.models import (
     ModelCatalogueRow,
     Organization,
     Project,
+    User,
 )
 from ..db.session import (
     allow_release_during_calls,
@@ -65,6 +67,7 @@ from ..schemas.agent_sessions import (
 )
 from ..secret_store import get_secret_store
 from .events import persist_event
+from .identity_exchange import SERVICE, USER_EXCHANGE, Acting
 
 if TYPE_CHECKING:
     from choregos_adapters.base import GatewayAdapter
@@ -532,9 +535,11 @@ async def respond(
             raise _ModelRefused(answer.status_code, "the model answered something that is not a completion")
         return parsed
 
+    identities = {server.connector: server.identity for server in spec.mcp_servers if server.identity}
+
     async def call_tool(name: str, arguments: dict[str, Any]) -> str:
         made["tool_calls"] += 1
-        return await call_session_tool(session, record, project, tools[name], arguments)
+        return await call_session_tool(session, record, project, tools[name], arguments, identities)
 
     async def on_event(type_: str, payload: dict[str, Any]) -> None:
         await journal(session, record, type_, payload)
@@ -668,13 +673,14 @@ async def call_session_tool(
     project: Project,
     tool: BrokerTool,
     arguments: dict[str, Any],
+    identities: Mapping[str, str] | None = None,
 ) -> str:
     """What a loop that gives its model text reads of `answer_session_tool` (a prompt session's tool
     message, a realtime session's `function_call_output`): the courtier's text between the same
     notices a hosted session's runner says (#1399) — the injection guard's flags first, the calls the
     cap leaves the session last — and, since neither channel has an error flag, a status of 400 or
     more said first (`choregos_core.tool_answer.render_text`)."""
-    return (await answer_session_tool(session, record, project, tool, arguments)).for_the_model()
+    return (await answer_session_tool(session, record, project, tool, arguments, identities)).for_the_model()
 
 
 async def answer_session_tool(
@@ -683,9 +689,12 @@ async def answer_session_tool(
     project: Project,
     tool: BrokerTool,
     arguments: dict[str, Any],
+    identities: Mapping[str, str] | None = None,
 ) -> SessionToolAnswer:
     """One read through the courtier, as a run's: the policy's cap, the schema, the connector's key
-    resolved here, the injection guard, a ledger line. What the model reads back is text: the text
+    resolved here (or, in `identities`, the person's exchanged token, ADR 0135: the mode the agent
+    version picks per connector, `service` for any it does not list), the injection guard, a ledger
+    line. What the model reads back is text: the text
     blocks and, when they do not serialize it, the `structuredContent` (S40-18c), guarded as read."""
     from choregos_core.policy import PolicyEngine
 
@@ -705,10 +714,11 @@ async def answer_session_tool(
     # (`allow_release_during_calls`, #1376): the broker commits first. What follows is the call's
     # booking — the count, its line, its events with their notification —, one transaction after the
     # call, committed here in the scope the call left with; all of it is kept or none.
-    code, body = await call(session, tool, arguments, project=project)
+    acting = await _acting(session, record, tool, identities)
+    code, body = await call(session, tool, arguments, project=project, acting=acting)
     provider = f"mcp:{tool.connector.name}"
     try:
-        answer = await _book_the_tool_call(session, record, project, tool, engine, cap, code, body)
+        answer = await _book_the_tool_call(session, record, project, tool, engine, cap, code, body, acting)
         if release_allowed(session):
             await release_connection(session)
     except Exception as failure:
@@ -728,7 +738,24 @@ async def answer_session_tool(
     return answer
 
 
-async def _book_the_tool_call(
+async def _acting(
+    session: AsyncSession, record: AgentSessionRecord, tool: BrokerTool, identities: Mapping[str, str] | None
+) -> Acting:
+    """Who this call is for: the person of the conversation when the agent version picks `user_exchange`
+    for the connector, the connector's own identity otherwise (ADR 0135)."""
+    if (identities or {}).get(tool.connector.name) != USER_EXCHANGE:
+        return Acting(SERVICE)
+    user = await session.get(User, record.user_id) if record.user_id else None
+    return Acting(
+        USER_EXCHANGE,
+        user_id=record.user_id or "",
+        subject=(user.oidc_sub if user is not None else None) or record.user_id or "",
+        org_id=record.org_id,
+        actor=f"assistant:{record.agent_slug}",
+    )
+
+
+async def _book_the_tool_call(  # noqa: PLR0913 - one call, fact by fact
     session: AsyncSession,
     record: AgentSessionRecord,
     project: Project,
@@ -737,6 +764,7 @@ async def _book_the_tool_call(
     cap: int,
     code: int,
     body: Any,
+    acting: Acting | None = None,
 ) -> SessionToolAnswer:
     """What the model reads back from a session's tool call, guarded, and what changes its meaning;
     the call's count, line and events."""
@@ -788,6 +816,7 @@ async def _book_the_tool_call(
         tool=tool.name,
         provider=provider,
         status_code=code,
+        **(acting or Acting(SERVICE)).audit(tool.connector.name),
     )
     flagged = [s.to_dict() for s in found]
     return SessionToolAnswer(text, answered, _calls_left(cap, record), flagged)
