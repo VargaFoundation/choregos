@@ -505,6 +505,18 @@ async def respond(
         key = keys.get(secret_name(record.id), "")
     tools = await session_tools(session, spec, project)
     messages = list(record.messages or [])
+    from .conversation_knowledge import (
+        KNOWLEDGE_TOOLS,
+        installation_bases,
+        serve,
+        tools_for,
+        with_citation_rule,
+    )
+
+    # S63-05: an assistant's conversation reads the knowledge of its installation, and of no other.
+    knowledge = await installation_bases(session, record)
+    if knowledge:
+        with_citation_rule(messages)
     for text in inputs:
         messages.append({"role": "user", "content": text})
         await journal(session, record, "input.text", {"text": text[:2000]})
@@ -539,6 +551,8 @@ async def respond(
 
     async def call_tool(name: str, arguments: dict[str, Any]) -> str:
         made["tool_calls"] += 1
+        if knowledge and name in KNOWLEDGE_TOOLS:
+            return await serve(session, knowledge, name, arguments)
         return await call_session_tool(session, record, project, tools[name], arguments, identities)
 
     async def on_event(type_: str, payload: dict[str, Any]) -> None:
@@ -560,7 +574,8 @@ async def respond(
                 [
                     LoopTool(t.name, str(t.announcement().get("description") or ""), tool_parameters(t))
                     for t in tools.values()
-                ],
+                ]
+                + tools_for(knowledge),
                 complete,
                 call_tool,
                 on_event=on_event,
