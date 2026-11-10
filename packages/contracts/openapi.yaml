@@ -1147,6 +1147,70 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ReceivedEventPage" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{id}/machine-accounts:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get:
+      tags: [projects]
+      operationId: listMachineAccounts
+      summary: The project's machine accounts and their tokens (never a token's value)
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/MachineAccount" } } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [projects]
+      operationId: createMachineAccount
+      summary: Create an account an application calls the A2A door under (ADR 0131)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/MachineAccountCreate" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/MachineAccount" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /projects/{id}/machine-accounts/{slug}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    delete:
+      tags: [projects]
+      operationId: removeMachineAccount
+      summary: End a machine account; its tokens stop working at once
+      responses:
+        "204": { description: Removed }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /projects/{id}/machine-accounts/{slug}/tokens:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [projects]
+      operationId: createMachineToken
+      summary: Issue an `a2a` token for the account; its plaintext is returned only once
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/MachineTokenCreate" } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: "#/components/schemas/ApiTokenCreated" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /projects/{id}/machine-accounts/{slug}/tokens/{token_id}:
+    parameters:
+      - { $ref: "#/components/parameters/Id" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+      - { name: token_id, in: path, required: true, schema: { type: string } }
+    delete:
+      tags: [projects]
+      operationId: revokeMachineToken
+      summary: Revoke one of the account's tokens
+      responses:
+        "204": { description: Revoked }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /projects/{id}/triggers:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     get:
@@ -8060,6 +8124,30 @@ components:
         scopes: { type: array, items: { $ref: "#/components/schemas/TokenScope" } }
         project: { type: [string, "null"], description: "`org:slug` of the linked project, if there is one." }
         last_client: { type: [string, "null"], description: "The client of the last call (`User-Agent`, truncated)." }
+    MachineAccountCreate:
+      type: object
+      required: [slug]
+      properties:
+        slug: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" }
+        display_name: { type: [string, "null"], maxLength: 200 }
+        writes_per_day: { type: integer, minimum: 1, maximum: 10000, default: 500 }
+    MachineAccount:
+      type: object
+      required: [slug, display_name, address, writes_per_day, created_at, tokens]
+      properties:
+        slug: { type: string }
+        display_name: { type: string }
+        address: { type: string, description: "The account's reserved address: how the journal names it." }
+        writes_per_day: { type: integer }
+        created_by: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        tokens: { type: array, items: { $ref: "#/components/schemas/ApiToken" } }
+    MachineTokenCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 128 }
+        expires_in_days: { type: integer, minimum: 1, maximum: 365, default: 90 }
     BrowserSession:
       type: object
       required: [id, channel, created_at, expires_at, current]

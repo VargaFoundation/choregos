@@ -4104,6 +4104,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/workflows\/[^/]+$/, workflow],
     [/^\/projects\/[^/]+\/workflow-routing$/, workflowRouting],
     // HTTP triggers (S56-02): one declared trigger, its token minted once, a manual firing.
+    [/^\/projects\/[^/]+\/machine-accounts$/, []],
     [/^\/projects\/[^/]+\/triggers\/[^/]+\/token$/, mockTriggerToken],
     [/^\/projects\/[^/]+\/triggers\/[^/]+\/fire$/, mockTriggerAck],
     [/^\/projects\/[^/]+\/triggers$/, mockTriggers],

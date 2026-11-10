@@ -110,7 +110,8 @@ async def _principal_from_user(session: AsyncSession, user: User, *, narrow: boo
         user_id=user.id,
         email=user.email,
         display_name=user.display_name,
-        kind="user",
+        # A machine account (ADR 0131) is never a person: every gate that asks for one refuses it.
+        kind="machine" if user.is_service else "user",
         org_roles=org_roles,
         project_roles=project_roles,
         groups=[str(g) for g in (user.groups or [])],

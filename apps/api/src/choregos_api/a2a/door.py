@@ -548,8 +548,9 @@ async def _send(door: Door, params: dict[str, Any]) -> dict[str, Any]:
     if not principal.can(Permission.ITEM_CONTROL, door.org.slug, project.slug):
         raise Fault(INVALID_PARAMS, f"you cannot open work items in {door.org.slug}:{project.slug}")
     text, fields, files = _read_parts(message.get("parts"), skill)
-    if await writes_today(door.session, principal.user_id) >= WRITES_PER_DAY:
-        raise Fault(BUDGET_EXHAUSTED, f"budget_exhausted: {WRITES_PER_DAY} writes a day through MCP and A2A")
+    budget = door.caller.writes_per_day or WRITES_PER_DAY
+    if await writes_today(door.session, principal.user_id) >= budget:
+        raise Fault(BUDGET_EXHAUSTED, f"budget_exhausted: {budget} writes a day through MCP and A2A")
     title = metadata.get("title") if isinstance(metadata.get("title"), str) else ""
     title = (title or next((line for line in text.splitlines() if line.strip()), "") or skill.id).strip()[
         :200

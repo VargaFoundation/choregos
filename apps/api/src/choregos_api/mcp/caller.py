@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import Settings
-from ..db.models import ApiToken, Organization, Project, User
+from ..db.models import ApiToken, MachineAccount, Organization, Project, User
 from ..db.session import ALL_ORGS, limit_to_organisations
 from ..deps import _aware, _principal_from_user, record_usage
 from ..rbac import Principal
@@ -54,6 +54,8 @@ class Caller:
     agent_org_id: str | None
     #: The door's tools the agent's version allows (patterns); `None`: those of the person.
     reasons: tuple[str, ...] | None
+    #: A machine account's own daily budget (ADR 0131); `None`: a person's.
+    writes_per_day: int | None
 
     def __init__(  # noqa: PLR0913 - one parameter per field
         self,
@@ -66,6 +68,7 @@ class Caller:
         agent: str | None = None,
         agent_org_id: str | None = None,
         reasons: tuple[str, ...] | None = None,
+        writes_per_day: int | None = None,
     ) -> None:
         self.principal = principal
         self.token = token
@@ -76,6 +79,7 @@ class Caller:
         self.agent = agent
         self.agent_org_id = agent_org_id
         self.reasons = reasons
+        self.writes_per_day = writes_per_day
 
     @property
     def writes(self) -> bool:
@@ -112,6 +116,16 @@ async def identify(
     return caller
 
 
+async def _machine_budget(session: AsyncSession, user: User) -> int:
+    """The daily budget of a machine account; an account that has ended opens nothing."""
+    account = (
+        await session.execute(select(MachineAccount).where(MachineAccount.user_id == user.id))
+    ).scalar_one_or_none()
+    if account is None or account.removed_at is not None:
+        raise Refusal(401, "this machine account has ended", error="invalid_token")
+    return account.writes_per_day
+
+
 async def caller_of_token(
     session: AsyncSession, token: ApiToken, *, scopes: frozenset[str] = MCP_SCOPES, door: str = "MCP"
 ) -> Caller:
@@ -135,6 +149,8 @@ async def caller_of_token(
         raise Refusal(401, "orphaned token", error="invalid_token")
     principal = await _principal_from_user(session, user)
     caller = Caller(principal=principal, token=token, scopes=token_scopes, key=f"jeton:{token.id}")
+    if user.is_service:
+        caller.writes_per_day = await _machine_budget(session, user)
     await act_as_agent(session, caller, token_id=token.id)
     if token.project_id:
         project = await session.get(Project, token.project_id)
@@ -172,6 +188,8 @@ async def _by_oauth(
             "user unknown to Choregos: sign in to the console once",
             error="invalid_token",
         )
+    if user.is_service:
+        raise Refusal(403, "a machine account signs in with its own token", error="invalid_token")
     requested = set(str(claims.get("scope") or "").split()) & scopes
     if not requested and scopes != MCP_SCOPES:
         # Only the MCP door reads by default: opening an A2A task is asked for, never implied.
