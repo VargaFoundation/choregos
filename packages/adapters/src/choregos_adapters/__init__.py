@@ -91,6 +91,7 @@ __all__ = [
 # The process-wide fakes of CHOREGOS_FAKES=1, scripted by the tests and the demo. `None` until the
 # first build; the factories in `builtins.py` create them here, and a test rebinds them here.
 FAKE_MCP: Any = None  # the fake MCP server
+FAKE_IDP: Any = None  # the fake identity provider (ADR 0135), served under CHOREGOS_FAKES=1
 FAKE_MCP_GATEWAY: Any = None  # the fake MCP gateway, whose fallback is always the CURRENT `FAKE_MCP`
 FAKE_ENTRA: Any = None  # the fake Graph
 FAKE_MARKETDATA: Any = None  # the fake of the `marketdata` family

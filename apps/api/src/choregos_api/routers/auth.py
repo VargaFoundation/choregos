@@ -717,6 +717,7 @@ async def callback(
                 raise unauthorized(f"OIDC exchange refused: {token_response.text[:200]}")
             tokens = token_response.json()
             access_token = tokens["access_token"]
+            refresh_token = str(tokens.get("refresh_token") or "")
             claims = _id_token_claims(tokens.get("id_token"))
             if claims is not None:
                 _check_id_token_claims(claims, issuer=issuer, client_id=client_id, nonce=handshake.get("n"))
@@ -759,12 +760,35 @@ async def callback(
                 raise unauthorized("the identity provider gave a subject reserved for another sign-in")
             user = await _ensure_oidc_user(session, info, settings)
             await _map_groups_to_roles(session, user, list(info.get("groups", [])), settings)
+            await _seal_refresh_token(session, user, refresh_token)
 
     response = await ouvrir_la_session(
         session, user, target, settings, canal="oidc", auth_time=auth_time, request=request
     )
     response.delete_cookie(OIDC_COOKIE)
     return response
+
+
+async def _org_ids_of(session: Any, user_id: str) -> list[str]:
+    from sqlalchemy import select
+
+    from ..db.models import Membership
+
+    rows = await session.execute(select(Membership.org_id).where(Membership.user_id == user_id).distinct())
+    return [str(org_id) for (org_id,) in rows.all()]
+
+
+async def _seal_refresh_token(session: Any, user: User, refresh_token: str) -> None:
+    """The provider's refresh token of the person, sealed per person (ADR 0135 point 2): a conversation
+    draws a fresh access token from it to exchange. A failure here never fails the sign-in."""
+    if not refresh_token:
+        return
+    from ..services.identity_exchange import seal_refresh_token
+
+    try:
+        await seal_refresh_token(session, await _org_ids_of(session, user.id), user.id, refresh_token)
+    except Exception as failure:  # the sign-in stands; the exchange will say `identity_unavailable`
+        logger.warning("refresh token not sealed", user=user.id, error=type(failure).__name__)
 
 
 async def ouvrir_la_session(
@@ -864,6 +888,9 @@ async def logout(request: Request, session: PlatformDb, settings: Config, respon
     payload = read_session(request.cookies.get(settings.session_cookie, ""), settings)
     if payload and isinstance(payload.get("sid"), str) and isinstance(payload.get("sub"), str):
         await end_session(session, payload["sub"], payload["sid"])
+        from ..services.identity_exchange import forget_refresh_token
+
+        await forget_refresh_token(session, await _org_ids_of(session, payload["sub"]), payload["sub"])
     response.delete_cookie(settings.session_cookie)
     response.status_code = status.HTTP_204_NO_CONTENT
     return response

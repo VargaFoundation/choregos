@@ -636,22 +636,36 @@ async def server_endpoint(session: AsyncSession, instance: OrgConnector) -> tupl
     return url, str(resolved[SERVER_TOKEN_FIELD])
 
 
-async def plugin_client(session: AsyncSession, instance: OrgConnector) -> PluginServerClient | None:
-    """The client of a plugin's server, with its bearer token; `None` for any other connector."""
+async def plugin_client(
+    session: AsyncSession, instance: OrgConnector, *, bearer: str | None = None
+) -> PluginServerClient | None:
+    """The client of a plugin's server, with its bearer token; `None` for any other connector.
+
+    `bearer`: the person's exchanged token for one call (ADR 0135), which replaces the server's own."""
+    if bearer is not None and instance.plugin_server is not None:
+        url = str(
+            instance.plugin_server["fake_url"] if bound_fake(instance) else instance.plugin_server["url"]
+        )
+        return PluginServerClient(url, token=bearer, transport=transport())
     endpoint = await server_endpoint(session, instance)
     if endpoint is None:
         return None
     return PluginServerClient(endpoint[0], token=endpoint[1], transport=transport())
 
 
-async def connector_client(session: AsyncSession, instance: OrgConnector) -> Any:
+async def connector_client(
+    session: AsyncSession, instance: OrgConnector, *, bearer: str | None = None
+) -> Any:
     """The client the platform calls an organisation connector with: a plugin's server through its
     Service and bearer token; any other through its type's adapter, its secrets resolved here.
 
     A connector the live eval matrix declared on a fake's scene (`fake_scene`, S57-11a) is served by
     that scene, built anew, when the deployment serves eval fakes (`CHOREGOS_EVAL_FAKE_SCENES`); the API
-    refuses the field on every declaration and edit, so no other connector carries it."""
-    client = await plugin_client(session, instance)
+    refuses the field on every declaration and edit, so no other connector carries it.
+
+    `bearer` (ADR 0135): the person's exchanged token, for this call only. It is the connector's bearer in
+    place of its own token, which is not even resolved."""
+    client = await plugin_client(session, instance, bearer=bearer)
     if client is not None:
         return client
     from choregos_adapters import build
@@ -662,9 +676,14 @@ async def connector_client(session: AsyncSession, instance: OrgConnector) -> Any
 
     from .platform_network import with_identity
 
+    refs = instance.secret_refs
+    if bearer is not None:
+        refs = {name: ref for name, ref in (refs or {}).items() if name != "token"}
     config = await resolved_configuration(
-        session, instance.org_id, instance.kind, instance.type, instance.config, instance.secret_refs
+        session, instance.org_id, instance.kind, instance.type, instance.config, refs
     )
+    if bearer is not None:
+        config = {**config, "token": bearer, "auth_scheme": "bearer", "auth_header": "Authorization"}
     return build(instance.kind, instance.type, await with_identity(session, instance.org_id, config))
 
 

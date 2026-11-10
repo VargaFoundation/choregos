@@ -72,6 +72,11 @@ class Settings(BaseSettings):
     oidc_client_id: str = "choregos"
     oidc_client_secret: str = ""
     oidc_scopes: str = "openid profile email groups"
+    #: The platform's token-exchange client (RFC 8693, ADR 0135): the client that swaps a person's token
+    #: for a source's audience. Empty: the console's own client and token endpoint.
+    token_exchange_client_id: str = ""
+    token_exchange_client_secret: str = ""
+    token_exchange_endpoint: str = ""
     #: For an IdP that publishes no discovery document; set all three or none (ADR 0100).
     oidc_authorization_endpoint: str = ""
     oidc_token_endpoint: str = ""

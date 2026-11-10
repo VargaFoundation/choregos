@@ -104,6 +104,17 @@ class AgentMcpServer(Dto):
     #: The tools the agent may call: names, or `prefix_*` patterns — or, to bind the call's arguments,
     #: `{name, arguments}` (S60-06, ADR 0128).
     tools: list[str | AgentToolGrant] = Field(default_factory=list)
+    #: The identity a conversation calls this connector under (ADR 0107 point 1, ADR 0135): one of the
+    #: modes the connector declares. `None` is `service`, the connector's own credential — and leaves
+    #: the entry out of the version's digest, so versions published before the field keep theirs.
+    identity: Literal["service", "user_exchange"] | None = None
+
+    @model_serializer(mode="wrap")
+    def _leave_out_absent_identity(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
+        data: dict[str, object] = handler(self)
+        if data.get("identity") is None:
+            data.pop("identity", None)
+        return data
 
 
 class AgentKnowledgeRef(Dto):
