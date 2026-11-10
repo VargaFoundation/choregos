@@ -41,6 +41,7 @@ from .routers import (
     agents,
     assistant_conversations,
     assistant_memory,
+    assistant_tasks,
     assistants,
     auth,
     budget_alerts,
@@ -88,6 +89,7 @@ from .routers import (
 )
 from .security import check_session_secret
 from .services.action_relay import relay_loop
+from .services.assistant_tasks import task_loop
 from .services.plugin_defaults import check_configuration, reconcile_in_background
 from .services.plugin_supply import warm_shipping
 from .services.skill_scanner import mirror_loop
@@ -125,6 +127,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     action_relay = asyncio.create_task(relay_loop())
     # A2A push notifications (ADR 0078 §5): read from the persisted events, at least once.
     a2a_push = asyncio.create_task(push_loop())
+    # Assistant tasks (ADR 0137): each subscriber's schedules and polls, then the delivery of their outputs.
+    assistant_task_loop = asyncio.create_task(task_loop())
     # The deployment's default plugins in every organisation (ADR 0093 §5), once the schema and the
     # bootstrap organisation exist. In the background: a slow source never holds the readiness probe.
     plugin_defaults = asyncio.create_task(reconcile_in_background(settings))
@@ -137,7 +141,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await conversions.stop()
     if relay is not None:
         await relay.stop()
-    for task in (metrics_refresh, action_relay, a2a_push, plugin_defaults, osv_mirror, shipping_warmup):
+    for task in (
+        metrics_refresh,
+        action_relay,
+        a2a_push,
+        assistant_task_loop,
+        plugin_defaults,
+        osv_mirror,
+        shipping_warmup,
+    ):
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task
@@ -393,6 +405,7 @@ def create_app() -> FastAPI:
         agent_sessions.router,
         conversations.router,
         assistant_conversations.router,
+        assistant_tasks.router,
         agent_realtime.router,
         agent_session_pods.router,
         skills.router,

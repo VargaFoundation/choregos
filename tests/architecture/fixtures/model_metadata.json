@@ -11273,5 +11273,179 @@
     ]
    ]
   ]
+ },
+ "task_subscriptions": {
+  "columns": [
+   {
+    "name": "org_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "installation_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "user_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "task",
+    "type": "String(length=63)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "trigger",
+    "type": "Json()",
+    "nullable": false,
+    "default": "<function dict>",
+    "server_default": null
+   },
+   {
+    "name": "delegation_id",
+    "type": "String(length=36)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "enabled",
+    "type": "Boolean()",
+    "nullable": false,
+    "default": "True",
+    "server_default": "<sqlalchemy.sql.elements.True_ object>"
+   },
+   {
+    "name": "last_run_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "last_window",
+    "type": "String(length=32)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "seen_keys",
+    "type": "Json()",
+    "nullable": false,
+    "default": "<function list>",
+    "server_default": null
+   },
+   {
+    "name": "last_refusal",
+    "type": "Text()",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": "<function uuid7>",
+    "server_default": null
+   },
+   {
+    "name": "created_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   },
+   {
+    "name": "updated_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   }
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "foreign_keys": [
+   [
+    [
+     "installation_id"
+    ],
+    [
+     "assistant_installations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_task_subscriptions_installation_id_assistant_installations"
+   ],
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_task_subscriptions_org_id_organizations"
+   ],
+   [
+    [
+     "user_id"
+    ],
+    [
+     "users.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_task_subscriptions_user_id_users"
+   ]
+  ],
+  "uniques": [
+   [
+    "uq_task_subscriptions",
+    [
+     "installation_id",
+     "user_id",
+     "task"
+    ]
+   ]
+  ],
+  "checks": [],
+  "indexes": [
+   [
+    "ix_task_subscriptions_installation_id",
+    [
+     "task_subscriptions.installation_id"
+    ],
+    false
+   ],
+   [
+    "ix_task_subscriptions_org_id",
+    [
+     "task_subscriptions.org_id"
+    ],
+    false
+   ],
+   [
+    "ix_task_subscriptions_user_id",
+    [
+     "task_subscriptions.user_id"
+    ],
+    false
+   ]
+  ]
  }
 }

@@ -903,6 +903,16 @@ async def plugin_assistant(
     return None
 
 
+async def plugin_text(session: AsyncSession, org_id: str, plugin: str, ref: str) -> str | None:
+    """The text of a file the installed plugin ships (a task's workflow, ADR 0137); `None` when the plugin
+    is not installed or ships no such file."""
+    row = await _row(session, org_id, plugin)
+    if row is None:
+        return None
+    path = inside(await _materialise(session, row), ref)
+    return path.read_text(encoding="utf-8") if path.is_file() else None
+
+
 async def plugin_template(session: AsyncSession, org_id: str | None, ref: str) -> tuple[dict[str, Any], Path]:
     """`plugin:<plugin>/<template>`: the manifest and the directory of a template an installed plugin
     brought, with its files."""
@@ -971,6 +981,7 @@ __all__ = [
     "plugin_assistant",
     "plugin_procedures",
     "plugin_template",
+    "plugin_text",
     "provenance",
     "to_dto",
     "uninstall",

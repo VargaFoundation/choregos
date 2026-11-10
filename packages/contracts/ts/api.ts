@@ -3950,6 +3950,55 @@ export type MyAssistantList = {
   items: Array<MyAssistant>;
 };
 
+export type TaskSubscriptionPut = {
+  kind?: "on_demand" | "schedule" | "poll";
+  cron?: string | null;
+  /** An IANA time zone, e.g. Europe/Paris. */
+  timezone?: string | null;
+  enabled?: boolean;
+};
+
+export type TaskTrigger = {
+  kind: "on_demand" | "schedule" | "poll";
+  cron?: string | null;
+  timezone?: string;
+};
+
+export type TaskSubscription = {
+  task: string;
+  trigger: TaskTrigger;
+  delegation: "none" | "read_only";
+  deliver: Array<string>;
+  enabled: boolean;
+  delegation_id?: string | null;
+  last_run_at?: string | null;
+  last_refusal?: string | null;
+  created_at: string;
+};
+
+export type TaskRun = {
+  work_item_id: string;
+  key: string;
+  project: string;
+};
+
+export type InboxItem = {
+  id: string;
+  task: string;
+  installation: string;
+  work_item_id: string;
+  name: string;
+  version: number;
+  type: string;
+  media_type: string;
+  content?: unknown;
+  created_at: string;
+};
+
+export type InboxList = {
+  items: Array<InboxItem>;
+};
+
 export type AssistantConversationOpen = {
   /** Validated against `surfaces.embed.context_schema`; data for the agent, never a subject. */
   context?: {
@@ -4968,6 +5017,7 @@ export interface Operations {
   deleteMyAssistantMemory: { method: "DELETE"; path: "/me/assistants/{org}/{slug}/memory/{space}"; body: never; response: void };
   deleteMyAssistantSubjectMemory: { method: "DELETE"; path: "/me/assistants/{org}/{slug}/memory/{space}/{subject}"; body: never; response: void };
   deleteMyConversation: { method: "DELETE"; path: "/me/conversations/{conversation_id}"; body: never; response: void };
+  deleteMyTaskSubscription: { method: "DELETE"; path: "/me/assistants/{org}/{slug}/tasks/{task}"; body: never; response: void };
   deleteOrgConnector: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}"; body: never; response: void };
   deleteOutboundProxy: { method: "DELETE"; path: "/orgs/{org}/outbound-proxy"; body: never; response: void };
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
@@ -5039,6 +5089,7 @@ export interface Operations {
   getMyAssistantMemory: { method: "GET"; path: "/me/assistants/{org}/{slug}/memory/{space}"; body: never; response: MemorySpace };
   getMyAssistantSubjectMemory: { method: "GET"; path: "/me/assistants/{org}/{slug}/memory/{space}/{subject}"; body: never; response: MemorySpace };
   getMyConversation: { method: "GET"; path: "/me/conversations/{conversation_id}"; body: never; response: Conversation };
+  getMyTaskSubscription: { method: "GET"; path: "/me/assistants/{org}/{slug}/tasks/{task}"; body: never; response: TaskSubscription };
   getNamedWorkflow: { method: "GET"; path: "/projects/{id}/workflows/{name}"; body: never; response: WorkflowDef };
   getNetworkActivity: { method: "GET"; path: "/orgs/{org}/network-activity"; body: never; response: NetworkActivity };
   getOrgConnector: { method: "GET"; path: "/orgs/{org}/connectors/{name}"; body: never; response: OrgConnector };
@@ -5216,6 +5267,7 @@ export interface Operations {
   listMemories: { method: "GET"; path: "/orgs/{org}/memories"; body: never; response: Array<MemoryStore> };
   listMyAssistants: { method: "GET"; path: "/me/assistants"; body: never; response: MyAssistantList };
   listMyConversations: { method: "GET"; path: "/me/conversations"; body: never; response: ConversationPage };
+  listMyInbox: { method: "GET"; path: "/me/inbox"; body: never; response: InboxList };
   listMySessions: { method: "GET"; path: "/me/sessions"; body: never; response: Array<BrowserSession> };
   listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: Array<ApiToken> };
   listOrgActions: { method: "GET"; path: "/orgs/{org}/actions"; body: never; response: Array<Action> };
@@ -5299,6 +5351,7 @@ export interface Operations {
   putKnowledgeGrants: { method: "PUT"; path: "/orgs/{org}/knowledge/{slug}/grants"; body: KnowledgeGrantsPut; response: KnowledgeGrants };
   putMcpGateway: { method: "PUT"; path: "/orgs/{org}/mcp-gateway"; body: McpGatewayPut; response: McpGatewayState };
   putModelCatalogueSettings: { method: "PUT"; path: "/orgs/{org}/models/settings"; body: ModelCatalogueSettings; response: ModelCatalogueSettings };
+  putMyTaskSubscription: { method: "PUT"; path: "/me/assistants/{org}/{slug}/tasks/{task}"; body: TaskSubscriptionPut; response: TaskSubscription };
   putNamedWorkflow: { method: "PUT"; path: "/projects/{id}/workflows/{name}"; body: WorkflowPut; response: WorkflowDef };
   putOutboundProxy: { method: "PUT"; path: "/orgs/{org}/outbound-proxy"; body: OutboundProxyPut; response: OutboundProxyState };
   putPolicy: { method: "PUT"; path: "/projects/{id}/policy"; body: PolicyPut; response: PolicyDef };
@@ -5334,6 +5387,7 @@ export interface Operations {
   rotateMcpGatewayAssertionKey: { method: "POST"; path: "/orgs/{org}/mcp-gateway/assertion-key"; body: never; response: McpGatewayAssertion };
   rotateTriggerToken: { method: "POST"; path: "/projects/{id}/triggers/{name}/token"; body: never; response: TriggerToken };
   runKnowledgeEval: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/eval/run"; body: never; response: KnowledgeBase };
+  runMyTask: { method: "POST"; path: "/me/assistants/{org}/{slug}/tasks/{task}/run"; body: never; response: TaskRun };
   searchGlobalMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}/search"; body: never; response: Array<Memory> };
   searchKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
   searchMemory: { method: "GET"; path: "/projects/{id}/memory/search"; body: never; response: Array<Memory> };
