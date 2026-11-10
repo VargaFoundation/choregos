@@ -25,6 +25,7 @@
  "CheckConstraint",
  "Connector",
  "ConnectorOperation",
+ "ConversationAction",
  "ConversationFeedback",
  "CostLedger",
  "DateTime",

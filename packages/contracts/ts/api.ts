@@ -3848,10 +3848,35 @@ export type AssistantUpdate = {
   };
 };
 
+export type ConversationActionList = {
+  items: Array<ConversationAction>;
+};
+
+export type ConversationAction = {
+  id: string;
+  conversation_id: string;
+  need: string;
+  operation: string;
+  arguments: {
+    [key: string]: unknown;
+  };
+  summary: string;
+  status: "proposed" | "confirmed" | "executed" | "refused" | "expired";
+  result?: {
+    [key: string]: unknown;
+  } | null;
+  confirmed_by?: string | null;
+  confirmed_at?: string | null;
+  executed_at?: string | null;
+  created_at: string;
+};
+
 export type AssistantBind = {
   /** The name of an organisation connector. */
   connector: string;
   enabled?: boolean;
+  /** A write's approval, raised above the manifest's (inline to console), never below it: 422. */
+  approval?: "inline" | "console" | null;
 };
 
 export type AssistantBinding = {
@@ -5032,6 +5057,7 @@ export interface Operations {
   clearConnectorSecret: { method: "DELETE"; path: "/projects/{id}/connectors/{kind}/secrets/{field}"; body: never; response: Connector };
   clearOrgConnectorSecret: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}/secrets/{field}"; body: never; response: OrgConnector };
   closeAgentSession: { method: "DELETE"; path: "/orgs/{org}/agent-sessions/{session_id}"; body: never; response: void };
+  confirmMyConversationAction: { method: "POST"; path: "/me/conversations/{conversation_id}/actions/{action_id}/confirm"; body: never; response: ConversationAction };
   connectCatalogueClient: { method: "POST"; path: "/orgs/{org}/agent-catalogue/{slug}/connect"; body: AgentCatalogueConnect; response: AgentCatalogueConnection };
   convertKnowledgeDocument: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}/convert"; body: never; response: KnowledgeDocument };
   createAgent: { method: "POST"; path: "/orgs/{org}/agents"; body: AgentCreate; response: Agent };
@@ -5318,6 +5344,7 @@ export interface Operations {
   listMembers: { method: "GET"; path: "/orgs/{org}/members"; body: never; response: Array<Membership> };
   listMemories: { method: "GET"; path: "/orgs/{org}/memories"; body: never; response: Array<MemoryStore> };
   listMyAssistants: { method: "GET"; path: "/me/assistants"; body: never; response: MyAssistantList };
+  listMyConversationActions: { method: "GET"; path: "/me/conversations/{conversation_id}/actions"; body: never; response: ConversationActionList };
   listMyConversations: { method: "GET"; path: "/me/conversations"; body: never; response: ConversationPage };
   listMySessions: { method: "GET"; path: "/me/sessions"; body: never; response: Array<BrowserSession> };
   listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: Array<ApiToken> };
@@ -5413,6 +5440,7 @@ export interface Operations {
   putWorkflowRouting: { method: "PUT"; path: "/projects/{id}/workflow-routing"; body: WorkflowRouting; response: WorkflowRouting };
   readyz: { method: "GET"; path: "/readyz"; body: never; response: void };
   refreshGitHubInstallations: { method: "POST"; path: "/orgs/{org}/github/refresh"; body: never; response: GitHubAppStatus };
+  refuseMyConversationAction: { method: "POST"; path: "/me/conversations/{conversation_id}/actions/{action_id}/refuse"; body: never; response: ConversationAction };
   refuseOrgEgressRequest: { method: "POST"; path: "/orgs/{org}/egress/requests/{rule_id}/refuse"; body: EgressDecision; response: EgressRule };
   reimportMemory: { method: "POST"; path: "/projects/{id}/memory/reimport"; body: {
   sources?: Array<string>;

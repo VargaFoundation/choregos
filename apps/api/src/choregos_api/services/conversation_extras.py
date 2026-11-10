@@ -21,19 +21,31 @@ class ConversationExtras:
     record: AgentSessionRecord
     knowledge: list[Any] = field(default_factory=list)
     memory: dict[str, LoopTool] = field(default_factory=dict)
+    #: The inline writes the conversation may PROPOSE (S63-10): name -> `conversation_actions.Proposable`.
+    actions: dict[str, Any] = field(default_factory=dict)
 
     @property
     def loop_tools(self) -> list[LoopTool]:
         from .conversation_knowledge import tools_for
 
-        return tools_for(self.knowledge) + list(self.memory.values())
+        return (
+            tools_for(self.knowledge)
+            + list(self.memory.values())
+            + [a.loop_tool() for a in self.actions.values()]
+        )
 
     def serves(self, name: str) -> bool:
         from .conversation_knowledge import KNOWLEDGE_TOOLS
 
-        return (bool(self.knowledge) and name in KNOWLEDGE_TOOLS) or name in self.memory
+        return (
+            (bool(self.knowledge) and name in KNOWLEDGE_TOOLS) or name in self.memory or name in self.actions
+        )
 
     async def call(self, session: AsyncSession, name: str, arguments: dict[str, Any]) -> str:
+        if name in self.actions:
+            from .conversation_actions import propose
+
+            return await propose(session, self.record, self.actions, name, arguments)
         if name in self.memory:
             from .assistant_memory import call_tool as call_memory_tool
 

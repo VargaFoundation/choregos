@@ -3,9 +3,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint, true
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint, true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..base import Base, Json, PkMixin, TimestampMixin
@@ -59,3 +60,32 @@ class AssistantToolBinding(Base, PkMixin, TimestampMixin):
     approval: Mapped[str | None] = mapped_column(String(16), nullable=True)
     #: False: an optional need the owners switched off.
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+
+
+class ConversationAction(Base, PkMixin, TimestampMixin):
+    """A write the assistant proposed in a conversation and the person has not yet decided (ADR 0139 point 5).
+
+    The call of an `inline` write need does not reach the source: it lands here as `proposed`, with the
+    arguments as the agent gave them and a readable `summary`. The conversation's owner confirms it (the
+    broker executes it with THEIR identity, `executed` with the `result`) or refuses it; one nobody decided
+    in a day is `expired`. `confirmed` without `executed_at` is a confirmation the source answered with an
+    error: the person may confirm again."""
+
+    __tablename__ = "conversation_actions"
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    conversation_id: Mapped[str] = mapped_column(
+        ForeignKey("agent_sessions.id", ondelete="CASCADE"), index=True
+    )
+    #: The conversation's owner: the only one who sees and decides it.
+    user_id: Mapped[str] = mapped_column(String(200), index=True)
+    need: Mapped[str] = mapped_column(String(63))
+    operation: Mapped[str] = mapped_column(String(128))
+    arguments: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
+    summary: Mapped[str] = mapped_column(Text)
+    #: `proposed`, `confirmed`, `executed`, `refused` or `expired`.
+    status: Mapped[str] = mapped_column(String(16), default="proposed")
+    result: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
+    confirmed_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
