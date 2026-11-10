@@ -94,7 +94,6 @@ NO_CLIENT_YET: dict[str, str] = {
     "/me/assistants/{org}/{slug}": "S63-18",
     "/orgs/{org}/assistants/{slug}/reads": "S63-18",
     "/orgs/{org}/assistants/{slug}/erasure": "S63-18",
-    "/me/assistants/{org}/{slug}/conversations": "S63-18",
     "/me/assistants/{org}/{slug}/tasks/{task}": "S63-18",
     "/me/assistants/{org}/{slug}/tasks/{task}/run": "S63-18",
     "/me/inbox": "S63-18",
@@ -107,14 +106,9 @@ NO_CLIENT_YET: dict[str, str] = {
     "/me/connected-accounts/callback": "S63-18",
     "/me/connected-accounts/{connector}/connect": "S63-18",
     "/me/connected-accounts/{connector}": "S63-18",
-    "/me/conversations/{conversation_id}": "S63-18",
-    "/me/conversations/{conversation_id}/messages": "S63-18",
     "/orgs/{org}/agent-sessions/{session_id}/feedback": "S63-18",
     "/orgs/{org}/agents/{slug}/feedback-candidates": "S63-18",
     "/me/conversations/{conversation_id}/cancel": "S63-18",
-    "/me/conversations/{conversation_id}/actions": "S63-18",
-    "/me/conversations/{conversation_id}/actions/{action_id}/confirm": "S63-18",
-    "/me/conversations/{conversation_id}/actions/{action_id}/refuse": "S63-18",
 }
 
 #: Paths the CLI calls and the console must not: an operator's command, not a screen.
