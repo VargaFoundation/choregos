@@ -22,8 +22,7 @@ from sqlalchemy import select
 from .agent_scopes_kit import as_user
 from .conftest import without_postgres
 from .kits.assistant_install import FIXTURE, ORG
-from .test_agent_sessions import Upstream, upstream  # noqa: F401
-from .test_assistant_memory import (
+from .kits.assistant_memory import (
     EXTRA,
     ISIN,
     SUBJECT,
@@ -34,6 +33,7 @@ from .test_assistant_memory import (
     _tool,
     markets,  # noqa: F401
 )
+from .test_agent_sessions import Upstream, upstream  # noqa: F401
 
 ME = "/api/v1/me/assistants/varga/investment-assistant"
 BY_SUBJECT = {"subject": SUBJECT}

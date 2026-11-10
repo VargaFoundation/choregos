@@ -25,6 +25,8 @@ from sqlalchemy import select
 
 from .conftest import login, without_postgres
 from .kits.assistant_install import _bind, _install, _member, _plugin, offline  # noqa: F401
+from .kits.assistant_rights import ME, OPEN, _as
+from .kits.user_exchange import SUBJECT, _calls, _person, _tool_events, source  # noqa: F401
 from .test_agent_sessions import (  # noqa: F401 - fixtures imported for their use here
     ORG,
     Upstream,
@@ -32,8 +34,6 @@ from .test_agent_sessions import (  # noqa: F401 - fixtures imported for their u
     _ask,
     upstream,
 )
-from .test_assistant_rights import ME, OPEN, _as
-from .test_user_exchange import SUBJECT, _calls, _person, _tool_events, source  # noqa: F401
 
 CLIENT_SECRET = "oauth-client-secret"
 PROVIDER_USER = "person-at-the-source"
@@ -352,8 +352,8 @@ async def test_a_need_bound_for_user_consent_calls_under_the_persons_connected_a
     import choregos_adapters
     from choregos_adapters.fakes.mcp import FakeMcpServer
 
-    from .test_assistant_genericity import AUDIENCE, _served
-    from .test_assistant_genericity import TOOLS as FEED
+    from .kits.assistant_genericity import AUDIENCE, _served
+    from .kits.assistant_genericity import TOOLS as FEED
 
     tools = [dict(t) for t in FEED] + [
         {

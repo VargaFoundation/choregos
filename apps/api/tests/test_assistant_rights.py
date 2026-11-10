@@ -14,11 +14,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
 from sqlalchemy import select
 
 from .agent_scopes_kit import as_user
-from .conftest import login
 from .kits.assistant_install import (
     MARKET,
     NEWS,
@@ -30,12 +29,15 @@ from .kits.assistant_install import (
     _plugin,
     offline,  # noqa: F401
 )
+from .kits.assistant_rights import (
+    ME,
+    OPEN,
+    _as,
+)
 from .test_agent_sessions import Upstream, upstream  # noqa: F401
 
 AUDIENCE = "investors"
 OWNERS = "investment-owners"
-ME = "/api/v1/me"
-OPEN = f"{ME}/assistants/varga/investment-assistant/conversations"
 
 
 async def _ready(client: AsyncClient, **extra: Any) -> None:
@@ -48,12 +50,6 @@ async def _ready(client: AsyncClient, **extra: Any) -> None:
     ready = await _bind(client, "market_data", "markets")
     assert ready.json()["status"] == "ready", ready.text
     await as_user(client, "admin@varga.dev")
-
-
-async def _as(app: Any, email: str) -> AsyncClient:
-    person = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
-    await login(person, email)
-    return person
 
 
 async def _groups(email: str, groups: list[str]) -> None:
