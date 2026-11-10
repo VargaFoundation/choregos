@@ -504,7 +504,10 @@ async def respond(
         keys = await get_secret_store().get_many(session, record.org_id, [secret_name(record.id)])
         key = keys.get(secret_name(record.id), "")
     tools = await session_tools(session, spec, project)
+    memory_tools = await _memory_tools(session, record)
     messages = list(record.messages or [])
+    if memory_tools and not any(m.get("role") == "user" for m in messages):
+        await _inject_memory(session, record, messages)
     for text in inputs:
         messages.append({"role": "user", "content": text})
         await journal(session, record, "input.text", {"text": text[:2000]})
@@ -539,6 +542,10 @@ async def respond(
 
     async def call_tool(name: str, arguments: dict[str, Any]) -> str:
         made["tool_calls"] += 1
+        if name in memory_tools:
+            from .assistant_memory import call_tool as call_memory_tool
+
+            return await call_memory_tool(session, record, name, arguments)
         return await call_session_tool(session, record, project, tools[name], arguments, identities)
 
     async def on_event(type_: str, payload: dict[str, Any]) -> None:
@@ -560,7 +567,8 @@ async def respond(
                 [
                     LoopTool(t.name, str(t.announcement().get("description") or ""), tool_parameters(t))
                     for t in tools.values()
-                ],
+                ]
+                + list(memory_tools.values()),
                 complete,
                 call_tool,
                 on_event=on_event,
@@ -581,6 +589,31 @@ async def respond(
             **made,
         )
         raise
+
+
+async def _memory_tools(session: AsyncSession, record: AgentSessionRecord) -> dict[str, LoopTool]:
+    """The memory tools of an assistant's conversation (S63-09): none outside a conversation of an
+    installation that declares memory, none where the personal space's policy turns memory off."""
+    from .assistant_memory import conversation_spaces, tool_definitions
+
+    spaces = await conversation_spaces(session, record)
+    if spaces is None:
+        return {}
+    return {
+        d["name"]: LoopTool(d["name"], d["description"], d["parameters"]) for d in tool_definitions(spaces)
+    }
+
+
+async def _inject_memory(
+    session: AsyncSession, record: AgentSessionRecord, messages: list[dict[str, Any]]
+) -> None:
+    """What is remembered, framed as data, after the system message at the start of a conversation."""
+    from .assistant_memory import injection_text
+
+    text = await injection_text(session, record)
+    if text:
+        at = 1 if messages and messages[0].get("role") == "system" else 0
+        messages.insert(at, {"role": "system", "content": text})
 
 
 async def _book_the_response(
@@ -819,6 +852,11 @@ async def _book_the_tool_call(  # noqa: PLR0913 - one call, fact by fact
         **(acting or Acting(SERVICE)).audit(tool.connector.name),
     )
     flagged = [s.to_dict() for s in found]
+    if answered < 400 and record.installation_id:
+        # The one place a conversation's tool results are booked: a resolver need's `subject` is recorded.
+        from .assistant_memory import note_resolved_subjects
+
+        await note_resolved_subjects(session, record, tool.connector.name, tool.operation.name, body)
     return SessionToolAnswer(text, answered, _calls_left(cap, record), flagged)
 
 

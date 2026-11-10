@@ -75,6 +75,7 @@ from .knowledge import (
     KnowledgeGrant,
     KnowledgeSource,
     MemoryFact,
+    MemoryProfile,
     MemoryStore,
 )
 from .plugins import OrgPlugin, OrgPluginApproval, OrgPluginFile
@@ -210,6 +211,7 @@ __all__ = [
     "Mapped",
     "Membership",
     "MemoryFact",
+    "MemoryProfile",
     "MemoryStore",
     "ModelCatalogueRow",
     "ModelProfileRow",
