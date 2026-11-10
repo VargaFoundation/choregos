@@ -266,6 +266,34 @@ the `kind: KnowledgeBase` shape, and its `corpus/`), each task workflow and each
 file, packed and digested like a template's. Conversing with an assistant comes with the other stories of
 stream S63 ([the plan](plan/PLAN-2026-11-10-assistants.md)).
 
+#### Tasks
+
+A task of an assistant ([ADR 0137](adr/0137-a-standing-read-only-delegation.md) points 1, 2 and 5, S63-13) is a
+workflow of the plugin run in the SUBSCRIBER's personal space: one work item per run (`tracker: internal`, the
+subscriber as initiator, `documents.task` naming the task and the installation), the workflow published in the
+space from the plugin's file when it is not there at that text. A person in the audience subscribes with
+`PUT /me/assistants/{org}/{slug}/tasks/{task}` (`kind` one of the task's triggers, `timezone` an IANA name,
+`cron` only for a schedule declared `user_timezone`), reads it with `GET`, leaves with `DELETE`, and starts it
+now with `POST …/run`. Nothing changes in the Temporal workflows: the scheduler is a job of the API
+(`assistant_tasks.task_loop`, each minute) that opens ordinary work items.
+
+- **`schedule`**: the cron is read in the subscriber's time zone (07:30 in Paris and in Bogota are two windows).
+  The window, the last fire minute within an hour of the clock, is claimed by one conditional update and keys
+  the work item, so a window runs once. A new subscription never runs a window that passed before it.
+- **`poll`**: on its window the declared read operation is called through the broker under the connector's own
+  identity; `when` is a map of JSON pointers (`*` for every item of an array) to a condition (`not_empty`,
+  `abs_gte`, `gte`, `lte`, `eq`). When `idempotency` runs through a `*` (`/events/*/id`) each item is an object,
+  `when` is tested on each, and one run starts per object not seen before; the keys seen are kept on the
+  subscription and in the work item's key.
+- **`on_demand`**: the caller's click, one work item each, no delegation (the session's identity).
+- **Delegation**: a task with `delegation: read_only` can be subscribed, but its scheduled and polled runs are
+  refused, the reason in `last_refusal`, until the standing delegation of S63-14. A run is also refused when
+  the subscriber leaves the audience or when the subscriber's month, then the installation's, is spent.
+- **Delivery**: the run's artifacts are listed by `GET /me/inbox` (always). `email` and `teams` go through a
+  notifier, `webhook` is an HMAC-signed POST (`X-Choregos-Signature: t=…,v1=…`, as the A2A push notifications)
+  to the installation's `policy_overrides.delivery.webhook.url`; each is sent once per artifact revision and a
+  channel nobody configured is recorded as `not_configured` in the work item.
+
 #### Knowledge in a conversation
 
 A conversation of an installation is offered `knowledge_search(base, query, top_k)` and
