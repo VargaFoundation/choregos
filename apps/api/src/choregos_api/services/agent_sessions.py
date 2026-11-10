@@ -86,6 +86,18 @@ DEFAULT_MAX_TURNS = 20
 KEY_PREFIX = "session:"
 
 SessionRuntime = Literal["prompt", "voice", "socket"]
+
+
+@dataclass(frozen=True, slots=True)
+class ConversationTerms:
+    """What makes a session a conversation (ADR 0134): it holds no key of its own, each turn mints one."""
+
+    max_usd: float
+    idle_close_minutes: int
+    context: dict[str, Any] | None = None
+    installation_id: str | None = None
+
+
 _DOORS: dict[str, str] = {"prompt": "/responses", "voice": "/realtime", "socket": "/realtime"}
 #: The runtimes each door serves: a hosted agent answers on `/responses` too, from its pod (S41-11),
 #: and on `/realtime` when its container serves `invocations_ws` (S41-21).
@@ -154,11 +166,13 @@ async def open_session(
     *,
     max_usd: float | None,
     runtime: SessionRuntime = "prompt",
+    conversation: ConversationTerms | None = None,
 ) -> AgentSessionRecord:
     """A new session of the agent in the project: its version, its model, its reservation, its key.
 
     `runtime` is the door it opens at: `prompt` on `/responses`, `voice` on `/realtime` (S41-10),
-    `socket` on `/realtime` for a hosted agent's own socket (S41-21)."""
+    `socket` on `/realtime` for a hosted agent's own socket (S41-21). With `conversation`, the session is a
+    durable conversation (S63-04): no reservation and no key here, each turn reserves and mints its own."""
     from .agents import AgentUnavailable, resolve_agent
 
     await sweep_expired(session, project.id)
@@ -168,6 +182,11 @@ async def open_session(
         raise conflict(str(refusal)) from refusal
     spec = resolved.spec
     kind = spec.runtime.kind if spec.runtime is not None else None
+    if conversation is not None and kind != "prompt":
+        raise unprocessable(
+            f"`{agent_slug}` is not a prompt agent (runtime `{kind or 'none'}`): a conversation needs one",
+            [{"loc": ["agent", "runtime"], "msg": f"runtime `{kind or 'none'}` has no conversation"}],
+        )
     if kind not in _SERVED[runtime]:
         raise unprocessable(
             f"`{agent_slug}` is not a {runtime} agent (runtime `{kind or 'none'}`): "
@@ -215,56 +234,45 @@ async def open_session(
         cost_usd=0.0,
         expires_at=utcnow() + timedelta(seconds=ttl_s),
     )
+    if conversation is not None:
+        now = utcnow()
+        record.kind = "conversation"
+        record.installation_id = conversation.installation_id
+        record.context = conversation.context
+        record.resolved_subjects = []
+        record.agent_revision = resolved.version
+        record.turns = 0
+        record.max_usd = conversation.max_usd
+        record.idle_close_minutes = conversation.idle_close_minutes
+        record.last_activity_at = now
+        record.expires_at = now + timedelta(minutes=conversation.idle_close_minutes)
+        session.add(record)
+        await session.flush()
+        await journal(
+            session,
+            record,
+            "conversation.opened",
+            {"model": record.model, "agent_revision": resolved.version, "max_usd": conversation.max_usd},
+        )
+        return record
     session.add(record)
     await session.flush()
-    reservation = await _reserve(session, organisation.id, project, resolved.agent.slug, spec, max_usd)
+    reservation = await reserve_budget(session, organisation.id, project, resolved.agent.slug, spec, max_usd)
     from .budgets import DEFAULT_FLOOR_USD
 
     if reservation.below(DEFAULT_FLOOR_USD):
         raise ApiError(409, "Budget exhausted", f"the session does not open: {reservation.describe()}")
 
-    team_id = None
-    from choregos_core.policy import PolicyEngine
-
-    from .definitions import effective_policy
-
-    policy = await effective_policy(session, project.id)
-    if (daily := PolicyEngine(policy).daily_budget()) is not None:
-        team_id = await gateway.ensure_team(f"choregos-{project.id}", daily)
-    key_metadata: dict[str, Any] = {
-        "project": project.slug,
-        "agent": record.agent_slug,
-        "agent_version": record.agent_version,
-        "session_id": record.id,
-        "user": principal.user_id,
-    }
-    if policy.sandbox.llm_security_analyzer:
-        # The gateway's guard masks secrets for this key, as for a run's (ADR 0084).
-        from choregos_adapters.base import llm_guard_refusal
-        from choregos_core.llm_guardrail import GUARD_METADATA_KEY, GUARD_REDACT
-
-        if (unguarded := llm_guard_refusal(gateway)) is not None:
-            raise unprocessable(
-                unguarded, [{"loc": ["policy", "sandbox", "llm_security_analyzer"], "msg": unguarded}]
-            )
-        key_metadata[GUARD_METADATA_KEY] = GUARD_REDACT
-    key = await gateway.mint_key(
-        key_metadata,
+    key = await mint_key(
+        session,
+        gateway,
+        record,
+        project,
         budget_usd=reservation.usd,
         ttl_s=ttl_s,
-        models=[model.litellm_model],
-        team_id=team_id,
+        run_id=f"{KEY_PREFIX}{record.id}",
     )
     record.gateway_key_id = key.key_id
-    session.add(
-        GatewayKeyRow(
-            key_id=key.key_id,
-            run_id=f"{KEY_PREFIX}{record.id}",
-            project_id=project.id,
-            budget_usd=reservation.usd,
-            expires_at=key.expires_at,
-        )
-    )
     await get_secret_store().put(
         session, organisation.id, secret_name(record.id), str(key.key), principal.email
     )
@@ -282,6 +290,58 @@ async def open_session(
         reserved_usd=reservation.usd,
     )
     return record
+
+
+async def mint_key(
+    session: AsyncSession,
+    gateway: GatewayAdapter,
+    record: AgentSessionRecord,
+    project: Project,
+    *,
+    budget_usd: float,
+    ttl_s: int,
+    run_id: str,
+) -> Any:
+    """A gateway key for the session's model at `budget_usd`, with its `gateway_keys` row named `run_id`
+    (`session:<id>`, or `turn:<id>:<n>` for a conversation's turn): the project's team, the guard's mark."""
+    from choregos_core.policy import PolicyEngine
+
+    from .definitions import effective_policy
+
+    team_id = None
+    policy = await effective_policy(session, project.id)
+    if (daily := PolicyEngine(policy).daily_budget()) is not None:
+        team_id = await gateway.ensure_team(f"choregos-{project.id}", daily)
+    key_metadata: dict[str, Any] = {
+        "project": project.slug,
+        "agent": record.agent_slug,
+        "agent_version": record.agent_version,
+        "session_id": record.id,
+        "user": record.user_id,
+    }
+    if policy.sandbox.llm_security_analyzer:
+        # The gateway's guard masks secrets for this key, as for a run's (ADR 0084).
+        from choregos_adapters.base import llm_guard_refusal
+        from choregos_core.llm_guardrail import GUARD_METADATA_KEY, GUARD_REDACT
+
+        if (unguarded := llm_guard_refusal(gateway)) is not None:
+            raise unprocessable(
+                unguarded, [{"loc": ["policy", "sandbox", "llm_security_analyzer"], "msg": unguarded}]
+            )
+        key_metadata[GUARD_METADATA_KEY] = GUARD_REDACT
+    key = await gateway.mint_key(
+        key_metadata, budget_usd=budget_usd, ttl_s=ttl_s, models=[record.model], team_id=team_id
+    )
+    session.add(
+        GatewayKeyRow(
+            key_id=key.key_id,
+            run_id=run_id,
+            project_id=project.id,
+            budget_usd=budget_usd,
+            expires_at=key.expires_at,
+        )
+    )
+    return key
 
 
 async def _resolve_model(
@@ -333,7 +393,7 @@ async def _voice_terms(
     return {"prices": prices.as_payload(), "max_usd_per_minute": row.max_usd_per_minute if row else None}
 
 
-async def _reserve(
+async def reserve_budget(
     session: AsyncSession,
     org_id: str,
     project: Project,
@@ -396,7 +456,12 @@ async def _reserve(
 
 
 async def respond(
-    session: AsyncSession, record: AgentSessionRecord, project: Project, inputs: list[str]
+    session: AsyncSession,
+    record: AgentSessionRecord,
+    project: Project,
+    inputs: list[str],
+    *,
+    turn_key: str | None = None,
 ) -> AgentResponse:
     """One response of the session: the person's input, the agent's loop, what it said.
 
@@ -429,8 +494,12 @@ async def respond(
     # What the request wrote so far (the session it opened, its reservation, the input) need not wait
     # for the model's answer to be kept: the first call commits it, and releases the budget's lock.
     allow_release_during_calls(session)
-    keys = await get_secret_store().get_many(session, record.org_id, [secret_name(record.id)])
-    key = keys.get(secret_name(record.id), "")
+    if turn_key is not None:
+        # A conversation's turn: the key was minted for this turn alone, and is not in the secret store.
+        key = turn_key
+    else:
+        keys = await get_secret_store().get_many(session, record.org_id, [secret_name(record.id)])
+        key = keys.get(secret_name(record.id), "")
     tools = await session_tools(session, spec, project)
     messages = list(record.messages or [])
     for text in inputs:
@@ -539,8 +608,9 @@ async def _book_the_response(
         f"response.{status}",
         {"response_id": response_id, "text": text[:2000], **({"error": error.model_dump()} if error else {})},
     )
-    if error is not None and error.code == "budget_exceeded":
-        # The key is spent: nothing more can be said in this session.
+    if error is not None and error.code == "budget_exceeded" and record.kind != "conversation":
+        # The key is spent: nothing more can be said in this session. (A conversation's turn key ends with
+        # its turn; the next turn is reserved from what is left of the conversation's cap.)
         await close_session(session, record, reason="budget_exceeded")
     await release_connection(session)
     return AgentResponse(
@@ -836,6 +906,7 @@ async def sweep_expired(session: AsyncSession, project_id: str) -> int:
         await session.execute(
             select(AgentSessionRecord).where(
                 AgentSessionRecord.project_id == project_id,
+                AgentSessionRecord.kind == "session",
                 AgentSessionRecord.status == "open",
                 AgentSessionRecord.expires_at <= utcnow(),
             )
@@ -912,7 +983,9 @@ __all__ = [
     "call_session_tool",
     "close_session",
     "journal",
+    "mint_key",
     "open_session",
+    "reserve_budget",
     "respond",
     "secret_name",
     "session_dto",

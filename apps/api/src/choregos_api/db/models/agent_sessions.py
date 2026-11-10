@@ -32,7 +32,7 @@ class AgentSessionRecord(Base, PkMixin, TimestampMixin):
     agent_version: Mapped[int] = mapped_column(Integer)
     #: Who opened it: the only person who may talk in it, read it or close it.
     user_id: Mapped[str] = mapped_column(String(200), index=True)
-    #: `open`, `closed` (by its person or at its expiry) or `failed` (the budget, the model).
+    #: `open`, `idle` (a conversation, inactive), `closed` (by its person or at its expiry) or `failed`.
     status: Mapped[str] = mapped_column(String(16), default="open")
     model: Mapped[str] = mapped_column(String(200), default="")
     gateway_key_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -51,6 +51,29 @@ class AgentSessionRecord(Base, PkMixin, TimestampMixin):
     #: What a hosted session's runner reads at start (`GET /internal/agent-sessions/{id}/input`): no
     #: gateway key, no token — those reach the pod through its Secret only.
     stage_input: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
+    #: `session` (a key for the whole session, one hour: `/responses`) or `conversation` (a key per turn,
+    #: closed on inactivity and resumed on demand; ADR 0134 §2-4).
+    kind: Mapped[str] = mapped_column(String(16), default="session", server_default="session")
+    #: The installation an assistant's conversation belongs to. No foreign key until the installations
+    #: table (S63-02) and this one are both on the branch: the key is added then.
+    installation_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    #: Generated from the first exchange; null until then.
+    title: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    #: What the surface that opened the conversation told the agent: a hint, never a resolved subject.
+    context: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
+    #: The subjects a resolver tool attested in this conversation, indexed for erasure.
+    resolved_subjects: Mapped[list[dict[str, Any]]] = mapped_column(Json, default=list, server_default="[]")
+    last_activity_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: When the daily purge may delete it (set at each turn from the installation's policy; S63-16).
+    retention_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    #: The revision of the agent the conversation started with, which it keeps.
+    agent_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: Turns taken: the `n` of the next turn's key, `turn:<conversation>:<n>`.
+    turns: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    #: The conversation's own cap (`per_conversation` USD): its turns are reserved from what is left of it.
+    max_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
+    #: Minutes of inactivity after which it is `idle`; null is the default (240).
+    idle_close_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class AgentSessionEvent(Base, PkMixin):
