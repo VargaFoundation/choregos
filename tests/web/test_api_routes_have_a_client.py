@@ -41,6 +41,8 @@ MACHINE_ONLY_ROUTES: dict[str, str] = {
     "JSON-RPC; outside the contract",
     "/mcp/projects/{project}": "the MCP door narrowed to one project, for the same clients; outside the "
     "contract",
+    "/mcp/assistants/{assistant}": "one assistant installation as its own MCP connector (S63-11, "
+    "ADR 0139); outside the contract",
     "/.well-known/oauth-protected-resource": "the MCP door's protected-resource metadata, read by an MCP "
     "client before it asks for a token; outside the contract",
     "/a2a/orgs/{org}": "the A2A door (ADR 0078): another agent sends the organisation a task over "
