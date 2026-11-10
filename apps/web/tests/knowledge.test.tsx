@@ -97,7 +97,7 @@ describe("the knowledge page (S33-01)", () => {
       wrap(<KnowledgeBasePage params={Promise.resolve({ slug: "architecture" })} />);
     });
     const documents = await screen.findByTestId("knowledge-documents");
-    expect(documents).toHaveTextContent("ready");
+    expect(documents).toHaveTextContent("Ready");
     expect(documents).toHaveTextContent("the document holds no text");
     expect(screen.getAllByRole("button", { name: "Convert again" })).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "Network zoning principles" }));

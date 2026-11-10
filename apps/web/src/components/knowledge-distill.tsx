@@ -103,13 +103,13 @@ export function KnowledgeDistill({
 
   return (
     <>
-      <button type="button" className="ml-2 underline" disabled={busy} onClick={() => void ask([])}>
+      <button type="button" className={buttonClasses("secondary", "sm")} disabled={busy} onClick={() => void ask([])}>
         Distill
       </button>
       {status === "running" && (
         <button
           type="button"
-          className="ml-2 underline"
+          className={buttonClasses("danger", "sm")}
           disabled={busy}
           onClick={() => void act(() => api.stopKnowledgeDistillation(org, slug))}
         >
@@ -119,7 +119,7 @@ export function KnowledgeDistill({
       {status && status !== "running" && status !== "approved" && (
         <button
           type="button"
-          className="ml-2 underline"
+          className={buttonClasses("secondary", "sm")}
           disabled={busy}
           onClick={() => void act(() => api.relaunchKnowledgeDistillation(org, slug))}
         >

@@ -263,6 +263,7 @@ export type { Artifact } from "@choregos/contracts/schemas";
 export type {
   KnowledgeBase,
   KnowledgeBaseCreate,
+  KnowledgeBaseUser,
   KnowledgeDistillEstimate,
   KnowledgeDistillRequest,
   KnowledgeDistillRun,

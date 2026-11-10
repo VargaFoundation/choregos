@@ -2265,6 +2265,24 @@ export const knowledgeBase: KnowledgeBase = {
   can: { edit: true, distill: true, share: true, archive: true, widen: true },
   my_role: "owner",
   grants: [],
+  used_by: [{ agent: "onboarding-coordinator", display_name: "Onboarding coordinator", version: 2 }],
+  sources: [
+    {
+      id: "ks-1",
+      kind: "web",
+      name: "Public architecture guide",
+      connector: null,
+      config: { url: "https://example.com/architecture/", max_depth: 2, max_pages: 50 },
+      interval_minutes: 1440,
+      refresh_mode: "interval",
+      status: "idle",
+      last_synced_at: iso(42),
+      last_error: null,
+      last_summary: { added: 1, updated: 0, deleted: 0, unchanged: 0 },
+      document_count: 1,
+      next_sync_at: new Date(Date.now() + 22 * 3_600_000).toISOString(),
+    },
+  ],
   documents: [
     {
       id: "kd-1",

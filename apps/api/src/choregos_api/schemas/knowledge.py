@@ -119,6 +119,15 @@ class KnowledgeDocumentDto(Dto):
     source_url: str | None = None
 
 
+class KnowledgeBaseUser(Dto):
+    """An agent whose current revision reads the base: a run of it is served the base."""
+
+    agent: str
+    display_name: str
+    #: the revision that names the base: production (`stable_version`), else the latest
+    version: int
+
+
 class KnowledgeBaseDto(Dto):
     slug: str
     name: str
@@ -156,6 +165,9 @@ class KnowledgeBaseDto(Dto):
     my_role: GrantRole | None = None
     #: a reading of ONE base carries them, to a caller who may share it
     grants: list[KnowledgeGrantDto] | None = None
+    #: a reading of ONE base carries them: the agents the caller sees whose current revision names
+    #: the base in `spec.knowledge` — a run is served a base only through one of them
+    used_by: list[KnowledgeBaseUser] | None = None
 
 
 class KnowledgeEvalCase(Dto):

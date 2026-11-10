@@ -3,12 +3,16 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Badge, Card, ErrorNote, Input, Select, buttonClasses } from "@/components/ui";
+import { Lock } from "lucide-react";
+import { Badge, Card, ErrorNote, Input, Select, buttonClasses, type Tone } from "@/components/ui";
 import { api } from "@/lib/api";
-import { GRANT_ROLES, accessLabel, grantKey, grantName, grantsBody, permissionsOf, roleHint, scopeLabel } from "@/lib/knowledge";
+import { GRANT_ROLES, grantKey, grantName, grantsBody, permissionsOf, readersLabel, roleHint } from "@/lib/knowledge";
 import type { KnowledgeBase, KnowledgeGrant } from "@/lib/types";
 
 type Kind = KnowledgeGrant["subject_type"] | "email";
+
+/** A role's pill: reading is plain, feeding is informational blue, owning is the accent. */
+const ROLE_TONE: Record<KnowledgeGrant["role"], Tone> = { viewer: "neutral", editor: "info", owner: "accent" };
 
 /** The list a base's grants edit: copied from the server's, replaced as a whole on save. */
 function initial(base: KnowledgeBase): KnowledgeGrant[] {
@@ -70,28 +74,39 @@ export function KnowledgeAccess({ org, base, onChange }: { org: string; base: Kn
     }
   }
 
+  const readers = readersLabel(base);
   const memberRows = [...new Map((members.data ?? []).filter((m) => m.user_id).map((m) => [m.user_id, m])).values()];
   return (
     <Card title="Access">
       <div className="space-y-4 text-sm" data-testid="knowledge-access">
-        <p>
-          <span className="text-ink-muted">Served to runs:</span> {scopeLabel(base)}
-          {base.owner_project && (
-            <span className="text-ink-muted"> · owned by project {base.owner_project}, whose owners are owners of this base</span>
+        <div className="flex flex-wrap items-start gap-2" data-testid="knowledge-readable">
+          {readers.open ? (
+            <Badge tone="ok">Open</Badge>
+          ) : (
+            <Badge tone="warn" dot={false}>
+              <Lock aria-hidden className="size-3" strokeWidth={2} />
+              Restricted
+            </Badge>
           )}
-        </p>
-        <p data-testid="knowledge-readable">
-          <span className="text-ink-muted">Who reads it:</span> {accessLabel(base)}
+          <span className="min-w-0 flex-1">
+            <span className="text-ink-muted">Who reads it: </span>
+            {readers.text}
+          </span>
           {base.my_role && (
-            <Badge tone="neutral" className="ml-2">
+            <Badge tone="neutral" title={roleHint(base.my_role)}>
               you: {base.my_role}
             </Badge>
           )}
-        </p>
+        </div>
+        {base.owner_project && (
+          <p className="text-ink-muted">
+            This base is owned by project {base.owner_project}, whose owners are owners of this base.
+          </p>
+        )}
         {can.widen ? (
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={restricted} onChange={(event) => void saveRestricted(event.target.checked)} />
-            Restricted: people read it only through a grant
+            Restricted: only the people granted a role below read it, and a run is served it only for a work item one of them started
           </label>
         ) : (
           <p className="text-ink-muted">Only an organisation administrator, or an owner of the project that owns this base, changes who it is served to or restricts it.</p>
@@ -119,8 +134,9 @@ export function KnowledgeAccess({ org, base, onChange }: { org: string; base: Kn
                         <span className="text-xs text-ink-muted">{grant.subject_type}</span>
                         {grant.pending && <Badge tone="neutral" className="ml-2">waiting for sign-in</Badge>}
                       </td>
-                      <td>
+                      <td className="py-2">
                         <Select
+                          className="w-28"
                           aria-label={`Role of ${grantName(grant)}`}
                           value={grant.role}
                           title={roleHint(grant.role)}
@@ -136,11 +152,12 @@ export function KnowledgeAccess({ org, base, onChange }: { org: string; base: Kn
                             </option>
                           ))}
                         </Select>
+                        <span className="mt-0.5 block text-xs text-ink-muted">{roleHint(grant.role)}</span>
                       </td>
-                      <td className="text-right">
+                      <td className="py-2 text-right">
                         <button
                           type="button"
-                          className="text-xs underline"
+                          className={buttonClasses("danger", "sm")}
                           aria-label={`Remove ${grantName(grant)}`}
                           onClick={() => setDraft((list) => list.filter((g) => grantKey(g) !== grantKey(grant)))}
                         >
@@ -200,9 +217,17 @@ export function KnowledgeAccess({ org, base, onChange }: { org: string; base: Kn
                 Save access
               </button>
             </div>
+            <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted" data-testid="knowledge-role-legend">
+              {GRANT_ROLES.map((r) => (
+                <li key={r} className="inline-flex items-center gap-1.5">
+                  <Badge tone={ROLE_TONE[r]}>{r}</Badge>
+                  {roleHint(r)}
+                </li>
+              ))}
+            </ul>
             <p className="text-xs text-ink-muted">
-              viewer reads · editor feeds, syncs and distils · owner also shares and archives. A project grant covers that project&apos;s
-              own members, not everyone with an organisation role. An e-mail with no member yet waits for that person.
+              A project grant covers that project&apos;s own members, not everyone with an organisation role. An e-mail with no
+              member yet waits for that person.
             </p>
           </div>
         ) : (

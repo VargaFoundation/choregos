@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 /** What the knowledge pages say about a base and its documents (ADR 0051). */
 import { relative } from "./format";
-import type { KnowledgeBase, KnowledgeEvalCase, KnowledgeGrant, KnowledgePermissions, KnowledgeSource } from "./types";
+import type { KnowledgeBase, KnowledgeEvalCase, KnowledgeGrant, KnowledgePermissions, KnowledgeSource, OrgConnector } from "./types";
 
 /** Where a base is served, said in words: who reads it, which runs get it. */
 export function scopeLabel(base: Pick<KnowledgeBase, "scope" | "projects" | "groups">): string {
@@ -254,7 +254,7 @@ export function describeRefresh(draft: RefreshDraft): string {
   }
 }
 
-/** How a source refreshes, in words: `every 60 min`, `every weekday … at 06:00 (Europe/Paris)`, `cron …` or `manual`. */
+/** How a source refreshes, in words: `every hour`, `every weekday … at 06:00 (Europe/Paris)`, `cron …` or `manual`. */
 export function refreshLabel(
   source: Pick<KnowledgeSource, "refresh_mode" | "refresh_cron" | "refresh_timezone" | "interval_minutes">,
 ): string {
@@ -264,7 +264,16 @@ export function refreshLabel(
     const preset = presetOf(source.refresh_cron ?? "");
     return preset ? `${describeRefresh({ ...draftOf(), ...preset })} (${zone})` : `cron ${source.refresh_cron} (${zone})`;
   }
-  return `every ${source.interval_minutes} min`;
+  return intervalLabel(source.interval_minutes);
+}
+
+/** An interval in words: `every 15 minutes`, `every hour`, `every 6 hours`, `every day`, `every 2 days`. */
+export function intervalLabel(minutes: number | null | undefined): string {
+  const m = Number(minutes) || 60;
+  const day = 24 * 60;
+  if (m % day === 0) return m === day ? "every day" : `every ${m / day} days`;
+  if (m % 60 === 0) return m === 60 ? "every hour" : `every ${m / 60} hours`;
+  return `every ${m} minutes`;
 }
 
 /** When it syncs next (an estimate: the worker may be down): `next in 23 minutes`; manual → `—`. */
@@ -405,4 +414,183 @@ export function runLabel(run: Record<string, unknown>): string {
   const spent = Number(run.spent_usd ?? 0);
   const parts = Number(run.parts_total ?? 0) ? ` \u00b7 ${Number(run.parts_done ?? 0)}/${Number(run.parts_total)} parts` : "";
   return `${status}${why && status !== "pending_review" ? ` (${why})` : ""}${parts} \u00b7 $${spent.toFixed(2)}${run.requested_by ? ` \u00b7 by ${String(run.requested_by)}` : ""}`;
+}
+
+// ───────────────────────────── what the base's page says first ─────────────────────────────
+
+/** The tones the page speaks in: those of the console's `Badge` (`components/ui`). */
+export type HealthTone = "ok" | "running" | "danger" | "neutral" | "warn";
+
+/** Whether the base can be used now, in one state the page shows first, with its next action. */
+export type BaseHealth = {
+  state: "ready" | "converting" | "attention" | "empty" | "archived";
+  tone: HealthTone;
+  title: string;
+  detail: string;
+  /** Converting: the documents ready out of all of them, for a progress bar. */
+  progress?: { done: number; total: number };
+};
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/**
+ * One state for the whole base, worst first: archived, then something to fix (a failed document,
+ * a source whose sync failed), then work still running (a conversion, a sync), then empty, then
+ * ready. What is ready is served even while the rest converts or failed, and the sentence says so.
+ */
+export function baseHealth(
+  base: Pick<KnowledgeBase, "status" | "documents_by_status" | "sources" | "serving_mode">,
+): BaseHealth {
+  const counts = base.documents_by_status ?? {};
+  const ready = counts.ready ?? 0;
+  const failed = counts.failed ?? 0;
+  const busy = (counts.pending ?? 0) + (counts.converting ?? 0);
+  const total = Object.values(counts).reduce((sum, n) => sum + n, 0);
+  const sources = base.sources ?? [];
+  const broken = sources.filter((s) => s.status === "failed" || Boolean(s.last_error));
+  const syncing = sources.filter((s) => s.status === "syncing");
+  const served = ready
+    ? `The ${plural(ready, "ready document")} ${ready === 1 ? "is" : "are"} served to the runs of agents that name this base.`
+    : "Nothing is served yet: no document is ready.";
+  if (base.status !== "active") {
+    return {
+      state: "archived",
+      tone: "neutral",
+      title: "Archived",
+      detail: "No run is served this base any more; its documents stay readable here.",
+    };
+  }
+  if (failed || broken.length) {
+    const what = [
+      failed ? `${plural(failed, "document")} failed to convert` : "",
+      broken.length ? `${plural(broken.length, "source")} failed to sync (${broken.map((s) => s.name).join(", ")})` : "",
+    ].filter(Boolean);
+    return {
+      state: "attention",
+      tone: "danger",
+      title: "Needs attention",
+      detail: `${what.join(" · ")}. ${served} The reasons are shown below.`,
+    };
+  }
+  if (busy || syncing.length) {
+    const doing = busy
+      ? `Converting: ${ready} of ${total} documents ready`
+      : `Syncing ${syncing.map((s) => s.name).join(", ")}`;
+    return {
+      state: "converting",
+      tone: "running",
+      title: doing,
+      detail: `${served} This page follows the work until it ends.`,
+      ...(busy ? { progress: { done: ready, total } } : {}),
+    };
+  }
+  if (!total) {
+    return {
+      state: "empty",
+      tone: "neutral",
+      title: "Empty",
+      detail: "No document yet: upload files or add a source below. An agent that names this base is served nothing until then.",
+    };
+  }
+  const how = base.serving_mode === "index" ? "searched as an index" : "copied into each run as files";
+  return {
+    state: "ready",
+    tone: "ok",
+    title: "Ready",
+    detail: `${plural(ready, "document")} ready, ${how}, for the runs of agents that name this base.`,
+  };
+}
+
+/**
+ * Who reads the base, said precisely (`knowledge/access.py`, `_reaches`): the reach needs an
+ * organisation role, a project's members read a project base, a group base needs both the group and
+ * an organisation role; `restricted` withdraws the reach and leaves only the grants. An
+ * organisation administrator reads every base.
+ */
+export function readersLabel(base: Pick<KnowledgeBase, "restricted" | "scope" | "projects" | "groups">): {
+  open: boolean;
+  text: string;
+} {
+  if (base.restricted) {
+    return { open: false, text: "Only the people granted a role below, and the organisation's administrators." };
+  }
+  if (base.scope === "projects") {
+    return {
+      open: true,
+      text: `The members of ${(base.projects ?? []).length === 1 ? "project" : "projects"} ${(base.projects ?? []).join(", ")}, and everyone with a role in the organisation.`,
+    };
+  }
+  if (base.scope === "groups") {
+    return {
+      open: true,
+      text: `People in the identity-provider ${(base.groups ?? []).length === 1 ? "group" : "groups"} ${(base.groups ?? []).join(", ")} who also hold a role in the organisation.`,
+    };
+  }
+  return {
+    open: true,
+    text: "Everyone with a role in the organisation. People who only belong to projects do not read it, unless granted a role below.",
+  };
+}
+
+/** Which runs may be served the base: those of the projects its scope names, and never a group's. */
+export function servedRunsLabel(base: Pick<KnowledgeBase, "scope" | "projects" | "restricted">): string {
+  const who =
+    base.scope === "groups"
+      ? "No run: a group base is read by people only."
+      : base.scope === "projects"
+        ? `Runs of ${(base.projects ?? []).length === 1 ? "project" : "projects"} ${(base.projects ?? []).join(", ")}.`
+        : "Runs of every project of the organisation.";
+  return base.restricted && base.scope !== "groups" ? `${who} Restricted: only for a work item started by someone who reads it.` : who;
+}
+
+/** What a serving mode does, said as a choice and never as a limit. */
+export const SERVING_MODES: Record<"files" | "index", { label: string; text: string }> = {
+  files: {
+    label: "Files",
+    text: "The documents are copied into the run's workspace and the agent reads them whole. Suits a small corpus, below about 200k tokens: a larger one would crowd the agent's context.",
+  },
+  index: {
+    label: "Index",
+    text: "The documents are cut into passages and searched — full text plus embeddings (hybrid) where the deployment has them — and the agent cites the passages it used. No size ceiling: the right choice for a large corpus.",
+  },
+};
+
+/** The index in one line: `14 documents in 230 passages · hybrid search`. */
+export function indexLine(index: KnowledgeBase["index"]): string {
+  if (!index) return "Not indexed yet.";
+  const how =
+    index.mode === "hybrid" ? "hybrid search" : index.mode === "full-text" ? "full-text search only" : (index.mode ?? "search");
+  return `${plural(index.documents ?? 0, "document")} in ${plural(index.chunks ?? 0, "passage")} · ${how}`;
+}
+
+/** A document's status, said in words and in a tone. */
+export const DOCUMENT_STATUS: Record<string, { label: string; tone: HealthTone }> = {
+  ready: { label: "Ready", tone: "ok" },
+  pending: { label: "Waiting", tone: "running" },
+  converting: { label: "Converting", tone: "running" },
+  failed: { label: "Failed", tone: "danger" },
+};
+
+/** A source's state: up to date, syncing, failed, or never synced. */
+export function sourceState(source: Pick<KnowledgeSource, "status" | "last_error" | "last_synced_at">): {
+  label: string;
+  tone: HealthTone;
+} {
+  if (source.status === "syncing") return { label: "Syncing", tone: "running" };
+  if (source.status === "failed" || source.last_error) return { label: "Sync failed", tone: "danger" };
+  if (source.last_synced_at) return { label: "Up to date", tone: "ok" };
+  return { label: "Never synced", tone: "neutral" };
+}
+
+export type SourceKind = "sharepoint" | "confluence" | "web" | "git";
+/** The kinds that cannot sync without a `documents/<kind>` connector. */
+export const CONNECTED_KINDS: SourceKind[] = ["sharepoint", "confluence"];
+
+/**
+ * The kind the "add a source" form opens on: the first connected kind the organisation has a
+ * connector for, else a web site (which needs none). Never a kind that could not be saved.
+ */
+export function firstUsableKind(connectors: Pick<OrgConnector, "kind" | "type">[] | undefined): SourceKind {
+  const has = (type: SourceKind) => (connectors ?? []).some((c) => c.kind === "documents" && c.type === type);
+  return CONNECTED_KINDS.find(has) ?? "web";
 }
