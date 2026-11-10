@@ -4128,6 +4128,40 @@ export type InboxList = {
   items: Array<InboxItem>;
 };
 
+export type DelegationCreate = {
+  org: string;
+  assistant: string;
+  task: string;
+  /** Must equal the needs the task reads; else 409 with the list. */
+  agree_to?: Array<string>;
+  /** 90 by default; capped by the installation's `policy_overrides.delegation.max_days`. */
+  expires_in_days?: number | null;
+};
+
+export type DelegationNeed = {
+  need: string;
+  operations: Array<string>;
+  identity: "service" | "user_exchange" | "user_consent";
+};
+
+export type Delegation = {
+  id: string;
+  org: string;
+  assistant: string;
+  task: string;
+  needs: Array<DelegationNeed>;
+  granted_at: string;
+  expires_at: string;
+  revoked_at?: string | null;
+  status: "active" | "suspended" | "revoked" | "expired";
+  suspended_reason?: string | null;
+  manifest_digest: string;
+};
+
+export type DelegationList = {
+  items: Array<Delegation>;
+};
+
 export type AssistantConversationOpen = {
   /** Validated against `surfaces.embed.context_schema`; data for the agent, never a subject. */
   context?: {
@@ -5153,6 +5187,7 @@ export interface Operations {
   createKnowledgeSource: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sources"; body: KnowledgeSourceCreate; response: KnowledgeSource };
   createMachineAccount: { method: "POST"; path: "/projects/{id}/machine-accounts"; body: MachineAccountCreate; response: MachineAccount };
   createMachineToken: { method: "POST"; path: "/projects/{id}/machine-accounts/{slug}/tokens"; body: MachineTokenCreate; response: ApiTokenCreated };
+  createMyDelegation: { method: "POST"; path: "/me/delegations"; body: DelegationCreate; response: Delegation };
   createMyToken: { method: "POST"; path: "/me/tokens"; body: ApiTokenCreate; response: ApiTokenCreated };
   createOrg: { method: "POST"; path: "/orgs"; body: OrgCreate; response: Org };
   createOrgConnector: { method: "POST"; path: "/orgs/{org}/connectors"; body: OrgConnectorCreate; response: OrgConnector };
@@ -5435,6 +5470,7 @@ export interface Operations {
   listMyConnectedAccounts: { method: "GET"; path: "/me/connected-accounts"; body: never; response: ConnectedAccountList };
   listMyConversationActions: { method: "GET"; path: "/me/conversations/{conversation_id}/actions"; body: never; response: ConversationActionList };
   listMyConversations: { method: "GET"; path: "/me/conversations"; body: never; response: ConversationPage };
+  listMyDelegations: { method: "GET"; path: "/me/delegations"; body: never; response: DelegationList };
   listMyInbox: { method: "GET"; path: "/me/inbox"; body: never; response: InboxList };
   listMySessions: { method: "GET"; path: "/me/sessions"; body: never; response: Array<BrowserSession> };
   listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: Array<ApiToken> };
@@ -5549,6 +5585,7 @@ export interface Operations {
   restoreAgentVersion: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/restore"; body: AgentVersionRestore; response: AgentVersion };
   restoreWorkflowVersion: { method: "POST"; path: "/projects/{id}/workflows/{name}/versions/{version}/restore"; body: never; response: WorkflowDef };
   revokeMachineToken: { method: "DELETE"; path: "/projects/{id}/machine-accounts/{slug}/tokens/{token_id}"; body: never; response: void };
+  revokeMyDelegation: { method: "DELETE"; path: "/me/delegations/{delegation_id}"; body: never; response: void };
   revokeMyToken: { method: "DELETE"; path: "/me/tokens/{id}"; body: never; response: void };
   revokeOrgEgressRule: { method: "DELETE"; path: "/orgs/{org}/egress/rules/{rule_id}"; body: never; response: EgressRule };
   revokeRemoteCredential: { method: "DELETE"; path: "/orgs/{org}/remote-credentials/{name}"; body: never; response: void };

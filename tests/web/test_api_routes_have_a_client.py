@@ -98,6 +98,8 @@ NO_CLIENT_YET: dict[str, str] = {
     "/me/assistants/{org}/{slug}/tasks/{task}": "S63-18",
     "/me/assistants/{org}/{slug}/tasks/{task}/run": "S63-18",
     "/me/inbox": "S63-18",
+    "/me/delegations": "S63-18",
+    "/me/delegations/{delegation_id}": "S63-18",
     "/me/assistants/{org}/{slug}/memory/{space}": "S63-18",
     "/me/assistants/{org}/{slug}/memory/{space}/{subject}": "S63-18",
     "/me/conversations": "S63-18",

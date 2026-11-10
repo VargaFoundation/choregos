@@ -4387,6 +4387,187 @@
    ]
   ]
  },
+ "delegations": {
+  "columns": [
+   {
+    "name": "org_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "installation_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "user_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "task",
+    "type": "String(length=63)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "needs",
+    "type": "Json()",
+    "nullable": false,
+    "default": "<function list>",
+    "server_default": null
+   },
+   {
+    "name": "granted_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "expires_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "revoked_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "manifest_digest",
+    "type": "String(length=64)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "secret_ref",
+    "type": "String(length=300)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "status",
+    "type": "String(length=16)",
+    "nullable": false,
+    "default": "'active'",
+    "server_default": "'active'"
+   },
+   {
+    "name": "suspended_reason",
+    "type": "Text()",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": "<function uuid7>",
+    "server_default": null
+   },
+   {
+    "name": "created_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   },
+   {
+    "name": "updated_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   }
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "foreign_keys": [
+   [
+    [
+     "installation_id"
+    ],
+    [
+     "assistant_installations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_delegations_installation_id_assistant_installations"
+   ],
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_delegations_org_id_organizations"
+   ],
+   [
+    [
+     "user_id"
+    ],
+    [
+     "users.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_delegations_user_id_users"
+   ]
+  ],
+  "uniques": [],
+  "checks": [],
+  "indexes": [
+   [
+    "ix_delegations_installation_id",
+    [
+     "delegations.installation_id"
+    ],
+    false
+   ],
+   [
+    "ix_delegations_member_task",
+    [
+     "delegations.installation_id",
+     "delegations.user_id",
+     "delegations.task"
+    ],
+    false
+   ],
+   [
+    "ix_delegations_org_id",
+    [
+     "delegations.org_id"
+    ],
+    false
+   ],
+   [
+    "ix_delegations_user_id",
+    [
+     "delegations.user_id"
+    ],
+    false
+   ]
+  ]
+ },
  "deployments": {
   "checks": [],
   "columns": [

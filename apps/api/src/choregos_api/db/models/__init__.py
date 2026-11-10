@@ -96,7 +96,7 @@ from .runs import (
 )
 from .secrets import OrgSecret, RemoteCredential
 from .skills import Skill, SkillVersion
-from .tasks import TaskSubscription
+from .tasks import Delegation, TaskSubscription
 from .work_items import Event, Finding, HumanRequest, Run, RunEvent, WorkItem
 
 ALL_TABLES = [
@@ -109,6 +109,7 @@ ALL_TABLES = [
     AssistantRead,
     AssistantToolBinding,
     TaskSubscription,
+    Delegation,
     ConnectedAccount,
     Connector,
     WorkflowDef,
@@ -198,6 +199,7 @@ __all__ = [
     "CostLedger",
     "DateTime",
     "DecisionRecordRow",
+    "Delegation",
     "Deployment",
     "Event",
     "Finding",

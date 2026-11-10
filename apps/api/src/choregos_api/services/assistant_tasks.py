@@ -15,7 +15,10 @@ opens ordinary work items, the way a person's click does.
   (`idempotency` pointer): the keys seen are kept on the subscription and in the work item's key.
 - **on demand**: `run_now`, with the caller as initiator; no delegation is needed (the session's identity).
 - **delegation**: a task with `delegation: read_only` can be subscribed, but its scheduled and polled runs
-  are REFUSED with a reason until the standing delegation of S63-14 exists. Its on-demand run is not.
+  are REFUSED with a reason unless the subscription's standing delegation (S63-14,
+  `assistant_delegations`) is valid at the run's clock. A polled read under it is made as the person (the
+  need's identity, the delegation's offline token or connected account) and journaled with the
+  delegation's id. Its on-demand run needs none.
 - **budget**: a run is refused when the subscriber's month, then the installation's month, is spent.
 """
 
@@ -37,6 +40,7 @@ from ..db.models import (
     AssistantInstallation,
     AssistantToolBinding,
     ConnectorOperation,
+    Delegation,
     Organization,
     OrgConnector,
     User,
@@ -47,7 +51,7 @@ from ..errors import ApiError, conflict, not_found, unprocessable
 from ..rbac import SYSTEM, Permission, Principal
 from ..schemas import WorkItemCreate
 from ..schemas.tasks import TaskSubscriptionPut
-from . import assistants, plugin_installer
+from . import assistant_delegations, assistants, plugin_installer
 from .assistant_access import caps_of, holds, month_spend
 from .assistant_conversations import audience_installation
 from .broker import BrokerTool, call
@@ -67,8 +71,8 @@ MAX_SEEN = 2000
 INTERVAL_S = 60.0
 
 DELEGATION_REFUSAL = (
-    "this task reads on the subscriber's behalf under a standing delegation, which is not available yet "
-    "(S63-14): its scheduled runs are refused until then; run it on demand instead"
+    "this task reads on the subscriber's behalf and has no standing delegation: agree to it "
+    "(POST /me/delegations) for its scheduled runs, or run it on demand"
 )
 
 
@@ -270,6 +274,7 @@ async def start_run(  # noqa: PLR0913 - one run: who, what, why, keyword-only
     trigger: str,
     object_key: str | None = None,
     title_suffix: str = "",
+    delegation_id: str | None = None,
 ) -> tuple[WorkItem, bool]:
     """One work item of the task in the subscriber's personal space; `(item, created)`. The key makes the
     run idempotent: the same window or the same object finds the work item it opened."""
@@ -307,6 +312,7 @@ async def start_run(  # noqa: PLR0913 - one run: who, what, why, keyword-only
                     "task": task,
                     "trigger": trigger,
                     "object": object_key,
+                    "delegation_id": delegation_id,
                     "deliver": list(declared.get("deliver") or ["inbox"]),
                 },
             }
@@ -369,10 +375,19 @@ async def run_now(
 
 
 async def read_operation(
-    session: AsyncSession, row: AssistantInstallation, operation: str, arguments: dict[str, Any]
+    session: AsyncSession,
+    row: AssistantInstallation,
+    operation: str,
+    arguments: dict[str, Any],
+    *,
+    delegation: Delegation | None = None,
+    now: datetime | None = None,
 ) -> Any:
     """The structured result of a read operation `<need>__<operation>` the installation's need is bound to,
-    called through the broker under the connector's own identity (`service`)."""
+    called through the broker under the connector's own identity (`service`), or, under a standing
+    delegation (S63-14), as the person the need's identity says. A delegated read is judged first
+    (`assistant_delegations.guard_read`: a write is refused, `DelegationRefused`) and journaled with the
+    delegation's id."""
     need, _, name = operation.partition("__")
     binding = (
         await session.execute(
@@ -397,11 +412,22 @@ async def read_operation(
         if connector is not None
         else None
     )
-    if connector is None or op is None or op.access != "read":
+    if connector is None or op is None or binding is None:
+        raise ValueError(f"the need `{need}` is not bound to a connector that serves `{name}`")
+    acting = None
+    if delegation is not None:
+        acting = await assistant_delegations.guard_read(
+            session, delegation, row, need=need, access=op.access, binding=binding, now=now
+        )
+    elif op.access != "read":
         raise ValueError(f"the need `{need}` is not bound to a connector that serves the read `{name}`")
     status, result = await call(
-        session, BrokerTool(name=operation, connector=connector, operation=op), arguments
+        session, BrokerTool(name=operation, connector=connector, operation=op), arguments, acting=acting
     )
+    if delegation is not None and status == 200:
+        await assistant_delegations.journal(
+            session, delegation, need=need, operation=operation, result=result, now=now
+        )
     if status != 200:
         raise ValueError(f"`{operation}` answered {status}: {str(result.get('error') or result)[:200]}")
     structured = result.get("structuredContent")
@@ -416,7 +442,7 @@ async def read_operation(
     return None
 
 
-async def _poll(
+async def _poll(  # noqa: PLR0913 - one poll: who, what, when, under which delegation
     session: AsyncSession,
     sub: Subscription,
     organisation: Organization,
@@ -424,11 +450,21 @@ async def _poll(
     user: User,
     declared: dict[str, Any],
     window: datetime,
+    *,
+    delegation: Delegation | None = None,
+    now: datetime | None = None,
 ) -> list[str]:
     """Call the poll's operation, test `when`, start one run per object not seen; the keys started."""
     poll = trigger_declaration(declared, "poll") or {}
     try:
-        result = await read_operation(session, row, str(poll["operation"]), dict(poll.get("arguments") or {}))
+        result = await read_operation(
+            session,
+            row,
+            str(poll["operation"]),
+            dict(poll.get("arguments") or {}),
+            delegation=delegation,
+            now=now,
+        )
     except ValueError as failure:
         sub.last_refusal = str(failure)[:500]
         return []
@@ -448,6 +484,7 @@ async def _poll(
             declared=declared,
             key_suffix=suffix,
             trigger="poll",
+            delegation_id=delegation.id if delegation is not None else None,
             object_key=object_key,
             title_suffix=f" — {object_key}"[:120],
         )
@@ -493,6 +530,16 @@ async def _run_one(session: AsyncSession, sub: Subscription, now: datetime) -> s
     document = await assistants.manifest(session, row)
     declared = task_declaration(document, sub.task) if document is not None else None
     refusal: str | None = None
+    delegation: Delegation | None = None
+    delegation_refusal: str | None = None
+    if declared is not None and declared.get("delegation") == "read_only":
+        # Judged first, whatever else refuses the run: a delegation that does not hold is marked at once.
+        delegation = await session.get(Delegation, sub.delegation_id) if sub.delegation_id else None
+        delegation_refusal = (
+            DELEGATION_REFUSAL
+            if delegation is None
+            else await assistant_delegations.check(session, delegation, now=now)
+        )
     if document is None or declared is None:
         refusal = "the task is no longer declared by the assistant"
     elif row.status != assistants.READY:
@@ -509,10 +556,10 @@ async def _run_one(session: AsyncSession, sub: Subscription, now: datetime) -> s
         row,
     ):
         refusal = "the subscriber is no longer in the assistant's audience"
-    elif declared.get("delegation") == "read_only":
-        refusal = DELEGATION_REFUSAL
-    elif (budget := await _over_budget(session, row, document, user.id)) is not None:
-        refusal = budget
+    elif delegation_refusal is not None:
+        refusal = delegation_refusal
+    if refusal is None and document is not None and declared is not None:
+        refusal = await _over_budget(session, row, document, user.id)
     if refusal is not None or declared is None:
         if await _claim(session, sub, window):
             sub.last_refusal = refusal
@@ -521,7 +568,9 @@ async def _run_one(session: AsyncSession, sub: Subscription, now: datetime) -> s
     if not await _claim(session, sub, window):
         return None
     if kind == "poll":
-        started = await _poll(session, sub, organisation, row, user, declared, window)
+        started = await _poll(
+            session, sub, organisation, row, user, declared, window, delegation=delegation, now=now
+        )
         if started:
             sub.last_run_at = now
         return f"poll:{','.join(started)}" if started else None
@@ -534,6 +583,7 @@ async def _run_one(session: AsyncSession, sub: Subscription, now: datetime) -> s
         key_suffix=_stamp(window),
         trigger="schedule",
         title_suffix=f" — {window:%Y-%m-%d %H:%M} UTC",
+        delegation_id=delegation.id if delegation is not None else None,
     )
     sub.last_run_at = now
     sub.last_refusal = None

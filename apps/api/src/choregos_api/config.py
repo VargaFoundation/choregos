@@ -77,6 +77,9 @@ class Settings(BaseSettings):
     token_exchange_client_id: str = ""
     token_exchange_client_secret: str = ""
     token_exchange_endpoint: str = ""
+    #: RFC 7009 revocation endpoint of the provider, to kill a delegation's offline token (S63-14). Empty:
+    #: the fake's under CHOREGOS_FAKES, none otherwise (the sealed token is then only deleted here).
+    token_revocation_endpoint: str = ""
     #: For an IdP that publishes no discovery document; set all three or none (ADR 0100).
     oidc_authorization_endpoint: str = ""
     oidc_token_endpoint: str = ""
