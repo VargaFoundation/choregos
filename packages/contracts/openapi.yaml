@@ -2512,6 +2512,35 @@ paths:
       responses:
         "204": { description: Closed }
         "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/agent-sessions/{session_id}/feedback:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: session_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: giveAgentSessionFeedback
+      description: "A thumb up or down, with an optional comment, on one answer of the caller's own session (ADR 0140); it replaces their earlier thumb on that answer. A thumb down proposes a pseudonymised candidate eval case to the agent's owners; it is never added to a suite automatically."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ConversationFeedbackCreate" } } }
+      responses:
+        "200": { description: Recorded, content: { application/json: { schema: { $ref: "#/components/schemas/ConversationFeedback" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/agents/{slug}/feedback-candidates:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [agents]
+      operationId: listAgentFeedbackCandidates
+      description: "The candidate eval cases thumbs down proposed for the agent, newest first, for those who manage it (ADR 0140). Pseudonymised; no author, no raw comment."
+      parameters:
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        "200": { description: The proposed candidates, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ConversationCandidate" } } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/agents/{slug}/metrics:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -5876,6 +5905,38 @@ components:
         expires_at: { type: string, format: date-time }
         closed_at: { type: [string, "null"], format: date-time }
         events: { type: array, items: { $ref: "#/components/schemas/AgentSessionEvent" } }
+    ConversationFeedbackCreate:
+      type: object
+      description: "A thumb on one answer of a session (S63-17, ADR 0140)."
+      required: [rating]
+      properties:
+        rating: { type: string, enum: [up, down] }
+        comment: { type: [string, "null"], maxLength: 2000 }
+        response: { type: [integer, "null"], minimum: 1, description: "The answer, by its 1-based position among the session's responses; absent: the latest" }
+    ConversationFeedback:
+      type: object
+      required: [id, session_id, agent, agent_version, response, rating, created_at]
+      properties:
+        id: { type: string }
+        session_id: { type: string }
+        agent: { type: string }
+        agent_version: { type: integer, description: The agent revision that gave the answer }
+        response: { type: integer }
+        rating: { type: string, enum: [up, down] }
+        comment: { type: [string, "null"] }
+        candidate_status: { type: [string, "null"], description: "`proposed` when the thumb down proposed a candidate case to the agent's owners" }
+        created_at: { type: string, format: date-time }
+    ConversationCandidate:
+      type: object
+      description: "A candidate eval case a thumb down proposed, as the agent's owners read it: pseudonymised, with no author and no raw comment. It is in no suite until an owner adds it."
+      required: [id, agent, agent_version, status, candidate, created_at]
+      properties:
+        id: { type: string }
+        agent: { type: string }
+        agent_version: { type: integer }
+        status: { type: string, enum: [proposed] }
+        candidate: { type: object, additionalProperties: true, description: "`{case, observed, comment}`: a conversation-evals case without assertions, and what the agent did" }
+        created_at: { type: string, format: date-time }
     AgentSessionTurn:
       type: object
       description: "A response a hosted session's person asked for, waiting for the session's pod (S41-11)."

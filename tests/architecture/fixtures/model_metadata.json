@@ -2736,6 +2736,168 @@
    ]
   ]
  },
+ "conversation_feedback": {
+  "columns": [
+   {
+    "name": "org_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "session_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "user_id",
+    "type": "String(length=200)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "agent_slug",
+    "type": "String(length=64)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "agent_version",
+    "type": "Integer()",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "response_seq",
+    "type": "Integer()",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "rating",
+    "type": "String(length=8)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "comment",
+    "type": "Text()",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "candidate",
+    "type": "Json()",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "candidate_status",
+    "type": "String(length=16)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": "<function uuid7>",
+    "server_default": null
+   },
+   {
+    "name": "created_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   },
+   {
+    "name": "updated_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   }
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "foreign_keys": [
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_conversation_feedback_org_id_organizations"
+   ],
+   [
+    [
+     "session_id"
+    ],
+    [
+     "agent_sessions.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_conversation_feedback_session_id_agent_sessions"
+   ]
+  ],
+  "uniques": [
+   [
+    "uq_conversation_feedback_answer",
+    [
+     "session_id",
+     "response_seq"
+    ]
+   ]
+  ],
+  "checks": [],
+  "indexes": [
+   [
+    "ix_conversation_feedback_agent_slug",
+    [
+     "conversation_feedback.agent_slug"
+    ],
+    false
+   ],
+   [
+    "ix_conversation_feedback_org_id",
+    [
+     "conversation_feedback.org_id"
+    ],
+    false
+   ],
+   [
+    "ix_conversation_feedback_session_id",
+    [
+     "conversation_feedback.session_id"
+    ],
+    false
+   ],
+   [
+    "ix_conversation_feedback_user_id",
+    [
+     "conversation_feedback.user_id"
+    ],
+    false
+   ]
+  ]
+ },
  "cost_ledger": {
   "checks": [],
   "columns": [

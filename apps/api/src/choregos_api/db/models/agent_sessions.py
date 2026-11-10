@@ -12,6 +12,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -66,3 +67,29 @@ class AgentSessionEvent(Base, PkMixin):
     type: Mapped[str] = mapped_column(String(64))
     payload: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
     ts: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ConversationFeedback(Base, PkMixin, TimestampMixin):
+    """A thumb on one answer of a session, with an optional comment (S63-17, ADR 0140). The answer is the
+    session's `response_seq`-th response, kept with the agent revision that gave it. A thumb down also
+    holds a `candidate` eval case: pseudonymised, `proposed` to the owners, in no suite until one of them
+    adds it."""
+
+    __tablename__ = "conversation_feedback"
+    __table_args__ = (UniqueConstraint("session_id", "response_seq", name="uq_conversation_feedback_answer"),)
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    session_id: Mapped[str] = mapped_column(ForeignKey("agent_sessions.id", ondelete="CASCADE"), index=True)
+    #: The person who gave it: the session's opener.
+    user_id: Mapped[str] = mapped_column(String(200), index=True)
+    agent_slug: Mapped[str] = mapped_column(String(64), index=True)
+    agent_version: Mapped[int] = mapped_column(Integer)
+    #: 1-based position of the answer among the session's responses.
+    response_seq: Mapped[int] = mapped_column(Integer)
+    #: `up` or `down`.
+    rating: Mapped[str] = mapped_column(String(8))
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: The candidate case of a thumb down (a `conversation-evals` case without assertions), pseudonymised.
+    candidate: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
+    #: `proposed`, `accepted` or `dismissed` by an owner; null without a candidate.
+    candidate_status: Mapped[str | None] = mapped_column(String(16), nullable=True)

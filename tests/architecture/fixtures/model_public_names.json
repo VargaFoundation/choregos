@@ -22,6 +22,7 @@
  "CheckConstraint",
  "Connector",
  "ConnectorOperation",
+ "ConversationFeedback",
  "CostLedger",
  "DateTime",
  "DecisionRecordRow",
