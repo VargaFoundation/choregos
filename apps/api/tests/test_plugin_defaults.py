@@ -139,6 +139,8 @@ async def test_a_plugin_that_brings_a_server_waits_for_a_second_administrator(
     again = await client.post(f"{ORG}/plugins/install", json=INSTALL)
     assert again.status_code == 202 and again.json()["approval_id"] == pending["approval_id"]
     approve = f"{ORG}/plugin-approvals/{pending['approval_id']}/approve"
+    await add_member(client, SECOND, "org_admin")  # with ONE administrator the requester may approve
+    await as_user(client, ADMIN)
     own = await client.post(approve)
     assert own.status_code == 403 and "second administrator" in own.text
     assert await _count(OrgPlugin) == 0
@@ -149,7 +151,7 @@ async def test_a_plugin_that_brings_a_server_waits_for_a_second_administrator(
         ("pending", ADMIN, False)
     ]
 
-    await _second_admin(client)
+    await as_user(client, SECOND)
     approved = await client.post(approve)
     assert approved.status_code == 200, approved.text
     assert not list(_contract("PluginApproval").iter_errors(approved.json()))

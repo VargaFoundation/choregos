@@ -38,6 +38,7 @@ from ..schemas import (
 from ..services.egress import egress_scope, ensure_or_409, skill_import_targets
 from ..services.organisations import organisation_by_slug
 from ..services.platform_network import check_platform_host, user_agent
+from ..services.second_person import is_sole_admin
 from ..services.skill_gate import assess
 from ..services.skill_sources import (
     SHA,
@@ -489,10 +490,14 @@ async def approve_skill_version(
         raise not_found("Skill version", f"{slug}@{version}")
     if row.review_status != "pending_review":
         raise conflict(f"`{slug}` v{version} is not waiting for a review")
+    sole_admin = False
     if row.created_by and row.created_by.lower() == principal.email.lower():
-        raise forbidden(
-            f"`{slug}` v{version} was imported by you: a second person approves a high-risk version"
-        )
+        # The organisation's only administrator has no second person to ask (ADR 0050 amendment).
+        sole_admin = await is_sole_admin(session, organisation.id, principal)
+        if not sole_admin:
+            raise forbidden(
+                f"`{slug}` v{version} was imported by you: a second person approves a high-risk version"
+            )
     row.review_status = "approved"
     row.reviewed_by = principal.email
     row.reviewed_at = datetime.now(UTC)
@@ -507,5 +512,6 @@ async def approve_skill_version(
         version=version,
         risk=row.risk,
         imported_by=row.created_by,
+        **({"sole_admin": True} if sole_admin else {}),
     )
     return skill_version_dto(row, files=True)

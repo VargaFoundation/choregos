@@ -141,9 +141,9 @@ async def test_a_high_risk_git_entry_waits_for_a_second_administrator(
     assert pinned.status_code == 422 and "second reviewer" in pinned.text
     assert _by_id((await client.get(BASE)).json())["systematic-debugging"]["state"] == "pending_review"
 
+    await _member(client, "second@varga.dev", "org_admin")  # with ONE administrator they may approve
     own = await client.post("/api/v1/orgs/varga/skills/systematic-debugging/versions/1/approve")
     assert own.status_code == 403, "the installer cannot approve its own install"
-    await _member(client, "second@varga.dev", "org_admin")
     async with _other_client(client) as second:
         await login(second, "second@varga.dev")
         approved = await second.post("/api/v1/orgs/varga/skills/systematic-debugging/versions/1/approve")

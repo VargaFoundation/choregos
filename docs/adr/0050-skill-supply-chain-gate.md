@@ -105,3 +105,10 @@ any other binary still refuses the skill.
 Not covered: a font or image is not parsed beyond its magic bytes, so a crafted file that a
 consumer's decoder mishandles is not detected; the closed network of the runner and the human
 review remain the guard.
+
+## Amendment (2026-11-10): the only administrator
+
+"A second person" is unreachable in an organisation with one administrator: the importer of a high-risk
+version could never approve it. When the importer is the only administrator of the organisation (same
+rule as ADR 0093 §4, `services/second_person.py`), they may approve their own version; the `skill.approve`
+audit event carries `sole_admin: true`. With two or more administrators, the importer is still refused.

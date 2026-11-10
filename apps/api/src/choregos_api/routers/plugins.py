@@ -235,12 +235,12 @@ async def approve_plugin_install(
     _may_install(principal, org)
     org_id = await installer.org_id_of(session, org)
     request = await approvals.pending_one(session, org_id, approval_id)
-    approvals.check_second_person(request, principal)
+    sole_admin = await approvals.check_second_person(session, request, principal)
     supply = plugin_supply(settings)
     try:
         async with supply.obtain(request.source, request.name, request.version) as plugin:
             await _approved_plugin(session, org_id, request, plugin, settings, principal)
     except SUPPLY_ERRORS as error:
         raise _supply_error(error) from error
-    await approvals.mark_approved(session, request, principal)
+    await approvals.mark_approved(session, request, principal, sole_admin=sole_admin)
     return approvals.to_dto(request)
