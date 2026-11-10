@@ -509,7 +509,10 @@ async def respond(
     # for the model's answer to be kept: the first call commits it, and releases the budget's lock.
     allow_release_during_calls(session)
     key = await _gateway_key(session, record, turn_key)
-    tools = await session_tools(session, spec, project)
+    from .conversation_needs import need_tools
+
+    plain_spec, from_needs = await need_tools(session, record, spec, project)
+    tools = {**await session_tools(session, plain_spec, project), **from_needs}
     messages = list(record.messages or [])
     from .conversation_extras import conversation_extras
 

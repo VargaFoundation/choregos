@@ -213,6 +213,11 @@ It wraps one of the plugin's agents and declares what the agent needs to convers
 configuration the installer sets, the audience, the tools it needs and the identity each is called under,
 its memory spaces, the knowledge it offers, its background tasks, its surfaces and its policy.
 
+In a conversation, the agent's `mcp_servers` name needs: it sees `<need>__<operation>` for the read tools of
+the connector the installation bound to each enabled need, never the connector's name. The core carries no
+business vocabulary: `test_assistant_genericity.py` runs the fixture below end to end on fakes and
+`test_core_names_no_business_vocabulary.py` fails when an identifier of the core names its domain.
+
 ```yaml
 # assistants/investment-assistant.yaml (tests/fixtures/plugins/investment-assistant)
 apiVersion: choregos/v1
