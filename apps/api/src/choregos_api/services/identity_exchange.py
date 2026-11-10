@@ -145,14 +145,20 @@ async def forget_refresh_token(session: AsyncSession, org_ids: list[str], user_i
 
 
 async def subject_token(
-    session: AsyncSession, org_id: str, user_id: str, settings: Settings | None = None
+    session: AsyncSession,
+    org_id: str,
+    user_id: str,
+    settings: Settings | None = None,
+    *,
+    secret_name: str | None = None,
 ) -> str:
-    """The person's access token for this call, or `IdentityUnavailable`."""
+    """The person's access token for this call, or `IdentityUnavailable`. `secret_name` names another sealed
+    refresh token (a standing delegation's offline token, S63-14): the door's bearer is then not used."""
     settings = settings or get_settings()
     door = _DOOR.get()
-    if door is not None and door[0] == user_id:
+    if secret_name is None and door is not None and door[0] == user_id:
         return door[1]
-    name = refresh_secret_name(user_id)
+    name = secret_name or refresh_secret_name(user_id)
     try:
         sealed = (await get_secret_store().get_many(session, org_id, [name])).get(name)
     except SecretNotFound:
@@ -178,6 +184,8 @@ class Acting:
     subject: str = ""
     org_id: str = ""
     actor: str | None = None
+    #: A standing delegation's sealed offline token (S63-14), drawn instead of the sign-in's refresh token.
+    refresh_secret: str = ""
 
     def audit(self, connector_name: str) -> dict[str, str]:
         """`as` and the mode, as the TOOL_CALLED event carries them (ADR 0107 point 8)."""
@@ -192,7 +200,9 @@ async def exchanged_token(session: AsyncSession, connector: Any, acting: Acting)
     if not supports_identity(connector, USER_EXCHANGE) or audience is None:
         raise IdentityUnavailable(f"`{connector.name}` does not declare the `user_exchange` identity")
     settings = get_settings()
-    subject = await subject_token(session, acting.org_id, acting.user_id, settings)
+    subject = await subject_token(
+        session, acting.org_id, acting.user_id, settings, secret_name=acting.refresh_secret or None
+    )
     try:
         issued = await (await _client(settings)).exchange(subject, audience=audience, actor=acting.actor)
     except (AdapterError, httpx.HTTPError) as failure:
@@ -200,3 +210,40 @@ async def exchanged_token(session: AsyncSession, connector: Any, acting: Acting)
             "the identity provider refused to issue a token for this source"
         ) from failure
     return issued.access_token
+
+
+def revocation_endpoint(settings: Settings) -> str:
+    if settings.token_revocation_endpoint:
+        return settings.token_revocation_endpoint
+    if settings.fakes:
+        from choregos_adapters.fakes.identity_provider import REVOCATION_ENDPOINT
+
+        return REVOCATION_ENDPOINT
+    return ""
+
+
+async def issue_offline_token(session: AsyncSession, org_id: str, user_id: str) -> str:
+    """An offline token of the person for a standing delegation (ADR 0137 point 3): the provider issues it,
+    to the exchange client, from the person's own token (their sealed sign-in refresh token, or the door's
+    bearer in this request). The caller seals it; this function never stores it."""
+    settings = get_settings()
+    subject = await subject_token(session, org_id, user_id, settings)
+    try:
+        return await (await _client(settings)).offline(subject)
+    except (AdapterError, httpx.HTTPError) as failure:
+        raise IdentityUnavailable(
+            "the identity provider did not issue an offline token for this person"
+        ) from failure
+
+
+async def revoke_offline_token(token: str) -> bool:
+    """Revoke the token at the provider when it has a revocation endpoint; False when it has none or the
+    call failed (the sealed copy is deleted by the caller either way)."""
+    settings = get_settings()
+    endpoint = revocation_endpoint(settings)
+    if not endpoint:
+        return False
+    try:
+        return await (await _client(settings)).revoke(endpoint, token)
+    except (AdapterError, httpx.HTTPError, IdentityUnavailable):
+        return False

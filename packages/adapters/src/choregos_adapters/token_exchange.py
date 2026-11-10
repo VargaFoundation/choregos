@@ -26,6 +26,8 @@ from .errors import AdapterError
 
 GRANT_EXCHANGE: Final = "urn:ietf:params:oauth:grant-type:token-exchange"
 TOKEN_TYPE_ACCESS: Final = "urn:ietf:params:oauth:token-type:access_token"  # noqa: S105 - a URN
+TOKEN_TYPE_REFRESH: Final = "urn:ietf:params:oauth:token-type:refresh_token"  # noqa: S105 - a URN
+OFFLINE_SCOPE: Final = "offline_access"
 
 
 class ExchangeRefused(AdapterError):  # noqa: N818 - the provider's refusal, rendered as is
@@ -110,3 +112,30 @@ class TokenExchangeClient:
         return ExchangedToken(
             str(body["access_token"]), int(body.get("expires_in") or 0), str(rotated) if rotated else None
         )
+
+    async def offline(self, subject_token: str) -> str:
+        """An OFFLINE refresh token of the person (scope `offline_access`), asked of the provider by
+        exchanging the person's access token (RFC 8693, `requested_token_type` refresh token). It is issued
+        to this client only: it can be refreshed and exchanged by it and by no other. The caller seals it."""
+        body = await self._post(
+            {
+                "grant_type": GRANT_EXCHANGE,
+                "subject_token": subject_token,
+                "subject_token_type": TOKEN_TYPE_ACCESS,
+                "requested_token_type": TOKEN_TYPE_REFRESH,
+                "scope": OFFLINE_SCOPE,
+            }
+        )
+        offline = body.get("refresh_token")
+        if not offline:
+            raise ExchangeRefused("no_offline_token", 200)
+        return str(offline)
+
+    async def revoke(self, revocation_endpoint: str, token: str) -> bool:
+        """RFC 7009: tell the provider the token is dead. True when it answered 2xx."""
+        form = {"client_id": self._client_id, "token": token, "token_type_hint": "refresh_token"}
+        if self._client_secret:
+            form["client_secret"] = self._client_secret
+        async with httpx.AsyncClient(timeout=self._timeout, transport=self._transport) as http:
+            response = await http.post(revocation_endpoint, data=form)
+        return response.status_code < 300

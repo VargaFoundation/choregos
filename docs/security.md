@@ -349,6 +349,43 @@ without that source. There is no fallback to the connector's own identity. The M
 refusal no longer applies to an entry installed with `user_consent` (`POST .../mcp-catalogue/{id}/install`
 with a `user_consent` body; the client secret is sealed).
 
+### The standing delegation (ADR 0137 points 3-4)
+
+A task of an assistant with `delegation: read_only` may read on a person's behalf while they are away (a
+scheduled run, a poll). That is the one place the platform keeps a long-lived credential of a person, so it
+is narrow and visible:
+
+- **The agreement is the exact list.** `POST /me/delegations {org, assistant, task, agree_to}` is a 409 that
+  shows the task's needs and their operations until `agree_to` equals that list. Read-only only: a task that
+  lists a write need cannot be delegated (422), and a write attempted under a delegation is refused with the
+  typed reason `write_under_delegation` before any source is called. A task has no conversation to confirm a
+  write in, so there is no proposal to make (the proposals of S63-10 belong to a conversation).
+- **Short and capped.** 90 days by default, capped by the installation's `policy_overrides.delegation.max_days`.
+  There is no automatic renewal and no reminder before expiry yet.
+- **The credential.** For a `user_exchange` need the platform asks the identity provider for an OFFLINE token
+  (`offline_access`, RFC 8693 `requested_token_type` refresh token) from the person's own token, and seals it
+  at `user/<id>/delegation/<delegation id>` (ADR 0058). It is issued to the exchange client only, never returned
+  by a route, and used as the refresh token of each delegated read, which then exchanges for the source's
+  audience exactly as a conversation's call does. A `user_consent` need uses the person's connected account.
+  A `service` need is read as before.
+- **Refused at every read and every run** (`assistant_delegations.check`, nothing cached): revoked, expired,
+  the person left the audience (their groups, from their user row) or the organisation, or the digest of the
+  task's needs in the installed manifest changed (a new agreement is then needed). A refused delegation is
+  marked `suspended` with the reason; one refused only for the audience resumes when the person returns.
+- **Revocation is immediate.** `DELETE /me/delegations/{id}` revokes the offline token at the provider (RFC 7009,
+  `CHOREGOS_TOKEN_REVOCATION_ENDPOINT`; without one only the sealed copy is deleted and the token lives until the
+  provider's own lifetime) and deletes the sealed secret. Erasing a person from an assistant does the same.
+- **Journaled.** Every delegated read writes a line of the reads journal with the delegation's id; never content.
+- **Only the owner reads it.** `delegations` is under forced RLS on the organisation plus a restrictive
+  owner-only policy.
+
+Security review required before production. This feature stores a credential that can act as a person with
+nobody present. Before enabling it in a production organisation, review: that the provider's offline sessions are
+bounded (idle and maximum lifetime) and revocable at the endpoint configured here; that the exchange client is the
+only client the offline token is bound to and its audiences are limited to the connectors that need them; the
+sealed-store keyring and its rotation; and the `max_days` the organisation sets. The tests prove the platform's
+side against a fake provider, not a real provider's offline-session behaviour.
+
 ## MCP gateway
 
 An organisation may put its MCP servers behind a gateway it runs

@@ -15,9 +15,10 @@ from urllib.parse import parse_qs
 
 import httpx
 
-from ..token_exchange import GRANT_EXCHANGE
+from ..token_exchange import GRANT_EXCHANGE, OFFLINE_SCOPE, TOKEN_TYPE_REFRESH
 
 ENDPOINT = "http://fake-idp.test/token"
+REVOCATION_ENDPOINT = "http://fake-idp.test/revoke"
 
 
 def _jwt(claims: dict[str, Any]) -> str:
@@ -40,6 +41,9 @@ class FakeIdentityProvider:
     #: forms of every request received
     requests: list[dict[str, str]] = field(default_factory=list)
     issued: int = 0
+    #: offline refresh tokens it issued (scope `offline_access`), and the ones revoked at its endpoint
+    offline_tokens: set[str] = field(default_factory=set)
+    revoked: list[str] = field(default_factory=list)
 
     def transport(self) -> httpx.MockTransport:
         return httpx.MockTransport(self.respond)
@@ -47,11 +51,29 @@ class FakeIdentityProvider:
     def respond(self, request: httpx.Request) -> httpx.Response:
         form = {k: v[0] for k, v in parse_qs(request.content.decode()).items()}
         self.requests.append(form)
+        if request.url.path == "/revoke":
+            token = form.get("token", "")
+            self.refresh_tokens.pop(token, None)
+            self.offline_tokens.discard(token)
+            self.revoked.append(token)
+            return httpx.Response(200)
         grant = form.get("grant_type", "")
         if grant == GRANT_EXCHANGE:
             subject = self.access_tokens.get(form.get("subject_token", ""))
             if subject is None:
                 return httpx.Response(400, json={"error": "invalid_token"})
+            if form.get("requested_token_type") == TOKEN_TYPE_REFRESH:
+                if form.get("scope") != OFFLINE_SCOPE:
+                    return httpx.Response(400, json={"error": "invalid_scope"})
+                self.issued += 1
+                offline = f"offline-of-{subject}-{self.issued}"
+                self.refresh_tokens[offline] = subject
+                self.offline_tokens.add(offline)
+                fresh = f"access-of-{subject}-{self.issued}"
+                self.access_tokens[fresh] = subject
+                return httpx.Response(
+                    200, json={"access_token": fresh, "refresh_token": offline, "expires_in": 60}
+                )
             audience = form.get("audience", "")
             if self.allowed_audiences is not None and audience not in self.allowed_audiences:
                 return httpx.Response(403, json={"error": "access_denied"})

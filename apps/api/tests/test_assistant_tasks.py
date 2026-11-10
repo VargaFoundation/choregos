@@ -351,9 +351,9 @@ async def test_a_delegated_task_is_subscribed_but_its_scheduled_run_is_refused(
     assert put.json()["delegation"] == "read_only" and put.json()["delegation_id"] is None
 
     assert await _pass(at(6, 30)) == {}
-    assert await _runs() == [], "no run reads on a person's behalf without the delegation of S63-14"
+    assert await _runs() == [], "no run reads on a person's behalf without a standing delegation"
     refused = (await person.get(f"{TASKS}/delegated_brief")).json()
-    assert "S63-14" in refused["last_refusal"] and "standing delegation" in refused["last_refusal"]
+    assert "standing delegation" in refused["last_refusal"]
     # On demand, the session's identity: no delegation is needed.
     ran = await person.post(f"{TASKS}/delegated_brief/run")
     assert ran.status_code == 201, ran.text

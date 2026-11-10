@@ -2605,6 +2605,44 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/InboxList" } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
+  /me/delegations:
+    get:
+      tags: [agents]
+      operationId: listMyDelegations
+      description: "The caller's standing delegations (ADR 0137 points 3-4) with their expiry and status (`active`, `suspended` with its reason, `revoked`, `expired`). Never another person's."
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/DelegationList" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [agents]
+      operationId: createMyDelegation
+      description: >-
+        The caller agrees that a `delegation: read_only` task reads on their behalf while they are away. `agree_to`
+        must equal the list of needs the task reads (with their operations): otherwise 409, whose body carries
+        `needs` (the exact needs and operations) and `agree_to` (the list to send). A task that lists a write need
+        cannot be delegated (422). The expiry is 90 days by default, capped by `policy_overrides.delegation.max_days`
+        of the installation. For `user_exchange` needs an offline token of the identity provider is obtained and
+        sealed (never returned); the delegation is linked to the caller's subscription to the task, which must exist.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/DelegationCreate" } } }
+      responses:
+        "201": { description: Agreed, content: { application/json: { schema: { $ref: "#/components/schemas/Delegation" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /me/delegations/{delegation_id}:
+    parameters:
+      - { name: delegation_id, in: path, required: true, schema: { type: string } }
+    delete:
+      tags: [agents]
+      operationId: revokeMyDelegation
+      description: "Revokes the caller's delegation at once: the offline token is revoked at the identity provider when it has a revocation endpoint and the sealed copy is deleted. The task's next delegated read is refused."
+      responses:
+        "204": { description: Revoked }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /me/connected-accounts:
     get:
       tags: [connectors]
@@ -9146,6 +9184,42 @@ components:
       required: [items]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/InboxItem" } }
+    DelegationCreate:
+      type: object
+      required: [org, assistant, task]
+      properties:
+        org: { type: string, minLength: 1, maxLength: 64 }
+        assistant: { type: string, minLength: 1, maxLength: 63 }
+        task: { type: string, minLength: 1, maxLength: 63 }
+        agree_to: { type: array, items: { type: string }, maxItems: 64, description: "Must equal the needs the task reads; else 409 with the list." }
+        expires_in_days: { type: [integer, "null"], minimum: 1, maximum: 3650, description: "90 by default; capped by the installation's `policy_overrides.delegation.max_days`." }
+    DelegationNeed:
+      type: object
+      required: [need, operations, identity]
+      properties:
+        need: { type: string }
+        operations: { type: array, items: { type: string } }
+        identity: { type: string, enum: [service, user_exchange, user_consent] }
+    Delegation:
+      type: object
+      required: [id, org, assistant, task, needs, granted_at, expires_at, status, manifest_digest]
+      properties:
+        id: { type: string }
+        org: { type: string }
+        assistant: { type: string }
+        task: { type: string }
+        needs: { type: array, items: { $ref: "#/components/schemas/DelegationNeed" } }
+        granted_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        revoked_at: { type: [string, "null"], format: date-time }
+        status: { type: string, enum: [active, suspended, revoked, expired] }
+        suspended_reason: { type: [string, "null"] }
+        manifest_digest: { type: string }
+    DelegationList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Delegation" } }
     AssistantConversationOpen:
       type: object
       properties:
