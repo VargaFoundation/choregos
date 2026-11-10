@@ -24,6 +24,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
 from .conftest import login, without_postgres
+from .kits.assistant_install import _bind, _install, _member, _plugin, offline  # noqa: F401
 from .test_agent_sessions import (  # noqa: F401 - fixtures imported for their use here
     ORG,
     Upstream,
@@ -31,7 +32,6 @@ from .test_agent_sessions import (  # noqa: F401 - fixtures imported for their u
     _ask,
     upstream,
 )
-from .test_assistant_install import _bind, _install, _member, _plugin, offline  # noqa: F401
 from .test_assistant_rights import ME, OPEN, _as
 from .test_user_exchange import SUBJECT, _calls, _person, _tool_events, source  # noqa: F401
 

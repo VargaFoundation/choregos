@@ -28,7 +28,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
 from .conftest import login
-from .test_assistant_install import (
+from .kits.assistant_install import (
     FIXTURE,
     MARKET,
     NEWS,
