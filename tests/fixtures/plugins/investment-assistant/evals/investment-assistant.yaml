@@ -1,0 +1,2 @@
+# Conversation suite (ADR 0140): its format is S63-17's; S63-01 checks only that the file ships.
+cases: []

@@ -1,0 +1,6 @@
+apiVersion: choregos/v1
+kind: Workflow
+metadata:
+  name: morning-brief
+  version: 1
+tracker: internal

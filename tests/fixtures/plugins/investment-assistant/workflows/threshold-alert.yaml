@@ -1,0 +1,6 @@
+apiVersion: choregos/v1
+kind: Workflow
+metadata:
+  name: threshold-alert
+  version: 1
+tracker: internal

@@ -70,6 +70,60 @@ export type Artifact = {
   value?: string | number | null;
 };
 
+/** English snake_case: lower-case letters and digits, single underscores (a double underscore separates a need from its operation) */
+export type AssistantSnake = string;
+
+/** relative to the plugin's directory; no absolute path, no `.` or `..` segment */
+export type AssistantPath = string;
+
+/** a JSON Schema (2020-12) */
+export type AssistantJsonSchema = {
+  [key: string]: unknown;
+};
+
+/** who the source sees (ADR 0135): the connector's credential, the person by token exchange, the person by a connected account */
+export type AssistantIdentity = "service" | "user_exchange" | "user_consent";
+
+export type AssistantTool = unknown & unknown & unknown;
+
+export type AssistantSubject = {
+  type: AssistantSnake;
+  key: AssistantSnake;
+  /** `none` for a public subject (any well-formed key is accepted), else the need that resolves it; absent, any need marked `subject_resolver` */
+  resolver?: string;
+};
+
+export type AssistantMemory = unknown & unknown & unknown;
+
+export type AssistantKnowledge = {
+  name: AssistantSnake;
+  /** a KnowledgeBase directory of the plugin (`knowledge.yaml` and its `corpus/`) */
+  seed: AssistantPath;
+  serving_mode?: "index" | "files";
+  upstream?: "follow" | "propose_updates" | "frozen";
+};
+
+export type AssistantTrigger = unknown & unknown;
+
+export type AssistantTask = unknown;
+
+export type AssistantPrompt = {
+  name: AssistantSnake;
+  description?: string;
+  arguments?: Array<{
+    name: AssistantSnake;
+    description?: string;
+    required?: boolean;
+  }>;
+  /** the user message the prompt sends; `{argument}` is replaced by its value */
+  message: string;
+};
+
+export type AssistantMoney = number;
+
+/** An assistant a plugin ships (`contents.assistants`, ADR 0133): a wrapper around one of the plugin's prompt or hosted agents that declares its configuration, audience, the tools it needs and the identity each is called under, its memory spaces, the knowledge it offers, its background tasks, its surfaces and its policy. What a schema cannot say (the agent exists and its runtime, `{{ config.x }}` keys, the agent's tools match the needs, a subject's resolver, a delegated task reads only, the files named exist) is checked by `choregos plugin validate`. */
+export type Assistant = unknown;
+
 export type ContextPackMemory = {
   id?: string;
   kind: "decision" | "convention" | "incident" | "ticket_summary" | "run_lesson" | "flaky_test" | "hotspot" | "finding" | "other";
@@ -529,6 +583,8 @@ export type Plugin = {
     procedures?: Array<PluginGlob>;
     /** plugin server files (plugin-server.schema.json) */
     servers?: Array<PluginPath>;
+    /** assistant files (assistant.schema.json, ADR 0133): each wraps an agent of this plugin; the knowledge seeds, task workflows and eval suites an assistant names ship with the plugin */
+    assistants?: Array<PluginPath>;
     /** agent cases of the core's eval matrix (#1372): YAML files in the core's agent-case format (`choregos_playbooks.evals.agents`, the runbook `live-eval-matrix.md`), named `plugin:<plugin>/<file stem>` by the matrix and played by it, never at install. A case names an agent of this plugin (or carries its own `agent_spec`), and a connector `plugin:<plugin>/<server>` names this plugin and a server it ships */
     matrix_cases?: Array<PluginPath>;
   };
@@ -1597,6 +1653,7 @@ export type Workflow = {
 
 export type ChoregosContract =
   | Artifact
+  | Assistant
   | ContextPack
   | DecisionRecord
   | Event

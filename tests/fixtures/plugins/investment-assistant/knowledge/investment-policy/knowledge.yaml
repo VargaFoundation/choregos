@@ -1,0 +1,5 @@
+apiVersion: choregos/v1
+kind: KnowledgeBase
+slug: investment-policy
+name: Investment policy of the house
+serving_mode: index

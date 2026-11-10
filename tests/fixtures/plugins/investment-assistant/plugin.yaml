@@ -1,0 +1,14 @@
+apiVersion: choregos/v1
+kind: Plugin
+metadata:
+  name: investment-assistant
+  version: 0.1.0
+  publisher: Varga Foundation
+  license: Apache-2.0
+  description: >-
+    A test plugin that ships a personal investment assistant on fakes (ADR 0133, S63-19). It is the
+    genericity guard of assistants: it must install and converse with no code of its own in the core.
+  core: ">=0.25.0"
+contents:
+  agents: [agents/investment-analyst.yaml]
+  assistants: [assistants/investment-assistant.yaml]

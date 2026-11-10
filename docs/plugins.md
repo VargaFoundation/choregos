@@ -27,7 +27,8 @@ matrix cases and a server with a `fake`.
 
 **A plugin is what its manifest declares**: `plugin.yaml`, a `README.md` and a `LICENSE` at its root when
 present, and exactly the paths `contents` names — each file, every file under a skill or template
-directory, every file a procedure pattern matches. Anything else in the directory (a server's source, its
+directory, every file a procedure pattern matches, and what an assistant names (its knowledge seeds, task
+workflows and eval suites, [Assistants](#assistants)). Anything else in the directory (a server's source, its
 `.venv`, build output) is not read, not validated, not digested and not packed, so a server's code can
 live beside its plugin without shipping in it.
 
@@ -53,6 +54,7 @@ contents:
   procedures: ["procedures/*.md"]   # the only list that may use *
   servers: [servers/hello.yaml]
   # matrix_cases: [evals/matrix/greeting.yaml]   # agent cases of the core's eval matrix (#1372)
+  # assistants: [assistants/helper.yaml]        # assistants wrapping an agent of the plugin (ADR 0133)
 ```
 
 ## What is checked
@@ -202,6 +204,62 @@ run](runbooks/live-eval-matrix.md#what-a-case-checks-of-its-run)): its facts are
 guarantees the run's (actions proposed and executed, tools never called, security events). What a door
 costs — `calls_by_origin`, `max_model_requests` — is a measure, written under `measures`; a case that
 still writes it under `assertions` has it read as a measure, never as a pass criterion.
+
+### Assistants
+
+An assistant ([ADR 0133](adr/0133-a-plugin-ships-an-assistant-an-organisation-installs-it-for-an-audience.md))
+is a file of `kind: Assistant` listed under `contents.assistants` and validated by `assistant.schema.json`.
+It wraps one of the plugin's agents and declares what the agent needs to converse with a person: the
+configuration the installer sets, the audience, the tools it needs and the identity each is called under,
+its memory spaces, the knowledge it offers, its background tasks, its surfaces and its policy.
+
+```yaml
+# assistants/investment-assistant.yaml (tests/fixtures/plugins/investment-assistant)
+apiVersion: choregos/v1
+kind: Assistant
+metadata: { name: investment-assistant, display_name: Investment assistant, description: "…" }
+agent: investment-analyst            # an agent of this plugin, runtime prompt or hosted
+config_schema: { type: object, required: [house_name], properties: { house_name: { type: string } } }
+audience: { personal_data: true }
+tools:
+  - { need: market_data, operations: [get_quote], access: read, identity: service, subject_resolver: true }
+  - { need: orders, operations: [place_order], access: write, identity: user_consent, approval: console }
+memory:
+  - { name: instrument_notes, scope: user_subject, subject: { type: instrument, key: isin, resolver: none },
+      kind: facts, writes: agent_proposes }
+knowledge:
+  - { name: investment_policy, seed: knowledge/investment-policy }
+tasks:
+  - { name: morning_brief, workflow: workflows/morning-brief.yaml, delegation: read_only,
+      needs: [market_data], triggers: [{ kind: schedule, cron: "30 7 * * 1-5", user_timezone: true }] }
+policy:
+  conversation: { retention_days: 30 }
+  data: { classification: sensitive, erasure: [by_user] }
+```
+
+`choregos plugin validate` refuses, naming the file and the JSON path of the field:
+
+1. an `agent` that is not an agent of the plugin, or whose runtime is not `prompt` or `hosted`;
+2. a `{{ config.<key> }}` of the agent's instructions that `config_schema` does not declare;
+3. a connector of the agent's `mcp_servers` that no need declares, or a tool that is not an operation of
+   its need (patterns included: an assistant's tools are a closed list; the agent calls them
+   `<need>__<operation>`);
+4. a write need without `approval`, or with `approval: none`; an `inline` approval under the `service`
+   identity;
+5. a `user_subject` memory without `subject`, or without a resolver (`resolver: none` for a public subject,
+   a need marked `subject_resolver: true` otherwise);
+6. `audience.personal_data: true` without `policy.conversation.retention_days` and an `erasure` mode;
+7. a task that calls a write need, or that reads with the person's identity while it runs without them (a
+   schedule, a poll) and has no `delegation: read_only`; a delegated task lists the needs it reads
+   (`needs`), which the person sees when they agree;
+8. a name (`need`, operations, `memory`, `knowledge`, `tasks`, prompts) that is not English `snake_case`
+   (a double underscore separates a need from its operation and is refused in a name).
+
+Names are unique within their list, a prompt's `{argument}` placeholders are its arguments, and every file
+the assistant names ships with the plugin: each knowledge seed (a directory holding a `knowledge.yaml` in
+the `kind: KnowledgeBase` shape, and its `corpus/`), each task workflow and each eval suite is a declared
+file, packed and digested like a template's. Installing an assistant, binding its needs and conversing with
+it come with the stories of stream S63 ([the plan](plan/PLAN-2026-11-10-assistants.md)).
 
 ## Pack and index
 

@@ -33,6 +33,11 @@ rather than the first:
   tracker profile declared with its access, `TRACKER_PROFILE`) — and, for a server that declares its
   `fake` (#1372), variables that are neither the platform's (`CHOREGOS_*`) nor any its configuration
   reaches, so that no administrator ever switches a server to its fake.
+- each assistant file (`contents.assistants`, ADR 0133) against `assistant.schema.json`, then what the
+  schema cannot say (`choregos_core.plugins.assistants`): its agent is one of the plugin's and converses,
+  its instructions read only declared configuration, its agent's tools are its declared needs, its subject
+  memories have a resolver, its tasks read only, and the files it names are present — and ship with the
+  plugin: an assistant's knowledge seeds, task workflows and eval suites are declared files.
 
 Loading also WARNS, without refusing (`Plugin.warnings`): an agent that reads a knowledge base
 (`spec.knowledge`) no template of the plugin ships (`defaults.knowledge`) runs only in an organisation
@@ -64,6 +69,7 @@ from jsonschema import Draft202012Validator
 
 from ..errors import ChoregosError
 from ..paths import PathOutsideError, files_under, inside, symlinks_under
+from . import assistants as _assistant_rules
 
 MANIFEST = "plugin.yaml"
 #: Files at the root that ship with a plugin when present, though `contents` does not name them.
@@ -122,6 +128,8 @@ class Plugin:
     files: tuple[str, ...] = ()
     #: what loads but may not run as shipped (ADR 0117): said, never refused
     warnings: tuple[str, ...] = ()
+    #: its assistants (`contents.assistants`, ADR 0133): `metadata.name` -> the assistant document
+    assistants: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     @property
     def name(self) -> str:
@@ -431,10 +439,31 @@ def _link_on(root: Path, ref: str) -> str | None:
     return None
 
 
+def _assistant_named(root: Path, contents: dict[str, list[str]]) -> tuple[list[str], list[str]]:
+    """The files and directories the plugin's assistants name (ADR 0133): they ship with the plugin.
+    An assistant file that is a link, outside the plugin or unreadable names nothing here; its own
+    checks say why."""
+    files: list[str] = []
+    directories: list[str] = []
+    for ref in contents.get("assistants", []):
+        try:
+            path = inside(root, ref)
+        except PathOutsideError:
+            continue
+        if _link_on(root, ref) is not None or not path.is_file():
+            continue
+        named, seeds = _assistant_rules.named_files(_yaml(path, ref, []))
+        files.extend(named)
+        directories.extend(seeds)
+    return files, directories
+
+
 def _declared_refs(root: Path, contents: dict[str, list[str]]) -> list[str]:
     refs = [MANIFEST, *(n for n in ROOT_FILES if (root / n).is_symlink() or (root / n).is_file())]
-    for kind in ("agents", "evals", "servers", "skills", "templates", "matrix_cases"):
+    for kind in ("agents", "evals", "servers", "skills", "templates", "matrix_cases", "assistants"):
         refs.extend(contents.get(kind, []))
+    named, seeds = _assistant_named(root, contents)
+    refs.extend([*named, *seeds])
     for pattern in contents.get("procedures", []):
         if "*" in pattern:
             refs.extend(sorted(p.relative_to(root).as_posix() for p in root.glob(pattern)))
@@ -450,7 +479,11 @@ def _declared(root: Path, contents: dict[str, list[str]]) -> tuple[dict[str, Pat
     words. A link on a declared path, or under a declared directory, is refused: nothing is read
     through it. Nothing else in the directory is looked at."""
     problems: list[str] = []
-    directories = {*contents.get("skills", []), *contents.get("templates", [])}
+    directories = {
+        *contents.get("skills", []),
+        *contents.get("templates", []),
+        *_assistant_named(root, contents)[1],
+    }
     files: dict[str, Path] = {}
     for ref in _declared_refs(root, contents):
         link = _link_on(root, ref)
@@ -624,6 +657,33 @@ def _servers(root: Path, refs: list[str], problems: list[str]) -> dict[str, dict
     return servers
 
 
+def _assistants(
+    root: Path, refs: list[str], agents: dict[str, dict[str, Any]], problems: list[str]
+) -> dict[str, dict[str, Any]]:
+    """Each assistant file against `assistant.schema.json`, then what the schema cannot say
+    (`choregos_core.plugins.assistants`)."""
+    found: dict[str, dict[str, Any]] = {}
+    for ref in refs:
+        path = _target(root, ref, problems)
+        if path is None:
+            continue
+        if not path.is_file():
+            problems.append(f"{ref}: assistant file missing")
+            continue
+        doc = _yaml(path, ref, problems)
+        schema = _schema_problems(ref, "assistant.schema.json", doc)
+        if schema:
+            problems.extend(schema)
+            continue
+        assert isinstance(doc, dict)
+        _assistant_rules.check(doc, ref, agents, root, _target, problems)
+        name = str(doc["metadata"]["name"])
+        if name in found:
+            problems.append(f"{ref}:metadata/name: assistant `{name}` is shipped twice")
+        found[name] = doc
+    return found
+
+
 def load_directory(root: Path) -> Plugin:
     """Validate a plugin directory; `PluginError` lists every problem found. Only what the manifest
     declares is read."""
@@ -644,6 +704,7 @@ def load_directory(root: Path) -> Plugin:
             _check_eval(path, ref, set(agents), problems)
     procedures = _procedures(root, contents.get("procedures", []), name, servers, problems)
     matrix = _matrix_cases(root, contents.get("matrix_cases", []), name, set(agents), servers, problems)
+    assistants = _assistants(root, contents.get("assistants", []), agents, problems)
 
     if problems:
         raise PluginError(problems)
@@ -657,6 +718,7 @@ def load_directory(root: Path) -> Plugin:
         matrix,
         tuple(files),
         tuple(_knowledge_warnings(agents, shipped)),
+        assistants,
     )
 
 

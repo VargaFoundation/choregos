@@ -206,6 +206,7 @@ SCHEMA_FILES = (
     "plugin-index.schema.json",
     "plugin-evals.schema.json",
     "plugin-tracker-profile.schema.json",
+    "assistant.schema.json",
 )
 
 
