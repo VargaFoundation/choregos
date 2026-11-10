@@ -314,6 +314,41 @@ tokens of their audience (`iris-mcp`, `insights360-mcp`, ...). Through an MCP ga
 
 A dedicated security review of this exchange is required before production (ADR 0135).
 
+### Connected accounts: `user_consent` (ADR 0135 points 1, 3, 4, 6)
+
+For a source that has its own OAuth, the person consents once and the platform keeps their refresh token
+(`services/connected_accounts.py`). The connector declares the mode and the source's settings:
+
+```yaml
+identity_modes: [service, user_consent]
+user_consent:
+  authorization_endpoint: https://source.example/oauth/authorize
+  token_endpoint: https://source.example/oauth/token
+  revocation_endpoint: https://source.example/oauth/revoke   # optional
+  client_id: choregos
+  client_secret_ref: store:connector/source/oauth_client_secret  # optional: a public client has none
+  scopes: [read, offline_access]
+```
+
+The mode is picked by the agent version's `identity: user_consent`, or, in an assistant, by the BINDING of
+the need (`assistant_tool_bindings.identity`). The routes, all about the caller's own accounts:
+`GET /me/connected-accounts`; `POST /me/connected-accounts/{connector}/connect?org=` returns the source's
+authorization URL (authorization code with PKCE `S256`; the state is signed, the verifier travels in a signed
+`HttpOnly` cookie bound to the state by a nonce); `GET /me/connected-accounts/callback` exchanges the code,
+seals the refresh token (`user/<id>/consent/<connector>`, ADR 0058) and redirects to the console, returning
+no token; `DELETE /me/connected-accounts/{connector}?org=` deletes the sealed secret and the row at once, then
+asks the source to revoke it (RFC 7009, best effort). The table `connected_accounts` is under forced RLS on
+the organisation and a restrictive owner-only policy: nobody else reads a person's account.
+
+At each call the platform draws an access token from the refresh token (re-sealing a rotated one), calls the
+source with it as bearer, and keeps nothing. A plugin's server receives it in `X-Choregos-User-Token` next to
+the platform's own bearer. With no account (or one the source stopped honouring) the call fails with the
+typed tool error `account_not_connected` carrying the console's connect URL
+(`<public url>/me/connected-accounts/{connector}/connect?org=<org>`); the agent tells the person and goes on
+without that source. There is no fallback to the connector's own identity. The MCP catalogue's `needs_oauth`
+refusal no longer applies to an entry installed with `user_consent` (`POST .../mcp-catalogue/{id}/install`
+with a `user_consent` body; the client secret is sealed).
+
 ## MCP gateway
 
 An organisation may put its MCP servers behind a gateway it runs

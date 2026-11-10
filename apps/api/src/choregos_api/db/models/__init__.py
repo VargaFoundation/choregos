@@ -45,7 +45,7 @@ from .agents import (
     HostedBuildRecord,
     ProjectAgent,
 )
-from .assistants import AssistantInstallation, AssistantToolBinding
+from .assistants import AssistantInstallation, AssistantToolBinding, ConnectedAccount
 from .audit import AuditLog, NetworkDecision
 from .connectors import (
     ConnectorOperation,
@@ -104,6 +104,7 @@ ALL_TABLES = [
     MachineAccount,
     AssistantInstallation,
     AssistantToolBinding,
+    ConnectedAccount,
     Connector,
     WorkflowDef,
     PolicyDef,
@@ -182,6 +183,7 @@ __all__ = [
     "Boolean",
     "BudgetAlert",
     "CheckConstraint",
+    "ConnectedAccount",
     "Connector",
     "ConnectorOperation",
     "ConversationFeedback",

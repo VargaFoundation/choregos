@@ -67,7 +67,7 @@ from ..schemas.agent_sessions import (
 )
 from ..secret_store import get_secret_store
 from .events import persist_event
-from .identity_exchange import SERVICE, USER_EXCHANGE, Acting
+from .identity_exchange import SERVICE, USER_CONSENT, USER_EXCHANGE, Acting
 from .model_stream import OnDelta, StreamRefused, stream_completion
 
 if TYPE_CHECKING:
@@ -509,7 +509,7 @@ async def respond(
     # for the model's answer to be kept: the first call commits it, and releases the budget's lock.
     allow_release_during_calls(session)
     key = await _gateway_key(session, record, turn_key)
-    from .conversation_needs import need_tools
+    from .conversation_needs import identities_of, need_tools
 
     plain_spec, from_needs = await need_tools(session, record, spec, project)
     tools = {**await session_tools(session, plain_spec, project), **from_needs}
@@ -558,7 +558,7 @@ async def respond(
             raise _ModelRefused(answer.status_code, "the model answered something that is not a completion")
         return parsed
 
-    identities = {server.connector: server.identity for server in spec.mcp_servers if server.identity}
+    identities = await identities_of(session, record, spec)
 
     async def call_tool(name: str, arguments: dict[str, Any]) -> str:
         made["tool_calls"] += 1
@@ -778,11 +778,12 @@ async def _acting(
 ) -> Acting:
     """Who this call is for: the person of the conversation when the agent version picks `user_exchange`
     for the connector, the connector's own identity otherwise (ADR 0135)."""
-    if (identities or {}).get(tool.connector.name) != USER_EXCHANGE:
+    mode = (identities or {}).get(tool.connector.name)
+    if mode not in (USER_EXCHANGE, USER_CONSENT):
         return Acting(SERVICE)
     user = await session.get(User, record.user_id) if record.user_id else None
     return Acting(
-        USER_EXCHANGE,
+        USER_CONSENT if mode == USER_CONSENT else USER_EXCHANGE,
         user_id=record.user_id or "",
         subject=(user.oidc_sub if user is not None else None) or record.user_id or "",
         org_id=record.org_id,

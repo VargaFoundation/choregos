@@ -43,9 +43,11 @@ from ..db.models import (
 )
 from ..db.session import outside_the_transaction
 from .catalogue_rights import SELECTED_PROJECTS, enabled_ids
+from .connected_accounts import NOT_CONNECTED, AccountNotConnected, consented_token
 from .connectors import declared_operation, human_floor, stricter
 from .identity_exchange import (
     UNAVAILABLE,
+    USER_CONSENT,
     USER_EXCHANGE,
     Acting,
     IdentityUnavailable,
@@ -561,6 +563,35 @@ async def call(
         return await _call(session, tool, arguments, run=run, project=project, acting=acting)
 
 
+async def _client_for(
+    session: AsyncSession,
+    tool: BrokerTool,
+    via_gateway: bool,
+    run: Run | None,
+    project: Project | None,
+    acting: Acting | None,
+) -> Any:
+    """The client of one call. A person's mode (ADR 0135) never goes through a gateway and never falls back
+    to the connector's own identity: its token is one call's, exchanged or drawn here and handed to this
+    client only."""
+    instance = tool.connector
+    mode = acting.mode if acting is not None else None
+    if acting is not None and mode in (USER_EXCHANGE, USER_CONSENT):
+        if via_gateway:
+            raise IdentityUnavailable(f"the `{mode}` identity does not go through an MCP gateway")
+        from .plugin_servers import connector_client as direct_client
+
+        if mode == USER_EXCHANGE:
+            return await direct_client(
+                session, instance, bearer=await exchanged_token(session, instance, acting)
+            )
+        token = await consented_token(session, instance, acting.user_id, acting.org_id)
+        return await direct_client(session, instance, user_token=token)
+    return await connector_client(
+        session, instance, lambda: identity_of_run(session, run, project, instance, tool.operation.name)
+    )
+
+
 async def _call(
     session: AsyncSession,
     tool: BrokerTool,
@@ -600,22 +631,7 @@ async def _call(
     try:
         # A gateway connector (ADR 0105) goes through the gateway, signed with this call's identity; a
         # plugin's server (ADR 0096), its Service and bearer token; any other, its type's adapter.
-        client: Any
-        if acting is not None and acting.mode == USER_EXCHANGE:
-            if route.via_gateway:
-                raise IdentityUnavailable("the `user_exchange` identity does not go through an MCP gateway")
-            from .plugin_servers import connector_client as direct_client
-
-            # One call's token: exchanged here, handed to this client, forgotten with it.
-            client = await direct_client(
-                session, instance, bearer=await exchanged_token(session, instance, acting)
-            )
-        else:
-            client = await connector_client(
-                session,
-                instance,
-                lambda: identity_of_run(session, run, project, instance, tool.operation.name),
-            )
+        client = await _client_for(session, tool, route.via_gateway, run, project, acting)
         # A server may take thirty seconds to answer: the caller's transaction, when it allows it,
         # does not wait for it on a pooled connection (#1354).
         async with outside_the_transaction(session):
@@ -626,6 +642,8 @@ async def _call(
                 # returned in the format of an MCP result — the agent reads the same everywhere.
                 raw = await client.execute(tool.operation.name, arguments)
                 result = {"content": [{"type": "text", "text": _json(raw)}], "structuredContent": raw}
+    except AccountNotConnected as missing:
+        return 422, {"error": str(missing), "type": NOT_CONNECTED, "connect_url": missing.connect_url}
     except IdentityUnavailable as unavailable:
         return 422, {"error": str(unavailable), "type": UNAVAILABLE}
     except McpError as mcp_error:

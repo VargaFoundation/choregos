@@ -15,6 +15,7 @@
  "ArtifactRecord",
  "AssistantInstallation",
  "AssistantToolBinding",
+ "ConnectedAccount",
  "AuditLog",
  "BackendRegistryRow",
  "Base",
