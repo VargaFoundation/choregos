@@ -26,8 +26,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from .test_agent_sessions import Upstream, _ledger, upstream  # noqa: F401
-from .test_assistant_install import (
+from .kits.assistant_install import (
     ORG,
     _bind,
     _install,
@@ -35,6 +34,7 @@ from .test_assistant_install import (
     _plugin,
     offline,  # noqa: F401
 )
+from .test_agent_sessions import Upstream, _ledger, upstream  # noqa: F401
 from .test_assistant_rights import ME, OPEN, _as
 
 ISIN = "FR0000120271"

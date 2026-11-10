@@ -19,7 +19,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from .agent_scopes_kit import add_member, as_user
-from .test_assistant_install import FIXTURE, OWNERS, _install, _member, _plugin
+from .kits.assistant_install import FIXTURE, OWNERS, _install, _member, _plugin
 
 ORG = "/api/v1/orgs/varga"
 BASE = "investment-assistant-investment-policy"

@@ -20,8 +20,8 @@ from sqlalchemy import select
 
 from .agent_scopes_kit import add_member, as_user
 from .kits.assistant_door import ORG, offline  # noqa: F401
+from .kits.conversations import _open, _say
 from .test_agent_sessions import Upstream, _agent, upstream  # noqa: F401
-from .test_conversations import _open, _say
 from .test_user_exchange import (  # noqa: F401 - fixtures imported for their use here
     AUDIENCE,
     EMAIL,

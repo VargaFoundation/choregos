@@ -5140,8 +5140,8 @@ export interface Operations {
   clearConnectorSecret: { method: "DELETE"; path: "/projects/{id}/connectors/{kind}/secrets/{field}"; body: never; response: Connector };
   clearOrgConnectorSecret: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}/secrets/{field}"; body: never; response: OrgConnector };
   closeAgentSession: { method: "DELETE"; path: "/orgs/{org}/agent-sessions/{session_id}"; body: never; response: void };
-  confirmMyConversationAction: { method: "POST"; path: "/me/conversations/{conversation_id}/actions/{action_id}/confirm"; body: never; response: ConversationAction };
   completeMyAccountConnection: { method: "GET"; path: "/me/connected-accounts/callback"; body: never; response: void };
+  confirmMyConversationAction: { method: "POST"; path: "/me/conversations/{conversation_id}/actions/{action_id}/confirm"; body: never; response: ConversationAction };
   connectCatalogueClient: { method: "POST"; path: "/orgs/{org}/agent-catalogue/{slug}/connect"; body: AgentCatalogueConnect; response: AgentCatalogueConnection };
   connectMyAccount: { method: "POST"; path: "/me/connected-accounts/{connector}/connect"; body: never; response: ConnectedAccountConnect };
   convertKnowledgeDocument: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}/convert"; body: never; response: KnowledgeDocument };
@@ -5432,8 +5432,8 @@ export interface Operations {
   listMembers: { method: "GET"; path: "/orgs/{org}/members"; body: never; response: Array<Membership> };
   listMemories: { method: "GET"; path: "/orgs/{org}/memories"; body: never; response: Array<MemoryStore> };
   listMyAssistants: { method: "GET"; path: "/me/assistants"; body: never; response: MyAssistantList };
-  listMyConversationActions: { method: "GET"; path: "/me/conversations/{conversation_id}/actions"; body: never; response: ConversationActionList };
   listMyConnectedAccounts: { method: "GET"; path: "/me/connected-accounts"; body: never; response: ConnectedAccountList };
+  listMyConversationActions: { method: "GET"; path: "/me/conversations/{conversation_id}/actions"; body: never; response: ConversationActionList };
   listMyConversations: { method: "GET"; path: "/me/conversations"; body: never; response: ConversationPage };
   listMyInbox: { method: "GET"; path: "/me/inbox"; body: never; response: InboxList };
   listMySessions: { method: "GET"; path: "/me/sessions"; body: never; response: Array<BrowserSession> };

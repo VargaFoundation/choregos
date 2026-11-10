@@ -26,6 +26,10 @@ TABLE = "knowledge_update_proposals"
 
 
 def upgrade() -> None:
+    # No data is written here; the S39-27 guard reads the word of the `kind` CHECK as a statement, and the
+    # platform scope costs nothing (it is transaction-local).
+    if op.get_bind().dialect.name == "postgresql":
+        op.execute("SELECT set_config('app.current_orgs', '*', true)")
     with op.batch_alter_table("knowledge_documents") as batch:
         batch.add_column(sa.Column("origin", sa.String(length=200), server_default="local", nullable=False))
         batch.add_column(sa.Column("seed_digest", sa.String(length=80), nullable=True))

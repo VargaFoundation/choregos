@@ -21,8 +21,8 @@ from sqlalchemy import select
 
 from .agent_scopes_kit import as_user
 from .conftest import without_postgres
+from .kits.assistant_install import FIXTURE, ORG
 from .test_agent_sessions import Upstream, upstream  # noqa: F401
-from .test_assistant_install import FIXTURE, ORG
 from .test_assistant_memory import (
     EXTRA,
     ISIN,
