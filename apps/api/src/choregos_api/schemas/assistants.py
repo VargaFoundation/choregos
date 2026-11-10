@@ -107,3 +107,9 @@ class AssistantConversationOpen(Dto):
     `surfaces.embed.context_schema` and given to the agent as data, never as a resolved subject."""
 
     context: dict[str, Any] | None = None
+
+
+class AssistantEmbed(Dto):
+    """The origins that may frame the installation's embedded component (`config.embed_origins`)."""
+
+    embed_origins: list[str]

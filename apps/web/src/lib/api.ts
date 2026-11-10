@@ -208,6 +208,10 @@ import type {
   MachineAccount,
   MachineAccountCreate,
   MachineTokenCreate,
+  AssistantEmbed,
+  Conversation,
+  ConversationAction,
+  ConversationActionList,
 } from "./types";
 
 export const API_BASE = "/api/v1";
@@ -374,6 +378,32 @@ async function artifactContent(id: string, ref: string): Promise<Blob> {
 
 export const api = {
   me: () => request<MeDto>("/me"),
+  /** The embedded component (S63-12, ADR 0139 point 6): who may frame it (public), and its conversation. */
+  assistantEmbed: (org: string, slug: string) =>
+    request<AssistantEmbed>(`/public/assistants/${org}/${slug}/embed`),
+  openAssistantConversation: (org: string, slug: string, context: Record<string, unknown> | null) =>
+    request<Conversation>(`/me/assistants/${org}/${slug}/conversations`, {
+      method: "POST",
+      body: JSON.stringify({ context }),
+    }),
+  myConversation: (id: string) => request<Conversation>(`/me/conversations/${id}`),
+  /** One streamed turn: the raw response, read as server-sent events by `lib/embed.ts`. */
+  conversationTurn: (id: string, input: string, signal?: AbortSignal) =>
+    fetch(`${API_BASE}/me/conversations/${id}/messages`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      body: JSON.stringify({ input, stream: true }),
+      signal,
+    }),
+  /** A memory space of the caller, to see whether a turn changed it (`memory.updated`). */
+  assistantMemory: (org: string, slug: string, space: string) =>
+    request<unknown>(`/me/assistants/${org}/${slug}/memory/${space}`),
+  conversationActions: (id: string) => request<ConversationActionList>(`/me/conversations/${id}/actions`),
+  confirmConversationAction: (id: string, action: string) =>
+    request<ConversationAction>(`/me/conversations/${id}/actions/${action}/confirm`, { method: "POST" }),
+  refuseConversationAction: (id: string, action: string) =>
+    request<ConversationAction>(`/me/conversations/${id}/actions/${action}/refuse`, { method: "POST" }),
   /** The running edition (ADR 0024): the console shows what it allows itself. */
   edition: () => request<Edition>("/edition"),
   /** Where to plug an MCP client (ADR 0030): the gate's URL, for the Integrations page. */
@@ -388,11 +418,18 @@ export const api = {
   getProcedure: (id: string) => request<Procedure>(`/procedures/${encodeURIComponent(id)}`),
   /** The URL that opens the session: the API redirects to the IdP (or, in dev, opens directly). */
   /** `tenant` picks the organisation's own identity provider, by sign-in link or by address (ADR 0108). */
-  loginUrl: (next?: string, as?: string, reauth = false, tenant: { org?: string; loginHint?: string } = {}) => {
+  loginUrl: (
+    next?: string,
+    as?: string,
+    reauth = false,
+    tenant: { org?: string; loginHint?: string } = {},
+    silent = false,
+  ) => {
     const params = new URLSearchParams();
     if (next) params.set("redirect_to", next);
     if (as) params.set("as", as);
     if (reauth) params.set("reauth", "1");
+    if (silent) params.set("silent", "1");
     if (tenant.org) params.set("org", tenant.org);
     if (tenant.loginHint) params.set("login_hint", tenant.loginHint);
     const q = params.toString();

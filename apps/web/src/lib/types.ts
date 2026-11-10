@@ -327,3 +327,11 @@ export type {
   PluginUpgrade,
   PluginUpgradeResult,
 } from "@choregos/contracts/api";
+
+// The embedded assistant (S63-12).
+export type {
+  AssistantEmbed,
+  Conversation,
+  ConversationAction,
+  ConversationActionList,
+} from "@choregos/contracts/api";

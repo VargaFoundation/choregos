@@ -4075,6 +4075,10 @@ export type MyAssistant = {
   status: "incomplete" | "ready" | "suspended";
 };
 
+export type AssistantEmbed = {
+  embed_origins: Array<string>;
+};
+
 export type MyAssistantList = {
   items: Array<MyAssistant>;
 };
@@ -5237,6 +5241,7 @@ export interface Operations {
   getAgentSessionInput: { method: "GET"; path: "/internal/agent-sessions/{id}/input"; body: never; response: StageInput };
   getAgentVersion: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}"; body: never; response: AgentVersion };
   getAssistant: { method: "GET"; path: "/orgs/{org}/assistants/{slug}"; body: never; response: Assistant };
+  getAssistantEmbed: { method: "GET"; path: "/public/assistants/{org}/{slug}/embed"; body: never; response: AssistantEmbed };
   getAssistantReadiness: { method: "GET"; path: "/orgs/{org}/assistants/{slug}/readiness"; body: never; response: AssistantReadiness };
   getGitHubAppStatus: { method: "GET"; path: "/orgs/{org}/github"; body: never; response: GitHubAppStatus };
   getHostedSource: { method: "GET"; path: "/orgs/{org}/hosted-sources/{sha256}"; body: never; response: HostedSource };

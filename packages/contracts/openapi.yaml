@@ -115,6 +115,7 @@ paths:
         - { name: redirect_to, in: query, schema: { type: string } }
         - { name: org, in: query, schema: { type: string, maxLength: 120 } }
         - { name: login_hint, in: query, schema: { type: string, maxLength: 320 } }
+        - { name: silent, in: query, schema: { type: boolean, default: false }, description: "`prompt=none` (the embedded component, S63-12): the IdP answers without showing anything; the callback returns to `redirect_to` with `?signin=required` when nobody is signed in." }
       responses:
         "307": { description: Redirect to the IdP, or to an extension's sign-in route }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -126,7 +127,8 @@ paths:
       security: []
       summary: OIDC callback (code → session)
       parameters:
-        - { name: code, in: query, required: true, schema: { type: string } }
+        - { name: code, in: query, schema: { type: string }, description: "Absent when the IdP answers `error` to a silent sign-in." }
+        - { name: error, in: query, schema: { type: string, maxLength: 80 } }
         - { name: state, in: query, required: true, schema: { type: string } }
       responses:
         "307": { description: Redirect to the application }
@@ -2520,6 +2522,21 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MyAssistantList" } } } }
         "401": { $ref: "#/components/responses/Unauthorized" }
+  /public/assistants/{org}/{slug}/embed:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    get:
+      tags: [agents]
+      operationId: getAssistantEmbed
+      security: []
+      description: >-
+        The origins that may frame the installation's embedded component (`config.embed_origins`, S63-12, ADR 0139
+        point 6). Public: the console reads it to set the embed page's `frame-ancestors` before anyone is signed in.
+        Origins only; 404 when the installation does not exist.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AssistantEmbed" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /me/assistants/{org}/{slug}/conversations:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -9088,6 +9105,11 @@ components:
         display_name: { type: [string, "null"] }
         description: { type: [string, "null"] }
         status: { type: string, enum: [incomplete, ready, suspended] }
+    AssistantEmbed:
+      type: object
+      required: [embed_origins]
+      properties:
+        embed_origins: { type: array, items: { type: string } }
     MyAssistantList:
       type: object
       required: [items]
