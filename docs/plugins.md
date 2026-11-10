@@ -261,6 +261,19 @@ the `kind: KnowledgeBase` shape, and its `corpus/`), each task workflow and each
 file, packed and digested like a template's. Conversing with an assistant comes with the other stories of
 stream S63 ([the plan](plan/PLAN-2026-11-10-assistants.md)).
 
+#### Knowledge in a conversation
+
+A conversation of an installation is offered `knowledge_search(base, query, top_k)` and
+`knowledge_get(base, document_id)` next to its need tools (S63-05,
+[ADR 0138](adr/0138-the-knowledge-an-assistant-offers.md) point 4), served in the
+conversation's tool loop. The bases offered are those with `knowledge_bases.installation_id` set to the
+installation (the copy of a seed made at install, which S63-06 populates), whatever the person's groups:
+giving the assistant is the control. A base outside the installation is neither offered nor reachable by
+name, even when the person reads it through the knowledge routes, and a `knowledge_get` of another base's
+document is refused. Each passage is framed as data with its document id, title, path and version
+(`source_version`, else the content digest), and the agent's instructions tell it to cite
+`[document, version]`.
+
 #### Installing an assistant and binding its needs
 
 Installing the plugin makes its assistants available; installing an assistant (S63-02) makes one of them an

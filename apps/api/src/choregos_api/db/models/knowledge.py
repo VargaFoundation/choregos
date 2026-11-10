@@ -136,6 +136,12 @@ class KnowledgeBase(Base, PkMixin, TimestampMixin):
     #: people read it only through a grant (or as an administrator or owning-project owner); a run
     #: is served it only on behalf of a person who reads it (S42-11e, ADR 0097)
     restricted: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    #: the assistant installation this base belongs to (S63-05, ADR 0138): the copy of a seed made at
+    #: install, offered to that installation's conversations and to no other. S63-06 sets it; null for
+    #: every base made through the knowledge routes. Deleting the installation keeps the base, unlinked.
+    installation_id: Mapped[str | None] = mapped_column(
+        ForeignKey("assistant_installations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
 
 class KnowledgeGrant(Base, PkMixin, TimestampMixin):

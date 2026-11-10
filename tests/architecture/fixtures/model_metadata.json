@@ -4879,6 +4879,13 @@
     "type": "Boolean()"
    },
    {
+    "default": null,
+    "name": "installation_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
     "default": "<function uuid7>",
     "name": "id",
     "nullable": false,
@@ -4903,6 +4910,17 @@
   "foreign_keys": [
    [
     [
+     "installation_id"
+    ],
+    [
+     "assistant_installations.id"
+    ],
+    "SET NULL",
+    null,
+    "fk_knowledge_bases_installation_id_assistant_installations"
+   ],
+   [
+    [
      "org_id"
     ],
     [
@@ -4914,6 +4932,13 @@
    ]
   ],
   "indexes": [
+   [
+    "ix_knowledge_bases_installation_id",
+    [
+     "knowledge_bases.installation_id"
+    ],
+    false
+   ],
    [
     "ix_knowledge_bases_org_id",
     [
