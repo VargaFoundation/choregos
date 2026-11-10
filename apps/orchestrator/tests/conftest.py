@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from . import pg_kit
+from . import pg_kit, sqlite_kit
 
 os.environ.setdefault("CHOREGOS_ENV", "test")
 os.environ.setdefault("CHOREGOS_FAKES", "1")
@@ -42,7 +42,6 @@ PG_URL = os.environ.get("CHOREGOS_TEST_DATABASE_URL", "")
 @pytest.fixture
 async def setup(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Fixture]:
     if ON_POSTGRES:
-        await pg_kit.prepare(PG_URL)
         os.environ["CHOREGOS_DATABASE_URL"] = pg_kit.app_url(PG_URL)
     else:
         os.environ["CHOREGOS_DATABASE_URL"] = f"sqlite+aiosqlite:///{tmp_path}/orch.db"
@@ -59,7 +58,7 @@ async def setup(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator
     reset_orchestrator_cache()
     await db_session.dispose_engine()
     if ON_POSTGRES:
-        await pg_kit.migrate()
+        await pg_kit.reset(PG_URL)
         # In the TESTS, an unscoped `session_scope()` is a shortcut for "as the platform" (setting a
         # scene). Product code never calls it unscoped, as `test_postgres_mode_runs_under_rls.py`
         # proves: translating it here hides no product defect. An explicit scope is forwarded untouched.
@@ -72,9 +71,7 @@ async def setup(tmp_path: Any, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator
 
         monkeypatch.setattr(db_session, "session_scope", as_platform)
     else:
-        from choregos_api.db.session import create_all
-
-        await create_all()
+        await sqlite_kit.copy_schema_to(tmp_path / "orch.db")
     clear_fake_signals()
 
     adapters = AdapterSet.fakes()

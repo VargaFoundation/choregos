@@ -174,7 +174,9 @@ async def test_the_same_bytes_twice_are_one_document(client: AsyncClient, admin:
         ("doc.pdf", b"PK\x03\x04 not a pdf", "does not start like a PDF"),
         ("notes.md", b"\x00\x01\x02binary", "binary, not text"),
         ("empty.txt", b"", "is empty"),
-        ("archive.docx", fx.broken_office()[:30], "damaged archive"),
+        # An explicit id: the archive carries the clock (zip timestamp), and every xdist worker must
+        # collect the same test ids.
+        pytest.param("archive.docx", fx.broken_office()[:30], "damaged archive", id="archive.docx-damaged"),
         ("values.yaml", b"name: \xe9t\xe9\n", "not UTF-8 text"),
     ],
 )
