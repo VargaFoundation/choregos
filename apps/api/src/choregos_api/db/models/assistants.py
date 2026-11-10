@@ -74,7 +74,9 @@ class ConversationAction(Base, PkMixin, TimestampMixin):
     __tablename__ = "conversation_actions"
 
     org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
-    conversation_id: Mapped[str] = mapped_column(ForeignKey("agent_sessions.id", ondelete="CASCADE"), index=True)
+    conversation_id: Mapped[str] = mapped_column(
+        ForeignKey("agent_sessions.id", ondelete="CASCADE"), index=True
+    )
     #: The conversation's owner: the only one who sees and decides it.
     user_id: Mapped[str] = mapped_column(String(200), index=True)
     need: Mapped[str] = mapped_column(String(63))
