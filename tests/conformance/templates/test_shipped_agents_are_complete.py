@@ -26,12 +26,7 @@ pytestmark = pytest.mark.conformance
 TEMPLATES = Path(__file__).resolve().parents[3] / "templates"
 AGENT_FILES = sorted(TEMPLATES.glob("*/agents/*.yaml"))
 #: plugin -> the version of its archive in `plugins/offline/` that predates S60-04.
-PENDING_REFRESH = {
-    "authoring": "1.0.0",
-    "netops": "1.1.0",
-    "requests": "1.0.1",
-    "software-delivery": "1.0.0",
-}
+PENDING_REFRESH: dict[str, str] = {}
 INTERNAL = [e for e in entries() if e.kind == "internal"]
 
 
