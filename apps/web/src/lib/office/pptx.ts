@@ -9,7 +9,14 @@ import type { Zip } from "./zip";
 export const MAX_SLIDES = 100;
 
 export type SlideRun = { text: string; bold?: boolean; italic?: boolean; underline?: boolean; color?: string; sizePt: number; font?: string };
-export type SlideParagraph = { runs: SlideRun[]; align?: "left" | "center" | "right" | "justify"; bullet?: string; level: number };
+export type SlideParagraph = {
+  runs: SlideRun[];
+  align?: "left" | "center" | "right" | "justify";
+  bullet?: string;
+  level: number;
+  /** A multiple of the font size, as PowerPoint's percentage spacing; single spacing is about 1.2. */
+  lineHeight: number;
+};
 export type SlideShape = {
   x: number;
   y: number;
@@ -21,6 +28,10 @@ export type SlideShape = {
   corners?: "round" | "ellipse";
   image?: string;
   anchor?: "top" | "middle" | "bottom";
+  /** The text frame's margins, in EMU: left, top, right, bottom. */
+  insets?: [number, number, number, number];
+  /** `wrap="none"`: the text keeps to one line per paragraph. */
+  noWrap?: boolean;
   paragraphs: SlideParagraph[];
   table?: SlideParagraph[][][];
   chart?: boolean;
@@ -146,6 +157,10 @@ class SlideReader {
 
   private paragraphs(body: Element | null, styles: (Element | null)[], heading: boolean): SlideParagraph[] {
     const paragraphs: SlideParagraph[] = [];
+    // `normAutofit`: PowerPoint shrank the text to fit its box, and saved by how much.
+    const autofit = child(child(body, "bodyPr"), "normAutofit");
+    const scale = (numberOf(autofit, "fontScale") ?? 100000) / 100000;
+    const reduction = (numberOf(autofit, "lnSpcReduction") ?? 0) / 100000;
     for (const paragraph of children(body, "p")) {
       const props = child(paragraph, "pPr");
       const level = numberOf(props, "lvl") ?? 0;
@@ -172,7 +187,7 @@ class SlideReader {
         const italic = attribute(rp, "i") ?? (firstValue((node) => attribute(node, "i")) as string | undefined) ?? null;
         runs.push({
           text: child(run, "t")?.textContent ?? "",
-          sizePt: size / 100,
+          sizePt: (size / 100) * scale,
           bold: isOn(bold),
           italic: isOn(italic),
           underline: isOn(attribute(rp, "u")),
@@ -187,11 +202,15 @@ class SlideReader {
         .map((item) => (child(item, "buNone") ? "" : (attribute(child(item, "buChar"), "char") ?? undefined)))
         .find((value) => value !== undefined);
       const bullet = none ? undefined : (attribute(ownBullet, "char") ?? inheritedBullet ?? undefined);
+      const percent = [props, ...levels]
+        .map((item) => numberOf(child(child(item, "lnSpc"), "spcPct"), "val"))
+        .find((value) => value !== null);
       paragraphs.push({
         runs,
         align: ALIGN[attribute(props, "algn") ?? levels.map((item) => attribute(item, "algn")).find(Boolean) ?? ""],
         bullet: runs.length > 0 && bullet ? "•" : undefined,
         level,
+        lineHeight: Math.max(0.6, 1.2 * ((percent ?? 100000) / 100000) - reduction),
       });
     }
     return paragraphs;
@@ -241,7 +260,12 @@ class SlideReader {
     const anchorSource = [body, ...inherited.map((shape) => child(shape, "txBody"))].map((item) => attribute(child(item, "bodyPr"), "anchor")).find(Boolean);
     const type = attribute(placeholder, "type");
     const line = child(properties, "ln");
+    const bodies = [body, ...inherited.map((shape) => child(shape, "txBody"))].map((item) => child(item, "bodyPr"));
+    const inset = (name: string, fallback: number) =>
+      bodies.map((item) => numberOf(item, name)).find((value) => value !== null) ?? fallback;
     return {
+      insets: [inset("lIns", 91440), inset("tIns", 45720), inset("rIns", 91440), inset("bIns", 45720)],
+      noWrap: bodies.map((item) => attribute(item, "wrap")).find(Boolean) === "none",
       ...placed,
       fill: child(properties, "noFill") ? undefined : colorOf(child(properties, "solidFill"), this.theme),
       line: colorOf(child(line, "solidFill"), this.theme),

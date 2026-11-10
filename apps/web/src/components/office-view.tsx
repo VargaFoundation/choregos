@@ -18,12 +18,13 @@ function fontSize(deck: Presentation, points: number): string {
   return `${((points * EMU_PER_POINT) / deck.width) * 100}cqw`;
 }
 
-function SlideText({ deck, paragraph }: { deck: Presentation; paragraph: SlideParagraph }) {
+function SlideText({ deck, paragraph, noWrap = false }: { deck: Presentation; paragraph: SlideParagraph; noWrap?: boolean }) {
   const first = paragraph.runs[0];
   return (
     <p
       style={{
         margin: 0,
+        lineHeight: paragraph.lineHeight,
         textAlign: paragraph.align,
         paddingLeft: `${paragraph.level * 2.2}cqw`,
         fontSize: first ? fontSize(deck, first.sizePt) : fontSize(deck, 12),
@@ -40,7 +41,7 @@ function SlideText({ deck, paragraph }: { deck: Presentation; paragraph: SlidePa
             textDecoration: run.underline ? "underline" : undefined,
             color: run.color,
             fontFamily: run.font ? `"${run.font}", sans-serif` : undefined,
-            whiteSpace: "pre-wrap",
+            whiteSpace: noWrap ? "pre" : "pre-wrap",
           }}
         >
           {run.text}
@@ -70,8 +71,13 @@ function Shape({ deck, shape }: { deck: Presentation; shape: SlideShape }) {
     display: "flex",
     flexDirection: "column",
     justifyContent: JUSTIFY[shape.anchor ?? "top"],
-    overflow: "hidden",
-    padding: shape.paragraphs.length > 0 ? "0.6cqw 0.8cqw" : undefined,
+    // PowerPoint does not clip text that overflows its box, and neither does the preview.
+    overflow: shape.image || shape.table ? "hidden" : "visible",
+    whiteSpace: shape.noWrap ? "nowrap" : undefined,
+    padding:
+      shape.paragraphs.length > 0 && shape.insets
+        ? [1, 2, 3, 0].map((side) => `${(shape.insets![side]! / deck.width) * 100}cqw`).join(" ")
+        : undefined,
   };
   if (shape.image) {
     // eslint-disable-next-line @next/next/no-img-element -- an object URL of raster bytes from the file
@@ -108,7 +114,7 @@ function Shape({ deck, shape }: { deck: Presentation; shape: SlideShape }) {
   return (
     <div style={style}>
       {shape.paragraphs.map((paragraph, index) => (
-        <SlideText key={index} deck={deck} paragraph={paragraph} />
+        <SlideText key={index} deck={deck} paragraph={paragraph} noWrap={shape.noWrap} />
       ))}
     </div>
   );

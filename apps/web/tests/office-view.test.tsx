@@ -69,7 +69,7 @@ const textOf = (paragraph: WordParagraph) => paragraph.runs.map((run) => run.tex
 describe("a presentation (ADR 0129)", () => {
   it("is read slide by slide, in order, with what placeholders inherit", async () => {
     const deck = (await readOffice("pptx", fixture("deck.pptx"))) as Presentation;
-    expect(deck.slides).toHaveLength(3);
+    expect(deck.slides).toHaveLength(4);
     expect(deck.width).toBe(9_144_000);
     const texts = deck.slides.map((slide) => slide.shapes.flatMap((s) => s.paragraphs.flatMap((p) => p.runs.map((r) => r.text))));
     expect(texts[0]).toEqual(["Quarterly business review", "Prepared for the directors"]);
@@ -86,6 +86,23 @@ describe("a presentation (ADR 0129)", () => {
     expect(oval.paragraphs[0]!.runs[0]).toMatchObject({ text: "Brand", sizePt: 20, bold: true });
   });
 
+  it("keeps a text frame's spacing, margins, wrapping and the shrink PowerPoint saved", async () => {
+    const deck = (await readOffice("pptx", fixture("deck.pptx"))) as Presentation;
+    const label = deck.slides[3]!.shapes.find((s) => s.paragraphs[0]?.runs[0]?.text === "MAIN TOPIC")!;
+    expect(label.noWrap).toBe(true);
+    expect(label.insets![0]).toBe(182880);
+    expect(label.paragraphs[0]!.runs[0]!.sizePt, "20 pt shrunk to half").toBe(10);
+    expect(label.paragraphs[0]!.lineHeight).toBeCloseTo(1.08);
+  });
+
+  it("does not clip text that overflows its box, as PowerPoint does not", async () => {
+    render(<OfficeView type="pptx" blob={new Blob([fixture("deck.pptx")])} fallback={null} />);
+    const slides = await screen.findAllByTestId("office-slide");
+    const label = within(slides[3]!).getByText("MAIN TOPIC").closest("div")!;
+    expect(label.style.overflow).toBe("visible");
+    expect(label.style.whiteSpace).toBe("nowrap");
+  });
+
   it("draws pictures and tables", async () => {
     const deck = (await readOffice("pptx", fixture("deck.pptx"))) as Presentation;
     expect(deck.slides[2]!.shapes.find((s) => s.image)!.image).toBe("blob:picture");
@@ -95,7 +112,7 @@ describe("a presentation (ADR 0129)", () => {
 
   it("is drawn as slides, positioned against the slide", async () => {
     render(<OfficeView type="pptx" blob={new Blob([fixture("deck.pptx")])} fallback={null} />);
-    expect(await screen.findAllByTestId("office-slide")).toHaveLength(3);
+    expect(await screen.findAllByTestId("office-slide")).toHaveLength(4);
     expect(screen.getByTestId("office-pptx")).toHaveTextContent("Quarterly business review");
     expect(screen.getByTestId("office-note")).toHaveTextContent("preview");
   });
