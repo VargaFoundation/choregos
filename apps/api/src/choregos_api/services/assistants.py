@@ -390,6 +390,24 @@ async def uninstall(
                  target_id=row.slug)  # fmt: skip
 
 
+#: The order of approvals: an owner moves a write up this scale, never down (S63-10).
+_APPROVAL_RANK = {"none": 0, "inline": 1, "console": 2}
+
+
+def _approval_of_binding(tool: dict[str, Any], asked: str | None, need: str) -> str | None:
+    """The approval a binding takes: the manifest's (the floor) unless the owners raise it to `console`."""
+    floor = tool.get("approval")
+    if asked is None:
+        return str(floor) if floor is not None else None
+    if floor is None:
+        raise unprocessable(f"`{need}` is a read: it has no approval to choose")
+    if _APPROVAL_RANK[asked] < _APPROVAL_RANK[str(floor)]:
+        raise unprocessable(
+            f"`{need}` needs at least the `{floor}` approval its plugin declares: `{asked}` is below it"
+        )
+    return asked
+
+
 async def bind(
     session: AsyncSession,
     org_id: str,
@@ -413,6 +431,7 @@ async def bind(
     ).scalar_one_or_none()
     if connector is None:
         raise unprocessable(f"`{body.connector}` is not a connector of {org}")
+    approval = _approval_of_binding(tool, body.approval, need)
     if not body.enabled and tool.get("required", True):
         raise unprocessable(f"`{need}` is a required need: it cannot be switched off")
     if body.enabled:
@@ -435,7 +454,7 @@ async def bind(
     binding.connector_id = connector.id
     binding.operations = [str(o) for o in tool["operations"]]
     binding.identity = str(tool["identity"])
-    binding.approval = tool.get("approval")
+    binding.approval = approval
     binding.enabled = body.enabled
     await session.flush()
     await refresh(session, row)

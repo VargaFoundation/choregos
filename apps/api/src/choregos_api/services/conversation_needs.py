@@ -22,37 +22,67 @@ if TYPE_CHECKING:
     from ..schemas import AgentSpec
 
 
-async def _bound(session: AsyncSession, installation_id: str) -> dict[str, tuple[bool, str]]:
-    """need -> (enabled, name of the connector it is bound to)."""
+async def _bindings(
+    session: AsyncSession, installation_id: str
+) -> dict[str, tuple[AssistantToolBinding, str]]:
+    """need -> (its binding, name of the connector it is bound to)."""
     rows = await session.execute(
-        select(AssistantToolBinding.need, AssistantToolBinding.enabled, OrgConnector.name)
+        select(AssistantToolBinding, OrgConnector.name)
         .join(OrgConnector, OrgConnector.id == AssistantToolBinding.connector_id)
         .where(AssistantToolBinding.installation_id == installation_id)
     )
-    return {need: (enabled, connector) for need, enabled, connector in rows.all()}
+    return {b.need: (b, connector) for b, connector in rows.all()}
+
+
+async def _reached(
+    session: AsyncSession, record: AgentSessionRecord, spec: AgentSpec, project: Project
+) -> tuple[AgentSpec, list[tuple[str, AssistantToolBinding, list[BrokerTool]]]]:
+    """The spec without the servers that name a bound need, and for each ENABLED need its binding and every
+    tool (read or write) the agent's grants reach through the connector the need is bound to."""
+    if not record.installation_id:
+        return spec, []
+    bindings = await _bindings(session, record.installation_id)
+    selection = selection_of_spec(spec.model_dump(mode="json"))
+    needs = {name: grants for name, grants in selection.items() if name in bindings}
+    if not needs:
+        return spec, []
+    plain = spec.model_copy(update={"mcp_servers": [s for s in spec.mcp_servers if s.connector not in needs]})
+    reached: list[tuple[str, AssistantToolBinding, list[BrokerTool]]] = []
+    for need, grants in needs.items():
+        binding, connector = bindings[need]
+        if not binding.enabled:
+            continue
+        tools = await tools_of_selection(session, {connector: grants}, project)
+        reached.append(
+            (need, binding, [replace(t, name=f"{need}{SEPARATOR}{t.operation.name}") for t in tools.values()])
+        )
+    return plain, reached
 
 
 async def need_tools(
     session: AsyncSession, record: AgentSessionRecord, spec: AgentSpec, project: Project
 ) -> tuple[AgentSpec, dict[str, BrokerTool]]:
     """The spec without the servers that name a bound need, and the read tools those needs reach."""
-    if not record.installation_id:
-        return spec, {}
-    bound = await _bound(session, record.installation_id)
-    selection = selection_of_spec(spec.model_dump(mode="json"))
-    needs = {name: grants for name, grants in selection.items() if name in bound}
-    if not needs:
-        return spec, {}
-    plain = spec.model_copy(update={"mcp_servers": [s for s in spec.mcp_servers if s.connector not in needs]})
-    tools: dict[str, BrokerTool] = {}
-    for need, grants in needs.items():
-        enabled, connector = bound[need]
-        if not enabled:
-            continue
-        reached = await tools_of_selection(session, {connector: grants}, project)
-        for tool in reached.values():
-            if tool.is_write or tool.needs_approval:
-                continue
-            name = f"{need}{SEPARATOR}{tool.operation.name}"
-            tools[name] = replace(tool, name=name)
+    plain, reached = await _reached(session, record, spec, project)
+    tools = {t.name: t for _, _, found in reached for t in found if not t.is_write and not t.needs_approval}
     return plain, tools
+
+
+#: What a conversation can execute once the person confirms (S63-10): the identities `acting=` supports.
+EXECUTABLE_IDENTITIES = ("user_exchange",)
+
+
+async def write_tools(
+    session: AsyncSession, record: AgentSessionRecord, spec: AgentSpec, project: Project, *, approval: str
+) -> dict[str, tuple[str, BrokerTool]]:
+    """`<need>__<operation>` -> (need, tool) of the write operations of the needs whose binding carries this
+    `approval` and an identity a confirmation can execute under. An operation whose organisation policy is
+    `approval` is a governed action already and is left out."""
+    _, reached = await _reached(session, record, spec, project)
+    return {
+        t.name: (need, t)
+        for need, binding, found in reached
+        if binding.approval == approval and binding.identity in EXECUTABLE_IDENTITIES
+        for t in found
+        if t.is_write and not t.needs_approval
+    }

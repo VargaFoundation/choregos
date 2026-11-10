@@ -37,6 +37,8 @@ class AssistantUpdate(Dto):
 class AssistantBind(Dto):
     connector: str = Field(min_length=1, max_length=64)
     enabled: bool = True
+    #: A write's approval, raised above the manifest's (`inline` to `console`), never below it (S63-10).
+    approval: Literal["inline", "console"] | None = None
 
 
 class AssistantBinding(Dto):
