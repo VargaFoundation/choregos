@@ -392,6 +392,21 @@ row-level policy.
 - **The page.** `GET, PATCH, DELETE /api/v1/me/assistants/{org}/{slug}/memory/{space}` and `.../{space}/{subject}`
   list, confirm or reject a proposal, correct, pin and delete; they are the caller's own memory only.
 
+### Data protection
+
+- **Retention.** A daily task of the API deletes the conversations past `retention_until` with their events
+  and the unpinned memory facts older than their space's `retention_days` (the ledger lines stay).
+- **Reads journal.** Each tool call of an assistant's conversation writes one line (person, need, operation,
+  subject, moment; never the content). `GET /api/v1/orgs/{org}/assistants/{slug}/reads` lists them for
+  `assistant:audit`, filtered by `subject_type` / `subject_key` / `user_id`.
+- **Erasure by user.** `DELETE /api/v1/me/assistants/{org}/{slug}` removes the caller's conversations and
+  memories in that installation, and is written in the audit log.
+- **Erasure and export by subject.** `POST /api/v1/orgs/{org}/assistants/{slug}/erasure` with
+  `{subject: {type, key}, mode: export | erase}`, for `assistant:audit`, only when `policy.data.erasure` lists
+  `by_subject`. `export` returns every person's memory of the subject and the conversations where it was
+  resolved; `erase` deletes those memories and redacts those conversations (`conversations: delete` deletes
+  them). Both are audited, the key as a digest.
+
 ## Pack and index
 
 ```

@@ -362,6 +362,8 @@ class Settings(BaseSettings):
     metrics_refresh_seconds: float = 15.0
     #: Seconds between two passes of the approved-actions relay, in every replica (ADR 0085).
     action_relay_interval_s: float = 30.0
+    #: Seconds between two passes of the assistants' retention purge (S63-16): daily.
+    assistant_retention_interval_s: float = 86400.0
     #: Tempo's query address, read by the nightly ledger-vs-trace job (`trace_drift.py`, ADR 0018
     #: point 3). Empty: the job refuses to run.
     tempo_url: str = ""

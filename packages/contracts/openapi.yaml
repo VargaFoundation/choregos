@@ -2622,6 +2622,62 @@ paths:
         "204": { description: Deleted }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /me/assistants/{org}/{slug}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    delete:
+      tags: [agents]
+      operationId: eraseMyAssistantData
+      description: >-
+        Erasure by user (ADR 0133 point 6): removes what belongs to the caller in the installation, whatever the
+        audience says today: their conversations with the transcripts, their `user` and `user_subject` memories, and
+        (lot 2) their connected accounts and delegations. Journaled in the audit log. The reads journal keeps its lines.
+      responses:
+        "200": { description: What was removed, content: { application/json: { schema: { $ref: "#/components/schemas/UserErasure" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/assistants/{slug}/reads:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    get:
+      tags: [agents]
+      operationId: listAssistantReads
+      description: >-
+        The reads journal (`assistant:audit`): one line per tool call of the assistant's conversations (user, need,
+        operation, subject, moment; never the content read), most recent first, filterable by subject and user.
+      parameters:
+        - { name: subject_type, in: query, required: false, schema: { type: string } }
+        - { name: subject_key, in: query, required: false, schema: { type: string } }
+        - { name: user_id, in: query, required: false, schema: { type: string } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AssistantReadPage" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/assistants/{slug}/erasure:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    post:
+      tags: [agents]
+      operationId: eraseAssistantSubject
+      description: >-
+        Export or erasure by subject (`assistant:audit`; only when the manifest's `policy.data.erasure` lists
+        `by_subject`, else 409). `export` returns every memory of the subject across the installation's users and the
+        conversations where it was resolved; `erase` deletes those memories and redacts (or deletes) those
+        conversations. Journaled with who did it; the subject's key is recorded as a digest.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SubjectErasureRequest" } } }
+      responses:
+        "200": { description: Done, content: { application/json: { schema: { $ref: "#/components/schemas/SubjectErasure" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /me/conversations:
     get:
       tags: [agents]
@@ -8652,6 +8708,78 @@ components:
         bindings: { type: array, items: { $ref: "#/components/schemas/AssistantBinding" } }
         created_by: { type: [string, "null"] }
         created_at: { type: string, format: date-time }
+    AssistantReadLine:
+      type: object
+      required: [id, user_id, need, operation, at]
+      properties:
+        id: { type: string }
+        user_id: { type: string }
+        conversation_id: { type: [string, "null"] }
+        work_item_key: { type: [string, "null"] }
+        need: { type: string }
+        operation: { type: string }
+        subject_type: { type: [string, "null"] }
+        subject_key: { type: [string, "null"] }
+        delegation_id: { type: [string, "null"] }
+        at: { type: string, format: date-time }
+    AssistantReadPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/AssistantReadLine" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    SubjectErasureRequest:
+      type: object
+      required: [subject, mode]
+      properties:
+        subject: { $ref: "#/components/schemas/MemorySubject" }
+        mode: { type: string, enum: [export, erase] }
+        conversations: { type: string, enum: [redact, delete], default: redact }
+    SubjectMemoryFact:
+      type: object
+      required: [id, content, status]
+      properties:
+        id: { type: string }
+        content: { type: string }
+        status: { type: string }
+        created_at: { type: [string, "null"], format: date-time }
+    SubjectMemory:
+      type: object
+      required: [user_id, space]
+      properties:
+        user_id: { type: string }
+        space: { type: string }
+        facts: { type: array, items: { $ref: "#/components/schemas/SubjectMemoryFact" } }
+        profiles: { type: array, items: { type: object, additionalProperties: true } }
+    SubjectConversation:
+      type: object
+      required: [id, user_id]
+      properties:
+        id: { type: string }
+        user_id: { type: string }
+        title: { type: [string, "null"] }
+        created_at: { type: [string, "null"], format: date-time }
+        last_activity_at: { type: [string, "null"], format: date-time }
+    SubjectErasure:
+      type: object
+      required: [mode, subject]
+      properties:
+        mode: { type: string, enum: [export, erase] }
+        subject: { $ref: "#/components/schemas/MemorySubject" }
+        memories: { type: array, items: { $ref: "#/components/schemas/SubjectMemory" } }
+        conversations: { type: array, items: { $ref: "#/components/schemas/SubjectConversation" } }
+        memories_erased: { type: integer }
+        conversations_redacted: { type: integer }
+        conversations_deleted: { type: integer }
+    UserErasure:
+      type: object
+      required: [conversations, memory_stores, memory_facts, memory_profiles]
+      properties:
+        conversations: { type: integer }
+        memory_stores: { type: integer }
+        memory_facts: { type: integer }
+        memory_profiles: { type: integer }
+        others: { type: object, additionalProperties: { type: integer } }
     MemorySubject:
       type: object
       required: [type, key]

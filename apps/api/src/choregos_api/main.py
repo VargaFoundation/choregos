@@ -40,6 +40,7 @@ from .routers import (
     agent_sessions,
     agents,
     assistant_conversations,
+    assistant_data,
     assistant_memory,
     assistants,
     auth,
@@ -88,6 +89,7 @@ from .routers import (
 )
 from .security import check_session_secret
 from .services.action_relay import relay_loop
+from .services.assistant_retention import retention_loop
 from .services.plugin_defaults import check_configuration, reconcile_in_background
 from .services.plugin_supply import warm_shipping
 from .services.skill_scanner import mirror_loop
@@ -132,12 +134,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     osv_mirror = asyncio.create_task(mirror_loop(settings))
     # The plugin sources' index, read once now: the first listing of the library does not wait for it.
     shipping_warmup = asyncio.create_task(warm_shipping(settings))
+    # The daily purge of assistants' conversations and memories past their retention (S63-16).
+    assistant_retention = asyncio.create_task(retention_loop(settings.assistant_retention_interval_s))
     yield
     # A conversion cut here stays `converting`; the next start-up takes it back once stale.
     await conversions.stop()
     if relay is not None:
         await relay.stop()
-    for task in (metrics_refresh, action_relay, a2a_push, plugin_defaults, osv_mirror, shipping_warmup):
+    for task in (
+        metrics_refresh,
+        action_relay,
+        a2a_push,
+        plugin_defaults,
+        osv_mirror,
+        shipping_warmup,
+        assistant_retention,
+    ):
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task
@@ -399,6 +411,7 @@ def create_app() -> FastAPI:
         skill_catalogue.router,
         assistants.router,
         assistant_memory.router,
+        assistant_data.router,
         plugins.router,
         plugin_sources.router,
         knowledge.router,
