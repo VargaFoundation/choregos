@@ -11,7 +11,7 @@ example that stops being true turns the suite red.
 
 | You are | Take | Credential | Gives you back |
 | --- | --- | --- | --- |
-| an application or an agent that wants the result | [**the A2A door**](#the-a2a-door-step-by-step) | an application's own token, or a person's, scope `a2a` | a task: its state, a stream or push notifications, the artefacts at the end |
+| an application or an agent that wants the result, or a script that waits for it with `choregos a2a` | [**the A2A door**](#the-a2a-door-step-by-step) | an application's own token, or a person's, scope `a2a` | a task: its state, a stream or push notifications, the artefacts at the end |
 | a terminal, a script, a CI job | [**the CLI or the REST API**](#from-a-terminal-or-a-script) | a person's token, scope `*` | the work item, then whatever you read of it |
 | a system that can only send JSON: monitoring, a form, a CRM | [**an HTTP trigger**](#from-a-system-that-only-sends-json) | the trigger's own token, no person behind it | an acknowledgement and the work item's id; nothing follows |
 | an assistant: Claude, Cursor, VS Code | [the MCP door](integrations.md) (`create_work_item`) | a person's token, scope `mcp:write`, or OAuth | tools the assistant calls and reads |
@@ -26,6 +26,9 @@ The door speaks [A2A](https://a2a-protocol.org) **0.3.0** and **1.0**, JSON-RPC 
 so any HTTP client can call it. This page uses the 0.3.0 names; [In A2A 1.0](#in-a2a-10) gives the other
 spelling. The rules behind each call are in the [reference](integrations.md#another-agent-over-a2a) and
 [ADR 0078](adr/0078-governed-workflows-as-a2a-skills.md).
+
+Each step shows the call with `curl`, then the same with the CLI's `choregos a2a`
+([reference](cli.md#choregos-a2a)), which writes the JSON-RPC for you.
 
 ### 1. Open the workflow to the door
 
@@ -82,6 +85,14 @@ export TOKEN=chg_...
 export A2A=https://choregos.example.com/a2a/orgs/acme
 ```
 
+The CLI reads the door's address from its profile (`CHOREGOS_API_URL`, `CHOREGOS_ORG`, or `choregos login`)
+and the token from `--token` or `CHOREGOS_A2A_TOKEN`. Without either it sends the profile's token, which is
+usually a `*` one: the door answers `403 insufficient_scope`, and the CLI says which token to create.
+
+```bash
+export CHOREGOS_API_URL=https://choregos.example.com CHOREGOS_ORG=acme CHOREGOS_A2A_TOKEN=chg_...
+```
+
 ### 3. See what you may start
 
 ```bash
@@ -99,7 +110,12 @@ curl -s "$A2A/.well-known/agent-card.json" -H "Authorization: Bearer $TOKEN" | j
   | select(.uri == "https://choregos.dev/a2a/extensions/skill-fields/v1") | .params.skills'
 ```
 
-A client that ignores the extension still reads the card.
+A client that ignores the extension still reads the card. The CLI lists both, a required field with a `*`:
+
+```bash
+choregos a2a skills
+choregos a2a skills --json
+```
 
 ### 4. Start the workflow
 
@@ -124,6 +140,19 @@ curl -s "$A2A" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/j
 - **`messageId` is your idempotency key.** Send the same one again after a timeout and you get the same
   work item back, with nothing started twice. Derive it from your own record, as here.
 - `metadata.skill` may be left out when the card has a single skill.
+
+With the CLI, `--text` gives the text, each `--field` (or `--fields-json`, a file holding one JSON object)
+the data part, `--title` the title:
+
+```bash
+choregos a2a send billing-api/ship-a-change --message-id order-2026-0042 --title "Add credit notes" \
+  --text "Customers need a credit note when an invoice is refunded." \
+  --field ticket=FIN-42 --field priority=high
+```
+
+It prints the message id first, then the task. Without `--message-id`, the id is a digest of the message
+(skill, title, text, fields, files): the same command sent again finds the same task, and nothing starts
+twice. To start the same request a second time on purpose, pass a new `--message-id`.
 
 The answer is the task. Keep its `id`:
 
@@ -173,6 +202,14 @@ curl -s "$A2A" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/j
 10 MiB by default per message, 50 MiB at most (**Settings › A2A** of the project). A file given by `uri` is
 refused: the door fetches nothing on a caller's behalf.
 
+With the CLI, `--file` reads the file and sends it in base64, its media type guessed from its extension;
+`PATH;type=MEDIA/TYPE` names it when the extension does not:
+
+```bash
+choregos a2a send billing-api/ship-a-change --message-id order-2026-0043 \
+  --title "Apply the attached specification" --field ticket=FIN-43 --file spec.pdf
+```
+
 ### 6. Follow it
 
 Read it whenever you like:
@@ -206,11 +243,29 @@ call. For a server that would rather be called back, see
 
 `metadata.choregos.state` gives the workflow's own state, finer than these five.
 
+With the CLI, `get` reads the task once and `follow` keeps the stream open until a final state, opening it
+again when the door cuts it after the hour. `send --wait` starts the task and follows it in one command.
+On `input-required` they print `decision_url` and go on waiting. `--json` prints the task as the door
+answers it on standard output, and the progress on standard error.
+
+```bash
+choregos a2a get <task id> --json
+choregos a2a follow <task id> --out ./result
+choregos a2a send billing-api/ship-a-change --text "..." --field ticket=FIN-44 --wait --out ./result
+```
+
+`follow` and `send --wait` exit `0` when the task completed, `3` when it failed, `4` when it was canceled,
+and `1` when the door refused a call or could not be reached.
+
 ### 7. Read the result
 
 A `completed` task carries the latest revision of each artefact in `artifacts`: markdown as text, a JSON
 object as data, anything else as a file in base64. The content stops at 256 KiB per artefact and 1 MiB per
 task; beyond that, the part describes the artefact and the console serves it.
+
+The CLI's `--out <directory>` (on `get`, `follow` and `send --wait`) writes each artefact of a completed
+task there: text as `<name>.md` unless its name has an extension, a JSON object as `<name>.json`, a file
+under its own name. An artefact the task only describes is named, not written.
 
 ### 8. Stop it
 
@@ -218,6 +273,12 @@ task; beyond that, the part describes the artefact and the console serves it.
 curl -s "$A2A" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{
   "jsonrpc": "2.0", "id": 5, "method": "tasks/cancel", "params": { "id": "<task id>" }
 }'
+```
+
+With the CLI:
+
+```bash
+choregos a2a cancel <task id>
 ```
 
 ### When it refuses
@@ -260,6 +321,8 @@ The same calls, under 1.0's names, at the same URL; the guards and the limits ar
 ## From a terminal or a script
 
 The CLI and the REST API take a token of scope `*`, which the A2A door refuses, and the other way round.
+`choregos a2a` is the CLI's way through the A2A door, with an `a2a` token: see
+[the steps above](#the-a2a-door-step-by-step). The commands below go through REST.
 
 ```bash
 export CHOREGOS_API_URL=https://choregos.example.com CHOREGOS_TOKEN=chg_... CHOREGOS_ORG=acme
@@ -294,4 +357,3 @@ in [Usage](usage.md#work-items-opened-by-another-system-http-triggers) and
 - **No `ListTasks` and no signed card in A2A 1.0.** The 1.0 spelling is checked against the
   specification's `a2a.proto` and the platform's own client, not yet against another vendor's 1.0 client.
 - **An application's account opens the A2A door only.** The REST API and the MCP door take a person's token.
-- **No CLI verb for the A2A door.** `choregos items create` goes through REST, and takes no file.

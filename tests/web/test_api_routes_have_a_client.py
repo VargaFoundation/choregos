@@ -44,9 +44,9 @@ MACHINE_ONLY_ROUTES: dict[str, str] = {
     "/.well-known/oauth-protected-resource": "the MCP door's protected-resource metadata, read by an MCP "
     "client before it asks for a token; outside the contract",
     "/a2a/orgs/{org}": "the A2A door (ADR 0078): another agent sends the organisation a task over "
-    "JSON-RPC; outside the contract",
-    "/a2a/orgs/{org}/.well-known/agent-card.json": "the A2A door's agent card, read by the calling agent; "
-    "outside the contract",
+    "JSON-RPC, and `choregos a2a` (S62-03) with the same `a2a` token; outside the contract",
+    "/a2a/orgs/{org}/.well-known/agent-card.json": "the A2A door's agent card, read by the calling agent "
+    "and `choregos a2a skills`; outside the contract",
     "/metrics": "the Prometheus scrape, read by the monitoring stack; outside the contract",
     "/orgs/{org}/mcp-gateway/jwks.json": "the MCP gateway reads the organisation's public assertion keys "
     "to verify the calls Choregos signs (ADR 0105); unauthenticated",

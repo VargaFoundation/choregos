@@ -12,6 +12,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from .a2a import a2a_app
 from .client import ApiError, Client, NoOrganisationError, Profile
 from .knowledge import knowledge_app
 from .plugins import plugin_app
@@ -45,6 +46,7 @@ app.add_typer(workflow_app, name="workflow")
 app.add_typer(dev_app, name="dev")
 app.add_typer(knowledge_app, name="knowledge")
 app.add_typer(plugin_app, name="plugin")
+app.add_typer(a2a_app, name="a2a")
 
 console = Console()
 
