@@ -2,8 +2,8 @@
 """Assistant installations of an organisation (ADR 0133, S63-02): install, configure, bind, readiness.
 
 Installing, uninstalling and changing the owners are the organisation administrator's; configuring and
-binding are the administrator's and the owner groups' (`services.assistants` decides, S63-15 replaces it
-with `assistant:manage`). The manifest is read from the installed plugin, never sent by the client.
+binding are the administrator's and the owner groups' (`assistant:manage`, decided by
+`services.assistant_access`). The manifest is read from the installed plugin, never sent by the client.
 """
 
 from __future__ import annotations
@@ -26,6 +26,7 @@ from ..schemas.assistants import (
 )
 from ..services import assistants as service
 from ..services.agent_governance import is_member
+from ..services.assistant_access import may_manage_groups
 from ..services.organisations import organisation_by_slug
 
 router = APIRouter(tags=["agents"])
@@ -42,7 +43,7 @@ async def list_assistants(org: str, session: Db, principal: Me) -> AssistantList
     rows = [
         r
         for r in await service.installations(session, organisation.id)
-        if service.may_manage(principal, org, list(r.owner_groups))
+        if may_manage_groups(principal, org, list(r.owner_groups))
     ]
     return AssistantList(items=[await service.to_dto(session, r) for r in rows])
 

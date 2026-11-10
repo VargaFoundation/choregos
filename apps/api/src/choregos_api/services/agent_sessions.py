@@ -403,8 +403,12 @@ async def reserve_budget(
     agent_slug: str,
     spec: AgentSpec,
     max_usd: float | None,
+    extra_caps: dict[str, float] | None = None,
 ) -> Any:
-    """The smallest of what is left under every cap that applies, as `prepare_stage` reads it."""
+    """The smallest of what is left under every cap that applies, as `prepare_stage` reads it.
+
+    `extra_caps` are further remainders the caller computed (an assistant's person and installation
+    months, S63-15), named as `bound_by` should report them."""
     from choregos_core.policy import PolicyEngine
 
     from .agents import spend_this_month, spend_today
@@ -452,6 +456,7 @@ async def reserve_budget(
             - await org_spent_since(session, org_id, start_of_month())
             - await open_reservations(session, org_id=org_id)
         )
+    left.update(extra_caps or {})
     return reserve(left)
 
 

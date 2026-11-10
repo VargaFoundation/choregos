@@ -174,6 +174,9 @@ class Settings(BaseSettings):
     #: default is what the prompt loop lets through of one tool answer (`RESULT_CEILING_BYTES`).
     broker_result_ceiling_bytes: int = Field(default=RESULT_CEILING_BYTES, ge=1024)
     allowed_agent_backends: list[str] = Field(default_factory=list)
+    #: The IdP groups whose members hold `assistant:audit` on every assistant of the platform: the
+    #: privacy officers (S63-15). Owners hold it on their own assistant; no organisation role carries it.
+    assistant_privacy_officer_groups: list[str] = Field(default_factory=list)
     #: The hosts the API pod may reach, as the deployment's network policy lets it (`*.` wildcards
     #: allowed). Empty means the deployment does not say: the MCP catalogue then answers `unknown`
     #: instead of `undeclared` (ADR 0065). It restricts nothing; the network policy does.

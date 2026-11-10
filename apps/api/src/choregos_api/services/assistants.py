@@ -10,8 +10,8 @@ overrides and, per need, the connector it is bound to.
 installed (uninstalling a plugin suspends its assistants, installing it again resumes them), `incomplete`
 while the readiness has an item, `ready` otherwise.
 
-Rights are decided in `may_manage` and `require_admin` and nowhere else: S63-15 replaces them with the
-`assistant:manage` permission.
+Rights are decided by the permissions `assistant:manage`, `assistant:use` and `assistant:audit`
+(`assistant_access.holds`, S63-15) and nowhere else.
 """
 
 from __future__ import annotations
@@ -42,6 +42,7 @@ from ..schemas.assistants import (
     AssistantUpdate,
 )
 from . import plugin_installer
+from .assistant_access import holds
 from .connector_identity import supports_identity
 
 INCOMPLETE = "incomplete"
@@ -51,25 +52,15 @@ SUSPENDED = "suspended"
 # -- rights ----------------------------------------------------------------------------------------------
 
 
-def is_org_admin(principal: Principal, org: str) -> bool:
-    """The organisation administrator, as for a plugin install."""
-    return principal.can(Permission.TOOLS_GRANT, org)
-
-
-def may_manage(principal: Principal, org: str, owner_groups: list[str]) -> bool:
-    """Configure and bind: an organisation administrator, or a member of one of the owner groups."""
-    return is_org_admin(principal, org) or bool(set(principal.groups) & set(owner_groups))
-
-
 def require_admin(principal: Principal, org: str) -> None:
-    if not is_org_admin(principal, org):
+    if not principal.can(Permission.ASSISTANT_MANAGE, org):
         raise forbidden(
             f"assistants are installed, uninstalled and given owners by the administrator of {org}"
         )
 
 
 def require_manager(principal: Principal, org: str, row: AssistantInstallation) -> None:
-    if not may_manage(principal, org, list(row.owner_groups)):
+    if not holds(principal, Permission.ASSISTANT_MANAGE, org, row):
         raise forbidden(f"`{row.slug}` is managed by the administrator of {org} and by its owner groups")
 
 
