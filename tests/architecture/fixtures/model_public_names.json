@@ -13,6 +13,8 @@
  "Any",
  "ApiToken",
  "ArtifactRecord",
+ "AssistantInstallation",
+ "AssistantToolBinding",
  "AuditLog",
  "BackendRegistryRow",
  "Base",

@@ -3743,6 +3743,89 @@ export type ApiToken = {
   last_client?: string | null;
 };
 
+export type AssistantInstall = {
+  /** An installed plugin of the organisation. */
+  plugin: string;
+  /** `metadata.name` of the assistant in that plugin. */
+  assistant: string;
+  /** Defaults to the assistant's name. */
+  slug?: string | null;
+  config?: {
+    [key: string]: unknown;
+  };
+  owner_groups?: Array<string>;
+  audience_groups?: Array<string>;
+  channel?: "stable" | "candidate";
+};
+
+export type AssistantUpdate = {
+  config?: {
+    [key: string]: unknown;
+  };
+  owner_groups?: Array<string>;
+  audience_groups?: Array<string>;
+  channel?: "stable" | "candidate";
+  policy_overrides?: {
+    [key: string]: unknown;
+  };
+};
+
+export type AssistantBind = {
+  /** The name of an organisation connector. */
+  connector: string;
+  enabled?: boolean;
+};
+
+export type AssistantBinding = {
+  need: string;
+  connector: string;
+  operations: Array<string>;
+  identity: "service" | "user_exchange" | "user_consent";
+  approval?: "none" | "inline" | "console" | null;
+  enabled: boolean;
+};
+
+export type Assistant = {
+  slug: string;
+  plugin: string;
+  plugin_version: string;
+  assistant_name: string;
+  display_name?: string | null;
+  config: {
+    [key: string]: unknown;
+  };
+  owner_groups: Array<string>;
+  audience_groups: Array<string>;
+  channel: "stable" | "candidate";
+  status: "incomplete" | "ready" | "suspended";
+  policy_overrides: {
+    [key: string]: unknown;
+  };
+  bindings: Array<AssistantBinding>;
+  created_by?: string | null;
+  created_at: string;
+};
+
+export type AssistantList = {
+  items: Array<Assistant>;
+};
+
+export type AssistantReadinessItem = {
+  kind: "assistant_missing" | "config_missing" | "need_unbound" | "need_not_served" | "identity_unsupported";
+  need?: string | null;
+  /** The configuration key, for `config_missing`. */
+  key?: string | null;
+  message: string;
+  /** `owners`: an organisation administrator or a member of `groups`; `org_admin`: the organisation administrator. */
+  fix_by: "owners" | "org_admin";
+  groups: Array<string>;
+};
+
+export type AssistantReadiness = {
+  status: "incomplete" | "ready" | "suspended";
+  items: Array<AssistantReadinessItem>;
+};
+
 export type MachineAccountCreate = {
   slug: string;
   display_name?: string | null;
@@ -4685,6 +4768,7 @@ export interface Operations {
   authLogin: { method: "GET"; path: "/auth/login"; body: never; response: void };
   authLogout: { method: "POST"; path: "/auth/logout"; body: never; response: void };
   authorizeRemoteCredential: { method: "POST"; path: "/orgs/{org}/remote-credentials/{name}/authorize"; body: never; response: RemoteCredentialAuthorization };
+  bindAssistantNeed: { method: "PUT"; path: "/orgs/{org}/assistants/{slug}/bindings/{need}"; body: AssistantBind; response: Assistant };
   callAgentSessionTool: { method: "POST"; path: "/internal/agent-sessions/{id}/tools/{name}"; body: AgentSessionToolCall; response: AgentSessionToolAnswer };
   callRunTool: { method: "POST"; path: "/internal/runs/{id}/tools/{name}"; body: {
   [key: string]: unknown;
@@ -4787,6 +4871,8 @@ export interface Operations {
   getAgentSession: { method: "GET"; path: "/orgs/{org}/agent-sessions/{session_id}"; body: never; response: AgentSession };
   getAgentSessionInput: { method: "GET"; path: "/internal/agent-sessions/{id}/input"; body: never; response: StageInput };
   getAgentVersion: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}"; body: never; response: AgentVersion };
+  getAssistant: { method: "GET"; path: "/orgs/{org}/assistants/{slug}"; body: never; response: Assistant };
+  getAssistantReadiness: { method: "GET"; path: "/orgs/{org}/assistants/{slug}/readiness"; body: never; response: AssistantReadiness };
   getGitHubAppStatus: { method: "GET"; path: "/orgs/{org}/github"; body: never; response: GitHubAppStatus };
   getHostedSource: { method: "GET"; path: "/orgs/{org}/hosted-sources/{sha256}"; body: never; response: HostedSource };
   getIntegrations: { method: "GET"; path: "/integrations"; body: never; response: Integrations };
@@ -4933,6 +5019,7 @@ export interface Operations {
   healthz: { method: "GET"; path: "/healthz"; body: never; response: void };
   importSkill: { method: "POST"; path: "/orgs/{org}/skills/import"; body: void; response: Skill };
   importSkillsFromGit: { method: "POST"; path: "/orgs/{org}/skills/import-git"; body: SkillGitImport; response: Array<Skill> };
+  installAssistant: { method: "POST"; path: "/orgs/{org}/assistants"; body: AssistantInstall; response: Assistant };
   installCatalogueAgent: { method: "POST"; path: "/orgs/{org}/agent-catalogue/{slug}/install"; body: AgentCatalogueInstall; response: Agent };
   installMcpCatalogueEntry: { method: "POST"; path: "/orgs/{org}/mcp-catalogue/{entry_id}/install"; body: McpCatalogueInstall; response: OrgConnector };
   installPlugin: { method: "POST"; path: "/orgs/{org}/plugins/install"; body: PluginInstall; response: InstalledPlugin };
@@ -4951,6 +5038,7 @@ export interface Operations {
   listAgentRuns: { method: "GET"; path: "/orgs/{org}/agents/{slug}/runs"; body: never; response: Array<Run> };
   listAgentSessionTools: { method: "GET"; path: "/internal/agent-sessions/{id}/tools"; body: never; response: AgentSessionTools };
   listAgents: { method: "GET"; path: "/orgs/{org}/agents"; body: never; response: Array<Agent> };
+  listAssistants: { method: "GET"; path: "/orgs/{org}/assistants"; body: never; response: AssistantList };
   listAudit: { method: "GET"; path: "/audit"; body: never; response: AuditPage };
   listBackends: { method: "GET"; path: "/platform/backends"; body: never; response: Array<AgentBackendInfo> };
   listBudgetAlerts: { method: "GET"; path: "/orgs/{org}/budget-alerts"; body: never; response: Array<BudgetAlert> };
@@ -5120,9 +5208,11 @@ export interface Operations {
   [key: string]: unknown;
 }; response: TriggerAck };
   unfreezeTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/unfreeze"; body: never; response: void };
+  uninstallAssistant: { method: "DELETE"; path: "/orgs/{org}/assistants/{slug}"; body: never; response: void };
   uninstallPlugin: { method: "DELETE"; path: "/orgs/{org}/plugins/{name}"; body: never; response: PluginUninstallResult };
   unpinProjectAgent: { method: "DELETE"; path: "/projects/{id}/agents/{slug}"; body: never; response: void };
   updateAgent: { method: "PATCH"; path: "/orgs/{org}/agents/{slug}"; body: AgentPatch; response: Agent };
+  updateAssistant: { method: "PATCH"; path: "/orgs/{org}/assistants/{slug}"; body: AssistantUpdate; response: Assistant };
   updateConnectorOperation: { method: "PATCH"; path: "/orgs/{org}/connectors/{name}/operations/{operation}"; body: OperationPatch; response: ConnectorOperation };
   updateKnowledgeBase: { method: "PATCH"; path: "/orgs/{org}/knowledge/{slug}"; body: KnowledgeBasePatch; response: KnowledgeBase };
   updateKnowledgeSource: { method: "PATCH"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}"; body: KnowledgeSourcePatch; response: KnowledgeSource };

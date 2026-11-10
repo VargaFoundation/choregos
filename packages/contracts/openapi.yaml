@@ -3101,6 +3101,106 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/assistants:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [agents]
+      operationId: listAssistants
+      description: >-
+        The assistant installations of the organisation (ADR 0133) that the caller manages: all of them for an
+        organisation administrator, those whose `owner_groups` hold one of the caller's groups for anyone else. The
+        `status` is computed from the readiness at the time of the call.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AssistantList" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [agents]
+      operationId: installAssistant
+      description: >-
+        Installs an assistant of an installed plugin (ADR 0133): the manifest is read from the installed plugin, the
+        `config` is checked against its `config_schema` (a missing required key is a readiness item, any other
+        violation a 422). The installation is `incomplete` until every required need is bound. Organisation
+        administrator only; audited as `assistant.install`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AssistantInstall" } } }
+      responses:
+        "201": { description: Installed, content: { application/json: { schema: { $ref: "#/components/schemas/Assistant" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/assistants/{slug}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    get:
+      tags: [agents]
+      operationId: getAssistant
+      description: One installation, with its bindings. An organisation administrator or a member of its owner groups.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Assistant" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [agents]
+      operationId: updateAssistant
+      description: >-
+        Configures an installation: config, audience, channel, policy overrides. An organisation administrator or a
+        member of its owner groups; changing `owner_groups` is the administrator's. Audited as `assistant.update`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AssistantUpdate" } } }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/Assistant" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [agents]
+      operationId: uninstallAssistant
+      description: Uninstalls the assistant, so the installation and its bindings go. Organisation administrator only, audited as `assistant.uninstall`.
+      responses:
+        "204": { description: Uninstalled }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/assistants/{slug}/readiness:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    get:
+      tags: [agents]
+      operationId: getAssistantReadiness
+      description: >-
+        What is missing for the installation to be `ready` (ADR 0133, rule 9): each required need not bound to a
+        connector that serves its operations, with a matching access and the identity mode it needs, and each required
+        configuration key without a value, with who may fix it.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AssistantReadiness" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/assistants/{slug}/bindings/{need}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+      - { name: need, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$" } }
+    put:
+      tags: [agents]
+      operationId: bindAssistantNeed
+      description: >-
+        Binds a need of the assistant to a connector of the organisation. The connector must serve every operation of
+        the need (as discovered), with the same `access`, and support the need's identity mode; otherwise 422 and
+        nothing changes. `enabled: false` is for an optional need only. An organisation administrator or a member of
+        the owner groups; audited as `assistant.bind`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AssistantBind" } } }
+      responses:
+        "200": { description: Bound, content: { application/json: { schema: { $ref: "#/components/schemas/Assistant" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/plugin-approvals:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -8222,6 +8322,80 @@ components:
         scopes: { type: array, items: { $ref: "#/components/schemas/TokenScope" } }
         project: { type: [string, "null"], description: "`org:slug` of the linked project, if there is one." }
         last_client: { type: [string, "null"], description: "The client of the last call (`User-Agent`, truncated)." }
+    AssistantInstall:
+      type: object
+      required: [plugin, assistant]
+      properties:
+        plugin: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$", description: "An installed plugin of the organisation." }
+        assistant: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$", description: "`metadata.name` of the assistant in that plugin." }
+        slug: { type: [string, "null"], pattern: "^[a-z0-9][a-z0-9-]{0,62}$", description: "Defaults to the assistant's name." }
+        config: { type: object, additionalProperties: true }
+        owner_groups: { type: array, items: { type: string, minLength: 1, maxLength: 255 } }
+        audience_groups: { type: array, items: { type: string, minLength: 1, maxLength: 255 } }
+        channel: { type: string, enum: [stable, candidate], default: stable }
+    AssistantUpdate:
+      type: object
+      properties:
+        config: { type: object, additionalProperties: true }
+        owner_groups: { type: array, items: { type: string, minLength: 1, maxLength: 255 } }
+        audience_groups: { type: array, items: { type: string, minLength: 1, maxLength: 255 } }
+        channel: { type: string, enum: [stable, candidate] }
+        policy_overrides: { type: object, additionalProperties: true }
+    AssistantBind:
+      type: object
+      required: [connector]
+      properties:
+        connector: { type: string, description: "The name of an organisation connector." }
+        enabled: { type: boolean, default: true }
+    AssistantBinding:
+      type: object
+      required: [need, connector, operations, identity, enabled]
+      properties:
+        need: { type: string }
+        connector: { type: string }
+        operations: { type: array, items: { type: string } }
+        identity: { type: string, enum: [service, user_exchange, user_consent] }
+        approval: { type: [string, "null"], enum: [none, inline, console, null] }
+        enabled: { type: boolean }
+    Assistant:
+      type: object
+      required: [slug, plugin, plugin_version, assistant_name, config, owner_groups, audience_groups, channel, status, policy_overrides, bindings, created_at]
+      properties:
+        slug: { type: string }
+        plugin: { type: string }
+        plugin_version: { type: string }
+        assistant_name: { type: string }
+        display_name: { type: [string, "null"] }
+        config: { type: object, additionalProperties: true }
+        owner_groups: { type: array, items: { type: string } }
+        audience_groups: { type: array, items: { type: string } }
+        channel: { type: string, enum: [stable, candidate] }
+        status: { type: string, enum: [incomplete, ready, suspended] }
+        policy_overrides: { type: object, additionalProperties: true }
+        bindings: { type: array, items: { $ref: "#/components/schemas/AssistantBinding" } }
+        created_by: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+    AssistantList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Assistant" } }
+    AssistantReadinessItem:
+      type: object
+      required: [kind, message, fix_by, groups]
+      properties:
+        kind: { type: string, enum: [assistant_missing, config_missing, need_unbound, need_not_served, identity_unsupported] }
+        need: { type: [string, "null"] }
+        key: { type: [string, "null"], description: "The configuration key, for `config_missing`." }
+        message: { type: string }
+        fix_by: { type: string, enum: [owners, org_admin], description: "`owners`: an organisation administrator or a member of `groups`; `org_admin`: the organisation administrator." }
+        groups: { type: array, items: { type: string } }
+    AssistantReadiness:
+      type: object
+      required: [status, items]
+      properties:
+        status: { type: string, enum: [incomplete, ready, suspended] }
+        items: { type: array, items: { $ref: "#/components/schemas/AssistantReadinessItem" } }
     MachineAccountCreate:
       type: object
       required: [slug]

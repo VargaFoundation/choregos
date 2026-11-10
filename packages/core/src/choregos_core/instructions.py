@@ -18,6 +18,17 @@ from typing import Any
 from jinja2 import StrictUndefined, TemplateError
 from jinja2.sandbox import SandboxedEnvironment
 
+
+class _SampleConfig(dict[str, Any]):
+    """An assistant's `{{ config.<key> }}` (ADR 0133): any key reads as a sample when a version is
+    checked at publication. The values an installation sets are given at conversation time."""
+
+    def __getattr__(self, key: str) -> str:
+        if key.startswith("_"):
+            raise AttributeError(key)
+        return f"<{key}>"
+
+
 #: Enough to render a template to check it, when a version is published.
 SAMPLE_VARIABLES: dict[str, Any] = {
     "ticket": {
@@ -34,6 +45,8 @@ SAMPLE_VARIABLES: dict[str, Any] = {
     "project": None,
     #: The production indicator sources the run can read (S22-48); empty = none configured.
     "production_indicators": [],
+    #: What an assistant's installation sets (ADR 0133): any key renders.
+    "config": _SampleConfig(),
 }
 
 _ENVIRONMENT = SandboxedEnvironment(undefined=StrictUndefined, autoescape=False, keep_trailing_newline=True)
