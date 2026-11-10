@@ -3884,6 +3884,74 @@ export type Assistant = {
   created_at: string;
 };
 
+export type AssistantReadLine = {
+  id: string;
+  user_id: string;
+  conversation_id?: string | null;
+  work_item_key?: string | null;
+  need: string;
+  operation: string;
+  subject_type?: string | null;
+  subject_key?: string | null;
+  delegation_id?: string | null;
+  at: string;
+};
+
+export type AssistantReadPage = {
+  items: Array<AssistantReadLine>;
+  meta: PageMeta;
+};
+
+export type SubjectErasureRequest = {
+  subject: MemorySubject;
+  mode: "export" | "erase";
+  conversations?: "redact" | "delete";
+};
+
+export type SubjectMemoryFact = {
+  id: string;
+  content: string;
+  status: string;
+  created_at?: string | null;
+};
+
+export type SubjectMemory = {
+  user_id: string;
+  space: string;
+  facts?: Array<SubjectMemoryFact>;
+  profiles?: Array<{
+    [key: string]: unknown;
+  }>;
+};
+
+export type SubjectConversation = {
+  id: string;
+  user_id: string;
+  title?: string | null;
+  created_at?: string | null;
+  last_activity_at?: string | null;
+};
+
+export type SubjectErasure = {
+  mode: "export" | "erase";
+  subject: MemorySubject;
+  memories?: Array<SubjectMemory>;
+  conversations?: Array<SubjectConversation>;
+  memories_erased?: number;
+  conversations_redacted?: number;
+  conversations_deleted?: number;
+};
+
+export type UserErasure = {
+  conversations: number;
+  memory_stores: number;
+  memory_facts: number;
+  memory_profiles: number;
+  others?: {
+    [key: string]: number;
+  };
+};
+
 export type MemorySubject = {
   type: string;
   key: string;
@@ -5034,6 +5102,8 @@ export interface Operations {
   enableOrgConnector: { method: "PUT"; path: "/projects/{id}/org-connectors/{connector}/enablement"; body: never; response: ProjectOrgConnector };
   endMyOtherSessions: { method: "POST"; path: "/me/sessions/end-others"; body: never; response: EndedSessions };
   endMySession: { method: "DELETE"; path: "/me/sessions/{id}"; body: never; response: void };
+  eraseAssistantSubject: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/erasure"; body: SubjectErasureRequest; response: SubjectErasure };
+  eraseMyAssistantData: { method: "DELETE"; path: "/me/assistants/{org}/{slug}"; body: never; response: UserErasure };
   estimateKnowledgeDistillation: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/distill/estimate"; body: never; response: KnowledgeDistillEstimate };
   exportOrgCostsCsv: { method: "GET"; path: "/orgs/{org}/costs.csv"; body: never; response: void };
   exportProjectCostsCsv: { method: "GET"; path: "/projects/{id}/costs.csv"; body: never; response: void };
@@ -5226,6 +5296,7 @@ export interface Operations {
   listAgentSessionTools: { method: "GET"; path: "/internal/agent-sessions/{id}/tools"; body: never; response: AgentSessionTools };
   listAgents: { method: "GET"; path: "/orgs/{org}/agents"; body: never; response: Array<Agent> };
   listAssistantKnowledgeUpdates: { method: "GET"; path: "/orgs/{org}/assistants/{slug}/knowledge/updates"; body: never; response: KnowledgeUpdateList };
+  listAssistantReads: { method: "GET"; path: "/orgs/{org}/assistants/{slug}/reads"; body: never; response: AssistantReadPage };
   listAssistants: { method: "GET"; path: "/orgs/{org}/assistants"; body: never; response: AssistantList };
   listAudit: { method: "GET"; path: "/audit"; body: never; response: AuditPage };
   listBackends: { method: "GET"; path: "/platform/backends"; body: never; response: Array<AgentBackendInfo> };
