@@ -15,6 +15,7 @@ The console has the same instructions, pre-filled with your platform's address: 
 | :-- | :-- |
 | `https://<console-host>/mcp` | Every project you can read; tools take a `project` argument (`org:slug`) |
 | `https://<console-host>/mcp/projects/<org>:<slug>` | One project; tools need no `project` argument |
+| `https://<console-host>/mcp/assistants/<org>:<installation>` | One assistant as its own connector (see below) |
 
 Transport: Streamable HTTP, stateless, JSON responses. Protocol versions `2025-11-25`, `2025-06-18`
 and `2025-03-26`.
@@ -30,6 +31,21 @@ and `2025-03-26`.
 | `create_work_item` | Opens a work item in a project (in its tracker first when external, ADR 0059) | `mcp:write` and the right to control work items |
 
 A tool you are not allowed to use is not announced, and calling it answers like an unknown tool.
+
+### Assistants (ADR 0139)
+
+An assistant installed for a group is reachable from the door by the people of that group (its audience), with
+`mcp:read` alone. On `/mcp`, `list_assistants`, `ask_assistant` and `get_conversation` are announced only to
+someone in the audience of at least one ready assistant. `/mcp/assistants/<org>:<installation>` is one assistant
+as its own connector: tools `ask` and `get_conversation`, and the manifest's `surfaces.mcp.prompts` as MCP
+prompts (`prompts/list`, `prompts/get`, `{argument}` substituted in the message). Outside the audience, that
+path answers `404`. A conversation opened here is one of your `/me/conversations`, in your personal space.
+
+An answer is `{conversation_id, status, text, citations, pending_actions, missing_accounts}`. A turn longer than
+`CHOREGOS_MCP_ASSISTANT_WAIT_S` (25 s) answers `status: working` and goes on in the background; call
+`get_conversation` again until it is `completed` (or `failed`). The assistant never decides for you: a proposal
+is confirmed in the console. Until their sources land (citations, proposals S63-05, accounts to connect), the
+three lists are empty.
 
 ## A token for each client
 
