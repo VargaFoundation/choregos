@@ -23,7 +23,7 @@ from ..db.org_aliases import aliases_by_org, aliases_of, holder_of_slug, keep_ol
 from ..db.session import ALL_ORGS, limit_to_organisations
 from ..deps import Db, Me, Pagination, ProjectCtx, require_platform_admin
 from ..edition import is_enterprise
-from ..errors import conflict, forbidden, not_found
+from ..errors import conflict, forbidden, not_found, unprocessable
 from ..extensions import GestureRequest, check_gesture
 from ..rbac import Permission
 from ..schemas import (
@@ -41,6 +41,7 @@ from ..schemas import (
 )
 from ..services import ensure_defaults, persist_event, project_dto
 from ..services.organisations import organisation_by_slug
+from ..services.personal_spaces import is_reserved_slug, listed
 from ..services.plugin_tracker import wire_template_tracker
 from ..services.projects import config_revision
 from ..temporal import get_temporal, provisioning_id
@@ -275,7 +276,7 @@ async def list_projects(org: str, session: Db, principal: Me, page: Pagination) 
     rows = (
         (
             await session.execute(
-                select(Project).where(Project.org_id == organization.id).order_by(Project.slug)
+                select(Project).where(Project.org_id == organization.id, listed()).order_by(Project.slug)
             )
         )
         .scalars()
@@ -322,6 +323,10 @@ async def create_project(org: str, body: ProjectCreate, session: Db, principal: 
     organization = await organisation_by_slug(session, org)
     if not principal.can(Permission.PROJECT_CREATE, org):
         raise forbidden("creating a project needs the org_admin role")
+    if is_reserved_slug(body.slug):
+        # A personal space's slug (ADR 0134): its row is invisible to the caller, so the unique key would
+        # be the only refusal, as a 500.
+        raise unprocessable(f"`{body.slug}` is reserved: a project slug may not start with `personal-`")
     existing = (
         await session.execute(
             select(Project).where(Project.org_id == organization.id, Project.slug == body.slug)

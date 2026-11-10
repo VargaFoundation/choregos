@@ -39,6 +39,7 @@ from ..services import (
     work_item_dto,
     workflow_model,
 )
+from ..services.personal_spaces import listed
 from .caller import Caller
 
 #: What the door tells the model, once, at initialisation.
@@ -131,7 +132,7 @@ async def _visible_projects(ctx: Context) -> list[tuple[Project, str]]:
     rows = await ctx.session.execute(
         select(Project, Organization.slug)
         .join(Organization, Project.org_id == Organization.id)
-        .where(Organization.slug.in_(sorted(orgs)))
+        .where(Organization.slug.in_(sorted(orgs)), listed())
         .order_by(Organization.slug, Project.slug)
     )
     return [

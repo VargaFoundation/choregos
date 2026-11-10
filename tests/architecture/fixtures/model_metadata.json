@@ -8096,7 +8096,12 @@
   ]
  },
  "projects": {
-  "checks": [],
+  "checks": [
+   [
+    "ck_projects_personal_has_owner",
+    "(kind = 'personal') = (owner_user_id IS NOT NULL)"
+   ]
+  ],
   "columns": [
    {
     "default": null,
@@ -8190,6 +8195,20 @@
     "type": "String(length=16)"
    },
    {
+    "default": "'standard'",
+    "name": "kind",
+    "nullable": false,
+    "server_default": "'standard'",
+    "type": "String(length=16)"
+   },
+   {
+    "default": null,
+    "name": "owner_user_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
     "default": "<function uuid7>",
     "name": "id",
     "nullable": false,
@@ -8222,6 +8241,17 @@
     "CASCADE",
     null,
     "fk_projects_org_id_organizations"
+   ],
+   [
+    [
+     "owner_user_id"
+    ],
+    [
+     "users.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_projects_owner_user_id_users"
    ]
   ],
   "indexes": [
@@ -8229,6 +8259,13 @@
     "ix_projects_org_id",
     [
      "projects.org_id"
+    ],
+    false
+   ],
+   [
+    "ix_projects_owner_user_id",
+    [
+     "projects.owner_user_id"
     ],
     false
    ],
@@ -8245,6 +8282,14 @@
      "projects.status"
     ],
     false
+   ],
+   [
+    "uq_projects_personal_owner",
+    [
+     "projects.org_id",
+     "projects.owner_user_id"
+    ],
+    true
    ]
   ],
   "primary_key": [
