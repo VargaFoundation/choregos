@@ -51,6 +51,16 @@ def deck() -> None:
     table.cell(0, 1).text = "Sales"
     table.cell(1, 0).text = "EMEA"
     table.cell(1, 1).text = "120"
+    framed = presentation.slides.add_slide(presentation.slide_layouts[6])
+    label = framed.shapes.add_textbox(Inches(1), Inches(1), Inches(1), Inches(0.3))
+    label.text_frame.text = "MAIN TOPIC"
+    label.text_frame.word_wrap = False
+    label.text_frame.margin_left = Inches(0.2)
+    paragraph = label.text_frame.paragraphs[0]
+    paragraph.line_spacing = 0.9
+    paragraph.runs[0].font.size = Pt(20)
+    body = label.text_frame._txBody.bodyPr
+    body.append(body.makeelement("{http://schemas.openxmlformats.org/drawingml/2006/main}normAutofit", {"fontScale": "50000"}))
     presentation.save(HERE / "deck.pptx")
 
 

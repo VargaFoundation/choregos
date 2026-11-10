@@ -57,7 +57,7 @@ test("the artifacts of a work item: markdown, SARIF, image, download, producer a
 
   // An Office file is drawn in the page, and says it is a preview.
   await tabs.getByRole("tab", { name: "board_deck" }).click();
-  await expect(page.getByTestId("office-slide")).toHaveCount(3);
+  await expect(page.getByTestId("office-slide")).toHaveCount(4);
   await expect(page.getByTestId("office-pptx")).toContainText("Quarterly business review");
   await tabs.getByRole("tab", { name: "board_memo" }).click();
   await expect(page.getByTestId("office-docx")).toContainText("Board memo");
