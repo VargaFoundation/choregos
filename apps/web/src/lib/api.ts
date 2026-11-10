@@ -320,7 +320,7 @@ function versLaReauthentification(): void {
   window.location.assign(new URL(api.loginUrl(ici, undefined, true), window.location.origin).toString());
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (IS_MOCK) {
     // The fixtures go into the bundle only if demo mode is requested: imported statically, 460
     // lines of fake data went to every user.

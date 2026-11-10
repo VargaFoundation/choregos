@@ -3503,6 +3503,20 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/plugins/{name}/assistants:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { $ref: "#/components/parameters/PluginName" }
+    get:
+      tags: [agents]
+      operationId: listPluginAssistants
+      description: >-
+        The assistants an installed plugin ships, with their configuration schema, suggested audience groups and
+        needs: what the owners' installation form is built from (S63-18). Any member of the organisation reads it.
+      responses:
+        "200": { description: The plugin's assistants, content: { application/json: { schema: { $ref: "#/components/schemas/PluginAssistantList" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /orgs/{org}/assistants:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -9088,6 +9102,46 @@ components:
         display_name: { type: [string, "null"] }
         description: { type: [string, "null"] }
         status: { type: string, enum: [incomplete, ready, suspended] }
+        memory_spaces: { type: array, items: { $ref: "#/components/schemas/AssistantMemorySpace" } }
+        tasks: { type: array, items: { $ref: "#/components/schemas/AssistantTaskDecl" } }
+        needs: { type: array, items: { $ref: "#/components/schemas/AssistantNeed" } }
+    AssistantMemorySpace:
+      type: object
+      required: [name, scope, kind]
+      properties:
+        name: { type: string }
+        scope: { type: string, enum: [user, user_subject] }
+        kind: { type: string, enum: [facts, profile] }
+    AssistantNeed:
+      type: object
+      required: [need, identity, access, required]
+      properties:
+        need: { type: string }
+        identity: { type: string, enum: [service, user_exchange, user_consent] }
+        access: { type: string }
+        required: { type: boolean }
+    AssistantTaskDecl:
+      type: object
+      required: [name, delegation, schedulable]
+      properties:
+        name: { type: string }
+        delegation: { type: string, enum: [none, read_only] }
+        schedulable: { type: boolean }
+    PluginAssistant:
+      type: object
+      required: [name, suggested_groups, needs]
+      properties:
+        name: { type: string }
+        display_name: { type: [string, "null"] }
+        description: { type: [string, "null"] }
+        config_schema: { type: [object, "null"], additionalProperties: true }
+        suggested_groups: { type: array, items: { type: string } }
+        needs: { type: array, items: { $ref: "#/components/schemas/AssistantNeed" } }
+    PluginAssistantList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/PluginAssistant" } }
     MyAssistantList:
       type: object
       required: [items]
