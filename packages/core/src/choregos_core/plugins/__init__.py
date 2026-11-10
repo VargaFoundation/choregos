@@ -657,6 +657,22 @@ def _servers(root: Path, refs: list[str], problems: list[str]) -> dict[str, dict
     return servers
 
 
+def _conversation_suites(doc: dict[str, Any], root: Path, problems: list[str]) -> None:
+    """Each eval file an assistant names, against `conversation-evals.schema.json`, then against the
+    assistant's tools. A missing file or a bad path is reported by the assistant's own check."""
+    for ref in doc.get("evals") or []:
+        path = _target(root, ref, [])
+        if path is None or not path.is_file():
+            continue
+        suite = _yaml(path, ref, problems)
+        found = _schema_problems(ref, "conversation-evals.schema.json", suite)
+        if found:
+            problems.extend(found)
+            continue
+        assert isinstance(suite, dict)
+        _assistant_rules.check_suite(suite, ref, doc, problems)
+
+
 def _assistants(
     root: Path, refs: list[str], agents: dict[str, dict[str, Any]], problems: list[str]
 ) -> dict[str, dict[str, Any]]:
@@ -677,6 +693,7 @@ def _assistants(
             continue
         assert isinstance(doc, dict)
         _assistant_rules.check(doc, ref, agents, root, _target, problems)
+        _conversation_suites(doc, root, problems)
         name = str(doc["metadata"]["name"])
         if name in found:
             problems.append(f"{ref}:metadata/name: assistant `{name}` is shipped twice")

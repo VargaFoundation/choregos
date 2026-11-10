@@ -1435,6 +1435,39 @@ export type ConversationPage = {
 export type ConversationMessageCreate = {
   input: string;
   stream?: boolean;
+/** A thumb on one answer of a session (S63-17, ADR 0140). */
+export type ConversationFeedbackCreate = {
+  rating: "up" | "down";
+  comment?: string | null;
+  /** The answer, by its 1-based position among the session's responses; absent: the latest */
+  response?: number | null;
+};
+
+export type ConversationFeedback = {
+  id: string;
+  session_id: string;
+  agent: string;
+  /** The agent revision that gave the answer */
+  agent_version: number;
+  response: number;
+  rating: "up" | "down";
+  comment?: string | null;
+  /** `proposed` when the thumb down proposed a candidate case to the agent's owners */
+  candidate_status?: string | null;
+  created_at: string;
+};
+
+/** A candidate eval case a thumb down proposed, as the agent's owners read it: pseudonymised, with no author and no raw comment. It is in no suite until an owner adds it. */
+export type ConversationCandidate = {
+  id: string;
+  agent: string;
+  agent_version: number;
+  status: "proposed";
+  /** `{case, observed, comment}`: a conversation-evals case without assertions, and what the agent did */
+  candidate: {
+    [key: string]: unknown;
+  };
+  created_at: string;
 };
 
 /** A response a hosted session's person asked for, waiting for the session's pod (S41-11). */
@@ -2141,7 +2174,7 @@ export type AgentReleaseCreate = {
 };
 
 export type AgentReleaseCheck = {
-  /** eval_suite, newer_than_production, is_candidate, candidate_runs, candidate_success_rate, soak, previously_in_production, human_session, fresh_authentication, live_eval, approvals (informational: how many people must approve) */
+  /** eval_suite, newer_than_production, is_candidate, candidate_runs, candidate_success_rate, soak, previously_in_production, human_session, fresh_authentication, live_eval, conversation_suite (the assistant's conversation suites, production only), approvals (informational: how many people must approve) */
   name: string;
   required?: boolean;
   /** null: not applicable */
@@ -5059,6 +5092,7 @@ export interface Operations {
   gitlabWebhook: { method: "POST"; path: "/webhooks/gitlab"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
+  giveAgentSessionFeedback: { method: "POST"; path: "/orgs/{org}/agent-sessions/{session_id}/feedback"; body: ConversationFeedbackCreate; response: ConversationFeedback };
   healthz: { method: "GET"; path: "/healthz"; body: never; response: void };
   importSkill: { method: "POST"; path: "/orgs/{org}/skills/import"; body: void; response: Skill };
   importSkillsFromGit: { method: "POST"; path: "/orgs/{org}/skills/import-git"; body: SkillGitImport; response: Array<Skill> };
@@ -5075,6 +5109,7 @@ export interface Operations {
   listAgentCatalogue: { method: "GET"; path: "/orgs/{org}/agent-catalogue"; body: never; response: Array<AgentCatalogueEntry> };
   listAgentCredentials: { method: "GET"; path: "/orgs/{org}/agents/{slug}/credentials"; body: never; response: Array<AgentCredential> };
   listAgentEvaluations: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}/evaluations"; body: never; response: Array<AgentEvaluation> };
+  listAgentFeedbackCandidates: { method: "GET"; path: "/orgs/{org}/agents/{slug}/feedback-candidates"; body: never; response: Array<ConversationCandidate> };
   listAgentImages: { method: "GET"; path: "/platform/agent-images"; body: never; response: Array<AgentImageInfo> };
   listAgentMetrics: { method: "GET"; path: "/orgs/{org}/agent-metrics"; body: never; response: Array<AgentMetricsSummary> };
   listAgentReleases: { method: "GET"; path: "/orgs/{org}/agents/{slug}/releases"; body: never; response: Array<AgentRelease> };

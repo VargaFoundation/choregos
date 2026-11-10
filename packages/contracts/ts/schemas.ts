@@ -160,6 +160,92 @@ export type ContextPack = {
   generated_at?: string;
 };
 
+/** `<need>__<operation>` */
+export type ConversationEvalsTool = string;
+
+/** a word or phrase (case-insensitive, whole words) or an object with a regular expression */
+export type ConversationEvalsTextMatch = string | {
+  regex: string;
+};
+
+export type ConversationEvalsMustCall = {
+  tool: ConversationEvalsTool;
+  /** `any`: this tool is the first call of the conversation (before any other read); a tool name: its first call comes before the first call of that tool, if that one is called at all */
+  before?: string;
+  /** arguments the call must carry (each key equal to the given value) */
+  arguments_contain?: {
+    [key: string]: unknown;
+  };
+};
+
+export type ConversationEvalsMustNotCall = {
+  tool: ConversationEvalsTool;
+  /** the rule applies only when every given condition holds */
+  when?: {
+    /** facts of the scenario (the case's `context`) that must all be equal */
+    context?: {
+      [key: string]: unknown;
+    };
+    /** this other tool was called in the conversation */
+    called?: ConversationEvalsTool;
+  };
+};
+
+export type ConversationEvalsMustCite = {
+  /** a regular expression matching each figure of a final text */
+  figure: string;
+  /** a regular expression that must match right after each figure */
+  source: string;
+  /** how far after the figure the source may start to end */
+  within_chars?: number;
+};
+
+export type ConversationEvalsAssertions = {
+  must_call?: Array<ConversationEvalsTool | ConversationEvalsMustCall>;
+  /** lists of tools: each list's tools are called in that order (not necessarily one after the other) */
+  call_order?: Array<Array<ConversationEvalsTool>>;
+  must_not_call?: Array<ConversationEvalsTool | ConversationEvalsMustNotCall>;
+  must_cite?: Array<ConversationEvalsMustCite>;
+  must_not_contain?: Array<ConversationEvalsTextMatch>;
+  /** the words of each final text */
+  length?: {
+    min_words?: number;
+    max_words?: number;
+  };
+};
+
+export type ConversationEvalsCase = {
+  name: string;
+  description?: string;
+  /** facts of the scenario a `must_not_call.when.context` reads (for example `{relation: coachee}`) */
+  context?: {
+    [key: string]: unknown;
+  };
+  /** what the person says, one entry per turn */
+  turns: Array<string>;
+  /** what the sources' fakes answer, by `<need>__<operation>`: a value is the answer of every call, an array is the answers of successive calls (the last one repeats) */
+  tool_results?: {
+    [key: string]: unknown;
+  };
+  assert?: ConversationEvalsAssertions;
+  /** criteria for the judge model (lot 2): stored and shown, not scored yet */
+  rubric?: Array<{
+    criterion: string;
+    threshold: number;
+  }>;
+};
+
+/** A conversation suite an assistant ships (ADR 0140, ADR 0133): scenarios of user turns, the tool results a source's fake answers, and deterministic assertions on the conversation's journal (the ordered tool calls and the final texts). The assertions are exact and run first; `rubric` is stored for the judge model, which is not scored yet. A tool is named `<need>__<operation>`, as the assistant's `tools` declare it. */
+export type ConversationEvals = {
+  kind: "conversation";
+  /** the slug of the assistant's agent */
+  agent: string;
+  description?: string;
+  /** the share of cases that must pass every deterministic assertion for the suite to pass; a version below it does not reach production */
+  threshold?: number;
+  cases: Array<ConversationEvalsCase>;
+};
+
 /** What was observed after the decision; each field is filled in when it becomes known. */
 export type DecisionRecordOutcome = {
   /** A later human step on the work item contradicted the decision; for a routing, the workflow a person re-routed it to, or the one it ended in, is not the one the model answered (ADR 0123). */
@@ -1655,6 +1741,7 @@ export type ChoregosContract =
   | Artifact
   | Assistant
   | ContextPack
+  | ConversationEvals
   | DecisionRecord
   | Event
   | Finding

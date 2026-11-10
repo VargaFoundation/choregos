@@ -40,6 +40,7 @@ from ..schemas import (
 from .agent_evals import evaluate, suite_for
 from .agent_governance import PERSONAL, is_admin
 from .agent_live_evals import latest_finished
+from .conversation_gate import conversation_check
 from .hosted_builds import build_row, ensure_build, names_key, zip_build_key
 
 FINISHED = ("succeeded", "failed", "timed_out", "cancelled")
@@ -297,6 +298,10 @@ async def checks_for(
                 f"{len(results)} case(s) pass" if not failing else f"failing: {', '.join(failing)}",
             )
         )
+        if channel == "stable":
+            conversations = await conversation_check(session, agent, version)
+            if conversations is not None:
+                checks.append(conversations)
         if agent.stable_version is not None:
             newer = version > agent.stable_version
             checks.append(
