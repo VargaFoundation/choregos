@@ -476,7 +476,11 @@ class Runner:
                     tool_calls=agent.outcome.tool_calls,
                     permission_denials=guards.denials,
                     duration_s=round(time.monotonic() - self.started, 2),
-                    agent_exit=_agent_exit(agent.outcome.stop_reason, agent.outcome.cancelled),
+                    # The gateway refused the key (S27-01): the agent met its budget, it did not crash,
+                    # even when it had written its result before the refused call.
+                    agent_exit="limit"
+                    if refused
+                    else _agent_exit(agent.outcome.stop_reason, agent.outcome.cancelled),
                     dod_iterations=dod_iterations,
                     result_repairs=repairs,
                 )

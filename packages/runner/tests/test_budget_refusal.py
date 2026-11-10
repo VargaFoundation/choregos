@@ -69,6 +69,22 @@ async def test_a_done_result_is_kept_even_after_a_refusal(
     assert outcome.result is not None and outcome.result.status is StageStatus.DONE
 
 
+async def test_a_done_result_after_a_refused_call_says_the_agent_met_its_limit(
+    stage_input: StageInput, runner_settings: Any
+) -> None:
+    """The key ran dry on the agent's last call, after it wrote its result: the protocol error is the
+    gateway's refusal, so the diagnostics say `limit`, not `crashed`."""
+    outcome, _ = await execute(
+        stage_input,
+        runner_settings,
+        {"turns": [{"error": LITELLM_REFUSAL, "result": valid_result()}]},
+    )
+    assert outcome.exit_code is Exit.OK
+    assert outcome.result is not None and outcome.result.status is StageStatus.DONE
+    assert outcome.result.diagnostics is not None
+    assert outcome.result.diagnostics.agent_exit == "limit"
+
+
 async def test_an_agent_talking_about_a_budget_is_not_refused(
     stage_input: StageInput, runner_settings: Any
 ) -> None:
