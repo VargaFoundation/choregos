@@ -19,8 +19,9 @@ OFFLINE = ROOT / "plugins" / "offline"
 
 #: The plugin of each agent, and the catalogue version its provenance carries (MIGRATION-FROM-CORE.md).
 #: Every internal agent moved one version when its plugin declared its five components (S60-04, ADR 0127);
-#: a client did not. netops had moved once before, for its tool-scripts default (S57-15).
-VERSION_THREE = {"architect", "prod-verifier", "spec-writer"}
+#: a client did not. netops had moved once before, for its tool-scripts default (S57-15); the researcher
+#: moved once more in software-delivery 1.1.1, which restored the web its eval E5 reads.
+VERSION_THREE = {"architect", "prod-verifier", "spec-writer", "researcher"}
 VERSION_FOUR = {"netops"}
 PLUGINS = {
     "software-delivery": 19,
@@ -30,7 +31,7 @@ PLUGINS = {
     "requests": 2,
 }
 #: The plugin version the offline directory holds, when it is not 1.0.0.
-PLUGIN_VERSIONS = {"software-delivery": "1.1.0", "netops": "1.2.0", "authoring": "1.1.0", "requests": "1.1.0"}
+PLUGIN_VERSIONS = {"software-delivery": "1.1.1", "netops": "1.2.0", "authoring": "1.1.0", "requests": "1.1.0"}
 
 #: The fingerprints the core's own YAML had at 3156d12e (choregos-agents' MIGRATION-FROM-CORE.md): the
 #: plugins carry the same documents, so an installed agent's checksum does not move. They include the
@@ -87,7 +88,7 @@ def test_a_client_keeps_its_client_and_reach() -> None:
 
 def test_madr_4_is_the_plugins_with_its_licence() -> None:
     skill = catalogue.catalogue().skills["madr-4"]
-    assert skill.provenance == "plugin:software-delivery/madr-4@1.1.0"
+    assert skill.provenance == "plugin:software-delivery/madr-4@1.1.1"
     assert {"SKILL.md", "LICENSE", "PROVENANCE.json"} <= set(skill.files)
 
 

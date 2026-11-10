@@ -48,7 +48,7 @@ def test_the_api_reads_the_offline_directory_against_its_lock() -> None:
         "mcp-clients": ["1.0.0"],
         "netops": ["1.2.0"],
         "requests": ["1.1.0"],
-        "software-delivery": ["1.1.0"],
+        "software-delivery": ["1.1.1"],
     }
 
 
@@ -124,7 +124,7 @@ async def test_a_preapproved_default_is_installed_and_the_configuration_is_the_a
     assert [(o.plugin, o.outcome) for o in outcomes] == [("software-delivery", "installed")]
     assert fake.calls == [], "taken from the offline directory: no network at start-up"
     row = (await _rows())["software-delivery"]
-    assert (row.source, row.version, row.is_default, row.installed_by) == ("varga", "1.1.0", True, None)
+    assert (row.source, row.version, row.is_default, row.installed_by) == ("varga", "1.1.1", True, None)
     (approval,) = await _audit("plugin.default.preapproved")
     assert approval.payload["approved_by"] == "deployment configuration"
     assert any("madr-4" in reason for reason in approval.payload["reasons"])
@@ -155,11 +155,11 @@ async def test_the_api_never_takes_a_preapproval(client: AsyncClient, admin: str
     deployment([])
     refused = await client.post(
         f"{ORG}/plugins/install",
-        json={"source": "offline", "name": "software-delivery", "version": "1.1.0", "preapproved": True},
+        json={"source": "offline", "name": "software-delivery", "version": "1.1.1", "preapproved": True},
     )
     assert refused.status_code == 422, refused.text
     waiting = await client.post(
-        f"{ORG}/plugins/install", json={"source": "offline", "name": "software-delivery", "version": "1.1.0"}
+        f"{ORG}/plugins/install", json={"source": "offline", "name": "software-delivery", "version": "1.1.1"}
     )
     assert waiting.status_code == 202, waiting.text
 

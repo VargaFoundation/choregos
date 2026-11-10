@@ -33,9 +33,9 @@ plugins:
     file: requests-1.1.0.tar.gz
     signature: keyless, https://github.com/VargaFoundation/choregos-agents/.github/workflows/publish.yml@refs/heads/main
   software-delivery:
-    version: 1.1.0
-    digest: sha256:78c7eabf556ed93d3263d49655796c37148cd97932ebfe193d3f89147d78a022
-    source: ghcr.io/vargafoundation/choregos-agents/software-delivery:1.1.0
-    artifact: sha256:4f76e5c398be187130d05be97a7bce1ba3656deed6403520f068c9a1b464b103
-    file: software-delivery-1.1.0.tar.gz
+    version: 1.1.1
+    digest: sha256:f5c826109e333995efa6b1dc71c6089c842d4ddc30922cf33404e91ea03d9959
+    source: ghcr.io/vargafoundation/choregos-agents/software-delivery:1.1.1
+    artifact: sha256:e68e785f27d4ca8c10c0a12757f4fce60d61f7cf835dab366938c722a51d8d00
+    file: software-delivery-1.1.1.tar.gz
     signature: keyless, https://github.com/VargaFoundation/choregos-agents/.github/workflows/publish.yml@refs/heads/main

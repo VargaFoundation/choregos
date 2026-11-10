@@ -16,7 +16,7 @@ INTERNAL = [e for e in entries() if e.kind == "internal"]
 #: installed copy is compared with, so no rename may move one (ADR 0098 §4).
 RECORDED_DIGESTS = {
     # Every document moved once, on purpose: the plugins' versions that declare the five components
-    # (S60-04, ADR 0127) — software-delivery 1.1.0, netops 1.2.0, authoring 1.1.0, requests 1.1.0.
+    # (S60-04, ADR 0127) — software-delivery 1.1.1, netops 1.2.0, authoring 1.1.0, requests 1.1.0.
     "agent-drafter": "sha256:28d4c5df5d91ed095358fe7990760eaa4b30f47ca3ed04c0d384ef39ed129734",
     "architect": "sha256:eff0e642adb1912c3764c289654ca961f0068185b8ead70e3a0ebcb0452297b5",
     "assistant": "sha256:e99375ec41aa60fd5202bdace406ee249c24627295f73db81f194e4f696e4e16",
@@ -38,7 +38,7 @@ RECORDED_DIGESTS = {
     "prod-verifier": "sha256:64b83b446b62cea8ac398f77d7469b25d0f69af685d4cd13f695bcf055b56b9c",
     "qa": "sha256:56dcd15cac559affd95db5e85bb2beede48da7824a816de07ad7d153a945b22c",
     "release-notes-writer": "sha256:7f71971e7afd9f8b565caf4347d50a47459f4f4f018cba9f31a75242699cad84",
-    "researcher": "sha256:bf5aead971bca8c0e9178623afd5dd28e76bf6303a65ecca9c6ea1a2e6fda790",
+    "researcher": "sha256:1b4fb56d160f74c1b437f56cb20f077e2d97858a6a9272a3489a433ec12f3e3c",
     "review-responder": "sha256:1abe0879e42dd199e514e91697025e585f6eb776c38de01ff5921019564c1ea5",
     "reviewer": "sha256:494b21d94b9dc9889193a035886e9dad242e15614a5fb8aa5e01c09d8f2e8bff",
     "secops": "sha256:3fddcf91e661b32595719bbc20a67141de31bf6ca291388bc0fd89f1bdc6446b",
