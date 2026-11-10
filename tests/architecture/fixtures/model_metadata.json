@@ -6549,114 +6549,305 @@
   ],
   "uniques": []
  },
- "memory_stores": {
-  "checks": [
-   [
-    "ck_memory_stores_ck_memory_stores_scope",
-    "(scope = 'project') = (project_id IS NOT NULL)"
-   ]
-  ],
+ "memory_profiles": {
   "columns": [
    {
-    "default": null,
     "name": "org_id",
+    "type": "String(length=36)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=36)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
-    "name": "slug",
+    "name": "memory_store_id",
+    "type": "String(length=36)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=64)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
-    "name": "display_name",
+    "name": "version",
+    "type": "Integer()",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=200)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
-    "name": "description",
-    "nullable": true,
-    "server_default": null,
-    "type": "Text()"
-   },
-   {
-    "default": null,
-    "name": "scope",
+    "name": "document",
+    "type": "Json()",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=16)"
+    "default": "<function dict>",
+    "server_default": null
    },
    {
-    "default": null,
-    "name": "project_id",
-    "nullable": true,
-    "server_default": null,
-    "type": "String(length=36)"
-   },
-   {
-    "default": null,
-    "name": "owner_key",
-    "nullable": false,
-    "server_default": null,
-    "type": "String(length=36)"
-   },
-   {
-    "default": null,
-    "name": "reach",
-    "nullable": true,
-    "server_default": null,
-    "type": "String(length=16)"
-   },
-   {
-    "default": "<function list>",
-    "name": "projects",
-    "nullable": false,
-    "server_default": null,
-    "type": "Json()"
-   },
-   {
-    "default": "'active'",
     "name": "status",
+    "type": "String(length=16)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=16)"
+    "default": "'active'",
+    "server_default": null
    },
    {
-    "default": null,
-    "name": "created_by",
+    "name": "updated_by",
+    "type": "String(length=200)",
     "nullable": true,
-    "server_default": null,
-    "type": "String(length=200)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": "<function uuid7>",
     "name": "id",
+    "type": "String(length=36)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=36)"
+    "default": "<function uuid7>",
+    "server_default": null
    },
    {
-    "default": "<function utcnow>",
     "name": "created_at",
+    "type": "DateTime(timezone=True)",
     "nullable": false,
-    "server_default": "<sqlalchemy.sql.functions.now; now>",
-    "type": "DateTime(timezone=True)"
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
    },
    {
-    "default": "<function utcnow>",
     "name": "updated_at",
+    "type": "DateTime(timezone=True)",
     "nullable": false,
-    "server_default": "<sqlalchemy.sql.functions.now; now>",
-    "type": "DateTime(timezone=True)"
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
    }
   ],
+  "primary_key": [
+   "id"
+  ],
   "foreign_keys": [
+   [
+    [
+     "memory_store_id"
+    ],
+    [
+     "memory_stores.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_memory_profiles_memory_store_id_memory_stores"
+   ],
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_memory_profiles_org_id_organizations"
+   ]
+  ],
+  "uniques": [
+   [
+    "uq_memory_profiles_version",
+    [
+     "memory_store_id",
+     "version"
+    ]
+   ]
+  ],
+  "checks": [],
+  "indexes": [
+   [
+    "ix_memory_profiles_memory_store_id",
+    [
+     "memory_profiles.memory_store_id"
+    ],
+    false
+   ],
+   [
+    "ix_memory_profiles_org_id",
+    [
+     "memory_profiles.org_id"
+    ],
+    false
+   ]
+  ]
+ },
+ "memory_stores": {
+  "columns": [
+   {
+    "name": "org_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "slug",
+    "type": "String(length=64)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "display_name",
+    "type": "String(length=200)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "description",
+    "type": "Text()",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "scope",
+    "type": "String(length=16)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "project_id",
+    "type": "String(length=36)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "owner_key",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "reach",
+    "type": "String(length=16)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "projects",
+    "type": "Json()",
+    "nullable": false,
+    "default": "<function list>",
+    "server_default": null
+   },
+   {
+    "name": "status",
+    "type": "String(length=16)",
+    "nullable": false,
+    "default": "'active'",
+    "server_default": null
+   },
+   {
+    "name": "created_by",
+    "type": "String(length=200)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "installation_id",
+    "type": "String(length=36)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "user_id",
+    "type": "String(length=36)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "subject_type",
+    "type": "String(length=63)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "subject_key",
+    "type": "String(length=300)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "kind",
+    "type": "String(length=16)",
+    "nullable": false,
+    "default": "'facts'",
+    "server_default": "'facts'"
+   },
+   {
+    "name": "schema",
+    "type": "Json()",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "writes",
+    "type": "String(length=16)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "retention_days",
+    "type": "Integer()",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "max_facts",
+    "type": "Integer()",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": "<function uuid7>",
+    "server_default": null
+   },
+   {
+    "name": "created_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   },
+   {
+    "name": "updated_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   }
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "foreign_keys": [
+   [
+    [
+     "installation_id"
+    ],
+    [
+     "assistant_installations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_memory_stores_installation_id_assistant_installations"
+   ],
    [
     [
      "org_id"
@@ -6678,9 +6869,59 @@
     "CASCADE",
     null,
     "fk_memory_stores_project_id_projects"
+   ],
+   [
+    [
+     "user_id"
+    ],
+    [
+     "users.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_memory_stores_user_id_users"
+   ]
+  ],
+  "uniques": [
+   [
+    "uq_memory_stores_owner_slug",
+    [
+     "org_id",
+     "owner_key",
+     "slug"
+    ]
+   ]
+  ],
+  "checks": [
+   [
+    "ck_memory_stores_ck_memory_stores_scope",
+    "(scope = 'project') = (project_id IS NOT NULL)"
+   ],
+   [
+    "ck_memory_stores_installation",
+    "(scope IN ('installation', 'user', 'user_subject')) = (installation_id IS NOT NULL)"
+   ],
+   [
+    "ck_memory_stores_kind",
+    "kind IN ('facts', 'profile')"
+   ],
+   [
+    "ck_memory_stores_owner",
+    "(scope IN ('user', 'user_subject')) = (user_id IS NOT NULL)"
+   ],
+   [
+    "ck_memory_stores_subject",
+    "(scope = 'user_subject') = (subject_type IS NOT NULL AND subject_key IS NOT NULL)"
    ]
   ],
   "indexes": [
+   [
+    "ix_memory_stores_installation_id",
+    [
+     "memory_stores.installation_id"
+    ],
+    false
+   ],
    [
     "ix_memory_stores_org_id",
     [
@@ -6694,19 +6935,13 @@
      "memory_stores.project_id"
     ],
     false
-   ]
-  ],
-  "primary_key": [
-   "id"
-  ],
-  "uniques": [
+   ],
    [
-    "uq_memory_stores_owner_slug",
+    "ix_memory_stores_user_id",
     [
-     "org_id",
-     "owner_key",
-     "slug"
-    ]
+     "memory_stores.user_id"
+    ],
+    false
    ]
   ]
  },

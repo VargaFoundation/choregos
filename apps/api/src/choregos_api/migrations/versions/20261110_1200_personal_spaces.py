@@ -68,6 +68,8 @@ def upgrade() -> None:
 def downgrade() -> None:
     if _postgres():
         op.execute("DROP POLICY IF EXISTS projects_personal_owner ON projects")
+    if _postgres():  # the rows of every organisation, under forced RLS (S39-27)
+        op.execute("SELECT set_config('app.current_orgs', '*', true)")
     op.execute("DELETE FROM projects WHERE kind = 'personal'")
     op.drop_index("uq_projects_personal_owner", table_name="projects")
     with op.batch_alter_table("projects") as batch:

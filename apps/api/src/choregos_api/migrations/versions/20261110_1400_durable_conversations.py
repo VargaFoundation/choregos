@@ -79,6 +79,8 @@ def upgrade() -> None:
         batch.add_column(sa.Column("max_usd", sa.Float(), nullable=True))
         batch.add_column(sa.Column("idle_close_minutes", sa.Integer(), nullable=True))
         batch.create_index(batch.f("ix_agent_sessions_installation_id"), ["installation_id"], unique=False)
+    if _postgres():  # the rows of every organisation, under forced RLS (S39-27)
+        op.execute("SELECT set_config('app.current_orgs', '*', true)")
     op.execute(
         "UPDATE agent_sessions SET status = 'closed', reason = 'migrated', closed_at = CURRENT_TIMESTAMP "
         "WHERE status = 'open'"
@@ -92,6 +94,8 @@ def downgrade() -> None:
     if _postgres():
         op.execute("DROP POLICY IF EXISTS agent_session_events_conversation_owner ON agent_session_events")
         op.execute("DROP POLICY IF EXISTS agent_sessions_conversation_owner ON agent_sessions")
+    if _postgres():  # the rows of every organisation, under forced RLS (S39-27)
+        op.execute("SELECT set_config('app.current_orgs', '*', true)")
     op.execute(
         "DELETE FROM agent_session_events WHERE session_id IN "
         "(SELECT id FROM agent_sessions WHERE kind = 'conversation')"

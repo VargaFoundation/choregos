@@ -90,6 +90,8 @@ NO_CLIENT_YET: dict[str, str] = {
     "/orgs/{org}/assistants/{slug}/bindings/{need}": "S63-18",
     "/me/assistants": "S63-18",
     "/me/assistants/{org}/{slug}/conversations": "S63-18",
+    "/me/assistants/{org}/{slug}/memory/{space}": "S63-18",
+    "/me/assistants/{org}/{slug}/memory/{space}/{subject}": "S63-18",
     "/me/conversations": "S63-18",
     "/me/conversations/{conversation_id}": "S63-18",
     "/me/conversations/{conversation_id}/messages": "S63-18",

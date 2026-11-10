@@ -4,7 +4,7 @@ The one place that says which bases an installation offers its conversations: th
 installation. Null for every existing base. The downgrade drops the column and loses the link, not the bases.
 
 Revision ID: d5a7c9e1f3b5
-Revises: c4b6d8f0a2e3
+Revises: d1f3a5b7c9e1
 Create Date: 2026-11-10 15:00:00+00:00
 """
 
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "d5a7c9e1f3b5"
-down_revision: str | None = "c4b6d8f0a2e3"
+down_revision: str | None = "d1f3a5b7c9e1"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
