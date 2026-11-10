@@ -8,6 +8,7 @@ from typing import Any, Literal
 
 from pydantic import Field
 
+from .assistant_catalogue import AssistantMemorySpace, AssistantNeed, AssistantTaskDecl
 from .base import Dto
 
 SLUG = r"^[a-z0-9][a-z0-9-]{0,62}$"
@@ -96,6 +97,9 @@ class MyAssistant(Dto):
     display_name: str | None = None
     description: str | None = None
     status: Status
+    memory_spaces: list[AssistantMemorySpace] = Field(default_factory=list)
+    tasks: list[AssistantTaskDecl] = Field(default_factory=list)
+    needs: list[AssistantNeed] = Field(default_factory=list)
 
 
 class MyAssistantList(Dto):

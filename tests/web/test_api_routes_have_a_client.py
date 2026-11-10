@@ -63,6 +63,8 @@ MACHINE_ONLY_ROUTES: dict[str, str] = {
 #: Paths people reach without a client calling them, or that stay an API gesture on purpose.
 NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
     "/auth/callback": "the identity provider's redirect after sign-in: the browser lands on it",
+    "/me/connected-accounts/callback": "the source's redirect after a person consented: the browser lands "
+    "on it, and the API sends it on to the console's /me/connected-accounts page (S63-18)",
     "/github/setup": "the GitHub App's Setup URL: GitHub redirects the browser there after an installation",
     "/remote-credentials/oauth/callback": "the provider's redirect after an administrator authorised a "
     "remote agent's credential",
@@ -110,6 +112,7 @@ NO_CLIENT_YET: dict[str, str] = {
     "/orgs/{org}/agents/{slug}/feedback-candidates": "S63-18",
     "/me/conversations/{conversation_id}/cancel": "S63-18",
 }
+NO_CLIENT_YET: dict[str, str] = {}
 
 #: Paths the CLI calls and the console must not: an operator's command, not a screen.
 CLI_ONLY: dict[str, str] = {

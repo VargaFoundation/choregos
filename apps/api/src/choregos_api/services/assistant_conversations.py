@@ -25,6 +25,7 @@ from ..rbac import Permission, Principal
 from ..schemas.assistants import MyAssistant
 from . import assistants
 from .assistant_access import caps_of, holds, turn_caps
+from .assistant_catalogue import memory_spaces_of, needs_of, tasks_of
 from .conversations import DEFAULT_CONVERSATION_USD, open_conversation
 
 
@@ -61,7 +62,8 @@ async def my_assistants(session: AsyncSession, principal: Principal) -> list[MyA
             if not holds(principal, Permission.ASSISTANT_USE, org, row):
                 continue
             status, _ = await assistants.refresh(session, row)
-            metadata = ((await assistants.manifest(session, row)) or {}).get("metadata") or {}
+            document = (await assistants.manifest(session, row)) or {}
+            metadata = document.get("metadata") or {}
             found.append(
                 MyAssistant(
                     org=org,
@@ -70,6 +72,9 @@ async def my_assistants(session: AsyncSession, principal: Principal) -> list[MyA
                     display_name=metadata.get("display_name"),
                     description=metadata.get("description"),
                     status=status,
+                    memory_spaces=memory_spaces_of(document),
+                    tasks=tasks_of(document),
+                    needs=needs_of(document),
                 )
             )
     return found

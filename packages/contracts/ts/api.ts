@@ -4073,6 +4073,43 @@ export type MyAssistant = {
   display_name?: string | null;
   description?: string | null;
   status: "incomplete" | "ready" | "suspended";
+  memory_spaces?: Array<AssistantMemorySpace>;
+  tasks?: Array<AssistantTaskDecl>;
+  needs?: Array<AssistantNeed>;
+};
+
+export type AssistantMemorySpace = {
+  name: string;
+  scope: "user" | "user_subject";
+  kind: "facts" | "profile";
+};
+
+export type AssistantNeed = {
+  need: string;
+  identity: "service" | "user_exchange" | "user_consent";
+  access: string;
+  required: boolean;
+};
+
+export type AssistantTaskDecl = {
+  name: string;
+  delegation: "none" | "read_only";
+  schedulable: boolean;
+};
+
+export type PluginAssistant = {
+  name: string;
+  display_name?: string | null;
+  description?: string | null;
+  config_schema?: {
+    [key: string]: unknown;
+  } | null;
+  suggested_groups: Array<string>;
+  needs: Array<AssistantNeed>;
+};
+
+export type PluginAssistantList = {
+  items: Array<PluginAssistant>;
 };
 
 export type AssistantEmbed = {
@@ -5487,6 +5524,7 @@ export interface Operations {
   listPendingMemory: { method: "GET"; path: "/projects/{id}/memory/pending"; body: never; response: Array<Memory> };
   listPlatformModels: { method: "GET"; path: "/platform/models"; body: never; response: Array<GatewayModel> };
   listPluginApprovals: { method: "GET"; path: "/orgs/{org}/plugin-approvals"; body: never; response: PluginApprovalList };
+  listPluginAssistants: { method: "GET"; path: "/orgs/{org}/plugins/{name}/assistants"; body: never; response: PluginAssistantList };
   listPluginSources: { method: "GET"; path: "/orgs/{org}/plugin-sources"; body: never; response: PluginSources };
   listPlugins: { method: "GET"; path: "/orgs/{org}/plugins"; body: never; response: PluginList };
   listProcedures: { method: "GET"; path: "/procedures"; body: never; response: Array<ProcedureSummary> };
