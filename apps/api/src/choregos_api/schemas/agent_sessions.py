@@ -70,7 +70,8 @@ class AgentResponse(Dto):
 
 
 class AgentDelta(Dto):
-    """A `response.output_text.delta` event: the whole text in one delta (no token streaming yet)."""
+    """A `response.output_text.delta` event: one chunk of what the model streamed (a turn of a durable
+    conversation); a `/responses` session sends the whole text in one."""
 
     type: Literal["response.output_text.delta"] = "response.output_text.delta"
     response_id: str

@@ -11,16 +11,20 @@ A conversation is `idle` once `idle_close_minutes` (240 by default) passed since
 state is derived from the clock, never swept: the next message reopens it with its history, and says so
 in the journal (`conversation.resumed`). It keeps the agent revision it started with.
 
-Not done here, stated in the ADR: the answer is computed whole and sent as one delta (the prompt loop does
-not stream yet), the history is not summarised past a token threshold, `retention_until` is not set (no
-installation policy exists yet), and the title is a deterministic cut of the first message, not a model's.
+A turn streams: with `on_delta`, every model call of the turn is read as server-sent chunks (S63-04b). Limits
+(`max_turns`, `retention_until`, compression, one turn at a time, cancel) are in `conversation_turns`.
+
+Not done here: the limits' defaults are the conversation's own (no installation policy exists yet), and the
+title is a deterministic cut of the first message, not a model's.
 """
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncIterator
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 from choregos_core import utcnow
 from choregos_core.domain import aware
@@ -36,11 +40,13 @@ from ..db.models import (
     Project,
     User,
 )
+from ..db.session import release_connection
 from ..errors import ApiError, conflict, not_found
 from ..logging import get_logger
 from ..schemas.agent_sessions import (
     AgentDelta,
     AgentResponse,
+    AgentResponseError,
     Conversation,
     ConversationMessage,
     ConversationSummary,
@@ -55,6 +61,15 @@ from .agent_sessions import (
     respond,
     session_gateway,
 )
+from .conversation_turns import (
+    claim_turn,
+    compress_history,
+    forget_turn,
+    refuse_if_not_allowed,
+    register_turn,
+    retention_until,
+)
+from .model_stream import OnDelta
 from .personal_spaces import personal_space
 
 if TYPE_CHECKING:
@@ -71,7 +86,7 @@ TURN_KEY_TTL_S = 1800
 TITLE_CHARS = 60
 
 
-async def open_conversation(
+async def open_conversation(  # noqa: PLR0913 - the terms of a conversation, one by one
     session: AsyncSession,
     principal: Principal,
     organisation: Organization,
@@ -81,6 +96,8 @@ async def open_conversation(
     idle_close_minutes: int | None = None,
     context: dict[str, Any] | None = None,
     installation_id: str | None = None,
+    max_turns: int | None = None,
+    retention_days: int | None = None,
 ) -> AgentSessionRecord:
     """A conversation with the agent in the caller's personal space, created on first use (S63-03).
 
@@ -102,6 +119,8 @@ async def open_conversation(
             idle_close_minutes=idle_close_minutes or DEFAULT_IDLE_CLOSE_MINUTES,
             context=context,
             installation_id=installation_id,
+            max_turns=max_turns,
+            retention_days=retention_days,
         ),
     )
 
@@ -129,8 +148,24 @@ def derive_title(text: str) -> str:
     return cut.rstrip(" ,;:.") + "..."
 
 
-async def converse(session: AsyncSession, record: AgentSessionRecord, text: str) -> AgentResponse:
-    """One turn: reopen an idle conversation, reserve, mint the turn's key, run the loop, settle the key."""
+async def converse(
+    session: AsyncSession, record: AgentSessionRecord, text: str, *, on_delta: OnDelta | None = None
+) -> AgentResponse:
+    """One turn, as a task registered by conversation id so `cancel_turn` can reach it. With `on_delta`,
+    the model's text is handed to it chunk by chunk as the gateway streams it."""
+    task = asyncio.ensure_future(_turn(session, record, text, on_delta))
+    register_turn(record.id, task)
+    try:
+        return await task
+    finally:
+        forget_turn(record.id, task)
+
+
+async def _turn(
+    session: AsyncSession, record: AgentSessionRecord, text: str, on_delta: OnDelta | None
+) -> AgentResponse:
+    """Reopen an idle conversation, refuse what is refused, claim the turn, reserve, mint the turn's key,
+    run the loop, settle the key."""
     from .agents import resolve_agent
     from .assistant_conversations import assistant_caps
     from .budgets import DEFAULT_FLOOR_USD
@@ -141,6 +176,7 @@ async def converse(session: AsyncSession, record: AgentSessionRecord, text: str)
     if project is None:
         raise not_found("Project", record.project_id)
     now = utcnow()
+    refuse_if_not_allowed(record, now)  # before anything is written: no key, no model call
     if is_idle(record, now) or record.status == "idle":
         idle_for = int((now - last_activity(record)).total_seconds())
         record.status = "open"
@@ -170,35 +206,72 @@ async def converse(session: AsyncSession, record: AgentSessionRecord, text: str)
     )
     if reservation.below(DEFAULT_FLOOR_USD):
         raise ApiError(409, "Budget exhausted", f"the turn does not start: {reservation.describe()}")
-    record.turns += 1
-    number = record.turns
-    gateway = await session_gateway(session, record.org_id)
-    key = await mint_key(
-        session,
-        gateway,
-        record,
-        project,
-        budget_usd=reservation.usd,
-        ttl_s=TURN_KEY_TTL_S,
-        run_id=f"turn:{record.id}:{number}",
-    )
-    await journal(
-        session,
-        record,
-        "turn.started",
-        {"turn": number, "reserved_usd": reservation.usd, "bound_by": reservation.bound_by},
-    )
-    first = not record.messages or all(m.get("role") == "system" for m in record.messages)
+    # The number, the lease and `retention_until`, under the row's lock, committed before anything slow.
+    number = await claim_turn(session, record)
+    await release_connection(session)
     try:
-        answer = await respond(session, record, project, [text], turn_key=str(key.key))
+        gateway = await session_gateway(session, record.org_id)
+        key = await mint_key(
+            session,
+            gateway,
+            record,
+            project,
+            budget_usd=reservation.usd,
+            ttl_s=TURN_KEY_TTL_S,
+            run_id=f"turn:{record.id}:{number}",
+        )
+        compressed = compress_history(record, text)
+        if compressed:
+            await journal(session, record, "conversation.compressed", {"turns_summarised": compressed})
+        await journal(
+            session,
+            record,
+            "turn.started",
+            {"turn": number, "reserved_usd": reservation.usd, "bound_by": reservation.bound_by},
+        )
+    except BaseException:
+        await _end_lease(session, record)
+        raise
+    first = not record.messages or all(m.get("role") == "system" for m in record.messages)
+    cancelled = False
+    answer: AgentResponse | None = None
+    try:
+        answer = await respond(session, record, project, [text], turn_key=str(key.key), on_delta=on_delta)
+    except asyncio.CancelledError:
+        cancelled = True
+        # Tool calls already made are journaled as they happen; the half answer is not kept.
+        asyncio.current_task().uncancel()  # type: ignore[union-attr]
     finally:
         await _settle_turn(session, record, gateway, key.key_id, number)
+        await _end_lease(session, record)
+    if cancelled:
+        await journal(session, record, "turn.cancelled", {"turn": number})
+        answer = AgentResponse(
+            id=f"resp_{uuid4().hex}",
+            session_id=record.id,
+            status="failed",
+            error=AgentResponseError(code="cancelled", message="the turn was cancelled"),
+        )
+    assert answer is not None
     if first and answer.status == "completed" and record.title is None:
         record.title = derive_title(text)
     stamped = utcnow()
     record.last_activity_at = stamped
+    record.retention_until = retention_until(record, stamped)
     record.expires_at = stamped + timedelta(minutes=record.idle_close_minutes or DEFAULT_IDLE_CLOSE_MINUTES)
+    if cancelled:
+        await release_connection(session)
     return answer
+
+
+async def _end_lease(session: AsyncSession, record: AgentSessionRecord) -> None:
+    """The turn no longer holds the conversation; committed, so the next turn (or a rollback of this
+    request) does not keep it locked."""
+    record.turn_lease_until = None
+    try:
+        await release_connection(session)
+    except Exception as failure:  # the lease lapses by itself
+        log.warning("conversation.lease_not_released", session_id=record.id, error=type(failure).__name__)
 
 
 async def _settle_turn(
@@ -290,14 +363,14 @@ def conversation_of(record: AgentSessionRecord) -> Conversation:
     """The summary and what was said: the system message and the tool traffic stay out."""
     said = [
         ConversationMessage(role=m["role"], content=str(m["content"]))
-        for m in record.messages or []
+        for m in [*(record.archived_messages or []), *(record.messages or [])]
         if m.get("role") in ("user", "assistant") and m.get("content")
     ]
     return Conversation(**summary_of(record).model_dump(), context=record.context, messages=said)
 
 
 async def response_events(answer: AgentResponse) -> AsyncIterator[dict[str, str]]:
-    """The server-sent events of a computed answer: created, one delta with the whole text, then its end."""
+    """The server-sent events of a computed answer (a `/responses` session): created, one delta, its end."""
     created = answer.model_copy(update={"output": [], "output_text": ""})
     yield {"event": "response.created", "data": created.model_dump_json()}
     if answer.output_text:

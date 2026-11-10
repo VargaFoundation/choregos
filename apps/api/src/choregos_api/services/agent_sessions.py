@@ -68,6 +68,7 @@ from ..schemas.agent_sessions import (
 from ..secret_store import get_secret_store
 from .events import persist_event
 from .identity_exchange import SERVICE, USER_EXCHANGE, Acting
+from .model_stream import OnDelta, StreamRefused, stream_completion
 
 if TYPE_CHECKING:
     from choregos_adapters.base import GatewayAdapter
@@ -99,6 +100,8 @@ class ConversationTerms:
     idle_close_minutes: int
     context: dict[str, Any] | None = None
     installation_id: str | None = None
+    max_turns: int | None = None
+    retention_days: int | None = None
 
 
 _DOORS: dict[str, str] = {"prompt": "/responses", "voice": "/realtime", "socket": "/realtime"}
@@ -247,6 +250,8 @@ async def open_session(
         record.turns = 0
         record.max_usd = conversation.max_usd
         record.idle_close_minutes = conversation.idle_close_minutes
+        record.max_turns = conversation.max_turns
+        record.retention_days = conversation.retention_days
         record.last_activity_at = now
         record.expires_at = now + timedelta(minutes=conversation.idle_close_minutes)
         session.add(record)
@@ -470,6 +475,7 @@ async def respond(
     inputs: list[str],
     *,
     turn_key: str | None = None,
+    on_delta: OnDelta | None = None,
 ) -> AgentResponse:
     """One response of the session: the person's input, the agent's loop, what it said.
 
@@ -540,6 +546,17 @@ async def respond(
             httpx.AsyncClient(transport=_OVERRIDES.get("transport"), timeout=300) as http,
         ):
             made["model_calls"] += 1
+            if on_delta is not None:
+                try:
+                    return await stream_completion(
+                        http,
+                        f"{gateway_url.rstrip('/')}/chat/completions",
+                        body,
+                        {"Authorization": f"Bearer {key}"},
+                        on_delta,
+                    )
+                except StreamRefused as refused:
+                    raise _ModelRefused(refused.status, refused.text) from refused
             answer = await http.post(
                 f"{gateway_url.rstrip('/')}/chat/completions",
                 json=body,

@@ -75,6 +75,14 @@ class AgentSessionRecord(Base, PkMixin, TimestampMixin):
     max_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     #: Minutes of inactivity after which it is `idle`; null is the default (240).
     idle_close_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: Turns a conversation may take in all; null is the default (200). The turn past it is refused (S63-04b).
+    max_turns: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: Days a conversation is kept after its last turn: `retention_until` moves by it; null is 30 (S63-04b).
+    retention_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: The turns compression took out of `messages` (replaced there by a summary): what the person reads.
+    archived_messages: Mapped[list[dict[str, Any]]] = mapped_column(Json, default=list, server_default="[]")
+    #: Set while a turn runs: a second turn is refused until it ends or it lapses (S63-04b).
+    turn_lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class AgentSessionEvent(Base, PkMixin):

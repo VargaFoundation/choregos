@@ -4875,6 +4875,7 @@ export interface Operations {
   /** The bound the API held `result` to, in bytes of JSON, its data counted once (#1383): the operation's, catalogue entry's or plugin tool's own cap, else `CHOREGOS_BROKER_RESULT_MAX_BYTES` (a page of `web_fetch`, a search), never above `CHOREGOS_BROKER_RESULT_CEILING_BYTES`. The run's tool server shows the model the result up to it, so that both doors read the same amount of it (ADR 0122 §8). `null` when nothing was bounded: a proposal (202 under approval), a job step's read (masked, never cut). */
   result_max_bytes?: number;
 } };
+  cancelMyConversationTurn: { method: "POST"; path: "/me/conversations/{conversation_id}/cancel"; body: never; response: ConversationSummary };
   changeAgentLifecycle: { method: "POST"; path: "/orgs/{org}/agents/{slug}/lifecycle"; body: AgentLifecycleChange; response: AgentLifecycleResult };
   changeAgentScope: { method: "POST"; path: "/orgs/{org}/agents/{slug}/scope"; body: AgentScopeChange; response: Agent };
   checkOrgEgress: { method: "POST"; path: "/orgs/{org}/egress/check"; body: EgressCheck; response: EgressCheckResult };
