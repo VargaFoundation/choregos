@@ -2821,6 +2821,8 @@ export type KnowledgeDocument = {
   source_id?: string | null;
   /** where to open the original */
   source_url?: string | null;
+  /** `local` (written by people), or `seed@<plugin version>` for the copy of an assistant's seed document that nobody changed (S63-06) */
+  origin?: string;
 };
 
 /** Optional body of `distillKnowledgeBase` (S42-10). */
@@ -3968,6 +3970,34 @@ export type AssistantReadinessItem = {
   groups: Array<string>;
 };
 
+export type KnowledgeUpdate = {
+  id: string;
+  /** the installation's knowledge base (slug) */
+  base: string;
+  /** the document's file name in the base */
+  path: string;
+  kind: "add" | "update" | "remove";
+  /** unified diff, the local copy to the new seed; empty for an add */
+  diff: string;
+  /** the new seed's text; none for a removal */
+  proposed_content?: string | null;
+  plugin_version: string;
+  status: "proposed" | "accepted" | "merged" | "refused";
+  decided_by?: string | null;
+  decided_at?: string | null;
+  created_at: string;
+};
+
+export type KnowledgeUpdateList = {
+  items: Array<KnowledgeUpdate>;
+};
+
+export type KnowledgeUpdateDecision = {
+  decision: "accept" | "refuse" | "merge";
+  /** the text to keep */
+  content?: string | null;
+};
+
 export type AssistantReadiness = {
   status: "incomplete" | "ready" | "suspended";
   items: Array<AssistantReadinessItem>;
@@ -4958,6 +4988,7 @@ export interface Operations {
   deactivateWorkflow: { method: "POST"; path: "/projects/{id}/workflows/{name}/deactivate"; body: never; response: void };
   decideAction: { method: "POST"; path: "/projects/{id}/actions/{action_id}/decision"; body: ActionDecision; response: Action };
   decideAgentRelease: { method: "POST"; path: "/orgs/{org}/agents/{slug}/releases/{release_id}/decision"; body: AgentReleaseDecision; response: AgentRelease };
+  decideAssistantKnowledgeUpdate: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/knowledge/updates/{update_id}"; body: KnowledgeUpdateDecision; response: KnowledgeUpdate };
   decideGlobalPendingMemory: { method: "POST"; path: "/orgs/{org}/memories/{slug}/pending"; body: MemoryDecision; response: void };
   decidePendingMemory: { method: "POST"; path: "/projects/{id}/memory/pending"; body: MemoryDecision; response: void };
   deleteAgent: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}"; body: never; response: void };
@@ -5194,6 +5225,7 @@ export interface Operations {
   listAgentRuns: { method: "GET"; path: "/orgs/{org}/agents/{slug}/runs"; body: never; response: Array<Run> };
   listAgentSessionTools: { method: "GET"; path: "/internal/agent-sessions/{id}/tools"; body: never; response: AgentSessionTools };
   listAgents: { method: "GET"; path: "/orgs/{org}/agents"; body: never; response: Array<Agent> };
+  listAssistantKnowledgeUpdates: { method: "GET"; path: "/orgs/{org}/assistants/{slug}/knowledge/updates"; body: never; response: KnowledgeUpdateList };
   listAssistants: { method: "GET"; path: "/orgs/{org}/assistants"; body: never; response: AssistantList };
   listAudit: { method: "GET"; path: "/audit"; body: never; response: AuditPage };
   listBackends: { method: "GET"; path: "/platform/backends"; body: never; response: Array<AgentBackendInfo> };

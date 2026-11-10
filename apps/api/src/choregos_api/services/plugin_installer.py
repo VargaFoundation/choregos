@@ -715,6 +715,9 @@ async def upgrade(
     row.status, row.installed_by, row.installed_at = status, principal.email, utcnow()
     await session.flush()
     knowledge = await _projects_receive_template_knowledge(session, org_id, row.name)
+    from .offered_knowledge import upgrade_plugin
+
+    await upgrade_plugin(session, org_id, row, principal)  # S63-06: the installations' offered knowledge
     await record(session, principal, "plugin.upgrade", org_id=org_id, target_type="plugin",
                  target_id=row.name, previous_version=previous, version=plugin.version,
                  digest=plugin.digest, offered=offered, kept=kept,
@@ -882,6 +885,11 @@ async def _materialise(session: AsyncSession, row: OrgPlugin) -> Path:
     except OSError:  # another request materialised it first
         shutil.rmtree(staging, ignore_errors=True)
     return target
+
+
+async def plugin_root(session: AsyncSession, row: OrgPlugin) -> Path:
+    """The directory of the plugin's stored files (see `_materialise`)."""
+    return await _materialise(session, row)
 
 
 async def plugin_assistant(

@@ -5472,162 +5472,178 @@
   ]
  },
  "knowledge_documents": {
-  "checks": [],
   "columns": [
    {
-    "default": null,
     "name": "org_id",
+    "type": "String(length=36)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=36)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "knowledge_base_id",
+    "type": "String(length=36)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=36)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": "'upload'",
     "name": "source",
+    "type": "String(length=32)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=32)"
+    "default": "'upload'",
+    "server_default": null
    },
    {
-    "default": null,
     "name": "filename",
+    "type": "String(length=255)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=255)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "title",
+    "type": "String(length=300)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=300)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "mime",
+    "type": "String(length=128)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=128)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "size_bytes",
+    "type": "Integer()",
     "nullable": false,
-    "server_default": null,
-    "type": "Integer()"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "digest",
+    "type": "String(length=80)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=80)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "content",
+    "type": "LargeBinary()",
     "nullable": true,
-    "server_default": null,
-    "type": "LargeBinary()"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "markdown",
+    "type": "Text()",
     "nullable": true,
-    "server_default": null,
-    "type": "Text()"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": "'pending'",
     "name": "status",
+    "type": "String(length=16)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=16)"
+    "default": "'pending'",
+    "server_default": null
    },
    {
-    "default": null,
     "name": "error",
+    "type": "Text()",
     "nullable": true,
-    "server_default": null,
-    "type": "Text()"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": "<function list>",
     "name": "warnings",
+    "type": "Json()",
     "nullable": false,
-    "server_default": "'[]'",
-    "type": "Json()"
+    "default": "<function list>",
+    "server_default": "'[]'"
    },
    {
-    "default": null,
     "name": "converted_at",
+    "type": "DateTime(timezone=True)",
     "nullable": true,
-    "server_default": null,
-    "type": "DateTime(timezone=True)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "created_by",
+    "type": "String(length=200)",
     "nullable": true,
-    "server_default": null,
-    "type": "String(length=200)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "source_id",
+    "type": "String(length=36)",
     "nullable": true,
-    "server_default": null,
-    "type": "String(length=36)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "source_ref",
+    "type": "String(length=1000)",
     "nullable": true,
-    "server_default": null,
-    "type": "String(length=1000)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": null,
     "name": "source_version",
+    "type": "String(length=200)",
     "nullable": true,
-    "server_default": null,
-    "type": "String(length=200)"
-   },
-   {
     "default": null,
+    "server_default": null
+   },
+   {
     "name": "source_url",
+    "type": "String(length=2000)",
     "nullable": true,
-    "server_default": null,
-    "type": "String(length=2000)"
+    "default": null,
+    "server_default": null
    },
    {
-    "default": "<function uuid7>",
+    "name": "origin",
+    "type": "String(length=200)",
+    "nullable": false,
+    "default": "'local'",
+    "server_default": "'local'"
+   },
+   {
+    "name": "seed_digest",
+    "type": "String(length=80)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
     "name": "id",
+    "type": "String(length=36)",
     "nullable": false,
-    "server_default": null,
-    "type": "String(length=36)"
+    "default": "<function uuid7>",
+    "server_default": null
    },
    {
-    "default": "<function utcnow>",
     "name": "created_at",
+    "type": "DateTime(timezone=True)",
     "nullable": false,
-    "server_default": "<sqlalchemy.sql.functions.now; now>",
-    "type": "DateTime(timezone=True)"
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
    },
    {
-    "default": "<function utcnow>",
     "name": "updated_at",
+    "type": "DateTime(timezone=True)",
     "nullable": false,
-    "server_default": "<sqlalchemy.sql.functions.now; now>",
-    "type": "DateTime(timezone=True)"
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
    }
+  ],
+  "primary_key": [
+   "id"
   ],
   "foreign_keys": [
    [
@@ -5664,6 +5680,16 @@
     "fk_knowledge_documents_source_id_knowledge_sources"
    ]
   ],
+  "uniques": [
+   [
+    "uq_knowledge_documents_kb_digest",
+    [
+     "knowledge_base_id",
+     "digest"
+    ]
+   ]
+  ],
+  "checks": [],
   "indexes": [
    [
     "ix_knowledge_documents_knowledge_base_id",
@@ -5692,18 +5718,6 @@
      "knowledge_documents.status"
     ],
     false
-   ]
-  ],
-  "primary_key": [
-   "id"
-  ],
-  "uniques": [
-   [
-    "uq_knowledge_documents_kb_digest",
-    [
-     "knowledge_base_id",
-     "digest"
-    ]
    ]
   ]
  },
@@ -6023,6 +6037,187 @@
    "id"
   ],
   "uniques": []
+ },
+ "knowledge_update_proposals": {
+  "columns": [
+   {
+    "name": "org_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "installation_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "knowledge_base_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "path",
+    "type": "String(length=255)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "kind",
+    "type": "String(length=8)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "diff",
+    "type": "Text()",
+    "nullable": false,
+    "default": "''",
+    "server_default": null
+   },
+   {
+    "name": "proposed_content",
+    "type": "Text()",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "seed_digest",
+    "type": "String(length=80)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "plugin_version",
+    "type": "String(length=128)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "status",
+    "type": "String(length=16)",
+    "nullable": false,
+    "default": "'proposed'",
+    "server_default": null
+   },
+   {
+    "name": "decided_by",
+    "type": "String(length=320)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "decided_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": "<function uuid7>",
+    "server_default": null
+   },
+   {
+    "name": "created_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   },
+   {
+    "name": "updated_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   }
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "foreign_keys": [
+   [
+    [
+     "installation_id"
+    ],
+    [
+     "assistant_installations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_knowledge_update_proposals_installation_id_assistant_installations"
+   ],
+   [
+    [
+     "knowledge_base_id"
+    ],
+    [
+     "knowledge_bases.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_knowledge_update_proposals_knowledge_base_id_knowledge_bases"
+   ],
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_knowledge_update_proposals_org_id_organizations"
+   ]
+  ],
+  "uniques": [],
+  "checks": [
+   [
+    "ck_knowledge_update_proposals_ck_knowledge_update_proposals_kind",
+    "kind IN ('add', 'update', 'remove')"
+   ],
+   [
+    "ck_knowledge_update_proposals_ck_knowledge_update_proposals_status",
+    "status IN ('proposed', 'accepted', 'merged', 'refused')"
+   ]
+  ],
+  "indexes": [
+   [
+    "ix_knowledge_update_proposals_installation_id",
+    [
+     "knowledge_update_proposals.installation_id"
+    ],
+    false
+   ],
+   [
+    "ix_knowledge_update_proposals_knowledge_base_id",
+    [
+     "knowledge_update_proposals.knowledge_base_id"
+    ],
+    false
+   ],
+   [
+    "ix_knowledge_update_proposals_org_id",
+    [
+     "knowledge_update_proposals.org_id"
+    ],
+    false
+   ]
+  ]
  },
  "machine_accounts": {
   "checks": [],

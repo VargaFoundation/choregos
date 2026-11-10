@@ -272,12 +272,38 @@ A conversation of an installation is offered `knowledge_search(base, query, top_
 `knowledge_get(base, document_id)` next to its need tools (S63-05,
 [ADR 0138](adr/0138-the-knowledge-an-assistant-offers.md) point 4), served in the
 conversation's tool loop. The bases offered are those with `knowledge_bases.installation_id` set to the
-installation (the copy of a seed made at install, which S63-06 populates), whatever the person's groups:
+installation (the copy of a seed made at install, S63-06), whatever the person's groups:
 giving the assistant is the control. A base outside the installation is neither offered nor reachable by
 name, even when the person reads it through the knowledge routes, and a `knowledge_get` of another base's
 document is refused. Each passage is framed as data with its document id, title, path and version
 (`source_version`, else the content digest), and the agent's instructions tell it to cite
 `[document, version]`.
+
+#### Offered knowledge: a copy, an origin, proposed updates
+
+Installing an assistant copies each seed it names (`knowledge: [{name, seed, serving_mode, upstream}]`,
+S63-06, [ADR 0138](adr/0138-the-knowledge-an-assistant-offers.md) points 1-3) into an organisation base
+`<installation slug>-<name>`, linked to the installation and read by its owner groups (a `group` grant with
+the `owner` role; the base is `restricted`). Each markdown file of the seed's `corpus/` becomes a document,
+indexed when `serving_mode` is `index`, marked `origin: seed@<plugin version>` and keeping the digest of the
+seed file (`seed_digest`). An owner who uploads a file of the same name through the knowledge routes edits
+that document, which becomes `origin: local`; a new file is `local` too.
+
+Upgrading the plugin compares, per document, the seed the copy came from, the new seed and the copy:
+
+| Document | `follow` | `propose_updates` | `frozen` |
+| --- | --- | --- | --- |
+| unchanged upstream | nothing | nothing | nothing |
+| changed upstream, unchanged locally | updated | proposal | nothing |
+| changed upstream and locally | proposal with its diff | proposal with its diff | proposal with its diff |
+| new upstream | added | proposal | nothing |
+| removed upstream | proposal to remove | proposal to remove | nothing if unchanged locally, else proposal |
+
+A document is never deleted by an upgrade: removal is always a proposal. The owners (`assistant:manage`)
+read `GET /orgs/{org}/assistants/{slug}/knowledge/updates[?status=]` and decide
+`POST .../knowledge/updates/{update_id}` with `{decision: accept | refuse | merge, content?}`: `accept`
+applies the seed's change, `merge` keeps their own `content` (a `local` document), `refuse` leaves the
+document and is remembered (the same upstream state is not proposed again). The index follows each change.
 
 #### Installing an assistant and binding its needs
 
