@@ -41,7 +41,7 @@ from ..schemas.assistants import (
     AssistantReadinessItem,
     AssistantUpdate,
 )
-from . import plugin_installer
+from . import offered_knowledge, plugin_installer
 from .assistant_access import holds
 from .connector_identity import supports_identity
 
@@ -337,6 +337,9 @@ async def install(
     )
     session.add(row)
     await session.flush()
+    await offered_knowledge.copy_seeds(
+        session, row, document, plugin_row, await plugin_installer.plugin_root(session, plugin_row), principal
+    )
     await refresh(session, row)
     await record(session, principal, "assistant.install", org_id=org_id, target_type="assistant",
                  target_id=slug, plugin=plugin_row.name, version=plugin_row.version)  # fmt: skip

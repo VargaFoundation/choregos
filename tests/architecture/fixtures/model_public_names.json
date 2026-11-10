@@ -47,6 +47,7 @@
  "KnowledgeDocument",
  "KnowledgeGrant",
  "KnowledgeSource",
+ "KnowledgeUpdateProposal",
  "LargeBinary",
  "MachineAccount",
  "Mapped",
