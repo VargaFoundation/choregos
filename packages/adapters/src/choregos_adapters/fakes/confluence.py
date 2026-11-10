@@ -1,8 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 """A Confluence Cloud site in memory (ADR 0005), scripted by tests: spaces, pages with versions,
-restrictions, attachments, and the REST API v2 over an `httpx.MockTransport`. It checks the Basic
+folders, restrictions, attachments, and the REST API v2 over an `httpx.MockTransport`. It checks the Basic
 credentials, serves a scoped token through `api.atlassian.com/ex/confluence/{cloud_id}`, redirects
-attachment downloads to a media host, and can be told to fail."""
+attachment downloads to a media host, and can be told to fail.
+
+Folders are what Confluence Cloud returns: content of type `folder`, never in a space's page
+listing, the parent (`parentId`, `parentType: "folder"`) of the pages filed in them, read by
+`GET /folders/{id}` and walked by the `descendants` endpoints with the real defaults (`depth` 2,
+at most 10; `limit` 25, at most 250)."""
 
 from __future__ import annotations
 
@@ -34,6 +39,15 @@ class _Page:
 
 
 @dataclass
+class _Folder:
+    id: str
+    space: str
+    title: str
+    parent: str | None
+    restricted: bool = False
+
+
+@dataclass
 class _Attachment:
     id: str
     page: str
@@ -49,6 +63,8 @@ class FakeConfluence:
         self.page_size = 250
         self.spaces: dict[str, str] = {}
         self.pages: dict[str, _Page] = {}
+        #: content ids are shared: a folder id is never a page id
+        self.folders: dict[str, _Folder] = {}
         self.attachments: dict[str, _Attachment] = {}
         #: every request served, in order: tests read the headers and URLs here
         self.requests: list[httpx.Request] = []
@@ -83,12 +99,16 @@ class FakeConfluence:
         if labels is not None:
             self.pages[id].labels = labels
 
+    def put_folder(self, space: str, id: str, title: str, parent: str | None = None) -> None:
+        """Creates a folder, or moves and renames it; `parent` is a page or a folder."""
+        self.folders[id] = _Folder(id, space, title, parent)
+
     def delete_page(self, id: str) -> None:
         self.pages[id].deleted = True
 
     def restrict(self, id: str, restricted: bool = True) -> None:
-        """Hides the page from the account: not listed, 403 when read."""
-        self.pages[id].restricted = restricted
+        """Hides the page (or the folder) from the account: not listed, 403 when read."""
+        (self.pages.get(id) or self.folders[id]).restricted = restricted
 
     def add_attachment(
         self, page: str, id: str, title: str, data: bytes, media_type: str = "application/pdf"
@@ -119,6 +139,18 @@ class FakeConfluence:
 
     def _visible(self, space: str) -> list[_Page]:
         return [p for p in self.pages.values() if p.space == space and not p.deleted and not p.restricted]
+
+    def _parent_type(self, parent: str | None) -> str | None:
+        if parent is None:
+            return None
+        return "folder" if parent in self.folders else "page"
+
+    def _shown(self, id: str) -> _Page | _Folder | None:
+        """A page or a folder the account sees, or `None`."""
+        node: _Page | _Folder | None = self.pages.get(id) or self.folders.get(id)
+        if node is None or node.restricted or (isinstance(node, _Page) and node.deleted):
+            return None
+        return node
 
     def _scripted_failure(self, path: str) -> httpx.Response | None:
         for index, (needle, status, times, headers) in enumerate(self._failures):
@@ -165,6 +197,10 @@ class FakeConfluence:
             return self._paged(
                 path, sorted(self._visible(key), key=lambda p: int(p.id)), params, self._summary
             )
+        if match := re.fullmatch(r"/wiki/api/v2/(pages|folders)/([^/]+)/descendants", path):
+            return self._descendants(path, match.group(1), match.group(2), params)
+        if match := re.fullmatch(r"/wiki/api/v2/folders/([^/]+)", path):
+            return self._folder(match.group(1))
         if match := re.fullmatch(r"/wiki/api/v2/pages/([^/]+)", path):
             return self._page(match.group(1), params.get("body-format"))
         if match := re.fullmatch(r"/wiki/api/v2/pages/([^/]+)/labels", path):
@@ -187,20 +223,67 @@ class FakeConfluence:
             )
         return httpx.Response(404, json={"message": f"not served: {path}"})
 
-    def _paged(self, path: str, rows: list[Any], params: Any, render: Any) -> httpx.Response:
-        size = min(int(params.get("limit", 250)), self.page_size)
+    def _paged(
+        self, path: str, rows: list[Any], params: Any, render: Any, *, default_limit: int = 250
+    ) -> httpx.Response:
+        size = min(int(params.get("limit", default_limit)), self.page_size)
         start = int(params.get("cursor", 0))
         links: dict[str, str] = {}
         if start + size < len(rows):
-            links["next"] = f"{path}?cursor={start + size}&limit={size}&status=current"
+            # The next link keeps the request's other parameters (`depth`, `status`), as Confluence's does.
+            following = params.set("cursor", str(start + size)).set("limit", str(size))
+            links["next"] = f"{path}?{following}"
         return httpx.Response(
             200, json={"results": [render(r) for r in rows[start : start + size]], "_links": links}
         )
 
-    @staticmethod
-    def _summary(page: _Page) -> dict[str, Any]:
+    def _descendants(self, path: str, kind: str, id: str, params: Any) -> httpx.Response:
+        """Everything under a page or a folder the account sees, top to bottom (by depth), pages
+        and folders alike, in the minimal `DescendantsResponse` shape."""
+        node = self._shown(id)
+        if node is None or isinstance(node, _Folder) != (kind == "folders"):
+            return httpx.Response(404, json={"message": f"no such {kind[:-1]}"})
+        depth = int(params.get("depth", 2))
+        if not 1 <= depth <= 10 or int(params.get("limit", 25)) > 250:
+            return httpx.Response(400, json={"message": "depth is 1 to 10, limit at most 250"})
+        rows: list[dict[str, Any]] = []
+        nodes: list[_Page | _Folder] = [*self.pages.values(), *self.folders.values()]
+        level, current = 1, [id]
+        while current and level <= depth:
+            below: list[str] = []
+            for parent in current:
+                children = sorted(
+                    (n for n in nodes if n.parent == parent),
+                    key=lambda n: int(n.id),
+                )
+                for position, child in enumerate(c for c in children if self._shown(c.id)):
+                    rows.append({
+                        "id": child.id, "status": "current", "title": child.title,
+                        "type": "folder" if isinstance(child, _Folder) else "page",
+                        "parentId": parent, "depth": level, "childPosition": position,
+                    })  # fmt: skip
+                    below.append(child.id)
+            level, current = level + 1, below
+        return self._paged(path, rows, params, lambda row: row, default_limit=25)
+
+    def _folder(self, id: str) -> httpx.Response:
+        folder = self.folders.get(id)
+        if folder is None:
+            return httpx.Response(404, json={"message": "no such folder"})
+        if folder.restricted:
+            return httpx.Response(403, json={"message": "restricted"})
+        return httpx.Response(200, json={
+            "id": folder.id, "type": "folder", "status": "current", "title": folder.title,
+            "parentId": folder.parent, "parentType": self._parent_type(folder.parent), "position": 0,
+            "spaceId": self.spaces[folder.space], "createdAt": "2026-10-15T00:00:00.000Z",
+            "version": {"number": 1, "createdAt": "2026-10-15T00:00:00.000Z"},
+            "_links": {"webui": f"/spaces/{folder.space}/folder/{folder.id}"},
+        })  # fmt: skip
+
+    def _summary(self, page: _Page) -> dict[str, Any]:
         return {
-            "id": page.id, "title": page.title, "parentId": page.parent, "status": "current",
+            "id": page.id, "title": page.title, "parentId": page.parent,
+            "parentType": self._parent_type(page.parent), "status": "current",
             "version": {"number": page.version, "createdAt": "2026-10-15T00:00:00.000Z"},
             "_links": {"webui": f"/spaces/{page.space}/pages/{page.id}/{page.title.replace(' ', '+')}"},
         }  # fmt: skip

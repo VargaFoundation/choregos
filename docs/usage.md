@@ -2330,10 +2330,12 @@ for the whole base with `POST …/knowledge/{slug}/sync`, **sync all now** on th
   `id.atlassian.com/manage-profile/security/api-tokens`. A classic token works with `auth: basic`
   (the default). A *scoped* token needs `auth: scoped` and the site's `cloud_id` (the connector's
   **test** reports it) and the scopes `read:space:confluence`, `read:page:confluence`,
-  `read:hierarchical-content:confluence`, plus `read:attachment:confluence` when attachments are
+  `read:hierarchical-content:confluence`, `read:folder:confluence` (a folder's name in the path of
+  its pages), plus `read:attachment:confluence` when attachments are
   on. The source names a `space_key` (`ENG`; a personal space starts with `~`) and optionally a
-  `page_id`: that page **and everything under it** (`include_root: false` leaves the page itself
-  out). The page id is the number in the page's address, `…/wiki/spaces/ENG/pages/<id>/Title`.
+  `page_id`: that page **and everything under it**, pages filed in folders included (a folder is
+  crossed, not indexed: its name is in the path of its pages; `include_root: false` leaves the page
+  itself out). The page id is the number in the page's address, `…/wiki/spaces/ENG/pages/<id>/Title`.
   To read **chosen pages** instead, give `page_ids` (up to 50 numbers; not together with `page_id`; the
   console accepts pasted page addresses) and, to leave the pages under them out, `descendants: false`
   (`page_id` with `descendants: false` is one page). A chosen page that is missing or unreadable
