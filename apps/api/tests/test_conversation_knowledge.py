@@ -9,10 +9,11 @@ from typing import Any
 from httpx import AsyncClient
 from sqlalchemy import select
 
+from .kits.conversations import _open, _say
 from .test_agent_sessions import Upstream, _agent, upstream  # noqa: F401
-from .test_conversations import _open, _say
 
 POLICY = "# Refund policy\n\n## Delay\n\nA customer is refunded within 14 days of the return.\n"
+AUDIENCE = "coaches"
 SECRET = "# Salary grid\n\n## Bands\n\nThe confidential salary bands are listed per grade.\n"
 
 
@@ -23,16 +24,20 @@ async def _bases() -> dict[str, Any]:
         KnowledgeBase,
         KnowledgeDocument,
         Organization,
+        User,
     )
     from choregos_api.db.session import session_scope
     from choregos_api.knowledge.index import index_document
 
     ids: dict[str, Any] = {}
     async with session_scope(orgs="*") as session:
+        # `assistant:use` is the membership AND a group of the installation's audience (S63-15)
+        admin = (await session.execute(select(User).where(User.email == "admin@varga.dev"))).scalar_one()
+        admin.groups = [AUDIENCE]
         org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
         installation = AssistantInstallation(
             org_id=org.id, slug="coach", plugin="p", plugin_version="1", manifest_digest="sha256:0",
-            assistant_name="coach",
+            assistant_name="coach", audience_groups=[AUDIENCE],
         )  # fmt: skip
         session.add(installation)
         await session.flush()

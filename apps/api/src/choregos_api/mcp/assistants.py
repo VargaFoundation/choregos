@@ -16,8 +16,8 @@ with its own session, so it survives the request; `get_conversation` reads it ba
 outcome it left, or -- for a turn another process runs -- from the journal (`turn.started` without its
 `turn.ended`, younger than a turn key's life).
 
-The audience test is `in_audience` below: S63-15 formalises it as `assistant:use`; until then the audience
-is the installation's `audience_groups` against the caller's groups, and an empty audience holds nobody.
+The audience test is the console's: `assistant_access.holds(principal, Permission.ASSISTANT_USE, org, row)`,
+the organisation membership and one of the installation's `audience_groups`; an empty audience holds nobody.
 """
 
 from __future__ import annotations
@@ -42,11 +42,12 @@ from ..db.models import (
 from ..db.session import name_the_user, release_connection, session_scope
 from ..errors import ApiError
 from ..logging import get_logger
+from ..rbac import Permission
 from ..services import assistants as installations
+from ..services.assistant_access import holds
 from ..services.conversations import TURN_KEY_TTL_S, converse, open_conversation
 
 if TYPE_CHECKING:
-    from ..rbac import Principal
     from .tools import Context, Tool
 
 log = get_logger(__name__)
@@ -57,11 +58,6 @@ FAILED = "failed"
 #: Outcomes kept in memory for `get_conversation` (a turn's failure is not in the transcript).
 _KEPT_OUTCOMES = 256
 _PLACEHOLDER = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
-
-
-def in_audience(principal: Principal, installation: AssistantInstallation) -> bool:
-    """Whether the principal holds one of the installation's audience groups (S63-15 replaces this)."""
-    return bool(set(principal.groups) & set(installation.audience_groups or []))
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,7 +86,7 @@ async def reachable(ctx: Context) -> list[Door]:
         )
         .order_by(Organization.slug, AssistantInstallation.slug)
     )
-    return [Door(row, org) for row, org in rows.all() if in_audience(principal, row)]
+    return [Door(row, org) for row, org in rows.all() if holds(principal, Permission.ASSISTANT_USE, org, row)]
 
 
 async def door_of(ctx: Context, reference: str) -> Door | None:
@@ -485,4 +481,4 @@ async def prompt_get(ctx: Context, params: dict[str, Any]) -> dict[str, Any] | s
     }
 
 
-__all__ = ["Door", "assistant_tools", "in_audience", "prompt_get", "prompt_list", "resolve_connector"]
+__all__ = ["Door", "assistant_tools", "prompt_get", "prompt_list", "resolve_connector"]
