@@ -404,20 +404,26 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
         ("api_key", "run_key"),
     ),
     # Knowledge base sources (S33-04, ADR 0051): one Entra application holding `Sites.Selected`,
-    # granted `read` on the chosen sites only — never `Files.Read.All` nor `Sites.Read.All`.
+    # granted `read` on the chosen sites only — never the application `Files.Read.All` nor
+    # `Sites.Read.All`. With `username`, it signs in as a read-only service account (ADR 0132).
     ("documents", "sharepoint"): ConnectorTypeSpec(
-        "Microsoft SharePoint and OneDrive (Graph, Sites.Selected)",
+        "Microsoft SharePoint and OneDrive (Graph)",
         ("documents",),
         _object_schema(
             {
                 "tenant_id": _TEXT,
                 "client_id": _TEXT,
+                "username": {
+                    "type": "string",
+                    "description": "optional: a read-only service account signs in instead of the "
+                    "application, with its `password`; leave empty to sign in as the application",
+                },
                 "graph_url": {"type": "string", "default": "https://graph.microsoft.com/v1.0"},
                 "login_url": {"type": "string", "default": "https://login.microsoftonline.com"},
             },
             ("tenant_id", "client_id"),
         ),
-        ("client_secret",),
+        ("client_secret", "password"),
     ),
     ("documents", "confluence"): ConnectorTypeSpec(
         "Atlassian Confluence Cloud (read)",

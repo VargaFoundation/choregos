@@ -2375,6 +2375,9 @@ for the whole base with `POST …/knowledge/{slug}/sync`, **Sync all now** on th
   holding the application permission **`Sites.Selected`** — and have a tenant administrator grant it
   `read` on the chosen sites (`POST /sites/{site-id}/permissions`). Never `Files.Read.All`. The
   source names a `site_id` (or a OneDrive's `drive_id`) and optionally a `folder`; sync is delta.
+  Where a per-site grant does not fit, the connector signs in as a read-only service account instead
+  (`username`, `secret_refs.password`; the same app, holding the delegated `Sites.Read.All`, ADR 0132):
+  it then reads only what that account may read.
   The console form **picks** the connector from a list of the organisation's `documents/sharepoint`
   connectors (it is never typed); with none, it links to `/admin/connectors?type=documents/sharepoint`
   to declare one. The API refuses a wrong name and says why: names are lowercase (the message

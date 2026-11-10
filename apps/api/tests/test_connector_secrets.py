@@ -461,6 +461,69 @@ async def test_a_sharepoint_source_syncs_with_a_store_held_secret(
     assert seen and seen[0]["client_secret"] == VALUE_1
 
 
+async def test_a_sharepoint_service_account_password_is_sealed_like_the_client_secret(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The account's password is a secret of the type: typed, sealed, resolved when the source opens."""
+    from choregos_adapters.fakes.documents import fake_source
+    from choregos_api.knowledge import sync as sync_module
+
+    config = {"tenant_id": "acme", "client_id": "choregos-kb", "username": "reader@example.com"}
+    in_clear = await client.post(
+        ORG,
+        json={
+            "name": "account",
+            "kind": "documents",
+            "type": "sharepoint",
+            "config": {**config, "password": VALUE_2},
+            "secret_values": {"client_secret": VALUE_1},
+        },
+    )
+    assert in_clear.status_code == 422 and "secret written in clear: password" in in_clear.text, in_clear.text
+    assert VALUE_2 not in in_clear.text
+
+    declared = await client.post(
+        ORG,
+        json={
+            "name": "account",
+            "kind": "documents",
+            "type": "sharepoint",
+            "config": config,
+            "secret_values": {"client_secret": VALUE_1, "password": VALUE_2},
+        },
+    )
+    assert declared.status_code == 201, declared.text
+    assert VALUE_2 not in declared.text and declared.json()["config"]["username"] == "reader@example.com"
+
+    await client.post(
+        "/api/v1/orgs/varga/knowledge",
+        json={"slug": "framework", "name": "Framework", "serving_mode": "index"},
+    )
+    source = (
+        await client.post(
+            "/api/v1/orgs/varga/knowledge/framework/sources",
+            json={
+                "kind": "sharepoint",
+                "name": "Site",
+                "connector": "account",
+                "config": {"site_id": "acme.sharepoint.com,1,2"},
+                "interval_minutes": 30,
+            },
+        )
+    ).json()
+    fake_source(source["id"]).put("item-1", "note.md", b"# Note\n\nHello.\n")
+    seen: list[dict[str, Any]] = []
+    real_build = sync_module.build
+
+    def spy(kind: str, type_name: str, resolved: dict[str, Any]) -> Any:
+        seen.append(resolved)
+        return real_build(kind, type_name, resolved)
+
+    monkeypatch.setattr(sync_module, "build", spy)
+    assert (await sync_module.sync_source("varga", source["id"]))["added"] == 1
+    assert seen[0]["username"] == "reader@example.com" and seen[0]["password"] == VALUE_2
+
+
 async def test_a_project_owner_types_values_but_does_not_write_references(
     client: AsyncClient, project: dict[str, Any], probe: list[dict[str, Any]]
 ) -> None:

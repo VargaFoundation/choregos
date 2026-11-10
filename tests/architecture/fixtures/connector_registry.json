@@ -1083,6 +1083,10 @@
         },
         "tenant_id": {
           "type": "string"
+        },
+        "username": {
+          "description": "optional: a read-only service account signs in instead of the application, with its `password`; leave empty to sign in as the application",
+          "type": "string"
         }
       },
       "required": [
@@ -1093,7 +1097,7 @@
     },
     "deprecated": false,
     "dev_only": false,
-    "display": "Microsoft SharePoint and OneDrive (Graph, Sites.Selected)",
+    "display": "Microsoft SharePoint and OneDrive (Graph)",
     "has_check_config": false,
     "has_egress": false,
     "has_factory": true,
@@ -1101,7 +1105,8 @@
     "operations": [],
     "pooled_fields": [],
     "secret_fields": [
-      "client_secret"
+      "client_secret",
+      "password"
     ],
     "type": "sharepoint"
   },
