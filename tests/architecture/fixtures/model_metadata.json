@@ -2852,6 +2852,155 @@
    ]
   ]
  },
+ "connected_accounts": {
+  "columns": [
+   {
+    "name": "org_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "user_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "connector",
+    "type": "String(length=64)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "mode",
+    "type": "String(length=16)",
+    "nullable": false,
+    "default": "'user_consent'",
+    "server_default": "'user_consent'"
+   },
+   {
+    "name": "secret_ref",
+    "type": "String(length=300)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "scopes",
+    "type": "Json()",
+    "nullable": false,
+    "default": "<function list>",
+    "server_default": null
+   },
+   {
+    "name": "subject",
+    "type": "String(length=320)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "expires_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "status",
+    "type": "String(length=16)",
+    "nullable": false,
+    "default": "'connected'",
+    "server_default": "'connected'"
+   },
+   {
+    "name": "last_used_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": "<function uuid7>",
+    "server_default": null
+   },
+   {
+    "name": "created_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   },
+   {
+    "name": "updated_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   }
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "foreign_keys": [
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_connected_accounts_org_id_organizations"
+   ],
+   [
+    [
+     "user_id"
+    ],
+    [
+     "users.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_connected_accounts_user_id_users"
+   ]
+  ],
+  "uniques": [
+   [
+    "uq_connected_accounts_member",
+    [
+     "org_id",
+     "user_id",
+     "connector"
+    ]
+   ]
+  ],
+  "checks": [],
+  "indexes": [
+   [
+    "ix_connected_accounts_org_id",
+    [
+     "connected_accounts.org_id"
+    ],
+    false
+   ],
+   [
+    "ix_connected_accounts_user_id",
+    [
+     "connected_accounts.user_id"
+    ],
+    false
+   ]
+  ]
+ },
  "connector_operations": {
   "checks": [],
   "columns": [

@@ -627,6 +627,38 @@ export type McpCatalogueEntry = {
   install_routes?: Array<"direct" | "gateway">;
 };
 
+export type ConnectedAccount = {
+  org: string;
+  connector: string;
+  mode: "user_consent";
+  scopes: Array<string>;
+  /** The person's subject at the source, when its token response named one. */
+  subject?: string | null;
+  /** `reconnect`: the source stopped honouring the consent. */
+  status: "connected" | "reconnect";
+  expires_at?: string | null;
+  last_used_at?: string | null;
+  created_at: string;
+};
+
+export type ConnectedAccountList = {
+  items: Array<ConnectedAccount>;
+};
+
+export type ConnectedAccountConnect = {
+  authorization_url: string;
+};
+
+export type McpCatalogueUserConsent = {
+  authorization_endpoint: string;
+  token_endpoint: string;
+  client_id: string;
+  /** The OAuth client secret typed once: sealed at rest, never returned (ADR 0058); none for a public client. */
+  client_secret?: string | null;
+  scopes?: Array<string>;
+  revocation_endpoint?: string | null;
+};
+
 export type McpCatalogueInstall = {
   /** defaults to the entry id */
   name?: string | null;
@@ -648,6 +680,8 @@ export type McpCatalogueInstall = {
   route?: "direct" | "gateway" | null;
   /** the server's name at the gateway; defaults to the entry id */
   gateway_server?: string | null;
+  /** installs an `oauth` entry for each person's own consent (ADR 0135 point 6): the entry is then no longer `needs_oauth`; direct route only, no organisation credential */
+  user_consent?: McpCatalogueUserConsent | null;
 };
 
 export type SkillCatalogueInstall = {
@@ -4934,7 +4968,9 @@ export interface Operations {
   clearConnectorSecret: { method: "DELETE"; path: "/projects/{id}/connectors/{kind}/secrets/{field}"; body: never; response: Connector };
   clearOrgConnectorSecret: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}/secrets/{field}"; body: never; response: OrgConnector };
   closeAgentSession: { method: "DELETE"; path: "/orgs/{org}/agent-sessions/{session_id}"; body: never; response: void };
+  completeMyAccountConnection: { method: "GET"; path: "/me/connected-accounts/callback"; body: never; response: void };
   connectCatalogueClient: { method: "POST"; path: "/orgs/{org}/agent-catalogue/{slug}/connect"; body: AgentCatalogueConnect; response: AgentCatalogueConnection };
+  connectMyAccount: { method: "POST"; path: "/me/connected-accounts/{connector}/connect"; body: never; response: ConnectedAccountConnect };
   convertKnowledgeDocument: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}/convert"; body: never; response: KnowledgeDocument };
   createAgent: { method: "POST"; path: "/orgs/{org}/agents"; body: AgentCreate; response: Agent };
   createAgentResponse: { method: "POST"; path: "/orgs/{org}/agents/{slug}/responses"; body: AgentResponseCreate; response: AgentResponse };
@@ -4976,6 +5012,7 @@ export interface Operations {
   describeBuiltinAgent: { method: "GET"; path: "/projects/{id}/builtin-agent"; body: never; response: BuiltinAgent };
   detachAgentCredential: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}/credentials/{credential_id}"; body: never; response: void };
   disableOrgConnector: { method: "DELETE"; path: "/projects/{id}/org-connectors/{connector}/enablement"; body: never; response: void };
+  disconnectMyAccount: { method: "DELETE"; path: "/me/connected-accounts/{connector}"; body: never; response: void };
   discoverConnectorOperations: { method: "POST"; path: "/orgs/{org}/connectors/{name}/discover"; body: never; response: ConnectorDiscovery };
   discoverRemoteAgent: { method: "POST"; path: "/orgs/{org}/agents/discover"; body: RemoteAgentDiscover; response: RemoteAgentDiscovery };
   distillKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/distill"; body: KnowledgeDistillRequest; response: KnowledgeBase };
@@ -5215,6 +5252,7 @@ export interface Operations {
   listMembers: { method: "GET"; path: "/orgs/{org}/members"; body: never; response: Array<Membership> };
   listMemories: { method: "GET"; path: "/orgs/{org}/memories"; body: never; response: Array<MemoryStore> };
   listMyAssistants: { method: "GET"; path: "/me/assistants"; body: never; response: MyAssistantList };
+  listMyConnectedAccounts: { method: "GET"; path: "/me/connected-accounts"; body: never; response: ConnectedAccountList };
   listMyConversations: { method: "GET"; path: "/me/conversations"; body: never; response: ConversationPage };
   listMySessions: { method: "GET"; path: "/me/sessions"; body: never; response: Array<BrowserSession> };
   listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: Array<ApiToken> };

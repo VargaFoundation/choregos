@@ -107,7 +107,7 @@ class AgentMcpServer(Dto):
     #: The identity a conversation calls this connector under (ADR 0107 point 1, ADR 0135): one of the
     #: modes the connector declares. `None` is `service`, the connector's own credential — and leaves
     #: the entry out of the version's digest, so versions published before the field keep theirs.
-    identity: Literal["service", "user_exchange"] | None = None
+    identity: Literal["service", "user_exchange", "user_consent"] | None = None
 
     @model_serializer(mode="wrap")
     def _leave_out_absent_identity(self, handler: SerializerFunctionWrapHandler) -> dict[str, object]:
