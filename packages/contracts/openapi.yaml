@@ -5655,6 +5655,11 @@ components:
             - { $ref: "#/components/schemas/AgentTools" }
             - { type: "null" }
           description: "The agent's measured default for tool scripts (ADR 0122 §9, S57-15). Absent (left out of the stored spec, so no digest moves): no default. Refused with an `a2a` runtime."
+        language:
+          oneOf:
+            - { type: string, pattern: "^[a-z]{2,3}(-[A-Z]{2})?$" }
+            - { type: "null" }
+          description: "The language a person reads the agent's output in (ADR 0126): a language tag, a primary subtag optionally followed by a region (`fr`, `de`, `pt-BR`). The platform's frame asks the agent to write its summary, documents, questions and findings in it; the keys, identifiers and enum values of the result contract stay as specified. Absent (left out of the stored spec, so no digest moves) or `en`: English, as before."
     AgentTools:
       type: object
       description: >-

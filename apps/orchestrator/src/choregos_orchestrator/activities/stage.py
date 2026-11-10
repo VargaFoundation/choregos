@@ -688,7 +688,7 @@ def _render_playbook(plan: StagePlan, bundle: Any, item: Any, context: ContextPa
 def _render_playbook_text(
     plan: StagePlan, bundle: Any, item: Any, context: ContextPack, agent: Any = None
 ) -> str:
-    from choregos_playbooks import frame, render_playbook
+    from choregos_playbooks import frame, invariants_in, render_playbook
 
     documents = item.documents or {}
     variables = {
@@ -714,6 +714,9 @@ def _render_playbook_text(
         "project": bundle.config,
         "production_indicators": production_indicator_sources(bundle.config, agent),
     }
+    # The language a person reads the output in is the agent's author's to choose (ADR 0126); a
+    # built-in role, which no author wrote, writes in English.
+    language = getattr(agent.spec, "language", None) if agent is not None else None
     if agent is not None and agent.spec.instructions.strip():
         from choregos_core.instructions import render_instructions
         from jinja2 import TemplateError
@@ -723,7 +726,7 @@ def _render_playbook_text(
         # template that does not render (a sandbox-refused escape included) is not retried: it
         # will not render any better the fifth time.
         try:
-            return frame(render_instructions(agent.spec.instructions, **variables))
+            return frame(render_instructions(agent.spec.instructions, **variables), language)
         except TemplateError as error:
             who = f"{agent.agent.slug}@{agent.version}"
             raise ApplicationError(
@@ -731,7 +734,8 @@ def _render_playbook_text(
                 type="InvalidInstructions",
                 non_retryable=True,
             ) from error
-    return render_playbook(plan.playbook or plan.role, **variables)
+    # A registry agent without instructions runs its role's playbook, in its own language.
+    return render_playbook(plan.playbook or plan.role, **variables, invariants=invariants_in(language))
 
 
 def _trial_agent(plan: StagePlan) -> Any:

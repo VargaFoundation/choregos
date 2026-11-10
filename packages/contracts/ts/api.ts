@@ -1179,6 +1179,8 @@ export type AgentSpec = {
   workspace?: "none" | "read" | "write" | null;
   /** The agent's measured default for tool scripts (ADR 0122 §9, S57-15). Absent (left out of the stored spec, so no digest moves): no default. Refused with an `a2a` runtime. */
   tools?: AgentTools | null;
+  /** The language a person reads the agent's output in (ADR 0126): a language tag, a primary subtag optionally followed by a region (`fr`, `de`, `pt-BR`). The platform's frame asks the agent to write its summary, documents, questions and findings in it; the keys, identifiers and enum values of the result contract stay as specified. Absent (left out of the stored spec, so no digest moves) or `en`: English, as before. */
+  language?: string | null;
 };
 
 /** How a run of this agent calls its tools by default (ADR 0122 §9, S57-15): a default, never a right. Strictest first, the deployment's brake, the organisation's switch (its `tool_scripts` setting, else the deployment's default), the organisation's ceiling, and the project's policy whenever it says something for the stage's role (`tools.per_role.<role>.scripts`, else `tools.scripts`) decide before it; a policy that says nothing leaves it. An eval cell's door ignores it. Since ADR 0127 it also names the tools a run is offered, source by source: a list that is present, even empty, closes its source (a run gets what the version names AND its project and the deployment allow); a list that is absent leaves that source to the project, as before. */
