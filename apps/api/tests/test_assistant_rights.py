@@ -19,8 +19,7 @@ from sqlalchemy import select
 
 from .agent_scopes_kit import as_user
 from .conftest import login
-from .test_agent_sessions import Upstream, upstream  # noqa: F401
-from .test_assistant_install import (
+from .kits.assistant_install import (
     MARKET,
     NEWS,
     ORG,
@@ -31,6 +30,7 @@ from .test_assistant_install import (
     _plugin,
     offline,  # noqa: F401
 )
+from .test_agent_sessions import Upstream, upstream  # noqa: F401
 
 AUDIENCE = "investors"
 OWNERS = "investment-owners"

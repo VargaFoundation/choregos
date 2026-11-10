@@ -9,98 +9,32 @@ binding the owner groups' too; uninstalling the plugin suspends its assistants.
 
 from __future__ import annotations
 
-import shutil
-from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
-import pytest
 from httpx import ASGITransport, AsyncClient
 
-from .agent_scopes_kit import add_member, as_user
 from .conftest import login
-
-ORG = "/api/v1/orgs/varga"
-FIXTURE = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "plugins" / "investment-assistant"
-PLUGIN = {"source": "offline", "name": "investment-assistant", "version": "0.1.0"}
-OWNERS = "investment-owners"
-NEWS = ("search_news", "get_article")
-MARKET = ("get_quote", "get_history", "lookup_instrument")
-BANK = ("list_accounts", "list_transactions")
-
-
-@pytest.fixture
-def offline(tmp_path: Path) -> Iterator[Path]:
-    from choregos_api.services.plugin_supply import OfflineDirectory, use_plugin_supply
-
-    root = tmp_path / "plugins"
-    shutil.copytree(FIXTURE, root / "investment-assistant" / "0.1.0")
-    use_plugin_supply(OfflineDirectory(root))
-    yield root
-    use_plugin_supply(None)
-
-
-async def _plugin(client: AsyncClient) -> None:
-    await as_user(client, "admin@varga.dev")
-    response = await client.post(f"{ORG}/plugins/install", json=PLUGIN)
-    assert response.status_code == 201, response.text
-
-
-async def _connector(
-    name: str, operations: tuple[str, ...], *, access: str = "read", identity_modes: list[str] | None = None
-) -> None:
-    from choregos_api.db.models import ConnectorOperation, Organization, OrgConnector
-    from choregos_api.db.session import session_scope
-    from sqlalchemy import select
-
-    async with session_scope() as session:
-        org_id = (await session.execute(select(Organization.id))).scalar_one()
-        config: dict[str, Any] = {"url": f"https://{name}.test/mcp"}
-        if identity_modes is not None:
-            config["identity_modes"] = identity_modes
-        connector = OrgConnector(org_id=org_id, name=name, kind="mcp", type="mcp", config=config)
-        session.add(connector)
-        await session.flush()
-        for operation in operations:
-            session.add(
-                ConnectorOperation(
-                    org_id=org_id, connector_id=connector.id, name=operation, access=access, policy="allowed"
-                )
-            )
-
-
-async def _install(client: AsyncClient, **extra: Any) -> Any:
-    body = {
-        "plugin": "investment-assistant",
-        "assistant": "investment-assistant",
-        "config": {"house_name": "Varga"},
-    }
-    return await client.post(f"{ORG}/assistants", json={**body, **extra})
-
-
-async def _kinds(client: AsyncClient, slug: str = "investment-assistant") -> list[tuple[str, str | None]]:
-    response = await client.get(f"{ORG}/assistants/{slug}/readiness")
-    assert response.status_code == 200, response.text
-    return [(i["kind"], i["need"] or i["key"]) for i in response.json()["items"]]
-
-
-async def _bind(client: AsyncClient, need: str, connector: str, slug: str = "investment-assistant") -> Any:
-    return await client.put(f"{ORG}/assistants/{slug}/bindings/{need}", json={"connector": connector})
-
-
-async def _member(client: AsyncClient, email: str, groups: list[str]) -> None:
-    from choregos_api.db.models import User
-    from choregos_api.db.session import session_scope
-    from sqlalchemy import select
-
-    await add_member(client, email, "developer")
-    async with session_scope() as session:
-        user = (await session.execute(select(User).where(User.email == email))).scalar_one()
-        user.groups = groups
+from .kits.assistant_install import (
+    BANK,
+    MARKET,
+    NEWS,
+    ORG,
+    OWNERS,
+    _bind,
+    _connector,
+    _install,
+    _kinds,
+    _member,
+    _plugin,
+    offline,  # noqa: F401
+)
 
 
 async def test_an_unbound_required_need_is_incomplete_and_binding_it_makes_it_ready(
-    client: AsyncClient, org: str, offline: Path
+    client: AsyncClient,
+    org: str,
+    offline: Path,  # noqa: F811
 ) -> None:
     await _plugin(client)
     installed = await _install(client)
@@ -129,7 +63,9 @@ async def test_an_unbound_required_need_is_incomplete_and_binding_it_makes_it_re
 
 
 async def test_a_connector_that_does_not_serve_the_operation_is_refused(
-    client: AsyncClient, org: str, offline: Path
+    client: AsyncClient,
+    org: str,
+    offline: Path,  # noqa: F811
 ) -> None:
     await _plugin(client)
     await _install(client)
@@ -141,7 +77,7 @@ async def test_a_connector_that_does_not_serve_the_operation_is_refused(
     assert after["bindings"] == [] and after["status"] == "incomplete"
 
 
-async def test_an_access_that_differs_is_refused(client: AsyncClient, org: str, offline: Path) -> None:
+async def test_an_access_that_differs_is_refused(client: AsyncClient, org: str, offline: Path) -> None:  # noqa: F811
     await _plugin(client)
     await _install(client)
     await _connector("writing-news", NEWS, access="write")
@@ -151,7 +87,9 @@ async def test_an_access_that_differs_is_refused(client: AsyncClient, org: str, 
 
 
 async def test_an_identity_the_connector_cannot_carry_is_refused(
-    client: AsyncClient, org: str, offline: Path
+    client: AsyncClient,
+    org: str,
+    offline: Path,  # noqa: F811
 ) -> None:
     from choregos_api.services.connector_identity import supports_identity
 
@@ -174,7 +112,9 @@ async def test_an_identity_the_connector_cannot_carry_is_refused(
 
 
 async def test_a_connector_that_loses_an_operation_makes_it_incomplete_again(
-    client: AsyncClient, org: str, offline: Path
+    client: AsyncClient,
+    org: str,
+    offline: Path,  # noqa: F811
 ) -> None:
     from choregos_api.db.models import ConnectorOperation
     from choregos_api.db.session import session_scope
@@ -193,7 +133,9 @@ async def test_a_connector_that_loses_an_operation_makes_it_incomplete_again(
 
 
 async def test_a_required_config_key_without_a_value_is_a_readiness_item(
-    client: AsyncClient, org: str, offline: Path
+    client: AsyncClient,
+    org: str,
+    offline: Path,  # noqa: F811
 ) -> None:
     await _plugin(client)
     installed = await client.post(
@@ -210,7 +152,7 @@ async def test_a_required_config_key_without_a_value_is_a_readiness_item(
     assert wrong.status_code == 422, wrong.text
 
 
-async def test_install_refusals(client: AsyncClient, org: str, offline: Path) -> None:
+async def test_install_refusals(client: AsyncClient, org: str, offline: Path) -> None:  # noqa: F811
     await _plugin(client)
     unknown = await _install(client, assistant="nothing")
     assert unknown.status_code == 404
@@ -227,7 +169,7 @@ async def test_install_refusals(client: AsyncClient, org: str, offline: Path) ->
     assert off.status_code == 422
 
 
-async def test_rights(client: AsyncClient, org: str, app: Any, offline: Path) -> None:
+async def test_rights(client: AsyncClient, org: str, app: Any, offline: Path) -> None:  # noqa: F811
     await _plugin(client)
     await _member(client, "owner@varga.dev", [OWNERS])
     await _member(client, "other@varga.dev", ["somebody-else"])
@@ -264,7 +206,9 @@ async def test_rights(client: AsyncClient, org: str, app: Any, offline: Path) ->
 
 
 async def test_uninstalling_the_plugin_suspends_its_assistants(
-    client: AsyncClient, org: str, offline: Path
+    client: AsyncClient,
+    org: str,
+    offline: Path,  # noqa: F811
 ) -> None:
     await _plugin(client)
     await _install(client)

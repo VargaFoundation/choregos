@@ -24,15 +24,16 @@ from sqlalchemy import select
 
 from .agent_scopes_kit import as_user
 from .conftest import login, without_postgres
-from .test_agent_sessions import Upstream, upstream  # noqa: F401
-from .test_assistant_install import (
+from .kits.assistant_install import (
     FIXTURE,
     ORG,
     _bind,
     _install,
     _plugin,
 )
+from .test_agent_sessions import Upstream, upstream  # noqa: F401
 
+AUDIENCE = "investors"
 ISIN = "US0378331005"
 EXTRA = """  - { name: instrument_views, scope: user_subject, subject: { type: instrument, key: isin },
       kind: facts, writes: agent }
@@ -81,6 +82,15 @@ def markets(monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
     yield server
 
 
+async def _groups(email: str, groups: list[str]) -> None:
+    from choregos_api.db.models import User
+    from choregos_api.db.session import session_scope
+
+    async with session_scope() as session:
+        user = (await session.execute(select(User).where(User.email == email))).scalar_one()
+        user.groups = groups
+
+
 async def _assistant(client: AsyncClient, *, with_markets: bool = False) -> str:
     """The plugin installed, the assistant installed and (when asked) its resolver need bound to a connector
     served by the fake MCP server. Returns the installation id."""
@@ -89,7 +99,8 @@ async def _assistant(client: AsyncClient, *, with_markets: bool = False) -> str:
 
     await _agent(client)  # the agent of the conversations, unless the test made its own first
     await _plugin(client)
-    assert (await _install(client)).status_code == 201
+    assert (await _install(client, audience_groups=[AUDIENCE])).status_code == 201
+    await _groups("admin@varga.dev", [AUDIENCE])  # `assistant:use` needs a group of the audience (S63-15)
     if with_markets:
         body = {"name": "markets", "type": "mcp", "config": {"url": "https://markets.test/mcp"},
                 "secret_refs": {"token": "env:CONNECTOR_TEST_MARKETS_KEY"}}  # fmt: skip
