@@ -25,8 +25,10 @@ person decides in the console.
 The door speaks [A2A](https://a2a-protocol.org) **0.3.0** and **1.0**, JSON-RPC over HTTP, at the same URL,
 so any HTTP client can call it. This page uses the 0.3.0 names; [In A2A 1.0](#in-a2a-10) gives the other
 spelling. The rules behind each call are in the [reference](integrations.md#another-agent-over-a2a) and
-[ADR 0078](adr/0078-governed-workflows-as-a2a-skills.md). Each step shows the call with `curl`, then the
-same with the CLI's `choregos a2a` ([reference](cli.md#choregos-a2a)), which writes the JSON-RPC for you.
+[ADR 0078](adr/0078-governed-workflows-as-a2a-skills.md).
+
+Each step shows the call with `curl`, then the same with the CLI's `choregos a2a`
+([reference](cli.md#choregos-a2a)), which writes the JSON-RPC for you.
 
 ### 1. Open the workflow to the door
 
