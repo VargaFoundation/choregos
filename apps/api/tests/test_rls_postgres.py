@@ -953,6 +953,53 @@ async def test_assistant_installations_stay_in_their_organisation(
         assert (await session.execute(select(AssistantToolBinding))).scalars().all() == []
 
 
+async def test_task_subscriptions_are_the_subscribers_own_in_their_organisation(
+    two_organisations: dict[str, str],
+) -> None:
+    """Task subscriptions (ADR 0137): the organisation's scope is not enough, only the subscriber (or the
+    platform scope, the scheduler) reads a row; org `a` reads none of `b`'s."""
+    from choregos_api.db.models import AssistantInstallation, Organization, TaskSubscription, User
+    from choregos_api.db.session import name_the_user, session_scope
+
+    async with session_scope(orgs="*") as session:
+        ids = {o.slug: o.id for o in (await session.execute(select(Organization))).scalars()}
+        users = {n: User(oidc_sub=f"dev|{n}", email=f"{n}@t.test", display_name=n) for n in ("ann", "bob")}
+        session.add_all(users.values())
+        await session.flush()
+        for slug in ("a", "b"):
+            row = AssistantInstallation(
+                org_id=ids[slug],
+                slug=f"assistant-{slug}",
+                plugin="p",
+                plugin_version="1",
+                manifest_digest="sha256:0",
+                assistant_name="a",
+            )
+            session.add(row)
+            await session.flush()
+            for name, user in users.items():
+                session.add(
+                    TaskSubscription(
+                        org_id=ids[slug],
+                        installation_id=row.id,
+                        user_id=user.id,
+                        task=f"task_{name}",
+                        trigger={"kind": "on_demand"},
+                        seen_keys=[],
+                    )
+                )
+        ann = users["ann"].id
+    async with session_scope(orgs=["a"]) as session:
+        await name_the_user(session, ann)
+        assert (await session.execute(select(TaskSubscription.task))).scalars().all() == ["task_ann"]
+    async with session_scope(orgs=["a"]) as session:
+        assert (await session.execute(select(TaskSubscription))).scalars().all() == [], "no person, no row"
+    async with session_scope(orgs="*") as session:
+        assert len((await session.execute(select(TaskSubscription))).scalars().all()) == 4
+    async with session_scope() as session:
+        assert (await session.execute(select(TaskSubscription))).scalars().all() == []
+
+
 async def test_org_egress_rules_are_isolated(two_organisations: dict[str, str]) -> None:
     """The egress allowlist (S39-22): org `a` reads none of `b`'s rules, writes none into it, and a
     session without a scope sees nothing."""
