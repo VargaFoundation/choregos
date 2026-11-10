@@ -4078,6 +4078,10 @@ export type MyAssistant = {
   needs?: Array<AssistantNeed>;
 };
 
+export type AssistantEmbed = {
+  embed_origins: Array<string>;
+};
+
 export type AssistantMemorySpace = {
   name: string;
   scope: "user" | "user_subject";
@@ -4110,10 +4114,6 @@ export type PluginAssistant = {
 
 export type PluginAssistantList = {
   items: Array<PluginAssistant>;
-};
-
-export type AssistantEmbed = {
-  embed_origins: Array<string>;
 };
 
 export type MyAssistantList = {

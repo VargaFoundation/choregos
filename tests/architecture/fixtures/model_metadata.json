@@ -4388,115 +4388,113 @@
   ]
  },
  "delegations": {
+  "checks": [],
   "columns": [
    {
+    "default": null,
     "name": "org_id",
-    "type": "String(length=36)",
     "nullable": false,
-    "default": null,
-    "server_default": null
+    "server_default": null,
+    "type": "String(length=36)"
    },
    {
+    "default": null,
     "name": "installation_id",
-    "type": "String(length=36)",
     "nullable": false,
-    "default": null,
-    "server_default": null
+    "server_default": null,
+    "type": "String(length=36)"
    },
    {
+    "default": null,
     "name": "user_id",
-    "type": "String(length=36)",
     "nullable": false,
-    "default": null,
-    "server_default": null
+    "server_default": null,
+    "type": "String(length=36)"
    },
    {
+    "default": null,
     "name": "task",
-    "type": "String(length=63)",
     "nullable": false,
-    "default": null,
-    "server_default": null
+    "server_default": null,
+    "type": "String(length=63)"
    },
    {
-    "name": "needs",
-    "type": "Json()",
-    "nullable": false,
     "default": "<function list>",
-    "server_default": null
+    "name": "needs",
+    "nullable": false,
+    "server_default": null,
+    "type": "Json()"
    },
    {
+    "default": null,
     "name": "granted_at",
-    "type": "DateTime(timezone=True)",
     "nullable": false,
-    "default": null,
-    "server_default": null
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
    },
    {
+    "default": null,
     "name": "expires_at",
-    "type": "DateTime(timezone=True)",
     "nullable": false,
-    "default": null,
-    "server_default": null
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
    },
    {
+    "default": null,
     "name": "revoked_at",
-    "type": "DateTime(timezone=True)",
     "nullable": true,
-    "default": null,
-    "server_default": null
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
    },
    {
+    "default": null,
     "name": "manifest_digest",
-    "type": "String(length=64)",
     "nullable": false,
-    "default": null,
-    "server_default": null
+    "server_default": null,
+    "type": "String(length=64)"
    },
    {
+    "default": null,
     "name": "secret_ref",
-    "type": "String(length=300)",
     "nullable": true,
-    "default": null,
-    "server_default": null
+    "server_default": null,
+    "type": "String(length=300)"
    },
    {
-    "name": "status",
-    "type": "String(length=16)",
-    "nullable": false,
     "default": "'active'",
-    "server_default": "'active'"
+    "name": "status",
+    "nullable": false,
+    "server_default": "'active'",
+    "type": "String(length=16)"
    },
    {
-    "name": "suspended_reason",
-    "type": "Text()",
-    "nullable": true,
     "default": null,
-    "server_default": null
+    "name": "suspended_reason",
+    "nullable": true,
+    "server_default": null,
+    "type": "Text()"
    },
    {
-    "name": "id",
-    "type": "String(length=36)",
-    "nullable": false,
     "default": "<function uuid7>",
-    "server_default": null
+    "name": "id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
    },
    {
+    "default": "<function utcnow>",
     "name": "created_at",
-    "type": "DateTime(timezone=True)",
     "nullable": false,
-    "default": "<function utcnow>",
-    "server_default": "<sqlalchemy.sql.functions.now; now>"
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
    },
    {
-    "name": "updated_at",
-    "type": "DateTime(timezone=True)",
-    "nullable": false,
     "default": "<function utcnow>",
-    "server_default": "<sqlalchemy.sql.functions.now; now>"
+    "name": "updated_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
    }
-  ],
-  "primary_key": [
-   "id"
   ],
   "foreign_keys": [
    [
@@ -4533,8 +4531,6 @@
     "fk_delegations_user_id_users"
    ]
   ],
-  "uniques": [],
-  "checks": [],
   "indexes": [
    [
     "ix_delegations_installation_id",
@@ -4566,7 +4562,11 @@
     ],
     false
    ]
-  ]
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "uniques": []
  },
  "deployments": {
   "checks": [],

@@ -9157,14 +9157,14 @@ components:
         display_name: { type: [string, "null"] }
         description: { type: [string, "null"] }
         status: { type: string, enum: [incomplete, ready, suspended] }
+        memory_spaces: { type: array, items: { $ref: "#/components/schemas/AssistantMemorySpace" } }
+        tasks: { type: array, items: { $ref: "#/components/schemas/AssistantTaskDecl" } }
+        needs: { type: array, items: { $ref: "#/components/schemas/AssistantNeed" } }
     AssistantEmbed:
       type: object
       required: [embed_origins]
       properties:
         embed_origins: { type: array, items: { type: string } }
-        memory_spaces: { type: array, items: { $ref: "#/components/schemas/AssistantMemorySpace" } }
-        tasks: { type: array, items: { $ref: "#/components/schemas/AssistantTaskDecl" } }
-        needs: { type: array, items: { $ref: "#/components/schemas/AssistantNeed" } }
     AssistantMemorySpace:
       type: object
       required: [name, scope, kind]
