@@ -66,6 +66,7 @@ def load_result(
     if not isinstance(payload, dict):
         return ResultLoad(None, error="the document must be a JSON object.", raw=raw)
     payload.setdefault("schema", "choregos/StageResult/v1")
+    _drop_empty_facts(payload)
     try:
         parsed = StageResult.model_validate(payload)
     except ValidationError as exc:
@@ -100,6 +101,23 @@ def load_result(
             raw=raw,
         )
     return ResultLoad(parsed, raw=raw)
+
+
+def _drop_empty_facts(payload: dict[str, Any]) -> None:
+    """A fact without a value states nothing: it is dropped, never held against the result (S62-05).
+
+    On the prod tenant, on 2026-11-09, a triage wrote `"facts": {"duplicate_of": null}` next to its
+    outputs ("no duplicate"); the contract keeps a fact to a word, a number or a boolean, so the
+    whole result was refused, the repair asked again, and the ticket (FON-277) failed its triage
+    for a remark about nothing. A `null` fact is removed here, where the agent's file is read; a
+    fact of any other wrong kind still goes back to the agent."""
+    evidence = payload.get("evidence")
+    if not isinstance(evidence, dict):
+        return
+    facts = evidence.get("facts")
+    if isinstance(facts, dict):
+        kept = {name: value for name, value in facts.items() if value is not None}
+        evidence["facts"] = kept or None
 
 
 def _missing_outputs(parsed: StageResult, declared: list[str]) -> list[str]:
