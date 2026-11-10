@@ -11273,5 +11273,166 @@
     ]
    ]
   ]
+ },
+ "conversation_actions": {
+  "columns": [
+   {
+    "name": "org_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "conversation_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "user_id",
+    "type": "String(length=200)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "need",
+    "type": "String(length=63)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "operation",
+    "type": "String(length=128)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "arguments",
+    "type": "Json()",
+    "nullable": false,
+    "default": "<function dict>",
+    "server_default": null
+   },
+   {
+    "name": "summary",
+    "type": "Text()",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "status",
+    "type": "String(length=16)",
+    "nullable": false,
+    "default": "'proposed'",
+    "server_default": null
+   },
+   {
+    "name": "result",
+    "type": "Json()",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "confirmed_by",
+    "type": "String(length=200)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "confirmed_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "executed_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": "<function uuid7>",
+    "server_default": null
+   },
+   {
+    "name": "created_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   },
+   {
+    "name": "updated_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   }
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "foreign_keys": [
+   [
+    [
+     "conversation_id"
+    ],
+    [
+     "agent_sessions.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_conversation_actions_conversation_id_agent_sessions"
+   ],
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_conversation_actions_org_id_organizations"
+   ]
+  ],
+  "uniques": [],
+  "checks": [],
+  "indexes": [
+   [
+    "ix_conversation_actions_conversation_id",
+    [
+     "conversation_actions.conversation_id"
+    ],
+    false
+   ],
+   [
+    "ix_conversation_actions_org_id",
+    [
+     "conversation_actions.org_id"
+    ],
+    false
+   ],
+   [
+    "ix_conversation_actions_user_id",
+    [
+     "conversation_actions.user_id"
+    ],
+    false
+   ]
+  ]
  }
 }

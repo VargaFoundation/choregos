@@ -2713,6 +2713,43 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /me/conversations/{conversation_id}/actions:
+    parameters:
+      - { name: conversation_id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [agents]
+      operationId: listMyConversationActions
+      description: The writes the assistant proposed in the conversation, with what became of them (the owner's alone).
+      responses:
+        "200": { description: The actions, oldest first, content: { application/json: { schema: { $ref: "#/components/schemas/ConversationActionList" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /me/conversations/{conversation_id}/actions/{action_id}/confirm:
+    parameters:
+      - { name: conversation_id, in: path, required: true, schema: { type: string } }
+      - { name: action_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: confirmMyConversationAction
+      description: "Executes a proposed inline write through the broker WITH THE PERSON'S identity (the source judges the right to write) and records the result. Only the conversation's owner (404 otherwise). 409 with a `code`: action_executed, action_refused, action_expired, approval_console (the owners raised the need to a console approval), not_available."
+      responses:
+        "200": { description: The action, executed or confirmed with the source's error in `result`, content: { application/json: { schema: { $ref: "#/components/schemas/ConversationAction" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /me/conversations/{conversation_id}/actions/{action_id}/refuse:
+    parameters:
+      - { name: conversation_id, in: path, required: true, schema: { type: string } }
+      - { name: action_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: refuseMyConversationAction
+      description: Refuses a proposed write; nothing reaches the source. Only the conversation's owner (404 otherwise).
+      responses:
+        "200": { description: The action, refused, content: { application/json: { schema: { $ref: "#/components/schemas/ConversationAction" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /orgs/{org}/agents/{slug}/metrics:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -8618,12 +8655,34 @@ components:
         audience_groups: { type: array, items: { type: string, minLength: 1, maxLength: 255 } }
         channel: { type: string, enum: [stable, candidate] }
         policy_overrides: { type: object, additionalProperties: true }
+    ConversationActionList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ConversationAction" } }
+    ConversationAction:
+      type: object
+      required: [id, conversation_id, need, operation, arguments, summary, status, created_at]
+      properties:
+        id: { type: string }
+        conversation_id: { type: string }
+        need: { type: string }
+        operation: { type: string }
+        arguments: { type: object, additionalProperties: true }
+        summary: { type: string }
+        status: { type: string, enum: [proposed, confirmed, executed, refused, expired] }
+        result: { type: [object, "null"], additionalProperties: true }
+        confirmed_by: { type: [string, "null"] }
+        confirmed_at: { type: [string, "null"], format: date-time }
+        executed_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
     AssistantBind:
       type: object
       required: [connector]
       properties:
         connector: { type: string, description: "The name of an organisation connector." }
         enabled: { type: boolean, default: true }
+        approval: { type: [string, "null"], enum: [inline, console, null], description: "A write's approval, raised above the manifest's (inline to console), never below it: 422." }
     AssistantBinding:
       type: object
       required: [need, connector, operations, identity, enabled]
