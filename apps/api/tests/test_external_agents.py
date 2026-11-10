@@ -130,6 +130,36 @@ async def test_what_cannot_be_attached(
     ).status_code == expected_status
 
 
+async def test_a_token_of_someone_outside_the_organisation_cannot_be_attached(
+    client: AsyncClient, admin: str
+) -> None:
+    """Finding #1520: knowing a token's id is not enough to bind it to an agent of another organisation."""
+    from choregos_api.db.models import ApiToken, User
+    from choregos_api.db.session import session_scope
+    from choregos_api.security import generate_api_token
+
+    await _external_agent(client, None)
+    async with session_scope(orgs="*") as session:
+        stranger = User(email="stranger@elsewhere.example", display_name="stranger")
+        session.add(stranger)
+        await session.flush()
+        _, digest = generate_api_token()
+        foreign = ApiToken(user_id=stranger.id, name="theirs", hash=digest, scopes=["mcp:write"])
+        session.add(foreign)
+        await session.flush()
+        foreign_id = foreign.id
+    refused = await _attach(client, foreign_id)
+    assert refused.status_code == 422, refused.text
+    assert (
+        refused.json()
+        == (await _attach(client, "no-such-token")).json() | {"instance": refused.json().get("instance")}
+        or refused.json()["detail"] == (await _attach(client, "no-such-token")).json()["detail"]
+    )
+    # A member's token still attaches.
+    token_id, _ = await _token(client)
+    assert (await _attach(client, token_id)).status_code == 201
+
+
 async def test_an_internal_agent_carries_no_client(client: AsyncClient, admin: str) -> None:
     internal = await client.post(
         "/api/v1/orgs/varga/agents", json={"slug": "internal", "display_name": "Internal", "kind": "internal"}
