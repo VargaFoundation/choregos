@@ -287,6 +287,42 @@ nothing changes. An optional need may stay unbound or be switched off (`"enabled
 uninstalling and changing the owners are the organisation administrator's; configuring and binding are also
 open to a member of an owner group (the identity provider's groups).
 
+#### Conversation evals
+
+An assistant's `evals` name conversation suites ([ADR 0140](adr/0140-conversation-evals-and-user-feedback.md),
+`conversation-evals.schema.json`). A case is a scenario of user `turns`, the tool results the sources' fakes
+answer (`tool_results`, by `<need>__<operation>`: a value answers every call, an array answers successive
+calls), and exact assertions on the conversation's journal, the ordered tool calls and the final texts:
+
+```yaml
+kind: conversation
+agent: investment-analyst
+threshold: 1                      # the share of cases that must pass; below it, no production
+cases:
+  - name: quote-is-read-first-and-cited
+    context: { relation: self }
+    turns: ["What is the price of ACME today?"]
+    tool_results:
+      market_data__get_quote: { isin: FR0000000001, price: 12.34, as_of: "2026-11-10" }
+    assert:
+      must_call: [{ tool: market_data__get_quote, before: any }]   # the first call of the conversation
+      call_order: [[brokerage__list_positions, market_data__get_quote]]
+      must_not_call: [{ tool: orders__place_order, when: { context: { relation: coachee } } }]
+      must_cite: [{ figure: '\d+(?:\.\d+)? ?EUR', source: '\(source: [a-z_ ]+, \d{4}-\d{2}-\d{2}\)' }]
+      must_not_contain: ["you should buy", { regex: "(?i)guaranteed return" }]
+      length: { min_words: 3, max_words: 120 }
+    rubric: [{ criterion: explains without recommending a purchase, threshold: 0.8 }]   # lot 2: stored only
+```
+
+`choregos plugin validate` holds the file to the schema and refuses a suite for another agent than the
+assistant's, a duplicate case name, and a tool (in an assertion, a condition or `tool_results`) that is not
+a `<need>__<operation>` of the assistant's tools. `choregos_core.conversation_evals` evaluates a journal
+(`evaluate_case`, `evaluate_suite`) and plays a case through the prompt loop on a scripted model
+(`play_case`, `play_suite`). A release to production of an agent version an assistant wraps carries the
+required check `conversation_suite`. A thumb down on an answer (`POST /orgs/{org}/agent-sessions/{id}/feedback`)
+proposes a pseudonymised candidate case to the agent's managers (`GET /orgs/{org}/agents/{slug}/feedback-candidates`);
+it never enters a suite by itself. The judge that scores the `rubric` is not delivered yet.
+
 ## Pack and index
 
 ```

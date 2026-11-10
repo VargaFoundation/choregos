@@ -27,6 +27,19 @@ from ..services.agent_access import enforce_decision, load_visible_agent, projec
 from ..services.agent_governance import Action, decide
 from ..services.agent_sessions import close_session, open_session, respond, session_dto
 from ..services.conversations import response_events
+from ..schemas.agent_sessions import (
+    AgentDelta,
+    AgentResponse,
+    AgentResponseCreate,
+    AgentSession,
+    ConversationCandidate,
+    ConversationFeedbackCreate,
+    ConversationFeedbackDto,
+)
+from ..services.agent_access import enforce_decision, load_visible_agent, project_in_org, require_agent_reader
+from ..services.agent_governance import Action, decide
+from ..services.agent_sessions import close_session, open_session, respond, session_dto
+from ..services.conversation_feedback import feedback_dto, give_feedback, proposed_candidates
 from ..services.organisations import organisation_by_slug
 
 router = APIRouter(tags=["agents"])
@@ -100,3 +113,33 @@ async def close_agent_session(org: str, session_id: str, session: Db, principal:
     record = await _own_session(session, principal, organisation, session_id)
     await close_session(session, record, reason="closed")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/orgs/{org}/agent-sessions/{session_id}/feedback",
+    response_model=ConversationFeedbackDto,
+    operation_id="giveAgentSessionFeedback",
+)
+async def give_agent_session_feedback(
+    org: str, session_id: str, body: ConversationFeedbackCreate, session: Db, principal: Me
+) -> ConversationFeedbackDto:
+    """A thumb up or down on one answer of the caller's own session (ADR 0140): replaces their earlier
+    thumb on it. A thumb down proposes a pseudonymised candidate eval case to the agent's owners."""
+    require_agent_reader(principal, org)
+    organisation = await organisation_by_slug(session, org)
+    record = await _own_session(session, principal, organisation, session_id)
+    return feedback_dto(await give_feedback(session, record, body))
+
+
+@router.get(
+    "/orgs/{org}/agents/{slug}/feedback-candidates",
+    response_model=list[ConversationCandidate],
+    operation_id="listAgentFeedbackCandidates",
+)
+async def list_agent_feedback_candidates(
+    org: str, slug: str, session: Db, principal: Me, limit: int = 50
+) -> list[ConversationCandidate]:
+    """The candidate eval cases thumbs down proposed for the agent, for those who manage it (ADR 0140)."""
+    organisation, agent, subject = await load_visible_agent(session, principal, org, slug)
+    enforce_decision(decide(principal, org, subject, Action.MANAGE))
+    return await proposed_candidates(session, organisation.id, agent.slug, max(1, min(limit, 200)))

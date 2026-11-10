@@ -145,6 +145,40 @@ class ConversationMessageCreate(Dto):
 
     input: str = Field(min_length=1, max_length=65_536)
     stream: bool = False
+class ConversationFeedbackCreate(Dto):
+    """A thumb on one answer of a session (S63-17, ADR 0140)."""
+
+    rating: Literal["up", "down"]
+    comment: str | None = Field(default=None, max_length=2000)
+    #: The answer, by its 1-based position among the session's responses; absent: the latest.
+    response: int | None = Field(default=None, ge=1)
+
+
+class ConversationFeedbackDto(Dto):
+    id: str
+    session_id: str
+    agent: str
+    #: The agent revision that gave the answer.
+    agent_version: int
+    response: int
+    rating: Literal["up", "down"]
+    comment: str | None = None
+    #: `proposed` when the thumb down proposed a candidate case to the agent's owners.
+    candidate_status: str | None = None
+    created_at: datetime
+
+
+class ConversationCandidate(Dto):
+    """A candidate eval case a thumb down proposed, as the agent's owners read it: pseudonymised, with no
+    author and no raw comment. It is in no suite until an owner adds it."""
+
+    id: str
+    agent: str
+    agent_version: int
+    status: Literal["proposed"]
+    #: `{case, observed, comment}`: a `conversation-evals` case without assertions, what the agent did.
+    candidate: dict[str, Any]
+    created_at: datetime
 
 
 # ───────────── a hosted session's pod, on the internal API (S41-11) ─────────────

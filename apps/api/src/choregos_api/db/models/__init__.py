@@ -35,7 +35,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..base import Base, Json, PkMixin, TimestampMixin, utcnow, uuid7
-from .agent_sessions import AgentSessionEvent, AgentSessionRecord
+from .agent_sessions import AgentSessionEvent, AgentSessionRecord, ConversationFeedback
 from .agents import (
     Agent,
     AgentCredential,
@@ -183,6 +183,7 @@ __all__ = [
     "CheckConstraint",
     "Connector",
     "ConnectorOperation",
+    "ConversationFeedback",
     "CostLedger",
     "DateTime",
     "DecisionRecordRow",
