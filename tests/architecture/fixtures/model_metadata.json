@@ -1352,6 +1352,83 @@
     "type": "Json()"
    },
    {
+    "default": "'session'",
+    "name": "kind",
+    "nullable": false,
+    "server_default": "'session'",
+    "type": "String(length=16)"
+   },
+   {
+    "default": null,
+    "name": "installation_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "title",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=200)"
+   },
+   {
+    "default": null,
+    "name": "context",
+    "nullable": true,
+    "server_default": null,
+    "type": "Json()"
+   },
+   {
+    "default": "<function list>",
+    "name": "resolved_subjects",
+    "nullable": false,
+    "server_default": "'[]'",
+    "type": "Json()"
+   },
+   {
+    "default": null,
+    "name": "last_activity_at",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": null,
+    "name": "retention_until",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": null,
+    "name": "agent_revision",
+    "nullable": true,
+    "server_default": null,
+    "type": "Integer()"
+   },
+   {
+    "default": "0",
+    "name": "turns",
+    "nullable": false,
+    "server_default": "'0'",
+    "type": "Integer()"
+   },
+   {
+    "default": null,
+    "name": "max_usd",
+    "nullable": true,
+    "server_default": null,
+    "type": "Float()"
+   },
+   {
+    "default": null,
+    "name": "idle_close_minutes",
+    "nullable": true,
+    "server_default": null,
+    "type": "Integer()"
+   },
+   {
     "default": "<function uuid7>",
     "name": "id",
     "nullable": false,
@@ -1398,6 +1475,13 @@
    ]
   ],
   "indexes": [
+   [
+    "ix_agent_sessions_installation_id",
+    [
+     "agent_sessions.installation_id"
+    ],
+    false
+   ],
    [
     "ix_agent_sessions_org_id",
     [

@@ -393,6 +393,32 @@ the session with its transcript and close it.
   `response.output_text.delta` and `response.completed` (or `response.failed`): the text arrives in
   one delta, not token by token.
 
+**A person keeps a conversation with a prompt agent (S63-04, ADR 0134).** A conversation is a
+session of kind `conversation` (the table `agent_sessions` keeps its name), held in its opener's
+personal space and spoken to on `/me/conversations`: `GET` lists the caller's own (title, agent,
+last activity, status; cursor-paginated), `GET` and `DELETE …/{id}` read it and erase it with its
+transcript (its ledger lines stay, detached), `POST …/{id}/messages` takes a turn (`input`,
+`stream`, answered as `/responses` answers). Only the opener reads or writes it: anyone else is
+answered 404, and on PostgreSQL a restrictive policy on `agent_sessions` and
+`agent_session_events` says the same to the database (the platform scope is let through).
+
+- **A key per turn.** Opening reserves nothing. Each turn reserves the smallest of what is left of
+  the conversation's cap (`max_usd`, 5 USD by default, minus what it spent) and the caps a session
+  meets above, mints a key `turn:<conversation>:<n>`, runs the loop, then reads the key's spend,
+  books it with `session_id` and revokes it. A turn the cap leaves under 0.01 USD is 409, before
+  the model is called; a turn whose key the gateway refuses fails `budget_exceeded` and leaves the
+  conversation open.
+- **Idle, then resumed.** After `idle_close_minutes` (240 by default) without activity a
+  conversation reads `idle`; the next message reopens it with its history (`conversation.resumed`
+  in the journal). The state is derived from the clock, nothing sweeps it. A conversation keeps the
+  agent version it started with (`agent_revision`), whatever is published after.
+- **Title.** Cut from the first message (60 characters, at a word): deterministic, no model call.
+- **Opening** is the service `open_conversation` (it creates the personal space on first use);
+  the route that opens an assistant's conversation comes with the installations (S63-02).
+- Not yet: the text is sent in one delta (the prompt loop does not stream), the history is not
+  summarised past a token threshold, `retention_until` is not set (no installation policy), a turn
+  cannot be cancelled, and `/responses` sessions keep their one key and their hour.
+
 **A person speaks to a voice agent (S41-10).** `/orgs/{org}/agents/{slug}/realtime?project=…`
 (optional `max_usd`) is a WebSocket speaking the OpenAI Realtime events; the API relays it to the
 gateway's realtime socket (`ws(s)://<gateway>/realtime?model=…`), with the session's key.
