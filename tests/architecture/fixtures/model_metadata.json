@@ -11273,5 +11273,162 @@
     ]
    ]
   ]
+ },
+ "assistant_reads": {
+  "columns": [
+   {
+    "name": "org_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "installation_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "user_id",
+    "type": "String(length=200)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "conversation_id",
+    "type": "String(length=36)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "work_item_key",
+    "type": "String(length=200)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "need",
+    "type": "String(length=63)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "operation",
+    "type": "String(length=200)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "subject_type",
+    "type": "String(length=63)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "subject_key",
+    "type": "String(length=300)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "delegation_id",
+    "type": "String(length=36)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": "<function uuid7>",
+    "server_default": null
+   }
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "foreign_keys": [
+   [
+    [
+     "installation_id"
+    ],
+    [
+     "assistant_installations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_assistant_reads_installation_id_assistant_installations"
+   ],
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_assistant_reads_org_id_organizations"
+   ]
+  ],
+  "uniques": [],
+  "checks": [],
+  "indexes": [
+   [
+    "ix_assistant_reads_installation_at",
+    [
+     "assistant_reads.installation_id",
+     "assistant_reads.at"
+    ],
+    false
+   ],
+   [
+    "ix_assistant_reads_installation_id",
+    [
+     "assistant_reads.installation_id"
+    ],
+    false
+   ],
+   [
+    "ix_assistant_reads_org_id",
+    [
+     "assistant_reads.org_id"
+    ],
+    false
+   ],
+   [
+    "ix_assistant_reads_subject",
+    [
+     "assistant_reads.installation_id",
+     "assistant_reads.subject_type",
+     "assistant_reads.subject_key"
+    ],
+    false
+   ],
+   [
+    "ix_assistant_reads_user_id",
+    [
+     "assistant_reads.user_id"
+    ],
+    false
+   ]
+  ]
  }
 }

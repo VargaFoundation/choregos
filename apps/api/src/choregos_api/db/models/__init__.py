@@ -45,6 +45,7 @@ from .agents import (
     HostedBuildRecord,
     ProjectAgent,
 )
+from .assistant_reads import AssistantRead
 from .assistants import AssistantInstallation, AssistantToolBinding
 from .audit import AuditLog, NetworkDecision
 from .connectors import (
@@ -103,6 +104,7 @@ ALL_TABLES = [
     Project,
     MachineAccount,
     AssistantInstallation,
+    AssistantRead,
     AssistantToolBinding,
     Connector,
     WorkflowDef,
@@ -174,6 +176,7 @@ __all__ = [
     "ApiToken",
     "ArtifactRecord",
     "AssistantInstallation",
+    "AssistantRead",
     "AssistantToolBinding",
     "AuditLog",
     "BackendRegistryRow",
