@@ -51,6 +51,7 @@
  "Mapped",
  "Membership",
  "MemoryFact",
+ "MemoryProfile",
  "MemoryStore",
  "ModelCatalogueRow",
  "ModelProfileRow",

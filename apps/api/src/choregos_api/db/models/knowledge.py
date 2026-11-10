@@ -36,6 +36,16 @@ class MemoryStore(Base, PkMixin, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("org_id", "owner_key", "slug", name="uq_memory_stores_owner_slug"),
         CheckConstraint("(scope = 'project') = (project_id IS NOT NULL)", name="ck_memory_stores_scope"),
+        CheckConstraint(
+            "(scope IN ('installation', 'user', 'user_subject')) = (installation_id IS NOT NULL)",
+            name="installation",
+        ),
+        CheckConstraint("(scope IN ('user', 'user_subject')) = (user_id IS NOT NULL)", name="owner"),
+        CheckConstraint(
+            "(scope = 'user_subject') = (subject_type IS NOT NULL AND subject_key IS NOT NULL)",
+            name="subject",
+        ),
+        CheckConstraint("kind IN ('facts', 'profile')", name="kind"),
     )
 
     org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
@@ -55,6 +65,42 @@ class MemoryStore(Base, PkMixin, TimestampMixin):
     #: active | archived
     status: Mapped[str] = mapped_column(String(16), default="active")
     created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # -- an assistant's spaces (S63-09, ADR 0136): `installation` | `user` | `user_subject` scopes ------
+    installation_id: Mapped[str | None] = mapped_column(
+        ForeignKey("assistant_installations.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    #: The owner of a `user` or `user_subject` space: the only person who reads it.
+    user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    subject_type: Mapped[str | None] = mapped_column(String(63), nullable=True)
+    subject_key: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    #: facts | profile
+    kind: Mapped[str] = mapped_column(String(16), default="facts", server_default="facts")
+    #: The JSON schema a `profile` document conforms to (the manifest's, copied at creation).
+    schema: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
+    #: agent | agent_proposes | user_only | owner_only
+    writes: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    retention_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_facts: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class MemoryProfile(Base, PkMixin, TimestampMixin):
+    """One version of a `profile` space's document (S63-09, ADR 0136 point 2). The active version is the
+    highest one whose `status` is `active`; a proposed one waits for the person."""
+
+    __tablename__ = "memory_profiles"
+    __table_args__ = (UniqueConstraint("memory_store_id", "version", name="uq_memory_profiles_version"),)
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    memory_store_id: Mapped[str] = mapped_column(
+        ForeignKey("memory_stores.id", ondelete="CASCADE"), index=True
+    )
+    version: Mapped[int] = mapped_column(Integer)
+    document: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
+    #: proposed | active | rejected | superseded
+    status: Mapped[str] = mapped_column(String(16), default="active")
+    updated_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
 class MemoryFact(Base, PkMixin, TimestampMixin):

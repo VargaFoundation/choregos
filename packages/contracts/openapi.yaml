@@ -2512,6 +2512,85 @@ paths:
       responses:
         "204": { description: Closed }
         "404": { $ref: "#/components/responses/NotFound" }
+  /me/assistants/{org}/{slug}/memory/{space}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+      - { name: space, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$" } }
+    get:
+      tags: [agents]
+      operationId: getMyAssistantMemory
+      description: >-
+        What an assistant remembers of the caller in one of its `user` or `user_subject` spaces (ADR 0136): one entry
+        per store (the person's, or one per subject), with facts (`active` and `proposed`) or the versions of the
+        profile. Only the caller's own: another person's page is empty, and an installation space is not on it (404).
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MemorySpace" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [agents]
+      operationId: updateMyAssistantMemory
+      description: >-
+        Confirms or rejects a proposed fact (`fact_id`) or profile version (`version`), pins or unpins a fact,
+        corrects a fact's `content` or writes a profile `document` (validated against the space's schema). A decided
+        proposal is 409.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/MemoryAction" } } }
+      responses:
+        "200": { description: The space as it is now, content: { application/json: { schema: { $ref: "#/components/schemas/MemorySpace" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [agents]
+      operationId: deleteMyAssistantMemory
+      description: "Deletes one fact (`fact_id`) or, without it, everything the assistant remembers of the caller in the space."
+      parameters:
+        - { name: fact_id, in: query, required: false, schema: { type: string } }
+      responses:
+        "204": { description: Deleted }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /me/assistants/{org}/{slug}/memory/{space}/{subject}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+      - { name: space, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$" } }
+      - { name: subject, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [agents]
+      operationId: getMyAssistantSubjectMemory
+      description: "What the assistant remembers of the caller about one subject (the subject's key) of a `user_subject` space; 404 when nothing is."
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MemorySpace" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [agents]
+      operationId: updateMyAssistantSubjectMemory
+      description: "As the space's `PATCH`, for one subject."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/MemoryAction" } } }
+      responses:
+        "200": { description: The subject's memory as it is now, content: { application/json: { schema: { $ref: "#/components/schemas/MemorySpace" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [agents]
+      operationId: deleteMyAssistantSubjectMemory
+      description: "Deletes one fact (`fact_id`) or everything remembered about the subject."
+      parameters:
+        - { name: fact_id, in: query, required: false, schema: { type: string } }
+      responses:
+        "204": { description: Deleted }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /me/conversations:
     get:
       tags: [agents]
@@ -8467,6 +8546,57 @@ components:
         bindings: { type: array, items: { $ref: "#/components/schemas/AssistantBinding" } }
         created_by: { type: [string, "null"] }
         created_at: { type: string, format: date-time }
+    MemorySubject:
+      type: object
+      required: [type, key]
+      properties:
+        type: { type: string }
+        key: { type: string }
+    MemoryFactView:
+      type: object
+      required: [id, content, status, pinned]
+      properties:
+        id: { type: string }
+        content: { type: string }
+        status: { type: string, description: "proposed | active | rejected | expired" }
+        pinned: { type: boolean }
+        reason: { type: [string, "null"] }
+        created_at: { type: [string, "null"], format: date-time }
+    MemoryProfileVersion:
+      type: object
+      required: [version, status, document]
+      properties:
+        version: { type: integer }
+        status: { type: string, description: "proposed | active | rejected | superseded" }
+        document: { type: object, additionalProperties: true }
+        updated_by: { type: [string, "null"] }
+        created_at: { type: [string, "null"], format: date-time }
+    MemorySubjectSpace:
+      type: object
+      description: "What is remembered in one store: of the person (no subject) or of one subject."
+      properties:
+        subject: { oneOf: [{ $ref: "#/components/schemas/MemorySubject" }, { type: "null" }] }
+        facts: { type: array, items: { $ref: "#/components/schemas/MemoryFactView" } }
+        profiles: { type: array, items: { $ref: "#/components/schemas/MemoryProfileVersion" } }
+    MemorySpace:
+      type: object
+      required: [space, scope, kind, writes, subjects]
+      properties:
+        space: { type: string }
+        scope: { type: string, enum: [user, user_subject] }
+        kind: { type: string, enum: [facts, profile] }
+        writes: { type: string }
+        subjects: { type: array, items: { $ref: "#/components/schemas/MemorySubjectSpace" } }
+    MemoryAction:
+      type: object
+      required: [action]
+      additionalProperties: false
+      properties:
+        action: { type: string, enum: [confirm, reject, pin, unpin, correct] }
+        fact_id: { type: [string, "null"] }
+        version: { type: [integer, "null"], minimum: 1 }
+        content: { type: [string, "null"], minLength: 1, maxLength: 2000 }
+        document: { type: [object, "null"], additionalProperties: true }
     AssistantList:
       type: object
       required: [items]

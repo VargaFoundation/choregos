@@ -3847,6 +3847,57 @@ export type Assistant = {
   created_at: string;
 };
 
+export type MemorySubject = {
+  type: string;
+  key: string;
+};
+
+export type MemoryFactView = {
+  id: string;
+  content: string;
+  /** proposed | active | rejected | expired */
+  status: string;
+  pinned: boolean;
+  reason?: string | null;
+  created_at?: string | null;
+};
+
+export type MemoryProfileVersion = {
+  version: number;
+  /** proposed | active | rejected | superseded */
+  status: string;
+  document: {
+    [key: string]: unknown;
+  };
+  updated_by?: string | null;
+  created_at?: string | null;
+};
+
+/** What is remembered in one store: of the person (no subject) or of one subject. */
+export type MemorySubjectSpace = {
+  subject?: MemorySubject | null;
+  facts?: Array<MemoryFactView>;
+  profiles?: Array<MemoryProfileVersion>;
+};
+
+export type MemorySpace = {
+  space: string;
+  scope: "user" | "user_subject";
+  kind: "facts" | "profile";
+  writes: string;
+  subjects: Array<MemorySubjectSpace>;
+};
+
+export type MemoryAction = {
+  action: "confirm" | "reject" | "pin" | "unpin" | "correct";
+  fact_id?: string | null;
+  version?: number | null;
+  content?: string | null;
+  document?: {
+    [key: string]: unknown;
+  } | null;
+};
+
 export type AssistantList = {
   items: Array<Assistant>;
 };
@@ -4858,6 +4909,8 @@ export interface Operations {
   deleteKnowledgeSource: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}"; body: never; response: void };
   deleteMcpGateway: { method: "DELETE"; path: "/orgs/{org}/mcp-gateway"; body: never; response: void };
   deleteModelCatalogueEntry: { method: "DELETE"; path: "/orgs/{org}/models/{entry_id}"; body: never; response: void };
+  deleteMyAssistantMemory: { method: "DELETE"; path: "/me/assistants/{org}/{slug}/memory/{space}"; body: never; response: void };
+  deleteMyAssistantSubjectMemory: { method: "DELETE"; path: "/me/assistants/{org}/{slug}/memory/{space}/{subject}"; body: never; response: void };
   deleteMyConversation: { method: "DELETE"; path: "/me/conversations/{conversation_id}"; body: never; response: void };
   deleteOrgConnector: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}"; body: never; response: void };
   deleteOutboundProxy: { method: "DELETE"; path: "/orgs/{org}/outbound-proxy"; body: never; response: void };
@@ -4927,6 +4980,8 @@ export interface Operations {
   getMemoryAbReport: { method: "GET"; path: "/orgs/{org}/memory/ab-report"; body: never; response: MemoryAbReport };
   getModelCatalogue: { method: "GET"; path: "/orgs/{org}/models"; body: never; response: ModelCatalogue };
   getModelMatrix: { method: "GET"; path: "/projects/{id}/models/matrix"; body: never; response: ModelMatrix };
+  getMyAssistantMemory: { method: "GET"; path: "/me/assistants/{org}/{slug}/memory/{space}"; body: never; response: MemorySpace };
+  getMyAssistantSubjectMemory: { method: "GET"; path: "/me/assistants/{org}/{slug}/memory/{space}/{subject}"; body: never; response: MemorySpace };
   getMyConversation: { method: "GET"; path: "/me/conversations/{conversation_id}"; body: never; response: Conversation };
   getNamedWorkflow: { method: "GET"; path: "/projects/{id}/workflows/{name}"; body: never; response: WorkflowDef };
   getNetworkActivity: { method: "GET"; path: "/orgs/{org}/network-activity"; body: never; response: NetworkActivity };
@@ -5263,6 +5318,8 @@ export interface Operations {
   updateKnowledgeSource: { method: "PATCH"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}"; body: KnowledgeSourcePatch; response: KnowledgeSource };
   updateMemory: { method: "PATCH"; path: "/orgs/{org}/memories/{slug}"; body: MemoryStorePatch; response: MemoryStore };
   updateModelCatalogueEntry: { method: "PATCH"; path: "/orgs/{org}/models/{entry_id}"; body: ModelCataloguePatch; response: ModelCatalogueEntry };
+  updateMyAssistantMemory: { method: "PATCH"; path: "/me/assistants/{org}/{slug}/memory/{space}"; body: MemoryAction; response: MemorySpace };
+  updateMyAssistantSubjectMemory: { method: "PATCH"; path: "/me/assistants/{org}/{slug}/memory/{space}/{subject}"; body: MemoryAction; response: MemorySpace };
   updateOrg: { method: "PATCH"; path: "/orgs/{org}"; body: OrgUpdate; response: Org };
   updateOrgConnector: { method: "PATCH"; path: "/orgs/{org}/connectors/{name}"; body: OrgConnectorUpdate; response: OrgConnector };
   updateProject: { method: "PATCH"; path: "/projects/{id}"; body: ProjectUpdate; response: Project };
