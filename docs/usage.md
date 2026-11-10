@@ -2183,6 +2183,7 @@ a failing one is a `409` naming it in `errors`):
 | Check | Passes when |
 | :-- | :-- |
 | `eval_suite` | the suite (production's cases and the revision's) passes again |
+| `conversation_suite` | production only, for a version an assistant wraps: each of the assistant's conversation suites passes at its threshold (a suite never evaluated for the version fails; ADR 0140) |
 | `newer_than_production` | the revision is newer than production |
 | `is_candidate` | the revision is the current candidate (required with `require_candidate` or a threshold) |
 | `candidate_runs` | at least `min_candidate_runs` finished runs since it became the candidate |

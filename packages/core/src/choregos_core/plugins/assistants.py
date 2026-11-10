@@ -18,7 +18,8 @@ against the plugin the assistant ships in:
 
 plus: names unique within their list, a prompt's `{argument}` placeholders declared, and every file the
 assistant names (a knowledge seed with its `knowledge.yaml`, a task's workflow, an eval suite) present.
-Each problem names the file and the JSON path of the field.
+An eval suite is also read: the loader holds it to `conversation-evals.schema.json`, and `check_suite` to
+the assistant's tools (ADR 0140). Each problem names the file and the JSON path of the field.
 """
 
 from __future__ import annotations
@@ -26,6 +27,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 from typing import Any
+
+from ..conversation_evals import tools_named
 
 #: `{{ config.company_name }}`, `{{config.x}}`, `{{ config.x | default(...) }}`.
 CONFIG_REFERENCE = re.compile(r"\{\{[^}]*?\bconfig\.([A-Za-z_][A-Za-z0-9_]*)")
@@ -239,3 +242,26 @@ def _files(doc: dict[str, Any], ref: str, root: Path, target: Any, problems: lis
             problems.append(
                 f"{ref}:knowledge/{index}/seed: `{base['seed']}` is not a directory holding a {SEED_MANIFEST}"
             )
+
+
+def check_suite(suite: dict[str, Any], ref: str, doc: dict[str, Any], problems: list[str]) -> None:
+    """A schema-valid conversation suite `suite`, read from `ref`, against the assistant `doc` that names
+    it (ADR 0140): it evaluates the assistant's agent, its case names are unique, and every tool an
+    assertion or a scripted result names is a `need__operation` of the assistant."""
+    if suite["agent"] != doc["agent"]:
+        problems.append(
+            f"{ref}:agent: the suite evaluates `{suite['agent']}`, the agent of assistant "
+            f"`{doc['metadata']['name']}` is `{doc['agent']}`"
+        )
+    known = {f"{tool['need']}__{op}" for tool in _mappings(doc.get("tools")) for op in tool["operations"]}
+    seen: set[str] = set()
+    for index, case in enumerate(suite["cases"]):
+        if case["name"] in seen:
+            problems.append(f"{ref}:cases/{index}/name: case `{case['name']}` is declared twice")
+        seen.add(case["name"])
+        for where, tool in tools_named(case):
+            if tool not in known:
+                problems.append(
+                    f"{ref}:cases/{index}/{where}: `{tool}` is not a `need__operation` of the "
+                    "assistant's tools"
+                )

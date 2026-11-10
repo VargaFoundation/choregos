@@ -2100,7 +2100,7 @@ export type AgentReleaseCreate = {
 };
 
 export type AgentReleaseCheck = {
-  /** eval_suite, newer_than_production, is_candidate, candidate_runs, candidate_success_rate, soak, previously_in_production, human_session, fresh_authentication, live_eval, approvals (informational: how many people must approve) */
+  /** eval_suite, newer_than_production, is_candidate, candidate_runs, candidate_success_rate, soak, previously_in_production, human_session, fresh_authentication, live_eval, conversation_suite (the assistant's conversation suites, production only), approvals (informational: how many people must approve) */
   name: string;
   required?: boolean;
   /** null: not applicable */

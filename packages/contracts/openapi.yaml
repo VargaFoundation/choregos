@@ -6529,7 +6529,7 @@ components:
       type: object
       required: [name]
       properties:
-        name: { type: string, description: "eval_suite, newer_than_production, is_candidate, candidate_runs, candidate_success_rate, soak, previously_in_production, human_session, fresh_authentication, live_eval, approvals (informational: how many people must approve)" }
+        name: { type: string, description: "eval_suite, newer_than_production, is_candidate, candidate_runs, candidate_success_rate, soak, previously_in_production, human_session, fresh_authentication, live_eval, conversation_suite (the assistant's conversation suites, production only), approvals (informational: how many people must approve)" }
         required: { type: boolean, default: true }
         passed: { type: [boolean, "null"], description: "null: not applicable" }
         detail: { type: [string, "null"] }
