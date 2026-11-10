@@ -132,6 +132,7 @@ def derive_title(text: str) -> str:
 async def converse(session: AsyncSession, record: AgentSessionRecord, text: str) -> AgentResponse:
     """One turn: reopen an idle conversation, reserve, mint the turn's key, run the loop, settle the key."""
     from .agents import resolve_agent
+    from .assistant_conversations import assistant_caps
     from .budgets import DEFAULT_FLOOR_USD
 
     if record.kind != "conversation" or record.status not in ("open", "idle"):
@@ -159,7 +160,13 @@ async def converse(session: AsyncSession, record: AgentSessionRecord, text: str)
         session, record.org_id, project.id, f"{record.agent_slug}@{record.agent_version}"
     )
     reservation = await reserve_budget(
-        session, record.org_id, project, record.agent_slug, resolved.spec, left
+        session,
+        record.org_id,
+        project,
+        record.agent_slug,
+        resolved.spec,
+        left,
+        extra_caps=await assistant_caps(session, record),
     )
     if reservation.below(DEFAULT_FLOOR_USD):
         raise ApiError(409, "Budget exhausted", f"the turn does not start: {reservation.describe()}")
@@ -229,6 +236,7 @@ async def _settle_turn(
             fx_rate=get_settings().fx_usd_eur,
         )
         entry.session_id = record.id
+        entry.installation_id, entry.user_id = record.installation_id, record.user_id
         entry.agent_slug, entry.agent_version = record.agent_slug, record.agent_version
         record.cost_usd = round(record.cost_usd + spend.cost_usd, 6)
         revoked = True

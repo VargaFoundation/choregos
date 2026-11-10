@@ -322,6 +322,35 @@ a `<need>__<operation>` of the assistant's tools. `choregos_core.conversation_ev
 required check `conversation_suite`. A thumb down on an answer (`POST /orgs/{org}/agent-sessions/{id}/feedback`)
 proposes a pseudonymised candidate case to the agent's managers (`GET /orgs/{org}/agents/{slug}/feedback-candidates`);
 it never enters a suite by itself. The judge that scores the `rubric` is not delivered yet.
+### Who may use an assistant, and what it may spend
+
+Three permissions (S63-15), decided in one place (`services/assistant_access.py`) from the groups the
+identity provider gave the person (`Principal.groups`, read from the user's row at each request):
+
+| Permission | Held by |
+| --- | --- |
+| `assistant:manage` | the organisation administrator, and a member of an owner group of the installation |
+| `assistant:use` | a member of an audience group of the installation; no organisation role carries it (an administrator outside the audience does not talk to the assistant) |
+| `assistant:audit` | the owners, the organisation administrator, and the privacy officers: members of the groups in `CHOREGOS_ASSISTANT_PRIVACY_OFFICER_GROUPS` (`privacy_officer` is not a `Role`: the roles are a published contract) |
+
+```text
+GET  /api/v1/me/assistants                                    # the installations whose audience holds me
+POST /api/v1/me/assistants/{org}/{slug}/conversations         {"context": {...}}   # optional context
+```
+
+Opening puts a conversation in the caller's personal space. The `context` is checked against the manifest's
+`surfaces.embed.context_schema` (422 otherwise, and 422 when the manifest declares none) and reaches the agent
+as data in a system message, never as a resolved subject. An installation that is not `ready` answers 409 with
+its `readiness`; a caller outside the audience gets 404, as for an assistant that does not exist.
+
+The audience is evaluated again at every turn (`POST /me/conversations/{id}/messages`): a person who left the
+group is answered 404 before the model is called, and nothing is deleted, so returning to the group resumes
+the conversation. Three caps, from the manifest's `policy.budget` overridden key by key by the installation's
+`policy_overrides.budget`, bound each turn's key reservation: `per_conversation_usd`, `per_user_month_usd` (the
+person's spend on this installation since the first of the month, UTC) and `per_installation_month_usd`. A
+turn that has less than the floor left under any of them is a 409 before the model. The month sums read the
+ledger lines, which carry the installation and the person, so deleting a conversation does not give its spend
+back.
 
 ## Pack and index
 

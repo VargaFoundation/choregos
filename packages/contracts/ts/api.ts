@@ -3886,6 +3886,26 @@ export type AssistantList = {
   items: Array<Assistant>;
 };
 
+export type MyAssistant = {
+  org: string;
+  slug: string;
+  name: string;
+  display_name?: string | null;
+  description?: string | null;
+  status: "incomplete" | "ready" | "suspended";
+};
+
+export type MyAssistantList = {
+  items: Array<MyAssistant>;
+};
+
+export type AssistantConversationOpen = {
+  /** Validated against `surfaces.embed.context_schema`; data for the agent, never a subject. */
+  context?: {
+    [key: string]: unknown;
+  } | null;
+};
+
 export type AssistantReadinessItem = {
   kind: "assistant_missing" | "config_missing" | "need_unbound" | "need_not_served" | "identity_unsupported";
   need?: string | null;
@@ -5138,6 +5158,7 @@ export interface Operations {
   listMcpCatalogue: { method: "GET"; path: "/orgs/{org}/mcp-catalogue"; body: never; response: McpCatalogue };
   listMembers: { method: "GET"; path: "/orgs/{org}/members"; body: never; response: Array<Membership> };
   listMemories: { method: "GET"; path: "/orgs/{org}/memories"; body: never; response: Array<MemoryStore> };
+  listMyAssistants: { method: "GET"; path: "/me/assistants"; body: never; response: MyAssistantList };
   listMyConversations: { method: "GET"; path: "/me/conversations"; body: never; response: ConversationPage };
   listMySessions: { method: "GET"; path: "/me/sessions"; body: never; response: Array<BrowserSession> };
   listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: Array<ApiToken> };
@@ -5177,6 +5198,7 @@ export interface Operations {
   listWorkflows: { method: "GET"; path: "/projects/{id}/workflows"; body: never; response: Array<WorkflowSummary> };
   nextAgentSessionSocketFrames: { method: "GET"; path: "/internal/agent-sessions/{id}/socket/next"; body: never; response: AgentSessionSocketNext };
   nextAgentSessionTurn: { method: "GET"; path: "/internal/agent-sessions/{id}/turns/next"; body: never; response: AgentSessionTurn };
+  openMyAssistantConversation: { method: "POST"; path: "/me/assistants/{org}/{slug}/conversations"; body: AssistantConversationOpen; response: Conversation };
   pinProjectAgent: { method: "PUT"; path: "/projects/{id}/agents/{slug}"; body: ProjectAgentPut; response: ProjectAgent };
   pluginWebhook: { method: "POST"; path: "/webhooks/plugins/{org}/{plugin}/{server}"; body: {
   [key: string]: unknown;

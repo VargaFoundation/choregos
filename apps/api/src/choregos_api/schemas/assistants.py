@@ -83,3 +83,25 @@ class AssistantReadinessItem(Dto):
 class AssistantReadiness(Dto):
     status: Status
     items: list[AssistantReadinessItem]
+
+
+class MyAssistant(Dto):
+    """An assistant the caller may talk to: the installations whose audience holds them (S63-15)."""
+
+    org: str
+    slug: str
+    name: str
+    display_name: str | None = None
+    description: str | None = None
+    status: Status
+
+
+class MyAssistantList(Dto):
+    items: list[MyAssistant]
+
+
+class AssistantConversationOpen(Dto):
+    """What opens an assistant's conversation: an optional context, validated against the manifest's
+    `surfaces.embed.context_schema` and given to the agent as data, never as a resolved subject."""
+
+    context: dict[str, Any] | None = None
