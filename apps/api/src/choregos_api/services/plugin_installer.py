@@ -45,8 +45,9 @@ from choregos_core.agent_catalogue import CatalogueEntry, entry_of
 from choregos_core.agent_catalogue.evals import evaluate
 from choregos_core.paths import PathOutsideError, SymlinkRefusedError, files_under, inside
 from choregos_core.plugins import Plugin
+from choregos_core.plugins.assistants import named_files as assistant_named_files
 from pydantic import ValidationError
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
@@ -55,6 +56,7 @@ from ..db.base import utcnow
 from ..db.models import (
     Agent,
     AgentVersion,
+    AssistantInstallation,
     Organization,
     OrgPlugin,
     OrgPluginFile,
@@ -161,6 +163,19 @@ async def _prepare(
 
     for ref in [*contents.get("agents", []), *contents.get("matrix_cases", [])]:
         prepared.files[ref] = inside(root, ref).read_bytes()
+
+    # An assistant's file and the files it names ship with the plugin: an installation reads them again.
+    named_files: list[str] = []
+    named_directories: list[str] = []
+    for document in plugin.assistants.values():
+        refs, directories = assistant_named_files(document)
+        named_files.extend(refs)
+        named_directories.extend(directories)
+    for ref in [*contents.get("assistants", []), *named_files]:
+        prepared.files[ref] = inside(root, ref).read_bytes()
+    for ref in named_directories:
+        for name, path in _dir_files(root, ref).items():
+            prepared.files[f"{ref}/{name}"] = path.read_bytes()
 
     for slug, document in sorted(plugin.agents.items()):
         entry = entry_of(document, plugin.name, plugin.version)
@@ -797,6 +812,12 @@ async def uninstall(
             name
         )
     await _drop_files(session, org_id, row.digest)
+    # Its assistants stop (ADR 0133): what belongs to their users stays, nobody can converse on them.
+    await session.execute(
+        update(AssistantInstallation)
+        .where(AssistantInstallation.org_id == org_id, AssistantInstallation.plugin == row.name)
+        .values(status="suspended")
+    )
     await plugin_servers.deprovision(session, org_id, row.name, principal, settings or get_settings())
     await session.delete(row)
     await session.flush()
@@ -861,6 +882,25 @@ async def _materialise(session: AsyncSession, row: OrgPlugin) -> Path:
     except OSError:  # another request materialised it first
         shutil.rmtree(staging, ignore_errors=True)
     return target
+
+
+async def plugin_assistant(
+    session: AsyncSession, org_id: str, plugin: str, name: str
+) -> tuple[OrgPlugin, dict[str, Any]] | None:
+    """The installed plugin and the document of its assistant `name`, read from the stored files; `None`
+    when the plugin is not installed or ships no such assistant (ADR 0133)."""
+    row = await _row(session, org_id, plugin)
+    if row is None:
+        return None
+    root = await _materialise(session, row)
+    for ref in (row.manifest.get("contents") or {}).get("assistants") or []:
+        path = inside(root, str(ref))
+        if not path.is_file():
+            continue
+        document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        if isinstance(document, dict) and (document.get("metadata") or {}).get("name") == name:
+            return row, document
+    return None
 
 
 async def plugin_template(session: AsyncSession, org_id: str | None, ref: str) -> tuple[dict[str, Any], Path]:
@@ -928,6 +968,7 @@ __all__ = [
     "installed_one",
     "installed_row",
     "org_id_of",
+    "plugin_assistant",
     "plugin_procedures",
     "plugin_template",
     "provenance",

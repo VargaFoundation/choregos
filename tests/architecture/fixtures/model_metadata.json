@@ -2167,6 +2167,309 @@
    ]
   ]
  },
+ "assistant_installations": {
+  "columns": [
+   {
+    "name": "org_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "slug",
+    "type": "String(length=63)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "plugin",
+    "type": "String(length=64)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "plugin_version",
+    "type": "String(length=128)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "manifest_digest",
+    "type": "String(length=80)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "assistant_name",
+    "type": "String(length=63)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "config",
+    "type": "Json()",
+    "nullable": false,
+    "default": "<function dict>",
+    "server_default": null
+   },
+   {
+    "name": "owner_groups",
+    "type": "Json()",
+    "nullable": false,
+    "default": "<function list>",
+    "server_default": null
+   },
+   {
+    "name": "audience_groups",
+    "type": "Json()",
+    "nullable": false,
+    "default": "<function list>",
+    "server_default": null
+   },
+   {
+    "name": "channel",
+    "type": "String(length=16)",
+    "nullable": false,
+    "default": "'stable'",
+    "server_default": "'stable'"
+   },
+   {
+    "name": "status",
+    "type": "String(length=16)",
+    "nullable": false,
+    "default": "'incomplete'",
+    "server_default": null
+   },
+   {
+    "name": "policy_overrides",
+    "type": "Json()",
+    "nullable": false,
+    "default": "<function dict>",
+    "server_default": null
+   },
+   {
+    "name": "created_by",
+    "type": "String(length=320)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": "<function uuid7>",
+    "server_default": null
+   },
+   {
+    "name": "created_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   },
+   {
+    "name": "updated_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   }
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "foreign_keys": [
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_assistant_installations_org_id_organizations"
+   ]
+  ],
+  "uniques": [
+   [
+    "uq_assistant_installations_org_slug",
+    [
+     "org_id",
+     "slug"
+    ]
+   ]
+  ],
+  "checks": [],
+  "indexes": [
+   [
+    "ix_assistant_installations_org_id",
+    [
+     "assistant_installations.org_id"
+    ],
+    false
+   ]
+  ]
+ },
+ "assistant_tool_bindings": {
+  "columns": [
+   {
+    "name": "org_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "installation_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "need",
+    "type": "String(length=63)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "connector_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "operations",
+    "type": "Json()",
+    "nullable": false,
+    "default": "<function list>",
+    "server_default": null
+   },
+   {
+    "name": "identity",
+    "type": "String(length=16)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "approval",
+    "type": "String(length=16)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "enabled",
+    "type": "Boolean()",
+    "nullable": false,
+    "default": "True",
+    "server_default": "<sqlalchemy.sql.elements.True_ object>"
+   },
+   {
+    "name": "id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": "<function uuid7>",
+    "server_default": null
+   },
+   {
+    "name": "created_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   },
+   {
+    "name": "updated_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   }
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "foreign_keys": [
+   [
+    [
+     "connector_id"
+    ],
+    [
+     "org_connectors.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_assistant_tool_bindings_connector_id_org_connectors"
+   ],
+   [
+    [
+     "installation_id"
+    ],
+    [
+     "assistant_installations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_assistant_tool_bindings_installation_id_assistant_installations"
+   ],
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_assistant_tool_bindings_org_id_organizations"
+   ]
+  ],
+  "uniques": [
+   [
+    "uq_assistant_tool_bindings_need",
+    [
+     "installation_id",
+     "need"
+    ]
+   ]
+  ],
+  "checks": [],
+  "indexes": [
+   [
+    "ix_assistant_tool_bindings_connector_id",
+    [
+     "assistant_tool_bindings.connector_id"
+    ],
+    false
+   ],
+   [
+    "ix_assistant_tool_bindings_installation_id",
+    [
+     "assistant_tool_bindings.installation_id"
+    ],
+    false
+   ],
+   [
+    "ix_assistant_tool_bindings_org_id",
+    [
+     "assistant_tool_bindings.org_id"
+    ],
+    false
+   ]
+  ]
+ },
  "audit_log": {
   "checks": [],
   "columns": [
