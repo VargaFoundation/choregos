@@ -63,6 +63,8 @@ MACHINE_ONLY_ROUTES: dict[str, str] = {
 #: Paths people reach without a client calling them, or that stay an API gesture on purpose.
 NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
     "/auth/callback": "the identity provider's redirect after sign-in: the browser lands on it",
+    "/me/connected-accounts/callback": "the source's redirect after a person consented: the browser lands "
+    "on it, and the API sends it on to the console's /me/connected-accounts page (S63-18)",
     "/github/setup": "the GitHub App's Setup URL: GitHub redirects the browser there after an installation",
     "/remote-credentials/oauth/callback": "the provider's redirect after an administrator authorised a "
     "remote agent's credential",
@@ -83,37 +85,7 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
 }
 
 #: Paths whose console screen is a story still to come: that story removes its entries.
-NO_CLIENT_YET: dict[str, str] = {
-    "/orgs/{org}/assistants": "S63-18",
-    "/orgs/{org}/assistants/{slug}": "S63-18",
-    "/orgs/{org}/assistants/{slug}/readiness": "S63-18",
-    "/orgs/{org}/assistants/{slug}/knowledge/updates": "S63-18",
-    "/orgs/{org}/assistants/{slug}/knowledge/updates/{update_id}": "S63-18",
-    "/orgs/{org}/assistants/{slug}/bindings/{need}": "S63-18",
-    "/me/assistants": "S63-18",
-    "/me/assistants/{org}/{slug}": "S63-18",
-    "/orgs/{org}/assistants/{slug}/reads": "S63-18",
-    "/orgs/{org}/assistants/{slug}/erasure": "S63-18",
-    "/me/assistants/{org}/{slug}/conversations": "S63-18",
-    "/me/assistants/{org}/{slug}/tasks/{task}": "S63-18",
-    "/me/assistants/{org}/{slug}/tasks/{task}/run": "S63-18",
-    "/me/inbox": "S63-18",
-    "/me/assistants/{org}/{slug}/memory/{space}": "S63-18",
-    "/me/assistants/{org}/{slug}/memory/{space}/{subject}": "S63-18",
-    "/me/conversations": "S63-18",
-    "/me/connected-accounts": "S63-18",
-    "/me/connected-accounts/callback": "S63-18",
-    "/me/connected-accounts/{connector}/connect": "S63-18",
-    "/me/connected-accounts/{connector}": "S63-18",
-    "/me/conversations/{conversation_id}": "S63-18",
-    "/me/conversations/{conversation_id}/messages": "S63-18",
-    "/orgs/{org}/agent-sessions/{session_id}/feedback": "S63-18",
-    "/orgs/{org}/agents/{slug}/feedback-candidates": "S63-18",
-    "/me/conversations/{conversation_id}/cancel": "S63-18",
-    "/me/conversations/{conversation_id}/actions": "S63-18",
-    "/me/conversations/{conversation_id}/actions/{action_id}/confirm": "S63-18",
-    "/me/conversations/{conversation_id}/actions/{action_id}/refuse": "S63-18",
-}
+NO_CLIENT_YET: dict[str, str] = {}
 
 #: Paths the CLI calls and the console must not: an operator's command, not a screen.
 CLI_ONLY: dict[str, str] = {
