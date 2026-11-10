@@ -3381,6 +3381,46 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AssistantReadiness" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/assistants/{slug}/knowledge/updates:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    get:
+      tags: [agents]
+      operationId: listAssistantKnowledgeUpdates
+      description: >-
+        The upstream changes a plugin upgrade proposed to the installation's offered knowledge (S63-06, ADR 0138
+        point 3): per document, an add, an update (with its diff, the local copy to the new seed) or a removal.
+        `status` narrows the list. An organisation administrator or a member of the owner groups.
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: string, enum: [proposed, accepted, merged, refused] } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeUpdateList" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/assistants/{slug}/knowledge/updates/{update_id}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+      - { name: update_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: decideAssistantKnowledgeUpdate
+      description: >-
+        Decides a proposal: `accept` applies the seed's change (add, replace, or remove the document) and marks the
+        document as the seed's; `merge` keeps the owners' `content` (required; a removal cannot be merged) as a
+        `local` document; `refuse` leaves the document, and the same upstream state is not proposed again. The index
+        follows. 409 when the proposal is already decided. Audited as `assistant.knowledge.decide`. An organisation
+        administrator or a member of the owner groups.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeUpdateDecision" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeUpdate" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/assistants/{slug}/bindings/{need}:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -7531,6 +7571,7 @@ components:
         markdown: { type: [string, "null"], description: returned by the reading of one document }
         source_id: { type: [string, "null"], description: the source it was synced from; none for an upload }
         source_url: { type: [string, "null"], description: where to open the original }
+        origin: { type: string, description: "`local` (written by people), or `seed@<plugin version>` for the copy of an assistant's seed document that nobody changed (S63-06)" }
     KnowledgeDistillRequest:
       type: object
       description: Optional body of `distillKnowledgeBase` (S42-10).
@@ -8737,6 +8778,32 @@ components:
         message: { type: string }
         fix_by: { type: string, enum: [owners, org_admin], description: "`owners`: an organisation administrator or a member of `groups`; `org_admin`: the organisation administrator." }
         groups: { type: array, items: { type: string } }
+    KnowledgeUpdate:
+      type: object
+      required: [id, base, path, kind, diff, plugin_version, status, created_at]
+      properties:
+        id: { type: string }
+        base: { type: string, description: the installation's knowledge base (slug) }
+        path: { type: string, description: the document's file name in the base }
+        kind: { type: string, enum: [add, update, remove] }
+        diff: { type: string, description: "unified diff, the local copy to the new seed; empty for an add" }
+        proposed_content: { type: [string, "null"], description: the new seed's text; none for a removal }
+        plugin_version: { type: string }
+        status: { type: string, enum: [proposed, accepted, merged, refused] }
+        decided_by: { type: [string, "null"] }
+        decided_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+    KnowledgeUpdateList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/KnowledgeUpdate" } }
+    KnowledgeUpdateDecision:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [accept, refuse, merge] }
+        content: { type: [string, "null"], maxLength: 2000000, description: the text to keep, for a merge }
     AssistantReadiness:
       type: object
       required: [status, items]
