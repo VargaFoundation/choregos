@@ -636,12 +636,21 @@ async def server_endpoint(session: AsyncSession, instance: OrgConnector) -> tupl
     return url, str(resolved[SERVER_TOKEN_FIELD])
 
 
+USER_TOKEN_HEADER = "X-Choregos-User-Token"  # noqa: S105 - a header name
+
+
 async def plugin_client(
-    session: AsyncSession, instance: OrgConnector, *, bearer: str | None = None
+    session: AsyncSession,
+    instance: OrgConnector,
+    *,
+    bearer: str | None = None,
+    user_token: str | None = None,
 ) -> PluginServerClient | None:
     """The client of a plugin's server, with its bearer token; `None` for any other connector.
 
-    `bearer`: the person's exchanged token for one call (ADR 0135), which replaces the server's own."""
+    `bearer`: the person's exchanged token for one call (ADR 0135), which replaces the server's own.
+    `user_token`: the person's `user_consent` token for one call, sent in `X-Choregos-User-Token` NEXT TO
+    the platform's token, which still authenticates Choregos to the server."""
     if bearer is not None and instance.plugin_server is not None:
         url = str(
             instance.plugin_server["fake_url"] if bound_fake(instance) else instance.plugin_server["url"]
@@ -650,11 +659,16 @@ async def plugin_client(
     endpoint = await server_endpoint(session, instance)
     if endpoint is None:
         return None
-    return PluginServerClient(endpoint[0], token=endpoint[1], transport=transport())
+    headers = {USER_TOKEN_HEADER: user_token} if user_token else None
+    return PluginServerClient(endpoint[0], token=endpoint[1], transport=transport(), headers=headers)
 
 
 async def connector_client(
-    session: AsyncSession, instance: OrgConnector, *, bearer: str | None = None
+    session: AsyncSession,
+    instance: OrgConnector,
+    *,
+    bearer: str | None = None,
+    user_token: str | None = None,
 ) -> Any:
     """The client the platform calls an organisation connector with: a plugin's server through its
     Service and bearer token; any other through its type's adapter, its secrets resolved here.
@@ -665,9 +679,11 @@ async def connector_client(
 
     `bearer` (ADR 0135): the person's exchanged token, for this call only. It is the connector's bearer in
     place of its own token, which is not even resolved."""
-    client = await plugin_client(session, instance, bearer=bearer)
+    client = await plugin_client(session, instance, bearer=bearer, user_token=user_token)
     if client is not None:
         return client
+    if user_token is not None:  # a source that is not a plugin's server takes the person's token as bearer
+        bearer = user_token
     from choregos_adapters import build
     from choregos_adapters.fakes.scenes import bound_scene
 

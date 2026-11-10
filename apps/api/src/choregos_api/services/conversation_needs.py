@@ -86,3 +86,28 @@ async def write_tools(
         for t in found
         if t.is_write and not t.needs_approval
     }
+
+
+async def need_identities(session: AsyncSession, record: AgentSessionRecord) -> dict[str, str]:
+    """connector name -> the identity of the BINDING (`assistant_tool_bindings.identity`, ADR 0135) of each
+    enabled need, for the needs that call as the person (`user_exchange`, `user_consent`). The agent's
+    entry names a need, not a connector, so the mode comes from the binding, not from the spec."""
+    if not record.installation_id:
+        return {}
+    rows = await session.execute(
+        select(OrgConnector.name, AssistantToolBinding.identity)
+        .join(OrgConnector, OrgConnector.id == AssistantToolBinding.connector_id)
+        .where(
+            AssistantToolBinding.installation_id == record.installation_id,
+            AssistantToolBinding.enabled.is_(True),
+            AssistantToolBinding.identity != "service",
+        )
+    )
+    return dict(rows.all())
+
+
+async def identities_of(session: AsyncSession, record: AgentSessionRecord, spec: AgentSpec) -> dict[str, str]:
+    """connector name -> identity for a conversation's tool calls: what the agent version's entries pick, and
+    over it what the bindings of the installation's needs say."""
+    picked = {server.connector: server.identity for server in spec.mcp_servers if server.identity}
+    return {**picked, **await need_identities(session, record)}

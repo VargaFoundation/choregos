@@ -5,7 +5,7 @@ Under forced RLS on the organisation, and a RESTRICTIVE policy that lets only th
 scheduler) and the subscriber read a row. The downgrade drops the table and loses who subscribed to what.
 
 Revision ID: e3f5a7c9e1b3
-Revises: d9b1d3f5a7c9
+Revises: e0d2f4a6c8e0
 Create Date: 2026-11-10 16:00:00+00:00
 """
 
@@ -18,7 +18,7 @@ from alembic import op
 from choregos_api.db.base import Json
 
 revision: str = "e3f5a7c9e1b3"
-down_revision: str | None = "d9b1d3f5a7c9"
+down_revision: str | None = "e0d2f4a6c8e0"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

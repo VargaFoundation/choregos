@@ -16,6 +16,7 @@
  "AssistantInstallation",
  "AssistantRead",
  "AssistantToolBinding",
+ "ConnectedAccount",
  "AuditLog",
  "BackendRegistryRow",
  "Base",
