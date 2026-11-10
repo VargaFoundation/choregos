@@ -15,13 +15,13 @@ import httpx
 import pytest
 from httpx import AsyncClient
 
-from . import test_extension_tools as _installed
+from .kits import extension_tools as _kit
 from .kits.tool_catalogue import intercept_host
 
 pytestmark = pytest.mark.asyncio
 
 #: The installed extension (a fixture of its own file); a test asks for it BEFORE `client`.
-extension_tools = _installed.extension_tools
+extension_tools = _kit.installed_extension
 
 AGENTS = "/api/v1/orgs/varga/agents"
 CATALOGUE = """
