@@ -49,6 +49,7 @@ streams:
   S55: "A console that makes a complex product simple: colour that orients, readable pages (ADR 0120)"
   S56: "A workflow starts from a trigger: tracker, HTTP, schedule or a person, one audit (ADR 0113)"
   S57: "An agent calls its run's tools from a script: the runner relays, the API governs each call (ADR 0122)"
+  S63: "Assistants: a plugin ships one, an organisation installs it for an audience, a person converses with their own identity (ADRs 0133-0140)"
   S65: "Outposts: tools that live where the platform cannot reach, behind a place that only dials out (ADRs 0147-0149)"
 
 stories:
@@ -4454,6 +4455,167 @@ stories:
     size: XS
     depends_on: [S57-11c]
     notes: "What the 2026-11-07 replay of the live matrix (core 0.24.1) showed: 79 of 80 runs passed, the one failure an E4 right answer whose next steps said to confirm the group memberships were removed. has been disabled and were removed are forbidden inside the Proposed section only; DONE { anywhere."
+  # ───────────── S63 — assistants (ADRs 0133-0140) ─────────────
+  - id: S63-00
+    title: "docs(adr): assistants, a plugin-shipped capability (ADRs 0133-0140), the plan, these stories"
+    stream: S63
+    sprint: 1
+    priority: 1
+    size: S
+    depends_on: []
+    notes: "ADRs 0133-0140 proposed, PLAN-2026-11-10-assistants.md, these stories."
+  - id: S63-01
+    title: "contract(schemas): assistant.schema.json and contents.assistants (AS-01, ADR 0133)"
+    stream: S63
+    sprint: 2
+    priority: 1
+    size: M
+    depends_on: [S63-00]
+    notes: "Validation rules 1-8 in choregos plugin validate; one invalid fixture per rule refused with the field's path; make contracts."
+  - id: S63-02
+    title: "feat(api): install an assistant, bind its needs, readiness (AS-02, ADR 0133)"
+    stream: S63
+    sprint: 3
+    priority: 1
+    size: M
+    depends_on: [S63-01]
+    notes: "An unbound required need gives incomplete and a readiness item; binding gives ready; a connector that does not serve the operation is 422."
+  - id: S63-03
+    title: "feat(api): the implicit personal space (AS-03, ADR 0134)"
+    stream: S63
+    sprint: 2
+    priority: 1
+    size: M
+    depends_on: [S63-00]
+    notes: "Created at the first conversation, one per person and organisation, absent from GET /orgs/{org}/projects, unreadable by another person (RLS, PostgreSQL)."
+  - id: S63-04
+    title: "feat(api): durable conversations, a key per turn (AS-04, ADR 0134)"
+    stream: S63
+    sprint: 3
+    priority: 1
+    size: L
+    depends_on: [S63-03]
+    notes: "Resumed after 2 h (simulated clock); per_conversation_usd holds across turns; test_agent_sessions.py passes unchanged; SSE relayed; list and resume."
+  - id: S63-05
+    title: "feat(api): knowledge in a conversation (AS-05, ADR 0138)"
+    stream: S63
+    sprint: 4
+    priority: 1
+    size: M
+    depends_on: [S63-02, S63-04]
+    notes: "knowledge_search and knowledge_get; the agent cites a passage of an installation base; a base outside the installation is never offered."
+  - id: S63-06
+    title: "feat(api): offered knowledge, origin, proposed upstream updates (AS-06, ADR 0138)"
+    stream: S63
+    sprint: 5
+    priority: 1
+    size: M
+    depends_on: [S63-05]
+    notes: "The four cases of the three-way merge under follow, propose_updates and frozen."
+  - id: S63-07
+    title: "feat(api): the user_exchange identity, RFC 8693, and act (AS-07, ADR 0135)"
+    stream: S63
+    sprint: 4
+    priority: 1
+    size: L
+    depends_on: [S63-04]
+    notes: "Fake IdP: subject is the person, audience the connector's; without a subject token identity_unavailable and no call under the connector's identity; live test against Keycloak."
+  - id: S63-08
+    title: "feat(api): connected accounts, user_consent (AS-08, ADR 0135)"
+    stream: S63
+    sprint: 6
+    priority: 1
+    size: L
+    depends_on: [S63-07]
+    notes: "Simulated OAuth end to end; sealed token never returned; immediate revocation; account_not_connected carries the URL; no needs_oauth refusal."
+  - id: S63-09
+    title: "feat(api): memory spaces, shapes, write rules, subject resolver, memory tools (AS-09, ADR 0136)"
+    stream: S63
+    sprint: 5
+    priority: 1
+    size: L
+    depends_on: [S63-02, S63-04]
+    notes: "Unresolved subject refused; resolved by a resolver it opens; resolver none accepts a well-formed subject; agent_proposes writes proposed; memory.enabled false cuts everything."
+  - id: S63-10
+    title: "feat(api,web): inline writes (AS-10, ADR 0139)"
+    stream: S63
+    sprint: 6
+    priority: 1
+    size: M
+    depends_on: [S63-07]
+    notes: "Proposal, confirmation, execution with the person's identity; through MCP a confirm_url and no execution; owners cannot go below the floor."
+  - id: S63-11
+    title: "feat(api): the MCP door talks to assistants (AS-11, ADR 0139)"
+    stream: S63
+    sprint: 5
+    priority: 1
+    size: M
+    depends_on: [S63-04]
+    notes: "Official SDK client with OAuth: a turn, status working then the answer; outside the audience the assistant is not listed; prompts/list."
+  - id: S63-12
+    title: "feat(web): the embedded component (AS-12, ADR 0139)"
+    stream: S63
+    sprint: 7
+    priority: 1
+    size: M
+    depends_on: [S63-11]
+    notes: "Playwright: allowed origin opens with context; other origin refused by frame-ancestors; postMessage events."
+  - id: S63-13
+    title: "feat(api,orchestrator): tasks, per-subscriber schedules, poll, delivery (AS-13, ADR 0137)"
+    stream: S63
+    sprint: 7
+    priority: 1
+    size: L
+    depends_on: [S63-04]
+    notes: "Paris and Bogota subscribers at their hour; a poll never starts the same object twice; artifact in the inbox."
+  - id: S63-14
+    title: "feat(api): the standing delegation (AS-14, ADR 0137)"
+    stream: S63
+    sprint: 8
+    priority: 1
+    size: L
+    depends_on: [S63-08, S63-13]
+    notes: "Offline read while valid; refused after expiry, revocation, leaving the audience or a manifest_digest change; a write becomes a proposal."
+  - id: S63-15
+    title: "feat(api): assistant:use, manage, audit; the audience at every turn; three budget caps (AS-15, ADR 0133)"
+    stream: S63
+    sprint: 4
+    priority: 1
+    size: M
+    depends_on: [S63-02, S63-04]
+    notes: "Removing an IdP group cuts the next turn; each cap refuses the turn that exceeds it."
+  - id: S63-16
+    title: "feat(api): retention, the reads journal, erasure by user and subject, export (AS-16, ADR 0133)"
+    stream: S63
+    sprint: 6
+    priority: 1
+    size: L
+    depends_on: [S63-09]
+    notes: "Purge deletes an expired conversation and its events; one journal line per tool call; erasure by subject deletes memories across users and redacts conversations."
+  - id: S63-17
+    title: "feat(evals): conversation evals and user feedback (AS-17, ADR 0140)"
+    stream: S63
+    sprint: 6
+    priority: 1
+    size: M
+    depends_on: [S63-04]
+    notes: "A conversation suite blocks promotion below its threshold; a thumb down creates a pseudonymised candidate case, not added automatically."
+  - id: S63-18
+    title: "feat(web): console screens for assistants (AS-18)"
+    stream: S63
+    sprint: 6
+    priority: 1
+    size: L
+    depends_on: [S63-02, S63-04, S63-09]
+    notes: "Web tests per screen; every route of the stream has a client."
+  - id: S63-19
+    title: "test(plugins): the investment-assistant fixture plugin on fakes (AS-19, ADR 0133)"
+    stream: S63
+    sprint: 3
+    priority: 1
+    size: M
+    depends_on: [S63-01]
+    notes: "Installs and converses with no code of its own in the core; played in CI."
   # ───────────── S65 — outposts (ADRs 0147-0149) ─────────────
   - id: S65-00
     title: "docs(adr): outposts, tools that live where the platform cannot reach (ADRs 0147-0149), the plan, these stories"

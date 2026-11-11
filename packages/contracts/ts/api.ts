@@ -627,6 +627,38 @@ export type McpCatalogueEntry = {
   install_routes?: Array<"direct" | "gateway">;
 };
 
+export type ConnectedAccount = {
+  org: string;
+  connector: string;
+  mode: "user_consent";
+  scopes: Array<string>;
+  /** The person's subject at the source, when its token response named one. */
+  subject?: string | null;
+  /** `reconnect`: the source stopped honouring the consent. */
+  status: "connected" | "reconnect";
+  expires_at?: string | null;
+  last_used_at?: string | null;
+  created_at: string;
+};
+
+export type ConnectedAccountList = {
+  items: Array<ConnectedAccount>;
+};
+
+export type ConnectedAccountConnect = {
+  authorization_url: string;
+};
+
+export type McpCatalogueUserConsent = {
+  authorization_endpoint: string;
+  token_endpoint: string;
+  client_id: string;
+  /** The OAuth client secret typed once: sealed at rest, never returned (ADR 0058); none for a public client. */
+  client_secret?: string | null;
+  scopes?: Array<string>;
+  revocation_endpoint?: string | null;
+};
+
 export type McpCatalogueInstall = {
   /** defaults to the entry id */
   name?: string | null;
@@ -648,6 +680,8 @@ export type McpCatalogueInstall = {
   route?: "direct" | "gateway" | null;
   /** the server's name at the gateway; defaults to the entry id */
   gateway_server?: string | null;
+  /** installs an `oauth` entry for each person's own consent (ADR 0135 point 6): the entry is then no longer `needs_oauth`; direct route only, no organisation credential */
+  user_consent?: McpCatalogueUserConsent | null;
 };
 
 export type SkillCatalogueInstall = {
@@ -1362,6 +1396,8 @@ export type AgentResponse = {
   output_text?: string;
   usage?: AgentResponseUsage;
   error?: AgentResponseError | null;
+  /** The memory spaces the turn wrote or proposed in (a conversation with an assistant). */
+  memory_updated?: Array<string>;
 };
 
 /** A `response.output_text.delta` event. */
@@ -1386,7 +1422,7 @@ export type AgentSession = {
   agent: string;
   agent_version: number;
   project: string;
-  status: "open" | "closed" | "failed";
+  status: "open" | "idle" | "closed" | "failed";
   reason?: string | null;
   model: string;
   responses: number;
@@ -1396,6 +1432,101 @@ export type AgentSession = {
   expires_at: string;
   closed_at?: string | null;
   events?: Array<AgentSessionEvent>;
+};
+
+/** A row of the caller's conversations (ADR 0134). `idle` is inactive past its `idle_close_minutes`: a new message reopens it. */
+export type ConversationSummary = {
+  id: string;
+  /** cut from the first message; null before it */
+  title?: string | null;
+  agent: string;
+  agent_version: number;
+  installation_id?: string | null;
+  /** the slug of the organisation the conversation belongs to */
+  org?: string | null;
+  /** the slug of the assistant's installation in that organisation, when it is one */
+  assistant?: string | null;
+  status: "open" | "idle" | "closed" | "failed";
+  turns: number;
+  cost_usd: number;
+  /** the conversation's own cap */
+  max_usd?: number | null;
+  created_at: string;
+  last_activity_at: string;
+};
+
+export type ConversationMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+/** A conversation with what was said in it; the system message and the tool traffic are not shown. */
+export type Conversation = ConversationSummary & {
+  context?: {
+    [key: string]: unknown;
+  } | null;
+  messages?: Array<ConversationMessage>;
+};
+
+export type ConversationPage = {
+  items: Array<ConversationSummary>;
+  meta: PageMeta;
+};
+
+/** One turn of a conversation: what the person says. */
+export type ConversationMessageCreate = {
+  input: string;
+  stream?: boolean;
+};
+
+/** A thumb on one answer of a session (S63-17, ADR 0140). */
+export type ConversationFeedbackCreate = {
+  rating: "up" | "down";
+  comment?: string | null;
+  /** The answer, by its 1-based position among the session's responses; absent: the latest */
+  response?: number | null;
+};
+
+export type ConversationFeedback = {
+  id: string;
+  session_id: string;
+  agent: string;
+  /** The agent revision that gave the answer */
+  agent_version: number;
+  response: number;
+  rating: "up" | "down";
+  comment?: string | null;
+  /** `proposed` when the thumb down proposed a candidate case to the agent's owners */
+  candidate_status?: string | null;
+  created_at: string;
+};
+
+/** A candidate eval case a thumb down proposed, as the agent's owners read it: pseudonymised, with no author and no raw comment. It is in no suite until an owner adds it. */
+export type ConversationCandidate = {
+  id: string;
+  agent: string;
+  agent_version: number;
+  status: "proposed" | "accepted" | "dismissed";
+  /** `{case, observed, comment}`: a conversation-evals case without assertions (the accepted one carries its assertions), and what the agent did */
+  candidate: {
+    [key: string]: unknown;
+  };
+  created_at: string;
+};
+
+/** What an owner adds to a candidate to make it a case: the assertions, and optionally a name, the scripted tool results and the context. */
+export type ConversationCandidateAccept = {
+  /** a conversation-evals `assert` object */
+  assertions: {
+    [key: string]: unknown;
+  };
+  name?: string | null;
+  tool_results?: {
+    [key: string]: unknown;
+  } | null;
+  context?: {
+    [key: string]: unknown;
+  } | null;
 };
 
 /** A response a hosted session's person asked for, waiting for the session's pod (S41-11). */
@@ -2102,7 +2233,7 @@ export type AgentReleaseCreate = {
 };
 
 export type AgentReleaseCheck = {
-  /** eval_suite, newer_than_production, is_candidate, candidate_runs, candidate_success_rate, soak, previously_in_production, human_session, fresh_authentication, live_eval, approvals (informational: how many people must approve) */
+  /** eval_suite, newer_than_production, is_candidate, candidate_runs, candidate_success_rate, soak, previously_in_production, human_session, fresh_authentication, live_eval, conversation_suite (the assistant's conversation suites, production only), approvals (informational: how many people must approve) */
   name: string;
   required?: boolean;
   /** null: not applicable */
@@ -2747,6 +2878,8 @@ export type KnowledgeDocument = {
   source_id?: string | null;
   /** where to open the original */
   source_url?: string | null;
+  /** `local` (written by people), or `seed@<plugin version>` for the copy of an assistant's seed document that nobody changed (S63-06) */
+  origin?: string;
 };
 
 /** Optional body of `distillKnowledgeBase` (S42-10). */
@@ -2899,7 +3032,7 @@ export type KnowledgeSourceCreate = {
   name: string;
   /** `sharepoint`, `confluence`: the organisation connector of capability `documents` */
   connector?: string | null;
-  /** `sharepoint`: `site_id` or `drive_id`, optional `folder`; `confluence`: `space_key`, optional `page_id` (that page and its descendants), `include_root` (default true), `include_attachments` (default false), `labels` (≤ 20); `web`: `url` (https), `max_depth` (≤ 5), `max_pages` (≤ 500); `git`: `url` (https), `ref`, `paths` (globs, default `*.md`) */
+  /** `sharepoint`: `site_id` or `drive_id`, optional `folder` and `exclude` (≤ 50 path globs under the folder, each starting with `/`, case-insensitive, `*` crossing `/`); `confluence`: `space_key`, optional `page_id` (that page and its descendants), `include_root` (default true), `include_attachments` (default false), `labels` (≤ 20); `web`: `url` (https), `max_depth` (≤ 5), `max_pages` (≤ 500); `git`: `url` (https), `ref`, `paths` (globs, default `*.md`) */
   config?: {
     [key: string]: unknown;
   };
@@ -3743,6 +3876,440 @@ export type ApiToken = {
   project?: string | null;
   /** The client of the last call (`User-Agent`, truncated). */
   last_client?: string | null;
+};
+
+export type AssistantInstall = {
+  /** An installed plugin of the organisation. */
+  plugin: string;
+  /** `metadata.name` of the assistant in that plugin. */
+  assistant: string;
+  /** Defaults to the assistant's name. */
+  slug?: string | null;
+  config?: {
+    [key: string]: unknown;
+  };
+  owner_groups?: Array<string>;
+  audience_groups?: Array<string>;
+  channel?: "stable" | "candidate";
+};
+
+export type AssistantUpdate = {
+  config?: {
+    [key: string]: unknown;
+  };
+  owner_groups?: Array<string>;
+  audience_groups?: Array<string>;
+  channel?: "stable" | "candidate";
+  policy_overrides?: {
+    [key: string]: unknown;
+  };
+};
+
+export type ConversationActionList = {
+  items: Array<ConversationAction>;
+};
+
+export type ConversationAction = {
+  id: string;
+  conversation_id: string;
+  need: string;
+  operation: string;
+  arguments: {
+    [key: string]: unknown;
+  };
+  summary: string;
+  /** `governed`: a console approval, decided as a governed action named in `result.action`. */
+  status: "proposed" | "confirmed" | "executed" | "refused" | "expired" | "governed";
+  result?: {
+    [key: string]: unknown;
+  } | null;
+  /** What the source's `<operation>_preview` returned at the proposal, when it serves one. */
+  diff?: {
+    [key: string]: unknown;
+  } | null;
+  confirmed_by?: string | null;
+  confirmed_at?: string | null;
+  executed_at?: string | null;
+  created_at: string;
+};
+
+export type AssistantBind = {
+  /** The name of an organisation connector. */
+  connector: string;
+  enabled?: boolean;
+  /** A write's approval, raised above the manifest's (inline to console), never below it: 422. */
+  approval?: "inline" | "console" | null;
+};
+
+export type AssistantBinding = {
+  need: string;
+  connector: string;
+  operations: Array<string>;
+  identity: "service" | "user_exchange" | "user_consent";
+  approval?: "none" | "inline" | "console" | null;
+  enabled: boolean;
+};
+
+export type Assistant = {
+  slug: string;
+  plugin: string;
+  plugin_version: string;
+  assistant_name: string;
+  display_name?: string | null;
+  config: {
+    [key: string]: unknown;
+  };
+  owner_groups: Array<string>;
+  audience_groups: Array<string>;
+  channel: "stable" | "candidate";
+  status: "incomplete" | "ready" | "suspended";
+  policy_overrides: {
+    [key: string]: unknown;
+  };
+  bindings: Array<AssistantBinding>;
+  created_by?: string | null;
+  created_at: string;
+};
+
+export type AssistantReadLine = {
+  id: string;
+  user_id: string;
+  conversation_id?: string | null;
+  work_item_key?: string | null;
+  need: string;
+  operation: string;
+  subject_type?: string | null;
+  subject_key?: string | null;
+  delegation_id?: string | null;
+  at: string;
+};
+
+export type AssistantReadPage = {
+  items: Array<AssistantReadLine>;
+  meta: PageMeta;
+};
+
+export type SubjectErasureRequest = {
+  subject: MemorySubject;
+  mode: "export" | "erase";
+  conversations?: "redact" | "delete";
+};
+
+export type SubjectMemoryFact = {
+  id: string;
+  content: string;
+  status: string;
+  created_at?: string | null;
+};
+
+export type SubjectMemory = {
+  user_id: string;
+  space: string;
+  facts?: Array<SubjectMemoryFact>;
+  profiles?: Array<{
+    [key: string]: unknown;
+  }>;
+};
+
+export type SubjectConversation = {
+  id: string;
+  user_id: string;
+  title?: string | null;
+  created_at?: string | null;
+  last_activity_at?: string | null;
+};
+
+export type SubjectErasure = {
+  mode: "export" | "erase";
+  subject: MemorySubject;
+  memories?: Array<SubjectMemory>;
+  conversations?: Array<SubjectConversation>;
+  memories_erased?: number;
+  conversations_redacted?: number;
+  conversations_deleted?: number;
+  /** The artifacts of the task runs whose reads were about the subject, deleted. */
+  task_artifacts_erased?: number;
+};
+
+export type UserErasure = {
+  conversations: number;
+  memory_stores: number;
+  memory_facts: number;
+  memory_profiles: number;
+  others?: {
+    [key: string]: number;
+  };
+};
+
+export type MemorySubject = {
+  type: string;
+  key: string;
+};
+
+export type MemoryFactView = {
+  id: string;
+  content: string;
+  /** proposed | active | rejected | expired */
+  status: string;
+  pinned: boolean;
+  reason?: string | null;
+  created_at?: string | null;
+};
+
+export type MemoryProfileVersion = {
+  version: number;
+  /** proposed | active | rejected | superseded */
+  status: string;
+  document: {
+    [key: string]: unknown;
+  };
+  updated_by?: string | null;
+  created_at?: string | null;
+};
+
+/** What is remembered in one store: of the person (no subject) or of one subject. */
+export type MemorySubjectSpace = {
+  subject?: MemorySubject | null;
+  facts?: Array<MemoryFactView>;
+  profiles?: Array<MemoryProfileVersion>;
+};
+
+export type MemorySpace = {
+  space: string;
+  scope: "installation" | "user" | "user_subject";
+  kind: "facts" | "profile";
+  writes: string;
+  subjects: Array<MemorySubjectSpace>;
+};
+
+export type MemoryExport = {
+  installation: string;
+  organisation: string;
+  exported_at: string;
+  spaces: Array<MemorySpace>;
+};
+
+export type MemoryAction = {
+  action: "confirm" | "reject" | "pin" | "unpin" | "correct" | "add";
+  fact_id?: string | null;
+  version?: number | null;
+  content?: string | null;
+  document?: {
+    [key: string]: unknown;
+  } | null;
+};
+
+export type AssistantList = {
+  items: Array<Assistant>;
+};
+
+export type MyAssistant = {
+  org: string;
+  slug: string;
+  name: string;
+  display_name?: string | null;
+  description?: string | null;
+  status: "incomplete" | "ready" | "suspended";
+  memory_spaces?: Array<AssistantMemorySpace>;
+  tasks?: Array<AssistantTaskDecl>;
+  needs?: Array<AssistantNeed>;
+};
+
+export type EmbedToken = {
+  token: string;
+  /** seconds */
+  expires_in: number;
+};
+
+export type AssistantEmbed = {
+  embed_origins: Array<string>;
+};
+
+export type AssistantMemorySpace = {
+  name: string;
+  scope: "user" | "user_subject" | "installation";
+  kind: "facts" | "profile";
+};
+
+export type AssistantNeed = {
+  need: string;
+  identity: "service" | "user_exchange" | "user_consent";
+  access: string;
+  required: boolean;
+};
+
+export type AssistantTaskDecl = {
+  name: string;
+  delegation: "none" | "read_only";
+  schedulable: boolean;
+};
+
+export type PluginAssistant = {
+  name: string;
+  display_name?: string | null;
+  description?: string | null;
+  config_schema?: {
+    [key: string]: unknown;
+  } | null;
+  suggested_groups: Array<string>;
+  needs: Array<AssistantNeed>;
+  /** Every declared space, the installation's own included (the owners' page); a person's page never lists an installation space. */
+  memory_spaces?: Array<AssistantMemorySpace>;
+};
+
+export type PluginAssistantList = {
+  items: Array<PluginAssistant>;
+};
+
+export type MyAssistantList = {
+  items: Array<MyAssistant>;
+};
+
+export type TaskSubscriptionPut = {
+  kind?: "on_demand" | "schedule" | "poll";
+  cron?: string | null;
+  /** An IANA time zone, e.g. Europe/Paris. */
+  timezone?: string | null;
+  enabled?: boolean;
+};
+
+export type TaskTrigger = {
+  kind: "on_demand" | "schedule" | "poll";
+  cron?: string | null;
+  timezone?: string;
+};
+
+export type TaskSubscription = {
+  task: string;
+  trigger: TaskTrigger;
+  delegation: "none" | "read_only";
+  deliver: Array<string>;
+  enabled: boolean;
+  delegation_id?: string | null;
+  last_run_at?: string | null;
+  last_refusal?: string | null;
+  created_at: string;
+};
+
+export type TaskRun = {
+  work_item_id: string;
+  key: string;
+  project: string;
+};
+
+export type InboxItem = {
+  id: string;
+  task: string;
+  installation: string;
+  work_item_id: string;
+  name: string;
+  version: number;
+  type: string;
+  media_type: string;
+  content?: unknown;
+  created_at: string;
+};
+
+export type InboxList = {
+  items: Array<InboxItem>;
+};
+
+export type DelegationCreate = {
+  org: string;
+  assistant: string;
+  task: string;
+  /** Must equal the needs the task reads; else 409 with the list. */
+  agree_to?: Array<string>;
+  /** 90 by default; capped by the installation's `policy_overrides.delegation.max_days`. */
+  expires_in_days?: number | null;
+};
+
+export type DelegationNeed = {
+  need: string;
+  operations: Array<string>;
+  identity: "service" | "user_exchange" | "user_consent";
+};
+
+export type Delegation = {
+  id: string;
+  org: string;
+  assistant: string;
+  task: string;
+  needs: Array<DelegationNeed>;
+  granted_at: string;
+  expires_at: string;
+  revoked_at?: string | null;
+  status: "active" | "suspended" | "revoked" | "expired";
+  suspended_reason?: string | null;
+  manifest_digest: string;
+  /** When the person was told it ends soon, if they were. */
+  reminded_at?: string | null;
+};
+
+export type DelegationList = {
+  items: Array<Delegation>;
+};
+
+export type WebhookSecretRequest = {
+  /** Make a new key instead of refusing a second showing. */
+  rotate?: boolean;
+};
+
+export type WebhookSecret = {
+  secret: string;
+  generation: number;
+  shown_at: string;
+};
+
+export type AssistantConversationOpen = {
+  /** Validated against `surfaces.embed.context_schema`; data for the agent, never a subject. */
+  context?: {
+    [key: string]: unknown;
+  } | null;
+};
+
+export type AssistantReadinessItem = {
+  kind: "assistant_missing" | "config_missing" | "need_unbound" | "need_not_served" | "identity_unsupported";
+  need?: string | null;
+  /** The configuration key, for `config_missing`. */
+  key?: string | null;
+  message: string;
+  /** `owners`: an organisation administrator or a member of `groups`; `org_admin`: the organisation administrator. */
+  fix_by: "owners" | "org_admin";
+  groups: Array<string>;
+};
+
+export type KnowledgeUpdate = {
+  id: string;
+  /** the installation's knowledge base (slug) */
+  base: string;
+  /** the document's file name in the base */
+  path: string;
+  kind: "add" | "update" | "remove";
+  /** unified diff, the local copy to the new seed; empty for an add */
+  diff: string;
+  /** the new seed's text; none for a removal */
+  proposed_content?: string | null;
+  plugin_version: string;
+  status: "proposed" | "accepted" | "merged" | "refused";
+  decided_by?: string | null;
+  decided_at?: string | null;
+  created_at: string;
+};
+
+export type KnowledgeUpdateList = {
+  items: Array<KnowledgeUpdate>;
+};
+
+export type KnowledgeUpdateDecision = {
+  decision: "accept" | "refuse" | "merge";
+  /** the text to keep */
+  content?: string | null;
+};
+
+export type AssistantReadiness = {
+  status: "incomplete" | "ready" | "suspended";
+  items: Array<AssistantReadinessItem>;
 };
 
 export type MachineAccountCreate = {
@@ -4666,6 +5233,7 @@ export interface Operations {
   abortRelease: { method: "POST"; path: "/releases/{id}/abort"; body: {
   reason?: string;
 }; response: void };
+  acceptAgentFeedbackCandidate: { method: "POST"; path: "/orgs/{org}/agents/{slug}/feedback-candidates/{candidate_id}/accept"; body: ConversationCandidateAccept; response: ConversationCandidate };
   acknowledgeBudgetAlert: { method: "POST"; path: "/orgs/{org}/budget-alerts/{alert_id}/acknowledge"; body: never; response: BudgetAlert };
   addMember: { method: "POST"; path: "/orgs/{org}/members"; body: MembershipUpsert; response: Membership };
   addModelCatalogueEntry: { method: "POST"; path: "/orgs/{org}/models"; body: ModelCatalogueEntryCreate; response: ModelCatalogueEntry };
@@ -4687,6 +5255,7 @@ export interface Operations {
   authLogin: { method: "GET"; path: "/auth/login"; body: never; response: void };
   authLogout: { method: "POST"; path: "/auth/logout"; body: never; response: void };
   authorizeRemoteCredential: { method: "POST"; path: "/orgs/{org}/remote-credentials/{name}/authorize"; body: never; response: RemoteCredentialAuthorization };
+  bindAssistantNeed: { method: "PUT"; path: "/orgs/{org}/assistants/{slug}/bindings/{need}"; body: AssistantBind; response: Assistant };
   callAgentSessionTool: { method: "POST"; path: "/internal/agent-sessions/{id}/tools/{name}"; body: AgentSessionToolCall; response: AgentSessionToolAnswer };
   callRunTool: { method: "POST"; path: "/internal/runs/{id}/tools/{name}"; body: {
   [key: string]: unknown;
@@ -4697,6 +5266,7 @@ export interface Operations {
   /** The bound the API held `result` to, in bytes of JSON, its data counted once (#1383): the operation's, catalogue entry's or plugin tool's own cap, else `CHOREGOS_BROKER_RESULT_MAX_BYTES` (a page of `web_fetch`, a search), never above `CHOREGOS_BROKER_RESULT_CEILING_BYTES`. The run's tool server shows the model the result up to it, so that both doors read the same amount of it (ADR 0122 §8). `null` when nothing was bounded: a proposal (202 under approval), a job step's read (masked, never cut). */
   result_max_bytes?: number;
 } };
+  cancelMyConversationTurn: { method: "POST"; path: "/me/conversations/{conversation_id}/cancel"; body: never; response: ConversationSummary };
   changeAgentLifecycle: { method: "POST"; path: "/orgs/{org}/agents/{slug}/lifecycle"; body: AgentLifecycleChange; response: AgentLifecycleResult };
   changeAgentScope: { method: "POST"; path: "/orgs/{org}/agents/{slug}/scope"; body: AgentScopeChange; response: Agent };
   checkOrgEgress: { method: "POST"; path: "/orgs/{org}/egress/check"; body: EgressCheck; response: EgressCheckResult };
@@ -4704,7 +5274,10 @@ export interface Operations {
   clearConnectorSecret: { method: "DELETE"; path: "/projects/{id}/connectors/{kind}/secrets/{field}"; body: never; response: Connector };
   clearOrgConnectorSecret: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}/secrets/{field}"; body: never; response: OrgConnector };
   closeAgentSession: { method: "DELETE"; path: "/orgs/{org}/agent-sessions/{session_id}"; body: never; response: void };
+  completeMyAccountConnection: { method: "GET"; path: "/me/connected-accounts/callback"; body: never; response: void };
+  confirmMyConversationAction: { method: "POST"; path: "/me/conversations/{conversation_id}/actions/{action_id}/confirm"; body: never; response: ConversationAction };
   connectCatalogueClient: { method: "POST"; path: "/orgs/{org}/agent-catalogue/{slug}/connect"; body: AgentCatalogueConnect; response: AgentCatalogueConnection };
+  connectMyAccount: { method: "POST"; path: "/me/connected-accounts/{connector}/connect"; body: never; response: ConnectedAccountConnect };
   convertKnowledgeDocument: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/documents/{document_id}/convert"; body: never; response: KnowledgeDocument };
   createAgent: { method: "POST"; path: "/orgs/{org}/agents"; body: AgentCreate; response: Agent };
   createAgentResponse: { method: "POST"; path: "/orgs/{org}/agents/{slug}/responses"; body: AgentResponseCreate; response: AgentResponse };
@@ -4714,6 +5287,7 @@ export interface Operations {
   createKnowledgeSource: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sources"; body: KnowledgeSourceCreate; response: KnowledgeSource };
   createMachineAccount: { method: "POST"; path: "/projects/{id}/machine-accounts"; body: MachineAccountCreate; response: MachineAccount };
   createMachineToken: { method: "POST"; path: "/projects/{id}/machine-accounts/{slug}/tokens"; body: MachineTokenCreate; response: ApiTokenCreated };
+  createMyDelegation: { method: "POST"; path: "/me/delegations"; body: DelegationCreate; response: Delegation };
   createMyToken: { method: "POST"; path: "/me/tokens"; body: ApiTokenCreate; response: ApiTokenCreated };
   createOrg: { method: "POST"; path: "/orgs"; body: OrgCreate; response: Org };
   createOrgConnector: { method: "POST"; path: "/orgs/{org}/connectors"; body: OrgConnectorCreate; response: OrgConnector };
@@ -4728,6 +5302,7 @@ export interface Operations {
   deactivateWorkflow: { method: "POST"; path: "/projects/{id}/workflows/{name}/deactivate"; body: never; response: void };
   decideAction: { method: "POST"; path: "/projects/{id}/actions/{action_id}/decision"; body: ActionDecision; response: Action };
   decideAgentRelease: { method: "POST"; path: "/orgs/{org}/agents/{slug}/releases/{release_id}/decision"; body: AgentReleaseDecision; response: AgentRelease };
+  decideAssistantKnowledgeUpdate: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/knowledge/updates/{update_id}"; body: KnowledgeUpdateDecision; response: KnowledgeUpdate };
   decideGlobalPendingMemory: { method: "POST"; path: "/orgs/{org}/memories/{slug}/pending"; body: MemoryDecision; response: void };
   decidePendingMemory: { method: "POST"; path: "/projects/{id}/memory/pending"; body: MemoryDecision; response: void };
   deleteAgent: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}"; body: never; response: void };
@@ -4735,6 +5310,10 @@ export interface Operations {
   deleteKnowledgeSource: { method: "DELETE"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}"; body: never; response: void };
   deleteMcpGateway: { method: "DELETE"; path: "/orgs/{org}/mcp-gateway"; body: never; response: void };
   deleteModelCatalogueEntry: { method: "DELETE"; path: "/orgs/{org}/models/{entry_id}"; body: never; response: void };
+  deleteMyAssistantMemory: { method: "DELETE"; path: "/me/assistants/{org}/{slug}/memory/{space}"; body: never; response: void };
+  deleteMyAssistantSubjectMemory: { method: "DELETE"; path: "/me/assistants/{org}/{slug}/memory/{space}/{subject}"; body: never; response: void };
+  deleteMyConversation: { method: "DELETE"; path: "/me/conversations/{conversation_id}"; body: never; response: void };
+  deleteMyTaskSubscription: { method: "DELETE"; path: "/me/assistants/{org}/{slug}/tasks/{task}"; body: never; response: void };
   deleteOrgConnector: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}"; body: never; response: void };
   deleteOutboundProxy: { method: "DELETE"; path: "/orgs/{org}/outbound-proxy"; body: never; response: void };
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
@@ -4743,8 +5322,10 @@ export interface Operations {
   describeBuiltinAgent: { method: "GET"; path: "/projects/{id}/builtin-agent"; body: never; response: BuiltinAgent };
   detachAgentCredential: { method: "DELETE"; path: "/orgs/{org}/agents/{slug}/credentials/{credential_id}"; body: never; response: void };
   disableOrgConnector: { method: "DELETE"; path: "/projects/{id}/org-connectors/{connector}/enablement"; body: never; response: void };
+  disconnectMyAccount: { method: "DELETE"; path: "/me/connected-accounts/{connector}"; body: never; response: void };
   discoverConnectorOperations: { method: "POST"; path: "/orgs/{org}/connectors/{name}/discover"; body: never; response: ConnectorDiscovery };
   discoverRemoteAgent: { method: "POST"; path: "/orgs/{org}/agents/discover"; body: RemoteAgentDiscover; response: RemoteAgentDiscovery };
+  dismissAgentFeedbackCandidate: { method: "POST"; path: "/orgs/{org}/agents/{slug}/feedback-candidates/{candidate_id}/dismiss"; body: never; response: ConversationCandidate };
   distillKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/distill"; body: KnowledgeDistillRequest; response: KnowledgeBase };
   draftAgent: { method: "POST"; path: "/orgs/{org}/agent-drafts"; body: AgentDraftRequest; response: AgentDraft };
   editWorkflow: { method: "POST"; path: "/workflows/edit"; body: WorkflowEditRequest; response: WorkflowEditResult };
@@ -4770,7 +5351,10 @@ export interface Operations {
   enableOrgConnector: { method: "PUT"; path: "/projects/{id}/org-connectors/{connector}/enablement"; body: never; response: ProjectOrgConnector };
   endMyOtherSessions: { method: "POST"; path: "/me/sessions/end-others"; body: never; response: EndedSessions };
   endMySession: { method: "DELETE"; path: "/me/sessions/{id}"; body: never; response: void };
+  eraseAssistantSubject: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/erasure"; body: SubjectErasureRequest; response: SubjectErasure };
+  eraseMyAssistantData: { method: "DELETE"; path: "/me/assistants/{org}/{slug}"; body: never; response: UserErasure };
   estimateKnowledgeDistillation: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/distill/estimate"; body: never; response: KnowledgeDistillEstimate };
+  exportMyAssistantMemory: { method: "GET"; path: "/me/assistants/{org}/{slug}/memory-export"; body: never; response: MemoryExport };
   exportOrgCostsCsv: { method: "GET"; path: "/orgs/{org}/costs.csv"; body: never; response: void };
   exportProjectCostsCsv: { method: "GET"; path: "/projects/{id}/costs.csv"; body: never; response: void };
   fireTrigger: { method: "POST"; path: "/projects/{id}/triggers/{name}/fire"; body: {
@@ -4789,6 +5373,10 @@ export interface Operations {
   getAgentSession: { method: "GET"; path: "/orgs/{org}/agent-sessions/{session_id}"; body: never; response: AgentSession };
   getAgentSessionInput: { method: "GET"; path: "/internal/agent-sessions/{id}/input"; body: never; response: StageInput };
   getAgentVersion: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}"; body: never; response: AgentVersion };
+  getAssistant: { method: "GET"; path: "/orgs/{org}/assistants/{slug}"; body: never; response: Assistant };
+  getAssistantEmbed: { method: "GET"; path: "/public/assistants/{org}/{slug}/embed"; body: never; response: AssistantEmbed };
+  getAssistantInstallationMemory: { method: "GET"; path: "/orgs/{org}/assistants/{slug}/memory/{space}"; body: never; response: MemorySpace };
+  getAssistantReadiness: { method: "GET"; path: "/orgs/{org}/assistants/{slug}/readiness"; body: never; response: AssistantReadiness };
   getGitHubAppStatus: { method: "GET"; path: "/orgs/{org}/github"; body: never; response: GitHubAppStatus };
   getHostedSource: { method: "GET"; path: "/orgs/{org}/hosted-sources/{sha256}"; body: never; response: HostedSource };
   getIntegrations: { method: "GET"; path: "/integrations"; body: never; response: Integrations };
@@ -4801,6 +5389,10 @@ export interface Operations {
   getMemoryAbReport: { method: "GET"; path: "/orgs/{org}/memory/ab-report"; body: never; response: MemoryAbReport };
   getModelCatalogue: { method: "GET"; path: "/orgs/{org}/models"; body: never; response: ModelCatalogue };
   getModelMatrix: { method: "GET"; path: "/projects/{id}/models/matrix"; body: never; response: ModelMatrix };
+  getMyAssistantMemory: { method: "GET"; path: "/me/assistants/{org}/{slug}/memory/{space}"; body: never; response: MemorySpace };
+  getMyAssistantSubjectMemory: { method: "GET"; path: "/me/assistants/{org}/{slug}/memory/{space}/{subject}"; body: never; response: MemorySpace };
+  getMyConversation: { method: "GET"; path: "/me/conversations/{conversation_id}"; body: never; response: Conversation };
+  getMyTaskSubscription: { method: "GET"; path: "/me/assistants/{org}/{slug}/tasks/{task}"; body: never; response: TaskSubscription };
   getNamedWorkflow: { method: "GET"; path: "/projects/{id}/workflows/{name}"; body: never; response: WorkflowDef };
   getNetworkActivity: { method: "GET"; path: "/orgs/{org}/network-activity"; body: never; response: NetworkActivity };
   getOrgConnector: { method: "GET"; path: "/orgs/{org}/connectors/{name}"; body: never; response: OrgConnector };
@@ -4932,9 +5524,11 @@ export interface Operations {
   gitlabWebhook: { method: "POST"; path: "/webhooks/gitlab"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
+  giveAgentSessionFeedback: { method: "POST"; path: "/orgs/{org}/agent-sessions/{session_id}/feedback"; body: ConversationFeedbackCreate; response: ConversationFeedback };
   healthz: { method: "GET"; path: "/healthz"; body: never; response: void };
   importSkill: { method: "POST"; path: "/orgs/{org}/skills/import"; body: void; response: Skill };
   importSkillsFromGit: { method: "POST"; path: "/orgs/{org}/skills/import-git"; body: SkillGitImport; response: Array<Skill> };
+  installAssistant: { method: "POST"; path: "/orgs/{org}/assistants"; body: AssistantInstall; response: Assistant };
   installCatalogueAgent: { method: "POST"; path: "/orgs/{org}/agent-catalogue/{slug}/install"; body: AgentCatalogueInstall; response: Agent };
   installMcpCatalogueEntry: { method: "POST"; path: "/orgs/{org}/mcp-catalogue/{entry_id}/install"; body: McpCatalogueInstall; response: OrgConnector };
   installPlugin: { method: "POST"; path: "/orgs/{org}/plugins/install"; body: PluginInstall; response: InstalledPlugin };
@@ -4947,12 +5541,16 @@ export interface Operations {
   listAgentCatalogue: { method: "GET"; path: "/orgs/{org}/agent-catalogue"; body: never; response: Array<AgentCatalogueEntry> };
   listAgentCredentials: { method: "GET"; path: "/orgs/{org}/agents/{slug}/credentials"; body: never; response: Array<AgentCredential> };
   listAgentEvaluations: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}/evaluations"; body: never; response: Array<AgentEvaluation> };
+  listAgentFeedbackCandidates: { method: "GET"; path: "/orgs/{org}/agents/{slug}/feedback-candidates"; body: never; response: Array<ConversationCandidate> };
   listAgentImages: { method: "GET"; path: "/platform/agent-images"; body: never; response: Array<AgentImageInfo> };
   listAgentMetrics: { method: "GET"; path: "/orgs/{org}/agent-metrics"; body: never; response: Array<AgentMetricsSummary> };
   listAgentReleases: { method: "GET"; path: "/orgs/{org}/agents/{slug}/releases"; body: never; response: Array<AgentRelease> };
   listAgentRuns: { method: "GET"; path: "/orgs/{org}/agents/{slug}/runs"; body: never; response: Array<Run> };
   listAgentSessionTools: { method: "GET"; path: "/internal/agent-sessions/{id}/tools"; body: never; response: AgentSessionTools };
   listAgents: { method: "GET"; path: "/orgs/{org}/agents"; body: never; response: Array<Agent> };
+  listAssistantKnowledgeUpdates: { method: "GET"; path: "/orgs/{org}/assistants/{slug}/knowledge/updates"; body: never; response: KnowledgeUpdateList };
+  listAssistantReads: { method: "GET"; path: "/orgs/{org}/assistants/{slug}/reads"; body: never; response: AssistantReadPage };
+  listAssistants: { method: "GET"; path: "/orgs/{org}/assistants"; body: never; response: AssistantList };
   listAudit: { method: "GET"; path: "/audit"; body: never; response: AuditPage };
   listBackends: { method: "GET"; path: "/platform/backends"; body: never; response: Array<AgentBackendInfo> };
   listBudgetAlerts: { method: "GET"; path: "/orgs/{org}/budget-alerts"; body: never; response: Array<BudgetAlert> };
@@ -4972,6 +5570,12 @@ export interface Operations {
   listMcpCatalogue: { method: "GET"; path: "/orgs/{org}/mcp-catalogue"; body: never; response: McpCatalogue };
   listMembers: { method: "GET"; path: "/orgs/{org}/members"; body: never; response: Array<Membership> };
   listMemories: { method: "GET"; path: "/orgs/{org}/memories"; body: never; response: Array<MemoryStore> };
+  listMyAssistants: { method: "GET"; path: "/me/assistants"; body: never; response: MyAssistantList };
+  listMyConnectedAccounts: { method: "GET"; path: "/me/connected-accounts"; body: never; response: ConnectedAccountList };
+  listMyConversationActions: { method: "GET"; path: "/me/conversations/{conversation_id}/actions"; body: never; response: ConversationActionList };
+  listMyConversations: { method: "GET"; path: "/me/conversations"; body: never; response: ConversationPage };
+  listMyDelegations: { method: "GET"; path: "/me/delegations"; body: never; response: DelegationList };
+  listMyInbox: { method: "GET"; path: "/me/inbox"; body: never; response: InboxList };
   listMySessions: { method: "GET"; path: "/me/sessions"; body: never; response: Array<BrowserSession> };
   listMyTokens: { method: "GET"; path: "/me/tokens"; body: never; response: Array<ApiToken> };
   listOrgActions: { method: "GET"; path: "/orgs/{org}/actions"; body: never; response: Array<Action> };
@@ -4982,6 +5586,7 @@ export interface Operations {
   listPendingMemory: { method: "GET"; path: "/projects/{id}/memory/pending"; body: never; response: Array<Memory> };
   listPlatformModels: { method: "GET"; path: "/platform/models"; body: never; response: Array<GatewayModel> };
   listPluginApprovals: { method: "GET"; path: "/orgs/{org}/plugin-approvals"; body: never; response: PluginApprovalList };
+  listPluginAssistants: { method: "GET"; path: "/orgs/{org}/plugins/{name}/assistants"; body: never; response: PluginAssistantList };
   listPluginSources: { method: "GET"; path: "/orgs/{org}/plugin-sources"; body: never; response: PluginSources };
   listPlugins: { method: "GET"; path: "/orgs/{org}/plugins"; body: never; response: PluginList };
   listProcedures: { method: "GET"; path: "/procedures"; body: never; response: Array<ProcedureSummary> };
@@ -5008,8 +5613,10 @@ export interface Operations {
   listWorkflowTemplates: { method: "GET"; path: "/workflows/templates"; body: never; response: Array<WorkflowTemplate> };
   listWorkflowVersions: { method: "GET"; path: "/projects/{id}/workflows/{name}/versions"; body: never; response: Array<WorkflowDef> };
   listWorkflows: { method: "GET"; path: "/projects/{id}/workflows"; body: never; response: Array<WorkflowSummary> };
+  mintMyEmbedToken: { method: "POST"; path: "/me/assistants/{org}/{slug}/embed-token"; body: never; response: EmbedToken };
   nextAgentSessionSocketFrames: { method: "GET"; path: "/internal/agent-sessions/{id}/socket/next"; body: never; response: AgentSessionSocketNext };
   nextAgentSessionTurn: { method: "GET"; path: "/internal/agent-sessions/{id}/turns/next"; body: never; response: AgentSessionTurn };
+  openMyAssistantConversation: { method: "POST"; path: "/me/assistants/{org}/{slug}/conversations"; body: AssistantConversationOpen; response: Conversation };
   pinProjectAgent: { method: "PUT"; path: "/projects/{id}/agents/{slug}"; body: ProjectAgentPut; response: ProjectAgent };
   pluginWebhook: { method: "POST"; path: "/webhooks/plugins/{org}/{plugin}/{server}"; body: {
   [key: string]: unknown;
@@ -5054,6 +5661,7 @@ export interface Operations {
   putKnowledgeGrants: { method: "PUT"; path: "/orgs/{org}/knowledge/{slug}/grants"; body: KnowledgeGrantsPut; response: KnowledgeGrants };
   putMcpGateway: { method: "PUT"; path: "/orgs/{org}/mcp-gateway"; body: McpGatewayPut; response: McpGatewayState };
   putModelCatalogueSettings: { method: "PUT"; path: "/orgs/{org}/models/settings"; body: ModelCatalogueSettings; response: ModelCatalogueSettings };
+  putMyTaskSubscription: { method: "PUT"; path: "/me/assistants/{org}/{slug}/tasks/{task}"; body: TaskSubscriptionPut; response: TaskSubscription };
   putNamedWorkflow: { method: "PUT"; path: "/projects/{id}/workflows/{name}"; body: WorkflowPut; response: WorkflowDef };
   putOutboundProxy: { method: "PUT"; path: "/orgs/{org}/outbound-proxy"; body: OutboundProxyPut; response: OutboundProxyState };
   putPolicy: { method: "PUT"; path: "/projects/{id}/policy"; body: PolicyPut; response: PolicyDef };
@@ -5065,6 +5673,7 @@ export interface Operations {
   putWorkflowRouting: { method: "PUT"; path: "/projects/{id}/workflow-routing"; body: WorkflowRouting; response: WorkflowRouting };
   readyz: { method: "GET"; path: "/readyz"; body: never; response: void };
   refreshGitHubInstallations: { method: "POST"; path: "/orgs/{org}/github/refresh"; body: never; response: GitHubAppStatus };
+  refuseMyConversationAction: { method: "POST"; path: "/me/conversations/{conversation_id}/actions/{action_id}/refuse"; body: never; response: ConversationAction };
   refuseOrgEgressRequest: { method: "POST"; path: "/orgs/{org}/egress/requests/{rule_id}/refuse"; body: EgressDecision; response: EgressRule };
   reimportMemory: { method: "POST"; path: "/projects/{id}/memory/reimport"; body: {
   sources?: Array<string>;
@@ -5081,7 +5690,9 @@ export interface Operations {
   resolveProjectAgents: { method: "GET"; path: "/projects/{id}/agent-resolution"; body: never; response: Array<AgentResolution> };
   restoreAgentVersion: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/restore"; body: AgentVersionRestore; response: AgentVersion };
   restoreWorkflowVersion: { method: "POST"; path: "/projects/{id}/workflows/{name}/versions/{version}/restore"; body: never; response: WorkflowDef };
+  revealAssistantWebhookSecret: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/webhook-secret"; body: WebhookSecretRequest; response: WebhookSecret };
   revokeMachineToken: { method: "DELETE"; path: "/projects/{id}/machine-accounts/{slug}/tokens/{token_id}"; body: never; response: void };
+  revokeMyDelegation: { method: "DELETE"; path: "/me/delegations/{delegation_id}"; body: never; response: void };
   revokeMyToken: { method: "DELETE"; path: "/me/tokens/{id}"; body: never; response: void };
   revokeOrgEgressRule: { method: "DELETE"; path: "/orgs/{org}/egress/rules/{rule_id}"; body: never; response: EgressRule };
   revokeRemoteCredential: { method: "DELETE"; path: "/orgs/{org}/remote-credentials/{name}"; body: never; response: void };
@@ -5089,11 +5700,13 @@ export interface Operations {
   rotateMcpGatewayAssertionKey: { method: "POST"; path: "/orgs/{org}/mcp-gateway/assertion-key"; body: never; response: McpGatewayAssertion };
   rotateTriggerToken: { method: "POST"; path: "/projects/{id}/triggers/{name}/token"; body: never; response: TriggerToken };
   runKnowledgeEval: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/eval/run"; body: never; response: KnowledgeBase };
+  runMyTask: { method: "POST"; path: "/me/assistants/{org}/{slug}/tasks/{task}/run"; body: never; response: TaskRun };
   searchGlobalMemory: { method: "GET"; path: "/orgs/{org}/memories/{slug}/search"; body: never; response: Array<Memory> };
   searchKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
   searchMemory: { method: "GET"; path: "/projects/{id}/memory/search"; body: never; response: Array<Memory> };
   searchRunKnowledge: { method: "POST"; path: "/internal/runs/{id}/knowledge/search"; body: KnowledgeSearchRequest; response: KnowledgeSearchResult };
   searchRunMemory: { method: "POST"; path: "/internal/runs/{id}/memory/search"; body: RunMemorySearch; response: Array<RunMemoryHit> };
+  sendMyConversationMessage: { method: "POST"; path: "/me/conversations/{conversation_id}/messages"; body: ConversationMessageCreate; response: AgentResponse };
   setAgentReleasePolicy: { method: "PUT"; path: "/orgs/{org}/agents/{slug}/release-policy"; body: AgentReleasePolicy; response: Agent };
   setConnectorSecret: { method: "PUT"; path: "/projects/{id}/connectors/{kind}/secrets/{field}"; body: SecretValue; response: Connector };
   setOrgConnectorSecret: { method: "PUT"; path: "/orgs/{org}/connectors/{name}/secrets/{field}"; body: SecretValue; response: OrgConnector };
@@ -5122,14 +5735,19 @@ export interface Operations {
   [key: string]: unknown;
 }; response: TriggerAck };
   unfreezeTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/unfreeze"; body: never; response: void };
+  uninstallAssistant: { method: "DELETE"; path: "/orgs/{org}/assistants/{slug}"; body: never; response: void };
   uninstallPlugin: { method: "DELETE"; path: "/orgs/{org}/plugins/{name}"; body: never; response: PluginUninstallResult };
   unpinProjectAgent: { method: "DELETE"; path: "/projects/{id}/agents/{slug}"; body: never; response: void };
   updateAgent: { method: "PATCH"; path: "/orgs/{org}/agents/{slug}"; body: AgentPatch; response: Agent };
+  updateAssistant: { method: "PATCH"; path: "/orgs/{org}/assistants/{slug}"; body: AssistantUpdate; response: Assistant };
+  updateAssistantInstallationMemory: { method: "PATCH"; path: "/orgs/{org}/assistants/{slug}/memory/{space}"; body: MemoryAction; response: MemorySpace };
   updateConnectorOperation: { method: "PATCH"; path: "/orgs/{org}/connectors/{name}/operations/{operation}"; body: OperationPatch; response: ConnectorOperation };
   updateKnowledgeBase: { method: "PATCH"; path: "/orgs/{org}/knowledge/{slug}"; body: KnowledgeBasePatch; response: KnowledgeBase };
   updateKnowledgeSource: { method: "PATCH"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}"; body: KnowledgeSourcePatch; response: KnowledgeSource };
   updateMemory: { method: "PATCH"; path: "/orgs/{org}/memories/{slug}"; body: MemoryStorePatch; response: MemoryStore };
   updateModelCatalogueEntry: { method: "PATCH"; path: "/orgs/{org}/models/{entry_id}"; body: ModelCataloguePatch; response: ModelCatalogueEntry };
+  updateMyAssistantMemory: { method: "PATCH"; path: "/me/assistants/{org}/{slug}/memory/{space}"; body: MemoryAction; response: MemorySpace };
+  updateMyAssistantSubjectMemory: { method: "PATCH"; path: "/me/assistants/{org}/{slug}/memory/{space}/{subject}"; body: MemoryAction; response: MemorySpace };
   updateOrg: { method: "PATCH"; path: "/orgs/{org}"; body: OrgUpdate; response: Org };
   updateOrgConnector: { method: "PATCH"; path: "/orgs/{org}/connectors/{name}"; body: OrgConnectorUpdate; response: OrgConnector };
   updateProject: { method: "PATCH"; path: "/projects/{id}"; body: ProjectUpdate; response: Project };

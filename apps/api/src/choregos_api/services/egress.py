@@ -9,7 +9,7 @@ from collections.abc import AsyncIterator, Iterable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 from choregos_contracts import Role
 from choregos_core import utcnow
@@ -259,6 +259,15 @@ def targets_of_connector(kind: str, type_name: str, config: dict[str, Any]) -> l
     from choregos_adapters import egress_hosts
 
     hosts = egress_hosts(kind, type_name, config)
+    # A `user_consent` connector (S63-08) also has the platform call its authorization server.
+    consent = config.get("user_consent")
+    if isinstance(consent, dict):
+        for key in ("token_endpoint", "revocation_endpoint"):
+            parsed = urlparse(str(consent.get(key) or ""))
+            if parsed.hostname:
+                found = (parsed.hostname, parsed.port or (80 if parsed.scheme == "http" else 443))
+                if found not in hosts:
+                    hosts = [*hosts, found]
     # the broker, a test and a discovery call out from the API; a documents connector is also
     # synced by the workers
     families = ("api", "workers") if kind == "documents" else ("api",)

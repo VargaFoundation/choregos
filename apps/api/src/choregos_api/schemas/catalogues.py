@@ -85,6 +85,19 @@ class McpCatalogueDto(Dto):
     entries: list[McpCatalogueEntryDto]
 
 
+class McpCatalogueUserConsent(Dto):
+    """The source's OAuth settings, to install an `oauth` entry for `user_consent` (ADR 0135 point 6): the
+    server is then called with each person's own token, so the catalogue's `needs_oauth` no longer applies."""
+
+    authorization_endpoint: str = Field(min_length=1, max_length=500)
+    token_endpoint: str = Field(min_length=1, max_length=500)
+    client_id: str = Field(min_length=1, max_length=300)
+    #: The OAuth client secret typed once: sealed at rest, never returned (ADR 0058).
+    client_secret: str | None = Field(default=None, repr=False)
+    scopes: list[str] = Field(default_factory=list)
+    revocation_endpoint: str | None = Field(default=None, max_length=500)
+
+
 class McpCatalogueInstall(Dto):
     name: str | None = Field(default=None, pattern=r"^[a-z][a-z0-9-]{1,62}$")
     secret_refs: dict[str, str] = Field(default_factory=dict)
@@ -100,6 +113,8 @@ class McpCatalogueInstall(Dto):
     route: Literal["direct", "gateway"] | None = None
     #: Through the gateway: the server's name there (default: the entry id).
     gateway_server: str | None = Field(default=None, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    #: An `oauth` entry installed for each person's own consent (`user_consent`); needs the direct route.
+    user_consent: McpCatalogueUserConsent | None = None
 
 
 class SkillCatalogueInstall(Dto):
