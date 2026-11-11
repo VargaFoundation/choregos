@@ -4,6 +4,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Info } from "lucide-react";
 import { useState, type ReactNode } from "react";
+import { useDocsUrl } from "@/components/docs-link";
 import { useServedTheme } from "@/components/served-theme";
 import { buttonClasses, Card, Drawer, ReadState } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -133,9 +134,11 @@ export function FooterText() {
   return <span data-testid="footer-text">{useServedTheme().footer?.text ?? DEFAULT_FOOTER_TEXT}</span>;
 }
 
-/** Where the core's source and documentation live: the foundation's repository (ADR 0048). */
+/**
+ * Where the core's source lives: the foundation's repository (ADR 0048). The documentation is the
+ * instance's (`docs_url`, S62-11), no longer the repository's `docs/` tree.
+ */
 export const SOURCE_REPOSITORY = "https://github.com/VargaFoundation/choregos";
-export const DOCUMENTATION = `${SOURCE_REPOSITORY}/tree/main/docs`;
 
 /** The plain text "Copy for support" puts on the clipboard: what a support request needs, nothing more. */
 export function aboutSupportText(productName: string, edition: Edition): string {
@@ -167,6 +170,7 @@ export function AboutPanel() {
   const productName = useServedTheme().product_name;
   const edition = useQuery({ queryKey: ["edition"], queryFn: () => api.edition(), staleTime: Infinity, retry: false });
   const [copied, setCopied] = useState<"yes" | "no" | null>(null);
+  const documentation = useDocsUrl("");
   const data = edition.data;
   if (!data) return <ReadState lecture={edition} quoi="the version information" />;
   const enterprise = data.edition === "enterprise";
@@ -212,7 +216,7 @@ export function AboutPanel() {
           </a>
         </li>
         <li>
-          <a href={DOCUMENTATION} target="_blank" rel="noreferrer" className="underline">
+          <a href={documentation} target="_blank" rel="noreferrer" className="underline">
             Documentation
           </a>
         </li>

@@ -70,7 +70,7 @@ tests:
           value: choregos-api.internal.dev.diametral.com
       - lengthEqual:
           path: spec.rules[0].http.paths
-          count: 6
+          count: 9
       # The MCP gateway (ADR 0030) exits through the API: without this path, an MCP client lands on the console.
       - equal:
           path: spec.rules[0].http.paths[1].path
@@ -83,6 +83,16 @@ tests:
       - equal:
           path: spec.rules[0].http.paths[5].path
           value: /a2a
+      # The CLI the instance serves (S62-08): its downloads, and the two install scripts as exact paths.
+      - equal:
+          path: spec.rules[0].http.paths[6].path
+          value: /downloads
+      - equal:
+          path: spec.rules[0].http.paths[7]
+          value: { path: /cli/install.sh, pathType: Exact, backend: { service: { name: choregos-api, port: { number: 8000 } } } }
+      - equal:
+          path: spec.rules[0].http.paths[8].path
+          value: /cli/install.ps1
 
   - it: without Gateway API, the front end exits through an Ingress
     template: charts/choregos-web/templates/deployment.yaml
