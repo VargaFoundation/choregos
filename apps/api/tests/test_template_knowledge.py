@@ -386,7 +386,7 @@ async def test_without_an_app_the_projects_repository_cannot_be_opened(
             await sync.open_source(session, row)
 
 
-async def test_no_request_grants_the_app_and_an_edit_keeps_it_only_on_the_same_repository(
+async def test_an_edit_keeps_the_app_only_on_the_same_repository_and_a_request_needs_an_app(
     client: AsyncClient, admin: str, templates: pathlib.Path
 ) -> None:
     assert (await _born(client)).status_code == 201
@@ -398,14 +398,19 @@ async def test_no_request_grants_the_app_and_an_edit_keeps_it_only_on_the_same_r
     assert edited.status_code == 200, edited.text
     assert edited.json()["config"] == {**same, "github_app": True}
 
-    asked = {"url": "https://github.com/acme/secrets", "github_app": True}
-    elsewhere = await client.patch(path, json={"config": asked, "allow_egress": True})
+    # Another repository is another decision: the flag does not follow the edit, and asking for it
+    # is an administrator's, with an installation (test_knowledge_source_github_app.py): this
+    # deployment has no App, so the request is refused rather than dropped.
+    other = {"url": "https://github.com/acme/secrets"}
+    elsewhere = await client.patch(path, json={"config": other, "allow_egress": True})
     assert elsewhere.status_code == 200, elsewhere.text
     assert "github_app" not in elsewhere.json()["config"]
+    asked = {**other, "github_app": True}
+    refused = await client.patch(path, json={"config": asked, "allow_egress": True})
+    assert refused.status_code == 409, refused.text
 
     created = await client.post(
         f"{KB}/product-docs/sources",
         json={"kind": "git", "name": "asked", "config": asked, "allow_egress": True},
     )
-    assert created.status_code == 201, created.text
-    assert "github_app" not in created.json()["config"]
+    assert created.status_code == 409, created.text
