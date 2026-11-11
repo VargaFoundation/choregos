@@ -1112,13 +1112,15 @@ type MockLine = {
   workflow: string;
   item: string;
   project: string;
+  /** The stage the line was spent in; a run is named by its work item key and stage (ADR 0141 §1). */
+  stage: string;
   /** The door a tool call came through (S57-06): a model line has none, nor a tool line booked before. */
   origin?: "model" | "script" | "job";
 };
 const FX_EUR = 0.92;
 export const mockLedger: MockLine[] = Array.from({ length: 45 }, (_, i) => i).flatMap((daysAgo) => [
-  { daysAgo, usd: 1.5 + (daysAgo % 5) * 0.4, kind: "model" as const, model: "claude-sonnet", agent: "coordinator", workflow: "delivery", item: "BILL-12", project: "billing-api" },
-  { daysAgo, usd: 0.8 + (daysAgo % 3) * 0.3, kind: "model" as const, model: "claude-haiku", agent: "reviewer", workflow: "delivery", item: "BILL-14", project: "billing-api" },
+  { daysAgo, usd: 1.5 + (daysAgo % 5) * 0.4, kind: "model" as const, model: "claude-sonnet", agent: "coordinator", workflow: "delivery", item: "BILL-12", project: "billing-api", stage: "implement" },
+  { daysAgo, usd: 0.8 + (daysAgo % 3) * 0.3, kind: "model" as const, model: "claude-haiku", agent: "reviewer", workflow: "delivery", item: "BILL-14", project: "billing-api", stage: "review" },
   ...(daysAgo % 4 === 0
     ? [
         {
@@ -1130,13 +1132,14 @@ export const mockLedger: MockLine[] = Array.from({ length: 45 }, (_, i) => i).fl
           workflow: "onboarding",
           item: "HR-3",
           project: "checkout-web",
+          stage: "implement",
           // The last weeks' calls say their door, half of them from a script; the older ones predate it.
           ...(daysAgo < 32 ? { origin: daysAgo % 8 === 0 ? ("script" as const) : ("model" as const) } : {}),
         },
       ]
     : []),
   ...(daysAgo % 6 === 0
-    ? [{ daysAgo, usd: 0.6, kind: "model" as const, model: "claude-sonnet", agent: null, workflow: "delivery", item: "BILL-12", project: "checkout-web" }]
+    ? [{ daysAgo, usd: 0.6, kind: "model" as const, model: "claude-sonnet", agent: null, workflow: "delivery", item: "BILL-12", project: "checkout-web", stage: "triage" }]
     : []),
 ]);
 
@@ -1146,6 +1149,10 @@ export function mockCostReport(path: string): CostReport {
   const project = /^\/projects\/([^/]+)\/costs/.exec(path.split("?")[0] ?? "")?.[1]?.split(":").at(-1);
   const since = query.get("since");
   const kind = query.get("kind");
+  // The narrowing filters (ADR 0141 §1): one agent, one workflow, one work item, combinable.
+  const agent = query.get("agent");
+  const workflowName = query.get("workflow");
+  const workItem = query.get("work_item");
   const day = (daysAgo: number) => new Date(now.getTime() - daysAgo * 86_400_000).toISOString().slice(0, 10);
   const key = (line: MockLine): string => {
     switch (group) {
@@ -1156,17 +1163,25 @@ export function mockCostReport(path: string): CostReport {
       case "model": return line.model;
       case "kind": return line.kind;
       case "origin": return line.origin ?? "—";
+      case "stage": return line.stage;
+      case "run": return `${line.item} · ${line.stage}`;
       default: return day(line.daysAgo);
     }
   };
   const rows = new Map<string, CostReport["rows"][number]>();
   for (const line of mockLedger) {
     if ((since && day(line.daysAgo) < since) || (kind && line.kind !== kind) || (project && line.project !== project)) continue;
+    if ((agent && line.agent !== agent) || (workflowName && line.workflow !== workflowName) || (workItem && line.item !== workItem)) continue;
     const k = key(line);
     const row = rows.get(k) ?? { key: k, cost_usd: 0, cost_eur: 0, tokens_in: 0, tokens_out: 0, tokens_cached: 0, runs: 0 };
     row.cost_usd = Math.round((row.cost_usd + line.usd) * 1e6) / 1e6;
     row.cost_eur = Math.round(row.cost_usd * FX_EUR * 1e6) / 1e6;
     row.runs = (row.runs ?? 0) + 1;
+    // A model line reads and writes tokens in proportion to its cost; a tool call spends none.
+    const read = line.kind === "model" ? Math.round(line.usd * 40_000) : 0;
+    row.tokens_in = (row.tokens_in ?? 0) + read;
+    row.tokens_out = (row.tokens_out ?? 0) + Math.round(read / 10);
+    row.tokens_cached = (row.tokens_cached ?? 0) + Math.round(read * 0.4);
     rows.set(k, row);
   }
   const list = [...rows.values()].sort((a, b) => a.key.localeCompare(b.key));
@@ -1178,6 +1193,9 @@ export function mockCostReport(path: string): CostReport {
       cost_usd: Math.round(list.reduce((s, r) => s + r.cost_usd, 0) * 1e6) / 1e6,
       cost_eur: Math.round(list.reduce((s, r) => s + r.cost_eur, 0) * 1e6) / 1e6,
       budget_usd: 150,
+      tokens_in: list.reduce((s, r) => s + (r.tokens_in ?? 0), 0),
+      tokens_out: list.reduce((s, r) => s + (r.tokens_out ?? 0), 0),
+      tokens_cached: list.reduce((s, r) => s + (r.tokens_cached ?? 0), 0),
     },
   };
 }

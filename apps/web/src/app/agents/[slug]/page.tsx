@@ -24,6 +24,7 @@ import { AgentDetailsCard } from "@/components/agents/details";
 import { History } from "@/components/agents/history";
 import { BUILD_POLL_MS, buildInProgress, latestRuntime } from "@/components/agents/runtime-row";
 import { TagList } from "@/components/agents/tags";
+import { TokensAndCostPanel } from "@/components/spend/tokens-panel";
 import { CardChangedWarning, RemoteDefinition, a2aOf } from "@/components/remote/remote-definition";
 import { RemoteAgentForm } from "@/components/remote/remote-agent-form";
 import { isMcpClient, clientState, readOnly } from "@/components/agents/registry";
@@ -149,6 +150,8 @@ export default function AgentPage({ params }: { params: Promise<{ slug: string }
             </Card>
           )}
           <AgentMetrics org={org} slug={slug} />
+          {/* The organisation's report narrowed to this agent, in every project (S64-07). */}
+          <TokensAndCostPanel filter={{ agent: slug }} groups={["model", "stage", "workflow", "run"]} />
         </>
       )}
       {onglet === "definition" && <Definition org={org} agent={a} />}

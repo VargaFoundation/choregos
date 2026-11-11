@@ -84,3 +84,46 @@ export function top(rows: Row[], currency: Currency, n = 5): Array<{ key: string
     .slice(0, n)
     .map((row) => ({ key: row.key, value: amount(row, currency), share: total > 0 ? amount(row, currency) / total : 0 }));
 }
+
+/** What a breakdown measures (ADR 0141 §1): the money, or the tokens read and written. */
+export type Measure = "cost" | "tokens";
+
+type TokenRow = Pick<CostReport["rows"][number], "key" | "tokens_in" | "tokens_out" | "tokens_cached">;
+
+/** The tokens a report's totals read: input, output, and the part of the input read from the cache. */
+export type TokenTotals = { input: number; output: number; cached: number };
+
+export function tokenTotals(
+  total: Pick<CostReport["total"], "tokens_in" | "tokens_out" | "tokens_cached"> | undefined,
+): TokenTotals {
+  return { input: total?.tokens_in ?? 0, output: total?.tokens_out ?? 0, cached: total?.tokens_cached ?? 0 };
+}
+
+/** A count of tokens, in full with thousands separators: totals are compared, not rounded away. */
+export function tokenCount(value: number | null | undefined): string {
+  return new Intl.NumberFormat("en-GB").format(value ?? 0);
+}
+
+/**
+ * The `n` rows that moved the most tokens (input plus output), each with its share of the report's
+ * tokens and its own three counts. The cached tokens are part of the input: they are shown, never
+ * added a second time.
+ */
+export function topTokens(
+  rows: TokenRow[],
+  n = 5,
+): Array<{ key: string; value: number; share: number; input: number; output: number; cached: number }> {
+  const moved = (row: TokenRow) => (row.tokens_in ?? 0) + (row.tokens_out ?? 0);
+  const total = rows.reduce((sum, row) => sum + moved(row), 0);
+  return [...rows]
+    .sort((a, b) => moved(b) - moved(a))
+    .slice(0, n)
+    .map((row) => ({
+      key: row.key,
+      value: moved(row),
+      share: total > 0 ? moved(row) / total : 0,
+      input: row.tokens_in ?? 0,
+      output: row.tokens_out ?? 0,
+      cached: row.tokens_cached ?? 0,
+    }));
+}
