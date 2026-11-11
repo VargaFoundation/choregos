@@ -152,10 +152,12 @@ async def test_retention_until_moves_forward_at_each_turn(
     upstream.model.say("One.").say("Two.")
     custom = await _open("varga", admin, retention_days=10)
     default = await _open("varga", admin)
-    assert (await _record(custom)).retention_until is None, "nothing before a first turn"
+    opened = (await _record(custom)).retention_until
+    assert opened is not None, "set at the opening, so a conversation with no turn is purged too (S63-16)"
+    await asyncio.sleep(0.05)
     await _say(client, custom, "a")
     first = (await _record(custom)).retention_until
-    assert first is not None
+    assert first is not None and first > opened
     assert (
         timedelta(days=9, hours=23)
         < first.replace(tzinfo=None) - utcnow().replace(tzinfo=None)
