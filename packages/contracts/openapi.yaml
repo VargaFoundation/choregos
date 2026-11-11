@@ -2560,6 +2560,24 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
         "422": { $ref: "#/components/responses/ValidationError" }
+  /me/assistants/{org}/{slug}/embed-token:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    post:
+      tags: [agents]
+      operationId: mintMyEmbedToken
+      description: >-
+        The frame token of the embedded component in a cross-site frame (ADR 0139 point 6): a signed value valid for
+        fifteen minutes, for the caller, their browser session and this installation, sent as `X-Choregos-Embed`. It
+        opens only the routes the component calls (open a conversation of the installation, read and write that
+        conversation, read its memory spaces), the conversation must be the installation's, and it carries a role in
+        this organisation only. Called with the console's session cookie (the sign-in popup), never with a frame
+        token. 404 for a caller outside the audience.
+      responses:
+        "200": { description: The token, content: { application/json: { schema: { $ref: "#/components/schemas/EmbedToken" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /me/assistants/{org}/{slug}/tasks/{task}:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -2965,6 +2983,38 @@ paths:
         "200": { description: The proposed candidates, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ConversationCandidate" } } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/agents/{slug}/feedback-candidates/{candidate_id}/accept:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+      - { name: candidate_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: acceptAgentFeedbackCandidate
+      description: "An owner makes a proposed candidate a case of the agent's conversation suites by writing its assertions (a case with none passes whatever the agent says). The case is validated as the plugin loader validates a suite (schema, case names, the assistant's tools); it is then played with the suites at the promotion gate. 409 when the candidate was decided; 422 when the case is not valid."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ConversationCandidateAccept" } } }
+      responses:
+        "200": { description: The candidate, accepted, content: { application/json: { schema: { $ref: "#/components/schemas/ConversationCandidate" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/agents/{slug}/feedback-candidates/{candidate_id}/dismiss:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+      - { name: candidate_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: dismissAgentFeedbackCandidate
+      description: "An owner dismisses a proposed candidate: it enters no suite and is not proposed again. 409 when it was decided."
+      responses:
+        "200": { description: The candidate, dismissed, content: { application/json: { schema: { $ref: "#/components/schemas/ConversationCandidate" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /me/conversations/{conversation_id}/cancel:
     parameters:
       - { name: conversation_id, in: path, required: true, schema: { type: string } }
@@ -6602,6 +6652,8 @@ components:
         agent: { type: string }
         agent_version: { type: integer }
         installation_id: { type: [string, "null"] }
+        org: { type: [string, "null"], description: "the slug of the organisation the conversation belongs to" }
+        assistant: { type: [string, "null"], description: "the slug of the assistant's installation in that organisation, when it is one" }
         status: { type: string, enum: [open, idle, closed, failed] }
         turns: { type: integer }
         cost_usd: { type: number }
@@ -6665,9 +6717,18 @@ components:
         id: { type: string }
         agent: { type: string }
         agent_version: { type: integer }
-        status: { type: string, enum: [proposed] }
-        candidate: { type: object, additionalProperties: true, description: "`{case, observed, comment}`: a conversation-evals case without assertions, and what the agent did" }
+        status: { type: string, enum: [proposed, accepted, dismissed] }
+        candidate: { type: object, additionalProperties: true, description: "`{case, observed, comment}`: a conversation-evals case without assertions (the accepted one carries its assertions), and what the agent did" }
         created_at: { type: string, format: date-time }
+    ConversationCandidateAccept:
+      type: object
+      description: "What an owner adds to a candidate to make it a case: the assertions, and optionally a name, the scripted tool results and the context."
+      required: [assertions]
+      properties:
+        assertions: { type: object, additionalProperties: true, minProperties: 1, description: "a conversation-evals `assert` object" }
+        name: { type: [string, "null"], minLength: 1, maxLength: 120 }
+        tool_results: { type: [object, "null"], additionalProperties: true }
+        context: { type: [object, "null"], additionalProperties: true }
     AgentSessionTurn:
       type: object
       description: "A response a hosted session's person asked for, waiting for the session's pod (S41-11)."
@@ -9241,6 +9302,12 @@ components:
         memory_spaces: { type: array, items: { $ref: "#/components/schemas/AssistantMemorySpace" } }
         tasks: { type: array, items: { $ref: "#/components/schemas/AssistantTaskDecl" } }
         needs: { type: array, items: { $ref: "#/components/schemas/AssistantNeed" } }
+    EmbedToken:
+      type: object
+      required: [token, expires_in]
+      properties:
+        token: { type: string }
+        expires_in: { type: integer, description: "seconds" }
     AssistantEmbed:
       type: object
       required: [embed_origins]

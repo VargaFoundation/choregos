@@ -673,6 +673,18 @@ def _conversation_suites(doc: dict[str, Any], root: Path, problems: list[str]) -
         _assistant_rules.check_suite(suite, ref, doc, problems)
 
 
+def suite_problems(suite: Any, ref: str, doc: dict[str, Any] | None = None) -> list[str]:
+    """What is wrong with a conversation suite: the schema first, then (with the assistant's document) its
+    agent, its case names and its tools. Empty when it is valid. Used by the loader's rules, and by the API
+    when an owner adds a case to a suite (S63-17)."""
+    found = _schema_problems(ref, "conversation-evals.schema.json", suite)
+    if found or doc is None:
+        return found
+    problems: list[str] = []
+    _assistant_rules.check_suite(suite, ref, doc, problems)
+    return problems
+
+
 def _assistants(
     root: Path, refs: list[str], agents: dict[str, dict[str, Any]], problems: list[str]
 ) -> dict[str, dict[str, Any]]:
@@ -888,4 +900,5 @@ __all__ = [
     "opened",
     "pack",
     "plugin_files",
+    "suite_problems",
 ]

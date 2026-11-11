@@ -12,7 +12,8 @@ import { safeAsset } from "@/lib/served-theme";
  * A form drawn from a JSON Schema: that of an administration section declared by an
  * extension (ADR 0032), tomorrow that of a connector (ADR 0034). Built here rather than with `@rjsf`:
  * the bundle budget, and only the cases that are used: an object of scalars, of choices, of lists,
- * of multi-line texts (`format: "multiline"`: a PEM certificate) and of mappings
+ * of fixed objects (nested fields), of closed lists (`items.enum`: checkboxes), of typed lists (integers,
+ * URIs), of multi-line texts (`format: "multiline"`: a PEM certificate) and of mappings
  * (`type: "object"` of strings: an IdP group -> a role group), one per line.
  *
  * The API remains the judge: this form refuses only what is missing, it does not revalidate the schema.
@@ -62,11 +63,14 @@ export function SchemaForm({
   disabled,
   org,
   connectorType,
+  nestedObjects,
 }: {
   schema: JsonSchema;
   value: Values;
   onChange: (value: Values) => void;
   disabled?: boolean;
+  /** An object with named properties is drawn as its own fields (an assistant's `config_schema`), not as a `key = value` mapping. */
+  nestedObjects?: boolean;
   /** Fills `{org}` in an asset field's `x-upload`; without it such a field cannot upload. */
   org?: string;
   /** The `web_search` backend type being configured: gives `data_handling` its structured editor (S40-01j). */
@@ -89,6 +93,7 @@ export function SchemaForm({
           disabled={disabled}
           org={org}
           connectorType={connectorType}
+          nestedObjects={nestedObjects}
           onChange={(next) => {
             const suivantes = { ...value };
             if (next === undefined) delete suivantes[name];
@@ -110,6 +115,7 @@ function Field({
   disabled,
   org,
   connectorType,
+  nestedObjects,
   onChange,
 }: {
   id: string;
@@ -120,6 +126,7 @@ function Field({
   disabled?: boolean;
   org?: string;
   connectorType?: string;
+  nestedObjects?: boolean;
   onChange: (value: unknown) => void;
 }) {
   const libelle = propriete.title ?? name.replaceAll("_", " ");
@@ -196,6 +203,20 @@ function Field({
     );
   } else if (name === "data_handling" && connectorType && propriete.properties?.terms_ref) {
     control = <DataHandlingField id={id} type={connectorType} value={value} disabled={disabled} onChange={onChange} />;
+  } else if (nestedObjects && propriete.type === "object" && propriete.properties) {
+    // A fixed object (named properties): its own fields, not a `key = value` mapping.
+    control = (
+      <fieldset className="space-y-2 rounded-control border border-line p-2" aria-describedby={aide}>
+        <SchemaForm
+          schema={propriete}
+          value={value && typeof value === "object" && !Array.isArray(value) ? (value as Values) : {}}
+          disabled={disabled}
+          org={org}
+          nestedObjects
+          onChange={(next) => onChange(Object.keys(next).length > 0 ? next : undefined)}
+        />
+      </fieldset>
+    );
   } else if (propriete.type === "object") {
     control = <Correspondance id={id} value={value} disabled={disabled} aide={aide} onChange={onChange} />;
   } else if (propriete.format === "multiline") {
@@ -211,29 +232,16 @@ function Field({
         onChange={(event) => onChange(event.target.value === "" ? undefined : event.target.value)}
       />
     );
+  } else if (propriete.type === "array" && propriete.items?.enum) {
+    control = <ChoiceList id={id} choices={propriete.items.enum} value={value} disabled={disabled} onChange={onChange} />;
   } else if (propriete.type === "array") {
-    control = (
-      <Input
-        id={id}
-        value={Array.isArray(value) ? value.join(", ") : ""}
-        placeholder="Comma separated"
-        disabled={disabled}
-        aria-describedby={aide}
-        onChange={(event) => {
-          const list = event.target.value
-            .split(",")
-            .map((part) => part.trim())
-            .filter(Boolean);
-          onChange(list.length > 0 ? list : undefined);
-        }}
-      />
-    );
+    control = <ListField id={id} items={propriete.items} value={value} disabled={disabled} aide={aide} onChange={onChange} />;
   } else {
     const isNumber = propriete.type === "integer" || propriete.type === "number";
     control = (
       <Input
         id={id}
-        type={isNumber ? "number" : propriete.format === "date" ? "date" : propriete.format === "password" ? "password" : "text"}
+        type={inputType(propriete, isNumber)}
         value={value === undefined || value === null ? "" : String(value)}
         required={requis}
         disabled={disabled}
@@ -253,6 +261,109 @@ function Field({
       {label}
       {control}
       {indication}
+    </div>
+  );
+}
+
+function inputType(propriete: JsonSchema, isNumber: boolean): string {
+  if (isNumber) return "number";
+  const byFormat: Record<string, string> = { date: "date", password: "password", uri: "url", email: "email" };
+  return byFormat[propriete.format ?? ""] ?? "text";
+}
+
+/** One item of a list as the schema types it (`integer` and `number` lists hold numbers, not strings). */
+export function listItem(raw: string, items: JsonSchema | undefined): unknown {
+  if (items?.type === "integer") return Number.parseInt(raw, 10);
+  if (items?.type === "number") return Number(raw);
+  return raw;
+}
+
+/**
+ * A list, comma separated. The typed text stays as typed (a trailing comma is kept: the next item comes
+ * after it), and it follows the value when that changes from elsewhere.
+ */
+function ListField({
+  id,
+  items,
+  value,
+  disabled,
+  aide,
+  onChange,
+}: {
+  id: string;
+  items?: JsonSchema;
+  value: unknown;
+  disabled?: boolean;
+  aide?: string;
+  onChange: (value: unknown) => void;
+}) {
+  const written = Array.isArray(value) ? value.join(", ") : "";
+  const [text, setText] = useState(written);
+  const [seen, setSeen] = useState(written);
+  if (written !== seen) {
+    setSeen(written);
+    const typed = text
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .join(", ");
+    if (typed !== written) setText(written);
+  }
+  return (
+    <Input
+      id={id}
+      type={items?.format === "uri" ? "url" : "text"}
+      value={text}
+      placeholder="Comma separated"
+      disabled={disabled}
+      aria-describedby={aide}
+      onChange={(event) => {
+        setText(event.target.value);
+        const list = event.target.value
+          .split(",")
+          .map((part) => part.trim())
+          .filter(Boolean)
+          .map((part) => listItem(part, items))
+          .filter((item) => typeof item !== "number" || !Number.isNaN(item));
+        onChange(list.length > 0 ? list : undefined);
+      }}
+    />
+  );
+}
+
+/** A list whose items are a closed set (`items.enum`): one checkbox per choice. */
+function ChoiceList({
+  id,
+  choices,
+  value,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  choices: unknown[];
+  value: unknown;
+  disabled?: boolean;
+  onChange: (value: unknown) => void;
+}) {
+  const chosen = Array.isArray(value) ? value : [];
+  return (
+    <div id={id} role="group" className="flex flex-wrap gap-3">
+      {choices.map((choice) => (
+        <label key={String(choice)} className="flex items-center gap-1 text-sm">
+          <input
+            type="checkbox"
+            checked={chosen.includes(choice)}
+            disabled={disabled}
+            onChange={(event) => {
+              const next = event.target.checked
+                ? choices.filter((c) => c === choice || chosen.includes(c))
+                : chosen.filter((c) => c !== choice);
+              onChange(next.length > 0 ? next : undefined);
+            }}
+          />
+          {String(choice)}
+        </label>
+      ))}
     </div>
   );
 }

@@ -114,7 +114,7 @@ export function InstallAssistant({ org, onInstalled }: { org: string; onInstalle
           {chosen && (
             <>
               {chosen.description && <p className="text-sm text-ink-muted">{chosen.description}</p>}
-              {schema && <SchemaForm schema={schema} value={config} onChange={setConfig} org={org} />}
+              {schema && <SchemaForm schema={schema} value={config} onChange={setConfig} org={org} nestedObjects />}
               <div className="grid gap-3 md:grid-cols-3">
                 <Field label="Audience groups" hint="Who may talk to it, comma separated.">
                   {(props) => (

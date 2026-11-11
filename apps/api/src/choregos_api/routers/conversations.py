@@ -36,6 +36,7 @@ from ..schemas.agent_sessions import (
 )
 from ..schemas.base import PageMeta
 from ..services.assistant_conversations import require_audience
+from ..services.conversation_assistant import with_assistant
 from ..services.conversation_turns import cancel_turn, refuse_if_not_allowed
 from ..services.conversations import (
     conversation_of,
@@ -89,7 +90,8 @@ async def list_my_conversations(session: Db, principal: Me, page: Pagination) ->
     )
     window, cursor, has_more = page.slice(list(rows))
     return ConversationPage(
-        items=[summary_of(r) for r in window], meta=PageMeta(next_cursor=cursor, has_more=has_more)
+        items=await with_assistant(session, window, [summary_of(r) for r in window]),
+        meta=PageMeta(next_cursor=cursor, has_more=has_more),
     )
 
 
@@ -97,7 +99,8 @@ async def list_my_conversations(session: Db, principal: Me, page: Pagination) ->
     "/me/conversations/{conversation_id}", response_model=Conversation, operation_id="getMyConversation"
 )
 async def get_my_conversation(conversation_id: str, session: Db, principal: Me) -> Conversation:
-    return conversation_of(await _mine(session, principal, conversation_id))
+    record = await _mine(session, principal, conversation_id)
+    return (await with_assistant(session, [record], [conversation_of(record)]))[0]
 
 
 @router.delete(
@@ -192,4 +195,4 @@ async def cancel_my_conversation_turn(
     if not await cancel_turn(conversation_id):
         raise conflict(f"no turn of conversation {conversation_id} is running")
     await session.refresh(record)
-    return summary_of(record)
+    return (await with_assistant(session, [record], [summary_of(record)]))[0]

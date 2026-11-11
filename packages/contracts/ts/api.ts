@@ -1440,6 +1440,10 @@ export type ConversationSummary = {
   agent: string;
   agent_version: number;
   installation_id?: string | null;
+  /** the slug of the organisation the conversation belongs to */
+  org?: string | null;
+  /** the slug of the assistant's installation in that organisation, when it is one */
+  assistant?: string | null;
   status: "open" | "idle" | "closed" | "failed";
   turns: number;
   cost_usd: number;
@@ -1500,12 +1504,27 @@ export type ConversationCandidate = {
   id: string;
   agent: string;
   agent_version: number;
-  status: "proposed";
-  /** `{case, observed, comment}`: a conversation-evals case without assertions, and what the agent did */
+  status: "proposed" | "accepted" | "dismissed";
+  /** `{case, observed, comment}`: a conversation-evals case without assertions (the accepted one carries its assertions), and what the agent did */
   candidate: {
     [key: string]: unknown;
   };
   created_at: string;
+};
+
+/** What an owner adds to a candidate to make it a case: the assertions, and optionally a name, the scripted tool results and the context. */
+export type ConversationCandidateAccept = {
+  /** a conversation-evals `assert` object */
+  assertions: {
+    [key: string]: unknown;
+  };
+  name?: string | null;
+  tool_results?: {
+    [key: string]: unknown;
+  } | null;
+  context?: {
+    [key: string]: unknown;
+  } | null;
 };
 
 /** A response a hosted session's person asked for, waiting for the session's pod (S41-11). */
@@ -4094,6 +4113,12 @@ export type MyAssistant = {
   needs?: Array<AssistantNeed>;
 };
 
+export type EmbedToken = {
+  token: string;
+  /** seconds */
+  expires_in: number;
+};
+
 export type AssistantEmbed = {
   embed_origins: Array<string>;
 };
@@ -5204,6 +5229,7 @@ export interface Operations {
   abortRelease: { method: "POST"; path: "/releases/{id}/abort"; body: {
   reason?: string;
 }; response: void };
+  acceptAgentFeedbackCandidate: { method: "POST"; path: "/orgs/{org}/agents/{slug}/feedback-candidates/{candidate_id}/accept"; body: ConversationCandidateAccept; response: ConversationCandidate };
   acknowledgeBudgetAlert: { method: "POST"; path: "/orgs/{org}/budget-alerts/{alert_id}/acknowledge"; body: never; response: BudgetAlert };
   addMember: { method: "POST"; path: "/orgs/{org}/members"; body: MembershipUpsert; response: Membership };
   addModelCatalogueEntry: { method: "POST"; path: "/orgs/{org}/models"; body: ModelCatalogueEntryCreate; response: ModelCatalogueEntry };
@@ -5295,6 +5321,7 @@ export interface Operations {
   disconnectMyAccount: { method: "DELETE"; path: "/me/connected-accounts/{connector}"; body: never; response: void };
   discoverConnectorOperations: { method: "POST"; path: "/orgs/{org}/connectors/{name}/discover"; body: never; response: ConnectorDiscovery };
   discoverRemoteAgent: { method: "POST"; path: "/orgs/{org}/agents/discover"; body: RemoteAgentDiscover; response: RemoteAgentDiscovery };
+  dismissAgentFeedbackCandidate: { method: "POST"; path: "/orgs/{org}/agents/{slug}/feedback-candidates/{candidate_id}/dismiss"; body: never; response: ConversationCandidate };
   distillKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/distill"; body: KnowledgeDistillRequest; response: KnowledgeBase };
   draftAgent: { method: "POST"; path: "/orgs/{org}/agent-drafts"; body: AgentDraftRequest; response: AgentDraft };
   editWorkflow: { method: "POST"; path: "/workflows/edit"; body: WorkflowEditRequest; response: WorkflowEditResult };
@@ -5582,6 +5609,7 @@ export interface Operations {
   listWorkflowTemplates: { method: "GET"; path: "/workflows/templates"; body: never; response: Array<WorkflowTemplate> };
   listWorkflowVersions: { method: "GET"; path: "/projects/{id}/workflows/{name}/versions"; body: never; response: Array<WorkflowDef> };
   listWorkflows: { method: "GET"; path: "/projects/{id}/workflows"; body: never; response: Array<WorkflowSummary> };
+  mintMyEmbedToken: { method: "POST"; path: "/me/assistants/{org}/{slug}/embed-token"; body: never; response: EmbedToken };
   nextAgentSessionSocketFrames: { method: "GET"; path: "/internal/agent-sessions/{id}/socket/next"; body: never; response: AgentSessionSocketNext };
   nextAgentSessionTurn: { method: "GET"; path: "/internal/agent-sessions/{id}/turns/next"; body: never; response: AgentSessionTurn };
   openMyAssistantConversation: { method: "POST"; path: "/me/assistants/{org}/{slug}/conversations"; body: AssistantConversationOpen; response: Conversation };

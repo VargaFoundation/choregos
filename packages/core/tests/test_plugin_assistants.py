@@ -331,3 +331,21 @@ def test_an_assistant_is_shipped_once(plugin: Path) -> None:
         "assistants/copy.yaml:metadata/name: assistant `investment-assistant` is shipped twice"
         in _problems(plugin)
     )
+
+
+def test_a_task_workflow_must_be_a_valid_workflow(plugin: Path) -> None:
+    (plugin / "workflows/morning-brief.yaml").write_text(
+        "apiVersion: choregos/v1\nkind: Workflow\nmetadata: { name: morning-brief, version: 1 }\n"
+        "tracker: internal\n"
+    )
+    problems = _problems(plugin)
+    assert any(p.startswith(f"{ASSISTANT}:tasks/0/workflow: ") and "actors" in p for p in problems)
+
+
+def test_the_fixture_workflows_are_valid_workflows() -> None:
+    from choregos_core.dsl.parser import parse_workflow_file
+
+    for name in ("morning-brief", "threshold-alert"):
+        workflow, report = parse_workflow_file(FIXTURE / "workflows" / f"{name}.yaml")
+        assert report.valid
+        assert workflow.metadata.name == name

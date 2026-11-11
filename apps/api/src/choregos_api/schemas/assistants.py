@@ -117,3 +117,10 @@ class AssistantEmbed(Dto):
     """The origins that may frame the installation's embedded component (`config.embed_origins`)."""
 
     embed_origins: list[str]
+
+
+class EmbedToken(Dto):
+    """The frame token of the embedded component (S63-12): short-lived, one person, one installation."""
+
+    token: str
+    expires_in: int

@@ -18,6 +18,7 @@ import type {
   ConversationAction,
   ConversationActionList,
   ConversationCandidate,
+  ConversationCandidateAccept,
   ConversationFeedback,
   ConversationFeedbackCreate,
   ConversationPage,
@@ -251,4 +252,14 @@ export const assistantsApi = {
     request<WebhookSecret>(`/orgs/${enc(org)}/assistants/${enc(slug)}/webhook-secret`, post({ rotate })),
   feedbackCandidates: (org: string, agent: string) =>
     request<ConversationCandidate[]>(`/orgs/${enc(org)}/agents/${enc(agent)}/feedback-candidates`),
+  acceptCandidate: (org: string, agent: string, id: string, body: ConversationCandidateAccept) =>
+    request<ConversationCandidate>(
+      `/orgs/${enc(org)}/agents/${enc(agent)}/feedback-candidates/${enc(id)}/accept`,
+      post(body),
+    ),
+  dismissCandidate: (org: string, agent: string, id: string) =>
+    request<ConversationCandidate>(
+      `/orgs/${enc(org)}/agents/${enc(agent)}/feedback-candidates/${enc(id)}/dismiss`,
+      post(),
+    ),
 };

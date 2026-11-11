@@ -115,6 +115,10 @@ class ConversationSummary(Dto):
     agent_version: int
     #: The installation of the assistant, when it is one.
     installation_id: str | None = None
+    #: The slug of the organisation the conversation belongs to, and of the assistant's installation in it:
+    #: with them a screen reaches the assistant's memory and the organisation's routes from any conversation.
+    org: str | None = None
+    assistant: str | None = None
     #: `idle` is a conversation inactive past its `idle_close_minutes`: a new message reopens it.
     status: Literal["open", "idle", "closed", "failed"]
     turns: int
@@ -178,10 +182,20 @@ class ConversationCandidate(Dto):
     id: str
     agent: str
     agent_version: int
-    status: Literal["proposed"]
+    status: Literal["proposed", "accepted", "dismissed"]
     #: `{case, observed, comment}`: a `conversation-evals` case without assertions, what the agent did.
     candidate: dict[str, Any]
     created_at: datetime
+
+
+class ConversationCandidateAccept(Dto):
+    """What an owner adds to a candidate to make it a case of the agent's suites: the assertions (without
+    them a case passes whatever the agent says), and optionally the scripted tool results and the context."""
+
+    assertions: dict[str, Any] = Field(min_length=1)
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    tool_results: dict[str, Any] | None = None
+    context: dict[str, Any] | None = None
 
 
 # ───────────── a hosted session's pod, on the internal API (S41-11) ─────────────

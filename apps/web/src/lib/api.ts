@@ -5,6 +5,7 @@
  * Two modes: `live` (the real API, relayed by Next) and `mock` (local fixtures, so that the front
  * end moves on without the API: `NEXT_PUBLIC_API_MODE=mock`).
  */
+import { clearEmbedToken, embedHeaders, isFrameSession } from "./embed-token";
 import type {
   Action,
   Agent,
@@ -209,6 +210,7 @@ import type {
   MachineAccountCreate,
   MachineTokenCreate,
   AssistantEmbed,
+  EmbedToken,
   Conversation,
   ConversationAction,
   ConversationActionList,
@@ -336,15 +338,21 @@ export async function request<T>(path: string, init: RequestInit = {}): Promise<
     credentials: "include",
     // A file upload (`FormData`) sets its own type, with its multipart boundary.
     // A raw file (`Blob`) carries the content type its caller gives it (`sectionUpload`).
-    headers:
-      init.body instanceof FormData || init.body instanceof Blob
+    headers: {
+      ...(init.body instanceof FormData || init.body instanceof Blob
         ? { ...(init.headers ?? {}) }
-        : { "Content-Type": "application/json", ...(init.headers ?? {}) },
+        : { "Content-Type": "application/json", ...(init.headers ?? {}) }),
+      // The embedded component's session in a cross-site frame (S63-12): nothing unless the frame holds one.
+      ...embedHeaders(),
+    },
     cache: "no-store",
   });
   if (!response.ok) {
     const problem = await problemOf(response);
-    if (response.status === 401) {
+    if (response.status === 401 && isFrameSession()) {
+      // A frame under a frame token: its token expired. The frame asks the person again; it never navigates.
+      clearEmbedToken();
+    } else if (response.status === 401) {
       if (asksForReauthentication(problem)) versLaReauthentification();
       else versLaConnexion();
     }
@@ -392,10 +400,13 @@ export const api = {
     fetch(`${API_BASE}/me/conversations/${id}/messages`, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream", ...embedHeaders() },
       body: JSON.stringify({ input, stream: true }),
       signal,
     }),
+  /** The frame token the sign-in popup hands to the frame (S63-12, API `embed_frame`). */
+  mintEmbedToken: (org: string, slug: string) =>
+    request<EmbedToken>(`/me/assistants/${org}/${slug}/embed-token`, { method: "POST" }),
   /** A memory space of the caller, to see whether a turn changed it (`memory.updated`). */
   assistantMemory: (org: string, slug: string, space: string) =>
     request<unknown>(`/me/assistants/${org}/${slug}/memory/${space}`),

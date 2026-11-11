@@ -331,6 +331,7 @@ export type {
 // The embedded assistant (S63-12).
 export type {
   AssistantEmbed,
+  EmbedToken,
   Conversation,
   ConversationAction,
   ConversationActionList,

@@ -18,8 +18,8 @@ export function AssistantsList() {
   const [error, setError] = useState<string | null>(null);
   const open = useMutation({
     mutationFn: (a: MyAssistant) => assistantsApi.openConversation(a.org, a.slug),
-    onSuccess: (conversation, a) =>
-      router.push(`/conversations/${encodeURIComponent(conversation.id)}?assistant=${a.org}/${a.slug}`),
+    onSuccess: (conversation) =>
+      router.push(`/conversations/${encodeURIComponent(conversation.id)}`),
     onError: (cause) => setError(cause instanceof Error ? cause.message : "Could not open the conversation"),
   });
   const items = assistants.data?.items ?? [];

@@ -16,8 +16,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import HTTPConnection
 
+from . import embed_frame
 from .config import Settings, get_settings
-from .db.models import ApiToken, Membership, Organization, Project, User
+from .db.models import AgentSessionRecord, ApiToken, Membership, Organization, Project, User
 from .db.org_aliases import current_slug
 from .db.session import (
     ALL_ORGS,
@@ -185,6 +186,10 @@ async def current_principal(
         principal.kind = "user"
         return principal
 
+    frame = request.headers.get(embed_frame.HEADER)
+    if frame:
+        return await _frame_principal(request, session, settings, frame)
+
     payload = read_session(request.cookies.get(settings.session_cookie, ""), settings)
     if payload is None:
         raise unauthorized()
@@ -201,6 +206,42 @@ async def current_principal(
     # time the session was opened (`iat`), which overestimates it after a silent SSO reconnection.
     when = payload.get("auth_time", payload.get("iat"))
     principal.authenticated_at = int(when) if isinstance(when, int | float) else None
+    return principal
+
+
+async def _frame_principal(
+    request: HTTPConnection, session: AsyncSession, settings: Settings, raw: str
+) -> Principal:
+    """The principal of the embedded component's frame token (S63-12): see `embed_frame`. It holds a role in
+    ONE organisation, opens a handful of routes, and the conversation it names must be its installation's."""
+    from .browser_sessions import check_session
+
+    token = embed_frame.read(raw, settings)
+    if token is None:
+        raise unauthorized("unknown or expired embed token")
+    allowed, conversation_id = embed_frame.route_of(request.scope["method"], request.url.path, token)
+    if not allowed:
+        raise forbidden("an embed token opens only the routes of the embedded assistant")
+    user = await session.get(User, token.user_id)
+    if user is None:
+        raise unauthorized("expired session")
+    payload: dict[str, Any] = {"sub": user.id, "iat": token.issued_at}
+    if token.sid is not None:
+        payload["sid"] = token.sid
+    sid = await check_session(session, user, payload, request, settings)
+    await _validate_session(session, user, payload)
+    principal = await _principal_from_user(session, user)
+    role = principal.org_roles.get(token.org)
+    principal.org_roles = {token.org: role} if role is not None else {}
+    principal.project_roles = {}
+    principal.session_id = sid
+    principal.authenticated_at = token.issued_at or None
+    await limit_to_organisations(session, sorted(principal.org_roles))
+    await name_the_user(session, user.id)
+    if conversation_id is not None:
+        record = await session.get(AgentSessionRecord, conversation_id)
+        if record is not None and record.installation_id != token.installation_id:
+            raise forbidden("this conversation is not that of the embedded assistant")
     return principal
 
 

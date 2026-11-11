@@ -331,9 +331,11 @@ jobs:
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm e2e
         env: { CI: "true" }
-      # The embedded assistant (S63-12): an allowed host frames it, another origin is refused by
-      # `frame-ancestors`, and the host receives its `postMessage` events. Its own build, in live mode.
+      # The console in LIVE mode against fake APIs (S63-12, S63-18): the embedded component framed by an allowed
+      # and a refused host, and the assistants' screens. Each builds the console for its own API.
       - run: pnpm e2e:embed
+        env: { CI: "true" }
+      - run: pnpm e2e:assistants
         env: { CI: "true" }
       - uses: actions/upload-artifact@v7
         if: failure()

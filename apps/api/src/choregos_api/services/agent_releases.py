@@ -931,6 +931,12 @@ async def after_publish(
     if not await _built(session, agent, version):
         # A zip whose image is not built yet: the move waits for its build (`release_built`).
         return
+    if target == "stable" and version > 1:
+        suites = await conversation_check(session, agent, version)
+        if suites is not None and not suites.passed:
+            # The conversation suites of an assistant that wraps the agent refuse it (ADR 0140): the revision
+            # is saved, production stays where it is, and an explicit release says why (409).
+            return
     if target == "stable" and version > 1 and policy.stable.approvals > 0:
         # The organisation wants people to approve what reaches production, publication included:
         # the revision is saved, production does not move until enough of them approve.

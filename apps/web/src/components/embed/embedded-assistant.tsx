@@ -11,6 +11,7 @@ import {
   targetOrigins,
   type EmbedEventType,
 } from "@/lib/embed";
+import { clearEmbedToken, embedHeaders, setEmbedToken, SIGNED_IN_MESSAGE } from "@/lib/embed-token";
 import type { Conversation, ConversationAction } from "@/lib/types";
 
 /**
@@ -20,7 +21,9 @@ import type { Conversation, ConversationAction } from "@/lib/types";
  * confirm. Everything that matters to the host goes out as a `postMessage` to the origin that framed it.
  *
  * Signed out: one silent attempt (OIDC `prompt=none`, the API's `silent=1`), then a "Sign in" button that
- * opens the identity provider in a popup (`/embed/signed-in` tells this frame it is done).
+ * opens the identity provider in a popup. The console's session cookie is `SameSite=Lax`, so under a host on
+ * another site the frame has none: the popup (first party) mints a short-lived frame token and hands it to
+ * this frame (`/embed/signed-in`, `lib/embed-token.ts`), which sends it as `X-Choregos-Embed`.
  */
 type Phase =
   | { kind: "starting" }
@@ -30,11 +33,26 @@ type Phase =
 
 type Turn = { role: "user" | "assistant"; content: string };
 
-export const SIGNED_IN_MESSAGE = "choregos.embed.signed-in";
+const SILENT_TRIED = "choregos.embed.silent-tried";
+
+function flag(action: "get" | "set" | "clear"): boolean {
+  try {
+    if (action === "set") window.sessionStorage.setItem(SILENT_TRIED, "1");
+    else if (action === "clear") window.sessionStorage.removeItem(SILENT_TRIED);
+    else return window.sessionStorage.getItem(SILENT_TRIED) === "1";
+  } catch {
+    /* a private window: the silent attempt is simply not remembered */
+  }
+  return false;
+}
 
 /** Signed in? A 401 is an answer here, never a redirect: a framed page must not navigate to the console's login. */
 async function signedIn(): Promise<boolean> {
-  const response = await fetch(`${API_BASE}/me`, { credentials: "include", cache: "no-store" });
+  const response = await fetch(`${API_BASE}/me`, {
+    credentials: "include",
+    cache: "no-store",
+    headers: embedHeaders(),
+  });
   return response.ok;
 }
 
@@ -98,8 +116,10 @@ export function EmbeddedAssistant({
         );
         if (!(await signedIn())) {
           if (cancelled) return;
-          if (!signinRequired) {
+          if (!signinRequired && !flag("get")) {
             // One silent attempt: back here with `?signin=required` when the provider needs the person.
+            // Remembered: a frame that cannot keep the cookie it just got must not loop through the IdP.
+            flag("set");
             const here = window.location.pathname + window.location.search;
             window.location.assign(api.loginUrl(here, undefined, false, {}, true));
             return;
@@ -107,6 +127,7 @@ export function EmbeddedAssistant({
           setPhase({ kind: "signin" });
           return;
         }
+        flag("clear");
         const context = decodeContext(rawContext);
         const key = storageKey(org, installation, rawContext);
         let conversation: Conversation | null = null;
@@ -131,7 +152,11 @@ export function EmbeddedAssistant({
         setPhase({ kind: "ready", conversation });
         emitRef.current("conversation.started", { conversation_id: conversation.id, resumed });
       } catch (error) {
-        if (!cancelled) {
+        if (!cancelled && error instanceof ApiError && error.status === 401) {
+          // An expired frame token (or a session that ended): ask the person again, never navigate away.
+          clearEmbedToken();
+          setPhase({ kind: "signin" });
+        } else if (!cancelled) {
           setPhase({
             kind: "failed",
             message: error instanceof Error ? error.message : "The assistant could not be opened.",
@@ -147,7 +172,15 @@ export function EmbeddedAssistant({
   // The popup of the sign-in says it is done: start again.
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
-      if (event.origin === window.location.origin && event.data === SIGNED_IN_MESSAGE) {
+      const data: unknown = event.data;
+      if (
+        event.origin === window.location.origin &&
+        typeof data === "object" &&
+        data !== null &&
+        (data as { type?: unknown }).type === SIGNED_IN_MESSAGE
+      ) {
+        const { token, expires_in } = data as { token?: unknown; expires_in?: unknown };
+        if (typeof token === "string" && typeof expires_in === "number") setEmbedToken(token, expires_in);
         setPhase({ kind: "starting" });
         setAttempt((n) => n + 1);
       }
@@ -235,7 +268,11 @@ export function EmbeddedAssistant({
           <p className="text-ink-muted">Sign in to talk to the assistant.</p>
           <Button
             onClick={() =>
-              window.open(api.loginUrl("/embed/signed-in"), "choregos-signin", "popup,width=520,height=680")
+              window.open(
+                api.loginUrl(`/embed/signed-in?org=${encodeURIComponent(org)}&installation=${encodeURIComponent(installation)}`),
+                "choregos-signin",
+                "popup,width=520,height=680",
+              )
             }
           >
             Sign in
