@@ -49,6 +49,7 @@ streams:
   S55: "A console that makes a complex product simple: colour that orients, readable pages (ADR 0120)"
   S56: "A workflow starts from a trigger: tracker, HTTP, schedule or a person, one audit (ADR 0113)"
   S57: "An agent calls its run's tools from a script: the runner relays, the API governs each call (ADR 0122)"
+  S65: "Outposts: tools that live where the platform cannot reach, behind a place that only dials out (ADRs 0147-0149)"
 
 stories:
 
@@ -4453,3 +4454,92 @@ stories:
     size: XS
     depends_on: [S57-11c]
     notes: "What the 2026-11-07 replay of the live matrix (core 0.24.1) showed: 79 of 80 runs passed, the one failure an E4 right answer whose next steps said to confirm the group memberships were removed. has been disabled and were removed are forbidden inside the Proposed section only; DONE { anywhere."
+  # ───────────── S65 — outposts (ADRs 0147-0149) ─────────────
+  - id: S65-00
+    title: "docs(adr): outposts, tools that live where the platform cannot reach (ADRs 0147-0149), the plan, these stories"
+    stream: S65
+    sprint: 1
+    priority: 1
+    size: S
+    depends_on: []
+    notes: "ADRs 0147-0149 proposed, PLAN-2026-11-11-outposts.md, these stories. S65-01 and S65-02 are hardening stories of the stream with their own pull requests."
+  - id: S65-10
+    title: "contract(outposts): the door's contract v1 and the management API (ADR 0148)"
+    stream: S65
+    sprint: 2
+    priority: 1
+    size: S
+    depends_on: [S65-00]
+    notes: "outpost-door.yaml (four verbs, signature claims, sealed envelope, version window, refusal codes), the policy file's schema and examples, the management paths in openapi.yaml; a fifth verb and a path parameter named connector or server are refused; make contracts."
+  - id: S65-11
+    title: "feat(api): outposts, instances, enrolments: tables, row-level security, rights, management routes (ADR 0147)"
+    stream: S65
+    sprint: 3
+    priority: 1
+    size: M
+    depends_on: [S65-10]
+    notes: "A token used twice or after 15 minutes is refused; an instance is born pending and approved by a person's session against its fingerprint; a revocation moves the epoch; a session naming outpost A reads and claims no row of outpost B from a query with no WHERE clause (PostgreSQL); the migration goes down and up."
+  - id: S65-12
+    title: "feat(api): the outposts' door: enrol, poll, answer, refuse (ADR 0148)"
+    stream: S65
+    sprint: 4
+    priority: 1
+    size: L
+    depends_on: [S65-11]
+    notes: "Replay, wrong method or URL, stale iat or nonce, revoked or pending instance, a foreign call (404), an oversized body, a second poll and a daemon below the minimum version are each refused; two claimers, one winner; a claimed write is never claimed again; a hundred waiting polls hold no pooled connection; the door joins DOOR_DIRS and DOOR_ROUTES."
+  - id: S65-13
+    title: "feat(api,adapters): a connector reached through an outpost, and its fakes (ADR 0149)"
+    stream: S65
+    sprint: 5
+    priority: 1
+    size: M
+    depends_on: [S65-12]
+    notes: "The type mcp-outpost, the outpost route in route_of and connector_client, typed refusals, FakeOutpost. The same call direct and through an outpost gives the same bounded result, ledger line and digests; a forbidden operation writes no rendezvous row; an offline outpost is a refusal that names it; the gateway's mode required does not refuse the type; no class extends the MCP client."
+  - id: S65-14
+    title: "feat(api,orchestrator): a write is delivered at most once, and may end in_doubt (ADR 0149)"
+    stream: S65
+    sprint: 6
+    priority: 1
+    size: M
+    depends_on: [S65-13]
+    notes: "A lost lease ends in_doubt on the effect and the action, one call received, nothing compensated, no replay; an effect retried after its claim writes no second row; an unclaimed write is retried; action_key allows a second delivery with the same key; opening a write with neither statement is 422; tests/replay green with a new history for the branch."
+  - id: S65-15
+    title: "feat(outpost): the daemon choregos-outpost: enrol, run, doctor (ADR 0147)"
+    stream: S65
+    sprint: 3
+    priority: 1
+    size: L
+    depends_on: [S65-10]
+    notes: "packages/outpost and its image. Signature, backoff, version negotiation; a tool outside its patterns, a write under writes deny, an unknown alias and an oversized payload are refused with a code and a local audit line; a daemon killed in a write reports it unanswered and does not execute it again; doctor fails per check; no import of the API."
+  - id: S65-16
+    title: "feat(charts): the door's own Deployment and route; the chart choregos-outpost (ADR 0148)"
+    stream: S65
+    sprint: 5
+    priority: 1
+    size: M
+    depends_on: [S65-12, S65-15]
+    notes: "Disabled renders nothing of the door; enabled serves /outposts under the door's hostnames only, in both entry forms; a dedicated Deployment serves the door alone; the outpost's pod is locked down and its NetworkPolicy lets egress through to the control plane and the listed Services only; make charts-lint for both charts."
+  - id: S65-17
+    title: "feat(cli,web): choregos outposts, the Outposts page, the connector form, the access tab (ADR 0149)"
+    stream: S65
+    sprint: 4
+    priority: 1
+    size: M
+    depends_on: [S65-11]
+    notes: "Every management route has a client; docs/cli.md regenerated; a pending instance is approved only with its fingerprint confirmed; a paused outpost says so; the access tab names the outpost and its offline state (that part after S65-13)."
+  - id: S65-18
+    title: "docs: outposts for whoever operates the platform, and for whoever runs one (ADR 0147)"
+    stream: S65
+    sprint: 6
+    priority: 1
+    size: S
+    depends_on: [S65-13, S65-15, S65-16, S65-17]
+    notes: "docs/outposts.md and docs/outpost-operator.md: what the daemon does and cannot do, the one firewall rule, the policy file, the local audit log, pulled and verified upgrades, who is responsible for what, no data residency; an organisation's own MCP gateway is offered first; tests/docs green."
+  - id: S65-19
+    title: "test(e2e): a tool call through an outpost, end to end (ADRs 0147-0149)"
+    stream: S65
+    sprint: 7
+    priority: 1
+    size: S
+    depends_on: [S65-14, S65-16, S65-17, S65-18]
+    notes: "On fakes: create, enrol, approve, run, declare, discover, one bounded result and one ledger line; daemon stopped, the call fails fast and names the outpost; alias removed, refused and logged locally; lost lease, in_doubt and one call received. On a cluster that enforces network policies: the read succeeds while a connection into the outpost's namespace times out."
