@@ -1,4 +1,4 @@
-# 0133 — The CLI ships as native binaries
+# 0151 — The CLI ships as native binaries
 
 - **Status**: accepted, 2026-11-11; S62-07 implements it, S62-08 serves the files from the instance
 - **Concerns**: `packages/cli`, `packages/core` (its `telemetry` extra), `tools/cli_binary/`,
