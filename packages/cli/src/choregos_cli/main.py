@@ -49,8 +49,6 @@ app.add_typer(dev_app, name="dev")
 app.add_typer(knowledge_app, name="knowledge")
 app.add_typer(plugin_app, name="plugin")
 app.add_typer(a2a_app, name="a2a")
-# Hidden: the native binaries' smoke test asks the binary what it knows about itself (S62-07).
-app.command("binary-info", hidden=True)(binary_info)
 
 console = Console()
 
@@ -69,6 +67,10 @@ def _root(
     ] = False,
 ) -> None:
     """Options of `choregos` itself, before any command."""
+
+
+# Hidden: the native binaries' smoke test asks the binary what it knows about itself (S62-07).
+app.command("binary-info", hidden=True)(binary_info)
 
 
 class TransportSafeClient(Client):
