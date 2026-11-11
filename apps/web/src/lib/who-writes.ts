@@ -72,6 +72,9 @@ export function initiatorInWords(initiatedBy: string | null | undefined): string
       return `${subject}, through MCP`;
     case "a2a":
       return `the A2A client ${subject}`;
+    case "machine":
+      // An application's account (ADR 0131): `<slug>.<project id>@machines.choregos.invalid`.
+      return `the application ${subject.split("@")[0]!.split(".")[0]}`;
     case "schedule":
       return `the schedule ${subject}`;
     case "tracker":

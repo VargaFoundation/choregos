@@ -96,7 +96,17 @@ class Client:
                 raise ApiError(response.status_code, response.json())
             except (json.JSONDecodeError, ValueError):
                 raise ApiError(response.status_code, response.text) from None
+        self._check_version()
         return response.json() if response.content else None
+
+    def _check_version(self) -> None:
+        """Once per process, at most once a day: one stderr line when the instance runs another version."""
+        from .self_update import CHECK_TIMEOUT_S, check_version
+
+        def edition() -> Any:
+            return self._client.get("/edition", timeout=CHECK_TIMEOUT_S).json()
+
+        check_version(self.profile.api_url, edition)
 
     def get(self, path: str, **kwargs: Any) -> Any:
         return self.request("GET", path, **kwargs)

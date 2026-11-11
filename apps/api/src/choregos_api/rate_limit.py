@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Rate limit on the routes WITHOUT a principal: sign-in (`/api/v1/auth/*`) and webhooks
-(`/api/v1/webhooks/*`).
+"""Rate limit on the routes WITHOUT a principal: sign-in (`/api/v1/auth/*`), webhooks
+(`/api/v1/webhooks/*`) and, with a budget of their own, the CLI downloads (`/downloads/*`,
+`/cli/install.*`, S62-08), whose answers weigh tens of megabytes.
 
 A sliding one-minute window in memory, per client address and per replica: with N replicas a
 client gets up to N x `CHOREGOS_RATE_LIMIT_PER_MINUTE`. There is no shared store, by decision.
@@ -38,6 +39,8 @@ from starlette.requests import HTTPConnection
 from .config import Settings, get_settings
 
 PREFIXES = ("/api/v1/auth/", "/api/v1/webhooks/")
+#: The CLI downloads: public, and counted apart, so a burst of installs does not spend the sign-in budget.
+DOWNLOAD_PREFIXES = ("/downloads/", "/cli/install.")
 WINDOW_S = 60.0
 #: The most keys one limiter holds; beyond it, the least recently seen key is evicted.
 MAX_KEYS = 10_000
@@ -142,21 +145,30 @@ def client_address(request: HTTPConnection, settings: Settings) -> str:
     return address[:MAX_KEY_CHARS]
 
 
-def install(app: FastAPI, per_minute: int) -> RateLimiter:
+def install(app: FastAPI, per_minute: int, downloads_per_minute: int = 0) -> RateLimiter:
     limiter = RateLimiter(per_minute)
+    downloads = RateLimiter(downloads_per_minute)
 
     @app.middleware("http")
     async def _limiter(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
-        if request.url.path.startswith(PREFIXES):
-            admitted, wait = limiter.admits(client_address(request, get_settings()))
+        path = request.url.path
+        chosen = (
+            limiter
+            if path.startswith(PREFIXES)
+            else downloads
+            if path.startswith(DOWNLOAD_PREFIXES)
+            else None
+        )
+        if chosen is not None:
+            admitted, wait = chosen.admits(client_address(request, get_settings()))
             if not admitted:
                 return JSONResponse(
                     {
                         "type": "about:blank",
                         "title": "Too many requests",
                         "status": 429,
-                        "detail": f"more than {per_minute} requests per minute from this address",
-                        "instance": request.url.path,
+                        "detail": f"more than {chosen.per_minute} requests per minute from this address",
+                        "instance": path,
                     },
                     status_code=429,
                     headers={"Retry-After": str(wait)},

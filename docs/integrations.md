@@ -29,8 +29,20 @@ and `2025-03-26`.
 | `summarize_run` | One agent run: stage, backend, model, status, cost, summary | `mcp:read` |
 | `list_pending_decisions` | What waits for a person, with the link where it is decided | `mcp:read` |
 | `create_work_item` | Opens a work item in a project (in its tracker first when external, ADR 0059) | `mcp:write` and the right to control work items |
+| `docs_search` | Searches this platform's user documentation: ranked pages with title, slug, public URL and a snippet | `mcp:read` |
+| `docs_read` | One documentation page as Markdown, by slug, or one of its sections by heading anchor; a long page comes in parts (`offset`) | `mcp:read` |
 
 A tool you are not allowed to use is not announced, and calling it answers like an unknown tool.
+
+**The documentation, from the platform itself** ([ADR 0150](adr/0150-the-instance-serves-its-own-documentation-over-mcp.md)).
+The API image carries the Markdown of the user documentation (`docs/site/` in the repository) of its
+own version, at `/opt/choregos/docs` (`CHOREGOS_DOCS_DIR` overrides). `docs_search` and `docs_read`
+read it, so your assistant answers from the documentation of the version you run, behind your firewall,
+without internet. The links they give point to the public site, `CHOREGOS_DOCS_URL` (default
+`https://docs.varga.foundation/choregos`). Every token that opens the door may use them, bound to a
+project or not; they are audited (`mcp.call`) and rate limited like the other reads. A build without
+documentation answers so, with the public URL. Ask *"how do gates work in Choregos?"*: the client
+should call `docs_search`, then `docs_read`.
 
 ### Assistants (ADR 0139)
 
@@ -253,6 +265,16 @@ Point it at `https://<console-host>/mcp` with the header `Authorization: Bearer 
 Streamable HTTP. The door has no SSE stream and no session: a `GET` answers 405, which the protocol
 allows.
 
+## The CLI
+
+The `choregos` CLI is installed from the instance itself (S62-08): **Integrations › CLI** shows the
+one-line install for the browser's system (`curl -fsSL <instance>/cli/install.sh | sh`, or
+`irm <instance>/cli/install.ps1 | iex` on Windows), the version, every file with its sha256, and the
+first commands (`choregos login --api-url <instance> --token <full-access token> --org <org>`, or the
+`CHOREGOS_API_URL` / `CHOREGOS_TOKEN` / `CHOREGOS_ORG` variables). `choregos self update` replaces the
+binary with the instance's current one. A build that bundles no CLI says so there and links the GitHub
+release of the version it runs. The routes and why they are public: [deployment.md](deployment.md#the-cli-served-by-the-instance-s62-08).
+
 ## An external agent
 
 A client of the door can be **registered as an agent** of the organisation
@@ -337,9 +359,25 @@ the door does:
   expired token ends the registration; so does the final state, once delivered. Registering inline
   in `message/send` is refused: its answer has no place for the secret.
 
-The organisation's card and endpoint are also on the console's **Integrations** page, which creates
-an `a2a` token for the person (30 days, shown once) and lists each project's file limit, with a link
-to the setting.
+The console walks through the same steps with the instance's own values: **Integrations › An
+application or another agent (A2A)** (`/integrations/a2a`, or `/p/<project>/integrations/a2a` for one
+project). It shows the organisation's card and endpoint, then:
+
+1. **the workflows exposed**: per project, which workflows carry `a2a:` (skill id, input modes,
+   required fields from `metadata.inputs`) and which do not, with the block to add, prefilled with the
+   workflow's name, and a link to its YAML tab; each project's file limit, with a link to the setting;
+2. **who calls**: an application's own account (create one or pick one, then issue its token, shown
+   once), which takes `member:manage` on the project, and says so to whoever lacks it; and, second, an
+   `a2a` token of one's own (30 days, shown once) to try the door;
+3. **the calls**, in three tabs (the CLI, `curl` in A2A 0.3.0, A2A 1.0) with the instance's address,
+   the organisation, the chosen skill and its required fields, and the token just issued, or a
+   placeholder; `tests/web/test_a2a_snippets_match_the_door.py` holds every method and command they
+   name to the door's tables and the CLI;
+4. **the follow-up**: each task is a work item of the project, started by `machine:<address>` for an
+   application; a decision is taken in the inbox; a token is revoked in **Settings › People ›
+   Applications** or **My account › Access tokens**.
+
+Each step links to the public documentation (`/integrate/a2a`, `/cli/install`).
 
 The card needs the token too, since its skills depend on who asks. Calls are audited (`a2a.call`),
 each stored file too (`workitem.input_file`, with its name, size and digest); they are rate-limited

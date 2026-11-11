@@ -21,6 +21,10 @@ The tree of a run:
 What a span never carries: the prompt, the tool arguments, the tool result (ADR 0018 conditions).
 No gate reads a span: tracing is off unless an exporter is configured, and a failure to export is
 the exporter's problem, never the run's.
+
+OpenTelemetry is the `telemetry` extra of `choregos-core` (S62-07), which the API, the orchestrator
+and the runner declare. Without it (the CLI, its native binary) this module still imports: tracing
+stays off, `configure_tracing` says so, and every helper is a no-op on a span that records nothing.
 """
 
 from __future__ import annotations
@@ -30,14 +34,28 @@ import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
+from typing import Any, cast
 
-from opentelemetry import trace
-from opentelemetry.context import Context
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor, SimpleSpanProcessor, SpanExporter
-from opentelemetry.sdk.trace.id_generator import RandomIdGenerator
-from opentelemetry.trace import NonRecordingSpan, Span, SpanContext, SpanKind, Status, StatusCode, TraceFlags
+try:
+    from opentelemetry import trace
+    from opentelemetry.context import Context
+    from opentelemetry.sdk.resources import Resource
+    from opentelemetry.sdk.trace import SpanProcessor, TracerProvider
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor, SimpleSpanProcessor, SpanExporter
+    from opentelemetry.sdk.trace.id_generator import RandomIdGenerator
+    from opentelemetry.trace import (
+        NonRecordingSpan,
+        Span,
+        SpanContext,
+        SpanKind,
+        Status,
+        StatusCode,
+        TraceFlags,
+    )
+except ImportError:  # the `telemetry` extra is not installed: tracing stays off
+    AVAILABLE = False
+else:
+    AVAILABLE = True
 
 #: The semantic conventions these names come from (`opentelemetry-semantic-conventions` 0.66b0).
 SEMCONV_SCHEMA_URL = "https://opentelemetry.io/schemas/1.44.0"
@@ -85,19 +103,38 @@ _INSTRUMENTATION = "choregos"
 _forced_ids: ContextVar[tuple[int, int] | None] = ContextVar("choregos_forced_span_ids", default=None)
 
 
-class _RunIds(RandomIdGenerator):
-    """Random ids, except for the span started while `_forced_ids` is set: the run's own."""
+if AVAILABLE:
 
-    def generate_trace_id(self) -> int:
-        forced = _forced_ids.get()
-        return forced[0] if forced else super().generate_trace_id()
+    class _RunIds(RandomIdGenerator):
+        """Random ids, except for the span started while `_forced_ids` is set: the run's own."""
 
-    def generate_span_id(self) -> int:
-        forced = _forced_ids.get()
-        return forced[1] if forced else super().generate_span_id()
+        def generate_trace_id(self) -> int:
+            forced = _forced_ids.get()
+            return forced[0] if forced else super().generate_trace_id()
 
-    def is_trace_id_random(self) -> bool:
-        return _forced_ids.get() is None
+        def generate_span_id(self) -> int:
+            forced = _forced_ids.get()
+            return forced[1] if forced else super().generate_span_id()
+
+        def is_trace_id_random(self) -> bool:
+            return _forced_ids.get() is None
+
+
+class _NullSpan:
+    """What a helper yields without OpenTelemetry: a span that records nothing."""
+
+    def set_attribute(self, key: str, value: Any) -> None:
+        """Nothing to record."""
+
+    def set_status(self, *args: Any, **kwargs: Any) -> None:
+        """Nothing to record."""
+
+    def is_recording(self) -> bool:
+        return False
+
+
+def _null_span() -> Span:
+    return cast("Span", _NullSpan())
 
 
 class _Tracing:
@@ -114,6 +151,8 @@ def configure_tracing(service_name: str, exporter: SpanExporter | None = None) -
     changes — tracing stays off, and every helper below is a no-op. The global tracer provider is
     left alone: the libraries that bring their own (LiteLLM, the MCP SDK) are not ours to redirect.
     """
+    if not AVAILABLE:
+        return False
     processor: SpanProcessor
     if exporter is not None:
         processor = SimpleSpanProcessor(exporter)
@@ -192,6 +231,9 @@ def stage_span(
     workflow: str | None = None,
 ) -> Iterator[Span]:
     """`invoke_workflow <stage>`: one stage attempt, with the run's derived ids (the trace's root)."""
+    if not AVAILABLE:
+        yield _null_span()
+        return
     attributes: dict[str, str] = {OPERATION_NAME: INVOKE_WORKFLOW}
     if workflow:
         attributes[WORKFLOW_NAME] = workflow
@@ -227,6 +269,9 @@ def agent_span(
     The parent is `trace_parent` when the orchestrator sent one, else the run's derived span: the
     two are the same span, the second only spares a runner started by hand an orphan trace.
     """
+    if not AVAILABLE:
+        yield _null_span()
+        return
     ids = _parse_traceparent(trace_parent) if trace_parent else None
     attributes: dict[str, str] = {
         OPERATION_NAME: INVOKE_AGENT,
@@ -254,6 +299,9 @@ def tool_span(run_id: str, tool: str) -> Iterator[Span]:
     Name and duration only at the start; `record_tool_call` adds what the call learned. Never the
     arguments, never the result.
     """
+    if not AVAILABLE:
+        yield _null_span()
+        return
     attributes = {OPERATION_NAME: EXECUTE_TOOL, TOOL_NAME: tool, CONVERSATION_ID: run_id, RUN_ID: run_id}
     with _tracer().start_as_current_span(
         f"{EXECUTE_TOOL} {tool}",
@@ -273,6 +321,8 @@ def record_tool_call(
     stage: str | None = None,
 ) -> None:
     """What the current `execute_tool` span learned: who served it, and whether it failed."""
+    if not AVAILABLE:
+        return
     span = trace.get_current_span()
     if provider:
         span.set_attribute(PROVIDER_NAME, provider)
@@ -286,6 +336,8 @@ def record_tool_call(
 
 def record_tool_origin(origin: str, script_sha256: str | None = None) -> None:
     """The door the current `execute_tool` span's call came through, and its script's digest."""
+    if not AVAILABLE:
+        return
     span = trace.get_current_span()
     span.set_attribute(TOOL_ORIGIN, origin)
     if script_sha256:
@@ -304,6 +356,6 @@ def record_correlation(
 def record_outcome(span: Span, outcome: str, *, failed: bool) -> None:
     """How a stage or an agent session ended; a failure is the span's error status."""
     span.set_attribute(STAGE_OUTCOME, outcome)
-    if failed:
+    if failed and AVAILABLE:
         span.set_attribute(ERROR_TYPE, outcome)
         span.set_status(Status(StatusCode.ERROR))

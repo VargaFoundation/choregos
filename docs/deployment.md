@@ -790,6 +790,23 @@ A refused file is logged (`procedures.file.refused`) and skipped: the API still 
 files still apply. A plugin can supply the same directory through a `choregos.procedures` entry point
 whose value is a path. Outside the chart, the setting is `CHOREGOS_PROCEDURES_EXTRA`.
 
+## Where the console's help links point
+
+The console's **Help** entry, in the top bar, and the "Learn more" links of its pages open the user
+documentation, `https://docs.varga.foundation/choregos` by default. An installation that cannot reach it
+(air-gapped) or serves its own copy sets `CHOREGOS_DOCS_URL` on the API, with the chart's `extraEnv`:
+
+```yaml
+global:
+  extraEnv:
+    - name: CHOREGOS_DOCS_URL
+      value: https://docs.intranet.example/choregos
+```
+
+The API serves it as `docs_url` in `GET /edition`, without its trailing slash; the console appends the
+page's path to it (`/integrate/a2a`, `/cli/install`…). A value that is not an `http(s)` address is
+ignored and the public site is used.
+
 ## Plugins
 
 A plugin packages agents, skills, templates, evals, procedures and MCP servers in one signed format
@@ -1819,6 +1836,33 @@ Service's name: the tokens and `networkPolicies` do. A hostname routed to the AP
 stays served until it is in `publicHostnames`, and a proxy in front of the API that rewrites `Host`
 without writing `X-Forwarded-Host` hides the public name from the guard. A run door is as public as
 its route.
+
+### The CLI served by the instance (S62-08)
+
+The API image carries the native `choregos` binaries (S62-07) in `/opt/choregos/cli/`, with their
+`SHA256SUMS` and `manifest.json` (`CHOREGOS_CLI_DIR` points elsewhere). The instance serves them on the
+console's host, so a person installs the CLI of the exact version it runs without reaching GitHub:
+
+| Path | What it answers |
+| :-- | :-- |
+| `/downloads/cli/manifest.json` | the manifest: `version`, and per file its `name`, `os`, `arch`, `sha256`, `size` |
+| `/downloads/cli/<name>` | a file the manifest lists, or `SHA256SUMS`: `Content-Length`, a strong `ETag` (`"sha256-<hex>"`), `Range` honoured. Any other name is a 404: names are looked up in the manifest, never joined to a path |
+| `/cli/install.sh` | the Linux and macOS install script (`curl -fsSL <instance>/cli/install.sh \| sh`) |
+| `/cli/install.ps1` | the Windows install script (`irm <instance>/cli/install.ps1 \| iex`) |
+
+The scripts carry `CHOREGOS_PUBLIC_URL` (refused with a 503 when it is not a plain `http(s)` URL), read
+the manifest and the binary from that host, and check the sha256 before installing. A build without a
+bundle answers `404` with `code: no_cli_bundled` and the GitHub release of the running version
+(`release_url`); a manifest that does not parse, or a file whose size is not the manifest's, answers
+`503`, never a doubtful file. The chart routes `/downloads` (prefix) and the two scripts (exact paths)
+to the API, beside `/api` and `/mcp`.
+
+**Public, on purpose**, like `/healthz` and `/edition`: the CLI is open source and carries no secret, the
+scripts must work with plain `curl` and `irm` before the person holds a token, and the manifest says
+only the version `/edition` already says. An instance behind a single sign-on proxy must let these four
+paths through it, as it does the probes. What needs guarding is the bandwidth: these routes have a rate
+limit of their own, `CHOREGOS_DOWNLOAD_RATE_LIMIT_PER_MINUTE` (60 requests per minute and per address by
+default, per replica, keyed as below; 0 switches it off), separate from the sign-in budget.
 
 ## Gateways and what each can do
 
