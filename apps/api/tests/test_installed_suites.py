@@ -146,7 +146,7 @@ async def test_a_version_that_passes_the_installed_suites_reaches_production_on_
 
 async def _candidate(agent: str = "investment-analyst") -> str:
     """A thumb down's candidate, as `give_feedback` stores it, for the agent of the installed assistant."""
-    async with session_scope() as db:
+    async with session_scope(orgs="*") as db:
         org_id = (await db.execute(select(Organization.id))).scalar_one()
         project_id = (await db.execute(select(Project.id).limit(1))).scalar_one()
         record = AgentSessionRecord(

@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
 from ..db.models import AgentSessionRecord, AssistantInstallation, CostLedger, GatewayKeyRow
+from ..db.session import session_scope
 from ..rbac import Permission, Principal
 from .budgets import start_of_month
 
@@ -84,13 +85,19 @@ def conversation_policy(document: dict[str, Any] | None, row: AssistantInstallat
 
 async def month_spend(session: AsyncSession, installation_id: str, user_id: str | None = None) -> float:
     """What the conversations of the installation cost since the first of the month, from the ledger lines
-    that name it (they outlive a deleted conversation), the person's alone when `user_id` is given."""
+    that name it (they outlive a deleted conversation), the person's alone when `user_id` is given.
+
+    The installation's whole month is a sum over every person's turns, and each turn is booked in its
+    person's own space, which nobody else reads (ADR 0134): it is read under the platform scope, which
+    returns the total and never a row."""
     query = select(func.coalesce(func.sum(CostLedger.cost_usd), 0.0)).where(
         CostLedger.installation_id == installation_id, CostLedger.ts >= start_of_month()
     )
     if user_id is not None:
         query = query.where(CostLedger.user_id == user_id)
-    return float((await session.execute(query)).scalar_one())
+        return float((await session.execute(query)).scalar_one())
+    async with session_scope(orgs="*") as platform:
+        return float((await platform.execute(query)).scalar_one())
 
 
 async def open_turn_reservations(
@@ -113,7 +120,9 @@ async def open_turn_reservations(
     )
     if user_id is not None:
         query = query.where(AgentSessionRecord.user_id == user_id)
-    return float((await session.execute(query)).scalar_one())
+        return float((await session.execute(query)).scalar_one())
+    async with session_scope(orgs="*") as platform:  # every person's turns: see `month_spend`
+        return float((await platform.execute(query)).scalar_one())
 
 
 async def turn_caps(
