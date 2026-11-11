@@ -5,7 +5,8 @@ description = "API Choregos (FastAPI)"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
 dependencies = [
-    "choregos-core",
+    # Spans (ADR 0018): `choregos_core.telemetry` needs the extra.
+    "choregos-core[telemetry]",
     "choregos-adapters",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",

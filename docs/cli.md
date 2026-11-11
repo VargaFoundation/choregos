@@ -3,6 +3,48 @@
 Generated from the CLI itself by `tools/gen_cli_reference.py` — do not edit by hand
 (`make docs-cli` regenerates it, a test checks it is current).
 
+## Installing the CLI
+
+`choregos` ships as one native, self-contained file per platform: nothing to install first, no
+Python, no SDK, no runtime. Each release attaches them to its GitHub release, under names that
+never change, and the API image carries the same files in `/opt/choregos/cli/`:
+
+| Platform | File |
+|:--|:--|
+| Linux x86_64 (glibc 2.28 or later: RHEL 8, Debian 10, Ubuntu 18.10 on) | `choregos-linux-x86_64` |
+| Linux arm64 (same) | `choregos-linux-arm64` |
+| macOS, Apple silicon | `choregos-macos-arm64` |
+| macOS, Intel | `choregos-macos-x86_64` |
+| Windows x86_64 | `choregos-windows-x86_64.exe` |
+
+Beside them, `SHA256SUMS`, `manifest.json` (the version, and each file's platform, digest and
+size) and a cosign bundle per file (`<file>.sigstore.json`). Download one, check it, put it on the
+PATH:
+
+```sh
+curl -fsSLO https://github.com/VargaFoundation/choregos/releases/download/v<version>/choregos-linux-x86_64
+curl -fsSLO https://github.com/VargaFoundation/choregos/releases/download/v<version>/SHA256SUMS
+sha256sum --ignore-missing -c SHA256SUMS          # macOS: shasum -a 256 --ignore-missing -c SHA256SUMS
+install -m 0755 choregos-linux-x86_64 ~/.local/bin/choregos
+choregos --version
+```
+
+`cosign verify-blob --bundle SHA256SUMS.sigstore.json --certificate-identity
+https://github.com/VargaFoundation/choregos/.github/workflows/release.yml@refs/tags/v<version>
+--certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS` proves the sums
+come from the release workflow. The Windows and macOS files are not yet signed by a platform
+vendor (`docs/plan/BLOCKERS.md`): Windows SmartScreen warns, and a macOS browser download needs
+`xattr -d com.apple.quarantine choregos-macos-arm64` once. The first call unpacks the binary into
+the user's cache directory (`~/.cache/choregos`, `~/Library/Caches/choregos`,
+`%LOCALAPPDATA%\choregos`); later calls start from there.
+
+From a checkout, `make cli-binary` builds the binary of the machine it runs on into `dist/cli/`
+(Nuitka; on Linux in the `manylinux_2_28` image, so docker is needed) and `make cli-binary-smoke`
+runs the release's smoke test on it. The Python package (`packages/cli`, `uv run choregos`)
+remains the way to work on the CLI itself.
+
+## Profile
+
 The profile lives in `~/.config/choregos/config.json` (`CHOREGOS_CONFIG` overrides the
 path): `api_url`, `token`, `org`. `choregos login` writes it; `CHOREGOS_API_URL`,
 `CHOREGOS_TOKEN` and `CHOREGOS_ORG` are read when no profile exists.

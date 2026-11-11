@@ -12,7 +12,9 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from . import __version__
 from .a2a import a2a_app
+from .binary_info import binary_info
 from .client import ApiError, Client, NoOrganisationError, Profile
 from .knowledge import knowledge_app
 from .plugins import plugin_app
@@ -51,6 +53,26 @@ app.add_typer(a2a_app, name="a2a")
 app.add_typer(self_app, name="self")
 
 console = Console()
+
+
+def _print_version(value: bool) -> None:
+    if value:
+        typer.echo(f"choregos {__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def _root(
+    version: Annotated[
+        bool,
+        typer.Option("--version", callback=_print_version, is_eager=True, help="Print the version and exit."),
+    ] = False,
+) -> None:
+    """Options of `choregos` itself, before any command."""
+
+
+# Hidden: the native binaries' smoke test asks the binary what it knows about itself (S62-07).
+app.command("binary-info", hidden=True)(binary_info)
 
 
 class TransportSafeClient(Client):

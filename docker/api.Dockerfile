@@ -86,6 +86,12 @@ RUN git clone --quiet --depth 1 --branch "${HUBBLE_VERSION}" https://github.com/
       -X 'github.com/cilium/cilium/hubble/pkg.Version=${HUBBLE_VERSION#v}'" \
     -o /out/hubble .
 
+# The native `choregos` CLI binaries (S62-07), served by the instance (S62-08): EMPTY here. The release
+# replaces this stage with the signed binaries, their SHA256SUMS and manifest.json
+# (`--build-context cli=dist/cli`, `release.yml`); any other build (compose, CI) leaves it empty, and
+# the image then has no /opt/choregos/cli/ — the instance says no CLI is bundled in this build.
+FROM scratch AS cli
+
 # `cosign`, the release binary checked against the release's checksums: the release's binaries are
 # built with Go 1.27.3, but the `ghcr.io/sigstore/cosign/cosign:v3.1.4` image is a separate build,
 # with Go 1.27.1, which links CVE-2026-56857 (measured with `go version`, S41-14c).
@@ -154,6 +160,17 @@ FROM commun AS api
 # `cosign`: publication verifies a hosted agent's image signature on its digest (S41-14, ADR 0080
 # §8). The same release as the `hosted-cosign` CI job, fetched and checked in the `cosign` stage above.
 COPY --from=cosign /out/cosign /usr/local/bin/cosign
+# The CLI binaries, when the build was given them (the `cli` stage above): read only, executable.
+# A mount rather than a `COPY --from=cli`: the directory exists only when there is something in it.
+USER root
+RUN --mount=type=bind,from=cli,target=/mnt/cli \
+    if [ -f /mnt/cli/manifest.json ]; then \
+      mkdir -p /opt/choregos/cli \
+      && cp /mnt/cli/* /opt/choregos/cli/ \
+      && chmod 0644 /opt/choregos/cli/* \
+      && find /opt/choregos/cli -name 'choregos-*' ! -name '*.json' -exec chmod 0755 {} +; \
+    fi
+USER 1000
 # SkillSpector (ADR 0095): the gate runs it on every version a person publishes.
 COPY --from=skillspector /opt/skillspector /opt/skillspector
 ENV CHOREGOS_SKILL_SCANNER=skillspector
