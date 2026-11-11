@@ -21,7 +21,14 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 LINK = re.compile(r"\]\(\s*<?([^)\s#>]+)")
 #: Fenced code blocks hold examples, not links.
 FENCE = re.compile(r"^(```|~~~).*?^\1", re.M | re.S)
-PAGES = sorted([*ROOT.glob("*.md"), *(ROOT / "docs").rglob("*.md"), *(ROOT / "templates").rglob("*.md")])
+#: `docs/site/` is checked by `test_site.py`, which also reads headings and tolerates, for the sections
+#: S62-09b writes, a link to a page that has not landed yet.
+SITE = ROOT / "docs" / "site"
+PAGES = sorted(
+    p
+    for p in [*ROOT.glob("*.md"), *(ROOT / "docs").rglob("*.md"), *(ROOT / "templates").rglob("*.md")]
+    if not p.is_relative_to(SITE)
+)
 
 
 def _targets(page: pathlib.Path) -> list[str]:

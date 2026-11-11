@@ -7,6 +7,13 @@ global:
   # (e.g. an internal HTTP ingress behind a VPN). Empty: derived from `domain`.
   publicUrl: ""
   apiUrl: ""
+  # Where runs call back (`CHOREGOS_INTERNAL_API_URL`, what a runner receives as `callbacks.api_url`),
+  # and where the per-run egress proxy asks for a run's network. Empty: the API's in-cluster Service,
+  # `http://choregos-api:8000`, which is right whenever agent stages run in the release namespace. Runner
+  # namespaces of their own need the Service's full name (`http://choregos-api.<namespace>.svc:8000`).
+  # An executor that runs OUTSIDE the cluster (`aca`) needs a URL it can reach: give it a run door,
+  # `choregos-api.runDoor.hostnames`, and write that URL here (ADR 0144).
+  internalApiUrl: ""
   imageRegistry: ghcr.io/vargafoundation
   imageTag: "0.25.3"
   imagePullPolicy: IfNotPresent

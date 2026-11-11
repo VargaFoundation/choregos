@@ -31,6 +31,8 @@ class HttpRunNetworkSource:
     The answer is kept `cache_seconds`, keyed by the run AND a hash of its token, so that a second
     token for the same run never reads the first one's answer. A refusal is remembered for a few
     seconds only, so that a pod hammering the proxy with a wrong token does not hammer the API.
+    A run that was closed while its answer was cached keeps that answer until it expires: the
+    cache, not the API, bounds how long a closed run's process still gets out.
     """
 
     def __init__(
@@ -64,7 +66,9 @@ class HttpRunNetworkSource:
             )
         except httpx.HTTPError as error:
             raise SourceUnavailableError(str(error)) from error
-        if response.status_code in (401, 403, 404):
+        # 409: the run is closed (ADR 0143). It has no network any more, and that is a refusal like
+        # the others, remembered a few seconds — not an API to ask again at every request.
+        if response.status_code in (401, 403, 404, 409):
             self._cache[key] = (now + self.refusal_seconds, None)
             raise UnknownRunError(run_id)
         if response.status_code != 200:

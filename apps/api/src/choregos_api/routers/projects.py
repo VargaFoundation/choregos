@@ -20,7 +20,7 @@ from ..audit import record
 from ..config import get_settings
 from ..db.models import Membership, Organization, Project
 from ..db.org_aliases import aliases_by_org, aliases_of, holder_of_slug, keep_old_slug, release
-from ..db.session import ALL_ORGS, limit_to_organisations
+from ..db.session import ALL_ORGS, limit_to_organisations, release_connection
 from ..deps import Db, Me, Pagination, ProjectCtx, require_platform_admin
 from ..edition import is_enterprise
 from ..errors import conflict, forbidden, not_found
@@ -592,7 +592,6 @@ async def provision(ctx: ProjectCtx, body: ProvisionRequest, session: Db) -> Pro
         "resume": body.resume,
     }
     if not body.dry_run:
-        await get_temporal().start_provisioning(workflow_id, payload)
         ctx.project.status = "provisioning"
     ctx.project.provision_state = {
         **(ctx.project.provision_state or {}),
@@ -601,6 +600,12 @@ async def provision(ctx: ProjectCtx, body: ProvisionRequest, session: Db) -> Pro
         "started_at": utcnow().isoformat(),
         "inputs": payload["inputs"],
     }
+    if not body.dry_run:
+        # Committed BEFORE the workflow starts (S62-13): a template with no step on this platform ends
+        # in under a second, and its `finish_provisioning` wrote `succeeded` before this request
+        # committed `running` over it; the project stayed `provisioning` (production, 2026-11-11).
+        await release_connection(session)
+        await get_temporal().start_provisioning(workflow_id, payload)
     await persist_event(
         session,
         EventType.PROVISIONING_STEP,

@@ -27,6 +27,8 @@ from .config import get_settings
 from .db.session import create_all, dispose_engine
 from .errors import REQUEST_ID_PATTERN, install_error_handlers, internal_error
 from .events import PostgresRelay
+from .internal_api_guard import announce as announce_the_internal_api_guard
+from .internal_api_guard import install_internal_api_guard
 from .knowledge.conversion import conversions
 from .logging import bind, clear, configure_logging, get_logger
 from .metrics import expose, http_requests, refresh_loop
@@ -101,6 +103,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if not settings.is_sqlite:
         await _refuse_the_superuser()
     _warn_without_secrets_key(settings.fakes)
+    # What the run's API guard does here, and what to configure when it cannot refuse (ADR 0144).
+    announce_the_internal_api_guard(settings)
     metrics_refresh = asyncio.create_task(refresh_loop(settings.metrics_refresh_seconds))
     relay = None if settings.is_sqlite else PostgresRelay(settings.database_url)
     if relay is not None:
@@ -299,6 +303,10 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json",
     )
     check_cors_origins(settings)
+    # The run's API answers only where runs are (ADR 0144): one guard for everything under
+    # `/api/v1/internal`. Added first, so innermost: its 404 goes back through the same middlewares as
+    # the router's own for an unknown path, and is logged with its request id.
+    install_internal_api_guard(app)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_list,

@@ -1,0 +1,8 @@
+{
+  "label": "Use Choregos",
+  "position": 4,
+  "link": {
+    "type": "generated-index",
+    "description": "Day-to-day work in the console: projects and members, workflows, work items, decisions, knowledge, connectors, budgets and policies."
+  }
+}

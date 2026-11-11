@@ -27,6 +27,8 @@ dist/
 build/
 # The real BuildKit's tests (S41-13): `build/` above hid them, and CI ran a directory git never had.
 !tests/build/
+# The public documentation's "Build agents" section (S62-09a): `docs/site/build/` is a page folder, not an output.
+!docs/site/build/
 .DS_Store
 .tilt/
 tmp/

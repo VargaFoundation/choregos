@@ -29,6 +29,9 @@ x-platform-env: &platform-env
   CHOREGOS_SESSION_SECRET: local-install-only-not-a-secret
   CHOREGOS_PUBLIC_URL: http://localhost:${CHOREGOS_PORT_WEB:-3000}
   CHOREGOS_API_URL: http://localhost:${CHOREGOS_PORT_API:-8000}
+  # What an agent calls back, from inside the compose network. The workers hand it to each run; the
+  # API reads it to know that runs do not come in under its published name (ADR 0144).
+  CHOREGOS_INTERNAL_API_URL: http://api:8000
   CHOREGOS_CORS_ORIGINS: http://localhost:${CHOREGOS_PORT_WEB:-3000}
   CHOREGOS_GATEWAY_URL: http://litellm:4000
   CHOREGOS_GATEWAY_MASTER_KEY: sk-local-install-only
@@ -213,8 +216,6 @@ services:
       - export CHOREGOS_RUN_TOKEN_PRIVATE_KEY="$$(cat /keys/run-token.pem)" && exec python -m choregos_orchestrator.worker
     environment:
       <<: *platform-env
-      # What an agent calls back, from inside the compose network.
-      CHOREGOS_INTERNAL_API_URL: http://api:8000
       # A project with no runtime connector runs its agents as local containers.
       CHOREGOS_EXECUTOR_KIND: local_docker
       CHOREGOS_RUNNER_IMAGE: ghcr.io/vargafoundation/choregos-runner:${CHOREGOS_RUNNER_VERSION:-0.17.12}

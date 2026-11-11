@@ -110,7 +110,9 @@ calls to an in-cluster Firecrawl. A deployment that wants their traffic through 
 `python -m choregos_api.relay` (the API image, its own Deployment, one per organisation), and points them at it:
 
 - environment: `CHOREGOS_RELAY_ORG` (the organisation's slug), `CHOREGOS_RELAY_API_URL` (e.g.
-  `http://choregos-api:8000/api/v1`), `CHOREGOS_RELAY_API_TOKEN` (printed by
+  `http://choregos-api:8000/api/v1`: the Service, not a public hostname of the API, where the route the
+  relay reads may be refused, see [the run's API and the run door](deployment.md#the-runs-api-and-the-run-door)),
+  `CHOREGOS_RELAY_API_TOKEN` (printed by
   `python -m choregos_api.relay mint --org <slug> --days N`, run where `CHOREGOS_RUN_TOKEN_PRIVATE_KEY` is set;
   it expires, at most 400 days), `CHOREGOS_RELAY_CLIENT_TOKEN` (16 characters or more, shared with the clients),
   `CHOREGOS_RELAY_LISTEN` (`0.0.0.0:3128` by default); it refuses to start without them;

@@ -85,7 +85,7 @@ plugins-check:  ## No network: the archives of plugins/offline/ are what plugins
 	$(UV) run python -m tools.plugins.update_lock --check
 
 .PHONY: docs-cli
-docs-cli:  ## Regenerate docs/cli.md from the CLI (to commit)
+docs-cli:  ## Regenerate docs/cli.md and docs/site/cli/reference.md from the CLI (to commit)
 	$(UV) run python tools/gen_cli_reference.py
 
 .PHONY: headroom-lock

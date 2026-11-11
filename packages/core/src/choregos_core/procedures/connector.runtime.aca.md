@@ -50,6 +50,13 @@ Set `runner.executor: aca` in the chart and declare the connector: `subscription
 `environment_id` (required), `location` (default `westeurope`), `tenant_id`, `client_id`, `client_secret`
 (password field; or a ready `token` instead of the three identity fields), `identity_id`, `registry_server` and `log_analytics_workspace_id`.
 
+The job runs outside the cluster and calls the platform back, so it needs an address it can reach: the
+in-cluster Service is not one. Give runs a hostname of their own, a **run door**: list it in
+`choregos-api.runDoor.hostnames` (the chart then routes it to the run's API and to nothing else), serve
+it over TLS, allow only the addresses your Container Apps environment leaves from where your ingress
+can, and set `global.internalApiUrl` to `https://<that hostname>`. The deployment guide has the steps
+under "The run's API and the run door".
+
 ## Test it
 
 Start a run on a test project: the job appears in the resource group and its execution finishes.
@@ -60,3 +67,7 @@ Start a run on a test project: the job appears in the resource group and its exe
 - The job cannot pull its image: the managed identity lacks pull rights on the registry.
 - No logs: no Log Analytics workspace is configured.
 - A timeout: the egress allowlist must open `management.azure.com` and `login.microsoftonline.com`.
+- The job starts and ends within seconds, "input not found": its first call back did not get through.
+  A connection error means `global.internalApiUrl` is not reachable from the Container Apps
+  environment. A `404` means the API refused the hostname the job called: it is a public hostname of
+  the API and not a run door, while `choregos-api.internalApiGuard` is `enforce`.

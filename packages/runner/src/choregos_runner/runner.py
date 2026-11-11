@@ -243,17 +243,21 @@ class Runner:
             # ADR 0070: before anything makes a network call — git, pip, the agent — the egress
             # proxy learns which run is calling. ADR 0115: with the run's egress token, not its run
             # token, since the agent inherits these variables.
-            os.environ.update(
-                authenticate_proxy_env(
-                    os.environ, self.settings.run_id, await self._egress_credential(client)
-                )
-            )
+            try:
+                credential = await self._egress_credential(client)
+            except InternalApiError as exc:
+                if exc.status_code != 409:
+                    raise
+                # The run is closed (ADR 0143): the platform has its result, or stopped waiting for
+                # it. As for the input below, there is nothing to do, and that is not a failure.
+                return RunOutcome(Exit.OK, detail="the run is closed")
+            os.environ.update(authenticate_proxy_env(os.environ, self.settings.run_id, credential))
             # 1. input
             try:
                 stage_input = await client.fetch_input()
             except Exception as exc:
                 detail = str(exc)
-                if "409" in detail:  # result already posted: replay, we exit cleanly
+                if "409" in detail:  # the run is closed (result posted, or abandoned): we exit cleanly
                     return RunOutcome(Exit.OK, detail="result already posted")
                 return RunOutcome(Exit.INPUT_NOT_FOUND, detail=detail)
             return await self.execute(with_gateway_key(stage_input, self.settings.gateway_key), client)

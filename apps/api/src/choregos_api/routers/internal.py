@@ -27,6 +27,7 @@ from choregos_contracts import (
     artifact_digest,
 )
 from choregos_core import PolicyEngine, matches_any, telemetry, utcnow
+from choregos_core.run_closure import run_is_closed
 from choregos_core.workspace import is_read_only_scope
 from fastapi import APIRouter, Header, Query, Request, Response, status
 from sqlalchemy import select
@@ -44,7 +45,7 @@ from ..db.models import (
 )
 from ..db.models import Finding as FindingRow
 from ..db.session import allow_release_during_calls, outside_the_transaction
-from ..deps import Db, NetworkAuth, RunAuth
+from ..deps import Db, NetworkAuth, OpenNetworkAuth, OpenRunAuth, RunAuth
 from ..errors import ApiError, conflict, not_found, unprocessable
 from ..logging import get_logger
 from ..object_store import object_store
@@ -125,11 +126,9 @@ async def _run_and_item(session: Any, run_id: str) -> tuple[Run, WorkItem, Proje
 
 
 @router.get("/runs/{id}/input", response_model=StageInput, operation_id="getRunInput")
-async def get_input(id: str, session: Db, claims: RunAuth) -> StageInput:
-    """The run's `StageInput`. If the result is already posted, 409: the runner exits with 0."""
+async def get_input(id: str, session: Db, claims: OpenRunAuth) -> StageInput:
+    """The run's `StageInput`. Once the run is closed, 409 (`OpenRunAuth`): the runner exits with 0."""
     run, _, _ = await _run_and_item(session, id)
-    if run.result is not None:
-        raise conflict("result already posted for this run")
     if not run.stage_input:
         raise not_found("StageInput", id)
     return StageInput.model_validate(run.stage_input)
@@ -137,7 +136,10 @@ async def get_input(id: str, session: Db, claims: RunAuth) -> StageInput:
 
 @router.post("/runs/{id}/events", status_code=status.HTTP_202_ACCEPTED, operation_id="postRunEvents")
 async def post_events(id: str, body: RunEventsBatch, session: Db, claims: RunAuth) -> dict[str, int]:
-    """ACP log in a batch, idempotent by `seq` (a replay does not write twice)."""
+    """ACP log in a batch, idempotent by `seq` (a replay does not write twice).
+
+    Accepted for a closed run too (ADR 0143): the journal is append-only, and what a process did
+    after its run ended is exactly what an operator wants to read."""
     run, _, project = await _run_and_item(session, id)
     known = set(
         (await session.execute(select(RunEvent.seq).where(RunEvent.run_id == run.id))).scalars().all()
@@ -173,9 +175,10 @@ async def post_events(id: str, body: RunEventsBatch, session: Db, claims: RunAut
 
 
 @router.get("/runs/{id}/network", response_model=RunNetwork, operation_id="getRunNetwork")
-async def get_run_network(id: str, session: Db, claims: NetworkAuth) -> RunNetwork:
+async def get_run_network(id: str, session: Db, claims: OpenNetworkAuth) -> RunNetwork:
     """The network THIS run may use (ADR 0070): the egress proxy reads it with the run's own token.
-    A hosted session's pod (S41-11) speaks as `session-{id}` and gets its agent version's network."""
+    A hosted session's pod (S41-11) speaks as `session-{id}` and gets its agent version's network.
+    A closed run has none (ADR 0143): the proxy is refused, and refuses."""
     if id.startswith(SESSION_RUN_PREFIX):
         return await session_network(session, await _session_of(session, id))
     run, _, _ = await _run_and_item(session, id)
@@ -190,9 +193,10 @@ async def get_run_network(id: str, session: Db, claims: NetworkAuth) -> RunNetwo
 async def post_network_decisions(
     id: str, body: NetworkDecisionBatch, session: Db, claims: NetworkAuth
 ) -> dict[str, int]:
-    """What the proxy or the runner let through or refused: cumulative totals, replay-safe. A
-    session's decisions are not stored yet (a `network_decisions` row belongs to a run): the batch
-    is acknowledged, so its proxy does not retry it."""
+    """What the proxy or the runner let through or refused: cumulative totals, replay-safe. It is
+    a journal: a closed run's decisions are accepted too (ADR 0143). A session's decisions are not
+    stored yet (a `network_decisions` row belongs to a run): the batch is acknowledged, so its proxy
+    does not retry it."""
     if id.startswith(SESSION_RUN_PREFIX):
         await _session_of(session, id)
         return {"accepted": len(body.decisions)}
@@ -201,7 +205,7 @@ async def post_network_decisions(
 
 
 @router.post("/runs/{id}/egress-token", response_model=EgressToken, operation_id="postRunEgressToken")
-async def post_egress_token(id: str, claims: RunAuth) -> EgressToken:
+async def post_egress_token(id: str, claims: OpenRunAuth) -> EgressToken:
     """The run's egress token (ADR 0115), for its run token: the runner puts it in the proxy
     variables the agent inherits, so the agent can read its run's network and nothing else — not
     its input, not its result, not its git token, not its tools."""
@@ -216,10 +220,17 @@ async def post_egress_token(id: str, claims: RunAuth) -> EgressToken:
 
 @router.post("/runs/{id}/result", operation_id="postRunResult")
 async def post_result(id: str, body: StageResult, session: Db, claims: RunAuth) -> dict[str, str]:
-    """Post the `StageResult`. Idempotent: an identical second call answers 200 and changes nothing."""
+    """Post the `StageResult`. Idempotent: a second call answers 200 and changes nothing.
+
+    So does a first call that comes after the run was closed (ADR 0143) — the orchestrator stopped
+    waiting, and wrote the result it told the workflow: the late result is answered as a replay,
+    and neither the run nor its work item moves. The row is read again under the lock an update
+    takes, so that a close and a post made at the same moment cannot both win.
+    """
     run, item, project = await _run_and_item(session, id)
     payload = body.model_dump(mode="json", by_alias=True)
-    if run.result is not None:
+    await session.refresh(run, with_for_update={"key_share": True})
+    if run_is_closed(run):
         return {"status": "already_recorded", "run_id": run.id}
     run.result = payload
     run.status = "succeeded" if body.status == "done" else "failed"
@@ -277,7 +288,7 @@ async def post_result(id: str, body: StageResult, session: Db, claims: RunAuth) 
     status_code=status.HTTP_201_CREATED,
     operation_id="postRunFinding",
 )
-async def post_finding(id: str, body: Finding, session: Db, claims: RunAuth) -> FindingAck:
+async def post_finding(id: str, body: Finding, session: Db, claims: OpenRunAuth) -> FindingAck:
     """Post a finding, capped by `policy.findings.max_per_run`."""
     run, item, project = await _run_and_item(session, id)
     engine = PolicyEngine(await effective_policy(session, project.id))
@@ -337,7 +348,7 @@ async def post_finding(id: str, body: Finding, session: Db, claims: RunAuth) -> 
 
 @router.post("/runs/{id}/scope-change", response_model=ScopeChangeDecision, operation_id="postScopeChange")
 async def post_scope_change(
-    id: str, body: ScopeChangeRequestIn, session: Db, claims: RunAuth
+    id: str, body: ScopeChangeRequestIn, session: Db, claims: OpenRunAuth
 ) -> ScopeChangeDecision:
     """Scope widening: granted automatically under a threshold, otherwise submitted to a human."""
     run, item, project = await _run_and_item(session, id)
@@ -392,7 +403,7 @@ async def post_scope_change(
 
 
 @router.post("/runs/{id}/question", status_code=status.HTTP_202_ACCEPTED, operation_id="postRunQuestion")
-async def post_question(id: str, body: QuestionIn, session: Db, claims: RunAuth) -> dict[str, str]:
+async def post_question(id: str, body: QuestionIn, session: Db, claims: OpenRunAuth) -> dict[str, str]:
     """The agent asks for an arbitration: the run will have to end in `needs_human`."""
     run, item, project = await _run_and_item(session, id)
     request_row = new_human_request(
@@ -423,7 +434,7 @@ async def post_question(id: str, body: QuestionIn, session: Db, claims: RunAuth)
 
 
 @router.get("/runs/{id}/context", response_model=ContextPack, operation_id="getRunContext")
-async def get_context(id: str, session: Db, claims: RunAuth) -> ContextPack:
+async def get_context(id: str, session: Db, claims: OpenRunAuth) -> ContextPack:
     run, _, _ = await _run_and_item(session, id)
     if run.context_pack:
         return ContextPack.model_validate(run.context_pack)
@@ -431,7 +442,7 @@ async def get_context(id: str, session: Db, claims: RunAuth) -> ContextPack:
 
 
 @router.get("/runs/{id}/skills", response_model=list[dict[str, Any]], operation_id="getRunSkills")
-async def get_skills(id: str, session: Db, claims: RunAuth) -> list[dict[str, Any]]:
+async def get_skills(id: str, session: Db, claims: OpenRunAuth) -> list[dict[str, Any]]:
     """The files of the skills that the run's `StageInput` names (ADR 0033).
 
     The runner reads them here, with its run token, then recomputes their fingerprint: the one in
@@ -475,7 +486,7 @@ def _declared_inputs(run: Run) -> list[str]:
 
 
 @router.get("/runs/{id}/inputs", response_model=list[RunInputFile], operation_id="getRunInputs")
-async def get_inputs(id: str, session: Db, claims: RunAuth) -> list[RunInputFile]:
+async def get_inputs(id: str, session: Db, claims: OpenRunAuth) -> list[RunInputFile]:
     """The declared inputs of the run that an earlier step produced, latest revision of each (ADR 0049).
 
     The runner mounts them as files in `.choregos/inputs/`, so a large report no longer has to fit
@@ -501,7 +512,7 @@ async def get_inputs(id: str, session: Db, claims: RunAuth) -> list[RunInputFile
 
 
 @router.get("/runs/{id}/inputs/{name}", operation_id="getRunInputContent")
-async def get_input_content(id: str, name: str, session: Db, claims: RunAuth) -> Response:
+async def get_input_content(id: str, name: str, session: Db, claims: OpenRunAuth) -> Response:
     """The bytes of a declared input, digest checked; reading it leaves a *read* receipt (S25-04)
     under the digest of what was read. Only the inputs the run's transition declares are served."""
     run, item, project = await _run_and_item(session, id)
@@ -546,18 +557,16 @@ async def put_output(
     name: str,
     request: Request,
     session: Db,
-    claims: RunAuth,
+    claims: OpenRunAuth,
     type: Annotated[str, Query(description="a type of the artifact vocabulary (ADR 0049)")],
 ) -> Artifact:
     """A deliverable the agent wrote in `.choregos/outputs/` (S31-05, ADR 0049).
 
     The API hashes the bytes it received and refuses them unless they match the digest the runner
     computed; it stores them in the object store and records a typed artifact revision with its
-    *produced* receipt. Idempotent: the same bytes again make no new version. Once the result is
-    posted, the run's outputs are closed."""
+    *produced* receipt. Idempotent: the same bytes again make no new version. Once the run is
+    closed, so are its outputs (`OpenRunAuth`)."""
     run, item, project = await _run_and_item(session, id)
-    if run.result is not None:
-        raise conflict("result already posted for this run: its outputs are closed")
     if type not in ARTIFACT_TYPES:
         raise unprocessable(f"unknown artifact type `{type}`")
     limit = get_settings().artifact_max_bytes
@@ -598,7 +607,7 @@ async def put_output(
 
 
 @router.get("/runs/{id}/knowledge", response_model=list[dict[str, Any]], operation_id="getRunKnowledge")
-async def get_knowledge(id: str, session: Db, claims: RunAuth) -> list[dict[str, Any]]:
+async def get_knowledge(id: str, session: Db, claims: OpenRunAuth) -> list[dict[str, Any]]:
     """The pinned documents of the `files` knowledge bases the run's `StageInput` names (ADR 0051).
 
     Exactly the documents pinned when the run was prepared, and only while the base is still served
@@ -627,7 +636,7 @@ async def get_knowledge(id: str, session: Db, claims: RunAuth) -> list[dict[str,
     operation_id="searchRunKnowledge",
 )
 async def search_knowledge(
-    id: str, body: KnowledgeSearchRequest, session: Db, claims: RunAuth
+    id: str, body: KnowledgeSearchRequest, session: Db, claims: OpenRunAuth
 ) -> KnowledgeSearchResult:
     """`knowledge_search` of the sidecar (ADR 0051): the `index` bases the run's `StageInput` names,
     and only while they are served to the run's project and, when restricted, readable by the person
@@ -667,7 +676,9 @@ async def search_knowledge(
     response_model=list[RunMemoryHit],
     operation_id="searchRunMemory",
 )
-async def search_memory(id: str, body: RunMemorySearch, session: Db, claims: RunAuth) -> list[RunMemoryHit]:
+async def search_memory(
+    id: str, body: RunMemorySearch, session: Db, claims: OpenRunAuth
+) -> list[RunMemoryHit]:
     """`search_memory` of the sidecar (S40-11): the memories the run's `StageInput` names, and no others.
 
     The run token proves the run; what it may read is what its `StageInput` resolved when it was
@@ -695,7 +706,7 @@ async def search_memory(id: str, body: RunMemorySearch, session: Db, claims: Run
 
 
 @router.get("/runs/{id}/ticket", response_model=RunTicket, operation_id="getRunTicket")
-async def get_ticket(id: str, session: Db, claims: RunAuth) -> RunTicket:
+async def get_ticket(id: str, session: Db, claims: OpenRunAuth) -> RunTicket:
     """The work item as the run sees it. `spec_markdown` and `plan_markdown` are earlier steps'
     outputs, so they follow the same rule as `/inputs/{name}` (ADR 0077 §4): served only when the
     run's transition declares them, and only what is served leaves a *read* receipt (S25-04)."""
@@ -737,7 +748,7 @@ def github_repository(url: str) -> str | None:
 
 
 @router.post("/runs/{id}/git-token", response_model=GitToken, operation_id="postRunGitToken")
-async def post_git_token(id: str, session: Db, claims: RunAuth) -> GitToken:
+async def post_git_token(id: str, session: Db, claims: OpenRunAuth) -> GitToken:
     """The run's git token (docs/security.md: "issued per run, repository scope, 1 h, in memory").
 
     The page promised it, the code did not do it: the runner cloned without credentials, and a
@@ -755,8 +766,6 @@ async def post_git_token(id: str, session: Db, claims: RunAuth) -> GitToken:
     from ..services.github_app import claimed_installation_for, implicit_claim_enabled
 
     run, _item, project_row = await _run_and_item(session, id)
-    if run.result is not None:
-        raise conflict("result already posted for this run")
     url = str(((run.stage_input or {}).get("repo") or {}).get("url") or "")
     repository = github_repository(url)
     app_id = os.environ.get("CHOREGOS_GITHUB_APP_ID", "")
@@ -790,7 +799,7 @@ async def post_git_token(id: str, session: Db, claims: RunAuth) -> GitToken:
 
 @router.get("/runs/{id}/ci-logs", response_model=CiLogs, operation_id="getRunCiLogs")
 async def get_ci_logs(
-    id: str, session: Db, claims: RunAuth, tail: int = Query(default=500, le=5000)
+    id: str, session: Db, claims: OpenRunAuth, tail: int = Query(default=500, le=5000)
 ) -> CiLogs:
     """Logs of the last CI failure, for the `fix_ci` role."""
     _run, item, _project = await _run_and_item(session, id)
@@ -846,7 +855,7 @@ def json_sha256(value: Any) -> str:
 
 
 @router.get("/runs/{id}/tools", operation_id="getRunTools")
-async def get_tools(id: str, session: Db, claims: RunAuth) -> dict[str, Any]:
+async def get_tools(id: str, session: Db, claims: OpenRunAuth) -> dict[str, Any]:
     """The tools THIS run can call, in MCP format (`name`, `description`, `inputSchema`), each with
     `annotations.readOnlyHint`, its access (`x-choregos-access`: `read`, `write`, `approval`) and the
     `outputSchema` its operation declares (ADR 0122). A catalogue tool and the web tools read: a
@@ -973,7 +982,7 @@ async def call_tool(
     name: str,
     body: dict[str, Any],
     session: Db,
-    claims: RunAuth,
+    claims: OpenRunAuth,
     tool_origin: Annotated[str | None, Header(alias=TOOL_ORIGIN_HEADER)] = None,
     script: Annotated[str | None, Header(alias=SCRIPT_HEADER)] = None,
 ) -> dict[str, Any]:
@@ -986,8 +995,6 @@ async def call_tool(
     origin, script_sha256 = _attributed(run, origin, script_sha256)
     # On the span from here on: a call refused below is a span with its door too.
     telemetry.record_tool_origin(origin, script_sha256)
-    if run.result is not None:
-        raise conflict("result already posted for this run")
     reach = await tool_reach(
         session,
         run,

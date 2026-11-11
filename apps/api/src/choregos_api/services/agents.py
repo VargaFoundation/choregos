@@ -48,11 +48,14 @@ def digest(spec: AgentSpec) -> str:
     return "sha256:" + hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
-async def require_complete(session: AsyncSession, org_id: str, kind: str, spec: AgentSpec) -> None:
+async def require_complete(
+    session: AsyncSession, org_id: str, kind: str, spec: AgentSpec, *, about: str = "the version"
+) -> None:
     """A new version of an internal agent inherits nothing from its project, in an organisation that
     requires it (ADR 0127 §8, S60-05: its `complete_agents` setting): its model, its tool sources and its
     memories are named, even empty. An external agent's rights are its human's (ADR 0033 §7); a restore or
-    a fork reproduces a version already accepted and does not come here."""
+    a fork reproduces a version already accepted and does not come here. `about` names what is refused when
+    the caller did not ask for this agent itself (a workflow that installs it from the catalogue)."""
     if kind == "external":
         return
     missing = missing_components(spec.model_dump(mode="json"))
@@ -64,7 +67,7 @@ async def require_complete(session: AsyncSession, org_id: str, kind: str, spec: 
     if not org_requires_complete(settings):
         return
     raise unprocessable(
-        f"the version leaves {', '.join(missing)} to its project, and the organisation requires complete "
+        f"{about} leaves {', '.join(missing)} to its project, and the organisation requires complete "
         "agents (its `complete_agents` setting, ADR 0127)",
         [
             {"code": "agent_incomplete", "loc": ["spec", *name.split(".")], "msg": "required"}

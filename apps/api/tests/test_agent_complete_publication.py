@@ -119,3 +119,53 @@ async def test_only_its_administrator_requires_it(
     refused = await client.patch(f"{ORG}/varga", json={"complete_agents": "required"})
     assert refused.status_code == 403, refused.text
     assert ORG_SETTING not in await _stored()
+
+
+def _incomplete_in_catalogue(monkeypatch: Any, *slugs: str) -> None:
+    """The offline catalogue with these entries leaving their tools and memories to the project, as a
+    plugin's agents may (diametral-delivery's, in production)."""
+    import dataclasses
+
+    from choregos_api.services import agent_catalogue as service
+
+    base = service.offline_catalogue()
+
+    def loose(entry: Any) -> Any:
+        document = dict(entry.document)
+        spec = {k: v for k, v in dict(document["spec"]).items() if k not in {"tools", "memories"}}
+        return dataclasses.replace(entry, document={**document, "spec": spec})
+
+    view = dataclasses.replace(base, entries=tuple(loose(e) if e.slug in slugs else e for e in base.entries))
+    monkeypatch.setattr(service, "offline_catalogue", lambda: view)
+
+
+def _naming(source: str, actor: str, slug: str) -> str:
+    import yaml
+
+    document = yaml.safe_load(source)
+    document["actors"][actor]["agent"] = slug
+    return yaml.safe_dump(document, sort_keys=False)
+
+
+async def test_a_workflow_naming_catalogue_agents_already_installed_is_published(
+    client: AsyncClient, project: dict[str, Any], monkeypatch: Any
+) -> None:
+    """Found in production on 2026-11-11 (S62-12): once complete agents were required, adding `a2a:` to a
+    template's workflow was refused, because publishing it judged the catalogue agents it names, already
+    installed and so never rewritten, as if they were new versions. Only an agent the publication installs
+    is judged, and the refusal names it."""
+    from choregos_core.dsl import template_yaml
+
+    _incomplete_in_catalogue(monkeypatch, "developer", "tester")
+    url = f"/api/v1/projects/{project['id']}/workflow"
+    source = _naming(template_yaml("default-simple"), "dev", "developer")
+    first = await client.put(url, json={"yaml": source})
+    assert first.status_code == 200, first.text
+    await _require(client, "required")
+
+    again = await client.put(url, json={"yaml": source.rstrip("\n") + "\n# a new version, the same agents\n"})
+    assert again.status_code == 200, again.text
+
+    refused = await client.put(url, json={"yaml": _naming(source, "checker", "tester")})
+    assert refused.status_code == 422, refused.text
+    assert refused.json()["detail"].startswith("the agent `tester` of the catalogue entry `tester` leaves ")
