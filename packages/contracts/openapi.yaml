@@ -4962,12 +4962,14 @@ paths:
     parameters: [{ $ref: "#/components/parameters/Id" }]
     post:
       tags: [internal]
-      security: [{ runToken: [] }, { egressToken: [] }]
+      security: [{ runToken: [] }, { egressToken: [], egressReportKey: [] }]
       operationId: postRunNetworkDecisions
       description: >-
         What the egress proxy or the runner let through or refused for this run. Counters are CUMULATIVE per
         (layer, host, decision, reason): a replayed batch replaces the totals and never adds twice. The first
-        `denied` of a host for the run is journaled as `choregos.network.denied`.
+        `denied` of a host for the run is journaled as `choregos.network.denied`. With the egress token, the
+        proxy's own key must come too (ADR 0145): the agent inherits the egress token, not the key, so it cannot
+        rewrite its run's counters. A deployment that configured no key accepts the egress token alone, as before.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/NetworkDecisionBatch" } } }
@@ -5224,6 +5226,7 @@ components:
     runToken: { type: http, scheme: bearer, bearerFormat: JWT, description: "Run JWT signed with ES256, aud=internal" }
     relayToken: { type: http, scheme: bearer, bearerFormat: JWT, description: "Relay JWT signed with ES256, aud=choregos-relay, sub=the organisation's slug, expiring (ADR 0091)" }
     egressToken: { type: http, scheme: bearer, bearerFormat: JWT, description: "Egress JWT signed with ES256, aud=choregos-egress, sub=the run, expiring with its run token (ADR 0115)" }
+    egressReportKey: { type: apiKey, in: header, name: X-Choregos-Egress-Key, description: "The egress proxy's own key, shared with the API and never given to a run's pod (ADR 0145)" }
   parameters:
     Id: { name: id, in: path, required: true, schema: { type: string } }
     Org: { name: org, in: path, required: true, schema: { type: string } }
