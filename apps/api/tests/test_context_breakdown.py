@@ -161,9 +161,13 @@ async def test_the_breakdown_is_read_with_the_runs_read_right(
     await _run(project, "run-ctx-5", "prompt", [("context.breakdown", _breakdown(1, 300))])
 
     assert (await client.get("/api/v1/runs/run-ctx-5/context-breakdown")).status_code == 200
-    assert (await client.get("/api/v1/runs/run-ctx-4")).status_code == 403
+    # 403 on SQLite, where the organisation's row is read and refused; 404 under PostgreSQL's row-level
+    # security, where another organisation's run does not exist for this caller. Either way, as `getRun`.
+    run_answer = (await client.get("/api/v1/runs/run-ctx-4")).status_code
+    assert run_answer in {403, 404}
     refused = await client.get("/api/v1/runs/run-ctx-4/context-breakdown")
-    assert refused.status_code == 403, refused.text
+    assert refused.status_code == run_answer, refused.text
+    assert "prompt_tokens" not in refused.text, "nothing of the breakdown leaks"
     assert (await client.get("/api/v1/runs/missing/context-breakdown")).status_code == 404
 
 
