@@ -4,7 +4,7 @@ apiVersion: choregos/v1
 kind: Workflow
 metadata:
   name: dev-fix
-  version: 1
+  version: 2
   catalogue:
     title: Bug fix
     summary: "A bug or a small change, sized S or M and of low or medium risk: implementation test first, tests, an agent review, a pull request merged once its CI is green, the release train to production and a production check. No human unless something goes wrong; a larger or riskier item goes to a person."
@@ -84,12 +84,14 @@ transitions:
     by: platform
     does: open_pr
     on_fail: { to: reviewed, max_attempts: 2, escalate_to: needs_human }
+  # Held to the merge (ADR 0152): the merge names the commit its own gates judged, so what the
+  # earlier steps were asked on the diff is asked again here, on the commit that is merged.
   - id: t-merge
     from: in_pr
     to: integrated
     by: platform
     does: merge_pr
-    gates: [ci_green]
+    gates: [ci_green, no_secrets, { name: diff_size_max, params: { files: 20, lines: 800 } }]
     timeout_hours: 24
     on_fail: { to: fixing_ci, max_attempts: 3, escalate_to: needs_human }
   - id: t-fix-ci

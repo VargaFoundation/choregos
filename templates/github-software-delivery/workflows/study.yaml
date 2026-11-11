@@ -12,7 +12,7 @@ apiVersion: choregos/v1
 kind: Workflow
 metadata:
   name: study
-  version: 1
+  version: 2
   description: "An in-depth study that ends with one architecture decision record in MADR 4 format: question, research, ADR, critique, decision by the architects, ADR accepted and merged. Nothing is deployed."
 initial: inbox
 actors:
@@ -90,6 +90,8 @@ transitions:
     by: platform
     does: open_pr
     on_fail: { to: accepted, max_attempts: 2, escalate_to: needs_human }
+  # Held to the merge (ADR 0152): the merge names the commit its own gates judged, so what the
+  # earlier steps were asked on the diff is asked again here, on the commit that is merged.
   - id: t-merge
     from: in_pr
     to: adopted
@@ -97,7 +99,15 @@ transitions:
     does: merge_pr
     # Two simultaneous studies read the same "highest number": the second to merge has its
     # number refused, and returns to the architect, who renumbers before putting `accepted` back (#287).
-    gates: [ci_green, adr_number_free]
+    gates:
+      - ci_green
+      - adr_number_free
+      - no_secrets
+      - name: markdown_sections
+        params:
+          paths: ["docs/adr/**"]
+          sections: [Context and Problem Statement, Considered Options, Decision Outcome]
+          patterns: ['Chosen option: "', 'status: "?accepted']
     timeout_hours: 24
     on_fail: { to: decided, max_attempts: 2, escalate_to: needs_human }
   - id: t-abandon

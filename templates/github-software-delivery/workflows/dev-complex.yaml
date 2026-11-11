@@ -15,7 +15,7 @@ apiVersion: choregos/v1
 kind: Workflow
 metadata:
   name: dev-complex
-  version: 2
+  version: 3
   description: "A feature or a large change: specification approved by a product owner, plan, implementation, tests, documentation, agent and security reviews, release notes, pull request approved by a maintainer, staging, production approved by a release captain, production check."
 initial: inbox
 actors:
@@ -146,12 +146,14 @@ transitions:
     to: pr_approved
     by: maintainers
     on_reject: addressing_review
+  # Held to the merge (ADR 0152): the merge names the commit its own gates judged, so what the
+  # earlier steps were asked on the diff is asked again here, on the commit that is merged.
   - id: t-merge
     from: pr_approved
     to: integrated
     by: platform
     does: merge_pr
-    gates: [ci_green]
+    gates: [ci_green, no_secrets, { name: diff_size_max, params: { files: 60, lines: 3000 } }, docs_updated]
     timeout_hours: 24
     on_fail: { to: fixing_ci, max_attempts: 3, escalate_to: needs_human }
   - id: t-fix-ci

@@ -49,7 +49,7 @@ organisations must assume **a member of one will try to read another**.
 | a process that outlives its run (a cancel that failed, a pod slow to die, a queued pod that starts late) writing as that run | when the orchestrator stops waiting it closes the run's row first — a terminal status, the end date and the result the workflow is told, committed before the executor is asked to cancel, whatever the cancel then does; a closed run's API answers 409 `run_closed` on every route but its two append-only journals (`events`, `network/decisions`) and `POST …/result`, whose idempotent answer changes neither the run nor its work item; a closed run has no network, and the runner refused at its first call exits with 0 ([ADR 0143](adr/0143-a-run-that-ended-stays-ended.md)) | `choregos_core/run_closure.py`, `activities/execution.py`, `deps.py` (`OpenRunAuth`), `apps/api/tests/test_run_closed.py`, `apps/api/tests/test_run_closed_postgres.py`, `apps/orchestrator/tests/test_run_closed_when_the_wait_ends.py` |
 | a project reaching objects of the cluster that are not its own | which cluster the platform talks to (`kubernetes`) and what a run's pod is given from it (`env_from_secrets`, `image_pull_secrets`, `service_account`) are the deployment's to set ([ADR 0153](adr/0153-a-connector-never-sets-what-the-deployment-sets.md)): a `runtime` connector's configuration that sets one is refused when it is declared (422) and again when a stored one is built, the factories take the pod's Secrets, pull secrets and account from the deployment alone, and the pod's service-account token is sent to its own cluster's API server only | `registry.refuse_deployment_fields`, `builtins._register_runtimes`, `executor/tekton.is_own_cluster` |
 | an agent passing off the pod's files as its deliverables | nothing in `.choregos/outputs` is followed, and neither is the folder: `.choregos` and `outputs` are opened one component at a time with `O_NOFOLLOW`, each file is read through a descriptor opened the same way relative to the folder, and a symbolic link in place of the folder or of a file is refused, when it is listed and again when it is read (S65-06) | `runner/outputs.py` (`open_folder`, `read_regular`) |
-| merging a commit the gates did not judge | a gate evaluation reads the head of the work item's branch once and judges that commit: the diff and the run's scope are compared at its SHA, a pull request's checks count only when its head is that commit, and each verdict and check-run is recorded on it; the merge then names it (`sha` on GitHub's and GitLab's merge, `expectedHeadOid` on GitHub's auto-merge), so a pull request whose head has moved is refused — a typed `HeadMoved`, not retried, nothing merged — and its gates judge the new head when the work item is started again; a connector that cannot name a commit is never asked to merge ([ADR 0152](adr/0152-what-is-merged-is-what-was-judged.md)) | `activities/gates.py`, `activities/scm.py`, `activities/judged.py`, `scm/github.py`, `scm/gitlab.py`, `apps/orchestrator/tests/test_merged_is_what_was_judged.py` |
+| merging a commit the gates did not judge | a gate evaluation reads the head of the work item's branch once and judges that commit: the diff and the run's scope are compared at its SHA, a pull request's checks count only when its head is that commit, and each verdict and check-run is recorded on it; the merge then names it (`sha` on GitHub's and GitLab's merge, `expectedHeadOid` on GitHub's auto-merge), so a pull request whose head has moved is refused — a typed `HeadMoved`, not retried, nothing merged — and its gates judge the new head when the work item is started again; a connector that cannot name a commit is never asked to merge; the shipped workflows declare on their merge transition what their steps ask of the whole diff (`no_secrets`, `diff_size_max`, `docs_updated`, `markdown_sections`), so the commit that is merged is one those guarantees read ([ADR 0152](adr/0152-what-is-merged-is-what-was-judged.md)) | `activities/gates.py`, `activities/scm.py`, `activities/judged.py`, `scm/github.py`, `scm/gitlab.py`, `choregos_core/dsl/templates/`, `templates/*/workflows/`, `apps/orchestrator/tests/test_merged_is_what_was_judged.py`, `apps/orchestrator/tests/test_shipped_workflows_hold_diff_guarantees_to_the_merge.py`, `packages/core/tests/test_merge_holds_the_diff_guarantees.py` |
 
 ## What is *not* a wall, and is said so
 
@@ -96,13 +96,18 @@ organisations must assume **a member of one will try to read another**.
   closes. The running run of an interpreter that died is left open on purpose — a restarted
   interpreter awaits it again — and a Temporal termination runs no code, so it closes nothing.
 - **A guarantee is held to the merge only where the merge transition carries it.** The merge names
-  the commit its own transition's gates judged (ADR 0152). A guarantee judged at an earlier step holds
-  on the commit it judged, which its verdict names; when the head has moved before the merge
-  transition is entered, that transition's gates are the ones that judge the new head. A workflow that
-  wants a diff guarantee held on what is merged declares it on its merge transition. On GitHub,
-  auto-merge is pinned to a commit when it is enabled, not when it merges: it applies when the forge
-  still waits for something as the platform merges, and a pull request already mergeable is merged
-  directly, at its commit.
+  the commit its own transition's gates judged (ADR 0152). The workflows the platform ships declare
+  there what their steps ask of the whole diff — `no_secrets` on every one, `diff_size_max`,
+  `docs_updated` and `markdown_sections` where a step asks them — so a commit that lands before the
+  merge is read by them. Three things remain. A workflow an organisation wrote holds a guarantee to
+  the merge only if it declares it there; the validator warns about a merge transition that reads no
+  diff (`workflow.no_diff_gate_at_merge`), and a project keeps the workflow version it stores until
+  someone publishes the next one. `scope_respected` is held nowhere beyond the run it judged: it
+  reads what that run wrote, so a commit that lands between two steps, or before the merge, is not
+  read against the allowed paths by any workflow, shipped or not — keep the paths that matter closed
+  on the forge (protected paths, code owners). And on GitHub, auto-merge is pinned to a commit when it
+  is enabled, not when it merges: it applies when the forge still waits for something as the platform
+  merges, and a pull request already mergeable is merged directly, at its commit.
 - **Row-level security needs a non-superuser role.** A PostgreSQL superuser ignores every
   policy. The API refuses to start as one in `staging` and `prod`; the embedded PostgreSQL
   creates `choregos_app` at initdb for that reason.

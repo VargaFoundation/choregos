@@ -523,6 +523,30 @@ lifted the production lock. Those names are still read, so a published workflow 
 behaviour, but the validator warns (`workflow.implicit_effect`), and a rename from the console
 first writes the effect down.
 
+**What is merged is what the merge transition's gates judged.** `does: merge_pr` merges the pull
+request at the commit the transition's own gates ruled on ([ADR 0152](adr/0152-what-is-merged-is-what-was-judged.md)).
+A gate on an earlier step ruled on the branch as it stood then, and a commit may land before the merge:
+declare on the merge transition the guarantees that must hold on what is merged.
+
+```yaml
+  - id: t-merge
+    from: review
+    to: integrated
+    by: ci
+    does: merge_pr
+    gates: [ci_green, no_secrets, { name: diff_size_max, params: { files: 60 } }]
+    timeout_hours: 48
+    on_fail: { to: in_progress, max_attempts: 3, escalate_to: needs_human }
+```
+
+`no_secrets`, `diff_size_max`, `docs_updated`, `markdown_sections` and `adr_number_free` read the work
+item's whole diff at that commit, whichever step ran last: use the parameters of the step that first
+asked them (a size limit then counts what the later steps added). `scope_respected` is different: it
+judges what a run wrote since the commit where it began, and on a merge transition that run is the
+last step's, so it is not a guarantee on what is merged and has no place there. A refusal follows the
+transition's `on_fail`, once the pull request's pending checks have answered. The validator warns
+about a transition that merges and reads no diff (`workflow.no_diff_gate_at_merge`).
+
 **A pull request can be opened as a draft.** By default `does: open_pr` opens the pull request ready
 for review. `pull_request: { draft: true }` on the same transition opens it as a draft:
 
@@ -898,6 +922,25 @@ curl -X PUT "$API/projects/acme:dev/workflows/dev-complex" \
 
 Running items stay pinned to their version until they are migrated (see above); every state of
 the old version exists in the new one, so no `state_mapping` is needed.
+
+**The versions whose merge transition holds the diff guarantees** (ADR 0152) are `default-simple` 2,
+`full-auto` 3, `advanced` 4, version 2 of the core's `dev-feature`, `dev-fix`, `hotfix`,
+`refactoring`, `dependency-upgrade`, `vulnerability-fix`, `documentation` and
+`architecture-decision`, `dev-simple` 3, `dev-complex` 3 and `study` 2 of `github-software-delivery`
+1.1.1, and `governed-delivery` 2 of `software-delivery-governed` 1.0.1. A project created on an
+earlier image keeps the version it stores, whose merge transition does not carry them, until the
+newer one is published in it:
+
+- a project born from a template: its readiness item `workflow-template` turns to *check* and names
+  the file; publish it as above (`choregos workflow push <project> <file>`);
+- a workflow adopted from the catalogue: **Adopted workflows up to date** turns to *check*; adopt the
+  entry again, which publishes the project's next version;
+- a project created without a template, which received `default-simple`: nothing says so. Take the
+  text from `GET /workflows/templates` and publish it the same way.
+
+A workflow someone edited in the project is theirs: add the gates to its merge transition by hand.
+Work items in progress finish on the version they were born in, with the merge transition it had,
+unless you migrate them; no state changed, so no `state_mapping` is needed.
 
 ### Editing a workflow without rewriting it
 

@@ -28,7 +28,7 @@ promise is no human unless something goes wrong, and most fixes change nothing d
 strict gate would escalate many of them. A fix that changes behaviour visibly carries the `feature`
 label and goes through `dev-complex`.
 
-A ticket whose fix is **already on `main`** (version 2, #539) does not reach a pull request. When the
+A ticket whose fix is **already on `main`** (since version 2, #539) does not reach a pull request. When the
 implementation changes nothing — `diff_files` and `diff_lines` measured by git at 0, no commit — the
 platform takes `t-already-fixed` instead of the tests, under `already_fixed_proven`: no work branch
 was pushed (read from GitHub), and the runner ran the tests on that unchanged checkout, which is
@@ -65,6 +65,17 @@ with no approval.
 
 No agent deploys: the release train does, under the project's policy. A batch that carries a
 `dev-complex` work item waits for its captain; a batch of fixes alone leaves on its own.
+
+**What is merged is what the merge read** (`dev-simple` 3, `dev-complex` 3, `study` 2;
+[ADR 0152](../../docs/adr/0152-what-is-merged-is-what-was-judged.md)). The platform merges the commit
+its merge transition's gates judged, so each workflow asks there, again, what its steps asked of the
+diff: `no_secrets` in all three, the size limit of the implementation in `dev-simple` and
+`dev-complex` (it now counts what the later steps added), `docs_updated` in `dev-complex`, the
+record's sections and its `accepted` status in `study`. A commit that lands on the branch before the
+merge is read by them; a refusal goes where a red CI goes (the CI fixer, or the architect for a
+study), then to a person. The allowed paths are checked on what each agent step wrote, not at the
+merge: keep closed on GitHub the paths that must stay so (rulesets, code owners). A project born from
+an earlier version keeps it until the file is published again (readiness item `workflow-template`).
 
 ## Before the first work item
 

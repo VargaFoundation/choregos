@@ -5,7 +5,7 @@ apiVersion: choregos/v1
 kind: Workflow
 metadata:
   name: hotfix
-  version: 1
+  version: 2
   catalogue:
     title: Hotfix to production
     summary: "An urgent fix of something broken in production: implementation test first, tests, one agent review, a pull request a maintainer approves within two hours, production through the release train approved by a release captain within one hour, and a production check."
@@ -77,12 +77,14 @@ transitions:
     to: pr_approved
     by: maintainers
     on_reject: addressing_review
+  # Held to the merge (ADR 0152): the merge names the commit its own gates judged, so what the
+  # earlier steps were asked on the diff is asked again here, on the commit that is merged.
   - id: t-merge
     from: pr_approved
     to: integrated
     by: platform
     does: merge_pr
-    gates: [ci_green]
+    gates: [ci_green, no_secrets, { name: diff_size_max, params: { files: 10, lines: 300 } }]
     timeout_hours: 4
     on_fail: { to: fixing_ci, max_attempts: 2, escalate_to: needs_human }
   - id: t-fix-ci

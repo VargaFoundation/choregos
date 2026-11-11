@@ -1,6 +1,6 @@
 {
  "workflow_name": "dev-complex",
- "workflow_version": 2,
+ "workflow_version": 3,
  "initial": "inbox",
  "graph": {
   "nodes": [
@@ -735,7 +735,10 @@
     "actor_type": "system",
     "role": null,
     "gates": [
-     "ci_green"
+     "ci_green",
+     "no_secrets",
+     "diff_size_max",
+     "docs_updated"
     ],
     "via": null,
     "timeout_hours": 24,
@@ -2107,6 +2110,24 @@
      "summary": "the CI pipeline is green",
      "detail": "waits for it up to 24 h",
      "asynchronous": true
+    },
+    {
+     "name": "no_secrets",
+     "summary": "no secret leaks into the change",
+     "detail": null,
+     "asynchronous": false
+    },
+    {
+     "name": "diff_size_max",
+     "summary": "the change stays under the size limit",
+     "detail": "at most 60 files and 3000 lines changed",
+     "asynchronous": false
+    },
+    {
+     "name": "docs_updated",
+     "summary": "the change updates its documentation when it changes anything else",
+     "detail": null,
+     "asynchronous": false
     }
    ],
    "on_fail": "On failure it retries up to 3 time(s) from “Fixing the CI”, then goes to “Needs a human”.",
@@ -2114,7 +2135,7 @@
    "timeout_hours": 24,
    "action": null,
    "task": null,
-   "sentence": "From “Pull request approved”, the platform, which merges the pull request moves the item to “Merged” once the CI pipeline is green. On failure it retries up to 3 time(s) from “Fixing the CI”, then goes to “Needs a human”. It times out after 24 h.",
+   "sentence": "From “Pull request approved”, the platform, which merges the pull request moves the item to “Merged” once the CI pipeline is green; no secret leaks into the change; the change stays under the size limit; the change updates its documentation when it changes anything else. On failure it retries up to 3 time(s) from “Fixing the CI”, then goes to “Needs a human”. It times out after 24 h.",
    "agent": null,
    "role": null,
    "model": null,

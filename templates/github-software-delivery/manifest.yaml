@@ -2,7 +2,7 @@ apiVersion: choregos/v1
 kind: Template
 metadata:
   name: github-software-delivery
-  version: 1.1.0
+  version: 1.1.1
   display: GitHub · software delivery (fix, study, feature)
   description: >-
     Three workflows for a software team on GitHub, run by agents from the catalogue. A bug or a small

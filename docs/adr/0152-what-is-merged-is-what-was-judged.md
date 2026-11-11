@@ -1,9 +1,11 @@
 # 0152 — What is merged is what was judged
 
-- **Status**: proposed, 2026-11-11; S65-05 implements it
+- **Status**: proposed, 2026-11-11; S65-05 implements decisions 1 to 8, S65-07 decisions 9 to 12
 - **Concerns**: `activities/gates.py` (`evaluate_gates`), `activities/scm.py` (`enqueue_merge`), the
   `ScmAdapter` protocol (`head_of`, `enqueue_merge`, `capabilities`), the GitHub and GitLab SCM adapters,
-  `FakeScm`; builds on [ADR 0008](0008-idempotence-and-run-id.md),
+  `FakeScm`; the merge transition of every shipped workflow that merges (`choregos_core/dsl/templates/`,
+  `templates/*/workflows/`), the validator's warning `workflow.no_diff_gate_at_merge`; builds on
+  [ADR 0008](0008-idempotence-and-run-id.md), [ADR 0031](0031-several-workflows-per-project.md),
   [ADR 0101](0101-governance-the-platform-does-not-enforce-is-refused.md) and
   [ADR 0124](0124-a-project-may-hold-several-repositories-a-work-item-works-on-one.md)
 
@@ -55,6 +57,37 @@ guarantees do not run by themselves.
    three shipped adapters (`github`, `gitlab`, `fake`). The orchestrator never asks an adapter without
    it to merge: a non-retryable `MergeUnpinned`, because a merge the platform cannot hold to a commit is
    refused, not made blind (ADR 0101).
+9. **The shipped workflows hold their diff guarantees to the merge.** Decision 6 leaves a commit that
+   landed after an earlier step's gates, and before the merge transition is entered, to the merge
+   transition's gates alone. Every workflow the repository ships that merges — eleven of the core's,
+   the three of `github-software-delivery` that merge and `governed-delivery` — therefore declares on
+   its merge transition each guarantee an earlier step asks of the work item's whole diff, with the
+   same parameters: `no_secrets`, `diff_size_max`, `docs_updated`, `markdown_sections` (and
+   `adr_number_free`, which the two decision-record workflows already carried there). These read the
+   diff between the default branch and the judged commit and nothing of a run, so at a merge
+   transition — where the platform acts, and the run the interpreter passes is the last step's, or none
+   once it was started again or carried its history over — the verdict is the same, and it is about
+   the commit the merge names. Templates change; the DSL and the interpreter do not.
+10. **`no_secrets` is on every shipped merge transition**, the two decision-record workflows
+    included, though they asked it of no step: their writing steps are held to `docs/adr/**` by
+    `scope_respected`, which decision 11 does not carry to the merge. A merge is where the platform
+    writes to the default branch; `no_secrets` takes no parameter and assumes nothing about the trade,
+    so it is the one guarantee every shipped merge can hold, and no other is added that a workflow did
+    not ask for.
+11. **`scope_respected` is not declared at the merge.** It is a guarantee about a run (S22-11): it
+    judges what that run wrote since the commit where it began, against the paths that run may write
+    (`_run_diff`, `Run.allowed_paths`). At a merge transition the run is the last step's. A file that
+    landed before that step began is not among its writes; a refusal sends the work item back to a
+    step whose run begins later, and the next verdict no longer reads the file; without a run, the
+    same branch is judged on its whole diff. A verdict that depends on which step ran last, and on
+    whether the interpreter still knows it, is not a guarantee on what is merged, and declaring it
+    there would say that it is. The core names these guarantees (`RUN_SCOPED_GATES`). Holding the
+    scope to the merge needs the guarantee to read the work item's diff at a `system` transition,
+    which is a change to what a gate means: its own decision.
+12. **A workflow written by an organisation holds what it declares.** The validator warns about a
+    transition that merges and carries no guarantee read on the whole diff
+    (`workflow.no_diff_gate_at_merge`; a run-scoped one does not count). It is a warning: a workflow
+    may rely on the forge's required checks alone, and says so by leaving it.
 
 ## Alternatives rejected
 
@@ -81,10 +114,34 @@ guarantees do not run by themselves.
   a run page tells on which commit each guarantee was given.
 - **A guarantee holds on the merged commit when the merge transition carries it.** One judged at an
   earlier step holds on the commit it judged; the head may have moved before the merge transition is
-  entered, and its own gates are then the ones that judge the new head. A workflow that wants a diff
-  guarantee held on what is merged declares it on its merge transition, as the `study` workflow does
-  with `adr_number_free`. The other shipped workflows carry their diff guarantees on the steps that
-  write; adding them to their merge transitions is left to a later story.
+  entered, and its own gates are then the ones that judge the new head. The shipped workflows declare
+  theirs there (decision 9); a workflow an organisation wrote holds them only if it does the same, and
+  the validator says when it declares none.
+- **The scope is the exception.** In every workflow, shipped or not, `scope_respected` holds on what
+  the judged run wrote and no further: a commit that lands between two steps, or before the merge, is
+  read by `no_secrets` and the other whole-diff guarantees of the merge transition, not by the scope.
+  The policy's forbidden paths (`scope.deny_paths`) are read by the same guarantee, on the same writes.
+  A repository that must keep paths closed to such a commit relies on its forge (protected paths, code
+  owners, required reviews) until the scope is held to the merge, which decision 11 leaves to a
+  decision of its own.
+- **A size limit now counts everything that is merged.** `diff_size_max` on the merge transition reads
+  the work item's whole diff with the bound the implementation step was given: what later steps add
+  (documentation, a review's changes, a CI fix) counts against it, where it used to be read once, after
+  the implementation. A work item that outgrows the bound stops before the merge and goes to a person.
+- **`no_secrets` reads what it read before**: the lines the cumulated diff adds, in the patches the
+  forge returns. It complements the repository's own secret scanning and does not replace it.
+- **A refusal follows the transition's `on_fail`**, the path a red CI already takes: back to
+  `in_progress`, `fixing_ci` or `decided` a bounded number of times, then to a person
+  (`needs_human`); `documentation` goes to a person at once. No shipped workflow dead-ends there. The
+  merge transition waits for its pending checks before it rules, as it did for `adr_number_free`: a
+  refusal on the diff is acted on once the pull request's checks have answered or timed out, and
+  nothing is merged meanwhile.
+- **A workflow document is versioned, and a project keeps its copy.** Each changed workflow takes its
+  next `metadata.version` (ADR 0031). A new project receives it. An existing project keeps the version
+  it stores until someone publishes the shipped file as its next version: the readiness items
+  `workflow-template` and `workflow-catalogue` (ADR 0111) say when the shipped one differs, and
+  nothing is applied on its own. A work item in progress finishes on the version it was born in,
+  unless it is migrated.
 - **GitHub's auto-merge is pinned when it is enabled, not when it merges.** `expectedHeadOid` refuses a
   head that has already moved; once enabled, auto-merge follows the pull request's head, and GitHub
   only disables it for a push from an account without write access. It applies when the forge still

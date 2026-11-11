@@ -16,7 +16,7 @@ apiVersion: choregos/v1
 kind: Workflow
 metadata:
   name: governed-delivery
-  version: 1
+  version: 2
   description: "A change that passes everything: research, an approved decision record, a specification and a plan, implementation, QA with mutation testing, security review, supply-chain scan, compliance review decided by people, documentation, release readiness, an approved pull request, staging, production approved by a release captain, and a verification from observed signals."
 initial: inbox
 actors:
@@ -179,12 +179,14 @@ transitions:
     to: pr_approved
     by: maintainers
     on_reject: addressing_review
+  # Held to the merge (ADR 0152): the merge names the commit its own gates judged, so what the
+  # earlier steps were asked on the diff is asked again here, on the commit that is merged.
   - id: t-merge
     from: pr_approved
     to: integrated
     by: platform
     does: merge_pr
-    gates: [ci_green]
+    gates: [ci_green, no_secrets, { name: diff_size_max, params: { files: 60, lines: 3000 } }]
     timeout_hours: 24
     on_fail: { to: fixing_ci, max_attempts: 3, escalate_to: needs_human }
   - id: t-fix-ci

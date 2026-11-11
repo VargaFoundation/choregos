@@ -4,7 +4,7 @@ apiVersion: choregos/v1
 kind: Workflow
 metadata:
   name: advanced
-  version: 3
+  version: 4
   description: "The full chain: plan, cross review, staging then production."
 actors:
   sorter: { type: agent, role: triage, model: "profile:cheap", max_turns: 10 }
@@ -123,11 +123,13 @@ transitions:
     by: fixer
     inputs: [spec_markdown]
     on_fail: { to: fixing_ci, max_attempts: 2, escalate_to: needs_human }
+  # Held to the merge (ADR 0152): the merge names the commit its own gates judged, so what the
+  # earlier steps were asked on the diff is asked again here, on the commit that is merged.
   - id: t-merge
     from: pr_open
     to: merged
     by: ci
-    gates: [ci_green, review_approved, scans_ok]
+    gates: [ci_green, review_approved, scans_ok, no_secrets, { name: diff_size_max, params: { files: 60, lines: 3000 } }]
     timeout_hours: 48
     on_fail: { to: fixing_ci, max_attempts: 3, escalate_to: needs_human }
     does: merge_pr

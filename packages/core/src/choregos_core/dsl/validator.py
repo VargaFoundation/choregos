@@ -41,7 +41,7 @@ from jsonschema.exceptions import SchemaError
 
 from ..domain import REPOSITORY_FIELD, TRACKER_FIELD
 from ..errors import Issue
-from ..gates import ALREADY_FIXED_GATE, known_gates
+from ..gates import ALREADY_FIXED_GATE, DIFF_GATES, RUN_SCOPED_GATES, known_gates
 from .dates import field_of
 from .groups import is_per_project, placeholder_error
 from .legacy import legacy_outputs
@@ -100,6 +100,7 @@ def validate_workflow(wf: Workflow, source: Any = None) -> ValidationReport:
     _check_output_types(wf, report, source)
     _check_artifact_declarations(wf, report, source)
     _check_unenforced_review(wf, report, source)
+    _check_merge_holds_a_diff_guarantee(wf, report, source)
     _check_warnings(wf, report, source)
     return report
 
@@ -812,6 +813,28 @@ def _check_effects(wf: Workflow, report: ValidationReport, source: Any) -> None:
                 "so that a rename no longer lifts the lock"
             )
             report.warn("workflow.implicit_effect", message, ["states", state_name], source)
+
+
+def _check_merge_holds_a_diff_guarantee(wf: Workflow, report: ValidationReport, source: Any) -> None:
+    """A merge names the commit its own transition's gates judged (ADR 0152): a guarantee on the diff
+    that only an earlier step carries is not held on what is merged. A warning: the workflow may rely
+    on the forge's required checks alone, and then says so by leaving it. A guarantee judged on a
+    run's writes (`RUN_SCOPED_GATES`) does not count: on a merge transition the run is the last
+    step's."""
+    held = DIFF_GATES - RUN_SCOPED_GATES
+    for index, t in enumerate(wf.transitions):
+        if not isinstance(wf.actors.get(t.by or ""), SystemActor) or transition_effect(t) != "merge_pr":
+            continue
+        if held & set(t.gate_names()):
+            continue
+        report.warn(
+            "workflow.no_diff_gate_at_merge",
+            f"the transition to `{t.to}` merges the pull request with no guarantee on its diff: what an "
+            "earlier step judged is not judged again on the commit that is merged — declare `no_secrets` "
+            "there, and the other diff guarantees the workflow relies on",
+            ["transitions", index],
+            source,
+        )
 
 
 def _check_prod_states(wf: Workflow, report: ValidationReport, source: Any) -> None:

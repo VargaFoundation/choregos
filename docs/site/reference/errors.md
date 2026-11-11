@@ -119,6 +119,7 @@ When a workflow is refused, `errors` lists each problem with its `code`, `line` 
 | `workflow.no_terminal_state`, `workflow.terminal_unreachable` | the work item could never end |
 | `workflow.no_human_state` | no state waits for a person |
 | `workflow.no_verify_before_pr` | a pull request is opened without a verification step |
+| `workflow.no_diff_gate_at_merge` | a transition merges the pull request and none of its gates reads the diff: declare `no_secrets` there, and the other diff gates the workflow relies on (a warning) |
 | `workflow.implicit_effect` | an effect deduced from a state's name: write `does` or `production` |
 | `workflow.name_reserved` | a reserved workflow name |
 | `state.unknown`, `state.orphan`, `state.no_inbound` | a state that is not declared, or that nothing leads to |

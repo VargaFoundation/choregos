@@ -19,11 +19,11 @@ def _doc(path: Path) -> dict[str, Any]:
     return dict(yaml.safe_load(path.read_text(encoding="utf-8")))
 
 
-def test_dev_complex_validates_strictly_in_version_2() -> None:
+def test_dev_complex_validates_strictly_in_version_3() -> None:
     workflow, report = parse_workflow(COMPLEX.read_text(encoding="utf-8"), strict=True)
     assert report.valid, [e.format() for e in report.errors]
     assert not report.warnings, [w.format() for w in report.warnings]
-    assert workflow.metadata.version == 2
+    assert workflow.metadata.version == 3
 
 
 def test_the_happy_path_goes_through_the_documentation_step() -> None:
@@ -53,7 +53,7 @@ def test_the_release_notes_read_the_documentation_report() -> None:
 
 def test_the_manifest_installs_exactly_the_agents_the_workflows_name() -> None:
     manifest = _doc(TEMPLATE / "manifest.yaml")
-    assert manifest["metadata"]["version"] == "1.1.0"
+    assert manifest["metadata"]["version"] == "1.1.1"
     listed = {a.removeprefix("catalogue:") for a in manifest["defaults"]["agents"]}
     named = {
         a["agent"]

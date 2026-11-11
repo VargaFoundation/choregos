@@ -284,8 +284,16 @@ merged, and the work item's workflow stops with that reason — started again (t
 action), its gates judge the new head. A merge transition without gates names the head it reads when it
 merges. A guarantee therefore
 holds on what is merged when the merge transition carries it: one judged at an earlier step holds on
-the commit it judged, so a workflow that wants `no_secrets` or `scope_respected` held to the merge
-declares them there too, as the `study` workflow does with `adr_number_free`.
+the commit it judged, and a commit may land before the merge transition is entered. The guarantees
+that read the work item's whole diff — `no_secrets`, `diff_size_max`, `docs_updated`,
+`markdown_sections`, `adr_number_free` — are held to the merge by declaring them there too, with the
+same parameters: they are then judged on the commit that is merged, with or without a run. Every
+workflow the platform ships that merges does so, `no_secrets` on each (a size limit therefore counts
+what the later steps added), and the validator warns about a merge transition that reads no diff
+(`workflow.no_diff_gate_at_merge`). A refusal there follows the transition's `on_fail`, as a red CI
+does. `scope_respected` is the exception: it judges what a run wrote since the commit where it began,
+and on a merge transition that run is the last step's — declared there, it is not a guarantee on
+what is merged, and the shipped workflows do not declare it.
 
 ## Evidence
 

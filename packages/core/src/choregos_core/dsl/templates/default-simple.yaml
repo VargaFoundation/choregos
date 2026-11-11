@@ -3,7 +3,7 @@ apiVersion: choregos/v1
 kind: Workflow
 metadata:
   name: default-simple
-  version: 1
+  version: 2
   description: Refinement → human approval → implementation → verification → PR → merge → release train.
 actors:
   refiner: { type: agent, role: refine, model: "profile:standard" }
@@ -63,11 +63,13 @@ transitions:
     gates: [evidence_present]
     on_fail: { to: verifying, max_attempts: 2, escalate_to: needs_human }
     does: open_pr
+  # Held to the merge (ADR 0152): the merge names the commit its own gates judged, so what the
+  # earlier steps were asked on the diff is asked again here, on the commit that is merged.
   - id: t-merge
     from: pr_open
     to: merged
     by: ci
-    gates: [ci_green, review_approved, scans_ok]
+    gates: [ci_green, review_approved, scans_ok, no_secrets, { name: diff_size_max, params: { files: 60 } }]
     timeout_hours: 48
     on_fail: { to: in_progress, max_attempts: 3, escalate_to: needs_human }
     does: merge_pr

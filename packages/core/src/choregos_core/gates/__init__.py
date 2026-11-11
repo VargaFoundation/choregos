@@ -112,6 +112,12 @@ DIFF_GATES: frozenset[str] = frozenset(
     }
 )
 
+#: The diff gates judged on what a RUN wrote since the commit where it began (S22-11), against the
+#: paths that run may write: the others read the work item's whole diff at the judged commit. On a
+#: `system` transition the run is the last step's, so declaring one of these on a merge transition
+#: does not hold it on what is merged (ADR 0152).
+RUN_SCOPED_GATES: frozenset[str] = frozenset({"scope_respected"})
+
 _REGISTRY: dict[str, GateFn] = {}
 _ASYNC_GATES: set[str] = set()
 _NEEDS: dict[str, frozenset[str]] = {}
@@ -1027,6 +1033,7 @@ __all__ = [
     "ALREADY_FIXED_GATE",
     "ALREADY_FIXED_UNPROVEN",
     "DIFF_GATES",
+    "RUN_SCOPED_GATES",
     "GateContext",
     "GateOutcome",
     "evaluate",

@@ -102,7 +102,7 @@ transitions:
     to: merged
     by: ci
     does: merge_pr
-    gates: [ci_green, review_approved, scans_ok]
+    gates: [ci_green, review_approved, scans_ok, no_secrets, { name: diff_size_max, params: { files: 60 } }]
     timeout_hours: 48
     on_fail: { to: in_progress, max_attempts: 3, escalate_to: needs_human }
   - id: t-deploy
@@ -391,5 +391,6 @@ Each problem has a code, a line and a column. The most frequent:
 | `transition.unbounded_retry` | an agent or job step that goes back to an earlier state without `on_fail.max_attempts` |
 | `transition.does_requires_system` | `does` on a transition whose actor is not `system` |
 | `workflow.no_verify_before_pr` | a pull request opened without a verification step (a warning) |
+| `workflow.no_diff_gate_at_merge` | a transition that merges with no gate read on the diff (a warning) |
 
 The complete list is in [Error codes](errors.md#workflow-validation).

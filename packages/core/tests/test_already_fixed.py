@@ -89,7 +89,7 @@ def test_an_unchanged_run_is_measured_not_reported() -> None:
 
 def test_dev_simple_declares_the_exit_and_never_selects_it_by_default() -> None:
     engine = _dev_simple()
-    assert engine.wf.metadata.version == 2
+    assert engine.wf.metadata.version == 3
     exit_ = engine.already_fixed_exit("triaged")
     assert exit_ is not None and exit_.id == "t-already-fixed"
     assert engine.is_terminal(exit_.to) and exit_.to == "already_fixed"
