@@ -209,9 +209,11 @@ class Settings(BaseSettings):
     plugins_config: str = ""
     #: The offline plugin directory baked into the image; wins over the file's `offline`.
     plugins_offline: str = ""
-    #: The public documentation site (S62 shared contracts): the console's help and "Learn more" links
-    #: read it from `GET /edition`, so an air-gapped install points them at its own copy.
-    docs_url: str = DEFAULT_DOCS_URL
+    #: The user documentation baked into the image (`docs/site/**`, S62-10, ADR 0141), served by the
+    #: MCP door's `docs_search` and `docs_read`. An absent directory: this build bundles none.
+    docs_dir: str = "/opt/choregos/docs"
+    #: The public documentation site, for the links those tools give (S62 shared contracts).
+    docs_url: str = "https://docs.varga.foundation/choregos"
     #: Plugin servers (ADR 0096): `kubernetes` runs them in `plugin_servers_namespace` through the API's
     #: Role there; `off` refuses a plugin that brings one (`CHOREGOS_FAKES` runs them in memory).
     plugin_servers: Literal["off", "kubernetes"] = "off"
