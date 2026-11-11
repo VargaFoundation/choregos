@@ -36,7 +36,9 @@ API_SRC = ROOT / "apps" / "api" / "src"
 MACHINE_ONLY_ROUTES: dict[str, str] = {
     "/webhooks/*": "a forge, a tracker, a pipeline, a deployer, Alertmanager or a plugin's server posts "
     "its signed events",
-    "/internal/*": "a runner or an agent session calls it from its pod, with its run token",
+    "/internal/*": "a runner or an agent session calls it from its pod, with its run token; the gateway's "
+    "callback reads a run's registered parts and posts its context breakdowns, signed for that run "
+    "(S64-08b, outside the contract)",
     "/mcp": "the MCP door (ADR 0030): an external MCP client calls the organisation's tools over "
     "JSON-RPC; outside the contract",
     "/mcp/projects/{project}": "the MCP door narrowed to one project, for the same clients; outside the "

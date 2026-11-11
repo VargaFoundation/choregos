@@ -4,7 +4,8 @@ session's own breakdown, measured per call in `agent_sessions.respond`.
 The route reads the run's `context.breakdown` events: the last one and the series of totals. A
 breakdown without the model's window gets it from the organisation's catalogue, and stays `null`
 (free space unknown) when the catalogue does not know it. `code` and `remote` runs are not measurable,
-nor an ACP CLI's yet. The run's read right is the route's: a person outside the organisation gets 403.
+nor an ACP CLI's before the gateway kept a breakdown of it. The run's read right is the route's: a
+person outside the organisation gets 403.
 A session's calls are journaled with numbers only, numbered across the session.
 """
 

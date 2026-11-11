@@ -28,9 +28,10 @@ from choregos_contracts import (
     StageOutputs,
     StageResult,
     StageStatus,
+    is_inert_binary_path,
 )
 from choregos_core import telemetry
-from choregos_core.context_breakdown import Hints
+from choregos_core.context_breakdown import PARTS_EVENT, Hints, register
 from choregos_core.hosted import CONNECT_PORT, MCP_PORT, MODEL_PORT
 from choregos_core.redaction import REDACTED, redact
 from pydantic import ValidationError
@@ -223,6 +224,8 @@ class Runner:
         self.skills_index = ""
         #: Where the knowledge bases lie in the workspace (ADR 0051), added to the prompt.
         self.knowledge_index = ""
+        #: The skill files the run placed (text ones), whose paragraphs the context breakdown registers.
+        self.skill_files: list[str] = []
         #: "Calling tools from a script" (ADR 0122 §5), added to the first prompt when the run was offered
         #: tool scripts and its client was written (S57-11b).
         self.tool_instructions = ""
@@ -350,9 +353,7 @@ class Runner:
         backend = get_backend(stage_input.agent.backend)
         plan = backend.launch_plan(stage_input, workspace.path)
         await self._record_shell_filter(stage_input, backend, journal)
-        written = plan.materialize(workspace.path)
-        workspace.exclude(written)
-        plan.materialize_home(agent_home(stage_input))
+        written = _materialize(plan, workspace, stage_input)
         # Skills, then knowledge bases: the first refusal stops the run before the agent starts.
         if (
             refusal := await self._place_skills(client, journal, stage_input, backend, workspace)
@@ -378,6 +379,7 @@ class Runner:
         # runner, counted on the environment it will really receive (the runner's without the run's
         # credentials, ADR 0115, then its own).
         env.update(agent_git_env({**agent_base_environment(), **env}, workspace.path))
+        await self._register_context_parts(journal, stage_input, workspace.path, plan, written)
 
         command, refusal = await self._confine(plan, env, workspace, journal)
         if refusal is not None:
@@ -1085,6 +1087,7 @@ class Runner:
             await journal.flush()
             return RunOutcome(Exit.SKILLS_INVALID, detail=str(exc))
         workspace.exclude(ecrites)
+        self.skill_files = [path for path in ecrites if not is_inert_binary_path(path)]
         return None
 
     async def _write_context(
@@ -1221,6 +1224,29 @@ class Runner:
             parts["messages"] = [task.read_text(encoding="utf-8") if task.is_file() else ""]
         return Hints(parts=parts, foreign=foreign, mcp_servers=frozenset(stage_input.tools.mcp))
 
+    async def _register_context_parts(
+        self, journal: EventJournal, stage_input: StageInput, workspace: Path, plan: Any, written: list[str]
+    ) -> None:
+        """`context.parts` (ADR 0141 §4, S64-08b): what the runner wrote that an ACP CLI will send its
+        model, registered by section as paragraph digests and sizes, never the text — the gateway's
+        callback counts each call's request against it, and the rest is `backend`. The playbook, the
+        tool-script instructions and the instruction files the backend wrote (`CLAUDE.md`) are the
+        agent's instructions (`system`), `task.md` its task (`messages`), the skills' files and index
+        `skills`, the knowledge index `knowledge`; the MCP servers name the tools that are `tools.mcp`.
+        Sent at once: the agent's first call must find it."""
+        task = workspace / ".choregos" / "task.md"
+        instructions = [plan.files[path] for path in written if path.endswith(".md") and path in plan.files]
+        parts = {
+            "system": [stage_input.playbook.prompt or "", self.tool_instructions, *instructions],
+            "messages": [task.read_text(encoding="utf-8") if task.is_file() else ""],
+            "skills": [self.skills_index, *_texts_of(workspace, self.skill_files)],
+            "knowledge": [self.knowledge_index],
+        }
+        await journal.record(
+            PARTS_EVENT, {"parts": register(parts), "mcp_servers": sorted(stage_input.tools.mcp)}
+        )
+        await journal.flush()
+
     async def _record_tool_instructions(self, journal: EventJournal, prompt: str) -> None:
         """`tools.instructions`: whether the first prompt holds the scripts section, and its size — what
         the run page and the live matrix read, instead of guessing from a model that wrote no script."""
@@ -1316,6 +1342,31 @@ class Runner:
             await journal.record("result.post_failed", {"error": str(exc)[:300]})
             await journal.flush()
         return result
+
+
+def _materialize(plan: Any, workspace: Workspace, stage_input: StageInput) -> list[str]:
+    """The backend's files in the workspace, out of the diff, and its `$HOME` files: the files written."""
+    written: list[str] = plan.materialize(workspace.path)
+    workspace.exclude(written)
+    plan.materialize_home(agent_home(stage_input))
+    return written
+
+
+#: The most of one file the context breakdown registers: past it, the file's tail counts as `backend`.
+_MAX_REGISTERED_BYTES = 256 * 1024
+
+
+def _texts_of(workspace: Path, paths: list[str]) -> list[str]:
+    """The text of each file the run placed, as far as `_MAX_REGISTERED_BYTES`; one it cannot read as
+    text is left out."""
+    texts: list[str] = []
+    for path in paths:
+        try:
+            with (workspace / path).open("rb") as handle:
+                texts.append(handle.read(_MAX_REGISTERED_BYTES).decode("utf-8", errors="ignore"))
+        except OSError:
+            continue
+    return texts
 
 
 def _files(stage_input: StageInput) -> list[str]:

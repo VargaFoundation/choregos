@@ -14,11 +14,19 @@ message, a tool schema or a digest of either (ADR 0141 §5).
 `ContextMeter` is what a builder holds for one run or one response: it numbers the calls, makes the
 breakdown, and keeps at most one event per `WINDOW_S` seconds — the run's first call, the largest call
 of each window, and its last call.
+
+A request someone else built, which the platform does not see being built (an ACP CLI's, seen by the
+gateway's callback, ADR 0141 §4), is matched by **digest**: the runner registers, per section, the
+sha256 of each paragraph it wrote (`register`), never the text; a paragraph of the request whose digest
+is registered counts in that section, the rest is `backend`. `choregos_core.llm_spans` carries a copy
+of this matching (the gateway's image has no Choregos package), and a test keeps the two equal.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 import time
 from collections.abc import Awaitable, Callable, Iterable, Mapping
 from dataclasses import dataclass, field
@@ -43,6 +51,16 @@ MCP_SEPARATOR = "__"
 WINDOW_S = 5.0
 EVENT = "context.breakdown"
 
+#: A paragraph shorter than this (normalised) is neither registered nor matched: a heading or a rule
+#: would match in any request.
+MIN_PARAGRAPH = 40
+#: The most paragraphs a run registers: past it, the rest is not registered (and counts as `backend`).
+MAX_PARTS = 4096
+#: A paragraph ends at a blank line.
+PARAGRAPH = re.compile(r"\n[ \t]*\n")
+#: The run event the runner registers what it wrote with (S64-08b): digests and sizes, never the text.
+PARTS_EVENT = "context.parts"
+
 Source = Literal["loop", "hosted_proxy", "gateway"]
 Record = Callable[[str, dict[str, Any]], Awaitable[None]]
 
@@ -61,12 +79,60 @@ class Hints:
     section and not in the message's. `foreign`: the request was built by someone else (a hosted
     container): what no part and no known MCP server explains is `backend`, not `system` or
     `messages`. `mcp_servers`: in a foreign request, the servers whose `server__tool` names count as
-    `tools.mcp`.
+    `tools.mcp`. `registered`: paragraph digests (`paragraph_digest`) and their section, for a request
+    whose builder only registered what it wrote (`register`): a matching paragraph counts there.
     """
 
     parts: Mapping[str, Iterable[str]] = field(default_factory=dict)
     foreign: bool = False
     mcp_servers: frozenset[str] = frozenset()
+    registered: Mapping[str, str] = field(default_factory=dict)
+
+
+def normalise(text: str) -> str:
+    """Whitespace collapsed: a CLI that re-indents or re-wraps blank space still matches."""
+    return " ".join(text.split())
+
+
+def paragraph_digest(paragraph: str) -> str:
+    return hashlib.sha256(normalise(paragraph).encode("utf-8")).hexdigest()
+
+
+def paragraphs(text: str) -> list[str]:
+    """The paragraphs of `text` long enough to be told apart, normalised."""
+    found = (normalise(paragraph) for paragraph in PARAGRAPH.split(text))
+    return [paragraph for paragraph in found if len(paragraph) >= MIN_PARAGRAPH]
+
+
+def register(parts: Mapping[str, Iterable[str]], *, limit: int = MAX_PARTS) -> list[dict[str, Any]]:
+    """What a builder registers of the text it wrote: per paragraph, its section, its digest and its
+    size in characters (normalised), never the text. A paragraph registered twice keeps its first
+    section; past `limit` paragraphs, the rest is not registered."""
+    registered: dict[str, dict[str, Any]] = {}
+    for section, texts in parts.items():
+        if section not in SECTIONS or section == "backend":
+            continue
+        for text in texts:
+            for paragraph in paragraphs(text or ""):
+                if len(registered) >= limit:
+                    return list(registered.values())
+                digest = paragraph_digest(paragraph)
+                registered.setdefault(digest, {"section": section, "sha256": digest, "size": len(paragraph)})
+    return list(registered.values())
+
+
+def registered_hints(parts: Iterable[Any], mcp_servers: Iterable[Any] = ()) -> Hints:
+    """The hints of a foreign request from what its builder registered (`register`'s list): an entry
+    that is not one, or names a section the breakdown does not have, is ignored."""
+    registered: dict[str, str] = {}
+    for part in parts:
+        if not isinstance(part, dict):
+            continue
+        section, digest = part.get("section"), part.get("sha256")
+        if section in SECTIONS and section != "backend" and isinstance(digest, str):
+            registered.setdefault(digest, str(section))
+    servers = frozenset(server for server in mcp_servers if isinstance(server, str) and server)
+    return Hints(foreign=True, mcp_servers=servers, registered=registered)
 
 
 def tool_section(name: str, hints: Hints | None = None) -> str:
@@ -95,7 +161,7 @@ def estimate_sections(body: Mapping[str, Any], hints: Hints | None = None) -> di
             sizes[tool_section(_tool_name(tool), hints)] += estimate_tokens(json.dumps(tool))
     own = "backend" if hints.foreign else "system"
     for text in _texts(body.get("system")), _texts(body.get("instructions")):
-        _count(text, own, parts, sizes)
+        _count(text, own, parts, sizes, hints.registered)
     messages = body.get("messages")
     if messages is None:
         messages = body.get("input")
@@ -103,7 +169,7 @@ def estimate_sections(body: Mapping[str, Any], hints: Hints | None = None) -> di
         messages = [{"role": "user", "content": messages}]
     for message in messages if isinstance(messages, list) else []:
         if isinstance(message, dict):
-            _count(_message_text(message), _section_of(message, hints), parts, sizes)
+            _count(_message_text(message), _section_of(message, hints), parts, sizes, hints.registered)
     return sizes
 
 
@@ -292,8 +358,15 @@ def _section_of(message: Mapping[str, Any], hints: Hints) -> str:
     return "messages"
 
 
-def _count(text: str, section: str, parts: list[tuple[str, str]], sizes: dict[str, int]) -> None:
-    """`text` in `section`, except the parts the builder recognises, which count in their own."""
+def _count(
+    text: str,
+    section: str,
+    parts: list[tuple[str, str]],
+    sizes: dict[str, int],
+    registered: Mapping[str, str] | None = None,
+) -> None:
+    """`text` in `section`, except what the builder recognises, which counts in its own: the parts it
+    wrote, then the paragraphs whose digest it registered."""
     if not text:
         return
     for part_section, part in parts:
@@ -301,6 +374,16 @@ def _count(text: str, section: str, parts: list[tuple[str, str]], sizes: dict[st
         if found:
             sizes[part_section] += found * estimate_tokens(part)
             text = text.replace(part, "")
+    if registered:
+        rest: list[str] = []
+        for paragraph in PARAGRAPH.split(text):
+            normalised = normalise(paragraph)
+            owner = registered.get(paragraph_digest(normalised)) if len(normalised) >= MIN_PARAGRAPH else None
+            if owner is None:
+                rest.append(paragraph)
+            else:
+                sizes[owner] += estimate_tokens(normalised)
+        text = "\n\n".join(rest)
     if text.strip():
         sizes[section] += estimate_tokens(text)
 
@@ -314,15 +397,16 @@ def _message_text(message: Mapping[str, Any]) -> str:
     name = message.get("name")
     if isinstance(name, str) and message.get("type") in {"function_call", "tool_use"}:
         texts.append(name)
-    return "\n".join(text for text in texts if text)
+    return "\n\n".join(text for text in texts if text)
 
 
 def _texts(value: Any) -> str:
-    """The text a content holds: a string, a list of blocks, a block."""
+    """The text a content holds: a string, a list of blocks, a block. Blocks are joined as paragraphs:
+    the last paragraph of one never merges with the first of the next (`registered` matching)."""
     if isinstance(value, str):
         return value
     if isinstance(value, list):
-        return "\n".join(text for text in (_texts(item) for item in value) if text)
+        return "\n\n".join(text for text in (_texts(item) for item in value) if text)
     if isinstance(value, dict):
         return _message_text(value)
     return ""
