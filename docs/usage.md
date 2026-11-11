@@ -1731,7 +1731,11 @@ sources the run can read — the project's catalogue tools filed under `observab
 MCP servers named after an observability tool, empty when there is none), and the platform appends a frame the author cannot remove — the output
 contract and the invariants. The run records the agent and its version; a revoked, suspended or
 expired agent does not start, and neither does one that has spent its `daily_usd` since midnight
-(UTC) — models **and** tool calls. `GET /orgs/{org}/agents/{slug}/metrics?days=30` gives its runs,
+(UTC) — models **and** tool calls. `POST /orgs/{org}/agents/{slug}/stop` with a `reason` (whoever
+may change the agent's status) suspends it first, then stops its runs `queued` or `running` in every
+project (each work item waits for a person) and closes its open sessions; the answer counts them,
+`agent.stop` is audited, and `PATCH ... {"status": "active"}` resumes it without restarting anything
+([ADR 0142](adr/0142-a-stop-interrupts-what-is-in-flight.md) §4). `GET /orgs/{org}/agents/{slug}/metrics?days=30` gives its runs,
 their success rate, their cost by kind and by project, and what it spent today.
 
 **What the tracker says about the ticket.** `ticket.fields` holds the work item's fields; a work item

@@ -108,8 +108,9 @@ _DOORS: dict[str, str] = {"prompt": "/responses", "voice": "/realtime", "socket"
 #: The runtimes each door serves: a hosted agent answers on `/responses` too, from its pod (S41-11),
 #: and on `/realtime` when its container serves `invocations_ws` (S41-21).
 _SERVED: dict[str, set[str]] = {"prompt": {"prompt", "hosted"}, "voice": {"voice"}, "socket": {"hosted"}}
-#: The reasons a session ends that are not failures.
-_CLEAN_ENDS = {"closed", "expired", "max_minutes", "idle", "caller_gone", "agent_closed"}
+#: The reasons a session ends that are not failures; `agent_stopped`: its agent was stopped by a
+#: person (ADR 0142 §4), a decision, not a failure.
+_CLEAN_ENDS = {"closed", "expired", "max_minutes", "idle", "caller_gone", "agent_closed", "agent_stopped"}
 
 #: The gateway's own words for a spent key, as `choregos_runner.budget` reads them.
 _BUDGET_SIGNATURES = ("budget_exceeded", "budgetexceedederror", "exceededbudget", "budget has been exceeded")

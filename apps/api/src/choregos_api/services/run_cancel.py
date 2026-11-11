@@ -61,13 +61,42 @@ async def cancel_run_now(
 
     `forbidden` without `item:control` on the run's project; `conflict` (409) when the run has a
     result or no longer runs — first writer wins, and the answer says how it ended. Audited as
-    `run.cancel` with the reason; `channel` (`work_item`, `agent`) says which stop reached it."""
+    `run.cancel` with the reason; `channel` (`work_item`, `agent_stop`) says which stop reached it."""
     project = await session.get(Project, run.project_id)
     if project is None:
         raise not_found("Project", run.project_id)
     org = await session.get(Organization, project.org_id)
     if not principal.can(Permission.ITEM_CONTROL, org.slug if org else "", project.slug):
         raise forbidden("stopping a run needs `item:control` on its project (developer or above)")
+    return await _write_the_stop(session, principal, project, run, reason, channel=channel)
+
+
+async def cancel_agent_run(session: AsyncSession, principal: Principal, run: Run, reason: str) -> Run:
+    """Stop `run` as part of its agent's stop (ADR 0142 §4); the run as it now stands.
+
+    The right is the agent's: whoever may manage the agent (`Action.MANAGE`, decided by the route
+    before it calls this) may stop every run of it, in every project of the organisation, without
+    holding `item:control` on each of them — the run is the agent's work, not the project's
+    decision, and the work item it served is not stopped, it waits for a person. Everything else is
+    `cancel_run_now`'s: first writer wins (409 when the run already ended), `run.cancel` audited
+    with the reason and `channel: agent_stop`, `RunCancellation` started once committed."""
+    project = await session.get(Project, run.project_id)
+    if project is None:
+        raise not_found("Project", run.project_id)
+    return await _write_the_stop(session, principal, project, run, reason, channel="agent_stop")
+
+
+async def _write_the_stop(
+    session: AsyncSession,
+    principal: Principal,
+    project: Project,
+    run: Run,
+    reason: str,
+    *,
+    channel: str | None,
+) -> Run:
+    """The stop itself, once the right is decided: the conditional write, the audit, the event and
+    `RunCancellation`."""
     if run_is_closed(run):  # one definition of an ended run, the orchestrator's too (ADR 0143 §1)
         raise conflict(how_it_ended(run), extra={"code": "run_already_ended"})
 

@@ -27,10 +27,13 @@ from ...schemas import (
     AgentFork,
     AgentLifecycleChange,
     AgentLifecycleResult,
+    AgentNotStopped,
     AgentOwnerChange,
     AgentPatch,
     AgentScopeChange,
     AgentSpec,
+    AgentStopResult,
+    StopRequest,
 )
 from ...services.agent_access import (
     enforce_decision,
@@ -51,6 +54,7 @@ from ...services.agent_lifecycle import (
 from ...services.agent_releases import (
     after_publish,
 )
+from ...services.agent_stop import stop_agent as stop_the_agent
 from ...services.agent_views import agent_dto, agent_versions
 from ...services.memory_access import check_bindings_at_publish
 from ._router import Slug, router
@@ -85,6 +89,25 @@ async def update_agent(org: str, slug: Slug, body: AgentPatch, session: Db, prin
         tags=agent.tags,
     )
     return await agent_dto(session, agent, principal, org)
+
+
+@router.post("/orgs/{org}/agents/{slug}/stop", response_model=AgentStopResult, operation_id="stopAgent")
+async def stop_agent(org: str, slug: Slug, body: StopRequest, session: Db, principal: Me) -> AgentStopResult:
+    """Suspend the agent, then stop its runs in flight in every project and close its open sessions
+    (ADR 0142 §4). The right is the one that guards a status change: `Action.MANAGE` on the agent.
+    A revoked agent is final (409). Stopping a suspended agent stops what is still in flight."""
+    organisation, agent, subject = await load_visible_agent(session, principal, org, slug)
+    enforce_decision(decide(principal, org, subject, Action.MANAGE))
+    if agent.status == "revoked":
+        raise conflict(f"agent `{slug}` is revoked: there is nothing to stop, revocation is final")
+    stop = await stop_the_agent(session, principal, organisation, agent, body.reason)
+    return AgentStopResult(
+        slug=agent.slug,
+        runs_cancelled=len(stop.runs_cancelled),
+        sessions_closed=len(stop.sessions_closed),
+        turns_cancelled=stop.turns_cancelled,
+        not_stopped=[AgentNotStopped(kind=n.kind, id=n.id, detail=n.detail) for n in stop.not_stopped],
+    )
 
 
 # ───────────────────────────── its life (S32-04) ─────────────────────────────
