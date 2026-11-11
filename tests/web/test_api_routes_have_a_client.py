@@ -90,7 +90,6 @@ NO_CLIENT_YET: dict[str, str] = {
     "/orgs/{org}/agents/{slug}/stop": "S64-06, the agent page's Stop (ADR 0142 §4)",
     "/orgs/{org}/activity": "S64-06, the Activity screen (ADR 0142 §1)",
     "/orgs/{org}/activity/stream": "S64-06, the Activity screen, live (ADR 0142 §1)",
-    "/runs/{id}/context-breakdown": "S64-08, the run page's Context card (ADR 0141 §6)",
 }
 
 #: Paths the CLI calls and the console must not: an operator's command, not a screen.

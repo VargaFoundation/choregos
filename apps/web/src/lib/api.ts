@@ -214,6 +214,7 @@ import type {
   Conversation,
   ConversationAction,
   ConversationActionList,
+  RunContext,
 } from "./types";
 
 export const API_BASE = "/api/v1";
@@ -1106,6 +1107,8 @@ export const api = {
   runEvents: (runId: string, afterSeq?: number) =>
     request<RunEventDto[]>(`/runs/${runId}/events${query(afterSeq ? { after_seq: String(afterSeq) } : undefined)}`),
   runDiff: (runId: string) => request<DiffSummary>(`/runs/${runId}/diff`),
+  /** What fills the run's model context: the last call's sections and the series of totals (ADR 0141 §6). */
+  runContext: (runId: string) => request<RunContext>(`/runs/${runId}/context-breakdown`),
 
   releases: (id: string, env?: string) => request<ReleasePage>(`/projects/${qualify(id)}/releases${query(env ? { env } : undefined)}`),
   train: (id: string, env: string) => request<TrainStatus>(`/projects/${qualify(id)}/trains/${env}`),

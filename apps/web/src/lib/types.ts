@@ -126,6 +126,8 @@ export type {
   WorkItemJourney,
   JourneyMove,
   JourneyStep,
+  ContextBreakdown,
+  RunContext,
 } from "@choregos/contracts/api";
 
 import type { Operations } from "@choregos/contracts/api";

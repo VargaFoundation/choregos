@@ -30,6 +30,7 @@ from choregos_contracts import (
     StageStatus,
 )
 from choregos_core import telemetry
+from choregos_core.context_breakdown import Hints
 from choregos_core.hosted import CONNECT_PORT, MCP_PORT, MODEL_PORT
 from choregos_core.redaction import REDACTED, redact
 from pydantic import ValidationError
@@ -886,6 +887,7 @@ class Runner:
             model_transport=self.model_transport,
             mcp_transport=self.mcp_transport,
             timeout_s=stage_input.budget.max_minutes * 60,
+            hints=self._context_hints(stage_input, workspace.path),
         )
         report = await run_checks(stage_input, workspace.path)
         outcome = step.outcome
@@ -950,7 +952,12 @@ class Runner:
                 await journal.flush()
                 return RunOutcome(Exit.CLONE_FAILED, detail=str(exc))
             await journal.record("hosted.workspace", {"mode": hosted.workspace, "files": copied})
-        model = ModelProxy(stage_input, journal.record, transport=self.model_transport)
+        model = ModelProxy(
+            stage_input,
+            journal.record,
+            transport=self.model_transport,
+            hints=self._context_hints(stage_input, workspace.path, foreign=True),
+        )
         mcp = McpProxy(stage_input, journal.record, guards, transport=self.mcp_transport)
         # After `authenticate_proxy_env`: the pod's egress proxy with the run's credentials, which
         # the tunnels carry and the container never sees.
@@ -1198,6 +1205,21 @@ class Runner:
         if self.tool_instructions:
             playbook = f"{playbook}\n\n{self.tool_instructions}"
         return f"{playbook}\n\n---\n\n{task}"
+
+    def _context_hints(self, stage_input: StageInput, workspace: Path, *, foreign: bool = False) -> Hints:
+        """What the runner wrote into the prompt, by section, for the context breakdown (ADR 0141 §3):
+        the playbook is the agent's instructions, the skills and knowledge indexes their own sections.
+        A hosted container wraps the prompt in its own request (`foreign`): the task is then named
+        too, so that only what the container added counts as `backend`."""
+        parts: dict[str, list[str]] = {
+            "system": [stage_input.playbook.prompt or ""],
+            "skills": [self.skills_index],
+            "knowledge": [self.knowledge_index],
+        }
+        if foreign:
+            task = workspace / ".choregos" / "task.md"
+            parts["messages"] = [task.read_text(encoding="utf-8") if task.is_file() else ""]
+        return Hints(parts=parts, foreign=foreign, mcp_servers=frozenset(stage_input.tools.mcp))
 
     async def _record_tool_instructions(self, journal: EventJournal, prompt: str) -> None:
         """`tools.instructions`: whether the first prompt holds the scripts section, and its size — what

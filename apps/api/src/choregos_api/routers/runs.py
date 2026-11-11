@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Runs: detail, ACP log (SSE), transcript, diff."""
+"""Runs: detail, ACP log (SSE), transcript, diff, what fills the context."""
 
 from __future__ import annotations
 
@@ -7,8 +7,11 @@ import json
 from typing import Annotated, Any
 
 from choregos_core import access_report, matches_any
+from choregos_core.context_breakdown import EVENT as CONTEXT_BREAKDOWN
+from choregos_core.context_breakdown import SECTIONS
 from choregos_core.tool_ledger import IN_FLIGHT
 from fastapi import APIRouter, Header, Query, Request
+from pydantic import ValidationError
 from sqlalchemy import select
 from sse_starlette.sse import EventSourceResponse
 
@@ -18,8 +21,19 @@ from ..errors import forbidden, not_found
 from ..events import get_bus, sse_format
 from ..knowledge.marked import readable, require_readable
 from ..rbac import Permission
-from ..schemas import ArtifactRef, DiffFileDto, DiffSummaryDto, RunDto, RunEventDto, RunLogsDto
+from ..schemas import (
+    ArtifactRef,
+    ContextBreakdownDto,
+    DiffFileDto,
+    DiffSummaryDto,
+    RunContextDto,
+    RunContextPoint,
+    RunDto,
+    RunEventDto,
+    RunLogsDto,
+)
 from ..services import run_dto, tool_connectors_of
+from ..services.model_catalogue import max_input_tokens_of
 
 router = APIRouter(tags=["runs"])
 
@@ -102,6 +116,65 @@ async def run_events(
             yield sse_format(live_event)
 
     return EventSourceResponse(stream())
+
+
+#: The backends whose model calls the platform measures (ADR 0141 §4): its own loop and the hosted
+#: container's loopback model. `code` and `remote` cannot be seen into; the ACP CLIs are not measured
+#: yet (the gateway callback's breakdown is S64-08b).
+MEASURED_BACKENDS = frozenset({"prompt", "hosted"})
+
+
+@router.get(
+    "/runs/{id}/context-breakdown", response_model=RunContextDto, operation_id="getRunContextBreakdown"
+)
+async def context_breakdown(id: str, session: Db, principal: Me) -> RunContextDto:
+    """What fills the run's context (ADR 0141 §6): its last measured call and the series of kept
+    totals, read from its `context.breakdown` events, with the run's own read right. A breakdown the
+    runner left without the model's window gets it from the organisation's catalogue."""
+    run, project = await _run(session, id, principal)
+    payloads = (
+        (
+            await session.execute(
+                select(RunEvent.payload)
+                .where(RunEvent.run_id == run.id, RunEvent.type == CONTEXT_BREAKDOWN)
+                .order_by(RunEvent.seq)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    kept = [breakdown for payload in payloads if (breakdown := _breakdown(payload)) is not None]
+    latest = kept[-1] if kept else None
+    if latest is not None and latest.max_input_tokens is None:
+        window = await max_input_tokens_of(session, project.org_id, latest.model)
+        latest = latest.model_copy(update={"max_input_tokens": window})
+    return RunContextDto(
+        run_id=run.id,
+        measurable=run.backend in MEASURED_BACKENDS or bool(kept),
+        backend=run.backend,
+        latest=latest,
+        series=[RunContextPoint(call=b.call, at=b.at, prompt_tokens=b.prompt_tokens) for b in kept],
+    )
+
+
+def _breakdown(payload: Any) -> ContextBreakdownDto | None:
+    """A kept event as the contract says it, numbers only: an event that is not one is left out, and a
+    section the contract does not name is never served."""
+    if not isinstance(payload, dict):
+        return None
+    sections = payload.get("sections")
+    sections = sections if isinstance(sections, dict) else {}
+    try:
+        return ContextBreakdownDto.model_validate(
+            {
+                **{key: payload[key] for key in ("call", "at", "model", "prompt_tokens") if key in payload},
+                "max_input_tokens": payload.get("max_input_tokens"),
+                "source": payload.get("source"),
+                "sections": {name: int(sections.get(name) or 0) for name in SECTIONS},
+            }
+        )
+    except (ValidationError, TypeError, ValueError):
+        return None
 
 
 @router.get("/runs/{id}/access", operation_id="getRunAccess")
