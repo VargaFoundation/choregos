@@ -2656,6 +2656,12 @@ export type ProjectAgent = {
   warning?: string | null;
 };
 
+/** Optional body of an approval: the importer forces the approval of their own version, with a written reason the audit keeps (ADR 0050 amendment). */
+export type SkillApproval = {
+  force?: boolean;
+  reason?: string | null;
+};
+
 export type SkillFiles = {
   /** path → content. UTF-8 text, except for the extensions png, jpg, jpeg, gif, webp, ico, ttf, otf, woff, woff2 (inert binaries, 512 KiB decoded at most, magic bytes checked), whose value is ALWAYS standard base64 of the bytes; SVG is text */
   files: {
@@ -5246,7 +5252,7 @@ export interface Operations {
   approveRelease: { method: "POST"; path: "/releases/{id}/approve"; body: {
   note?: string;
 }; response: void };
-  approveSkillVersion: { method: "POST"; path: "/orgs/{org}/skills/{slug}/versions/{version}/approve"; body: never; response: SkillVersion };
+  approveSkillVersion: { method: "POST"; path: "/orgs/{org}/skills/{slug}/versions/{version}/approve"; body: SkillApproval; response: SkillVersion };
   argocdWebhook: { method: "POST"; path: "/webhooks/argocd"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };

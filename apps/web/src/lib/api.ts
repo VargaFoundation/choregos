@@ -715,8 +715,11 @@ export const api = {
     request<Skill[]>(`/orgs/${org}/skills/import-git`, { method: "POST", body: JSON.stringify(body) }),
   skillSources: (org: string) => request<SkillSources>(`/orgs/${org}/skill-sources`),
   checkSkillUpdate: (org: string, slug: string) => request<SkillUpdate>(`/orgs/${org}/skills/${slug}/update`),
-  approveSkillVersion: (org: string, slug: string, version: number) =>
-    request<SkillVersion>(`/orgs/${org}/skills/${slug}/versions/${version}/approve`, { method: "POST" }),
+  approveSkillVersion: (org: string, slug: string, version: number, force?: { reason: string }) =>
+    request<SkillVersion>(`/orgs/${org}/skills/${slug}/versions/${version}/approve`, {
+      method: "POST",
+      ...(force ? { body: JSON.stringify({ force: true, reason: force.reason }) } : {}),
+    }),
 
   searchKnowledgeBase: (org: string, slug: string, query: string, k = 5) =>
     request<KnowledgeSearchResult>(`/orgs/${org}/knowledge/${slug}/search`, {
