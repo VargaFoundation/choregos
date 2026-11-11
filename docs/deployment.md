@@ -86,6 +86,7 @@ The chart never writes production secrets. It expects them to exist:
 | `global.apiSecretRef`, entry `session-secret-previous` (optional) | the previous session key during a rotation, `CHOREGOS_SESSION_SECRET_PREVIOUS`: verification only | API only |
 | `global.apiSecretRef`, entries `github-app-client-id`, `github-app-client-secret` (optional) | the App's OAuth client: needed only to claim an installation when the instance has several organisations ([the GitHub App](#the-github-app)) | API |
 | `global.apiSecretRef`, entry `secrets-keks` (optional) | `CHOREGOS_SECRETS_KEKS`, see below | API **and** orchestrator |
+| `global.apiSecretRef`, entry `egress-report-key` (optional) | `CHOREGOS_EGRESS_REPORT_KEY`: the egress proxy's own key, a random string (48 characters or more). Its reports need it on top of the run's egress token, so an agent cannot rewrite its run's network counters ([ADR 0145](adr/0145-the-proxy-reports-with-a-key-the-agent-does-not-hold.md)); absent, the API logs `egress.report_key_missing` at start-up and accepts the egress token alone. Rotate it by replacing it and restarting the API and `choregos-egress` together | API **and** egress proxy |
 | `global.oidc.secretRef` | `client-secret` | API |
 | `global.database.secretRef` | `url` (or `passwordSecret` holding the password) | API, orchestrator |
 | `global.gateway.secretRef` | `master-key` | orchestrator |

@@ -123,6 +123,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _warn_without_secrets_key(settings.fakes)
     # What the run's API guard does here, and what to configure when it cannot refuse (ADR 0144).
     announce_the_internal_api_guard(settings)
+    _warn_without_egress_report_key(settings)
     metrics_refresh = asyncio.create_task(refresh_loop(settings.metrics_refresh_seconds))
     relay = None if settings.is_sqlite else PostgresRelay(settings.database_url)
     if relay is not None:
@@ -192,6 +193,17 @@ def _warn_without_secrets_key(fakes: bool) -> None:
         logger.warning(
             "secrets.key_missing", detail=f"{ENV_KEKS} is not set: connector secrets cannot be typed"
         )
+
+
+def _warn_without_egress_report_key(settings: Any) -> None:
+    """Without the proxy's key, an agent can post its own run's network counters (ADR 0145). The
+    API still runs, as before the key existed: say it once, at start-up."""
+    if settings.fakes or settings.egress_report_key:
+        return
+    logger.warning(
+        "egress.report_key_missing",
+        detail="CHOREGOS_EGRESS_REPORT_KEY is not set: an agent can rewrite its run's network counters",
+    )
 
 
 async def _refuse_the_superuser() -> None:
