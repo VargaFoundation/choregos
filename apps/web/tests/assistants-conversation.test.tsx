@@ -62,7 +62,7 @@ describe("the assistants of my audience", () => {
     wrap(<AssistantsList />);
     expect(await screen.findByText("Investment assistant")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Converse" }));
-    await waitFor(() => expect(push).toHaveBeenCalledWith("/conversations/c9?assistant=varga/invest"));
+    await waitFor(() => expect(push).toHaveBeenCalledWith("/conversations/c9"));
     expect(mocks.openConversation).toHaveBeenCalledWith("varga", "invest");
     expect(screen.getByRole("link", { name: "Memory, accounts and tasks" })).toHaveAttribute("href", "/assistants/varga/invest");
   });
@@ -126,6 +126,28 @@ describe("a conversation", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send feedback" }));
     await waitFor(() => expect(mocks.feedback).toHaveBeenCalledWith("varga", "c1", { rating: "down", comment: "wrong rate" }));
     expect(await screen.findByText("Thank you for your feedback.")).toBeInTheDocument();
+  });
+
+  it("sends the feedback to the conversation's organisation, not the session's", async () => {
+    mocks.conversation.mockResolvedValue({ ...said, org: "acme" });
+    mocks.feedback.mockResolvedValue({});
+    wrap(<ConversationView id="c1" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Good answer" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send feedback" }));
+    await waitFor(() => expect(mocks.feedback).toHaveBeenCalledWith("acme", "c1", { rating: "up", comment: null }));
+  });
+
+  it("shows the memory proposals of the assistant the conversation carries, with no hint in the link", async () => {
+    mocks.conversation.mockResolvedValue({ ...summary, org: "varga", assistant: "invest", messages: [] });
+    mocks.memory.mockResolvedValue({
+      space: "preferred_sources",
+      scope: "user",
+      kind: "facts",
+      writes: "agent_proposes",
+      subjects: [{ subject: null, facts: [{ id: "f1", content: "Prefers Reuters", status: "proposed", pinned: false }], profiles: [] }],
+    });
+    wrap(<ConversationView id="c1" />);
+    expect(await screen.findByText("Prefers Reuters")).toBeInTheDocument();
   });
 
   it("shows a refused thumb", async () => {

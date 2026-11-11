@@ -42,6 +42,8 @@ const mocks = vi.hoisted(() => ({
   reads: vi.fn(),
   eraseSubject: vi.fn(),
   feedbackCandidates: vi.fn(),
+  acceptCandidate: vi.fn(),
+  dismissCandidate: vi.fn(),
 }));
 vi.mock("@/lib/assistants-api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/assistants-api")>();
@@ -312,6 +314,60 @@ describe("one installation, for its owners", () => {
     fireEvent.change(screen.getByLabelText("Agent"), { target: { value: "investment-analyst" } });
     expect(await screen.findByText(/why did it fall/)).toBeInTheDocument();
     expect(mocks.feedbackCandidates).toHaveBeenCalledWith("varga", "investment-analyst");
+  });
+
+  describe("deciding a candidate (S63-17)", () => {
+    const candidate = {
+      id: "k1",
+      agent: "investment-analyst",
+      agent_version: 4,
+      status: "proposed",
+      candidate: { case: { name: "candidate-1", turns: ["why did it fall"] } },
+      created_at: "2026-11-10T08:00:00Z",
+    };
+    async function open() {
+      mocks.feedbackCandidates.mockResolvedValue([candidate]);
+      wrap(<InstallationDetail slug="invest" />);
+      await screen.findByRole("option", { name: "investment-analyst" });
+      fireEvent.change(screen.getByLabelText("Agent"), { target: { value: "investment-analyst" } });
+      await screen.findByLabelText("Assertions");
+    }
+
+    it("adds it to the suite with the assertions the owner wrote", async () => {
+      mocks.acceptCandidate.mockResolvedValue({ ...candidate, status: "accepted" });
+      await open();
+      fireEvent.change(screen.getByLabelText("Assertions"), { target: { value: '{"must_not_contain": ["Buy."]}' } });
+      mocks.feedbackCandidates.mockResolvedValue([]);
+      fireEvent.click(screen.getByRole("button", { name: "Add to the suite" }));
+      await waitFor(() =>
+        expect(mocks.acceptCandidate).toHaveBeenCalledWith("varga", "investment-analyst", "k1", {
+          assertions: { must_not_contain: ["Buy."] },
+        }),
+      );
+      expect(await screen.findByText("No candidate case.")).toBeInTheDocument();
+    });
+
+    it("does not send assertions that are not JSON, or empty, and shows the server's refusal", async () => {
+      await open();
+      fireEvent.change(screen.getByLabelText("Assertions"), { target: { value: "{nope" } });
+      fireEvent.click(screen.getByRole("button", { name: "Add to the suite" }));
+      expect(await screen.findByText("The assertions are not valid JSON.")).toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText("Assertions"), { target: { value: "{}" } });
+      fireEvent.click(screen.getByRole("button", { name: "Add to the suite" }));
+      expect(await screen.findByText(/Write at least one assertion/)).toBeInTheDocument();
+      expect(mocks.acceptCandidate).not.toHaveBeenCalled();
+      mocks.acceptCandidate.mockRejectedValue(new Error("not a need__operation of the assistant's tools"));
+      fireEvent.change(screen.getByLabelText("Assertions"), { target: { value: '{"must_call": []}' } });
+      fireEvent.click(screen.getByRole("button", { name: "Add to the suite" }));
+      expect(await screen.findByText(/not a need__operation/)).toBeInTheDocument();
+    });
+
+    it("dismisses it", async () => {
+      mocks.dismissCandidate.mockResolvedValue({ ...candidate, status: "dismissed" });
+      await open();
+      fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+      await waitFor(() => expect(mocks.dismissCandidate).toHaveBeenCalledWith("varga", "investment-analyst", "k1"));
+    });
   });
 
   it("uninstalls, for an administrator only", async () => {

@@ -131,7 +131,11 @@ export function ConversationView({ id, assistant }: { id: string; assistant?: st
   const conversation = useQuery({ queryKey: ["conversation", id], queryFn: () => assistantsApi.conversation(id) });
   const actions = useQuery({ queryKey: ["conversation-actions", id], queryFn: () => assistantsApi.conversationActions(id) });
   const mine = useQuery({ queryKey: ["my-assistants"], queryFn: assistantsApi.myAssistants });
-  const [org, slug] = (assistant ?? "").split("/");
+  // The conversation carries its organisation and its assistant; `?assistant=org/slug` stays as a hint
+  // for a conversation read before the API said it.
+  const [hintOrg, hintSlug] = (assistant ?? "").split("/");
+  const org = conversation.data?.org ?? hintOrg;
+  const slug = conversation.data?.assistant ?? hintSlug;
   const known = (mine.data?.items ?? []).find((a) => a.org === org && a.slug === slug);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState<string | null>(null);
@@ -216,7 +220,7 @@ export function ConversationView({ id, assistant }: { id: string; assistant?: st
             {m.role === "user" ? (
               <p className="whitespace-pre-wrap text-sm">{m.content}</p>
             ) : (
-              <Answer text={m.content} session={id} org={sessionOrg} last={index === lastAnswer && !busy} />
+              <Answer text={m.content} session={id} org={org || sessionOrg} last={index === lastAnswer && !busy} />
             )}
           </Card>
         ))}

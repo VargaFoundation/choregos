@@ -16,6 +16,7 @@ from ..deps import Db, Me
 from ..schemas.agent_sessions import Conversation
 from ..schemas.assistants import SLUG, AssistantConversationOpen, MyAssistantList
 from ..services.assistant_conversations import my_assistants, open_assistant_conversation
+from ..services.conversation_assistant import with_assistant
 from ..services.conversations import conversation_of
 
 router = APIRouter(tags=["agents"])
@@ -38,4 +39,4 @@ async def open_my_assistant_conversation(
     org: str, slug: Slug, body: AssistantConversationOpen, session: Db, principal: Me
 ) -> Conversation:
     record = await open_assistant_conversation(session, principal, org, slug, body.context)
-    return conversation_of(record)
+    return (await with_assistant(session, [record], [conversation_of(record)]))[0]

@@ -393,7 +393,20 @@ a `<need>__<operation>` of the assistant's tools. `choregos_core.conversation_ev
 (`play_case`, `play_suite`). A release to production of an agent version an assistant wraps carries the
 required check `conversation_suite`. A thumb down on an answer (`POST /orgs/{org}/agent-sessions/{id}/feedback`)
 proposes a pseudonymised candidate case to the agent's managers (`GET /orgs/{org}/agents/{slug}/feedback-candidates`);
-it never enters a suite by itself. The judge that scores the `rubric` is not delivered yet.
+it never enters a suite by itself: an owner writes its assertions and accepts it
+(`POST …/feedback-candidates/{id}/accept`, a stored addition to the agent's suites, validated like a suite) or
+dismisses it (`…/dismiss`); both are final, and both are on the installation page of the console.
+
+The suites of an installed assistant reach the gate: the installation registers its manifest's eval files, read
+from the installed plugin, plus the accepted cases (`services/installed_suites.py`). A `SuitePlayer` plays them
+(`set_suite_player`: tests and CI play on a scripted model, `scripted_player`; a deployment registers one on its
+model gateway). Production is then refused below a suite's threshold, whether the revision is released
+explicitly (409) or saved with `on_publish: stable` (production stays where it is). With no player registered
+nothing can evaluate the suites and the gate adds no check. The judge that scores the `rubric` is not delivered
+yet.
+
+A task's workflow (`tasks[].workflow`) must be a valid workflow (the workflow schema and its static rules):
+`choregos plugin validate` refuses a stub, naming the file.
 #### Writes in a conversation
 
 A write need with `approval: inline` is offered to the agent as `<need>__<operation>` (the agent's `mcp_servers`

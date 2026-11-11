@@ -29,6 +29,8 @@ from pathlib import Path
 from typing import Any
 
 from ..conversation_evals import tools_named
+from ..dsl.parser import parse_workflow
+from ..errors import ValidationError
 
 #: `{{ config.company_name }}`, `{{config.x}}`, `{{ config.x | default(...) }}`.
 CONFIG_REFERENCE = re.compile(r"\{\{[^}]*?\bconfig\.([A-Za-z_][A-Za-z0-9_]*)")
@@ -232,6 +234,8 @@ def _files(doc: dict[str, Any], ref: str, root: Path, target: Any, problems: lis
         path = target(root, task["workflow"], problems)
         if path is not None and not path.is_file():
             problems.append(f"{ref}:tasks/{index}/workflow: `{task['workflow']}` is not a file of the plugin")
+        elif path is not None:
+            _check_workflow(path, f"{ref}:tasks/{index}/workflow", problems)
     for index, suite in enumerate(doc.get("evals") or []):
         path = target(root, suite, problems)
         if path is not None and not path.is_file():
@@ -242,6 +246,17 @@ def _files(doc: dict[str, Any], ref: str, root: Path, target: Any, problems: lis
             problems.append(
                 f"{ref}:knowledge/{index}/seed: `{base['seed']}` is not a directory holding a {SEED_MANIFEST}"
             )
+
+
+def _check_workflow(path: Path, ref: str, problems: list[str]) -> None:
+    """A task's workflow must be a valid workflow (the workflow schema and the static rules): a stub that
+    the scheduler could not publish is refused when the plugin is validated, not at the first run."""
+    try:
+        parse_workflow(path.read_text(encoding="utf-8"))
+    except ValidationError as exc:
+        problems.extend(f"{ref}: {issue.message} ({issue.path or '/'})" for issue in exc.issues)
+    except (OSError, UnicodeDecodeError) as exc:
+        problems.append(f"{ref}: cannot be read ({exc})")
 
 
 def check_suite(suite: dict[str, Any], ref: str, doc: dict[str, Any], problems: list[str]) -> None:

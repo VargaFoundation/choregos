@@ -70,9 +70,18 @@ no transcript: the person signs in to Choregos, and the conversation is theirs (
   signed in).
 - **Sign-in.** If the frame has no session it asks the identity provider once, silently (`prompt=none`); if the
   provider needs the person it shows a **Sign in** button that opens the provider in a popup. The console's session
-  cookie is `SameSite=Lax`, and Choregos does not weaken it for the embed: the frame carries the session only when
-  the host is on the **same site** as the console (for example `app.example.com` and `choregos.example.com`). A host
-  on another site gets the Sign in button but the frame stays signed out; it is not supported yet.
+  cookie is `SameSite=Lax`, and Choregos does not weaken it for the embed. When the host is on the **same site** as
+  the console (for example `app.example.com` and `choregos.example.com`) the frame carries that cookie. When the host
+  is on **another site** the browser does not send it, so the popup (a first-party page, signed in with the ordinary
+  cookie) asks `POST /api/v1/me/assistants/{org}/{slug}/embed-token` and hands the answer to the frame that opened it
+  (`postMessage`, to the console's own origin). The frame keeps that **frame token** in its memory and sends it as
+  `X-Choregos-Embed`. The token lives fifteen minutes, is bound to the person, their browser session (signing out ends
+  it), the organisation and the installation, opens only the routes the component calls (open and read its
+  conversation, send a turn, confirm or refuse an action, read a memory space) and carries a role in that organisation
+  only; it never reaches the host application, and when it expires the frame shows the Sign in button again. A
+  third-party cookie (`SameSite=None; Partitioned`) was not chosen: a cookie set by the popup is stored under the
+  console's partition, not the host's, and Safari refuses third-party cookies whatever their attributes. The browser
+  journey (`pnpm e2e:embed`, and `pnpm e2e:assistants` for the console's own screens) runs against fake APIs in CI.
 - **Events.** The frame posts messages to the host with `postMessage`, to the allowed origin that framed it (never
   `*`; your listener should check `event.origin` is the console's and `event.data.source === "choregos.assistant"`).
   Every message is `{ source: "choregos.assistant", type, org, installation, ...payload }`:

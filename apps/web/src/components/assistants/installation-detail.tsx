@@ -29,7 +29,13 @@ import {
   buttonClasses,
 } from "@/components/ui";
 import { api } from "@/lib/api";
-import { assistantsApi, type Assistant, type KnowledgeUpdate, type SubjectErasure } from "@/lib/assistants-api";
+import {
+  assistantsApi,
+  type Assistant,
+  type ConversationCandidate,
+  type KnowledgeUpdate,
+  type SubjectErasure,
+} from "@/lib/assistants-api";
 import { shortDate } from "@/lib/format";
 import { useSession } from "@/lib/session";
 
@@ -392,6 +398,66 @@ function SubjectRights({ org, slug }: Ref) {
   );
 }
 
+/**
+ * One candidate: the owner writes its assertions (a case without any passes whatever the agent says) and
+ * accepts it into the agent's conversation suites, or dismisses it (S63-17, ADR 0140).
+ */
+function CandidateCard({
+  org,
+  agent,
+  candidate,
+  onDecided,
+}: {
+  org: string;
+  agent: string;
+  candidate: ConversationCandidate;
+  onDecided: () => void;
+}) {
+  const [assertions, setAssertions] = useState('{\n  "must_not_contain": []\n}');
+  const [error, setError] = useState<string | null>(null);
+  async function decide(kind: "accept" | "dismiss") {
+    setError(null);
+    try {
+      if (kind === "dismiss") {
+        await assistantsApi.dismissCandidate(org, agent, candidate.id);
+      } else {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(assertions);
+        } catch {
+          setError("The assertions are not valid JSON.");
+          return;
+        }
+        if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed) || Object.keys(parsed).length === 0) {
+          setError("Write at least one assertion (must_call, must_not_call, must_cite, must_not_contain, length, call_order).");
+          return;
+        }
+        await assistantsApi.acceptCandidate(org, agent, candidate.id, { assertions: parsed as Record<string, unknown> });
+      }
+      onDecided();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Refused");
+    }
+  }
+  return (
+    <Card padding="sm" eyebrow={`version ${candidate.agent_version} · ${shortDate(candidate.created_at)}`}>
+      <pre className="overflow-x-auto text-xs">{JSON.stringify(candidate.candidate, null, 2)}</pre>
+      <div className="mt-2 space-y-2">
+        <Textarea aria-label="Assertions" className="font-mono text-xs" rows={4} value={assertions} onChange={(e) => setAssertions(e.target.value)} />
+        {error && <ErrorNote>{error}</ErrorNote>}
+        <div className="flex gap-2">
+          <Button size="sm" tone="primary" onClick={() => void decide("accept")}>
+            Add to the suite
+          </Button>
+          <Button size="sm" tone="default" onClick={() => void decide("dismiss")}>
+            Dismiss
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 /** The candidate cases that thumbs down proposed to an agent's owners. */
 function FeedbackCandidates({ org }: { org: string }) {
   const agents = useQuery({ queryKey: ["agents", org], queryFn: () => api.agents(org) });
@@ -414,9 +480,7 @@ function FeedbackCandidates({ org }: { org: string }) {
         </Select>
         {candidates.data && candidates.data.length === 0 && <Empty>No candidate case.</Empty>}
         {(candidates.data ?? []).map((c) => (
-          <Card key={c.id} padding="sm" eyebrow={`version ${c.agent_version} · ${shortDate(c.created_at)}`}>
-            <pre className="overflow-x-auto text-xs">{JSON.stringify(c.candidate, null, 2)}</pre>
-          </Card>
+          <CandidateCard key={c.id} org={org} agent={agent} candidate={c} onDecided={() => void candidates.refetch()} />
         ))}
       </div>
     </Card>

@@ -53,10 +53,12 @@ from .routers import (
     connector_catalogue,
     connectors,
     conversation_actions,
+    conversation_candidates,
     conversations,
     costs,
     delegations,
     egress,
+    embed_token,
     findings,
     github_app,
     integrations,
@@ -98,6 +100,8 @@ from .security import check_session_secret
 from .services.action_relay import relay_loop
 from .services.assistant_retention import retention_loop
 from .services.assistant_tasks import task_loop
+from .services.conversation_gate import set_conversation_source
+from .services.installed_suites import installed_suite_source
 from .services.plugin_defaults import check_configuration, reconcile_in_background
 from .services.plugin_supply import warm_shipping
 from .services.skill_scanner import mirror_loop
@@ -317,6 +321,9 @@ def create_app() -> FastAPI:
     # The plugin sources and default plugins (ADR 0093): an unreadable configuration stops the API here,
     # naming the setting, rather than answering 500 at the first install.
     check_configuration(settings)
+    # The conversation suites of the assistants an organisation installed count at the promotion gate
+    # (S63-17): played by the `SuitePlayer` a deployment (or a test) registers, none without one.
+    set_conversation_source(installed_suite_source)
     app = FastAPI(
         title="Choregos API",
         # The package's version, not a constant: the API announced itself as `1.0.0` from the first
@@ -420,6 +427,8 @@ def create_app() -> FastAPI:
         conversations.router,
         conversation_actions.router,
         assistant_conversations.router,
+        embed_token.router,
+        conversation_candidates.router,
         assistant_catalogue.router,
         assistant_tasks.router,
         delegations.router,
