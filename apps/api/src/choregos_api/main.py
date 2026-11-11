@@ -35,6 +35,7 @@ from .metrics import expose, http_requests, refresh_loop
 from .origin_guard import check_cors_origins, install_origin_guard
 from .routers import (
     actions,
+    activity,
     admin,
     agent_realtime,
     agent_releases,
@@ -417,6 +418,7 @@ def create_app() -> FastAPI:
         model_catalogue.router,
         workitems.router,
         runs.router,
+        activity.router,
         trains.router,
         findings.router,
         memory.router,
