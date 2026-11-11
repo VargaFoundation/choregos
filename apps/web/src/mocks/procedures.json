@@ -3589,7 +3589,7 @@
       {
         "key": "in_choregos",
         "title": "In Choregos",
-        "markdown": "1. **Knowledge**, the base, **Add source**, kind **SharePoint**.\n2. Pick the **connector**. With none in the list, the form links to Administration, Connectors, to declare\n   one.\n3. `site_id` (or `drive_id` for a OneDrive), and optionally a `folder`.\n4. Choose the refresh: every N minutes (5 minutes to 7 days), a cron expression, or manual."
+        "markdown": "1. **Knowledge**, the base, **Add source**, kind **SharePoint**.\n2. Pick the **connector**. With none in the list, the form links to Administration, Connectors, to declare\n   one.\n3. `site_id` (or `drive_id` for a OneDrive), and optionally a `folder`.\n   **Excluded paths** leave out what the folder holds but should not be read, for example an archive:\n   globs under the folder, each starting with `/`, case-insensitive, where `*` also crosses `/`\n   (`/*Archive*/*` drops every `Archive` folder at any depth, `/*DO NOT USE*` every file or folder named so).\n   Changing them starts the next sync from scratch: what they now exclude leaves the base.\n4. Choose the refresh: every N minutes (5 minutes to 7 days), a cron expression, or manual."
       },
       {
         "key": "test",

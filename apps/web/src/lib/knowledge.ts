@@ -135,7 +135,8 @@ export function sourceConfig(
   if (kind === "sharepoint") {
     const site = fields.site.trim();
     const key = site.startsWith("b!") ? "drive_id" : "site_id";
-    return { [key]: site, ...(fields.folder.trim() ? { folder: fields.folder.trim() } : {}) };
+    const exclude = (fields.exclude ?? "").split(",").map((p) => p.trim()).filter(Boolean);
+    return { [key]: site, ...(fields.folder.trim() ? { folder: fields.folder.trim() } : {}), ...(exclude.length ? { exclude } : {}) };
   }
   if (kind === "web") {
     const exclude = (fields.exclude ?? "").split(",").map((p) => p.trim()).filter(Boolean);

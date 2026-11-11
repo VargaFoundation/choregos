@@ -74,10 +74,28 @@ async def _documents_connector(
     raise unprocessable(f"no `documents` connector `{name}` in {organisation.slug} ({listing})")
 
 
+def _excluded_paths(config: dict[str, object]) -> list[str]:
+    """`exclude`: at most 50 path globs, each starting with `/` (a web source, a SharePoint folder)."""
+    exclude = config.get("exclude") or []
+    if (
+        not isinstance(exclude, list)
+        or len(exclude) > 50
+        or not all(isinstance(p, str) and p.startswith("/") and len(p) <= 200 for p in exclude)
+    ):
+        raise unprocessable("`exclude` is a list of at most 50 path globs, each starting with `/`")
+    return [str(p) for p in exclude]
+
+
 def _sharepoint_config(config: dict[str, object]) -> dict[str, object]:
     if not (config.get("site_id") or config.get("drive_id")):
         raise unprocessable("a SharePoint or OneDrive source names a `site_id` or a `drive_id`")
-    return {k: str(v) for k, v in config.items() if k in {"site_id", "drive_id", "folder"} and v}
+    checked: dict[str, object] = {
+        k: str(v) for k, v in config.items() if k in {"site_id", "drive_id", "folder"} and v
+    }
+    exclude = _excluded_paths(config)
+    if exclude:
+        checked["exclude"] = exclude
+    return checked
 
 
 _SPACE_KEY = re.compile(r"^[A-Z0-9~][A-Za-z0-9_~-]{0,254}$")
@@ -129,13 +147,7 @@ def _confluence_config(config: dict[str, object]) -> dict[str, object]:
 
 def _web_config(config: dict[str, object]) -> dict[str, object]:
     url = _https_url(config, "web")
-    exclude = config.get("exclude") or []
-    if (
-        not isinstance(exclude, list)
-        or len(exclude) > 50
-        or not all(isinstance(p, str) and p.startswith("/") and len(p) <= 200 for p in exclude)
-    ):
-        raise unprocessable("`exclude` is a list of at most 50 path globs, each starting with `/`")
+    exclude = _excluded_paths(config)
     checked: dict[str, object] = {
         "url": url,
         "max_depth": max(0, min(int(str(config.get("max_depth", 2))), 5)),
