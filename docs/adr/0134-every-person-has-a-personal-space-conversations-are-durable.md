@@ -1,6 +1,6 @@
 # 0134 — Every person has a personal space; conversations are durable
 
-- **Status**: proposed, 2026-11-10
+- **Status**: accepted, 2026-11-11 (product owner's review of the same day; proposed 2026-11-10)
 - **Concerns**: `projects` (`kind`, `owner_user_id`), `agent_sessions` and `agent_session_events`
   (`services/agent_sessions.py`, `routers/agent_sessions.py`), the gateway key of a session, the cost
   ledger, the routes `/me/conversations/*` and `/me/assistants/{org}/{slug}/conversations`; amends

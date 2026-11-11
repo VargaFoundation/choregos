@@ -1,6 +1,6 @@
 # 0135 — A tool call may carry the person's identity: token exchange, consented accounts
 
-- **Status**: proposed, 2026-11-10
+- **Status**: proposed, 2026-11-10; acceptance waits for the security review of the token exchange (S63-07)
 - **Concerns**: the broker (`services/broker.py`, `_call`), the connector client
   (`services/plugin_servers.py` `connector_client`), the connector type spec
   (`choregos_adapters.registry.ConnectorTypeSpec`), the sealed store (`secret_store.py`, ADR 0058), the MCP

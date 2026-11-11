@@ -1,6 +1,6 @@
 # 0133 — A plugin ships an assistant; an organisation installs it and publishes it to an audience
 
-- **Status**: proposed, 2026-11-10
+- **Status**: accepted, 2026-11-11 (product owner's review of the same day; proposed 2026-11-10)
 - **Concerns**: `packages/contracts/schemas/plugin.schema.json` (`contents.assistants`), a new
   `assistant.schema.json`, `choregos_core.plugins` (`load_directory`, `_declared_refs`), the plugin
   installer (`services/plugin_installer.py`), new tables `assistant_installations` and

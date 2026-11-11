@@ -1,6 +1,7 @@
 # 0137 — A standing, read-only, revocable delegation lets a task read on a person's behalf
 
-- **Status**: proposed, 2026-11-10
+- **Status**: proposed, 2026-11-10; acceptance waits for the works council's opinion, the data protection
+  impact assessment and the security review of the delegation (S63-14)
 - **Concerns**: an assistant's `tasks`, new tables `task_subscriptions` and `delegations`, the schedules of
   workflows (S38-11) made per subscriber, a `poll` trigger, task delivery (inbox, email, Teams, webhook),
   the routes `/me/assistants/{org}/{slug}/tasks/*` and `/me/delegations/*`; amends

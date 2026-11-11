@@ -1,6 +1,6 @@
 # 0138 — Knowledge an assistant offers: a seed, the installation's copy, proposed upstream updates
 
-- **Status**: proposed, 2026-11-10
+- **Status**: accepted, 2026-11-11 (product owner's review of the same day; proposed 2026-11-10)
 - **Concerns**: `knowledge_bases`, `knowledge_documents` (an `origin`), the plugin installer and upgrade,
   the hybrid index (`knowledge/index.py` `search`), the knowledge tools of a conversation, the routes
   `/orgs/{org}/assistants/{slug}/knowledge/updates`; amends [ADR 0051](0051-knowledge-bases.md); builds on

@@ -1,6 +1,6 @@
 # 0139 — Talking to an assistant through the MCP door and an embedded component
 
-- **Status**: proposed, 2026-11-10
+- **Status**: accepted, 2026-11-11 (product owner's review of the same day; proposed 2026-11-10)
 - **Concerns**: the MCP door (`mcp/transport.py`, `mcp/tools.py`, `mcp/caller.py`), MCP prompts, a new path
   `/mcp/assistants/{org}:{installation}`, the console's `/embed/assistants/{org}/{installation}` page, the
   `frame-ancestors` header, inline write confirmations; amends [ADR 0030](0030-an-mcp-door-for-external-clients.md);
