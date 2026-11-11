@@ -44,7 +44,10 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // to 2339 kB, with no new dependency.
 // 2026-11-11 (S63 waves E and F): 2350 -> 2375 kB. The memory export and owners' memory, the action's diff, the
 // richer configuration forms and the embedded token bring 2350 kB (shared JSX already folded): no headroom left.
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2375);
+// 2026-11-11 (S62-11): 2375 -> 2400 kB. The A2A page of Integrations (four steps, the snippet builder and its
+// name list), the Help entry and the "Learn more" links add 19 kB: 2369 kB with the assistants, no new
+// dependency. S62-08's CLI page, written the same day, adds 6 kB more: the two together would sit at 2375.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2400);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* files(dir) {

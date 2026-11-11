@@ -9,6 +9,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ThemePicker } from "@/components/theme-picker";
 import { AccountMenu, personName } from "@/components/account/account-menu";
 import { Count, NavigationList } from "@/components/shell/navigation";
+import { HelpEntry } from "@/components/docs-link";
 import { AboutEntry, EditionBadge } from "@/components/edition";
 import { Select } from "@/components/ui";
 import { useADecider, useInboxCount } from "@/lib/a-decider";
@@ -118,6 +119,7 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
       <div className="ml-auto hidden items-center gap-4 whitespace-nowrap text-xs xl:flex">
         {edition.data && <EditionBadge edition={edition.data.edition} publisher={edition.data.publisher} />}
         {badgeDemo}
+        <HelpEntry />
         {me ? (
           <AccountMenu me={me} onSignOut={() => void deconnecter()} />
         ) : (
@@ -129,7 +131,9 @@ export function TopNav({ demo = false }: { demo?: boolean }) {
           </>
         )}
       </div>
-      <nav className="ml-auto flex items-center xl:hidden" aria-label="Main navigation">
+      <nav className="ml-auto flex items-center gap-2 xl:hidden" aria-label="Main navigation">
+        {/* Help stays in the bar below 1280 px too: the documentation is one tab stop away on a phone. */}
+        <HelpEntry className="min-h-11" />
         <button
           ref={bouton}
           type="button"

@@ -1,6 +1,6 @@
 [project]
 name = "choregos-core"
-version = "0.25.3"
+version = "0.26.0"
 description = "Cœur Choregos : DSL de workflow, politiques, résolution de modèles, gates"
 requires-python = ">=3.12,<3.13"
 license = { text = "Apache-2.0" }
@@ -11,8 +11,15 @@ dependencies = [
     "jsonschema>=4.23",
     "structlog>=24.4",
     "jinja2>=3.1",
-    # GenAI traces (ADR 0018): `choregos_core.telemetry` is the one module that knows the span and
-    # attribute names; exact pins because the semantic conventions it targets are still incubating.
+]
+
+[project.optional-dependencies]
+# GenAI traces (ADR 0018): `choregos_core.telemetry` is the one module that knows the span and
+# attribute names; exact pins because the semantic conventions it targets are still incubating.
+# An extra, not a dependency (S62-07): the services that emit spans (the API, the orchestrator, the
+# runner) ask for `choregos-core[telemetry]`; the CLI does not, and its native binary carries no
+# OpenTelemetry. Without the extra, `telemetry` turns into no-ops (tracing off).
+telemetry = [
     "opentelemetry-sdk==1.45.2",
     "opentelemetry-exporter-otlp-proto-http==1.45.2",
 ]
