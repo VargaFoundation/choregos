@@ -19,7 +19,8 @@ import re
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 DOCKER = ROOT / "docker"
 STAGE = re.compile(r"^FROM\s+(?:--platform=\S+\s+)?(\S+)(?:\s+AS\s+(\S+))?\s*$", re.M | re.I)
-SOURCE = re.compile(r"COPY\s+--from=(\S+)")
+#: A stage only copied or mounted from (`COPY --from=x`, `RUN --mount=...,from=x`) is a source, not an image.
+SOURCE = re.compile(r"(?:COPY\s+--from=|--mount=\S*?\bfrom=)([^\s,]+)")
 UPGRADE = re.compile(r"apt-get\s+upgrade\s+-y")
 
 

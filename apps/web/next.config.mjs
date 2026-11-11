@@ -39,6 +39,10 @@ const nextConfig = {
       { source: "/mcp/:path*", destination: `${apiUrl}/mcp/:path*` },
       // The A2A door (ADR 0078): an outside agent's card and task calls.
       { source: "/a2a/:path*", destination: `${apiUrl}/a2a/:path*` },
+      // The CLI served by the instance (S62-08): its manifest, its binaries and the install scripts.
+      { source: "/downloads/:path*", destination: `${apiUrl}/downloads/:path*` },
+      { source: "/cli/install.sh", destination: `${apiUrl}/cli/install.sh` },
+      { source: "/cli/install.ps1", destination: `${apiUrl}/cli/install.ps1` },
       // Its OAuth metadata (RFC 9728), read by claude.ai before it connects.
       {
         source: "/.well-known/oauth-protected-resource/:path*",

@@ -693,6 +693,30 @@ Options:
   --help  Show this message and exit.
 ```
 
+## `choregos self`
+
+The CLI itself: keep it in step with the instance
+
+### `choregos self update`
+
+```text
+Usage: choregos self update [OPTIONS]
+
+  Replace this CLI with the instance's own build, for this OS and processor.
+
+  The binary comes from the instance (`/downloads/cli/`), in the version it
+  runs, and is checked against the sha256 of its manifest before it replaces
+  the running one in a single rename. A CLI installed from Python packages has
+  no binary to replace: upgrade the package, or install the binary with the
+  instance's install script.
+
+Options:
+  --api-url <str>  The instance to update from (default: the profile's)
+  --path <path>    The binary to replace (default: the running one)
+  --force          Download even when the versions are the same
+  --help           Show this message and exit.
+```
+
 ## `choregos tokens`
 
 API tokens

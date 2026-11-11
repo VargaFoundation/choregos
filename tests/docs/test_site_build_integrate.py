@@ -64,6 +64,8 @@ CONTRACT_SLUGS = {
     "use/budgets-and-policies",
     *OWN_SLUGS,
 }
+#: The pages whose plugin files (titled blocks) are written to disk and loaded as a plugin by the tests.
+PLUGIN_PAGES = {"build/plugins.md", "build/assistants.md"}
 FENCE = re.compile(r"^```([^\n]*)\n(.*?)^```\s*$", re.M | re.S)
 LINK = re.compile(r"\]\(\s*<?([^)\s>]+)")
 LANGUAGES = {"bash", "shell", "powershell", "json", "yaml", "python", "markdown", "text", "mermaid"}
@@ -364,8 +366,9 @@ def test_every_yaml_block_is_checked(page: str, info: str, block: str) -> None:
         assert not report.warnings, f"{page}: " + " · ".join(i.format() for i in report.warnings)
     elif kind == "Policy":
         Policy.model_validate(document)
-    elif kind == "Plugin" or {"catalogue", "agent"} <= set(document):
-        assert page == "build/plugins.md", "plugin files are checked as a plugin by test_the_plugin_validates"
+    elif kind in {"Plugin", "Assistant", "conversation"} or {"catalogue", "agent"} <= set(document):
+        assert page in PLUGIN_PAGES, f"{page}: a plugin file outside the pages that are validated as a plugin"
+        assert "title=" in info, f'{page}: a plugin file must say its path (title="plugin/file.yaml")'
     elif set(document) & {"global", "choregos-api", "choregos-web"}:
         missing = [".".join(p) for p in _values_paths(document) if not _in_chart(p)]
         assert not missing, f"{page}: keys the chart does not have: {missing}"
@@ -406,6 +409,41 @@ def test_the_plugin_validates(tmp_path: Path) -> None:
     plugin = load_directory(tmp_path / "billing-team")
     assert plugin.name == "billing-team" and plugin.version == "1.0.0"
     assert plugin.digest.startswith("sha256:")
+
+
+def _write_titled_files(page: Path, root: Path) -> int:
+    written = 0
+    for info, block in _blocks(page):
+        title = re.search(r'title="([^"]+)"', info)
+        if title:
+            target = root / title.group(1)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(block, encoding="utf-8")
+            written += 1
+    return written
+
+
+def test_the_assistant_plugin_validates(tmp_path: Path) -> None:
+    """The assistants page's files (plugin, agent, assistant, conversation suite) are a valid plugin."""
+    from choregos_core.plugins import load_directory
+
+    assert _write_titled_files(SITE / "build" / "assistants.md", tmp_path) == 4
+    plugin = load_directory(tmp_path / "billing-assistant")
+    assert plugin.name == "billing-assistant"
+    assert plugin.digest.startswith("sha256:")
+
+
+def test_the_assistant_plugin_check_refuses_a_wrong_example(tmp_path: Path) -> None:
+    """The guard bites: an assistant whose agent is not in the plugin is refused."""
+    from choregos_core.plugins import load_directory
+
+    _write_titled_files(SITE / "build" / "assistants.md", tmp_path)
+    manifest = tmp_path / "billing-assistant" / "assistants" / "billing-assistant.yaml"
+    manifest.write_text(
+        manifest.read_text(encoding="utf-8").replace("agent: invoice-helper", "agent: nobody")
+    )
+    with pytest.raises(Exception, match="nobody"):
+        load_directory(tmp_path / "billing-assistant")
 
 
 # ───────────────────────── the references against the code ─────────────────────────

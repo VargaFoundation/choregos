@@ -19,10 +19,18 @@ spec:
         paths:
           {{- /* `/mcp`: the gateway for external MCP clients (ADR 0030), served by the API, and its
                OAuth metadata (RFC 9728) that claude.ai reads before connecting. `/a2a`: the A2A door
-               (ADR 0078), last so that the paths before it keep their place. */}}
-          {{- range list "/api" "/mcp" "/healthz" "/readyz" "/.well-known/oauth-protected-resource" "/a2a" }}
+               (ADR 0078), last so that the paths before it keep their place. `/downloads` and the two
+               install scripts: the CLI served by the instance (S62-08); the scripts are exact paths,
+               so nothing else under `/cli` leaves the console. */}}
+          {{- range list "/api" "/mcp" "/healthz" "/readyz" "/.well-known/oauth-protected-resource" "/a2a" "/downloads" }}
           - path: {{ . }}
             pathType: Prefix
+            backend:
+              service: { name: choregos-api, port: { number: {{ $.Values.service.port }} } }
+          {{- end }}
+          {{- range list "/cli/install.sh" "/cli/install.ps1" }}
+          - path: {{ . }}
+            pathType: Exact
             backend:
               service: { name: choregos-api, port: { number: {{ $.Values.service.port }} } }
           {{- end }}
@@ -49,6 +57,9 @@ spec:
         - path: { type: PathPrefix, value: /readyz }
         - path: { type: PathPrefix, value: /.well-known/oauth-protected-resource }
         - path: { type: PathPrefix, value: /a2a }
+        - path: { type: PathPrefix, value: /downloads }
+        - path: { type: Exact, value: /cli/install.sh }
+        - path: { type: Exact, value: /cli/install.ps1 }
       backendRefs:
         - name: choregos-api
           port: {{ .Values.service.port }}

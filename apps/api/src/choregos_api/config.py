@@ -45,6 +45,10 @@ class OAuthClient(BaseModel):
     callback_port: int | None = Field(default=None, ge=1024, le=65535)
 
 
+#: The public documentation site (S62 shared contracts), when `CHOREGOS_DOCS_URL` names none.
+DEFAULT_DOCS_URL = "https://docs.varga.foundation/choregos"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CHOREGOS_", env_file=".env", extra="ignore")
 
@@ -229,6 +233,11 @@ class Settings(BaseSettings):
     plugins_config: str = ""
     #: The offline plugin directory baked into the image; wins over the file's `offline`.
     plugins_offline: str = ""
+    #: The user documentation baked into the image (`docs/site/**`, S62-10, ADR 0150), served by the
+    #: MCP door's `docs_search` and `docs_read`. An absent directory: this build bundles none.
+    docs_dir: str = "/opt/choregos/docs"
+    #: The public documentation site, for the links those tools give (S62 shared contracts).
+    docs_url: str = "https://docs.varga.foundation/choregos"
     #: Plugin servers (ADR 0096): `kubernetes` runs them in `plugin_servers_namespace` through the API's
     #: Role there; `off` refuses a plugin that brings one (`CHOREGOS_FAKES` runs them in memory).
     plugin_servers: Literal["off", "kubernetes"] = "off"
@@ -352,6 +361,10 @@ class Settings(BaseSettings):
     procedures_extra: str = ""
     public_url: str = "http://localhost:3000"
     api_url: str = "http://localhost:8000"
+    #: Where the native `choregos` binaries, their `SHA256SUMS` and `manifest.json` lie (S62-07 puts
+    #: them there in the API image). An absent directory is a build that bundles no CLI: the download
+    #: routes answer 404 and say where the GitHub release is (S62-08, `routers/cli_downloads.py`).
+    cli_dir: str = "/opt/choregos/cli"
 
     # Webhooks
     github_webhook_secret: str = ""
@@ -371,6 +384,9 @@ class Settings(BaseSettings):
     #: Requests per minute and per address on the routes without a principal (`/auth/*`,
     #: `/webhooks/*`), per replica. 0 disables. See `rate_limit.py`.
     rate_limit_per_minute: int = 600
+    #: Requests per minute and per address on the CLI downloads (`/downloads/*`, `/cli/install.*`),
+    #: public like the probes: each answer can be tens of megabytes. 0 disables. See `rate_limit.py`.
+    download_rate_limit_per_minute: int = 60
     #: The networks of the proxies in front of the API, as a JSON list
     #: (`CHOREGOS_TRUSTED_PROXY_CIDRS='["10.0.0.0/8"]'`): the rate limit keys on the address the
     #: nearest trusted proxy saw, the right-most `X-Forwarded-For` entry outside them. Empty: the TCP
