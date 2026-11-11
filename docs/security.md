@@ -361,7 +361,9 @@ is narrow and visible:
   typed reason `write_under_delegation` before any source is called. A task has no conversation to confirm a
   write in, so there is no proposal to make (the proposals of S63-10 belong to a conversation).
 - **Short and capped.** 90 days by default, capped by the installation's `policy_overrides.delegation.max_days`.
-  There is no automatic renewal and no reminder before expiry yet.
+  There is no automatic renewal. A reminder is sent ONCE, `policy_overrides.delegation.remind_days` (7 by
+  default) before the end, through the installation's `email` notifier (`remind_expiring`, a pass of the task
+  loop); without a notifier the console shows the expiry.
 - **The credential.** For a `user_exchange` need the platform asks the identity provider for an OFFLINE token
   (`offline_access`, RFC 8693 `requested_token_type` refresh token) from the person's own token, and seals it
   at `user/<id>/delegation/<delegation id>` (ADR 0058). It is issued to the exchange client only, never returned
@@ -375,7 +377,12 @@ is narrow and visible:
 - **Revocation is immediate.** `DELETE /me/delegations/{id}` revokes the offline token at the provider (RFC 7009,
   `CHOREGOS_TOKEN_REVOCATION_ENDPOINT`; without one only the sealed copy is deleted and the token lives until the
   provider's own lifetime) and deletes the sealed secret. Erasing a person from an assistant does the same.
-- **Journaled.** Every delegated read writes a line of the reads journal with the delegation's id; never content.
+- **The steps of the run.** The workflow's own agent steps read under it too (`task_reads`): a read of a
+  connector bound to a need is judged by the same `guard_read` at each call and made as the person; a write by such
+  a step is refused (`write_under_delegation`). A connector the installation binds to no need keeps the run's
+  identity.
+- **Journaled.** Every delegated read writes a line of the reads journal with the delegation's id (and, for a
+  step of the run, the work item's key); never content.
 - **Only the owner reads it.** `delegations` is under forced RLS on the organisation plus a restrictive
   owner-only policy.
 

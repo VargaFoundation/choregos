@@ -61,3 +61,5 @@ class Delegation(Base, PkMixin, TimestampMixin):
     secret_ref: Mapped[str | None] = mapped_column(String(300), nullable=True)
     status: Mapped[str] = mapped_column(String(16), default="active", server_default="active")
     suspended_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: When the person was told it ends soon (`assistant_delegations.remind_expiring`): once per delegation.
+    reminded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

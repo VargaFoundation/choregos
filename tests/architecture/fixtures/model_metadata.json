@@ -2374,6 +2374,20 @@
     "type": "String(length=320)"
    },
    {
+    "default": "0",
+    "name": "webhook_secret_generation",
+    "nullable": false,
+    "server_default": "'0'",
+    "type": "Integer()"
+   },
+   {
+    "default": null,
+    "name": "webhook_secret_shown_at",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
     "default": "<function uuid7>",
     "name": "id",
     "nullable": false,
@@ -3525,6 +3539,13 @@
    },
    {
     "default": null,
+    "name": "diff",
+    "nullable": true,
+    "server_default": null,
+    "type": "Json()"
+   },
+   {
+    "default": null,
     "name": "confirmed_by",
     "nullable": true,
     "server_default": null,
@@ -4473,6 +4494,13 @@
     "nullable": true,
     "server_default": null,
     "type": "Text()"
+   },
+   {
+    "default": null,
+    "name": "reminded_at",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
    },
    {
     "default": "<function uuid7>",

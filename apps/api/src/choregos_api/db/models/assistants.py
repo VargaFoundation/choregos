@@ -6,7 +6,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, UniqueConstraint, true
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ..base import Base, Json, PkMixin, TimestampMixin
@@ -40,6 +40,10 @@ class AssistantInstallation(Base, PkMixin, TimestampMixin):
     #: What the owners narrow of the manifest's policy (budgets, retention).
     policy_overrides: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
     created_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    #: The generation of the task webhook's key (`task_delivery.webhook_secret`) and when an owner was last
+    #: shown it: a key is shown once, a rotation makes a new generation.
+    webhook_secret_generation: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    webhook_secret_shown_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class AssistantToolBinding(Base, PkMixin, TimestampMixin):
@@ -83,9 +87,12 @@ class ConversationAction(Base, PkMixin, TimestampMixin):
     operation: Mapped[str] = mapped_column(String(128))
     arguments: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
     summary: Mapped[str] = mapped_column(Text)
-    #: `proposed`, `confirmed`, `executed`, `refused` or `expired`.
+    #: `proposed`, `confirmed`, `executed`, `refused`, `expired`, or `governed`: a `console` approval, decided
+    #: as a governed action (ADR 0035) whose id and decision path are in `result`.
     status: Mapped[str] = mapped_column(String(16), default="proposed")
     result: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
+    #: What the source's preview of the write returned at the proposal, when it serves one (S63-10).
+    diff: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
     confirmed_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     executed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

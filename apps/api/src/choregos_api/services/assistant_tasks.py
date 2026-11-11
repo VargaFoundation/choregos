@@ -630,6 +630,8 @@ async def task_loop(interval_s: float = INTERVAL_S) -> None:
                 await run_due(session)
             async with session_scope(orgs="*") as session:
                 await deliver_pending(session)
+            async with session_scope(orgs="*") as session:
+                await assistant_delegations.remind_expiring(session)
         except asyncio.CancelledError:
             raise
         except Exception as error:

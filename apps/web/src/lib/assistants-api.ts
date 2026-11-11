@@ -22,6 +22,9 @@ import type {
   ConversationFeedbackCreate,
   ConversationPage,
   ConversationSummary,
+  Delegation,
+  DelegationCreate,
+  DelegationList,
   InboxList,
   KnowledgeUpdate,
   KnowledgeUpdateDecision,
@@ -36,6 +39,7 @@ import type {
   TaskSubscription,
   TaskSubscriptionPut,
   UserErasure,
+  WebhookSecret,
 } from "@choregos/contracts/api";
 import { API_BASE, ApiError, problemOf, request } from "./api";
 
@@ -50,6 +54,7 @@ export type {
   ConversationCandidate,
   ConversationMessage,
   ConversationSummary,
+  Delegation,
   InboxItem,
   KnowledgeUpdate,
   MemoryFactView,
@@ -211,6 +216,10 @@ export const assistantsApi = {
   runTask: (org: string, slug: string, task: string) =>
     request<TaskRun>(`/me/assistants/${enc(org)}/${enc(slug)}/tasks/${enc(task)}/run`, post()),
   inbox: () => request<InboxList>("/me/inbox"),
+  // Standing delegations of a task (S63-14): agree to the exact needs, list, revoke.
+  delegations: () => request<DelegationList>("/me/delegations"),
+  agreeDelegation: (body: DelegationCreate) => request<Delegation>("/me/delegations", post(body)),
+  revokeDelegation: (id: string) => request<void>(`/me/delegations/${enc(id)}`, { method: "DELETE" }),
 
   // The owners.
   pluginAssistants: (org: string, plugin: string) =>
@@ -238,6 +247,8 @@ export const assistantsApi = {
     request<AssistantReadPage>(`/orgs/${enc(org)}/assistants/${enc(slug)}/reads${query(filter)}`),
   eraseSubject: (org: string, slug: string, body: SubjectErasureRequest) =>
     request<SubjectErasure>(`/orgs/${enc(org)}/assistants/${enc(slug)}/erasure`, post(body)),
+  webhookSecret: (org: string, slug: string, rotate = false) =>
+    request<WebhookSecret>(`/orgs/${enc(org)}/assistants/${enc(slug)}/webhook-secret`, post({ rotate })),
   feedbackCandidates: (org: string, agent: string) =>
     request<ConversationCandidate[]>(`/orgs/${enc(org)}/agents/${enc(agent)}/feedback-candidates`),
 };

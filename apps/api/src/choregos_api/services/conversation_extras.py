@@ -23,6 +23,8 @@ class ConversationExtras:
     memory: dict[str, LoopTool] = field(default_factory=dict)
     #: The inline writes the conversation may PROPOSE (S63-10): name -> `conversation_actions.Proposable`.
     actions: dict[str, Any] = field(default_factory=dict)
+    #: `run_task` (S63-13), when the installation has on-demand tasks.
+    tasks: dict[str, LoopTool] = field(default_factory=dict)
 
     @property
     def loop_tools(self) -> list[LoopTool]:
@@ -32,16 +34,24 @@ class ConversationExtras:
             tools_for(self.knowledge)
             + list(self.memory.values())
             + [a.loop_tool() for a in self.actions.values()]
+            + list(self.tasks.values())
         )
 
     def serves(self, name: str) -> bool:
         from .conversation_knowledge import KNOWLEDGE_TOOLS
 
         return (
-            (bool(self.knowledge) and name in KNOWLEDGE_TOOLS) or name in self.memory or name in self.actions
+            (bool(self.knowledge) and name in KNOWLEDGE_TOOLS)
+            or name in self.memory
+            or name in self.actions
+            or name in self.tasks
         )
 
     async def call(self, session: AsyncSession, name: str, arguments: dict[str, Any]) -> str:
+        if name in self.tasks:
+            from .conversation_tasks import call as run_task
+
+            return await run_task(session, self.record, arguments)
         if name in self.actions:
             from .conversation_actions import propose
 
@@ -64,6 +74,9 @@ async def conversation_extras(
     from .conversation_knowledge import installation_bases, with_citation_rule
 
     extras = ConversationExtras(record)
+    from .conversation_tasks import offered
+
+    extras.tasks = await offered(session, record)
     # S63-05: an assistant's conversation reads the knowledge of its installation, and of no other.
     extras.knowledge = list(await installation_bases(session, record))
     if extras.knowledge:

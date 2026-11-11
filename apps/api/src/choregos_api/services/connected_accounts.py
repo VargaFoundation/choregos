@@ -362,22 +362,32 @@ async def disconnect(session: AsyncSession, principal: Principal, org: str, conn
             OrgConnector.org_id == organisation.id, OrgConnector.name == connector_name
         )
     )
-    declared = consent_settings(connector) if connector is not None else None
     # Local deletion first and unconditional: the source being down never keeps a token alive here.
     await store.delete(session, organisation.id, name)
     await session.delete(row)
     await session.flush()
-    if refresh and declared is not None and declared.revocation_endpoint:
-        try:
-            secret = await _client_secret(session, organisation.id, declared)
-            await _post(
-                declared.revocation_endpoint,
-                {"token": refresh, "token_type_hint": "refresh_token", "client_id": declared.client_id},
-                secret,
-                check=False,
-            )
-        except (ConsentFailure, IdentityUnavailable):
-            pass  # best effort, RFC 7009: the secret is already gone from here
+    if connector is not None:
+        await revoke_at_source(session, organisation.id, connector, refresh)
+
+
+async def revoke_at_source(
+    session: AsyncSession, org_id: str, connector: OrgConnector, refresh: str | None
+) -> None:
+    """Best effort, RFC 7009: the refresh token is revoked at the source when it offers it. The secret is
+    already gone from here, so a failure changes nothing for us."""
+    declared = consent_settings(connector)
+    if not refresh or declared is None or not declared.revocation_endpoint:
+        return
+    try:
+        secret = await _client_secret(session, org_id, declared)
+        await _post(
+            declared.revocation_endpoint,
+            {"token": refresh, "token_type_hint": "refresh_token", "client_id": declared.client_id},
+            secret,
+            check=False,
+        )
+    except (ConsentFailure, IdentityUnavailable):
+        pass
 
 
 async def consented_token(session: AsyncSession, connector: OrgConnector, user_id: str, org_id: str) -> str:

@@ -85,10 +85,7 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
 }
 
 #: Paths whose console screen is a story still to come: that story removes its entries.
-NO_CLIENT_YET: dict[str, str] = {
-    "/me/delegations": "S63-18b: the task card shows delegations read-only until agree and revoke land",
-    "/me/delegations/{delegation_id}": "S63-18b: as `/me/delegations`",
-}
+NO_CLIENT_YET: dict[str, str] = {}
 
 #: Paths the CLI calls and the console must not: an operator's command, not a screen.
 CLI_ONLY: dict[str, str] = {

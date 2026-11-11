@@ -41,6 +41,8 @@ class Delegation(Dto):
     status: Literal["active", "suspended", "revoked", "expired"]
     suspended_reason: str | None = None
     manifest_digest: str
+    #: When the person was told it ends soon (the reminder, once), if they were.
+    reminded_at: datetime | None = None
 
 
 class DelegationList(Dto):

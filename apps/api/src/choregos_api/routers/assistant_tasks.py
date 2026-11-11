@@ -21,9 +21,12 @@ from ..schemas.tasks import (
     TaskSubscription,
     TaskSubscriptionPut,
     TaskTrigger,
+    WebhookSecret,
+    WebhookSecretRequest,
 )
-from ..services import assistant_tasks
-from ..services.task_delivery import inbox
+from ..services import assistant_tasks, assistants
+from ..services.organisations import organisation_by_slug
+from ..services.task_delivery import inbox, reveal_webhook_secret
 
 router = APIRouter(tags=["agents"])
 
@@ -85,3 +88,21 @@ async def list_inbox(
     session: Db, principal: Me, limit: Annotated[int, Query(ge=1, le=200)] = 100
 ) -> InboxList:
     return InboxList(items=await inbox(session, principal, limit=limit))
+
+
+@router.post(
+    "/orgs/{org}/assistants/{slug}/webhook-secret",
+    response_model=WebhookSecret,
+    operation_id="revealAssistantWebhookSecret",
+)
+async def webhook_secret(
+    org: str, slug: Slug, session: Db, principal: Me, body: WebhookSecretRequest | None = None
+) -> WebhookSecret:
+    """The key a task webhook is signed with, shown once to whoever manages the installation
+    (`assistant:manage`); `rotate` makes a new one."""
+    organisation = await organisation_by_slug(session, org)
+    row = await assistants.installation(session, organisation.id, slug)
+    assistants.require_manager(principal, org, row)
+    return await reveal_webhook_secret(
+        session, principal, org, row, rotate=body.rotate if body is not None else False
+    )

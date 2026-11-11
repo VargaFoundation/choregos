@@ -12,8 +12,9 @@ second pass sends nothing twice and a failed channel is retried up to `MAX_ATTEM
   `set_notifier_factory`. A channel nobody configured is recorded as `not_configured`, never silent.
 - `webhook` posts the artifact as JSON to `policy_overrides.delivery.webhook.url`, through the organisation's
   egress guard, signed like the A2A push notifications: `X-Choregos-Signature: t=<unix>,v1=<hex HMAC-SHA256
-  of "<t>.<body>">`, under a key derived from the deployment's session secret and the installation id
-  (`webhook_secret`), with `Idempotency-Key` the artifact's id.
+  of "<t>.<body>">`, under a key derived from the deployment's session secret, the installation id and its
+  generation (`webhook_secret`; an owner is shown it once, `reveal_webhook_secret`), with `Idempotency-Key`
+  the artifact's id.
 """
 
 from __future__ import annotations
@@ -28,14 +29,17 @@ from typing import Any
 import httpx
 import structlog
 from choregos_adapters import Notifier
+from choregos_core import utcnow
 from choregos_core.domain import Message
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..audit import record as audit
 from ..config import get_settings
 from ..db.models import ArtifactRecord, AssistantInstallation, Organization, Project, User, WorkItem
+from ..errors import conflict
 from ..rbac import Principal
-from ..schemas.tasks import InboxItem
+from ..schemas.tasks import InboxItem, WebhookSecret
 from .personal_spaces import PERSONAL
 
 log = structlog.get_logger("choregos.task_delivery")
@@ -59,7 +63,7 @@ def set_notifier_factory(factory: NotifierFactory | None) -> None:
         _factory.append(factory)
 
 
-def _notifier(row: AssistantInstallation, channel: str) -> Notifier | None:
+def notifier_for(row: AssistantInstallation, channel: str) -> Notifier | None:
     if _factory:
         return _factory[0](row, channel)
     configured = ((row.policy_overrides or {}).get("delivery") or {}).get(channel)
@@ -71,10 +75,50 @@ def _notifier(row: AssistantInstallation, channel: str) -> Notifier | None:
     return notifier
 
 
-def webhook_secret(installation_id: str) -> str:
-    """The HMAC key of an installation's webhook: derived from the session secret, nothing more stored."""
+def webhook_secret(installation_id: str, generation: int = 0) -> str:
+    """The HMAC key of an installation's webhook: derived from the session secret, the installation and its
+    generation (0 until a rotation), nothing more stored."""
     key = get_settings().session_secret.encode()
-    return "chtask_" + hmac.new(key, f"task-webhook:{installation_id}".encode(), hashlib.sha256).hexdigest()
+    label = f"task-webhook:{installation_id}" + (f":{generation}" if generation else "")
+    return "chtask_" + hmac.new(key, label.encode(), hashlib.sha256).hexdigest()
+
+
+async def reveal_webhook_secret(
+    session: AsyncSession,
+    principal: Principal,
+    org: str,
+    row: AssistantInstallation,
+    *,
+    rotate: bool,
+) -> WebhookSecret:
+    """Shows the key once: the first call returns it and remembers it was shown; later calls are 409 unless
+    `rotate`, which makes a new generation and shows that one. Every showing is in the audit log (never the
+    key)."""
+    if row.webhook_secret_shown_at is not None and not rotate:
+        raise conflict(
+            "the webhook key was already shown: rotate it to get a new one",
+            extra={"code": "already_shown", "generation": row.webhook_secret_generation},
+        )
+    if rotate:
+        row.webhook_secret_generation += 1
+    now = utcnow()
+    row.webhook_secret_shown_at = now
+    await session.flush()
+    await audit(
+        session,
+        principal,
+        "assistant.webhook_secret.rotated" if rotate else "assistant.webhook_secret.shown",
+        org_id=row.org_id,
+        target_type="assistant",
+        target_id=row.id,
+        organisation=org,
+        generation=row.webhook_secret_generation,
+    )
+    return WebhookSecret(
+        secret=webhook_secret(row.id, row.webhook_secret_generation),
+        generation=row.webhook_secret_generation,
+        shown_at=now,
+    )
 
 
 def sign(secret: str, stamp: str, body: bytes) -> str:
@@ -184,14 +228,15 @@ async def _send(
             sort_keys=True,
         ).encode()
         stamp = str(int(time.time()))
+        secret = webhook_secret(row.id, row.webhook_secret_generation)
         headers = {
             "Content-Type": "application/json",
-            SIGNATURE: f"t={stamp},v1={sign(webhook_secret(row.id), stamp, body)}",
+            SIGNATURE: f"t={stamp},v1={sign(secret, stamp, body)}",
             "Idempotency-Key": artifact.id,
         }
         await _post(session, organisation, url, body, headers)
         return
-    notifier = _notifier(row, channel)
+    notifier = notifier_for(row, channel)
     if notifier is None:
         raise LookupError("not_configured")
     await notifier.send(

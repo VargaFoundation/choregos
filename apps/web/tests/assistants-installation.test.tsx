@@ -42,6 +42,7 @@ const mocks = vi.hoisted(() => ({
   reads: vi.fn(),
   eraseSubject: vi.fn(),
   feedbackCandidates: vi.fn(),
+  webhookSecret: vi.fn(),
 }));
 vi.mock("@/lib/assistants-api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/assistants-api")>();
@@ -197,6 +198,22 @@ describe("one installation, for its owners", () => {
     expect(screen.getByText("to fix: the owners")).toBeInTheDocument();
     fireEvent.change(await screen.findByLabelText("Connector for news"), { target: { value: "news-feed" } });
     await waitFor(() => expect(mocks.bind).toHaveBeenCalledWith("varga", "invest", "news", { connector: "news-feed", enabled: true, approval: null }));
+  });
+
+  it("shows the webhook key once, and rotates it on request", async () => {
+    mocks.webhookSecret
+      .mockResolvedValueOnce({ secret: "chtask_first", generation: 0, shown_at: "2026-11-11T00:00:00Z" })
+      .mockRejectedValueOnce(new Error("the webhook key was already shown: rotate it to get a new one"))
+      .mockResolvedValueOnce({ secret: "chtask_second", generation: 1, shown_at: "2026-11-11T00:00:00Z" });
+    wrap(<InstallationDetail slug="invest" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Show the key" }));
+    expect(await screen.findByText("chtask_first")).toBeInTheDocument();
+    expect(mocks.webhookSecret).toHaveBeenLastCalledWith("varga", "invest", false);
+    fireEvent.click(screen.getByRole("button", { name: "Show the key" }));
+    expect(await screen.findByText(/already shown/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Rotate the key" }));
+    expect(await screen.findByText("chtask_second")).toBeInTheDocument();
+    expect(mocks.webhookSecret).toHaveBeenLastCalledWith("varga", "invest", true);
   });
 
   it("sets the approval of a write need once bound, and shows a refused binding", async () => {

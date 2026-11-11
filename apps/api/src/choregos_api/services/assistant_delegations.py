@@ -191,6 +191,7 @@ def view_of(row: Delegation, org: str, assistant: str, now: datetime) -> Delegat
         status=status_of(row, now),
         suspended_reason=row.suspended_reason,
         manifest_digest=row.manifest_digest,
+        reminded_at=row.reminded_at,
     )
 
 
@@ -541,6 +542,72 @@ async def journal(
             at=now or utcnow(),
         )
     )
+
+
+# -- the reminder before expiry ----------------------------------------------------------------------------
+
+REMIND_DAYS: Final = 7
+
+
+def remind_days_of(row: AssistantInstallation) -> int:
+    """How many days before the end the person is told: `policy_overrides.delegation.remind_days`, else 7."""
+    declared = ((row.policy_overrides or {}).get("delegation") or {}).get("remind_days")
+    if isinstance(declared, int) and not isinstance(declared, bool) and declared >= 1:
+        return declared
+    return REMIND_DAYS
+
+
+async def remind_expiring(session: AsyncSession, now: datetime | None = None) -> int:
+    """Tells each person whose live delegation ends within `remind_days`, once per delegation, through the
+    installation's `email` notifier (`task_delivery`); the number of reminders sent. A delegation that is
+    revoked, expired or already reminded is left alone, and so is one whose installation has no notifier
+    (the console shows its expiry). Runs at the platform scope, as the scheduler pass does."""
+    from choregos_core.domain import Message
+
+    from .task_delivery import notifier_for
+
+    now = now or utcnow()
+    rows = (
+        (
+            await session.execute(
+                select(Delegation).where(Delegation.revoked_at.is_(None), Delegation.reminded_at.is_(None))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    sent = 0
+    for delegation in rows:
+        installation = await session.get(AssistantInstallation, delegation.installation_id)
+        user = await session.get(User, delegation.user_id)
+        expires = _utc(delegation.expires_at)
+        if installation is None or user is None or expires <= now:
+            continue
+        if expires - now > timedelta(days=remind_days_of(installation)):
+            continue
+        notifier = notifier_for(installation, "email")
+        if notifier is None:
+            continue
+        try:
+            await notifier.send(
+                user.email,
+                Message(
+                    title=f"Your delegation of {delegation.task} ends soon",
+                    body=(
+                        f"The standing delegation that lets `{delegation.task}` of `{installation.slug}` "
+                        f"read on your behalf ends on {expires:%Y-%m-%d}. Agree to it again to keep the "
+                        "task running while you are away."
+                    ),
+                    context={"task": delegation.task, "delegation": delegation.id},
+                ),
+            )
+        except Exception as failure:  # a failed send is tried again at the next pass
+            log.warning("delegation.reminder_failed", delegation=delegation.id, error=str(failure)[:200])
+            continue
+        delegation.reminded_at = now
+        sent += 1
+    await session.flush()
+    return sent
 
 
 # -- erasure -----------------------------------------------------------------------------------------------

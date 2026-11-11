@@ -375,3 +375,167 @@ async def test_an_approval_of_none_is_not_a_choice(client: AsyncClient, admin: s
         f"{ORG}/assistants/x/bindings/orders", json={"connector": "c", "approval": approval}
     )
     assert refused.status_code == 422
+
+
+# ───────────────────────── booked like a tool call, a diff, a console approval (E3) ─────────────────────────
+
+
+async def test_a_confirmed_call_is_booked_by_the_ledger_and_the_events_like_a_tool_call(
+    client: AsyncClient,
+    admin: str,
+    project: dict[str, Any],
+    upstream: Upstream,  # noqa: F811
+    source: Any,  # noqa: F811
+    idp: FakeIdentityProvider,  # noqa: F811
+) -> None:
+    from choregos_api.db.models import AgentSessionRecord, CostLedger, User
+    from choregos_api.db.session import session_scope
+
+    from .kits.user_exchange import _tool_events
+
+    ids = await _ready(client)
+    conversation, action_id = await _propose(client, admin, upstream, ids)
+    async with session_scope(orgs="*") as session:
+        before = (await session.get(AgentSessionRecord, conversation)).tool_calls  # type: ignore[union-attr]
+        tools = select(CostLedger).where(CostLedger.session_id == conversation, CostLedger.kind == "tool")
+        assert (await session.execute(tools)).all() == [], "the proposal booked no tool call"
+    assert (await client.post(f"{ME}/{conversation}/actions/{action_id}/confirm")).status_code == 200
+    async with session_scope(orgs="*") as session:
+        record = await session.get(AgentSessionRecord, conversation)
+        assert record is not None and record.tool_calls == before + 1
+        (line,) = (
+            await session.execute(
+                select(CostLedger).where(CostLedger.session_id == conversation, CostLedger.kind == "tool")
+            )
+        ).scalars()
+        user = (await session.execute(select(User).where(User.email == EMAIL))).scalar_one()
+        assert (line.kind, line.model, line.installation_id, line.user_id) == (
+            "tool", WRITE, ids["installation"], user.id,
+        )  # fmt: skip
+        assert line.provider == "mcp:fournisseur"
+    (event,) = await _tool_events(conversation)
+    assert event["tool"] == WRITE and event["status_code"] == 200
+    assert event["as"] == f"person:{SUBJECT}" and event["identity_mode"] == "user_exchange"
+
+
+async def test_a_proposal_carries_the_diff_the_source_previews(
+    client: AsyncClient,
+    admin: str,
+    project: dict[str, Any],
+    upstream: Upstream,  # noqa: F811
+    source: Any,  # noqa: F811
+    idp: FakeIdentityProvider,  # noqa: F811
+) -> None:
+    preview = "commander_poste_preview"
+    source.tools.append(
+        {"name": preview, "description": "what the order would change", "annotations": {"readOnlyHint": True},
+         "inputSchema": {"type": "object"}}
+    )  # fmt: skip
+    source.structured[preview] = {"changes": [{"field": "stock", "from": 5, "to": 3}]}
+    ids = await _ready(client)
+    opened = await client.patch(
+        f"{ORG}/connectors/fournisseur/operations/{preview}", json={"policy": "allowed"}
+    )
+    assert opened.status_code == 200, opened.text
+    await _agent(client, mcp_servers=[{"connector": "orders", "tools": ["commander_poste", preview]}])
+    upstream.model.call(WRITE, ARGUMENTS).say("I proposed the order; please confirm it.")
+    conversation = await _open("varga", admin, installation_id=ids["installation"])
+    assert (await _say(client, conversation, "Order two laptops.")).status_code == 200
+    (action,) = (await client.get(f"{ME}/{conversation}/actions")).json()["items"]
+    assert action["status"] == "proposed"
+    assert action["diff"] == {"changes": [{"field": "stock", "from": 5, "to": 3}]}
+    previews = _calls(source)
+    assert len(previews) == 1, "the preview was read, the write was not made"
+    assert claims_of(previews[0]["authorization"].removeprefix("Bearer "))["sub"] == SUBJECT, "as the person"
+    assert [s for s in source.calls if s[0] == "commander_poste"] == []
+
+
+async def test_a_console_approval_of_a_service_write_is_a_governed_action_decided_in_the_console(
+    client: AsyncClient,
+    admin: str,
+    project: dict[str, Any],
+    upstream: Upstream,  # noqa: F811
+    source: Any,  # noqa: F811
+    idp: FakeIdentityProvider,  # noqa: F811
+) -> None:
+    from choregos_api.db.models import Action, Agent, AssistantToolBinding, Project
+    from choregos_api.db.session import session_scope
+
+    ids = await _ready(client, approval="console")
+    async with session_scope(orgs="*") as session:
+        binding = (await session.execute(select(AssistantToolBinding))).scalar_one()
+        binding.identity = (
+            "service"  # a write the connector makes under its own identity, approved in the console
+        )
+    await _agent(client, mcp_servers=NEEDS)
+    async with session_scope(orgs="*") as session:
+        for agent in (await session.execute(select(Agent))).scalars():
+            agent.owner_id = None  # whoever owns the agent does not decide its proposals
+    upstream.model.call(WRITE, ARGUMENTS).say("I proposed it; it needs an approval.")
+    conversation = await _open("varga", admin, installation_id=ids["installation"])
+    assert (await _say(client, conversation, "Order two laptops.")).status_code == 200
+    (offered, *_) = upstream.model.requests
+    assert WRITE in {t["function"]["name"] for t in offered[1]["tools"]}, "a console need of a service write"
+
+    (row,) = (await client.get(f"{ME}/{conversation}/actions")).json()["items"]
+    assert row["status"] == "governed" and row["result"]["action"], row
+    assert _writes(source) == [], "nothing reached the source before the approval"
+    for verb in ("confirm", "refuse"):
+        refused = await client.post(f"{ME}/{conversation}/actions/{row['id']}/{verb}")
+        assert refused.status_code == 409 and refused.json()["code"] == "governed"
+    async with session_scope(orgs="*") as session:
+        action = await session.get(Action, row["result"]["action"])
+        assert action is not None and action.status == "pending_approval"
+        assert action.kind == "fournisseur.commander_poste" and action.params == {"arguments": ARGUMENTS}
+        space = await session.get(Project, action.project_id)
+        assert space is not None and space.kind == "personal", "decided in the person's space"
+        space_id = space.id
+
+    decided = await client.post(
+        f"/api/v1/projects/{space_id}/actions/{row['result']['action']}/decision",
+        json={"decision": "approve"},
+    )
+    assert decided.status_code == 200, decided.text
+    (after,) = (await client.get(f"{ME}/{conversation}/actions")).json()["items"]
+    assert after["result"]["action_status"] in ("approved", "running", "succeeded"), after
+
+    # A second proposal, rejected in the console: the conversation's row says it was refused.
+    upstream.model.call(WRITE, {"item": "mouse", "quantity": 1}).say("Proposed too.")
+    assert (await _say(client, conversation, "And a mouse.")).status_code == 200
+    rows = (await client.get(f"{ME}/{conversation}/actions")).json()["items"]
+    (second,) = [r for r in rows if r["arguments"]["item"] == "mouse"]
+    rejected = await client.post(
+        f"/api/v1/projects/{space_id}/actions/{second['result']['action']}/decision",
+        json={"decision": "reject", "reason": "not this month"},
+    )
+    assert rejected.status_code == 200, rejected.text
+    rows = (await client.get(f"{ME}/{conversation}/actions")).json()["items"]
+    assert [r["status"] for r in rows if r["arguments"]["item"] == "mouse"] == ["refused"]
+
+
+async def test_a_console_write_bound_to_a_persons_identity_is_not_offered(
+    client: AsyncClient,
+    admin: str,
+    project: dict[str, Any],
+    upstream: Upstream,  # noqa: F811
+    source: Any,  # noqa: F811
+    idp: FakeIdentityProvider,  # noqa: F811
+) -> None:
+    from choregos_api.db.models import Agent, AssistantToolBinding
+    from choregos_api.db.session import session_scope
+
+    ids = await _ready(client, approval="console")  # identity `user_exchange` under a console approval
+    async with session_scope(orgs="*") as session:
+        for agent in (await session.execute(select(Agent))).scalars():
+            agent.owner_id = None
+    await _agent(client, mcp_servers=NEEDS)
+    upstream.model.say("hello")
+    conversation = await _open("varga", admin, installation_id=ids["installation"])
+    assert (await _say(client, conversation, "hi")).status_code == 200
+    (_, first) = upstream.model.requests[0]
+    assert WRITE not in {t["function"]["name"] for t in first.get("tools") or []}, (
+        "the governed action has no per-person identity: it would write as the service"
+    )
+    async with session_scope(orgs="*") as session:
+        binding = (await session.execute(select(AssistantToolBinding))).scalar_one()
+        assert (binding.identity, binding.approval) == ("user_exchange", "console")
