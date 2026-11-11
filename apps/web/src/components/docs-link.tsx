@@ -76,7 +76,9 @@ export function HelpEntry({ className }: { className?: string }) {
       data-testid="help-entry"
       title="Documentation (opens in a new tab)"
       className={cn(
-        "inline-flex min-h-8 items-center gap-1.5 rounded px-1.5 text-xs text-ink-muted no-underline hover:text-ink",
+        // 28 px, like the account button beside it: the top bar holds one line at 1280 px (S21-03), and a
+        // finger still gets 44 px.
+        "inline-flex h-7 items-center gap-1.5 rounded px-1.5 text-xs text-ink-muted no-underline hover:text-ink pointer-coarse:min-h-11",
         className,
       )}
     >
