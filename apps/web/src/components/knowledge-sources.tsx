@@ -380,7 +380,9 @@ export function KnowledgeSources({
             <>
               <Input aria-label="site or drive id" placeholder="site id, or drive id (b!…)" value={fields.site} onChange={set("site")} />
               <Input aria-label="folder" placeholder="folder (optional)" value={fields.folder} onChange={set("folder")} />
-              <p className="text-xs text-ink-muted sm:col-span-3">SharePoint reads with <code>Sites.Selected</code> only.</p>
+              <p className="text-xs text-ink-muted sm:col-span-3">
+                SharePoint reads the sites granted to its application (<code>Sites.Selected</code>), or what its connector&apos;s service account may read.
+              </p>
             </>
           ) : kind === "confluence" ? (
             <>

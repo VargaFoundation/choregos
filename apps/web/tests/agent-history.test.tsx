@@ -182,6 +182,20 @@ describe("the Definition tab", () => {
     expect(within(groups).queryByText("Other fields")).toBeNull();
   });
 
+  it("says the language a version writes in, English when unsaid", async () => {
+    await open(page());
+    let groups = await screen.findByTestId("definition-groups");
+    expect(within(groups).getByTestId("agent-language-line").textContent).toBe("English (en) (default)");
+    vi.mocked(api.agent).mockResolvedValue(
+      architect({ versions: architect().versions?.map((v) => (v.version === 3 ? { ...v, spec: { ...SPEC_3, language: "fr" } } : v)) }),
+    );
+    await open(page());
+    groups = await screen.findByTestId("definition-groups");
+    expect(within(groups).getByTestId("agent-language-line").textContent).toBe("French (fr)");
+    expect(within(groups).getByText(/20 lines · output in French \(fr\)/)).toBeTruthy();
+    expect(within(groups).queryByText("Other fields")).toBeNull();
+  });
+
   it("links what the version leaves to its project to where the project sets it (owner review of 2026-11-03)", async () => {
     const bare = { instructions: "Write the ADR." };
     vi.mocked(api.agent).mockResolvedValue(

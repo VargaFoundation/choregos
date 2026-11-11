@@ -27,6 +27,7 @@ from ..db.models import OrgPluginApproval
 from ..errors import conflict, forbidden, not_found
 from ..rbac import SYSTEM, Principal
 from ..schemas.plugins import PluginApprovalDto
+from .second_person import is_sole_admin
 
 INSTALL = "install"
 UPGRADE = "upgrade"
@@ -123,21 +124,28 @@ async def pending_one(session: AsyncSession, org_id: str, approval_id: str) -> O
     return row
 
 
-def check_second_person(row: OrgPluginApproval, principal: Principal) -> None:
-    """The requester does not approve their own request (ADR 0050)."""
-    if row.requested_by and row.requested_by.lower() == principal.email.lower():
-        raise forbidden(
-            f"you asked to {row.action} `{row.name}` {row.version}: a second administrator approves a "
-            "plugin that brings a server"
-        )
+async def check_second_person(session: AsyncSession, row: OrgPluginApproval, principal: Principal) -> bool:
+    """The requester does not approve their own request (ADR 0050), unless they are the organisation's
+    only administrator: there is nobody else to ask. Returns True in that case (recorded in the audit)."""
+    if not (row.requested_by and row.requested_by.lower() == principal.email.lower()):
+        return False
+    if await is_sole_admin(session, row.org_id, principal):
+        return True
+    raise forbidden(
+        f"you asked to {row.action} `{row.name}` {row.version}: a second administrator approves a "
+        "plugin that brings a server"
+    )
 
 
-async def mark_approved(session: AsyncSession, row: OrgPluginApproval, principal: Principal) -> None:
+async def mark_approved(
+    session: AsyncSession, row: OrgPluginApproval, principal: Principal, *, sole_admin: bool = False
+) -> None:
     row.status, row.decided_by, row.decided_at = APPROVED, principal.email, utcnow()
     await session.flush()
     await record(session, principal, "plugin.approve", org_id=row.org_id, target_type="plugin",
                  target_id=row.name, request=row.action, version=row.version, digest=row.digest,
-                 requested_by=row.requested_by, default=row.is_default)  # fmt: skip
+                 requested_by=row.requested_by, default=row.is_default,
+                 **({"sole_admin": True} if sole_admin else {}))  # fmt: skip
 
 
 async def forget(session: AsyncSession, org_id: str, name: str) -> None:

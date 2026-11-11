@@ -2,7 +2,9 @@
 
 - **Status**: accepted, 2026-10-07 — §2 and §3 superseded by
   [ADR 0046](0046-english-everywhere.md) on 2026-10-12 (identifiers, code, `docs/plan` and commit
-  messages are English too); §1 and §4 stand
+  messages are English too); §1 and §4 stand. Amendment: §1 is amended for an agent's output by
+  [ADR 0126](0126-an-agent-may-write-for-people-in-another-language.md) (an agent's author may choose
+  the language it writes in; what the platform ships stays English)
 - **Concerns**: everything Choregos ships or says to a person — the console, the API's messages,
   the validator's, the shipped workflow templates, policy presets and stack templates, agents,
   skills, the files a template adds to a project's repository, the demo; follows the decision of

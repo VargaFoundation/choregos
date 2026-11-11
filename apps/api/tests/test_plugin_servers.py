@@ -465,3 +465,54 @@ async def test_the_platform_fills_its_arguments_and_drops_the_agent_s(
     assert arguments == {"text": "hi"}
     assert filled["action_key"] != "forged" and len(filled["action_key"]) == 24
     assert await _platform_arguments(ctx, await _connector(), "say_hello", {"action_key": "x"}) == {}
+
+
+# ───────────────────────────── the organisation's only administrator ─────────────────────────────
+
+
+async def _approvals(action: str) -> list[dict[str, Any]]:
+    from choregos_api.db.models import AuditLog
+    from choregos_api.db.session import session_scope
+
+    async with session_scope() as session:
+        rows = (await session.execute(select(AuditLog).where(AuditLog.action == action))).scalars()
+        return [dict(r.payload) for r in rows]
+
+
+async def test_the_only_administrator_approves_their_own_install(
+    client: AsyncClient, admin: str, kube: FakeKubernetesApi
+) -> None:
+    asked = await _ask(client)
+    assert asked.status_code == 202, asked.text
+    approved = await client.post(f"{ORG}/plugin-approvals/{asked.json()['approval_id']}/approve")
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["status"] == "approved" and approved.json()["decided_by"] == admin
+    assert (await client.get(f"{ORG}/plugins")).json()["items"], "the plugin is installed"
+    (event,) = await _approvals("plugin.approve")
+    assert event["sole_admin"] is True, event
+
+
+async def test_with_a_second_administrator_the_requester_still_cannot_approve(
+    client: AsyncClient, admin: str, kube: FakeKubernetesApi
+) -> None:
+    asked = await _ask(client)
+    approval = asked.json()["approval_id"]
+    await add_member(client, SECOND, "org_admin")
+    await as_user(client, "admin@varga.dev")
+    own = await client.post(f"{ORG}/plugin-approvals/{approval}/approve")
+    assert own.status_code == 403, own.text
+    await as_user(client, SECOND)
+    approved = await client.post(f"{ORG}/plugin-approvals/{approval}/approve")
+    assert approved.status_code == 200, approved.text
+    (event,) = await _approvals("plugin.approve")
+    assert "sole_admin" not in event, event
+
+
+async def test_a_member_who_is_not_an_administrator_cannot_approve(
+    client: AsyncClient, admin: str, kube: FakeKubernetesApi
+) -> None:
+    asked = await _ask(client)
+    await add_member(client, "dev@varga.dev", "viewer")
+    await as_user(client, "dev@varga.dev")
+    denied = await client.post(f"{ORG}/plugin-approvals/{asked.json()['approval_id']}/approve")
+    assert denied.status_code == 403, denied.text

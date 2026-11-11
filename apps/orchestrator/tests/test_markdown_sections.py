@@ -58,3 +58,14 @@ async def test_the_added_text_of_the_diff_reaches_the_gate(setup: Any) -> None:
     )
     [refusal] = await evaluate_gates(charge)
     assert refusal["passed"] is False and "Decision Outcome" in refusal["detail"]
+
+
+def test_a_multi_line_summary_stays_on_its_row() -> None:
+    """S62-06: a run summary with line breaks and a `|` no longer breaks the status table."""
+    from choregos_orchestrator.markdown import StageLine
+
+    row = StageLine(
+        index=1, label="Triaged", actor="agent triage", outcome="contract:\n- `a`: bad | worse"
+    ).render()
+    assert "\n" not in row
+    assert row.endswith("| contract: - `a`: bad \\| worse |")

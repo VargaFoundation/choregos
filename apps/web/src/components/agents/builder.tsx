@@ -35,6 +35,7 @@ import { usableModels } from "@/lib/usable-models";
 import { usd } from "@/lib/format";
 import { NO_TOOL_LABEL, grantNames, keepBounds, type ToolGrant } from "@/lib/mcp-tools";
 import { WORKSPACE_LABELS, type Workspace } from "@/lib/workspace";
+import { LANGUAGES, languageLabel } from "@/lib/language";
 import type {
   Agent,
   AgentNetwork,
@@ -143,6 +144,8 @@ export function cleanSpec(spec: AgentSpec): AgentSpec {
     // Left unsaid, a run writes as before and the digest does not move (S51-03, ADR 0119).
     workspace: spec.workspace ?? undefined,
     tools: cleanTools(spec.tools),
+    // Left unsaid, the agent writes in English and the digest does not move.
+    language: spec.language || undefined,
   };
 }
 
@@ -836,6 +839,7 @@ function InstructionsField({ spec, set }: { spec: AgentSpec; set: (patch: Partia
           />
         )}
       </Field>
+      <LanguageField spec={spec} set={set} />
       <Disclosure title="Which variables can I use?" className="border-0" id="template-variables">
         <p className="text-xs text-ink-muted">
           The instructions are a template rendered in a sandbox: it reads <code>ticket</code>, <code>spec</code>,{" "}
@@ -845,6 +849,33 @@ function InstructionsField({ spec, set }: { spec: AgentSpec; set: (patch: Partia
         </p>
       </Disclosure>
     </div>
+  );
+}
+
+/**
+ * The language a person reads the agent's output in: its summary, its documents, its questions and
+ * findings. The platform's frame asks for it; the result's keys and values stay as the contract says.
+ */
+function LanguageField({ spec, set }: { spec: AgentSpec; set: (patch: Partial<AgentSpec>) => void }) {
+  const current = spec.language || "";
+  const known = LANGUAGES.some(([tag]) => tag === current);
+  return (
+    <Field
+      label="Output language"
+      hint="What people read from this agent is written in it. The result's keys and identifiers stay in English."
+    >
+      {(id) => (
+        <Select id={id} value={current} onChange={(e) => set({ language: e.target.value || null })}>
+          <option value="">The default: English</option>
+          {LANGUAGES.filter(([tag]) => tag !== "en").map(([tag]) => (
+            <option key={tag} value={tag}>
+              {languageLabel(tag)}
+            </option>
+          ))}
+          {current && !known && <option value={current}>{languageLabel(current)}</option>}
+        </Select>
+      )}
+    </Field>
   );
 }
 

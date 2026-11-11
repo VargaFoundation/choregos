@@ -21,7 +21,8 @@ fields:
   OneDrive"): it holds the Entra app and its secret. The source form picks it from a list and never asks
   for a secret.
 - The app must have been **granted the site** (`Sites.Selected` plus a per-site grant). Consent alone grants
-  none, and every sync then fails with 403.
+  none, and every sync then fails with 403. A connector that signs in with a service account needs no
+  grant: the account must be able to read the site.
 - The site's Graph id, or the id of the drive.
 
 ## At Microsoft

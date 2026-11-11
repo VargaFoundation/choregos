@@ -178,11 +178,39 @@ async def test_a_skill_that_takes_no_data_part_publishes_no_fields(
     assert "extensions" not in raw["capabilities"], raw["capabilities"]
 
 
-async def test_an_a2a_1_0_method_is_refused_as_the_guide_says(
+async def test_the_guide_s_first_request_in_a2a_1_0_opens_a_task(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
+    """The page's first request, spelled as its "In A2A 1.0" table says, is served."""
+    first = _bodies()[0]
+    assert first["method"] == "message/send", first
+    message = dict(first["params"]["message"])
+    message.pop("kind", None)
+    message["role"] = "ROLE_USER"
+    message["parts"] = [{k: v for k, v in part.items() if k != "kind"} for part in message["parts"]]
+    assert all(set(part) <= {"text", "data"} for part in message["parts"]), (
+        "the guide's first request sends no file"
+    )
     await _publish(client, project)
     token = await _token(client)
-    body = {"jsonrpc": "2.0", "id": 1, "method": "SendMessage", "params": {}}
-    refused = (await client.post(ENDPOINT, json=body, headers={"Authorization": f"Bearer {token}"})).json()
-    assert refused["error"]["code"] == -32601, refused
+    body = {"jsonrpc": "2.0", "id": 1, "method": "SendMessage", "params": {"message": message}}
+    answer = (await client.post(ENDPOINT, json=body, headers={"Authorization": f"Bearer {token}"})).json()
+    assert answer["result"]["task"]["status"]["state"].startswith("TASK_STATE_"), answer
+
+
+def test_the_1_0_names_the_guide_lists_are_the_door_s() -> None:
+    from choregos_api.a2a import v1
+
+    section = _page().split("### In A2A 1.0", 1)[1].split("\n## ", 1)[0]
+    names = set(re.findall(r"`([A-Z][A-Za-z]+)`", section))
+    assert {"SendMessage", "GetTask", "ListTasks"} <= names, names
+    assert names <= set(v1.METHODS) | v1.UNSERVED, names - set(v1.METHODS) - v1.UNSERVED
+    assert (
+        set(v1.METHODS)
+        - {
+            "GetTaskPushNotificationConfig",
+            "ListTaskPushNotificationConfigs",
+            "DeleteTaskPushNotificationConfig",
+        }
+        <= names
+    )

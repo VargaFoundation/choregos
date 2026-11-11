@@ -8,6 +8,122 @@ path): `api_url`, `token`, `org`. `choregos login` writes it; `CHOREGOS_API_URL`
 `CHOREGOS_TOKEN` and `CHOREGOS_ORG` are read when no profile exists.
 
 
+## `choregos a2a`
+
+Start and follow a workflow over the A2A door (an `a2a` token)
+
+### `choregos a2a cancel`
+
+```text
+Usage: choregos a2a cancel [OPTIONS] {task}
+
+  Stop a task: its work item is stopped, as from the console.
+
+Arguments:
+  task  the task id `send` printed  [required]
+
+Options:
+  --org <str>    the organisation; the profile's otherwise
+  --token <str>  an `a2a` token; the profile's token otherwise, which the door
+                 refuses when it is `*`  [env var: CHOREGOS_A2A_TOKEN]
+  --json         print the task as the door answers it, for a script
+  --help         Show this message and exit.
+```
+
+### `choregos a2a follow`
+
+```text
+Usage: choregos a2a follow [OPTIONS] {task}
+
+  Follow a task to its end, over the stream, opened again when the door cuts
+  it (an hour at most).
+
+  Exit 0 completed, 3 failed, 4 canceled. A decision is printed with its URL;
+  the task waits for it.
+
+Arguments:
+  task  the task id `send` printed  [required]
+
+Options:
+  --out <path>   write the artefacts of a completed task in this directory
+  --org <str>    the organisation; the profile's otherwise
+  --token <str>  an `a2a` token; the profile's token otherwise, which the door
+                 refuses when it is `*`  [env var: CHOREGOS_A2A_TOKEN]
+  --json         print the task as the door answers it, for a script
+  --help         Show this message and exit.
+```
+
+### `choregos a2a get`
+
+```text
+Usage: choregos a2a get [OPTIONS] {task}
+
+  Read a task once: its state, the decision it waits for, its artefacts.
+
+Arguments:
+  task  the task id `send` printed  [required]
+
+Options:
+  --out <path>   write the artefacts of a completed task in this directory
+  --org <str>    the organisation; the profile's otherwise
+  --token <str>  an `a2a` token; the profile's token otherwise, which the door
+                 refuses when it is `*`  [env var: CHOREGOS_A2A_TOKEN]
+  --json         print the task as the door answers it, for a script
+  --help         Show this message and exit.
+```
+
+### `choregos a2a send`
+
+```text
+Usage: choregos a2a send [OPTIONS] {skill}
+
+  Start a workflow: a text, fields and files in one message. The message id is
+  printed first.
+
+Arguments:
+  skill  the skill, `project/skill` as `choregos a2a skills` lists it
+         [required]
+
+Options:
+  --text <str>          the request in words, the work item's body
+                        (repeatable)
+  --field <str>         `key=value` (repeatable), a value read as JSON when it
+                        is JSON
+  --fields-json <path>  a file holding the fields as one JSON object (`-` for
+                        stdin)
+  --file <str>          `PATH` or `PATH;type=MEDIA/TYPE`, sent in base64
+                        (repeatable)
+  --message-id <str>    the idempotency key; by default a digest of the
+                        message, so the same command finds the same task
+  --title <str>         the work item's title
+  --wait                follow the task to its end: exit 0 completed, 3
+                        failed, 4 canceled
+  --out <path>          write the artefacts of a completed task in this
+                        directory
+  --org <str>           the organisation; the profile's otherwise
+  --token <str>         an `a2a` token; the profile's token otherwise, which
+                        the door refuses when it is `*`  [env var:
+                        CHOREGOS_A2A_TOKEN]
+  --json                print the task as the door answers it, for a script
+  --help                Show this message and exit.
+```
+
+### `choregos a2a skills`
+
+```text
+Usage: choregos a2a skills [OPTIONS]
+
+  The workflows this token may start, and the fields each takes (`*` =
+  required).
+
+Options:
+  --org <str>    the organisation; the profile's otherwise
+  --token <str>  an `a2a` token; the profile's token otherwise, which the door
+                 refuses when it is `*`  [env var: CHOREGOS_A2A_TOKEN]
+  --json         print the task as the door answers it, for a script
+  --help         Show this message and exit.
+```
+
 ## `choregos admin`
 
 Platform administration

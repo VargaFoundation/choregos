@@ -57,7 +57,11 @@ def markdown_to_adf(markdown: str) -> dict[str, Any]:
             continue
         paragraph: list[str] = []
         while index < len(lines) and lines[index].strip() and not HEADING.match(lines[index]):
-            if BULLET.match(lines[index]) or _is_table_row(lines[index]):
+            # A list or a table interrupts a paragraph, never starts one: a line that looks like a
+            # table row with no separator under it (no table) is text. Breaking on it before taking
+            # any line left `index` where it was, and the outer loop appended empty paragraphs until
+            # the tracker worker ran out of memory (S62-06, FON-277).
+            if paragraph and (BULLET.match(lines[index]) or _is_table_row(lines[index])):
                 break
             paragraph.append(lines[index])
             index += 1
@@ -98,8 +102,12 @@ def _is_table_row(line: str) -> bool:
     return line.strip().startswith("|") and line.strip().endswith("|")
 
 
+UNESCAPED_PIPE = re.compile(r"(?<!\\)\|")
+
+
 def _cells(line: str) -> list[str]:
-    return [cell.strip() for cell in line.strip().strip("|").split("|")]
+    """The cells of a row; an escaped `\\|` stays inside its cell, as a `|`."""
+    return [cell.strip().replace("\\|", "|") for cell in UNESCAPED_PIPE.split(line.strip().strip("|"))]
 
 
 def _table(lines: list[str], index: int) -> tuple[dict[str, Any], int]:

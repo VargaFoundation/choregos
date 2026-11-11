@@ -20,6 +20,7 @@ TESTS = pathlib.Path(__file__).resolve().parent
 #: Test modules, under their final English names, that other test modules may import from.
 ALLOWED_SOURCES = frozenset(
     {
+        "test_a2a_guide",
         "test_a2a_inbound",
         "test_a2a_push",
         "test_a2a_replicas_and_limits",

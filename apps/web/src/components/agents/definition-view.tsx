@@ -16,6 +16,7 @@ import { relative, usd } from "@/lib/format";
 import { describe, effectiveBindings, writesTo } from "@/lib/memories";
 import type { Agent, AgentSpec, AgentVersion } from "@/lib/types";
 import { workspaceLine } from "@/lib/workspace";
+import { languageLabel, languageLine } from "@/lib/language";
 import { skillHref } from "@/lib/skill-slug";
 import { AgentDetailsCard } from "./details";
 import { RestoreDialog } from "./history";
@@ -32,7 +33,7 @@ import { INHERITED, inheritsMemory, sectionSummaries, toolSources } from "./spec
 /** Lines of instructions shown before "Show all". */
 export const INSTRUCTION_LINES = 12;
 
-const KNOWN_FIELDS = new Set(["instructions", "model", "backend", "runtime", "limits", "budget", "skills", "mcp_servers", "knowledge", "memory", "memories", "evals", "network", "workspace", "tools"]);
+const KNOWN_FIELDS = new Set(["instructions", "model", "backend", "runtime", "limits", "budget", "skills", "mcp_servers", "knowledge", "memory", "memories", "evals", "network", "workspace", "tools", "language"]);
 
 const here = (slug: string, query: string) => `/agents/${slug}?${query}`;
 
@@ -307,8 +308,15 @@ export function DefinitionView({ org, agent, version }: { org: string; agent: Ag
           <AgentDetailsCard bare org={org} agent={agent} />
         </Disclosure>
 
-        <Disclosure title="Instructions" summary={lines ? `${lines} line${lines === 1 ? "" : "s"}` : "none"} defaultOpen>
+        <Disclosure
+          title="Instructions"
+          summary={`${lines ? `${lines} line${lines === 1 ? "" : "s"}` : "none"}${spec.language ? ` · output in ${languageLabel(spec.language)}` : ""}`}
+          defaultOpen
+        >
           <InstructionsText text={spec.instructions ?? ""} />
+          <p className="mt-2 text-xs text-ink-muted">
+            Output language: <span data-testid="agent-language-line">{languageLine(spec)}</span>
+          </p>
         </Disclosure>
 
         <Disclosure title="Model and runtime" summary={`${summaries.model} · workspace ${summaries.workspace}`}>

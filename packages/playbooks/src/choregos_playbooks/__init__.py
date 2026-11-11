@@ -161,17 +161,83 @@ def playbook_instructions(role: str) -> str:
     return text.strip() + "\n"
 
 
-def frame(instructions: str) -> str:
+def frame(instructions: str, language: str | None = None) -> str:
     """A registry agent's instructions, followed by the frame it cannot change (ADR 0033).
 
     An agent's author writes what to DO; how to answer the platform — the output contract, the
-    invariants — is not theirs to decide.
+    invariants — is not theirs to decide. The one thing of the frame the author chooses is the
+    language a person reads (`language`, ADR 0126): absent or `en`, the frame is today's, byte for byte.
     """
     return (
         f"{instructions.rstrip()}\n\n---\n\n"
         "## What the platform requires (this frame cannot be changed)\n\n"
-        f"{INVARIANTS}\n\n{OUTPUT_CONTRACT}\n"
+        f"{invariants_in(language)}\n\n{OUTPUT_CONTRACT}\n"
     )
+
+
+#: The English name of the languages an agent's author is likely to pick (ADR 0126). A tag missing
+#: here still works: the frame names it by its tag.
+LANGUAGE_NAMES: dict[str, str] = {
+    "ar": "Arabic",
+    "cs": "Czech",
+    "da": "Danish",
+    "de": "German",
+    "el": "Greek",
+    "en": "English",
+    "en-GB": "British English",
+    "en-US": "American English",
+    "es": "Spanish",
+    "fi": "Finnish",
+    "fr": "French",
+    "fr-CA": "Canadian French",
+    "he": "Hebrew",
+    "hi": "Hindi",
+    "hu": "Hungarian",
+    "id": "Indonesian",
+    "it": "Italian",
+    "ja": "Japanese",
+    "ko": "Korean",
+    "nb": "Norwegian",
+    "nl": "Dutch",
+    "pl": "Polish",
+    "pt": "Portuguese",
+    "pt-BR": "Brazilian Portuguese",
+    "ro": "Romanian",
+    "ru": "Russian",
+    "sv": "Swedish",
+    "tr": "Turkish",
+    "uk": "Ukrainian",
+    "vi": "Vietnamese",
+    "zh": "Chinese",
+}
+
+
+def language_name(language: str) -> str:
+    """How the frame names a language: its English name, else `the language tagged `xx``."""
+    return LANGUAGE_NAMES.get(language) or f"the language tagged `{language}`"
+
+
+#: The line of `INVARIANTS` a language replaces (a test fails if they drift apart).
+_ENGLISH_OUTPUT = (
+    "- Write in English everything a person will read — the summary, the documents you produce, your\n"
+    "  questions, your findings — even when the work item, its fields or its names are in another language."
+)
+
+
+def invariants_in(language: str | None = None) -> str:
+    """The invariants, with the output written in `language` (ADR 0126); `INVARIANTS` itself when the
+    language is absent or `en`. What a machine reads does not change language: the result's keys,
+    identifiers and enum values stay as the contract writes them."""
+    if language is None or language == "en":
+        return INVARIANTS
+    line = (
+        f"- Write in {language_name(language)} everything a person will read — the summary, the documents\n"
+        "  you produce, your questions, your findings — even when the work item, its fields or its names\n"
+        "  are in another language. What a machine reads stays as specified: the keys, the identifiers,\n"
+        "  the enum values of the result contract (`status`, `type`, `severity`) and the shape of\n"
+        "  `.choregos/result.json`."
+    )
+    return INVARIANTS.replace(_ENGLISH_OUTPUT, line)
 
 
 def _template_name(path: Path, role: str) -> str:
@@ -224,9 +290,12 @@ strings. An empty list is `[]`."""
 __all__ = [
     "INVARIANTS",
     "KNOWN_ROLES",
+    "LANGUAGE_NAMES",
     "OUTPUT_CONTRACT",
     "extra_roles_dirs",
     "frame",
+    "invariants_in",
+    "language_name",
     "playbook_instructions",
     "playbook_origin",
     "playbook_path",

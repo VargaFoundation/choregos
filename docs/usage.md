@@ -1793,6 +1793,19 @@ differs is a `422`. On a run that never cloned, the diff guarantees read an empt
 branch does not exist (`diff_size_max files: 0` passes). The console shows the workspace on the
 agent's definition (Capabilities) and edits it in the builder's Workspace section.
 
+A version may also say **which language** a person reads its output in
+([ADR 0126](adr/0126-an-agent-may-write-for-people-in-another-language.md)), in `"language"`: a
+language tag such as `fr`, `de` or `pt-BR` (a primary subtag, optionally a region; anything else is a
+`422`). The platform's frame then asks the agent to write its summary, documents, questions and
+findings in that language, while the keys, identifiers and enum values of the result contract
+(`status`, `type`, `severity`) and the shape of `.choregos/result.json` stay as specified. Absent or
+`en`, the agent writes in English, as before, and an absent field is left out of the stored spec so no
+digest moves. The language is the agent's, not the organisation's: a code agent can keep writing pull
+requests in English while an assistant writes for people in theirs. A built-in role run without a
+registry agent writes in English. An interactive session gets the instructions without the frame, so
+`language` does not reach it.
+The console edits it under the instructions ("Output language") and shows it on the definition.
+
 A project **pins** a version and may only **tighten** it — a lower budget or limit, fewer tools;
 an override that widens is refused (`422`). A revocation is final.
 
@@ -2363,6 +2376,9 @@ for the whole base with `POST …/knowledge/{slug}/sync`, **Sync all now** on th
   holding the application permission **`Sites.Selected`** — and have a tenant administrator grant it
   `read` on the chosen sites (`POST /sites/{site-id}/permissions`). Never `Files.Read.All`. The
   source names a `site_id` (or a OneDrive's `drive_id`) and optionally a `folder`; sync is delta.
+  Where a per-site grant does not fit, the connector signs in as a read-only service account instead
+  (`username`, `secret_refs.password`; the same app, holding the delegated `Sites.Read.All`, ADR 0132):
+  it then reads only what that account may read.
   The console form **picks** the connector from a list of the organisation's `documents/sharepoint`
   connectors (it is never typed); with none, it links to `/admin/connectors?type=documents/sharepoint`
   to declare one. The API refuses a wrong name and says why: names are lowercase (the message

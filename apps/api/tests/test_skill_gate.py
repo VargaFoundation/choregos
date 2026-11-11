@@ -144,11 +144,11 @@ async def test_a_skill_with_a_script_is_high_risk_and_unusable_until_another_per
     unpinned = await _agent(client, "form-filler", [{"slug": "fill-forms"}])
     assert unpinned.status_code == 422 and "no approved version" in unpinned.text
 
-    # The importer cannot approve its own import.
+    # With a second administrator in the organisation, the importer cannot approve its own import.
+    await _second_admin()
     own = await client.post("/api/v1/orgs/varga/skills/fill-forms/versions/1/approve")
     assert own.status_code == 403 and "second person" in own.text
 
-    await _second_admin()
     async with _client(client) as second:
         await login(second, "second@varga.dev")
         approved = await second.post("/api/v1/orgs/varga/skills/fill-forms/versions/1/approve")
@@ -163,6 +163,24 @@ async def test_a_skill_with_a_script_is_high_risk_and_unusable_until_another_per
     assert (await _agent(client, "form-filler", [{"slug": "fill-forms", "version": 1}])).status_code == 201
     audit = (await client.get("/api/v1/audit", params={"target_type": "skill"})).json()
     assert any(e.get("action") == "skill.approve" for e in audit["items"]), audit
+
+
+async def test_the_only_administrator_approves_their_own_high_risk_skill(
+    client: AsyncClient, admin: str
+) -> None:
+    created = await client.post("/api/v1/orgs/varga/skills", json={"files": WITH_SCRIPT})
+    assert created.json()["review_status"] == "pending_review"
+    approved = await client.post("/api/v1/orgs/varga/skills/fill-forms/versions/1/approve")
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["review_status"] == "approved"
+    from choregos_api.db.models import AuditLog
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    async with session_scope() as session:
+        rows = (await session.execute(select(AuditLog).where(AuditLog.action == "skill.approve"))).scalars()
+        (event,) = [dict(r.payload) for r in rows]
+    assert event["sole_admin"] is True, event
 
 
 async def test_a_low_or_medium_skill_is_usable_at_once(client: AsyncClient, admin: str) -> None:

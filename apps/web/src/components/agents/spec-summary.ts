@@ -29,6 +29,22 @@ export function toolSources(spec: Pick<AgentSpec, "tools">): Array<{ id: ToolSou
   ];
 }
 
+/**
+ * What a version leaves to its project, as ADR 0127 §7 says it (mirrors `choregos_core.agent_completeness`):
+ * a remote (a2a) agent is complete by construction, a voice agent needs only its model. The Access tab
+ * says the same from the API for one project; this one reads the spec alone, so a page may say it without one.
+ */
+export function missingComponents(spec: AgentSpec): string[] {
+  const kind = spec.runtime?.kind as string | undefined;
+  if (kind === "a2a") return [];
+  const missing: string[] = [];
+  if (!spec.model?.trim()) missing.push("model");
+  if (kind === "voice") return missing;
+  for (const source of toolSources(spec)) if (source.named === null) missing.push(`tools.${source.id}`);
+  if (inheritsMemory(spec)) missing.push("memories");
+  return missing;
+}
+
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 function toolsSummary(spec: AgentSpec, servers: number): string {

@@ -109,6 +109,12 @@ its sources and their trust, the installer, and a way to run a plugin's server w
   fetched again and installed only if the digest is unchanged. A default plugin is requested by the
   platform (no requester): any administrator of the organisation approves it, and the platform never
   does.
+  **Amendment (2026-11-10): the only administrator.** An organisation with exactly one administrator
+  (human members holding `org_admin` at organisation scope, service accounts excluded) has no second
+  person: the requester may approve their own request, and the `plugin.approve` audit event carries
+  `sole_admin: true`. With two or more administrators the rule is unchanged (403). A platform
+  administrator who is not a member of the organisation with that role is not a second person. The audit
+  event records it; the DTO does not (it would need a column).
 - **Uninstall answers 200** with what was removed and what was kept, instead of a 204 without a body.
 - **The reconcile** never upgrades: an organisation that has a default plugin, at any version, is left
   alone. It runs on every replica, one organisation at a time under an advisory lock, and when an
