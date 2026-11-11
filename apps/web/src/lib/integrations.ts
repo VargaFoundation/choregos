@@ -67,6 +67,9 @@ export const CLIENTS: ReadonlyArray<ClientInfo> = [
 
 export const PLACEHOLDER = "<token>";
 
+/** The Integrations entry for an application or another agent, over A2A (S62-11): a page of steps, not an MCP client. */
+export const A2A_ENTRY = { id: "a2a", label: "An application or another agent (A2A)" } as const;
+
 export function estClient(value: string): value is ClientId {
   return CLIENTS.some((client) => client.id === value);
 }

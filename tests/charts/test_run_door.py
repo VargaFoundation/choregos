@@ -24,7 +24,19 @@ DOOR = "choregos-run-door"
 DOOR_HOST = "runs.example.com"
 DOOR_SET = f'choregos-api.runDoor.hostnames=["{DOOR_HOST}"]'
 INGRESS = 'choregos-api.ingress.kind="ingress"'
-PUBLIC_PATHS = ["/api", "/mcp", "/healthz", "/readyz", "/.well-known/oauth-protected-resource", "/a2a"]
+#: The public route's paths, in the chart's order: the six of the API, then the CLI the instance serves
+#: (S62-08: `/downloads`, and the two install scripts as exact paths).
+PUBLIC_PATHS = [
+    "/api",
+    "/mcp",
+    "/healthz",
+    "/readyz",
+    "/.well-known/oauth-protected-resource",
+    "/a2a",
+    "/downloads",
+    "/cli/install.sh",
+    "/cli/install.ps1",
+]
 GUARD, DOORS, PUBLIC, CALLBACK = (
     "CHOREGOS_INTERNAL_API_GUARD",
     "CHOREGOS_RUN_DOOR_HOSTS",

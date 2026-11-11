@@ -36,6 +36,7 @@ from .source_config import (
     _reachable_start,
     _source,
     _start_sync_loop,
+    checked_github_app,
 )
 
 
@@ -54,6 +55,9 @@ async def create_knowledge_source(
     _require(principal, org, base, KnowledgeAction.EDIT)
     organisation = await organisation_by_slug(session, org)
     config = await _checked_source_config(session, organisation, body.kind, body.connector, body.config)
+    config = await checked_github_app(
+        session, principal, organisation, body.kind, body.connector, body.config, config
+    )
     await _egress_gate(
         session, principal, organisation, body.kind, body.connector, config, body.name, body.allow_egress
     )
@@ -86,6 +90,7 @@ async def create_knowledge_source(
         target_type="knowledge_source",
         target_id=source.id,
         kind=source.kind,
+        github_app=bool(source.config.get("github_app")),
     )
     dto = await _source_dto(session, source)
     await session.commit()
@@ -131,10 +136,18 @@ async def update_knowledge_source(
         source.config = await _checked_source_config(
             session, organisation, source.kind, source.connector, body.config
         )
-        if previous.get("github_app") and previous.get("url") == source.config.get("url"):
-            # A project's own repository a template attached (S51-06): read through the App while
-            # the URL stays; no request can grant that flag.
-            source.config = {**source.config, "github_app": True}
+        # The App (S51-06, ADR 0117): an administrator may ask for it; a flag the source had (a
+        # template's, or an administrator's) stays while the URL does, unless `false` removes it.
+        source.config = await checked_github_app(
+            session,
+            principal,
+            organisation,
+            source.kind,
+            source.connector,
+            body.config,
+            source.config,
+            previous,
+        )
         await _egress_gate(
             session,
             principal,
@@ -148,6 +161,16 @@ async def update_knowledge_source(
         await _reachable_start(session, organisation, source.kind, source.config, source.connector)
         # Another site, URL or ref: the next sync starts from scratch.
         source.cursor = None
+        if bool(previous.get("github_app")) != bool(source.config.get("github_app")):
+            await record(
+                session,
+                principal,
+                "knowledge.source.github_app",
+                org_id=base.org_id,
+                target_type="knowledge_source",
+                target_id=source.id,
+                github_app=bool(source.config.get("github_app")),
+            )
     if refresh_changed:
         await record(
             session,

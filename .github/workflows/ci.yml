@@ -45,6 +45,7 @@ jobs:
       decisions-live: ${{ steps.filter.outputs.decisions-live }}
       skill-scanner: ${{ steps.filter.outputs.skill-scanner }}
       web-live: ${{ steps.filter.outputs.web-live }}
+      cli-binary: ${{ steps.filter.outputs.cli-binary }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -205,6 +206,15 @@ jobs:
               - 'tests/live/decisions/**'
               - 'tests/live/test_decisions_live.py'
               - '.github/workflows/ci.yml'
+            # The native CLI binary (S62-07): what goes into it, what builds and tests it.
+            cli-binary:
+              - 'packages/cli/**'
+              - 'packages/core/**'
+              - 'packages/contracts/**'
+              - 'tools/cli_binary/**'
+              - 'uv.lock'
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/release.yml'
             web-live:
               - 'apps/web/**'
               - 'apps/api/**'
@@ -992,6 +1002,39 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: failure()
         with: { name: playwright-live-report, path: apps/web/test-results, retention-days: 7 }
+  cli-binary:
+    # The `choregos` CLI as the release ships it (S62-07): the Linux x86_64 native binary, built with
+    # Nuitka in the manylinux_2_28 image exactly as `release.yml` builds it, then smoke-tested where no
+    # Python is available — a bare environment, then `debian:bookworm-slim`. A change that breaks the
+    # build (a dependency Nuitka cannot follow, a data file read at run time and left out) is seen on
+    # its pull request, not on the tag. Nuitka's cache, with ccache's inside it, is kept between runs:
+    # a run that changes little recompiles little. The four other targets are built at release only.
+    needs: changes
+    if: needs.changes.outputs.cli-binary == 'true' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v5
+        with:
+          path: build/cli-binary/cache
+          key: cli-binary-ci-linux-x86_64-${{ hashFiles('uv.lock', 'tools/cli_binary/requirements.txt') }}-${{ github.sha }}
+          restore-keys: |
+            cli-binary-ci-linux-x86_64-${{ hashFiles('uv.lock', 'tools/cli_binary/requirements.txt') }}-
+            cli-binary-ci-linux-x86_64-
+      - name: build (manylinux_2_28, Nuitka)
+        run: python3 tools/cli_binary/build.py --manylinux
+      - name: smoke test, where no Python is available
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"$/\1/p' packages/cli/pyproject.toml)"
+          python3 tools/cli_binary/smoke.py dist/cli/choregos-linux-x86_64 --expect-version "$version" \
+            --container debian:bookworm-slim
+      - uses: actions/upload-artifact@v7
+        with:
+          name: choregos-linux-x86_64
+          path: dist/cli/choregos-linux-x86_64
+          retention-days: 3
+
   ci-ok:
     # Single target for branch protection and the merge queue.
     #
@@ -1008,7 +1051,7 @@ jobs:
     # 2026-10-05, the hosted runners stopped acquiring jobs, `python` came back
     # `abandoned`, and a PR's gate was green without a single Python test having run. Whatever
     # GitHub invents tomorrow will close the gate too: we enumerate what passes, not what breaks.
-    needs: [changes, python, python-postgres, contracts, web, charts, conformance-backends, images, local-install, hosted-build, hosted-cosign, hosted-admission, hosted-gvisor, hosted-cluster, hosted-foundry, hosted-images, hosted-docker, llm-guard, decisions-live, skill-scanner, web-live, secrets, dco, english]
+    needs: [changes, python, python-postgres, contracts, web, charts, conformance-backends, images, local-install, hosted-build, hosted-cosign, hosted-admission, hosted-gvisor, hosted-cluster, hosted-foundry, hosted-images, hosted-docker, llm-guard, decisions-live, skill-scanner, web-live, cli-binary, secrets, dco, english]
     if: always()
     runs-on: ubuntu-latest
     steps:

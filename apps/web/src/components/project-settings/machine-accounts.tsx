@@ -2,11 +2,16 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useState } from "react";
 import { ConfirmedGesture } from "@/components/confirmed-gesture";
+import { DocsLink } from "@/components/docs-link";
 import { Button, Card, Code, ErrorNote, Field, Input } from "@/components/ui";
 import { api } from "@/lib/api";
-import type { ApiToken, MachineAccount } from "@/lib/types";
+import type { ApiToken, ApiTokenCreated, MachineAccount } from "@/lib/types";
+
+/** Told when a token is issued, with its secret: the Integrations page puts it in its snippets (S62-11). */
+export type OnIssued = (account: MachineAccount, token: ApiTokenCreated) => void;
 
 const SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
@@ -14,7 +19,7 @@ const SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/;
  * The applications that call the A2A door under their own name (ADR 0131): one account per project,
  * `a2a` tokens that expire, each shown once. An account never decides and survives whoever created it.
  */
-export function MachineAccounts({ slug }: { slug: string }) {
+export function MachineAccounts({ slug, onIssued }: { slug: string; onIssued?: OnIssued }) {
   const client = useQueryClient();
   const listed = useQuery({
     queryKey: ["machine-accounts", slug],
@@ -37,7 +42,13 @@ export function MachineAccounts({ slug }: { slug: string }) {
       <p className="mb-3 text-sm text-ink-muted">
         An application starts this project&apos;s workflows over the A2A door
         under its own name, not a person&apos;s. It never takes a decision, and
-        it keeps working when whoever created it leaves.
+        it keeps working when whoever created it leaves.{" "}
+        {!onIssued && (
+          <Link href={`/p/${slug}/integrations/a2a`} data-testid="machine-accounts-steps">
+            Connect one, step by step
+          </Link>
+        )}{" "}
+        <DocsLink slug="integrate/a2a" />
       </p>
       {listed.error ? (
         <ErrorNote>{String(listed.error)}</ErrorNote>
@@ -56,6 +67,7 @@ export function MachineAccounts({ slug }: { slug: string }) {
               slug={slug}
               account={account}
               onChange={refresh}
+              onIssued={onIssued}
             />
           ))}
         </ul>
@@ -90,10 +102,12 @@ function AccountLine({
   slug,
   account,
   onChange,
+  onIssued,
 }: {
   slug: string;
   account: MachineAccount;
   onChange: () => unknown;
+  onIssued?: OnIssued;
 }) {
   const [issued, setIssued] = useState<string | null>(null);
   const issue = useMutation({
@@ -103,6 +117,7 @@ function AccountLine({
       }),
     onSuccess: (token) => {
       setIssued(token.token);
+      onIssued?.(account, token);
       void onChange();
     },
   });

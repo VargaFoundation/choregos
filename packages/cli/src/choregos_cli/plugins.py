@@ -4,12 +4,17 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 import typer
 import yaml
-from choregos_core.plugins import PluginError, build_index, opened, pack
 from rich.console import Console
+
+if TYPE_CHECKING:
+    from choregos_core.plugins import PluginError
+
+# `choregos_core.plugins` is imported by each command, not here: it loads the whole core (a quarter
+# of a second), and every call of the CLI — `choregos --version` included — paid it (S62-07).
 
 plugin_app = typer.Typer(help="Plugins: validate, pack and index them (ADR 0093)")
 console = Console()
@@ -28,6 +33,8 @@ def validate(
 ) -> None:
     """Check a plugin and everything it ships; print its name, version and content digest. Only what
     plugin.yaml declares is read: a server's source or a .venv beside it is ignored."""
+    from choregos_core.plugins import PluginError, opened
+
     try:
         with opened(path) as plugin:
             console.print(
@@ -50,6 +57,8 @@ def pack_(
     """Validate, then write a reproducible archive of the declared files only (plugin.yaml, README.md
     and LICENSE when present, and what `contents` names): sorted entries, time 0, owner 0. The same
     files always give the same bytes, and the printed digest is the one an index records."""
+    from choregos_core.plugins import PluginError, pack
+
     try:
         plugin = pack(directory, output)
     except PluginError as exc:
@@ -85,6 +94,8 @@ def index(
 ) -> None:
     """Write a source index (plugin-index.schema.json) for every plugin under DIRECTORY, located
     either in an OCI repository or in a git commit."""
+    from choregos_core.plugins import PluginError, build_index
+
     try:
         doc = build_index(
             directory,

@@ -163,6 +163,7 @@ it in **Plugins**.
 
 ## Go further
 
+- A plugin can also ship a conversational assistant: [Ship an assistant in a plugin](assistants.md).
 - The full plugin format, servers and trust:
   [plugins reference](../../plugins.md).
 - [CLI reference](../cli/reference.md#choregos-plugin) for every option of `choregos plugin`.
