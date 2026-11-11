@@ -230,6 +230,7 @@ async def grant(
             f"subscribe to the task `{body.task}` first: a delegation is linked to the subscription"
         )
     await _require_bound_and_connected(session, row, organisation, principal.user_id, agreement)
+    bound = await _bound(session, row.id)
     days = min(body.expires_in_days or DEFAULT_DAYS, max_days_of(row))
     delegation = Delegation(
         org_id=row.org_id,
@@ -237,7 +238,15 @@ async def grant(
         user_id=principal.user_id,
         task=body.task,
         needs=[
-            {"need": n["need"], "operations": n["operations"], "identity": n["identity"]} for n in agreement
+            {
+                "need": n["need"],
+                "operations": n["operations"],
+                "identity": n["identity"],
+                # What the need was bound to when the person agreed: a re-binding is a new agreement.
+                "connector": bound[n["need"]][1],
+                "binding_identity": bound[n["need"]][0].identity,
+            }
+            for n in agreement
         ],
         granted_at=now,
         expires_at=now + timedelta(days=days),
@@ -459,6 +468,19 @@ async def _reason(session: AsyncSession, delegation: Delegation, now: datetime) 
         return "the needs the task reads changed since you agreed: agree to them again"
     if digest != delegation.manifest_digest:
         return "the needs the task reads changed since you agreed: agree to them again"
+    bound = await _bound(session, row.id)
+    for agreed in delegation.needs:
+        entry = bound.get(agreed["need"])
+        if (
+            entry is None
+            or not entry[0].enabled
+            or entry[1] != agreed.get("connector")
+            or entry[0].identity != agreed.get("binding_identity")
+        ):
+            return (
+                f"the need `{agreed['need']}` is not bound as it was when you agreed (another source or "
+                "another identity): agree to it again"
+            )
     return None
 
 
@@ -495,6 +517,7 @@ async def guard_read(
     need: str,
     access: str,
     binding: AssistantToolBinding,
+    operation: str = "",
     now: datetime | None = None,
 ) -> Acting | None:
     """Everything a delegated read must satisfy before it reaches a source; the identity to call under.
@@ -508,8 +531,13 @@ async def guard_read(
     reason = await check(session, delegation, now=now)
     if reason is not None:
         raise DelegationRefused("delegation_refused", reason)
-    if need not in {n["need"] for n in delegation.needs}:
+    agreed = next((n for n in delegation.needs if n["need"] == need), None)
+    if agreed is None:
         raise DelegationRefused("outside_agreement", f"the need `{need}` is not part of what you agreed to")
+    if operation not in agreed["operations"]:
+        raise DelegationRefused(
+            "outside_agreement", f"the operation `{need}__{operation}` is not part of what you agreed to"
+        )
     user = await session.get(User, delegation.user_id)
     if user is None:
         raise DelegationRefused("delegation_refused", "the person no longer exists")

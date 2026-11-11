@@ -77,6 +77,9 @@ class Settings(BaseSettings):
     token_exchange_client_id: str = ""
     token_exchange_client_secret: str = ""
     token_exchange_endpoint: str = ""
+    #: The audiences a person's token may be exchanged for. Empty: any audience a connector declares (the
+    #: provider's own exchange permissions then decide); set it in production (security review S63-07).
+    token_exchange_audiences: list[str] = Field(default_factory=list)
     #: RFC 7009 revocation endpoint of the provider, to kill a delegation's offline token (S63-14). Empty:
     #: the fake's under CHOREGOS_FAKES, none otherwise (the sealed token is then only deleted here).
     token_revocation_endpoint: str = ""

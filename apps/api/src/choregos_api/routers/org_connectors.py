@@ -63,6 +63,7 @@ from ..services.connector_secrets import (
 from ..services.connectors import (
     RANK,
     check_type_config,
+    consent_env_reference,
     declared_operation,
     spec_to_declare,
     stricter,
@@ -233,7 +234,8 @@ async def declare_org_connector(
         type_name,
         config,
         secret_refs,
-        may_reference=not secret_refs or await is_instance_admin(session, principal),
+        may_reference=not (secret_refs or consent_env_reference(config))
+        or await is_instance_admin(session, principal),
         secret_values=body.secret_values,
         store_prefix=prefix,
     )
@@ -352,7 +354,9 @@ async def update_org_connector(
     operator_refs = [
         r for f, r in (instance.secret_refs or {}).items() if f not in refs_in and f not in values
     ]
-    deployment_held = any(not is_store_reference(r) for r in [*refs_in.values(), *operator_refs])
+    deployment_held = any(not is_store_reference(r) for r in [*refs_in.values(), *operator_refs]) or bool(
+        consent_env_reference(instance.config) or consent_env_reference(config)
+    )
     may_reference = not deployment_held or await is_instance_admin(session, principal)
     if body.config is not None and not may_reference:
         raise unprocessable(

@@ -26,7 +26,8 @@ from typing import Any, Final, Literal
 
 import httpx
 from choregos_adapters.errors import AdapterError
-from choregos_adapters.token_exchange import ExchangedToken, TokenExchangeClient
+from choregos_adapters.token_exchange import ExchangedToken, TokenExchangeClient, claims_of
+from choregos_core.redaction import remember_secret
 from choregos_core.secrets import SecretNotFound
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -157,6 +158,7 @@ async def subject_token(
     settings = settings or get_settings()
     door = _DOOR.get()
     if secret_name is None and door is not None and door[0] == user_id:
+        remember_secret(door[1])
         return door[1]
     name = secret_name or refresh_secret_name(user_id)
     try:
@@ -169,9 +171,23 @@ async def subject_token(
         drawn: ExchangedToken = await (await _client(settings)).refresh(sealed)
     except (AdapterError, httpx.HTTPError) as failure:
         raise IdentityUnavailable("the identity provider did not renew the person's token") from failure
+    remember_secret(drawn.access_token)
     if drawn.refresh_token:
+        remember_secret(drawn.refresh_token)
+        if not await _still_sealed(session, org_id, name):
+            # Signed out or revoked while the provider answered: the rotated token is not kept, and it is
+            # killed at the provider, or it would outlive the revocation as an orphan credential.
+            await revoke_offline_token(drawn.refresh_token)
+            raise IdentityUnavailable("the person's token was withdrawn while it was renewed")
         await get_secret_store().put(session, org_id, name, drawn.refresh_token, user_id)
     return drawn.access_token
+
+
+async def _still_sealed(session: AsyncSession, org_id: str, name: str) -> bool:
+    try:
+        return bool((await get_secret_store().get_many(session, org_id, [name])).get(name))
+    except SecretNotFound:
+        return False
 
 
 @dataclass(frozen=True, slots=True)
@@ -200,6 +216,13 @@ async def exchanged_token(session: AsyncSession, connector: Any, acting: Acting)
     if not supports_identity(connector, USER_EXCHANGE) or audience is None:
         raise IdentityUnavailable(f"`{connector.name}` does not declare the `user_exchange` identity")
     settings = get_settings()
+    allowed = {a for a in settings.token_exchange_audiences if a}
+    if allowed and audience not in allowed:
+        # The audience comes from the connector's configuration, which its editors write: the operator's
+        # list bounds what a person's token may be exchanged for.
+        raise IdentityUnavailable(
+            f"the audience of `{connector.name}` is not one this deployment exchanges for"
+        )
     subject = await subject_token(
         session, acting.org_id, acting.user_id, settings, secret_name=acting.refresh_secret or None
     )
@@ -209,6 +232,15 @@ async def exchanged_token(session: AsyncSession, connector: Any, acting: Acting)
         raise IdentityUnavailable(
             "the identity provider refused to issue a token for this source"
         ) from failure
+    remember_secret(issued.access_token)
+    claimed = claims_of(issued.access_token).get("aud")
+    if claimed is not None:
+        audiences = (
+            [claimed] if isinstance(claimed, str) else list(claimed) if isinstance(claimed, list) else []
+        )
+        if audience not in audiences:
+            # A token for another audience is never handed to this source (token confusion).
+            raise IdentityUnavailable("the identity provider issued a token for another audience")
     return issued.access_token
 
 
@@ -229,7 +261,9 @@ async def issue_offline_token(session: AsyncSession, org_id: str, user_id: str) 
     settings = get_settings()
     subject = await subject_token(session, org_id, user_id, settings)
     try:
-        return await (await _client(settings)).offline(subject)
+        offline = await (await _client(settings)).offline(subject)
+        remember_secret(offline)
+        return offline
     except (AdapterError, httpx.HTTPError) as failure:
         raise IdentityUnavailable(
             "the identity provider did not issue an offline token for this person"

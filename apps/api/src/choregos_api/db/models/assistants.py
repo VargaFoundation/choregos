@@ -115,4 +115,7 @@ class ConnectedAccount(Base, PkMixin, TimestampMixin):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     #: `connected`, or `reconnect` once the source refused the refresh token.
     status: Mapped[str] = mapped_column(String(16), default="connected", server_default="connected")
+    #: Digest of what the person consented to (the source's authorization server, client and address): the
+    #: account is not used, and nothing is sent to a new address, once an editor changed any of them.
+    provider_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -335,6 +335,210 @@ async def test_a_plugin_server_receives_the_persons_token_next_to_the_platforms(
     assert call.headers["x-choregos-user-token"] == "the-persons-token"
 
 
+# ───────────────────────── security review of the consent (2026-11-11) ─────────────────────────
+
+
+async def _begin_and_call_back(client: AsyncClient, provider: FakeOAuthProvider) -> httpx.Response:
+    started = await client.post("/api/v1/me/connected-accounts/fournisseur/connect", params={"org": "varga"})
+    assert started.status_code == 200, started.text
+    parsed = urlparse(provider.authorize(started.json()["authorization_url"], PROVIDER_USER))
+    return await client.get(f"{parsed.path}?{parsed.query}")
+
+
+async def _edit_connector(change: Any) -> None:
+    from choregos_api.db.models import OrgConnector
+    from choregos_api.db.session import ALL_ORGS, session_scope
+
+    async with session_scope(orgs=ALL_ORGS) as session:
+        connector = (
+            await session.execute(select(OrgConnector).where(OrgConnector.name == "fournisseur"))
+        ).scalar_one()
+        config = json.loads(json.dumps(connector.config))
+        change(config)
+        connector.config = config
+
+
+@pytest.mark.parametrize("reference", ["store:user/someone/oidc_refresh", "store:connector/other/token"])
+async def test_the_client_secret_reference_cannot_read_a_sealed_secret_that_is_not_the_connectors_own(
+    client: AsyncClient,
+    project: dict[str, Any],
+    provider: FakeOAuthProvider,
+    source: Any,
+    reference: str,
+) -> None:
+    """The reference is sent, as the client secret, to the token endpoint the connector's editor names: it
+    must never name another person's sealed token nor another connector's key."""
+    body = {
+        "name": "fournisseur",
+        "type": "mcp",
+        "config": _consent_config(client_secret_ref=reference),
+        "secret_refs": {"token": "env:CONNECTOR_TEST_SUPPLIER_KEY"},
+    }
+    refused = await client.post(f"{ORG}/connectors", json=body)
+    assert refused.status_code == 422 and "derived by the platform" in refused.text, refused.text
+
+    # A row written some other way (an older release, the database) is refused when it is used.
+    await _declare(client)
+    await _edit_connector(lambda config: config["user_consent"].update(client_secret_ref=reference))
+    done = await _begin_and_call_back(client, provider)
+    assert done.status_code == 422 and provider.requests == [], "no secret was read, nothing was sent"
+
+
+@pytest.mark.parametrize(
+    "endpoint", ["javascript:alert(1)", "https://user:pw@source.example/authorize", "file:///etc/passwd"]
+)
+async def test_an_authorization_endpoint_that_is_not_a_plain_https_address_is_never_handed_to_the_browser(
+    client: AsyncClient, project: dict[str, Any], provider: FakeOAuthProvider, source: Any, endpoint: str
+) -> None:
+    await _declare(client, _consent_config(authorization_endpoint=endpoint))
+    started = await client.post("/api/v1/me/connected-accounts/fournisseur/connect", params={"org": "varga"})
+    assert started.status_code == 422, started.text
+    assert "authorization_url" not in started.text
+
+
+async def test_the_callback_runs_under_the_organisations_egress_allowlist(
+    client: AsyncClient,
+    project: dict[str, Any],
+    provider: FakeOAuthProvider,
+    source: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The token endpoint is named by the connector's editor: the platform reaches it only if the
+    organisation opened its host (it used to go out through a plain client, SSRF included)."""
+    from choregos_api.config import reset_settings_cache
+
+    await _declare(client)
+    monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "enforce")
+    reset_settings_cache()
+    try:
+        done = await _begin_and_call_back(client, provider)
+    finally:
+        monkeypatch.setenv("CHOREGOS_EGRESS_MODE", "warn")
+        reset_settings_cache()
+    assert done.status_code == 422, done.text
+    assert provider.requests == [], "the authorization server received nothing"
+
+
+async def test_a_rotation_by_a_concurrent_call_does_not_cost_the_person_their_account(
+    client: AsyncClient, project: dict[str, Any], provider: FakeOAuthProvider, source: Any, sealed_store: None
+) -> None:
+    """Two calls refresh at once against a source that rotates: the loser's `invalid_grant` concerns a token
+    already replaced. It used to mark the account `reconnect` and delete the NEW sealed token."""
+    from choregos_api.db.models import ConnectedAccount
+    from choregos_api.db.session import ALL_ORGS, session_scope
+    from choregos_api.secret_store import get_secret_store
+    from choregos_api.services.connected_accounts import (
+        connector_of,
+        consented_token,
+        refresh_secret_name,
+        set_consent_transport,
+    )
+
+    await _declare(client)
+    await _consent(client, provider, [])
+    provider.rotate = True
+    user_id, org_id = await _person()
+    name = refresh_secret_name(user_id, "fournisseur")
+    fired: list[int] = []
+
+    async def respond(request: httpx.Request) -> httpx.Response:
+        if not fired:
+            fired.append(1)
+            winner = provider.respond(request)  # the other call got there first and rotated
+            async with session_scope(orgs=ALL_ORGS) as other:
+                await get_secret_store().put(
+                    other, org_id, name, json.loads(winner.content)["refresh_token"], user_id
+                )
+        return provider.respond(request)  # this call's refresh token is now stale
+
+    set_consent_transport(httpx.MockTransport(respond))
+    async with session_scope(orgs=ALL_ORGS) as session:
+        connector = await connector_of(session, org_id, "fournisseur")
+        token = await consented_token(session, connector, user_id, org_id)
+    assert token in provider.access_tokens
+    async with session_scope(orgs=ALL_ORGS) as session:
+        account = (await session.execute(select(ConnectedAccount))).scalar_one()
+        assert account.status == "connected"
+        sealed = (await get_secret_store().get_many(session, org_id, [name]))[name]
+    assert sealed in provider.refresh_tokens, "the sealed token is the source's current one"
+
+
+async def test_a_token_rotated_while_the_person_disconnects_is_not_sealed_again(
+    client: AsyncClient, project: dict[str, Any], provider: FakeOAuthProvider, source: Any, sealed_store: None
+) -> None:
+    """A refresh in flight when the person disconnects must not re-seal a token for an account that is gone:
+    it would outlive its revocation."""
+    from choregos_api.db.models import ConnectedAccount
+    from choregos_api.db.session import ALL_ORGS, session_scope
+    from choregos_api.secret_store import get_secret_store
+    from choregos_api.services.connected_accounts import (
+        AccountNotConnected,
+        connector_of,
+        consented_token,
+        refresh_secret_name,
+        set_consent_transport,
+    )
+    from sqlalchemy import delete
+
+    await _declare(client)
+    await _consent(client, provider, [])
+    provider.rotate = True
+    user_id, org_id = await _person()
+    name = refresh_secret_name(user_id, "fournisseur")
+    fired: list[int] = []
+
+    async def respond(request: httpx.Request) -> httpx.Response:
+        if not fired:
+            fired.append(1)
+            async with session_scope(orgs=ALL_ORGS) as other:  # the person's DELETE, committed meanwhile
+                await get_secret_store().delete(other, org_id, name)
+                await other.execute(delete(ConnectedAccount))
+        return provider.respond(request)
+
+    set_consent_transport(httpx.MockTransport(respond))
+    with pytest.raises(AccountNotConnected):
+        async with session_scope(orgs=ALL_ORGS) as session:
+            connector = await connector_of(session, org_id, "fournisseur")
+            await consented_token(session, connector, user_id, org_id)
+    from choregos_core.secrets import SecretNotFound
+
+    async with session_scope(orgs=ALL_ORGS) as session:
+        with pytest.raises(SecretNotFound):
+            await get_secret_store().get_many(session, org_id, [name])
+
+
+async def test_an_editor_who_moves_the_token_endpoint_receives_no_refresh_token(
+    client: AsyncClient,
+    project: dict[str, Any],
+    upstream: Upstream,
+    source: Any,
+    provider: FakeOAuthProvider,
+) -> None:
+    await _declare(client)
+    await _consent(client, provider, [])
+    sent = len(provider.requests)
+    await _edit_connector(
+        lambda config: config["user_consent"].update(token_endpoint="http://elsewhere.test/token")
+    )
+    source.received.clear()
+    await _converse(client, upstream)
+    assert _calls(source) == [] and len(provider.requests) == sent, "the refresh token went nowhere"
+    assert any("changed since you connected" in text for text in _told(upstream))
+
+
+async def test_disconnecting_does_not_send_the_refresh_token_to_a_revocation_endpoint_that_was_moved(
+    client: AsyncClient, project: dict[str, Any], source: Any, provider: FakeOAuthProvider
+) -> None:
+    await _declare(client)
+    await _consent(client, provider, [])
+    await _edit_connector(
+        lambda config: config["user_consent"].update(revocation_endpoint="http://elsewhere.test/revoke")
+    )
+    gone = await client.delete("/api/v1/me/connected-accounts/fournisseur", params={"org": "varga"})
+    assert gone.status_code == 204
+    assert provider.revoked == [] and all(path != "/revoke" for path, _ in provider.requests)
+
+
 # ───────────────────────── a need bound with `user_consent` ─────────────────────────
 
 
