@@ -17,6 +17,7 @@ Graph's redirect to a pre-authenticated URL; httpx does not forward the bearer t
 
 from __future__ import annotations
 
+import fnmatch
 import time
 from typing import Any
 
@@ -72,6 +73,7 @@ class GraphDriveSource:
         site_id: str | None = None,
         drive_id: str | None = None,
         folder: str | None = None,
+        exclude: list[str] | None = None,
         graph_url: str = GRAPH,
         login_url: str = LOGIN,
         transport: httpx.AsyncBaseTransport | None = None,
@@ -91,6 +93,8 @@ class GraphDriveSource:
         self.site_id = site_id
         self.drive_id = drive_id
         self.folder = "/" + folder.strip("/") if folder else None
+        #: Path globs under the folder (`/Z-Archive/*`, `/*DO NOT USE*`), case-insensitive, `*` crossing `/`.
+        self.exclude = [p.lower() for p in exclude or []]
         self.graph_url = graph_url.rstrip("/")
         self.login_url = login_url.rstrip("/")
         self._http = httpx.AsyncClient(timeout=60.0, transport=guarded(transport), follow_redirects=True)
@@ -140,6 +144,17 @@ class GraphDriveSource:
         inside = path.split("root:", 1)[1] if "root:" in path else path
         return inside == self.folder or inside.startswith(self.folder + "/")
 
+    def _excluded(self, item: dict[str, Any]) -> bool:
+        """Whether the file's path under the source's folder matches one of `exclude`."""
+        if not self.exclude:
+            return False
+        path = str((item.get("parentReference") or {}).get("path", ""))
+        parent = path.split("root:", 1)[1] if "root:" in path else path
+        under = f"{parent}/{item.get('name', '')}"
+        if self.folder:
+            under = under[len(self.folder) :]
+        return any(fnmatch.fnmatchcase(under.lower(), pattern) for pattern in self.exclude)
+
     async def changes(self, cursor: dict[str, Any] | None) -> Changes:
         drive = await self._drive()
         url = (cursor or {}).get("delta_link") or f"{self.graph_url}/drives/{drive}/root/delta"
@@ -150,7 +165,7 @@ class GraphDriveSource:
                 ref = str(item["id"])
                 if "deleted" in item:
                     changes.deleted.append(ref)
-                elif "file" in item and self._in_folder(item):
+                elif "file" in item and self._in_folder(item) and not self._excluded(item):
                     changes.items.append(
                         SourceItem(
                             ref=ref,
@@ -163,7 +178,7 @@ class GraphDriveSource:
                         )
                     )
                 elif "file" in item:
-                    # Moved out of the folder: it leaves the knowledge base.
+                    # Moved out of the folder, or excluded: it leaves the knowledge base.
                     changes.deleted.append(ref)
             if "@odata.deltaLink" in page:
                 changes.cursor = {"delta_link": page["@odata.deltaLink"], "drive_id": drive}
@@ -204,6 +219,7 @@ class GraphDocumentsConnector:
             site_id=config.get("site_id"),
             drive_id=config.get("drive_id"),
             folder=config.get("folder"),
+            exclude=config.get("exclude"),
             graph_url=self.config.get("graph_url", GRAPH),
             login_url=self.config.get("login_url", LOGIN),
         )
