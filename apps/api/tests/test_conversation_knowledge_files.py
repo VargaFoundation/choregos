@@ -6,10 +6,12 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
 from .kits.conversations import _open, _say
+from .kits.synthetic_installation import synthetic_installation  # noqa: F401
 from .test_agent_sessions import Upstream, _agent, upstream  # noqa: F401
 
 AUDIENCE = "coaches"
@@ -56,6 +58,7 @@ async def _files_base() -> dict[str, str]:
     return ids
 
 
+@pytest.mark.usefixtures("synthetic_installation")
 async def test_a_files_base_is_listed_and_read_whole_and_a_restricted_one_is_served_to_the_assistant(
     client: AsyncClient,
     admin: str,

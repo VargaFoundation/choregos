@@ -31,7 +31,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import Agent, AssistantInstallation, ConversationFeedback
-from . import assistants, plugin_installer
+from . import assistants, plugin_files
 from .conversation_gate import SuiteOutcome
 
 ACCEPTED = "accepted"
@@ -114,7 +114,7 @@ async def suites_of(session: AsyncSession, row: AssistantInstallation) -> list[t
         return []
     found: list[tuple[str, dict[str, Any]]] = []
     for ref in document.get("evals") or []:
-        text = await plugin_installer.plugin_text(session, row.org_id, row.plugin, str(ref))
+        text = await plugin_files.plugin_text(session, row.org_id, row.plugin, str(ref))
         parsed: Mapping[str, Any] | None = yaml.safe_load(text) if text else None
         if isinstance(parsed, Mapping) and parsed.get("kind") == "conversation":
             found.append((str(ref), await with_additions(session, dict(parsed), row)))

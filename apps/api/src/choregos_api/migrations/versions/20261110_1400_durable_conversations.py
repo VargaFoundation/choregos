@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Durable conversations: the columns of `agent_sessions` that make a session resumable (S63-04, ADR 0134)
 
 A conversation is an extended session: the table keeps its name and gains `kind`, `installation_id`,

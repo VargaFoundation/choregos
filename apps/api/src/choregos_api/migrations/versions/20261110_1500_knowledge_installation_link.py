@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Knowledge bases of an assistant installation: `knowledge_bases.installation_id` (S63-05, ADR 0138)
 
 The one place that says which bases an installation offers its conversations: the base names its

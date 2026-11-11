@@ -33,6 +33,7 @@ from .kits.assistant_memory import (
     _tool,
     markets,  # noqa: F401
 )
+from .kits.synthetic_installation import synthetic_installation  # noqa: F401
 from .test_agent_sessions import Upstream, upstream  # noqa: F401
 
 ME = "/api/v1/me/assistants/varga/investment-assistant"
@@ -183,6 +184,7 @@ async def test_the_purge_deletes_an_expired_conversation_with_its_events_and_kee
 # ───────────────────────── the reads journal ─────────────────────────
 
 
+@pytest.mark.usefixtures("synthetic_installation")
 async def test_every_tool_call_of_a_conversation_writes_one_line_with_the_subject_and_an_auditor_reads_them(
     client: AsyncClient, admin: str, upstream: Upstream, offline: Path, markets: Any
 ) -> None:

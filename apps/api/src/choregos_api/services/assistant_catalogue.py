@@ -14,7 +14,7 @@ from ..schemas.assistant_catalogue import (
     AssistantTaskDecl,
     PluginAssistant,
 )
-from . import plugin_installer
+from . import plugin_files
 
 
 def _mappings(value: Any) -> list[dict[str, Any]]:
@@ -58,12 +58,12 @@ def tasks_of(document: dict[str, Any]) -> list[AssistantTaskDecl]:
 
 async def plugin_assistants(session: AsyncSession, org_id: str, plugin: str) -> list[PluginAssistant] | None:
     """The assistants an installed plugin ships; `None` when the plugin is not installed."""
-    row = await plugin_installer.installed_row(session, org_id, plugin)
+    row = await plugin_files.installed_row(session, org_id, plugin)
     if row is None:
         return None
     found: list[PluginAssistant] = []
     for ref in ((row.manifest or {}).get("contents") or {}).get("assistants") or []:
-        text = await plugin_installer.plugin_text(session, org_id, plugin, str(ref))
+        text = await plugin_files.plugin_text(session, org_id, plugin, str(ref))
         document = yaml.safe_load(text) if text else None
         if not isinstance(document, dict):
             continue

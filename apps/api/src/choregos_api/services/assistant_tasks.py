@@ -51,7 +51,7 @@ from ..errors import ApiError, conflict, not_found, unprocessable
 from ..rbac import SYSTEM, Permission, Principal
 from ..schemas import WorkItemCreate
 from ..schemas.tasks import TaskSubscriptionPut
-from . import assistant_delegations, assistants, plugin_installer
+from . import assistant_delegations, assistants, plugin_files
 from .assistant_access import caps_of, holds, month_spend
 from .assistant_conversations import audience_installation
 from .broker import BrokerTool, call
@@ -240,7 +240,7 @@ async def _publish_task_workflow(
     session: AsyncSession, row: AssistantInstallation, declared: dict[str, Any], space_id: str, space: Any
 ) -> str:
     """The task's workflow, published in the personal space when it is not there at that text; its name."""
-    text = await plugin_installer.plugin_text(session, row.org_id, row.plugin, str(declared["workflow"]))
+    text = await plugin_files.plugin_text(session, row.org_id, row.plugin, str(declared["workflow"]))
     if text is None:
         raise conflict(f"the plugin `{row.plugin}` no longer ships `{declared['workflow']}`")
     workflow, report = parse_workflow(text, strict=False)

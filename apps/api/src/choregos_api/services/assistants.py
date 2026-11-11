@@ -2,7 +2,7 @@
 """Assistant installations: install, configure, bind the needs, readiness (ADR 0133, S63-02).
 
 The manifest is never copied into the installation: it is read again from the installed plugin
-(`plugin_installer.plugin_assistant`), so what an upgrade changes is seen at once. The installation holds
+(`plugin_files.plugin_assistant`), so what an upgrade changes is seen at once. The installation holds
 what the organisation decided: the config, the owner and audience groups, the channel, the policy
 overrides and, per need, the connector it is bound to.
 
@@ -41,7 +41,7 @@ from ..schemas.assistants import (
     AssistantReadinessItem,
     AssistantUpdate,
 )
-from . import assistant_embed, offered_knowledge, plugin_installer
+from . import assistant_embed, offered_knowledge, plugin_files
 from .assistant_access import holds
 from .connector_identity import supports_identity
 
@@ -155,7 +155,7 @@ async def binding_problems(
 
 
 async def manifest(session: AsyncSession, row: AssistantInstallation) -> dict[str, Any] | None:
-    found = await plugin_installer.plugin_assistant(session, row.org_id, row.plugin, row.assistant_name)
+    found = await plugin_files.plugin_assistant(session, row.org_id, row.plugin, row.assistant_name)
     return found[1] if found is not None else None
 
 
@@ -237,7 +237,7 @@ async def refresh(
     session: AsyncSession, row: AssistantInstallation
 ) -> tuple[str, list[AssistantReadinessItem]]:
     """The live status and readiness; the row follows (and the plugin's version with it)."""
-    plugin_row = await plugin_installer.installed_row(session, row.org_id, row.plugin)
+    plugin_row = await plugin_files.installed_row(session, row.org_id, row.plugin)
     items = await readiness_items(session, row)
     if plugin_row is None:
         status = SUSPENDED
@@ -309,7 +309,7 @@ def _check_config(document: dict[str, Any], config: dict[str, Any]) -> None:
 async def install(
     session: AsyncSession, org_id: str, org: str, body: AssistantInstall, principal: Principal
 ) -> AssistantInstallation:
-    found = await plugin_installer.plugin_assistant(session, org_id, body.plugin, body.assistant)
+    found = await plugin_files.plugin_assistant(session, org_id, body.plugin, body.assistant)
     if found is None:
         raise not_found("Assistant", f"{body.plugin}/{body.assistant}")
     plugin_row, document = found
@@ -342,7 +342,7 @@ async def install(
     session.add(row)
     await session.flush()
     await offered_knowledge.copy_seeds(
-        session, row, document, plugin_row, await plugin_installer.plugin_root(session, plugin_row), principal
+        session, row, document, plugin_row, await plugin_files.plugin_root(session, plugin_row), principal
     )
     await refresh(session, row)
     await record(session, principal, "assistant.install", org_id=org_id, target_type="assistant",

@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """The cost ledger names the installation and the person of a conversation's turn (S63-15, ADR 0133)
 
 The person's month and the installation's month are summed from the ledger. A conversation's lines were

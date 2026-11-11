@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 """Conversation limits: turns, retention, compression's archive and the turn lease (S63-04b, ADR 0134)
 
 `agent_sessions` gains `max_turns`, `retention_days`, `archived_messages` (the turns compression replaced by

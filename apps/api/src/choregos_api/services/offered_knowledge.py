@@ -485,7 +485,7 @@ async def upgrade_plugin(
     session: AsyncSession, org_id: str, plugin_row: OrgPlugin, principal: Principal
 ) -> dict[str, dict[str, list[str]]]:
     """Every installation of an assistant of `plugin_row`, after the plugin moved to its new version."""
-    from . import plugin_installer
+    from . import plugin_files
 
     found = await session.execute(
         select(AssistantInstallation).where(
@@ -494,10 +494,10 @@ async def upgrade_plugin(
     )
     outcome: dict[str, dict[str, list[str]]] = {}
     for row in found.scalars():
-        assistant = await plugin_installer.plugin_assistant(session, org_id, row.plugin, row.assistant_name)
+        assistant = await plugin_files.plugin_assistant(session, org_id, row.plugin, row.assistant_name)
         if assistant is None:
             continue
-        root = await plugin_installer.plugin_root(session, plugin_row)
+        root = await plugin_files.plugin_root(session, plugin_row)
         outcome[row.slug] = await upgrade_installation(
             session, row, assistant[1], plugin_row, root, principal
         )
