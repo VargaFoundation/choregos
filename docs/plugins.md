@@ -301,7 +301,10 @@ A conversation of an installation is offered `knowledge_search(base, query, top_
 [ADR 0138](adr/0138-the-knowledge-an-assistant-offers.md) point 4), served in the
 conversation's tool loop. The bases offered are those with `knowledge_bases.installation_id` set to the
 installation (the copy of a seed made at install, S63-06), whatever the person's groups:
-giving the assistant is the control. A base outside the installation is neither offered nor reachable by
+giving the assistant is the control, which is the whole decision about a `restricted` base or one scoped to
+groups (no grant is read at conversation time: the owners' grants decide who edits a base, not whom the
+assistant answers). An `index` base is searched; a `files` base is read with `knowledge_list(base?)` (id,
+title, path, version of each ready document) and `knowledge_get`. A base outside the installation is neither offered nor reachable by
 name, even when the person reads it through the knowledge routes, and a `knowledge_get` of another base's
 document is refused. Each passage is framed as data with its document id, title, path and version
 (`source_version`, else the content digest), and the agent's instructions tell it to cite
@@ -332,6 +335,22 @@ read `GET /orgs/{org}/assistants/{slug}/knowledge/updates[?status=]` and decide
 `POST .../knowledge/updates/{update_id}` with `{decision: accept | refuse | merge, content?}`: `accept`
 applies the seed's change, `merge` keeps their own `content` (a `local` document), `refuse` leaves the
 document and is remembered (the same upstream state is not proposed again). The index follows each change.
+
+Four more rules keep the owners' decisions:
+
+- **A deleted document stays deleted.** An owner who deletes a document that came from a seed leaves a
+  tombstone (`knowledge_seed_tombstones`): neither `follow` nor a proposal adds it back at the next upgrade. A
+  document the owners wrote is not remembered.
+- **A source makes a document local.** A source synced into the base (`knowledge sources`) that brings a file
+  named like a seed document rewrites that document, which becomes `origin: local` and belongs to the source.
+- **The seed's sources are attached at install.** The `sources` list of the seed's `knowledge.yaml`
+  (`{kind: web | git | sharepoint | confluence, name, config, connector?, interval_minutes?}`) is attached to the
+  base, `refresh_mode: manual`, and never synced there: opening the hosts in the egress allowlist and starting
+  the sync stay the owners' gestures on the source routes, so installing never reaches out.
+- **The owners are told.** When an upgrade opens new proposals, each owner (a member of the organisation in
+  one of the owner groups) receives one message through the installation's `email` notifier (the one of its
+  task deliveries, `policy_overrides.delivery.email`); nothing configured, nothing sent, and the proposals stay
+  listed. A proposal already open is refreshed, not announced again.
 
 #### Installing an assistant and binding its needs
 
@@ -458,15 +477,26 @@ row-level policy.
   memory page), `user_only` refuses the agent, `owner_only` is never written by a conversation (the agent's
   proposal waits, `proposed`). `max_facts` and `retention_days` bound a space: the oldest unpinned facts
   expire first. A `profile_patch` is merged into the active document and validated against the space's schema
-  (`schema_violation`).
+  (`schema_violation`). The schema, the rule and the bounds are read again from the installed manifest at each
+  write: after a plugin upgrade the next version of a profile is validated against the new schema, the
+  versions already written are kept.
 - **Tools.** The agent of an assistant's conversation is offered `memory_search(space, query, subject?)`,
   `memory_get_profile(space)` and `memory_propose(space, subject?, content | profile_patch, reason)`. A refusal
   is typed JSON (`{"error": "subject_not_resolved", ...}`). A project policy with `memory.enabled: false` (that
   of the person's personal space) turns every memory tool and the injection off.
 - **Injection.** The first turn of a conversation carries the active `user` profile and a few facts of the
   `installation` and `user` spaces, framed as data, each space cut to its `inject_tokens` (300 by default).
+  The facts are ranked, deterministically: the BM25 ranking of the opening context's text (a hint, never a
+  subject: it opens no `user_subject` space) fused with recency, a pinned fact above the rest, the id breaking
+  ties. `memory_search` ranks the same way.
 - **The page.** `GET, PATCH, DELETE /api/v1/me/assistants/{org}/{slug}/memory/{space}` and `.../{space}/{subject}`
-  list, confirm or reject a proposal, correct, pin and delete; they are the caller's own memory only.
+  list, confirm or reject a proposal, correct, pin, delete and `add` (a fact's `content` or a profile
+  `document`, active at once: how a `user_only` space is written); they are the caller's own memory only.
+  `GET /api/v1/me/assistants/{org}/{slug}/memory-export` returns all of it as JSON (every `user` and
+  `user_subject` space, facts and profile versions) for the person to keep or carry elsewhere.
+- **The owners' page.** `GET, PATCH /api/v1/orgs/{org}/assistants/{slug}/memory/{space}` (`assistant:manage`)
+  show an `installation` space with its proposals and let the owners `confirm` or `reject` a proposed fact
+  (`fact_id`) or profile version (`version`), or `add` to it themselves; a person's own space is 404 there.
 
 ### Data protection
 

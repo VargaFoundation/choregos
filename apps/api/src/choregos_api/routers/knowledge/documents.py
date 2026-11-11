@@ -27,6 +27,7 @@ from ...knowledge.formats import DocumentRefusedError, accept
 from ...schemas.knowledge import (
     KnowledgeDocumentDto,
 )
+from ...services import offered_knowledge
 from ._common import _base, _document_dto, _member, _require
 from ._router import Slug, router
 
@@ -190,6 +191,7 @@ async def delete_knowledge_document(
     base = await _base(session, principal, org, slug)
     _require(principal, org, base, KnowledgeAction.EDIT)
     document = await _document(session, base, document_id)
+    await offered_knowledge.remember_deleted(session, base, document, principal.email)
     await session.delete(document)
     await record(
         session,

@@ -6490,6 +6490,112 @@
    ]
   ]
  },
+ "knowledge_seed_tombstones": {
+  "columns": [
+   {
+    "name": "org_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "knowledge_base_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "path",
+    "type": "String(length=255)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "deleted_by",
+    "type": "String(length=320)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": "<function uuid7>",
+    "server_default": null
+   },
+   {
+    "name": "created_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   },
+   {
+    "name": "updated_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   }
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "foreign_keys": [
+   [
+    [
+     "knowledge_base_id"
+    ],
+    [
+     "knowledge_bases.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_knowledge_seed_tombstones_knowledge_base_id_knowledge_bases"
+   ],
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_knowledge_seed_tombstones_org_id_organizations"
+   ]
+  ],
+  "uniques": [
+   [
+    "uq_knowledge_seed_tombstones_base_path",
+    [
+     "knowledge_base_id",
+     "path"
+    ]
+   ]
+  ],
+  "checks": [],
+  "indexes": [
+   [
+    "ix_knowledge_seed_tombstones_knowledge_base_id",
+    [
+     "knowledge_seed_tombstones.knowledge_base_id"
+    ],
+    false
+   ],
+   [
+    "ix_knowledge_seed_tombstones_org_id",
+    [
+     "knowledge_seed_tombstones.org_id"
+    ],
+    false
+   ]
+  ]
+ },
  "knowledge_sources": {
   "checks": [],
   "columns": [

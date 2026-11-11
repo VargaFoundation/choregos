@@ -88,6 +88,8 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
 NO_CLIENT_YET: dict[str, str] = {
     "/me/delegations": "S63-18b: the task card shows delegations read-only until agree and revoke land",
     "/me/delegations/{delegation_id}": "S63-18b: as `/me/delegations`",
+    "/me/assistants/{org}/{slug}/memory-export": "S63-18: the memory page offers the export",
+    "/orgs/{org}/assistants/{slug}/memory/{space}": "S63-18: the owners' page of an installation space",
 }
 
 #: Paths the CLI calls and the console must not: an operator's command, not a screen.

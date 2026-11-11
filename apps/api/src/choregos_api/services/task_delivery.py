@@ -71,6 +71,11 @@ def _notifier(row: AssistantInstallation, channel: str) -> Notifier | None:
     return notifier
 
 
+def notifier_of(row: AssistantInstallation, channel: str) -> Notifier | None:
+    """The notifier of a channel of an installation, for the other services that tell its owners."""
+    return _notifier(row, channel)
+
+
 def webhook_secret(installation_id: str) -> str:
     """The HMAC key of an installation's webhook: derived from the session secret, nothing more stored."""
     key = get_settings().session_secret.encode()

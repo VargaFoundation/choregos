@@ -189,7 +189,7 @@ def _owner_of(decl: dict[str, Any], spaces: Spaces) -> str | None:
 async def find_store(
     session: AsyncSession, spaces: Spaces, decl: dict[str, Any], subject: tuple[str, str] | None
 ) -> MemoryStore | None:
-    return (
+    found = (
         await session.execute(
             select(MemoryStore).where(
                 MemoryStore.org_id == spaces.organisation.id,
@@ -199,9 +199,25 @@ async def find_store(
             )
         )
     ).scalar_one_or_none()
+    if found is not None:
+        sync_store(found, decl)
+    return found
 
 
-async def _ensure_store(
+def sync_store(store: MemoryStore, decl: dict[str, Any]) -> None:
+    """The manifest is read again, never copied for good: after an upgrade a store follows the schema, the
+    rule and the bounds the installed plugin declares now. Profile versions already written are kept;
+    only the next write is validated against the new schema."""
+    schema = decl.get("schema") if decl["kind"] == "profile" else None
+    if store.schema != schema:
+        store.schema = schema
+    for column in ("writes", "retention_days", "max_facts"):
+        wanted = decl["writes"] if column == "writes" else decl.get(column)
+        if getattr(store, column) != wanted:
+            setattr(store, column, wanted)
+
+
+async def ensure_store(
     session: AsyncSession, spaces: Spaces, decl: dict[str, Any], subject: tuple[str, str] | None
 ) -> MemoryStore:
     found = await find_store(session, spaces, decl, subject)
@@ -282,6 +298,28 @@ async def facts_of(
         .order_by(MemoryFact.created_at.desc(), MemoryFact.id)
     )
     return list(rows.scalars())
+
+
+#: A pinned fact outranks any reciprocal-rank score (their sum stays well under 1).
+PINNED_BONUS = 1.0
+
+
+def rank_facts(facts: list[MemoryFact], query: str = "") -> list[MemoryFact]:
+    """The facts, most relevant first and deterministic: reciprocal-rank fusion of the BM25 ranking of the
+    query over the facts (the knowledge index's own) and their recency, a pinned fact on top of that, the
+    id breaking ties. Without a query it is pinned first, then newest."""
+    from ..knowledge.index import bm25, fuse
+
+    by_id = {f.id: f for f in facts}
+    newest = [
+        f.id for f in sorted(facts, key=lambda f: (-(f.created_at.timestamp() if f.created_at else 0), f.id))
+    ]
+    relevance = bm25(query, {f.id: f.content for f in facts}) if query.strip() else []
+    scores = dict(fuse(relevance, newest))
+    for fact in facts:
+        if (fact.provenance or {}).get("pinned"):
+            scores[fact.id] += PINNED_BONUS
+    return [by_id[key] for key, _ in sorted(scores.items(), key=lambda item: (-item[1], item[0]))]
 
 
 def fact_view(fact: MemoryFact) -> dict[str, Any]:
@@ -429,12 +467,9 @@ async def search(
     if store is None:
         return {"results": []}
     wanted = _words(query)
-    scored = [
-        (len(wanted & _words(f.content)), f) for f in await facts_of(session, store) if f.status == "active"
-    ]
-    hits = [(score, f) for score, f in scored if score or not wanted]
-    hits.sort(key=lambda pair: -pair[0])
-    return {"results": [fact_view(f) for _, f in hits[:SEARCH_LIMIT]]}
+    active = [f for f in await facts_of(session, store) if f.status == "active"]
+    hits = [f for f in active if not wanted or wanted & _words(f.content)]
+    return {"results": [fact_view(f) for f in rank_facts(hits, query)[:SEARCH_LIMIT]]}
 
 
 async def get_profile(session: AsyncSession, spaces: Spaces, space: str) -> dict[str, Any]:
@@ -478,7 +513,7 @@ async def propose(
         if not isinstance(content, str) or not content.strip() or profile_patch is not None:
             raise MemoryRefused("invalid_arguments", f"`{space}` holds facts: give a `content` string")
         text = content.strip()[:MAX_CONTENT_CHARS]
-        store = await _ensure_store(session, spaces, decl, key)
+        store = await ensure_store(session, spaces, decl, key)
         fact = MemoryFact(
             org_id=spaces.organisation.id,
             project_id=None,
@@ -508,7 +543,7 @@ async def propose(
     current = active_profile(versions)
     validate_profile(decl.get("schema"), merge_patch(current.document if current else {}, profile_patch))
     document = merge_patch(current.document if current else {}, profile_patch)
-    store = existing or await _ensure_store(session, spaces, decl, key)
+    store = existing or await ensure_store(session, spaces, decl, key)
     row = MemoryProfile(
         org_id=spaces.organisation.id,
         memory_store_id=store.id,
@@ -632,8 +667,9 @@ async def injection_text(session: AsyncSession, record: AgentSessionRecord) -> s
                 lines.append(json.dumps(current.document, sort_keys=True))
         else:
             facts = await facts_of(session, store)
-            facts.sort(key=lambda f: not (f.provenance or {}).get("pinned"))
-            lines = [f"- {f.content}" for f in facts[:INJECTED_FACTS]]
+            # The opening context is a hint to rank by, never a subject: nothing is opened by it.
+            hint = json.dumps(record.context, ensure_ascii=False) if record.context else ""
+            lines = [f"- {f.content}" for f in rank_facts(facts, hint)[:INJECTED_FACTS]]
         kept: list[str] = []
         used = 0
         for line in lines:
@@ -659,11 +695,14 @@ __all__ = [
     "Spaces",
     "call_tool",
     "conversation_spaces",
+    "ensure_store",
     "injection_text",
     "note_resolved_subjects",
     "propose",
+    "rank_facts",
     "search",
     "spaces_of",
     "subjects_in",
+    "sync_store",
     "tool_definitions",
 ]

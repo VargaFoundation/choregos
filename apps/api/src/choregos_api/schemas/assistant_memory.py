@@ -44,7 +44,7 @@ class MemorySubjectSpace(Dto):
 
 class MemorySpace(Dto):
     space: str
-    scope: Literal["user", "user_subject"]
+    scope: Literal["installation", "user", "user_subject"]
     kind: Literal["facts", "profile"]
     writes: str
     subjects: list[MemorySubjectSpace] = Field(default_factory=list)
@@ -52,10 +52,21 @@ class MemorySpace(Dto):
 
 class MemoryAction(Dto):
     """What the person does to a proposal or a fact: confirm or reject a proposed fact or profile version,
-    pin or unpin a fact, correct a fact's content or write a profile document."""
+    pin or unpin a fact, correct a fact's content or write a profile document, or `add` what the agent may
+    not write itself (`user_only`): a fact's `content` or a profile `document`, active at once."""
 
-    action: Literal["confirm", "reject", "pin", "unpin", "correct"]
+    action: Literal["confirm", "reject", "pin", "unpin", "correct", "add"]
     fact_id: str | None = None
     version: int | None = Field(default=None, ge=1)
     content: str | None = Field(default=None, min_length=1, max_length=2000)
     document: dict[str, Any] | None = None
+
+
+class MemoryExport(Dto):
+    """Everything an assistant remembers of the person (their `user` and `user_subject` spaces): facts
+    awaiting confirmation or active, and every version of every profile."""
+
+    installation: str
+    organisation: str
+    exported_at: datetime
+    spaces: list[MemorySpace] = Field(default_factory=list)

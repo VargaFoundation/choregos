@@ -10,9 +10,10 @@ from fastapi import APIRouter, Path, Query, Response, status
 
 from ..deps import Db, Me
 from ..errors import forbidden, not_found
-from ..schemas.assistant_memory import MemoryAction, MemorySpace
+from ..schemas.assistant_memory import MemoryAction, MemoryExport, MemorySpace
 from ..schemas.assistants import SLUG
 from ..services import assistant_memory as memory
+from ..services import assistant_memory_owners as owners
 from ..services import assistant_memory_page as page
 from ..services import assistants
 from ..services.agent_governance import is_member
@@ -33,6 +34,50 @@ async def _spaces(session: Db, principal: Me, org: str, slug: str) -> memory.Spa
     if found is None:
         raise not_found("Assistant memory", slug)
     return found
+
+
+@router.get(
+    "/me/assistants/{org}/{slug}/memory-export",
+    response_model=MemoryExport,
+    operation_id="exportMyAssistantMemory",
+)
+async def export_memory(org: str, slug: Slug, session: Db, principal: Me) -> MemoryExport:
+    """Everything the assistant remembers of the caller, as JSON, to keep or to carry elsewhere."""
+    return await page.export(session, await _spaces(session, principal, org, slug))
+
+
+async def _owner_spaces(session: Db, principal: Me, org: str, slug: str) -> memory.Spaces:
+    organisation = await organisation_by_slug(session, org)
+    row = await assistants.installation(session, organisation.id, slug)
+    assistants.require_manager(principal, org, row)
+    found = await memory.spaces_of(session, row, principal.user_id)
+    if found is None:
+        raise not_found("Assistant memory", slug)
+    return found
+
+
+@router.get(
+    "/orgs/{org}/assistants/{slug}/memory/{space}",
+    response_model=MemorySpace,
+    operation_id="getAssistantInstallationMemory",
+)
+async def get_installation_memory(
+    org: str, slug: Slug, space: Space, session: Db, principal: Me
+) -> MemorySpace:
+    """An `installation` space as its owners see it, proposals waiting included. Owners only."""
+    return await owners.view(session, await _owner_spaces(session, principal, org, slug), space)
+
+
+@router.patch(
+    "/orgs/{org}/assistants/{slug}/memory/{space}",
+    response_model=MemorySpace,
+    operation_id="updateAssistantInstallationMemory",
+)
+async def update_installation_memory(
+    org: str, slug: Slug, space: Space, body: MemoryAction, session: Db, principal: Me
+) -> MemorySpace:
+    """Confirm or reject what a conversation proposed in an `installation` space, or add. Owners only."""
+    return await owners.act(session, await _owner_spaces(session, principal, org, slug), space, body)
 
 
 @router.get(
