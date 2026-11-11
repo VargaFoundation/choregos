@@ -47,6 +47,9 @@ describe("what a source says", () => {
     expect(syncSummary({ added: 1, truncated: 2 })).toBe("1 added · 2 truncated");
     const fields = { site: "b!drive", folder: "Policies", url: "https://git.test/r.git", ref: "", paths: "docs/*.md, *.md" };
     expect(sourceConfig("sharepoint", fields)).toEqual({ drive_id: "b!drive", folder: "Policies" });
+    expect(sourceConfig("sharepoint", { ...fields, exclude: "/Z-*/*, /*DO NOT USE*" })).toEqual({
+      drive_id: "b!drive", folder: "Policies", exclude: ["/Z-*/*", "/*DO NOT USE*"],
+    });
     expect(sourceConfig("web", { ...fields, exclude: "/es/*, /pt/*" })).toEqual({
       url: "https://git.test/r.git", max_depth: 2, max_pages: 50, exclude: ["/es/*", "/pt/*"],
     });

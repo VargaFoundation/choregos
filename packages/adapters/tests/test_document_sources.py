@@ -73,6 +73,34 @@ async def test_graph_delta_lists_files_deletions_and_keeps_the_delta_link() -> N
     assert "authorization" not in download.headers, "the bearer never leaves Graph"
 
 
+async def test_graph_leaves_out_the_excluded_paths_under_the_folder() -> None:
+    """An archive folder inside a source's folder (`Z-Archive`, `… DO NOT USE`) stays out of the base:
+    a file under it is not listed, and one already in the base leaves it on the next full sync."""
+    first = f"{GRAPH}/drives/d1/root/delta"
+    pages = {
+        first: {
+            "value": [
+                {"id": "f1", "name": "deck.pptx", "file": {}, "cTag": "c1",
+                 "parentReference": {"path": "/drive/root:/Brand/Templates"}},
+                {"id": "f2", "name": "old.pptx", "file": {}, "cTag": "c2",
+                 "parentReference": {"path": "/drive/root:/Brand/Templates/Z-Archive"}},
+                {"id": "f3", "name": "Kit [DO NOT USE].docx", "file": {}, "cTag": "c3",
+                 "parentReference": {"path": "/drive/root:/Brand"}},
+                {"id": "f4", "name": "notes.pdf", "file": {}, "cTag": "c4",
+                 "parentReference": {"path": "/drive/root:/Brand/z-archive/Deep"}},
+            ],
+            "@odata.deltaLink": f"{GRAPH}/drives/d1/root/delta?token=next",
+        },
+    }  # fmt: skip
+    source = GraphDriveSource(
+        tenant_id="t", client_id="c", client_secret="s", drive_id="d1", folder="Brand",
+        exclude=["/*Z-*/*", "/*DO NOT USE*"], transport=_graph_transport(pages, []),
+    )  # fmt: skip
+    changes = await source.changes(None)
+    assert [i.ref for i in changes.items] == ["f1"]
+    assert changes.deleted == ["f2", "f3", "f4"], "excluded: it leaves the base, whatever the case"
+
+
 async def test_graph_resumes_from_its_delta_link() -> None:
     link = f"{GRAPH}/drives/d1/root/delta?token=next"
     pages = {link: {"value": [], "@odata.deltaLink": f"{GRAPH}/drives/d1/root/delta?token=after"}}
