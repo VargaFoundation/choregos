@@ -76,13 +76,16 @@ Read it in order the first time: what it is, the ideas, a first project, then th
 | ▸ [Knowledge](use/knowledge.md) | Give agents documents to read: uploads, Confluence, SharePoint, git, the web |
 | ▸ [Connectors](use/connectors.md) | Connect the tracker, the repository, the deployment and the other systems |
 | ▸ [Budgets and policies](use/budgets-and-policies.md) | Cap what work costs and bound what agents may do |
+| ▸ [Assistants](use/assistants.md) | Talk to an assistant, confirm its writes, and keep control of what it remembers and does for you |
 | **Build agents** | Write what agents carry |
 | ▸ [Skills](build/skills.md) | Package know-how an agent loads |
 | ▸ [Agents](build/agents.md) | Create, version and release agents of every kind |
 | ▸ [Plugins](build/plugins.md) | Ship templates, agents and connectors as one package |
 | ▸ [Tools](build/tools.md) | Give agents tools they cannot misuse |
+| ▸ [Assistants](build/assistants.md) | Ship a conversational assistant in a plugin |
 | **Integrate** | Reach Choregos from outside |
 | ▸ [MCP](integrate/mcp.md) | Connect an AI assistant (Claude, Cursor, VS Code) to Choregos |
+| ▸ [Assistants](integrate/assistants.md) | Use an assistant from claude.ai or embed it in your application |
 | ▸ [A2A](integrate/a2a.md) | Start and follow a workflow from another agent or an application |
 | ▸ [Triggers](integrate/triggers.md) | Start work from a schedule, a webhook or a tracker |
 | ▸ [REST API](integrate/rest.md) | Script anything the console does |

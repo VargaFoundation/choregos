@@ -224,5 +224,6 @@ The full list of answers is in [Error codes](../reference/errors.md#the-mcp-door
 
 ## Go further
 
+- [Use assistants from claude.ai and your own application](assistants.md), the same door for the assistants you may talk to.
 - [Start a workflow over A2A](a2a.md), for an application or another agent rather than an assistant.
 - [The CLI](../cli/install.md) and [the REST API](rest.md), for your own scripts.
