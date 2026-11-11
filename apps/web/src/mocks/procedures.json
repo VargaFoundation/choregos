@@ -2429,7 +2429,7 @@
       {
         "key": "in_choregos",
         "title": "In Choregos",
-        "markdown": "Set `runner.executor: aca` in the chart and declare the connector: `subscription_id`, `resource_group`,\n`environment_id` (required), `location` (default `westeurope`), `tenant_id`, `client_id`, `client_secret`\n(password field; or a ready `token` instead of the three identity fields), `identity_id`, `registry_server` and `log_analytics_workspace_id`."
+        "markdown": "Set `runner.executor: aca` in the chart and declare the connector: `subscription_id`, `resource_group`,\n`environment_id` (required), `location` (default `westeurope`), `tenant_id`, `client_id`, `client_secret`\n(password field; or a ready `token` instead of the three identity fields), `identity_id`, `registry_server` and `log_analytics_workspace_id`.\n\nThe job runs outside the cluster and calls the platform back, so it needs an address it can reach: the\nin-cluster Service is not one. Give runs a hostname of their own, a **run door**: list it in\n`choregos-api.runDoor.hostnames` (the chart then routes it to the run's API and to nothing else), serve\nit over TLS, allow only the addresses your Container Apps environment leaves from where your ingress\ncan, and set `global.internalApiUrl` to `https://<that hostname>`. The deployment guide has the steps\nunder \"The run's API and the run door\"."
       },
       {
         "key": "test",
@@ -2439,7 +2439,7 @@
       {
         "key": "fails",
         "title": "When it fails",
-        "markdown": "- `AuthorizationFailed`: the service principal's role does not cover the resource group.\n- The job cannot pull its image: the managed identity lacks pull rights on the registry.\n- No logs: no Log Analytics workspace is configured.\n- A timeout: the egress allowlist must open `management.azure.com` and `login.microsoftonline.com`."
+        "markdown": "- `AuthorizationFailed`: the service principal's role does not cover the resource group.\n- The job cannot pull its image: the managed identity lacks pull rights on the registry.\n- No logs: no Log Analytics workspace is configured.\n- A timeout: the egress allowlist must open `management.azure.com` and `login.microsoftonline.com`.\n- The job starts and ends within seconds, \"input not found\": its first call back did not get through.\n  A connection error means `global.internalApiUrl` is not reachable from the Container Apps\n  environment. A `404` means the API refused the hostname the job called: it is a public hostname of\n  the API and not a run door, while `choregos-api.internalApiGuard` is `enforce`."
       }
     ],
     "values": {},
@@ -3589,7 +3589,7 @@
       {
         "key": "in_choregos",
         "title": "In Choregos",
-        "markdown": "1. **Knowledge**, the base, **Add source**, kind **SharePoint**.\n2. Pick the **connector**. With none in the list, the form links to Administration, Connectors, to declare\n   one.\n3. `site_id` (or `drive_id` for a OneDrive), and optionally a `folder`.\n4. Choose the refresh: every N minutes (5 minutes to 7 days), a cron expression, or manual."
+        "markdown": "1. **Knowledge**, the base, **Add source**, kind **SharePoint**.\n2. Pick the **connector**. With none in the list, the form links to Administration, Connectors, to declare\n   one.\n3. `site_id` (or `drive_id` for a OneDrive), and optionally a `folder`.\n   **Excluded paths** leave out what the folder holds but should not be read, for example an archive:\n   globs under the folder, each starting with `/`, case-insensitive, where `*` also crosses `/`\n   (`/*Archive*/*` drops every `Archive` folder at any depth, `/*DO NOT USE*` every file or folder named so).\n   Changing them starts the next sync from scratch: what they now exclude leaves the base.\n4. Choose the refresh: every N minutes (5 minutes to 7 days), a cron expression, or manual."
       },
       {
         "key": "test",

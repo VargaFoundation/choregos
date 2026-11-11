@@ -1,0 +1,410 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://choregos.dev/schemas/assistant.schema.json",
+  "title": "Assistant",
+  "description": "An assistant a plugin ships (`contents.assistants`, ADR 0133): a wrapper around one of the plugin's prompt or hosted agents that declares its configuration, audience, the tools it needs and the identity each is called under, its memory spaces, the knowledge it offers, its background tasks, its surfaces and its policy. What a schema cannot say (the agent exists and its runtime, `{{ config.x }}` keys, the agent's tools match the needs, a subject's resolver, a delegated task reads only, the files named exist) is checked by `choregos plugin validate`.",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "agent"],
+  "additionalProperties": false,
+  "$defs": {
+    "snake": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$",
+      "maxLength": 63,
+      "description": "English snake_case: lower-case letters and digits, single underscores (a double underscore separates a need from its operation)"
+    },
+    "path": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(^|/)\\.\\.?(/|$))(?!.*//)[A-Za-z0-9._/-]{1,255}$",
+      "description": "relative to the plugin's directory; no absolute path, no `.` or `..` segment"
+    },
+    "json_schema": {
+      "type": "object",
+      "description": "a JSON Schema (2020-12)"
+    },
+    "identity": {
+      "enum": ["service", "user_exchange", "user_consent"],
+      "description": "who the source sees (ADR 0135): the connector's credential, the person by token exchange, the person by a connected account"
+    },
+    "tool": {
+      "type": "object",
+      "required": ["need", "operations", "access", "identity"],
+      "additionalProperties": false,
+      "properties": {
+        "need": { "$ref": "#/$defs/snake" },
+        "description": { "type": "string", "maxLength": 1000 },
+        "operations": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/snake" },
+          "description": "the operations the agent calls, as `<need>__<operation>`"
+        },
+        "access": { "enum": ["read", "write"] },
+        "identity": { "$ref": "#/$defs/identity" },
+        "required": {
+          "type": "boolean",
+          "default": true,
+          "description": "false: the installation's owners, then each person, may switch it off"
+        },
+        "approval": {
+          "enum": ["none", "inline", "console"],
+          "description": "for a write: `inline` (the person confirms in the conversation, ADR 0139) or `console` (a governed action, ADR 0035); a write never defaults to `none`"
+        },
+        "subject_resolver": {
+          "type": "boolean",
+          "default": false,
+          "description": "a result's `subject` opens that subject's memory spaces in the conversation (ADR 0136)"
+        },
+        "satisfied_by": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "server": {
+              "type": "string",
+              "pattern": "^plugin:[a-z0-9][a-z0-9-]{0,62}/[a-z0-9][a-z0-9-]{0,62}$",
+              "description": "a server a plugin ships (ADR 0096), `plugin:<plugin>/<server>`"
+            },
+            "connector_type": {
+              "type": "string",
+              "maxLength": 64,
+              "description": "any organisation connector of this type whose operations match"
+            }
+          },
+          "description": "hints for binding the need at install; the installation decides"
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "access": { "const": "write" } } },
+          "then": {
+            "required": ["approval"],
+            "properties": { "approval": { "enum": ["inline", "console"] } }
+          }
+        },
+        {
+          "if": { "properties": { "access": { "const": "read" } } },
+          "then": { "not": { "required": ["approval"] } }
+        },
+        {
+          "if": { "properties": { "approval": { "const": "inline" } }, "required": ["approval"] },
+          "then": { "properties": { "identity": { "enum": ["user_exchange", "user_consent"] } } }
+        }
+      ]
+    },
+    "subject": {
+      "type": "object",
+      "required": ["type", "key"],
+      "additionalProperties": false,
+      "properties": {
+        "type": { "$ref": "#/$defs/snake" },
+        "key": { "$ref": "#/$defs/snake" },
+        "resolver": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*$",
+          "description": "`none` for a public subject (any well-formed key is accepted), else the need that resolves it; absent, any need marked `subject_resolver`"
+        }
+      }
+    },
+    "memory": {
+      "type": "object",
+      "required": ["name", "scope", "kind", "writes"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "$ref": "#/$defs/snake" },
+        "description": { "type": "string", "maxLength": 1000 },
+        "scope": { "enum": ["installation", "user", "user_subject"] },
+        "kind": { "enum": ["facts", "profile"] },
+        "schema": { "$ref": "#/$defs/json_schema" },
+        "subject": { "$ref": "#/$defs/subject" },
+        "writes": { "enum": ["agent", "agent_proposes", "user_only", "owner_only"] },
+        "max_facts": { "type": "integer", "minimum": 1, "maximum": 10000 },
+        "retention_days": { "type": "integer", "minimum": 1, "maximum": 3650 },
+        "inject_tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 8000,
+          "description": "the token budget of what is injected at the start of a conversation"
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "scope": { "const": "user_subject" } } },
+          "then": { "required": ["subject"] },
+          "else": { "not": { "required": ["subject"] } }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "profile" } } },
+          "then": { "required": ["schema"], "not": { "required": ["max_facts"] } }
+        },
+        {
+          "if": { "properties": { "scope": { "const": "installation" } } },
+          "then": { "properties": { "writes": { "const": "owner_only" } } },
+          "else": { "properties": { "writes": { "not": { "const": "owner_only" } } } }
+        }
+      ]
+    },
+    "knowledge": {
+      "type": "object",
+      "required": ["name", "seed"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "$ref": "#/$defs/snake" },
+        "seed": {
+          "$ref": "#/$defs/path",
+          "description": "a KnowledgeBase directory of the plugin (`knowledge.yaml` and its `corpus/`)"
+        },
+        "serving_mode": { "enum": ["index", "files"], "default": "index" },
+        "upstream": { "enum": ["follow", "propose_updates", "frozen"], "default": "propose_updates" }
+      }
+    },
+    "trigger": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["on_demand", "schedule", "poll", "trigger"] },
+        "cron": { "type": "string", "minLength": 9, "maxLength": 128 },
+        "user_timezone": { "type": "boolean", "default": false },
+        "operation": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9]*(_[a-z0-9]+)*__[a-z][a-z0-9]*(_[a-z0-9]+)*$",
+          "description": "for `poll`: the read operation it calls, `<need>__<operation>`"
+        },
+        "arguments": { "type": "object" },
+        "when": {
+          "type": "object",
+          "minProperties": 1,
+          "description": "for `poll`: JSON pointers into the result, each with its condition"
+        },
+        "idempotency": {
+          "type": "string",
+          "maxLength": 255,
+          "description": "for `poll`: the pointer of the objects' identity, so that one object never starts twice"
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "schedule" } } },
+          "then": { "required": ["cron"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "poll" } } },
+          "then": { "required": ["cron", "operation", "when"] }
+        }
+      ]
+    },
+    "task": {
+      "type": "object",
+      "required": ["name", "workflow", "triggers", "delegation"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "$ref": "#/$defs/snake" },
+        "description": { "type": "string", "maxLength": 1000 },
+        "workflow": { "$ref": "#/$defs/path", "description": "a workflow file of the plugin, `tracker: internal`" },
+        "triggers": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/trigger" } },
+        "delegation": {
+          "enum": ["none", "read_only"],
+          "description": "`read_only`: the task reads on the subscriber's behalf under a standing delegation (ADR 0137)"
+        },
+        "needs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/snake" },
+          "description": "the needs the task reads, shown to the person who agrees to a delegation; required with `read_only`"
+        },
+        "deliver": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["inbox", "email", "teams", "webhook"] },
+          "default": ["inbox"]
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "delegation": { "const": "read_only" } } },
+          "then": { "required": ["needs"] }
+        }
+      ]
+    },
+    "prompt": {
+      "type": "object",
+      "required": ["name", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "$ref": "#/$defs/snake" },
+        "description": { "type": "string", "maxLength": 1000 },
+        "arguments": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "$ref": "#/$defs/snake" },
+              "description": { "type": "string", "maxLength": 500 },
+              "required": { "type": "boolean", "default": false }
+            }
+          }
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000,
+          "description": "the user message the prompt sends; `{argument}` is replaced by its value"
+        }
+      }
+    },
+    "money": { "type": "number", "exclusiveMinimum": 0, "maximum": 100000 }
+  },
+  "properties": {
+    "apiVersion": { "const": "choregos/v1" },
+    "kind": { "const": "Assistant" },
+    "metadata": {
+      "type": "object",
+      "required": ["name", "display_name", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+          "description": "unique in the plugin; the installation's slug defaults to it"
+        },
+        "display_name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "description": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "icon": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,39}$", "description": "one generic word" },
+        "i18n": {
+          "type": "object",
+          "propertyNames": { "pattern": "^[a-z]{2}(-[A-Z]{2})?$" },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "display_name": { "type": "string", "minLength": 1, "maxLength": 120 },
+              "description": { "type": "string", "minLength": 1, "maxLength": 2000 }
+            }
+          },
+          "description": "what users read, translated; identifiers never are"
+        }
+      }
+    },
+    "agent": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,62}$",
+      "description": "an agent of the same plugin's `contents.agents`, whose runtime is `prompt` or `hosted`"
+    },
+    "config_schema": {
+      "$ref": "#/$defs/json_schema",
+      "description": "the values the installer sets; the agent's instructions read them as `{{ config.<key> }}`"
+    },
+    "audience": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "suggested_groups": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 255 },
+          "description": "a hint; the installation sets the real groups"
+        },
+        "personal_data": {
+          "type": "boolean",
+          "default": false,
+          "description": "the assistant processes personal data: a conversation retention and an erasure mode become mandatory"
+        }
+      }
+    },
+    "tools": { "type": "array", "items": { "$ref": "#/$defs/tool" } },
+    "memory": { "type": "array", "items": { "$ref": "#/$defs/memory" } },
+    "knowledge": { "type": "array", "items": { "$ref": "#/$defs/knowledge" } },
+    "tasks": { "type": "array", "items": { "$ref": "#/$defs/task" } },
+    "surfaces": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "console": { "type": "boolean", "default": true },
+        "mcp": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "prompts": { "type": "array", "items": { "$ref": "#/$defs/prompt" } }
+          }
+        },
+        "embed": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "context_schema": {
+              "$ref": "#/$defs/json_schema",
+              "description": "the opening context a host may pass; given to the agent as data, never as a resolved subject"
+            }
+          }
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "budget": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "per_user_month_usd": { "$ref": "#/$defs/money" },
+            "per_conversation_usd": { "$ref": "#/$defs/money" },
+            "per_installation_month_usd": { "$ref": "#/$defs/money" }
+          }
+        },
+        "conversation": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "retention_days": { "type": "integer", "minimum": 1, "maximum": 3650 },
+            "max_turns": { "type": "integer", "minimum": 1, "maximum": 1000 },
+            "idle_close_minutes": { "type": "integer", "minimum": 5, "maximum": 43200 }
+          }
+        },
+        "data": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "classification": { "enum": ["public", "internal", "personal", "sensitive"] },
+            "erasure": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "enum": ["by_user", "by_subject"] }
+            }
+          }
+        }
+      }
+    },
+    "evals": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/path" },
+      "description": "conversation eval suites of the plugin (ADR 0140)"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "audience": { "properties": { "personal_data": { "const": true } }, "required": ["personal_data"] } },
+        "required": ["audience"]
+      },
+      "then": {
+        "required": ["policy"],
+        "properties": {
+          "policy": {
+            "required": ["conversation", "data"],
+            "properties": {
+              "conversation": { "required": ["retention_days"] },
+              "data": { "required": ["erasure"], "properties": { "erasure": { "minItems": 1 } } }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

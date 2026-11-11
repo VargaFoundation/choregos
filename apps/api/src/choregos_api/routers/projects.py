@@ -20,10 +20,10 @@ from ..audit import record
 from ..config import get_settings
 from ..db.models import Membership, Organization, Project
 from ..db.org_aliases import aliases_by_org, aliases_of, holder_of_slug, keep_old_slug, release
-from ..db.session import ALL_ORGS, limit_to_organisations
+from ..db.session import ALL_ORGS, limit_to_organisations, release_connection
 from ..deps import Db, Me, Pagination, ProjectCtx, require_platform_admin
 from ..edition import is_enterprise
-from ..errors import conflict, forbidden, not_found
+from ..errors import conflict, forbidden, not_found, unprocessable
 from ..extensions import GestureRequest, check_gesture
 from ..rbac import Permission
 from ..schemas import (
@@ -41,6 +41,7 @@ from ..schemas import (
 )
 from ..services import ensure_defaults, persist_event, project_dto
 from ..services.organisations import organisation_by_slug
+from ..services.personal_spaces import is_reserved_slug, listed
 from ..services.plugin_tracker import wire_template_tracker
 from ..services.projects import config_revision
 from ..temporal import get_temporal, provisioning_id
@@ -275,7 +276,7 @@ async def list_projects(org: str, session: Db, principal: Me, page: Pagination) 
     rows = (
         (
             await session.execute(
-                select(Project).where(Project.org_id == organization.id).order_by(Project.slug)
+                select(Project).where(Project.org_id == organization.id, listed()).order_by(Project.slug)
             )
         )
         .scalars()
@@ -322,6 +323,10 @@ async def create_project(org: str, body: ProjectCreate, session: Db, principal: 
     organization = await organisation_by_slug(session, org)
     if not principal.can(Permission.PROJECT_CREATE, org):
         raise forbidden("creating a project needs the org_admin role")
+    if is_reserved_slug(body.slug):
+        # A personal space's slug (ADR 0134): its row is invisible to the caller, so the unique key would
+        # be the only refusal, as a 500.
+        raise unprocessable(f"`{body.slug}` is reserved: a project slug may not start with `personal-`")
     existing = (
         await session.execute(
             select(Project).where(Project.org_id == organization.id, Project.slug == body.slug)
@@ -592,7 +597,6 @@ async def provision(ctx: ProjectCtx, body: ProvisionRequest, session: Db) -> Pro
         "resume": body.resume,
     }
     if not body.dry_run:
-        await get_temporal().start_provisioning(workflow_id, payload)
         ctx.project.status = "provisioning"
     ctx.project.provision_state = {
         **(ctx.project.provision_state or {}),
@@ -601,6 +605,12 @@ async def provision(ctx: ProjectCtx, body: ProvisionRequest, session: Db) -> Pro
         "started_at": utcnow().isoformat(),
         "inputs": payload["inputs"],
     }
+    if not body.dry_run:
+        # Committed BEFORE the workflow starts (S62-13): a template with no step on this platform ends
+        # in under a second, and its `finish_provisioning` wrote `succeeded` before this request
+        # committed `running` over it; the project stayed `provisioning` (production, 2026-11-11).
+        await release_connection(session)
+        await get_temporal().start_provisioning(workflow_id, payload)
     await persist_event(
         session,
         EventType.PROVISIONING_STEP,

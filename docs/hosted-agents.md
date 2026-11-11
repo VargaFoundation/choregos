@@ -393,6 +393,53 @@ the session with its transcript and close it.
   `response.output_text.delta` and `response.completed` (or `response.failed`): the text arrives in
   one delta, not token by token.
 
+**A person keeps a conversation with a prompt agent (S63-04, ADR 0134).** A conversation is a
+session of kind `conversation` (the table `agent_sessions` keeps its name), held in its opener's
+personal space and spoken to on `/me/conversations`: `GET` lists the caller's own (title, agent,
+last activity, status; cursor-paginated), `GET` and `DELETE …/{id}` read it and erase it with its
+transcript (its ledger lines stay, detached), `POST …/{id}/messages` takes a turn (`input`,
+`stream`, answered as `/responses` answers). Only the opener reads or writes it: anyone else is
+answered 404, and on PostgreSQL a restrictive policy on `agent_sessions` and
+`agent_session_events` says the same to the database (the platform scope is let through).
+
+- **A key per turn.** Opening reserves nothing. Each turn reserves the smallest of what is left of
+  the conversation's cap (`max_usd`, 5 USD by default, minus what it spent) and the caps a session
+  meets above, mints a key `turn:<conversation>:<n>`, runs the loop, then reads the key's spend,
+  books it with `session_id` and revokes it. A turn the cap leaves under 0.01 USD is 409, before
+  the model is called; a turn whose key the gateway refuses fails `budget_exceeded` and leaves the
+  conversation open.
+- **Idle, then resumed.** After `idle_close_minutes` (240 by default) without activity a
+  conversation reads `idle`; the next message reopens it with its history (`conversation.resumed`
+  in the journal). The state is derived from the clock, nothing sweeps it. A conversation keeps the
+  agent version it started with (`agent_revision`), whatever is published after.
+- **Title.** Written by the model from the first exchange (the person's message and the answer), as one
+  more call on the turn's own key: its cost is the turn's. When the model cannot (a refusal, a spent key, an
+  empty answer) the title is the first message cut at 60 characters, at a word: a title never fails a turn.
+- **Opening** is the service `open_conversation` (it creates the personal space on first use);
+  the route that opens an assistant's conversation comes with the installations (S63-02).
+- **Streaming (S63-04b).** With `stream`, every model call of the turn is requested with
+  `stream: true` and each text chunk is sent as it arrives, one `response.output_text.delta` per
+  chunk; tool calls are assembled from the stream and journaled by the loop as before. A turn the
+  conversation refuses (limit, running turn) is 409 before the stream opens.
+- **Limits (S63-04b).** `max_turns` (200 by default) refuses the turn past it with 409 before any
+  key or call. `retention_until` moves to now plus `retention_days` (30 by default) at each turn.
+  Past about 6000 estimated tokens (characters / 4) the oldest turns, all but the latest two, leave
+  what the model receives and become one system message, a deterministic cut (not written by the
+  model); the person still reads them. One turn runs at a time: a second is 409 (a row lock and a
+  lease), so turn numbers never repeat. `POST …/{id}/cancel` cancels the running turn: tool calls
+  already made stay journaled, the key is revoked and the spend booked. The cancel reaches turns
+  run by the same API process only.
+- **Installation policy.** A conversation of an assistant reads its installation at every turn: the
+  installation must be `ready` (one that became `incomplete` or `suspended` since the opening refuses the
+  turn, 409, before any key or call; the conversation and its history stay), and `max_turns`,
+  `retention_days` and `idle_close_minutes` are the manifest's `policy.conversation` overridden by the
+  installation's `policy_overrides.conversation`, so a change reaches conversations already open.
+  `retention_until` is set from it at each turn. The month caps (person, installation) count what the turns
+  running now reserved on their keys, under a lock on the installation, so two turns racing a cap cannot
+  both be admitted at the whole remainder.
+- Not yet: a model-written summary (the compression is a cut), and `/responses` sessions keep their one
+  key and their hour.
+
 **A person speaks to a voice agent (S41-10).** `/orgs/{org}/agents/{slug}/realtime?project=…`
 (optional `max_usd`) is a WebSocket speaking the OpenAI Realtime events; the API relays it to the
 gateway's realtime socket (`ws(s)://<gateway>/realtime?model=…`), with the session's key.
