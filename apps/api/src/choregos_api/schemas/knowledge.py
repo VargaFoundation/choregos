@@ -117,6 +117,8 @@ class KnowledgeDocumentDto(Dto):
     #: synced from a source (S33-04): which one, and where to open the original
     source_id: str | None = None
     source_url: str | None = None
+    #: `local`, or `seed@<plugin version>` for the copy of an assistant's seed (S63-06)
+    origin: str = "local"
 
 
 class KnowledgeBaseUser(Dto):

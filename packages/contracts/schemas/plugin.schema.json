@@ -187,6 +187,14 @@
             "$ref": "#/$defs/path"
           }
         },
+        "assistants": {
+          "type": "array",
+          "uniqueItems": true,
+          "description": "assistant files (assistant.schema.json, ADR 0133): each wraps an agent of this plugin; the knowledge seeds, task workflows and eval suites an assistant names ship with the plugin",
+          "items": {
+            "$ref": "#/$defs/path"
+          }
+        },
         "matrix_cases": {
           "type": "array",
           "uniqueItems": true,

@@ -21,7 +21,7 @@ from sqlalchemy import select
 from ..config import get_settings
 from ..db.models import OrgConnector
 from ..deps import Db, Me
-from ..errors import forbidden, not_found, unprocessable
+from ..errors import conflict, forbidden, not_found, unprocessable
 from ..schemas import (
     CatalogueMetaDto,
     CataloguePermissions,
@@ -29,9 +29,11 @@ from ..schemas import (
     McpCatalogueDto,
     McpCatalogueEntryDto,
     McpCatalogueInstall,
+    McpCatalogueUserConsent,
     OrgConnectorCreate,
     OrgConnectorDto,
 )
+from ..secret_store import NO_KEY_MESSAGE, derived_org_name, get_secret_store, store_ref
 from ..services.catalogue_rights import (
     SELECTED_PROJECTS,
     CatalogueAction,
@@ -184,11 +186,69 @@ async def list_mcp_catalogue(
     return McpCatalogueDto(meta=CatalogueMetaDto.model_validate(loaded.meta.model_dump()), entries=entries)
 
 
+def _consent_config(consent: McpCatalogueUserConsent, name: str) -> dict[str, object]:
+    """The connector's `user_consent` declaration (S63-08): the sealed secret is named, never written."""
+    settings: dict[str, object] = {
+        "authorization_endpoint": consent.authorization_endpoint,
+        "token_endpoint": consent.token_endpoint,
+        "client_id": consent.client_id,
+        "scopes": consent.scopes,
+    }
+    if consent.revocation_endpoint:
+        settings["revocation_endpoint"] = consent.revocation_endpoint
+    if consent.client_secret:
+        settings["client_secret_ref"] = store_ref(derived_org_name(name, "oauth_client_secret"))
+    return {"identity_modes": ["user_consent"], "user_consent": settings}
+
+
+async def _seal_client_secret(
+    session: Db, org_id: str, actor: str, name: str, consent: McpCatalogueUserConsent
+) -> None:
+    store = get_secret_store()
+    if not store.available():
+        raise conflict(NO_KEY_MESSAGE)
+    assert consent.client_secret is not None
+    await store.put(
+        session, org_id, derived_org_name(name, "oauth_client_secret"), consent.client_secret, actor
+    )
+
+
+def _refuse(entry: catalogue.McpEntry) -> None:
+    if refusal := _refusal_for(entry):
+        raise unprocessable(refusal)
+
+
+def _direct_config(
+    entry: catalogue.McpEntry, body: McpCatalogueInstall
+) -> tuple[dict[str, object], dict[str, str]]:
+    """The connector's configuration and secret references for a direct install."""
+    assert entry.remote is not None  # `installable` and `needs_oauth` mean a hosted remote
+    config: dict[str, object] = {"url": entry.remote.url}
+    secret_refs = dict(body.secret_refs)
+    if body.user_consent is not None:
+        if secret_refs or body.secret_values:
+            raise unprocessable("with `user_consent` the server holds no credential of the organisation's")
+        config.update(_consent_config(body.user_consent, body.name or entry.id))
+    elif entry.auth == "none":
+        if secret_refs or body.secret_values:
+            raise unprocessable(f"`{entry.id}` takes no credential: `secret_refs` must be empty")
+    else:
+        if "token" not in secret_refs and "token" not in body.secret_values:
+            raise unprocessable(
+                f"`{entry.id}` needs a credential: give a reference in `secret_refs.token` "
+                "or the value in `secret_values.token`"
+            )
+        header = entry.auth_header or body.auth_header
+        if header and header.lower() != "authorization":
+            config["auth_header"] = header
+    return config, secret_refs
+
+
 def _refusal_for(entry: catalogue.McpEntry) -> str | None:
     if entry.install == "needs_oauth":
         return (
-            f"`{entry.id}` authenticates each user with OAuth, which an organisation connector cannot "
-            "carry yet: it is listed, not installable"
+            f"`{entry.id}` authenticates each user with OAuth, which an organisation connector's own "
+            "credential cannot carry: install it with `user_consent` (each person connects their own account)"
         )
     if entry.install == "needs_hosting":
         package = entry.hosting.package if entry.hosting else "a local process"
@@ -218,6 +278,14 @@ async def install_mcp_catalogue_entry(
     setting = stored(organisation)
     mode = setting.mode if setting else None
     route = body.route
+    consent = body.user_consent
+    if consent is not None and (route == "gateway" or entry.install == "needs_hosting"):
+        raise unprocessable(
+            "`user_consent` calls the server with each person's own token: it needs a hosted remote, "
+            "installed directly"
+        )
+    if route is None and consent is not None:
+        route = "direct"
     if route is None:
         gateway_first = mode == "required" or (entry.install != "installable" and mode == "available")
         route = "gateway" if gateway_first else "direct"
@@ -242,23 +310,9 @@ async def install_mcp_catalogue_entry(
             ),
             catalogue_entry=f"{entry.id}@{loaded.meta.catalogue_version}",
         )
-    if refusal := _refusal_for(entry):
-        raise unprocessable(refusal)
-    assert entry.remote is not None  # `installable` means a hosted remote
-    config: dict[str, object] = {"url": entry.remote.url}
-    secret_refs = dict(body.secret_refs)
-    if entry.auth == "none":
-        if secret_refs or body.secret_values:
-            raise unprocessable(f"`{entry_id}` takes no credential: `secret_refs` must be empty")
-    else:
-        if "token" not in secret_refs and "token" not in body.secret_values:
-            raise unprocessable(
-                f"`{entry_id}` needs a credential: give a reference in `secret_refs.token` "
-                "or the value in `secret_values.token`"
-            )
-        header = entry.auth_header or body.auth_header
-        if header and header.lower() != "authorization":
-            config["auth_header"] = header
+    if consent is None or entry.install != "needs_oauth":  # ADR 0135 point 6 lifts `needs_oauth`
+        _refuse(entry)
+    config, secret_refs = _direct_config(entry, body)
     declaration = OrgConnectorCreate(
         name=body.name or entry.id,
         type="mcp",
@@ -269,10 +323,13 @@ async def install_mcp_catalogue_entry(
         availability=body.availability,
         allow_egress=body.allow_egress,
     )
-    return await declare_org_connector(
+    declared = await declare_org_connector(
         session,
         principal,
         organisation,
         declaration,
         catalogue_entry=f"{entry.id}@{loaded.meta.catalogue_version}",
     )
+    if consent is not None and consent.client_secret:
+        await _seal_client_secret(session, organisation.id, principal.email, declaration.name, consent)
+    return declared

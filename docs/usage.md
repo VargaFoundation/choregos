@@ -2198,6 +2198,7 @@ a failing one is a `409` naming it in `errors`):
 | Check | Passes when |
 | :-- | :-- |
 | `eval_suite` | the suite (production's cases and the revision's) passes again |
+| `conversation_suite` | production only, for a version an assistant wraps: each of the assistant's conversation suites passes at its threshold (a suite never evaluated for the version fails; ADR 0140) |
 | `newer_than_production` | the revision is newer than production |
 | `is_candidate` | the revision is the current candidate (required with `require_candidate` or a threshold) |
 | `candidate_runs` | at least `min_candidate_runs` finished runs since it became the candidate |
@@ -3539,6 +3540,33 @@ keeps as its memory key cannot be reused (`409`): two organisations would share 
 ```bash
 curl -X PATCH $API/orgs/acme -d '{"slug": "acme-corp", "name": "Acme Corporation"}'
 ```
+
+## 7 bis. Assistants
+
+An assistant is a plugin's agent made available to a group of people (ADR 0133). The console keeps
+it simple (ADR 0139): it does not compete with claude.ai.
+
+**Users.** *Assistants* lists the assistants of your audience; *Converse* opens a conversation in
+your personal space. The answer streams in, rendered as markdown; *Cancel* stops the turn. Citations
+(`[document, version]`) show under the answer, a thumb up or down takes an optional comment, a write the
+assistant proposes appears as a card you *Confirm* or *Refuse* (nothing is written before), and what it
+proposes to remember appears as a card to confirm or reject. When a source needs your own account, the
+answer carries a *Connect* link. *Memory, accounts and tasks* (one page per assistant) holds:
+
+- *Memory*: what the assistant remembers, per space and per subject; confirm, reject, pin, delete, forget a
+  space, export it, or erase everything about you;
+- *Connected accounts*: connect through the source's own consent page, or revoke;
+- *Tasks*: subscribe to a task on a cron and a time zone, run it now, pause or unsubscribe;
+- *Inbox*: what your tasks delivered;
+- *Sources*: which needs the assistant has, which are optional, and under whose identity they run.
+
+**Owners and administrators.** *Manage installations* (`/assistants/manage`) lists what you own. An
+administrator installs an assistant from an installed plugin: the configuration form is drawn from the
+assistant's `config_schema`, then the audience groups, owner groups and channel. An installation's page
+sets the budgets, binds each need to a connector (the readiness list says what still blocks it and who may
+fix it), decides the knowledge updates the plugin proposes (accept, merge with edits, refuse, with the
+diff), reads the reads journal, exports or erases what the assistant holds about a subject, and lists the
+feedback candidates a thumb down proposed to the agent's owners.
 
 ## Known limits, stated rather than discovered
 

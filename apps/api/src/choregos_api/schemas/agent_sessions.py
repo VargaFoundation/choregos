@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from pydantic import Field
 
-from .base import Dto
+from .base import Dto, PageMeta
 
 SLUG = r"^[a-z0-9][a-z0-9-]{0,62}$"
 
@@ -67,10 +67,13 @@ class AgentResponse(Dto):
     output_text: str = ""
     usage: AgentResponseUsage = Field(default_factory=AgentResponseUsage)
     error: AgentResponseError | None = None
+    #: The memory spaces the turn wrote or proposed in (a conversation with an assistant).
+    memory_updated: list[str] = Field(default_factory=list)
 
 
 class AgentDelta(Dto):
-    """A `response.output_text.delta` event: the whole text in one delta (no token streaming yet)."""
+    """A `response.output_text.delta` event: one chunk of what the model streamed (a turn of a durable
+    conversation); a `/responses` session sends the whole text in one."""
 
     type: Literal["response.output_text.delta"] = "response.output_text.delta"
     response_id: str
@@ -89,7 +92,7 @@ class AgentSession(Dto):
     agent: str
     agent_version: int
     project: str
-    status: Literal["open", "closed", "failed"]
+    status: Literal["open", "idle", "closed", "failed"]
     reason: str | None = None
     model: str
     responses: int
@@ -99,6 +102,102 @@ class AgentSession(Dto):
     expires_at: datetime
     closed_at: datetime | None = None
     events: list[AgentSessionEventDto] = Field(default_factory=list)
+
+
+# ───────────── a durable conversation (S63-04, ADR 0134) ─────────────
+
+
+class ConversationSummary(Dto):
+    """A row of the caller's conversations."""
+
+    id: str
+    #: Generated from the first exchange; null before it.
+    title: str | None = None
+    agent: str
+    agent_version: int
+    #: The installation of the assistant, when it is one.
+    installation_id: str | None = None
+    #: The slug of the organisation the conversation belongs to, and of the assistant's installation in it:
+    #: with them a screen reaches the assistant's memory and the organisation's routes from any conversation.
+    org: str | None = None
+    assistant: str | None = None
+    #: `idle` is a conversation inactive past its `idle_close_minutes`: a new message reopens it.
+    status: Literal["open", "idle", "closed", "failed"]
+    turns: int
+    cost_usd: float
+    max_usd: float | None = None
+    created_at: datetime
+    last_activity_at: datetime
+
+
+class ConversationMessage(Dto):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class Conversation(ConversationSummary):
+    """A conversation with what was said in it (the system message and the tool traffic are not shown)."""
+
+    context: dict[str, Any] | None = None
+    messages: list[ConversationMessage] = Field(default_factory=list)
+
+
+class ConversationPage(Dto):
+    items: list[ConversationSummary]
+    meta: PageMeta
+
+
+class ConversationMessageCreate(Dto):
+    """One turn: what the person says, answered whole or as server-sent events."""
+
+    input: str = Field(min_length=1, max_length=65_536)
+    stream: bool = False
+
+
+class ConversationFeedbackCreate(Dto):
+    """A thumb on one answer of a session (S63-17, ADR 0140)."""
+
+    rating: Literal["up", "down"]
+    comment: str | None = Field(default=None, max_length=2000)
+    #: The answer, by its 1-based position among the session's responses; absent: the latest.
+    response: int | None = Field(default=None, ge=1)
+
+
+class ConversationFeedbackDto(Dto):
+    id: str
+    session_id: str
+    agent: str
+    #: The agent revision that gave the answer.
+    agent_version: int
+    response: int
+    rating: Literal["up", "down"]
+    comment: str | None = None
+    #: `proposed` when the thumb down proposed a candidate case to the agent's owners.
+    candidate_status: str | None = None
+    created_at: datetime
+
+
+class ConversationCandidate(Dto):
+    """A candidate eval case a thumb down proposed, as the agent's owners read it: pseudonymised, with no
+    author and no raw comment. It is in no suite until an owner adds it."""
+
+    id: str
+    agent: str
+    agent_version: int
+    status: Literal["proposed", "accepted", "dismissed"]
+    #: `{case, observed, comment}`: a `conversation-evals` case without assertions, what the agent did.
+    candidate: dict[str, Any]
+    created_at: datetime
+
+
+class ConversationCandidateAccept(Dto):
+    """What an owner adds to a candidate to make it a case of the agent's suites: the assertions (without
+    them a case passes whatever the agent says), and optionally the scripted tool results and the context."""
+
+    assertions: dict[str, Any] = Field(min_length=1)
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    tool_results: dict[str, Any] | None = None
+    context: dict[str, Any] | None = None
 
 
 # ───────────── a hosted session's pod, on the internal API (S41-11) ─────────────

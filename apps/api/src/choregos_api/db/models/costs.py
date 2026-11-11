@@ -21,7 +21,10 @@ from ..base import Base, PkMixin, TimestampMixin
 
 class CostLedger(Base, PkMixin):
     __tablename__ = "cost_ledger"
-    __table_args__ = (Index("ix_cost_ledger_project_ts", "project_id", "ts"),)
+    __table_args__ = (
+        Index("ix_cost_ledger_project_ts", "project_id", "ts"),
+        Index("ix_cost_ledger_installation_id", "installation_id", "ts"),
+    )
 
     #: The project that spent it. NULL for an organisation-level line (S42-10e, ADR 0092: a
     #: distillation of a base with no owning project): then `org_id` is set.
@@ -71,6 +74,10 @@ class CostLedger(Base, PkMixin):
     session_id: Mapped[str | None] = mapped_column(
         ForeignKey("agent_sessions.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    #: The assistant installation and the person of a conversation's turn (S63-15): the month caps are
+    #: summed on them, and they survive the deletion of the conversation, which detaches `session_id`.
+    installation_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    user_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
 
 class BudgetAlert(Base, PkMixin, TimestampMixin):

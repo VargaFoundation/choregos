@@ -296,6 +296,256 @@ username, a plugin's server; `null` when the configuration names none. Not yet: 
 who started the work (on-behalf-of, ADR 0107 stories 2 and 3, #756); every write above is the
 connector's account.
 
+## A tool call under the person's identity (ADR 0135)
+
+By default a connector is called with its own credential (`service`). A connector may instead be called
+as the person who talks to the assistant, so the source decides what that person reads
+([ADR 0135](adr/0135-a-tool-call-may-carry-the-person-s-identity.md), `services/identity_exchange.py`).
+
+**Declaring it.** In the connector's configuration:
+
+```yaml
+identity_modes: [service, user_exchange]   # absent: [service]
+token_exchange: {audience: iris-mcp}       # required for user_exchange
+```
+
+The agent version's `mcp_servers` entry picks the mode (`identity: user_exchange`; absent: `service`).
+Only conversations use it today; runs, realtime and pod sessions keep `service`.
+
+**What happens.** At each call the platform exchanges the person's token at the identity provider
+(RFC 8693: `subject_token` = the person's access token, `audience` = the connector's, `requested_actor`
+= `assistant:<slug>`) and calls the source with the exchanged token as bearer. The token serves one call;
+it is never stored, logged, journaled or handed to a run or a pod. The subject token is the bearer the MCP
+door validated for that person, or a refresh token the console's sign-in sealed per person
+(`user/<id>/oidc_refresh`, ADR 0058), forgotten at sign-out.
+
+**No fallback.** Without a valid subject token, a refused exchange, or a connector that does not declare
+the mode, the call fails with the typed tool error `identity_unavailable` and nothing reaches the source.
+The `TOOL_CALLED` event carries `as: person:<subject>` (or `assigned:<connector>`) and `identity_mode`.
+
+**What the identity provider must allow.** The exchange client (`CHOREGOS_TOKEN_EXCHANGE_CLIENT_ID` and
+`_SECRET`, `_ENDPOINT`; by default the console's client and token endpoint) needs the realm's standard
+token exchange enabled, permission to exchange towards each source's audience, and refresh tokens at sign-in (the realm's normal ones). Keycloak's standard exchange has no actor token and ignores
+`requested_actor`: `act` is in the issued token only if a protocol mapper adds it. Sources must accept
+tokens of their audience (`iris-mcp`, `insights360-mcp`, ...). Through an MCP gateway the mode is refused.
+
+The dedicated security review of this exchange (ADR 0135) was done on 2026-11-11: see
+[Review of the person's identity](#review-of-the-persons-identity-s63-07-s63-08-s63-14-2026-11-11). Set
+`CHOREGOS_TOKEN_EXCHANGE_AUDIENCES` (a JSON list) to the audiences of your sources: an audience outside it is
+never asked of the provider, whatever a connector's configuration says. A JWT issued for another audience than
+the one asked is refused.
+
+### Connected accounts: `user_consent` (ADR 0135 points 1, 3, 4, 6)
+
+For a source that has its own OAuth, the person consents once and the platform keeps their refresh token
+(`services/connected_accounts.py`). The connector declares the mode and the source's settings:
+
+```yaml
+identity_modes: [service, user_consent]
+user_consent:
+  authorization_endpoint: https://source.example/oauth/authorize
+  token_endpoint: https://source.example/oauth/token
+  revocation_endpoint: https://source.example/oauth/revoke   # optional
+  client_id: choregos
+  client_secret_ref: store:connector/source/oauth_client_secret  # optional: a public client has none
+  scopes: [read, offline_access]
+```
+
+The three endpoints must be plain `https` addresses. `client_secret_ref` can only be the connector's own
+`store:connector/<name>/oauth_client_secret` (the catalogue install writes it) or, for a platform
+administrator, an `env:` reference. The platform calls the token and revocation endpoints under the
+organisation's egress allowlist (the install gate opens their hosts). The account remembers what the person
+consented to (authorization server, client, source address): if a connector's editor changes one, the account
+is not used until the person connects again.
+
+The mode is picked by the agent version's `identity: user_consent`, or, in an assistant, by the BINDING of
+the need (`assistant_tool_bindings.identity`). The routes, all about the caller's own accounts:
+`GET /me/connected-accounts`; `POST /me/connected-accounts/{connector}/connect?org=` returns the source's
+authorization URL (authorization code with PKCE `S256`; the state is signed, the verifier travels in a signed
+`HttpOnly` cookie bound to the state by a nonce); `GET /me/connected-accounts/callback` exchanges the code,
+seals the refresh token (`user/<id>/consent/<connector>`, ADR 0058) and redirects to the console, returning
+no token; `DELETE /me/connected-accounts/{connector}?org=` deletes the sealed secret and the row at once, then
+asks the source to revoke it (RFC 7009, best effort, only at the endpoint the person consented to). The table `connected_accounts` is under forced RLS on
+the organisation and a restrictive owner-only policy: nobody else reads a person's account.
+
+At each call the platform draws an access token from the refresh token (re-sealing a rotated one), calls the
+source with it as bearer, and keeps nothing. A plugin's server receives it in `X-Choregos-User-Token` next to
+the platform's own bearer. With no account (or one the source stopped honouring) the call fails with the
+typed tool error `account_not_connected` carrying the console's connect URL
+(`<public url>/me/connected-accounts/{connector}/connect?org=<org>`); the agent tells the person and goes on
+without that source. There is no fallback to the connector's own identity. The MCP catalogue's `needs_oauth`
+refusal no longer applies to an entry installed with `user_consent` (`POST .../mcp-catalogue/{id}/install`
+with a `user_consent` body; the client secret is sealed).
+
+### The standing delegation (ADR 0137 points 3-4)
+
+A task of an assistant with `delegation: read_only` may read on a person's behalf while they are away (a
+scheduled run, a poll). That is the one place the platform keeps a long-lived credential of a person, so it
+is narrow and visible:
+
+- **The agreement is the exact list.** `POST /me/delegations {org, assistant, task, agree_to}` is a 409 that
+  shows the task's needs and their operations until `agree_to` equals that list. Read-only only: a task that
+  lists a write need cannot be delegated (422), and a write attempted under a delegation is refused with the
+  typed reason `write_under_delegation` before any source is called. A task has no conversation to confirm a
+  write in, so there is no proposal to make (the proposals of S63-10 belong to a conversation).
+- **Short and capped.** 90 days by default, capped by the installation's `policy_overrides.delegation.max_days`.
+  There is no automatic renewal. A reminder is sent ONCE, `policy_overrides.delegation.remind_days` (7 by
+  default) before the end, through the installation's `email` notifier (`remind_expiring`, a pass of the task
+  loop); without a notifier the console shows the expiry.
+- **The credential.** For a `user_exchange` need the platform asks the identity provider for an OFFLINE token
+  (`offline_access`, RFC 8693 `requested_token_type` refresh token) from the person's own token, and seals it
+  at `user/<id>/delegation/<delegation id>` (ADR 0058). It is issued to the exchange client only, never returned
+  by a route, and used as the refresh token of each delegated read, which then exchanges for the source's
+  audience exactly as a conversation's call does. A `user_consent` need uses the person's connected account.
+  A `service` need is read as before.
+- **Refused at every read and every run** (`assistant_delegations.check`, nothing cached): revoked, expired,
+  the person left the audience (their groups, from their user row) or the organisation, or the digest of the
+  task's needs in the installed manifest changed (a new agreement is then needed). A refused delegation is
+  marked `suspended` with the reason; one refused only for the audience resumes when the person returns.
+- **Revocation is immediate.** `DELETE /me/delegations/{id}` revokes the offline token at the provider (RFC 7009,
+  `CHOREGOS_TOKEN_REVOCATION_ENDPOINT`; without one only the sealed copy is deleted and the token lives until the
+  provider's own lifetime) and deletes the sealed secret. Erasing a person from an assistant does the same.
+- **The steps of the run.** The workflow's own agent steps read under it too (`task_reads`): a read of a
+  connector bound to a need is judged by the same `guard_read` at each call and made as the person; a write by such
+  a step is refused (`write_under_delegation`). A connector the installation binds to no need keeps the run's
+  identity.
+- **Journaled.** Every delegated read writes a line of the reads journal with the delegation's id (and, for a
+  step of the run, the work item's key); never content.
+- **Bound to what was agreed.** The delegation records the connector and the identity each need was bound to; a
+  re-binding suspends it (a new agreement is needed), and a read of an operation outside the agreed list is
+  refused.
+- **Only the owner reads it.** `delegations` is under forced RLS on the organisation plus a restrictive
+  owner-only policy.
+
+Security review done 2026-11-11 (see the review below); what remains is the deployment's. This feature stores a
+credential that can act as a person with nobody present. Before enabling it in a production organisation, check: that the provider's offline sessions are
+bounded (idle and maximum lifetime) and revocable at the endpoint configured here; that the exchange client is the
+only client the offline token is bound to and its audiences are limited to the connectors that need them; the
+sealed-store keyring and its rotation; and the `max_days` the organisation sets. The tests prove the platform's
+side against a fake provider, not a real provider's offline-session behaviour.
+
+## Review of the person's identity (S63-07, S63-08, S63-14), 2026-11-11
+
+[ADR 0135](adr/0135-a-tool-call-may-carry-the-person-s-identity.md) and
+[ADR 0137](adr/0137-a-standing-read-only-delegation.md) require a dedicated security review before production.
+This is that review of the code in the repository. It is not an audit of a running deployment, and it does not
+change the status of either ADR: acceptance also waits for the items under "Outside the repository".
+
+**Scope.** `user_exchange` (RFC 8693: `services/identity_exchange.py`, `choregos_adapters/token_exchange.py`, the
+person's sealed sign-in refresh token in `routers/auth.py`, the MCP door's bearer used as subject token in
+`mcp/caller.py`); `user_consent` connected accounts (`services/connected_accounts.py`,
+`routers/connected_accounts.py`: authorization code with PKCE, state, callback, sealing, refresh, revocation, the
+headers a plugin server receives); the standing delegation (`services/assistant_delegations.py`: the offline
+token, suspension, revocation, what a delegated read may touch); the tables `connected_accounts` and
+`delegations`; what the broker, the events, the reads journal and the error messages say about a token.
+
+**Method.** Adversarial reading of each path against a list of questions, then a test that fails without the fix
+for every finding. The questions: could a token minted for another audience or for another person be accepted or
+sent; can a subject token be replayed or confused with another; is the OAuth callback bound to the session and to
+the person (CSRF); can a URL a person is sent to, or the platform calls, be chosen by someone who should not
+choose it (open redirect, SSRF, egress); where is the PKCE verifier kept; can a token reach a log, an event, a run
+payload or an error text; which key seals what; do the row-level policies hold; can a revocation lose a race;
+can a delegation reach more than the person agreed to (a write, a need or an operation outside the agreement, a
+changed manifest, a re-bound need); can one organisation reach another's rows or secrets. The attacker models
+are a member of one organisation, an organisation's connector administrator (a role that writes the free-form
+`config` of a connector) and a source or provider that misbehaves.
+
+### Findings
+
+| # | Severity | Finding | Fix | Test |
+| :-- | :-- | :-- | :-- | :-- |
+| 1 | High | `user_consent.client_secret_ref` travels in the connector's `config`, outside the `secret_refs` checks. A connector administrator could name any sealed secret of the organisation (`store:user/<id>/oidc_refresh`, another person's consent or delegation token, another connector's key) or an `env:` variable, and set `token_endpoint` to a host they run: the platform sent that value there as `client_secret` at the next consent. | A `store:` reference is only the connector's own derived one (`store:connector/<name>/oauth_client_secret`), refused at write and again at use; an `env:` one follows the rule of every secret reference (a platform administrator's). | `test_the_client_secret_reference_cannot_read_a_sealed_secret_that_is_not_the_connectors_own` |
+| 2 | High | The calls to the source's authorization server (code exchange, refresh, revocation) went through a plain HTTP client: outside the organisation's egress allowlist and bounds, so a connector administrator could make the API call any host it can reach (SSRF; the reply is not shown, but the call and its form are sent). | The client is the guarded transport; the callback and the revocation run in the organisation's egress scope (the refresh already ran in the broker's); the install gate now also opens the token and revocation hosts. | `test_the_callback_runs_under_the_organisations_egress_allowlist` |
+| 3 | Medium | The authorization endpoint was returned to the console as `authorization_url` with no scheme check: `javascript:`, `data:`, `file:` or `https://user:pw@host` could be configured, and the console navigates to it. Plain `http` was accepted for the token endpoint. | `https` only (`http` only under `CHOREGOS_FAKES`), a host, no user-info, no fragment, for the three endpoints. | `test_an_authorization_endpoint_that_is_not_a_plain_https_address_is_never_handed_to_the_browser` |
+| 4 | Medium | An account was bound to the connector's name, not to what the person consented to. An editor who moved the token endpoint, the client or the connector's URL made the platform send the person's refresh token (refresh, or the revocation at disconnect) and access token there. | `connected_accounts.provider_digest` (migration `a5e5c0f0e0d5`): digest of the authorization server, client and address at consent. When it differs the account is not used and nothing is sent: the person connects again. A disconnect revokes only at the endpoint they consented to. Existing accounts have no digest and connect again once. | `test_an_editor_who_moves_the_token_endpoint_receives_no_refresh_token`, `test_disconnecting_does_not_send_the_refresh_token_to_a_revocation_endpoint_that_was_moved` |
+| 5 | Medium | Revocation races. (a) Two calls refreshing at once against a source that rotates: the loser's `invalid_grant` marked the account `reconnect` and deleted the winner's NEW sealed token. (b) A refresh in flight when the person disconnected sealed the rotated token again, for an account that no longer exists, and so outlived its revocation. | (a) On `invalid_grant` the sealed value is read again: a different one is retried once, and only an unchanged one ends the account. (b) The account row is read again under `FOR UPDATE` before a rotated token is sealed; none, no seal. | `test_a_rotation_by_a_concurrent_call_does_not_cost_the_person_their_account`, `test_a_token_rotated_while_the_person_disconnects_is_not_sealed_again` |
+| 6 | Medium | The same race for the identity provider's refresh tokens: a renewal in flight when the person signs out, or when a delegation is revoked, sealed what the provider had just issued. For a delegation that is an orphan OFFLINE token, alive at the provider, that no row points to and no revocation reaches. | The sealed secret is checked again before the rotated token is sealed; if it is gone the token is revoked at the provider and the call is an unavailable identity. | `test_a_token_rotated_while_the_person_signs_out_is_killed_not_sealed_again` |
+| 7 | Medium | Token confusion: the token the provider issued was handed to the connector without looking at its `aud`. A provider or proxy that answers with a token for another audience would send it to the wrong source. | When the token is a JWT its `aud` must contain the audience asked for, or the call is `identity_unavailable`. (An opaque token cannot be checked here: see residual risks.) | `test_a_token_issued_for_another_audience_is_never_handed_to_the_source` |
+| 8 | Medium | The audience of an exchange is written in the connector's `config`: whoever edits the connector chooses what the person's token is exchanged for, bounded only by the provider's permissions. | `CHOREGOS_TOKEN_EXCHANGE_AUDIENCES` (a JSON list): when set, an audience outside it is never asked of the provider. Empty keeps the old behaviour, so a production deployment must set it. | `test_the_deployments_audience_list_bounds_what_a_connectors_editor_can_ask_for` |
+| 9 | Medium | A delegation recorded the needs agreed to, not what they were bound to. An administrator who re-bound a need to the connector's own identity, or to another connector, made the standing token read there (as the service account, or at a source the person never saw). | Each agreed need records its connector and the binding's identity; `check` suspends the delegation when either differs, and a new agreement is needed. | `test_a_need_bound_otherwise_than_when_the_person_agreed_suspends_the_delegation` |
+| 10 | Low | A delegated read was judged by need, not by operation: an operation the manifest later names that the person's agreement did not list would have been read. | `guard_read` refuses an operation outside the agreed list (`outside_agreement`). | `test_a_delegated_read_of_an_operation_the_person_did_not_agree_to_is_refused` |
+| 11 | Low | The exchanged token, the drawn access and refresh tokens and the offline token were not registered with `redact`: an opaque token quoted back in a source's error text would not be masked (a JWT is, by shape). | Each is remembered (`remember_secret`) when drawn. | `test_an_exchanged_opaque_token_is_masked_wherever_an_error_would_echo_it` |
+
+All eleven are fixed in this change. Nothing found was left open.
+
+### What was reviewed and held
+
+- **Subject-token origin.** The door's bearer is accepted only after the issuer, signature, expiry and mandatory
+  audience of the door are checked (`mcp/oauth.py`), is kept in a context variable read for the same person only,
+  and is never stored. The person is found by `sub` (at the same issuer) or by a verified e-mail; a machine
+  account is refused. A bearer cannot serve another person, and a token minted for another audience is refused at
+  the door. The sign-in's refresh token is sealed per person and per organisation, and read only to draw an access token.
+- **CSRF on the callback.** The state is signed (`purpose` separated, expiry checked) and carries the person, the
+  organisation, the connector and a nonce; the PKCE verifier is in a signed `HttpOnly`, `SameSite=Lax` cookie
+  scoped to the route and bound to the state by the same nonce, and never goes to the source. A callback is refused
+  when the state was started by another person, when the cookie is absent or another browser's, when the state or
+  the cookie is forged or expired, or when the organisation is not the caller's. The cookie is deleted on success.
+- **Open redirect.** The callback redirects to the console's own URL, never to a parameter; the connect URL
+  carries the organisation slug URL-encoded. The only URL chosen from outside is the authorization endpoint, now
+  constrained (finding 3).
+- **Leakage.** Tokens are not columns, not in `TOOL_CALLED` (which carries `as` and the mode), not in the reads
+  journal (subject and operation only), not in run payloads, not in the 422 bodies (`identity_unavailable`,
+  `account_not_connected` carry a message and a connect URL), and the provider's errors are reduced to their
+  `error` code. `ExchangedToken` hides its tokens from `repr`. No route returns a token.
+- **Sealing key.** Everything uses the sealed store of ADR 0058 (AES-256-GCM envelopes, the organisation and the
+  name in the associated data, KEKs from the deployment). Names under `user/<id>/...` are written by the
+  platform only; no route lets an administrator list, read or replace an arbitrary name (finding 1 closed the one path that
+  could read one).
+- **Row-level security.** `connected_accounts` and `delegations` are under forced RLS on the organisation plus a
+  RESTRICTIVE owner-only policy; the tests read another person's rows as an organisation administrator and get none (PostgreSQL).
+- **Delegation scope.** Read-only is enforced three times (the grant refuses a write need, the manifest check at
+  install, `guard_read` before any call); expiry is capped by the installation; `check` is evaluated from the rows
+  and the clock at every read and run; erasure revokes at the provider then deletes.
+- **Cross-organisation.** A connector, an account, a delegation and a sealed secret are all read under the
+  organisation of the caller or of the conversation; no path takes an organisation from a request parameter without
+  checking the caller's membership.
+- **Redirects with credentials.** The MCP and plugin clients do not follow redirects, so `X-Choregos-User-Token`
+  and the bearer never follow one to another host.
+
+### Residual risks (not fixed, and why)
+
+- **A connector administrator names the source.** For `user_exchange` they choose both the connector's URL and its
+  audience: pointing a legitimate audience at their own server gives them the person's exchanged tokens for that
+  audience for as long as the call goes out. Bounded by the egress allowlist (an administrator opens the host), the
+  audience list of finding 8 and the provider's exchange permissions, and audited as a connector change, but not
+  prevented. A `user_consent` account no longer has this problem (finding 4).
+- **Opaque tokens.** The `aud` check of finding 7 reads JWTs only; an opaque exchanged token is trusted as the
+  provider's answer.
+- **One sealed sign-in token per person.** A sign-out on one device removes the token every device uses (the next
+  call is `identity_unavailable` until the next sign-in); a person removed from an organisation keeps a stale
+  sealed token in its store until the organisation is erased. Neither widens anything: a conversation needs an
+  authenticated request, and a delegation has its own token.
+- **Race window.** Findings 5 and 6 close the races with a re-read and a row lock, not a transaction spanning the
+  provider's answer: a sign-out committed in the instant between the re-read and the seal would still be lost.
+  The provider's own refresh-token lifetime bounds it.
+- **State is not single-use.** A state can be replayed for 10 minutes, but only with the cookie of the browser it
+  started in, and the authorization code is single-use at the source. The state names the person's and the
+  organisation's internal ids to the source's authorization server.
+- **The source's `id_token` subject is not verified.** It is shown as the account's subject and journaled; it
+  decides nothing.
+- **The provider's endpoints are the deployment's.** Calls to the identity provider (token, discovery,
+  revocation) are made by the API's own client, outside the organisations' egress allowlists, as every other
+  platform call to the deployment's identity provider.
+- **Delegation limits already documented.** No reminder before expiry; a scheduled workflow's own agents keep
+  their identity (only polled reads and `read_operation` take the delegation); without `CHOREGOS_TOKEN_REVOCATION_ENDPOINT`
+  an offline token is only deleted here and lives to the provider's own lifetime.
+
+### Outside the repository
+
+These cannot be established from the code and gate production:
+
+- **Keycloak (or the deployment's provider).** Standard token exchange enabled for the platform's client, and
+  permitted towards each source's audience only; offline sessions bounded (idle and maximum lifetime) and revocable at the
+  endpoint configured in `CHOREGOS_TOKEN_REVOCATION_ENDPOINT`; refresh tokens bound to the client that holds
+  them (if the exchange client is not the console's, refreshing the sealed sign-in token fails); a protocol
+  mapper for `act` (Keycloak ignores `requested_actor`); the audience of the door's tokens;
+  `CHOREGOS_TOKEN_EXCHANGE_AUDIENCES` set to the list of sources.
+- **A real source's behaviour:** that it accepts exchanged tokens, restricts on `act`, rotates and revokes refresh
+  tokens as RFC 6749 and 7009 say (Notion, Google, Microsoft).
+- **The sealed-store keyring** and its rotation, the `max_days` an organisation sets, and the works council and
+  data protection impact assessment ADR 0137 waits for.
+- **The deployment's network policy** under the API pod, which the egress allowlist assumes.
+
 ## MCP gateway
 
 An organisation may put its MCP servers behind a gateway it runs

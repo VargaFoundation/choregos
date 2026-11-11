@@ -1399,6 +1399,26 @@ value>` on the first model call. Nothing said the key had never resolved.
 If the API refuses to start with `réglages non résolus`, fix the source of the secret — the key
 is missing where it is stored, not where it is read.
 
+## Upgrading to 0.26
+
+0.26.0 brings assistants (stream S63, ADRs 0133-0140): a plugin may ship one, an organisation installs it
+for an audience, and people converse with it in the console, through the MCP door or in an embedded
+frame. Nothing changes for an organisation that installs no assistant. The migrations run with the
+chart's job as usual; what an operator does:
+
+| What | Why | What to do |
+| :-- | :-- | :-- |
+| `CHOREGOS_TOKEN_EXCHANGE_AUDIENCES` | The audiences a person's token may be exchanged for (`user_exchange`, ADR 0135). Unset, a connector's editor chooses any audience the identity provider allows. | Set it in `global.extraEnv` to a JSON list of your sources' audiences before binding a need under `user_exchange` ([security](security.md), "Review of the person's identity"). |
+| The identity provider | `user_exchange` needs token exchange (RFC 8693) enabled for the API's client and limited to the sources' audiences; a standing delegation (ADR 0137) needs `offline_access`, bounded and revocable offline sessions. | Configure the realm; nothing changes for deployments without assistants. |
+| Open sessions of `/responses` | The migration that makes sessions durable closes the sessions open at upgrade time (`reason: migrated`, their spend booked). | Upgrade outside working hours if hosted prompt agents are in use. |
+| Connected accounts | Accounts are now bound to the authorization server the person consented to (`provider_digest`). | Accounts made before 0.26 (none outside a test deployment) are connected again once. |
+| Conversation suites (ADR 0140) | An installed assistant's conversation suites gate the promotion of its agent version: the platform plays them through the gateway and a judge model scores their rubrics (`conversation_judge_model`, else the `strong` model profile). | With no gateway key, a version whose assistant ships suites is refused promotion with the reason; `conversation_suites_require_model=false` opts out (no check then). |
+| The embedded component | A host page frames `/embed/assistants/{org}/{installation}` only from the installation's `config.embed_origins`. | List the host origins in the installation's configuration; nothing else to deploy. |
+
+The standing delegation (ADR 0137) is shipped but its ADR stays `proposed` until the works council's
+opinion and the data protection impact assessment of the deploying organisation: do not offer delegated
+tasks to people before then.
+
 ## Upgrading to 0.24
 
 0.24.0 removes every external French alias whose window closed with 0.23.0 (S45-49,

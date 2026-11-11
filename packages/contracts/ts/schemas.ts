@@ -70,6 +70,60 @@ export type Artifact = {
   value?: string | number | null;
 };
 
+/** English snake_case: lower-case letters and digits, single underscores (a double underscore separates a need from its operation) */
+export type AssistantSnake = string;
+
+/** relative to the plugin's directory; no absolute path, no `.` or `..` segment */
+export type AssistantPath = string;
+
+/** a JSON Schema (2020-12) */
+export type AssistantJsonSchema = {
+  [key: string]: unknown;
+};
+
+/** who the source sees (ADR 0135): the connector's credential, the person by token exchange, the person by a connected account */
+export type AssistantIdentity = "service" | "user_exchange" | "user_consent";
+
+export type AssistantTool = unknown & unknown & unknown;
+
+export type AssistantSubject = {
+  type: AssistantSnake;
+  key: AssistantSnake;
+  /** `none` for a public subject (any well-formed key is accepted), else the need that resolves it; absent, any need marked `subject_resolver` */
+  resolver?: string;
+};
+
+export type AssistantMemory = unknown & unknown & unknown;
+
+export type AssistantKnowledge = {
+  name: AssistantSnake;
+  /** a KnowledgeBase directory of the plugin (`knowledge.yaml` and its `corpus/`) */
+  seed: AssistantPath;
+  serving_mode?: "index" | "files";
+  upstream?: "follow" | "propose_updates" | "frozen";
+};
+
+export type AssistantTrigger = unknown & unknown;
+
+export type AssistantTask = unknown;
+
+export type AssistantPrompt = {
+  name: AssistantSnake;
+  description?: string;
+  arguments?: Array<{
+    name: AssistantSnake;
+    description?: string;
+    required?: boolean;
+  }>;
+  /** the user message the prompt sends; `{argument}` is replaced by its value */
+  message: string;
+};
+
+export type AssistantMoney = number;
+
+/** An assistant a plugin ships (`contents.assistants`, ADR 0133): a wrapper around one of the plugin's prompt or hosted agents that declares its configuration, audience, the tools it needs and the identity each is called under, its memory spaces, the knowledge it offers, its background tasks, its surfaces and its policy. What a schema cannot say (the agent exists and its runtime, `{{ config.x }}` keys, the agent's tools match the needs, a subject's resolver, a delegated task reads only, the files named exist) is checked by `choregos plugin validate`. */
+export type Assistant = unknown;
+
 export type ContextPackMemory = {
   id?: string;
   kind: "decision" | "convention" | "incident" | "ticket_summary" | "run_lesson" | "flaky_test" | "hotspot" | "finding" | "other";
@@ -104,6 +158,92 @@ export type ContextPack = {
     summary?: string;
   }>;
   generated_at?: string;
+};
+
+/** `<need>__<operation>` */
+export type ConversationEvalsTool = string;
+
+/** a word or phrase (case-insensitive, whole words) or an object with a regular expression */
+export type ConversationEvalsTextMatch = string | {
+  regex: string;
+};
+
+export type ConversationEvalsMustCall = {
+  tool: ConversationEvalsTool;
+  /** `any`: this tool is the first call of the conversation (before any other read); a tool name: its first call comes before the first call of that tool, if that one is called at all */
+  before?: string;
+  /** arguments the call must carry (each key equal to the given value) */
+  arguments_contain?: {
+    [key: string]: unknown;
+  };
+};
+
+export type ConversationEvalsMustNotCall = {
+  tool: ConversationEvalsTool;
+  /** the rule applies only when every given condition holds */
+  when?: {
+    /** facts of the scenario (the case's `context`) that must all be equal */
+    context?: {
+      [key: string]: unknown;
+    };
+    /** this other tool was called in the conversation */
+    called?: ConversationEvalsTool;
+  };
+};
+
+export type ConversationEvalsMustCite = {
+  /** a regular expression matching each figure of a final text */
+  figure: string;
+  /** a regular expression that must match right after each figure */
+  source: string;
+  /** how far after the figure the source may start to end */
+  within_chars?: number;
+};
+
+export type ConversationEvalsAssertions = {
+  must_call?: Array<ConversationEvalsTool | ConversationEvalsMustCall>;
+  /** lists of tools: each list's tools are called in that order (not necessarily one after the other) */
+  call_order?: Array<Array<ConversationEvalsTool>>;
+  must_not_call?: Array<ConversationEvalsTool | ConversationEvalsMustNotCall>;
+  must_cite?: Array<ConversationEvalsMustCite>;
+  must_not_contain?: Array<ConversationEvalsTextMatch>;
+  /** the words of each final text */
+  length?: {
+    min_words?: number;
+    max_words?: number;
+  };
+};
+
+export type ConversationEvalsCase = {
+  name: string;
+  description?: string;
+  /** facts of the scenario a `must_not_call.when.context` reads (for example `{relation: coachee}`) */
+  context?: {
+    [key: string]: unknown;
+  };
+  /** what the person says, one entry per turn */
+  turns: Array<string>;
+  /** what the sources' fakes answer, by `<need>__<operation>`: a value is the answer of every call, an array is the answers of successive calls (the last one repeats) */
+  tool_results?: {
+    [key: string]: unknown;
+  };
+  assert?: ConversationEvalsAssertions;
+  /** criteria scored by the judge model (0 to 1) after the assertions pass; each must reach its threshold */
+  rubric?: Array<{
+    criterion: string;
+    threshold: number;
+  }>;
+};
+
+/** A conversation suite an assistant ships (ADR 0140, ADR 0133): scenarios of user turns, the tool results a source's fake answers, and deterministic assertions on the conversation's journal (the ordered tool calls and the final texts). The assertions are exact and run first; `rubric` is scored by a judge model once the assertions pass; a case fails when any criterion is below its threshold. A tool is named `<need>__<operation>`, as the assistant's `tools` declare it. */
+export type ConversationEvals = {
+  kind: "conversation";
+  /** the slug of the assistant's agent */
+  agent: string;
+  description?: string;
+  /** the share of cases that must pass every deterministic assertion for the suite to pass; a version below it does not reach production */
+  threshold?: number;
+  cases: Array<ConversationEvalsCase>;
 };
 
 /** What was observed after the decision; each field is filled in when it becomes known. */
@@ -529,6 +669,8 @@ export type Plugin = {
     procedures?: Array<PluginGlob>;
     /** plugin server files (plugin-server.schema.json) */
     servers?: Array<PluginPath>;
+    /** assistant files (assistant.schema.json, ADR 0133): each wraps an agent of this plugin; the knowledge seeds, task workflows and eval suites an assistant names ship with the plugin */
+    assistants?: Array<PluginPath>;
     /** agent cases of the core's eval matrix (#1372): YAML files in the core's agent-case format (`choregos_playbooks.evals.agents`, the runbook `live-eval-matrix.md`), named `plugin:<plugin>/<file stem>` by the matrix and played by it, never at install. A case names an agent of this plugin (or carries its own `agent_spec`), and a connector `plugin:<plugin>/<server>` names this plugin and a server it ships */
     matrix_cases?: Array<PluginPath>;
   };
@@ -1597,7 +1739,9 @@ export type Workflow = {
 
 export type ChoregosContract =
   | Artifact
+  | Assistant
   | ContextPack
+  | ConversationEvals
   | DecisionRecord
   | Event
   | Finding

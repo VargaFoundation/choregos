@@ -83,6 +83,7 @@ from ..services.artifacts import (
     record_input_file,
     sent_by_caller,
 )
+from ..services.personal_spaces import listed
 from ..services.tickets import start_work_item
 from ..temporal import InterpreterNotRunningError, deliver_control
 from . import v1
@@ -268,7 +269,7 @@ async def _projects(door: Door) -> list[Project]:
         projects = list(
             (
                 await door.session.execute(
-                    select(Project).where(Project.org_id == door.org.id).order_by(Project.slug)
+                    select(Project).where(Project.org_id == door.org.id, listed()).order_by(Project.slug)
                 )
             ).scalars()
         )
