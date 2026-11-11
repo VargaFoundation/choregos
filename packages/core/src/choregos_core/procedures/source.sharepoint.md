@@ -42,6 +42,10 @@ readable by everyone the base is open to, whatever the document's own permission
 2. Pick the **connector**. With none in the list, the form links to Administration, Connectors, to declare
    one.
 3. `site_id` (or `drive_id` for a OneDrive), and optionally a `folder`.
+   **Excluded paths** leave out what the folder holds but should not be read, for example an archive:
+   globs under the folder, each starting with `/`, case-insensitive, where `*` also crosses `/`
+   (`/*Archive*/*` drops every `Archive` folder at any depth, `/*DO NOT USE*` every file or folder named so).
+   Changing them starts the next sync from scratch: what they now exclude leaves the base.
 4. Choose the refresh: every N minutes (5 minutes to 7 days), a cron expression, or manual.
 
 ## Test it
