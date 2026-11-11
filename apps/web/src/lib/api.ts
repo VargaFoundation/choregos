@@ -5,6 +5,7 @@
  * Two modes: `live` (the real API, relayed by Next) and `mock` (local fixtures, so that the front
  * end moves on without the API: `NEXT_PUBLIC_API_MODE=mock`).
  */
+import { type CliManifest, MANIFEST_PATH } from "./cli-download";
 import { clearEmbedToken, embedHeaders, isFrameSession } from "./embed-token";
 import type {
   Action,
@@ -386,8 +387,22 @@ async function artifactContent(id: string, ref: string): Promise<Blob> {
   return response.blob();
 }
 
+/**
+ * The CLI this instance bundles (S62-08), read at the root (`/downloads/cli/manifest.json`), outside
+ * `/api/v1`: the install scripts and `choregos self update` read the same file. `null` when the build
+ * bundles none (the API's 404), and in the demo, which has no binaries to offer.
+ */
+async function cliManifest(): Promise<CliManifest | null> {
+  if (IS_MOCK) return null;
+  const response = await fetch(MANIFEST_PATH, { cache: "no-store" });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new ApiError(response.status, await problemOf(response));
+  return (await response.json()) as CliManifest;
+}
+
 export const api = {
   me: () => request<MeDto>("/me"),
+  cliManifest,
   /** The embedded component (S63-12, ADR 0139 point 6): who may frame it (public), and its conversation. */
   assistantEmbed: (org: string, slug: string) =>
     request<AssistantEmbed>(`/public/assistants/${org}/${slug}/embed`),

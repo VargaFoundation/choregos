@@ -265,6 +265,16 @@ Point it at `https://<console-host>/mcp` with the header `Authorization: Bearer 
 Streamable HTTP. The door has no SSE stream and no session: a `GET` answers 405, which the protocol
 allows.
 
+## The CLI
+
+The `choregos` CLI is installed from the instance itself (S62-08): **Integrations › CLI** shows the
+one-line install for the browser's system (`curl -fsSL <instance>/cli/install.sh | sh`, or
+`irm <instance>/cli/install.ps1 | iex` on Windows), the version, every file with its sha256, and the
+first commands (`choregos login --api-url <instance> --token <full-access token> --org <org>`, or the
+`CHOREGOS_API_URL` / `CHOREGOS_TOKEN` / `CHOREGOS_ORG` variables). `choregos self update` replaces the
+binary with the instance's current one. A build that bundles no CLI says so there and links the GitHub
+release of the version it runs. The routes and why they are public: [deployment.md](deployment.md#the-cli-served-by-the-instance-s62-08).
+
 ## An external agent
 
 A client of the door can be **registered as an agent** of the organisation

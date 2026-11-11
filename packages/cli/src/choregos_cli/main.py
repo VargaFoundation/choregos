@@ -16,6 +16,7 @@ from .a2a import a2a_app
 from .client import ApiError, Client, NoOrganisationError, Profile
 from .knowledge import knowledge_app
 from .plugins import plugin_app
+from .self_update import self_app
 
 app = typer.Typer(
     add_completion=True, help="Choregos — a work item comes in, a controlled release comes out."
@@ -47,6 +48,7 @@ app.add_typer(dev_app, name="dev")
 app.add_typer(knowledge_app, name="knowledge")
 app.add_typer(plugin_app, name="plugin")
 app.add_typer(a2a_app, name="a2a")
+app.add_typer(self_app, name="self")
 
 console = Console()
 

@@ -37,6 +37,23 @@ The profile lives in `~/.config/choregos/config.json` (`CHOREGOS_CONFIG` overrid
 path): `api_url`, `token`, `org`. `choregos login` writes it; `CHOREGOS_API_URL`,
 `CHOREGOS_TOKEN` and `CHOREGOS_ORG` are read when no profile exists.
 
+## Install from your instance
+
+Every Choregos instance serves the CLI in the exact version it runs, through the console's host:
+no Python, no access to GitHub needed. The console shows the command for your system under
+Integrations › CLI.
+
+```sh
+curl -fsSL https://<your-instance>/cli/install.sh | sh        # Linux, macOS: ~/.local/bin/choregos
+irm https://<your-instance>/cli/install.ps1 | iex             # Windows: %LOCALAPPDATA%\\Programs\\choregos
+```
+
+The scripts check the binary's sha256 against the instance's manifest
+(`/downloads/cli/manifest.json`) and never use sudo; `sh -s -- --prefix DIR` installs into `DIR/bin`.
+`choregos self update` later replaces the binary with the instance's current one. When the CLI
+talks to an instance that runs another version, it says so in one line on stderr, at most once a
+day (`CHOREGOS_NO_VERSION_CHECK=1` silences it).
+
 """
 
 SITE_HEADER = """---
