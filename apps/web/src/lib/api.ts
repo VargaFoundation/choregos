@@ -302,9 +302,11 @@ export async function problemOf(response: Response): Promise<Problem> {
   return problem;
 }
 
-/** On a 401 outside the sign-in page: go there, keeping where one comes from. */
+/** On a 401 outside the sign-in page: go there, keeping where one comes from. A framed page (`/embed/`) never
+ * navigates: the console's login refuses to be framed, and the embedded component asks the person itself. */
 function versLaConnexion(): void {
   if (typeof window === "undefined" || window.location.pathname.startsWith("/login")) return;
+  if (window.location.pathname.startsWith("/embed/")) return;
   const next = encodeURIComponent(window.location.pathname + window.location.search);
   // A full navigation, on purpose: the session is dead, and so is the React state.
   window.location.assign(new URL(`/login?next=${next}`, window.location.origin).toString());

@@ -67,6 +67,8 @@ test("a conversation opened from the list shows the same memory proposals", asyn
 
 test("an owner installs an assistant with the form its config_schema draws", async ({ page, request }) => {
   await page.goto("/assistants/manage");
+  // The session's current organisation is `varga`; the owner installs in `acme`.
+  await page.getByLabel("Current organisation").selectOption({ label: "Acme" });
   await page.getByLabel("Plugin").selectOption("coaching");
   await page.getByLabel("Assistant").selectOption("one-on-one-coach");
   // The defaults are in, the required field without one is asked for, the list of URLs is typed as a URL list.

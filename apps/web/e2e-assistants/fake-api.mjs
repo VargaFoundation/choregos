@@ -123,6 +123,10 @@ createServer(async (req, res) => {
   if (path === "/orgs/acme/plugins") return json(res, 200, { items: [{ name: "coaching", version: "1.0.0" }] });
   if (path === "/orgs/acme/plugins/coaching/assistants") return json(res, 200, shipped);
   if (path === "/me/conversations/c1/messages") {
+    // As the API does, the turn stays in the conversation: the page reads it back once the stream ends.
+    conversation.messages.push({ role: "user", content: String(payload?.input ?? "") });
+    conversation.messages.push({ role: "assistant", content: "Ask what went well." });
+    conversation.turns += 1;
     res.writeHead(200, { "Content-Type": "text/event-stream" });
     res.write('event: response.output_text.delta\ndata: {"delta":"Ask what "}\n\n');
     res.write('event: response.output_text.delta\ndata: {"delta":"went well."}\n\n');
