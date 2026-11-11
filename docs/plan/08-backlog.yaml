@@ -4615,3 +4615,98 @@ stories:
     size: M
     depends_on: [S63-01]
     notes: "Installs and converses with no code of its own in the core; played in CI."
+  - id: S64-00
+    title: "docs(adr): ADRs 0141 and 0142, the S64 plan, the backlog stories"
+    stream: S64
+    sprint: 1
+    priority: 1
+    size: XS
+    depends_on: []
+    notes: "Proposed ADRs; the product owner's decisions of 2026-11-11: consumption and context composition, stopping an agent suspends it, one story per pull request."
+  - id: S64-01
+    title: "contract(openapi): reports narrowed and in tokens, activity, cancel, stop, context (ADRs 0141, 0142)"
+    stream: S64
+    sprint: 1
+    priority: 1
+    size: S
+    depends_on: [S64-00]
+    notes: "contract-change: CostReport filters and groupings, CostTotal tokens, activity and its stream, runs cancel, agents stop, ContextBreakdown."
+  - id: S64-02
+    title: "feat(api): a spend report narrowed to an agent, a workflow, a work item; grouped by run; in tokens (ADR 0141 §1)"
+    stream: S64
+    sprint: 1
+    priority: 1
+    size: S
+    depends_on: [S64-01]
+    notes: "A filter by agent counts no other agent's line; totals' tokens equal the lines'."
+  - id: S64-03
+    title: "feat(api,orchestrator): a run stopped alone, and a work item's stop stops its run (ADR 0142 §2-3)"
+    stream: S64
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: [S64-01]
+    notes: "Cancelled within one poll; executor cancel once; spend booked once; work item waits for a person; replayed history; workflow.patched."
+  - id: S64-04
+    title: "feat(api): stopping an agent suspends it and stops its runs and sessions (ADR 0142 §4)"
+    stream: S64
+    sprint: 1
+    priority: 1
+    size: S
+    depends_on: [S64-03]
+    notes: "Suspended first; only that agent's runs cancelled, in every project; sessions closed; agent.stop audited with the reason."
+  - id: S64-05
+    title: "feat(api): what is in flight, as one list and a stream (ADR 0142 §1, ADR 0141 §2)"
+    stream: S64
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: [S64-01]
+    notes: "Read rights per project; filters; spend so far from the run's key, at most every 30 s, '—' when unknown; SSE from existing events."
+  - id: S64-06
+    title: "feat(web): an Activity screen and a stop with a reason (ADR 0142)"
+    stream: S64
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: [S64-01]
+    notes: "In flight then finished, expandable steps, elapsed, tokens and cost so far, filters; Stop on a run, a work item, an agent, each with a reason."
+  - id: S64-07
+    title: "feat(web): tokens and their breakdown on a workflow's, an agent's and a project's page (ADR 0141 §1)"
+    stream: S64
+    sprint: 1
+    priority: 1
+    size: S
+    depends_on: [S64-02]
+    notes: "Input, output, cached; by model, stage, agent or workflow, run."
+  - id: S64-08
+    title: "feat(runner,api): the context breakdown of prompt agents, hosted containers and sessions (ADR 0141 §3-6)"
+    stream: S64
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: [S64-01]
+    notes: "Sections sum to the reported prompt_tokens; tools.mcp vs tools.platform; no text in any event; free space unknown without max_input_tokens."
+  - id: S64-08b
+    title: "feat(gateway,runner): the context breakdown of ACP CLIs, from the gateway callback (ADR 0141 §4)"
+    stream: S64
+    sprint: 1
+    priority: 1
+    size: M
+    depends_on: [S64-08]
+    notes: "Registered parts recognised, the rest is backend; nothing recognised is all backend, never an error."
+  - id: S64-09
+    title: "feat(api,web): an assistant's tokens and stopping an assistant (ADRs 0141, 0142)"
+    stream: S64
+    sprint: 1
+    priority: 1
+    size: S
+    depends_on: [S64-02, S64-04, S63-15, S63-04b]
+    notes: "Waits for the S63 stream on main: ledger installation_id, conversation turns in the activity list, suspend an installation and cancel its turns."
+  - id: S64-10
+    title: "docs: the Activity and Costs pages of the user documentation"
+    stream: S64
+    sprint: 1
+    priority: 1
+    size: XS
+    depends_on: [S64-06, S64-07, S64-08]
