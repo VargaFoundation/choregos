@@ -1,0 +1,260 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://choregos.dev/schemas/outpost-call.schema.json",
+  "title": "OutpostCall",
+  "description": "A call as the daemon sees it once it has opened the envelope with its sealing key (ADR 0148 §5, ADR 0149). Only `id` and `kind` are common to every kind: a daemon refuses a kind it does not know with `unsupported_kind`, and ignores a field it does not know. The call says nothing of whether the tool writes: the outpost reads that from its own server (ADR 0147 §6).",
+  "type": "object",
+  "required": [
+    "id",
+    "kind"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$",
+      "description": "The call's id: the envelope's too, and the associated data it was sealed under. A daemon refuses `call_unreadable` a call whose id is not its envelope's."
+    },
+    "kind": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}$",
+      "description": "`call_tool` or `list_tools` in protocol 1 (`#/$defs/known_kind`). A later kind is refused `unsupported_kind` by a daemon that does not know it."
+    },
+    "endpoint": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[a-z][a-z0-9-]{0,62}$",
+      "default": null,
+      "description": "The alias of an endpoint in the outpost's policy file."
+    },
+    "tool": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1,
+      "maxLength": 128,
+      "default": null,
+      "description": "`call_tool`: the tool's name at the endpoint's server."
+    },
+    "arguments": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "default": null,
+      "description": "`call_tool`: the arguments, after the platform decided the call."
+    },
+    "deadline": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time",
+      "default": null,
+      "description": "The door takes no answer after it, and the outpost makes no call after it; nothing a daemon sends moves it. A daemon judges it by its own clock: `server_time` is not signed, and may bring a deadline closer, never push it away."
+    },
+    "answer_key": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$",
+      "default": null,
+      "description": "The X25519 public key the answer is sealed to (raw, base64url without padding). It travels inside the envelope, where no proxy can rewrite it."
+    },
+    "asserted": {
+      "$ref": "#/$defs/asserted"
+    }
+  },
+  "if": {
+    "properties": {
+      "kind": {
+        "const": "call_tool"
+      }
+    },
+    "required": [
+      "kind"
+    ]
+  },
+  "then": {
+    "required": [
+      "endpoint",
+      "tool",
+      "arguments",
+      "deadline",
+      "answer_key"
+    ],
+    "properties": {
+      "endpoint": {
+        "type": "string"
+      },
+      "tool": {
+        "type": "string"
+      },
+      "arguments": {
+        "type": "object"
+      },
+      "deadline": {
+        "type": "string"
+      },
+      "answer_key": {
+        "type": "string"
+      }
+    }
+  },
+  "else": {
+    "if": {
+      "properties": {
+        "kind": {
+          "const": "list_tools"
+        }
+      },
+      "required": [
+        "kind"
+      ]
+    },
+    "then": {
+      "required": [
+        "endpoint",
+        "deadline",
+        "answer_key"
+      ],
+      "properties": {
+        "endpoint": {
+          "type": "string"
+        },
+        "deadline": {
+          "type": "string"
+        },
+        "answer_key": {
+          "type": "string"
+        },
+        "tool": {
+          "type": "null"
+        },
+        "arguments": {
+          "type": "null"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "known_kind": {
+      "enum": [
+        "call_tool",
+        "list_tools"
+      ],
+      "description": "The kinds of protocol 1: a tool call, and a tool listing (discovery)."
+    },
+    "asserted": {
+      "type": "object",
+      "description": "Who the platform says the call is made for: the claims the gateway route signs (ADR 0149 §3). They are assertions of the control plane: an outpost may log them and decides nothing on them (ADR 0147 §6).",
+      "properties": {
+        "sub": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256,
+          "default": null,
+          "description": "The caller the platform acts for: a run, an action, a person."
+        },
+        "org": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256,
+          "default": null,
+          "description": "The organisation's slug, for display."
+        },
+        "org_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256,
+          "default": null,
+          "description": "The organisation's id, which survives a rename."
+        },
+        "purpose": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256,
+          "default": null
+        },
+        "project": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256,
+          "default": null
+        },
+        "run": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256,
+          "default": null
+        },
+        "work_item": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256,
+          "default": null
+        },
+        "agent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256,
+          "default": null
+        },
+        "initiator": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256,
+          "default": null
+        },
+        "action": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256,
+          "default": null,
+          "description": "The governed action a write belongs to."
+        },
+        "connector": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 256,
+          "default": null,
+          "description": "The connector that routed the call."
+        },
+        "approved_by": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "default": []
+        }
+      }
+    }
+  }
+}

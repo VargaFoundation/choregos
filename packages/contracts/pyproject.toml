@@ -16,3 +16,4 @@ packages = ["src/choregos_contracts"]
 [tool.hatch.build.targets.wheel.force-include]
 "schemas" = "choregos_contracts/schemas"
 "openapi.yaml" = "choregos_contracts/openapi.yaml"
+"outpost-door.yaml" = "choregos_contracts/outpost-door.yaml"

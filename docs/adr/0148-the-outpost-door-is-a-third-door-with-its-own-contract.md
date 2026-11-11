@@ -5,7 +5,8 @@
   `apps/api/src/choregos_api/outposts/`, mounted beside the two doors in `main.py`); its contract
   `packages/contracts/outpost-door.yaml`; a new table `outpost_calls`; a second row-level security setting,
   `app.current_outpost` (`db/session.py`); the event relay (`events.py`, `PostgresRelay`);
-  `choregos_adapters.sealing`; the key wrapper of `secret_store.py`; the API chart (a Deployment and a
+  `choregos_adapters.sealing`; the key wrapper of `secret_store.py`; the door's signing key, a secret of
+  the installation, and the `door_keys` an outpost's policy file pins; the API chart (a Deployment and a
   route of its own); the boundary test `tests/licences/test_mcp_gateway_boundary.py` (`DOOR_DIRS`,
   `DOOR_ROUTES`). When accepted, amends
   [ADR 0105](0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md) §1 (its doors "offer no
@@ -61,7 +62,7 @@ constrains today:
    | Verb | Carries | Answers |
    |:--|:--|:--|
    | `POST /outposts/v1/enrol` | an enrolment token, the instance's public keys, facts about it | a *pending* instance and the fingerprint to compare (ADR 0147 §4) |
-   | `POST /outposts/v1/poll` | signed: the instance's sequence, how long it waits, what it is running | calls to make, cancellations, the server's time, the minimum version, a stop flag |
+   | `POST /outposts/v1/poll` | signed: the instance's sequence, how long it waits, what it is running | calls to make, each signed by the door (13), cancellations, the server's time, the minimum version, a stop flag |
    | `POST /outposts/v1/calls/{id}/answer` | signed, sealed, bounded | recorded once: idempotent on the call, the instance and the epoch |
    | `POST /outposts/v1/calls/{id}/refuse` | signed: a refusal code from a closed list, which does not reveal the policy | recorded once |
 
@@ -70,10 +71,19 @@ constrains today:
    poll; the door announces the window it serves (a current and a minimum version); a daemon below the
    minimum gets a clean refusal that names the minimum, and no assignment. A new need enters the poll's
    answer as a field an older daemon ignores before it ever becomes a verb.
+
+   An enrolment token enrols one instance, once. A signing key that is still pending at the token's own
+   outpost enrols again as the same instance, under a new token: a daemon whose first answer was lost on
+   the way keeps its keys. A key that was ever approved or revoked, or that is pending at another outpost,
+   is refused: a revoked key does not come back.
 4. **A request is authenticated by a signature that binds it.** Every request after `enrol` carries a
    token signed with the instance's Ed25519 key (EdDSA) that binds the method, the URL, a digest of the
    body, an `iat` at most 60 seconds old, a nonce the server issued and a per-instance sequence number. A
    refusal for a stale `iat` carries the server's time, so a daemon whose clock drifts learns it.
+   - The enrolment is signed too, with the key it enrols: the same token, without a nonce or a sequence,
+     since neither exists yet. It proves the enroller holds the key, and it ties the sealing key to the
+     signing key whose fingerprint a person compares (ADR 0147 §4). Without it, a proxy on the path could
+     swap the sealing key under a fingerprint that still matches, and read every call.
    - The nonce is issued by the server and needs no stored state: an authenticated timestamp the door can
      check alone (the server-provided nonce of RFC 9449 §8).
    - The sequence is kept on the instance's row. A request whose sequence is not above the row's is a
@@ -89,7 +99,7 @@ constrains today:
    associated data where a run's id is today. A proxy that terminates TLS reads the envelope (ids, sizes,
    timing) and nothing of the arguments or of the result. The key an answer is sealed to reaches the
    outpost inside a sealed request or at enrolment, never in a field a proxy could rewrite; the contract
-   fixes the envelope.
+   fixes the envelope. Sealing hides a call; it does not say who sealed it. That is decision 13.
 6. **One organisation, never all of them.** The door resolves a signature to one instance of one outpost
    of one organisation, then sets `app.current_orgs` to that organisation and `app.current_outpost` to that
    outpost. It never sets the all-organisations scope the pod-facing routes set. The outposts' tables are
@@ -149,6 +159,50 @@ constrains today:
       not one of the refused modules and imports none of them (checked by importing it alone).
 
     The broker's half of the same route is ADR 0149's.
+13. **A call is signed by the door.** Sealing (5) hides a call from whoever is not its recipient. It does
+    not say who sealed it: anyone who knows a public key can seal to it. Whoever terminates the daemon's
+    TLS, an organisation's inspecting proxy for one, knows the instance's sealing key, which crossed it at
+    enrolment. It could hand the daemon a call of its own, and read the answer through an `answer_key` of
+    its own: an execution channel into the outpost's network for a party this design never meant to trust.
+    So a call the door hands over is signed by the door, and an outpost makes only calls signed by a key
+    its own policy file pins.
+    - **The key.** The door holds an Ed25519 signing key, and the next one during a rotation. A public key
+      is written as the other keys of the contract are: the unpadded base64url of its 32 raw bytes.
+    - **The pin.** The outpost's policy file has a required `door_keys`: one to four distinct keys. It is
+      the only place the pinned set lives: nothing the door sends, at enrolment or later, adds a key to it
+      or changes it. A policy file without it is invalid, so the daemon does not start: an outpost that
+      cannot check who orders it refuses to serve (ADR 0101). The key itself is pinned, not a fingerprint:
+      an Ed25519 key is as short as its digest, and no key then has to travel with a call.
+    - **The signature.** Each call in a poll's answer carries a compact JWS (`alg` `EdDSA`, `typ`
+      `choregos-outpost-call+jwt`, `kid` the signing key) whose claims are the call's id, the claiming
+      instance's id and `sealed_sha256`, the digest of the envelope exactly as carried, and nothing else.
+      There is no `iat`: a call is as fresh as the deadline inside its envelope, which the digest covers.
+    - **What the daemon does**, before it opens the envelope and in this order: the `kid` is one of the
+      pinned keys; the signature verifies under it; the call is the envelope's; the instance is its own;
+      the digest matches. If one fails it does not open the envelope and does not call its server. It
+      writes a line to its audit log and refuses the call with one code, `signature_refused`, which names
+      the class and never the check. A forged call's refusal meets a 404 at the door, which is harmless; a
+      real call refused this way is how the platform learns that an outpost does not pin the key in
+      service.
+    - **Replays.** An outpost decides once per call id. Its journal (ADR 0149 §5) holds the first thing it
+      decided for an id, to make the call or to refuse it, and every later envelope under that id gets the
+      same: a copy that does not verify cannot have a call that is under way refused, and a refused id is
+      never made. A signed call replayed to the same instance is therefore answered from the journal, its
+      server not called, and refused once its deadline is behind; the journal keeps an id at least until
+      then. The outpost judges a deadline by its own clock, because the server's time is not signed.
+    - **What is not signed**: the rest of a poll's answer (the stop flag, the cancellations, the version
+      window, the server's time), the enrolment's answer and every problem. Whoever sits on the path can
+      stop, starve or mislead a daemon about versions and time, as it can by dropping packets. It cannot
+      make it call anything, nor read an answer.
+    - **Rotation is an overlap the outpost's operator takes part in.** The platform shows the next key:
+      the management API returns the keys to pin with an outpost and with its enrolment token, never the
+      door itself. Operators add it to `door_keys`; then the door signs with it. An outpost that did not
+      add it refuses with `signature_refused`, visibly. No message of the protocol rotates a pinned key.
+    - *Rejected: trusting the TLS connection.* It ends at the proxy.
+    - *Rejected: a key learned at enrolment.* That is trust on first use, across the same proxy.
+    - *Rejected: a key carried in the enrolment token.* The pinned set must be the operator's to read and
+      to change, in the file the control plane cannot write, and every instance of an outpost shares that
+      file; a token is used once, by one instance.
 
 ## Alternatives rejected
 
@@ -173,4 +227,7 @@ constrains today:
 - A compatibility window is a promise to operators: the door keeps serving the previous version's
   daemons, and its conformance test plays their fixtures.
 - An inspecting proxy still sees who talks, when and how much. The operator's guide says so.
+- The door holds one more secret of the installation, its signing key (13): the chart generates it
+  (S65-16). Rotating it is an overlap the operators of outposts take part in: the next key is shown, they
+  pin it, and only then does the door sign with it.
 - This record proves nothing: it is the decision and its guard.

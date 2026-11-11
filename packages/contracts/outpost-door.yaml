@@ -1,0 +1,576 @@
+openapi: 3.1.0
+info:
+  title: Choregos outposts' door
+  version: v1
+  description: |
+    The door an outpost dials (ADR 0147, ADR 0148): `/outposts/v1`, protocol 1. It is not part of
+    `openapi.yaml`: its caller is neither the console nor the CLI, it is the daemon `choregos-outpost`,
+    installed in someone else's network and upgraded on their schedule. A change here is a
+    `contract-change` (ADR 0001), and every verb added is one every daemon in the field must learn.
+
+    Four verbs, all `POST`, all JSON:
+
+    - `enrol`: an enrolment token and the instance's public keys; answers a *pending* instance.
+    - `poll`: a long poll; answers the calls to make, the cancellations, the door's time, the protocol
+      window and a stop flag.
+    - `calls/{id}/answer`: the sealed answer of a call the instance claimed; recorded once.
+    - `calls/{id}/refuse`: a refusal code from a closed list; recorded once.
+
+    The door serves assignments and never MCP: no tool listing of the platform, no JSON-RPC, and no route
+    that names a connector or a server (ADR 0148 §12). The one path parameter is a call's `{id}`.
+
+    Two signatures cross the door. A request is signed by the instance that sends it
+    (`x-request-signature`). A call is signed by the door that hands it over (`x-call-signature`), with a
+    key the outpost's own policy file pins, and an outpost makes no other call (ADR 0148 §13).
+
+    Requests are closed shapes: a field the verb does not describe is a 422. Answers are open: a daemon
+    ignores a field it does not know, which is how a later need reaches an older daemon before it ever
+    becomes a verb. Every problem is an RFC 9457 document with a `code` and the door's `server_time`.
+
+    Where the door is switched off (`CHOREGOS_OUTPOSTS`, ADR 0147 §12) it is not mounted: the daemon
+    meets a 404 that is not one of this contract's problems.
+  license: { name: Apache-2.0, url: https://www.apache.org/licenses/LICENSE-2.0 }
+servers:
+  - url: /
+    description: >-
+      The door's own hostname (ADR 0148 §8), the one name an outpost's firewall opens. The paths start at its
+      root: a request's URL is the `control_plane` of the outpost's policy file followed by the verb's path.
+
+x-protocol:
+  version: 1
+  negotiation: >-
+    The daemon announces the protocol it speaks in `protocol`, at `enrol` and at every `poll`. The door answers
+    the window it serves, `protocol.current` and `protocol.minimum`, in the answer of both. A daemon below the
+    minimum gets a 426 `protocol_unsupported` whose problem carries the same window, and no assignment: it stops
+    polling and says so; nobody upgrades it for its operator (ADR 0147 §9). No verb makes a daemon download or
+    run anything.
+  later_kinds: >-
+    A call's `kind` is `call_tool` or `list_tools` in protocol 1. A kind added later does not break a daemon of
+    this protocol: it refuses the call with the refusal code `unsupported_kind`.
+  capabilities: >-
+    A daemon of protocol 1 announces `tools` and nothing else. `runs` is reserved (ADR 0149 §12): no message of
+    this protocol carries it.
+
+x-request-signature:
+  whose: >-
+    The instance's. Every request an outpost sends is signed with the Ed25519 key it enrolled (ADR 0148 §4).
+    It is not the call's signature (`x-call-signature`), which is the door's.
+  header: Outpost-Signature
+  format: >-
+    A compact JWS (RFC 7515). Protected header: `alg` `EdDSA` (Ed25519), `typ` `choregos-outpost+jwt`, and `kid`,
+    the instance's id as `enrol` answered it. The enrolment's own signature carries no `kid`: it is made with
+    the key being enrolled, read from the body's `signing_key`, and proves the enroller holds it.
+  algorithm: EdDSA
+  type: choregos-outpost+jwt
+  claims:
+    htm: The request's method, in capitals.
+    htu: >-
+      The request's URL without query or fragment: the policy file's `control_plane` followed by the verb's path.
+      The door compares it with its own public URL, scheme and host in lower case, a default port left out.
+    body_sha256: The SHA-256 of the body exactly as sent, lowercase hex.
+    iat: >-
+      When the signature was made, in seconds. Refused when it is more than 60 seconds from the door's clock,
+      either way; that refusal, like every problem, carries `server_time`.
+    nonce: >-
+      The last value the door sent in `Outpost-Nonce`. Not in the enrolment's signature. The door issues it
+      without storing anything (an authenticated timestamp it checks alone, RFC 9449 §8) and takes it for 300
+      seconds. It proves freshness; it is not single use.
+    seq: >-
+      A whole number, from 1 to 2^53 - 1, that the instance raises with every request it signs. Not in the
+      enrolment's signature. The door keeps the last one it took on the instance's row and refuses a request
+      whose `seq` is not above it, at whichever replica it arrives. Gaps are allowed. A request the door refused
+      before this check took no sequence; the daemon signs it again under a higher one. Two requests sent at
+      once may arrive out of order: the higher sequence wins and the other is signed again.
+  enrolment_claims: [htm, htu, body_sha256, iat]
+  session_claims: [htm, htu, body_sha256, iat, nonce, seq]
+  nonce_header: Outpost-Nonce
+  nonce: >-
+    Every answer of the door may carry a fresh `Outpost-Nonce`, and a 401 `stale_nonce` always does. A daemon
+    keeps the last one it received and signs its next request with it. Its first signed request has none: it
+    is refused `stale_nonce`, and the daemon signs again with the nonce that refusal carries.
+  server_time: >-
+    The door's clock comes back in `server_time`: in the answers of `enrol` and `poll`, and in every problem.
+    It tells a daemon its own clock drifts; it is not signed, and a daemon decides nothing on it that the
+    path could turn to its advantage (`x-call-signature`, `not_signed`).
+  checks: >-
+    A request that fails several checks is answered for the first that fails, in this order: the body's size
+    (413, before anything is parsed); the signature (401 `invalid_signature`: absent, malformed, made by a key
+    the door does not know, or not verifying; the door does not say which); what it binds (401
+    `request_mismatch`); `iat` (401 `stale_iat`); the nonce (401 `stale_nonce`); the sequence (401
+    `replayed_sequence`), which the row takes from then on; the instance (403 `instance_pending`,
+    `instance_revoked`); the rate (429); the protocol (426), read from the body before the rest of it is
+    judged, so that a daemon too old for the body's present shape is told so; the body against its schema
+    (422); then what the verb itself refuses. At `enrol` there is no nonce, sequence or instance: a body in
+    which no `signing_key` can be read is a 422 before the signature is looked at, the token is checked where
+    the instance would be (401 `invalid_enrolment_token`, 409 `key_already_enrolled`), and a refused
+    enrolment does not use the token up.
+
+x-call-signature:
+  whose: >-
+    The door's. Sealing hides a call and says nothing of who sealed it; this signature does. Every call the
+    door hands over carries it in `signature`, beside `id` and `sealed`, and an outpost makes only calls
+    signed by a key its own policy file pins (`door_keys`, ADR 0148 §13). It is not the request's signature
+    (`x-request-signature`), which is the instance's.
+  format: >-
+    A compact JWS (RFC 7515). Protected header, these three members and no other: `alg` `EdDSA` (Ed25519),
+    `typ` `choregos-outpost-call+jwt`, and `kid`, the signing public key itself, written as every key of this
+    contract is: the unpadded base64url of its 32 raw bytes, 43 characters. No key travels with a call beyond
+    that name: the daemon verifies under the key it pinned.
+  algorithm: EdDSA
+  type: choregos-outpost-call+jwt
+  claims:
+    call: The call's id.
+    instance: The id of the instance that claimed the call. A call handed to one instance is not another's.
+    sealed_sha256: The SHA-256 of the `sealed` string exactly as carried (its ASCII bytes), lowercase hex.
+  claim_names: [call, instance, sealed_sha256]
+  freshness: >-
+    There is no `iat`. A call is as fresh as the `deadline` inside its envelope, which `sealed_sha256` covers.
+  keys: >-
+    The door holds one signing key, and the next one during a rotation. The pinned set lives in the outpost's
+    policy file and nowhere else: `door_keys`, 1 to 4 distinct keys. Nothing the door sends, at enrolment or
+    later, adds a key to it or changes it: there is no trust on first use, because the enrolment's answer
+    crosses the same path as a call. A policy file without `door_keys` is not valid, and a daemon without a
+    valid policy does not start: an outpost that cannot check who orders it does not serve. The keys to pin
+    are shown where a person creates the outpost and its enrolment token (`door_keys` in the management API),
+    never in an answer of this door.
+  checks: >-
+    A call whose id the daemon's journal already holds gets what the journal holds (`x-bounds`, `delivery`).
+    For any other, before it opens the envelope and in this order: the header is the one above and its `kid`
+    is one of the pinned keys, compared as written; the signature verifies under that key; `call` is the
+    envelope's `id`; `instance` is the daemon's own id; `sealed_sha256` is the digest of `sealed`; the claims
+    are these three and no other. If one fails, the daemon does not open the envelope and does not call its
+    server: it writes a line to its audit log and refuses the call with `signature_refused`, a code that
+    names the class and never which check failed. A call that carries no `signature` is refused the same way.
+  refusal: >-
+    A forged call's refusal meets a 404 at the door, which is harmless. A real call refused this way is how
+    the platform learns that an outpost does not pin the key in service.
+  rotation: >-
+    An overlap the outpost's operator takes part in. The platform shows the next key; operators add it to
+    `door_keys`; only then does the door sign with it, and operators drop the former key afterwards. An
+    outpost that did not add it refuses with `signature_refused`, visibly. No message of this protocol
+    rotates a pinned key.
+  not_signed: >-
+    Only a call is signed. The rest of a poll's answer (`stop`, `cancel`, `protocol`, `server_time`), the
+    enrolment's answer, the `Outpost-Nonce` header and every problem are not. Whoever sits on the path, an
+    outbound proxy that terminates TLS for one, can therefore stop, starve or mislead a daemon about versions
+    and time, as it can by dropping packets. It cannot make it call anything, nor read an answer. Two rules
+    keep that true: a daemon judges a call's `deadline` by its own clock, which `server_time` may bring
+    closer and never push away; and it prints the fingerprint of its own signing key, never the one the
+    enrolment's answer echoes.
+
+x-sealing:
+  construction: >-
+    `seal` and `open_sealed` of `choregos_adapters.sealing`, as they are, with the call's id where a run's id
+    is today (ADR 0148 §5).
+  key_agreement: X25519, between a key pair the sender makes for this one envelope and the recipient's public key.
+  key_derivation: >-
+    HKDF-SHA256 over the shared secret, 32 bytes out; salt: the ephemeral public key followed by the
+    recipient's public key (64 bytes); info: `choregos/assignment/v1`.
+  info: choregos/assignment/v1
+  cipher: ChaCha20-Poly1305, with a random 12-byte nonce.
+  associated_data: The call's id, UTF-8. An envelope moved to another call does not open.
+  plaintext: One JSON object, UTF-8.
+  encoding: >-
+    base64url without padding of: the ephemeral public key (32 bytes), the nonce (12 bytes), the ciphertext
+    and its tag.
+  call: >-
+    A call is sealed to the X25519 key the claiming instance enrolled (`sealing_key`), when it is claimed. Its
+    plaintext is `schemas/outpost-call.schema.json`. What a proxy that terminates TLS reads of it is its id,
+    its size and its timing.
+  answer: >-
+    An answer is sealed to the `answer_key` found inside the call it answers, never to a key read from a field
+    a proxy could rewrite. Its plaintext is `schemas/outpost-answer.schema.json`. A refusal is not sealed: it
+    is a code.
+  origin: >-
+    Sealing hides a call from whoever is not its recipient. Alone it proves no origin: anyone who knows a
+    public key can seal to it. What proves a call is the door's is the door's signature (`x-call-signature`),
+    and an envelope is opened only once that signature is verified under a pinned key. What proves an answer
+    is the instance's is the signature of the request that carries it (`x-request-signature`).
+
+x-bounds:
+  max_wait_s: 25
+  max_lease_s: 300
+  iat_window_s: 60
+  nonce_ttl_s: 300
+  enrolment_ttl_s: 900
+  max_concurrency: 64
+  max_door_keys: 4
+  max_body_bytes: { enrol: 16384, poll: 65536, answer: 2097152, refuse: 4096 }
+  wait: >-
+    A poll is answered within `wait_s` seconds, 25 at most, sooner when the door has something to hand over,
+    and a little sooner than asked with nothing (jitter). The daemon polls again at once. One poll per
+    instance at a time.
+  lease: >-
+    A call is leased to the instance that claims it, until the `deadline` inside its envelope: 300 seconds
+    after the claim at most. The lease is the door's: nothing a daemon sends extends it. An answer or a
+    refusal is taken from the claiming instance only, under the outpost's epoch of the claim, before the
+    deadline, once.
+  delivery: >-
+    A read whose lease ended without an answer may be handed over again; a claimed write is never handed over
+    again, to any instance (ADR 0149 §5). On the outpost's side there is one decision per call id. The first
+    thing an instance decides for an id, to make the call or to refuse it, is written to its journal and
+    stands for every later envelope under that id, whoever sent it: a call under way or done is answered
+    from the journal and its server is not called again (a write begun and left without an answer is
+    reported `unanswered`), and an id that was refused is refused again with the same code. Once it has
+    accepted a call, a daemon sends no refusal for a copy of it that does not verify. The journal keeps an
+    id at least until the call's deadline has passed, 300 seconds when the envelope was not opened, and a
+    write's for as long as the journal lives. A call whose deadline is behind is refused `deadline_passed`.
+    So a signed call replayed to the same instance by whoever sits on the path reaches no server: it meets
+    the journal before its deadline, and `deadline_passed` after it. A read's entry no longer counts once
+    its deadline has passed: handed over again with a later deadline, the read is made again.
+
+x-vectors:
+  description: >-
+    What a door and a daemon are both built against: signed requests of one instance; the envelope of a call
+    and of its answer, with the door's signature of that call; nothing left to chance. Their keys are derived
+    from labels written in the files: test material, derivable by anyone, never a key in service. The door's
+    key of the second file is the one the policy example pins.
+  request_signature: ./schemas/examples/outpost-signature.vector.json
+  sealing: ./schemas/examples/outpost-sealing.vector.json
+
+security:
+  - outpostSignature: []
+
+paths:
+  /outposts/v1/enrol:
+    post:
+      operationId: enrolOutpostInstance
+      summary: Enrol an instance with a one-time token; it is born pending
+      description: >-
+        Carries an enrolment token (bound to one outpost, single use, valid 15 minutes at most), the public
+        halves of the instance's Ed25519 signing key and X25519 sealing key, and bounded facts about it. The
+        request is signed with the key it enrols. The instance is born `pending` and is handed nothing: a
+        person approves it in the console by comparing the fingerprint shown there with the one the daemon
+        printed (ADR 0147 §4). Until then its polls answer 403 `instance_pending`. A token enrols one
+        instance, once. A signing key that is already a pending instance of the token's outpost is that
+        instance again, under the new token: a daemon whose first answer was lost enrols again and keeps its
+        keys. A key that was ever approved or revoked, or that is pending at another outpost, is a 409
+        `key_already_enrolled`: a revoked key does not come back.
+      x-max-body-bytes: 16384
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "./schemas/outpost-enrolment-request.schema.json" }
+            examples:
+              enrolment: { externalValue: "./schemas/examples/outpost-enrolment-request.example.json" }
+      responses:
+        "201":
+          description: A pending instance, and the fingerprint to compare
+          headers: { Outpost-Nonce: { $ref: "#/components/headers/OutpostNonce" } }
+          content:
+            application/json:
+              schema: { $ref: "./schemas/outpost-enrolment-answer.schema.json" }
+              examples:
+                pending: { externalValue: "./schemas/examples/outpost-enrolment-answer.example.json" }
+        "401":
+          description: The signature or the enrolment token is refused
+          x-codes: [invalid_signature, request_mismatch, stale_iat, invalid_enrolment_token]
+          content: { application/problem+json: { schema: { $ref: "#/components/schemas/DoorProblem" } } }
+        "409":
+          description: This signing key is already an approved or revoked instance, or pending elsewhere
+          x-codes: [key_already_enrolled]
+          content: { application/problem+json: { schema: { $ref: "#/components/schemas/DoorProblem" } } }
+        "413": { $ref: "#/components/responses/BodyTooLarge" }
+        "422": { $ref: "#/components/responses/InvalidRequest" }
+        "426": { $ref: "#/components/responses/ProtocolUnsupported" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /outposts/v1/poll:
+    post:
+      operationId: pollOutpostCalls
+      summary: Wait for calls to make; learn the cancellations, the door's time and the protocol window
+      description: >-
+        The one connection an instance holds: every lane is in its answer. The door answers as soon as it
+        has a call to hand over or a cancellation to tell, and with nothing at the end of the wait. It hands
+        over at most `capacity` calls, each sealed to this instance, signed by the door and claimed by this
+        instance from that moment. Nothing else of the answer is signed (`x-call-signature`, `not_signed`). A
+        paused outpost is handed nothing and reads `stop: true`; what its instances hold may finish. A second
+        poll while one waits under the same key is a 409 `poll_conflict`: two holders of one key is what a
+        stolen key looks like.
+      x-max-body-bytes: 65536
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PollRequest" }
+            examples:
+              poll: { externalValue: "./schemas/examples/outpost-poll-request.example.json" }
+      responses:
+        "200":
+          description: The calls to make and the cancellations, or nothing
+          headers: { Outpost-Nonce: { $ref: "#/components/headers/OutpostNonce" } }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PollAnswer" }
+              examples:
+                a-call: { externalValue: "./schemas/examples/outpost-poll-answer.example.json" }
+        "401": { $ref: "#/components/responses/NotAuthenticated" }
+        "403": { $ref: "#/components/responses/InstanceNotActive" }
+        "409":
+          description: Another poll is waiting under this instance's key
+          x-codes: [poll_conflict]
+          headers: { Outpost-Nonce: { $ref: "#/components/headers/OutpostNonce" } }
+          content: { application/problem+json: { schema: { $ref: "#/components/schemas/DoorProblem" } } }
+        "413": { $ref: "#/components/responses/BodyTooLarge" }
+        "422": { $ref: "#/components/responses/InvalidRequest" }
+        "426": { $ref: "#/components/responses/ProtocolUnsupported" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /outposts/v1/calls/{id}/answer:
+    parameters: [{ $ref: "#/components/parameters/CallId" }]
+    post:
+      operationId: answerOutpostCall
+      summary: Answer a call the instance claimed; sealed, bounded, recorded once
+      description: >-
+        The body is the answer sealed to the call's `answer_key`. It is taken from the instance that claimed
+        the call, under the epoch of the claim, before the call's deadline, and recorded once: the same
+        instance sending again under the same epoch reads what was recorded, whatever it sends. The door
+        does not need to open an answer to record it. A call that is not this outpost's is a 404, never a 403.
+      x-max-body-bytes: 2097152
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SealedAnswer" }
+            examples:
+              answer: { externalValue: "./schemas/examples/outpost-sealed-answer.example.json" }
+      responses:
+        "200": { $ref: "#/components/responses/Recorded" }
+        "401": { $ref: "#/components/responses/NotAuthenticated" }
+        "403": { $ref: "#/components/responses/InstanceNotActive" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/LeaseLost" }
+        "413": { $ref: "#/components/responses/BodyTooLarge" }
+        "422": { $ref: "#/components/responses/InvalidRequest" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+  /outposts/v1/calls/{id}/refuse:
+    parameters: [{ $ref: "#/components/parameters/CallId" }]
+    post:
+      operationId: refuseOutpostCall
+      summary: Refuse a call the instance claimed, with a code from a closed list; recorded once
+      description: >-
+        The outpost's own policy refused the call, no key it pins signed it, or the outpost could not start
+        it: its server received nothing. The body is a code and nothing else; it names a class of refusal
+        and never the rule (ADR 0147 §10). Taken and recorded as an answer is.
+      x-max-body-bytes: 4096
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "./schemas/outpost-refusal.schema.json" }
+            examples:
+              refusal: { externalValue: "./schemas/examples/outpost-refusal.example.json" }
+      responses:
+        "200": { $ref: "#/components/responses/Recorded" }
+        "401": { $ref: "#/components/responses/NotAuthenticated" }
+        "403": { $ref: "#/components/responses/InstanceNotActive" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/LeaseLost" }
+        "413": { $ref: "#/components/responses/BodyTooLarge" }
+        "422": { $ref: "#/components/responses/InvalidRequest" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+
+components:
+  securitySchemes:
+    outpostSignature:
+      type: apiKey
+      in: header
+      name: Outpost-Signature
+      description: >-
+        A compact JWS signed with the instance's Ed25519 key (`x-request-signature`). It binds the method, the URL, a
+        digest of the body, `iat`, the nonce the door issued and the instance's sequence. It is the only thing
+        this door reads: no session, no API token and no OAuth token opens it, and it opens no other door.
+  parameters:
+    CallId:
+      name: id
+      in: path
+      required: true
+      description: The call's id, as the poll handed it over
+      schema: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$" }
+  headers:
+    OutpostNonce:
+      description: The nonce to sign the next request with; the daemon keeps the last one it received
+      schema: { type: string, minLength: 1, maxLength: 256 }
+  responses:
+    Recorded:
+      description: What the door recorded for the call
+      headers: { Outpost-Nonce: { $ref: "#/components/headers/OutpostNonce" } }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/CallAck" }
+          examples:
+            recorded: { externalValue: "./schemas/examples/outpost-call-ack.example.json" }
+    NotAuthenticated:
+      description: The signature is refused; a `stale_nonce` carries a fresh nonce, every code the door's time
+      x-codes: [invalid_signature, request_mismatch, stale_iat, stale_nonce, replayed_sequence]
+      headers: { Outpost-Nonce: { $ref: "#/components/headers/OutpostNonce" } }
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/DoorProblem" }
+          examples:
+            stale-iat: { externalValue: "./schemas/examples/outpost-door-problem.example.json" }
+    InstanceNotActive:
+      description: The instance is not approved yet, or it was revoked, or its outpost was
+      x-codes: [instance_pending, instance_revoked]
+      headers: { Outpost-Nonce: { $ref: "#/components/headers/OutpostNonce" } }
+      content: { application/problem+json: { schema: { $ref: "#/components/schemas/DoorProblem" } } }
+    NotFound:
+      description: No such call for this outpost; another outpost's call answers the same
+      x-codes: [not_found]
+      headers: { Outpost-Nonce: { $ref: "#/components/headers/OutpostNonce" } }
+      content: { application/problem+json: { schema: { $ref: "#/components/schemas/DoorProblem" } } }
+    LeaseLost:
+      description: The call is not leased to this instance any more
+      x-codes: [lease_lost]
+      headers: { Outpost-Nonce: { $ref: "#/components/headers/OutpostNonce" } }
+      content: { application/problem+json: { schema: { $ref: "#/components/schemas/DoorProblem" } } }
+    BodyTooLarge:
+      description: The body is above the verb's cap (`x-max-body-bytes`); refused before it is parsed
+      x-codes: [body_too_large]
+      content: { application/problem+json: { schema: { $ref: "#/components/schemas/DoorProblem" } } }
+    InvalidRequest:
+      description: The body is not what the verb's schema describes
+      x-codes: [invalid_request]
+      content: { application/problem+json: { schema: { $ref: "#/components/schemas/DoorProblem" } } }
+    ProtocolUnsupported:
+      description: The daemon's protocol is below the door's minimum; the problem names the window
+      x-codes: [protocol_unsupported]
+      headers:
+        Upgrade:
+          description: >-
+            `choregos-outpost/<minimum>`, as RFC 9110 asks of a 426. A proxy may drop it: the problem's
+            `protocol` is what a daemon reads.
+          schema: { type: string, pattern: "^choregos-outpost/[0-9]+$" }
+      content:
+        application/problem+json:
+          schema: { $ref: "#/components/schemas/DoorProblem" }
+          examples:
+            below-the-minimum: { externalValue: "./schemas/examples/outpost-door-problem.protocol.example.json" }
+    RateLimited:
+      description: Too many requests from this instance; `retry_after` says when to come back
+      x-codes: [rate_limited]
+      content: { application/problem+json: { schema: { $ref: "#/components/schemas/DoorProblem" } } }
+  schemas:
+    ProtocolWindow:
+      type: object
+      description: The protocol versions the door serves. A daemon below `minimum` is refused.
+      required: [current, minimum]
+      properties:
+        current: { type: integer, minimum: 1 }
+        minimum: { type: integer, minimum: 1 }
+    PollRequest:
+      type: object
+      additionalProperties: false
+      description: How long the instance waits, what it can take and what it holds. Its sequence is in its signature.
+      required: [protocol, daemon_version, capacity, capabilities]
+      properties:
+        protocol: { type: integer, minimum: 1, description: "The protocol the daemon speaks: 1 for this contract" }
+        daemon_version: { type: string, pattern: "^[0-9A-Za-z][0-9A-Za-z.+-]{0,63}$", description: "The daemon's own release, as a fact to show" }
+        wait_s: { type: integer, minimum: 0, maximum: 25, default: 25, description: "How long the poll may wait; 0 answers at once" }
+        capacity: { type: integer, minimum: 0, maximum: 64, description: "How many more calls the instance can take now; the door hands over no more, and none at 0" }
+        capabilities: { type: array, maxItems: 4, items: { enum: [tools] }, description: "What the instance can do; an outpost is used only for what its instances announce and its organisation enabled" }
+        endpoints: { type: array, maxItems: 64, default: [], items: { type: string, pattern: "^[a-z][a-z0-9-]{0,62}$" }, description: "The aliases its policy file serves: names only, never an address (ADR 0147 §7)" }
+        running: { type: array, maxItems: 256, default: [], items: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$" }, description: "The calls it holds and has not answered" }
+    SealedCall:
+      type: object
+      description: >-
+        A call as it crosses the door. Everything but its id is sealed to the claiming instance (`x-sealing`),
+        and the door signs the id, the instance and the envelope together (`x-call-signature`).
+      required: [id, sealed, signature]
+      properties:
+        id: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$", description: "The call's id: the associated data of the envelope, and the `{id}` of its answer" }
+        sealed:
+          type: string
+          pattern: "^[A-Za-z0-9_-]{80,}$"
+          description: The envelope; once open, `schemas/outpost-call.schema.json`
+          x-sealed-to: the claiming instance's `sealing_key`
+          x-plaintext: { $ref: "./schemas/outpost-call.schema.json" }
+        signature:
+          type: string
+          maxLength: 2048
+          pattern: "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]{86}$"
+          description: >-
+            The door's signature of this call (`x-call-signature`): a compact JWS under a key the outpost's
+            policy file pins. A daemon verifies it before it opens `sealed`, and opens nothing it cannot verify
+          x-signed-by: the door, with a key of the outpost's `door_keys`
+    PollAnswer:
+      type: object
+      description: >-
+        The door's answer to a poll. A daemon ignores a field it does not know. Each call is signed by the
+        door; nothing else here is, so nothing else here can make a daemon call anything.
+      required: [protocol, server_time, stop, calls, cancel]
+      properties:
+        protocol: { $ref: "#/components/schemas/ProtocolWindow" }
+        server_time: { type: string, format: date-time }
+        stop: { type: boolean, description: "The outpost is paused: nothing is handed over until it is resumed; what the instance holds may finish, and it keeps polling" }
+        calls: { type: array, items: { $ref: "#/components/schemas/SealedCall" }, description: "Claimed by this instance from this answer on; at most `capacity`" }
+        cancel: { type: array, items: { type: string }, description: "Calls among `running` the door waits for no more: an answer to one would be a 409 `lease_lost`" }
+    SealedAnswer:
+      type: object
+      additionalProperties: false
+      description: An answer as it crosses the door, sealed to the `answer_key` of the call it answers (`x-sealing`).
+      required: [sealed]
+      properties:
+        sealed:
+          type: string
+          pattern: "^[A-Za-z0-9_-]{80,}$"
+          description: The envelope; once open, `schemas/outpost-answer.schema.json`
+          x-sealed-to: the call's `answer_key`
+          x-plaintext: { $ref: "./schemas/outpost-answer.schema.json" }
+    CallAck:
+      type: object
+      description: What the door recorded for a call. The first of an answer and a refusal wins.
+      required: [id, recorded]
+      properties:
+        id: { type: string }
+        recorded: { enum: [answer, refusal] }
+    DoorProblem:
+      type: object
+      description: >-
+        A problem of the door (RFC 9457) with its `code`. `type`, `title`, `status`, `detail`, `instance`,
+        `errors` and `retry_after` are the members the API puts on any problem.
+      required: [type, title, status, code, server_time]
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              loc: { type: array, items: { type: string } }
+              msg: { type: string }
+        retry_after: { type: integer, minimum: 0, description: "Seconds before the daemon comes back (`rate_limited`, `poll_conflict`)" }
+        code:
+          enum:
+            - invalid_request
+            - body_too_large
+            - invalid_signature
+            - request_mismatch
+            - stale_iat
+            - stale_nonce
+            - replayed_sequence
+            - invalid_enrolment_token
+            - key_already_enrolled
+            - instance_pending
+            - instance_revoked
+            - protocol_unsupported
+            - rate_limited
+            - poll_conflict
+            - not_found
+            - lease_lost
+          description: >-
+            `invalid_request` (422): the body is not what the verb's schema describes. `body_too_large` (413).
+            `invalid_signature` (401): no signature, one that does not verify, or a key the door does not know.
+            `request_mismatch` (401): the signature binds another method, URL or body. `stale_iat` (401).
+            `stale_nonce` (401): the nonce is absent or too old, and the answer carries a fresh one.
+            `replayed_sequence` (401). `invalid_enrolment_token` (401): unknown, already used or expired; the
+            door does not say which. `key_already_enrolled` (409): the signing key is already an approved or
+            revoked instance, or pending at another outpost. `instance_pending` (403): nobody approved
+            the instance yet. `instance_revoked` (403): the instance or its outpost was revoked; the daemon
+            stops. `protocol_unsupported` (426). `rate_limited` (429). `poll_conflict` (409). `not_found`
+            (404). `lease_lost` (409): the lease ended or the outpost's epoch moved; the daemon drops the call.
+        server_time: { type: string, format: date-time, description: "The door's clock: a daemon whose own drifts learns it from any refusal" }
+        protocol: { $ref: "#/components/schemas/ProtocolWindow" }

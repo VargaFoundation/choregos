@@ -121,7 +121,9 @@ promises about it. Read on `main` at `9f646fda4`:
    - **The daemon keeps a persisted journal of call ids.** It records a write's id on disk before it
      executes it, and the answer after. An id it has seen is answered from the journal, never executed
      again; a daemon restarted in the middle of a write finds the id without an answer and reports
-     exactly that.
+     exactly that. The journal holds the id of every call, a read's too, at least until the call's
+     deadline, and the first thing the outpost decided for it (to make it or to refuse it): that is what
+     makes a call replayed on the path harmless (ADR 0148 §13).
 6. **Refused when the write is opened** (ADR 0101). A write operation of an `mcp-outpost` connector
    cannot be set to `allowed` or `approval` unless its rule says one of two things: that the operation
    takes the platform's idempotency key, or that an in-doubt outcome is accepted for it, explicitly.

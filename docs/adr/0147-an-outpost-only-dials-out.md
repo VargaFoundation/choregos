@@ -91,6 +91,8 @@ Two things have to be separated before deciding.
    (ADR 0148): nothing in flight from a revoked instance is taken.
 6. **What an outpost protects against, and what it does not.** An outpost checks only what it can verify
    alone, from a policy file the control plane cannot write:
+   - who signed the call: the door's keys the file pins (ADR 0148 §13). A call signed by no key of that
+     list is not made, and nothing the door sends adds a key to it;
    - its endpoints: an alias maps to a URL and a credential that exist in that file only;
    - `writes: deny | allow` per endpoint, `deny` by default. Whether a tool writes is read by the outpost
      from its own server (the `readOnlyHint` the platform's discovery also reads,
@@ -105,6 +107,7 @@ Two things have to be separated before deciding.
 
    ```yaml
    control_plane: https://outposts.example.com
+   door_keys: ["3k9fZti-P3Z9Du9RmNmJm-pNxgUQSHfGN_bx7DmXwNw"]   # the only keys whose calls it makes
    endpoints:
      tracker:
        url: http://tracker-mcp.tools.svc:8080/mcp     # known to the outpost only
