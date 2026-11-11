@@ -47,6 +47,7 @@ from choregos_core import (
 )
 from choregos_core.memory_bindings import merge_context_packs
 from choregos_core.redaction import REDACTED
+from choregos_core.run_journal import MEMORY_SKIPPED
 from choregos_core.workspace import write_paths_for
 from temporalio import activity
 
@@ -612,7 +613,7 @@ async def _journal_skipped_memories(session: Any, run_id: str, skipped: list[dic
 
     rows = (
         await session.execute(
-            select(RunEvent.payload).where(RunEvent.run_id == run_id, RunEvent.type == "memory.skipped")
+            select(RunEvent.payload).where(RunEvent.run_id == run_id, RunEvent.type == MEMORY_SKIPPED)
         )
     ).scalars()
     already = {str(payload.get("memory")) for payload in rows}
@@ -623,7 +624,7 @@ async def _journal_skipped_memories(session: Any, run_id: str, skipped: list[dic
         if entry["memory"] in already:
             continue
         seq += 1
-        session.add(RunEvent(run_id=run_id, seq=seq, type="memory.skipped", payload=dict(entry), ts=utcnow()))
+        session.add(RunEvent(run_id=run_id, seq=seq, type=MEMORY_SKIPPED, payload=dict(entry), ts=utcnow()))
 
 
 async def _context_pack(

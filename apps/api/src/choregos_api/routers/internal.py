@@ -28,6 +28,7 @@ from choregos_contracts import (
 )
 from choregos_core import PolicyEngine, matches_any, telemetry, utcnow
 from choregos_core.run_closure import run_is_closed
+from choregos_core.run_journal import platform_written
 from choregos_core.workspace import is_read_only_scope
 from fastapi import APIRouter, Header, Query, Request, Response, status
 from sqlalchemy import select
@@ -139,8 +140,21 @@ async def post_events(id: str, body: RunEventsBatch, session: Db, claims: RunAut
     """ACP log in a batch, idempotent by `seq` (a replay does not write twice).
 
     Accepted for a closed run too (ADR 0143): the journal is append-only, and what a process did
-    after its run ended is exactly what an operator wants to read."""
+    after its run ended is exactly what an operator wants to read.
+
+    A run writes its own lines, never the platform's (ADR 0154): a batch that carries a type the
+    platform writes in this journal (`gate.outcome`, `memory.skipped`, their namespaces) is refused
+    whole, and nothing of it is written. No runner sends one; the refusal is logged."""
     run, _, project = await _run_and_item(session, id)
+    reserved = sorted({event.type for event in body.events if platform_written(event.type)})
+    if reserved:
+        logger.warning(
+            "run_journal.platform_event_refused", run_id=run.id, project=project.slug, types=reserved[:8]
+        )
+        raise unprocessable(
+            "a run does not write the platform's lines of its journal: "
+            + ", ".join(f"`{name}`" for name in reserved[:8])
+        )
     known = set(
         (await session.execute(select(RunEvent.seq).where(RunEvent.run_id == run.id))).scalars().all()
     )

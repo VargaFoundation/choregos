@@ -13,6 +13,7 @@ from choregos_contracts import StageResult
 from choregos_core import GateContext, GateOutcome, evaluate, is_async_gate, matches_any, scan_secrets
 from choregos_core.domain import DiffSummary, PrRef
 from choregos_core.gates import ADR_PATTERN, ALREADY_FIXED_GATE, DIFF_GATES, unchanged_run
+from choregos_core.run_journal import GATE_OUTCOME
 from temporalio import activity
 
 from .base import db, load_work_item, project_bundle, scm_for
@@ -337,7 +338,7 @@ async def _journal(session: Any, run: Run, outcomes: list[GateOutcome], head: st
             RunEvent(
                 run_id=run.id,
                 seq=seq,
-                type="gate.outcome",
+                type=GATE_OUTCOME,
                 payload={
                     "name": outcome.name,
                     "passed": outcome.passed,
