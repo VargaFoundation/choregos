@@ -641,3 +641,66 @@ async def test_upgrading_to_the_installed_version_installs_the_agents_the_organi
         assert "greeter" in row.contents["agents"]
     audit = (await client.get("/api/v1/audit")).json()["items"]
     assert [a["payload"]["added"]["agents"] for a in audit if a["action"] == "plugin.repair"] == [["greeter"]]
+
+
+async def _hand_knowledge(slug: str, **changes: Any) -> None:
+    """The organisation publishes its next version: the latest spec plus its own knowledge base."""
+    from choregos_api.db.models import Agent, AgentVersion
+    from choregos_api.db.session import session_scope
+    from choregos_api.schemas import AgentSpec
+    from choregos_api.services.agents import digest
+
+    async with session_scope() as session:
+        agent = (await session.execute(select(Agent).where(Agent.slug == slug))).scalar_one()
+        last = (
+            (
+                await session.execute(
+                    select(AgentVersion)
+                    .where(AgentVersion.agent_id == agent.id)
+                    .order_by(AgentVersion.version.desc())
+                )
+            )
+            .scalars()
+            .first()
+        )
+        assert last is not None
+        spec = AgentSpec.model_validate({**last.spec, "knowledge": [{"slug": "our-engineering"}], **changes})
+        session.add(
+            AgentVersion(
+                agent_id=agent.id,
+                org_id=agent.org_id,
+                version=last.version + 1,
+                spec=spec.model_dump(mode="json"),
+                checksum=digest(spec),
+                created_by="alice@varga.dev",
+            )
+        )
+        await session.commit()
+
+
+async def test_a_plugin_upgrade_keeps_the_knowledge_the_organisation_added(
+    client: AsyncClient, admin: str, offline: Path
+) -> None:
+    await _install(client)
+    await _hand_knowledge("greeter")
+    upgraded = await client.post(f"{ORG}/plugins/hello/upgrade", json={"version": "1.1.0"})
+    assert upgraded.status_code == 200, upgraded.text
+    assert upgraded.json()["offered"] == []
+    agent = (await client.get(f"{ORG}/agents/greeter")).json()
+    latest = agent["versions"][0]
+    assert latest["version"] == 3 and latest["created_by"] == "plugin:hello/greeter@2"
+    assert [k["slug"] for k in latest["spec"]["knowledge"]] == ["our-engineering"]
+    assert "Greet the author" in latest["spec"]["instructions"]
+    assert "knowledge kept: our-engineering" in latest["message"]
+    assert (await client.post(f"{ORG}/plugins/hello/upgrade")).status_code == 200
+    assert len(await _versions("greeter")) == 3, "the kept knowledge is not republished, nor lost"
+
+
+async def test_a_plugin_upgrade_still_offers_an_agent_changed_beyond_its_knowledge(
+    client: AsyncClient, admin: str, offline: Path
+) -> None:
+    await _install(client)
+    await _hand_knowledge("greeter", instructions="Our own greeting.")
+    upgraded = await client.post(f"{ORG}/plugins/hello/upgrade", json={"version": "1.1.0"})
+    assert upgraded.json()["offered"] == ["greeter"]
+    assert [v for v, _ in await _versions("greeter")] == [1, 2]
