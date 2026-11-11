@@ -1,6 +1,6 @@
 # 0140 — Conversation evals and user feedback
 
-- **Status**: proposed, 2026-11-10
+- **Status**: accepted, 2026-11-11 (product owner's review of the same day; proposed 2026-11-10)
 - **Concerns**: `packages/contracts/schemas/plugin-evals.schema.json` (a conversation suite), the eval runner,
   the promotion gate of channels, a feedback route on a conversation's answer; amends
   [ADR 0071](0071-an-agent-version-reaches-production-through-channels.md); builds on

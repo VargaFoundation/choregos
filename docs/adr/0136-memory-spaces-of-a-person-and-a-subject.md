@@ -1,6 +1,6 @@
 # 0136 — Memory spaces with user and subject scopes; a subject opens only once a resolver vouched for it
 
-- **Status**: proposed, 2026-11-10
+- **Status**: accepted, 2026-11-11 (product owner's review of the same day; proposed 2026-11-10)
 - **Concerns**: `memory_stores` (`scope`, new columns), `memory_facts`, a new table `memory_profiles`,
   `choregos_core.memory_scope`, `services/memory_access.py`, the memory tools of a conversation, the
   routes `/me/assistants/{org}/{slug}/memory/*`; amends [ADR 0075](0075-an-agent-reads-several-memories.md);
