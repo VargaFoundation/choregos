@@ -3,6 +3,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
+import { DocsProvider } from "@/components/docs-link";
 import { EgressProvider } from "@/components/egress/egress-provider";
 import { SessionProvider } from "@/lib/session";
 import { ThemeProvider } from "@/lib/theme";
@@ -20,7 +21,9 @@ export function Providers({ children }: { children: ReactNode }) {
     <ThemeProvider>
       <QueryClientProvider client={client}>
         <SessionProvider>
-          <EgressProvider>{children}</EgressProvider>
+          <EgressProvider>
+            <DocsProvider>{children}</DocsProvider>
+          </EgressProvider>
         </SessionProvider>
       </QueryClientProvider>
     </ThemeProvider>

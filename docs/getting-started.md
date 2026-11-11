@@ -146,6 +146,20 @@ package fails the creation, like an invalid workflow. Without such a plugin (the
 trial, off unless `CHOREGOS_ONTOLOGY_TRIAL=1`), the project is born without it, and the audit log
 says so (`template.extension.skip`).
 
+### Install the CLI from your instance
+
+Your instance serves the `choregos` CLI in the version it runs, from the console's host; the console
+shows the command for your system under **Integrations › CLI**:
+
+```bash
+curl -fsSL https://choregos.example.com/cli/install.sh | sh     # Linux, macOS: ~/.local/bin/choregos
+irm https://choregos.example.com/cli/install.ps1 | iex          # Windows, in PowerShell
+```
+
+`choregos self update` keeps it in step after an upgrade of the instance; the CLI says so on stderr,
+once a day, when the two versions differ (`CHOREGOS_NO_VERSION_CHECK=1` silences it). See
+[cli.md](cli.md#install-from-your-instance).
+
 ### Create the project
 
 ```bash

@@ -25,6 +25,9 @@ shows how to create one, feed it, keep it current, and decide who uses it.
 - To sync from Confluence or SharePoint: a connector of that kind, declared by an organisation admin
   (see [Connectors](connectors.md)).
 
+An [assistant](assistants.md) reads the knowledge bases its plugin seeded, and cites the documents it
+uses.
+
 ## Knowledge or memory?
 
 | | Knowledge base | Memory |

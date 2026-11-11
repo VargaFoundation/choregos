@@ -21,6 +21,7 @@ hold — never more.
 | What is happening on ABC-12? | `get_work_item` — state, recent timeline, pending decision |
 | What did that agent run do? | `summarize_run` |
 | What waits for me? | `list_pending_decisions` |
+| How does Choregos do X? How do I set up Y? | `docs_search`, then `docs_read` with the slug — the documentation of the version this platform runs |
 
 ## Rules that do not bend
 
