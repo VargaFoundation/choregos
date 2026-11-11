@@ -5,6 +5,7 @@
  * Two modes: `live` (the real API, relayed by Next) and `mock` (local fixtures, so that the front
  * end moves on without the API: `NEXT_PUBLIC_API_MODE=mock`).
  */
+import { type CliManifest, MANIFEST_PATH } from "./cli-download";
 import type {
   Action,
   Agent,
@@ -372,8 +373,22 @@ async function artifactContent(id: string, ref: string): Promise<Blob> {
   return response.blob();
 }
 
+/**
+ * The CLI this instance bundles (S62-08), read at the root (`/downloads/cli/manifest.json`), outside
+ * `/api/v1`: the install scripts and `choregos self update` read the same file. `null` when the build
+ * bundles none (the API's 404), and in the demo, which has no binaries to offer.
+ */
+async function cliManifest(): Promise<CliManifest | null> {
+  if (IS_MOCK) return null;
+  const response = await fetch(MANIFEST_PATH, { cache: "no-store" });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new ApiError(response.status, await problemOf(response));
+  return (await response.json()) as CliManifest;
+}
+
 export const api = {
   me: () => request<MeDto>("/me"),
+  cliManifest,
   /** The running edition (ADR 0024): the console shows what it allows itself. */
   edition: () => request<Edition>("/edition"),
   /** Where to plug an MCP client (ADR 0030): the gate's URL, for the Integrations page. */

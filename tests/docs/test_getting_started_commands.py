@@ -75,6 +75,12 @@ def test_every_command_exists(command: str) -> None:
         path = " ".join(w for w in words[:3] if not w.startswith(("-", "<")) and w.isascii())
         known = _cli_commands() | {"choregos login"}
         assert any(path == c or path.startswith(c + " ") for c in known), f"no CLI command for `{command}`"
+    elif tool in {"curl", "irm"}:
+        # The install of the CLI from the instance (S62-08): a route the API serves at the root.
+        url = next(word for word in words if word.startswith("http"))
+        path = "/" + url.split("://", 1)[1].split("/", 1)[1]
+        routes = (ROOT / "apps" / "api" / "src" / "choregos_api" / "routers" / "cli_downloads.py").read_text()
+        assert f'@router.get("{path}"' in routes, f"the API serves no `{path}`"
     elif tool in {"git", "cd"} or "=" in tool:
         return  # cloning, moving, or a line of `.env`
     else:

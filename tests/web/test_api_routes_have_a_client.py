@@ -48,6 +48,14 @@ MACHINE_ONLY_ROUTES: dict[str, str] = {
     "/a2a/orgs/{org}/.well-known/agent-card.json": "the A2A door's agent card, read by the calling agent "
     "and `choregos a2a skills`; outside the contract",
     "/metrics": "the Prometheus scrape, read by the monitoring stack; outside the contract",
+    "/downloads/cli/manifest.json": "the CLI the instance bundles (S62-08): read by the install scripts, "
+    "`choregos self update` and the console's download block; files, not an API resource, outside the "
+    "contract",
+    "/downloads/cli/{name}": "a CLI binary or its SHA256SUMS, fetched by curl, irm or `choregos self "
+    "update` (S62-08); outside the contract",
+    "/cli/install.sh": "the POSIX install script, piped by a person into `sh` (S62-08); outside the contract",
+    "/cli/install.ps1": "the Windows install script, piped by a person into `iex` (S62-08); outside the "
+    "contract",
     "/orgs/{org}/mcp-gateway/jwks.json": "the MCP gateway reads the organisation's public assertion keys "
     "to verify the calls Choregos signs (ADR 0105); unauthenticated",
     "/healthz": "the liveness probe of the kubelet and of the load balancer",
