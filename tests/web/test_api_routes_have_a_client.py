@@ -86,10 +86,6 @@ NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
 
 #: Paths whose console screen is a story still to come: that story removes its entries.
 NO_CLIENT_YET: dict[str, str] = {
-    "/runs/{id}/cancel": "S64-06, the Activity screen's Stop on a run (ADR 0142 §2)",
-    "/orgs/{org}/agents/{slug}/stop": "S64-06, the agent page's Stop (ADR 0142 §4)",
-    "/orgs/{org}/activity": "S64-06, the Activity screen (ADR 0142 §1)",
-    "/orgs/{org}/activity/stream": "S64-06, the Activity screen, live (ADR 0142 §1)",
     "/runs/{id}/context-breakdown": "S64-08, the run page's Context card (ADR 0141 §6)",
 }
 
