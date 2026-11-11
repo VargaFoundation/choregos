@@ -50,6 +50,12 @@ class Permission(StrEnum):
     #: Enable, disable and price the models of the organisation's catalogue, choose its mode and
     #: its tiers (S39-07, ADR 0060): what the organisation lets its agents use.
     MODEL_CATALOGUE_MANAGE = "model:catalogue:manage"
+    #: Assistants (S63-15, ADR 0133 point 5). `manage` and `audit` are held through the organisation role
+    #: (the administrator) and, per installation, through its owner groups; `use` is held only through the
+    #: audience groups, so no organisation role carries it. `services.assistant_access` decides.
+    ASSISTANT_MANAGE = "assistant:manage"
+    ASSISTANT_USE = "assistant:use"
+    ASSISTANT_AUDIT = "assistant:audit"
 
 
 ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
@@ -100,7 +106,7 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             Permission.AGENT_PROJECT_MANAGE,
         }
     ),
-    Role.ORG_ADMIN: frozenset(Permission),
+    Role.ORG_ADMIN: frozenset(Permission) - {Permission.ASSISTANT_USE},
 }
 
 

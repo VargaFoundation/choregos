@@ -41,12 +41,26 @@ from .routers import (
     agent_session_pods,
     agent_sessions,
     agents,
+    assistant_catalogue,
+    assistant_conversations,
+    assistant_data,
+    assistant_embed,
+    assistant_knowledge,
+    assistant_memory,
+    assistant_tasks,
+    assistants,
     auth,
     budget_alerts,
+    connected_accounts,
     connector_catalogue,
     connectors,
+    conversation_actions,
+    conversation_candidates,
+    conversations,
     costs,
+    delegations,
     egress,
+    embed_token,
     findings,
     github_app,
     integrations,
@@ -86,6 +100,10 @@ from .routers import (
 )
 from .security import check_session_secret
 from .services.action_relay import relay_loop
+from .services.assistant_retention import retention_loop
+from .services.assistant_tasks import task_loop
+from .services.conversation_gate import set_conversation_source
+from .services.installed_suites import installed_suite_source
 from .services.plugin_defaults import check_configuration, reconcile_in_background
 from .services.plugin_supply import warm_shipping
 from .services.skill_scanner import mirror_loop
@@ -125,6 +143,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     action_relay = asyncio.create_task(relay_loop())
     # A2A push notifications (ADR 0078 §5): read from the persisted events, at least once.
     a2a_push = asyncio.create_task(push_loop())
+    # Assistant tasks (ADR 0137): each subscriber's schedules and polls, then the delivery of their outputs.
+    assistant_task_loop = asyncio.create_task(task_loop())
     # The deployment's default plugins in every organisation (ADR 0093 §5), once the schema and the
     # bootstrap organisation exist. In the background: a slow source never holds the readiness probe.
     plugin_defaults = asyncio.create_task(reconcile_in_background(settings))
@@ -132,12 +152,26 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     osv_mirror = asyncio.create_task(mirror_loop(settings))
     # The plugin sources' index, read once now: the first listing of the library does not wait for it.
     shipping_warmup = asyncio.create_task(warm_shipping(settings))
+    # The daily purge of assistants' conversations and memories past their retention (S63-16).
+    assistant_retention = asyncio.create_task(retention_loop(settings.assistant_retention_interval_s))
     yield
     # A conversion cut here stays `converting`; the next start-up takes it back once stale.
     await conversions.stop()
     if relay is not None:
         await relay.stop()
-    for task in (metrics_refresh, action_relay, a2a_push, plugin_defaults, osv_mirror, shipping_warmup):
+    for task in (
+        metrics_refresh,
+        action_relay,
+        a2a_push,
+        plugin_defaults,
+        osv_mirror,
+        shipping_warmup,
+        assistant_retention,
+        assistant_task_loop,
+        plugin_defaults,
+        osv_mirror,
+        shipping_warmup,
+    ):
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task
@@ -291,6 +325,9 @@ def create_app() -> FastAPI:
     # The plugin sources and default plugins (ADR 0093): an unreadable configuration stops the API here,
     # naming the setting, rather than answering 500 at the first install.
     check_configuration(settings)
+    # The conversation suites of the assistants an organisation installed count at the promotion gate
+    # (S63-17): played by the `SuitePlayer` a deployment (or a test) registers, none without one.
+    set_conversation_source(installed_suite_source)
     app = FastAPI(
         title="Choregos API",
         # The package's version, not a constant: the API announced itself as `1.0.0` from the first
@@ -395,10 +432,24 @@ def create_app() -> FastAPI:
         agents.router,
         agent_releases.router,
         agent_sessions.router,
+        conversations.router,
+        conversation_actions.router,
+        assistant_conversations.router,
+        embed_token.router,
+        conversation_candidates.router,
+        assistant_catalogue.router,
+        assistant_tasks.router,
+        delegations.router,
         agent_realtime.router,
         agent_session_pods.router,
         skills.router,
         skill_catalogue.router,
+        assistants.router,
+        assistant_memory.router,
+        assistant_knowledge.router,
+        assistant_data.router,
+        assistant_embed.router,
+        connected_accounts.router,
         plugins.router,
         plugin_sources.router,
         knowledge.router,

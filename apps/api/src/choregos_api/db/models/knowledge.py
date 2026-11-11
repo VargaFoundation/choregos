@@ -36,6 +36,16 @@ class MemoryStore(Base, PkMixin, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("org_id", "owner_key", "slug", name="uq_memory_stores_owner_slug"),
         CheckConstraint("(scope = 'project') = (project_id IS NOT NULL)", name="ck_memory_stores_scope"),
+        CheckConstraint(
+            "(scope IN ('installation', 'user', 'user_subject')) = (installation_id IS NOT NULL)",
+            name="installation",
+        ),
+        CheckConstraint("(scope IN ('user', 'user_subject')) = (user_id IS NOT NULL)", name="owner"),
+        CheckConstraint(
+            "(scope = 'user_subject') = (subject_type IS NOT NULL AND subject_key IS NOT NULL)",
+            name="subject",
+        ),
+        CheckConstraint("kind IN ('facts', 'profile')", name="kind"),
     )
 
     org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
@@ -55,6 +65,42 @@ class MemoryStore(Base, PkMixin, TimestampMixin):
     #: active | archived
     status: Mapped[str] = mapped_column(String(16), default="active")
     created_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # -- an assistant's spaces (S63-09, ADR 0136): `installation` | `user` | `user_subject` scopes ------
+    installation_id: Mapped[str | None] = mapped_column(
+        ForeignKey("assistant_installations.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    #: The owner of a `user` or `user_subject` space: the only person who reads it.
+    user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    subject_type: Mapped[str | None] = mapped_column(String(63), nullable=True)
+    subject_key: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    #: facts | profile
+    kind: Mapped[str] = mapped_column(String(16), default="facts", server_default="facts")
+    #: The JSON schema a `profile` document conforms to (the manifest's, copied at creation).
+    schema: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
+    #: agent | agent_proposes | user_only | owner_only
+    writes: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    retention_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_facts: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+
+class MemoryProfile(Base, PkMixin, TimestampMixin):
+    """One version of a `profile` space's document (S63-09, ADR 0136 point 2). The active version is the
+    highest one whose `status` is `active`; a proposed one waits for the person."""
+
+    __tablename__ = "memory_profiles"
+    __table_args__ = (UniqueConstraint("memory_store_id", "version", name="uq_memory_profiles_version"),)
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    memory_store_id: Mapped[str] = mapped_column(
+        ForeignKey("memory_stores.id", ondelete="CASCADE"), index=True
+    )
+    version: Mapped[int] = mapped_column(Integer)
+    document: Mapped[dict[str, Any]] = mapped_column(Json, default=dict)
+    #: proposed | active | rejected | superseded
+    status: Mapped[str] = mapped_column(String(16), default="active")
+    updated_by: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
 
 class MemoryFact(Base, PkMixin, TimestampMixin):
@@ -136,6 +182,12 @@ class KnowledgeBase(Base, PkMixin, TimestampMixin):
     #: people read it only through a grant (or as an administrator or owning-project owner); a run
     #: is served it only on behalf of a person who reads it (S42-11e, ADR 0097)
     restricted: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    #: the assistant installation this base belongs to (S63-05, ADR 0138): the copy of a seed made at
+    #: install, offered to that installation's conversations and to no other. S63-06 sets it; null for
+    #: every base made through the knowledge routes. Deleting the installation keeps the base, unlinked.
+    installation_id: Mapped[str | None] = mapped_column(
+        ForeignKey("assistant_installations.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
 
 class KnowledgeGrant(Base, PkMixin, TimestampMixin):
@@ -199,6 +251,47 @@ class KnowledgeDocument(Base, PkMixin, TimestampMixin):
     source_ref: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     source_version: Mapped[str | None] = mapped_column(String(200), nullable=True)
     source_url: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    #: `local` (written by people: an upload, a sync, an edit) or `seed@<plugin version>` (the copy of a
+    #: plugin's seed document, S63-06, ADR 0138)
+    origin: Mapped[str] = mapped_column(String(200), default="local", server_default="local")
+    #: the digest of the seed file this document came from; kept when an owner edits it, so that an
+    #: upgrade compares the new seed with the one the copy was made from
+    seed_digest: Mapped[str | None] = mapped_column(String(80), nullable=True)
+
+
+class KnowledgeUpdateProposal(Base, PkMixin, TimestampMixin):
+    """An upstream change to a document of an installation's base, that its owners decide (S63-06,
+    ADR 0138 point 3). `kind`: add | update | remove. `status`: proposed | accepted | merged | refused."""
+
+    __tablename__ = "knowledge_update_proposals"
+    __table_args__ = (
+        CheckConstraint("kind IN ('add', 'update', 'remove')", name="ck_knowledge_update_proposals_kind"),
+        CheckConstraint(
+            "status IN ('proposed', 'accepted', 'merged', 'refused')",
+            name="ck_knowledge_update_proposals_status",
+        ),
+    )
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    installation_id: Mapped[str] = mapped_column(
+        ForeignKey("assistant_installations.id", ondelete="CASCADE"), index=True
+    )
+    knowledge_base_id: Mapped[str] = mapped_column(
+        ForeignKey("knowledge_bases.id", ondelete="CASCADE"), index=True
+    )
+    #: the document's file name in the base (its path in the seed's `corpus/`)
+    path: Mapped[str] = mapped_column(String(255))
+    kind: Mapped[str] = mapped_column(String(8))
+    #: unified diff, the local copy to the new seed (empty text for an add)
+    diff: Mapped[str] = mapped_column(Text, default="")
+    #: the new seed's text; none for a removal
+    proposed_content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: the new seed file's digest; none for a removal
+    seed_digest: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    plugin_version: Mapped[str] = mapped_column(String(128))
+    status: Mapped[str] = mapped_column(String(16), default="proposed")
+    decided_by: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class KnowledgeSource(Base, PkMixin, TimestampMixin):

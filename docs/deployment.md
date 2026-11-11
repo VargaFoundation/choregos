@@ -233,7 +233,7 @@ superseded by [ADR 0072](adr/0072-agent-sandbox-is-the-runtime-of-a-real-deploym
 allowed list (`CHOREGOS_EXECUTORS_ALLOWED`, from `global.runner.allowedExecutors`). `GET
 /platform/executors` answers from them, and `PUT /projects/{id}/connectors/runtime` refuses (422)
 a type outside the list and names the allowed ones. It also refuses a configuration that sets
-what only the deployment sets ([ADR 0150](adr/0150-a-connector-never-sets-what-the-deployment-sets.md)):
+what only the deployment sets ([ADR 0153](adr/0153-a-connector-never-sets-what-the-deployment-sets.md)):
 `kubernetes` (the API server and its credential), `env_from_secrets`, `image_pull_secrets` and
 `service_account`. The pod's Secrets come from `runner.envFromSecrets`, its pull secrets from
 `global.imagePullSecrets`, and it runs as the account the chart creates. A row stored with one of
@@ -1414,6 +1414,26 @@ value>` on the first model call. Nothing said the key had never resolved.
 
 If the API refuses to start with `réglages non résolus`, fix the source of the secret — the key
 is missing where it is stored, not where it is read.
+
+## Upgrading to 0.26
+
+0.26.0 brings assistants (stream S63, ADRs 0133-0140): a plugin may ship one, an organisation installs it
+for an audience, and people converse with it in the console, through the MCP door or in an embedded
+frame. Nothing changes for an organisation that installs no assistant. The migrations run with the
+chart's job as usual; what an operator does:
+
+| What | Why | What to do |
+| :-- | :-- | :-- |
+| `CHOREGOS_TOKEN_EXCHANGE_AUDIENCES` | The audiences a person's token may be exchanged for (`user_exchange`, ADR 0135). Unset, a connector's editor chooses any audience the identity provider allows. | Set it in `global.extraEnv` to a JSON list of your sources' audiences before binding a need under `user_exchange` ([security](security.md), "Review of the person's identity"). |
+| The identity provider | `user_exchange` needs token exchange (RFC 8693) enabled for the API's client and limited to the sources' audiences; a standing delegation (ADR 0137) needs `offline_access`, bounded and revocable offline sessions. | Configure the realm; nothing changes for deployments without assistants. |
+| Open sessions of `/responses` | The migration that makes sessions durable closes the sessions open at upgrade time (`reason: migrated`, their spend booked). | Upgrade outside working hours if hosted prompt agents are in use. |
+| Connected accounts | Accounts are now bound to the authorization server the person consented to (`provider_digest`). | Accounts made before 0.26 (none outside a test deployment) are connected again once. |
+| Conversation suites (ADR 0140) | An installed assistant's conversation suites gate the promotion of its agent version: the platform plays them through the gateway and a judge model scores their rubrics (`conversation_judge_model`, else the `strong` model profile). | With no gateway key, a version whose assistant ships suites is refused promotion with the reason; `conversation_suites_require_model=false` opts out (no check then). |
+| The embedded component | A host page frames `/embed/assistants/{org}/{installation}` only from the installation's `config.embed_origins`. | List the host origins in the installation's configuration; nothing else to deploy. |
+
+The standing delegation (ADR 0137) is shipped but its ADR stays `proposed` until the works council's
+opinion and the data protection impact assessment of the deploying organisation: do not offer delegated
+tasks to people before then.
 
 ## Upgrading to 0.24
 

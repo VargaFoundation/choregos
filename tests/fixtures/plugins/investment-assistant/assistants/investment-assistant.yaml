@@ -1,0 +1,83 @@
+apiVersion: choregos/v1
+kind: Assistant
+metadata:
+  name: investment-assistant
+  display_name: Investment assistant
+  description: Explains markets and your own positions, follows the instruments you watch.
+  icon: chart
+  i18n: { fr: { display_name: "Assistant investissement" } }
+agent: investment-analyst
+config_schema:
+  type: object
+  required: [house_name]
+  properties:
+    house_name: { type: string }
+audience:
+  suggested_groups: [grp-investors]
+  personal_data: true
+tools:
+  - { need: news, operations: [search_news, get_article], access: read, identity: service, required: true }
+  - need: market_data
+    operations: [get_quote, get_history, lookup_instrument]
+    access: read
+    identity: service
+    required: true
+    subject_resolver: true
+  - { need: bank_accounts, operations: [list_accounts, list_transactions], access: read,
+      identity: user_consent, required: false }
+  - { need: brokerage, operations: [list_positions], access: read, identity: user_consent, required: false }
+  - { need: orders, operations: [place_order], access: write, identity: user_consent,
+      approval: console, required: false }
+memory:
+  - name: investor_profile
+    scope: user
+    kind: profile
+    writes: agent_proposes
+    schema:
+      type: object
+      required: [risk_tolerance, horizon_years]
+      properties:
+        risk_tolerance: { enum: [low, medium, high] }
+        horizon_years: { type: integer }
+        exclusions: { type: array, items: { type: string } }
+  - { name: preferred_sources, scope: user, kind: facts, writes: agent_proposes }
+  - name: instrument_notes
+    scope: user_subject
+    subject: { type: instrument, key: isin, resolver: none }
+    kind: facts
+    writes: agent_proposes
+    max_facts: 50
+knowledge:
+  - { name: investment_policy, seed: knowledge/investment-policy, serving_mode: index, upstream: propose_updates }
+tasks:
+  - name: morning_brief
+    workflow: workflows/morning-brief.yaml
+    triggers: [{ kind: schedule, cron: "30 7 * * 1-5", user_timezone: true }]
+    delegation: read_only
+    needs: [news, market_data, brokerage]
+    deliver: [inbox, email]
+  - name: threshold_alert
+    workflow: workflows/threshold-alert.yaml
+    triggers:
+      - kind: poll
+        cron: "*/15 9-17 * * 1-5"
+        operation: market_data__get_quote
+        when: { /change_pct: { abs_gte: 3 } }
+        idempotency: /isin
+    delegation: none
+    deliver: [inbox]
+surfaces:
+  console: true
+  mcp:
+    prompts:
+      - name: explain_move
+        description: Explain why an instrument moved today.
+        arguments: [{ name: instrument, required: true }]
+        message: "Why did {instrument} move today?"
+  embed:
+    context_schema: { type: object, properties: { instrument: { type: string } } }
+policy:
+  budget: { per_user_month_usd: 20, per_conversation_usd: 2, per_installation_month_usd: 500 }
+  conversation: { retention_days: 30, max_turns: 60, idle_close_minutes: 240 }
+  data: { classification: sensitive, erasure: [by_user] }
+evals: [evals/investment-assistant.yaml]

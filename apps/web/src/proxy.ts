@@ -13,7 +13,41 @@ import { type NextRequest, NextResponse } from "next/server";
  * Before 2026-09-25: `script-src 'self' 'unsafe-inline'` in `next.config.mjs`, a CSP that let
  * through exactly what a CSP exists to stop.
  */
-export function proxy(request: NextRequest) {
+/** The embedded component's page (S63-12, ADR 0139 point 6): the one route a host may frame. */
+const EMBED_PATH = /^\/embed\/assistants\/([a-z0-9][a-z0-9_-]*)\/([a-z0-9][a-z0-9-]{0,62})\/?$/;
+
+/**
+ * The origins that may frame an installation's embed page: its `config.embed_origins`, read from the
+ * API's public route (the visitor may not be signed in yet, and the cookie of a framed page is not
+ * ours to rely on). Any failure frames nobody: `'none'`, the console's rule for every other page.
+ */
+async function embedOrigins(org: string, slug: string): Promise<string[]> {
+  const apiUrl = process.env.CHOREGOS_API_URL ?? "http://localhost:8000";
+  try {
+    const response = await fetch(`${apiUrl}/api/v1/public/assistants/${org}/${slug}/embed`, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!response.ok) return [];
+    const body = (await response.json()) as { embed_origins?: unknown };
+    return Array.isArray(body.embed_origins)
+      ? body.embed_origins.filter((o): o is string => typeof o === "string" && /^https?:\/\/[^\s;,'"*]+$/.test(o))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Every page: framed by nobody. The embed page: framed by its installation's origins, resolved first. */
+export function proxy(request: NextRequest): NextResponse | Promise<NextResponse> {
+  const embed = EMBED_PATH.exec(request.nextUrl.pathname);
+  if (!embed) return respond(request, "'none'", false);
+  return embedOrigins(embed[1]!, embed[2]!).then((origins) =>
+    respond(request, origins.length > 0 ? origins.join(" ") : "'none'", true),
+  );
+}
+
+function respond(request: NextRequest, frameAncestors: string, embed: boolean): NextResponse {
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const apiUrl = process.env.CHOREGOS_API_URL ?? "http://localhost:8000";
   const isDev = process.env.NODE_ENV === "development";
@@ -31,12 +65,14 @@ export function proxy(request: NextRequest) {
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
-    "frame-ancestors 'none'",
+    `frame-ancestors ${frameAncestors}`,
   ].join("; ");
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
   requestHeaders.set("Content-Security-Policy", csp);
+  // The layout draws no chrome around the embedded component.
+  if (embed) requestHeaders.set("x-embed", "1");
   const response = NextResponse.next({ request: { headers: requestHeaders } });
   response.headers.set("Content-Security-Policy", csp);
   return response;

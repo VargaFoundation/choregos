@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     Float,
     ForeignKey,
@@ -26,9 +27,26 @@ if TYPE_CHECKING:
     from .identity import Organization
 
 
+#: A project of a team, or a person's personal space (ADR 0134).
+PROJECT_KINDS = ("standard", "personal")
+
+
 class Project(Base, PkMixin, TimestampMixin):
     __tablename__ = "projects"
-    __table_args__ = (UniqueConstraint("org_id", "slug", name="org_slug"),)
+    __table_args__ = (
+        UniqueConstraint("org_id", "slug", name="org_slug"),
+        # A personal space has its owner, a team's project has none (ADR 0134).
+        CheckConstraint("(kind = 'personal') = (owner_user_id IS NOT NULL)", name="personal_has_owner"),
+        # One personal space per person and organisation.
+        Index(
+            "uq_projects_personal_owner",
+            "org_id",
+            "owner_user_id",
+            unique=True,
+            postgresql_where=text("kind = 'personal'"),
+            sqlite_where=text("kind = 'personal'"),
+        ),
+    )
 
     org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
     slug: Mapped[str] = mapped_column(String(64), index=True)
@@ -55,6 +73,13 @@ class Project(Base, PkMixin, TimestampMixin):
     #: Which channel of the agents this project runs when it pins nothing (S40-02, ADR 0071):
     #: `stable` (production, the default) or `candidate` (testing).
     agent_channel: Mapped[str] = mapped_column(String(16), default="stable", server_default="stable")
+    #: `standard` (a team's project) or `personal` (a person's space, ADR 0134): created at their first
+    #: conversation, left out of every project listing, read by its owner only (RLS).
+    kind: Mapped[str] = mapped_column(String(16), default="standard", server_default="standard")
+    #: The owner of a personal space; none for a team's project.
+    owner_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
+    )
 
     org: Mapped[Organization] = relationship(back_populates="projects")
     connectors: Mapped[list[Connector]] = relationship(back_populates="project", cascade="all, delete-orphan")

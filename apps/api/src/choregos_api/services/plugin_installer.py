@@ -31,9 +31,6 @@ the audit trail.
 
 from __future__ import annotations
 
-import os
-import shutil
-import tempfile
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -45,8 +42,9 @@ from choregos_core.agent_catalogue import CatalogueEntry, entry_of
 from choregos_core.agent_catalogue.evals import evaluate
 from choregos_core.paths import PathOutsideError, SymlinkRefusedError, files_under, inside
 from choregos_core.plugins import Plugin
+from choregos_core.plugins.assistants import named_files as assistant_named_files
 from pydantic import ValidationError
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
@@ -55,6 +53,7 @@ from ..db.base import utcnow
 from ..db.models import (
     Agent,
     AgentVersion,
+    AssistantInstallation,
     Organization,
     OrgPlugin,
     OrgPluginFile,
@@ -74,6 +73,13 @@ from .agent_releases import after_publish
 from .agents import digest, require_complete, version_errors
 from .installation import install_skills_and_agents
 from .network import check_agent_network
+from .plugin_files import (
+    _materialise,
+    _row,
+    installed_row,
+    plugin_assistant,
+    plugin_text,
+)
 from .plugin_supply import PluginSupply, semver_key
 from .skill_gate import platform_columns
 from .skills import SkillRefused, refuse_reserved_slug, validate
@@ -161,6 +167,19 @@ async def _prepare(
 
     for ref in [*contents.get("agents", []), *contents.get("matrix_cases", [])]:
         prepared.files[ref] = inside(root, ref).read_bytes()
+
+    # An assistant's file and the files it names ship with the plugin: an installation reads them again.
+    named_files: list[str] = []
+    named_directories: list[str] = []
+    for document in plugin.assistants.values():
+        refs, directories = assistant_named_files(document)
+        named_files.extend(refs)
+        named_directories.extend(directories)
+    for ref in [*contents.get("assistants", []), *named_files]:
+        prepared.files[ref] = inside(root, ref).read_bytes()
+    for ref in named_directories:
+        for name, path in _dir_files(root, ref).items():
+            prepared.files[f"{ref}/{name}"] = path.read_bytes()
 
     for slug, document in sorted(plugin.agents.items()):
         entry = entry_of(document, plugin.name, plugin.version)
@@ -250,11 +269,6 @@ async def _procedures(
 # -- rows ------------------------------------------------------------------------------------------------
 
 
-async def _row(session: AsyncSession, org_id: str, name: str) -> OrgPlugin | None:
-    found = await session.execute(select(OrgPlugin).where(OrgPlugin.org_id == org_id, OrgPlugin.name == name))
-    return found.scalar_one_or_none()
-
-
 async def _rows(session: AsyncSession, org_id: str) -> list[OrgPlugin]:
     found = await session.execute(
         select(OrgPlugin).where(OrgPlugin.org_id == org_id).order_by(OrgPlugin.name)
@@ -264,10 +278,6 @@ async def _rows(session: AsyncSession, org_id: str) -> list[OrgPlugin]:
 
 async def installed(session: AsyncSession, org_id: str) -> list[OrgPlugin]:
     return await _rows(session, org_id)
-
-
-async def installed_row(session: AsyncSession, org_id: str, name: str) -> OrgPlugin | None:
-    return await _row(session, org_id, name)
 
 
 async def installed_one(session: AsyncSession, org_id: str, name: str) -> OrgPlugin:
@@ -700,6 +710,9 @@ async def upgrade(
     row.status, row.installed_by, row.installed_at = status, principal.email, utcnow()
     await session.flush()
     knowledge = await _projects_receive_template_knowledge(session, org_id, row.name)
+    from .offered_knowledge import upgrade_plugin
+
+    await upgrade_plugin(session, org_id, row, principal)  # S63-06: the installations' offered knowledge
     await record(session, principal, "plugin.upgrade", org_id=org_id, target_type="plugin",
                  target_id=row.name, previous_version=previous, version=plugin.version,
                  digest=plugin.digest, offered=offered, kept=kept,
@@ -797,6 +810,12 @@ async def uninstall(
             name
         )
     await _drop_files(session, org_id, row.digest)
+    # Its assistants stop (ADR 0133): what belongs to their users stays, nobody can converse on them.
+    await session.execute(
+        update(AssistantInstallation)
+        .where(AssistantInstallation.org_id == org_id, AssistantInstallation.plugin == row.name)
+        .values(status="suspended")
+    )
     await plugin_servers.deprovision(session, org_id, row.name, principal, settings or get_settings())
     await session.delete(row)
     await session.flush()
@@ -830,37 +849,6 @@ async def to_dto(row: OrgPlugin, supply: PluginSupply | None, *, wait: bool = Tr
 
 
 # -- what the platform serves again: templates and procedures ------------------------------------------------
-
-
-def _cache_root() -> Path:
-    return Path(tempfile.gettempdir()) / "choregos-plugin-files"
-
-
-async def _materialise(session: AsyncSession, row: OrgPlugin) -> Path:
-    """The plugin's stored files on disk, once per content digest (they never change under a digest)."""
-    target = _cache_root() / row.org_id / row.digest.removeprefix("sha256:")
-    if (target / ".complete").is_file():
-        return target
-    files = (
-        await session.execute(
-            select(OrgPluginFile).where(
-                OrgPluginFile.org_id == row.org_id, OrgPluginFile.digest == row.digest
-            )
-        )
-    ).scalars()
-    _cache_root().mkdir(parents=True, exist_ok=True)
-    staging = Path(tempfile.mkdtemp(prefix="staging-", dir=_cache_root()))
-    for stored in files:
-        path = inside(staging, stored.path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(stored.content)
-    (staging / ".complete").write_text(row.digest, encoding="utf-8")
-    target.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        os.replace(staging, target)
-    except OSError:  # another request materialised it first
-        shutil.rmtree(staging, ignore_errors=True)
-    return target
 
 
 async def plugin_template(session: AsyncSession, org_id: str | None, ref: str) -> tuple[dict[str, Any], Path]:
@@ -928,8 +916,10 @@ __all__ = [
     "installed_one",
     "installed_row",
     "org_id_of",
+    "plugin_assistant",
     "plugin_procedures",
     "plugin_template",
+    "plugin_text",
     "provenance",
     "to_dto",
     "uninstall",

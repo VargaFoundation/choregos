@@ -30,6 +30,9 @@ MemoryScope = Literal["none", "project", "agent"]
 SEPARATOR = "#agent:"
 STORE_SEPARATOR = "#memory:"
 ORG_PREFIX = "org:"
+#: An assistant's memory space (S63-09, ADR 0136):
+#: `org:<key>#assistant:<installation>[#user:<id>[#subject:<type>:<key>]]`.
+ASSISTANT_SEPARATOR = "#assistant:"
 NamespaceKind = Literal["project", "agent", "project_store", "global_store"]
 
 
@@ -76,12 +79,30 @@ def memory_key(organisation: Any) -> str:
     return str(key) if key else str(organisation.slug)
 
 
+def assistant_space_namespace(
+    org: str, installation: str, user: str | None = None, subject: tuple[str, str] | None = None
+) -> str:
+    """Where an assistant's memory space lives. Only `split_namespace` and `parse_namespace` know the form:
+    both refuse it, so no run adapter can read a person's space as a project's memory."""
+    if subject is not None and user is None:
+        raise ValueError("a subject space belongs to a user")
+    namespace = f"{ORG_PREFIX}{org}{ASSISTANT_SEPARATOR}{installation}"
+    if user is not None:
+        namespace += f"#user:{user}"
+    if subject is not None:
+        namespace += f"#subject:{subject[0]}:{subject[1]}"
+    return namespace
+
+
 def global_store_namespace(org: str, store: str) -> str:
     return f"{ORG_PREFIX}{org}{STORE_SEPARATOR}{store}"
 
 
 def parse_namespace(namespace: str) -> ParsedNamespace:
-    """The structure of a namespace string; raises `ValueError` on one that is none of the four forms."""
+    """The structure of a namespace string; raises `ValueError` on one that is none of the four forms
+    (an assistant's space is a fifth, never read by a run: it raises too)."""
+    if ASSISTANT_SEPARATOR in namespace:
+        raise ValueError(f"an assistant's memory space is not a run's memory: {namespace!r}")
     if namespace.startswith(ORG_PREFIX):
         org, sep, store = namespace[len(ORG_PREFIX) :].partition(STORE_SEPARATOR)
         if not sep or not org or not store or SEPARATOR in store or STORE_SEPARATOR in store:
@@ -108,19 +129,21 @@ def split_namespace(namespace: str) -> tuple[str, str | None]:
     Only the two forms that existed before S40-11. A named or global memory raises: answering
     `(project, None)` would read it as the project's shared memory.
     """
-    if namespace.startswith(ORG_PREFIX) or STORE_SEPARATOR in namespace:
+    if namespace.startswith(ORG_PREFIX) or STORE_SEPARATOR in namespace or ASSISTANT_SEPARATOR in namespace:
         raise ValueError(f"not a project or agent namespace (use parse_namespace): {namespace!r}")
     project, _, agent = namespace.partition(SEPARATOR)
     return project, agent or None
 
 
 __all__ = [
+    "ASSISTANT_SEPARATOR",
     "MEMORY_KEY_SETTING",
     "ORG_PREFIX",
     "SEPARATOR",
     "STORE_SEPARATOR",
     "MemoryScope",
     "ParsedNamespace",
+    "assistant_space_namespace",
     "global_store_namespace",
     "memory_key",
     "memory_namespace",

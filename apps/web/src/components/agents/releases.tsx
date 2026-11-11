@@ -86,6 +86,7 @@ export function unreleasedRevision(agent: Pick<Agent, "stable_version" | "versio
 
 const CHECK_LABEL: Record<string, string> = {
   eval_suite: "The eval suite passes",
+  conversation_suite: "The assistant's conversation suites pass",
   newer_than_production: "Newer than production",
   is_candidate: "Is the revision in testing",
   candidate_runs: "Enough finished runs in testing",

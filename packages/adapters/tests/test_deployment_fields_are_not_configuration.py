@@ -1,4 +1,4 @@
-"""S65-03, ADR 0150: a connector's configuration never says what only the deployment says.
+"""S65-03, ADR 0153: a connector's configuration never says what only the deployment says.
 
 Which cluster the platform talks to (`kubernetes`), and what a run's pod is given from that cluster
 (`env_from_secrets`, `image_pull_secrets`, `service_account`), were read from a `runtime` connector's

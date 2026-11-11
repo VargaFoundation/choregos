@@ -41,10 +41,10 @@ class Upstream:
         key_id = next((k for k, v in self.gateway.keys.items() if str(v.key) == bearer), None)
         if key_id is None:
             return httpx.Response(401, json={"error": {"message": "invalid key", "type": "auth_error"}})
+        sent = json.loads(request.content)
         try:
-            self.gateway.record_usage(
-                key_id, self.tokens_in, self.tokens_out, model=json.loads(request.content)["model"]
-            )
+            if not (sent.get("metadata") or {}).get("purpose"):  # a side request (a title) is not priced here
+                self.gateway.record_usage(key_id, self.tokens_in, self.tokens_out, model=sent["model"])
         except Exception as refused:
             return httpx.Response(400, json={"error": {"message": str(refused), "type": "budget_exceeded"}})
         return self.model.answer(request)

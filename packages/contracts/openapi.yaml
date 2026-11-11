@@ -115,6 +115,7 @@ paths:
         - { name: redirect_to, in: query, schema: { type: string } }
         - { name: org, in: query, schema: { type: string, maxLength: 120 } }
         - { name: login_hint, in: query, schema: { type: string, maxLength: 320 } }
+        - { name: silent, in: query, schema: { type: boolean, default: false }, description: "`prompt=none` (the embedded component, S63-12): the IdP answers without showing anything; the callback returns to `redirect_to` with `?signin=required` when nobody is signed in." }
       responses:
         "307": { description: Redirect to the IdP, or to an extension's sign-in route }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -126,7 +127,8 @@ paths:
       security: []
       summary: OIDC callback (code → session)
       parameters:
-        - { name: code, in: query, required: true, schema: { type: string } }
+        - { name: code, in: query, schema: { type: string }, description: "Absent when the IdP answers `error` to a silent sign-in." }
+        - { name: error, in: query, schema: { type: string, maxLength: 80 } }
         - { name: state, in: query, required: true, schema: { type: string } }
       responses:
         "307": { description: Redirect to the application }
@@ -2512,6 +2514,558 @@ paths:
       responses:
         "204": { description: Closed }
         "404": { $ref: "#/components/responses/NotFound" }
+  /me/assistants:
+    get:
+      tags: [agents]
+      operationId: listMyAssistants
+      description: "The assistant installations whose audience groups hold one of the caller's groups (`assistant:use`, ADR 0133): name, display name, description, status. An assistant the caller is not in the audience of is not listed."
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MyAssistantList" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /public/assistants/{org}/{slug}/embed:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    get:
+      tags: [agents]
+      operationId: getAssistantEmbed
+      security: []
+      description: >-
+        The origins that may frame the installation's embedded component (`config.embed_origins`, S63-12, ADR 0139
+        point 6). Public: the console reads it to set the embed page's `frame-ancestors` before anyone is signed in.
+        Origins only; 404 when the installation does not exist.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AssistantEmbed" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /me/assistants/{org}/{slug}/conversations:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    post:
+      tags: [agents]
+      operationId: openMyAssistantConversation
+      description: >-
+        Opens a conversation of a `ready` assistant in the caller's personal space (ADR 0134). The optional `context`
+        is validated against the manifest's `surfaces.embed.context_schema` and given to the agent as data, never as
+        a resolved subject. The conversation's cap is the installation's `per_conversation_usd`. 409 with the
+        `readiness` when the installation is not ready; 404 for a caller outside the audience (it is not revealed).
+        Every later turn evaluates the audience again, and reserves under the conversation's, the person's month and
+        the installation's month caps.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AssistantConversationOpen" } } }
+      responses:
+        "201": { description: Opened, content: { application/json: { schema: { $ref: "#/components/schemas/Conversation" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /me/assistants/{org}/{slug}/embed-token:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    post:
+      tags: [agents]
+      operationId: mintMyEmbedToken
+      description: >-
+        The frame token of the embedded component in a cross-site frame (ADR 0139 point 6): a signed value valid for
+        fifteen minutes, for the caller, their browser session and this installation, sent as `X-Choregos-Embed`. It
+        opens only the routes the component calls (open a conversation of the installation, read and write that
+        conversation, read its memory spaces), the conversation must be the installation's, and it carries a role in
+        this organisation only. Called with the console's session cookie (the sign-in popup), never with a frame
+        token. 404 for a caller outside the audience.
+      responses:
+        "200": { description: The token, content: { application/json: { schema: { $ref: "#/components/schemas/EmbedToken" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /me/assistants/{org}/{slug}/tasks/{task}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+      - { name: task, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [agents]
+      operationId: getMyTaskSubscription
+      description: "The caller's subscription to a task of an assistant they are in the audience of (ADR 0137). 404 when they have none, and for a caller outside the audience."
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/TaskSubscription" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [agents]
+      operationId: putMyTaskSubscription
+      description: >-
+        Subscribes the caller to the task, or changes their trigger, time zone or switch. `kind` is one of the task's
+        triggers; a `schedule` declared with `user_timezone` is read in `timezone` (an IANA name, UTC by default) and
+        its cron may be changed by the person. A new schedule starts at the next window: it never runs one that passed
+        before. A task with `delegation: read_only` can be subscribed, but its scheduled and polled runs are refused,
+        with the reason in `last_refusal`, until the standing delegation of S63-14.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/TaskSubscriptionPut" } } }
+      responses:
+        "200": { description: Subscribed, content: { application/json: { schema: { $ref: "#/components/schemas/TaskSubscription" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [agents]
+      operationId: deleteMyTaskSubscription
+      description: "Unsubscribes the caller. What earlier runs delivered stays in their inbox."
+      responses:
+        "204": { description: Unsubscribed }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /me/assistants/{org}/{slug}/tasks/{task}/run:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+      - { name: task, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: runMyTask
+      description: "Runs the task now (its `on_demand` trigger), in the caller's personal space, as the caller: one work item per click. 409 when the installation is not ready, the task has no `on_demand` trigger or a monthly budget is spent."
+      responses:
+        "201": { description: Started, content: { application/json: { schema: { $ref: "#/components/schemas/TaskRun" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /me/inbox:
+    get:
+      tags: [agents]
+      operationId: listMyInbox
+      description: "The artifacts the caller's tasks delivered (the `inbox` channel is always on), newest first."
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 100 } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/InboxList" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /me/delegations:
+    get:
+      tags: [agents]
+      operationId: listMyDelegations
+      description: "The caller's standing delegations (ADR 0137 points 3-4) with their expiry and status (`active`, `suspended` with its reason, `revoked`, `expired`). Never another person's."
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/DelegationList" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [agents]
+      operationId: createMyDelegation
+      description: >-
+        The caller agrees that a `delegation: read_only` task reads on their behalf while they are away. `agree_to`
+        must equal the list of needs the task reads (with their operations): otherwise 409, whose body carries
+        `needs` (the exact needs and operations) and `agree_to` (the list to send). A task that lists a write need
+        cannot be delegated (422). The expiry is 90 days by default, capped by `policy_overrides.delegation.max_days`
+        of the installation. For `user_exchange` needs an offline token of the identity provider is obtained and
+        sealed (never returned); the delegation is linked to the caller's subscription to the task, which must exist.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/DelegationCreate" } } }
+      responses:
+        "201": { description: Agreed, content: { application/json: { schema: { $ref: "#/components/schemas/Delegation" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /me/delegations/{delegation_id}:
+    parameters:
+      - { name: delegation_id, in: path, required: true, schema: { type: string } }
+    delete:
+      tags: [agents]
+      operationId: revokeMyDelegation
+      description: "Revokes the caller's delegation at once: the offline token is revoked at the identity provider when it has a revocation endpoint and the sealed copy is deleted. The task's next delegated read is refused."
+      responses:
+        "204": { description: Revoked }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /me/connected-accounts:
+    get:
+      tags: [connectors]
+      operationId: listMyConnectedAccounts
+      description: "The caller's own connected accounts (`user_consent`, ADR 0135 point 6): connector, scopes, status. Never a token; a person never sees another person's account."
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ConnectedAccountList" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /me/connected-accounts/callback:
+    get:
+      tags: [connectors]
+      operationId: completeMyAccountConnection
+      description: "Where the source's authorization server redirects the person's browser. Checks the signed `state` and the handshake cookie (PKCE verifier), exchanges the code, seals the refresh token (ADR 0058) and answers 303 to the console. The token is never returned."
+      parameters:
+        - { name: code, in: query, required: true, schema: { type: string } }
+        - { name: state, in: query, required: true, schema: { type: string } }
+      responses:
+        "303": { description: Connected; redirects to the console }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /me/connected-accounts/{connector}/connect:
+    parameters:
+      - { name: connector, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" } }
+      - { name: org, in: query, required: true, schema: { type: string } }
+    post:
+      tags: [connectors]
+      operationId: connectMyAccount
+      description: "Starts the consent at the source: returns its authorization URL (authorization code, PKCE S256, signed state) and sets the handshake cookie that holds the verifier. 422 when the connector does not declare `user_consent`."
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ConnectedAccountConnect" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /me/connected-accounts/{connector}:
+    parameters:
+      - { name: connector, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9-]{1,62}$" } }
+      - { name: org, in: query, required: true, schema: { type: string } }
+    delete:
+      tags: [connectors]
+      operationId: disconnectMyAccount
+      description: "Deletes the caller's account and its sealed refresh token at once, and revokes the token at the source when its connector declares a `revocation_endpoint`. The next call in a conversation answers `account_not_connected`."
+      responses:
+        "204": { description: Disconnected }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /me/assistants/{org}/{slug}/memory-export:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    get:
+      tags: [agents]
+      operationId: exportMyAssistantMemory
+      description: >-
+        Everything the assistant remembers of the caller (ADR 0136 point 6), as JSON, to keep or to carry elsewhere:
+        every `user` and `user_subject` space, with its facts (`active` and `proposed`) and every version of its
+        profiles. Never the installation's spaces, never another person's.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MemoryExport" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/assistants/{slug}/memory/{space}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+      - { name: space, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$" } }
+    get:
+      tags: [agents]
+      operationId: getAssistantInstallationMemory
+      description: >-
+        An `installation` space as the installation's owners see it (ADR 0136): its facts, `proposed` ones included,
+        or the versions of its profile. Owners only (`assistant:manage`); a person's own space is 404.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MemorySpace" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [agents]
+      operationId: updateAssistantInstallationMemory
+      description: >-
+        The owners confirm or reject what a conversation proposed in an `installation` space (a fact by `fact_id`,
+        a profile version by `version`), or `add` a fact or a profile document themselves. `pin`, `unpin` and
+        `correct` are a person's own gestures (422). A decided proposal is 409.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/MemoryAction" } } }
+      responses:
+        "200": { description: The space as it is now, content: { application/json: { schema: { $ref: "#/components/schemas/MemorySpace" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /me/assistants/{org}/{slug}/memory/{space}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+      - { name: space, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$" } }
+    get:
+      tags: [agents]
+      operationId: getMyAssistantMemory
+      description: >-
+        What an assistant remembers of the caller in one of its `user` or `user_subject` spaces (ADR 0136): one entry
+        per store (the person's, or one per subject), with facts (`active` and `proposed`) or the versions of the
+        profile. Only the caller's own: another person's page is empty, and an installation space is not on it (404).
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MemorySpace" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [agents]
+      operationId: updateMyAssistantMemory
+      description: >-
+        Confirms or rejects a proposed fact (`fact_id`) or profile version (`version`), pins or unpins a fact,
+        corrects a fact's `content` or writes a profile `document` (validated against the space's schema), or `add`s
+        what the agent may not write itself (`user_only`): a fact's `content` or a profile `document`, active at
+        once. A decided proposal is 409.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/MemoryAction" } } }
+      responses:
+        "200": { description: The space as it is now, content: { application/json: { schema: { $ref: "#/components/schemas/MemorySpace" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [agents]
+      operationId: deleteMyAssistantMemory
+      description: "Deletes one fact (`fact_id`) or, without it, everything the assistant remembers of the caller in the space."
+      parameters:
+        - { name: fact_id, in: query, required: false, schema: { type: string } }
+      responses:
+        "204": { description: Deleted }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /me/assistants/{org}/{slug}/memory/{space}/{subject}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+      - { name: space, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$" } }
+      - { name: subject, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [agents]
+      operationId: getMyAssistantSubjectMemory
+      description: "What the assistant remembers of the caller about one subject (the subject's key) of a `user_subject` space; 404 when nothing is."
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MemorySpace" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [agents]
+      operationId: updateMyAssistantSubjectMemory
+      description: "As the space's `PATCH`, for one subject."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/MemoryAction" } } }
+      responses:
+        "200": { description: The subject's memory as it is now, content: { application/json: { schema: { $ref: "#/components/schemas/MemorySpace" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [agents]
+      operationId: deleteMyAssistantSubjectMemory
+      description: "Deletes one fact (`fact_id`) or everything remembered about the subject."
+      parameters:
+        - { name: fact_id, in: query, required: false, schema: { type: string } }
+      responses:
+        "204": { description: Deleted }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /me/assistants/{org}/{slug}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    delete:
+      tags: [agents]
+      operationId: eraseMyAssistantData
+      description: >-
+        Erasure by user (ADR 0133 point 6): removes what belongs to the caller in the installation, whatever the
+        audience says today: their conversations with the transcripts, their `user` and `user_subject` memories, and
+        (lot 2) their connected accounts and delegations. Journaled in the audit log. The reads journal keeps its lines.
+      responses:
+        "200": { description: What was removed, content: { application/json: { schema: { $ref: "#/components/schemas/UserErasure" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/assistants/{slug}/reads:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    get:
+      tags: [agents]
+      operationId: listAssistantReads
+      description: >-
+        The reads journal (`assistant:audit`): one line per tool call of the assistant's conversations (user, need,
+        operation, subject, moment; never the content read), most recent first, filterable by subject and user.
+      parameters:
+        - { name: subject_type, in: query, required: false, schema: { type: string } }
+        - { name: subject_key, in: query, required: false, schema: { type: string } }
+        - { name: user_id, in: query, required: false, schema: { type: string } }
+        - { $ref: "#/components/parameters/Cursor" }
+        - { $ref: "#/components/parameters/Limit" }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AssistantReadPage" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/assistants/{slug}/erasure:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    post:
+      tags: [agents]
+      operationId: eraseAssistantSubject
+      description: >-
+        Export or erasure by subject (`assistant:audit`; only when the manifest's `policy.data.erasure` lists
+        `by_subject`, else 409). `export` returns every memory of the subject across the installation's users and the
+        conversations where it was resolved; `erase` deletes those memories and redacts (or deletes) those
+        conversations. Journaled with who did it; the subject's key is recorded as a digest.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/SubjectErasureRequest" } } }
+      responses:
+        "200": { description: Done, content: { application/json: { schema: { $ref: "#/components/schemas/SubjectErasure" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /me/conversations:
+    get:
+      tags: [agents]
+      operationId: listMyConversations
+      description: "The caller's durable conversations (ADR 0134), the most recently active first: title, agent, last activity, status. Only the caller's own."
+      parameters: [{ $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/ConversationPage" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /me/conversations/{conversation_id}:
+    parameters:
+      - { name: conversation_id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [agents]
+      operationId: getMyConversation
+      description: "A conversation and what was said in it. Only its opener reads it: anyone else is answered 404."
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Conversation" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [agents]
+      operationId: deleteMyConversation
+      description: "Erases the conversation and its transcript. Its ledger lines stay, detached from it."
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /me/conversations/{conversation_id}/messages:
+    parameters:
+      - { name: conversation_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: sendMyConversationMessage
+      description: "One turn of a conversation, in the Responses API's shape. An idle conversation is reopened with its history. The turn mints its own gateway key at the smallest of what is left of the conversation's cap and the caps a run meets; a turn the cap refuses is 409, before the model is called. With `stream`, server-sent events `response.created`, `response.output_text.delta` (one per chunk the model streamed, every model call of the turn streams; tool calls are journaled as they happen), `response.completed` or `response.failed`. Refused with 409 before the model: a turn past the conversation's `max_turns`, and a turn while another of the same conversation runs. A cancelled turn ends `failed` with `error.code` `cancelled`."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ConversationMessageCreate" } } }
+      responses:
+        "200":
+          description: The response; `status` is `failed` with an `error` when the model or the budget stopped it
+          content:
+            application/json: { schema: { $ref: "#/components/schemas/AgentResponse" } }
+            text/event-stream: { schema: { type: string } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/agent-sessions/{session_id}/feedback:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: session_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: giveAgentSessionFeedback
+      description: "A thumb up or down, with an optional comment, on one answer of the caller's own session (ADR 0140); it replaces their earlier thumb on that answer. A thumb down proposes a pseudonymised candidate eval case to the agent's owners; it is never added to a suite automatically."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ConversationFeedbackCreate" } } }
+      responses:
+        "200": { description: Recorded, content: { application/json: { schema: { $ref: "#/components/schemas/ConversationFeedback" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/agents/{slug}/feedback-candidates:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [agents]
+      operationId: listAgentFeedbackCandidates
+      description: "The candidate eval cases thumbs down proposed for the agent, newest first, for those who manage it (ADR 0140). Pseudonymised; no author, no raw comment."
+      parameters:
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+      responses:
+        "200": { description: The proposed candidates, content: { application/json: { schema: { type: array, items: { $ref: "#/components/schemas/ConversationCandidate" } } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/agents/{slug}/feedback-candidates/{candidate_id}/accept:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+      - { name: candidate_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: acceptAgentFeedbackCandidate
+      description: "An owner makes a proposed candidate a case of the agent's conversation suites by writing its assertions (a case with none passes whatever the agent says). The case is validated as the plugin loader validates a suite (schema, case names, the assistant's tools); it is then played with the suites at the promotion gate. 409 when the candidate was decided; 422 when the case is not valid."
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ConversationCandidateAccept" } } }
+      responses:
+        "200": { description: The candidate, accepted, content: { application/json: { schema: { $ref: "#/components/schemas/ConversationCandidate" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/agents/{slug}/feedback-candidates/{candidate_id}/dismiss:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string } }
+      - { name: candidate_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: dismissAgentFeedbackCandidate
+      description: "An owner dismisses a proposed candidate: it enters no suite and is not proposed again. 409 when it was decided."
+      responses:
+        "200": { description: The candidate, dismissed, content: { application/json: { schema: { $ref: "#/components/schemas/ConversationCandidate" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /me/conversations/{conversation_id}/cancel:
+    parameters:
+      - { name: conversation_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: cancelMyConversationTurn
+      description: "Interrupts the turn that runs (on the replica that serves it): the tool calls it already made stay journaled, its key is revoked and its spend booked before this answers. 409 when no turn is running."
+      responses:
+        "200":
+          description: The conversation, once the turn settled
+          content: { application/json: { schema: { $ref: "#/components/schemas/ConversationSummary" } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /me/conversations/{conversation_id}/actions:
+    parameters:
+      - { name: conversation_id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [agents]
+      operationId: listMyConversationActions
+      description: The writes the assistant proposed in the conversation, with what became of them (the owner's alone).
+      responses:
+        "200": { description: The actions, oldest first, content: { application/json: { schema: { $ref: "#/components/schemas/ConversationActionList" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /me/conversations/{conversation_id}/actions/{action_id}/confirm:
+    parameters:
+      - { name: conversation_id, in: path, required: true, schema: { type: string } }
+      - { name: action_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: confirmMyConversationAction
+      description: "Executes a proposed inline write through the broker WITH THE PERSON'S identity (the source judges the right to write) and records the result. Only the conversation's owner (404 otherwise). 409 with a `code`: action_executed, action_refused, action_expired, approval_console (the owners raised the need to a console approval), not_available."
+      responses:
+        "200": { description: The action, executed or confirmed with the source's error in `result`, content: { application/json: { schema: { $ref: "#/components/schemas/ConversationAction" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /me/conversations/{conversation_id}/actions/{action_id}/refuse:
+    parameters:
+      - { name: conversation_id, in: path, required: true, schema: { type: string } }
+      - { name: action_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: refuseMyConversationAction
+      description: Refuses a proposed write; nothing reaches the source. Only the conversation's owner (404 otherwise).
+      responses:
+        "200": { description: The action, refused, content: { application/json: { schema: { $ref: "#/components/schemas/ConversationAction" } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /orgs/{org}/agents/{slug}/metrics:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -3101,6 +3655,179 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/plugins/{name}/assistants:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { $ref: "#/components/parameters/PluginName" }
+    get:
+      tags: [agents]
+      operationId: listPluginAssistants
+      description: >-
+        The assistants an installed plugin ships, with their configuration schema, suggested audience groups and
+        needs: what the owners' installation form is built from (S63-18). Any member of the organisation reads it.
+      responses:
+        "200": { description: The plugin's assistants, content: { application/json: { schema: { $ref: "#/components/schemas/PluginAssistantList" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/assistants:
+    parameters: [{ $ref: "#/components/parameters/Org" }]
+    get:
+      tags: [agents]
+      operationId: listAssistants
+      description: >-
+        The assistant installations of the organisation (ADR 0133) that the caller manages: all of them for an
+        organisation administrator, those whose `owner_groups` hold one of the caller's groups for anyone else. The
+        `status` is computed from the readiness at the time of the call.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AssistantList" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [agents]
+      operationId: installAssistant
+      description: >-
+        Installs an assistant of an installed plugin (ADR 0133): the manifest is read from the installed plugin, the
+        `config` is checked against its `config_schema` (a missing required key is a readiness item, any other
+        violation a 422). The installation is `incomplete` until every required need is bound. Organisation
+        administrator only; audited as `assistant.install`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AssistantInstall" } } }
+      responses:
+        "201": { description: Installed, content: { application/json: { schema: { $ref: "#/components/schemas/Assistant" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/assistants/{slug}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    get:
+      tags: [agents]
+      operationId: getAssistant
+      description: One installation, with its bindings. An organisation administrator or a member of its owner groups.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Assistant" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [agents]
+      operationId: updateAssistant
+      description: >-
+        Configures an installation: config, audience, channel, policy overrides. An organisation administrator or a
+        member of its owner groups; changing `owner_groups` is the administrator's. Audited as `assistant.update`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AssistantUpdate" } } }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: "#/components/schemas/Assistant" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      tags: [agents]
+      operationId: uninstallAssistant
+      description: Uninstalls the assistant, so the installation and its bindings go. Organisation administrator only, audited as `assistant.uninstall`.
+      responses:
+        "204": { description: Uninstalled }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/assistants/{slug}/readiness:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    get:
+      tags: [agents]
+      operationId: getAssistantReadiness
+      description: >-
+        What is missing for the installation to be `ready` (ADR 0133, rule 9): each required need not bound to a
+        connector that serves its operations, with a matching access and the identity mode it needs, and each required
+        configuration key without a value, with who may fix it.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AssistantReadiness" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/assistants/{slug}/webhook-secret:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    post:
+      tags: [agents]
+      operationId: revealAssistantWebhookSecret
+      description: >-
+        The key an installation's task webhook is signed with (S63-13, ADR 0137 point 1), shown ONCE to whoever
+        manages the installation (`assistant:manage`): a second call is a 409 unless `rotate` is true, which makes
+        a new generation and shows that one. Each showing is in the audit log, never the key.
+      requestBody:
+        required: false
+        content: { application/json: { schema: { $ref: "#/components/schemas/WebhookSecretRequest" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookSecret" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /orgs/{org}/assistants/{slug}/knowledge/updates:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    get:
+      tags: [agents]
+      operationId: listAssistantKnowledgeUpdates
+      description: >-
+        The upstream changes a plugin upgrade proposed to the installation's offered knowledge (S63-06, ADR 0138
+        point 3): per document, an add, an update (with its diff, the local copy to the new seed) or a removal.
+        `status` narrows the list. An organisation administrator or a member of the owner groups.
+      parameters:
+        - { name: status, in: query, required: false, schema: { type: string, enum: [proposed, accepted, merged, refused] } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeUpdateList" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/assistants/{slug}/knowledge/updates/{update_id}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+      - { name: update_id, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [agents]
+      operationId: decideAssistantKnowledgeUpdate
+      description: >-
+        Decides a proposal: `accept` applies the seed's change (add, replace, or remove the document) and marks the
+        document as the seed's; `merge` keeps the owners' `content` (required; a removal cannot be merged) as a
+        `local` document; `refuse` leaves the document, and the same upstream state is not proposed again. The index
+        follows. 409 when the proposal is already decided. Audited as `assistant.knowledge.decide`. An organisation
+        administrator or a member of the owner groups.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeUpdateDecision" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/KnowledgeUpdate" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+  /orgs/{org}/assistants/{slug}/bindings/{need}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+      - { name: need, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$" } }
+    put:
+      tags: [agents]
+      operationId: bindAssistantNeed
+      description: >-
+        Binds a need of the assistant to a connector of the organisation. The connector must serve every operation of
+        the need (as discovered), with the same `access`, and support the need's identity mode; otherwise 422 and
+        nothing changes. `enabled: false` is for an optional need only. An organisation administrator or a member of
+        the owner groups; audited as `assistant.bind`.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/AssistantBind" } } }
+      responses:
+        "200": { description: Bound, content: { application/json: { schema: { $ref: "#/components/schemas/Assistant" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /orgs/{org}/plugin-approvals:
     parameters: [{ $ref: "#/components/parameters/Org" }]
     get:
@@ -5126,6 +5853,39 @@ components:
         enablement: { type: array, items: { $ref: "#/components/schemas/ConnectorEnablement" }, description: "one per installed instance of this entry" }
         procedure: { type: [string, "null"], description: "the setup procedure its install shows (`GET /procedures/{id}`): its own, else the generic MCP one (ADR 0067)" }
         install_routes: { type: array, uniqueItems: true, items: { type: string, enum: [direct, gateway] }, description: "how THIS organisation can install the entry: direct (Choregos holds the credential) and/or gateway (through its MCP gateway, ADR 0105)" }
+    ConnectedAccount:
+      type: object
+      required: [org, connector, mode, scopes, status, created_at]
+      properties:
+        org: { type: string }
+        connector: { type: string }
+        mode: { type: string, enum: [user_consent] }
+        scopes: { type: array, items: { type: string } }
+        subject: { type: [string, "null"], description: "The person's subject at the source, when its token response named one." }
+        status: { type: string, enum: [connected, reconnect], description: "`reconnect`: the source stopped honouring the consent." }
+        expires_at: { type: [string, "null"], format: date-time }
+        last_used_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+    ConnectedAccountList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ConnectedAccount" } }
+    ConnectedAccountConnect:
+      type: object
+      required: [authorization_url]
+      properties:
+        authorization_url: { type: string }
+    McpCatalogueUserConsent:
+      type: object
+      required: [authorization_endpoint, token_endpoint, client_id]
+      properties:
+        authorization_endpoint: { type: string, minLength: 1, maxLength: 500 }
+        token_endpoint: { type: string, minLength: 1, maxLength: 500 }
+        client_id: { type: string, minLength: 1, maxLength: 300 }
+        client_secret: { type: [string, "null"], description: "The OAuth client secret typed once: sealed at rest, never returned (ADR 0058); none for a public client." }
+        scopes: { type: array, items: { type: string } }
+        revocation_endpoint: { type: [string, "null"], maxLength: 500 }
     McpCatalogueInstall:
       type: object
       properties:
@@ -5137,6 +5897,7 @@ components:
         allow_egress: { type: boolean, default: false, description: "open the hosts this needs in the organisation's egress allowlist, in the same call (S39-22); needs `tools:grant`. Without it a missing host is a 409 `egress_required`" }
         route: { type: [string, "null"], enum: [direct, gateway, null], description: "absent: gateway when the organisation's gateway is required, or when the entry cannot be installed directly and a gateway is available; else direct (ADR 0105)" }
         gateway_server: { type: [string, "null"], pattern: "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", description: "the server's name at the gateway; defaults to the entry id" }
+        user_consent: { anyOf: [{ $ref: "#/components/schemas/McpCatalogueUserConsent" }, { type: "null" }], description: "installs an `oauth` entry for each person's own consent (ADR 0135 point 6): the entry is then no longer `needs_oauth`; direct route only, no organisation credential" }
     SkillCatalogueInstall:
       type: object
       properties:
@@ -5846,6 +6607,7 @@ components:
         output_text: { type: string, default: "" }
         usage: { $ref: "#/components/schemas/AgentResponseUsage" }
         error: { oneOf: [{ $ref: "#/components/schemas/AgentResponseError" }, { type: "null" }] }
+        memory_updated: { type: array, items: { type: string }, description: "The memory spaces the turn wrote or proposed in (a conversation with an assistant)." }
     AgentDelta:
       type: object
       description: "A `response.output_text.delta` event."
@@ -5871,7 +6633,7 @@ components:
         agent: { type: string }
         agent_version: { type: integer }
         project: { type: string }
-        status: { type: string, enum: [open, closed, failed] }
+        status: { type: string, enum: [open, idle, closed, failed] }
         reason: { type: [string, "null"] }
         model: { type: string }
         responses: { type: integer }
@@ -5881,6 +6643,93 @@ components:
         expires_at: { type: string, format: date-time }
         closed_at: { type: [string, "null"], format: date-time }
         events: { type: array, items: { $ref: "#/components/schemas/AgentSessionEvent" } }
+    ConversationSummary:
+      type: object
+      description: "A row of the caller's conversations (ADR 0134). `idle` is inactive past its `idle_close_minutes`: a new message reopens it."
+      required: [id, agent, agent_version, status, turns, cost_usd, created_at, last_activity_at]
+      properties:
+        id: { type: string }
+        title: { type: [string, "null"], description: "cut from the first message; null before it" }
+        agent: { type: string }
+        agent_version: { type: integer }
+        installation_id: { type: [string, "null"] }
+        org: { type: [string, "null"], description: "the slug of the organisation the conversation belongs to" }
+        assistant: { type: [string, "null"], description: "the slug of the assistant's installation in that organisation, when it is one" }
+        status: { type: string, enum: [open, idle, closed, failed] }
+        turns: { type: integer }
+        cost_usd: { type: number }
+        max_usd: { type: [number, "null"], description: "the conversation's own cap" }
+        created_at: { type: string, format: date-time }
+        last_activity_at: { type: string, format: date-time }
+    ConversationMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role: { type: string, enum: [user, assistant] }
+        content: { type: string }
+    Conversation:
+      description: "A conversation with what was said in it; the system message and the tool traffic are not shown."
+      allOf:
+        - { $ref: "#/components/schemas/ConversationSummary" }
+        - type: object
+          properties:
+            context: { type: [object, "null"], additionalProperties: true }
+            messages: { type: array, items: { $ref: "#/components/schemas/ConversationMessage" } }
+    ConversationPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ConversationSummary" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    ConversationMessageCreate:
+      type: object
+      description: "One turn of a conversation: what the person says."
+      required: [input]
+      additionalProperties: false
+      properties:
+        input: { type: string, minLength: 1, maxLength: 65536 }
+        stream: { type: boolean, default: false }
+    ConversationFeedbackCreate:
+      type: object
+      description: "A thumb on one answer of a session (S63-17, ADR 0140)."
+      required: [rating]
+      properties:
+        rating: { type: string, enum: [up, down] }
+        comment: { type: [string, "null"], maxLength: 2000 }
+        response: { type: [integer, "null"], minimum: 1, description: "The answer, by its 1-based position among the session's responses; absent: the latest" }
+    ConversationFeedback:
+      type: object
+      required: [id, session_id, agent, agent_version, response, rating, created_at]
+      properties:
+        id: { type: string }
+        session_id: { type: string }
+        agent: { type: string }
+        agent_version: { type: integer, description: The agent revision that gave the answer }
+        response: { type: integer }
+        rating: { type: string, enum: [up, down] }
+        comment: { type: [string, "null"] }
+        candidate_status: { type: [string, "null"], description: "`proposed` when the thumb down proposed a candidate case to the agent's owners" }
+        created_at: { type: string, format: date-time }
+    ConversationCandidate:
+      type: object
+      description: "A candidate eval case a thumb down proposed, as the agent's owners read it: pseudonymised, with no author and no raw comment. It is in no suite until an owner adds it."
+      required: [id, agent, agent_version, status, candidate, created_at]
+      properties:
+        id: { type: string }
+        agent: { type: string }
+        agent_version: { type: integer }
+        status: { type: string, enum: [proposed, accepted, dismissed] }
+        candidate: { type: object, additionalProperties: true, description: "`{case, observed, comment}`: a conversation-evals case without assertions (the accepted one carries its assertions), and what the agent did" }
+        created_at: { type: string, format: date-time }
+    ConversationCandidateAccept:
+      type: object
+      description: "What an owner adds to a candidate to make it a case: the assertions, and optionally a name, the scripted tool results and the context."
+      required: [assertions]
+      properties:
+        assertions: { type: object, additionalProperties: true, minProperties: 1, description: "a conversation-evals `assert` object" }
+        name: { type: [string, "null"], minLength: 1, maxLength: 120 }
+        tool_results: { type: [object, "null"], additionalProperties: true }
+        context: { type: [object, "null"], additionalProperties: true }
     AgentSessionTurn:
       type: object
       description: "A response a hosted session's person asked for, waiting for the session's pod (S41-11)."
@@ -6534,7 +7383,7 @@ components:
       type: object
       required: [name]
       properties:
-        name: { type: string, description: "eval_suite, newer_than_production, is_candidate, candidate_runs, candidate_success_rate, soak, previously_in_production, human_session, fresh_authentication, live_eval, approvals (informational: how many people must approve)" }
+        name: { type: string, description: "eval_suite, newer_than_production, is_candidate, candidate_runs, candidate_success_rate, soak, previously_in_production, human_session, fresh_authentication, live_eval, conversation_suite (the assistant's conversation suites, production only), approvals (informational: how many people must approve)" }
         required: { type: boolean, default: true }
         passed: { type: [boolean, "null"], description: "null: not applicable" }
         detail: { type: [string, "null"] }
@@ -7159,6 +8008,7 @@ components:
         markdown: { type: [string, "null"], description: returned by the reading of one document }
         source_id: { type: [string, "null"], description: the source it was synced from; none for an upload }
         source_url: { type: [string, "null"], description: where to open the original }
+        origin: { type: string, description: "`local` (written by people), or `seed@<plugin version>` for the copy of an assistant's seed document that nobody changed (S63-06)" }
     KnowledgeDistillRequest:
       type: object
       description: Optional body of `distillKnowledgeBase` (S42-10).
@@ -8227,6 +9077,433 @@ components:
         scopes: { type: array, items: { $ref: "#/components/schemas/TokenScope" } }
         project: { type: [string, "null"], description: "`org:slug` of the linked project, if there is one." }
         last_client: { type: [string, "null"], description: "The client of the last call (`User-Agent`, truncated)." }
+    AssistantInstall:
+      type: object
+      required: [plugin, assistant]
+      properties:
+        plugin: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$", description: "An installed plugin of the organisation." }
+        assistant: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$", description: "`metadata.name` of the assistant in that plugin." }
+        slug: { type: [string, "null"], pattern: "^[a-z0-9][a-z0-9-]{0,62}$", description: "Defaults to the assistant's name." }
+        config: { type: object, additionalProperties: true }
+        owner_groups: { type: array, items: { type: string, minLength: 1, maxLength: 255 } }
+        audience_groups: { type: array, items: { type: string, minLength: 1, maxLength: 255 } }
+        channel: { type: string, enum: [stable, candidate], default: stable }
+    AssistantUpdate:
+      type: object
+      properties:
+        config: { type: object, additionalProperties: true }
+        owner_groups: { type: array, items: { type: string, minLength: 1, maxLength: 255 } }
+        audience_groups: { type: array, items: { type: string, minLength: 1, maxLength: 255 } }
+        channel: { type: string, enum: [stable, candidate] }
+        policy_overrides: { type: object, additionalProperties: true }
+    ConversationActionList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/ConversationAction" } }
+    ConversationAction:
+      type: object
+      required: [id, conversation_id, need, operation, arguments, summary, status, created_at]
+      properties:
+        id: { type: string }
+        conversation_id: { type: string }
+        need: { type: string }
+        operation: { type: string }
+        arguments: { type: object, additionalProperties: true }
+        summary: { type: string }
+        status: { type: string, enum: [proposed, confirmed, executed, refused, expired, governed], description: "`governed`: a console approval, decided as a governed action named in `result.action`." }
+        result: { type: [object, "null"], additionalProperties: true }
+        diff: { type: [object, "null"], additionalProperties: true, description: "What the source's `<operation>_preview` returned at the proposal, when it serves one." }
+        confirmed_by: { type: [string, "null"] }
+        confirmed_at: { type: [string, "null"], format: date-time }
+        executed_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+    AssistantBind:
+      type: object
+      required: [connector]
+      properties:
+        connector: { type: string, description: "The name of an organisation connector." }
+        enabled: { type: boolean, default: true }
+        approval: { type: [string, "null"], enum: [inline, console, null], description: "A write's approval, raised above the manifest's (inline to console), never below it: 422." }
+    AssistantBinding:
+      type: object
+      required: [need, connector, operations, identity, enabled]
+      properties:
+        need: { type: string }
+        connector: { type: string }
+        operations: { type: array, items: { type: string } }
+        identity: { type: string, enum: [service, user_exchange, user_consent] }
+        approval: { type: [string, "null"], enum: [none, inline, console, null] }
+        enabled: { type: boolean }
+    Assistant:
+      type: object
+      required: [slug, plugin, plugin_version, assistant_name, config, owner_groups, audience_groups, channel, status, policy_overrides, bindings, created_at]
+      properties:
+        slug: { type: string }
+        plugin: { type: string }
+        plugin_version: { type: string }
+        assistant_name: { type: string }
+        display_name: { type: [string, "null"] }
+        config: { type: object, additionalProperties: true }
+        owner_groups: { type: array, items: { type: string } }
+        audience_groups: { type: array, items: { type: string } }
+        channel: { type: string, enum: [stable, candidate] }
+        status: { type: string, enum: [incomplete, ready, suspended] }
+        policy_overrides: { type: object, additionalProperties: true }
+        bindings: { type: array, items: { $ref: "#/components/schemas/AssistantBinding" } }
+        created_by: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+    AssistantReadLine:
+      type: object
+      required: [id, user_id, need, operation, at]
+      properties:
+        id: { type: string }
+        user_id: { type: string }
+        conversation_id: { type: [string, "null"] }
+        work_item_key: { type: [string, "null"] }
+        need: { type: string }
+        operation: { type: string }
+        subject_type: { type: [string, "null"] }
+        subject_key: { type: [string, "null"] }
+        delegation_id: { type: [string, "null"] }
+        at: { type: string, format: date-time }
+    AssistantReadPage:
+      type: object
+      required: [items, meta]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/AssistantReadLine" } }
+        meta: { $ref: "#/components/schemas/PageMeta" }
+    SubjectErasureRequest:
+      type: object
+      required: [subject, mode]
+      properties:
+        subject: { $ref: "#/components/schemas/MemorySubject" }
+        mode: { type: string, enum: [export, erase] }
+        conversations: { type: string, enum: [redact, delete], default: redact }
+    SubjectMemoryFact:
+      type: object
+      required: [id, content, status]
+      properties:
+        id: { type: string }
+        content: { type: string }
+        status: { type: string }
+        created_at: { type: [string, "null"], format: date-time }
+    SubjectMemory:
+      type: object
+      required: [user_id, space]
+      properties:
+        user_id: { type: string }
+        space: { type: string }
+        facts: { type: array, items: { $ref: "#/components/schemas/SubjectMemoryFact" } }
+        profiles: { type: array, items: { type: object, additionalProperties: true } }
+    SubjectConversation:
+      type: object
+      required: [id, user_id]
+      properties:
+        id: { type: string }
+        user_id: { type: string }
+        title: { type: [string, "null"] }
+        created_at: { type: [string, "null"], format: date-time }
+        last_activity_at: { type: [string, "null"], format: date-time }
+    SubjectErasure:
+      type: object
+      required: [mode, subject]
+      properties:
+        mode: { type: string, enum: [export, erase] }
+        subject: { $ref: "#/components/schemas/MemorySubject" }
+        memories: { type: array, items: { $ref: "#/components/schemas/SubjectMemory" } }
+        conversations: { type: array, items: { $ref: "#/components/schemas/SubjectConversation" } }
+        memories_erased: { type: integer }
+        conversations_redacted: { type: integer }
+        conversations_deleted: { type: integer }
+        task_artifacts_erased: { type: integer, description: "The artifacts of the task runs whose reads were about the subject, deleted." }
+    UserErasure:
+      type: object
+      required: [conversations, memory_stores, memory_facts, memory_profiles]
+      properties:
+        conversations: { type: integer }
+        memory_stores: { type: integer }
+        memory_facts: { type: integer }
+        memory_profiles: { type: integer }
+        others: { type: object, additionalProperties: { type: integer } }
+    MemorySubject:
+      type: object
+      required: [type, key]
+      properties:
+        type: { type: string }
+        key: { type: string }
+    MemoryFactView:
+      type: object
+      required: [id, content, status, pinned]
+      properties:
+        id: { type: string }
+        content: { type: string }
+        status: { type: string, description: "proposed | active | rejected | expired" }
+        pinned: { type: boolean }
+        reason: { type: [string, "null"] }
+        created_at: { type: [string, "null"], format: date-time }
+    MemoryProfileVersion:
+      type: object
+      required: [version, status, document]
+      properties:
+        version: { type: integer }
+        status: { type: string, description: "proposed | active | rejected | superseded" }
+        document: { type: object, additionalProperties: true }
+        updated_by: { type: [string, "null"] }
+        created_at: { type: [string, "null"], format: date-time }
+    MemorySubjectSpace:
+      type: object
+      description: "What is remembered in one store: of the person (no subject) or of one subject."
+      properties:
+        subject: { oneOf: [{ $ref: "#/components/schemas/MemorySubject" }, { type: "null" }] }
+        facts: { type: array, items: { $ref: "#/components/schemas/MemoryFactView" } }
+        profiles: { type: array, items: { $ref: "#/components/schemas/MemoryProfileVersion" } }
+    MemorySpace:
+      type: object
+      required: [space, scope, kind, writes, subjects]
+      properties:
+        space: { type: string }
+        scope: { type: string, enum: [installation, user, user_subject] }
+        kind: { type: string, enum: [facts, profile] }
+        writes: { type: string }
+        subjects: { type: array, items: { $ref: "#/components/schemas/MemorySubjectSpace" } }
+    MemoryExport:
+      type: object
+      required: [installation, organisation, exported_at, spaces]
+      properties:
+        installation: { type: string }
+        organisation: { type: string }
+        exported_at: { type: string, format: date-time }
+        spaces: { type: array, items: { $ref: "#/components/schemas/MemorySpace" } }
+    MemoryAction:
+      type: object
+      required: [action]
+      additionalProperties: false
+      properties:
+        action: { type: string, enum: [confirm, reject, pin, unpin, correct, add] }
+        fact_id: { type: [string, "null"] }
+        version: { type: [integer, "null"], minimum: 1 }
+        content: { type: [string, "null"], minLength: 1, maxLength: 2000 }
+        document: { type: [object, "null"], additionalProperties: true }
+    AssistantList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Assistant" } }
+    MyAssistant:
+      type: object
+      required: [org, slug, name, status]
+      properties:
+        org: { type: string }
+        slug: { type: string }
+        name: { type: string }
+        display_name: { type: [string, "null"] }
+        description: { type: [string, "null"] }
+        status: { type: string, enum: [incomplete, ready, suspended] }
+        memory_spaces: { type: array, items: { $ref: "#/components/schemas/AssistantMemorySpace" } }
+        tasks: { type: array, items: { $ref: "#/components/schemas/AssistantTaskDecl" } }
+        needs: { type: array, items: { $ref: "#/components/schemas/AssistantNeed" } }
+    EmbedToken:
+      type: object
+      required: [token, expires_in]
+      properties:
+        token: { type: string }
+        expires_in: { type: integer, description: "seconds" }
+    AssistantEmbed:
+      type: object
+      required: [embed_origins]
+      properties:
+        embed_origins: { type: array, items: { type: string } }
+    AssistantMemorySpace:
+      type: object
+      required: [name, scope, kind]
+      properties:
+        name: { type: string }
+        scope: { type: string, enum: [user, user_subject, installation] }
+        kind: { type: string, enum: [facts, profile] }
+    AssistantNeed:
+      type: object
+      required: [need, identity, access, required]
+      properties:
+        need: { type: string }
+        identity: { type: string, enum: [service, user_exchange, user_consent] }
+        access: { type: string }
+        required: { type: boolean }
+    AssistantTaskDecl:
+      type: object
+      required: [name, delegation, schedulable]
+      properties:
+        name: { type: string }
+        delegation: { type: string, enum: [none, read_only] }
+        schedulable: { type: boolean }
+    PluginAssistant:
+      type: object
+      required: [name, suggested_groups, needs]
+      properties:
+        name: { type: string }
+        display_name: { type: [string, "null"] }
+        description: { type: [string, "null"] }
+        config_schema: { type: [object, "null"], additionalProperties: true }
+        suggested_groups: { type: array, items: { type: string } }
+        needs: { type: array, items: { $ref: "#/components/schemas/AssistantNeed" } }
+        memory_spaces: { type: array, items: { $ref: "#/components/schemas/AssistantMemorySpace" }, description: "Every declared space, the installation's own included (the owners' page); a person's page never lists an installation space." }
+    PluginAssistantList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/PluginAssistant" } }
+    MyAssistantList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/MyAssistant" } }
+    TaskSubscriptionPut:
+      type: object
+      properties:
+        kind: { type: string, enum: [on_demand, schedule, poll], default: schedule }
+        cron: { type: [string, "null"], maxLength: 128 }
+        timezone: { type: [string, "null"], maxLength: 64, description: "An IANA time zone, e.g. Europe/Paris." }
+        enabled: { type: boolean, default: true }
+    TaskTrigger:
+      type: object
+      required: [kind]
+      properties:
+        kind: { type: string, enum: [on_demand, schedule, poll] }
+        cron: { type: [string, "null"] }
+        timezone: { type: string, default: UTC }
+    TaskSubscription:
+      type: object
+      required: [task, trigger, delegation, deliver, enabled, created_at]
+      properties:
+        task: { type: string }
+        trigger: { $ref: "#/components/schemas/TaskTrigger" }
+        delegation: { type: string, enum: [none, read_only] }
+        deliver: { type: array, items: { type: string } }
+        enabled: { type: boolean }
+        delegation_id: { type: [string, "null"] }
+        last_run_at: { type: [string, "null"], format: date-time }
+        last_refusal: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+    TaskRun:
+      type: object
+      required: [work_item_id, key, project]
+      properties:
+        work_item_id: { type: string }
+        key: { type: string }
+        project: { type: string }
+    InboxItem:
+      type: object
+      required: [id, task, installation, work_item_id, name, version, type, media_type, created_at]
+      properties:
+        id: { type: string }
+        task: { type: string }
+        installation: { type: string }
+        work_item_id: { type: string }
+        name: { type: string }
+        version: { type: integer }
+        type: { type: string }
+        media_type: { type: string }
+        content: {}
+        created_at: { type: string, format: date-time }
+    InboxList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/InboxItem" } }
+    DelegationCreate:
+      type: object
+      required: [org, assistant, task]
+      properties:
+        org: { type: string, minLength: 1, maxLength: 64 }
+        assistant: { type: string, minLength: 1, maxLength: 63 }
+        task: { type: string, minLength: 1, maxLength: 63 }
+        agree_to: { type: array, items: { type: string }, maxItems: 64, description: "Must equal the needs the task reads; else 409 with the list." }
+        expires_in_days: { type: [integer, "null"], minimum: 1, maximum: 3650, description: "90 by default; capped by the installation's `policy_overrides.delegation.max_days`." }
+    DelegationNeed:
+      type: object
+      required: [need, operations, identity]
+      properties:
+        need: { type: string }
+        operations: { type: array, items: { type: string } }
+        identity: { type: string, enum: [service, user_exchange, user_consent] }
+    Delegation:
+      type: object
+      required: [id, org, assistant, task, needs, granted_at, expires_at, status, manifest_digest]
+      properties:
+        id: { type: string }
+        org: { type: string }
+        assistant: { type: string }
+        task: { type: string }
+        needs: { type: array, items: { $ref: "#/components/schemas/DelegationNeed" } }
+        granted_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        revoked_at: { type: [string, "null"], format: date-time }
+        status: { type: string, enum: [active, suspended, revoked, expired] }
+        suspended_reason: { type: [string, "null"] }
+        manifest_digest: { type: string }
+        reminded_at: { type: [string, "null"], format: date-time, description: "When the person was told it ends soon, if they were." }
+    DelegationList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Delegation" } }
+    WebhookSecretRequest:
+      type: object
+      properties:
+        rotate: { type: boolean, default: false, description: "Make a new key instead of refusing a second showing." }
+    WebhookSecret:
+      type: object
+      required: [secret, generation, shown_at]
+      properties:
+        secret: { type: string }
+        generation: { type: integer }
+        shown_at: { type: string, format: date-time }
+    AssistantConversationOpen:
+      type: object
+      properties:
+        context: { type: [object, "null"], additionalProperties: true, description: "Validated against `surfaces.embed.context_schema`; data for the agent, never a subject." }
+    AssistantReadinessItem:
+      type: object
+      required: [kind, message, fix_by, groups]
+      properties:
+        kind: { type: string, enum: [assistant_missing, config_missing, need_unbound, need_not_served, identity_unsupported] }
+        need: { type: [string, "null"] }
+        key: { type: [string, "null"], description: "The configuration key, for `config_missing`." }
+        message: { type: string }
+        fix_by: { type: string, enum: [owners, org_admin], description: "`owners`: an organisation administrator or a member of `groups`; `org_admin`: the organisation administrator." }
+        groups: { type: array, items: { type: string } }
+    KnowledgeUpdate:
+      type: object
+      required: [id, base, path, kind, diff, plugin_version, status, created_at]
+      properties:
+        id: { type: string }
+        base: { type: string, description: the installation's knowledge base (slug) }
+        path: { type: string, description: the document's file name in the base }
+        kind: { type: string, enum: [add, update, remove] }
+        diff: { type: string, description: "unified diff, the local copy to the new seed; empty for an add" }
+        proposed_content: { type: [string, "null"], description: the new seed's text; none for a removal }
+        plugin_version: { type: string }
+        status: { type: string, enum: [proposed, accepted, merged, refused] }
+        decided_by: { type: [string, "null"] }
+        decided_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+    KnowledgeUpdateList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/KnowledgeUpdate" } }
+    KnowledgeUpdateDecision:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [accept, refuse, merge] }
+        content: { type: [string, "null"], maxLength: 2000000, description: the text to keep, for a merge }
+    AssistantReadiness:
+      type: object
+      required: [status, items]
+      properties:
+        status: { type: string, enum: [incomplete, ready, suspended] }
+        items: { type: array, items: { $ref: "#/components/schemas/AssistantReadinessItem" } }
     MachineAccountCreate:
       type: object
       required: [slug]
