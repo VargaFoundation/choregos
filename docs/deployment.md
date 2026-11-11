@@ -68,6 +68,11 @@ Only the API reads and writes the object store: a runner hands its files to the 
 under its run token and never holds the store's keys. Under `CHOREGOS_FAKES=1` (or with a
 `memory://` URL) the store is in memory and lost on restart.
 
+Since 0.27 the API also deletes objects (the bytes of a task artifact when a person or a subject is erased,
+and when the retention purge removes an expired one): the store's credentials need `s3:DeleteObject` on the
+prefix. Without it an erasure of an assistant's data that holds a file artifact answers 502 and erases
+nothing, and the purge keeps the expired rows and retries them at every pass.
+
 An empty `endpoint` means AWS, and without `secretRef` the calls are unsigned: nothing fails at install, and
 the first run that writes a file loses its run. The project's readiness (`object-store` item, `docs/usage.md`)
 probes the bucket when a workflow declares a file output and names the cause.
@@ -1415,6 +1420,15 @@ value>` on the first model call. Nothing said the key had never resolved.
 
 If the API refuses to start with `réglages non résolus`, fix the source of the secret — the key
 is missing where it is stored, not where it is read.
+
+## Upgrading to 0.27
+
+One permission changes. The API now deletes the objects of a task artifact it erases or purges (an assistant's
+task output, S63-24), where 0.26 left them to the bucket's lifecycle rule.
+
+| What | Why | What to do |
+| :-- | :-- | :-- |
+| `s3:DeleteObject` on the object store's bucket and prefix | The erasure of a person's or a subject's data (S63-16) and the retention purge delete the bytes before the rows. A store that refuses the delete fails the erasure (502, nothing erased) and keeps the expired rows for the next purge pass. | Add the permission to the credentials of `objectStore.secretRef` (an IAM policy, or the MinIO/RustFS policy of the key). A lifecycle rule on the bucket is no longer needed for this, and stays harmless. No migration. |
 
 ## Upgrading to 0.26
 
