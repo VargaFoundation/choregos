@@ -930,7 +930,19 @@ async def _cancel(door: Door, params: dict[str, Any]) -> dict[str, Any]:
         target_id=item.id,
         reason="canceled over A2A",
     )
-    return await task_of(door, item, project)
+    # The stop is delivered and cannot be taken back, but the interpreter closes the work item a moment
+    # later: read now, it is still open. The answer is the task as the stop leaves it (S62-14, production
+    # 2026-11-11: `CancelTask` answered `TASK_STATE_INPUT_REQUIRED`, `tasks/get` read `canceled` seconds
+    # later).
+    task = await task_of(door, item, project)
+    if task["status"]["state"] not in TERMINAL:
+        link = _console_url(door, project, item)
+        text = f"Stopped over A2A in state `{item.state}`: the work item closes in a moment. See {link}"
+        task["status"] = {
+            "state": "canceled",
+            "message": _status_message(item, "canceled", [{"kind": "text", "text": text}]),
+        }
+    return task
 
 
 # ───────────────────────── message/stream, tasks/resubscribe ─────────────────────────
