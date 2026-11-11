@@ -222,10 +222,10 @@ async def test_the_per_conversation_cap_refuses_the_turn_that_exceeds_it(
     await _ready(client)
     one = await _one_turn(client, app, upstream)
 
-    await _budget(client, per_conversation_usd=one * 1.1)
+    await _budget(client, per_conversation_usd=one + 0.001)
     person = await _as(app, "probe@varga.dev")
     conversation = await _open(person)
-    assert (await _record(conversation)).max_usd == pytest.approx(one * 1.1)
+    assert (await _record(conversation)).max_usd == pytest.approx(one + 0.001)
     upstream.model.say("Ok.").say("Never said.")
     assert (await _turn(person, conversation)).status_code == 200
     calls = len(upstream.model.requests)
@@ -246,7 +246,7 @@ async def test_the_per_user_month_cap_refuses_the_turn_that_exceeds_it(
     await _ready(client)
     one = await _one_turn(client, app, upstream)  # the probe has spent one turn this month
 
-    await _budget(client, per_user_month_usd=one * 2.1)
+    await _budget(client, per_user_month_usd=one * 2 + 0.001)
     person = await _as(app, "probe@varga.dev")
     conversation = await _open(person)
     upstream.model.say("Ok.").say("Never said.").say("Other's.")
@@ -272,7 +272,7 @@ async def test_the_per_installation_month_cap_refuses_the_turn_that_exceeds_it(
     await _ready(client)
     one = await _one_turn(client, app, upstream)  # another person's turn, in the installation's month
 
-    await _budget(client, per_installation_month_usd=one * 2.1)
+    await _budget(client, per_installation_month_usd=one * 2 + 0.001)
     other = await _as(app, "other@varga.dev")
     conversation = await _open(other)
     upstream.model.say("Ok.").say("Never said.")
@@ -297,7 +297,7 @@ async def test_deleting_a_conversation_does_not_give_its_spend_back(
     (listed,) = (await person.get(f"{ME}/conversations")).json()["items"]
     assert (await person.delete(f"{ME}/conversations/{listed['id']}")).status_code == 204
 
-    await _budget(client, per_user_month_usd=one * 1.1)
+    await _budget(client, per_user_month_usd=one + 0.001)
     conversation = await _open(person)
     upstream.model.say("Never said.")
     refused = await _turn(person, conversation)

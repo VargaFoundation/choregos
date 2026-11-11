@@ -21,6 +21,7 @@ from sqlalchemy import select
 from .agent_scopes_kit import add_member, as_user
 from .kits.assistant_door import ORG, offline  # noqa: F401
 from .kits.conversations import _open, _say
+from .kits.synthetic_installation import synthetic_installation  # noqa: F401
 from .kits.user_exchange import (  # noqa: F401 - fixtures imported for their use here
     AUDIENCE,
     EMAIL,
@@ -32,6 +33,9 @@ from .kits.user_exchange import (  # noqa: F401 - fixtures imported for their us
     source,
 )
 from .test_agent_sessions import Upstream, _agent, upstream  # noqa: F401
+
+# The installation of these tests is a row, not a plugin: its readiness is not their subject.
+pytestmark = pytest.mark.usefixtures("synthetic_installation")
 
 ME = "/api/v1/me/conversations"
 AUDIENCE_GROUP = "grp-buyers"
