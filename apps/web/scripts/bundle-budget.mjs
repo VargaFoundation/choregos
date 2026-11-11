@@ -39,7 +39,10 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // brings 29 kB where a library would bring megabytes.
 // 2026-11-10 (S59-14): 2250 -> 2275 kB. S60-03's agent Access tab and the knowledge base page's status banner,
 // "who uses it" and source rows take the console to 2253 kB, with no new dependency.
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2275);
+// 2026-11-11 (S63, assistants): 2275 -> 2350 kB. The assistants' screens (catalogue, installation, conversation
+// with its stream, memory page, tasks and delegations, the embedded component and its sign-in) take the console
+// to 2339 kB, with no new dependency.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2350);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* files(dir) {
