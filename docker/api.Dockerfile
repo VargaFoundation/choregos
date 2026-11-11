@@ -106,6 +106,17 @@ RUN set -eu; \
     echo "${sum}  /out/cosign" | sha256sum -c -; \
     chmod 0755 /out/cosign
 
+# The user documentation (`docs/site/**`, S62-10, ADR 0150), Markdown only: the MCP door's `docs_search`
+# and `docs_read` serve it, so an assistant reads the documentation of this very version, behind the
+# firewall. The whole of `docs` enters this throwaway stage because `docs/site` may not exist yet (a
+# COPY of a missing path fails the build); only its `.md` and `.mdx` files reach the image. Nothing
+# serves images through the door, so none is carried. An empty result: "no bundled documentation".
+FROM python:3.12-slim-bookworm AS docs
+COPY docs /src/docs
+RUN mkdir -p /out \
+ && if [ -d /src/docs/site ]; then cd /src/docs/site \
+    && find . -type f \( -name '*.md' -o -name '*.mdx' \) -exec cp --parents {} /out/ \; ; fi
+
 # Base common to both targets (stage `commun`): nothing that decides what the container does.
 FROM python:3.12-slim-bookworm AS commun
 # `PIP_PYTHON`: the enterprise edition's image is built FROM this one and adds its wheel
@@ -146,6 +157,8 @@ COPY --from=cosign /out/cosign /usr/local/bin/cosign
 # SkillSpector (ADR 0095): the gate runs it on every version a person publishes.
 COPY --from=skillspector /opt/skillspector /opt/skillspector
 ENV CHOREGOS_SKILL_SCANNER=skillspector
+# The documentation, at the path `CHOREGOS_DOCS_DIR` defaults to (`config.py`): read only.
+COPY --from=docs /out /opt/choregos/docs
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
   CMD python -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/healthz')"

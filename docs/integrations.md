@@ -29,8 +29,20 @@ and `2025-03-26`.
 | `summarize_run` | One agent run: stage, backend, model, status, cost, summary | `mcp:read` |
 | `list_pending_decisions` | What waits for a person, with the link where it is decided | `mcp:read` |
 | `create_work_item` | Opens a work item in a project (in its tracker first when external, ADR 0059) | `mcp:write` and the right to control work items |
+| `docs_search` | Searches this platform's user documentation: ranked pages with title, slug, public URL and a snippet | `mcp:read` |
+| `docs_read` | One documentation page as Markdown, by slug, or one of its sections by heading anchor; a long page comes in parts (`offset`) | `mcp:read` |
 
 A tool you are not allowed to use is not announced, and calling it answers like an unknown tool.
+
+**The documentation, from the platform itself** ([ADR 0150](adr/0150-the-instance-serves-its-own-documentation-over-mcp.md)).
+The API image carries the Markdown of the user documentation (`docs/site/` in the repository) of its
+own version, at `/opt/choregos/docs` (`CHOREGOS_DOCS_DIR` overrides). `docs_search` and `docs_read`
+read it, so your assistant answers from the documentation of the version you run, behind your firewall,
+without internet. The links they give point to the public site, `CHOREGOS_DOCS_URL` (default
+`https://docs.varga.foundation/choregos`). Every token that opens the door may use them, bound to a
+project or not; they are audited (`mcp.call`) and rate limited like the other reads. A build without
+documentation answers so, with the public URL. Ask *"how do gates work in Choregos?"*: the client
+should call `docs_search`, then `docs_read`.
 
 ### Assistants (ADR 0139)
 
