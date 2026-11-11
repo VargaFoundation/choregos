@@ -30,7 +30,7 @@ from choregos_core import PolicyEngine, matches_any, telemetry, utcnow
 from choregos_core.run_closure import run_is_closed
 from choregos_core.workspace import is_read_only_scope
 from fastapi import APIRouter, Header, Query, Request, Response, status
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from ..catalogue import call as call_catalogue_tool
 from ..config import get_settings
@@ -94,6 +94,7 @@ from ..services.extension_tools import (
 )
 from ..services.network import record_decisions, run_network
 from ..services.receipts import PRODUCED, PROMPT_DOCUMENTS, READ, record, record_digests
+from ..services.run_cancel import without_a_result
 from ..services.tickets import outputs_to_store
 from ..services.tool_call_cap import take_tool_call_slot
 from ..temporal import get_temporal, interpreter_id
@@ -231,6 +232,16 @@ async def post_result(id: str, body: StageResult, session: Db, claims: RunAuth) 
     payload = body.model_dump(mode="json", by_alias=True)
     await session.refresh(run, with_for_update={"key_share": True})
     if run_is_closed(run):
+        return {"status": "already_recorded", "run_id": run.id}
+    # First writer wins (ADR 0142 §2): a person who stopped the run in the meantime keeps the stop,
+    # and this result changes nothing; written first, it is the stop that changes nothing.
+    claimed = await session.execute(
+        update(Run)
+        .where(Run.id == run.id, without_a_result())
+        .values(result=payload)
+        .execution_options(synchronize_session=False)
+    )
+    if claimed.rowcount != 1:  # type: ignore[attr-defined]
         return {"status": "already_recorded", "run_id": run.id}
     run.result = payload
     run.status = "succeeded" if body.status == "done" else "failed"

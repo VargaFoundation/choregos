@@ -8,7 +8,7 @@ from typing import Annotated, Any
 
 from choregos_core import access_report, matches_any
 from choregos_core.tool_ledger import IN_FLIGHT
-from fastapi import APIRouter, Header, Query, Request
+from fastapi import APIRouter, Header, Query, Request, status
 from sqlalchemy import select
 from sse_starlette.sse import EventSourceResponse
 
@@ -18,8 +18,9 @@ from ..errors import forbidden, not_found
 from ..events import get_bus, sse_format
 from ..knowledge.marked import readable, require_readable
 from ..rbac import Permission
-from ..schemas import ArtifactRef, DiffFileDto, DiffSummaryDto, RunDto, RunEventDto, RunLogsDto
+from ..schemas import ArtifactRef, DiffFileDto, DiffSummaryDto, RunDto, RunEventDto, RunLogsDto, StopRequest
 from ..services import run_dto, tool_connectors_of
+from ..services.run_cancel import cancel_run_now
 
 router = APIRouter(tags=["runs"])
 
@@ -67,6 +68,21 @@ async def list_runs(id: str, session: Db, principal: Me) -> list[RunDto]:
 async def get_run(id: str, session: Db, principal: Me) -> RunDto:
     run, project = await _run(session, id, principal)
     return run_dto(run, project.slug, await tool_connectors_of(session, run, project))
+
+
+@router.post(
+    "/runs/{id}/cancel",
+    response_model=RunDto,
+    status_code=status.HTTP_202_ACCEPTED,
+    operation_id="cancelRun",
+)
+async def cancel_run(id: str, body: StopRequest, session: Db, principal: Me) -> RunDto:
+    """Stop this run now, with a reason (ADR 0142 §2): its result is written as stopped by the caller
+    unless one is written already (409, saying how it ended), and its executor is stopped once that
+    is committed. Needs `item:control` on the run's project; audited as `run.cancel`."""
+    run, project = await _run(session, id, principal)
+    stopped = await cancel_run_now(session, principal, run, body.reason)
+    return run_dto(stopped, project.slug)
 
 
 @router.get("/runs/{id}/events", operation_id="getRunEvents")

@@ -21,6 +21,7 @@ from .knowledge_distill import KnowledgeDistill
 from .memory import MemoryIngestion
 from .provisioning import ProjectProvisioning
 from .reconciliation import TrackerReconciliation
+from .run_cancellation import RunCancellation
 from .train import ReleaseTrain
 from .trial import AgentTrial
 
@@ -38,6 +39,7 @@ ALL_WORKFLOWS = [
     KnowledgeDistill,
     HostedImageBuild,
     AgentSessionPod,
+    RunCancellation,
 ]
 
 WORKFLOW_ACTIVITIES = [
@@ -62,6 +64,7 @@ __all__ = [
     "MemoryIngestion",
     "ProjectProvisioning",
     "ReleaseTrain",
+    "RunCancellation",
     "TrackerReconciliation",
     "WorkflowInterpreter",
 ]

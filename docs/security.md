@@ -661,7 +661,8 @@ process (API, workers): nothing is shared.
   agent under its backend's own variable (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`…), never under that
   name (S57-02). It is never stored in `runs.stage_input` and never carried by a Temporal payload
   (#519, #523).
-- The key is revoked however the run ends: `collect_spend` at the end of a stage; `cancel_run`;
+- The key is revoked however the run ends: `collect_spend` at the end of a stage; `cancel_run`
+  (the evals, and `RunCancellation` for a run a person stopped, ADR 0142 §2);
   and `record_workflow_failure` when the interpreter dies — cancelled, or `await_run` gave up —
   which books the spend of the ticket's runs left uncollected first. A revocation that fails is
   logged and the key dies at its TTL (`max_minutes + 30`). Migration `e7a9c1b3d5f7` scrubbed the

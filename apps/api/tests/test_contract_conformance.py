@@ -11,14 +11,12 @@ PREFIX = "/api/v1"
 # Contract-first (ADR 0001): operations the contract declares before the API serves them. Each entry
 # names the story that implements it; an entry the API does serve must be removed from here.
 CONTRACT_ONLY: dict[str, str] = {
-    "cancelRun": "S64-03",
     "stopAgent": "S64-04",
     "listOrgActivity": "S64-05",
     "streamOrgActivity": "S64-05",
     "getRunContextBreakdown": "S64-08",
 }
 CONTRACT_ONLY_PATHS: set[str] = {
-    "/runs/{id}/cancel",
     "/orgs/{org}/agents/{slug}/stop",
     "/orgs/{org}/activity",
     "/orgs/{org}/activity/stream",
