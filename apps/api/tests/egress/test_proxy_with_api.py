@@ -170,3 +170,94 @@ async def test_end_to_end_the_proxy_obeys_the_policy_stored_in_the_database(
             for r in (await session.execute(select(NetworkDecision))).scalars().all()
         }
     assert rows == {("pypi.org", "allowed"): 1, ("stripe.com", "denied"): 1, ("github.com", "allowed"): 1}
+
+
+# ───────────────────────── a closed run has no network (ADR 0143) ─────────────────────────
+
+
+async def close(run_id: str, *, status: str = "failed", reason: str = "timeout") -> None:
+    """Close the row as the orchestrator does when it stops waiting for the run (`close_run`)."""
+    from choregos_api.db.models import Run
+    from choregos_api.db.session import session_scope
+    from choregos_contracts import StageResult
+    from choregos_core.run_closure import close_run
+
+    async with session_scope() as session:
+        run = await session.get(Run, run_id)
+        assert run is not None
+        assert close_run(run, StageResult.failure(f"the wait ended ({reason})", reason), status=status)
+
+
+async def test_a_closed_run_has_no_network_and_the_refusal_is_remembered(
+    client: AsyncClient, project: dict[str, Any], edge: tuple[Counting, AsyncClient]
+) -> None:
+    """The API answers 409 for a closed run: a refusal like a wrong token's, not an outage the
+    proxy would ask about again at every request."""
+    await _set_policy(client, project, ["pypi.org"])
+    headers = await _run(project, "run-edge-6")
+    await close("run-edge-6")
+    transport, http = edge
+    clock = Clock()
+    source = HttpRunNetworkSource(BASE, client=http, clock=clock, refusal_seconds=5)
+
+    with pytest.raises(UnknownRunError):
+        await source.get("run-edge-6", _token(headers))
+    clock.now += 4
+    with pytest.raises(UnknownRunError):
+        await source.get("run-edge-6", _token(headers))
+    assert len(transport.paths) == 1, "a process that outlives its run does not hammer the API"
+
+
+async def test_a_run_closed_while_its_network_is_cached_loses_it_when_the_cache_expires(
+    client: AsyncClient, project: dict[str, Any], edge: tuple[Counting, AsyncClient]
+) -> None:
+    """The bound is the proxy's cache (`cache_seconds`), not the run token's life."""
+    await _set_policy(client, project, ["pypi.org"])
+    headers = await _run(project, "run-edge-7")
+    _, http = edge
+    clock = Clock()
+    source = HttpRunNetworkSource(BASE, client=http, cache_seconds=60, clock=clock)
+    assert (await source.get("run-edge-7", _token(headers))).allow == ["pypi.org"]
+
+    await close("run-edge-7", status="cancelled", reason="cancelled")
+
+    clock.now += 30
+    assert (await source.get("run-edge-7", _token(headers))).allow == ["pypi.org"], "within the cache"
+    clock.now += 31
+    with pytest.raises(UnknownRunError):
+        await source.get("run-edge-7", _token(headers))
+
+
+async def test_end_to_end_the_proxy_stops_serving_a_run_that_was_closed(
+    client: AsyncClient, project: dict[str, Any], edge: tuple[Counting, AsyncClient]
+) -> None:
+    await _set_policy(client, project, ["pypi.org"])
+    token = _token(await _run(project, "run-edge-8"))
+    _, http = edge
+    async with upstream_server() as upstream:
+
+        async def resolver(host: str, port: int) -> list[str]:
+            return [LOOPBACK]
+
+        proxy = EgressProxy(
+            EgressSettings(ports=[upstream.port]),
+            HttpRunNetworkSource(BASE, client=http, cache_seconds=0),
+            Reporter(HttpDecisionSink(BASE, client=http)),
+            resolver=resolver,
+            public=lambda address: address == LOOPBACK,
+        )
+        port = await proxy.start("127.0.0.1", 0)
+        try:
+            auth = basic("run-edge-8", token)
+            _, opened, status, _ = await connect_request(port, f"pypi.org:{upstream.port}", auth=auth)
+            assert status.startswith("HTTP/1.1 200"), "an open run gets out"
+            opened.close()
+
+            await close("run-edge-8")
+
+            _, refused, status, body = await connect_request(port, f"pypi.org:{upstream.port}", auth=auth)
+            assert status.startswith("HTTP/1.1 407"), f"a closed run does not get out: {status}"
+            assert b"not a live run's" in body
+            refused.close()
+        finally:
+            await proxy.close()
