@@ -4695,14 +4695,38 @@ stories:
     size: M
     depends_on: [S64-08]
     notes: "Registered parts recognised, the rest is backend; nothing recognised is all backend, never an error."
-  - id: S64-09
-    title: "feat(api,web): an assistant's tokens and stopping an assistant (ADRs 0141, 0142)"
+  - id: S64-09a
+    title: "contract(openapi): an assistant's spend, and stopping and resuming an assistant (ADR 0142 §4 bis)"
+    stream: S64
+    sprint: 1
+    priority: 1
+    size: XS
+    depends_on: [S64-01]
+    notes: "Written once S63 was on main. Cost filter and grouping `assistant`; POST /orgs/{org}/assistants/{slug}/stop and /resume; Assistant.stopped; ADR 0142 gains §4 bis."
+  - id: S64-09b
+    title: "feat(api): a spend report narrowed to and grouped by assistant (ADR 0141 §1)"
+    stream: S64
+    sprint: 1
+    priority: 1
+    size: XS
+    depends_on: [S64-02, S64-09a]
+    notes: "The ledger's installation_id; an assistant named by its slug; CSV follows."
+  - id: S64-09c
+    title: "feat(api): stopping an assistant, its turns in the activity list, and an agent's stop cancels its turns (ADR 0142 §1, §4, §4 bis)"
     stream: S64
     sprint: 1
     priority: 1
     size: S
-    depends_on: [S64-02, S64-04, S63-15, S63-04b]
-    notes: "Waits for the S63 stream on main: ledger installation_id, conversation turns in the activity list, suspend an installation and cancel its turns."
+    depends_on: [S64-04, S64-05, S64-09a]
+    notes: "Installation.stopped (migration), the derived status reads it first; conversation.cancel_requested_at read by the turn between model and tool calls; kind=turn and the assistant filter in the activity list."
+  - id: S64-09d
+    title: "feat(web): an assistant's tokens, its turns on the Activity screen, its stop and resume"
+    stream: S64
+    sprint: 1
+    priority: 1
+    size: S
+    depends_on: [S64-06, S64-07, S64-09b, S64-09c]
+    notes: "The assistant page's Tokens and cost panel and Stop / Resume; the Activity screen's assistant filter and turn entries."
   - id: S64-10
     title: "docs: the Activity and Costs pages of the user documentation"
     stream: S64

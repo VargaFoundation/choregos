@@ -310,7 +310,7 @@ async def test_the_three_doors_are_three_groups_of_the_cost_reports(
 
 #: Contract-first (ADR 0001): groupings the contract declares before the API accepts them, each with the
 #: story that implements it. An entry the API accepts must be removed from here.
-GROUPINGS_AHEAD_OF_THE_API: dict[str, str] = {"run": "S64-02"}
+GROUPINGS_AHEAD_OF_THE_API: dict[str, str] = {"run": "S64-02", "assistant": "S64-09b"}
 
 
 def test_the_contract_lists_the_groupings_the_api_accepts() -> None:

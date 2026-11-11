@@ -16,6 +16,8 @@ CONTRACT_ONLY: dict[str, str] = {
     "listOrgActivity": "S64-05",
     "streamOrgActivity": "S64-05",
     "getRunContextBreakdown": "S64-08",
+    "stopAssistant": "S64-09c",
+    "resumeAssistant": "S64-09c",
 }
 CONTRACT_ONLY_PATHS: set[str] = {
     "/runs/{id}/cancel",
@@ -23,6 +25,8 @@ CONTRACT_ONLY_PATHS: set[str] = {
     "/orgs/{org}/activity",
     "/orgs/{org}/activity/stream",
     "/runs/{id}/context-breakdown",
+    "/orgs/{org}/assistants/{slug}/stop",
+    "/orgs/{org}/assistants/{slug}/resume",
 }
 
 
