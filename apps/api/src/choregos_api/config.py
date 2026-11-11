@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import ipaddress
+import re
 from functools import lru_cache
 from typing import Any, Literal
 
@@ -22,6 +23,12 @@ DEFAULT_SESSION_SECRET = "dev-session-secret-change-me"
 #: The shortest session secret a deployed instance accepts: a 256-bit HMAC key.
 MIN_SESSION_SECRET_BYTES = 32
 
+
+#: A hostname as `CHOREGOS_RUN_DOOR_HOSTS` and `CHOREGOS_PUBLIC_HOSTS` take it: no scheme, port or path;
+#: a leading `*.` names every sub-domain.
+HOSTNAME = re.compile(
+    r"(\*\.)?[A-Za-z0-9_]([A-Za-z0-9_-]*[A-Za-z0-9_])?(\.[A-Za-z0-9_]([A-Za-z0-9_-]*[A-Za-z0-9_])?)*"
+)
 
 #: The clients of the Integrations page that a pre-registered OAuth client can serve (ADR 0030).
 OAUTH_CLIENTS = frozenset(
@@ -354,6 +361,21 @@ class Settings(BaseSettings):
     #: Used only without `trusted_proxy_cidrs`: the number of proxies in front of the API that each
     #: append one `X-Forwarded-For` entry. 0: the TCP peer is the client.
     trusted_proxy_hops: int = Field(default=0, ge=0, le=10)
+    #: What the API does with a request for the run's API (`/api/v1/internal/*`) that arrives under one
+    #: of its public hostnames (ADR 0144): `off` (nothing), `warn` (log `internal_api.would_refuse` and
+    #: serve it) or `enforce` (answer 404, as an unknown route does). See `internal_api_guard.py`.
+    internal_api_guard: Literal["off", "warn", "enforce"] = "warn"
+    #: The run doors, as a JSON list (`CHOREGOS_RUN_DOOR_HOSTS='["runs.example.com"]'`): the hostnames
+    #: runs call back on when they run outside the cluster. The run's API answers there even when the
+    #: name is also a public one.
+    run_door_hosts: list[str] = Field(default_factory=list)
+    #: Hostnames this API is published under beyond those of `public_url`, `api_url` and `cors_origins`,
+    #: as a JSON list (`CHOREGOS_PUBLIC_HOSTS`): the chart passes its ingress hostnames.
+    public_hosts: list[str] = Field(default_factory=list)
+    #: Where runs call back (`CHOREGOS_INTERNAL_API_URL`, the setting the workers build
+    #: `callbacks.api_url` from). The guard reads it so that it never refuses the address runs are sent
+    #: to. Empty: `api_url`.
+    internal_api_url: str = ""
     #: Period of the recomputation of the Prometheus metrics from the database (see `metrics.py`).
     metrics_refresh_seconds: float = 15.0
     #: Seconds between two passes of the approved-actions relay, in every replica (ADR 0085).
@@ -420,6 +442,21 @@ class Settings(BaseSettings):
                 raise ValueError(f"CHOREGOS_TRUSTED_PROXY_CIDRS: `{entry}` is not a network") from None
         if self.trusted_proxy_cidrs and self.trusted_proxy_hops > 0:
             raise ValueError("set CHOREGOS_TRUSTED_PROXY_CIDRS or CHOREGOS_TRUSTED_PROXY_HOPS, not both")
+        return self
+
+    @model_validator(mode="after")
+    def _guard_hosts_are_hostnames(self) -> Settings:
+        """A URL or a port where a hostname goes would never equal a `Host` header: the door would stay
+        shut, or the public name open, without a word. Refused, in every process (the workers set neither)."""
+        for name, entries in (
+            ("CHOREGOS_RUN_DOOR_HOSTS", self.run_door_hosts),
+            ("CHOREGOS_PUBLIC_HOSTS", self.public_hosts),
+        ):
+            for entry in entries:
+                if not HOSTNAME.fullmatch(entry.strip()):
+                    raise ValueError(
+                        f"{name}: `{entry}` is not a hostname (no scheme, port or path; `*.` may lead)"
+                    )
         return self
 
     @model_validator(mode="after")

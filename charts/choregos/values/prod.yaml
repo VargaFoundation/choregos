@@ -9,6 +9,11 @@ global:
   logLevel: INFO
   imagePullPolicy: IfNotPresent
 choregos-api:
+  # The run's API on the public hostnames (ADR 0144). `warn` is written here so that the choice is
+  # visible: it refuses nothing and logs `internal_api.would_refuse`. Switch to `enforce` once a
+  # release in `warn` has shown that log empty of your own callers (docs/deployment.md, "The run's
+  # API and the run door"); runs that call back from outside the cluster need a run door first.
+  internalApiGuard: warn
   replicaCount: 3
   autoscaling: { enabled: true, minReplicas: 3, maxReplicas: 12, targetCPUUtilizationPercentage: 70 }
   podDisruptionBudget: { enabled: true, minAvailable: 2 }
