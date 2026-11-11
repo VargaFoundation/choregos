@@ -5,6 +5,9 @@ global:
   fakes: false
   logLevel: INFO
 choregos-api:
+  # The run's API on the public hostnames (ADR 0144): `warn` logs what `enforce` would refuse. Staging
+  # is where to switch first, once that log shows none of your own callers.
+  internalApiGuard: warn
   replicaCount: 2
 choregos-web:
   replicaCount: 2
