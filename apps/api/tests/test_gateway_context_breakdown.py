@@ -19,7 +19,7 @@ from choregos_core.context_breakdown import register
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from .test_context_breakdown import _run
+from .kits.context_breakdown import run_with_events as _run
 
 MASTER_KEY = "-".join(["sk", "master", "c0ffee" * 3])
 CANARY = "canary-3d1e-what-the-ticket-said"

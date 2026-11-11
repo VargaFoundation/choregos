@@ -18,6 +18,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
+from .kits.context_breakdown import run_with_events as _run
 from .test_agent_sessions import Upstream, _agent, _ask, upstream  # noqa: F401 - the fixture
 
 CANARY = "canary-58c2-what-the-person-typed"
@@ -35,31 +36,6 @@ def _breakdown(
         "source": "loop",
         "sections": {"system": tokens // 4, "tools.mcp": tokens // 4, "messages": tokens - 2 * (tokens // 4)},
     }
-
-
-async def _run(
-    project: dict[str, Any], run_id: str, backend: str | None, events: list[tuple[str, dict[str, Any]]]
-) -> None:
-    from choregos_api.db.models import Run, RunEvent, WorkItem
-    from choregos_api.db.session import session_scope
-    from choregos_core import utcnow
-
-    async with session_scope() as session:
-        item = WorkItem(project_id=project["id"], tracker_key=f"varga/x#{run_id}", title="T", state="ready")
-        session.add(item)
-        await session.flush()
-        session.add(
-            Run(
-                id=run_id,
-                work_item_id=item.id,
-                project_id=project["id"],
-                stage_role="triage",
-                status="running",
-                backend=backend,
-            )
-        )
-        for seq, (type_, payload) in enumerate(events, start=1):
-            session.add(RunEvent(run_id=run_id, seq=seq, type=type_, payload=payload, ts=utcnow()))
 
 
 async def _window(model: str, tokens: int | None) -> None:
