@@ -57,3 +57,34 @@ completed, and the edition answer's `version` naming the new version.
 
 Upgrading Temporal itself has its own
 [runbook](../../runbooks/temporal-upgrade.md).
+
+## Upgrading to 0.26
+
+0.26 brings [assistants](../use/assistants.md): a plugin may ship one, an organisation installs it for
+an audience, and people converse with it in the console, from an MCP client or in an embedded frame.
+Nothing changes for an organisation that installs none. The migrations run with the chart's job as
+usual. The full table is in the
+[deployment reference](../../deployment.md#upgrading-to-026); what you do is:
+
+1. **Bound the token exchange.** Set `CHOREGOS_TOKEN_EXCHANGE_AUDIENCES` to a JSON list of your sources'
+   audiences (in `global.extraEnv`) before binding a need that uses the person's identity
+   (`user_exchange`). Unset, a connector's editor chooses any audience the identity provider allows. See
+   the [review of the person's identity](../../security.md).
+2. **Prepare the identity provider.** `user_exchange` needs token exchange (RFC 8693) enabled for the
+   API's client and limited to those audiences. A standing delegation needs `offline_access` with
+   bounded, revocable offline sessions. See [Identity](identity.md).
+3. **Give conversation suites a model.** An assistant's conversation suites gate the promotion of its
+   agent version, and a judge model scores their rubrics (`conversation_judge_model`, else the `strong`
+   model profile). With no gateway key, a version whose assistant ships suites is refused promotion
+   with the reason. `conversation_suites_require_model=false` opts out, and no check then runs.
+4. **Pick a quiet hour.** The migration that makes `/responses` sessions durable closes the ones open at
+   upgrade time. Matters only if you use hosted prompt agents.
+5. **List the host origins** of an embedded assistant in the installation's `config.embed_origins`; nothing
+   else to deploy. Accounts connected before 0.26 are connected again once.
+
+:::caution Delegated tasks
+The standing delegation ships, but its decision record
+([ADR 0137](../../adr/0137-a-standing-read-only-delegation.md)) stays proposed until the works council has
+given its opinion and the data protection impact assessment is done. Do not offer delegated tasks to
+people before then.
+:::
