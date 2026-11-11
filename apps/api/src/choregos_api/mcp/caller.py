@@ -209,6 +209,10 @@ async def _by_oauth(
         key=f"oauth:{client}:{sub}",
     )
     await act_as_agent(session, caller, client_id=client)
+    # The validated bearer may be exchanged for a source's audience in this request (ADR 0135).
+    from ..services.identity_exchange import door_bearer
+
+    door_bearer(user.id, raw)
     return caller
 
 

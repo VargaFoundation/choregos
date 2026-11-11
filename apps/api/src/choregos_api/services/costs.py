@@ -66,7 +66,26 @@ async def dimensions_of(session: AsyncSession, run_id: str | None) -> dict[str, 
     )
     if definition is not None:
         dims |= {"workflow_name": definition.name, "workflow_version": definition.version}
+    dims |= await task_attribution(session, item)
     return dims
+
+
+async def task_attribution(session: AsyncSession, item: WorkItem | None) -> dict[str, Any]:
+    """The assistant installation and the person a task run's spend belongs to (S63-13): the work item of a
+    task names its installation, and its personal space its subscriber, so that the month caps
+    (`assistant_access.month_spend`) read the run's lines as they read a conversation's. Empty for any other
+    work item."""
+    from ..db.models import Project
+
+    task = (item.documents or {}).get("task") if item is not None else None
+    installation = task.get("installation_id") if isinstance(task, dict) else None
+    if item is None or not installation:
+        return {}
+    project = await session.get(Project, item.project_id)
+    return {
+        "installation_id": str(installation),
+        "user_id": project.owner_user_id if project is not None else None,
+    }
 
 
 async def record_cost(  # noqa: PLR0913 — one ledger line, field by field, as keywords

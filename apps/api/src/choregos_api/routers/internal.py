@@ -1309,13 +1309,23 @@ async def _read_by_the_broker(
     """A call through the broker, a READ: arguments checked BEFORE (400, nothing counted), the
     connector's key resolved HERE, and what the server returns passed to the injection guard: a
     third-party server writes what the agent will read."""
+    from ..services.assistant_delegations import DelegationRefused
     from ..services.broker import ArgumentsRefused, call, check_arguments
+    from ..services.task_reads import acting_for_read, journal_run_read
 
     try:
         check_arguments(tool, arguments)
     except ArgumentsRefused as refusal:
         raise _arguments_problem(refusal) from refusal
-    code, result_body = await call(session, tool, arguments, run=run, project=project)
+    # A step of a task's work item reads as the person under a standing delegation (S63-14), and its read is
+    # a line of the reads journal (S63-16).
+    try:
+        acting, task_run, need = await acting_for_read(session, run, tool)
+    except DelegationRefused as refused:
+        return 403, {"error": str(refused), "type": refused.code}, []
+    code, result_body = await call(session, tool, arguments, run=run, project=project, acting=acting)
+    if code == 200 and task_run is not None:
+        await journal_run_read(session, task_run, need, tool, result_body)
     return await _injection_guard(session, run, project, tool, code, result_body)
 
 
@@ -1324,12 +1334,18 @@ async def _write_by_the_broker(
 ) -> tuple[int, Any, list[dict[str, str]], bool]:
     """A write called by a run: arguments checked BEFORE (400, nothing proposed), then a
     governed action whose outcome the broker waits for; what it returns goes through the same guard."""
+    from ..services.assistant_delegations import DelegationRefused
     from ..services.broker import ArgumentsRefused, check_arguments, write_through_action
+    from ..services.task_reads import refuse_write
 
     try:
         check_arguments(tool, arguments)
     except ArgumentsRefused as refusal:
         raise _arguments_problem(refusal) from refusal
+    try:
+        await refuse_write(session, run)
+    except DelegationRefused as refused:
+        return 403, {"error": str(refused), "type": refused.code}, [], False
     code, result_body, created = await write_through_action(session, run, project, tool, arguments)
     code, result_body, suspicions = await _injection_guard(session, run, project, tool, code, result_body)
     return code, result_body, suspicions, created
