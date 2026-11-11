@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
-"""Generates `docs/cli.md` from the CLI itself: a reference that cannot lie.
+"""Generates `docs/cli.md` and the public page `docs/site/cli/reference.md` from the CLI itself.
 
-    uv run python tools/gen_cli_reference.py            # writes docs/cli.md
-    uv run python tools/gen_cli_reference.py --check    # fails if docs/cli.md diverges
+    uv run python tools/gen_cli_reference.py            # writes both
+    uv run python tools/gen_cli_reference.py --check    # fails if either diverges
+
+The public page (S62-09b) is the same reference under the documentation site's front matter: one
+generator, so the two never say different things.
 
 There was no CLI reference, in any language (state of play of 2026-09-24): `usage.md`
 showed five of its commands, `dev.md` six others, and nothing mentioned
@@ -23,6 +26,7 @@ from typing import Any
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TARGET = ROOT / "docs" / "cli.md"
+SITE_TARGET = ROOT / "docs" / "site" / "cli" / "reference.md"
 
 HEADER = """# CLI reference
 
@@ -52,6 +56,24 @@ day (`CHOREGOS_NO_VERSION_CHECK=1` silences it).
 
 """
 
+SITE_HEADER = """---
+title: CLI reference
+description: Every choregos command and option, generated from the CLI itself.
+sidebar_position: 2
+---
+
+# CLI reference
+
+This page is generated from the CLI itself, and the repository's tests fail when it differs from the
+commands. `choregos <command> --help` prints the same text for the version you installed
+([Install the CLI](install.md)).
+
+The profile lives in `~/.config/choregos/config.json` (`CHOREGOS_CONFIG` names another file):
+`api_url`, `token`, `org`. `choregos login` writes it; `CHOREGOS_API_URL`, `CHOREGOS_TOKEN` and
+`CHOREGOS_ORG` are read when no profile exists.
+
+"""
+
 
 def _render(command: Any, path: list[str], output: list[str]) -> None:
     """Typer bundles its own click (`typer._click`): a group is recognised by its `commands`."""
@@ -70,26 +92,38 @@ def _render(command: Any, path: list[str], output: list[str]) -> None:
     output.append("```text\n" + command.get_help(context).strip() + "\n```\n")
 
 
-def generate() -> str:
+def generate(header: str = HEADER) -> str:
     import typer.core
     from choregos_cli.main import app
 
     root = typer.main.get_command(app)
-    output: list[str] = [HEADER]
+    output: list[str] = [header]
     _render(root, ["choregos"], output)
     return "\n".join(output).rstrip() + "\n"
 
 
+def targets() -> dict[pathlib.Path, str]:
+    """Each generated file and what it must hold."""
+    return {TARGET: generate(), SITE_TARGET: generate(SITE_HEADER)}
+
+
 def main() -> int:
-    content = generate()
     if "--check" in sys.argv:
-        if not TARGET.exists() or TARGET.read_text(encoding="utf-8") != content:
-            print(f"{TARGET.relative_to(ROOT)} is out of date: run `make docs-cli`", file=sys.stderr)
+        stale = [
+            path
+            for path, content in targets().items()
+            if not path.exists() or path.read_text(encoding="utf-8") != content
+        ]
+        for path in stale:
+            print(f"{path.relative_to(ROOT)} is out of date: run `make docs-cli`", file=sys.stderr)
+        if stale:
             return 1
-        print("docs/cli.md is up to date")
+        print("docs/cli.md and docs/site/cli/reference.md are up to date")
         return 0
-    TARGET.write_text(content, encoding="utf-8")
-    print(f"wrote {TARGET.relative_to(ROOT)} ({len(content.splitlines())} lines)")
+    for path, content in targets().items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        print(f"wrote {path.relative_to(ROOT)} ({len(content.splitlines())} lines)")
     return 0
 
 
