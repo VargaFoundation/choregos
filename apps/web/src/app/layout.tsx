@@ -33,7 +33,10 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const demo = process.env.NEXT_PUBLIC_API_MODE === "mock";
   // The theme script runs before React, so outside Next's `strict-dynamic`: it carries the request's
   // nonce (`src/proxy.ts`), without which the CSP would block it without a word.
-  const nonce = (await headers()).get("x-nonce") ?? undefined;
+  const requestHeaders = await headers();
+  const nonce = requestHeaders.get("x-nonce") ?? undefined;
+  // The embedded component (S63-12) is framed by a host application: no navigation, no footer.
+  const embedded = requestHeaders.get("x-embed") === "1";
   // The look the API serves, read before anything is drawn (ADR 0064); the default on any failure.
   const theme = await instanceTheme();
   return (
@@ -55,6 +58,12 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           <Providers>
             <OrganisationTheme />
             <DocumentTitle />
+            {embedded ? (
+              <main id="content" className="min-h-screen">
+                {children}
+              </main>
+            ) : (
+              <>
             {/* Nine tab stops separated the top of the page from its content (S23-05, WCAG 2.4.1). */}
             <a
               href="#content"
@@ -96,6 +105,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
                 </footer>
               </div>
             </div>
+              </>
+            )}
           </Providers>
         </ServedThemeProvider>
       </body>

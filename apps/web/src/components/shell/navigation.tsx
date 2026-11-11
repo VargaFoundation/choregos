@@ -29,6 +29,7 @@ import {
   Puzzle,
   ScrollText,
   Server,
+  MessagesSquare,
   Settings,
   SquareKanban,
   TrainFront,
@@ -65,6 +66,7 @@ export const NAV: { href: string; label: string; icone: LucideIcon }[] = [
   { href: "/library/mcp-servers", label: "MCP servers", icone: ServerCog },
   { href: "/library/connectors", label: "Connector types", icone: Cable },
   { href: "/library/plugins", label: "Plugins", icone: Puzzle },
+  { href: "/assistants", label: "Assistants", icone: MessagesSquare },
   { href: "/inbox", label: "Inbox", icone: Inbox },
   { href: "/integrations", label: "Integrations", icone: Plug },
   { href: "/costs", label: "Spend", icone: Wallet },
@@ -84,7 +86,7 @@ export const GROUP_HUES = { work: 1, define: 2, configure: 7 } as const satisfie
 
 /** The entries, grouped: the work, what agents use, the organisation (S40-08). */
 export const GROUPS: { titre: string; hue: Hue; entrees: string[] }[] = [
-  { titre: "Work", hue: GROUP_HUES.work, entrees: ["/", "/inbox"] },
+  { titre: "Work", hue: GROUP_HUES.work, entrees: ["/", "/assistants", "/inbox"] },
   { titre: "Library", hue: GROUP_HUES.define, entrees: ["/agents", "/skills", "/knowledge", "/memories", "/library/mcp-servers", "/library/connectors", "/library/plugins"] },
   { titre: "Organisation", hue: GROUP_HUES.configure, entrees: ["/integrations", "/costs", "/admin"] },
 ];

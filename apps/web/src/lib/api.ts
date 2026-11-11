@@ -6,6 +6,7 @@
  * end moves on without the API: `NEXT_PUBLIC_API_MODE=mock`).
  */
 import { type CliManifest, MANIFEST_PATH } from "./cli-download";
+import { clearEmbedToken, embedHeaders, isFrameSession } from "./embed-token";
 import type {
   Action,
   Agent,
@@ -209,6 +210,11 @@ import type {
   MachineAccount,
   MachineAccountCreate,
   MachineTokenCreate,
+  AssistantEmbed,
+  EmbedToken,
+  Conversation,
+  ConversationAction,
+  ConversationActionList,
 } from "./types";
 
 export const API_BASE = "/api/v1";
@@ -297,9 +303,11 @@ export async function problemOf(response: Response): Promise<Problem> {
   return problem;
 }
 
-/** On a 401 outside the sign-in page: go there, keeping where one comes from. */
+/** On a 401 outside the sign-in page: go there, keeping where one comes from. A framed page (`/embed/`) never
+ * navigates: the console's login refuses to be framed, and the embedded component asks the person itself. */
 function versLaConnexion(): void {
   if (typeof window === "undefined" || window.location.pathname.startsWith("/login")) return;
+  if (window.location.pathname.startsWith("/embed/")) return;
   const next = encodeURIComponent(window.location.pathname + window.location.search);
   // A full navigation, on purpose: the session is dead, and so is the React state.
   window.location.assign(new URL(`/login?next=${next}`, window.location.origin).toString());
@@ -321,7 +329,7 @@ function versLaReauthentification(): void {
   window.location.assign(new URL(api.loginUrl(ici, undefined, true), window.location.origin).toString());
 }
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+export async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (IS_MOCK) {
     // The fixtures go into the bundle only if demo mode is requested: imported statically, 460
     // lines of fake data went to every user.
@@ -333,15 +341,21 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     credentials: "include",
     // A file upload (`FormData`) sets its own type, with its multipart boundary.
     // A raw file (`Blob`) carries the content type its caller gives it (`sectionUpload`).
-    headers:
-      init.body instanceof FormData || init.body instanceof Blob
+    headers: {
+      ...(init.body instanceof FormData || init.body instanceof Blob
         ? { ...(init.headers ?? {}) }
-        : { "Content-Type": "application/json", ...(init.headers ?? {}) },
+        : { "Content-Type": "application/json", ...(init.headers ?? {}) }),
+      // The embedded component's session in a cross-site frame (S63-12): nothing unless the frame holds one.
+      ...embedHeaders(),
+    },
     cache: "no-store",
   });
   if (!response.ok) {
     const problem = await problemOf(response);
-    if (response.status === 401) {
+    if (response.status === 401 && isFrameSession()) {
+      // A frame under a frame token: its token expired. The frame asks the person again; it never navigates.
+      clearEmbedToken();
+    } else if (response.status === 401) {
       if (asksForReauthentication(problem)) versLaReauthentification();
       else versLaConnexion();
     }
@@ -389,6 +403,32 @@ async function cliManifest(): Promise<CliManifest | null> {
 export const api = {
   me: () => request<MeDto>("/me"),
   cliManifest,
+  /** The embedded component (S63-12, ADR 0139 point 6): who may frame it (public), and its conversation. */
+  assistantEmbed: (org: string, slug: string) =>
+    request<AssistantEmbed>(`/public/assistants/${org}/${slug}/embed`),
+  openAssistantConversation: (org: string, slug: string, context: Record<string, unknown> | null) =>
+    request<Conversation>(`/me/assistants/${org}/${slug}/conversations`, {
+      method: "POST",
+      body: JSON.stringify({ context }),
+    }),
+  myConversation: (id: string) => request<Conversation>(`/me/conversations/${id}`),
+  /** One streamed turn: the raw response, read as server-sent events by `lib/embed.ts`. */
+  conversationTurn: (id: string, input: string, signal?: AbortSignal) =>
+    fetch(`${API_BASE}/me/conversations/${id}/messages`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream", ...embedHeaders() },
+      body: JSON.stringify({ input, stream: true }),
+      signal,
+    }),
+  /** The frame token the sign-in popup hands to the frame (S63-12, API `embed_frame`). */
+  mintEmbedToken: (org: string, slug: string) =>
+    request<EmbedToken>(`/me/assistants/${org}/${slug}/embed-token`, { method: "POST" }),
+  conversationActions: (id: string) => request<ConversationActionList>(`/me/conversations/${id}/actions`),
+  confirmConversationAction: (id: string, action: string) =>
+    request<ConversationAction>(`/me/conversations/${id}/actions/${action}/confirm`, { method: "POST" }),
+  refuseConversationAction: (id: string, action: string) =>
+    request<ConversationAction>(`/me/conversations/${id}/actions/${action}/refuse`, { method: "POST" }),
   /** The running edition (ADR 0024): the console shows what it allows itself. */
   edition: () => request<Edition>("/edition"),
   /** Where to plug an MCP client (ADR 0030): the gate's URL, for the Integrations page. */
@@ -403,11 +443,18 @@ export const api = {
   getProcedure: (id: string) => request<Procedure>(`/procedures/${encodeURIComponent(id)}`),
   /** The URL that opens the session: the API redirects to the IdP (or, in dev, opens directly). */
   /** `tenant` picks the organisation's own identity provider, by sign-in link or by address (ADR 0108). */
-  loginUrl: (next?: string, as?: string, reauth = false, tenant: { org?: string; loginHint?: string } = {}) => {
+  loginUrl: (
+    next?: string,
+    as?: string,
+    reauth = false,
+    tenant: { org?: string; loginHint?: string } = {},
+    silent = false,
+  ) => {
     const params = new URLSearchParams();
     if (next) params.set("redirect_to", next);
     if (as) params.set("as", as);
     if (reauth) params.set("reauth", "1");
+    if (silent) params.set("silent", "1");
     if (tenant.org) params.set("org", tenant.org);
     if (tenant.loginHint) params.set("login_hint", tenant.loginHint);
     const q = params.toString();

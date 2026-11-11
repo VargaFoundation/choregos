@@ -1352,6 +1352,111 @@
     "type": "Json()"
    },
    {
+    "default": "'session'",
+    "name": "kind",
+    "nullable": false,
+    "server_default": "'session'",
+    "type": "String(length=16)"
+   },
+   {
+    "default": null,
+    "name": "installation_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "title",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=200)"
+   },
+   {
+    "default": null,
+    "name": "context",
+    "nullable": true,
+    "server_default": null,
+    "type": "Json()"
+   },
+   {
+    "default": "<function list>",
+    "name": "resolved_subjects",
+    "nullable": false,
+    "server_default": "'[]'",
+    "type": "Json()"
+   },
+   {
+    "default": null,
+    "name": "last_activity_at",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": null,
+    "name": "retention_until",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": null,
+    "name": "agent_revision",
+    "nullable": true,
+    "server_default": null,
+    "type": "Integer()"
+   },
+   {
+    "default": "0",
+    "name": "turns",
+    "nullable": false,
+    "server_default": "'0'",
+    "type": "Integer()"
+   },
+   {
+    "default": null,
+    "name": "max_usd",
+    "nullable": true,
+    "server_default": null,
+    "type": "Float()"
+   },
+   {
+    "default": null,
+    "name": "idle_close_minutes",
+    "nullable": true,
+    "server_default": null,
+    "type": "Integer()"
+   },
+   {
+    "default": null,
+    "name": "max_turns",
+    "nullable": true,
+    "server_default": null,
+    "type": "Integer()"
+   },
+   {
+    "default": null,
+    "name": "retention_days",
+    "nullable": true,
+    "server_default": null,
+    "type": "Integer()"
+   },
+   {
+    "default": "<function list>",
+    "name": "archived_messages",
+    "nullable": false,
+    "server_default": "'[]'",
+    "type": "Json()"
+   },
+   {
+    "default": null,
+    "name": "turn_lease_until",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
     "default": "<function uuid7>",
     "name": "id",
     "nullable": false,
@@ -1398,6 +1503,13 @@
    ]
   ],
   "indexes": [
+   [
+    "ix_agent_sessions_installation_id",
+    [
+     "agent_sessions.installation_id"
+    ],
+    false
+   ],
    [
     "ix_agent_sessions_org_id",
     [
@@ -1963,157 +2075,155 @@
   "uniques": []
  },
  "artifacts": {
+  "checks": [],
   "columns": [
    {
+    "default": null,
     "name": "org_id",
-    "type": "String(length=36)",
     "nullable": false,
-    "default": null,
-    "server_default": null
+    "server_default": null,
+    "type": "String(length=36)"
    },
    {
+    "default": null,
     "name": "work_item_id",
-    "type": "String(length=36)",
     "nullable": false,
-    "default": null,
-    "server_default": null
+    "server_default": null,
+    "type": "String(length=36)"
    },
    {
+    "default": null,
     "name": "name",
-    "type": "String(length=128)",
     "nullable": false,
-    "default": null,
-    "server_default": null
+    "server_default": null,
+    "type": "String(length=128)"
    },
    {
+    "default": null,
     "name": "version",
-    "type": "Integer()",
     "nullable": false,
-    "default": null,
-    "server_default": null
+    "server_default": null,
+    "type": "Integer()"
    },
    {
+    "default": null,
     "name": "type",
-    "type": "String(length=16)",
     "nullable": false,
-    "default": null,
-    "server_default": null
+    "server_default": null,
+    "type": "String(length=16)"
    },
    {
+    "default": null,
     "name": "kind",
-    "type": "String(length=16)",
     "nullable": false,
-    "default": null,
-    "server_default": null
+    "server_default": null,
+    "type": "String(length=16)"
    },
    {
+    "default": null,
     "name": "media_type",
-    "type": "String(length=200)",
     "nullable": false,
-    "default": null,
-    "server_default": null
+    "server_default": null,
+    "type": "String(length=200)"
    },
    {
+    "default": null,
     "name": "digest",
-    "type": "String(length=80)",
     "nullable": false,
-    "default": null,
-    "server_default": null
+    "server_default": null,
+    "type": "String(length=80)"
    },
    {
+    "default": null,
     "name": "size",
-    "type": "Integer()",
     "nullable": false,
-    "default": null,
-    "server_default": null
+    "server_default": null,
+    "type": "Integer()"
    },
    {
+    "default": null,
     "name": "content",
-    "type": "Json()",
     "nullable": true,
-    "default": null,
-    "server_default": null
+    "server_default": null,
+    "type": "Json()"
    },
    {
+    "default": null,
     "name": "storage_key",
-    "type": "String(length=500)",
     "nullable": true,
-    "default": null,
-    "server_default": null
+    "server_default": null,
+    "type": "String(length=500)"
    },
    {
+    "default": null,
     "name": "storage_url",
-    "type": "String(length=700)",
     "nullable": true,
-    "default": null,
-    "server_default": null
+    "server_default": null,
+    "type": "String(length=700)"
    },
    {
+    "default": null,
     "name": "run_id",
-    "type": "String(length=128)",
     "nullable": false,
-    "default": null,
-    "server_default": null
+    "server_default": null,
+    "type": "String(length=128)"
    },
    {
+    "default": null,
     "name": "stage",
-    "type": "String(length=64)",
     "nullable": true,
-    "default": null,
-    "server_default": null
+    "server_default": null,
+    "type": "String(length=64)"
    },
    {
+    "default": null,
     "name": "attempt",
-    "type": "Integer()",
     "nullable": true,
-    "default": null,
-    "server_default": null
+    "server_default": null,
+    "type": "Integer()"
    },
    {
+    "default": null,
     "name": "agent_slug",
-    "type": "String(length=64)",
     "nullable": true,
-    "default": null,
-    "server_default": null
+    "server_default": null,
+    "type": "String(length=64)"
    },
    {
+    "default": null,
     "name": "agent_version",
-    "type": "Integer()",
     "nullable": true,
-    "default": null,
-    "server_default": null
+    "server_default": null,
+    "type": "Integer()"
    },
    {
+    "default": null,
     "name": "display",
-    "type": "Json()",
     "nullable": true,
-    "default": null,
-    "server_default": null
+    "server_default": null,
+    "type": "Json()"
    },
    {
-    "name": "id",
-    "type": "String(length=36)",
-    "nullable": false,
     "default": "<function uuid7>",
-    "server_default": null
+    "name": "id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
    },
    {
+    "default": "<function utcnow>",
     "name": "created_at",
-    "type": "DateTime(timezone=True)",
     "nullable": false,
-    "default": "<function utcnow>",
-    "server_default": "<sqlalchemy.sql.functions.now; now>"
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
    },
    {
-    "name": "updated_at",
-    "type": "DateTime(timezone=True)",
-    "nullable": false,
     "default": "<function utcnow>",
-    "server_default": "<sqlalchemy.sql.functions.now; now>"
+    "name": "updated_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
    }
-  ],
-  "primary_key": [
-   "id"
   ],
   "foreign_keys": [
    [
@@ -2139,17 +2249,6 @@
     "fk_artifacts_work_item_id_work_items"
    ]
   ],
-  "uniques": [
-   [
-    "uq_artifacts_version",
-    [
-     "work_item_id",
-     "name",
-     "version"
-    ]
-   ]
-  ],
-  "checks": [],
   "indexes": [
    [
     "ix_artifacts_org_id",
@@ -2164,6 +2263,500 @@
      "artifacts.work_item_id"
     ],
     false
+   ]
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "uniques": [
+   [
+    "uq_artifacts_version",
+    [
+     "work_item_id",
+     "name",
+     "version"
+    ]
+   ]
+  ]
+ },
+ "assistant_installations": {
+  "checks": [],
+  "columns": [
+   {
+    "default": null,
+    "name": "org_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "slug",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=63)"
+   },
+   {
+    "default": null,
+    "name": "plugin",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=64)"
+   },
+   {
+    "default": null,
+    "name": "plugin_version",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=128)"
+   },
+   {
+    "default": null,
+    "name": "manifest_digest",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=80)"
+   },
+   {
+    "default": null,
+    "name": "assistant_name",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=63)"
+   },
+   {
+    "default": "<function dict>",
+    "name": "config",
+    "nullable": false,
+    "server_default": null,
+    "type": "Json()"
+   },
+   {
+    "default": "<function list>",
+    "name": "owner_groups",
+    "nullable": false,
+    "server_default": null,
+    "type": "Json()"
+   },
+   {
+    "default": "<function list>",
+    "name": "audience_groups",
+    "nullable": false,
+    "server_default": null,
+    "type": "Json()"
+   },
+   {
+    "default": "'stable'",
+    "name": "channel",
+    "nullable": false,
+    "server_default": "'stable'",
+    "type": "String(length=16)"
+   },
+   {
+    "default": "'incomplete'",
+    "name": "status",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=16)"
+   },
+   {
+    "default": "<function dict>",
+    "name": "policy_overrides",
+    "nullable": false,
+    "server_default": null,
+    "type": "Json()"
+   },
+   {
+    "default": null,
+    "name": "created_by",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=320)"
+   },
+   {
+    "default": "0",
+    "name": "webhook_secret_generation",
+    "nullable": false,
+    "server_default": "'0'",
+    "type": "Integer()"
+   },
+   {
+    "default": null,
+    "name": "webhook_secret_shown_at",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": "<function uuid7>",
+    "name": "id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "created_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "updated_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   }
+  ],
+  "foreign_keys": [
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_assistant_installations_org_id_organizations"
+   ]
+  ],
+  "indexes": [
+   [
+    "ix_assistant_installations_org_id",
+    [
+     "assistant_installations.org_id"
+    ],
+    false
+   ]
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "uniques": [
+   [
+    "uq_assistant_installations_org_slug",
+    [
+     "org_id",
+     "slug"
+    ]
+   ]
+  ]
+ },
+ "assistant_reads": {
+  "checks": [],
+  "columns": [
+   {
+    "default": null,
+    "name": "org_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "installation_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "user_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=200)"
+   },
+   {
+    "default": null,
+    "name": "conversation_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "work_item_key",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=200)"
+   },
+   {
+    "default": null,
+    "name": "task",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=63)"
+   },
+   {
+    "default": null,
+    "name": "need",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=63)"
+   },
+   {
+    "default": null,
+    "name": "operation",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=200)"
+   },
+   {
+    "default": null,
+    "name": "subject_type",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=63)"
+   },
+   {
+    "default": null,
+    "name": "subject_key",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=300)"
+   },
+   {
+    "default": null,
+    "name": "delegation_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "at",
+    "nullable": false,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": "<function uuid7>",
+    "name": "id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   }
+  ],
+  "foreign_keys": [
+   [
+    [
+     "installation_id"
+    ],
+    [
+     "assistant_installations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_assistant_reads_installation_id_assistant_installations"
+   ],
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_assistant_reads_org_id_organizations"
+   ]
+  ],
+  "indexes": [
+   [
+    "ix_assistant_reads_installation_at",
+    [
+     "assistant_reads.installation_id",
+     "assistant_reads.at"
+    ],
+    false
+   ],
+   [
+    "ix_assistant_reads_installation_id",
+    [
+     "assistant_reads.installation_id"
+    ],
+    false
+   ],
+   [
+    "ix_assistant_reads_org_id",
+    [
+     "assistant_reads.org_id"
+    ],
+    false
+   ],
+   [
+    "ix_assistant_reads_subject",
+    [
+     "assistant_reads.installation_id",
+     "assistant_reads.subject_type",
+     "assistant_reads.subject_key"
+    ],
+    false
+   ],
+   [
+    "ix_assistant_reads_user_id",
+    [
+     "assistant_reads.user_id"
+    ],
+    false
+   ]
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "uniques": []
+ },
+ "assistant_tool_bindings": {
+  "checks": [],
+  "columns": [
+   {
+    "default": null,
+    "name": "org_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "installation_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "need",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=63)"
+   },
+   {
+    "default": null,
+    "name": "connector_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": "<function list>",
+    "name": "operations",
+    "nullable": false,
+    "server_default": null,
+    "type": "Json()"
+   },
+   {
+    "default": null,
+    "name": "identity",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=16)"
+   },
+   {
+    "default": null,
+    "name": "approval",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=16)"
+   },
+   {
+    "default": "True",
+    "name": "enabled",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.elements.True_ object>",
+    "type": "Boolean()"
+   },
+   {
+    "default": "<function uuid7>",
+    "name": "id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "created_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "updated_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   }
+  ],
+  "foreign_keys": [
+   [
+    [
+     "connector_id"
+    ],
+    [
+     "org_connectors.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_assistant_tool_bindings_connector_id_org_connectors"
+   ],
+   [
+    [
+     "installation_id"
+    ],
+    [
+     "assistant_installations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_assistant_tool_bindings_installation_id_assistant_installations"
+   ],
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_assistant_tool_bindings_org_id_organizations"
+   ]
+  ],
+  "indexes": [
+   [
+    "ix_assistant_tool_bindings_connector_id",
+    [
+     "assistant_tool_bindings.connector_id"
+    ],
+    false
+   ],
+   [
+    "ix_assistant_tool_bindings_installation_id",
+    [
+     "assistant_tool_bindings.installation_id"
+    ],
+    false
+   ],
+   [
+    "ix_assistant_tool_bindings_org_id",
+    [
+     "assistant_tool_bindings.org_id"
+    ],
+    false
+   ]
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "uniques": [
+   [
+    "uq_assistant_tool_bindings_need",
+    [
+     "installation_id",
+     "need"
+    ]
    ]
   ]
  },
@@ -2433,6 +3026,162 @@
      "period",
      "period_key",
      "threshold"
+    ]
+   ]
+  ]
+ },
+ "connected_accounts": {
+  "checks": [],
+  "columns": [
+   {
+    "default": null,
+    "name": "org_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "user_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "connector",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=64)"
+   },
+   {
+    "default": "'user_consent'",
+    "name": "mode",
+    "nullable": false,
+    "server_default": "'user_consent'",
+    "type": "String(length=16)"
+   },
+   {
+    "default": null,
+    "name": "secret_ref",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=300)"
+   },
+   {
+    "default": "<function list>",
+    "name": "scopes",
+    "nullable": false,
+    "server_default": null,
+    "type": "Json()"
+   },
+   {
+    "default": null,
+    "name": "subject",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=320)"
+   },
+   {
+    "default": null,
+    "name": "expires_at",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": "'connected'",
+    "name": "status",
+    "nullable": false,
+    "server_default": "'connected'",
+    "type": "String(length=16)"
+   },
+   {
+    "default": null,
+    "name": "provider_digest",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=64)"
+   },
+   {
+    "default": null,
+    "name": "last_used_at",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": "<function uuid7>",
+    "name": "id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "created_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "updated_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   }
+  ],
+  "foreign_keys": [
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_connected_accounts_org_id_organizations"
+   ],
+   [
+    [
+     "user_id"
+    ],
+    [
+     "users.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_connected_accounts_user_id_users"
+   ]
+  ],
+  "indexes": [
+   [
+    "ix_connected_accounts_org_id",
+    [
+     "connected_accounts.org_id"
+    ],
+    false
+   ],
+   [
+    "ix_connected_accounts_user_id",
+    [
+     "connected_accounts.user_id"
+    ],
+    false
+   ]
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "uniques": [
+   [
+    "uq_connected_accounts_member",
+    [
+     "org_id",
+     "user_id",
+     "connector"
     ]
    ]
   ]
@@ -2736,6 +3485,336 @@
    ]
   ]
  },
+ "conversation_actions": {
+  "checks": [],
+  "columns": [
+   {
+    "default": null,
+    "name": "org_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "conversation_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "user_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=200)"
+   },
+   {
+    "default": null,
+    "name": "need",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=63)"
+   },
+   {
+    "default": null,
+    "name": "operation",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=128)"
+   },
+   {
+    "default": "<function dict>",
+    "name": "arguments",
+    "nullable": false,
+    "server_default": null,
+    "type": "Json()"
+   },
+   {
+    "default": null,
+    "name": "summary",
+    "nullable": false,
+    "server_default": null,
+    "type": "Text()"
+   },
+   {
+    "default": "'proposed'",
+    "name": "status",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=16)"
+   },
+   {
+    "default": null,
+    "name": "result",
+    "nullable": true,
+    "server_default": null,
+    "type": "Json()"
+   },
+   {
+    "default": null,
+    "name": "diff",
+    "nullable": true,
+    "server_default": null,
+    "type": "Json()"
+   },
+   {
+    "default": null,
+    "name": "confirmed_by",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=200)"
+   },
+   {
+    "default": null,
+    "name": "confirmed_at",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": null,
+    "name": "executed_at",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": "<function uuid7>",
+    "name": "id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "created_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "updated_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   }
+  ],
+  "foreign_keys": [
+   [
+    [
+     "conversation_id"
+    ],
+    [
+     "agent_sessions.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_conversation_actions_conversation_id_agent_sessions"
+   ],
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_conversation_actions_org_id_organizations"
+   ]
+  ],
+  "indexes": [
+   [
+    "ix_conversation_actions_conversation_id",
+    [
+     "conversation_actions.conversation_id"
+    ],
+    false
+   ],
+   [
+    "ix_conversation_actions_org_id",
+    [
+     "conversation_actions.org_id"
+    ],
+    false
+   ],
+   [
+    "ix_conversation_actions_user_id",
+    [
+     "conversation_actions.user_id"
+    ],
+    false
+   ]
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "uniques": []
+ },
+ "conversation_feedback": {
+  "checks": [],
+  "columns": [
+   {
+    "default": null,
+    "name": "org_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "session_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "user_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=200)"
+   },
+   {
+    "default": null,
+    "name": "agent_slug",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=64)"
+   },
+   {
+    "default": null,
+    "name": "agent_version",
+    "nullable": false,
+    "server_default": null,
+    "type": "Integer()"
+   },
+   {
+    "default": null,
+    "name": "response_seq",
+    "nullable": false,
+    "server_default": null,
+    "type": "Integer()"
+   },
+   {
+    "default": null,
+    "name": "rating",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=8)"
+   },
+   {
+    "default": null,
+    "name": "comment",
+    "nullable": true,
+    "server_default": null,
+    "type": "Text()"
+   },
+   {
+    "default": null,
+    "name": "candidate",
+    "nullable": true,
+    "server_default": null,
+    "type": "Json()"
+   },
+   {
+    "default": null,
+    "name": "candidate_status",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=16)"
+   },
+   {
+    "default": "<function uuid7>",
+    "name": "id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "created_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "updated_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   }
+  ],
+  "foreign_keys": [
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_conversation_feedback_org_id_organizations"
+   ],
+   [
+    [
+     "session_id"
+    ],
+    [
+     "agent_sessions.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_conversation_feedback_session_id_agent_sessions"
+   ]
+  ],
+  "indexes": [
+   [
+    "ix_conversation_feedback_agent_slug",
+    [
+     "conversation_feedback.agent_slug"
+    ],
+    false
+   ],
+   [
+    "ix_conversation_feedback_org_id",
+    [
+     "conversation_feedback.org_id"
+    ],
+    false
+   ],
+   [
+    "ix_conversation_feedback_session_id",
+    [
+     "conversation_feedback.session_id"
+    ],
+    false
+   ],
+   [
+    "ix_conversation_feedback_user_id",
+    [
+     "conversation_feedback.user_id"
+    ],
+    false
+   ]
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "uniques": [
+   [
+    "uq_conversation_feedback_answer",
+    [
+     "session_id",
+     "response_seq"
+    ]
+   ]
+  ]
+ },
  "cost_ledger": {
   "checks": [],
   "columns": [
@@ -2908,6 +3987,20 @@
     "type": "String(length=36)"
    },
    {
+    "default": null,
+    "name": "installation_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "user_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
     "default": "<function uuid7>",
     "name": "id",
     "nullable": false,
@@ -2977,6 +4070,14 @@
     "ix_cost_ledger_agent_slug",
     [
      "cost_ledger.agent_slug"
+    ],
+    false
+   ],
+   [
+    "ix_cost_ledger_installation_id",
+    [
+     "cost_ledger.installation_id",
+     "cost_ledger.ts"
     ],
     false
    ],
@@ -3320,6 +4421,194 @@
     ]
    ]
   ]
+ },
+ "delegations": {
+  "checks": [],
+  "columns": [
+   {
+    "default": null,
+    "name": "org_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "installation_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "user_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "task",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=63)"
+   },
+   {
+    "default": "<function list>",
+    "name": "needs",
+    "nullable": false,
+    "server_default": null,
+    "type": "Json()"
+   },
+   {
+    "default": null,
+    "name": "granted_at",
+    "nullable": false,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": null,
+    "name": "expires_at",
+    "nullable": false,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": null,
+    "name": "revoked_at",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": null,
+    "name": "manifest_digest",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=64)"
+   },
+   {
+    "default": null,
+    "name": "secret_ref",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=300)"
+   },
+   {
+    "default": "'active'",
+    "name": "status",
+    "nullable": false,
+    "server_default": "'active'",
+    "type": "String(length=16)"
+   },
+   {
+    "default": null,
+    "name": "suspended_reason",
+    "nullable": true,
+    "server_default": null,
+    "type": "Text()"
+   },
+   {
+    "default": null,
+    "name": "reminded_at",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": "<function uuid7>",
+    "name": "id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "created_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "updated_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   }
+  ],
+  "foreign_keys": [
+   [
+    [
+     "installation_id"
+    ],
+    [
+     "assistant_installations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_delegations_installation_id_assistant_installations"
+   ],
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_delegations_org_id_organizations"
+   ],
+   [
+    [
+     "user_id"
+    ],
+    [
+     "users.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_delegations_user_id_users"
+   ]
+  ],
+  "indexes": [
+   [
+    "ix_delegations_installation_id",
+    [
+     "delegations.installation_id"
+    ],
+    false
+   ],
+   [
+    "ix_delegations_member_task",
+    [
+     "delegations.installation_id",
+     "delegations.user_id",
+     "delegations.task"
+    ],
+    false
+   ],
+   [
+    "ix_delegations_org_id",
+    [
+     "delegations.org_id"
+    ],
+    false
+   ],
+   [
+    "ix_delegations_user_id",
+    [
+     "delegations.user_id"
+    ],
+    false
+   ]
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "uniques": []
  },
  "deployments": {
   "checks": [],
@@ -4492,6 +5781,13 @@
     "type": "Boolean()"
    },
    {
+    "default": null,
+    "name": "installation_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
     "default": "<function uuid7>",
     "name": "id",
     "nullable": false,
@@ -4516,6 +5812,17 @@
   "foreign_keys": [
    [
     [
+     "installation_id"
+    ],
+    [
+     "assistant_installations.id"
+    ],
+    "SET NULL",
+    null,
+    "fk_knowledge_bases_installation_id_assistant_installations"
+   ],
+   [
+    [
      "org_id"
     ],
     [
@@ -4527,6 +5834,13 @@
    ]
   ],
   "indexes": [
+   [
+    "ix_knowledge_bases_installation_id",
+    [
+     "knowledge_bases.installation_id"
+    ],
+    false
+   ],
    [
     "ix_knowledge_bases_org_id",
     [
@@ -4984,6 +6298,20 @@
     "type": "String(length=2000)"
    },
    {
+    "default": "'local'",
+    "name": "origin",
+    "nullable": false,
+    "server_default": "'local'",
+    "type": "String(length=200)"
+   },
+   {
+    "default": null,
+    "name": "seed_digest",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=80)"
+   },
+   {
     "default": "<function uuid7>",
     "name": "id",
     "nullable": false,
@@ -5204,6 +6532,112 @@
    ]
   ]
  },
+ "knowledge_seed_tombstones": {
+  "columns": [
+   {
+    "name": "org_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "knowledge_base_id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "path",
+    "type": "String(length=255)",
+    "nullable": false,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "deleted_by",
+    "type": "String(length=320)",
+    "nullable": true,
+    "default": null,
+    "server_default": null
+   },
+   {
+    "name": "id",
+    "type": "String(length=36)",
+    "nullable": false,
+    "default": "<function uuid7>",
+    "server_default": null
+   },
+   {
+    "name": "created_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   },
+   {
+    "name": "updated_at",
+    "type": "DateTime(timezone=True)",
+    "nullable": false,
+    "default": "<function utcnow>",
+    "server_default": "<sqlalchemy.sql.functions.now; now>"
+   }
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "foreign_keys": [
+   [
+    [
+     "knowledge_base_id"
+    ],
+    [
+     "knowledge_bases.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_knowledge_seed_tombstones_knowledge_base_id_knowledge_bases"
+   ],
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_knowledge_seed_tombstones_org_id_organizations"
+   ]
+  ],
+  "uniques": [
+   [
+    "uq_knowledge_seed_tombstones_base_path",
+    [
+     "knowledge_base_id",
+     "path"
+    ]
+   ]
+  ],
+  "checks": [],
+  "indexes": [
+   [
+    "ix_knowledge_seed_tombstones_knowledge_base_id",
+    [
+     "knowledge_seed_tombstones.knowledge_base_id"
+    ],
+    false
+   ],
+   [
+    "ix_knowledge_seed_tombstones_org_id",
+    [
+     "knowledge_seed_tombstones.org_id"
+    ],
+    false
+   ]
+  ]
+ },
  "knowledge_sources": {
   "checks": [],
   "columns": [
@@ -5391,6 +6825,187 @@
     "ix_knowledge_sources_org_id",
     [
      "knowledge_sources.org_id"
+    ],
+    false
+   ]
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "uniques": []
+ },
+ "knowledge_update_proposals": {
+  "checks": [
+   [
+    "ck_knowledge_update_proposals_ck_knowledge_update_proposals_kind",
+    "kind IN ('add', 'update', 'remove')"
+   ],
+   [
+    "ck_knowledge_update_proposals_ck_knowledge_update_proposals_status",
+    "status IN ('proposed', 'accepted', 'merged', 'refused')"
+   ]
+  ],
+  "columns": [
+   {
+    "default": null,
+    "name": "org_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "installation_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "knowledge_base_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "path",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=255)"
+   },
+   {
+    "default": null,
+    "name": "kind",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=8)"
+   },
+   {
+    "default": "''",
+    "name": "diff",
+    "nullable": false,
+    "server_default": null,
+    "type": "Text()"
+   },
+   {
+    "default": null,
+    "name": "proposed_content",
+    "nullable": true,
+    "server_default": null,
+    "type": "Text()"
+   },
+   {
+    "default": null,
+    "name": "seed_digest",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=80)"
+   },
+   {
+    "default": null,
+    "name": "plugin_version",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=128)"
+   },
+   {
+    "default": "'proposed'",
+    "name": "status",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=16)"
+   },
+   {
+    "default": null,
+    "name": "decided_by",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=320)"
+   },
+   {
+    "default": null,
+    "name": "decided_at",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": "<function uuid7>",
+    "name": "id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "created_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "updated_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   }
+  ],
+  "foreign_keys": [
+   [
+    [
+     "installation_id"
+    ],
+    [
+     "assistant_installations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_knowledge_update_proposals_installation_id_assistant_installations"
+   ],
+   [
+    [
+     "knowledge_base_id"
+    ],
+    [
+     "knowledge_bases.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_knowledge_update_proposals_knowledge_base_id_knowledge_bases"
+   ],
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_knowledge_update_proposals_org_id_organizations"
+   ]
+  ],
+  "indexes": [
+   [
+    "ix_knowledge_update_proposals_installation_id",
+    [
+     "knowledge_update_proposals.installation_id"
+    ],
+    false
+   ],
+   [
+    "ix_knowledge_update_proposals_knowledge_base_id",
+    [
+     "knowledge_update_proposals.knowledge_base_id"
+    ],
+    false
+   ],
+   [
+    "ix_knowledge_update_proposals_org_id",
+    [
+     "knowledge_update_proposals.org_id"
     ],
     false
    ]
@@ -5925,11 +7540,147 @@
   ],
   "uniques": []
  },
+ "memory_profiles": {
+  "checks": [],
+  "columns": [
+   {
+    "default": null,
+    "name": "org_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "memory_store_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "version",
+    "nullable": false,
+    "server_default": null,
+    "type": "Integer()"
+   },
+   {
+    "default": "<function dict>",
+    "name": "document",
+    "nullable": false,
+    "server_default": null,
+    "type": "Json()"
+   },
+   {
+    "default": "'active'",
+    "name": "status",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=16)"
+   },
+   {
+    "default": null,
+    "name": "updated_by",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=200)"
+   },
+   {
+    "default": "<function uuid7>",
+    "name": "id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "created_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "updated_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   }
+  ],
+  "foreign_keys": [
+   [
+    [
+     "memory_store_id"
+    ],
+    [
+     "memory_stores.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_memory_profiles_memory_store_id_memory_stores"
+   ],
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_memory_profiles_org_id_organizations"
+   ]
+  ],
+  "indexes": [
+   [
+    "ix_memory_profiles_memory_store_id",
+    [
+     "memory_profiles.memory_store_id"
+    ],
+    false
+   ],
+   [
+    "ix_memory_profiles_org_id",
+    [
+     "memory_profiles.org_id"
+    ],
+    false
+   ]
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "uniques": [
+   [
+    "uq_memory_profiles_version",
+    [
+     "memory_store_id",
+     "version"
+    ]
+   ]
+  ]
+ },
  "memory_stores": {
   "checks": [
    [
     "ck_memory_stores_ck_memory_stores_scope",
     "(scope = 'project') = (project_id IS NOT NULL)"
+   ],
+   [
+    "ck_memory_stores_installation",
+    "(scope IN ('installation', 'user', 'user_subject')) = (installation_id IS NOT NULL)"
+   ],
+   [
+    "ck_memory_stores_kind",
+    "kind IN ('facts', 'profile')"
+   ],
+   [
+    "ck_memory_stores_owner",
+    "(scope IN ('user', 'user_subject')) = (user_id IS NOT NULL)"
+   ],
+   [
+    "ck_memory_stores_subject",
+    "(scope = 'user_subject') = (subject_type IS NOT NULL AND subject_key IS NOT NULL)"
    ]
   ],
   "columns": [
@@ -6011,6 +7762,69 @@
     "type": "String(length=200)"
    },
    {
+    "default": null,
+    "name": "installation_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "user_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "subject_type",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=63)"
+   },
+   {
+    "default": null,
+    "name": "subject_key",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=300)"
+   },
+   {
+    "default": "'facts'",
+    "name": "kind",
+    "nullable": false,
+    "server_default": "'facts'",
+    "type": "String(length=16)"
+   },
+   {
+    "default": null,
+    "name": "schema",
+    "nullable": true,
+    "server_default": null,
+    "type": "Json()"
+   },
+   {
+    "default": null,
+    "name": "writes",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=16)"
+   },
+   {
+    "default": null,
+    "name": "retention_days",
+    "nullable": true,
+    "server_default": null,
+    "type": "Integer()"
+   },
+   {
+    "default": null,
+    "name": "max_facts",
+    "nullable": true,
+    "server_default": null,
+    "type": "Integer()"
+   },
+   {
     "default": "<function uuid7>",
     "name": "id",
     "nullable": false,
@@ -6035,6 +7849,17 @@
   "foreign_keys": [
    [
     [
+     "installation_id"
+    ],
+    [
+     "assistant_installations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_memory_stores_installation_id_assistant_installations"
+   ],
+   [
+    [
      "org_id"
     ],
     [
@@ -6054,9 +7879,27 @@
     "CASCADE",
     null,
     "fk_memory_stores_project_id_projects"
+   ],
+   [
+    [
+     "user_id"
+    ],
+    [
+     "users.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_memory_stores_user_id_users"
    ]
   ],
   "indexes": [
+   [
+    "ix_memory_stores_installation_id",
+    [
+     "memory_stores.installation_id"
+    ],
+    false
+   ],
    [
     "ix_memory_stores_org_id",
     [
@@ -6068,6 +7911,13 @@
     "ix_memory_stores_project_id",
     [
      "memory_stores.project_id"
+    ],
+    false
+   ],
+   [
+    "ix_memory_stores_user_id",
+    [
+     "memory_stores.user_id"
     ],
     false
    ]
@@ -8096,7 +9946,12 @@
   ]
  },
  "projects": {
-  "checks": [],
+  "checks": [
+   [
+    "ck_projects_personal_has_owner",
+    "(kind = 'personal') = (owner_user_id IS NOT NULL)"
+   ]
+  ],
   "columns": [
    {
     "default": null,
@@ -8190,6 +10045,20 @@
     "type": "String(length=16)"
    },
    {
+    "default": "'standard'",
+    "name": "kind",
+    "nullable": false,
+    "server_default": "'standard'",
+    "type": "String(length=16)"
+   },
+   {
+    "default": null,
+    "name": "owner_user_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
     "default": "<function uuid7>",
     "name": "id",
     "nullable": false,
@@ -8222,6 +10091,17 @@
     "CASCADE",
     null,
     "fk_projects_org_id_organizations"
+   ],
+   [
+    [
+     "owner_user_id"
+    ],
+    [
+     "users.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_projects_owner_user_id_users"
    ]
   ],
   "indexes": [
@@ -8229,6 +10109,13 @@
     "ix_projects_org_id",
     [
      "projects.org_id"
+    ],
+    false
+   ],
+   [
+    "ix_projects_owner_user_id",
+    [
+     "projects.owner_user_id"
     ],
     false
    ],
@@ -8245,6 +10132,14 @@
      "projects.status"
     ],
     false
+   ],
+   [
+    "uq_projects_personal_owner",
+    [
+     "projects.org_id",
+     "projects.owner_user_id"
+    ],
+    true
    ]
   ],
   "primary_key": [
@@ -9322,6 +11217,180 @@
     [
      "org_id",
      "slug"
+    ]
+   ]
+  ]
+ },
+ "task_subscriptions": {
+  "checks": [],
+  "columns": [
+   {
+    "default": null,
+    "name": "org_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "installation_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "user_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "task",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=63)"
+   },
+   {
+    "default": "<function dict>",
+    "name": "trigger",
+    "nullable": false,
+    "server_default": null,
+    "type": "Json()"
+   },
+   {
+    "default": null,
+    "name": "delegation_id",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": "True",
+    "name": "enabled",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.elements.True_ object>",
+    "type": "Boolean()"
+   },
+   {
+    "default": null,
+    "name": "last_run_at",
+    "nullable": true,
+    "server_default": null,
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": null,
+    "name": "last_window",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=32)"
+   },
+   {
+    "default": "<function list>",
+    "name": "seen_keys",
+    "nullable": false,
+    "server_default": null,
+    "type": "Json()"
+   },
+   {
+    "default": null,
+    "name": "last_refusal",
+    "nullable": true,
+    "server_default": null,
+    "type": "Text()"
+   },
+   {
+    "default": "<function uuid7>",
+    "name": "id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "created_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "updated_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   }
+  ],
+  "foreign_keys": [
+   [
+    [
+     "installation_id"
+    ],
+    [
+     "assistant_installations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_task_subscriptions_installation_id_assistant_installations"
+   ],
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_task_subscriptions_org_id_organizations"
+   ],
+   [
+    [
+     "user_id"
+    ],
+    [
+     "users.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_task_subscriptions_user_id_users"
+   ]
+  ],
+  "indexes": [
+   [
+    "ix_task_subscriptions_installation_id",
+    [
+     "task_subscriptions.installation_id"
+    ],
+    false
+   ],
+   [
+    "ix_task_subscriptions_org_id",
+    [
+     "task_subscriptions.org_id"
+    ],
+    false
+   ],
+   [
+    "ix_task_subscriptions_user_id",
+    [
+     "task_subscriptions.user_id"
+    ],
+    false
+   ]
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "uniques": [
+   [
+    "uq_task_subscriptions",
+    [
+     "installation_id",
+     "user_id",
+     "task"
     ]
    ]
   ]

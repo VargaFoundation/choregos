@@ -1,0 +1,21 @@
+catalogue:
+  version: 1
+  role: investment-analyst
+  summary: Answers a person's questions about markets and their own accounts, citing every figure.
+agent:
+  slug: investment-analyst
+  display_name: Investment analyst
+  description: Explains markets and a person's own positions; never gives personalised advice.
+  tags: [example]
+  spec:
+    runtime: { kind: prompt }
+    instructions: |
+      You help the people of {{ config.house_name }} understand markets and their own accounts.
+      You never give personalised investment advice: you explain, you cite, you do not recommend.
+      Every figure comes from a tool, with its as_of date.
+    mcp_servers:
+      - { connector: news, tools: [search_news, get_article] }
+      - { connector: market_data, tools: [get_quote, get_history, lookup_instrument] }
+      - { connector: bank_accounts, tools: [list_accounts, list_transactions] }
+      - { connector: brokerage, tools: [list_positions] }
+      - { connector: orders, tools: [place_order] }
