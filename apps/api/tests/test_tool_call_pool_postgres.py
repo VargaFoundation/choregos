@@ -29,7 +29,9 @@ from .kits.tool_catalogue import CATALOGUE
 pytestmark = [without_postgres, pytest.mark.asyncio]
 
 POOL_SIZE = 2
-POOL_TIMEOUT_S = 2
+# Long enough that a loaded CI runner serves `/readyz` within it (2 s gave 2.19 s under xdist, #1603),
+# short enough that the defect, which waits it out in full, still fails fast.
+POOL_TIMEOUT_S = 5
 HELD = 3
 TOOL = "recherche_profils"
 
