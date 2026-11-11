@@ -82,6 +82,8 @@ def test_all_declared_schemas_exist() -> None:
         ("plugin-index.example.json", "plugin-index.schema.json"),
         ("plugin-evals.example.json", "plugin-evals.schema.json"),
         ("plugin-tracker-profile.example.json", "plugin-tracker-profile.schema.json"),
+        ("assistant.example.json", "assistant.schema.json"),
+        ("conversation-evals.example.json", "conversation-evals.schema.json"),
     ],
 )
 def test_example_matches_json_schema(example: str, schema_name: str) -> None:

@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
 from sqlalchemy import select
@@ -39,7 +39,11 @@ from ..services import (
     work_item_dto,
     workflow_model,
 )
+from ..services.personal_spaces import listed
 from .caller import Caller
+
+if TYPE_CHECKING:
+    from .assistants import Door
 
 #: What the door tells the model, once, at initialisation.
 INSTRUCTIONS = (
@@ -68,6 +72,8 @@ class Context:
     #: The organisation of the project the tool acted on: the audit is filed under it, and that is
     #: where the day's writes are counted (a row without an organisation is readable by the platform only).
     target_org_id: str | None = None
+    #: The assistant of `/mcp/assistants/{org}:{installation}` (S63-11): the door is that one connector.
+    assistant: Door | None = None
 
 
 Executor = Callable[[Context, dict[str, Any]], Awaitable[tuple[str, Any]]]
@@ -131,7 +137,7 @@ async def _visible_projects(ctx: Context) -> list[tuple[Project, str]]:
     rows = await ctx.session.execute(
         select(Project, Organization.slug)
         .join(Organization, Project.org_id == Organization.id)
-        .where(Organization.slug.in_(sorted(orgs)))
+        .where(Organization.slug.in_(sorted(orgs)), listed())
         .order_by(Organization.slug, Project.slug)
     )
     return [
@@ -632,6 +638,12 @@ async def _extension_tools(ctx: Context) -> list[Tool]:
 async def announced_tools(ctx: Context) -> list[Tool]:
     """What THIS person, with THIS token, sees: a tool outside their rights does not exist for them."""
     principal = ctx.caller.principal
+    from .assistants import assistant_tools
+
+    if ctx.assistant is not None:
+        # An assistant's connector announces its own tools and nothing of the organisation's.
+        visible = await assistant_tools(ctx)
+        return _within_agent(ctx, visible)
     visible = []
     for tool in core_tools(ctx):
         if tool.write:
@@ -643,6 +655,12 @@ async def announced_tools(ctx: Context) -> list[Tool]:
         visible.append(tool)
     # Then those of the extensions (the project's ontology): a write appears only with `mcp:write`.
     visible += [o for o in await _extension_tools(ctx) if ctx.caller.writes or not o.write]
+    # The assistants the person may talk to (S63-11): announced only to someone in an audience.
+    visible += await assistant_tools(ctx)
+    return _within_agent(ctx, visible)
+
+
+def _within_agent(ctx: Context, visible: list[Tool]) -> list[Tool]:
     # An external agent (ADR 0033): the person's rights, intersected with what its version names.
     if ctx.caller.reasons is not None:
         from fnmatch import fnmatchcase

@@ -1,0 +1,20 @@
+# A task workflow of the fixture assistant (S63-19): one agent writes one document, then the work item closes.
+apiVersion: choregos/v1
+kind: Workflow
+metadata:
+  name: morning-brief
+  version: 1
+  description: A morning brief of the person's watched instruments.
+initial: open
+actors:
+  analyst: { type: agent, role: analysis, agent: investment-analyst, max_turns: 10, max_minutes: 5 }
+states:
+  open: { display: Open, kind: wait }
+  done: { display: Done, terminal: true }
+transitions:
+  - id: t-brief
+    from: open
+    to: done
+    by: analyst
+    outputs: [brief]
+    gates: [outputs_present]

@@ -70,8 +70,13 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }
 
   // Without a session, `request()` has already redirected to /login; nothing else is rendered
-  // meanwhile. The sign-in page itself, of course, does render.
-  const nonConnecte = me.error instanceof ApiError && me.error.status === 401 && !pathname.startsWith("/login");
+  // meanwhile. The sign-in page itself, of course, does render, and so does the embedded component
+  // (`/embed/`, S63-12): framed, it is never redirected and asks the person to sign in itself.
+  const nonConnecte =
+    me.error instanceof ApiError &&
+    me.error.status === 401 &&
+    !pathname.startsWith("/login") &&
+    !pathname.startsWith("/embed/");
   return (
     <SessionContext.Provider
       value={{
