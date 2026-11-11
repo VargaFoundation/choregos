@@ -173,6 +173,29 @@ async def test_a_search_answers_citations(client: AsyncClient, admin: str) -> No
     assert top["document"] == "Encryption standard" and top["knowledge_base"] == "framework"
 
 
+async def test_a_search_whose_embedding_the_gateway_refuses_ranks_by_words(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The gateway refused a query's embedding (422, seen in production): the search answers anyway,
+    ranked by its words, instead of a 500 that leaves the run's agent without its sources."""
+    import httpx
+    from choregos_api.knowledge import index
+
+    await _indexed_base(client)
+
+    class Refusing:
+        dimensions = 64
+
+        async def embed(self, texts: list[str]) -> list[list[float]]:
+            request = httpx.Request("POST", "http://litellm:4000/v1/embeddings")
+            raise httpx.HTTPStatusError("422", request=request, response=httpx.Response(422, request=request))
+
+    monkeypatch.setattr(index, "get_embedder", lambda *a, **k: Refusing())
+    found = await client.post(f"{BASE}/framework/search", json={"query": "Which TLS version in transit?"})
+    assert found.status_code == 200, found.text
+    assert found.json()["hits"][0]["filename"] == "encryption.docx"
+
+
 async def test_recall_at_5_on_the_eval_set_is_reported(client: AsyncClient, admin: str) -> None:
     """The acceptance of S33-03."""
     await _indexed_base(client)
