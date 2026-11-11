@@ -102,6 +102,20 @@ slug, served to the right project, with the right sources.
 - Inputs given only at provisioning (`POST /projects/{id}/provision` with `inputs`) arrive after the
   bases were installed; a `github-repo` input falls back to the project's repository.
 
+## Amendment (S51-06d): a person may ask for the App on a git source
+
+`config.github_app: true` is no longer reserved to a template. On `POST` and `PATCH …/sources`, an
+organisation administrator may set it on a `git` source that names no connector, whose URL is a
+github.com repository, when the organisation claimed an installation on the repository's owner
+(`claimed_installation_for`, ADR 0073); a single-organisation instance (`implicit_claim_enabled`) needs
+no claim, because that is what `github_app_credential` accepts at sync time. The App reads every
+repository it is installed on, so it stays an administrator's decision: any other caller gets 403 (the
+usual knowledge-base right to add a source is still required), a missing claim or App 409 naming the
+owner and Settings, Connections, a non-GitHub URL, a connector or a non-boolean 422. A flag a source
+already had stays while its URL stays (an editor may change its `ref`), `false` removes it, another URL
+drops it. The audit records `github_app` on `knowledge.source.create` and a change on
+`knowledge.source.github_app`. The contract keeps it in `config`; the console form does not expose it yet.
+
 ## Alternatives discarded
 
 - **A provisioning step `knowledge.ensure_bases`**: steps run in the orchestrator from templates on

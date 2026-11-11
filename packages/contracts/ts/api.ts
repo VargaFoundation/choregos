@@ -3032,7 +3032,7 @@ export type KnowledgeSourceCreate = {
   name: string;
   /** `sharepoint`, `confluence`: the organisation connector of capability `documents` */
   connector?: string | null;
-  /** `sharepoint`: `site_id` or `drive_id`, optional `folder` and `exclude` (≤ 50 path globs under the folder, each starting with `/`, case-insensitive, `*` crossing `/`); `confluence`: `space_key`, optional `page_id` (that page and its descendants), `include_root` (default true), `include_attachments` (default false), `labels` (≤ 20); `web`: `url` (https), `max_depth` (≤ 5), `max_pages` (≤ 500); `git`: `url` (https), `ref`, `paths` (globs, default `*.md`) */
+  /** `sharepoint`: `site_id` or `drive_id`, optional `folder` and `exclude` (≤ 50 path globs under the folder, each starting with `/`, case-insensitive, `*` crossing `/`); `confluence`: `space_key`, optional `page_id` (that page and its descendants), `include_root` (default true), `include_attachments` (default false), `labels` (≤ 20); `web`: `url` (https), `max_depth` (≤ 5), `max_pages` (≤ 500); `git`: `url` (https), `ref`, `paths` (globs, default `*.md`), and `github_app: true` to read a github.com repository through the deployment's GitHub App (no `connector`; an organisation administrator, and an installation the organisation claimed on the repository's owner: 403 or 409 otherwise); on a patch, absent keeps what the source had while its URL stays, `false` removes it */
   config?: {
     [key: string]: unknown;
   };
