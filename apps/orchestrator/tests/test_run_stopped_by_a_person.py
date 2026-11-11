@@ -287,7 +287,9 @@ async def test_await_run_returns_the_stop_within_one_poll(setup: Fixture) -> Non
     stopped_at = time.monotonic()
     awaited = await asyncio.wait_for(waiting, timeout=10)
 
-    assert time.monotonic() - stopped_at < poll + 0.5, "within one poll"
+    # The run never ends on its own here: what is measured is that the stop ends the wait at a poll, not
+    # at the run's end. A loaded CI runner took 2.2 s for one poll of 0.3 s, hence the margin.
+    assert time.monotonic() - stopped_at < poll + 3.0, "within a poll, not at the run's end"
     assert awaited["status"] == "finished"
     assert awaited["result"]["reason"] == "stopped_by_person"
 
