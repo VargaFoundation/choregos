@@ -41,6 +41,7 @@ from ..db.models import (
     WorkItem,
 )
 from ..schemas.assistant_memory import MemorySubject
+from ..schemas.assistant_reads import SubjectArtifact
 from ..secret_store import SecretStoreUnavailable, get_secret_store
 from . import assistants
 from .assistant_erasure import USER_ERASERS
@@ -148,11 +149,10 @@ USER_ERASERS["connected_accounts"] = _erase_accounts
 # -- by subject --------------------------------------------------------------------------------------------
 
 
-async def erase_subject_artifacts(
+async def _items_about(
     session: AsyncSession, installation: AssistantInstallation, subject: MemorySubject
-) -> int:
-    """Deletes the artifacts of the task work items whose reads were about `subject`; how many rows went.
-    Runs in the platform scope, once the caller's right is checked."""
+) -> list[WorkItem]:
+    """The task work items whose reads (the reads journal, `work_item_key`) were about `subject`."""
     keys = {
         k
         for k in (
@@ -168,9 +168,52 @@ async def erase_subject_artifacts(
         if k
     }
     if not keys:
-        return 0
-    items = await _personal_items(session, installation.id)
-    return await _delete_artifacts(session, [i.id for i in items if i.tracker_key in keys])
+        return []
+    return [i for i in await _personal_items(session, installation.id) if i.tracker_key in keys]
+
+
+async def erase_subject_artifacts(
+    session: AsyncSession, installation: AssistantInstallation, subject: MemorySubject
+) -> int:
+    """Deletes the artifacts of the task work items whose reads were about `subject`; how many rows went.
+    Runs in the platform scope, once the caller's right is checked."""
+    items = await _items_about(session, installation, subject)
+    return await _delete_artifacts(session, [i.id for i in items])
+
+
+async def export_subject_artifacts(
+    session: AsyncSession, installation: AssistantInstallation, subject: MemorySubject
+) -> list[SubjectArtifact]:
+    """What `erase_subject_artifacts` would delete, listed: each artifact with its inline content (a FILE
+    artifact lists its storage key, its bytes are in the object store)."""
+    items = {i.id: i for i in await _items_about(session, installation, subject)}
+    if not items:
+        return []
+    rows = (
+        (
+            await session.execute(
+                select(ArtifactRecord)
+                .where(ArtifactRecord.work_item_id.in_(list(items)))
+                .order_by(ArtifactRecord.created_at, ArtifactRecord.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        SubjectArtifact(
+            id=a.id,
+            work_item_key=items[a.work_item_id].tracker_key,
+            task=str((_task_of(items[a.work_item_id]) or {}).get("task") or ""),
+            name=a.name,
+            version=a.version,
+            media_type=a.media_type,
+            content=a.content,
+            storage_key=a.storage_key,
+            created_at=a.created_at,
+        )
+        for a in rows
+    ]
 
 
 # -- the purge ---------------------------------------------------------------------------------------------

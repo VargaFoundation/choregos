@@ -3,12 +3,13 @@
 
 A line says who the assistant read for, through which need and operation, about which subject and when:
 never what it read. The one place conversation tool calls are booked (`_book_the_tool_call`) writes it, in
-the same transaction as the call's own booking. `assistant:audit` reads the journal, filtered by subject or
-user and paginated by keyset (the journal can be long: no page is loaded whole).
+the same transaction as the call's own booking. `assistant:audit` reads the journal, filtered by subject,
+user, need and period and paginated by keyset (the journal can be long: no page is loaded whole).
 """
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from choregos_core import utcnow
@@ -79,6 +80,7 @@ def line_of(row: AssistantRead) -> AssistantReadLine:
         user_id=row.user_id,
         conversation_id=row.conversation_id,
         work_item_key=row.work_item_key,
+        task=row.task,
         need=row.need,
         operation=row.operation,
         subject_type=row.subject_type,
@@ -88,13 +90,16 @@ def line_of(row: AssistantRead) -> AssistantReadLine:
     )
 
 
-async def page_of_reads(
+async def page_of_reads(  # noqa: PLR0913 - the filters of the journal, one by one
     session: AsyncSession,
     installation_id: str,
     *,
     subject_type: str | None,
     subject_key: str | None,
     user_id: str | None,
+    need: str | None = None,
+    since: datetime | None = None,
+    until: datetime | None = None,
     cursor: str | None,
     limit: int,
 ) -> AssistantReadPage:
@@ -108,6 +113,12 @@ async def page_of_reads(
     ):
         if wanted is not None:
             query = query.where(column == wanted)
+    if need is not None:
+        query = query.where(AssistantRead.need == need)
+    if since is not None:
+        query = query.where(AssistantRead.at >= since)
+    if until is not None:
+        query = query.where(AssistantRead.at < until)
     after: Any = None
     if cursor:
         after = await session.get(AssistantRead, cursor)

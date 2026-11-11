@@ -16,12 +16,13 @@ from typing import Any
 
 import pytest
 from choregos_core import utcnow
+from choregos_core.domain import aware
 from httpx import AsyncClient
 from sqlalchemy import select
 
 from .agent_scopes_kit import as_user
 from .conftest import without_postgres
-from .kits.assistant_install import FIXTURE, ORG
+from .kits.assistant_install import FIXTURE, NEWS, ORG, _bind, _connector
 from .kits.assistant_memory import (
     EXTRA,
     ISIN,
@@ -191,6 +192,9 @@ async def test_every_tool_call_of_a_conversation_writes_one_line_with_the_subjec
     reads_url = f"{ORG}/assistants/investment-assistant/reads"
     await _agent(client, mcp_servers=[{"connector": "markets", "tools": ["lookup_*", "get_quote"]}])
     installation = await _assistant(client, with_markets=True)
+    # The manifest's other required need: a turn is refused (409) while the installation is incomplete.
+    await _connector("news-feed", NEWS)
+    assert (await _bind(client, "news", "news-feed")).json()["status"] == "ready"
     await _audience("admin@varga.dev")
     conversation = await _open(installation)
     for tool, text in (("lookup_instrument", "Apple?"), ("get_quote", "Quote?")):
@@ -593,3 +597,177 @@ async def test_the_purge_deletes_old_task_artifacts_and_old_profile_versions(
     assert versions == [0, *range(5, 15)], "the newest ten stay, and the live ones"
     async with session_scope(orgs="*") as session:
         assert (await purge_once(session))["profile_versions"] == 0, "idempotent"
+
+
+# ───────────────────── the audit surface, unspoken conversations, pseudonyms (F2) ─────────────────────
+
+
+async def _read_lines(installation: str, *specs: tuple[str, str, str, int]) -> str:
+    """Journal lines `(need, operation, subject_key, days_ago)` for the admin; returns the admin's id."""
+    from choregos_api.db.models import AssistantRead, Organization, User
+    from choregos_api.db.session import session_scope
+
+    async with session_scope(orgs="*") as session:
+        me = (await session.execute(select(User).where(User.email == "admin@varga.dev"))).scalar_one()
+        org = (await session.execute(select(Organization))).scalar_one()
+        for need, operation, subject_key, days_ago in specs:
+            session.add(
+                AssistantRead(
+                    org_id=org.id, installation_id=installation, user_id=me.id, need=need,
+                    operation=operation, subject_type="instrument", subject_key=subject_key,
+                    at=utcnow() - timedelta(days=days_ago),
+                )
+            )  # fmt: skip
+        return me.id
+
+
+async def test_the_reads_journal_filters_by_need_and_period_and_the_read_is_itself_audited(
+    client: AsyncClient, admin: str, upstream: Upstream, offline: Path
+) -> None:
+    from choregos_api.db.models import AuditLog
+    from choregos_api.db.session import session_scope
+
+    installation = await _assistant(client)
+    await _read_lines(
+        installation,
+        ("market_data", "get_quote", "A", 10),
+        ("market_data", "get_quote", "B", 3),
+        ("news", "search_news", "B", 1),
+    )
+    url = f"{ORG}/assistants/investment-assistant/reads"
+    assert len((await client.get(url)).json()["items"]) == 3
+    by_need = (await client.get(url, params={"need": "news"})).json()["items"]
+    assert [r["operation"] for r in by_need] == ["search_news"]
+    since = (utcnow() - timedelta(days=5)).isoformat()
+    until = (utcnow() - timedelta(days=2)).isoformat()
+    inside = (await client.get(url, params={"since": since, "until": until})).json()["items"]
+    assert [r["subject_key"] for r in inside] == ["B"] and inside[0]["need"] == "market_data"
+    recent = (await client.get(url, params={"since": since})).json()["items"]
+    assert len(recent) == 2, "from a date on"
+
+    async with session_scope(orgs="*") as session:
+        audited = list(
+            (await session.execute(select(AuditLog).where(AuditLog.action == "assistant.reads.read")))
+            .scalars()
+            .all()
+        )
+    assert len(audited) == 4, "every read of the journal is a line of the audit log"
+    last = audited[-1].payload
+    assert last["returned"] == 2 and last["since"] and last["until"] is None
+    filtered = [a for a in audited if a.payload.get("need") == "news"]
+    assert len(filtered) == 1 and filtered[0].payload["returned"] == 1
+    keyed = await client.get(url, params={"subject_key": "A"})
+    assert keyed.status_code == 200
+    async with session_scope(orgs="*") as session:
+        newest = (
+            await session.execute(
+                select(AuditLog).where(AuditLog.action == "assistant.reads.read").order_by(AuditLog.ts.desc())
+            )
+        ).scalars().first()  # fmt: skip
+    assert newest is not None and "A" not in str(newest.payload.values()).replace("'A'", "")
+    assert newest.payload["subject_digest"] and newest.payload["subject_digest"] != "A", "never in clear"
+
+    await as_user(client, "colleague@varga.dev")
+    assert (await client.get(url, params={"need": "news"})).status_code == 403
+    async with session_scope(orgs="*") as session:
+        count = len(
+            (await session.execute(select(AuditLog).where(AuditLog.action == "assistant.reads.read"))).all()
+        )
+    assert count == 5, "the refused read was not served (it is not a read of the journal)"
+
+
+async def test_a_conversation_never_spoken_in_has_a_retention_and_is_purged(
+    client: AsyncClient, admin: str, upstream: Upstream, offline: Path
+) -> None:
+    from choregos_api.db.models import AgentSessionRecord
+    from choregos_api.db.session import session_scope
+    from choregos_api.services.assistant_retention import purge_once
+
+    installation = await _assistant(client)
+    empty = await _open(installation)
+    record = await _conversation(empty)
+    assert record.turns == 0 and record.retention_until is not None, "the clock starts at the opening"
+    assert aware(record.retention_until) > utcnow() + timedelta(days=20)
+    # A conversation older than the policy's days, with no turn: purged; a fresh one stays.
+    async with session_scope(orgs="*") as session:
+        row = await session.get(AgentSessionRecord, empty)
+        assert row is not None
+        row.retention_until = utcnow() - timedelta(minutes=1)
+    fresh = await _open(installation)
+    async with session_scope(orgs="*") as session:
+        assert (await purge_once(session))["conversations"] == 1
+    assert await _conversation(empty) is None and await _conversation(fresh) is not None
+    # One opened before the clock was set (no `retention_until`) is purged by its creation date.
+    legacy = await _open(installation)
+    async with session_scope(orgs="*") as session:
+        row = await session.get(AgentSessionRecord, legacy)
+        assert row is not None
+        row.retention_until = None
+        row.created_at = utcnow() - timedelta(days=60)
+    async with session_scope(orgs="*") as session:
+        assert (await purge_once(session))["conversations"] == 1
+    assert await _conversation(legacy) is None and await _conversation(fresh) is not None
+
+
+async def test_an_export_by_subject_lists_the_artifacts_of_the_task_runs_that_read_about_it(
+    client: AsyncClient, admin: str, upstream: Upstream, offline: Path
+) -> None:
+    from choregos_api.db.models import AssistantRead, Organization, User
+    from choregos_api.db.session import session_scope
+
+    installation = await _assistant(client)
+    await _task_artifact("admin@varga.dev", installation, "TASK-about", name="brief")
+    await _task_artifact("admin@varga.dev", installation, "TASK-other", name="other-brief")
+    async with session_scope(orgs="*") as session:
+        me = (await session.execute(select(User).where(User.email == "admin@varga.dev"))).scalar_one()
+        org = (await session.execute(select(Organization))).scalar_one()
+        for key, subject_key in (("TASK-about", SUBJECT["key"]), ("TASK-other", "ISIN-OTHER")):
+            session.add(
+                AssistantRead(
+                    org_id=org.id, installation_id=installation, user_id=me.id, work_item_key=key,
+                    task="morning_brief", need="market_data", operation="market_data__get_quote",
+                    subject_type=SUBJECT["type"], subject_key=subject_key, at=utcnow(),
+                )
+            )  # fmt: skip
+    exported = await client.post(
+        f"{ORG}/assistants/investment-assistant/erasure", json={**BY_SUBJECT, "mode": "export"}
+    )
+    assert exported.status_code == 200, exported.text
+    (artifact,) = exported.json()["task_artifacts"]
+    assert (artifact["work_item_key"], artifact["task"], artifact["name"]) == (
+        "TASK-about",
+        "morning_brief",
+        "brief",
+    )
+    assert artifact["content"] == "abc", "the inline content is in the export"
+    assert await _artifacts() == ["TASK-about", "TASK-other"], "an export deletes nothing"
+
+
+async def test_an_erasure_by_user_keeps_the_journal_lines_but_pseudonymises_the_person(
+    client: AsyncClient, admin: str, upstream: Upstream, offline: Path
+) -> None:
+    installation = await _assistant(client)
+    mine = await _read_lines(
+        installation, ("market_data", "get_quote", "A", 2), ("news", "search_news", "B", 1)
+    )
+    from choregos_api.db.models import AssistantRead, Organization
+    from choregos_api.db.session import session_scope
+
+    async with session_scope(orgs="*") as session:
+        org = (await session.execute(select(Organization))).scalar_one()
+        session.add(
+            AssistantRead(
+                org_id=org.id, installation_id=installation, user_id="colleague-id", need="news",
+                operation="search_news", at=utcnow(),
+            )
+        )  # fmt: skip
+    assert (await client.delete(ME)).status_code == 200
+    async with session_scope(orgs="*") as session:
+        rows = list((await session.execute(select(AssistantRead).order_by(AssistantRead.at))).scalars())
+    assert len(rows) == 3, "the evidence of what was read stays"
+    ours = [r for r in rows if r.user_id != "colleague-id"]
+    assert len(ours) == 2 and all(r.user_id.startswith("erased-user:") for r in ours)
+    assert mine not in {r.user_id for r in rows}, "nothing links a line back to the person"
+    assert len({r.user_id for r in ours}) == 1, "the lines still read as one person's"
+    assert [r.operation for r in ours] == ["get_quote", "search_news"], "what was read is intact"
+    assert any(r.user_id == "colleague-id" for r in rows), "the colleague's line is untouched"

@@ -543,3 +543,77 @@ async def test_a_console_write_bound_to_a_persons_identity_is_not_offered(
     async with session_scope(orgs="*") as session:
         binding = (await session.execute(select(AssistantToolBinding))).scalar_one()
         assert (binding.identity, binding.approval) == ("user_exchange", "console")
+
+
+# ───────────────────────── `user_consent` writes (F2) ─────────────────────────
+
+
+async def test_an_inline_write_bound_for_user_consent_executes_under_the_persons_connected_account(
+    client: AsyncClient,
+    admin: str,
+    project: dict[str, Any],
+    upstream: Upstream,  # noqa: F811
+    source: Any,  # noqa: F811
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The proposal is the same; at confirmation the broker calls the source with the access token of the
+    person's connected account, not the connector's key and not an exchanged token."""
+    import base64
+    from urllib.parse import urlparse
+
+    from choregos_adapters.fakes.oauth_provider import AUTHORIZE, TOKEN, FakeOAuthProvider
+    from choregos_api.db.models import AssistantToolBinding, OrgConnector
+    from choregos_api.db.session import session_scope
+    from choregos_api.secret_store import SealedDbSecretStore, parse_keyring, set_secret_store
+    from choregos_api.services.connected_accounts import set_consent_transport
+
+    ring = parse_keyring("k1:" + base64.b64encode(b"k" * 32).decode())
+    assert ring is not None
+    set_secret_store(SealedDbSecretStore(ring))
+    provider = FakeOAuthProvider(client_secret="oauth-secret")
+    set_consent_transport(provider.transport())
+    monkeypatch.setenv("CONNECTOR_TEST_OAUTH_SECRET", "oauth-secret")
+    try:
+        await _declare(client, modes=["service", "user_consent"], audience=False)
+        await _sign_in_sealed()
+        ids = await _installation()
+        async with session_scope(orgs="*") as session:
+            connector = (await session.execute(select(OrgConnector))).scalar_one()
+            connector.config = {
+                **connector.config,
+                "user_consent": {
+                    "authorization_endpoint": AUTHORIZE,
+                    "token_endpoint": TOKEN,
+                    "client_id": "choregos-client",
+                    "client_secret_ref": "env:CONNECTOR_TEST_OAUTH_SECRET",
+                    "scopes": ["read", "offline_access"],
+                },
+            }
+            binding = (await session.execute(select(AssistantToolBinding))).scalar_one()
+            binding.identity = "user_consent"
+        conversation, action_id = await _propose(client, admin, upstream, ids)
+        assert _writes(source) == [], "proposed, nothing sent"
+
+        # No account yet: confirming reaches no source and says why.
+        refused = await client.post(f"{ME}/{conversation}/actions/{action_id}/confirm")
+        assert refused.status_code == 200 and refused.json()["status"] != "executed", refused.text
+        assert _writes(source) == []
+        assert "account_not_connected" in refused.text
+
+        started = await client.post(
+            "/api/v1/me/connected-accounts/fournisseur/connect", params={"org": "varga"}
+        )
+        assert started.status_code == 200, started.text
+        redirect = urlparse(provider.authorize(started.json()["authorization_url"], "person-at-the-source"))
+        assert (await client.get(f"{redirect.path}?{redirect.query}")).status_code == 303
+
+        confirmed = await client.post(f"{ME}/{conversation}/actions/{action_id}/confirm")
+        assert confirmed.status_code == 200, confirmed.text
+        assert confirmed.json()["status"] == "executed", confirmed.text
+        (headers,) = _writes(source)
+        bearer = headers["authorization"].removeprefix("Bearer ")
+        assert provider.access_tokens[bearer] == "person-at-the-source", "the person's own account"
+        assert bearer != "supplier-key"
+    finally:
+        set_consent_transport(None)
+        set_secret_store(None)

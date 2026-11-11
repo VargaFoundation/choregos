@@ -9,10 +9,10 @@ owner confirms it (`confirm`: the broker calls the source with THE PERSON'S iden
 judge of the right to write) or refuses it (`refuse`). Neither the agent nor the MCP door ever executes.
 
 What is offered, and why not more:
-- a binding whose approval is `inline` and whose identity is `user_exchange` (S63-07,
-  `conversation_needs.EXECUTABLE_IDENTITIES`): the person confirms in the console and the broker executes it
-  as
-  them. `user_consent` (S63-08) is not offered until it can execute.
+- a binding whose approval is `inline` and whose identity is `user_exchange` (S63-07) or `user_consent`
+  (S63-08), `conversation_needs.EXECUTABLE_IDENTITIES`: the person confirms in the console and the broker
+  executes it as them (an exchanged token, or the person's connected account; without an account the call is
+  refused `account_not_connected` and the action stays confirmed-but-failed like any refused call).
 - a binding whose approval is `console` and whose identity is `service`: the call proposes a GOVERNED action
   (ADR 0035, `broker.tool_action`) in the person's personal space, decided at `/p/<space>/actions/<id>` by
   whoever
@@ -61,9 +61,9 @@ from .broker import (
     check_arguments,
     tool_action,
 )
-from .conversation_needs import previews, write_tools
+from .conversation_needs import need_identities, previews, write_tools
 from .events import persist_event
-from .identity_exchange import SERVICE, USER_EXCHANGE, Acting
+from .identity_exchange import SERVICE, USER_CONSENT, USER_EXCHANGE, Acting
 from .mcp_gateway import route_of
 from .mcp_gateway_identity import GatewayRefusal
 
@@ -142,11 +142,13 @@ async def offered_writes(
     }
 
 
-async def _acting(session: AsyncSession, record: AgentSessionRecord) -> Acting:
-    """The person of the conversation, through the identity exchange."""
+async def _acting(session: AsyncSession, record: AgentSessionRecord, connector: str) -> Acting:
+    """The person of the conversation: through the identity exchange, or under their connected account when
+    the need's binding says `user_consent` (the broker serves both, `acting=`)."""
+    mode = (await need_identities(session, record)).get(connector, USER_EXCHANGE)
     user = await session.get(User, record.user_id) if record.user_id else None
     return Acting(
-        USER_EXCHANGE,
+        USER_CONSENT if mode == USER_CONSENT else USER_EXCHANGE,
         user_id=record.user_id or "",
         subject=(user.oidc_sub if user is not None else None) or record.user_id or "",
         org_id=record.org_id,
@@ -209,7 +211,7 @@ async def _diff(
     project = await session.get(Project, record.project_id) if record.project_id else None
     if project is None:
         return None
-    acting = await _acting(session, record)
+    acting = await _acting(session, record, entry.preview.connector.name)
     code, body = await call(session, entry.preview, arguments, project=project, acting=acting)
     await _book(session, record, project, entry.preview, code, body, acting)
     if code != 200 or not isinstance(body, dict):
@@ -446,7 +448,7 @@ async def confirm(
             f"`{action.need}` is no longer bound for an inline write: the action is not executed",
             "not_available",
         )
-    acting = await _acting(session, record)
+    acting = await _acting(session, record, entry.tool.connector.name)
     action.confirmed_by, action.confirmed_at, action.status = principal.user_id, utcnow(), "confirmed"
     code, body = await call(session, entry.tool, dict(action.arguments), project=project, acting=acting)
     action.result = {"status_code": code, "body": body}

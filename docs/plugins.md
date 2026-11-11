@@ -288,7 +288,9 @@ now with `POST …/run`. Nothing changes in the Temporal workflows: the schedule
 - **`on_demand`**: the caller's click, one work item each, no delegation (the session's identity). A
   conversation of the installation is offered the same through ONE tool, `run_task(task)`, whose `task` is one of
   the manifest's on-demand tasks (`conversation_tasks`): it starts the task as the conversation's owner, with
-  no delegation, under the click's budget and readiness checks, and tells the agent the work item's key.
+  no delegation, under the click's budget and readiness checks, and tells the agent the work item's key (proved
+  through a full model turn). The **`trigger`** kind (an external event starting a run) stays for later: ADR 0137
+  point 2 defers it, so this is a deferral the ADR already made, not a departure.
 - **Delegation**: a task with `delegation: read_only` can be subscribed, but its scheduled and polled runs are
   refused, the reason in `last_refusal`, unless the subscriber's standing delegation holds
   ([security](security.md#the-standing-delegation-adr-0137-points-3-4)). The steps of the run's workflow read
@@ -466,8 +468,10 @@ decided at `/p/<space>/actions/<id>` with a fresh sign-in by whoever the project
 action) and follows its outcome (`executed`, or `refused` when rejected); confirming or refusing it from the
 conversation is 409 `governed`. A `console` need with a person's identity (`user_exchange`) is NOT offered: the
 governed action's effect has no per-person identity, so it would write as the service; a proposal made before the
-owners raised the approval is refused at confirmation with `approval_console`. `user_consent` writes wait for
-S63-08.
+owners raised the approval is refused at confirmation with `approval_console`. A need bound `user_consent` with
+`approval: inline` is offered and executed like a `user_exchange` one, but under the person's connected account (the
+source receives the account's access token); without a connected account the confirmation is refused
+`account_not_connected` and nothing reaches the source.
 
 ### Who may use an assistant, and what it may spend
 
@@ -544,19 +548,30 @@ row-level policy.
 - **Retention.** A daily task of the API deletes the conversations past `retention_until` with their events,
   the unpinned memory facts older than their space's `retention_days` (the ledger lines stay), the task
   artifacts older than `policy.data.retention_days` (30 days when the manifest names none) and the profile
-  versions past the newest ten (`policy_overrides.retention.profile_versions`), the live ones kept.
+  versions past the newest ten (`policy_overrides.retention.profile_versions`), the live ones kept. A conversation's
+  clock starts when it is opened, so one that never had a turn is purged too (an older one with no
+  `retention_until` and no turn is purged by its creation date).
 - **Reads journal.** Each tool call of an assistant's conversation writes one line (person, need, operation,
-  subject, moment; never the content). `GET /api/v1/orgs/{org}/assistants/{slug}/reads` lists them for
-  `assistant:audit`, filtered by `subject_type` / `subject_key` / `user_id`.
+  subject, moment; never the content). A task run's lines name the work item and the task, a delegated one the
+  delegation, and a poll writes one line per poll (task and delegation; the work item too when the poll started
+  exactly one run). `GET /api/v1/orgs/{org}/assistants/{slug}/reads` lists them for `assistant:audit` (owners, the
+  administrator, privacy officers), filtered by `subject_type` / `subject_key` / `user_id` / `need` and the
+  period (`since`, `until`), newest first, paginated by cursor. Reading the journal is itself written in the audit
+  log (the filters, the subject's key as a digest, how many lines were returned). The audience of a token
+  principal (machine or personal token, REST or MCP door) is judged on the user's groups at each request, exactly
+  like a session's.
 - **Erasure by user.** `DELETE /api/v1/me/assistants/{org}/{slug}` removes the caller's conversations and
   memories in that installation, their standing delegations (revoked first), task subscriptions, the artifacts of
   their task runs (the work item stays as the trace; the bytes of a file artifact stay in the object store, which
   has no delete) and their connected accounts at the connectors the installation binds with `user_consent`
-  (revoked at the source when it offers it), and is written in the audit log.
+  (revoked at the source when it offers it), and is written in the audit log. The person's journal lines stay as
+  the accountability record (ADR 0133 point 6 lists no deletion of it) but lose who: their `user_id` becomes
+  `erased-user:<random>`, one token per erasure, not derived from the id.
 - **Erasure and export by subject.** `POST /api/v1/orgs/{org}/assistants/{slug}/erasure` with
   `{subject: {type, key}, mode: export | erase}`, for `assistant:audit`, only when `policy.data.erasure` lists
-  `by_subject`. `export` returns every person's memory of the subject and the conversations where it was
-  resolved; `erase` deletes those memories and redacts those conversations (`conversations: delete` deletes
+  `by_subject`. `export` returns every person's memory of the subject, the conversations where it was
+  resolved and the artifacts (inline content, or the storage key of a file) of the task runs whose reads were about
+  it; `erase` deletes those memories and redacts those conversations (`conversations: delete` deletes
   them), and deletes the artifacts of the task runs whose reads (the reads journal) were about the subject.
   Delegations and connected accounts belong to a person, not a subject. Both are audited, the key as a digest.
 

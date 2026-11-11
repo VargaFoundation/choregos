@@ -23,6 +23,7 @@ of an erased subject.
 from __future__ import annotations
 
 import hashlib
+import secrets
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -63,11 +64,31 @@ UserEraser = Callable[[AsyncSession, AssistantInstallation, str], Awaitable[int]
 USER_ERASERS: dict[str, UserEraser] = {}
 
 
+#: The prefix of the pseudonym a journal line carries once its person was erased.
+ERASED_USER = "erased-user"
+
+
 def digest(key: str) -> str:
     return hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
 
 
 # -- by user ---------------------------------------------------------------------------------------------
+
+
+async def pseudonymise_reads(session: AsyncSession, installation: AssistantInstallation, user_id: str) -> int:
+    """The person's lines of the reads journal keep what was read (need, operation, subject, when) but lose
+    who: `user_id` becomes `erased-user:<random>`, one token for this erasure so that the lines still read as
+    one person's, a value nothing links back (no hash of the id, which anyone with the user list could
+    recompute). ADR 0133 point 6 says the journal is the evidence of what the installation read and lists
+    no deletion of it: erasing the person's data removes the reference to the person, not the evidence."""
+    token = f"{ERASED_USER}:{secrets.token_hex(8)}"
+    done = await session.execute(
+        update(AssistantRead)
+        .where(AssistantRead.installation_id == installation.id, AssistantRead.user_id == user_id)
+        .values(user_id=token)
+        .execution_options(synchronize_session=False)
+    )
+    return int(done.rowcount or 0)  # type: ignore[attr-defined]
 
 
 async def _delete_stores(session: AsyncSession, stores: list[MemoryStore]) -> tuple[int, int, int]:
@@ -90,6 +111,7 @@ async def erase_user(
     from . import assistant_delegations, task_erasure  # noqa: F401 - they register their erasers on import
 
     user_id = principal.user_id
+    await pseudonymise_reads(session, installation, user_id)
     conversations = list(
         (
             await session.execute(
@@ -270,6 +292,9 @@ async def by_subject(
         conversations = await _conversations_of(session, installation, subject)
         if request.mode == "export":
             report.memories, report.conversations = await _export(session, stores, conversations)
+            from .task_erasure import export_subject_artifacts
+
+            report.task_artifacts = await export_subject_artifacts(session, installation, subject)
         else:
             report.memories_erased = (await _delete_stores(session, stores))[0]
             from .task_erasure import erase_subject_artifacts
@@ -305,6 +330,8 @@ async def by_subject(
         memories=len(stores) if request.mode == "export" else report.memories_erased,
         conversations=len(conversations),
         conversation_mode=request.conversations if request.mode == "erase" else None,
-        task_artifacts=report.task_artifacts_erased,
+        task_artifacts=len(report.task_artifacts)
+        if request.mode == "export"
+        else report.task_artifacts_erased,
     )
     return report

@@ -38,6 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import (
     AssistantInstallation,
+    AssistantRead,
     AssistantToolBinding,
     ConnectorOperation,
     Delegation,
@@ -54,6 +55,7 @@ from ..schemas.tasks import TaskSubscriptionPut
 from . import assistant_delegations, assistants, plugin_files
 from .assistant_access import caps_of, holds, month_spend
 from .assistant_conversations import audience_installation
+from .assistant_memory import subjects_in
 from .broker import BrokerTool, call
 from .definitions import active_workflow_named, publish_workflow
 from .initiator import initiator
@@ -382,12 +384,16 @@ async def read_operation(
     *,
     delegation: Delegation | None = None,
     now: datetime | None = None,
+    journal_for: tuple[str, str] | None = None,
+    lines: list[AssistantRead] | None = None,
 ) -> Any:
     """The structured result of a read operation `<need>__<operation>` the installation's need is bound to,
     called through the broker under the connector's own identity (`service`), or, under a standing
     delegation (S63-14), as the person the need's identity says. A delegated read is judged first
     (`assistant_delegations.guard_read`: a write is refused, `DelegationRefused`) and journaled with the
-    delegation's id."""
+    delegation's id. `journal_for=(user_id, task)` also writes the line of the reads journal (S63-16): the
+    poll's read has no work item yet, so the line names the task and the delegation; it is appended to
+    `lines` so that the caller can add the work item once there is exactly one."""
     need, _, name = operation.partition("__")
     binding = (
         await session.execute(
@@ -424,10 +430,27 @@ async def read_operation(
     status, result = await call(
         session, BrokerTool(name=operation, connector=connector, operation=op), arguments, acting=acting
     )
-    if delegation is not None and status == 200:
+    if delegation is not None and status == 200 and journal_for is None:
         await assistant_delegations.journal(
             session, delegation, need=need, operation=operation, result=result, now=now
         )
+    if journal_for is not None and status == 200:
+        found = subjects_in(result.get("structuredContent"))
+        line = AssistantRead(
+            org_id=row.org_id,
+            installation_id=row.id,
+            user_id=journal_for[0],
+            task=journal_for[1],
+            need=need,
+            operation=operation,
+            subject_type=found[0]["type"] if found else None,
+            subject_key=found[0]["key"] if found else None,
+            delegation_id=delegation.id if delegation is not None else None,
+            at=now or utcnow(),
+        )
+        session.add(line)
+        if lines is not None:
+            lines.append(line)
     if status != 200:
         raise ValueError(f"`{operation}` answered {status}: {str(result.get('error') or result)[:200]}")
     structured = result.get("structuredContent")
@@ -456,6 +479,7 @@ async def _poll(  # noqa: PLR0913 - one poll: who, what, when, under which deleg
 ) -> list[str]:
     """Call the poll's operation, test `when`, start one run per object not seen; the keys started."""
     poll = trigger_declaration(declared, "poll") or {}
+    lines: list[AssistantRead] = []
     try:
         result = await read_operation(
             session,
@@ -464,6 +488,8 @@ async def _poll(  # noqa: PLR0913 - one poll: who, what, when, under which deleg
             dict(poll.get("arguments") or {}),
             delegation=delegation,
             now=now,
+            journal_for=(user.id, str(declared["name"])),
+            lines=lines,
         )
     except ValueError as failure:
         sub.last_refusal = str(failure)[:500]
@@ -471,12 +497,13 @@ async def _poll(  # noqa: PLR0913 - one poll: who, what, when, under which deleg
     due = due_objects(dict(poll.get("when") or {}), poll.get("idempotency"), result)
     seen = list(sub.seen_keys or [])
     started: list[str] = []
+    items: list[WorkItem] = []
     for object_key in due:
         if object_key in seen:
             continue
         digest = object_key.removeprefix("sha256:")[:24]
         suffix = "obj-" + "".join(c if c.isalnum() else "-" for c in digest)[:48]
-        await start_run(
+        item, _created = await start_run(
             session,
             organisation=organisation,
             row=row,
@@ -490,6 +517,10 @@ async def _poll(  # noqa: PLR0913 - one poll: who, what, when, under which deleg
         )
         seen.append(object_key)
         started.append(object_key)
+        items.append(item)
+    if len(items) == 1:  # one read, one run: the line names the work item (several: the task and the poll)
+        for line in lines:
+            line.work_item_key = items[0].tracker_key
     sub.seen_keys = seen[-MAX_SEEN:]
     sub.last_refusal = None
     return started

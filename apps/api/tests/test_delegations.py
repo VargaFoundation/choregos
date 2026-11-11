@@ -840,9 +840,10 @@ async def test_the_steps_of_a_delegated_task_read_as_the_person_and_are_journale
     claims = claims_of(sent[0]["authorization"].removeprefix("Bearer "))
     assert claims["sub"] == SUBJECT and claims["aud"] == AUDIENCE_OF_SOURCE, "the step read as the PERSON"
     lines = [r for r in await _reads() if r.work_item_key]
+    # The poll's own line (it names the work item it started) and the step's.
     assert [(r.work_item_key, r.delegation_id, r.need) for r in lines] == [
         (key, granted["id"], "market_data")
-    ]
+    ] * 2
 
     # A write by a step of a delegated task is refused, typed (a task has no conversation to confirm it in).
     async with session_scope(orgs="*") as session:
