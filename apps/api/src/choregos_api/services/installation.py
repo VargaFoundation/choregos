@@ -128,13 +128,18 @@ async def install_skills_and_agents(
         installed["skills"].append(head.name)
     for document in agents:
         body = AgentCreate.model_validate(document)
-        version_errors(body.spec)
-        await require_complete(session, org_id, body.kind, body.spec)
-        await check_agent_network(session, org_id, body.spec)
+        # An agent already there is never rewritten, so nothing about this version is judged: an
+        # organisation that requires complete agents still publishes a workflow naming a catalogue agent it
+        # installed earlier (S62-12, found in production on 2026-11-11).
         if (
             await session.execute(select(Agent.id).where(Agent.org_id == org_id, Agent.slug == body.slug))
         ).first():
             continue
+        version_errors(body.spec)
+        await require_complete(
+            session, org_id, body.kind, body.spec, about=f"the agent `{body.slug}` of {what}"
+        )
+        await check_agent_network(session, org_id, body.spec)
         body.spec = await pin_hosted_runtime(session, org_id, body.spec)
         provenance = (catalogue_provenance or {}).get(body.slug, author)
         agent = Agent(
