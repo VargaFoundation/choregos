@@ -231,7 +231,7 @@ spec:
             {{- end }}
             {{- /* A name this chart sets for the API must not also come from global.extraEnv.
                    S47-02/03/04 add their names to this dict. */}}
-            {{- $apiOwned := dict "CHOREGOS_SESSION_SECRET_PREVIOUS" "the session-secret-previous key of global.apiSecretRef" "CHOREGOS_TRUSTED_PROXY_CIDRS" "choregos-api.trustedProxyCidrs" "CHOREGOS_TRUSTED_PROXY_HOPS" "choregos-api.trustedProxyHops" "CHOREGOS_CORS_ORIGINS" "choregos-api.corsOrigins (a list)" "CHOREGOS_OIDC_AUTHORIZATION_ENDPOINT" "choregos-api.oidcEndpoints.authorization" "CHOREGOS_OIDC_TOKEN_ENDPOINT" "choregos-api.oidcEndpoints.token" "CHOREGOS_OIDC_USERINFO_ENDPOINT" "choregos-api.oidcEndpoints.userinfo" "CHOREGOS_OIDC_REQUIRE_EMAIL_VERIFIED" "choregos-api.oidcRequireEmailVerified" "CHOREGOS_OIDC_RELINK_VERIFIED_EMAIL" "choregos-api.oidcRelinkVerifiedEmail" }}
+            {{- $apiOwned := dict "CHOREGOS_SESSION_SECRET_PREVIOUS" "the session-secret-previous key of global.apiSecretRef" "CHOREGOS_TRUSTED_PROXY_CIDRS" "choregos-api.trustedProxyCidrs" "CHOREGOS_TRUSTED_PROXY_HOPS" "choregos-api.trustedProxyHops" "CHOREGOS_CORS_ORIGINS" "choregos-api.corsOrigins (a list)" "CHOREGOS_OIDC_AUTHORIZATION_ENDPOINT" "choregos-api.oidcEndpoints.authorization" "CHOREGOS_OIDC_TOKEN_ENDPOINT" "choregos-api.oidcEndpoints.token" "CHOREGOS_OIDC_USERINFO_ENDPOINT" "choregos-api.oidcEndpoints.userinfo" "CHOREGOS_OIDC_REQUIRE_EMAIL_VERIFIED" "choregos-api.oidcRequireEmailVerified" "CHOREGOS_OIDC_RELINK_VERIFIED_EMAIL" "choregos-api.oidcRelinkVerifiedEmail" "CHOREGOS_INTERNAL_API_GUARD" "choregos-api.internalApiGuard" "CHOREGOS_RUN_DOOR_HOSTS" "choregos-api.runDoor.hostnames" "CHOREGOS_PUBLIC_HOSTS" "choregos-api.publicHostnames" }}
             {{- range ($.Values.global.extraEnv | default list) }}
             {{- if hasKey $apiOwned .name }}
             {{- fail (printf "global.extraEnv: %s is set by the choregos-api chart; use %s instead (two values for one name: Kubernetes keeps the last one without saying so)" .name (get $apiOwned .name)) }}
@@ -288,6 +288,23 @@ spec:
               value: {{ toJson (.Values.trustedProxyCidrs | default list) | quote }}
             - name: CHOREGOS_TRUSTED_PROXY_HOPS
               value: {{ .Values.trustedProxyHops | default 0 | quote }}
+            # The run's API answers only where runs are (ADR 0144): what the API does with a request for
+            # `/api/v1/internal` that arrives under a public hostname, which names are public beyond the
+            # two URLs and the CORS origins, which are run doors, and where runs are told to call back
+            # (the workers' own value: the guard never refuses that address).
+            {{- $guard := .Values.internalApiGuard | default "warn" | toString }}
+            {{- if not (has $guard (list "off" "warn" "enforce")) }}
+            {{- fail (printf "choregos-api.internalApiGuard: %q is not off, warn or enforce" $guard) }}
+            {{- end }}
+            {{- $door := .Values.runDoor | default dict }}
+            - name: CHOREGOS_INTERNAL_API_GUARD
+              value: {{ $guard | quote }}
+            - name: CHOREGOS_RUN_DOOR_HOSTS
+              value: {{ toJson (compact ($door.hostnames | default list)) | quote }}
+            - name: CHOREGOS_PUBLIC_HOSTS
+              value: {{ toJson (compact (concat (ternary (.Values.ingress.hostnames | default list) list (.Values.ingress.enabled | default false)) (.Values.publicHostnames | default list))) | quote }}
+            - name: CHOREGOS_INTERNAL_API_URL
+              value: {{ .Values.global.internalApiUrl | default "http://choregos-api:8000" | quote }}
             # STRUCTURAL, never optional: an API that starts without a session
             # secret signs cookies with an empty value, and a missing run-token key
             # sends every process back to an ephemeral pair — the agent then receives
