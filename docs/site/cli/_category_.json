@@ -1,9 +1,8 @@
 {
-  "label": "CLI",
-  "position": 6,
+  "label": "Command line",
+  "position": 7,
   "link": {
     "type": "generated-index",
-    "slug": "/choregos/cli",
-    "description": "Install the choregos command and look up every option."
+    "description": "Install the choregos command and look up every command it has."
   }
 }

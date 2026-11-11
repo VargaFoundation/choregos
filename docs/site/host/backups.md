@@ -25,9 +25,9 @@ Temporal and in the platform database disagree is stuck or replays a step.
 
 1. Restore PostgreSQL into a **new** cluster at the chosen instant, then point
    `global.database.secretRef` at it:
-   [PostgreSQL restore runbook](https://github.com/VargaFoundation/choregos/blob/v0.25.3/docs/runbooks/postgres-restore.md).
+   [PostgreSQL restore runbook](../../runbooks/postgres-restore.md).
 2. Restore Temporal's database to the same instant:
-   [Temporal backup runbook](https://github.com/VargaFoundation/choregos/blob/v0.25.3/docs/runbooks/temporal-backup.md).
+   [Temporal backup runbook](../../runbooks/temporal-backup.md).
 3. Restart the API and the workers, then list the workflows Temporal runs and compare them with the
    work items the console shows in progress. The Temporal runbook says how to start again a work item
    that lost its workflow.
@@ -35,5 +35,5 @@ Temporal and in the platform database disagree is stuck or replays a step.
 ## Purging
 
 The database grows with runs, events and transcripts; the
-[purge runbook](https://github.com/VargaFoundation/choregos/blob/v0.25.3/docs/runbooks/purge-runs.md)
+[purge runbook](../../runbooks/purge-runs.md)
 says what can go, and keeps what the audit needs.

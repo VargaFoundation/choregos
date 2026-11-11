@@ -34,13 +34,13 @@ choregos tokens create --name weekly-report --expires-in-days 30
 A token with an MCP or A2A scope is refused by the REST API, and the MCP and A2A doors refuse a
 full-access token: one token per use.
 
-```bash
+```shell
 export CHOREGOS_API_URL=https://choregos.example.com CHOREGOS_TOKEN=chg_...
 ```
 
 ## 2. Open a work item
 
-```bash
+```shell
 curl -s "$CHOREGOS_API_URL/api/v1/projects/acme:billing-api/work-items" \
   -H "Authorization: Bearer $CHOREGOS_TOKEN" -H 'Content-Type: application/json' -d '{
   "title": "Add credit notes",
@@ -63,8 +63,8 @@ curl -s "$CHOREGOS_API_URL/api/v1/projects/acme:billing-api/work-items" \
 | `budget_usd` | a budget for this work item, which can only tighten the project's |
 | `start` | `true` (the default) starts the workflow at once |
 
-**What you should see:** HTTP `201` and the work item, with its `id`, its `tracker_key` (such as
-`BIL-12`) and its `state`.
+**What you should see:** HTTP `201` and the work item, with its `id`, its `tracker_key` (the project's
+key prefix and a number, such as `BIL-12`) and its `state`.
 
 The same with the CLI:
 
@@ -96,7 +96,7 @@ choregos items list acme:billing-api
 
 ## What a project is called in a URL
 
-`/projects/{id}` takes the project's UUID, `org:slug` (`acme:billing-api`), `org/slug`, or its bare
+`/api/v1/projects/{id}` takes the project's UUID, `org:slug` (`acme:billing-api`), `org/slug`, or its bare
 slug when no other organisation has the same one.
 
 ## Errors

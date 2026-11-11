@@ -13,7 +13,7 @@ Everything the console does goes through the REST API, under `/api/v1` on your i
 
 The API is described by an OpenAPI 3 document, the contract the console and the CLI are generated
 against:
-[`packages/contracts/openapi.yaml`](https://github.com/VargaFoundation/choregos/blob/v0.25.3/packages/contracts/openapi.yaml).
+[`packages/contracts/openapi.yaml`](../../../packages/contracts/openapi.yaml).
 Take the version of your instance (`GET /api/v1/edition` says which). The MCP and A2A doors are not
 in it: they speak their own protocols ([MCP](../integrate/mcp.md), [A2A](../integrate/a2a.md)).
 

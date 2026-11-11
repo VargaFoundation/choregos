@@ -93,7 +93,8 @@ def targets() -> dict[pathlib.Path, str]:
 def main() -> int:
     if "--check" in sys.argv:
         stale = [
-            path for path, content in targets().items()
+            path
+            for path, content in targets().items()
             if not path.exists() or path.read_text(encoding="utf-8") != content
         ]
         for path in stale:

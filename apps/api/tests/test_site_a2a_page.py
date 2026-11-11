@@ -29,7 +29,7 @@ CALL = re.compile(r"^curl [^\n]*\"\$A2A\"[^\n]*-d '(\{.*?^\})'", re.M | re.S)
 HEADER = re.compile(r"-H '([^':]+): ([^']+)'")
 OPT_IN = re.compile(r"```yaml\n(metadata:.*?a2a:.*?)```", re.S)
 ANSWER = re.compile(r"```json\n(.*?)```", re.S)
-BASH = re.compile(r"```bash\n(.*?)```", re.S)
+BASH = re.compile(r"```(?:bash|shell)\n(.*?)```", re.S)
 
 METHODS = [
     "message/send",
@@ -230,7 +230,9 @@ async def test_a_file_part_is_stored_as_an_input_of_the_work_item(
         assert "spec.pdf" in set(names)
 
 
-async def test_the_refusals_the_page_lists_are_the_door_s(client: AsyncClient, project: dict[str, Any]) -> None:
+async def test_the_refusals_the_page_lists_are_the_door_s(
+    client: AsyncClient, project: dict[str, Any]
+) -> None:
     """Fields the workflow refuses, a version the door does not speak, a full-access token."""
     await _publish(client, project)
     full = await client.post("/api/v1/me/tokens", json={"name": "full", "scopes": ["*"]})

@@ -26,7 +26,7 @@ brought from your vault by the External Secrets Operator (on by default, from th
 
 ## Generate them
 
-```bash
+```shell
 openssl rand -base64 48
 openssl ecparam -name prime256v1 -genkey -noout
 python3 -c "import os,base64;print('k1:'+base64.b64encode(os.urandom(32)).decode())"
@@ -39,7 +39,7 @@ python3 -c "import os,base64;print('k1:'+base64.b64encode(os.urandom(32)).decode
 - **`secrets-keks`** (the third) seals the connector secrets people type in the console. Without it,
   typing a secret answers `409`.
 
-```bash
+```shell
 kubectl -n choregos create secret generic choregos-api-secrets \
   --from-literal=session-secret="$SESSION_SECRET" \
   --from-file=run-token-private-key=run-token.pem \
@@ -68,5 +68,5 @@ can still be restored.
   no run is in flight.
 
 The step-by-step:
-[secret rotation runbook](https://github.com/VargaFoundation/choregos/blob/v0.25.3/docs/runbooks/secret-rotation.md).
+[secret rotation runbook](../../runbooks/secret-rotation.md).
 `global.devSecrets: true` generates everything for a bench; it is refused in `staging` and `prod`.

@@ -79,7 +79,7 @@ it when the client is gone (`choregos tokens list`, then `choregos tokens revoke
 
 ### Claude Code
 
-```bash
+```shell
 export CHOREGOS_TOKEN=chg_...
 claude mcp add --transport http choregos https://choregos.example.com/mcp \
   --header "Authorization: Bearer $CHOREGOS_TOKEN"
@@ -90,7 +90,7 @@ Claude Code runs on your machine, so it reaches an instance behind your VPN.
 **With your single sign-on instead of a token.** When your operator registered a Claude Code client
 at the identity provider, the Integrations page shows this command first; no token to mint:
 
-```bash
+```shell
 claude mcp add --transport http --client-id choregos-claude-code --callback-port 33418 \
   choregos https://choregos.example.com/mcp
 ```

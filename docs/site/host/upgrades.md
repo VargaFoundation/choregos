@@ -13,7 +13,7 @@ sidebar_position: 5
 1. **Read the release notes** of every version between yours and the target, on the
    [GitHub releases](https://github.com/VargaFoundation/choregos/releases), and the "Upgrading to …"
    sections of the
-   [deployment reference](https://github.com/VargaFoundation/choregos/blob/v0.25.3/docs/deployment.md#upgrading-to-024).
+   [deployment reference](../../deployment.md#upgrading-to-024).
    A breaking change says what to rename or set before you upgrade.
 2. **Back up** the platform database and Temporal's, to the same instant ([Backups](backups.md)).
    The migrations change the schema; restoring a backup is the only way back.
@@ -23,7 +23,7 @@ sidebar_position: 5
 
 The same command as the install, with the new version:
 
-```bash
+```shell
 helm upgrade --install choregos oci://ghcr.io/vargafoundation/charts/choregos \
   --version 0.25.3 --namespace choregos -f my-values.yaml
 ```
@@ -38,7 +38,7 @@ helm upgrade --install choregos oci://ghcr.io/vargafoundation/charts/choregos \
 
 ## Check it
 
-```bash
+```shell
 kubectl -n choregos get pods
 kubectl -n choregos get jobs -l app.kubernetes.io/instance=choregos
 curl -s https://choregos.example.com/api/v1/edition
@@ -56,4 +56,4 @@ completed, and the edition answer's `version` naming the new version.
 | you must go back | `helm rollback` restores the previous pods, not the previous schema: restore the database backup taken before the upgrade, then roll back |
 
 Upgrading Temporal itself has its own
-[runbook](https://github.com/VargaFoundation/choregos/blob/v0.25.3/docs/runbooks/temporal-upgrade.md).
+[runbook](../../runbooks/temporal-upgrade.md).

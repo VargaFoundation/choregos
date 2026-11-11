@@ -78,7 +78,7 @@ global:
 The door publishes `/.well-known/oauth-protected-resource/mcp`. For claude.ai and ChatGPT, it and
 `/mcp` must be reachable on a public HTTPS address. A person must have signed in to the console once
 before the door knows them. Setting up Keycloak for it:
-[runbook](https://github.com/VargaFoundation/choregos/blob/v0.25.3/docs/runbooks/keycloak-mcp.md).
+[runbook](../../runbooks/keycloak-mcp.md).
 
 ## What can go wrong
 
@@ -91,4 +91,4 @@ before the door knows them. Setting up Keycloak for it:
 | `401 invalid_token` at the MCP door with OAuth | a wrong audience or issuer, or keys the provider no longer publishes |
 
 Everything about identity, including moving to a new provider and per-organisation providers:
-[deployment reference, Identity](https://github.com/VargaFoundation/choregos/blob/v0.25.3/docs/deployment.md#identity-what-the-oidc-provider-must-give-us).
+[deployment reference, Identity](../../deployment.md#identity-what-the-oidc-provider-must-give-us).

@@ -61,7 +61,7 @@ curl -fsSL https://choregos.example.com/downloads/cli/manifest.json
 `manifest.json` gives the version and, for each file, its system, architecture, size and `sha256`.
 Compare it with the file you downloaded:
 
-```bash
+```shell
 sha256sum choregos-linux-x86_64
 chmod +x choregos-linux-x86_64 && mv choregos-linux-x86_64 ~/.local/bin/choregos
 ```
@@ -78,7 +78,7 @@ GitHub release.
 The CLI tells you when its version differs from your instance's. Replace it with the instance's own
 build:
 
-```bash
+```shell
 choregos self update
 ```
 
@@ -90,7 +90,7 @@ This works on every version, and is the way on 0.25.3 and earlier. It needs Pyth
 `choregos_cli-0.25.3-py3-none-any.whl`, `choregos_core-0.25.3-py3-none-any.whl` and
 `choregos_contracts-0.25.3-py3-none-any.whl`. Then:
 
-```bash
+```shell
 uv tool install --python 3.12 ./choregos_cli-0.25.3-py3-none-any.whl \
   --with ./choregos_core-0.25.3-py3-none-any.whl --with ./choregos_contracts-0.25.3-py3-none-any.whl
 ```

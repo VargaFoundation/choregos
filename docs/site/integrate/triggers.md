@@ -79,7 +79,7 @@ header may send `X-Choregos-Token: chtrg_...` or add `?token=chtrg_...` to the U
 
 Try it from a terminal:
 
-```bash
+```shell
 curl -s -X POST "https://choregos.example.com/api/v1/webhooks/triggers/acme/billing-api/error-alert" \
   -H "Authorization: Bearer $TRIGGER_TOKEN" -H 'Content-Type: application/json' -d '{
   "id": "4f1c9e2a",
@@ -141,8 +141,17 @@ With `"auth": "signature"`, the trigger takes no bearer token: each call carries
 **signing secret** (it starts with `chsig_`), shown once with the token when you mint it. Use it for
 senders that sign their webhooks, such as many monitoring and ticketing tools.
 
+## Other ways work starts
+
+- **From your tracker:** an issue labelled `agent-ready` starts in Choregos; *start rules* start other
+  items, for instance a Jira bug of a given type or an issue carrying two labels. They are edited as
+  JSON in the same **Triggers** card, under *Tracker start rules (JSON)*
+  ([usage reference](../../usage.md#tracker-items-that-start-without-agent-ready)).
+- **On a schedule:** a project can open a work item on a cron schedule, for a weekly dependency
+  update or a nightly check ([usage reference](../../usage.md#work-items-on-a-schedule)).
+
 ## Go further
 
 - [Start a workflow over A2A](a2a.md), when the caller wants to follow the work and read its result.
 - The design decision:
-  [ADR 0113](https://github.com/VargaFoundation/choregos/blob/v0.25.3/docs/adr/0113-a-workflow-starts-from-a-trigger.md).
+  [ADR 0113](../../adr/0113-a-workflow-starts-from-a-trigger.md).

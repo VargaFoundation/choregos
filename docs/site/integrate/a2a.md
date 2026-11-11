@@ -98,7 +98,7 @@ choregos tokens create --name my-test --scope a2a --project acme:billing-api --e
 
 Keep both values at hand for the next steps:
 
-```bash
+```shell
 export TOKEN=chg_...
 export A2A=https://choregos.example.com/a2a/orgs/acme
 ```
@@ -106,7 +106,7 @@ export A2A=https://choregos.example.com/a2a/orgs/acme
 The CLI finds the door from its profile (`choregos login`, or `CHOREGOS_API_URL` and `CHOREGOS_ORG`)
 and takes the token from `--token` or `CHOREGOS_A2A_TOKEN`:
 
-```bash
+```shell
 export CHOREGOS_API_URL=https://choregos.example.com CHOREGOS_ORG=acme CHOREGOS_A2A_TOKEN=chg_...
 ```
 
@@ -126,7 +126,7 @@ A skill that takes `application/json` also says which fields it wants, as the JS
 `metadata.inputs`. A2A has no place for that on a skill, so it is in an optional extension of the
 card, which a client that does not know it simply ignores:
 
-```bash
+```shell
 curl -s "$A2A/.well-known/agent-card.json" -H "Authorization: Bearer $TOKEN" | jq '.capabilities.extensions[]
   | select(.uri == "https://choregos.dev/a2a/extensions/skill-fields/v1") | .params.skills'
 ```
@@ -142,7 +142,7 @@ choregos a2a skills
 
 ## 4. Start the workflow
 
-```bash
+```shell
 curl -s "$A2A" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{
   "jsonrpc": "2.0", "id": 1, "method": "message/send",
   "params": {
@@ -202,7 +202,7 @@ choregos a2a send billing-api/ship-a-change --message-id order-2026-0042 --title
 A `file` part carries its bytes in base64. Its `mimeType` must be one of the skill's `input_modes`; the
 first step that lists the file's `name` in its `inputs` finds it in `.choregos/inputs/`.
 
-```bash
+```shell
 curl -s "$A2A" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{
   "jsonrpc": "2.0", "id": 2, "method": "message/send",
   "params": {
@@ -234,7 +234,7 @@ behalf.
 
 Read the task whenever you like:
 
-```bash
+```shell
 curl -s "$A2A" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{
   "jsonrpc": "2.0", "id": 3, "method": "tasks/get", "params": { "id": "<task id>" }
 }'
@@ -242,7 +242,7 @@ curl -s "$A2A" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/j
 
 Or keep a connection open and receive each change as server-sent events, until a `final` status:
 
-```bash
+```shell
 curl -sN "$A2A" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{
   "jsonrpc": "2.0", "id": 4, "method": "tasks/resubscribe", "params": { "id": "<task id>" }
 }'
@@ -279,7 +279,7 @@ A server that would rather be called than hold a stream registers an `https` URL
 URL's host must be open in the organisation's network list (**Admin › Network**); with a strict list,
 ask an administrator first.
 
-```bash
+```shell
 curl -s "$A2A" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{
   "jsonrpc": "2.0", "id": 5, "method": "tasks/pushNotificationConfig/set",
   "params": {
@@ -313,7 +313,7 @@ own name.
 
 ## 9. Cancel it
 
-```bash
+```shell
 curl -s "$A2A" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{
   "jsonrpc": "2.0", "id": 6, "method": "tasks/cancel", "params": { "id": "<task id>" }
 }'
@@ -347,7 +347,7 @@ version a call is in; an `A2A-Version: 1.0` header is optional and, when sent, m
 
 Start, with a file:
 
-```bash
+```shell
 curl -s "$A2A" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -H 'A2A-Version: 1.0' -d '{
   "jsonrpc": "2.0", "id": 11, "method": "SendMessage",
   "params": {
@@ -366,26 +366,26 @@ curl -s "$A2A" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/j
 
 Read, follow, be called back, cancel:
 
-```bash
+```shell
 curl -s "$A2A" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -H 'A2A-Version: 1.0' -d '{
   "jsonrpc": "2.0", "id": 12, "method": "GetTask", "params": { "id": "<task id>" }
 }'
 ```
 
-```bash
+```shell
 curl -sN "$A2A" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -H 'A2A-Version: 1.0' -d '{
   "jsonrpc": "2.0", "id": 13, "method": "SubscribeToTask", "params": { "id": "<task id>" }
 }'
 ```
 
-```bash
+```shell
 curl -s "$A2A" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -H 'A2A-Version: 1.0' -d '{
   "jsonrpc": "2.0", "id": 14, "method": "CreateTaskPushNotificationConfig",
   "params": { "taskId": "<task id>", "id": "orders", "url": "https://hooks.partner.example/a2a", "token": "orders-check" }
 }'
 ```
 
-```bash
+```shell
 curl -s "$A2A" -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -H 'A2A-Version: 1.0' -d '{
   "jsonrpc": "2.0", "id": 15, "method": "CancelTask", "params": { "id": "<task id>" }
 }'
@@ -426,4 +426,4 @@ Every code the door can answer is in [Error codes](../reference/errors.md#the-a2
 - [Open work items from any system that sends JSON](triggers.md), when the sender cannot speak A2A.
 - [The REST API](rest.md), for your own scripts with a full-access token.
 - The design decision behind the door:
-  [ADR 0078](https://github.com/VargaFoundation/choregos/blob/v0.25.3/docs/adr/0078-governed-workflows-as-a2a-skills.md).
+  [ADR 0078](../../adr/0078-governed-workflows-as-a2a-skills.md).

@@ -8,7 +8,7 @@ sidebar_position: 1
 
 These pages are for the people who run a Choregos instance on Kubernetes. They are a digest: each one
 says what to do and links to the full
-[deployment reference](https://github.com/VargaFoundation/choregos/blob/v0.25.3/docs/deployment.md) for
+[deployment reference](../../deployment.md) for
 every value and every edge case.
 
 **What you will be able to do:** install an instance with Helm, connect it to your identity provider,

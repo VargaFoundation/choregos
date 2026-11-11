@@ -62,7 +62,7 @@ For a single-node bench with every dependency embedded, start from the chart's
 
 ## 2. Install
 
-```bash
+```shell
 helm upgrade --install choregos oci://ghcr.io/vargafoundation/charts/choregos \
   --version 0.25.3 --namespace choregos --create-namespace -f my-values.yaml
 ```
@@ -73,13 +73,13 @@ multi-arch and signed. The database migrations run as a Helm hook before the API
 
 Install the admission policies once per cluster, from a checkout of the repository at the same tag:
 
-```bash
+```shell
 kubectl apply -k infra/policies
 ```
 
 ## 3. Check it
 
-```bash
+```shell
 kubectl -n choregos get pods
 curl -s https://choregos.example.com/healthz
 ```
@@ -92,7 +92,7 @@ curl -s https://choregos.example.com/healthz
 Once signed in, a person creates their own tokens (**My account**, or `choregos tokens create`).
 Before anyone has signed in, the first one comes from the server side:
 
-```bash
+```shell
 kubectl -n choregos exec deploy/choregos-api -- choregos-admin tokens create --email alice@acme.example
 choregos login --api-url https://choregos.example.com --token chg_... --org acme
 ```
@@ -109,4 +109,4 @@ choregos login --api-url https://choregos.example.com --token chg_... --org acme
 | the first run that writes a file fails | the object store has no credentials or a wrong endpoint |
 
 The full list of values: the
-[deployment reference](https://github.com/VargaFoundation/choregos/blob/v0.25.3/docs/deployment.md).
+[deployment reference](../../deployment.md).

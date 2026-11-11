@@ -64,12 +64,9 @@ CONTRACT_SLUGS = {
     "use/budgets-and-policies",
     *OWN_SLUGS,
 }
-#: Docusaurus category positions of the shared contract.
-POSITIONS = {"build": 4, "integrate": 5, "cli": 6, "host": 7, "reference": 8}
-REPO = "https://github.com/VargaFoundation/choregos/blob/"
 FENCE = re.compile(r"^```([^\n]*)\n(.*?)^```\s*$", re.M | re.S)
 LINK = re.compile(r"\]\(\s*<?([^)\s>]+)")
-LANGUAGES = {"bash", "powershell", "json", "yaml", "python", "markdown", "text"}
+LANGUAGES = {"bash", "shell", "powershell", "json", "yaml", "python", "markdown", "text", "mermaid"}
 #: Commands a page may announce before the CLI has them, each with the story that brings it. The page
 #: must mark them with an "Available from" note.
 UPCOMING = {"choregos self update": "S62-08, the CLI served by the instance"}
@@ -124,13 +121,11 @@ def test_the_contract_s_slugs_exist(slug: str) -> None:
     assert (SITE / OWN_SLUGS[slug]).is_file(), f"/choregos/{slug} has no page"
 
 
-@pytest.mark.parametrize("section", sorted(POSITIONS))
-def test_each_section_has_its_category_and_position(section: str) -> None:
+@pytest.mark.parametrize("section", SECTIONS)
+def test_each_section_has_its_category(section: str) -> None:
+    """The positions are S62-09a's (`tests/docs/test_site.py` checks their order); a label is needed here."""
     category = json.loads((SITE / section / "_category_.json").read_text(encoding="utf-8"))
-    assert category["position"] == POSITIONS[section]
-    link = category.get("link")
-    if link and link.get("type") == "generated-index":
-        assert link["slug"] == f"/choregos/{section}", "a generated index must keep the contract's prefix"
+    assert category.get("label")
 
 
 @pytest.mark.parametrize("page", PAGES, ids=_rel)
@@ -145,6 +140,9 @@ def test_a_page_has_its_front_matter_and_one_title(page: Path) -> None:
 
 @pytest.mark.parametrize("page", PAGES, ids=_rel)
 def test_links_resolve(page: Path) -> None:
+    """A relative link names a file of the repository and one of its headings. Inside `docs/site` it is
+    another page; outside, the import into the documentation site rewrites it to GitHub at the release
+    tag. A site-absolute link names a slug of the contract."""
     broken: list[str] = []
     for target in LINK.findall(FENCE.sub("", _body(page))):
         path, _, anchor = target.partition("#")
@@ -154,42 +152,31 @@ def test_links_resolve(page: Path) -> None:
         elif target.startswith("/choregos/"):
             if path.removeprefix("/choregos/") not in CONTRACT_SLUGS:
                 broken.append(target)
-        elif target.startswith(REPO):
-            tag, _, file = path.removeprefix(REPO).partition("/")
-            if tag not in _tags() or not (ROOT / file).exists():
-                broken.append(target)
-            elif anchor and anchor not in _anchors((ROOT / file).read_text(encoding="utf-8")):
-                broken.append(target)
         elif re.match(r"^[a-z]+:", target):
-            continue
+            if target.startswith("https://github.com/VargaFoundation/choregos/blob/"):
+                broken.append(f"{target} (link to the repository with a relative path)")
         else:
             resolved = (page.parent / path).resolve()
-            if not resolved.is_file() or SITE.resolve() not in resolved.parents:
-                broken.append(target)
-            elif anchor and anchor not in _anchors(resolved.read_text(encoding="utf-8")):
+            missing = not resolved.exists() or ROOT.resolve() not in resolved.parents
+            if missing or (anchor and anchor not in _anchors(resolved.read_text(encoding="utf-8"))):
                 broken.append(target)
     assert not broken, f"{_rel(page)}: links to nothing: {broken}"
 
 
-@cache
-def _tags() -> frozenset[str]:
-    """The tags a repository link may pin: the version under the CLI's pyproject, or an earlier one."""
+def _version(text: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in text.split("."))
+
+
+def test_the_pages_pin_one_released_version() -> None:
+    """Every command that names a release (the chart, the wheels) names the same one, not a future one."""
     current = re.search(r'^version = "([^"]+)"', (ROOT / "packages/cli/pyproject.toml").read_text(), re.M)
     assert current
-    return frozenset({f"v{current.group(1)}", "main"})
-
-
-def test_the_pages_pin_one_version() -> None:
-    """Every repository link and command names the same release, the CLI's own version."""
     pinned = set()
     for page in PAGES:
-        if _rel(page) == "cli/reference.md":
-            continue
-        pinned |= set(re.findall(r"/blob/v(\d+\.\d+\.\d+)/", _text(page)))
         pinned |= set(re.findall(r"--version (\d+\.\d+\.\d+)", _text(page)))
         pinned |= set(re.findall(r"choregos_[a-z_]+-(\d+\.\d+\.\d+)-py3", _text(page)))
     assert len(pinned) == 1, f"the pages pin several versions: {sorted(pinned)}"
-    assert f"v{next(iter(pinned))}" in _tags()
+    assert _version(next(iter(pinned))) <= _version(current.group(1))
 
 
 @pytest.mark.parametrize("page", PAGES, ids=_rel)
@@ -213,7 +200,7 @@ def test_code_blocks_name_their_language(page: Path) -> None:
 def _commands(page: Path) -> list[str]:
     """Each command of the page's shell blocks: continued lines joined, a quoted body kept whole."""
     commands: list[str] = []
-    for _info, block in _blocks(page, "bash", "powershell"):
+    for _info, block in _blocks(page, "bash", "shell", "powershell"):
         pending = ""
         for raw in block.replace("\\\n", " ").splitlines():
             pending = f"{pending}\n{raw}" if pending else raw.strip()
@@ -257,7 +244,7 @@ def _cli_problem(words: list[str]) -> str | None:
     parser = command.make_parser(context)
     try:
         values, extra, _ = parser.parse_args(list(rest))
-    except Exception as error:  # noqa: BLE001 - click's own parse errors, said as such
+    except Exception as error:
         return f"`{' '.join(path)}`: {error}"
     if extra:
         return f"`{' '.join(path)}`: unexpected arguments {extra}"
@@ -425,7 +412,9 @@ def test_the_plugin_validates(tmp_path: Path) -> None:
 
 
 def _schema_keys() -> set[str]:
-    schema = json.loads((ROOT / "packages/contracts/schemas/workflow.schema.json").read_text(encoding="utf-8"))
+    schema = json.loads(
+        (ROOT / "packages/contracts/schemas/workflow.schema.json").read_text(encoding="utf-8")
+    )
     keys: set[str] = set()
 
     def walk(node: Any) -> None:
@@ -467,7 +456,12 @@ def test_the_validation_codes_the_pages_name_exist() -> None:
     )
     named: set[str] = set()
     for page in ("reference/errors.md", "reference/workflow-yaml.md"):
-        named |= set(re.findall(r"`((?:workflow|state|actor|transition|gate|action|decision|yaml|schema|skill)\.[a-z_]+)`", _text(SITE / page)))
+        named |= set(
+            re.findall(
+                r"`((?:workflow|state|actor|transition|gate|action|decision|yaml|schema|skill)\.[a-z_]+)`",
+                _text(SITE / page),
+            )
+        )
     assert len(named) > 20
     missing = sorted(code for code in named if f'"{code}"' not in sources)
     assert not missing, f"codes no source emits: {missing}"
