@@ -19,7 +19,7 @@ function Harness({ schema, start = {} }: { schema: JsonSchema; start?: Record<st
   const [value, setValue] = useState<Record<string, unknown>>(start);
   return (
     <>
-      <SchemaForm schema={schema} value={value} onChange={setValue} />
+      <SchemaForm schema={schema} value={value} onChange={setValue} nestedObjects />
       <output data-testid="value">{JSON.stringify(value)}</output>
     </>
   );

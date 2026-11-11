@@ -63,11 +63,14 @@ export function SchemaForm({
   disabled,
   org,
   connectorType,
+  nestedObjects,
 }: {
   schema: JsonSchema;
   value: Values;
   onChange: (value: Values) => void;
   disabled?: boolean;
+  /** An object with named properties is drawn as its own fields (an assistant's `config_schema`), not as a `key = value` mapping. */
+  nestedObjects?: boolean;
   /** Fills `{org}` in an asset field's `x-upload`; without it such a field cannot upload. */
   org?: string;
   /** The `web_search` backend type being configured: gives `data_handling` its structured editor (S40-01j). */
@@ -90,6 +93,7 @@ export function SchemaForm({
           disabled={disabled}
           org={org}
           connectorType={connectorType}
+          nestedObjects={nestedObjects}
           onChange={(next) => {
             const suivantes = { ...value };
             if (next === undefined) delete suivantes[name];
@@ -111,6 +115,7 @@ function Field({
   disabled,
   org,
   connectorType,
+  nestedObjects,
   onChange,
 }: {
   id: string;
@@ -121,6 +126,7 @@ function Field({
   disabled?: boolean;
   org?: string;
   connectorType?: string;
+  nestedObjects?: boolean;
   onChange: (value: unknown) => void;
 }) {
   const libelle = propriete.title ?? name.replaceAll("_", " ");
@@ -197,7 +203,7 @@ function Field({
     );
   } else if (name === "data_handling" && connectorType && propriete.properties?.terms_ref) {
     control = <DataHandlingField id={id} type={connectorType} value={value} disabled={disabled} onChange={onChange} />;
-  } else if (propriete.type === "object" && propriete.properties) {
+  } else if (nestedObjects && propriete.type === "object" && propriete.properties) {
     // A fixed object (named properties): its own fields, not a `key = value` mapping.
     control = (
       <fieldset className="space-y-2 rounded-control border border-line p-2" aria-describedby={aide}>
@@ -206,6 +212,7 @@ function Field({
           value={value && typeof value === "object" && !Array.isArray(value) ? (value as Values) : {}}
           disabled={disabled}
           org={org}
+          nestedObjects
           onChange={(next) => onChange(Object.keys(next).length > 0 ? next : undefined)}
         />
       </fieldset>

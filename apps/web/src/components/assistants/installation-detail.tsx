@@ -156,7 +156,7 @@ function Settings({ org, slug, assistant, schema }: Ref & { assistant: Assistant
   return (
     <Card title="Settings">
       <div className="space-y-4">
-        {schema && <SchemaForm schema={schema} value={config} onChange={setConfig} org={org} />}
+        {schema && <SchemaForm schema={schema} value={config} onChange={setConfig} org={org} nestedObjects />}
         <div className="grid gap-3 md:grid-cols-3">
           <Field label="Audience groups">{(p) => <Input {...p} value={audience} onChange={(e) => setAudience(e.target.value)} />}</Field>
           <Field label="Owner groups" hint="Changing owners is the administrator's.">
