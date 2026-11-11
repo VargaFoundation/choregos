@@ -722,9 +722,6 @@
         "pipeline": {
           "default": "choregos-agent",
           "type": "string"
-        },
-        "service_account": {
-          "type": "string"
         }
       },
       "type": "object"
@@ -769,12 +766,6 @@
       "properties": {
         "assignment_port": {
           "type": "integer"
-        },
-        "env_from_secrets": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
         },
         "max_active": {
           "type": "integer"

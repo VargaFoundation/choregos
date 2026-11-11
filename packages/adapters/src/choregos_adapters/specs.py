@@ -308,20 +308,16 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
     ("runtime", "tekton"): ConnectorTypeSpec(
         "Tekton PipelineRun",
         ("runtime",),
-        _object_schema(
-            {"pipeline": {"type": "string", "default": "choregos-agent"}, "service_account": _TEXT}
-        ),
+        _object_schema({"pipeline": {"type": "string", "default": "choregos-agent"}}),
     ),
     ("runtime", "k8s_job"): ConnectorTypeSpec(
         "Kubernetes Job",
         ("runtime",),
         _object_schema(
             {
-                "service_account": _TEXT,
                 "cpu_limit": _TEXT,
                 "memory_limit": _TEXT,
                 "max_active": _INTEGER,
-                "env_from_secrets": {"type": "array", "items": _TEXT},
             }
         ),
     ),
@@ -336,7 +332,6 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
                 "pool_image": _TEXT,
                 "ttl_seconds": _INTEGER,
                 "max_active": _INTEGER,
-                "env_from_secrets": {"type": "array", "items": _TEXT},
             }
         ),
     ),

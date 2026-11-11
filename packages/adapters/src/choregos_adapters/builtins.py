@@ -572,22 +572,19 @@ def _register_runtimes() -> None:
         lambda cfg: TektonExecutor(
             KubernetesClient(**cfg.get("kubernetes", {})),
             pipeline=cfg.get("pipeline", "choregos-agent"),
-            service_account=cfg.get("service_account", "choregos-runner"),
         )
     )
     register("runtime", "k8s_job")(
         lambda cfg: KubernetesJobExecutor(
             KubernetesClient(**cfg.get("kubernetes", {})),
-            service_account=cfg.get("service_account", "choregos-runner"),
             cpu_limit=cfg.get("cpu_limit", os.environ.get("CHOREGOS_RUNNER_CPU_LIMIT", "") or "2"),
             memory_limit=cfg.get("memory_limit", os.environ.get("CHOREGOS_RUNNER_MEMORY_LIMIT", "") or "6Gi"),
-            env_from_secrets=cfg.get("env_from_secrets")
-            or [s for s in os.environ.get("CHOREGOS_RUNNER_ENV_SECRETS", "").split(",") if s],
+            # The deployment's, never a connector's (S65-03): the chart's `runner.envFromSecrets`.
+            env_from_secrets=_names(os.environ.get("CHOREGOS_RUNNER_ENV_SECRETS", "")),
             # How many runs run at the same time in the namespace. 0 = no ceiling.
             max_active=int(cfg.get("max_active", os.environ.get("CHOREGOS_RUNNER_MAX_ACTIVE", "") or 0)),
             # The chart's `global.imagePullSecrets` (S51-09): a step's own image may be private.
-            image_pull_secrets=cfg.get("image_pull_secrets")
-            or _names(os.environ.get("CHOREGOS_RUNNER_IMAGE_PULL_SECRETS", "")),
+            image_pull_secrets=_names(os.environ.get("CHOREGOS_RUNNER_IMAGE_PULL_SECRETS", "")),
         )
     )
     register("runtime", "agent_sandbox", _SHIPPED_SPECS[("runtime", "agent_sandbox")])(
@@ -606,8 +603,8 @@ def _register_runtimes() -> None:
             # from the same value: a run asking for another image cannot be honoured.
             pool_image=cfg.get("pool_image", os.environ.get("CHOREGOS_RUNNER_IMAGE", "")) or None,
             max_active=int(cfg.get("max_active", os.environ.get("CHOREGOS_RUNNER_MAX_ACTIVE", "") or 0)),
-            env_from_secrets=cfg.get("env_from_secrets")
-            or [s for s in os.environ.get("CHOREGOS_RUNNER_ENV_SECRETS", "").split(",") if s],
+            # The deployment's, never a connector's (S65-03): the chart's `runner.envFromSecrets`.
+            env_from_secrets=_names(os.environ.get("CHOREGOS_RUNNER_ENV_SECRETS", "")),
             # How long a finished sandbox keeps its volume (`runner.sandbox.ttlSecondsAfterFinished`).
             ttl_seconds=int(
                 cfg.get(

@@ -232,7 +232,23 @@ superseded by [ADR 0072](adr/0072-agent-sandbox-is-the-runtime-of-a-real-deploym
 **What a project may pick.** The API knows the executor (`CHOREGOS_EXECUTOR_KIND`) and the
 allowed list (`CHOREGOS_EXECUTORS_ALLOWED`, from `global.runner.allowedExecutors`). `GET
 /platform/executors` answers from them, and `PUT /projects/{id}/connectors/runtime` refuses (422)
-a type outside the list and names the allowed ones.
+a type outside the list and names the allowed ones. It also refuses a configuration that sets
+what only the deployment sets ([ADR 0150](adr/0150-a-connector-never-sets-what-the-deployment-sets.md)):
+`kubernetes` (the API server and its credential), `env_from_secrets`, `image_pull_secrets` and
+`service_account`. The pod's Secrets come from `runner.envFromSecrets`, its pull secrets from
+`global.imagePullSecrets`, and it runs as the account the chart creates. A row stored with one of
+these by an earlier version stops its project's stages with the same message: before upgrading, list
+them and move their values to the chart —
+
+```sql
+select project_id, type, config from connectors
+where kind = 'runtime'
+  and config::jsonb ?| array['kubernetes', 'env_from_secrets', 'image_pull_secrets', 'service_account'];
+```
+
+A blank value (`""`, `[]`) sets nothing and stops nothing. Projects that need Secrets of their own get
+them from runner namespaces of their own (`runner.namespacePattern`): the Secret has the same name in
+each namespace, and each project's content.
 
 **Upgrading from 0.17 or earlier**, which defaulted to Tekton: set
 `global.runner.executor: tekton` to keep it. An override of only
