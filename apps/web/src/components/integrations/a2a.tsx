@@ -366,6 +366,12 @@ export function A2aIntegration({
   );
 }
 
+/** What a step's documentation link says, when a step has more than one: two "Learn more" would be ambiguous. */
+const STEP_DOCS_LABELS: Partial<Record<DocSlug, string>> = {
+  "cli/install": "Install the CLI",
+  "use/work-items": "Work items",
+};
+
 /** One step: its number, its title, and the documentation pages that say more. */
 function Step({
   n,
@@ -389,7 +395,7 @@ function Step({
           <span className="flex flex-wrap gap-3">
             {docs.map((slug) => (
               <DocsLink key={slug} slug={slug} testId={`a2a-step-${n}-docs`}>
-                {slug === "cli/install" ? "Install the CLI" : "Learn more"}
+                {STEP_DOCS_LABELS[slug] ?? "Learn more"}
               </DocsLink>
             ))}
           </span>

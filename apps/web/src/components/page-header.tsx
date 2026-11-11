@@ -52,7 +52,8 @@ export function PageHeader({
           <Icon className="size-5" strokeWidth={1.75} />
         </span>
       )}
-      <div className="min-w-0 flex-1">
+      {/* A basis, so the actions go under the title on a phone rather than squeeze it to a column. */}
+      <div className="min-w-0 flex-1 basis-64">
         {eyebrow && (
           <div className="text-xs font-medium text-ink-muted">{eyebrow}</div>
         )}
