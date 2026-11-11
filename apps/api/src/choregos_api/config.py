@@ -209,7 +209,7 @@ class Settings(BaseSettings):
     plugins_config: str = ""
     #: The offline plugin directory baked into the image; wins over the file's `offline`.
     plugins_offline: str = ""
-    #: The user documentation baked into the image (`docs/site/**`, S62-10, ADR 0141), served by the
+    #: The user documentation baked into the image (`docs/site/**`, S62-10, ADR 0150), served by the
     #: MCP door's `docs_search` and `docs_read`. An absent directory: this build bundles none.
     docs_dir: str = "/opt/choregos/docs"
     #: The public documentation site, for the links those tools give (S62 shared contracts).
