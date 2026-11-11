@@ -316,7 +316,7 @@ def create_app() -> FastAPI:
     app.add_middleware(OrgAliasMiddleware)
     from .rate_limit import install as install_the_rate_limiter
 
-    install_the_rate_limiter(app, settings.rate_limit_per_minute)
+    install_the_rate_limiter(app, settings.rate_limit_per_minute, settings.download_rate_limit_per_minute)
     # After the limiter and before the logging middleware: logging stays outermost, so a refusal is
     # logged with its request id.
     install_origin_guard(app)
@@ -413,6 +413,11 @@ def create_app() -> FastAPI:
     from .a2a import router as a2a_door
 
     app.include_router(a2a_door)
+    # The CLI, served by the instance it talks to (S62-08): at the root, where the install scripts
+    # and `choregos self update` fetch it through the console's host; outside the OpenAPI schema.
+    from .routers import cli_downloads
+
+    app.include_router(cli_downloads.router)
 
     @app.get("/metrics", tags=["session"], operation_id="metrics", include_in_schema=False)
     async def metrics() -> Response:

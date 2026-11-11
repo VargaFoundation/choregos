@@ -49,6 +49,23 @@ The profile lives in `~/.config/choregos/config.json` (`CHOREGOS_CONFIG` overrid
 path): `api_url`, `token`, `org`. `choregos login` writes it; `CHOREGOS_API_URL`,
 `CHOREGOS_TOKEN` and `CHOREGOS_ORG` are read when no profile exists.
 
+## Install from your instance
+
+Every Choregos instance serves the CLI in the exact version it runs, through the console's host:
+no Python, no access to GitHub needed. The console shows the command for your system under
+Integrations › CLI.
+
+```sh
+curl -fsSL https://<your-instance>/cli/install.sh | sh        # Linux, macOS: ~/.local/bin/choregos
+irm https://<your-instance>/cli/install.ps1 | iex             # Windows: %LOCALAPPDATA%\Programs\choregos
+```
+
+The scripts check the binary's sha256 against the instance's manifest
+(`/downloads/cli/manifest.json`) and never use sudo; `sh -s -- --prefix DIR` installs into `DIR/bin`.
+`choregos self update` later replaces the binary with the instance's current one. When the CLI
+talks to an instance that runs another version, it says so in one line on stderr, at most once a
+day (`CHOREGOS_NO_VERSION_CHECK=1` silences it).
+
 
 ## `choregos a2a`
 
@@ -726,6 +743,30 @@ Arguments:
 
 Options:
   --help  Show this message and exit.
+```
+
+## `choregos self`
+
+The CLI itself: keep it in step with the instance
+
+### `choregos self update`
+
+```text
+Usage: choregos self update [OPTIONS]
+
+  Replace this CLI with the instance's own build, for this OS and processor.
+
+  The binary comes from the instance (`/downloads/cli/`), in the version it
+  runs, and is checked against the sha256 of its manifest before it replaces
+  the running one in a single rename. A CLI installed from Python packages has
+  no binary to replace: upgrade the package, or install the binary with the
+  instance's install script.
+
+Options:
+  --api-url <str>  The instance to update from (default: the profile's)
+  --path <path>    The binary to replace (default: the running one)
+  --force          Download even when the versions are the same
+  --help           Show this message and exit.
 ```
 
 ## `choregos tokens`

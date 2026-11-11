@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Alert, Button, Card, Code, ErrorNote, Tabs, Select, tabClasses } from "@/components/ui";
-import { api, qualify } from "@/lib/api";
+import { api, orgSlug, qualify } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import {
   CLIENTS,
@@ -15,8 +15,10 @@ import {
   extrait,
   PLACEHOLDER,
   gateUrl,
+  origineDe,
 } from "@/lib/integrations";
 import type { ApiTokenCreated } from "@/lib/types";
+import { CliDownload } from "./cli-download";
 
 const DUREES = [7, 30, 90] as const;
 
@@ -177,6 +179,14 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
           </Card>
         )}
       </div>
+
+      {client === "cli" && (
+        <CliDownload
+          origin={infos.data ? origineDe(infos.data.mcp_url) : typeof window !== "undefined" ? window.location.origin : ""}
+          version={infos.data?.version}
+          org={orgSlug()}
+        />
+      )}
 
       <Card title="Which client reaches what">
         <div className="overflow-x-auto">

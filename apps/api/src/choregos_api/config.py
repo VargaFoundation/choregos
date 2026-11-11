@@ -320,6 +320,10 @@ class Settings(BaseSettings):
     procedures_extra: str = ""
     public_url: str = "http://localhost:3000"
     api_url: str = "http://localhost:8000"
+    #: Where the native `choregos` binaries, their `SHA256SUMS` and `manifest.json` lie (S62-07 puts
+    #: them there in the API image). An absent directory is a build that bundles no CLI: the download
+    #: routes answer 404 and say where the GitHub release is (S62-08, `routers/cli_downloads.py`).
+    cli_dir: str = "/opt/choregos/cli"
 
     # Webhooks
     github_webhook_secret: str = ""
@@ -339,6 +343,9 @@ class Settings(BaseSettings):
     #: Requests per minute and per address on the routes without a principal (`/auth/*`,
     #: `/webhooks/*`), per replica. 0 disables. See `rate_limit.py`.
     rate_limit_per_minute: int = 600
+    #: Requests per minute and per address on the CLI downloads (`/downloads/*`, `/cli/install.*`),
+    #: public like the probes: each answer can be tens of megabytes. 0 disables. See `rate_limit.py`.
+    download_rate_limit_per_minute: int = 60
     #: The networks of the proxies in front of the API, as a JSON list
     #: (`CHOREGOS_TRUSTED_PROXY_CIDRS='["10.0.0.0/8"]'`): the rate limit keys on the address the
     #: nearest trusted proxy saw, the right-most `X-Forwarded-For` entry outside them. Empty: the TCP
