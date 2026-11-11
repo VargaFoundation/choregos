@@ -4048,14 +4048,21 @@ export type MemorySubjectSpace = {
 
 export type MemorySpace = {
   space: string;
-  scope: "user" | "user_subject";
+  scope: "installation" | "user" | "user_subject";
   kind: "facts" | "profile";
   writes: string;
   subjects: Array<MemorySubjectSpace>;
 };
 
+export type MemoryExport = {
+  installation: string;
+  organisation: string;
+  exported_at: string;
+  spaces: Array<MemorySpace>;
+};
+
 export type MemoryAction = {
-  action: "confirm" | "reject" | "pin" | "unpin" | "correct";
+  action: "confirm" | "reject" | "pin" | "unpin" | "correct" | "add";
   fact_id?: string | null;
   version?: number | null;
   content?: string | null;
@@ -5296,6 +5303,7 @@ export interface Operations {
   eraseAssistantSubject: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/erasure"; body: SubjectErasureRequest; response: SubjectErasure };
   eraseMyAssistantData: { method: "DELETE"; path: "/me/assistants/{org}/{slug}"; body: never; response: UserErasure };
   estimateKnowledgeDistillation: { method: "GET"; path: "/orgs/{org}/knowledge/{slug}/distill/estimate"; body: never; response: KnowledgeDistillEstimate };
+  exportMyAssistantMemory: { method: "GET"; path: "/me/assistants/{org}/{slug}/memory-export"; body: never; response: MemoryExport };
   exportOrgCostsCsv: { method: "GET"; path: "/orgs/{org}/costs.csv"; body: never; response: void };
   exportProjectCostsCsv: { method: "GET"; path: "/projects/{id}/costs.csv"; body: never; response: void };
   fireTrigger: { method: "POST"; path: "/projects/{id}/triggers/{name}/fire"; body: {
@@ -5316,6 +5324,7 @@ export interface Operations {
   getAgentVersion: { method: "GET"; path: "/orgs/{org}/agents/{slug}/versions/{version}"; body: never; response: AgentVersion };
   getAssistant: { method: "GET"; path: "/orgs/{org}/assistants/{slug}"; body: never; response: Assistant };
   getAssistantEmbed: { method: "GET"; path: "/public/assistants/{org}/{slug}/embed"; body: never; response: AssistantEmbed };
+  getAssistantInstallationMemory: { method: "GET"; path: "/orgs/{org}/assistants/{slug}/memory/{space}"; body: never; response: MemorySpace };
   getAssistantReadiness: { method: "GET"; path: "/orgs/{org}/assistants/{slug}/readiness"; body: never; response: AssistantReadiness };
   getGitHubAppStatus: { method: "GET"; path: "/orgs/{org}/github"; body: never; response: GitHubAppStatus };
   getHostedSource: { method: "GET"; path: "/orgs/{org}/hosted-sources/{sha256}"; body: never; response: HostedSource };
@@ -5678,6 +5687,7 @@ export interface Operations {
   unpinProjectAgent: { method: "DELETE"; path: "/projects/{id}/agents/{slug}"; body: never; response: void };
   updateAgent: { method: "PATCH"; path: "/orgs/{org}/agents/{slug}"; body: AgentPatch; response: Agent };
   updateAssistant: { method: "PATCH"; path: "/orgs/{org}/assistants/{slug}"; body: AssistantUpdate; response: Assistant };
+  updateAssistantInstallationMemory: { method: "PATCH"; path: "/orgs/{org}/assistants/{slug}/memory/{space}"; body: MemoryAction; response: MemorySpace };
   updateConnectorOperation: { method: "PATCH"; path: "/orgs/{org}/connectors/{name}/operations/{operation}"; body: OperationPatch; response: ConnectorOperation };
   updateKnowledgeBase: { method: "PATCH"; path: "/orgs/{org}/knowledge/{slug}"; body: KnowledgeBasePatch; response: KnowledgeBase };
   updateKnowledgeSource: { method: "PATCH"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}"; body: KnowledgeSourcePatch; response: KnowledgeSource };

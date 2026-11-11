@@ -80,6 +80,7 @@ from .knowledge import (
     MemoryProfile,
     MemoryStore,
 )
+from .offered_knowledge import KnowledgeSeedTombstone
 from .plugins import OrgPlugin, OrgPluginApproval, OrgPluginFile
 from .projects import Connector, ModelProfileRow, OrgWorkflow, PolicyDef, Project, Template, WorkflowDef
 from .releases import Deployment, Release
@@ -139,6 +140,7 @@ ALL_TABLES = [
     AgentCredential,
     KnowledgeBase,
     KnowledgeDocument,
+    KnowledgeSeedTombstone,
     KnowledgeUpdateProposal,
     KnowledgeChunk,
     KnowledgeSource,
@@ -218,6 +220,7 @@ __all__ = [
     "KnowledgeDistillationPart",
     "KnowledgeDocument",
     "KnowledgeGrant",
+    "KnowledgeSeedTombstone",
     "KnowledgeSource",
     "KnowledgeUpdateProposal",
     "LargeBinary",

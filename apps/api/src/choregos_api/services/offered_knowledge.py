@@ -25,6 +25,7 @@ import hashlib
 from pathlib import Path
 from typing import Any
 
+import structlog
 import yaml
 from choregos_core import utcnow
 from choregos_core.paths import files_under, inside
@@ -38,8 +39,12 @@ from ..db.models import (
     KnowledgeBase,
     KnowledgeDocument,
     KnowledgeGrant,
+    KnowledgeSeedTombstone,
+    KnowledgeSource,
     KnowledgeUpdateProposal,
+    Membership,
     OrgPlugin,
+    User,
 )
 from ..db.session import after_commit
 from ..errors import conflict, unprocessable
@@ -47,6 +52,7 @@ from ..knowledge.conversion import title_of
 from ..rbac import Principal
 from ..schemas.assistant_knowledge import UpdateDecision
 
+log = structlog.get_logger("choregos.offered_knowledge")
 PROPOSED, ACCEPTED, MERGED, REFUSED = "proposed", "accepted", "merged", "refused"
 LOCAL = "local"
 _MARKDOWN = (".md", ".markdown")
@@ -164,6 +170,80 @@ def _replace(
     _reindex(session, org, document.id)
 
 
+# -- documents an owner deleted ---------------------------------------------------------------------------
+
+
+async def _tombstones(session: AsyncSession, base: KnowledgeBase) -> set[str]:
+    found = await session.execute(
+        select(KnowledgeSeedTombstone.path).where(KnowledgeSeedTombstone.knowledge_base_id == base.id)
+    )
+    return set(found.scalars())
+
+
+async def remember_deleted(
+    session: AsyncSession, base: KnowledgeBase, document: KnowledgeDocument, who: str | None
+) -> None:
+    """An owner deletes a document of an installation's base that came from a seed: remember it, so that an
+    upgrade does not add it back (ADR 0138 point 3). A document the owners wrote is not remembered."""
+    if base.installation_id is None or document.seed_digest is None:
+        return
+    if document.filename in await _tombstones(session, base):
+        return
+    session.add(
+        KnowledgeSeedTombstone(
+            org_id=base.org_id, knowledge_base_id=base.id, path=document.filename, deleted_by=who
+        )
+    )
+
+
+# -- the seed's own sources --------------------------------------------------------------------------------
+
+#: The kinds a seed's `sources` may name (the ones a base's source routes know).
+SOURCE_KINDS = ("sharepoint", "confluence", "web", "git")
+
+
+async def _attach_sources(
+    session: AsyncSession, base: KnowledgeBase, seed_manifest: dict[str, Any], who: str | None
+) -> list[str]:
+    """Attaches the `sources` of the seed's `knowledge.yaml` to the base, by name. A source is attached
+    `manual` and never synced here: opening its hosts in the egress allowlist and syncing stay the owners'
+    gestures (the source routes), so installing never reaches out."""
+    known = set(
+        (
+            await session.execute(
+                select(KnowledgeSource.name).where(KnowledgeSource.knowledge_base_id == base.id)
+            )
+        ).scalars()
+    )
+    attached: list[str] = []
+    for item in seed_manifest.get("sources") or []:
+        if not isinstance(item, dict) or item.get("kind") not in SOURCE_KINDS or not item.get("name"):
+            continue
+        name = str(item["name"])[:200]
+        if name in known:
+            continue
+        config = item.get("config")
+        session.add(
+            KnowledgeSource(
+                org_id=base.org_id,
+                knowledge_base_id=base.id,
+                kind=str(item["kind"]),
+                name=name,
+                connector=str(item["connector"]) if item.get("connector") else None,
+                config=dict(config) if isinstance(config, dict) else {},
+                interval_minutes=int(item.get("interval_minutes") or 60),
+                refresh_mode="manual",
+                next_sync_at=None,
+                status="idle",
+                created_by=who,
+            )
+        )
+        attached.append(name)
+    if attached:
+        await session.flush()
+    return attached
+
+
 # -- install ---------------------------------------------------------------------------------------------
 
 
@@ -238,6 +318,7 @@ async def copy_seeds(
                 _digest(data),
                 principal.email,
             )
+        await _attach_sources(session, base, seed_manifest, principal.email)
         await record(session, principal, "assistant.knowledge.seed", org_id=row.org_id,
                      target_type="knowledge_base", target_id=base.id, installation=row.slug,
                      documents=len(files), version=plugin_row.version)  # fmt: skip
@@ -268,9 +349,10 @@ async def _propose(
     diff: str,
     content: bytes | None,
     version: str,
-) -> bool:
+) -> str | None:
     """A proposal for the document, unless one is already open for it (it is refreshed) or the owners already
-    refused this very change. Returns whether a proposal is open afterwards."""
+    refused this very change. Returns `opened` for a new proposal, `proposed` for one refreshed, `None` for
+    none."""
     digest = _digest(content) if content is not None else None
     same = (
         (
@@ -286,9 +368,11 @@ async def _propose(
         .all()
     )
     if any(p.status == REFUSED and p.kind == kind and p.seed_digest == digest for p in same):
-        return False
+        return None
     open_one = next((p for p in same if p.status == PROPOSED), None)
+    outcome = "proposed"
     if open_one is None:
+        outcome = "opened"
         open_one = KnowledgeUpdateProposal(
             org_id=row.org_id, installation_id=row.id, knowledge_base_id=base.id, path=path, status=PROPOSED
         )
@@ -297,7 +381,7 @@ async def _propose(
     open_one.proposed_content = _text(content) if content is not None else None
     open_one.plugin_version = version
     await session.flush()
-    return True
+    return outcome
 
 
 async def _reconcile(
@@ -312,19 +396,26 @@ async def _reconcile(
     """The three-way comparison of one base: what was `updated`, `added` or `proposed`, as (what, where)."""
     upstream = str(entry.get("upstream") or "propose_updates")
     local = await _documents(session, base)
+    tombstones = await _tombstones(session, base)
     out: list[tuple[str, str]] = []
     for path, data in sorted(seed.items()):
         new = _digest(data)
         copy = local.get(path)
         where = f"{base.slug}/{path}"
         if copy is None:
+            if path in tombstones:
+                continue  # an owner deleted this document: it is not brought back, nor proposed again
             if upstream == "follow":
                 await _add(session, org, base, path, data, seed_origin(version), new, None)
                 out.append(("added", where))
-            elif upstream == "propose_updates" and await _propose(
-                session, row, base, path, "add", "", data, version
-            ):
-                out.append(("proposed", where))
+            else:
+                kind = (
+                    await _propose(session, row, base, path, "add", "", data, version)
+                    if (upstream == "propose_updates")
+                    else None
+                )
+                if kind:
+                    out.append((kind, where))
             continue
         if copy.seed_digest == new:
             continue  # the seed did not change under this copy
@@ -336,16 +427,16 @@ async def _reconcile(
             out.append(("updated", where))
             continue
         diff = _diff(_text(copy.content or b""), _text(data), path, version)
-        if await _propose(session, row, base, path, "update", diff, data, version):
-            out.append(("proposed", where))
+        if kind := await _propose(session, row, base, path, "update", diff, data, version):
+            out.append((kind, where))
     for path, copy in sorted(local.items()):
         if path in seed or copy.seed_digest is None:
             continue  # still shipped, or written by the owners
         if copy.origin != LOCAL and upstream == "frozen":
             continue
         diff = _diff(_text(copy.content or b""), "", path, version)
-        if await _propose(session, row, base, path, "remove", diff, None, version):
-            out.append(("proposed", f"{base.slug}/{path}"))
+        if kind := await _propose(session, row, base, path, "remove", diff, None, version):
+            out.append((kind, f"{base.slug}/{path}"))
     return out
 
 
@@ -360,7 +451,7 @@ async def upgrade_installation(
     """The three-way comparison for every seed of the installation's assistant, as the plugin is now."""
     version = plugin_row.version
     org = await _org_slug(session, row.org_id)
-    done: dict[str, list[str]] = {"updated": [], "added": [], "proposed": []}
+    done: dict[str, list[str]] = {"updated": [], "added": [], "proposed": [], "opened": []}
     for entry in _entries(document):
         seed_manifest, seed = _read_seed(root, str(entry["seed"]))
         slug = base_slug(row.slug, str(entry["name"]))
@@ -377,10 +468,13 @@ async def upgrade_installation(
             base = await _create_base(session, row, entry, seed_manifest, principal.email)
             for path, data in seed.items():
                 await _add(session, org, base, path, data, seed_origin(version), _digest(data), None)
+            await _attach_sources(session, base, seed_manifest, principal.email)
             done["added"].extend(f"{slug}/{p}" for p in seed)
             continue
         for kind, where in await _reconcile(session, org, row, base, seed, entry, version):
             done[kind].append(where)
+            if kind == "opened":  # `proposed` lists every open proposal touched, `opened` the new ones
+                done["proposed"].append(where)
     if any(done.values()):
         await record(session, principal, "assistant.knowledge.upgrade", org_id=row.org_id,
                      target_type="assistant", target_id=row.slug, version=version, **done)  # fmt: skip
@@ -407,7 +501,46 @@ async def upgrade_plugin(
         outcome[row.slug] = await upgrade_installation(
             session, row, assistant[1], plugin_row, root, principal
         )
+        if outcome[row.slug]["opened"]:  # told once: a proposal already open is not announced again
+            await notify_owners(session, row, plugin_row.version, outcome[row.slug]["opened"])
     return outcome
+
+
+async def notify_owners(
+    session: AsyncSession, row: AssistantInstallation, version: str, proposed: list[str]
+) -> int:
+    """Tells the owners, through the installation's `email` notifier (the one of its task deliveries), that an
+    upgrade left proposals waiting. Nothing configured, nothing sent: the proposals stay listed in the owners'
+    route. Returns the number of owners told; a failing channel never fails the upgrade."""
+    from choregos_core.domain import Message
+
+    from .task_delivery import notifier_of
+
+    notifier = notifier_of(row, "email")
+    if notifier is None or not row.owner_groups:
+        return 0
+    found = await session.execute(
+        select(User)
+        .join(Membership, Membership.user_id == User.id)
+        .where(Membership.org_id == row.org_id, Membership.project_id.is_(None))
+    )
+    owners = sorted({u.email for u in found.scalars() if set(u.groups or []) & set(row.owner_groups)})
+    told = 0
+    for email in owners:
+        try:
+            await notifier.send(
+                email,
+                Message(
+                    title=f"{row.slug}: {len(proposed)} knowledge update(s) to decide",
+                    body=f"Version {version} of the plugin proposes changes to the knowledge of "
+                    f"`{row.slug}`:\n" + "\n".join(f"- {p}" for p in proposed),
+                    context={"installation": row.slug, "version": version},
+                ),
+            )
+            told += 1
+        except Exception as failure:  # a channel that fails must not undo the upgrade
+            log.warning("assistant.knowledge.notify_failed", installation=row.slug, error=str(failure)[:200])
+    return told
 
 
 # -- the owners decide -----------------------------------------------------------------------------------
@@ -471,4 +604,4 @@ async def decide(
     return proposal
 
 
-__all__ = ["copy_seeds", "decide", "proposals", "upgrade_plugin"]
+__all__ = ["copy_seeds", "decide", "notify_owners", "proposals", "remember_deleted", "upgrade_plugin"]

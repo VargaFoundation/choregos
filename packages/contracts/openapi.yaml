@@ -2706,6 +2706,52 @@ paths:
         "204": { description: Disconnected }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /me/assistants/{org}/{slug}/memory-export:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    get:
+      tags: [agents]
+      operationId: exportMyAssistantMemory
+      description: >-
+        Everything the assistant remembers of the caller (ADR 0136 point 6), as JSON, to keep or to carry elsewhere:
+        every `user` and `user_subject` space, with its facts (`active` and `proposed`) and every version of its
+        profiles. Never the installation's spaces, never another person's.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MemoryExport" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/assistants/{slug}/memory/{space}:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+      - { name: space, in: path, required: true, schema: { type: string, pattern: "^[a-z][a-z0-9]*(_[a-z0-9]+)*$" } }
+    get:
+      tags: [agents]
+      operationId: getAssistantInstallationMemory
+      description: >-
+        An `installation` space as the installation's owners see it (ADR 0136): its facts, `proposed` ones included,
+        or the versions of its profile. Owners only (`assistant:manage`); a person's own space is 404.
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/MemorySpace" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [agents]
+      operationId: updateAssistantInstallationMemory
+      description: >-
+        The owners confirm or reject what a conversation proposed in an `installation` space (a fact by `fact_id`,
+        a profile version by `version`), or `add` a fact or a profile document themselves. `pin`, `unpin` and
+        `correct` are a person's own gestures (422). A decided proposal is 409.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/MemoryAction" } } }
+      responses:
+        "200": { description: The space as it is now, content: { application/json: { schema: { $ref: "#/components/schemas/MemorySpace" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+        "422": { $ref: "#/components/responses/ValidationError" }
   /me/assistants/{org}/{slug}/memory/{space}:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -2727,8 +2773,9 @@ paths:
       operationId: updateMyAssistantMemory
       description: >-
         Confirms or rejects a proposed fact (`fact_id`) or profile version (`version`), pins or unpins a fact,
-        corrects a fact's `content` or writes a profile `document` (validated against the space's schema). A decided
-        proposal is 409.
+        corrects a fact's `content` or writes a profile `document` (validated against the space's schema), or `add`s
+        what the agent may not write itself (`user_only`): a fact's `content` or a profile `document`, active at
+        once. A decided proposal is 409.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/MemoryAction" } } }
@@ -9133,16 +9180,24 @@ components:
       required: [space, scope, kind, writes, subjects]
       properties:
         space: { type: string }
-        scope: { type: string, enum: [user, user_subject] }
+        scope: { type: string, enum: [installation, user, user_subject] }
         kind: { type: string, enum: [facts, profile] }
         writes: { type: string }
         subjects: { type: array, items: { $ref: "#/components/schemas/MemorySubjectSpace" } }
+    MemoryExport:
+      type: object
+      required: [installation, organisation, exported_at, spaces]
+      properties:
+        installation: { type: string }
+        organisation: { type: string }
+        exported_at: { type: string, format: date-time }
+        spaces: { type: array, items: { $ref: "#/components/schemas/MemorySpace" } }
     MemoryAction:
       type: object
       required: [action]
       additionalProperties: false
       properties:
-        action: { type: string, enum: [confirm, reject, pin, unpin, correct] }
+        action: { type: string, enum: [confirm, reject, pin, unpin, correct, add] }
         fact_id: { type: [string, "null"] }
         version: { type: [integer, "null"], minimum: 1 }
         content: { type: [string, "null"], minLength: 1, maxLength: 2000 }

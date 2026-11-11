@@ -49,6 +49,7 @@
  "KnowledgeDistillationPart",
  "KnowledgeDocument",
  "KnowledgeGrant",
+ "KnowledgeSeedTombstone",
  "KnowledgeSource",
  "KnowledgeUpdateProposal",
  "LargeBinary",

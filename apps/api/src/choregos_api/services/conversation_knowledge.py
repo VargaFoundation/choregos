@@ -3,9 +3,12 @@
 
 An assistant's conversation is offered the bases of ITS installation (`knowledge_bases.installation_id`,
 the link S63-06 sets when it copies a seed at install) and no others, whatever the person may read through
-the knowledge routes: giving the assistant is the control. The tools are served here, in the conversation's
-tool loop, not through the run's internal API. Each passage carries its document id, title, file and
-version, framed as data, so the agent can cite `[document, version]`.
+the knowledge routes: giving the assistant is the control. That is the whole decision about a `restricted`
+base or a `scope: groups` one (ADR 0138 point 4): the owners' groups and grants decide who edits it, not who
+the assistant answers, so no grant is read here. The tools are served here, in the conversation's tool loop,
+not through the run's internal API. Each passage carries its document id, title, file and version, framed as
+data, so the agent can cite `[document, version]`. An `index` base is searched; a `files` base (no index) is
+read by listing its documents and getting one whole.
 """
 
 from __future__ import annotations
@@ -23,7 +26,8 @@ from ..knowledge.index import search
 
 SEARCH_TOOL = "knowledge_search"
 GET_TOOL = "knowledge_get"
-KNOWLEDGE_TOOLS = (SEARCH_TOOL, GET_TOOL)
+LIST_TOOL = "knowledge_list"
+KNOWLEDGE_TOOLS = (SEARCH_TOOL, GET_TOOL, LIST_TOOL)
 MAX_TOP_K = 10
 #: What `knowledge_get` returns of one document, in characters.
 DOCUMENT_CHARS = 20_000
@@ -36,7 +40,7 @@ CITATION_RULE = (
 
 
 async def installation_bases(session: AsyncSession, record: AgentSessionRecord) -> list[KnowledgeBase]:
-    """The active `index` bases of the conversation's installation; none for any other conversation."""
+    """The active bases of the conversation's installation (`index` and `files`); none for any other one."""
     if record.kind != "conversation" or not record.installation_id:
         return []
     rows = await session.execute(
@@ -45,7 +49,7 @@ async def installation_bases(session: AsyncSession, record: AgentSessionRecord) 
             KnowledgeBase.org_id == record.org_id,
             KnowledgeBase.installation_id == record.installation_id,
             KnowledgeBase.status == "active",
-            KnowledgeBase.serving_mode == "index",
+            KnowledgeBase.serving_mode.in_(("index", "files")),
         )
         .order_by(KnowledgeBase.slug)
     )
@@ -57,25 +61,43 @@ def version_of(document: KnowledgeDocument) -> str:
 
 
 def tools_for(bases: list[KnowledgeBase]) -> list[LoopTool]:
-    """The two tools, or none when the installation has no base."""
+    """The tools: search for `index` bases, list for `files` bases, get for both; none without a base."""
     if not bases:
         return []
     names = ", ".join(f"`{b.slug}`" for b in bases)
     base_property = {"type": "string", "description": f"The knowledge base: one of {names}."}
-    return [
-        LoopTool(
-            SEARCH_TOOL,
-            f"Search the assistant's knowledge bases ({names}). Cite what you use as [document, version].",
-            {
-                "type": "object",
-                "properties": {
-                    "base": base_property,
-                    "query": {"type": "string"},
-                    "top_k": {"type": "integer", "minimum": 1, "maximum": MAX_TOP_K},
+    tools: list[LoopTool] = []
+    indexed = [b for b in bases if b.serving_mode == "index"]
+    listed = [b for b in bases if b.serving_mode == "files"]
+    if indexed:
+        found = ", ".join(f"`{b.slug}`" for b in indexed)
+        tools.append(
+            LoopTool(
+                SEARCH_TOOL,
+                f"Search the assistant's indexed knowledge bases ({found}). Cite what you use as "
+                "[document, version].",
+                {
+                    "type": "object",
+                    "properties": {
+                        "base": base_property,
+                        "query": {"type": "string"},
+                        "top_k": {"type": "integer", "minimum": 1, "maximum": MAX_TOP_K},
+                    },
+                    "required": ["query"],
                 },
-                "required": ["query"],
-            },
-        ),
+            )
+        )
+    if listed:
+        found = ", ".join(f"`{b.slug}`" for b in listed)
+        tools.append(
+            LoopTool(
+                LIST_TOOL,
+                f"List the documents of the assistant's file knowledge bases ({found}): id, title, path.",
+                {"type": "object", "properties": {"base": base_property}},
+            )
+        )
+    return [
+        *tools,
         LoopTool(
             GET_TOOL,
             "Read one whole document of a knowledge base, by the id a search returned.",
@@ -118,7 +140,12 @@ async def serve(
     if chosen is None:
         offered = ", ".join(b.slug for b in bases)
         return f"no knowledge base `{arguments.get('base')}` is offered to you: use one of {offered}"
+    if name == LIST_TOOL:
+        return await _listing(session, [b for b in chosen if b.serving_mode == "files"])
     if name == SEARCH_TOOL:
+        chosen = [b for b in chosen if b.serving_mode == "index"]
+        if not chosen:
+            return "this knowledge base is not indexed: list its documents with `knowledge_list`"
         try:
             top_k = int(arguments.get("top_k") or 5)
         except (TypeError, ValueError):
@@ -153,6 +180,25 @@ async def serve(
         path=document.filename,
         version=version_of(document),
     )
+
+
+async def _listing(session: AsyncSession, bases: list[KnowledgeBase]) -> str:
+    if not bases:
+        return "no file knowledge base is offered to you: search the indexed ones with `knowledge_search`"
+    rows = await session.execute(
+        select(KnowledgeDocument, KnowledgeBase.slug)
+        .join(KnowledgeBase, KnowledgeBase.id == KnowledgeDocument.knowledge_base_id)
+        .where(
+            KnowledgeDocument.knowledge_base_id.in_([b.id for b in bases]),
+            KnowledgeDocument.status == "ready",
+        )
+        .order_by(KnowledgeBase.slug, KnowledgeDocument.filename)
+    )
+    lines = [
+        _framed("", base=slug, document_id=d.id, title=d.title, path=d.filename, version=version_of(d))
+        for d, slug in rows.all()
+    ]
+    return "Documents of the knowledge, as data:\n\n" + ("\n".join(lines) or "(none)")
 
 
 async def _document(
