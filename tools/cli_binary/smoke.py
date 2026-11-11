@@ -6,13 +6,14 @@
         --container debian:bookworm-slim
 
 This script is the DRIVER: it needs the standard library of any Python 3.12, writes the files the
-binary reads, and serves a fake A2A door on the loopback. The binary under test never sees a Python:
+binary reads, and serves a fake A2A door. The binary under test never sees a Python:
 
 - natively, it runs with an environment built from nothing — a PATH that is an empty directory
   (`System32` alone on Windows), a fresh HOME, no `PYTHON*` variable but a `PYTHONHOME` and a
   `PYTHONPATH` that point nowhere — and the driver checks that no `python` is on that PATH;
 - with `--container IMAGE` (Linux), the same checks run a second time inside a container whose
-  image has no Python at all (the driver checks that too), with the host's loopback.
+  image has no Python at all (the driver checks that too), reaching the door as
+  `host.docker.internal` (Docker's `host-gateway`, on Docker Engine and Docker Desktop alike).
 
 What it proves, in order: the size budget; `choregos --version` prints the expected version, and its
 start-up stays under budget (a cold start unpacks the binary, a warm one reuses it: the warm median
@@ -154,13 +155,13 @@ class _Door(BaseHTTPRequestHandler):
 
 
 @contextlib.contextmanager
-def fake_door() -> Iterator[str]:
-    """A fake A2A door on the loopback; yields the API URL the CLI is pointed at."""
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _Door)
+def fake_door(bind: str = "127.0.0.1") -> Iterator[int]:
+    """A fake A2A door; yields its port. `0.0.0.0` only when a container must reach it."""
+    server = ThreadingHTTPServer((bind, 0), _Door)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-        yield f"http://127.0.0.1:{server.server_address[1]}"
+        yield server.server_address[1]
     finally:
         server.shutdown()
         server.server_close()
@@ -248,6 +249,7 @@ class Runner:
             return [str(self.binary), *args]
         docker = shutil.which("docker") or "docker"
         inside = {**self.env, "HOME": "/smoke/home", "CHOREGOS_CONFIG": "/smoke/no-profile/config.json"}
+        inside["CHOREGOS_API_URL"] = self.env["CHOREGOS_API_URL"].replace("127.0.0.1", "host.docker.internal")
         inside.update(
             {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "PYTHONHOME": "/nowhere", "PYTHONPATH": "/nowhere"}
         )
@@ -256,7 +258,7 @@ class Runner:
             docker,
             "run",
             "--rm",
-            "--network=host",
+            "--add-host=host.docker.internal:host-gateway",
             *user,
             f"--volume={self.binary.resolve()}:/opt/choregos/choregos:ro",
             f"--volume={self.work}:/smoke",
@@ -367,10 +369,11 @@ def smoke(
     if not binary.is_file():
         raise SmokeError(f"no binary at {binary}")
     size = binary.stat().st_size
-    with tempfile.TemporaryDirectory(prefix="choregos-smoke-") as tmp, fake_door() as api_url:
+    bind = "0.0.0.0" if container else "127.0.0.1"  # noqa: S104 - the container reaches it from outside
+    with tempfile.TemporaryDirectory(prefix="choregos-smoke-") as tmp, fake_door(bind) as port:
         work = pathlib.Path(tmp).resolve()
         write_inputs(work)
-        runner = Runner(binary, work, bare_environment(work, api_url))
+        runner = Runner(binary, work, bare_environment(work, f"http://127.0.0.1:{port}"))
         no_python_on(runner.env["PATH"])
         cold, warm = timings(runner, version)
         functional_checks(runner, version)

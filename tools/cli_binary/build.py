@@ -108,7 +108,8 @@ def source_digest() -> str:
     """A digest of what the binary is made of: the onefile cache directory is named after it, so a
     rebuilt binary never runs files a previous one of the same version unpacked."""
     digest = hashlib.sha256((ROOT / "uv.lock").read_bytes())
-    digest.update(REQUIREMENTS.read_bytes())
+    for path in (REQUIREMENTS, ENTRY, pathlib.Path(__file__).resolve()):
+        digest.update(path.read_bytes())
     for package in PACKAGES:
         for path in sorted((ROOT / package).rglob("*")):
             if path.is_file() and "__pycache__" not in path.parts and "tests" not in path.parts:

@@ -134,8 +134,8 @@ def test_a_release_without_all_five_binaries_is_refused(tmp_path: pathlib.Path) 
 
 def test_the_fake_door_serves_the_card_the_cli_reads() -> None:
     assert smoke.SKILL_FIELDS_EXTENSION == a2a.SKILL_FIELDS_EXTENSION
-    with smoke.fake_door() as url:
-        endpoint = f"{url}/a2a/orgs/{smoke.ORG}/.well-known/agent-card.json"
+    with smoke.fake_door() as port:
+        endpoint = f"http://127.0.0.1:{port}/a2a/orgs/{smoke.ORG}/.well-known/agent-card.json"
         request = urllib.request.Request(endpoint, headers={"Authorization": f"Bearer {smoke.TOKEN}"})
         with urllib.request.urlopen(request) as response:
             card = json.loads(response.read())
