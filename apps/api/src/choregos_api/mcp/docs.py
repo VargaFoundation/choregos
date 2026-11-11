@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The user documentation the image carries, searched and read through the MCP door (S62-10, ADR 0141).
+"""The user documentation the image carries, searched and read through the MCP door (S62-10, ADR 0150).
 
 The API image copies `docs/site/**` (the Markdown of the public site) to `/opt/choregos/docs`
 (`CHOREGOS_DOCS_DIR` overrides). The first `docs_search` or `docs_read` walks that directory once and

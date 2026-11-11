@@ -35,7 +35,9 @@ slot (`runner.maxActive`), and the run says so (ADR 0013).
    ```bash
    choregos items action <ticket-id> stop
    ```
-   The `cancel_run` activity deletes the `PipelineRun` and its Secret.
+   The `cancel_run` activity closes the run first — status `cancelled`, a result whose reason is
+   `cancelled` — then deletes the `PipelineRun` and its Secret. The run is closed whether or not
+   the delete succeeds (ADR 0143): from then on its token opens nothing but its journals.
 3. **replay the stage** once the cause is fixed:
    ```bash
    choregos items action <ticket-id> rerun_stage
@@ -44,6 +46,28 @@ slot (`runner.maxActive`), and the run says so (ADR 0013).
    since it escalated (S22-41): the interpreter reads, from the work item's state changes, the
    stage that escalated and the state it left, and replays that stage with a new run number. A
    `rerun_stage` sent to such a work item before S22-41 was dropped: send it again.
+
+## The run is closed, and something is still running
+
+A run is over for the platform as soon as the orchestrator stops waiting for it: budget spent
+(`timeout`), never admitted (`queue_timeout`), lost by the executor (`lost`), cancelled. Its row
+says so before the executor is asked to remove anything. When that removal fails, the orchestrator
+logs it and goes on:
+
+```bash
+kubectl -n choregos-system logs -l app.kubernetes.io/name=choregos-orchestrator --tail=-1 | grep run.cancel_failed
+```
+
+Each line names a `run_id` whose pod, Job or claim may still exist. That process can no longer
+post a result, call a tool, take a git token or read its input (409 `run_closed`); what it still
+does shows in the run's journal and in the API's log (`run.closed_refused`). Remove what is left:
+
+```bash
+kubectl -n proj-$PROJ-runners delete job,pipelinerun -l choregos/run-id=$RUN
+```
+
+A git token it took before the run was closed lives up to one hour: if the run's branch moved
+after its run ended, compare the branch with what the run's result says it pushed before merging.
 
 ## Check it is fixed
 

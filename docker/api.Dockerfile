@@ -106,7 +106,7 @@ RUN set -eu; \
     echo "${sum}  /out/cosign" | sha256sum -c -; \
     chmod 0755 /out/cosign
 
-# The user documentation (`docs/site/**`, S62-10, ADR 0141), Markdown only: the MCP door's `docs_search`
+# The user documentation (`docs/site/**`, S62-10, ADR 0150), Markdown only: the MCP door's `docs_search`
 # and `docs_read` serve it, so an assistant reads the documentation of this very version, behind the
 # firewall. The whole of `docs` enters this throwaway stage because `docs/site` may not exist yet (a
 # COPY of a missing path fails the build); only its `.md` and `.mdx` files reach the image. Nothing

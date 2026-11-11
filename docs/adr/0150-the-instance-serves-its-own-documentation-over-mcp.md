@@ -1,4 +1,4 @@
-# 0141 — The instance serves its own documentation over its MCP door
+# 0150 — The instance serves its own documentation over its MCP door
 
 - **Status**: accepted, 2026-11-11
 - **Concerns**: `docker/api.Dockerfile` (stage `docs`), `apps/api/src/choregos_api/mcp/docs.py`, the

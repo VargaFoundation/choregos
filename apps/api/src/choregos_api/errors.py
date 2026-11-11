@@ -72,6 +72,25 @@ def conflict(detail: str, *, extra: dict[str, Any] | None = None) -> ApiError:
     return ApiError(status.HTTP_409_CONFLICT, "State conflict", detail, extra=extra)
 
 
+#: The code of the problem the run's API answers once the run is closed (ADR 0143).
+RUN_CLOSED = "run_closed"
+
+
+def run_closed(run_id: str) -> ApiError:
+    """The one refusal of a closed run: nothing more is written, minted or served for it."""
+    detail = (
+        f"run `{run_id}` is closed: its result is recorded, or the platform stopped waiting for it; "
+        "nothing more is written, minted or served for this run"
+    )
+    return ApiError(
+        status.HTTP_409_CONFLICT,
+        "Run closed",
+        detail,
+        errors=[{"code": RUN_CLOSED, "msg": detail}],
+        extra={"code": RUN_CLOSED},
+    )
+
+
 def unprocessable(detail: str, errors: list[dict[str, Any]] | None = None) -> ApiError:
     return ApiError(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unprocessable entity", detail, errors=errors)
 

@@ -1,4 +1,4 @@
-"""The documentation over the MCP door (S62-10, ADR 0141): `docs_search` and `docs_read`.
+"""The documentation over the MCP door (S62-10, ADR 0150): `docs_search` and `docs_read`.
 
 The documentation is the Markdown of `docs/site/` that the API image carries; here, a fixture tree
 under `CHOREGOS_DOCS_DIR`. The tools are announced to every token that opens the door, read only,

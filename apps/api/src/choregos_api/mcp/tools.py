@@ -3,7 +3,7 @@
 
 Seven tools backed by the REST API's services — a work item created from Claude differs in nothing
 from one created from the console — and two that read the documentation the image carries
-(`docs_search`, `docs_read`, ADR 0141). The descriptions are in English, because a model reads
+(`docs_search`, `docs_read`, ADR 0150). The descriptions are in English, because a model reads
 them and chooses; the error messages follow the API.
 
 Two rules hold the door:

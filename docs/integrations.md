@@ -33,7 +33,7 @@ and `2025-03-26`.
 
 A tool you are not allowed to use is not announced, and calling it answers like an unknown tool.
 
-**The documentation, from the platform itself** ([ADR 0141](adr/0141-the-instance-serves-its-own-documentation-over-mcp.md)).
+**The documentation, from the platform itself** ([ADR 0150](adr/0150-the-instance-serves-its-own-documentation-over-mcp.md)).
 The API image carries the Markdown of the user documentation (`docs/site/` in the repository) of its
 own version, at `/opt/choregos/docs` (`CHOREGOS_DOCS_DIR` overrides). `docs_search` and `docs_read`
 read it, so your assistant answers from the documentation of the version you run, behind your firewall,

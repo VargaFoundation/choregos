@@ -153,3 +153,48 @@ async def test_without_proxy_authentication_no_egress_token_is_asked(
     client = FakeInternalClient(stage_input)
     await Runner(runner_settings, client).run()  # type: ignore[arg-type]
     assert client.egress_token_calls == 0
+
+
+async def test_a_closed_run_refused_its_egress_token_ends_cleanly(
+    monkeypatch: pytest.MonkeyPatch, stage_input: Any, runner_settings: Any
+) -> None:
+    """ADR 0143: once a run is closed — its result recorded, or the platform no longer waiting — the
+    API refuses it everything, its egress token first since that is the runner's first call. A pod
+    that starts late has nothing to do: it ends with 0, as it does when its input is refused, and
+    reads neither its input nor anything else."""
+    from choregos_runner.client import InternalApiError
+    from choregos_runner.exits import Exit
+    from choregos_runner.runner import Runner
+
+    from .conftest import FakeInternalClient
+
+    for name, value in _env().items():
+        monkeypatch.setenv(name, value)
+    client = FakeInternalClient(stage_input)
+    client.egress_token = InternalApiError(409, '{"title":"Run closed","status":409,"code":"run_closed"}')
+
+    async def never() -> Any:
+        raise AssertionError("a closed run's input is not asked for")
+
+    monkeypatch.setattr(client, "fetch_input", never)
+    outcome = await Runner(runner_settings, client).run()  # type: ignore[arg-type]
+
+    assert (outcome.exit_code, outcome.result) == (Exit.OK, None)
+    assert client.egress_token_calls == 1 and client.results == [] and client.events == []
+    assert urlsplit(os.environ["HTTPS_PROXY"]).password is None, "no credential reached the proxy variables"
+
+
+async def test_another_refusal_of_the_egress_token_is_still_a_failure(
+    monkeypatch: pytest.MonkeyPatch, stage_input: Any, runner_settings: Any
+) -> None:
+    from choregos_runner.client import InternalApiError
+    from choregos_runner.runner import Runner
+
+    from .conftest import FakeInternalClient
+
+    for name, value in _env().items():
+        monkeypatch.setenv(name, value)
+    client = FakeInternalClient(stage_input)
+    client.egress_token = InternalApiError(503, "the API is restarting")
+    with pytest.raises(InternalApiError):
+        await Runner(runner_settings, client).run()  # type: ignore[arg-type]

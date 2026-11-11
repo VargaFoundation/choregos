@@ -1,4 +1,4 @@
-"""The API image carries the user documentation of its own version (S62-10, ADR 0141).
+"""The API image carries the user documentation of its own version (S62-10, ADR 0150).
 
 The MCP door's `docs_search` and `docs_read` read `/opt/choregos/docs`; the image fills it from
 `docs/site/**`, Markdown only. A Dockerfile that forgets the copy builds, starts, and answers "no
