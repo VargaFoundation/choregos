@@ -293,11 +293,26 @@ async def _apply_item(
     if twin is not None:
         _skip(summary, item, f"same content as `{twin}`")
         return None
+    if existing is None and base.installation_id is not None:
+        # An assistant's base (S63-06): an item named like a document of the seed rewrites that document,
+        # which then belongs to the source and to the owners (`origin: local`), not to the seed.
+        existing = (
+            await session.execute(
+                select(KnowledgeDocument).where(
+                    KnowledgeDocument.knowledge_base_id == base.id,
+                    KnowledgeDocument.filename == accepted.filename,
+                    KnowledgeDocument.source_id.is_(None),
+                )
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            existing.source_id, existing.source_ref = source.id, item.ref
     document = existing or KnowledgeDocument(
         org_id=base.org_id, knowledge_base_id=base.id, source_id=source.id, source_ref=item.ref,
         created_by=f"source:{source.name}",
     )  # fmt: skip
     document.source = source.kind
+    document.origin = "local"  # a sync that rewrites a seed document makes it the owners' (S63-06)
     document.filename, document.title, document.mime = accepted.filename, accepted.filename, accepted.mime
     document.size_bytes, document.digest, document.content = len(data), digest, data
     document.source_version, document.source_url = item.version, item.url

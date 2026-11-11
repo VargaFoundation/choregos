@@ -149,6 +149,11 @@ DOOR_ROUTES = {
             "GET /mcp/projects/{project}",
             "DELETE /mcp/projects/{project}",
             "POST /mcp/projects/{project}",
+            # An installed assistant as a connector of its own (ADR 0139 point 2): Choregos's own assistant,
+            # never another server's tools (point 7).
+            "GET /mcp/assistants/{assistant}",
+            "DELETE /mcp/assistants/{assistant}",
+            "POST /mcp/assistants/{assistant}",
         }
     ),
     "apps/api/src/choregos_api/a2a": frozenset(

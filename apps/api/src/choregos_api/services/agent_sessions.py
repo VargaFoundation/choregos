@@ -21,6 +21,7 @@ idempotent: a session closed twice is closed once.
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any, Literal
@@ -45,6 +46,7 @@ from ..db.models import (
     ModelCatalogueRow,
     Organization,
     Project,
+    User,
 )
 from ..db.session import (
     allow_release_during_calls,
@@ -65,6 +67,8 @@ from ..schemas.agent_sessions import (
 )
 from ..secret_store import get_secret_store
 from .events import persist_event
+from .identity_exchange import SERVICE, USER_CONSENT, USER_EXCHANGE, Acting
+from .model_stream import OnDelta, StreamRefused, stream_completion
 
 if TYPE_CHECKING:
     from choregos_adapters.base import GatewayAdapter
@@ -86,6 +90,20 @@ DEFAULT_MAX_TURNS = 20
 KEY_PREFIX = "session:"
 
 SessionRuntime = Literal["prompt", "voice", "socket"]
+
+
+@dataclass(frozen=True, slots=True)
+class ConversationTerms:
+    """What makes a session a conversation (ADR 0134): it holds no key of its own, each turn mints one."""
+
+    max_usd: float
+    idle_close_minutes: int
+    context: dict[str, Any] | None = None
+    installation_id: str | None = None
+    max_turns: int | None = None
+    retention_days: int | None = None
+
+
 _DOORS: dict[str, str] = {"prompt": "/responses", "voice": "/realtime", "socket": "/realtime"}
 #: The runtimes each door serves: a hosted agent answers on `/responses` too, from its pod (S41-11),
 #: and on `/realtime` when its container serves `invocations_ws` (S41-21).
@@ -154,11 +172,13 @@ async def open_session(
     *,
     max_usd: float | None,
     runtime: SessionRuntime = "prompt",
+    conversation: ConversationTerms | None = None,
 ) -> AgentSessionRecord:
     """A new session of the agent in the project: its version, its model, its reservation, its key.
 
     `runtime` is the door it opens at: `prompt` on `/responses`, `voice` on `/realtime` (S41-10),
-    `socket` on `/realtime` for a hosted agent's own socket (S41-21)."""
+    `socket` on `/realtime` for a hosted agent's own socket (S41-21). With `conversation`, the session is a
+    durable conversation (S63-04): no reservation and no key here, each turn reserves and mints its own."""
     from .agents import AgentUnavailable, resolve_agent
 
     await sweep_expired(session, project.id)
@@ -168,6 +188,11 @@ async def open_session(
         raise conflict(str(refusal)) from refusal
     spec = resolved.spec
     kind = spec.runtime.kind if spec.runtime is not None else None
+    if conversation is not None and kind != "prompt":
+        raise unprocessable(
+            f"`{agent_slug}` is not a prompt agent (runtime `{kind or 'none'}`): a conversation needs one",
+            [{"loc": ["agent", "runtime"], "msg": f"runtime `{kind or 'none'}` has no conversation"}],
+        )
     if kind not in _SERVED[runtime]:
         raise unprocessable(
             f"`{agent_slug}` is not a {runtime} agent (runtime `{kind or 'none'}`): "
@@ -215,56 +240,47 @@ async def open_session(
         cost_usd=0.0,
         expires_at=utcnow() + timedelta(seconds=ttl_s),
     )
+    if conversation is not None:
+        now = utcnow()
+        record.kind = "conversation"
+        record.installation_id = conversation.installation_id
+        record.context = conversation.context
+        record.resolved_subjects = []
+        record.agent_revision = resolved.version
+        record.turns = 0
+        record.max_usd = conversation.max_usd
+        record.idle_close_minutes = conversation.idle_close_minutes
+        record.max_turns = conversation.max_turns
+        record.retention_days = conversation.retention_days
+        record.last_activity_at = now
+        record.expires_at = now + timedelta(minutes=conversation.idle_close_minutes)
+        session.add(record)
+        await session.flush()
+        await journal(
+            session,
+            record,
+            "conversation.opened",
+            {"model": record.model, "agent_revision": resolved.version, "max_usd": conversation.max_usd},
+        )
+        return record
     session.add(record)
     await session.flush()
-    reservation = await _reserve(session, organisation.id, project, resolved.agent.slug, spec, max_usd)
+    reservation = await reserve_budget(session, organisation.id, project, resolved.agent.slug, spec, max_usd)
     from .budgets import DEFAULT_FLOOR_USD
 
     if reservation.below(DEFAULT_FLOOR_USD):
         raise ApiError(409, "Budget exhausted", f"the session does not open: {reservation.describe()}")
 
-    team_id = None
-    from choregos_core.policy import PolicyEngine
-
-    from .definitions import effective_policy
-
-    policy = await effective_policy(session, project.id)
-    if (daily := PolicyEngine(policy).daily_budget()) is not None:
-        team_id = await gateway.ensure_team(f"choregos-{project.id}", daily)
-    key_metadata: dict[str, Any] = {
-        "project": project.slug,
-        "agent": record.agent_slug,
-        "agent_version": record.agent_version,
-        "session_id": record.id,
-        "user": principal.user_id,
-    }
-    if policy.sandbox.llm_security_analyzer:
-        # The gateway's guard masks secrets for this key, as for a run's (ADR 0084).
-        from choregos_adapters.base import llm_guard_refusal
-        from choregos_core.llm_guardrail import GUARD_METADATA_KEY, GUARD_REDACT
-
-        if (unguarded := llm_guard_refusal(gateway)) is not None:
-            raise unprocessable(
-                unguarded, [{"loc": ["policy", "sandbox", "llm_security_analyzer"], "msg": unguarded}]
-            )
-        key_metadata[GUARD_METADATA_KEY] = GUARD_REDACT
-    key = await gateway.mint_key(
-        key_metadata,
+    key = await mint_key(
+        session,
+        gateway,
+        record,
+        project,
         budget_usd=reservation.usd,
         ttl_s=ttl_s,
-        models=[model.litellm_model],
-        team_id=team_id,
+        run_id=f"{KEY_PREFIX}{record.id}",
     )
     record.gateway_key_id = key.key_id
-    session.add(
-        GatewayKeyRow(
-            key_id=key.key_id,
-            run_id=f"{KEY_PREFIX}{record.id}",
-            project_id=project.id,
-            budget_usd=reservation.usd,
-            expires_at=key.expires_at,
-        )
-    )
     await get_secret_store().put(
         session, organisation.id, secret_name(record.id), str(key.key), principal.email
     )
@@ -282,6 +298,58 @@ async def open_session(
         reserved_usd=reservation.usd,
     )
     return record
+
+
+async def mint_key(
+    session: AsyncSession,
+    gateway: GatewayAdapter,
+    record: AgentSessionRecord,
+    project: Project,
+    *,
+    budget_usd: float,
+    ttl_s: int,
+    run_id: str,
+) -> Any:
+    """A gateway key for the session's model at `budget_usd`, with its `gateway_keys` row named `run_id`
+    (`session:<id>`, or `turn:<id>:<n>` for a conversation's turn): the project's team, the guard's mark."""
+    from choregos_core.policy import PolicyEngine
+
+    from .definitions import effective_policy
+
+    team_id = None
+    policy = await effective_policy(session, project.id)
+    if (daily := PolicyEngine(policy).daily_budget()) is not None:
+        team_id = await gateway.ensure_team(f"choregos-{project.id}", daily)
+    key_metadata: dict[str, Any] = {
+        "project": project.slug,
+        "agent": record.agent_slug,
+        "agent_version": record.agent_version,
+        "session_id": record.id,
+        "user": record.user_id,
+    }
+    if policy.sandbox.llm_security_analyzer:
+        # The gateway's guard masks secrets for this key, as for a run's (ADR 0084).
+        from choregos_adapters.base import llm_guard_refusal
+        from choregos_core.llm_guardrail import GUARD_METADATA_KEY, GUARD_REDACT
+
+        if (unguarded := llm_guard_refusal(gateway)) is not None:
+            raise unprocessable(
+                unguarded, [{"loc": ["policy", "sandbox", "llm_security_analyzer"], "msg": unguarded}]
+            )
+        key_metadata[GUARD_METADATA_KEY] = GUARD_REDACT
+    key = await gateway.mint_key(
+        key_metadata, budget_usd=budget_usd, ttl_s=ttl_s, models=[record.model], team_id=team_id
+    )
+    session.add(
+        GatewayKeyRow(
+            key_id=key.key_id,
+            run_id=run_id,
+            project_id=project.id,
+            budget_usd=budget_usd,
+            expires_at=key.expires_at,
+        )
+    )
+    return key
 
 
 async def _resolve_model(
@@ -333,15 +401,19 @@ async def _voice_terms(
     return {"prices": prices.as_payload(), "max_usd_per_minute": row.max_usd_per_minute if row else None}
 
 
-async def _reserve(
+async def reserve_budget(
     session: AsyncSession,
     org_id: str,
     project: Project,
     agent_slug: str,
     spec: AgentSpec,
     max_usd: float | None,
+    extra_caps: dict[str, float] | None = None,
 ) -> Any:
-    """The smallest of what is left under every cap that applies, as `prepare_stage` reads it."""
+    """The smallest of what is left under every cap that applies, as `prepare_stage` reads it.
+
+    `extra_caps` are further remainders the caller computed (an assistant's person and installation
+    months, S63-15), named as `bound_by` should report them."""
     from choregos_core.policy import PolicyEngine
 
     from .agents import spend_this_month, spend_today
@@ -389,6 +461,7 @@ async def _reserve(
             - await org_spent_since(session, org_id, start_of_month())
             - await open_reservations(session, org_id=org_id)
         )
+    left.update(extra_caps or {})
     return reserve(left)
 
 
@@ -396,7 +469,13 @@ async def _reserve(
 
 
 async def respond(
-    session: AsyncSession, record: AgentSessionRecord, project: Project, inputs: list[str]
+    session: AsyncSession,
+    record: AgentSessionRecord,
+    project: Project,
+    inputs: list[str],
+    *,
+    turn_key: str | None = None,
+    on_delta: OnDelta | None = None,
 ) -> AgentResponse:
     """One response of the session: the person's input, the agent's loop, what it said.
 
@@ -429,10 +508,18 @@ async def respond(
     # What the request wrote so far (the session it opened, its reservation, the input) need not wait
     # for the model's answer to be kept: the first call commits it, and releases the budget's lock.
     allow_release_during_calls(session)
-    keys = await get_secret_store().get_many(session, record.org_id, [secret_name(record.id)])
-    key = keys.get(secret_name(record.id), "")
-    tools = await session_tools(session, spec, project)
+    key = await _gateway_key(session, record, turn_key)
+    from .conversation_needs import identities_of, need_tools
+
+    plain_spec, from_needs = await need_tools(session, record, spec, project)
+    tools = {**await session_tools(session, plain_spec, project), **from_needs}
     messages = list(record.messages or [])
+    from .conversation_extras import conversation_extras
+
+    extras = await conversation_extras(session, record, messages)
+    from .conversation_actions import offered_writes
+
+    extras.actions = await offered_writes(session, record, spec, project)
     for text in inputs:
         messages.append({"role": "user", "content": text})
         await journal(session, record, "input.text", {"text": text[:2000]})
@@ -451,6 +538,17 @@ async def respond(
             httpx.AsyncClient(transport=_OVERRIDES.get("transport"), timeout=300) as http,
         ):
             made["model_calls"] += 1
+            if on_delta is not None:
+                try:
+                    return await stream_completion(
+                        http,
+                        f"{gateway_url.rstrip('/')}/chat/completions",
+                        body,
+                        {"Authorization": f"Bearer {key}"},
+                        on_delta,
+                    )
+                except StreamRefused as refused:
+                    raise _ModelRefused(refused.status, refused.text) from refused
             answer = await http.post(
                 f"{gateway_url.rstrip('/')}/chat/completions",
                 json=body,
@@ -463,9 +561,13 @@ async def respond(
             raise _ModelRefused(answer.status_code, "the model answered something that is not a completion")
         return parsed
 
+    identities = await identities_of(session, record, spec)
+
     async def call_tool(name: str, arguments: dict[str, Any]) -> str:
         made["tool_calls"] += 1
-        return await call_session_tool(session, record, project, tools[name], arguments)
+        if extras.serves(name):
+            return await extras.call(session, name, arguments)
+        return await call_session_tool(session, record, project, tools[name], arguments, identities)
 
     async def on_event(type_: str, payload: dict[str, Any]) -> None:
         await journal(session, record, type_, payload)
@@ -486,7 +588,8 @@ async def respond(
                 [
                     LoopTool(t.name, str(t.announcement().get("description") or ""), tool_parameters(t))
                     for t in tools.values()
-                ],
+                ]
+                + extras.loop_tools,
                 complete,
                 call_tool,
                 on_event=on_event,
@@ -507,6 +610,15 @@ async def respond(
             **made,
         )
         raise
+
+
+async def _gateway_key(session: AsyncSession, record: AgentSessionRecord, turn_key: str | None) -> str:
+    """The key a response calls the model with: a conversation's turn has its own, minted for that turn
+    alone and never in the secret store; a session's is sealed under the session."""
+    if turn_key is not None:
+        return turn_key
+    keys = await get_secret_store().get_many(session, record.org_id, [secret_name(record.id)])
+    return keys.get(secret_name(record.id), "")
 
 
 async def _book_the_response(
@@ -539,8 +651,9 @@ async def _book_the_response(
         f"response.{status}",
         {"response_id": response_id, "text": text[:2000], **({"error": error.model_dump()} if error else {})},
     )
-    if error is not None and error.code == "budget_exceeded":
-        # The key is spent: nothing more can be said in this session.
+    if error is not None and error.code == "budget_exceeded" and record.kind != "conversation":
+        # The key is spent: nothing more can be said in this session. (A conversation's turn key ends with
+        # its turn; the next turn is reserved from what is left of the conversation's cap.)
         await close_session(session, record, reason="budget_exceeded")
     await release_connection(session)
     return AgentResponse(
@@ -598,13 +711,14 @@ async def call_session_tool(
     project: Project,
     tool: BrokerTool,
     arguments: dict[str, Any],
+    identities: Mapping[str, str] | None = None,
 ) -> str:
     """What a loop that gives its model text reads of `answer_session_tool` (a prompt session's tool
     message, a realtime session's `function_call_output`): the courtier's text between the same
     notices a hosted session's runner says (#1399) — the injection guard's flags first, the calls the
     cap leaves the session last — and, since neither channel has an error flag, a status of 400 or
     more said first (`choregos_core.tool_answer.render_text`)."""
-    return (await answer_session_tool(session, record, project, tool, arguments)).for_the_model()
+    return (await answer_session_tool(session, record, project, tool, arguments, identities)).for_the_model()
 
 
 async def answer_session_tool(
@@ -613,9 +727,12 @@ async def answer_session_tool(
     project: Project,
     tool: BrokerTool,
     arguments: dict[str, Any],
+    identities: Mapping[str, str] | None = None,
 ) -> SessionToolAnswer:
     """One read through the courtier, as a run's: the policy's cap, the schema, the connector's key
-    resolved here, the injection guard, a ledger line. What the model reads back is text: the text
+    resolved here (or, in `identities`, the person's exchanged token, ADR 0135: the mode the agent
+    version picks per connector, `service` for any it does not list), the injection guard, a ledger
+    line. What the model reads back is text: the text
     blocks and, when they do not serialize it, the `structuredContent` (S40-18c), guarded as read."""
     from choregos_core.policy import PolicyEngine
 
@@ -635,10 +752,11 @@ async def answer_session_tool(
     # (`allow_release_during_calls`, #1376): the broker commits first. What follows is the call's
     # booking — the count, its line, its events with their notification —, one transaction after the
     # call, committed here in the scope the call left with; all of it is kept or none.
-    code, body = await call(session, tool, arguments, project=project)
+    acting = await _acting(session, record, tool, identities)
+    code, body = await call(session, tool, arguments, project=project, acting=acting)
     provider = f"mcp:{tool.connector.name}"
     try:
-        answer = await _book_the_tool_call(session, record, project, tool, engine, cap, code, body)
+        answer = await _book_the_tool_call(session, record, project, tool, engine, cap, code, body, acting)
         if release_allowed(session):
             await release_connection(session)
     except Exception as failure:
@@ -658,7 +776,25 @@ async def answer_session_tool(
     return answer
 
 
-async def _book_the_tool_call(
+async def _acting(
+    session: AsyncSession, record: AgentSessionRecord, tool: BrokerTool, identities: Mapping[str, str] | None
+) -> Acting:
+    """Who this call is for: the person of the conversation when the agent version picks `user_exchange`
+    for the connector, the connector's own identity otherwise (ADR 0135)."""
+    mode = (identities or {}).get(tool.connector.name)
+    if mode not in (USER_EXCHANGE, USER_CONSENT):
+        return Acting(SERVICE)
+    user = await session.get(User, record.user_id) if record.user_id else None
+    return Acting(
+        USER_CONSENT if mode == USER_CONSENT else USER_EXCHANGE,
+        user_id=record.user_id or "",
+        subject=(user.oidc_sub if user is not None else None) or record.user_id or "",
+        org_id=record.org_id,
+        actor=f"assistant:{record.agent_slug}",
+    )
+
+
+async def _book_the_tool_call(  # noqa: PLR0913 - one call, fact by fact
     session: AsyncSession,
     record: AgentSessionRecord,
     project: Project,
@@ -667,6 +803,7 @@ async def _book_the_tool_call(
     cap: int,
     code: int,
     body: Any,
+    acting: Acting | None = None,
 ) -> SessionToolAnswer:
     """What the model reads back from a session's tool call, guarded, and what changes its meaning;
     the call's count, line and events."""
@@ -718,8 +855,26 @@ async def _book_the_tool_call(
         tool=tool.name,
         provider=provider,
         status_code=code,
+        **(acting or Acting(SERVICE)).audit(tool.connector.name),
     )
     flagged = [s.to_dict() for s in found]
+    if code == 422 and isinstance(body, dict) and body.get("connect_url"):
+        # What the MCP door reports as `missing_accounts`: the need, and where the person connects it.
+        from .connected_accounts import NOT_CONNECTED
+        from .conversation_signals import note_missing_account
+
+        if body.get("type") == NOT_CONNECTED:
+            await note_missing_account(session, record, tool.name.split("__", 1)[0], str(body["connect_url"]))
+    if answered < 400 and record.installation_id:
+        # The one place a conversation's tool results are booked: a resolver need's `subject` is recorded.
+        from .assistant_memory import note_resolved_subjects
+
+        await note_resolved_subjects(session, record, tool.connector.name, tool.operation.name, body)
+    if record.installation_id and not refused_by_network:
+        # The reads journal (S63-16): one line per call, the subject but never the content.
+        from .assistant_reads import journal_read
+
+        await journal_read(session, record, tool.connector.name, tool.operation.name, body)
     return SessionToolAnswer(text, answered, _calls_left(cap, record), flagged)
 
 
@@ -836,6 +991,7 @@ async def sweep_expired(session: AsyncSession, project_id: str) -> int:
         await session.execute(
             select(AgentSessionRecord).where(
                 AgentSessionRecord.project_id == project_id,
+                AgentSessionRecord.kind == "session",
                 AgentSessionRecord.status == "open",
                 AgentSessionRecord.expires_at <= utcnow(),
             )
@@ -912,7 +1068,9 @@ __all__ = [
     "call_session_tool",
     "close_session",
     "journal",
+    "mint_key",
     "open_session",
+    "reserve_budget",
     "respond",
     "secret_name",
     "session_dto",

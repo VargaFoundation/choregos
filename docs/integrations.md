@@ -15,6 +15,7 @@ The console has the same instructions, pre-filled with your platform's address: 
 | :-- | :-- |
 | `https://<console-host>/mcp` | Every project you can read; tools take a `project` argument (`org:slug`) |
 | `https://<console-host>/mcp/projects/<org>:<slug>` | One project; tools need no `project` argument |
+| `https://<console-host>/mcp/assistants/<org>:<installation>` | One assistant as its own connector (see below) |
 
 Transport: Streamable HTTP, stateless, JSON responses. Protocol versions `2025-11-25`, `2025-06-18`
 and `2025-03-26`.
@@ -30,6 +31,74 @@ and `2025-03-26`.
 | `create_work_item` | Opens a work item in a project (in its tracker first when external, ADR 0059) | `mcp:write` and the right to control work items |
 
 A tool you are not allowed to use is not announced, and calling it answers like an unknown tool.
+
+### Assistants (ADR 0139)
+
+An assistant installed for a group is reachable from the door by the people of that group (its audience), with
+`mcp:read` alone. On `/mcp`, `list_assistants`, `ask_assistant` and `get_conversation` are announced only to
+someone in the audience of at least one ready assistant. `/mcp/assistants/<org>:<installation>` is one assistant
+as its own connector: tools `ask` and `get_conversation`, and the manifest's `surfaces.mcp.prompts` as MCP
+prompts (`prompts/list`, `prompts/get`, `{argument}` substituted in the message). Outside the audience, that
+path answers `404`. A conversation opened here is one of your `/me/conversations`, in your personal space.
+
+An answer is `{conversation_id, status, text, citations, pending_actions, missing_accounts}`. A turn longer than
+`CHOREGOS_MCP_ASSISTANT_WAIT_S` (25 s) answers `status: working` and goes on in the background; call
+`get_conversation` again until it is `completed` (or `failed`). The assistant never decides for you: a proposal
+is confirmed in the console. `citations` are the knowledge documents the turn's knowledge tools returned
+(`document_id`, `title`, `version`, `base`); `pending_actions` the writes it proposed and you have not decided;
+`missing_accounts` the accounts a tool needed and you have not connected (`need`, `connect_url`). Each list is
+the latest turn's, read from the conversation's journal.
+
+### Embedding an assistant in your application (ADR 0139 point 6)
+
+A host application (an internal web app) shows an assistant in an iframe. The host holds no token, no model and
+no transcript: the person signs in to Choregos, and the conversation is theirs (`/me/conversations`).
+
+```html
+<iframe id="assistant" title="Assistant" width="480" height="520"
+  src="https://choregos.example.com/embed/assistants/<org>/<installation>?context=<base64url JSON>"></iframe>
+```
+
+- **`context`** (optional) is a JSON object, base64url-encoded (`btoa(JSON.stringify(obj))` with `+` `/` `=`
+  replaced by `-` `_` and nothing). Choregos validates it against the manifest's `surfaces.embed.context_schema`
+  (422 shown in the frame when it does not match, or when the assistant declares none) and gives it to the agent
+  as data, never as an instruction or a resolved subject. The frame resumes the person's conversation for the same
+  installation and context while the browser tab lives; otherwise it opens a new one.
+- **Who may frame it.** An administrator or owner of the installation sets `config.embed_origins` (a list of
+  origins, `https://app.example.com`: no path, no `*`; `http` only for `localhost`). The console answers the embed
+  page with `Content-Security-Policy: frame-ancestors <those origins>`; with none, or for an unknown installation,
+  `'none'`. Every other console page always refuses framing. The origins are served, to anyone, by
+  `GET /api/v1/public/assistants/{org}/{slug}/embed` (origins only: the console needs them before the visitor is
+  signed in).
+- **Sign-in.** If the frame has no session it asks the identity provider once, silently (`prompt=none`); if the
+  provider needs the person it shows a **Sign in** button that opens the provider in a popup. The console's session
+  cookie is `SameSite=Lax`, and Choregos does not weaken it for the embed. When the host is on the **same site** as
+  the console (for example `app.example.com` and `choregos.example.com`) the frame carries that cookie. When the host
+  is on **another site** the browser does not send it, so the popup (a first-party page, signed in with the ordinary
+  cookie) asks `POST /api/v1/me/assistants/{org}/{slug}/embed-token` and hands the answer to the frame that opened it
+  (`postMessage`, to the console's own origin). The frame keeps that **frame token** in its memory and sends it as
+  `X-Choregos-Embed`. The token lives fifteen minutes, is bound to the person, their browser session (signing out ends
+  it), the organisation and the installation, opens only the routes the component calls (open and read its
+  conversation, send a turn, confirm or refuse an action, read a memory space) and carries a role in that organisation
+  only; it never reaches the host application, and when it expires the frame shows the Sign in button again. A
+  third-party cookie (`SameSite=None; Partitioned`) was not chosen: a cookie set by the popup is stored under the
+  console's partition, not the host's, and Safari refuses third-party cookies whatever their attributes. The browser
+  journey (`pnpm e2e:embed`, and `pnpm e2e:assistants` for the console's own screens) runs against fake APIs in CI.
+- **Events.** The frame posts messages to the host with `postMessage`, to the allowed origin that framed it (never
+  `*`; your listener should check `event.origin` is the console's and `event.data.source === "choregos.assistant"`).
+  Every message is `{ source: "choregos.assistant", type, org, installation, ...payload }`:
+
+| `type` | When | Payload |
+|---|---|---|
+| `conversation.started` | The conversation is open (new or resumed) | `conversation_id`, `resumed` |
+| `action.confirmed` | The person confirmed a write the assistant proposed | `conversation_id`, `action_id`, `operation`, `status` |
+| `memory.updated` | A turn wrote or proposed in a memory space (`?memory=space1,space2` narrows it to those) | `conversation_id`, `spaces` |
+| `resize` | The content's height changed: size the iframe to it | `height` (pixels) |
+
+`memory.updated` comes from the turn itself: its final event carries `memory_updated`, the spaces the turn wrote or
+proposed in (a proposal counts: the person has something to confirm). `?memory=` only narrows it. The write actions
+the assistant proposes appear in the frame with what the source's preview says they would change (`diff`) and Confirm and Refuse
+buttons (the same routes as the console: the broker executes with the person's identity).
 
 ## A token for each client
 

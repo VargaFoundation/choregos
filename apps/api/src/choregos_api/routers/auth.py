@@ -186,6 +186,21 @@ def redirection_sure(target: str | None, settings: Settings) -> str:
     return settings.public_url
 
 
+#: What an IdP answers to `prompt=none` when it cannot sign the person in without showing something.
+SILENT_REFUSALS = frozenset(
+    {"login_required", "interaction_required", "consent_required", "account_selection_required"}
+)
+
+
+def _without_code(target: str, error: str | None) -> RedirectResponse:
+    """The IdP answered without a code. A `prompt=none` it could not answer silently (S63-12) goes back to
+    the page, which offers a button; any other answer is a refusal."""
+    if error not in SILENT_REFUSALS:
+        raise unauthorized(f"the identity provider refused the sign-in: {error or 'no code'}")
+    joiner = "&" if "?" in target else "?"
+    return RedirectResponse(url=f"{target}{joiner}signin=required", status_code=307)
+
+
 def _pkce() -> tuple[str, str]:
     verifier = secrets.token_urlsafe(48)
     digest = hashlib.sha256(verifier.encode("ascii")).digest()
@@ -274,8 +289,12 @@ async def login(
     reauth: Annotated[bool, Query()] = False,
     org: Annotated[str | None, Query(max_length=120)] = None,
     login_hint: Annotated[str | None, Query(max_length=320)] = None,
+    silent: Annotated[bool, Query()] = False,
 ) -> RedirectResponse:
     """Redirect to the IdP. In dev, `?as=email` opens a session directly.
+
+    `silent=1` (the embedded component, S63-12) asks for `prompt=none`: the IdP answers without showing
+    anything, and the callback comes back to the target with `?signin=required` when nobody is signed in.
 
     `reauth=1` asks the IdP to RE-authenticate the user even if they already have a session with
     it (`prompt=login`, `max_age=0`): this is the path of a door that demands a fresh authentication,
@@ -328,6 +347,8 @@ async def login(
     }
     if reauth:
         params |= {"prompt": "login", "max_age": "0"}
+    elif silent:
+        params["prompt"] = "none"
     if login_hint:
         params["login_hint"] = login_hint
     response = RedirectResponse(
@@ -661,10 +682,11 @@ async def _development_groups(session: Any, email: str, settings: Settings) -> l
 @router.get("/auth/callback", operation_id="authCallback")
 async def callback(
     request: Request,
-    code: Annotated[str, Query()],
     state: Annotated[str, Query()],
     session: PlatformDb,
     settings: Config,
+    code: Annotated[str | None, Query()] = None,
+    error: Annotated[str | None, Query(max_length=80)] = None,
 ) -> RedirectResponse:
     """Check `state` and the nonce, exchange the code (PKCE), open the session, set the signed cookie."""
     expected = read_session(state, settings, purpose="oidc-state")
@@ -672,6 +694,8 @@ async def callback(
     if not expected or not handshake or expected.get("n") != handshake.get("n"):
         raise unauthorized("invalid or expired sign-in state: start the sign-in again")
     target = redirection_sure(str(expected.get("r") or ""), settings)
+    if code is None:
+        return _without_code(target, error)
     reauth = bool(handshake.get("a"))
 
     if code.startswith("dev:") and settings.dev_login_enabled:
@@ -717,6 +741,7 @@ async def callback(
                 raise unauthorized(f"OIDC exchange refused: {token_response.text[:200]}")
             tokens = token_response.json()
             access_token = tokens["access_token"]
+            refresh_token = str(tokens.get("refresh_token") or "")
             claims = _id_token_claims(tokens.get("id_token"))
             if claims is not None:
                 _check_id_token_claims(claims, issuer=issuer, client_id=client_id, nonce=handshake.get("n"))
@@ -759,12 +784,35 @@ async def callback(
                 raise unauthorized("the identity provider gave a subject reserved for another sign-in")
             user = await _ensure_oidc_user(session, info, settings)
             await _map_groups_to_roles(session, user, list(info.get("groups", [])), settings)
+            await _seal_refresh_token(session, user, refresh_token)
 
     response = await ouvrir_la_session(
         session, user, target, settings, canal="oidc", auth_time=auth_time, request=request
     )
     response.delete_cookie(OIDC_COOKIE)
     return response
+
+
+async def _org_ids_of(session: Any, user_id: str) -> list[str]:
+    from sqlalchemy import select
+
+    from ..db.models import Membership
+
+    rows = await session.execute(select(Membership.org_id).where(Membership.user_id == user_id).distinct())
+    return [str(org_id) for (org_id,) in rows.all()]
+
+
+async def _seal_refresh_token(session: Any, user: User, refresh_token: str) -> None:
+    """The provider's refresh token of the person, sealed per person (ADR 0135 point 2): a conversation
+    draws a fresh access token from it to exchange. A failure here never fails the sign-in."""
+    if not refresh_token:
+        return
+    from ..services.identity_exchange import seal_refresh_token
+
+    try:
+        await seal_refresh_token(session, await _org_ids_of(session, user.id), user.id, refresh_token)
+    except Exception as failure:  # the sign-in stands; the exchange will say `identity_unavailable`
+        logger.warning("refresh token not sealed", user=user.id, error=type(failure).__name__)
 
 
 async def ouvrir_la_session(
@@ -864,6 +912,9 @@ async def logout(request: Request, session: PlatformDb, settings: Config, respon
     payload = read_session(request.cookies.get(settings.session_cookie, ""), settings)
     if payload and isinstance(payload.get("sid"), str) and isinstance(payload.get("sub"), str):
         await end_session(session, payload["sub"], payload["sid"])
+        from ..services.identity_exchange import forget_refresh_token
+
+        await forget_refresh_token(session, await _org_ids_of(session, payload["sub"]), payload["sub"])
     response.delete_cookie(settings.session_cookie)
     response.status_code = status.HTTP_204_NO_CONTENT
     return response

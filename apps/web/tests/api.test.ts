@@ -85,6 +85,21 @@ describe("a decision that asks for a recent authentication", () => {
     expect(assign).toHaveBeenCalledWith("http://c/login?next=%2Fp%2Finfra");
     vi.unstubAllGlobals();
   });
+
+  it("a 401 in the embedded component never navigates: the console's login refuses to be framed (S63-12)", async () => {
+    const assign = vi.fn();
+    vi.stubGlobal("window", {
+      location: { pathname: "/embed/assistants/varga/coach", search: "?signin=required", origin: "http://c", assign },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify({ title: "Not authenticated" }), { status: 401 })),
+    );
+    const { api } = await import("@/lib/api");
+    await expect(api.me()).rejects.toThrow();
+    expect(assign).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
 });
 
 describe("unhandled API errors (S26-02)", () => {

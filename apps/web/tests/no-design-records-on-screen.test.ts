@@ -51,7 +51,8 @@ describe("the console shows no ADR number nor story id", () => {
       }
     }
     expect(faults).toEqual([]);
-  });
+    // It parses every source of the console: 5 s by default was reached on CI once the assistants' screens came.
+  }, 30_000);
 
   it("in the setup procedures the console opens", () => {
     const faults = JSON.stringify(procedures).match(new RegExp(INTERNAL.source, "g")) ?? [];

@@ -41,6 +41,8 @@ MACHINE_ONLY_ROUTES: dict[str, str] = {
     "JSON-RPC; outside the contract",
     "/mcp/projects/{project}": "the MCP door narrowed to one project, for the same clients; outside the "
     "contract",
+    "/mcp/assistants/{assistant}": "one assistant installation as its own MCP connector (S63-11, "
+    "ADR 0139); outside the contract",
     "/.well-known/oauth-protected-resource": "the MCP door's protected-resource metadata, read by an MCP "
     "client before it asks for a token; outside the contract",
     "/a2a/orgs/{org}": "the A2A door (ADR 0078): another agent sends the organisation a task over "
@@ -61,6 +63,8 @@ MACHINE_ONLY_ROUTES: dict[str, str] = {
 #: Paths people reach without a client calling them, or that stay an API gesture on purpose.
 NOT_CALLED_BY_A_CLIENT: dict[str, str] = {
     "/auth/callback": "the identity provider's redirect after sign-in: the browser lands on it",
+    "/me/connected-accounts/callback": "the source's redirect after a person consented: the browser lands "
+    "on it, and the API sends it on to the console's /me/connected-accounts page (S63-18)",
     "/github/setup": "the GitHub App's Setup URL: GitHub redirects the browser there after an installation",
     "/remote-credentials/oauth/callback": "the provider's redirect after an administrator authorised a "
     "remote agent's credential",
