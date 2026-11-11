@@ -1,0 +1,7 @@
+# What builds the native CLI binary (S62-07, `tools/cli_binary/build.py`), pinned: a Nuitka release
+# changes what goes in the binary, so it moves through a reviewed bump, never on its own.
+nuitka==4.3.5
+# Onefile compression: without it the payload is stored uncompressed (about three times larger).
+zstandard==0.25.0
+# Nuitka rewrites the run-time paths of the bundled shared libraries with it, on Linux.
+patchelf==0.17.2.4 ; sys_platform == 'linux'

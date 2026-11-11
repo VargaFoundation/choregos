@@ -12,6 +12,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from . import __version__
 from .a2a import a2a_app
 from .client import ApiError, Client, NoOrganisationError, Profile
 from .knowledge import knowledge_app
@@ -49,6 +50,22 @@ app.add_typer(plugin_app, name="plugin")
 app.add_typer(a2a_app, name="a2a")
 
 console = Console()
+
+
+def _print_version(value: bool) -> None:
+    if value:
+        typer.echo(f"choregos {__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def _root(
+    version: Annotated[
+        bool,
+        typer.Option("--version", callback=_print_version, is_eager=True, help="Print the version and exit."),
+    ] = False,
+) -> None:
+    """Options of `choregos` itself, before any command."""
 
 
 class TransportSafeClient(Client):

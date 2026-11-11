@@ -88,6 +88,20 @@ plugins-check:  ## No network: the archives of plugins/offline/ are what plugins
 docs-cli:  ## Regenerate docs/cli.md from the CLI (to commit)
 	$(UV) run python tools/gen_cli_reference.py
 
+# The native CLI binary of this machine (S62-07, `tools/cli_binary/`): on Linux in the manylinux_2_28
+# image (docker), as the release builds it; elsewhere with this machine's compiler.
+CLI_BINARY_FLAGS ?= $(if $(filter Linux,$(shell uname -s)),--manylinux,)
+
+.PHONY: cli-binary
+cli-binary:  ## Build the native `choregos` binary of this machine into dist/cli/ (Nuitka)
+	python3 tools/cli_binary/build.py $(CLI_BINARY_FLAGS)
+
+.PHONY: cli-binary-smoke
+cli-binary-smoke:  ## Smoke-test it where no Python is available (Linux: also in debian:bookworm-slim)
+	python3 tools/cli_binary/smoke.py dist/cli/$$(python3 -c "import sys; sys.path.insert(0, 'tools/cli_binary'); import build; print(build.file_name(*build.host_target()))") \
+	  --expect-version $$(sed -n 's/^version = "\(.*\)"$$/\1/p' packages/cli/pyproject.toml) \
+	  $(if $(filter Linux,$(shell uname -s)),--container debian:bookworm-slim,)
+
 .PHONY: headroom-lock
 # certifi is exempt from the 14 days: 2026.10.19 removes root CAs with compromised keys
 # (GHSA-6q48-6c7w-9gw2, CRITICAL, #856), and Trivy refuses the image without it. The exemption

@@ -106,6 +106,12 @@ RUN set -eu; \
     echo "${sum}  /out/cosign" | sha256sum -c -; \
     chmod 0755 /out/cosign
 
+# The native `choregos` CLI binaries (S62-07), served by the instance (S62-08): EMPTY here. The release
+# replaces this stage with the signed binaries, their SHA256SUMS and manifest.json
+# (`--build-context cli=dist/cli`, `release.yml`); any other build (compose, CI) leaves it empty, and
+# the image then has no /opt/choregos/cli/ — the instance says no CLI is bundled in this build.
+FROM scratch AS cli
+
 # Base common to both targets (stage `commun`): nothing that decides what the container does.
 FROM python:3.12-slim-bookworm AS commun
 # `PIP_PYTHON`: the enterprise edition's image is built FROM this one and adds its wheel
@@ -146,6 +152,17 @@ COPY --from=cosign /out/cosign /usr/local/bin/cosign
 # SkillSpector (ADR 0095): the gate runs it on every version a person publishes.
 COPY --from=skillspector /opt/skillspector /opt/skillspector
 ENV CHOREGOS_SKILL_SCANNER=skillspector
+# The CLI binaries, when the build was given them (the `cli` stage above): read only, executable.
+# A mount rather than a `COPY --from=cli`: the directory exists only when there is something in it.
+USER root
+RUN --mount=type=bind,from=cli,target=/mnt/cli \
+    if [ -f /mnt/cli/manifest.json ]; then \
+      mkdir -p /opt/choregos/cli \
+      && cp /mnt/cli/* /opt/choregos/cli/ \
+      && chmod 0644 /opt/choregos/cli/* \
+      && find /opt/choregos/cli -name 'choregos-*' ! -name '*.json' -exec chmod 0755 {} +; \
+    fi
+USER 1000
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
   CMD python -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/healthz')"
