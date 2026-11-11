@@ -88,6 +88,8 @@ def _render(command: Any, path: list[str], output: list[str]) -> None:
             if command.help:
                 output.append(command.help.strip() + "\n")
         for sub_name in sorted(subcommands):
+            if getattr(subcommands[sub_name], "hidden", False):
+                continue  # not for people (`binary-info` is the binaries' smoke test's)
             _render(subcommands[sub_name], [*path, sub_name], output)
         return
     context = command.make_context(name, [], resilient_parsing=True)

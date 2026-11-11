@@ -87,6 +87,20 @@ def test_forbidden_modules_are_found_in_a_report(tmp_path: pathlib.Path) -> None
     assert build.forbidden_in(modules) == ["opentelemetry.trace"]
 
 
+def test_the_report_names_the_metadata_the_binary_carries(tmp_path: pathlib.Path) -> None:
+    report = tmp_path / "report.xml"
+    report.write_text(
+        '<nuitka-compilation-report><included_metadata name="choregos-cli" reason="user requested"/>'
+        '<included_metadata name="attrs" reason="static analysis"/></nuitka-compilation-report>',
+        encoding="utf-8",
+    )
+    assert build.bundled_metadata(report) == ["attrs", "choregos-cli"]
+    assert set(build.REQUIRED_METADATA) <= set(build.bundled_metadata(report))
+    for name in build.REQUIRED_METADATA:
+        command = build.nuitka_command(pathlib.Path("python"), tmp_path, "choregos-linux-x86_64", "0.25.3")
+        assert f"--include-distribution-metadata={name}" in command
+
+
 def test_the_linux_build_runs_in_the_manylinux_2_28_image(tmp_path: pathlib.Path) -> None:
     if build.shutil.which("docker") is None:
         pytest.skip("docker missing")
@@ -186,8 +200,58 @@ def test_the_budgets_are_enforced(
     binary.write_bytes(b"x" * 100)
     monkeypatch.setattr(smoke, "timings", lambda runner, version: (0.2, warm))
     monkeypatch.setattr(smoke, "functional_checks", lambda runner, version: None)
+    monkeypatch.setattr(smoke, "self_knowledge_checks", lambda runner, version: [])
     with pytest.raises(smoke.SmokeError, match=failure):
         smoke.smoke(binary, "0.25.3", max_size_mb=max_size_mb, max_warm_start_s=2.0)
     monkeypatch.setattr(smoke, "timings", lambda runner, version: (0.2, 0.1))
     report = smoke.smoke(binary, "0.25.3", max_size_mb=40.0, max_warm_start_s=2.0)
     assert report["size_bytes"] == 100 and report["warm_start_s"] == 0.1
+
+
+def _info(**overrides: object) -> str:
+    info = {
+        "version": "0.25.3",
+        "metadata_version": "0.25.3",
+        "compiled": True,
+        "argv0": "choregos",
+        "running_binary": None,
+        "detector": "choregos_cli.binary_info",
+    }
+    info.update(overrides)
+    return json.dumps(info)
+
+
+@pytest.mark.parametrize(
+    ("overrides", "failure"),
+    [
+        ({}, None),
+        ({"compiled": False}, "not a Nuitka build"),
+        ({"metadata_version": None, "version": "0.0.0+unknown"}, "left the distribution metadata out"),
+        ({"version": "0.25.3-hard-coded"}, "does not come from the metadata"),
+        ({"running_binary": "/tmp/elsewhere/choregos"}, "the running binary resolves to"),
+    ],
+)
+def test_the_binary_must_know_its_version_and_its_path(
+    tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch, overrides: dict[str, object], failure: str | None
+) -> None:
+    """What S62-08's version check and `self update` rely on, read from `choregos binary-info`."""
+    binary = tmp_path / "choregos-linux-x86_64"
+    binary.write_bytes(b"x")
+    runner = smoke.Runner(binary, tmp_path, {"PATH": str(tmp_path)})
+    real = os.path.normcase(str(binary.resolve()))
+    answer = _info(**{"running_binary": real, **overrides})
+    monkeypatch.setattr(runner, "run", lambda *args, by_name=False: smoke.Result(0, answer, "", 0.1))
+    if failure is None:
+        assert len(smoke.self_knowledge_checks(runner, "0.25.3")) == 2
+    else:
+        with pytest.raises(smoke.SmokeError, match=failure):
+            smoke.self_knowledge_checks(runner, "0.25.3")
+
+
+def test_binary_info_from_python_packages_says_so() -> None:
+    """Outside a binary the hidden command reports no running binary: `self update` refuses there."""
+    from choregos_cli.binary_info import info
+
+    found = info()
+    assert found["compiled"] is False and found["running_binary"] is None
+    assert found["version"] == found["metadata_version"] == build.cli_version()

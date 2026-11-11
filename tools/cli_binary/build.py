@@ -221,6 +221,17 @@ def bundled_modules(report: pathlib.Path) -> list[str]:
     return sorted({node.attrib["name"] for node in tree.iter("module") if "name" in node.attrib})
 
 
+#: Distributions whose metadata the binary must carry: `choregos --version`, the version check
+#: against the instance and `choregos self update` (S62-08) read `choregos-cli`'s.
+REQUIRED_METADATA = ("choregos-cli",)
+
+
+def bundled_metadata(report: pathlib.Path) -> list[str]:
+    """The distributions whose metadata Nuitka's report says it put in the binary."""
+    tree = ET.parse(report)  # noqa: S314 - our own build's report
+    return sorted({node.attrib["name"] for node in tree.iter("included_metadata") if "name" in node.attrib})
+
+
 def forbidden_in(modules: list[str]) -> list[str]:
     return [m for m in modules if any(m == f or m.startswith(f + ".") for f in FORBIDDEN_MODULES)]
 
@@ -240,6 +251,9 @@ def build(out: pathlib.Path, python: str) -> pathlib.Path:
     leaked = forbidden_in(modules)
     if leaked:
         raise SystemExit(f"modules the CLI must not carry are in the binary: {leaked}")
+    missing = sorted(set(REQUIRED_METADATA) - set(bundled_metadata(work / "report.xml")))
+    if missing:
+        raise SystemExit(f"the binary lacks the distribution metadata of {missing}")
     out.mkdir(parents=True, exist_ok=True)
     target = out / name
     shutil.copy2(work / "nuitka" / name, target)

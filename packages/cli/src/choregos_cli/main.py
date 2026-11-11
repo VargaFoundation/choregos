@@ -14,6 +14,7 @@ from rich.table import Table
 
 from . import __version__
 from .a2a import a2a_app
+from .binary_info import binary_info
 from .client import ApiError, Client, NoOrganisationError, Profile
 from .knowledge import knowledge_app
 from .plugins import plugin_app
@@ -48,6 +49,8 @@ app.add_typer(dev_app, name="dev")
 app.add_typer(knowledge_app, name="knowledge")
 app.add_typer(plugin_app, name="plugin")
 app.add_typer(a2a_app, name="a2a")
+# Hidden: the native binaries' smoke test asks the binary what it knows about itself (S62-07).
+app.command("binary-info", hidden=True)(binary_info)
 
 console = Console()
 

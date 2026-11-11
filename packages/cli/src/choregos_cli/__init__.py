@@ -3,16 +3,16 @@
 
 from __future__ import annotations
 
-from importlib.metadata import PackageNotFoundError, version
+from importlib import metadata as _metadata
 
 from .client import ApiError, Client, Profile
 
+#: Read from the installed package's metadata, as the API does: the constant said `0.1.0` while the
+#: package was at 0.25.3, and the version check against the instance (S62-08) compares this one.
+#: A native binary (S62-07) carries the metadata of the `choregos-cli` distribution.
 try:
-    #: The release's version, read from the installed distribution: `tools/bump_version.py` sets it
-    #: in `pyproject.toml`, and the native binary carries the distribution's metadata (S62-07).
-    #: It said `0.1.0` whatever the release, in the `User-Agent` of every A2A call.
-    __version__ = version("choregos-cli")
-except PackageNotFoundError:  # a source tree on `sys.path`, never installed
-    __version__ = "0+unknown"
+    __version__ = _metadata.version("choregos-cli")
+except _metadata.PackageNotFoundError:  # tree not installed
+    __version__ = "0.0.0+unknown"
 
-__all__ = ["ApiError", "Client", "Profile", "__version__"]
+__all__ = ["ApiError", "Client", "Profile"]

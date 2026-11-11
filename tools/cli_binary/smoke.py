@@ -20,7 +20,9 @@ start-up stays under budget (a cold start unpacks the binary, a warm one reuses 
 is enforced, the cold one is printed); `workflow templates` lists the core's templates (the data
 files are inside); `workflow validate` passes a shipped template and fails a broken workflow and an
 unreadable YAML with exit code 1; `a2a skills` prints the skills of the fake door's card and its
-fields, and a refused token exits 1. Any failure exits 1: the release and the CI stop there.
+fields, and a refused token exits 1; `binary-info` (hidden), called by path and by bare name on the
+PATH, says its version comes from the `choregos-cli` metadata and the executable `self update`
+(S62-08) would replace is the binary's real path. Any failure exits 1: the release and the CI stop there.
 
 The budgets. Measured on the first builds (Linux x86_64, 2026-11-11, a 24-core machine): 24.8 MB,
 `--version` in 0.69 s warm and cold alike; the CPython import of the CLI alone takes 0.30 s, the
@@ -244,14 +246,36 @@ class Runner:
     container: str | None = None
     log: list[str] = field(default_factory=list)
 
-    def command(self, args: list[str]) -> list[str]:
+    #: Where the container sees the binary; its directory is on the container's PATH.
+    INSIDE = "/opt/choregos/choregos"
+
+    def expected_path(self) -> str:
+        """The executable `self update` must find: the binary's real path, wherever it was called from."""
+        return self.INSIDE if self.container else os.path.normcase(str(self.binary.resolve()))
+
+    def command(self, args: list[str], *, by_name: bool = False) -> list[str]:
+        """The binary by its path, or by its bare name found on the PATH (as a shell calls it)."""
         if self.container is None:
-            return [str(self.binary), *args]
+            if not by_name:
+                return [str(self.binary), *args]
+            if os.name == "nt":  # CreateProcess searches the parent's PATH: let cmd find it on the child's
+                return [
+                    str(pathlib.Path(self.env["SYSTEMROOT"]) / "System32" / "cmd.exe"),
+                    "/d",
+                    "/c",
+                    self.binary.name,
+                    *args,
+                ]
+            return [self.binary.name, *args]
         docker = shutil.which("docker") or "docker"
         inside = {**self.env, "HOME": "/smoke/home", "CHOREGOS_CONFIG": "/smoke/no-profile/config.json"}
         inside["CHOREGOS_API_URL"] = self.env["CHOREGOS_API_URL"].replace("127.0.0.1", "host.docker.internal")
         inside.update(
-            {"PATH": "/usr/sbin:/usr/bin:/sbin:/bin", "PYTHONHOME": "/nowhere", "PYTHONPATH": "/nowhere"}
+            {
+                "PATH": "/opt/choregos:/usr/sbin:/usr/bin:/sbin:/bin",
+                "PYTHONHOME": "/nowhere",
+                "PYTHONPATH": "/nowhere",
+            }
         )
         user = [f"--user={os.getuid()}:{os.getgid()}"] if hasattr(os, "getuid") else []
         return [
@@ -260,21 +284,24 @@ class Runner:
             "--rm",
             "--add-host=host.docker.internal:host-gateway",
             *user,
-            f"--volume={self.binary.resolve()}:/opt/choregos/choregos:ro",
+            f"--volume={self.binary.resolve()}:{self.INSIDE}:ro",
             f"--volume={self.work}:/smoke",
             "--workdir=/smoke",
             *[f"--env={key}={value}" for key, value in sorted(inside.items())],
             self.container,
-            "/opt/choregos/choregos",
+            "choregos" if by_name else self.INSIDE,
             *args,
         ]
 
-    def run(self, *args: str) -> Result:
+    def run(self, *args: str, by_name: bool = False) -> Result:
+        env = self.env
+        if by_name and self.container is None:
+            env = {**self.env, "PATH": os.pathsep.join([str(self.binary.resolve().parent), self.env["PATH"]])}
         started = time.perf_counter()
         completed = subprocess.run(  # noqa: S603 - the binary under test, or docker
-            self.command(list(args)),
+            self.command(list(args), by_name=by_name),
             cwd=self.work,
-            env=self.env if self.container is None else None,
+            env=env if self.container is None else None,
             capture_output=True,
             timeout=300,
             check=False,
@@ -286,7 +313,8 @@ class Runner:
             completed.stderr.decode("utf-8", "replace"),
             seconds,
         )
-        self.log.append(f"$ choregos {' '.join(args)}  -> exit {result.code} in {seconds:.2f} s")
+        how = " (by name, on the PATH)" if by_name else ""
+        self.log.append(f"$ choregos {' '.join(args)}{how}  -> exit {result.code} in {seconds:.2f} s")
         return result
 
 
@@ -337,6 +365,43 @@ def functional_checks(runner: Runner, version: str) -> None:
     del runner.env["CHOREGOS_A2A_TOKEN"]
 
 
+def self_knowledge_checks(runner: Runner, version: str) -> list[dict[str, Any]]:
+    """What S62-08 relies on, asked of the binary itself (`choregos binary-info`, hidden).
+
+    The version comes from the `choregos-cli` distribution metadata the build embeds — not from a
+    string written in the code — and is the release's; the executable `self update` would replace
+    is the binary's real path, whether it was called by its path or by its bare name on the PATH.
+    """
+    seen = []
+    for by_name in (False, True):
+        result = runner.run("binary-info", by_name=by_name)
+        what = "binary-info" + (" (by name)" if by_name else "")
+        expect(result, 0, what=what)
+        try:
+            info = json.loads(result.out)
+        except ValueError as exc:
+            raise SmokeError(f"{what}: not JSON\n{result.text}") from exc
+        if not info.get("compiled"):
+            raise SmokeError(
+                f"{what}: `__compiled__` is not defined: this is not a Nuitka build\n{result.out}"
+            )
+        if info.get("metadata_version") != version:
+            raise SmokeError(
+                f"{what}: the choregos-cli metadata says {info.get('metadata_version')!r}, expected "
+                f"{version!r}: the build left the distribution metadata out\n{result.out}"
+            )
+        if info.get("version") != info["metadata_version"]:
+            raise SmokeError(f"{what}: `--version` does not come from the metadata\n{result.out}")
+        found = os.path.normcase(info.get("running_binary") or "")
+        if found != runner.expected_path():
+            raise SmokeError(
+                f"{what}: the running binary resolves to {found!r}, "
+                f"not {runner.expected_path()!r}\n{result.out}"
+            )
+        seen.append(info)
+    return seen
+
+
 def timings(runner: Runner, version: str, warm_runs: int = 5) -> tuple[float, float]:
     """(cold, warm median) seconds of `--version`: the first call unpacks, the next ones reuse."""
     cold = runner.run("--version")
@@ -375,12 +440,15 @@ def smoke(
         write_inputs(work)
         runner = Runner(binary, work, bare_environment(work, f"http://127.0.0.1:{port}"))
         no_python_on(runner.env["PATH"])
+        no_python_on(str(binary.resolve().parent))  # on the PATH when the binary is called by name
         cold, warm = timings(runner, version)
         functional_checks(runner, version)
+        self_knowledge = self_knowledge_checks(runner, version)
         if container:
             container_has_no_python(container)
             in_container = Runner(binary, work, dict(runner.env), container=container)
             functional_checks(in_container, version)
+            self_knowledge += self_knowledge_checks(in_container, version)
             runner.log += [f"[{container}] {line}" for line in in_container.log]
     report = {
         "binary": binary.name,
@@ -391,6 +459,7 @@ def smoke(
         "warm_start_s": round(warm, 3),
         "budget": {"size_mb": max_size_mb, "warm_start_s": max_warm_start_s},
         "container": container,
+        "binary_info": self_knowledge,
         "log": runner.log,
     }
     if size / 1_000_000 > max_size_mb:
