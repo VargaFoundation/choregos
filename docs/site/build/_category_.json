@@ -1,0 +1,8 @@
+{
+  "label": "Build agents",
+  "position": 5,
+  "link": {
+    "type": "generated-index",
+    "description": "Write what agents carry: skills, agents of every kind, plugins and tools."
+  }
+}

@@ -119,6 +119,7 @@ async def test_cancel_task_stops_the_work_item(client: AsyncClient, project: dic
     task = (await _send_v1(client, token))["result"]["task"]
     answer = (await _call(client, token, "CancelTask", {"id": task["id"]})).json()
     assert answer["result"]["id"] == task["id"], answer
+    assert answer["result"]["status"]["state"] == "TASK_STATE_CANCELED", answer
     controls = [s[2] for s in get_temporal().signals if s[1] == "control"]  # type: ignore[attr-defined]
     assert [c["action"] for c in controls] == ["stop"]
 

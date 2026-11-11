@@ -40,6 +40,7 @@ until then, upgrading is the fix.
 | Secrets never enter git: gitleaks is a gate on every pull request | `ci.yml` job `secrets` |
 | Organisations are isolated by fail-closed PostgreSQL RLS, audit included | migrations `b2d4f6a8c0e1`, `c3e5a7f9b1d4`, `db/session.py` |
 | Secrets rotate on the schedule in `docs/runbooks/secret-rotation.md` | that runbook |
+| A run that ended stays ended: the orchestrator closes the row before it asks the executor to cancel, and a closed run's API refuses everything but its journals (ADR 0143) | `choregos_core/run_closure.py`, `activities/execution.py`, `deps.py` (`OpenRunAuth`), `apps/api/tests/test_run_closed.py`, `apps/orchestrator/tests/test_run_closed_when_the_wait_ends.py` |
 
 ## What we do **not** guarantee, stated rather than discovered
 
@@ -55,7 +56,15 @@ until then, upgrading is the fix.
 - **Platform administration is over-broad**: `Principal.is_platform_admin()` is true for any
   `org_admin` of any organisation. Harmless on a single-organisation install; a tenant crossing
   from the second one on. Tracked in `docs/plan/BLOCKERS.md`.
-- **A run token cannot be revoked** before it expires (`max_minutes + 15`).
+- **A run token cannot be revoked** before it expires (`max_minutes + 15`). What it opens ends with
+  the run instead (ADR 0143): once a run is closed — its result is recorded, or the orchestrator
+  stopped waiting for it — its token still appends to the run's two journals (`events`,
+  `network/decisions`) and gets the idempotent answer of `POST …/result`, which changes nothing;
+  every other route of the run's API answers 409 `run_closed`. Closing a run does not reach what
+  was minted before: the run's git token lives its hour (`contents: write` on the run's repository),
+  the egress proxy serves the network it cached for up to a minute, and a tunnel already open stays
+  open. The running run of an interpreter that died is not closed (a restart awaits it again), and a
+  Temporal termination closes nothing.
 - **Audit is not tamper-evident**, and its retention is documented in a runbook but applied by
   no code.
 
