@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 from httpx import ASGITransport, AsyncClient
 
 from .conftest import login
@@ -236,24 +237,29 @@ async def test_a_result_posted_between_the_read_and_the_write_wins(
     assert _cancellations() == {}
 
 
+@pytest.mark.parametrize(
+    ("stored", "sql_null"),
+    [pytest.param("NULL", True, id="sql-null"), pytest.param("'null'", False, id="json-null")],
+)
 async def test_a_resumed_run_whose_result_was_reset_can_be_stopped(
-    client: AsyncClient, project: dict[str, Any]
+    client: AsyncClient, project: dict[str, Any], stored: str, sql_null: bool
 ) -> None:
-    """A run resumed after a person's answer has its result reset to JSON `null`, not SQL `NULL`
-    (`activities/suspension.py`): it has no result, and the stop's condition says so."""
-    from choregos_api.db.models import Run
+    """A run resumed after a person's answer has its result reset (`activities/suspension.py`). The
+    ORM writes that `None` as SQL `NULL` or as the JSON `null`, depending on the database: both mean
+    "no result", and the stop's condition reads both so. Each is written here in SQL, so each case
+    exists on SQLite and on PostgreSQL alike (`'null'` is a `jsonb` null there, a text one here)."""
     from choregos_api.db.session import session_scope
     from sqlalchemy import text
 
     item = await _item(client, project)
-    run_id = await _run(item, "run-stop-resumed", result=DONE)
+    run_id = await _run(item, f"run-stop-reset-{'sql' if sql_null else 'json'}", result=DONE)
     async with session_scope() as session:
-        run = await session.get(Run, run_id)
-        assert run is not None
-        run.result = None
+        await session.execute(text(f"UPDATE runs SET result = {stored} WHERE id = :id"), {"id": run_id})
     async with session_scope() as session:
-        raw = (await session.execute(text("SELECT result FROM runs WHERE id = :id"), {"id": run_id})).scalar()
-    assert raw == "null", f"the case this proves: a JSON null, not a SQL NULL ({raw!r})"
+        is_null = (
+            await session.execute(text("SELECT result IS NULL FROM runs WHERE id = :id"), {"id": run_id})
+        ).scalar()
+    assert bool(is_null) is sql_null, f"the case this proves: SQL NULL {sql_null}, read {is_null!r}"
 
     stopped = await client.post(f"/api/v1/runs/{run_id}/cancel", json={"reason": "enough"})
 
