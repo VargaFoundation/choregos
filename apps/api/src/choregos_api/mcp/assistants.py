@@ -45,6 +45,7 @@ from ..logging import get_logger
 from ..rbac import Permission
 from ..services import assistants as installations
 from ..services.assistant_access import holds
+from ..services.conversation_signals import signals_of
 from ..services.conversations import TURN_KEY_TTL_S, converse, open_conversation
 
 if TYPE_CHECKING:
@@ -120,17 +121,22 @@ _OUTCOMES: dict[str, Outcome] = {}
 
 
 def _answer(
-    conversation_id: str, status: str, text: str, pending: list[dict[str, Any]] | None = None
+    conversation_id: str,
+    status: str,
+    text: str,
+    pending: list[dict[str, Any]] | None = None,
+    signals: tuple[list[dict[str, Any]], list[dict[str, Any]]] | None = None,
 ) -> dict[str, Any]:
-    """The door's answer. The three lists are empty until their sources exist: citations, the proposals of
-    S63-05 and the accounts S63-07's exchange asks the person to connect."""
+    """The door's answer. `citations` are what the knowledge tools returned in the turn, `pending_actions`
+    the proposals of the inline writes, `missing_accounts` the `account_not_connected` of the turn's tools."""
+    citations, accounts = signals or ([], [])
     return {
         "conversation_id": conversation_id,
         "status": status,
         "text": text,
-        "citations": [],
+        "citations": citations,
         "pending_actions": pending or [],
-        "missing_accounts": [],
+        "missing_accounts": accounts,
     }
 
 
@@ -242,16 +248,17 @@ async def _pending(ctx: Context, conversation_id: str) -> list[dict[str, Any]]:
 
 async def _read(ctx: Context, record: AgentSessionRecord) -> dict[str, Any]:
     pending = await _pending(ctx, record.id)
+    signals = await signals_of(ctx.session, record.id)
     if (task := _TURNS.get(record.id)) is not None and not task.done():
-        return _answer(record.id, WORKING, "", pending)
+        return _answer(record.id, WORKING, "", pending, signals)
     if (kept := _OUTCOMES.get(record.id)) is not None:
-        return _answer(record.id, kept.status, kept.text, pending)
+        return _answer(record.id, kept.status, kept.text, pending, signals)
     if await _turn_in_flight(ctx, record):
-        return _answer(record.id, WORKING, "", pending)
+        return _answer(record.id, WORKING, "", pending, signals)
     said = _last_answer(record)
     if said is None and record.turns:
-        return _answer(record.id, FAILED, "the last turn left no answer", pending)
-    return _answer(record.id, COMPLETED, said or "", pending)
+        return _answer(record.id, FAILED, "the last turn left no answer", pending, signals)
+    return _answer(record.id, COMPLETED, said or "", pending, signals)
 
 
 # -- tools -----------------------------------------------------------------------------------------------
@@ -309,10 +316,11 @@ async def _ask(ctx: Context, door: Door, arguments: dict[str, Any]) -> tuple[str
     await asyncio.wait({task}, timeout=get_settings().mcp_assistant_wait_s)
     outcome = task.result() if task.done() else None
     pending = await _pending(ctx, conversation_id)
+    signals = await signals_of(ctx.session, conversation_id)
     answer = (
-        _answer(conversation_id, outcome.status, outcome.text, pending)
+        _answer(conversation_id, outcome.status, outcome.text, pending, signals)
         if outcome is not None
-        else _answer(conversation_id, WORKING, "", pending)
+        else _answer(conversation_id, WORKING, "", pending, signals)
     )
     return _spoken(answer), answer
 

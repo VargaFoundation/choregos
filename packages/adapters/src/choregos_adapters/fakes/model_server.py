@@ -26,6 +26,21 @@ class FakeModelServer:
     #: (headers, body) of every request received, headers lower-cased.
     requests: list[tuple[dict[str, str], dict[str, Any]]] = field(default_factory=list)
     usage: dict[str, int] = field(default_factory=lambda: {"prompt_tokens": 10, "completion_tokens": 5})
+    #: Replies to requests that name a purpose (`metadata.purpose`), by purpose (`say_for`). Such a
+    #: request never takes a step of `script`: a side request does not eat the turns' scripted answers.
+    purposes: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    #: (headers, body) of the requests that named a purpose, kept out of `requests`.
+    side_requests: list[tuple[dict[str, str], dict[str, Any]]] = field(default_factory=list)
+
+    def say_for(self, purpose: str, text: str | None, *, status: int | None = None) -> FakeModelServer:
+        """The next reply to a request of `purpose`: `text`, or with `status` a refusal."""
+        step: dict[str, Any] = (
+            {"status": status, "body": {"error": {"message": text or ""}}}
+            if status
+            else {"message": {"role": "assistant", "content": text}}
+        )
+        self.purposes.setdefault(purpose, []).append(step)
+        return self
 
     def say(self, text: str) -> FakeModelServer:
         self.script.append({"message": {"role": "assistant", "content": text}})
@@ -66,14 +81,15 @@ class FakeModelServer:
     def answer(self, request: httpx.Request) -> httpx.Response:
         headers = {k.lower(): v for k, v in request.headers.items()}
         body = json.loads(request.content or b"{}")
-        self.requests.append((headers, body))
+        purpose = (body.get("metadata") or {}).get("purpose")
+        # A side request is recorded apart: `requests` stays the turns' own calls.
+        (self.side_requests if purpose else self.requests).append((headers, body))
         if not request.url.path.endswith("/chat/completions"):
             return httpx.Response(404, json={"error": {"message": f"no route {request.url.path}"}})
         if self.key and headers.get("authorization") != f"Bearer {self.key}":
             return httpx.Response(401, json={"error": {"message": "invalid key", "type": "auth_error"}})
-        step: dict[str, Any] = (
-            self.script.pop(0) if self.script else {"message": {"role": "assistant", "content": ""}}
-        )
+        queue = self.purposes.setdefault(str(purpose), []) if purpose else self.script
+        step: dict[str, Any] = queue.pop(0) if queue else {"message": {"role": "assistant", "content": ""}}
         if "status" in step:
             return httpx.Response(step["status"], json=step["body"])
         if body.get("stream"):
@@ -81,7 +97,7 @@ class FakeModelServer:
         return httpx.Response(
             200,
             json={
-                "id": f"chatcmpl-{len(self.requests)}",
+                "id": f"chatcmpl-{len(self.requests) + len(self.side_requests)}",
                 "object": "chat.completion",
                 "model": body.get("model", ""),
                 "choices": [{"index": 0, "message": step["message"], "finish_reason": "stop"}],
@@ -91,7 +107,7 @@ class FakeModelServer:
 
     def _stream(self, step: dict[str, Any], body: dict[str, Any]) -> httpx.Response:
         """The step as `chat.completion.chunk` server-sent events, ending with usage and `[DONE]`."""
-        ident, model = f"chatcmpl-{len(self.requests)}", body.get("model", "")
+        ident, model = f"chatcmpl-{len(self.requests) + len(self.side_requests)}", body.get("model", "")
 
         def event(payload: dict[str, Any]) -> str:
             base = {"id": ident, "object": "chat.completion.chunk", "model": model}

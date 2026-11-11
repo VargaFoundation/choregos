@@ -93,6 +93,61 @@ def _slow(upstream: Upstream, delay: float) -> None:  # noqa: F811
     set_model_transport(httpx.MockTransport(handler))
 
 
+async def _installation_knowledge() -> str:
+    """A base of the investment assistant's installation with one document; returns the document's id."""
+    from choregos_api.db.models import AssistantInstallation, KnowledgeBase, KnowledgeDocument
+    from choregos_api.db.session import session_scope
+    from choregos_api.knowledge.index import index_document
+    from sqlalchemy import select
+
+    async with session_scope(orgs="*") as session:
+        installation = (await session.execute(select(AssistantInstallation))).scalar_one()
+        base = KnowledgeBase(
+            org_id=installation.org_id, slug="policy", name="policy", scope="org", serving_mode="index",
+            installation_id=installation.id,
+        )  # fmt: skip
+        session.add(base)
+        await session.flush()
+        document = KnowledgeDocument(
+            org_id=installation.org_id, knowledge_base_id=base.id, filename="risk.md", title="RISK POLICY",
+            mime="text/markdown", size_bytes=1, digest="sha256:risk", status="ready", source_version="v3",
+            markdown="# Risk\n\n## Limits\n\nNo single instrument may exceed ten percent of a portfolio.\n",
+        )  # fmt: skip
+        session.add(document)
+        await session.flush()
+        document_id = document.id
+    assert await index_document("varga", document_id) > 0
+    return str(document_id)
+
+
+async def test_the_answer_cites_the_knowledge_the_turn_read_and_a_turn_without_any_cites_nothing(
+    client: AsyncClient,
+    installed: str,
+    upstream: Upstream,  # noqa: F811
+) -> None:
+    document_id = await _installation_knowledge()
+    upstream.model.call("knowledge_search", {"base": "policy", "query": "limit per instrument"}).say(
+        "At most ten percent [RISK POLICY, v3]."
+    )
+    upstream.model.say("Nothing to look up.")
+    asked = {"assistant": "varga:investment-assistant", "message": "What is the limit per instrument?"}
+    first = await _call(client, installed, "ask_assistant", asked)
+    assert first["status"] == "completed", first
+    assert first["citations"] == [
+        {"document_id": document_id, "title": "RISK POLICY", "version": "v3", "base": "policy"}
+    ]
+    again = await _call(client, installed, "get_conversation", {"conversation_id": first["conversation_id"]})
+    assert again["citations"] == first["citations"], "read back from the journal, by any process"
+    # The next turn cites what IT read: none.
+    second = await _call(
+        client,
+        installed,
+        "ask_assistant",
+        {**asked, "message": "Thanks", "conversation_id": first["conversation_id"]},
+    )
+    assert second["status"] == "completed" and second["citations"] == []
+
+
 # ───────────────────────── the door's tools ─────────────────────────
 
 

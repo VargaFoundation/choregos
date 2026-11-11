@@ -23,11 +23,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import func, select
+from choregos_core import utcnow
+from sqlalchemy import func, literal, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import get_settings
-from ..db.models import AssistantInstallation, CostLedger
+from ..db.models import AgentSessionRecord, AssistantInstallation, CostLedger, GatewayKeyRow
 from ..rbac import Permission, Principal
 from .budgets import start_of_month
 
@@ -64,6 +65,23 @@ def caps_of(document: dict[str, Any] | None, row: AssistantInstallation) -> dict
     return caps
 
 
+CONVERSATION_KEYS = ("max_turns", "retention_days", "idle_close_minutes")
+
+
+def conversation_policy(document: dict[str, Any] | None, row: AssistantInstallation) -> dict[str, int]:
+    """The limits of a conversation in force: the manifest's `policy.conversation`, then the installation's
+    `policy_overrides.conversation` on top. A value that is not a positive integer is ignored."""
+    declared = ((document or {}).get("policy") or {}).get("conversation") or {}
+    overrides = (row.policy_overrides or {}).get("conversation") or {}
+    found: dict[str, int] = {}
+    for key in CONVERSATION_KEYS:
+        for source in (declared, overrides):
+            value = source.get(key) if isinstance(source, dict) else None
+            if isinstance(value, int) and not isinstance(value, bool) and value >= 1:
+                found[key] = value
+    return found
+
+
 async def month_spend(session: AsyncSession, installation_id: str, user_id: str | None = None) -> float:
     """What the conversations of the installation cost since the first of the month, from the ledger lines
     that name it (they outlive a deleted conversation), the person's alone when `user_id` is given."""
@@ -72,6 +90,29 @@ async def month_spend(session: AsyncSession, installation_id: str, user_id: str 
     )
     if user_id is not None:
         query = query.where(CostLedger.user_id == user_id)
+    return float((await session.execute(query)).scalar_one())
+
+
+async def open_turn_reservations(
+    session: AsyncSession, installation_id: str, user_id: str | None = None
+) -> float:
+    """What the turns running now reserved on their keys (not yet in the ledger), for the installation, or
+    the person's alone: a month cap counts them, or two turns in flight would each see the whole month."""
+    query = (
+        select(func.coalesce(func.sum(GatewayKeyRow.budget_usd), 0.0))
+        .select_from(GatewayKeyRow)
+        .join(
+            AgentSessionRecord,
+            GatewayKeyRow.run_id.like(literal("turn:") + AgentSessionRecord.id + literal(":%")),
+        )
+        .where(
+            AgentSessionRecord.installation_id == installation_id,
+            GatewayKeyRow.revoked.is_(False),
+            GatewayKeyRow.expires_at > utcnow(),
+        )
+    )
+    if user_id is not None:
+        query = query.where(AgentSessionRecord.user_id == user_id)
     return float((await session.execute(query)).scalar_one())
 
 
@@ -86,11 +127,15 @@ async def turn_caps(
     if "per_conversation_usd" in caps:
         left["assistant_conversation"] = caps["per_conversation_usd"] - conversation_spent
     if "per_user_month_usd" in caps:
-        left["assistant_user_month"] = caps["per_user_month_usd"] - await month_spend(
-            session, row.id, user_id
+        left["assistant_user_month"] = (
+            caps["per_user_month_usd"]
+            - await month_spend(session, row.id, user_id)
+            - await open_turn_reservations(session, row.id, user_id)
         )
     if "per_installation_month_usd" in caps:
-        left["assistant_installation_month"] = caps["per_installation_month_usd"] - await month_spend(
-            session, row.id
+        left["assistant_installation_month"] = (
+            caps["per_installation_month_usd"]
+            - await month_spend(session, row.id)
+            - await open_turn_reservations(session, row.id)
         )
     return left

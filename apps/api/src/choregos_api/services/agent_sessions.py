@@ -858,6 +858,13 @@ async def _book_the_tool_call(  # noqa: PLR0913 - one call, fact by fact
         **(acting or Acting(SERVICE)).audit(tool.connector.name),
     )
     flagged = [s.to_dict() for s in found]
+    if code == 422 and isinstance(body, dict) and body.get("connect_url"):
+        # What the MCP door reports as `missing_accounts`: the need, and where the person connects it.
+        from .connected_accounts import NOT_CONNECTED
+        from .conversation_signals import note_missing_account
+
+        if body.get("type") == NOT_CONNECTED:
+            await note_missing_account(session, record, tool.name.split("__", 1)[0], str(body["connect_url"]))
     if answered < 400 and record.installation_id:
         # The one place a conversation's tool results are booked: a resolver need's `subject` is recorded.
         from .assistant_memory import note_resolved_subjects

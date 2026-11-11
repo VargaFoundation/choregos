@@ -110,10 +110,16 @@ def _pick(bases: list[KnowledgeBase], name: Any) -> list[KnowledgeBase] | None:
 
 
 async def serve(
-    session: AsyncSession, bases: list[KnowledgeBase], name: str, arguments: dict[str, Any]
+    session: AsyncSession,
+    bases: list[KnowledgeBase],
+    name: str,
+    arguments: dict[str, Any],
+    cited: list[dict[str, str]] | None = None,
 ) -> str:
     """The text the model reads for one call. A base outside `bases` is the same as one that does not
-    exist: only `bases` is ever searched or read."""
+    exist: only `bases` is ever searched or read. What the call returned is added to `cited` (document id,
+    title, version, base) for the MCP door's `citations`."""
+    cited = cited if cited is not None else []
     chosen = _pick(bases, arguments.get("base"))
     if chosen is None:
         offered = ", ".join(b.slug for b in bases)
@@ -128,6 +134,15 @@ async def serve(
         )
         if not result.hits:
             return "no passage found: the knowledge does not answer this"
+        for hit in result.hits:
+            cited.append(
+                {
+                    "document_id": hit.document_id,
+                    "title": hit.document,
+                    "version": await _version(session, hit.document_id),
+                    "base": hit.knowledge_base,
+                }
+            )
         passages = [
             _framed(
                 hit.excerpt,
@@ -146,6 +161,14 @@ async def serve(
     document = await _document(session, chosen, str(arguments.get("document_id") or ""))
     if document is None:
         return "no such document in this knowledge base"
+    cited.append(
+        {
+            "document_id": document.id,
+            "title": document.title,
+            "version": version_of(document),
+            "base": next((b.slug for b in chosen if b.id == document.knowledge_base_id), ""),
+        }
+    )
     return _framed(
         (document.markdown or "")[:DOCUMENT_CHARS],
         document_id=document.id,
