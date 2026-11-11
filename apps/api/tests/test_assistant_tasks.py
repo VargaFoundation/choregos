@@ -39,6 +39,7 @@ from .kits.assistant_install import (
     _member,
     _plugin,
 )
+from .test_agent_sessions import Upstream, upstream  # noqa: F401
 
 AUDIENCE = "investors"
 ME = "/api/v1/me"
@@ -712,3 +713,82 @@ async def test_a_conversation_is_offered_run_task_which_starts_the_task_as_the_p
     task = item.documents["task"]
     assert task["trigger"] == "on_demand" and task["delegation_id"] is None, "no delegation under a tool"
     assert task["task"] == "delegated_brief"
+
+
+# ───────────────────────── the loop, the poll's journal (F2) ─────────────────────────
+
+
+async def test_run_task_is_called_by_the_model_in_a_turn_and_starts_the_task_as_the_person(
+    client: AsyncClient,
+    org: str,
+    app: Any,
+    offline: Path,
+    markets: Any,
+    upstream: Upstream,  # noqa: F811
+) -> None:
+    """A scripted model calls `run_task` in a full turn of `POST .../messages`: the tool is offered to the
+    model, the work item opens in the person's space with the person as initiator, no delegation."""
+    await _ready(client)
+    mine = await _subscriber(client, app, "mine@varga.dev")
+    await _subscriber(client, app, "other@varga.dev")
+    opened = await mine.post(f"{ME}/assistants/varga/investment-assistant/conversations", json={})
+    assert opened.status_code == 201, opened.text
+    conversation = opened.json()["id"]
+    upstream.model.call("run_task", {"task": "morning_brief"}).say("Your brief is on its way.")
+    said = await mine.post(f"{ME}/conversations/{conversation}/messages", json={"input": "Brief me."})
+    assert said.status_code == 200, said.text
+
+    (_, first) = upstream.model.requests[0]
+    assert "run_task" in {t["function"]["name"] for t in first["tools"]}
+    (_, last) = upstream.model.requests[-1]
+    told = [m["content"] for m in last["messages"] if m["role"] == "tool"]
+    assert told and "was started" in told[0], told
+    ((item, owner),) = await _runs()
+    assert owner == "mine@varga.dev" and item.initiated_by == "person:mine@varga.dev"
+    task = item.documents["task"]
+    assert (task["task"], task["trigger"], task["delegation_id"]) == ("morning_brief", "on_demand", None)
+    assert await _runs("other@varga.dev") == [], "nobody else's space got it"
+
+
+async def _journal() -> list[Any]:
+    from choregos_api.db.models import AssistantRead
+    from choregos_api.db.session import session_scope
+
+    async with session_scope(orgs="*") as session:
+        rows = list((await session.execute(select(AssistantRead).order_by(AssistantRead.at))).scalars())
+        for row in rows:
+            session.expunge(row)
+        return rows
+
+
+async def test_the_reads_of_a_poll_are_journaled_with_the_task_and_the_work_item_once_it_exists(
+    client: AsyncClient, org: str, app: Any, offline: Path, markets: Any
+) -> None:
+    await _ready(client)
+    person = await _subscriber(client, app, "poller@varga.dev")
+    assert (await person.put(f"{TASKS}/threshold_alert", json={"kind": "poll"})).status_code == 200
+
+    markets.structured["get_quote"] = {"events": [{"id": "e1", "change_pct": 4.2}]}
+    await _pass(at(9, 0))
+    (first,) = await _journal()
+    assert (first.task, first.need, first.operation) == (
+        "threshold_alert",
+        "market_data",
+        "market_data__get_quote",
+    )
+    assert first.delegation_id is None and first.conversation_id is None
+    ((item, _),) = await _runs()
+    assert first.work_item_key == item.tracker_key, "one read, one run: the line names the work item"
+
+    # Two objects start two runs from ONE read: the line names the task, not one of the items.
+    markets.structured["get_quote"] = {
+        "events": [
+            {"id": "e1", "change_pct": 4.2},
+            {"id": "e2", "change_pct": 5},
+            {"id": "e3", "change_pct": 6},
+        ]
+    }
+    await _pass(at(9, 15))
+    lines = await _journal()
+    assert len(lines) == 2, "one line per poll"
+    assert lines[-1].task == "threshold_alert" and lines[-1].work_item_key is None

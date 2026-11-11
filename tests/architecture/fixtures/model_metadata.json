@@ -2484,6 +2484,13 @@
    },
    {
     "default": null,
+    "name": "task",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=63)"
+   },
+   {
+    "default": null,
     "name": "need",
     "nullable": false,
     "server_default": null,

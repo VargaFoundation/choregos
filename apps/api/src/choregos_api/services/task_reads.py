@@ -134,6 +134,7 @@ async def journal_run_read(
             installation_id=found.installation.id,
             user_id=user_id,
             work_item_key=found.item.tracker_key,
+            task=str(((found.item.documents or {}).get("task") or {}).get("task") or "") or None,
             need=need,
             operation=tool.operation.name,
             subject_type=subjects[0]["type"] if subjects else None,

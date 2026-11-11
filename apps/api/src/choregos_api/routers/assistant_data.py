@@ -5,10 +5,12 @@ open to any member of the organisation."""
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Path, Query
 
+from ..audit import record as audit
 from ..db.models import AssistantInstallation
 from ..deps import Db, Me
 from ..errors import forbidden
@@ -23,7 +25,7 @@ from ..schemas.assistants import SLUG
 from ..services import assistants
 from ..services.agent_governance import is_member
 from ..services.assistant_access import holds
-from ..services.assistant_erasure import by_subject, erase_user
+from ..services.assistant_erasure import by_subject, digest, erase_user
 from ..services.assistant_reads import page_of_reads
 from ..services.organisations import organisation_by_slug
 
@@ -55,19 +57,44 @@ async def list_reads(  # noqa: PLR0913 - the filters of the journal, one by one
     subject_type: Annotated[str | None, Query()] = None,
     subject_key: Annotated[str | None, Query()] = None,
     user_id: Annotated[str | None, Query()] = None,
+    need: Annotated[str | None, Query()] = None,
+    since: Annotated[datetime | None, Query()] = None,
+    until: Annotated[datetime | None, Query()] = None,
     cursor: Annotated[str | None, Query()] = None,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> AssistantReadPage:
     row = await _audited(session, principal, org, slug)
-    return await page_of_reads(
+    page = await page_of_reads(
         session,
         row.id,
         subject_type=subject_type,
         subject_key=subject_key,
         user_id=user_id,
+        need=need,
+        since=since,
+        until=until,
         cursor=cursor,
         limit=limit,
     )
+    # Who looked at the journal is itself a fact worth keeping: the filters (the subject's key as a digest,
+    # never in clear) and how many lines were returned.
+    await audit(
+        session,
+        principal,
+        "assistant.reads.read",
+        org_id=row.org_id,
+        target_type="assistant",
+        target_id=row.id,
+        organisation=org,
+        subject_type=subject_type,
+        subject_digest=digest(subject_key) if subject_key else None,
+        user_id=user_id,
+        need=need,
+        since=since.isoformat() if since else None,
+        until=until.isoformat() if until else None,
+        returned=len(page.items),
+    )
+    return page
 
 
 @router.post(

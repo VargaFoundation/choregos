@@ -69,7 +69,7 @@ async def need_tools(
 
 
 #: What a conversation can execute once the person confirms (S63-10): the identities `acting=` supports.
-EXECUTABLE_IDENTITIES = ("user_exchange",)
+EXECUTABLE_IDENTITIES = ("user_exchange", "user_consent")
 
 
 async def write_tools(

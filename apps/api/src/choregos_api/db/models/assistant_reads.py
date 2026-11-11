@@ -32,6 +32,8 @@ class AssistantRead(Base, PkMixin):
     conversation_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     #: A task's work item (S63-13); null for a conversation.
     work_item_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    #: The task whose run or poll read (lot F2); null in a conversation.
+    task: Mapped[str | None] = mapped_column(String(63), nullable=True)
     need: Mapped[str] = mapped_column(String(63))
     operation: Mapped[str] = mapped_column(String(200))
     subject_type: Mapped[str | None] = mapped_column(String(63), nullable=True)

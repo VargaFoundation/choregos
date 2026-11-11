@@ -21,12 +21,14 @@ from collections.abc import Awaitable, Callable
 from datetime import datetime, timedelta
 
 from choregos_core import utcnow
+from choregos_core.domain import aware
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.models import AgentSessionRecord, AssistantInstallation, MemoryFact, MemoryProfile, MemoryStore
 from ..db.session import ALL_ORGS, session_scope
 from ..logging import get_logger
+from .conversation_turns import retention_until
 from .conversations import delete_conversation
 
 log = get_logger("choregos.assistants.retention")
@@ -54,6 +56,22 @@ async def purge_conversations(session: AsyncSession, now: datetime, *, batch: in
             )
         ).scalars()
     )
+    # A conversation opened before `retention_until` was set at the opening, and never spoken in, has none:
+    # its clock is its creation.
+    unclocked = (
+        await session.execute(
+            select(AgentSessionRecord)
+            .where(
+                AgentSessionRecord.kind == "conversation",
+                AgentSessionRecord.retention_until.is_(None),
+                AgentSessionRecord.turns == 0,
+            )
+            .limit(batch)
+        )
+    ).scalars()
+    for row in unclocked:
+        if row.created_at is not None and retention_until(row, aware(row.created_at) or now) <= now:
+            rows.append(row)
     for row in rows:
         await delete_conversation(session, row)
     return len(rows)

@@ -412,3 +412,35 @@ def _reset_turns() -> Iterator[None]:
     yield
     assistants._TURNS.clear()
     assistants._OUTCOMES.clear()
+
+
+async def test_a_token_principal_has_its_groups_re_read_at_every_request(
+    client: AsyncClient, installed: str
+) -> None:
+    """A token carries no group of its own: the audience is judged on the user's row at each call, through
+    the MCP door and through the REST API, so leaving the IdP group cuts a token as it cuts a session."""
+    from choregos_api.db.models import User
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    async def groups(*names: str) -> None:
+        async with session_scope() as session:
+            user = (await session.execute(select(User).where(User.email == "ines@varga.dev"))).scalar_one()
+            user.groups = list(names)
+
+    created = await client.post("/api/v1/me/tokens", json={"name": "rest", "scopes": ["*"]})
+    assert created.status_code == 201, created.text
+    rest = {"Authorization": f"Bearer {created.json()['token']}"}
+    listing = "/api/v1/me/assistants"
+
+    assert (await _rpc(client, installed, "tools/list", path=CONNECTOR)).status_code == 200
+    assert (await client.get(listing, headers=rest)).json()["items"] != []
+
+    await groups("grp-sales")
+    assert (await _rpc(client, installed, "tools/list", path=CONNECTOR)).status_code == 404
+    assert "list_assistants" not in await _names(client, installed)
+    assert (await client.get(listing, headers=rest)).json()["items"] == []
+
+    await groups(INVESTORS)
+    assert (await _rpc(client, installed, "tools/list", path=CONNECTOR)).status_code == 200
+    assert (await client.get(listing, headers=rest)).json()["items"] != []

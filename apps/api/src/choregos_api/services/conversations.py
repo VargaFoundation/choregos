@@ -122,7 +122,7 @@ async def open_conversation(  # noqa: PLR0913 - the terms of a conversation, one
         max_turns = max_turns or policy.get("max_turns")
         retention_days = retention_days or policy.get("retention_days")
         idle_close_minutes = idle_close_minutes or policy.get("idle_close_minutes")
-    return await open_session(
+    record = await open_session(
         session,
         principal,
         organisation,
@@ -138,6 +138,10 @@ async def open_conversation(  # noqa: PLR0913 - the terms of a conversation, one
             retention_days=retention_days,
         ),
     )
+    # A conversation that never had a turn is purged too: its clock starts when it is opened.
+    if record.retention_until is None:
+        record.retention_until = retention_until(record, utcnow())
+    return record
 
 
 def last_activity(record: AgentSessionRecord) -> datetime:

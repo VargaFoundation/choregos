@@ -20,6 +20,7 @@ class AssistantReadLine(Dto):
     user_id: str
     conversation_id: str | None = None
     work_item_key: str | None = None
+    task: str | None = None
     need: str
     operation: str
     subject_type: str | None = None
@@ -68,6 +69,21 @@ class SubjectConversation(Dto):
     last_activity_at: datetime | None = None
 
 
+class SubjectArtifact(Dto):
+    """An artifact of a task run whose reads were about the subject (export): its inline content, or the
+    storage key of a file."""
+
+    id: str
+    work_item_key: str
+    task: str
+    name: str
+    version: int
+    media_type: str
+    content: Any | None = None
+    storage_key: str | None = None
+    created_at: datetime | None = None
+
+
 class SubjectErasure(Dto):
     """The answer: the export lists what was found; the erasure says what it removed."""
 
@@ -75,6 +91,8 @@ class SubjectErasure(Dto):
     subject: MemorySubject
     memories: list[SubjectMemory] = Field(default_factory=list)
     conversations: list[SubjectConversation] = Field(default_factory=list)
+    #: The artifacts of the task runs whose reads were about the subject (export).
+    task_artifacts: list[SubjectArtifact] = Field(default_factory=list)
     memories_erased: int = 0
     conversations_redacted: int = 0
     conversations_deleted: int = 0
