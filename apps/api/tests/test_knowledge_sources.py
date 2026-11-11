@@ -66,6 +66,25 @@ async def _chunks_of(document_id: str) -> int:
         )
 
 
+async def test_a_sharepoint_source_keeps_its_excluded_paths_and_refuses_bad_ones(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = await _sharepoint(client, monkeypatch)
+    url = f"{BASE}/framework/sources/{source['id']}"
+    kept = await client.patch(
+        url,
+        json={"config": {"site_id": "acme.sharepoint.com,1,2", "folder": "Policies", "exclude": ["/Z-*/*"]}},
+    )
+    assert kept.status_code == 200, kept.text
+    assert kept.json()["config"]["exclude"] == ["/Z-*/*"]
+    for bad in (["Z-*/*"], "/Z-*/*", ["/x"] * 51):
+        refused = await client.patch(
+            url, json={"config": {"site_id": "acme.sharepoint.com,1,2", "exclude": bad}}
+        )
+        assert refused.status_code == 422, (bad, refused.text)
+        assert "exclude" in refused.text
+
+
 async def test_a_document_deleted_at_the_source_leaves_the_index(
     client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
