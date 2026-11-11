@@ -42,6 +42,7 @@ from ..services import (
     work_item_dto,
     workflow_model,
 )
+from ..services.organisations import organisation_by_slug
 from . import docs
 from .caller import Caller
 
@@ -474,6 +475,24 @@ async def _list_pending_decisions(ctx: Context, arguments: dict[str, Any]) -> tu
     return text, {"pending": waiting}
 
 
+async def _file_under_the_callers_organisation(ctx: Context) -> None:
+    """A documentation read targets no organisation: its audit row is filed under the caller's, when
+    they belong to exactly one, so that its administrators read it. Under RLS a row without an
+    organisation is readable at platform scope only. A project's door and an external agent already
+    name one (`transport._audit`)."""
+    if ctx.project is not None or ctx.caller.agent_org_id is not None:
+        return
+    principal = ctx.caller.principal
+    orgs = set(principal.org_roles) | {key.split("/", 1)[0] for key in principal.project_roles}
+    if len(orgs) != 1:
+        return
+    try:
+        organisation = await organisation_by_slug(ctx.session, orgs.pop())
+    except ApiError:
+        return
+    ctx.target_org_id = organisation.id
+
+
 def _docs_index() -> tuple[docs.Index, str]:
     settings = get_settings()
     index = docs.index_of(settings.docs_dir)
@@ -489,6 +508,7 @@ async def _docs_search(ctx: Context, arguments: dict[str, Any]) -> tuple[str, An
     query = arguments.get("query")
     if not isinstance(query, str) or not query.strip():
         raise ToolRefused("argument `query` missing: a few words, such as `budget policy`")
+    await _file_under_the_callers_organisation(ctx)
     index, base = _docs_index()
     try:
         hits = index.search(query[:500], _limit(arguments, default=8, maximum=20))
@@ -516,6 +536,7 @@ async def _docs_read(ctx: Context, arguments: dict[str, Any]) -> tuple[str, Any]
     reference = arguments.get("slug")
     if not isinstance(reference, str):
         raise ToolRefused("argument `slug` missing: one from docs_search, such as `use/workflows`")
+    await _file_under_the_callers_organisation(ctx)
     index, base = _docs_index()
     anchor = arguments.get("section")
     if not isinstance(anchor, str) or not anchor.strip():

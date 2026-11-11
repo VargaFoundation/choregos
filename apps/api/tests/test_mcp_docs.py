@@ -324,7 +324,7 @@ async def test_a_token_without_an_mcp_scope_is_refused(
 
 
 async def test_every_call_is_audited(client: AsyncClient, admin: str, docs_dir: Path) -> None:
-    from choregos_api.db.models import AuditLog, User
+    from choregos_api.db.models import AuditLog, Organization, User
     from choregos_api.db.session import session_scope
     from sqlalchemy import select
 
@@ -342,10 +342,15 @@ async def test_every_call_is_audited(client: AsyncClient, admin: str, docs_dir: 
             .all()
         )
         user = (await session.execute(select(User).where(User.email == ADMIN))).scalar_one()
-    calls = [(r.target_type, r.target_id, r.payload["issue"], r.payload["write"], r.actor_id) for r in rows]
+        org = (await session.execute(select(Organization).where(Organization.slug == "varga"))).scalar_one()
+    calls = [
+        (r.target_type, r.target_id, r.payload["issue"], r.payload["write"], r.actor_id, r.org_id)
+        for r in rows
+    ]
+    # Filed under the caller's only organisation: under RLS a row without one is the platform's alone.
     assert calls == [
-        ("mcp_tool", "docs_search", "ok", False, user.id),
-        ("mcp_tool", "docs_read", "refused", False, user.id),
+        ("mcp_tool", "docs_search", "ok", False, user.id, org.id),
+        ("mcp_tool", "docs_read", "refused", False, user.id, org.id),
     ]
     await login(client, ADMIN)
     listed = (await client.get("/api/v1/audit")).json()["items"]
