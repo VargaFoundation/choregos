@@ -3,14 +3,16 @@
 
 - `by_user` (`DELETE /me/assistants/{org}/{slug}`): everything of the caller's in one installation: their
   conversations with the transcripts, their `user` and `user_subject` memories (stores, facts, profiles),
-  and whatever the holders registered in `USER_ERASERS` hold of a person (connected accounts and standing
-  delegations come with lot 2: they register here). Always open to the person: it is their right, and the
+  and whatever the holders registered in `USER_ERASERS` hold of a person: standing delegations (S63-14), task
+  subscriptions, task artifacts and connected accounts (`task_erasure`, S63-16). Always open to the person: it
+  is their right, and the
   manifest cannot take it away.
 - `by_subject` (`POST /orgs/{org}/assistants/{slug}/erasure`, `assistant:audit`, only when the manifest's
   `policy.data.erasure` lists `by_subject`): `export` returns every memory of the subject across every user of
   the installation and the conversations where it was resolved; `erase` deletes those memories and redacts
   those conversations (their messages and transcript events replaced by a marker, their metadata kept) or
-  deletes them. The rows of other people are under row-level security, so this runs in the platform scope
+  deletes them, and deletes the artifacts of the task runs whose reads (the reads journal) were about it. The
+  rows of other people are under row-level security, so this runs in the platform scope
   once the caller's right is checked, and every statement names the installation.
 
 Both are written in the audit log: who, which installation, how many rows. The subject's key is recorded as a
@@ -56,7 +58,7 @@ from .conversations import delete_conversation
 REDACTED = "[redacted]"
 
 #: What else holds a person's data in an installation, by name: `(session, installation, user_id)` removes
-#: it and answers how many rows went. Connected accounts and delegations (lot 2) register here.
+#: it and answers how many rows went. Delegations, task data and connected accounts register here.
 UserEraser = Callable[[AsyncSession, AssistantInstallation, str], Awaitable[int]]
 USER_ERASERS: dict[str, UserEraser] = {}
 
@@ -85,6 +87,8 @@ async def erase_user(
     session: AsyncSession, principal: Principal, org: str, installation: AssistantInstallation
 ) -> UserErasure:
     """Removes what belongs to the caller in the installation, and journals it."""
+    from . import assistant_delegations, task_erasure  # noqa: F401 - they register their erasers on import
+
     user_id = principal.user_id
     conversations = list(
         (
@@ -268,6 +272,9 @@ async def by_subject(
             report.memories, report.conversations = await _export(session, stores, conversations)
         else:
             report.memories_erased = (await _delete_stores(session, stores))[0]
+            from .task_erasure import erase_subject_artifacts
+
+            report.task_artifacts_erased = await erase_subject_artifacts(session, installation, subject)
             for conversation in conversations:
                 if request.conversations == "delete":
                     await delete_conversation(session, conversation)
@@ -298,5 +305,6 @@ async def by_subject(
         memories=len(stores) if request.mode == "export" else report.memories_erased,
         conversations=len(conversations),
         conversation_mode=request.conversations if request.mode == "erase" else None,
+        task_artifacts=report.task_artifacts_erased,
     )
     return report

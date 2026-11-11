@@ -306,6 +306,34 @@ async def _propose_tool_action(
     action_id: str | None = None,
 ) -> Any:
     """A tool call's action: a `connector.call` effect, in the name of the run's proposer (`proposer_of`)."""
+    proposed_by, justification = proposer_of(run)
+    return await tool_action(
+        session,
+        project,
+        tool,
+        arguments,
+        action_id=action_id,
+        proposed_by=proposed_by,
+        justification=justification,
+        run_id=run.id,
+        work_item_id=run.work_item_id,
+    )
+
+
+async def tool_action(  # noqa: PLR0913 - one action: what, by whom, why, keyword-only
+    session: AsyncSession,
+    project: Project,
+    tool: BrokerTool,
+    arguments: dict[str, Any],
+    *,
+    action_id: str | None,
+    proposed_by: dict[str, Any],
+    justification: str,
+    run_id: str | None = None,
+    work_item_id: str | None = None,
+) -> Any:
+    """A governed action of one `connector.call` effect (ADR 0035), proposed by `proposed_by`: a run's
+    (`proposer_of`) or an assistant's conversation (S63-10, `conversation_actions`)."""
     from choregos_contracts import ActionOrigin
 
     from ..rbac import SYSTEM
@@ -343,7 +371,6 @@ async def _propose_tool_action(
         if tool.operation.approver_group
         else ApprovalSpec()
     )
-    proposed_by, justification = proposer_of(run)
     body = ActionCreate(
         kind=f"{tool.connector.name}.{tool.operation.name}",
         title=f"{tool.operation.description or tool.operation.name} ({tool.connector.name})",
@@ -351,7 +378,7 @@ async def _propose_tool_action(
         params={"arguments": arguments},
         effects=[ActionEffectSpec.model_validate(effect)],
         approval=approval,
-        work_item_id=run.work_item_id,
+        work_item_id=work_item_id,
     )
     return await propose(
         session,
@@ -360,7 +387,7 @@ async def _propose_tool_action(
         origin=ActionOrigin.TOOL.value,
         proposed_by=proposed_by,
         principal=SYSTEM,
-        run_id=run.id,
+        run_id=run_id,
         action_id=action_id,
     )
 

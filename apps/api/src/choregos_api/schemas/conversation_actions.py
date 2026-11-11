@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from .base import Dto
 
-ActionStatus = Literal["proposed", "confirmed", "executed", "refused", "expired"]
+ActionStatus = Literal["proposed", "confirmed", "executed", "refused", "expired", "governed"]
 
 
 class ConversationAction(Dto):
@@ -20,6 +20,8 @@ class ConversationAction(Dto):
     summary: str
     status: ActionStatus
     result: dict[str, Any] | None = None
+    #: What the source's preview of the write returned at the proposal, when it serves one.
+    diff: dict[str, Any] | None = None
     confirmed_by: str | None = None
     confirmed_at: datetime | None = None
     executed_at: datetime | None = None

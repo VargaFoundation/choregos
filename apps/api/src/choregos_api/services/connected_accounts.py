@@ -49,7 +49,7 @@ from ..errors import conflict, not_found, unprocessable
 from ..rbac import Principal
 from ..secret_store import SecretStoreUnavailable, derived_org_name, get_secret_store, store_ref
 from ..security import read_session, sign_session
-from .egress import egress_scope
+from .egress import egress_scope, egress_scope_for_org
 from .identity_exchange import IdentityUnavailable
 
 USER_CONSENT: Final = "user_consent"
@@ -420,30 +420,40 @@ async def disconnect(session: AsyncSession, principal: Principal, org: str, conn
             OrgConnector.org_id == organisation.id, OrgConnector.name == connector_name
         )
     )
-    declared = consent_settings(connector) if connector is not None else None
     # Local deletion first and unconditional: the source being down never keeps a token alive here.
     await store.delete(session, organisation.id, name)
     await session.delete(row)
     await session.flush()
-    # Only to the authorization server the person consented to: an editor who moved it would otherwise
-    # receive the refresh token as the thing to revoke.
-    unchanged = (
-        connector is not None
-        and declared is not None
-        and row.provider_digest == provider_digest(connector, declared)
-    )
-    if refresh and declared is not None and declared.revocation_endpoint and unchanged:
-        try:
-            secret = await _client_secret(session, organisation.id, declared, connector_name)
-            async with egress_scope(session, organisation, "api", f"oauth:{connector_name}"):
-                await _post(
-                    declared.revocation_endpoint,
-                    {"token": refresh, "token_type_hint": "refresh_token", "client_id": declared.client_id},
-                    secret,
-                    check=False,
-                )
-        except (ConsentFailure, IdentityUnavailable):
-            pass  # best effort, RFC 7009: the secret is already gone from here
+    if connector is not None:
+        await revoke_at_source(session, organisation.id, connector, row, refresh)
+
+
+async def revoke_at_source(
+    session: AsyncSession,
+    org_id: str,
+    connector: OrgConnector,
+    account: ConnectedAccount,
+    refresh: str | None,
+) -> None:
+    """Best effort, RFC 7009: the refresh token is revoked at the source when it offers it. The secret is
+    already gone from here, so a failure changes nothing for us. Only to the authorization server the person
+    consented to: an editor who moved it would otherwise receive the refresh token as the thing to revoke."""
+    declared = consent_settings(connector)
+    if not refresh or declared is None or not declared.revocation_endpoint:
+        return
+    if account.provider_digest != provider_digest(connector, declared):
+        return
+    try:
+        secret = await _client_secret(session, org_id, declared, connector.name)
+        async with egress_scope_for_org(session, org_id, "api", f"oauth:{connector.name}"):
+            await _post(
+                declared.revocation_endpoint,
+                {"token": refresh, "token_type_hint": "refresh_token", "client_id": declared.client_id},
+                secret,
+                check=False,
+            )
+    except (ConsentFailure, IdentityUnavailable):
+        pass
 
 
 async def consented_token(session: AsyncSession, connector: OrgConnector, user_id: str, org_id: str) -> str:

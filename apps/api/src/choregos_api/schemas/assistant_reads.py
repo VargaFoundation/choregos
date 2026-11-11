@@ -78,6 +78,8 @@ class SubjectErasure(Dto):
     memories_erased: int = 0
     conversations_redacted: int = 0
     conversations_deleted: int = 0
+    #: The artifacts of the task runs whose reads were about the subject, deleted.
+    task_artifacts_erased: int = 0
 
 
 class UserErasure(Dto):
@@ -87,5 +89,6 @@ class UserErasure(Dto):
     memory_stores: int
     memory_facts: int
     memory_profiles: int
-    #: What the other holders of a person's data removed (connected accounts, delegations: lot 2), by name.
+    #: What the other holders of a person's data removed (connected accounts, delegations, task subscriptions
+    #: and artifacts), by name.
     others: dict[str, int] = Field(default_factory=dict)

@@ -775,3 +775,146 @@ async def test_another_person_never_reads_someones_delegation_on_postgresql(
             )
     async with session_scope(orgs="*") as session:
         assert len((await session.execute(select(Delegation))).all()) == 1, "the platform scope reads"
+
+
+# ───────────────────────── the steps of a task's workflow, and the reminder (E3) ─────────────────────────
+
+
+async def _task_run_tools(client: AsyncClient) -> tuple[str, dict[str, str], str]:
+    """An agent step on the task's work item (the personal space's): tool route, headers, work item key."""
+    from choregos_api.db.models import Project, Run, WorkItem
+    from choregos_api.db.session import session_scope
+    from choregos_api.security import mint_run_token
+
+    spec = {"mcp_servers": [{"connector": "markets", "tools": ["get_quote"]}]}
+    made = await client.post(f"{ORG}/agents", json={"slug": "briefer", "display_name": "B", "spec": spec})
+    assert made.status_code == 201, made.text
+    async with session_scope(orgs="*") as session:
+        item, slug = (
+            await session.execute(
+                select(WorkItem, Project.slug)
+                .join(Project, Project.id == WorkItem.project_id)
+                .where(Project.kind == "personal")
+            )
+        ).one()
+        session.add(
+            Run(
+                id="run-task-step-1",
+                work_item_id=item.id,
+                project_id=item.project_id,
+                stage_role="brief",
+                status="running",
+                agent_slug="briefer",
+                agent_version=1,
+            )
+        )
+        key = item.tracker_key
+    token = mint_run_token("run-task-step-1", project_slug=slug, work_item_key=key, ttl_minutes=30)
+    return (
+        "/api/v1/internal/runs/run-task-step-1/tools/markets__get_quote",
+        {"Authorization": f"Bearer {token}"},
+        key,
+    )
+
+
+async def test_the_steps_of_a_delegated_task_read_as_the_person_and_are_journaled(
+    client: AsyncClient, org: str, app: Any, offline: Path, markets: Any, idp: FakeIdentityProvider
+) -> None:
+    from choregos_api.db.models import Run
+    from choregos_api.db.session import session_scope
+    from choregos_api.services.assistant_delegations import DelegationRefused
+    from choregos_api.services.task_reads import refuse_write
+
+    await _ready(client)
+    person = await _traveller(client, app)
+    granted = await _agree(person, expires_in_days=LONG)
+    await _forget_sign_in()
+    assert list((await _pass(at(9, 0))).values()) == ["poll:e1"]
+    route, headers, key = await _task_run_tools(client)
+    before = len(_calls(markets))
+
+    answer = await client.post(route, headers=headers, json={})
+    assert answer.status_code == 200 and answer.json()["status_code"] == 200, answer.text
+    sent = _calls(markets)[before:]
+    assert len(sent) == 1
+    claims = claims_of(sent[0]["authorization"].removeprefix("Bearer "))
+    assert claims["sub"] == SUBJECT and claims["aud"] == AUDIENCE_OF_SOURCE, "the step read as the PERSON"
+    lines = [r for r in await _reads() if r.work_item_key]
+    assert [(r.work_item_key, r.delegation_id, r.need) for r in lines] == [
+        (key, granted["id"], "market_data")
+    ]
+
+    # A write by a step of a delegated task is refused, typed (a task has no conversation to confirm it in).
+    async with session_scope(orgs="*") as session:
+        run = await session.get(Run, "run-task-step-1")
+        assert run is not None
+        with pytest.raises(DelegationRefused) as write:
+            await refuse_write(session, run)
+    assert write.value.code == "write_under_delegation"
+
+    # Revoked: the next read of the step is refused, typed, and reaches no source.
+    assert (await person.delete(f"{ME}/delegations/{granted['id']}")).status_code == 204
+    before = len(_calls(markets))
+    refused = await client.post(route, headers=headers, json={})
+    assert refused.json()["status_code"] == 403 and "revoked" in refused.text, refused.text
+    assert len(_calls(markets)) == before
+
+
+async def test_a_step_of_a_task_with_no_delegation_reads_as_the_run_and_is_still_journaled(
+    client: AsyncClient, org: str, app: Any, offline: Path, markets: Any, idp: FakeIdentityProvider
+) -> None:
+    await _ready(client)
+    person = await _traveller(client, app)
+    assert (await person.post(f"{TASKS}/plain_brief/run")).status_code == 201
+    route, headers, key = await _task_run_tools(client)
+    answer = await client.post(route, headers=headers, json={})
+    assert answer.json()["status_code"] == 200, answer.text
+    (call,) = _calls(markets)
+    assert call["authorization"] == "Bearer markets-key", "the connector's own key, not a person's token"
+    (line,) = await _reads()
+    assert line.work_item_key == key and line.delegation_id is None and line.conversation_id is None
+
+
+async def test_the_person_is_reminded_once_before_the_delegation_ends(
+    client: AsyncClient, org: str, app: Any, offline: Path, markets: Any, idp: FakeIdentityProvider
+) -> None:
+    from datetime import timedelta
+
+    from choregos_adapters.fakes.notify import FakeNotifier
+    from choregos_api.db.session import session_scope
+    from choregos_api.services.assistant_delegations import remind_expiring
+    from choregos_api.services.task_delivery import set_notifier_factory
+
+    await _ready(client)
+    person = await _traveller(client, app)
+    granted = await _agree(person, expires_in_days=10)
+    notifier = FakeNotifier()
+    set_notifier_factory(lambda row, channel: notifier if channel == "email" else None)
+    start = datetime.now(UTC)
+
+    async def remind(days: float) -> int:
+        async with session_scope(orgs="*") as session:
+            return await remind_expiring(session, start + timedelta(days=days))
+
+    try:
+        assert await remind(2) == 0, "eight days are left: more than the seven of the default"
+        assert notifier.sent == []
+        assert await remind(4) == 1, "six days are left"
+        ((to, message),) = notifier.sent
+        assert to == EMAIL and "poll_alert" in message.title and "ends" in message.title
+        assert await remind(5) == 0, "told once"
+        assert (await _delegation(granted["id"])).reminded_at is not None
+        assert (await person.get(f"{ME}/delegations")).json()["items"][0]["reminded_at"] is not None
+
+        # An ended delegation is not reminded of; the installation may widen the window.
+        again = await _agree(person, expires_in_days=10)
+        assert await remind(11) == 0, "already ended"
+        patched = await client.patch(
+            f"{ORG}/assistants/{SLUG}",
+            json={"policy_overrides": {"delegation": {"max_days": LONG, "remind_days": 30}}},
+        )
+        assert patched.status_code == 200, patched.text
+        assert await remind(0) == 1, "ten days left, within the thirty the installation asks for"
+        assert again["id"] != granted["id"] and len(notifier.sent) == 2
+    finally:
+        set_notifier_factory(None)

@@ -567,3 +567,148 @@ async def test_a_run_is_refused_when_the_subscribers_month_is_spent(
     refused = await mine.post(f"{TASKS}/morning_brief/run")
     assert refused.status_code == 409 and "monthly budget" in refused.text
     assert await _runs() == []
+
+
+# ───────────────────────── spend, the webhook key, the `run_task` tool (E3) ─────────────────────────
+
+
+async def test_the_spend_of_a_task_run_is_attributed_to_the_installation_and_stops_the_next_run(
+    client: AsyncClient, org: str, app: Any, offline: Path, markets: Any
+) -> None:
+    from choregos_api.db.models import CostLedger, Project, Run, User, WorkItem
+    from choregos_api.db.session import session_scope
+    from choregos_api.services.assistant_access import month_spend
+    from choregos_api.services.costs import record_cost
+
+    await _ready(client)
+    mine = await _subscriber(client, app, "mine@varga.dev")
+    await as_admin(client)
+    assert (
+        await client.patch(
+            f"{ORG}/assistants/investment-assistant",
+            json={"policy_overrides": {"budget": {"per_user_month_usd": 1}}},
+        )
+    ).status_code == 200
+    run = (await mine.post(f"{TASKS}/morning_brief/run")).json()
+    installation = await _installation_id()
+    async with session_scope(orgs="*") as session:
+        item = await session.get(WorkItem, run["work_item_id"])
+        assert item is not None
+        project = await session.get(Project, item.project_id)
+        assert project is not None
+        session.add(
+            Run(id="run-spend-1", work_item_id=item.id, project_id=item.project_id, stage_role="brief",
+                status="succeeded")
+        )  # fmt: skip
+        await session.flush()
+        await record_cost(
+            session, project_id=project.id, work_item_id=item.id, run_id="run-spend-1", provider="p",
+            model="m", backend=None, stage_role="brief", size=None, tokens_in=1, tokens_out=1,
+            tokens_cached=0, cost_usd=1.5, fx_rate=1.0,
+        )  # fmt: skip
+    async with session_scope(orgs="*") as session:
+        line = (
+            await session.execute(select(CostLedger).where(CostLedger.run_id == "run-spend-1"))
+        ).scalar_one()
+        user = (await session.execute(select(User).where(User.email == "mine@varga.dev"))).scalar_one()
+        assert (line.installation_id, line.user_id) == (installation, user.id)
+        assert await month_spend(session, installation, user.id) == 1.5
+        assert await month_spend(session, installation) == 1.5
+    refused = await mine.post(f"{TASKS}/morning_brief/run")
+    assert refused.status_code == 409 and "monthly budget" in refused.text
+    other = await _subscriber(client, app, "other@varga.dev")
+    assert (await other.post(f"{TASKS}/morning_brief/run")).status_code == 201, "another person's month"
+
+
+async def test_the_webhook_key_is_shown_once_to_a_manager_and_rotates(
+    client: AsyncClient, org: str, app: Any, offline: Path, markets: Any
+) -> None:
+    from choregos_api.db.session import session_scope
+    from choregos_api.services.remote_agents import set_a2a_transport
+    from choregos_api.services.task_delivery import deliver_pending, webhook_secret
+
+    await _ready(client)
+    mine = await _subscriber(client, app, "mine@varga.dev")
+    route = f"{ORG}/assistants/investment-assistant/webhook-secret"
+    assert (await mine.post(route)).status_code == 403, "a member of the audience does not manage"
+    await as_admin(client)
+    installation = await _installation_id()
+    first = await client.post(route)
+    assert first.status_code == 200, first.text
+    assert first.json()["secret"] == webhook_secret(installation) and first.json()["generation"] == 0
+    again = await client.post(route)
+    assert again.status_code == 409 and again.json()["code"] == "already_shown"
+    rotated = await client.post(route, json={"rotate": True})
+    assert rotated.status_code == 200 and rotated.json()["generation"] == 1
+    assert rotated.json()["secret"] == webhook_secret(installation, 1) != first.json()["secret"]
+    assert (await client.post(route)).status_code == 409, "the new key was shown too"
+
+    # The deliveries are signed with the CURRENT key, the one the owner was shown.
+    assert (
+        await client.patch(
+            f"{ORG}/assistants/investment-assistant",
+            json={"policy_overrides": {"delivery": {"webhook": {"url": "https://apps.test/hook"}}}},
+        )
+    ).status_code == 200
+    run = (await mine.post(f"{TASKS}/morning_brief/run")).json()
+    await _produce(run["work_item_id"], brief="Hello")
+    received: list[httpx.Request] = []
+
+    def receiver(request: httpx.Request) -> httpx.Response:
+        received.append(request)
+        return httpx.Response(204)
+
+    set_a2a_transport(httpx.MockTransport(receiver))
+    try:
+        async with session_scope(orgs="*") as session:
+            await deliver_pending(session)
+    finally:
+        set_a2a_transport(None)
+    (request,) = received
+    stamp, signature = re.fullmatch(
+        r"t=(\d+),v1=([0-9a-f]{64})", request.headers["x-choregos-signature"]
+    ).groups()  # type: ignore[union-attr]
+
+    def signed(secret: str) -> str:
+        return hmac.new(secret.encode(), stamp.encode() + b"." + request.content, hashlib.sha256).hexdigest()
+
+    assert signature == signed(rotated.json()["secret"]) and signature != signed(first.json()["secret"])
+
+
+async def test_a_conversation_is_offered_run_task_which_starts_the_task_as_the_person(
+    client: AsyncClient, org: str, app: Any, offline: Path, markets: Any
+) -> None:
+    from choregos_api.db.models import AgentSessionRecord, AssistantInstallation
+    from choregos_api.db.session import session_scope
+    from choregos_api.services.conversation_extras import conversation_extras
+
+    from .kits.conversations import _open
+
+    await _ready(client)
+    await _subscriber(client, app, "mine@varga.dev")
+    installation = await _installation_id()
+    spec = {"instructions": "Help.", "runtime": {"kind": "prompt"}}
+    made = await client.post(f"{ORG}/agents", json={"slug": "helper", "display_name": "h", "spec": spec})
+    assert made.status_code == 201, made.text
+    conversation = await _open("varga", "mine@varga.dev", installation_id=installation)
+    async with session_scope(orgs="*") as session:
+        record = await session.get(AgentSessionRecord, conversation)
+        assert record is not None
+        extras = await conversation_extras(session, record, [])
+        (tool,) = [t for t in extras.loop_tools if t.name == "run_task"]
+        assert tool.parameters["properties"]["task"]["enum"] == ["delegated_brief", "morning_brief"], (
+            "the on-demand tasks of the manifest, `threshold_alert` (a poll) not among them"
+        )
+        assert extras.serves("run_task")
+        told = await extras.call(session, "run_task", {"task": "delegated_brief"})
+        assert "was started" in told
+        refused = await extras.call(session, "run_task", {"task": "threshold_alert"})
+        assert "task not started" in refused
+        installation_row = await session.get(AssistantInstallation, installation)
+        assert installation_row is not None
+    runs = await _runs("mine@varga.dev")
+    ((item, _),) = runs
+    assert item.initiated_by == "person:mine@varga.dev"
+    task = item.documents["task"]
+    assert task["trigger"] == "on_demand" and task["delegation_id"] is None, "no delegation under a tool"
+    assert task["task"] == "delegated_brief"

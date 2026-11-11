@@ -21,6 +21,9 @@ const mocks = vi.hoisted(() => ({
   deleteTask: vi.fn(),
   runTask: vi.fn(),
   inbox: vi.fn(),
+  delegations: vi.fn(),
+  agreeDelegation: vi.fn(),
+  revokeDelegation: vi.fn(),
 }));
 vi.mock("@/lib/assistants-api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/assistants-api")>();
@@ -58,6 +61,7 @@ const tab = (name: string) => fireEvent.click(screen.getByRole("tab", { name }))
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.delegations.mockResolvedValue({ items: [] });
   mocks.myAssistants.mockResolvedValue({ items: [invest] });
   mocks.memory.mockImplementation(async (_o: string, _s: string, space: string) =>
     space === "preferred_sources"
@@ -236,6 +240,47 @@ describe("one assistant, for me", () => {
     tab("Tasks");
     fireEvent.click((await screen.findAllByRole("button", { name: "Run now" }))[0]!);
     expect(await screen.findByText("not ready")).toBeInTheDocument();
+  });
+
+  const DELEGATION = {
+    id: "d1", org: "varga", assistant: "invest", task: "morning_brief",
+    needs: [{ need: "brokerage", operations: ["get_positions"], identity: "user_exchange" }],
+    granted_at: "2026-11-01T00:00:00Z", expires_at: "2027-01-30T00:00:00Z", status: "active", manifest_digest: "x",
+  };
+  const SUBSCRIBED = { task: "morning_brief", trigger: { kind: "schedule", cron: "30 7 * * 1-5", timezone: "UTC" }, delegation: "read_only", deliver: ["inbox"], enabled: true, created_at: "2026-11-01T00:00:00Z" };
+
+  it("shows the needs a delegation covers, agrees to exactly them, and revokes it", async () => {
+    mocks.task.mockResolvedValue(SUBSCRIBED);
+    mocks.agreeDelegation
+      .mockRejectedValueOnce(new ApiError(409, { title: "State conflict", detail: "agree to exactly these needs", needs: [{ need: "brokerage", operations: ["get_positions"] }] } as never))
+      .mockResolvedValueOnce(DELEGATION);
+    mocks.revokeDelegation.mockResolvedValue(undefined);
+    wrap(<AssistantWorkspace org="varga" slug="invest" />);
+    await screen.findByText("Prefers Reuters");
+    tab("Tasks");
+    const card = (await screen.findByText("morning brief")).closest("section")!;
+    fireEvent.click(await within(card).findByRole("button", { name: "Review and agree" }));
+    expect(await within(card).findByText(/brokerage \(get_positions\)/)).toBeInTheDocument();
+    mocks.delegations.mockResolvedValue({ items: [DELEGATION] });
+    fireEvent.click(within(card).getByRole("button", { name: "I agree to these reads" }));
+    await waitFor(() =>
+      expect(mocks.agreeDelegation).toHaveBeenLastCalledWith({ org: "varga", assistant: "invest", task: "morning_brief", agree_to: ["brokerage"] }),
+    );
+    expect(await within(card).findByText(/Reads brokerage \(get_positions\) until/)).toBeInTheDocument();
+    fireEvent.click(within(card).getByRole("button", { name: "Revoke the delegation" }));
+    await waitFor(() => expect(mocks.revokeDelegation).toHaveBeenCalledWith("d1"));
+  });
+
+  it("offers to agree again to a suspended delegation, with its reason", async () => {
+    mocks.task.mockResolvedValue(SUBSCRIBED);
+    mocks.delegations.mockResolvedValue({ items: [{ ...DELEGATION, status: "suspended", suspended_reason: "the needs the task reads changed" }] });
+    mocks.agreeDelegation.mockResolvedValue(DELEGATION);
+    wrap(<AssistantWorkspace org="varga" slug="invest" />);
+    await screen.findByText("Prefers Reuters");
+    tab("Tasks");
+    expect(await screen.findByText("the needs the task reads changed")).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("button", { name: "Agree again" }));
+    await waitFor(() => expect(mocks.agreeDelegation).toHaveBeenCalledWith({ org: "varga", assistant: "invest", task: "morning_brief", agree_to: ["brokerage"] }));
   });
 
   it("shows what the tasks delivered to me, for this assistant only", async () => {

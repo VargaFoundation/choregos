@@ -3698,6 +3698,25 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/AssistantReadiness" } } } }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /orgs/{org}/assistants/{slug}/webhook-secret:
+    parameters:
+      - { $ref: "#/components/parameters/Org" }
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,62}$" } }
+    post:
+      tags: [agents]
+      operationId: revealAssistantWebhookSecret
+      description: >-
+        The key an installation's task webhook is signed with (S63-13, ADR 0137 point 1), shown ONCE to whoever
+        manages the installation (`assistant:manage`): a second call is a 409 unless `rotate` is true, which makes
+        a new generation and shows that one. Each showing is in the audit log, never the key.
+      requestBody:
+        required: false
+        content: { application/json: { schema: { $ref: "#/components/schemas/WebhookSecretRequest" } } }
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/WebhookSecret" } } } }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /orgs/{org}/assistants/{slug}/knowledge/updates:
     parameters:
       - { $ref: "#/components/parameters/Org" }
@@ -9030,8 +9049,9 @@ components:
         operation: { type: string }
         arguments: { type: object, additionalProperties: true }
         summary: { type: string }
-        status: { type: string, enum: [proposed, confirmed, executed, refused, expired] }
+        status: { type: string, enum: [proposed, confirmed, executed, refused, expired, governed], description: "`governed`: a console approval, decided as a governed action named in `result.action`." }
         result: { type: [object, "null"], additionalProperties: true }
+        diff: { type: [object, "null"], additionalProperties: true, description: "What the source's `<operation>_preview` returned at the proposal, when it serves one." }
         confirmed_by: { type: [string, "null"] }
         confirmed_at: { type: [string, "null"], format: date-time }
         executed_at: { type: [string, "null"], format: date-time }
@@ -9134,6 +9154,7 @@ components:
         memories_erased: { type: integer }
         conversations_redacted: { type: integer }
         conversations_deleted: { type: integer }
+        task_artifacts_erased: { type: integer, description: "The artifacts of the task runs whose reads were about the subject, deleted." }
     UserErasure:
       type: object
       required: [conversations, memory_stores, memory_facts, memory_profiles]
@@ -9351,11 +9372,23 @@ components:
         status: { type: string, enum: [active, suspended, revoked, expired] }
         suspended_reason: { type: [string, "null"] }
         manifest_digest: { type: string }
+        reminded_at: { type: [string, "null"], format: date-time, description: "When the person was told it ends soon, if they were." }
     DelegationList:
       type: object
       required: [items]
       properties:
         items: { type: array, items: { $ref: "#/components/schemas/Delegation" } }
+    WebhookSecretRequest:
+      type: object
+      properties:
+        rotate: { type: boolean, default: false, description: "Make a new key instead of refusing a second showing." }
+    WebhookSecret:
+      type: object
+      required: [secret, generation, shown_at]
+      properties:
+        secret: { type: string }
+        generation: { type: integer }
+        shown_at: { type: string, format: date-time }
     AssistantConversationOpen:
       type: object
       properties:

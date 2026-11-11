@@ -188,6 +188,45 @@ function Settings({ org, slug, assistant, schema }: Ref & { assistant: Assistant
   );
 }
 
+/** The key the task webhook is signed with: shown once; a second showing needs a rotation. */
+function WebhookKey({ org, slug }: Ref) {
+  const [shown, setShown] = useState<{ secret: string; generation: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  async function reveal(rotate: boolean) {
+    setError(null);
+    try {
+      const got = await assistantsApi.webhookSecret(org, slug, rotate);
+      setShown({ secret: got.secret, generation: got.generation });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Refused");
+    }
+  }
+  return (
+    <Card title="Task webhook key" eyebrow="Shown once">
+      <div className="space-y-3">
+        <p className="text-sm text-ink-muted">
+          Deliveries to the task webhook are signed with this key (HMAC-SHA256 in <code>X-Choregos-Signature</code>).
+          Copy it now: it is shown once, and a new one needs a rotation.
+        </p>
+        {shown && (
+          <p className="text-sm">
+            Key (generation {shown.generation}): <code data-verbatim>{shown.secret}</code>
+          </p>
+        )}
+        {error && <ErrorNote>{error}</ErrorNote>}
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" tone="default" onClick={() => void reveal(false)}>
+            Show the key
+          </Button>
+          <Button size="sm" tone="danger" onClick={() => void reveal(true)}>
+            Rotate the key
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 function DiffLines({ diff }: { diff: string }) {
   return (
     <pre className="overflow-x-auto rounded bg-surface-muted p-2 text-xs" aria-label="Diff">
@@ -457,6 +496,7 @@ export function InstallationDetail({ slug }: { slug: string }) {
         <>
           <Settings key={data.created_at + JSON.stringify(data.config)} org={org} slug={slug} assistant={data} schema={(manifest?.config_schema ?? null) as JsonSchema | null} />
           <Bindings org={org} slug={slug} assistant={data} needs={manifest?.needs ?? []} />
+          <WebhookKey org={org} slug={slug} />
           <KnowledgeUpdates org={org} slug={slug} />
           <ReadsJournal org={org} slug={slug} />
           <SubjectRights org={org} slug={slug} />

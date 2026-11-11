@@ -66,3 +66,17 @@ class InboxItem(Dto):
 
 class InboxList(Dto):
     items: list[InboxItem]
+
+
+class WebhookSecretRequest(Dto):
+    """`rotate` makes a new key (the old one stops verifying at the receiver once it is changed there)."""
+
+    rotate: bool = False
+
+
+class WebhookSecret(Dto):
+    """The key an installation's task webhook is signed with, shown once to an owner (`assistant:manage`)."""
+
+    secret: str
+    generation: int
+    shown_at: datetime

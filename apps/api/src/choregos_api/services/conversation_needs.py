@@ -73,19 +73,46 @@ EXECUTABLE_IDENTITIES = ("user_exchange",)
 
 
 async def write_tools(
-    session: AsyncSession, record: AgentSessionRecord, spec: AgentSpec, project: Project, *, approval: str
+    session: AsyncSession,
+    record: AgentSessionRecord,
+    spec: AgentSpec,
+    project: Project,
+    *,
+    approval: str,
+    identities: tuple[str, ...] = EXECUTABLE_IDENTITIES,
 ) -> dict[str, tuple[str, BrokerTool]]:
     """`<need>__<operation>` -> (need, tool) of the write operations of the needs whose binding carries this
-    `approval` and an identity a confirmation can execute under. An operation whose organisation policy is
-    `approval` is a governed action already and is left out."""
+    `approval` and one of these `identities`. An operation whose organisation policy is `approval` is a
+    governed action already and is left out."""
     _, reached = await _reached(session, record, spec, project)
     return {
         t.name: (need, t)
         for need, binding, found in reached
-        if binding.approval == approval and binding.identity in EXECUTABLE_IDENTITIES
+        if binding.approval == approval and binding.identity in identities
         for t in found
         if t.is_write and not t.needs_approval
     }
+
+
+#: The suffix of a read operation that previews a write: `<operation>_preview` (S63-10). A source that
+#: serves one returns what the write would change, and the proposal shows it as the action's diff.
+PREVIEW_SUFFIX = "_preview"
+
+
+async def previews(
+    session: AsyncSession, record: AgentSessionRecord, spec: AgentSpec, project: Project
+) -> dict[str, BrokerTool]:
+    """`<need>__<operation>` of a WRITE -> the read tool of the same need that previews it, when there is
+    one."""
+    _, reached = await _reached(session, record, spec, project)
+    found: dict[str, BrokerTool] = {}
+    for _need, _binding, tools in reached:
+        by_operation = {t.operation.name: t for t in tools}
+        for t in tools:
+            preview = by_operation.get(t.operation.name + PREVIEW_SUFFIX)
+            if t.is_write and preview is not None and not preview.is_write and not preview.needs_approval:
+                found[t.name] = preview
+    return found
 
 
 async def need_identities(session: AsyncSession, record: AgentSessionRecord) -> dict[str, str]:

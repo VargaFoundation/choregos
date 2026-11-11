@@ -3897,8 +3897,13 @@ export type ConversationAction = {
     [key: string]: unknown;
   };
   summary: string;
-  status: "proposed" | "confirmed" | "executed" | "refused" | "expired";
+  /** `governed`: a console approval, decided as a governed action named in `result.action`. */
+  status: "proposed" | "confirmed" | "executed" | "refused" | "expired" | "governed";
   result?: {
+    [key: string]: unknown;
+  } | null;
+  /** What the source's `<operation>_preview` returned at the proposal, when it serves one. */
+  diff?: {
     [key: string]: unknown;
   } | null;
   confirmed_by?: string | null;
@@ -4001,6 +4006,8 @@ export type SubjectErasure = {
   memories_erased?: number;
   conversations_redacted?: number;
   conversations_deleted?: number;
+  /** The artifacts of the task runs whose reads were about the subject, deleted. */
+  task_artifacts_erased?: number;
 };
 
 export type UserErasure = {
@@ -4206,10 +4213,23 @@ export type Delegation = {
   status: "active" | "suspended" | "revoked" | "expired";
   suspended_reason?: string | null;
   manifest_digest: string;
+  /** When the person was told it ends soon, if they were. */
+  reminded_at?: string | null;
 };
 
 export type DelegationList = {
   items: Array<Delegation>;
+};
+
+export type WebhookSecretRequest = {
+  /** Make a new key instead of refusing a second showing. */
+  rotate?: boolean;
+};
+
+export type WebhookSecret = {
+  secret: string;
+  generation: number;
+  shown_at: string;
 };
 
 export type AssistantConversationOpen = {
@@ -5638,6 +5658,7 @@ export interface Operations {
   resolveProjectAgents: { method: "GET"; path: "/projects/{id}/agent-resolution"; body: never; response: Array<AgentResolution> };
   restoreAgentVersion: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/restore"; body: AgentVersionRestore; response: AgentVersion };
   restoreWorkflowVersion: { method: "POST"; path: "/projects/{id}/workflows/{name}/versions/{version}/restore"; body: never; response: WorkflowDef };
+  revealAssistantWebhookSecret: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/webhook-secret"; body: WebhookSecretRequest; response: WebhookSecret };
   revokeMachineToken: { method: "DELETE"; path: "/projects/{id}/machine-accounts/{slug}/tokens/{token_id}"; body: never; response: void };
   revokeMyDelegation: { method: "DELETE"; path: "/me/delegations/{delegation_id}"; body: never; response: void };
   revokeMyToken: { method: "DELETE"; path: "/me/tokens/{id}"; body: never; response: void };

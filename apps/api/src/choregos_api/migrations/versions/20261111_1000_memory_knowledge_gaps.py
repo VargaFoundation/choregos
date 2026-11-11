@@ -5,7 +5,7 @@ A plugin upgrade does not bring back a seed document the owners deleted. The tab
 the organisation. The downgrade drops it: a `follow` upgrade would add the deleted documents back.
 
 Revision ID: a2e2c0f0e0d2
-Revises: f4a6c8e0b2d4
+Revises: a5e5c0f0e0d5
 Create Date: 2026-11-11 10:00:00+00:00
 """
 
@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "a2e2c0f0e0d2"
-down_revision: str | None = "f4a6c8e0b2d4"
+down_revision: str | None = "a5e5c0f0e0d5"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

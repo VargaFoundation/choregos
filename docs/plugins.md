@@ -285,14 +285,31 @@ now with `POST …/run`. Nothing changes in the Temporal workflows: the schedule
   `abs_gte`, `gte`, `lte`, `eq`). When `idempotency` runs through a `*` (`/events/*/id`) each item is an object,
   `when` is tested on each, and one run starts per object not seen before; the keys seen are kept on the
   subscription and in the work item's key.
-- **`on_demand`**: the caller's click, one work item each, no delegation (the session's identity).
+- **`on_demand`**: the caller's click, one work item each, no delegation (the session's identity). A
+  conversation of the installation is offered the same through ONE tool, `run_task(task)`, whose `task` is one of
+  the manifest's on-demand tasks (`conversation_tasks`): it starts the task as the conversation's owner, with
+  no delegation, under the click's budget and readiness checks, and tells the agent the work item's key.
 - **Delegation**: a task with `delegation: read_only` can be subscribed, but its scheduled and polled runs are
-  refused, the reason in `last_refusal`, until the standing delegation of S63-14. A run is also refused when
-  the subscriber leaves the audience or when the subscriber's month, then the installation's, is spent.
+  refused, the reason in `last_refusal`, unless the subscriber's standing delegation holds
+  ([security](security.md#the-standing-delegation-adr-0137-points-3-4)). The steps of the run's workflow read
+  under it too: a step's read of a connector the installation binds to a need is made as the person the need's
+  identity says and judged again at each call, a write of such a step is refused (`write_under_delegation`).
+  The console's task card shows what the delegation covers and until when, agrees to the exact list the API
+  shows, and revokes. A run is also refused when the subscriber leaves the audience or when the subscriber's
+  month, then the installation's, is spent.
+- **Spend**: the ledger lines of a task run (model and tool) name the installation and the subscriber
+  (`costs.task_attribution`), so the month caps above read them like a conversation's.
+- **Reads journal**: every read of a task run's steps is a line with the work item's key (and the delegation's id
+  under one), never the content.
 - **Delivery**: the run's artifacts are listed by `GET /me/inbox` (always). `email` and `teams` go through a
   notifier, `webhook` is an HMAC-signed POST (`X-Choregos-Signature: t=…,v1=…`, as the A2A push notifications)
   to the installation's `policy_overrides.delivery.webhook.url`; each is sent once per artifact revision and a
-  channel nobody configured is recorded as `not_configured` in the work item.
+  channel nobody configured is recorded as `not_configured` in the work item. No Teams adapter ships: the
+  `teams` channel works through whichever notifier the installation's `policy_overrides.delivery.teams`
+  (`{type, config}`) names. The webhook's signing key is shown ONCE to whoever manages the installation:
+  `POST /orgs/{org}/assistants/{slug}/webhook-secret` (`assistant:manage`) returns it, a second call is 409
+  unless `{"rotate": true}` makes a new generation (the console's installation page has the two buttons); each
+  showing is audited, never the key.
 
 #### Knowledge in a conversation
 
@@ -422,13 +439,22 @@ pending action (`conversation_actions`: operation, arguments, a readable summary
 agent that the action awaits the person. The conversation's owner decides, and only they:
 `GET /me/conversations/{id}/actions`, `POST .../actions/{action_id}/confirm` (the broker calls the source with a
 token exchanged for that person, `user_exchange`; the source stays the judge of the right to write; the result is
-kept, a second confirmation is 409 `action_executed`) and `POST .../refuse`. A proposal nobody decides in 24 hours
-expires. The MCP door lists them as `pending_actions[{id, summary, confirm_url}]` and never executes
+kept, a second confirmation is 409 `action_executed`) and `POST .../refuse`. A confirmed call is booked like a
+tool call of a turn: a ledger line naming the installation and the person, the conversation's tool-call count and a
+`tool.called` event (`as: person:<subject>`). When the need also serves a read operation `<operation>_preview`, the
+proposal calls it as the person with the same arguments and keeps what it returned in `diff`. A proposal nobody
+decides in 24 hours expires. The MCP door lists them as `pending_actions[{id, summary, confirm_url}]` and never executes
 ([ADR 0030](adr/0030-an-mcp-door-for-external-clients.md)). Owners may bind a write with
-`approval: console` (above the manifest's floor), never below it (422); a `console` need is not offered in a
-conversation (a governed action needs a work item a conversation has not) and a proposal made before the owners
-raised it is refused at confirmation with `approval_console`. `user_consent` writes wait for S63-08; no dry run
-diff is computed.
+`approval: console` (above the manifest's floor), never below it (422). A `console` need bound with the
+connector's own identity (`service`) is offered too: calling it proposes a GOVERNED action
+([ADR 0035](adr/0035-governed-actions-in-the-core.md)) in the person's personal space,
+decided at `/p/<space>/actions/<id>` with a fresh sign-in by whoever the project's rules name, played by the
+`ActionWorkflow` under the connector's identity; the conversation's row is `governed` (`result.action` names the
+action) and follows its outcome (`executed`, or `refused` when rejected); confirming or refusing it from the
+conversation is 409 `governed`. A `console` need with a person's identity (`user_exchange`) is NOT offered: the
+governed action's effect has no per-person identity, so it would write as the service; a proposal made before the
+owners raised the approval is refused at confirmation with `approval_console`. `user_consent` writes wait for
+S63-08.
 
 ### Who may use an assistant, and what it may spend
 
@@ -500,18 +526,24 @@ row-level policy.
 
 ### Data protection
 
-- **Retention.** A daily task of the API deletes the conversations past `retention_until` with their events
-  and the unpinned memory facts older than their space's `retention_days` (the ledger lines stay).
+- **Retention.** A daily task of the API deletes the conversations past `retention_until` with their events,
+  the unpinned memory facts older than their space's `retention_days` (the ledger lines stay), the task
+  artifacts older than `policy.data.retention_days` (30 days when the manifest names none) and the profile
+  versions past the newest ten (`policy_overrides.retention.profile_versions`), the live ones kept.
 - **Reads journal.** Each tool call of an assistant's conversation writes one line (person, need, operation,
   subject, moment; never the content). `GET /api/v1/orgs/{org}/assistants/{slug}/reads` lists them for
   `assistant:audit`, filtered by `subject_type` / `subject_key` / `user_id`.
 - **Erasure by user.** `DELETE /api/v1/me/assistants/{org}/{slug}` removes the caller's conversations and
-  memories in that installation, and is written in the audit log.
+  memories in that installation, their standing delegations (revoked first), task subscriptions, the artifacts of
+  their task runs (the work item stays as the trace; the bytes of a file artifact stay in the object store, which
+  has no delete) and their connected accounts at the connectors the installation binds with `user_consent`
+  (revoked at the source when it offers it), and is written in the audit log.
 - **Erasure and export by subject.** `POST /api/v1/orgs/{org}/assistants/{slug}/erasure` with
   `{subject: {type, key}, mode: export | erase}`, for `assistant:audit`, only when `policy.data.erasure` lists
   `by_subject`. `export` returns every person's memory of the subject and the conversations where it was
   resolved; `erase` deletes those memories and redacts those conversations (`conversations: delete` deletes
-  them). Both are audited, the key as a digest.
+  them), and deletes the artifacts of the task runs whose reads (the reads journal) were about the subject.
+  Delegations and connected accounts belong to a person, not a subject. Both are audited, the key as a digest.
 
 ## Pack and index
 

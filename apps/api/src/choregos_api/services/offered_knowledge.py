@@ -514,9 +514,9 @@ async def notify_owners(
     route. Returns the number of owners told; a failing channel never fails the upgrade."""
     from choregos_core.domain import Message
 
-    from .task_delivery import notifier_of
+    from .task_delivery import notifier_for
 
-    notifier = notifier_of(row, "email")
+    notifier = notifier_for(row, "email")
     if notifier is None or not row.owner_groups:
         return 0
     found = await session.execute(

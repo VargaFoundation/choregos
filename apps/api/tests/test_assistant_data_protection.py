@@ -415,3 +415,179 @@ async def test_the_reads_journal_stays_in_its_organisation_on_postgresql(pg_app:
             session.add(read(ids["b"], installations["b"].id, "stolen"))
     async with session_scope() as session:
         assert (await session.execute(select(AssistantRead))).scalars().all() == [], "no scope, nothing"
+
+
+# ───────────────────────── tasks, accounts and delegations (E3) ─────────────────────────
+
+
+async def _task_artifact(email: str, installation_id: str, key: str, *, name: str = "brief") -> str:
+    """A task work item in the person's personal space with one artifact; the work item's id."""
+    from choregos_api.db.models import ArtifactRecord, Organization, User, WorkItem
+    from choregos_api.db.session import session_scope
+    from choregos_api.services.personal_spaces import personal_space
+
+    async with session_scope(orgs="*") as session:
+        user = (await session.execute(select(User).where(User.email == email))).scalar_one()
+        organisation = (await session.execute(select(Organization))).scalar_one()
+        space = await personal_space(session, organisation, user)
+        item = WorkItem(
+            project_id=space.id,
+            tracker_key=key,
+            title=key,
+            state="brief",
+            documents={"task": {"installation_id": installation_id, "task": "morning_brief"}},
+        )
+        session.add(item)
+        await session.flush()
+        session.add(
+            ArtifactRecord(
+                org_id=organisation.id, work_item_id=item.id, name=name, version=1, type="report",
+                kind="inline", media_type="text/markdown", digest="sha256:0", size=3, content="abc",
+                run_id="r",
+            )
+        )  # fmt: skip
+        return item.id
+
+
+async def _artifacts() -> list[str]:
+    from choregos_api.db.models import ArtifactRecord, WorkItem
+    from choregos_api.db.session import session_scope
+
+    async with session_scope(orgs="*") as session:
+        rows = await session.execute(
+            select(WorkItem.tracker_key).join(ArtifactRecord, ArtifactRecord.work_item_id == WorkItem.id)
+        )
+        return sorted(rows.scalars())
+
+
+async def test_an_erasure_by_user_reaches_accounts_delegations_subscriptions_and_task_artifacts(
+    client: AsyncClient, admin: str, upstream: Upstream, offline: Path, markets: Any
+) -> None:
+    from choregos_api.db.models import (
+        AssistantToolBinding,
+        ConnectedAccount,
+        Delegation,
+        Organization,
+        TaskSubscription,
+        User,
+    )
+    from choregos_api.db.session import session_scope
+
+    installation = await _assistant(client, with_markets=True)
+    async with session_scope(orgs="*") as session:
+        me = (await session.execute(select(User).where(User.email == "admin@varga.dev"))).scalar_one()
+        org = (await session.execute(select(Organization))).scalar_one()
+        binding = (await session.execute(select(AssistantToolBinding))).scalars().all()[-1]
+        binding.identity = "user_consent"  # the installation reads `markets` as the person
+        colleague = User(email="colleague@varga.dev", display_name="c", oidc_sub="c")
+        session.add(colleague)
+        await session.flush()
+        for owner in (me, colleague):
+            session.add(
+                ConnectedAccount(
+                    org_id=org.id, user_id=owner.id, connector="markets", secret_ref=f"store:{owner.id}",
+                    status="connected",
+                )
+            )  # fmt: skip
+            session.add(
+                TaskSubscription(
+                    org_id=org.id, installation_id=installation, user_id=owner.id, task="morning_brief",
+                    trigger={"kind": "on_demand"}, seen_keys=[],
+                )
+            )  # fmt: skip
+            session.add(
+                Delegation(
+                    org_id=org.id, installation_id=installation, user_id=owner.id, task="morning_brief",
+                    needs=[], granted_at=utcnow(), expires_at=utcnow() + timedelta(days=5),
+                    manifest_digest="d",
+                )
+            )  # fmt: skip
+    await _task_artifact("admin@varga.dev", installation, "TASK-mine")
+    await _task_artifact("colleague@varga.dev", installation, "TASK-theirs")
+
+    gone = await client.delete(ME)
+    assert gone.status_code == 200, gone.text
+    others = gone.json()["others"]
+    assert others["connected_accounts"] == 1 and others["delegations"] == 1, others
+    assert others["task_subscriptions"] == 1 and others["task_artifacts"] == 1, others
+    assert await _artifacts() == ["TASK-theirs"], "the colleague's artifact stays"
+    async with session_scope(orgs="*") as session:
+        for model in (ConnectedAccount, TaskSubscription, Delegation):
+            owners = (await session.execute(select(model.user_id))).scalars().all()
+            assert owners == [colleague.id], model.__name__
+
+
+async def test_an_erasure_by_subject_deletes_the_artifacts_of_the_task_runs_that_read_about_it(
+    client: AsyncClient, admin: str, upstream: Upstream, offline: Path
+) -> None:
+    from choregos_api.db.models import AssistantRead, Organization, User
+    from choregos_api.db.session import session_scope
+
+    installation = await _assistant(client)
+    await _task_artifact("admin@varga.dev", installation, "TASK-about", name="brief")
+    await _task_artifact("admin@varga.dev", installation, "TASK-other", name="brief")
+    async with session_scope(orgs="*") as session:
+        me = (await session.execute(select(User).where(User.email == "admin@varga.dev"))).scalar_one()
+        org = (await session.execute(select(Organization))).scalar_one()
+        for key, subject_key in (("TASK-about", SUBJECT["key"]), ("TASK-other", "ISIN-OTHER")):
+            session.add(
+                AssistantRead(
+                    org_id=org.id, installation_id=installation, user_id=me.id, work_item_key=key,
+                    need="market_data", operation="market_data__get_quote", subject_type=SUBJECT["type"],
+                    subject_key=subject_key, at=utcnow(),
+                )
+            )  # fmt: skip
+    erased = await client.post(
+        f"{ORG}/assistants/investment-assistant/erasure", json={**BY_SUBJECT, "mode": "erase"}
+    )
+    assert erased.status_code == 200, erased.text
+    assert erased.json()["task_artifacts_erased"] == 1
+    assert await _artifacts() == ["TASK-other"]
+
+
+async def test_the_purge_deletes_old_task_artifacts_and_old_profile_versions(
+    client: AsyncClient, admin: str, upstream: Upstream, offline: Path
+) -> None:
+    from choregos_api.db.models import ArtifactRecord, MemoryProfile, MemoryStore, Organization, User
+    from choregos_api.db.session import session_scope
+    from choregos_api.services.assistant_retention import purge_once
+
+    installation = await _assistant(client)
+    old = await _task_artifact("admin@varga.dev", installation, "TASK-old")
+    await _task_artifact("admin@varga.dev", installation, "TASK-fresh")
+    async with session_scope(orgs="*") as session:
+        me = (await session.execute(select(User).where(User.email == "admin@varga.dev"))).scalar_one()
+        org = (await session.execute(select(Organization))).scalar_one()
+        for artifact in (
+            await session.execute(select(ArtifactRecord).where(ArtifactRecord.work_item_id == old))
+        ).scalars():
+            artifact.created_at = utcnow() - timedelta(days=60)
+        store = MemoryStore(
+            org_id=org.id, slug="profile", display_name="p", scope="user", owner_key="x", kind="profile",
+            installation_id=installation, user_id=me.id,
+        )  # fmt: skip
+        session.add(store)
+        await session.flush()
+        for version in range(1, 15):
+            session.add(
+                MemoryProfile(
+                    org_id=org.id,
+                    memory_store_id=store.id,
+                    version=version,
+                    document={"v": version},
+                    status="active" if version == 14 else "superseded",
+                )
+            )
+        # An old version that is still live (proposed, waiting for the person) is never purged.
+        session.add(
+            MemoryProfile(org_id=org.id, memory_store_id=store.id, version=0, document={}, status="proposed")
+        )
+        await session.flush()
+        done = await purge_once(session)
+    assert done["task_artifacts"] == 1 and done["profile_versions"] == 4, done
+    assert await _artifacts() == ["TASK-fresh"]
+    async with session_scope(orgs="*") as session:
+        versions = sorted((await session.execute(select(MemoryProfile.version))).scalars().all())
+    assert versions == [0, *range(5, 15)], "the newest ten stay, and the live ones"
+    async with session_scope(orgs="*") as session:
+        assert (await purge_once(session))["profile_versions"] == 0, "idempotent"
