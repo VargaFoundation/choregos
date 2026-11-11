@@ -3,6 +3,7 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { AddToMemory, Decide } from "@/components/assistants/memory-add";
 import { ConfirmedGesture } from "@/components/confirmed-gesture";
 import { Badge, Button, Card, Empty, ErrorNote, ReadState } from "@/components/ui";
 import { assistantsApi, type MemoryFactView, type MemorySpace } from "@/lib/assistants-api";
@@ -44,16 +45,47 @@ function useMemoryActions({ org, slug }: Ref, space: string) {
     forget: (subject: string | undefined, fact: MemoryFactView) =>
       guard(() => assistantsApi.deleteMemory(org, slug, space, fact.id, subject)),
     forgetAll: (subject: string | undefined) => guard(() => assistantsApi.deleteMemory(org, slug, space, undefined, subject)),
+    /** What the person writes themselves (`add`): active at once. */
+    add: async (body: Parameters<typeof assistantsApi.memoryAction>[3], subject?: string) => {
+      await assistantsApi.memoryAction(org, slug, space, body, subject);
+      await refresh();
+    },
   };
 }
 
-function exportSpace(space: MemorySpace) {
-  const blob = new Blob([JSON.stringify(space, null, 2)], { type: "application/json" });
+function download(value: unknown, name: string) {
+  const blob = new Blob([JSON.stringify(value, null, 2)], { type: "application/json" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = `${space.space}.json`;
+  link.download = name;
   link.click();
   URL.revokeObjectURL(link.href);
+}
+
+const exportSpace = (space: MemorySpace) => download(space, `${space.space}.json`);
+
+/** Everything the assistant remembers of the person, in every space, to keep or carry elsewhere. */
+function ExportEverything({ org, slug }: Ref) {
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <div className="space-y-2">
+      <Button
+        size="sm"
+        tone="default"
+        onClick={async () => {
+          setError(null);
+          try {
+            download(await assistantsApi.exportMemory(org, slug), `${slug}-memory.json`);
+          } catch (cause) {
+            setError(cause instanceof Error ? cause.message : "Export refused");
+          }
+        }}
+      >
+        Export everything
+      </Button>
+      {error && <ErrorNote>{error}</ErrorNote>}
+    </div>
+  );
 }
 
 /** What the assistant remembers of me in one space: confirm, reject, pin, delete, export. */
@@ -103,14 +135,7 @@ export function MemorySpaceCard({ org, slug, space }: Ref & { space: string }) {
                       </span>
                       <span className="flex gap-1">
                         {isProposed(fact.status) && (
-                          <>
-                            <Button size="sm" tone="primary" onClick={act.fact(key, fact, "confirm")}>
-                              Confirm
-                            </Button>
-                            <Button size="sm" tone="default" onClick={act.fact(key, fact, "reject")}>
-                              Reject
-                            </Button>
-                          </>
+                          <Decide onConfirm={act.fact(key, fact, "confirm")} onReject={act.fact(key, fact, "reject")} />
                         )}
                         <Button size="sm" tone="default" onClick={act.fact(key, fact, fact.pinned ? "unpin" : "pin")}>
                           {fact.pinned ? "Unpin" : "Pin"}
@@ -128,14 +153,7 @@ export function MemorySpaceCard({ org, slug, space }: Ref & { space: string }) {
                           Profile v{p.version} <Badge tone={isProposed(p.status) ? "waiting" : "neutral"}>{p.status}</Badge>
                         </span>
                         {isProposed(p.status) && (
-                          <span className="flex gap-1">
-                            <Button size="sm" tone="primary" onClick={act.profile(key, p.version, "confirm")}>
-                              Confirm
-                            </Button>
-                            <Button size="sm" tone="default" onClick={act.profile(key, p.version, "reject")}>
-                              Reject
-                            </Button>
-                          </span>
+                          <Decide onConfirm={act.profile(key, p.version, "confirm")} onReject={act.profile(key, p.version, "reject")} />
                         )}
                       </div>
                       <pre className="overflow-x-auto rounded bg-surface-muted p-2 text-xs">
@@ -147,6 +165,7 @@ export function MemorySpaceCard({ org, slug, space }: Ref & { space: string }) {
               </div>
             );
           })}
+          <AddToMemory kind={data.kind} askSubject={data.scope === "user_subject"} onAdd={act.add} />
         </div>
       )}
     </Card>
@@ -159,6 +178,7 @@ export function AssistantMemory({ org, slug, spaces }: Ref & { spaces: string[] 
   return (
     <div className="space-y-4">
       <p className="text-sm text-ink-muted">What the assistant remembers about you. You decide what stays.</p>
+      <ExportEverything org={org} slug={slug} />
       {spaces.map((space) => (
         <MemorySpaceCard key={space} org={org} slug={slug} space={space} />
       ))}

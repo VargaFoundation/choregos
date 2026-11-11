@@ -15,7 +15,7 @@ export default defineConfig({
   use: { baseURL: `http://127.0.0.1:${console_}`, trace: "on-first-retry" },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: [
-    { command: "node e2e-embed/fake-servers.mjs", url: "http://127.0.0.1:4100/api/v1/me", reuseExistingServer: !process.env.CI },
+    { command: "node e2e-embed/fake-servers.mjs", url: "http://127.0.0.1:4100/api/v1/public/assistants/varga/coach/embed", reuseExistingServer: !process.env.CI },
     {
       command: `CHOREGOS_API_URL=http://127.0.0.1:4100 pnpm build && CHOREGOS_API_URL=http://127.0.0.1:4100 pnpm start -p ${console_}`,
       url: `http://127.0.0.1:${console_}/login`,

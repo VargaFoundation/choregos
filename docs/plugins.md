@@ -388,6 +388,10 @@ PUT   /api/v1/orgs/{org}/assistants/{slug}/bindings/{need}  {"connector": "news-
 An installation is `incomplete` until its readiness has no item: each **required** need is bound to a
 connector of the organisation that serves every operation of the need (as discovered, with the same
 `access`) and can carry the need's identity mode, and each required key of `config_schema` has a value.
+The console draws the installation form from `config_schema`: scalars, choices (`enum`, or a `oneOf`/`anyOf` of
+`const`s with their `title`), nullable or mixed scalars (`anyOf` of simple types), lists of scalars or of fixed
+objects (nested to any depth that is written out), fixed objects, and local `$ref`s (`#/$defs/…`,
+`#/definitions/…`); a union of objects is left to the API to judge.
 `service` is always supported; `user_exchange` and `user_consent` only by a connector whose config declares
 them in `identity_modes`. A binding to a connector that cannot satisfy the need is a 422 naming why, and
 nothing changes. An optional need may stay unbound or be switched off (`"enabled": false`). The status is

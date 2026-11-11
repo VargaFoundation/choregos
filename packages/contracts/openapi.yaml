@@ -6607,6 +6607,7 @@ components:
         output_text: { type: string, default: "" }
         usage: { $ref: "#/components/schemas/AgentResponseUsage" }
         error: { oneOf: [{ $ref: "#/components/schemas/AgentResponseError" }, { type: "null" }] }
+        memory_updated: { type: array, items: { type: string }, description: "The memory spaces the turn wrote or proposed in (a conversation with an assistant)." }
     AgentDelta:
       type: object
       description: "A `response.output_text.delta` event."
@@ -9318,7 +9319,7 @@ components:
       required: [name, scope, kind]
       properties:
         name: { type: string }
-        scope: { type: string, enum: [user, user_subject] }
+        scope: { type: string, enum: [user, user_subject, installation] }
         kind: { type: string, enum: [facts, profile] }
     AssistantNeed:
       type: object
@@ -9345,6 +9346,7 @@ components:
         config_schema: { type: [object, "null"], additionalProperties: true }
         suggested_groups: { type: array, items: { type: string } }
         needs: { type: array, items: { $ref: "#/components/schemas/AssistantNeed" } }
+        memory_spaces: { type: array, items: { $ref: "#/components/schemas/AssistantMemorySpace" }, description: "Every declared space, the installation's own included (the owners' page); a person's page never lists an installation space." }
     PluginAssistantList:
       type: object
       required: [items]

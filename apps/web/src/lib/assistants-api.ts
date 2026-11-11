@@ -31,6 +31,7 @@ import type {
   KnowledgeUpdateDecision,
   KnowledgeUpdateList,
   MemoryAction,
+  MemoryExport,
   MemorySpace,
   MyAssistantList,
   PluginAssistantList,
@@ -198,6 +199,16 @@ export const assistantsApi = {
       : request<void>(`/me/assistants/${enc(org)}/${enc(slug)}/memory/${enc(space)}${query({ fact_id: factId })}`, {
           method: "DELETE",
         }),
+  exportMemory: (org: string, slug: string) =>
+    request<MemoryExport>(`/me/assistants/${enc(org)}/${enc(slug)}/memory-export`),
+  // The installation's own memory, for its owners.
+  installationMemory: (org: string, slug: string, space: string) =>
+    request<MemorySpace>(`/orgs/${enc(org)}/assistants/${enc(slug)}/memory/${enc(space)}`),
+  installationMemoryAction: (org: string, slug: string, space: string, body: MemoryAction) =>
+    request<MemorySpace>(`/orgs/${enc(org)}/assistants/${enc(slug)}/memory/${enc(space)}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
   // Connected accounts.
   connectedAccounts: () => request<ConnectedAccountList>("/me/connected-accounts"),
   connectAccount: (connector: string, org: string) =>

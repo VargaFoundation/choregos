@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { groupsOf } from "@/components/assistants/install-assistant";
+import { InstallationMemory } from "@/components/assistants/installation-memory";
 import { ConfirmedGesture } from "@/components/confirmed-gesture";
 import { OrgPageHeader } from "@/components/org-page-header";
 import { SchemaForm, type JsonSchema } from "@/components/schema-form";
@@ -560,6 +561,11 @@ export function InstallationDetail({ slug }: { slug: string }) {
         <>
           <Settings key={data.created_at + JSON.stringify(data.config)} org={org} slug={slug} assistant={data} schema={(manifest?.config_schema ?? null) as JsonSchema | null} />
           <Bindings org={org} slug={slug} assistant={data} needs={manifest?.needs ?? []} />
+          <InstallationMemory
+            org={org}
+            slug={slug}
+            spaces={(manifest?.memory_spaces ?? []).filter((s) => s.scope === "installation").map((s) => s.name)}
+          />
           <WebhookKey org={org} slug={slug} />
           <KnowledgeUpdates org={org} slug={slug} />
           <ReadsJournal org={org} slug={slug} />

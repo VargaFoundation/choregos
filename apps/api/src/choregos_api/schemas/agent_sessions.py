@@ -67,6 +67,8 @@ class AgentResponse(Dto):
     output_text: str = ""
     usage: AgentResponseUsage = Field(default_factory=AgentResponseUsage)
     error: AgentResponseError | None = None
+    #: The memory spaces the turn wrote or proposed in (a conversation with an assistant).
+    memory_updated: list[str] = Field(default_factory=list)
 
 
 class AgentDelta(Dto):

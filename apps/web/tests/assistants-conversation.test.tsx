@@ -238,6 +238,17 @@ describe("a conversation", () => {
     expect(await screen.findByText("already decided")).toBeInTheDocument();
   });
 
+  it("shows the diff the source previewed on a write's card, and none when there is none", async () => {
+    mocks.conversation.mockResolvedValue({ ...summary, messages: [] });
+    const action = (id: string, diff: unknown) => ({ id, conversation_id: "c1", need: "orders", operation: "place_order", arguments: {}, summary: `Buy ${id}`, status: "proposed", diff, created_at: "2026-11-10T08:00:00Z" });
+    mocks.conversationActions.mockResolvedValue({ items: [action("a1", { cash: { before: 100, after: 40 } }), action("a2", null)] });
+    wrap(<ConversationView id="c1" />);
+    await screen.findByText("Buy a1");
+    const diffs = screen.getAllByTestId("action-diff");
+    expect(diffs).toHaveLength(1);
+    expect(diffs[0]).toHaveTextContent('"after": 40');
+  });
+
   it("shows what the assistant proposes to remember, and decides it", async () => {
     mocks.conversation.mockResolvedValue({ ...summary, messages: [] });
     mocks.memory.mockResolvedValue({

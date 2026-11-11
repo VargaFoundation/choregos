@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   myAssistants: vi.fn(),
   memory: vi.fn(),
   memoryAction: vi.fn(),
+  exportMemory: vi.fn(),
   deleteMemory: vi.fn(),
   eraseMyData: vi.fn(),
   connectedAccounts: vi.fn(),
@@ -140,6 +141,37 @@ describe("one assistant, for me", () => {
     fireEvent.click(within(space).getByRole("button", { name: "Forget all" }));
     fireEvent.click(within(space).getByRole("button", { name: "Forget all" }));
     await waitFor(() => expect(mocks.deleteMemory).toHaveBeenCalledWith("varga", "invest", "preferred_sources", undefined, undefined));
+  });
+
+  it("exports everything it remembers of me through the export route", async () => {
+    mocks.exportMemory.mockResolvedValue({ installation: "invest", organisation: "varga", exported_at: "2026-11-11T08:00:00Z", spaces: [] });
+    const create = vi.fn(() => "blob:all");
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: create, revokeObjectURL: vi.fn() }));
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+    wrap(<AssistantWorkspace org="varga" slug="invest" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Export everything" }));
+    await waitFor(() => expect(mocks.exportMemory).toHaveBeenCalledWith("varga", "invest"));
+    await waitFor(() => expect(click).toHaveBeenCalled());
+  });
+
+  it("adds a fact of my own, and a fact about a subject under its key; refuses a profile that is not JSON", async () => {
+    mocks.memoryAction.mockResolvedValue({});
+    wrap(<AssistantWorkspace org="varga" slug="invest" />);
+    await screen.findByText("Prefers Reuters");
+    const [plain, subjects] = screen.getAllByTestId("memory-add") as [HTMLElement, HTMLElement];
+    fireEvent.change(within(plain).getByLabelText("Add a fact"), { target: { value: "Reads Les Echos" } });
+    fireEvent.click(within(plain).getByRole("button", { name: "Add" }));
+    await waitFor(() =>
+      expect(mocks.memoryAction).toHaveBeenCalledWith("varga", "invest", "preferred_sources", { action: "add", content: "Reads Les Echos" }, undefined),
+    );
+    fireEvent.change(within(subjects).getByLabelText("Add a fact"), { target: { value: "Coupon in March" } });
+    fireEvent.click(within(subjects).getByRole("button", { name: "Add" }));
+    expect(await within(subjects).findByText("Name the subject this is about.")).toBeInTheDocument();
+    fireEvent.change(within(subjects).getByLabelText("Subject key"), { target: { value: "FR001" } });
+    fireEvent.click(within(subjects).getByRole("button", { name: "Add" }));
+    await waitFor(() =>
+      expect(mocks.memoryAction).toHaveBeenCalledWith("varga", "invest", "instrument_notes", { action: "add", content: "Coupon in March" }, "FR001"),
+    );
   });
 
   it("erases everything about me after a confirmation", async () => {

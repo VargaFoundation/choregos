@@ -1396,6 +1396,8 @@ export type AgentResponse = {
   output_text?: string;
   usage?: AgentResponseUsage;
   error?: AgentResponseError | null;
+  /** The memory spaces the turn wrote or proposed in (a conversation with an assistant). */
+  memory_updated?: Array<string>;
 };
 
 /** A `response.output_text.delta` event. */
@@ -4125,7 +4127,7 @@ export type AssistantEmbed = {
 
 export type AssistantMemorySpace = {
   name: string;
-  scope: "user" | "user_subject";
+  scope: "user" | "user_subject" | "installation";
   kind: "facts" | "profile";
 };
 
@@ -4151,6 +4153,8 @@ export type PluginAssistant = {
   } | null;
   suggested_groups: Array<string>;
   needs: Array<AssistantNeed>;
+  /** Every declared space, the installation's own included (the owners' page); a person's page never lists an installation space. */
+  memory_spaces?: Array<AssistantMemorySpace>;
 };
 
 export type PluginAssistantList = {

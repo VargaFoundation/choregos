@@ -35,7 +35,7 @@ function sse(...events: [string, unknown][]): Response {
   return new Response(text, { headers: { "Content-Type": "text/event-stream" } });
 }
 
-function fakeApi(options: { signedIn?: boolean; resumable?: boolean; needsToken?: boolean; expired?: boolean } = {}) {
+function fakeApi(options: { signedIn?: boolean; resumable?: boolean; needsToken?: boolean; expired?: boolean; memoryUpdated?: string[]; diff?: object } = {}) {
   const calls: Call[] = [];
   let actions: unknown[] = [];
   const fetcher = vi.fn(async (input: string, init?: RequestInit) => {
@@ -55,12 +55,12 @@ function fakeApi(options: { signedIn?: boolean; resumable?: boolean; needsToken?
     }
     if (path === "/me/conversations/c1") return new Response("{}", { status: 404 });
     if (path === "/me/conversations/c1/messages") {
-      actions = [proposed];
+      actions = [options.diff ? { ...proposed, diff: options.diff } : proposed];
       return sse(
         ["response.created", {}],
         ["response.output_text.delta", { delta: "Hel" }],
         ["response.output_text.delta", { delta: "lo" }],
-        ["response.completed", {}],
+        ["response.completed", { memory_updated: options.memoryUpdated ?? [] }],
       );
     }
     if (path === "/me/conversations/c1/actions") return Response.json({ items: actions });
@@ -135,6 +135,46 @@ describe("the embedded assistant (S63-12)", () => {
       ),
     );
     await waitFor(() => expect(screen.queryByRole("button", { name: "Confirm" })).toBeNull());
+  });
+
+  it("shows what a proposed write would change, from the source's preview", async () => {
+    fakeApi({ diff: { phone: { from: "01", to: "02" } } });
+    mount();
+    fireEvent.change(await screen.findByLabelText("Message"), { target: { value: "Call them" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByTestId("action-diff")).toHaveTextContent('"to": "02"');
+  });
+
+  it("tells the host which memory spaces the turn wrote in, with no space to watch listed", async () => {
+    fakeApi({ memoryUpdated: ["notes"] });
+    mount();
+    fireEvent.change(await screen.findByLabelText("Message"), { target: { value: "Remember this" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() =>
+      expect(host.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "memory.updated", conversation_id: "c1", spaces: ["notes"] }),
+        ORIGIN,
+      ),
+    );
+  });
+
+  it("narrows memory.updated to the spaces the host asked to watch", async () => {
+    fakeApi({ memoryUpdated: ["notes", "private"] });
+    mount({ memorySpaces: ["notes"] });
+    fireEvent.change(await screen.findByLabelText("Message"), { target: { value: "Remember this" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await waitFor(() =>
+      expect(host.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: "memory.updated", spaces: ["notes"] }), ORIGIN),
+    );
+  });
+
+  it("says nothing of memory when the turn wrote none", async () => {
+    fakeApi();
+    mount();
+    fireEvent.change(await screen.findByLabelText("Message"), { target: { value: "Hi" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await screen.findByText("Hello");
+    expect(host.postMessage.mock.calls.some((c) => (c[0] as { type: string }).type === "memory.updated")).toBe(false);
   });
 
   it("tries the silent sign-in once, then offers a Sign in button", async () => {

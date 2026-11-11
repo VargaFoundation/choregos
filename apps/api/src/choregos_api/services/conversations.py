@@ -64,6 +64,7 @@ from .agent_sessions import (
 )
 from .budgets import lock_budget_scopes
 from .conversation_installation import apply_installation
+from .conversation_signals import memory_written_of
 from .conversation_title import model_title
 from .conversation_turns import (
     claim_turn,
@@ -259,6 +260,7 @@ async def _turn(
     answer: AgentResponse | None = None
     try:
         answer = await respond(session, record, project, [text], turn_key=str(key.key), on_delta=on_delta)
+        answer = answer.model_copy(update={"memory_updated": await memory_written_of(session, record.id)})
         if first and answer.status == "completed" and record.title is None:
             # The same model, on the turn's key: its cost is the turn's. The cut message stands in.
             written = await model_title(session, record, str(key.key), text, answer.output_text)

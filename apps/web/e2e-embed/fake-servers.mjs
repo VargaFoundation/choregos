@@ -6,10 +6,16 @@
 //   host      localhost:3100   an allowed origin   (`/?src=<embed url>`)
 //   host      127.0.0.1:3200   NOT an allowed origin
 //
+// A frame under another site holds no console cookie: like the real API, the fake opens the component's routes
+// only to the frame token (`X-Choregos-Embed`) that `POST .../embed-token` mints for a signed-in browser (the
+// header `X-Fake-Session: ada` stands for the first-party cookie the sign-in popup carries). Every call is
+// recorded with the token it carried.
+//
 // `GET /__calls` on the fake API returns what it was asked, so the test can see the opening context.
 import { createServer } from "node:http";
 
 const calls = [];
+const TOKEN = "frame-token-ada";
 const json = (res, status, body) => {
   res.writeHead(status, { "Content-Type": "application/json" });
   res.end(JSON.stringify(body));
@@ -38,15 +44,22 @@ createServer(async (req, res) => {
   const path = url.pathname.replace("/api/v1", "");
   const payload = req.method === "POST" ? await body(req) : null;
   if (path === "/__calls") return json(res, 200, calls);
-  calls.push({ method: req.method, path, body: payload });
+  const token = req.headers["x-choregos-embed"];
+  calls.push({ method: req.method, path, body: payload, token: token ?? null });
   if (path === "/public/assistants/varga/coach/embed") return json(res, 200, { embed_origins: ["http://localhost:3100"] });
+  if (path === "/me/assistants/varga/coach/embed-token" && req.method === "POST") {
+    if (req.headers["x-fake-session"] !== "ada") return json(res, 401, { title: "Unauthorized" });
+    return json(res, 200, { token: TOKEN, expires_in: 900 });
+  }
+  // The component's own routes: the cookie never comes from a frame, only the token.
+  if (token !== TOKEN) return json(res, 401, { title: "Unauthorized" });
   if (path === "/me") return json(res, 200, { email: "ada@varga.test" });
   if (path === "/me/assistants/varga/coach/conversations") return json(res, 201, conversation);
   if (path === "/me/conversations/c1/actions") return json(res, 200, { items: [] });
   if (path === "/me/conversations/c1/messages") {
     res.writeHead(200, { "Content-Type": "text/event-stream" });
     res.write('event: response.output_text.delta\ndata: {"delta":"Bonjour"}\n\n');
-    res.end('event: response.completed\ndata: {"status":"completed"}\n\n');
+    res.end('event: response.completed\ndata: {"status":"completed","memory_updated":["notes"]}\n\n');
     return;
   }
   return json(res, 404, { title: "Not Found" });

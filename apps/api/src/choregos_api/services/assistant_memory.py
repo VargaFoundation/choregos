@@ -493,6 +493,14 @@ def _status_for(decl: dict[str, Any]) -> str:
     raise MemoryRefused("write_refused", f"`{decl['name']}` is written by the person only (`user_only`)")
 
 
+async def _note_written(session: AsyncSession, spaces: Spaces, space: str) -> None:
+    """The turn's answer reports the spaces it wrote in (`memory_updated`)."""
+    if spaces.conversation is not None:
+        from .conversation_signals import note_memory_written
+
+        await note_memory_written(session, spaces.conversation, space)
+
+
 async def propose(
     session: AsyncSession,
     spaces: Spaces,
@@ -535,6 +543,7 @@ async def propose(
         session.add(fact)
         await session.flush()
         await _expire(session, store)
+        await _note_written(session, spaces, space)
         return {"status": fact.status, "id": fact.id}
     if not isinstance(profile_patch, dict) or content is not None:
         raise MemoryRefused("invalid_arguments", f"`{space}` is a profile: give a `profile_patch` object")
@@ -556,6 +565,7 @@ async def propose(
     if status == "active" and current is not None:
         current.status = "superseded"
     await session.flush()
+    await _note_written(session, spaces, space)
     return {"status": row.status, "version": row.version}
 
 

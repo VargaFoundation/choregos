@@ -30,6 +30,8 @@ vi.mock("@/lib/api", async (importOriginal) => {
 
 const mocks = vi.hoisted(() => ({
   pluginAssistants: vi.fn(),
+  installationMemory: vi.fn(),
+  installationMemoryAction: vi.fn(),
   installations: vi.fn(),
   installation: vi.fn(),
   install: vi.fn(),
@@ -200,6 +202,55 @@ describe("one installation, for its owners", () => {
     expect(screen.getByText("to fix: the owners")).toBeInTheDocument();
     fireEvent.change(await screen.findByLabelText("Connector for news"), { target: { value: "news-feed" } });
     await waitFor(() => expect(mocks.bind).toHaveBeenCalledWith("varga", "invest", "news", { connector: "news-feed", enabled: true, approval: null }));
+  });
+
+  it("lists the installation's own memory for its owners, decides proposals and adds a fact", async () => {
+    mocks.pluginAssistants.mockResolvedValue({
+      items: [
+        {
+          ...shipped.items[0],
+          memory_spaces: [
+            { name: "investor_profile", scope: "user", kind: "profile" },
+            { name: "house_view", scope: "installation", kind: "facts" },
+          ],
+        },
+      ],
+    });
+    mocks.installationMemory.mockResolvedValue({
+      space: "house_view",
+      scope: "installation",
+      kind: "facts",
+      writes: "owner_only",
+      subjects: [
+        {
+          subject: null,
+          facts: [
+            { id: "h1", content: "Overweight bonds", status: "proposed", pinned: false },
+            { id: "h2", content: "No tobacco", status: "active", pinned: false },
+          ],
+          profiles: [],
+        },
+      ],
+    });
+    mocks.installationMemoryAction.mockResolvedValue({});
+    wrap(<InstallationDetail slug="invest" />);
+    expect(await screen.findByText("Overweight bonds")).toBeInTheDocument();
+    expect(mocks.installationMemory).toHaveBeenCalledTimes(1);
+    expect(mocks.installationMemory).toHaveBeenCalledWith("varga", "invest", "house_view"); // a person's space is not listed
+    const card = screen.getByText("Overweight bonds").closest("section")!;
+    fireEvent.click(within(card).getByRole("button", { name: "Confirm" }));
+    await waitFor(() =>
+      expect(mocks.installationMemoryAction).toHaveBeenCalledWith("varga", "invest", "house_view", { action: "confirm", fact_id: "h1" }),
+    );
+    fireEvent.click(within(card).getByRole("button", { name: "Reject" }));
+    await waitFor(() =>
+      expect(mocks.installationMemoryAction).toHaveBeenCalledWith("varga", "invest", "house_view", { action: "reject", fact_id: "h1" }),
+    );
+    fireEvent.change(within(card).getByLabelText("Add a fact"), { target: { value: "Cap equities at 60%" } });
+    fireEvent.click(within(card).getByRole("button", { name: "Add" }));
+    await waitFor(() =>
+      expect(mocks.installationMemoryAction).toHaveBeenCalledWith("varga", "invest", "house_view", { action: "add", content: "Cap equities at 60%" }),
+    );
   });
 
   it("shows the webhook key once, and rotates it on request", async () => {

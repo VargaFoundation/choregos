@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Button, Input } from "@/components/ui";
+import { ActionDiff } from "@/components/assistants/action-diff";
 import { api, API_BASE, ApiError } from "@/lib/api";
 import {
   createEmitter,
@@ -88,7 +89,7 @@ export function EmbeddedAssistant({
   rawContext: string | null;
   /** The silent sign-in already ran and the identity provider needs the person. */
   signinRequired: boolean;
-  /** The memory spaces to watch for `memory.updated` (comma-separated names in `?memory=`). */
+  /** Narrows `memory.updated` to these spaces (comma-separated names in `?memory=`); none: every space the turn wrote. */
   memorySpaces: string[];
 }) {
   const [phase, setPhase] = useState<Phase>({ kind: "starting" });
@@ -198,12 +199,6 @@ export function EmbeddedAssistant({
     return () => observer.disconnect();
   }, []);
 
-  const memoryOf = useCallback(
-    async () =>
-      JSON.stringify(await Promise.all(memorySpaces.map((s) => api.assistantMemory(org, installation, s).catch(() => null)))),
-    [memorySpaces, org, installation],
-  );
-
   const send = useCallback(
     async (conversation: Conversation) => {
       const text = draft.trim();
@@ -215,26 +210,28 @@ export function EmbeddedAssistant({
       const grow = (delta: string) =>
         setTurns((t) => t.map((turn, i) => (i === t.length - 1 ? { ...turn, content: turn.content + delta } : turn)));
       try {
-        const before = memorySpaces.length > 0 ? await memoryOf() : "";
         const response = await api.conversationTurn(conversation.id, text);
         if (!response.ok || !response.body) throw new ApiError(response.status, { title: response.statusText });
+        let written: string[] = [];
         for await (const item of readEvents(response.body)) {
           if (item.event === "response.output_text.delta") grow((JSON.parse(item.data) as { delta: string }).delta);
-          else if (item.event === "error") {
+          else if (item.event === "response.completed") {
+            written = (JSON.parse(item.data) as { memory_updated?: string[] }).memory_updated ?? [];
+          } else if (item.event === "error") {
             throw new Error((JSON.parse(item.data) as { detail?: string }).detail ?? "The turn failed.");
           }
         }
         setActions((await api.conversationActions(conversation.id)).items);
-        if (memorySpaces.length > 0 && (await memoryOf()) !== before) {
-          emitRef.current("memory.updated", { conversation_id: conversation.id, spaces: memorySpaces });
-        }
+        // The turn says which spaces it wrote or proposed in; `?memory=` narrows them to the host's.
+        const spaces = memorySpaces.length > 0 ? written.filter((w) => memorySpaces.includes(w)) : written;
+        if (spaces.length > 0) emitRef.current("memory.updated", { conversation_id: conversation.id, spaces });
       } catch (error) {
         setProblem(error instanceof Error ? error.message : "The turn failed.");
       } finally {
         setBusy(false);
       }
     },
-    [busy, draft, memoryOf, memorySpaces],
+    [busy, draft, memorySpaces],
   );
 
   const decide = useCallback(async (conversation: Conversation, action: ConversationAction, confirm: boolean) => {
@@ -296,6 +293,7 @@ export function EmbeddedAssistant({
             <div key={action.id} role="group" aria-label="Action to confirm" className="rounded border border-line p-2">
               <p className="font-medium">{action.summary}</p>
               <p className="text-xs text-ink-muted">{action.operation}</p>
+              <ActionDiff diff={action.diff} />
               <div className="mt-2 flex gap-2">
                 <Button tone="primary" size="sm" onClick={() => void decide(phase.conversation, action, true)}>
                   Confirm
