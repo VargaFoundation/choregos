@@ -512,6 +512,20 @@ async def notify_owners(
     """Tells the owners, through the installation's `email` notifier (the one of its task deliveries), that an
     upgrade left proposals waiting. Nothing configured, nothing sent: the proposals stay listed in the owners'
     route. Returns the number of owners told; a failing channel never fails the upgrade."""
+    return await tell_owners(
+        session,
+        row,
+        f"{row.slug}: {len(proposed)} knowledge update(s) to decide",
+        f"Version {version} of the plugin proposes changes to the knowledge of "
+        f"`{row.slug}`:\n" + "\n".join(f"- {p}" for p in proposed),
+        {"installation": row.slug, "version": version},
+    )
+
+
+async def tell_owners(
+    session: AsyncSession, row: AssistantInstallation, title: str, body: str, context: dict[str, Any]
+) -> int:
+    """One message to every owner of `row` (members of an owner group), through its `email` notifier."""
     from choregos_core.domain import Message
 
     from .task_delivery import notifier_for
@@ -528,18 +542,10 @@ async def notify_owners(
     told = 0
     for email in owners:
         try:
-            await notifier.send(
-                email,
-                Message(
-                    title=f"{row.slug}: {len(proposed)} knowledge update(s) to decide",
-                    body=f"Version {version} of the plugin proposes changes to the knowledge of "
-                    f"`{row.slug}`:\n" + "\n".join(f"- {p}" for p in proposed),
-                    context={"installation": row.slug, "version": version},
-                ),
-            )
+            await notifier.send(email, Message(title=title, body=body, context=context))
             told += 1
         except Exception as failure:  # a channel that fails must not undo the upgrade
-            log.warning("assistant.knowledge.notify_failed", installation=row.slug, error=str(failure)[:200])
+            log.warning("assistant.notify_failed", installation=row.slug, error=str(failure)[:200])
     return told
 
 
@@ -604,4 +610,12 @@ async def decide(
     return proposal
 
 
-__all__ = ["copy_seeds", "decide", "notify_owners", "proposals", "remember_deleted", "upgrade_plugin"]
+__all__ = [
+    "copy_seeds",
+    "decide",
+    "notify_owners",
+    "proposals",
+    "remember_deleted",
+    "tell_owners",
+    "upgrade_plugin",
+]

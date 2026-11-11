@@ -143,6 +143,16 @@ tools:
   assistant says what is missing.
 - The source decides what a person may read, not Choregos.
 
+### Upgrading a plugin that changes a need
+
+When a new version of your plugin changes `tools`, each installation follows it. A need you drop has its
+binding switched off and kept for the audit. A need you add is unbound: the installation shows it as
+something to do. A need whose operations, `access` or `identity` changed is checked again against the
+connector it is bound to; if the connector still fits, nothing is asked of the owners, if not the binding is
+switched off and the installation says why. Flipping `required` changes what the installation needs to be
+ready. The owners are told by email when the installation has an email delivery. Keep a need's name when
+you change it, since a new name is a new need.
+
 ## 3. Memory spaces
 
 ```text

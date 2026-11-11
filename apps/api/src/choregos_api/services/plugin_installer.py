@@ -657,6 +657,13 @@ async def upgrade(
         return previous, []
     prepared = await _prepare(session, org_id, plugin, settings, replacing=row)
     offered: list[str] = []
+    from . import assistants
+
+    needs_before = {
+        r.slug: await assistants.manifest(session, r)
+        for r in await assistants.installations(session, org_id)
+        if r.plugin == row.name
+    }  # S63-22: the needs as the installations read them before the files change
     kept: dict[str, list[str]] = {"agents": [], "skills": []}
     skipped: dict[str, list[str]] = {"skills": [], "agents": []}
     old = PluginContents.model_validate(row.contents or {})
@@ -713,6 +720,7 @@ async def upgrade(
     from .offered_knowledge import upgrade_plugin
 
     await upgrade_plugin(session, org_id, row, principal)  # S63-06: the installations' offered knowledge
+    await assistants.upgrade_plugin_bindings(session, org_id, row.name, needs_before, principal)  # S63-22
     await record(session, principal, "plugin.upgrade", org_id=org_id, target_type="plugin",
                  target_id=row.name, previous_version=previous, version=plugin.version,
                  digest=plugin.digest, offered=offered, kept=kept,

@@ -377,6 +377,20 @@ Installing the plugin makes its assistants available; installing an assistant (S
 object of the organisation, for an audience. The manifest is never copied: it is read again from the
 installed plugin, so a plugin upgrade is seen at once.
 
+**Upgrading the plugin moves the bindings (S63-22).** The upgrade compares each installation's manifest with
+the new one, need by need:
+
+| The upgrade | The binding | The readiness |
+| --- | --- | --- |
+| drops a need | disabled and kept, for the audit | nothing is asked of it |
+| adds a need | none | a required one is `need_unbound` |
+| changes a need's operations, `access`, `identity` or approval floor | checked again against the connector: it follows the manifest when it fits, it is disabled when it does not | a disabled required binding shows why (`need_not_served`, `identity_unsupported`) |
+| flips `required` | unchanged | recomputed |
+
+The change is audited (`assistant.upgrade`) and the owners are told through the installation's `email`
+notifier, as they are of knowledge proposals; an upgrade that changes no need says nothing. A binding the
+upgrade disabled is enabled again by binding the need (`PUT …/bindings/{need}`) once the connector fits.
+
 ```
 POST  /api/v1/orgs/{org}/assistants      {"plugin": "investment-assistant", "assistant": "investment-assistant",
                                           "slug": "invest", "config": {"house_name": "Varga"},
