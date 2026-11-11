@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { Suspense, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ActivityPage from "@/app/activity/page";
-import ProjectActivityPage from "@/app/p/[slug]/activity/page";
+import { projectGroups } from "@/components/shell/navigation";
 import { ActivityView } from "@/components/activity/activity-view";
 import { elapsedMs, entryLabel, formatElapsed, spendSoFar, statusKind } from "@/lib/activity";
 import { api, ApiError } from "@/lib/api";
@@ -204,9 +204,12 @@ describe("the Activity screen", () => {
     expect(await screen.findByRole("heading", { name: "In flight (1)" })).toBeInTheDocument();
     expect(api.activity).toHaveBeenCalledWith("acme", { project: "billing-api" });
     vi.mocked(api.activity).mockClear();
-    await show(<ProjectActivityPage params={Promise.resolve({ slug: "checkout-web" })} />);
+    await show(<ActivityView org="acme" project="checkout-web" />);
     expect(await screen.findByRole("heading", { name: "In flight (1)" })).toBeInTheDocument();
     expect(api.activity).toHaveBeenCalledWith("acme", { project: "checkout-web" });
+    // A project's sidebar leads to the same screen, narrowed to it.
+    const work = projectGroups("checkout-web").find((g) => g.title === "Work")!;
+    expect(work.entries.find((e) => e.label === "Activity")?.href).toBe("/activity?project=checkout-web");
   });
 
   it("opens a run onto its steps, the run's events", async () => {
