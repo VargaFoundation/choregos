@@ -45,6 +45,10 @@ class OAuthClient(BaseModel):
     callback_port: int | None = Field(default=None, ge=1024, le=65535)
 
 
+#: The public documentation site (S62 shared contracts), when `CHOREGOS_DOCS_URL` names none.
+DEFAULT_DOCS_URL = "https://docs.varga.foundation/choregos"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="CHOREGOS_", env_file=".env", extra="ignore")
 
@@ -229,6 +233,11 @@ class Settings(BaseSettings):
     plugins_config: str = ""
     #: The offline plugin directory baked into the image; wins over the file's `offline`.
     plugins_offline: str = ""
+    #: The user documentation baked into the image (`docs/site/**`, S62-10, ADR 0150), served by the
+    #: MCP door's `docs_search` and `docs_read`. An absent directory: this build bundles none.
+    docs_dir: str = "/opt/choregos/docs"
+    #: The public documentation site, for the links those tools give (S62 shared contracts).
+    docs_url: str = "https://docs.varga.foundation/choregos"
     #: Plugin servers (ADR 0096): `kubernetes` runs them in `plugin_servers_namespace` through the API's
     #: Role there; `off` refuses a plugin that brings one (`CHOREGOS_FAKES` runs them in memory).
     plugin_servers: Literal["off", "kubernetes"] = "off"

@@ -5347,6 +5347,8 @@ export interface Operations {
     /** the source revision the image was built from; null when the build did not record it */
     revision: string | null;
   };
+  /** the user documentation's base URL, without a trailing slash (`CHOREGOS_DOCS_URL`, `https://docs.varga.foundation/choregos` by default): the console's help and "Learn more" links append a page's slug to it (S62-11) */
+  docs_url?: string;
 } };
   enableOrgConnector: { method: "PUT"; path: "/projects/{id}/org-connectors/{connector}/enablement"; body: never; response: ProjectOrgConnector };
   endMyOtherSessions: { method: "POST"; path: "/me/sessions/end-others"; body: never; response: EndedSessions };

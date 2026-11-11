@@ -9,10 +9,10 @@ import { Glossary } from "@/components/glossary";
 import { Empty } from "@/components/ui";
 import { OrgPageHeader } from "@/components/org-page-header";
 import { api } from "@/lib/api";
-import { estClient } from "@/lib/integrations";
+import { A2A_ENTRY, estClient } from "@/lib/integrations";
 import { useSession } from "@/lib/session";
-import { A2aAgent } from "./a2a";
-import { IntegrationsPanel } from "./panel";
+import { A2aIntegration } from "./a2a";
+import { ClientTabs, IntegrationsPanel } from "./panel";
 
 /**
  * The Integrations page, at the scale of the organisation or of a project (ADR 0030).
@@ -23,20 +23,27 @@ import { IntegrationsPanel } from "./panel";
  */
 export function IntegrationsPage({ client, projet }: { client: string; projet?: string }) {
   const base = projet ? `/p/${projet}/integrations` : "/integrations";
+  const { org } = useSession();
   return (
     <div className="space-y-6">
       {!projet && (
         <div className="space-y-2">
-          <OrgPageHeader title="Integrations" description="Plug Claude, or any MCP client, into Choregos. Your agent lists your projects, opens and follows work items, and tells you what waits for your decision — with your rights, never more. It never decides: you do, in the console." />
+          <OrgPageHeader title="Integrations" description="Plug Claude, any MCP client, an application or another agent into Choregos. Your agent lists your projects, opens and follows work items, and tells you what waits for your decision — with your rights, never more. It never decides: you do, in the console." />
           <Glossary ici="clients" />
         </div>
       )}
-      {estClient(client) ? (
+      {client === A2A_ENTRY.id ? (
+        // An application or another agent (S62-11): a page of steps, not an MCP client's snippet.
+        <div className="space-y-6">
+          <ClientTabs client={client} base={base} />
+          <A2aIntegration org={org} projet={projet} />
+        </div>
+      ) : estClient(client) ? (
         <IntegrationsPanel client={client} projet={projet} base={base} />
       ) : (
         <Empty title="Unknown client">No client called {client}</Empty>
       )}
-      {!projet && <OrganisationClients />}
+      {!projet && client !== A2A_ENTRY.id && <OrganisationClients />}
     </div>
   );
 }
@@ -53,7 +60,6 @@ function OrganisationClients() {
   return (
     <>
       <McpClients org={org} clients={(tokens.data ?? []).filter(isMcpClient)} agents={agents.data ?? []} />
-      <A2aAgent org={org} />
       <AiClientCatalogue org={org} />
     </>
   );

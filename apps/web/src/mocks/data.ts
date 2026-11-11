@@ -89,6 +89,7 @@ import type {
 import { normalizeSpec } from "@/lib/agent-diff";
 import { ApiError } from "@/lib/api";
 import type {
+  MachineAccount,
   McpGatewayPut,
   McpGatewayState,
   OutboundProxyPut,
@@ -1304,6 +1305,9 @@ export const workflowSummaries: WorkflowSummary[] = [
   { name: "hotfix", version: 2, is_default: false, open_items: 0, created_by: "marc@acme.dev", updated_at: iso(60 * 5) },
 ];
 
+/** The demo project's applications (ADR 0131): none until one is created on the page. */
+const mockMachineAccounts: MachineAccount[] = [];
+
 export const workflowRouting: WorkflowRouting = {
   default: "default-simple",
   rules: [{ when: { labels_any: ["incident"], labels_all: [], item_type: null }, workflow: "hotfix" }],
@@ -1397,6 +1401,12 @@ export const hotfix: WorkflowDef = {
           detected_on: { type: "string", format: "date", title: "detected on" },
         },
       },
+    },
+    // Served over the A2A door (ADR 0078): the Integrations page's A2A steps show it as a skill (S62-11).
+    a2a: {
+      skill: "open-incident",
+      description: "Open an incident and ship its fix.",
+      input_modes: ["text/plain", "application/json"],
     },
   } as unknown as WorkflowDef["json"],
 };
@@ -3318,6 +3328,37 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     mySessions = mySessions.filter((s) => s.id !== id);
     return undefined as T;
   }
+  // Applications (ADR 0131), for the A2A steps of Integrations (S62-11): created, then a token shown once.
+  const machineToken = /^\/projects\/[^/]+\/machine-accounts\/([^/]+)\/tokens$/.exec(path);
+  if (method === "POST" && machineToken) {
+    const reqBody = (body ?? {}) as { name?: string };
+    const account = mockMachineAccounts.find((a) => a.slug === machineToken[1]);
+    const token = {
+      id: `tok-machine-${(account?.tokens.length ?? 0) + 1}`,
+      name: reqBody.name ?? "token",
+      created_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 90 * 86_400_000).toISOString(),
+      last_used_at: null,
+      scopes: ["a2a" as const],
+      project: "acme:billing-api",
+    };
+    account?.tokens.push(token);
+    return { ...token, token: "chg_demo_application_token_shown_once" } as T;
+  }
+  if (method === "POST" && /^\/projects\/[^/]+\/machine-accounts$/.test(path)) {
+    const reqBody = (body ?? {}) as { slug: string; display_name?: string | null };
+    const account: MachineAccount = {
+      slug: reqBody.slug,
+      display_name: reqBody.display_name ?? reqBody.slug,
+      address: `${reqBody.slug}.p1@machines.choregos.invalid`,
+      writes_per_day: 500,
+      created_by: me.email,
+      created_at: new Date().toISOString(),
+      tokens: [],
+    };
+    mockMachineAccounts.push(account);
+    return account as T;
+  }
   if (method === "POST" && path === "/me/tokens") {
     // The token is returned only once, at creation: the Integrations page slips it into its snippets.
     const reqBody = JSON.parse(String(init.body ?? "{}")) as { name?: string; scopes?: string[]; project?: string | null };
@@ -4149,7 +4190,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/workflows\/[^/]+$/, workflow],
     [/^\/projects\/[^/]+\/workflow-routing$/, workflowRouting],
     // HTTP triggers (S56-02): one declared trigger, its token minted once, a manual firing.
-    [/^\/projects\/[^/]+\/machine-accounts$/, []],
+    [/^\/projects\/[^/]+\/machine-accounts$/, mockMachineAccounts],
     [/^\/projects\/[^/]+\/triggers\/[^/]+\/token$/, mockTriggerToken],
     [/^\/projects\/[^/]+\/triggers\/[^/]+\/fire$/, mockTriggerAck],
     [/^\/projects\/[^/]+\/triggers$/, mockTriggers],
