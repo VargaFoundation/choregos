@@ -34,13 +34,14 @@ def needs_of(document: dict[str, Any]) -> list[AssistantNeed]:
     ]
 
 
-def memory_spaces_of(document: dict[str, Any]) -> list[AssistantMemorySpace]:
+def memory_spaces_of(document: dict[str, Any], *, owners: bool = False) -> list[AssistantMemorySpace]:
+    """A person's spaces; with `owners`, the installation's too (never on a person's page)."""
     return [
         AssistantMemorySpace(
             name=str(m["name"]), scope=m.get("scope") or "user", kind=m.get("kind") or "facts"
         )
         for m in _mappings(document.get("memory"))
-        if m.get("name")
+        if m.get("name") and (owners or m.get("scope") != "installation")
     ]
 
 
@@ -78,6 +79,7 @@ async def plugin_assistants(session: AsyncSession, org_id: str, plugin: str) -> 
                     str(g) for g in (document.get("audience") or {}).get("suggested_groups") or []
                 ],
                 needs=needs_of(document),
+                memory_spaces=memory_spaces_of(document, owners=True),
             )
         )
     return found

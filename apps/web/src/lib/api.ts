@@ -407,9 +407,6 @@ export const api = {
   /** The frame token the sign-in popup hands to the frame (S63-12, API `embed_frame`). */
   mintEmbedToken: (org: string, slug: string) =>
     request<EmbedToken>(`/me/assistants/${org}/${slug}/embed-token`, { method: "POST" }),
-  /** A memory space of the caller, to see whether a turn changed it (`memory.updated`). */
-  assistantMemory: (org: string, slug: string, space: string) =>
-    request<unknown>(`/me/assistants/${org}/${slug}/memory/${space}`),
   conversationActions: (id: string) => request<ConversationActionList>(`/me/conversations/${id}/actions`),
   confirmConversationAction: (id: string, action: string) =>
     request<ConversationAction>(`/me/conversations/${id}/actions/${action}/confirm`, { method: "POST" }),

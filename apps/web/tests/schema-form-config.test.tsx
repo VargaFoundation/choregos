@@ -70,4 +70,103 @@ describe("a config_schema form", () => {
     fireEvent.change(screen.getByLabelText("per day"), { target: { value: "5" } });
     expect(value()).toEqual({ limits: { per_day: 5 } });
   });
+
+  it("draws a oneOf of labelled constants as a choice that keeps the constant's own type", () => {
+    render(
+      <Harness
+        schema={{
+          type: "object",
+          properties: {
+            tone: { oneOf: [{ const: "formal", title: "Formal" }, { const: "casual", title: "Casual" }] },
+            level: { anyOf: [{ const: 1 }, { const: 2 }] },
+          },
+        }}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("tone"), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("level"), { target: { value: "1" } });
+    expect(value()).toEqual({ tone: "casual", level: 2 });
+    expect(screen.getByRole("option", { name: "Formal" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("tone"), { target: { value: "" } });
+    expect(value()).toEqual({ level: 2 });
+  });
+
+  it("draws a nullable scalar as that scalar, and a mixed one as text typed on the way out", () => {
+    render(
+      <Harness
+        schema={{
+          type: "object",
+          properties: {
+            days: { anyOf: [{ type: "integer" }, { type: "null" }] },
+            limit: { oneOf: [{ type: "integer" }, { type: "string" }] },
+          },
+        }}
+      />,
+    );
+    const days = screen.getByLabelText("days");
+    expect(days).toHaveAttribute("type", "number");
+    fireEvent.change(days, { target: { value: "7" } });
+    fireEvent.change(screen.getByLabelText("limit"), { target: { value: "30" } });
+    expect(value()).toEqual({ days: 7, limit: 30 });
+    fireEvent.change(screen.getByLabelText("limit"), { target: { value: "unlimited" } });
+    expect(value().limit).toBe("unlimited");
+  });
+
+  it("follows a local $ref for a field, a list's items and a fixed object", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      $defs: {
+        window: { type: "object", properties: { from: { type: "string" }, to: { type: "string" } } },
+        channel: { enum: ["inbox", "email"] },
+      },
+      properties: {
+        hours: { $ref: "#/$defs/window" },
+        channels: { type: "array", items: { $ref: "#/$defs/channel" } },
+      },
+    };
+    render(<Harness schema={schema} />);
+    fireEvent.change(screen.getByLabelText("from"), { target: { value: "09:00" } });
+    fireEvent.click(screen.getByLabelText("email"));
+    expect(value()).toEqual({ hours: { from: "09:00" }, channels: ["email"] });
+  });
+
+  it("does not loop on a $ref to itself, nor fail on a dangling one", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      $defs: { node: { type: "object", properties: { name: { type: "string" }, child: { $ref: "#/$defs/node" } } } },
+      properties: { tree: { $ref: "#/$defs/node" }, lost: { $ref: "#/$defs/missing", type: "string" } },
+    };
+    render(<Harness schema={schema} />);
+    expect(screen.getAllByLabelText("name").length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("lost")).toBeInTheDocument();
+  });
+
+  it("draws a list of objects: add, edit, remove, and nested lists of objects inside", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        sources: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              name: { type: "string" },
+              feeds: { type: "array", items: { type: "object", properties: { url: { type: "string", format: "uri" } } } },
+            },
+          },
+        },
+      },
+    };
+    render(<Harness schema={schema} />);
+    fireEvent.click(screen.getByRole("button", { name: "Add an item" }));
+    fireEvent.change(screen.getByLabelText("name"), { target: { value: "Reuters" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Add an item" })[0]!);
+    fireEvent.change(screen.getByLabelText("url"), { target: { value: "https://r.example/rss" } });
+    expect(value()).toEqual({ sources: [{ name: "Reuters", feeds: [{ url: "https://r.example/rss" }] }] });
+    fireEvent.click(screen.getAllByRole("button", { name: "Add an item" }).at(-1)!);
+    expect(value().sources).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "Remove item 2" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Remove item 1" }).at(-1)!); // the outer item's, after its feeds'
+    expect(value()).toEqual({});
+  });
 });

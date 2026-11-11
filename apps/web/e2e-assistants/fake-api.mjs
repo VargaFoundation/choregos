@@ -61,6 +61,18 @@ const memory = {
     },
   ],
 };
+// A write the assistant proposes, with what the source's preview says it would change.
+const action = {
+  id: "a1",
+  conversation_id: "c1",
+  need: "crm",
+  operation: "update_contact",
+  arguments: { phone: "02" },
+  summary: "Update Ada's phone",
+  status: "proposed",
+  diff: { phone: { from: "01", to: "02" } },
+  created_at: "2026-11-10T10:00:00Z",
+};
 const shipped = {
   items: [
     {
@@ -74,7 +86,11 @@ const shipped = {
           company_name: { type: "string", default: "Diametral" },
           hr_contact: { type: "string", description: "Who to refer sensitive matters to" },
           embed_origins: { type: "array", items: { type: "string", format: "uri" }, default: ["https://scorecard.example.org"] },
+          tone: { oneOf: [{ const: "warm", title: "Warm" }, { const: "direct", title: "Direct" }] },
+          review_days: { anyOf: [{ type: "integer" }, { type: "null" }] },
+          topics: { type: "array", items: { $ref: "#/$defs/topic" } },
         },
+        $defs: { topic: { type: "object", properties: { label: { type: "string" } } } },
       },
       suggested_groups: ["grp-managers"],
       needs: [],
@@ -94,7 +110,10 @@ createServer(async (req, res) => {
   if (path === "/me/assistants/acme/coach/conversations") return json(res, 201, conversation);
   if (path === "/me/conversations") return json(res, 200, { items: [conversation], meta: { has_more: false } });
   if (path === "/me/conversations/c1") return json(res, 200, conversation);
-  if (path === "/me/conversations/c1/actions") return json(res, 200, { items: [] });
+  if (path === "/me/conversations/c1/actions") return json(res, 200, { items: [action] });
+  if (path === "/me/assistants/acme/coach/memory-export") {
+    return json(res, 200, { installation: "coach", organisation: "acme", exported_at: "2026-11-11T08:00:00Z", spaces: [memory] });
+  }
   if (path === "/me/assistants/acme/coach/memory/preferred_sources") return json(res, 200, memory);
   if (path === "/orgs/acme/agent-sessions/c1/feedback") return json(res, 201, { id: "fb1", rating: payload?.rating });
   if (path === "/orgs/acme/assistants") {

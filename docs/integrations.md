@@ -92,11 +92,12 @@ no transcript: the person signs in to Choregos, and the conversation is theirs (
 |---|---|---|
 | `conversation.started` | The conversation is open (new or resumed) | `conversation_id`, `resumed` |
 | `action.confirmed` | The person confirmed a write the assistant proposed | `conversation_id`, `action_id`, `operation`, `status` |
-| `memory.updated` | A turn changed a memory space listed in `?memory=space1,space2` | `conversation_id`, `spaces` |
+| `memory.updated` | A turn wrote or proposed in a memory space (`?memory=space1,space2` narrows it to those) | `conversation_id`, `spaces` |
 | `resize` | The content's height changed: size the iframe to it | `height` (pixels) |
 
-`memory.updated` is opt-in because a turn does not report memory writes: the frame compares the listed spaces
-before and after each turn. The write actions the assistant proposes appear in the frame with Confirm and Refuse
+`memory.updated` comes from the turn itself: its final event carries `memory_updated`, the spaces the turn wrote or
+proposed in (a proposal counts: the person has something to confirm). `?memory=` only narrows it. The write actions
+the assistant proposes appear in the frame with what the source's preview says they would change (`diff`) and Confirm and Refuse
 buttons (the same routes as the console: the broker executes with the person's identity).
 
 ## A token for each client

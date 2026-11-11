@@ -33,7 +33,84 @@ export type JsonSchema = {
   "x-upload"?: string;
   "x-accept"?: string[];
   "x-max-bytes"?: number;
+  /** A local reference (`#/$defs/name`, `#/definitions/name`): resolved against the form's root schema. */
+  $ref?: string;
+  $defs?: Record<string, JsonSchema>;
+  definitions?: Record<string, JsonSchema>;
+  /** `oneOf`/`anyOf` of constants (a labelled choice) or of simple types (a nullable or mixed scalar). */
+  oneOf?: JsonSchema[];
+  anyOf?: JsonSchema[];
+  const?: unknown;
 };
+
+/** A schema as the form draws it: references resolved, `oneOf`/`anyOf` of simple things collapsed. */
+type Drawn = JsonSchema & {
+  /** Labelled constants (`oneOf: [{const, title}]`), drawn as a choice. */
+  choices?: { value: unknown; label: string }[];
+  /** Several simple types (`anyOf: [{type: string}, {type: integer}]`): one text field, typed on the way out. */
+  mixed?: string[];
+};
+
+const MAX_DEPTH = 8;
+
+function lookup(ref: string, root: JsonSchema): JsonSchema | undefined {
+  const match = /^#\/(\$defs|definitions)\/([^/]+)$/.exec(ref);
+  if (!match) return undefined;
+  const table = match[1] === "$defs" ? root.$defs : root.definitions;
+  return table?.[decodeURIComponent(match[2] ?? "")];
+}
+
+/** Follows local references (a loop stops after a few hops); the node's own keywords win over the target's. */
+export function resolveRef(node: JsonSchema, root: JsonSchema): JsonSchema {
+  let current = node;
+  for (let hop = 0; hop < MAX_DEPTH && current.$ref; hop += 1) {
+    const { $ref, ...own } = current;
+    const target = lookup($ref, root);
+    if (!target) return own;
+    current = { ...target, ...own };
+  }
+  return current;
+}
+
+const SIMPLE = new Set(["string", "integer", "number"]);
+
+/** What the form draws for a node: `$ref` followed, a constants `oneOf`/`anyOf` as choices, simple types merged. */
+export function drawn(node: JsonSchema, root: JsonSchema): Drawn {
+  const resolved = resolveRef(node, root);
+  const branches = (resolved.oneOf ?? resolved.anyOf ?? []).map((b) => resolveRef(b, root));
+  if (branches.length === 0) return resolved;
+  const rest: JsonSchema = { ...resolved };
+  delete rest.oneOf;
+  delete rest.anyOf;
+  const live = branches.filter((b) => b.type !== "null");
+  const constant = (b: JsonSchema) => b.const !== undefined || (b.enum?.length === 1 && !b.type);
+  if (live.length > 0 && live.every(constant)) {
+    const choices = live.map((b) => {
+      const value = b.const !== undefined ? b.const : b.enum?.[0];
+      return { value, label: b.title ?? String(value) };
+    });
+    return { ...rest, choices };
+  }
+  const types = live.map((b) => b.type ?? "");
+  if (live.length > 0 && types.every((t) => SIMPLE.has(t))) {
+    const distinct = [...new Set(types)];
+    const first = live[0] ?? {};
+    return distinct.length === 1
+      ? { ...first, ...rest, type: distinct[0] }
+      : { ...rest, type: "string", format: first.format, mixed: distinct };
+  }
+  if (live.length === 1) return { ...live[0], ...rest };
+  return resolved; // a union of objects: left to the API (and drawn as a mapping, as before)
+}
+
+/** The value a typed text stands for in a field that takes several simple types. */
+export function mixedValue(raw: string, types: string[]): unknown {
+  const numeric = types.includes("integer") || types.includes("number");
+  if (numeric && raw.trim() !== "" && Number.isFinite(Number(raw)) && String(Number(raw)) === raw.trim()) {
+    return Number(raw);
+  }
+  return raw;
+}
 
 type Values = Record<string, unknown>;
 
@@ -64,9 +141,14 @@ export function SchemaForm({
   org,
   connectorType,
   nestedObjects,
+  root,
+  depth = 0,
 }: {
   schema: JsonSchema;
   value: Values;
+  /** The schema `$ref`s are resolved against (the whole form's); the schema itself by default. */
+  root?: JsonSchema;
+  depth?: number;
   onChange: (value: Values) => void;
   disabled?: boolean;
   /** An object with named properties is drawn as its own fields (an assistant's `config_schema`), not as a `key = value` mapping. */
@@ -77,9 +159,11 @@ export function SchemaForm({
   connectorType?: string;
 }) {
   const base = useId();
-  const requis = new Set(schema.required ?? []);
-  const proprietes = Object.entries(schema.properties ?? {});
-  if (proprietes.length === 0) return null;
+  const top = root ?? schema;
+  const here = resolveRef(schema, top);
+  const requis = new Set(here.required ?? []);
+  const proprietes = Object.entries(here.properties ?? {});
+  if (proprietes.length === 0 || depth > MAX_DEPTH) return null;
   return (
     <div className="grid gap-3 md:grid-cols-2">
       {proprietes.map(([name, propriete]) => (
@@ -94,6 +178,8 @@ export function SchemaForm({
           org={org}
           connectorType={connectorType}
           nestedObjects={nestedObjects}
+          root={top}
+          depth={depth}
           onChange={(next) => {
             const suivantes = { ...value };
             if (next === undefined) delete suivantes[name];
@@ -109,18 +195,22 @@ export function SchemaForm({
 function Field({
   id,
   name,
-  propriete,
+  propriete: raw,
   requis,
   value,
   disabled,
   org,
   connectorType,
   nestedObjects,
+  root,
+  depth,
   onChange,
 }: {
   id: string;
   name: string;
   propriete: JsonSchema;
+  root: JsonSchema;
+  depth: number;
   requis: boolean;
   value: unknown;
   disabled?: boolean;
@@ -129,6 +219,7 @@ function Field({
   nestedObjects?: boolean;
   onChange: (value: unknown) => void;
 }) {
+  const propriete = drawn(raw, root);
   const libelle = propriete.title ?? name.replaceAll("_", " ");
   const aide = propriete.description ? `${id}-aide` : undefined;
   const label = (
@@ -161,7 +252,26 @@ function Field({
     );
   }
   let control;
-  if (propriete.enum) {
+  if (propriete.choices) {
+    const choices = propriete.choices;
+    const at = choices.findIndex((c) => Object.is(c.value, value));
+    control = (
+      <Select
+        id={id}
+        value={at < 0 ? "" : String(at)}
+        disabled={disabled}
+        aria-describedby={aide}
+        onChange={(event) => onChange(event.target.value === "" ? undefined : choices[Number(event.target.value)]?.value)}
+      >
+        <option value="">—</option>
+        {choices.map((choice, index) => (
+          <option key={index} value={String(index)}>
+            {choice.label}
+          </option>
+        ))}
+      </Select>
+    );
+  } else if (propriete.enum) {
     control = (
       <Select
         id={id}
@@ -213,6 +323,8 @@ function Field({
           disabled={disabled}
           org={org}
           nestedObjects
+          root={root}
+          depth={depth + 1}
           onChange={(next) => onChange(Object.keys(next).length > 0 ? next : undefined)}
         />
       </fieldset>
@@ -232,10 +344,28 @@ function Field({
         onChange={(event) => onChange(event.target.value === "" ? undefined : event.target.value)}
       />
     );
-  } else if (propriete.type === "array" && propriete.items?.enum) {
-    control = <ChoiceList id={id} choices={propriete.items.enum} value={value} disabled={disabled} onChange={onChange} />;
+  } else if (propriete.type === "array" && propriete.items && itemsOf(propriete.items, root).enum) {
+    control = (
+      <ChoiceList id={id} choices={itemsOf(propriete.items, root).enum ?? []} value={value} disabled={disabled} onChange={onChange} />
+    );
+  } else if (nestedObjects && propriete.type === "array" && propriete.items && itemsOf(propriete.items, root).properties) {
+    // A list of fixed objects: one fieldset per item, with its own fields.
+    control = (
+      <ObjectList
+        id={id}
+        items={itemsOf(propriete.items, root)}
+        value={value}
+        disabled={disabled}
+        org={org}
+        root={root}
+        depth={depth + 1}
+        onChange={onChange}
+      />
+    );
   } else if (propriete.type === "array") {
-    control = <ListField id={id} items={propriete.items} value={value} disabled={disabled} aide={aide} onChange={onChange} />;
+    control = (
+      <ListField id={id} items={propriete.items && itemsOf(propriete.items, root)} value={value} disabled={disabled} aide={aide} onChange={onChange} />
+    );
   } else {
     const isNumber = propriete.type === "integer" || propriete.type === "number";
     control = (
@@ -251,6 +381,7 @@ function Field({
           if (raw === "") return onChange(undefined);
           if (propriete.type === "integer") return onChange(Number.parseInt(raw, 10));
           if (propriete.type === "number") return onChange(Number(raw));
+          if (propriete.mixed) return onChange(mixedValue(raw, propriete.mixed));
           return onChange(raw);
         }}
       />
@@ -261,6 +392,61 @@ function Field({
       {label}
       {control}
       {indication}
+    </div>
+  );
+}
+
+/** An array's item schema, resolved (`items: {$ref}`; a choice of constants as an `enum`). */
+function itemsOf(items: JsonSchema, root: JsonSchema): JsonSchema {
+  const item = drawn(items, root);
+  const choices = item.choices?.map((c) => c.value);
+  return choices ? { ...item, enum: choices } : item;
+}
+
+/** A list of fixed objects (`items` with named properties): add, edit and remove whole items. */
+function ObjectList({
+  id,
+  items,
+  value,
+  disabled,
+  org,
+  root,
+  depth,
+  onChange,
+}: {
+  id: string;
+  items: JsonSchema;
+  value: unknown;
+  disabled?: boolean;
+  org?: string;
+  root: JsonSchema;
+  depth: number;
+  onChange: (value: unknown) => void;
+}) {
+  const list = Array.isArray(value) ? (value as Values[]) : [];
+  const commit = (next: Values[]) => onChange(next.length > 0 ? next : undefined);
+  return (
+    <div id={id} role="group" className="space-y-2">
+      {list.map((entry, index) => (
+        <fieldset key={index} className="space-y-2 rounded-control border border-line p-2">
+          <SchemaForm
+            schema={items}
+            value={entry && typeof entry === "object" ? entry : {}}
+            disabled={disabled}
+            org={org}
+            nestedObjects
+            root={root}
+            depth={depth}
+            onChange={(next) => commit(list.map((e, i) => (i === index ? next : e)))}
+          />
+          <Button size="sm" tone="default" type="button" disabled={disabled} onClick={() => commit(list.filter((_, i) => i !== index))}>
+            Remove item {index + 1}
+          </Button>
+        </fieldset>
+      ))}
+      <Button size="sm" tone="default" type="button" disabled={disabled} onClick={() => commit([...list, {}])}>
+        Add an item
+      </Button>
     </div>
   );
 }

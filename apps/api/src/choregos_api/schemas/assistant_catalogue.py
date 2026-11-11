@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
+from pydantic import Field
+
 from .base import Dto
 
 
@@ -12,7 +14,7 @@ class AssistantMemorySpace(Dto):
     """A memory space the assistant declares: the console's memory page lists them."""
 
     name: str
-    scope: Literal["user", "user_subject"]
+    scope: Literal["user", "user_subject", "installation"]
     kind: Literal["facts", "profile"]
 
 
@@ -42,6 +44,7 @@ class PluginAssistant(Dto):
     config_schema: dict[str, Any] | None = None
     suggested_groups: list[str]
     needs: list[AssistantNeed]
+    memory_spaces: list[AssistantMemorySpace] = Field(default_factory=list)
 
 
 class PluginAssistantList(Dto):

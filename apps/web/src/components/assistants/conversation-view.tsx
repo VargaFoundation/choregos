@@ -10,6 +10,7 @@ import { MarkdownView } from "@/components/markdown-view";
 import { OrgPageHeader } from "@/components/org-page-header";
 import { Alert, Badge, Button, Card, ErrorNote, ReadState, Textarea, buttonClasses } from "@/components/ui";
 import { citationsOf, connectLinksOf, type ConnectLink } from "@/lib/assistants";
+import { ActionDiff } from "@/components/assistants/action-diff";
 import { assistantsApi, streamTurn, type ConversationAction } from "@/lib/assistants-api";
 import { useSession } from "@/lib/session";
 
@@ -108,6 +109,7 @@ function ActionCard({ action, conversation, onDecided }: { action: ConversationA
     <Card padding="sm" title="The assistant wants to act" eyebrow={`${action.need} · ${action.operation}`}>
       <p className="text-sm">{action.summary}</p>
       <pre className="mt-2 overflow-x-auto rounded bg-surface-muted p-2 text-xs">{JSON.stringify(action.arguments, null, 2)}</pre>
+      <ActionDiff diff={action.diff} />
       {error && <ErrorNote>{error}</ErrorNote>}
       <div className="mt-3 flex gap-2">
         <Button size="sm" tone="primary" onClick={() => void decide("confirm")}>

@@ -643,3 +643,31 @@ async def test_another_person_never_reads_someones_user_space_on_postgresql(pg_a
             assert [m.slug for m in (await session.execute(select(MemoryStore))).scalars()] == ["house"]
         async with session_scope(orgs="*") as session:
             assert len((await session.execute(select(MemoryStore.id))).all()) == 2
+
+
+async def test_a_turn_that_proposed_memory_says_which_spaces_in_its_answer(
+    client: AsyncClient,
+    admin: str,
+    upstream: Upstream,
+    offline: Path,
+) -> None:
+    """The embedded component's `memory.updated` (S63-12) needs the turn to say it wrote."""
+    await _agent(client)
+    conversation = await _open(await _assistant(client))
+    url = f"/api/v1/me/conversations/{conversation}/messages"
+
+    upstream.model.say("Nothing to keep.")
+    quiet = await client.post(url, json={"input": "Hi"})
+    assert quiet.status_code == 200, quiet.text
+    assert quiet.json()["memory_updated"] == []
+
+    upstream.model.call(
+        "memory_propose", {"space": "preferred_sources", "content": "Les Echos", "reason": "asked"}
+    ).say("Noted.")
+    answer = await client.post(url, json={"input": "I read Les Echos"})
+    assert answer.status_code == 200, answer.text
+    assert answer.json()["memory_updated"] == ["preferred_sources"]
+
+    upstream.model.say("Still nothing.")
+    after = await client.post(url, json={"input": "Thanks"})
+    assert after.json()["memory_updated"] == []  # the next turn does not repeat it
