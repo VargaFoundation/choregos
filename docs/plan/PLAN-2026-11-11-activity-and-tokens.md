@@ -39,7 +39,7 @@ S64-07, S64-08; S64-09 waits for S63-15 on `main`; S64-10 last.
 
 `CostReport` filters (`agent`, `workflow`, `assistant`, `work_item`) and groupings (`run`, `assistant`);
 `CostTotal.tokens_in/out/cached`; `GET /orgs/{org}/activity`, `GET /orgs/{org}/activity/stream`;
-`POST /runs/{id}/cancel`; `POST /orgs/{org}/agents/{slug}/stop`; `GET /runs/{id}/context`;
+`POST /runs/{id}/cancel`; `POST /orgs/{org}/agents/{slug}/stop`; `GET /runs/{id}/context-breakdown`;
 `ContextBreakdown`. **Accepted when** `make contracts` is regenerated and `contracts-check` is green.
 
 ### S64-02 · feat(api): a spend report narrowed to an agent, a workflow, a work item; grouped by run; in tokens (ADR 0141 §1)
@@ -89,7 +89,7 @@ each page passes its own filter and the totals read input, output and cache. Dep
 ### S64-08 · feat(runner,api): the context breakdown of prompt agents, hosted containers, sessions (ADR 0141 §3-6)
 
 `ContextBreakdown` measured in `prompt_loop` (per call), in the loopback `ModelProxy` (hosted) and in
-`agent_sessions.respond`; `context.breakdown` events throttled; `GET /runs/{id}/context`; the run page's
+`agent_sessions.respond`; `context.breakdown` events throttled; `GET /runs/{id}/context-breakdown`; the run page's
 Context card (stacked bar, free space against `max_input_tokens`). **Accepted when** the sections of a scripted
 call sum to the reported `prompt_tokens`, an MCP tool counts in `tools.mcp` and a runner tool in
 `tools.platform`, no event carries text, and a model without `max_input_tokens` shows free space unknown.

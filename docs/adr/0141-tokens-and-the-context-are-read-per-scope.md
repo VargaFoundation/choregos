@@ -74,7 +74,7 @@ What the platform can see of a request differs by backend (audit of 2026-11-11):
    tool schema, no digest of the person's input. It inherits the retention of the run's events (and of the
    conversation's, ADR 0134). At most one event per call, and at most one per 5 seconds per run: a run of
    300 calls keeps its first, its last and the largest of each window.
-6. **Read where the rest is read.** `GET /runs/{id}/context` returns the last breakdown and the series of
+6. **Read where the rest is read.** `GET /runs/{id}/context-breakdown` returns the last breakdown and the series of
    totals; a conversation's own route returns it to its owner only. The breakdown is read with the run's
    (or the conversation's) read right, nothing wider.
 
