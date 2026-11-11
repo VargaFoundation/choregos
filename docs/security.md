@@ -45,6 +45,7 @@ organisations must assume **a member of one will try to read another**.
 | a page on another site acting with your console session | Origin guard on cookie-authenticated mutations: the `Origin` must be the console's or a listed CORS origin (compared lower-cased, without `:443`/`:80`), `null` is refused, an empty `Origin` counts as absent, only an `Authorization: Bearer` header exempts the request (any other scheme still falls back to the cookie), a cross-site or same-site fetch without `Origin` is refused; `SameSite=Lax` cookies; explicit CORS methods and headers, never `*` | `origin_guard.py`, `apps/api/tests/test_request_edge.py` |
 | an outside agent driving a workflow, or deciding in a person's place | the A2A door (ADR 0078) serves only the workflows that opted in (`a2a:`), to a token with the `a2a` scope (a `*` token is refused, and an `a2a` token is refused by the REST API); the caller acts with its person's rights, a resent message is the same work item (id derived from organisation, client and `messageId`), a waiting decision is answered `input-required` with the console's `decision_url` and a reply to a task is refused; every call is audited (`a2a.call`), rate-limited per token, counted in the daily write budget shared with the MCP door, and a message is capped (20 parts, 100,000 characters; file parts within the project's `a2a.max_file_bytes`, 10 MiB by default, each and together, in a media type the skill lists, never fetched by `uri`, stored as input artefacts before the work item exists and audited as `workitem.input_file`; the body the door reads is bounded by the organisation's largest project limit) | `a2a/door.py`, `mcp/appelant.py`, `apps/api/tests/test_a2a_inbound.py` |
 | an application acting under a person's name, or outliving its purpose | a machine account (ADR 0131) belongs to one project and is a `kind: machine` principal, which every gate asking for a person refuses; its tokens open the A2A door only, are bound to the project and expire within 365 days; it has no group, so no approval rule can name it, and the door takes no decision; the OAuth path refuses it; removing it ends its tokens at once | what the application does with a token it holds: a stolen token acts within the project's opted-in workflows until it is revoked or expires |
+| a process that outlives its run (a cancel that failed, a pod slow to die, a queued pod that starts late) writing as that run | when the orchestrator stops waiting it closes the run's row first — a terminal status, the end date and the result the workflow is told, committed before the executor is asked to cancel, whatever the cancel then does; a closed run's API answers 409 `run_closed` on every route but its two append-only journals (`events`, `network/decisions`) and `POST …/result`, whose idempotent answer changes neither the run nor its work item; a closed run has no network, and the runner refused at its first call exits with 0 ([ADR 0143](adr/0143-a-run-that-ended-stays-ended.md)) | `choregos_core/run_closure.py`, `activities/execution.py`, `deps.py` (`OpenRunAuth`), `apps/api/tests/test_run_closed.py`, `apps/api/tests/test_run_closed_postgres.py`, `apps/orchestrator/tests/test_run_closed_when_the_wait_ends.py` |
 
 ## What is *not* a wall, and is said so
 
@@ -75,6 +76,13 @@ organisations must assume **a member of one will try to read another**.
   name that resolves to a private address and connects to the address it resolved (one resolution), but
   a wall also needs the chart's NetworkPolicies (or the platform's) to stop runner pods going out
   another way. The per-project Squid of per-project namespaces stays host-level and project-level.
+- **Closing a run does not take back what was minted before.** A run token cannot be revoked, so
+  the platform closes the run instead ([ADR 0143](adr/0143-a-run-that-ended-stays-ended.md)): the
+  token then opens the run's journals and nothing else. But the run's git token lives its hour
+  (`contents: write` on the run's repository), the egress proxy serves the network answer it cached
+  for up to `cache_seconds` (one minute by default), and a tunnel already open stays open until it
+  closes. The running run of an interpreter that died is left open on purpose — a restarted
+  interpreter awaits it again — and a Temporal termination runs no code, so it closes nothing.
 - **Row-level security needs a non-superuser role.** A PostgreSQL superuser ignores every
   policy. The API refuses to start as one in `staging` and `prod`; the embedded PostgreSQL
   creates `choregos_app` at initdb for that reason.
@@ -627,6 +635,10 @@ process (API, workers): nothing is shared.
   `runs.stage_input`, never carried by a Temporal payload (#519). The runner reads it, and the
   remote agent's token beside it, into its settings; no process it starts inherits either — the
   agent, the project's checks, git — except a job, which is given the run token by name (S57-02).
+  It cannot be revoked before it expires; what it opens ends with the run. Once the run is closed
+  (it holds a result, or its status is `succeeded`, `failed`, `cancelled` or `timed_out`), every
+  route of `/internal/runs/{id}` answers 409 `run_closed`, except `events` and `network/decisions`,
+  which still append, and `result`, which answers `already_recorded` and writes nothing (ADR 0143).
 - The organisation's model catalogue (ADR 0060) limits which models an agent may name; it is a
   governance control in front of the gateway, not a replacement for the key's own model list. With an
   OpenAI-compatible gateway the `run_key` is shared by runs: scope it at the gateway (a consumer with

@@ -20,6 +20,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
 
+import httpx
 from sqlalchemy import bindparam, delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import undefer
@@ -229,12 +230,26 @@ async def _in_process(
             )
         ).tuples()
     )
-    if embedder is None:
+    vector = await _query_vector(embedder, query) if embedder is not None else None
+    if vector is None:
         return [await offload.run(_lexical, query, [(str(i), t) for i, t, _ in rows])]
-    (vector,) = await embedder.embed([query])
     return list(
         await offload.run(_rankings, query, vector, [(str(i), t, list(e) if e else None) for i, t, e in rows])
     )
+
+
+async def _query_vector(embedder: Embedder, query: str) -> list[float] | None:
+    """The query's embedding, or `None` when the gateway refuses or fails it.
+
+    A search then ranks by its words alone: a refused embedding (a 422 from the gateway, seen on real
+    queries) must not turn a run's knowledge search into a 500.
+    """
+    try:
+        (vector,) = await embedder.embed([query])
+    except (httpx.HTTPError, KeyError, ValueError) as error:
+        logger.warning("knowledge.search.embedding_failed", error=str(error)[:300], query_chars=len(query))
+        return None
+    return vector
 
 
 def _lexical(query: str, rows: list[tuple[str, str]]) -> list[str]:
@@ -266,8 +281,8 @@ async def search(
         rankings = await _in_process(session, base_ids, query, embedder)
     else:
         rankings = [await _full_text(session, base_ids, query)]
-        if mode == HYBRID and embedder is not None:
-            (vector,) = await embedder.embed([query])
+        vector = await _query_vector(embedder, query) if mode == HYBRID and embedder is not None else None
+        if vector is not None:
             rankings.append(await _nearest(session, base_ids, vector))
     best = fuse(*rankings)[: max(1, min(k, 20))]
     if not best:

@@ -14,6 +14,7 @@ from datetime import timedelta
 from typing import Any
 from urllib.parse import urlsplit
 
+import structlog
 from choregos_adapters.errors import ConfigurationError
 from choregos_adapters.executor.log_archive import archive_run_logs
 from choregos_api.db.models import Run, RunEvent, WorkItem
@@ -24,6 +25,7 @@ from choregos_contracts import EventType, StageInput, StageResult, StageStatus
 from choregos_core import ExecRef, ExecStatus, StageJobSpec, telemetry, utcnow
 from choregos_core.hosted import agent_container
 from choregos_core.redaction import REDACTED
+from choregos_core.run_closure import close_run, status_of
 from sqlalchemy import select
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
@@ -34,6 +36,8 @@ from .base import db, project_bundle, without_secrets
 from .outcome import close_run_spend
 from .remote import mint_remote_token
 from .run_key import mint_run_key
+
+logger = structlog.get_logger("choregos.execution")
 
 #: The `ApplicationError` type of an executor that refuses a run on its configuration: not retried.
 START_REFUSED = "executor_configuration_refused"
@@ -317,10 +321,8 @@ async def _fail_run_on_configuration(
     the error that follows rolls the session back."""
     message = str(refusal)
     if run is not None:
-        run.status = "failed"
-        run.ended_at = run.ended_at or utcnow()
         reason = getattr(refusal, "code", START_REFUSED)
-        run.result = StageResult.failure(message[:4000], reason).model_dump(mode="json", by_alias=True)
+        close_run(run, StageResult.failure(message[:4000], reason), status="failed")
     await persist_event(
         session,
         EventType.RUN_FINISHED,
@@ -475,27 +477,23 @@ async def _await_run(payload: dict[str, Any]) -> dict[str, Any]:
                 if fetched is None and fetcher is not None:
                     fetched = await fetcher(ref)
                 if fetched is not None:
-                    payload_result = fetched.model_dump(mode="json", by_alias=True)
-                    if run is not None:
-                        run.result = payload_result
-                    return {"status": "finished", "result": payload_result}
-            if status.state == "succeeded":
-                return {
-                    "status": "missing_result",
-                    "result": StageResult(
+                    return await _closed(session, run, "finished", fetched, status_of(fetched))
+                # The pod ended and left no result anywhere: the wait ends here, and the row says so
+                # in this transaction (ADR 0143) — a retried pod, or a process the executor counts
+                # dead too early, finds its run closed.
+                if status.state == "succeeded":
+                    without_result = StageResult(
                         status=StageStatus.FAILED,
                         summary="the runner ended without posting a result",
                         reason="invalid_result",
-                    ).model_dump(mode="json", by_alias=True),
-                }
-            return {
-                "status": status.state,
-                "result": StageResult(
+                    )
+                    return await _closed(session, run, "missing_result", without_result)
+                ended = StageResult(
                     status=StageStatus.FAILED,
                     summary=status.message or f"run {status.state}",
                     reason=status.state,
-                ).model_dump(mode="json", by_alias=True),
-            }
+                )
+                return await _closed(session, run, status.state, ended)
         # The executor no longer knows the run: its claim, Job or container is gone. Nothing will
         # bring it back, and `unknown` is not `finished`: the wait went on to the end of the stage
         # budget, then started over on each Temporal retry. On the dev tenant, on 2026-10-18, a
@@ -510,31 +508,25 @@ async def _await_run(payload: dict[str, Any]) -> dict[str, Any]:
         if status.state == "pending" and not has_run:
             in_queue += interval
             if in_queue > queue_max:
-                await _abandon(payload["project_id"], run_id, ref)
-                return {
-                    "status": "queue_timed_out",
-                    "result": StageResult(
-                        status=StageStatus.FAILED,
-                        summary=(
-                            f"never admitted: {in_queue / 60:.0f} min in the queue "
-                            f"({status.message or 'limit reached'})"
-                        ),
-                        reason="queue_timeout",
-                    ).model_dump(mode="json", by_alias=True),
-                }
+                never_admitted = StageResult(
+                    status=StageStatus.FAILED,
+                    summary=(
+                        f"never admitted: {in_queue / 60:.0f} min in the queue "
+                        f"({status.message or 'limit reached'})"
+                    ),
+                    reason="queue_timeout",
+                )
+                return await _abandon(payload["project_id"], run_id, ref, "queue_timed_out", never_admitted)
             continue
         has_run = True
         waited += interval
     # A run that exceeds its budget must leave nothing behind: a suspended Job whose state nobody
     # reads any more stays at the head of the queue and blocks all the following ones (seen on the
     # bench of 2026-09-25, five work items frozen behind two dead runs).
-    await _abandon(payload["project_id"], run_id, ref)
-    return {
-        "status": "timed_out",
-        "result": StageResult(
-            status=StageStatus.FAILED, summary=f"over {timeout_minutes:g} min", reason="timeout"
-        ).model_dump(mode="json", by_alias=True),
-    }
+    over_budget = StageResult(
+        status=StageStatus.FAILED, summary=f"over {timeout_minutes:g} min", reason="timeout"
+    )
+    return await _abandon(payload["project_id"], run_id, ref, "timed_out", over_budget)
 
 
 async def _lost_run(project_id: str, run_id: str, ref: ExecRef, status: ExecStatus) -> dict[str, Any]:
@@ -546,34 +538,94 @@ async def _lost_run(project_id: str, run_id: str, ref: ExecRef, status: ExecStat
         run = await session.get(Run, run_id)
         fetched = await result_from_journal(session, run_id)
         if fetched is not None:
-            payload_result = fetched.model_dump(mode="json", by_alias=True)
-            if run is not None:
-                run.result = payload_result
-            return {"status": "finished", "result": payload_result}
-    await _abandon(project_id, run_id, ref)
-    return {
-        "status": "lost",
-        "result": StageResult(
-            status=StageStatus.FAILED,
-            summary=f"the executor no longer knows this run ({status.message or 'not found'})",
-            reason="lost",
-        ).model_dump(mode="json", by_alias=True),
-    }
+            return await _closed(session, run, "finished", fetched, status_of(fetched))
+    lost = StageResult(
+        status=StageStatus.FAILED,
+        summary=f"the executor no longer knows this run ({status.message or 'not found'})",
+        reason="lost",
+    )
+    return await _abandon(project_id, run_id, ref, "lost", lost)
 
 
-async def _abandon(project_id: str, run_id: str, ref: ExecRef) -> None:
-    """Remove the Job (or the equivalent) of a run that is no longer awaited, never raising: what
-    matters is that the run ends; the cleanup is a duty, not a condition."""
-    with contextlib.suppress(Exception):
+async def _for_closing(session: Any, run: Run | None) -> Run | None:
+    """The run's row as it stands now, held until this transaction ends (ADR 0143).
+
+    What this session wrote so far goes first (the archive of the pod's log), then the row is read
+    again under the lock an update takes (`FOR NO KEY UPDATE`): a result the runner is posting at
+    this very moment is waited for and read, not overwritten. SQLite has one writer and no such
+    clause; the row is simply read again.
+    """
+    if run is None:
+        return None
+    await session.flush()
+    await session.refresh(run, with_for_update={"key_share": True})
+    return run
+
+
+async def _closed(
+    session: Any, run: Run | None, outcome: str, result: StageResult, status: str = "failed"
+) -> dict[str, Any]:
+    """Close the row of a run the orchestrator stops waiting for, in the caller's transaction, and
+    return what the workflow is told: `outcome` and `result`, which the row now holds — or, when
+    the runner's own result got there first, that result, as `finished` (ADR 0143).
+
+    The row and the workflow never tell two stories: what is returned is what is stored.
+    """
+    told = result.model_dump(mode="json", by_alias=True)
+    run = await _for_closing(session, run)
+    if run is not None and not close_run(run, result, status=status):
+        return {"status": "finished", "result": run.result}
+    return {"status": outcome, "result": told}
+
+
+async def _abandon(
+    project_id: str, run_id: str, ref: ExecRef, outcome: str, result: StageResult
+) -> dict[str, Any]:
+    """Stop waiting for a run: close its row, then remove its Job (or the equivalent). Returns what
+    the workflow is told (`_closed`). Never raises: what matters is that the run ends; the cleanup
+    is a duty, not a condition.
+
+    The row is closed first, in a transaction of its own, committed before the executor is asked
+    anything (ADR 0143): whether the cancel succeeds, fails or never answers, the run is over for
+    the platform, and a process that outlives it finds it closed. A row that could not be closed is
+    said in the log; `record_run_outcome`, which follows in every workflow, writes the same result.
+    """
+    told = {"status": outcome, "result": result.model_dump(mode="json", by_alias=True)}
+    try:
         async with db() as session:
-            bundle = await project_bundle(session, project_id)
-            run = await session.get(Run, run_id)
-            # Before the cancel: deleting the Job deletes its pods, and their logs with them.
-            await archive_once(bundle.adapters.executor, run, ref)
+            told = await _closed(session, await session.get(Run, run_id), outcome, result)
+    except Exception as error:
+        logger.warning("run.close_failed", run_id=run_id, outcome=outcome, error=str(error)[:300])
+    try:
+        await _stop_at_the_executor(project_id, run_id, ref)
+    except Exception as error:
+        logger.warning("run.cleanup_failed", run_id=run_id, error=str(error)[:300])
+    return told
+
+
+async def _stop_at_the_executor(project_id: str, run_id: str, ref: ExecRef) -> None:
+    """Keep what the run's pod said, then ask the executor to remove it.
+
+    The archive comes before the cancel: deleting the Job deletes its pods, and their logs with
+    them. A cancel that fails is logged with the run it leaves behind, never swallowed: the row is
+    closed already, so the process that may survive it can no longer write, mint or read anything
+    (ADR 0143), and an operator knows there is something to remove (`docs/runbooks/stuck-run.md`).
+    """
+    async with db() as session:
+        bundle = await project_bundle(session, project_id)
+        run = await session.get(Run, run_id)
+        await archive_once(bundle.adapters.executor, run, ref)
+        try:
             await bundle.adapters.executor.cancel(ref)
-            if run is not None and run.status in {"queued", "running"}:
-                run.status = "failed"
-                run.ended_at = utcnow()
+        except Exception as error:  # gone already, never started, or the executor does not answer
+            logger.warning(
+                "run.cancel_failed",
+                run_id=run_id,
+                project=bundle.slug,
+                stage=run.stage_role if run is not None else None,
+                executor=str(ref.kind),
+                error=str(error)[:300],
+            )
 
 
 async def abandon_queued_runs(project_id: str, run_ids: list[str]) -> None:
@@ -587,10 +639,11 @@ async def abandon_queued_runs(project_id: str, run_ids: list[str]) -> None:
     forever. Deleting the Job (propagation `Background`) takes the Secret it owns with it.
 
     Only runs the executor knows (`executor_ref`) and that never ran (`queued`): a running run
-    ends on its own deadline, and its TTL then collects it. Never raises.
+    ends on its own deadline, and its TTL then collects it. Its row is closed like any run nobody
+    waits for (`_abandon`, ADR 0143). Never raises.
     """
     for run_id in run_ids:
-        with contextlib.suppress(Exception):
+        try:
             async with db() as session:
                 bundle = await project_bundle(session, project_id)
                 run = await session.get(Run, run_id)
@@ -602,7 +655,12 @@ async def abandon_queued_runs(project_id: str, run_ids: list[str]) -> None:
                     namespace=_runner_namespace(get_settings(), bundle.slug),
                     run_id=run.id,
                 )
-            await _abandon(project_id, run_id, ref)
+            never_ran = StageResult.failure(
+                "never admitted: its workflow ended while the run waited for a slot", "cancelled"
+            )
+            await _abandon(project_id, run_id, ref, "cancelled", never_ran)
+        except Exception as error:
+            logger.warning("run.abandon_failed", run_id=run_id, error=str(error)[:300])
 
 
 @activity.defn(name="cancel_run")
@@ -610,12 +668,15 @@ async def cancel_run(payload: dict[str, Any]) -> None:
     """Stops a run nobody will wait for — its interpreter was cancelled — and closes its key.
 
     Replayable (ADR 0008): cancelling what is gone is not an error, and the spend is booked once.
+    The row is closed first, with the result that says so, and committed before the executor is
+    asked to stop (ADR 0143): a cancel that fails leaves a process, not an open run. A run that
+    ended keeps how it ended, and the result it posted.
     Its key is revoked and scrubbed after the executor is told to stop (#523), never before: a
     revoked key may no longer tell what it spent.
     """
     async with db() as session:
         bundle = await project_bundle(session, payload["project_id"])
-        run = await session.get(Run, payload["run_id"])
+        run = await _for_closing(session, await session.get(Run, payload["run_id"]))
         if run is None:
             return
         ref = ExecRef(
@@ -624,10 +685,7 @@ async def cancel_run(payload: dict[str, Any]) -> None:
             namespace=_runner_namespace(get_settings(), bundle.slug),
             run_id=run.id,
         )
-        await archive_once(bundle.adapters.executor, run, ref)
-        with contextlib.suppress(Exception):  # gone already, or never started
-            await bundle.adapters.executor.cancel(ref)
-        if run.status in {"queued", "running"}:  # a run that ended keeps how it ended
-            run.status = "cancelled"
-        run.ended_at = run.ended_at or utcnow()
+        cancelled = StageResult.failure("cancelled: nothing waits for this run any more", "cancelled")
+        close_run(run, cancelled, status="cancelled")
+    await _stop_at_the_executor(payload["project_id"], payload["run_id"], ref)
     await close_run_spend(payload["project_id"], payload["run_id"])
