@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..audit import record
 from ..db.models import Agent, AgentSessionRecord, Organization, Project, Run
+from ..db.session import release_connection
 from ..errors import ApiError
 from ..logging import get_logger
 from ..rbac import Principal
@@ -58,9 +59,14 @@ class AgentStop:
 
 
 async def suspend_first(session: AsyncSession, agent: Agent) -> None:
-    """The agent is `suspended`, COMMITTED: from now on no run of it starts, whatever follows."""
+    """The agent is `suspended`, COMMITTED: from now on no run of it starts, whatever follows.
+
+    `release_connection`, not a bare `commit`: on PostgreSQL the request's RLS scope
+    (`app.current_orgs`, `app.current_user`) is set per transaction, and the transaction after a bare
+    commit would start without it — the run updates would see no row and the audit insert would be
+    refused by `audit_log`'s policy. The next transaction begins in the same scope."""
     agent.status = "suspended"
-    await session.commit()
+    await release_connection(session)
 
 
 async def stop_agent(
