@@ -18,6 +18,7 @@ from typing import Any
 
 from choregos_contracts import EventType
 from choregos_core import utcnow
+from choregos_core.run_closure import OPEN_RUN_STATUSES, run_is_closed
 from choregos_core.run_stop import stopped_by_a_person, stopped_result
 from sqlalchemy import JSON, ColumnElement, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -32,8 +33,8 @@ from .events import persist_event
 
 logger = get_logger("choregos.run_cancel")
 
-#: The run statuses a stop can still interrupt.
-IN_FLIGHT = ("queued", "running")
+#: The run statuses a stop can still interrupt: an open run's (ADR 0143 §1).
+IN_FLIGHT = tuple(sorted(OPEN_RUN_STATUSES))
 
 
 def without_a_result() -> ColumnElement[bool]:
@@ -67,7 +68,7 @@ async def cancel_run_now(
     org = await session.get(Organization, project.org_id)
     if not principal.can(Permission.ITEM_CONTROL, org.slug if org else "", project.slug):
         raise forbidden("stopping a run needs `item:control` on its project (developer or above)")
-    if run.result is not None or run.status not in IN_FLIGHT:
+    if run_is_closed(run):  # one definition of an ended run, the orchestrator's too (ADR 0143 §1)
         raise conflict(how_it_ended(run), extra={"code": "run_already_ended"})
 
     written = stopped_result(principal.email, reason).model_dump(mode="json", by_alias=True)
