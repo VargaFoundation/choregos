@@ -32,9 +32,10 @@ import time
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any, Final
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 import httpx
+from choregos_adapters.http.egress import guarded
 from choregos_core import secrets as core_secrets
 from choregos_core import utcnow
 from choregos_core.redaction import remember_secret
@@ -46,8 +47,9 @@ from ..config import Settings, get_settings
 from ..db.models import ConnectedAccount, Organization, OrgConnector
 from ..errors import conflict, not_found, unprocessable
 from ..rbac import Principal
-from ..secret_store import SecretStoreUnavailable, get_secret_store, store_ref
+from ..secret_store import SecretStoreUnavailable, derived_org_name, get_secret_store, store_ref
 from ..security import read_session, sign_session
+from .egress import egress_scope
 from .identity_exchange import IdentityUnavailable
 
 USER_CONSENT: Final = "user_consent"
@@ -107,8 +109,24 @@ class ConsentSettings:
     client_secret_ref: str | None = None
 
 
+def _acceptable_endpoint(url: str, settings: Settings) -> bool:
+    """An endpoint the platform calls or sends the person's browser to: `https` (`http` only under the
+    fakes), a host, no user-info, no fragment. `javascript:`, `data:` and `file:` never pass: the console
+    follows `authorization_url`."""
+    parsed = urlparse(url)
+    scheme_ok = parsed.scheme == "https" or (parsed.scheme == "http" and settings.fakes)
+    return (
+        scheme_ok
+        and bool(parsed.hostname)
+        and not parsed.username
+        and not parsed.password
+        and not parsed.fragment
+    )
+
+
 def consent_settings(connector: Any) -> ConsentSettings | None:
-    """The connector's OAuth settings, when it declares `user_consent` AND they are complete."""
+    """The connector's OAuth settings, when it declares `user_consent`, they are complete and their
+    endpoints acceptable (`_acceptable_endpoint`)."""
     config = getattr(connector, "config", None) or {}
     declared = config.get("identity_modes")
     if not isinstance(declared, list) or USER_CONSENT not in declared:
@@ -122,6 +140,11 @@ def consent_settings(connector: Any) -> ConsentSettings | None:
     scopes = raw.get("scopes")
     revocation = raw.get("revocation_endpoint")
     secret = raw.get("client_secret_ref")
+    endpoints = [str(fields["authorization_endpoint"]), str(fields["token_endpoint"])]
+    if isinstance(revocation, str) and revocation:
+        endpoints.append(revocation)
+    if not all(_acceptable_endpoint(url, get_settings()) for url in endpoints):
+        return None
     return ConsentSettings(
         authorization_endpoint=str(fields["authorization_endpoint"]),
         token_endpoint=str(fields["token_endpoint"]),
@@ -130,6 +153,24 @@ def consent_settings(connector: Any) -> ConsentSettings | None:
         revocation_endpoint=str(revocation) if isinstance(revocation, str) and revocation else None,
         client_secret_ref=str(secret) if isinstance(secret, str) and secret else None,
     )
+
+
+def provider_digest(connector: Any, declared: ConsentSettings) -> str:
+    """What a person consented TO: the authorization server, the client and the source's address. The
+    refresh token is sent to these, and the access token to the source: when an editor of the connector
+    changes one, the account is not used (and nothing is sent to the new address) until the person
+    connects again."""
+    config = getattr(connector, "config", None) or {}
+    canonical = json.dumps(
+        [
+            declared.authorization_endpoint,
+            declared.token_endpoint,
+            declared.revocation_endpoint or "",
+            declared.client_id,
+            str(config.get("url") or ""),
+        ]
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def supports_consent(connector: Any) -> bool:
@@ -150,10 +191,21 @@ def redirect_uri(settings: Settings | None = None) -> str:
     return (settings or get_settings()).api_url.rstrip("/") + CALLBACK_PATH
 
 
-async def _client_secret(session: AsyncSession, org_id: str, settings: ConsentSettings) -> str:
+def own_secret_reference(connector: str) -> str:
+    """The one `store:` reference a connector's OAuth client secret may carry: the one the catalogue install
+    derives. Any other would read another person's token or another connector's key and send it, as the
+    client secret, to the token endpoint the connector's editor names."""
+    return store_ref(derived_org_name(connector, "oauth_client_secret"))
+
+
+async def _client_secret(
+    session: AsyncSession, org_id: str, settings: ConsentSettings, connector: str
+) -> str:
     reference = settings.client_secret_ref
     if not reference:
         return ""
+    if is_store_reference(reference) and reference != own_secret_reference(connector):
+        raise IdentityUnavailable("the source's OAuth client secret reference is not this connector's own")
     try:
         if is_store_reference(reference):
             name = reference.split(":", 1)[1]
@@ -171,7 +223,7 @@ async def _post(url: str, form: dict[str, str], client_secret: str, *, check: bo
     if client_secret:
         data["client_secret"] = client_secret
     try:
-        async with httpx.AsyncClient(timeout=10, transport=_transport(get_settings())) as http:
+        async with httpx.AsyncClient(timeout=10, transport=guarded(_transport(get_settings()))) as http:
             response = await http.post(url, data=data, headers={"Accept": "application/json"})
     except httpx.HTTPError as failure:
         raise ConsentFailure("unreachable") from failure
@@ -277,19 +329,24 @@ async def complete(
     declared = consent_settings(connector)
     if declared is None:
         raise unprocessable(f"`{name}` does not declare the `user_consent` identity")
-    secret = await _client_secret(session, organisation.id, declared)
     try:
-        body = await _post(
-            declared.token_endpoint,
-            {
-                "grant_type": "authorization_code",
-                "code": code,
-                "redirect_uri": redirect_uri(settings),
-                "client_id": declared.client_id,
-                "code_verifier": str(handshake["v"]),
-            },
-            secret,
-        )
+        secret = await _client_secret(session, organisation.id, declared, name)
+    except IdentityUnavailable as unavailable:
+        raise unprocessable(str(unavailable)) from unavailable
+    try:
+        # The callback runs under the organisation's egress allowlist like any call to a source.
+        async with egress_scope(session, organisation, "api", f"oauth:{name}"):
+            body = await _post(
+                declared.token_endpoint,
+                {
+                    "grant_type": "authorization_code",
+                    "code": code,
+                    "redirect_uri": redirect_uri(settings),
+                    "client_id": declared.client_id,
+                    "code_verifier": str(handshake["v"]),
+                },
+                secret,
+            )
     except ConsentFailure as refused:
         raise unprocessable(f"the source refused the authorization code ({refused.code})") from refused
     refresh = body.get("refresh_token")
@@ -307,6 +364,7 @@ async def complete(
         session.add(row)
     row.secret_ref = store_ref(secret_name)
     row.mode = USER_CONSENT
+    row.provider_digest = provider_digest(connector, declared)
     row.scopes = granted
     row.subject = _subject_of(body)
     row.status = CONNECTED
@@ -367,15 +425,23 @@ async def disconnect(session: AsyncSession, principal: Principal, org: str, conn
     await store.delete(session, organisation.id, name)
     await session.delete(row)
     await session.flush()
-    if refresh and declared is not None and declared.revocation_endpoint:
+    # Only to the authorization server the person consented to: an editor who moved it would otherwise
+    # receive the refresh token as the thing to revoke.
+    unchanged = (
+        connector is not None
+        and declared is not None
+        and row.provider_digest == provider_digest(connector, declared)
+    )
+    if refresh and declared is not None and declared.revocation_endpoint and unchanged:
         try:
-            secret = await _client_secret(session, organisation.id, declared)
-            await _post(
-                declared.revocation_endpoint,
-                {"token": refresh, "token_type_hint": "refresh_token", "client_id": declared.client_id},
-                secret,
-                check=False,
-            )
+            secret = await _client_secret(session, organisation.id, declared, connector_name)
+            async with egress_scope(session, organisation, "api", f"oauth:{connector_name}"):
+                await _post(
+                    declared.revocation_endpoint,
+                    {"token": refresh, "token_type_hint": "refresh_token", "client_id": declared.client_id},
+                    secret,
+                    check=False,
+                )
         except (ConsentFailure, IdentityUnavailable):
             pass  # best effort, RFC 7009: the secret is already gone from here
 
@@ -396,42 +462,76 @@ async def consented_token(session: AsyncSession, connector: OrgConnector, user_i
             "Continue without this source until then.",
             url,
         )
+    if row.provider_digest != provider_digest(connector, declared):
+        raise AccountNotConnected(
+            connector.name,
+            f"the settings of `{connector.name}` changed since you connected: reconnect at {url}",
+            url,
+        )
     name = refresh_secret_name(user_id, connector.name)
-    try:
-        sealed = (await get_secret_store().get_many(session, org_id, [name])).get(name)
-    except (SecretNotFound, SecretStoreUnavailable):
-        sealed = None
+    sealed = await _sealed(session, org_id, name)
     if not sealed:
         raise AccountNotConnected(
             connector.name, f"your `{connector.name}` account is not connected: open {url}", url
         )
-    secret = await _client_secret(session, org_id, declared)
-    try:
-        body = await _post(
-            declared.token_endpoint,
-            {"grant_type": "refresh_token", "refresh_token": sealed, "client_id": declared.client_id},
-            secret,
-        )
-    except ConsentFailure as refused:
-        if refused.code == "invalid_grant":
-            row.status = RECONNECT
-            await get_secret_store().delete(session, org_id, name)
-            await session.flush()
+    secret = await _client_secret(session, org_id, declared, connector.name)
+    used = sealed
+    for attempt in (1, 2):
+        try:
+            body = await _post(
+                declared.token_endpoint,
+                {"grant_type": "refresh_token", "refresh_token": used, "client_id": declared.client_id},
+                secret,
+            )
+            break
+        except ConsentFailure as refused:
+            if refused.code != "invalid_grant":
+                raise IdentityUnavailable(
+                    "the source's authorization server did not renew the person's token"
+                ) from refused
+            # A concurrent call may have rotated the token while this one waited on the source: the refusal
+            # then concerns a token already replaced, not the person's consent. Read what is sealed NOW.
+            latest = await _sealed(session, org_id, name)
+            if attempt == 1 and latest and latest != used:
+                used = latest
+                continue
+            if latest == used:
+                row.status = RECONNECT
+                await get_secret_store().delete(session, org_id, name)
+                await session.flush()
             raise AccountNotConnected(
                 connector.name,
                 f"the source no longer honours your `{connector.name}` consent: reconnect at {url}",
                 url,
             ) from refused
-        raise IdentityUnavailable(
-            "the source's authorization server did not renew the person's token"
-        ) from refused
+    # The person may have disconnected while the source answered: the row is read again under a lock, and a
+    # rotated token is never sealed for an account that is gone (it would outlive its revocation).
+    still = (
+        await session.execute(
+            select(ConnectedAccount)
+            .where(ConnectedAccount.id == row.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if still is None or still.status != CONNECTED:
+        raise AccountNotConnected(
+            connector.name, f"your `{connector.name}` account is not connected: open {url}", url
+        )
     rotated = body.get("refresh_token")
-    if isinstance(rotated, str) and rotated and rotated != sealed:
+    if isinstance(rotated, str) and rotated and rotated != used:
         await get_secret_store().put(session, org_id, name, rotated, user_id)
-    row.last_used_at = utcnow()
+    still.last_used_at = utcnow()
     expires = body.get("expires_in")
-    row.expires_at = utcnow() + timedelta(seconds=int(expires)) if expires else None
+    still.expires_at = utcnow() + timedelta(seconds=int(expires)) if expires else None
     await session.flush()
     access = str(body["access_token"])
     remember_secret(access)
     return access
+
+
+async def _sealed(session: AsyncSession, org_id: str, name: str) -> str | None:
+    try:
+        return (await get_secret_store().get_many(session, org_id, [name])).get(name)
+    except (SecretNotFound, SecretStoreUnavailable):
+        return None

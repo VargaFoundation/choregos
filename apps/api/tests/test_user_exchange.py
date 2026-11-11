@@ -251,3 +251,144 @@ def test_an_absent_identity_leaves_the_agent_versions_digest_unchanged() -> None
     assert AgentMcpServer(connector="iris").model_dump(mode="json") == {"connector": "iris", "tools": []}
     named = AgentMcpServer(connector="iris", identity="user_exchange").model_dump(mode="json")
     assert named["identity"] == "user_exchange"
+
+
+# ───────────────────────── security review of the exchange (2026-11-11) ─────────────────────────
+
+
+def _issuing(idp: FakeIdentityProvider, issue: Any) -> None:
+    """The provider answers token exchanges with `issue(audience)`; everything else as the fake does."""
+    import json
+
+    import httpx
+    from choregos_api.services.identity_exchange import set_exchange_transport
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        answer = idp.respond(request)
+        form = idp.requests[-1]
+        if form.get("grant_type", "").endswith("token-exchange") and form.get("audience"):
+            body = json.loads(answer.content)
+            body["access_token"] = issue(form["audience"])
+            return httpx.Response(200, json=body)
+        return answer
+
+    set_exchange_transport(httpx.MockTransport(respond))
+
+
+def _jwt_for(audience: str) -> str:
+    import base64
+    import json
+
+    def part(value: dict[str, Any]) -> str:
+        return base64.urlsafe_b64encode(json.dumps(value).encode()).rstrip(b"=").decode()
+
+    return f"{part({'alg': 'none'})}.{part({'sub': SUBJECT, 'aud': audience})}.sig-of-the-token"
+
+
+async def test_a_token_issued_for_another_audience_is_never_handed_to_the_source(
+    client: AsyncClient,
+    project: dict[str, Any],
+    upstream: Upstream,
+    source: Any,
+    idp: FakeIdentityProvider,
+) -> None:
+    """Token confusion: a provider (or a proxy in front of it) that answers with a token whose `aud` is not
+    the one asked for must not have that token sent to the connector."""
+    await _declare(client)
+    await _sign_in_sealed()
+    _issuing(idp, lambda audience: _jwt_for("the-finance-api"))
+    source.received.clear()
+    await _converse(client, upstream, "user_exchange")
+    assert _calls(source) == [], "the source received nothing"
+    (_, last) = upstream.model.requests[-1]
+    assert any("identity_unavailable" in m["content"] for m in last["messages"] if m["role"] == "tool")
+
+
+async def test_the_deployments_audience_list_bounds_what_a_connectors_editor_can_ask_for(
+    client: AsyncClient,
+    project: dict[str, Any],
+    upstream: Upstream,
+    source: Any,
+    idp: FakeIdentityProvider,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The audience is written in the connector's configuration, by whoever edits the connector: with
+    `CHOREGOS_TOKEN_EXCHANGE_AUDIENCES` set, an audience outside it is never even asked of the provider."""
+    from choregos_api.config import reset_settings_cache
+
+    await _declare(client)
+    await _sign_in_sealed()
+    monkeypatch.setenv("CHOREGOS_TOKEN_EXCHANGE_AUDIENCES", '["iris-mcp"]')
+    reset_settings_cache()
+    try:
+        source.received.clear()
+        await _converse(client, upstream, "user_exchange")
+    finally:
+        monkeypatch.delenv("CHOREGOS_TOKEN_EXCHANGE_AUDIENCES")
+        reset_settings_cache()
+    assert _calls(source) == []
+    assert [f for f in idp.requests if f["grant_type"].endswith("token-exchange")] == []
+
+
+async def test_an_exchanged_opaque_token_is_masked_wherever_an_error_would_echo_it(
+    client: AsyncClient, project: dict[str, Any], source: Any, idp: FakeIdentityProvider
+) -> None:
+    """A source's error text can quote the bearer it received; an opaque token has no shape for `redact` to
+    recognise, so the platform remembers it."""
+    from choregos_api.db.models import OrgConnector
+    from choregos_api.db.session import ALL_ORGS, session_scope
+    from choregos_api.services.identity_exchange import Acting, exchanged_token
+    from choregos_core.redaction import forget_secrets, redact
+    from sqlalchemy import select
+
+    await _declare(client)
+    await _sign_in_sealed()
+    _issuing(idp, lambda audience: "opaque-exchanged-token-0123456789")
+    user_id, org_id = await _person()
+    forget_secrets()
+    async with session_scope(orgs=ALL_ORGS) as session:
+        connector = (await session.execute(select(OrgConnector))).scalars().first()
+        assert connector is not None
+        token = await exchanged_token(
+            session, connector, Acting("user_exchange", user_id=user_id, org_id=org_id)
+        )
+    assert token == "opaque-exchanged-token-0123456789"
+    assert token not in redact(f"the source quotes {token} back")
+
+
+async def test_a_token_rotated_while_the_person_signs_out_is_killed_not_sealed_again(
+    client: AsyncClient, project: dict[str, Any], source: Any, idp: FakeIdentityProvider
+) -> None:
+    """The same race as a delegation's revocation: a renewal in flight when the sealed token is withdrawn
+    must not seal what the provider just issued, and kills it at the provider."""
+    import httpx
+    from choregos_api.db.session import ALL_ORGS, session_scope
+    from choregos_api.secret_store import get_secret_store
+    from choregos_api.services.identity_exchange import (
+        IdentityUnavailable,
+        forget_refresh_token,
+        refresh_secret_name,
+        set_exchange_transport,
+        subject_token,
+    )
+
+    await _declare(client)
+    await _sign_in_sealed()
+    idp.rotate = True
+    user_id, org_id = await _person()
+
+    async def respond(request: httpx.Request) -> httpx.Response:
+        async with session_scope(orgs=ALL_ORGS) as other:  # the sign-out, committed meanwhile
+            await forget_refresh_token(other, [org_id], user_id)
+        return idp.respond(request)
+
+    set_exchange_transport(httpx.MockTransport(respond))
+    with pytest.raises(IdentityUnavailable):
+        async with session_scope(orgs=ALL_ORGS) as session:
+            await subject_token(session, org_id, user_id)
+    from choregos_core.secrets import SecretNotFound
+
+    async with session_scope(orgs=ALL_ORGS) as session:
+        with pytest.raises(SecretNotFound):
+            await get_secret_store().get_many(session, org_id, [refresh_secret_name(user_id)])
+    assert len(idp.revoked) == 1, "the token the provider just issued was revoked"

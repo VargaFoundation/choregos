@@ -417,7 +417,7 @@ async def read_operation(
     acting = None
     if delegation is not None:
         acting = await assistant_delegations.guard_read(
-            session, delegation, row, need=need, access=op.access, binding=binding, now=now
+            session, delegation, row, need=need, access=op.access, binding=binding, operation=name, now=now
         )
     elif op.access != "read":
         raise ValueError(f"the need `{need}` is not bound to a connector that serves the read `{name}`")

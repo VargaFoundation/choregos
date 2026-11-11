@@ -128,6 +128,41 @@ def a_field_of(spec: ConnectorTypeSpec, name: str) -> bool:
     return field in spec.secret_fields and (n == 1 or field in spec.pooled_fields)
 
 
+def consent_secret_reference(config: dict[str, Any] | None) -> str | None:
+    """The OAuth client secret reference a connector's `user_consent` settings carry (S63-08), if any."""
+    consent = (config or {}).get("user_consent")
+    ref = consent.get("client_secret_ref") if isinstance(consent, dict) else None
+    return str(ref) if ref else None
+
+
+def _check_consent_secret(config: dict[str, Any], *, may_reference: bool, store_prefix: str | None) -> None:
+    """`user_consent.client_secret_ref` travels in `config`, outside `secret_refs`: it follows the same
+    rules. A `store:` reference is only the connector's own derived one (else it would read another
+    person's sealed token and send it to the token endpoint the editor names); an `env:` one is a
+    platform administrator's."""
+    from choregos_core.secrets import InvalidReference, check, is_store_reference
+
+    reference = consent_secret_reference(config)
+    if reference is None:
+        return
+    if is_store_reference(reference):
+        if store_prefix is None or reference != f"store:{store_prefix}/oauth_client_secret":
+            raise unprocessable(
+                "`user_consent.client_secret_ref`: a `store:` reference is derived by the platform, never "
+                "written: install through the catalogue with the client secret typed once"
+            )
+        return
+    if not may_reference:
+        raise unprocessable(
+            "only a platform administrator writes a secret reference (`env:NAME`) in "
+            "`user_consent.client_secret_ref`"
+        )
+    try:
+        check(reference)
+    except InvalidReference as refus:
+        raise unprocessable(str(refus)) from refus
+
+
 def verify_secrets(
     spec: ConnectorTypeSpec,
     type_name: str,
@@ -183,6 +218,7 @@ def verify_secrets(
     empty = sorted(f for f, v in values.items() if not v)
     if empty:
         raise unprocessable(f"{', '.join(empty)}: an empty secret value (to remove a secret, clear it)")
+    _check_consent_secret(config, may_reference=may_reference, store_prefix=store_prefix)
     written = [(f, r) for f, r in [*secret_refs.items(), *([("", secret_ref)] if secret_ref else [])]]
     for field, reference in written:
         if is_store_reference(reference):
@@ -235,3 +271,11 @@ async def policy_for_project(session: AsyncSession, project: Project, connector:
         )
     ).scalar_one_or_none()
     return human_floor(instance, operation, stricter(found.policy, tightened))
+
+
+def consent_env_reference(config: dict[str, Any] | None) -> str | None:
+    """The `user_consent` client secret reference when it reads the deployment's environment."""
+    from choregos_core.secrets import is_store_reference
+
+    reference = consent_secret_reference(config)
+    return reference if reference is not None and not is_store_reference(reference) else None

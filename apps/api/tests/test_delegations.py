@@ -573,6 +573,78 @@ async def test_a_delegated_read_outside_the_agreement_is_refused(
     assert refused.value.code == "outside_agreement"
 
 
+@pytest.mark.parametrize("drift", ["identity", "connector"])
+async def test_a_need_bound_otherwise_than_when_the_person_agreed_suspends_the_delegation(
+    client: AsyncClient,
+    org: str,
+    app: Any,
+    offline: Path,
+    markets: Any,
+    idp: FakeIdentityProvider,
+    drift: str,
+) -> None:
+    """Security review S63-14: the agreement names the need, but the person agreed to read it AS THEM, at the
+    source it was bound to. An administrator who re-binds it (to the connector's own identity, or to another
+    source) must not make the standing token read there: a new agreement is needed, and nothing is called."""
+    from choregos_api.db.models import AssistantToolBinding, OrgConnector
+    from choregos_api.db.session import session_scope
+
+    await _ready(client)
+    person = await _traveller(client, app)
+    granted = await _agree(person, expires_in_days=LONG)
+    async with session_scope(orgs="*") as session:
+        binding = (
+            await session.execute(
+                select(AssistantToolBinding).where(AssistantToolBinding.need == "market_data")
+            )
+        ).scalar_one()
+        if drift == "identity":
+            binding.identity = "service"
+        else:
+            other = (
+                await session.execute(select(OrgConnector).where(OrgConnector.name == "news-feed"))
+            ).scalar_one()
+            binding.connector_id = other.id
+    before = len(_calls(markets))
+    assert await _pass(at(9, 0)) == {}
+    assert "not bound as it was" in (await person.get(f"{TASKS}/poll_alert")).json()["last_refusal"]
+    assert len(_calls(markets)) == before, "no source was called under any identity"
+    assert (await _delegation(granted["id"])).status == "suspended"
+
+
+async def test_a_delegated_read_of_an_operation_the_person_did_not_agree_to_is_refused(
+    client: AsyncClient, org: str, app: Any, offline: Path, markets: Any, idp: FakeIdentityProvider
+) -> None:
+    from choregos_api.db.models import AssistantInstallation, AssistantToolBinding, Delegation
+    from choregos_api.db.session import session_scope
+    from choregos_api.services.assistant_delegations import DelegationRefused, guard_read
+
+    await _ready(client)
+    person = await _traveller(client, app)
+    granted = await _agree(person, expires_in_days=LONG)
+    async with session_scope(orgs="*") as session:
+        row = (await session.execute(select(AssistantInstallation))).scalar_one()
+        binding = (
+            await session.execute(
+                select(AssistantToolBinding).where(AssistantToolBinding.need == "market_data")
+            )
+        ).scalar_one()
+        delegation = await session.get(Delegation, granted["id"])
+        assert delegation is not None
+        with pytest.raises(DelegationRefused) as refused:
+            await guard_read(
+                session,
+                delegation,
+                row,
+                need="market_data",
+                access="read",
+                binding=binding,
+                operation="export_everything",
+                now=at(9),
+            )
+    assert refused.value.code == "outside_agreement"
+
+
 # ───────────────────────── another person, and erasure ─────────────────────────
 
 

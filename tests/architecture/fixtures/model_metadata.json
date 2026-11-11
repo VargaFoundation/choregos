@@ -3077,6 +3077,13 @@
    },
    {
     "default": null,
+    "name": "provider_digest",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=64)"
+   },
+   {
+    "default": null,
     "name": "last_used_at",
     "nullable": true,
     "server_default": null,
