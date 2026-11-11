@@ -22,6 +22,7 @@ from choregos_core.conversation_evals import (
     play_case,
     play_suite,
 )
+from choregos_core.conversation_judge import judge_with
 from choregos_core.plugins import PluginError, load_directory
 
 FIXTURE = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "plugins" / "investment-assistant"
@@ -234,11 +235,18 @@ async def test_scripted_answers_succeed_in_order_and_the_last_repeats() -> None:
 async def test_a_suite_played_gives_its_share() -> None:
     suite = _fixture_suite()
     suite["cases"] = suite["cases"][:1]
+    criterion = suite["cases"][0]["rubric"][0]["criterion"]
+    verdict = json.dumps({"scores": [{"criterion": criterion, "score": 0.9, "reason": "ok"}]})
+    judge = judge_with(_model(_say(verdict)), "judge")
     good = _model(_call(QUOTE), _say(CITED))
-    result = await play_suite(suite, instructions="x", tools=TOOLS, complete_for=lambda _name: good)
+    result = await play_suite(
+        suite, instructions="x", tools=TOOLS, complete_for=lambda _name: good, judge=judge
+    )
     assert result.passed and result.share == 1.0
     bad = _model(_call(QUOTE), _say("12.34 EUR."))
-    result = await play_suite(suite, instructions="x", tools=TOOLS, complete_for=lambda _name: bad)
+    result = await play_suite(
+        suite, instructions="x", tools=TOOLS, complete_for=lambda _name: bad, judge=judge
+    )
     assert not result.passed and result.failing == ["quote-is-read-first-and-cited"]
 
 

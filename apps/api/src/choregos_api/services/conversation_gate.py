@@ -34,6 +34,8 @@ class SuiteOutcome:
 
     name: str
     result: SuiteResult | None
+    #: Why there is no result (the suite could not be played), shown in the refusal.
+    reason: str = ""
 
 
 ConversationSuiteSource = Callable[[AsyncSession, Agent, int], Awaitable[list[SuiteOutcome]]]
@@ -55,7 +57,10 @@ def judge(outcomes: list[SuiteOutcome]) -> AgentReleaseCheck | None:
     for outcome in outcomes:
         result = outcome.result
         if result is None:
-            problems.append(f"{outcome.name}: not evaluated for this version")
+            problems.append(
+                f"{outcome.name}: not evaluated for this version"
+                + (f" ({outcome.reason})" if outcome.reason else "")
+            )
         elif not result.passed:
             problems.append(
                 f"{outcome.name}: {result.share:.0%} of cases pass, {result.threshold:.0%} required "

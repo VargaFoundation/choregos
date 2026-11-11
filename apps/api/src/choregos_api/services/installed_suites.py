@@ -9,11 +9,13 @@ a
 `SuitePlayer` play them, and hands the outcomes to the gate, which refuses production below a suite's
 threshold.
 
-WHO plays a suite is a `SuitePlayer`, registered with `set_suite_player`: tests and CI register one that plays
-on a scripted model (`scripted_player`); a deployment registers the one that plays on its model gateway. With
-NO player the source finds nothing and the gate adds no check: an installation never blocks a release that
-nothing can evaluate. Once a player is registered, a suite it cannot play (it answers `None`) fails the gate,
-because nothing evaluated is never a pass (ADR 0020).
+WHO plays a suite is a `SuitePlayer`, registered with `set_suite_player`: tests and CI register one that
+plays on a scripted model (`scripted_player`). With none registered the DEFAULT player plays on the platform's
+model gateway (`conversation_player.default_player`), the rubric scored by the judge model.
+A suite that cannot
+be played (no model configured, a model refusal, a player answering `None`) fails the gate with the reason,
+because nothing evaluated is never a pass (ADR 0020); only `conversation_suites_require_model = false` lets
+such a suite add no check.
 
 A candidate case the owners accept (`services/conversation_candidates`) is kept on its feedback row
 (`accepted`) and joins the suites of the agent it was given for, played with the plugin's own cases.
@@ -24,38 +26,56 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any
 
+import httpx
 import yaml
 from choregos_core.conversation_evals import SuiteResult, loop_tools, play_suite, tools_named
+from choregos_core.conversation_judge import judge_with
 from choregos_core.prompt_loop import Complete
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..config import get_settings
 from ..db.models import Agent, AssistantInstallation, ConversationFeedback
 from . import assistants, plugin_files
 from .conversation_gate import SuiteOutcome
+from .conversation_player import CannotPlayError, ModelRefusedError, default_player, judge_model_of
 
 ACCEPTED = "accepted"
 
-#: (installation, the suite's name, the suite with its accepted additions, the agent, its version).
+#: (session, installation, the suite's name, the suite with its accepted additions, the agent, its version).
+#: It raises `CannotPlayError` when the suite cannot be played here.
 SuitePlayer = Callable[
-    [AssistantInstallation, str, dict[str, Any], Agent, int], Awaitable[SuiteResult | None]
+    [AsyncSession, AssistantInstallation, str, dict[str, Any], Agent, int], Awaitable[SuiteResult | None]
 ]
 
 _PLAYER: list[SuitePlayer] = []
 
 
 def set_suite_player(player: SuitePlayer | None) -> None:
-    """Who plays the installed suites; `None` removes it (the gate then adds no check)."""
+    """Who plays the installed suites; `None` goes back to the default, which plays on the gateway."""
     _PLAYER[:] = [player] if player is not None else []
 
 
+def current_player() -> SuitePlayer:
+    """The registered player, else `conversation_player.default_player`: never none (a hole in production)."""
+    return _PLAYER[0] if _PLAYER else default_player
+
+
 def scripted_player(
-    complete_for: Callable[[int, str], Complete], instructions: str = "scripted"
+    complete_for: Callable[[int, str], Complete],
+    instructions: str = "scripted",
+    judge: Complete | None = None,
 ) -> SuitePlayer:
-    """A player on scripted models: `complete_for(version, case name)` gives each case its model."""
+    """A player on scripted models: `complete_for(version, case name)` gives each case its model; `judge`
+    is the model that scores the rubrics (none: a case with a rubric fails, nothing was judged)."""
 
     async def play(
-        row: AssistantInstallation, name: str, suite: dict[str, Any], agent: Agent, version: int
+        session: AsyncSession,
+        row: AssistantInstallation,
+        name: str,
+        suite: dict[str, Any],
+        agent: Agent,
+        version: int,
     ) -> SuiteResult | None:
         names = sorted({tool for case in suite.get("cases") or [] for _, tool in tools_named(case)})
         return await play_suite(
@@ -63,6 +83,7 @@ def scripted_player(
             instructions=instructions,
             tools=loop_tools(names),
             complete_for=lambda case: complete_for(version, case),
+            judge=judge_with(judge, judge_model_of(get_settings())) if judge is not None else None,
         )
 
     return play
@@ -142,11 +163,16 @@ async def wrapping(session: AsyncSession, agent: Agent) -> list[AssistantInstall
 
 async def installed_suite_source(session: AsyncSession, agent: Agent, version: int) -> list[SuiteOutcome]:
     """The gate's source: the suites of every installation that wraps `agent`, and how `version` fared."""
-    if not _PLAYER:
-        return []
+    player = current_player()
     outcomes: list[SuiteOutcome] = []
     for row in await wrapping(session, agent):
         for ref, suite in await suites_of(session, row):
-            result = await _PLAYER[0](row, ref, suite, agent, version)
-            outcomes.append(SuiteOutcome(f"{row.slug}:{ref}", result))
+            label = f"{row.slug}:{ref}"
+            try:
+                outcomes.append(SuiteOutcome(label, await player(session, row, ref, suite, agent, version)))
+            except CannotPlayError as cannot:
+                if get_settings().conversation_suites_require_model:
+                    outcomes.append(SuiteOutcome(label, None, str(cannot)))
+            except (ModelRefusedError, httpx.HTTPError) as failure:
+                outcomes.append(SuiteOutcome(label, None, f"the model could not be called: {failure}"[:300]))
     return outcomes

@@ -21,6 +21,7 @@ from choregos_api.services.conversation_gate import (
     set_conversation_source,
 )
 from choregos_core.conversation_evals import CaseResult, Check, SuiteResult, loop_tools, play_suite
+from choregos_core.conversation_judge import judge_with
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -51,6 +52,13 @@ def _say(text: str) -> dict[str, Any]:
     return {"role": "assistant", "content": text}
 
 
+async def _satisfied(body: dict[str, Any]) -> dict[str, Any]:
+    """A judge content with every criterion (the judge itself is proved in `test_conversation_player`)."""
+    criteria = json.loads(body["messages"][1]["content"].split("<criteria>")[1].split("</criteria>")[0])
+    scores = [{"criterion": c, "score": 1, "reason": "fine"} for c in criteria]
+    return {"choices": [{"message": _say(json.dumps({"scores": scores}))}]}
+
+
 @pytest.fixture
 def conversation_model() -> Iterator[dict[int, list[dict[str, Any]]]]:
     """The scripted model of each version: what it does when the suite plays its first case."""
@@ -65,6 +73,7 @@ def conversation_model() -> Iterator[dict[int, list[dict[str, Any]]]]:
             instructions="x",
             tools=loop_tools([QUOTE, "orders__place_order", "news__search_news"]),
             complete_for=lambda _case: _scripted(*scripts[version]),
+            judge=judge_with(_satisfied, "judge"),
         )
         return [SuiteOutcome("investment-assistant", result)]
 

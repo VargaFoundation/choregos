@@ -425,7 +425,7 @@ cases:
       must_cite: [{ figure: '\d+(?:\.\d+)? ?EUR', source: '\(source: [a-z_ ]+, \d{4}-\d{2}-\d{2}\)' }]
       must_not_contain: ["you should buy", { regex: "(?i)guaranteed return" }]
       length: { min_words: 3, max_words: 120 }
-    rubric: [{ criterion: explains without recommending a purchase, threshold: 0.8 }]   # lot 2: stored only
+    rubric: [{ criterion: explains without recommending a purchase, threshold: 0.8 }]   # scored by the judge model
 ```
 
 `choregos plugin validate` holds the file to the schema and refuses a suite for another agent than the
@@ -440,12 +440,28 @@ it never enters a suite by itself: an owner writes its assertions and accepts it
 dismisses it (`…/dismiss`); both are final, and both are on the installation page of the console.
 
 The suites of an installed assistant reach the gate: the installation registers its manifest's eval files, read
-from the installed plugin, plus the accepted cases (`services/installed_suites.py`). A `SuitePlayer` plays them
-(`set_suite_player`: tests and CI play on a scripted model, `scripted_player`; a deployment registers one on its
-model gateway). Production is then refused below a suite's threshold, whether the revision is released
-explicitly (409) or saved with `on_publish: stable` (production stays where it is). With no player registered
-nothing can evaluate the suites and the gate adds no check. The judge that scores the `rubric` is not delivered
-yet.
+from the installed plugin, plus the accepted cases (`services/installed_suites.py`). A `SuitePlayer` plays them.
+Production is then refused below a suite's threshold, whether the revision is released explicitly (409) or
+saved with `on_publish: stable` (production stays where it is).
+
+**The default player.** With no player registered (`set_suite_player`: tests and CI register `scripted_player`
+on a scripted model) the platform's own plays each case through the prompt loop on the platform's model gateway
+(`services/conversation_player.py`): the version's instructions and model, the tools answering from the
+`tool_results` the suite declares. If a deployment cannot play (no gateway key, or an organisation that brings
+its own gateway, on which the deployment's key is no good) the promotion is REFUSED, with the reason in the
+`conversation_suite` check. `CHOREGOS_CONVERSATION_SUITES_REQUIRE_MODEL=false` is the explicit opt-out: such a
+suite then adds no check (a deployment that gates by other means says so).
+
+**The rubric and the judge.** A case's `rubric` (criteria, each with a threshold from 0 to 1) is scored only after
+its deterministic assertions pass: assertions are exact and first, a case they already failed is never judged.
+The judge is a model called through the same gateway (`/chat/completions` with the deployment's key, no provider
+SDK) with a fixed prompt that frames the transcript as data, not instructions, and asks for one JSON object,
+`{"scores": [{"criterion", "score", "reason"}]}`, one entry per criterion. The answer is validated; a malformed
+answer (not JSON, a missing, unknown or repeated criterion, a score outside 0 to 1), a refusal, a gateway error,
+or a rubric with no judge available fails the case, never passes it. A case fails when any criterion scores below
+its threshold; the suite's `threshold` (share of cases passing) gates promotion as before. The judge model is the
+setting `CHOREGOS_CONVERSATION_JUDGE_MODEL`; empty, it is `default_model_profiles["strong"]`, else `["standard"]`,
+else `platform/standard`. Tests script it on `FakeModelServer` (`say_for("conversation_judge", ...)`).
 
 A task's workflow (`tasks[].workflow`) must be a valid workflow (the workflow schema and its static rules):
 `choregos plugin validate` refuses a stub, naming the file.

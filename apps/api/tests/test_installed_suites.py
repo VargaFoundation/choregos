@@ -76,7 +76,13 @@ def model() -> Iterator[dict[int, dict[str, list[dict[str, Any]]]]]:
 
         return complete
 
-    set_suite_player(scripted_player(complete_for))
+    async def judge(body: dict[str, Any]) -> dict[str, Any]:
+        """A judge satisfied with everything (the judge is proved in `test_conversation_player`)."""
+        criteria = json.loads(body["messages"][1]["content"].split("<criteria>")[1].split("</criteria>")[0])
+        scores = [{"criterion": c, "score": 1, "reason": "fine"} for c in criteria]
+        return {"choices": [{"message": _say(json.dumps({"scores": scores}))}]}
+
+    set_suite_player(scripted_player(complete_for, judge=judge))
     yield scripts
     set_suite_player(None)
 
@@ -136,17 +142,6 @@ async def test_a_version_that_passes_the_installed_suites_reaches_production_on_
     assert check is not None and check["passed"] is True, check
     # Saving a revision follows the agent's `on_publish` (stable by default): it moved production.
     assert (await client.get(ANALYST)).json()["stable_version"] == 2
-
-
-async def test_without_a_player_an_installed_suite_adds_no_check(
-    client: AsyncClient,
-    org: str,
-    offline: Path,  # noqa: F811
-) -> None:
-    """Nothing can evaluate the suites: they block nothing (a deployment registers its player)."""
-    set_suite_player(None)
-    await _installed_analyst(client)
-    assert await _check(client) is None
 
 
 async def _candidate(agent: str = "investment-analyst") -> str:

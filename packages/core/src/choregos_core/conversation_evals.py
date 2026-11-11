@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -30,6 +30,8 @@ from .prompt_loop import Complete, LoopRequest, LoopTool, run_loop
 
 #: How far after a figure its source may end, unless the assertion says otherwise.
 DEFAULT_CITE_WINDOW = 120
+#: Scores a case's rubric on its journal (`conversation_judge.judge_with`): one check per criterion.
+Judge = Callable[[Mapping[str, Any], "Journal"], Awaitable[list["Check"]]]
 #: A tool a scripted source has no answer for.
 NO_SCRIPTED_RESULT = "error: the source has no scripted result for this call"
 
@@ -317,12 +319,28 @@ async def play_suite(
     instructions: str,
     tools: Sequence[LoopTool],
     complete_for: Callable[[str], Complete],
+    judge: Judge | None = None,
+    model: str = "scripted",
 ) -> SuiteResult:
-    """Every case of a suite played, then evaluated; `complete_for(case name)` gives each case its model."""
+    """Every case of a suite played, then evaluated; `complete_for(case name)` gives each case its model.
+
+    The assertions come first and are exact. Only a case that passes them is judged on its `rubric`; a case
+    that fails them is not (the judge is never asked about a case already lost). A rubric nobody can judge
+    (`judge` is `None`) fails its case: nothing evaluated is never a pass."""
     journals: dict[str, Journal] = {}
     for case in suite.get("cases") or []:
         name = str(case["name"])
         journals[name] = await play_case(
-            case, instructions=instructions, tools=tools, complete=complete_for(name)
+            case, instructions=instructions, tools=tools, complete=complete_for(name), model=model
         )
-    return evaluate_suite(suite, journals)
+    result = evaluate_suite(suite, journals)
+    cases = {str(case["name"]): case for case in suite.get("cases") or []}
+    for case_result in result.results:
+        case = cases[case_result.name]
+        if not case.get("rubric") or not case_result.passed:
+            continue
+        if judge is None:
+            case_result.checks.append(Check("rubric", False, "the case has a rubric and no judge model"))
+        else:
+            case_result.checks.extend(await judge(case, journals[case_result.name]))
+    return result

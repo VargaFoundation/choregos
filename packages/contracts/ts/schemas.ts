@@ -228,14 +228,14 @@ export type ConversationEvalsCase = {
     [key: string]: unknown;
   };
   assert?: ConversationEvalsAssertions;
-  /** criteria for the judge model (lot 2): stored and shown, not scored yet */
+  /** criteria scored by the judge model (0 to 1) after the assertions pass; each must reach its threshold */
   rubric?: Array<{
     criterion: string;
     threshold: number;
   }>;
 };
 
-/** A conversation suite an assistant ships (ADR 0140, ADR 0133): scenarios of user turns, the tool results a source's fake answers, and deterministic assertions on the conversation's journal (the ordered tool calls and the final texts). The assertions are exact and run first; `rubric` is stored for the judge model, which is not scored yet. A tool is named `<need>__<operation>`, as the assistant's `tools` declare it. */
+/** A conversation suite an assistant ships (ADR 0140, ADR 0133): scenarios of user turns, the tool results a source's fake answers, and deterministic assertions on the conversation's journal (the ordered tool calls and the final texts). The assertions are exact and run first; `rubric` is scored by a judge model once the assertions pass; a case fails when any criterion is below its threshold. A tool is named `<need>__<operation>`, as the assistant's `tools` declare it. */
 export type ConversationEvals = {
   kind: "conversation";
   /** the slug of the assistant's agent */

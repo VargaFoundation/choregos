@@ -262,6 +262,14 @@ class Settings(BaseSettings):
     #: empty speaks plain gRPC, which the chart's NetworkPolicy limits to the orchestrator's pods.
     buildkit_tls_dir: str = ""
     default_model_profiles: dict[str, str] = Field(default_factory=dict)
+    #: The gateway model that judges the rubric of a conversation suite (ADR 0140). Empty:
+    #: `default_model_profiles["strong"]`, else `["standard"]`, else `platform/standard`.
+    conversation_judge_model: str = ""
+    #: A conversation suite an installed assistant ships must be played to let a version reach production.
+    #: With no model to play it on (no gateway key, or an organisation's own gateway) the promotion is
+    #: REFUSED, with the reason. `CHOREGOS_CONVERSATION_SUITES_REQUIRE_MODEL=false` opts out: such a suite
+    #: then adds no check (a deployment that gates by other means says so explicitly).
+    conversation_suites_require_model: bool = True
     #: The organisation egress allowlist (S39-22, ADR 0066). `CHOREGOS_EGRESS_MODE` is `enforce`,
     #: `warn` (log `egress.would_refuse` and pass) or `off`; empty means `enforce`, and `warn` under
     #: `CHOREGOS_FAKES=1`.
