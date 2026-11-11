@@ -202,7 +202,7 @@ workers read the same setting, and `agent_sandbox` is the default.
 | :-- | :-- | :-- |
 | `tekton` | A `PipelineRun` per stage | Only where written: `global.runner.executor: tekton` |
 | `k8s_job` | A `Job` per stage | Fewest moving parts; supports queueing |
-| `aca` | Azure Container Apps job | Verified against a real subscription |
+| `aca` | Azure Container Apps job | Verified against a real subscription; runs outside the cluster, so it needs a [run door](#the-runs-api-and-the-run-door) |
 | `local_docker` | A container on the host | Development only |
 | `agent_sandbox` | A claimed sandbox from a warm pool (`kubernetes-sigs/agent-sandbox`) | **The default**; needs the operator (the chart fails at render without it); supports queueing |
 
@@ -1416,6 +1416,26 @@ value>` on the first model call. Nothing said the key had never resolved.
 If the API refuses to start with `réglages non résolus`, fix the source of the secret — the key
 is missing where it is stored, not where it is read.
 
+## Upgrading to 0.26
+
+0.26.0 brings assistants (stream S63, ADRs 0133-0140): a plugin may ship one, an organisation installs it
+for an audience, and people converse with it in the console, through the MCP door or in an embedded
+frame. Nothing changes for an organisation that installs no assistant. The migrations run with the
+chart's job as usual; what an operator does:
+
+| What | Why | What to do |
+| :-- | :-- | :-- |
+| `CHOREGOS_TOKEN_EXCHANGE_AUDIENCES` | The audiences a person's token may be exchanged for (`user_exchange`, ADR 0135). Unset, a connector's editor chooses any audience the identity provider allows. | Set it in `global.extraEnv` to a JSON list of your sources' audiences before binding a need under `user_exchange` ([security](security.md), "Review of the person's identity"). |
+| The identity provider | `user_exchange` needs token exchange (RFC 8693) enabled for the API's client and limited to the sources' audiences; a standing delegation (ADR 0137) needs `offline_access`, bounded and revocable offline sessions. | Configure the realm; nothing changes for deployments without assistants. |
+| Open sessions of `/responses` | The migration that makes sessions durable closes the sessions open at upgrade time (`reason: migrated`, their spend booked). | Upgrade outside working hours if hosted prompt agents are in use. |
+| Connected accounts | Accounts are now bound to the authorization server the person consented to (`provider_digest`). | Accounts made before 0.26 (none outside a test deployment) are connected again once. |
+| Conversation suites (ADR 0140) | An installed assistant's conversation suites gate the promotion of its agent version: the platform plays them through the gateway and a judge model scores their rubrics (`conversation_judge_model`, else the `strong` model profile). | With no gateway key, a version whose assistant ships suites is refused promotion with the reason; `conversation_suites_require_model=false` opts out (no check then). |
+| The embedded component | A host page frames `/embed/assistants/{org}/{installation}` only from the installation's `config.embed_origins`. | List the host origins in the installation's configuration; nothing else to deploy. |
+
+The standing delegation (ADR 0137) is shipped but its ADR stays `proposed` until the works council's
+opinion and the data protection impact assessment of the deploying organisation: do not offer delegated
+tasks to people before then.
+
 ## Upgrading to 0.24
 
 0.24.0 removes every external French alias whose window closed with 0.23.0 (S45-49,
@@ -1710,6 +1730,112 @@ The console's Next server is a trusted hop: it proxies `/api/v1` to the API, so 
 must reach the API in `X-Forwarded-For`. **If every console sign-in shares one window** (one user's
 retries throttle everyone), the web hop is not forwarding `X-Forwarded-For`, and the key has become the
 web pod's address.
+
+### The run's API and the run door
+
+`/api/v1/internal/*` is the run's own API: a runner reads its input and posts its events and its result
+there, a hosted session's pod takes its turns, the per-run egress proxy reads a run's network, the
+outbound relay reads an organisation's proxy. Each presents a token of its own. The API's route sends
+the whole `/api` prefix of the public hostnames to the API, so these routes answered there as well.
+Runs do not come that way: they call `global.internalApiUrl`, which is the in-cluster Service unless
+you changed it. The API therefore guards these routes by the name a request arrives under
+([ADR 0144](adr/0144-the-run-s-api-answers-only-where-runs-are.md)).
+
+| Setting | Chart value | Default | What it does |
+| :-- | :-- | :-- | :-- |
+| `CHOREGOS_INTERNAL_API_GUARD` | `choregos-api.internalApiGuard` | `warn` | `off`: nothing. `warn`: a request for the run's API that arrives under a public hostname is served and logged (`internal_api.would_refuse`). `enforce`: it gets the 404 of an unknown route, before any token is read (`internal_api.refused`) |
+| `CHOREGOS_PUBLIC_HOSTS` | `choregos-api.ingress.hostnames` when the chart renders the route, plus `choregos-api.publicHostnames` | code: `[]`; chart: the route's hostnames | public hostnames beyond the hosts of `global.publicUrl`, `global.apiUrl` and `choregos-api.corsOrigins`, which always count. Put in `publicHostnames` a name the chart cannot know: a route made outside it, a second name on a load balancer. `*.` may lead |
+| `CHOREGOS_RUN_DOOR_HOSTS` | `choregos-api.runDoor.hostnames` | `[]` | run doors: hostnames the run's API answers under although they are public. The chart renders their route, `choregos-run-door` |
+| — | `choregos-api.runDoor.annotations` | `{}` | the door Ingress's own annotations (`ingress.kind: ingress`) |
+| `CHOREGOS_INTERNAL_API_URL` | `global.internalApiUrl` | `http://choregos-api:8000` | where runs call back: the workers hand it to each run, the per-run egress proxy uses it, and the API reads it so that the guard never refuses that address |
+
+A request *arrives under* the name in its `Host` header and under every name in `X-Forwarded-Host`
+(a reverse proxy that rewrites `Host`, as the console's relay of `/api/v1` does, writes where the
+request came in there). One public name among them is enough to refuse. A name in `X-Forwarded-Host`
+never opens anything: writing a run door there does not open a public hostname. Ports and case are
+not compared. Everything else is served as before: the Service's name in any of its forms, a compose
+service, `localhost`, an address.
+
+The API refuses to start on a mode outside the three, and on a door or a public hostname written as a
+URL or with a port. The chart owns the first three names: `global.extraEnv` naming one fails the
+render, and so does a door hostname that is also in `choregos-api.ingress.hostnames`.
+
+**What `enforce` cannot do: refuse the address runs are sent to.** When the host of
+`global.internalApiUrl` is itself a public hostname and no run door covers it, refusing there would end
+every run at its first call. The guard then keeps warning whatever the mode, and the API says so once
+at start-up:
+
+```json
+{"event": "internal_api.guard_not_enforced", "level": "warning", "mode": "enforce", "callback_host": "api.example.com", "detail": "runs call back on `api.example.com`, a public hostname of this API that is not a run door: …"}
+```
+
+Without `CHOREGOS_INTERNAL_API_URL` (an installation that is not the chart's nor the compose file's),
+the API assumes runs call its own public URL, which holds `enforce` back in the same way.
+
+**Runs outside the cluster need a run door.** A job of the `aca` executor cannot reach the Service:
+such an installation has a public hostname in `global.internalApiUrl` today. Give those runs a
+hostname of their own before enforcing:
+
+1. Choose a hostname that is not one of the API's (`runs.example.com`), point it at the ingress and
+   serve it over TLS: the run token travels on it.
+2. List it in `choregos-api.runDoor.hostnames`. The chart renders `choregos-run-door`, an Ingress or an
+   HTTPRoute like the API's (`ingress.kind`, `className`, `gateway`), which sends `/api/v1/internal`
+   to the API and nothing else: the console, the REST API, the doors and the webhooks do not answer on
+   that hostname.
+3. Restrict it where your ingress can: the source addresses your runs leave from, a request rate.
+   With `ingress.kind: ingress` the door's `annotations` are its own, so a rule written there does not
+   land on the public route; with the Gateway API, attach your implementation's policy to the route
+   `choregos-run-door`.
+4. Set `global.internalApiUrl` to `https://runs.example.com`. It is one value for every run of the
+   installation: stages that run in the cluster call the door too, so check that their pods can reach
+   it (with `networkPolicies.enabled`, `choregos-runner-egress` lets runner pods reach the API pods,
+   not an ingress).
+5. Then `enforce`, in a later roll-out, once the runs started before step 4 have ended: a run keeps
+   the address it was started with, and those still call the public hostname.
+
+```yaml
+global:
+  internalApiUrl: https://runs.example.com
+choregos-api:
+  internalApiGuard: enforce
+  ingress:
+    kind: ingress
+    className: nginx
+  runDoor:
+    hostnames: ["runs.example.com"]
+    annotations:
+      # ingress-nginx's names; another controller has its own.
+      nginx.ingress.kubernetes.io/whitelist-source-range: "203.0.113.0/24"
+      nginx.ingress.kubernetes.io/limit-rps: "50"
+```
+
+**Upgrading.** The default is `warn`, and no preset of the chart enforces: an upgrade refuses nothing.
+
+1. Deploy the release as it is and let runs go through it, hosted sessions and the outbound relay
+   included if you use them.
+2. Read the API's log for `internal_api.guard_not_enforced` (once per pod at start-up) and
+   `internal_api.would_refuse`. Each line of the second carries `host`, `header` (`host` or
+   `x-forwarded-host`) and `path_prefix`: `/api/v1/internal/runs` is a run, `…/agent-sessions` a hosted
+   session's pod, `…/orgs` the outbound relay.
+3. A line that is one of your own callers names something to move first: runs outside the cluster to a
+   run door (above), a relay or a script to the Service or to the door. Lines that are nobody of yours
+   are what `enforce` will stop answering. After moving a caller, wait until its lines stop: a run in
+   flight keeps the address it was started with.
+4. Set `choregos-api.internalApiGuard: enforce`, staging first. `internal_api.refused` then counts what
+   is refused. To go back, set `warn`: nothing else changes.
+
+An installation that decides to keep its runs on a public hostname sets `off`: `warn` logs one line
+per call back.
+
+A run that ends at its first call after the switch is in
+[the stuck-run runbook](runbooks/stuck-run.md#a-run-that-ends-at-its-first-call).
+
+**What it is, and what it is not.** It closes the run's API on the hostnames the deployment declared,
+for requests that come in through them. It does not stop a caller inside the cluster, which uses the
+Service's name: the tokens and `networkPolicies` do. A hostname routed to the API that nobody declared
+stays served until it is in `publicHostnames`, and a proxy in front of the API that rewrites `Host`
+without writing `X-Forwarded-Host` hides the public name from the guard. A run door is as public as
+its route.
 
 ## Gateways and what each can do
 

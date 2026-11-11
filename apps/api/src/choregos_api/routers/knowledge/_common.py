@@ -141,6 +141,7 @@ def _document_dto(document: KnowledgeDocument, *, with_markdown: bool = False) -
         markdown=document.markdown if with_markdown else None,
         source_id=document.source_id,
         source_url=document.source_url,
+        origin=document.origin,
     )
 
 

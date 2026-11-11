@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import ipaddress
+import re
 from functools import lru_cache
 from typing import Any, Literal
 
@@ -22,6 +23,12 @@ DEFAULT_SESSION_SECRET = "dev-session-secret-change-me"
 #: The shortest session secret a deployed instance accepts: a 256-bit HMAC key.
 MIN_SESSION_SECRET_BYTES = 32
 
+
+#: A hostname as `CHOREGOS_RUN_DOOR_HOSTS` and `CHOREGOS_PUBLIC_HOSTS` take it: no scheme, port or path;
+#: a leading `*.` names every sub-domain.
+HOSTNAME = re.compile(
+    r"(\*\.)?[A-Za-z0-9_]([A-Za-z0-9_-]*[A-Za-z0-9_])?(\.[A-Za-z0-9_]([A-Za-z0-9_-]*[A-Za-z0-9_])?)*"
+)
 
 #: The clients of the Integrations page that a pre-registered OAuth client can serve (ADR 0030).
 OAUTH_CLIENTS = frozenset(
@@ -76,6 +83,17 @@ class Settings(BaseSettings):
     oidc_client_id: str = "choregos"
     oidc_client_secret: str = ""
     oidc_scopes: str = "openid profile email groups"
+    #: The platform's token-exchange client (RFC 8693, ADR 0135): the client that swaps a person's token
+    #: for a source's audience. Empty: the console's own client and token endpoint.
+    token_exchange_client_id: str = ""
+    token_exchange_client_secret: str = ""
+    token_exchange_endpoint: str = ""
+    #: The audiences a person's token may be exchanged for. Empty: any audience a connector declares (the
+    #: provider's own exchange permissions then decide); set it in production (security review S63-07).
+    token_exchange_audiences: list[str] = Field(default_factory=list)
+    #: RFC 7009 revocation endpoint of the provider, to kill a delegation's offline token (S63-14). Empty:
+    #: the fake's under CHOREGOS_FAKES, none otherwise (the sealed token is then only deleted here).
+    token_revocation_endpoint: str = ""
     #: For an IdP that publishes no discovery document; set all three or none (ADR 0100).
     oidc_authorization_endpoint: str = ""
     oidc_token_endpoint: str = ""
@@ -89,6 +107,9 @@ class Settings(BaseSettings):
     #: The MCP door also accepts OAuth tokens issued by the IdP (ADR 0030, RFC 9728): claude.ai and
     #: hosted clients cannot present a `chg_` token. Off by default.
     mcp_oauth_enabled: bool = False
+    #: How long an `ask` through the MCP door waits for the assistant's turn before answering `working`
+    #: (S63-11): the turn goes on in the background and `get_conversation` returns it when done.
+    mcp_assistant_wait_s: float = 25.0
     #: The issuer of the door's tokens; empty: that of the console's OIDC sign-in.
     mcp_oauth_issuer: str = ""
     #: The MANDATORY audience of a door token: on a shared realm, a token obtained by another
@@ -173,6 +194,9 @@ class Settings(BaseSettings):
     #: default is what the prompt loop lets through of one tool answer (`RESULT_CEILING_BYTES`).
     broker_result_ceiling_bytes: int = Field(default=RESULT_CEILING_BYTES, ge=1024)
     allowed_agent_backends: list[str] = Field(default_factory=list)
+    #: The IdP groups whose members hold `assistant:audit` on every assistant of the platform: the
+    #: privacy officers (S63-15). Owners hold it on their own assistant; no organisation role carries it.
+    assistant_privacy_officer_groups: list[str] = Field(default_factory=list)
     #: The hosts the API pod may reach, as the deployment's network policy lets it (`*.` wildcards
     #: allowed). Empty means the deployment does not say: the MCP catalogue then answers `unknown`
     #: instead of `undeclared` (ADR 0065). It restricts nothing; the network policy does.
@@ -254,6 +278,14 @@ class Settings(BaseSettings):
     #: empty speaks plain gRPC, which the chart's NetworkPolicy limits to the orchestrator's pods.
     buildkit_tls_dir: str = ""
     default_model_profiles: dict[str, str] = Field(default_factory=dict)
+    #: The gateway model that judges the rubric of a conversation suite (ADR 0140). Empty:
+    #: `default_model_profiles["strong"]`, else `["standard"]`, else `platform/standard`.
+    conversation_judge_model: str = ""
+    #: A conversation suite an installed assistant ships must be played to let a version reach production.
+    #: With no model to play it on (no gateway key, or an organisation's own gateway) the promotion is
+    #: REFUSED, with the reason. `CHOREGOS_CONVERSATION_SUITES_REQUIRE_MODEL=false` opts out: such a suite
+    #: then adds no check (a deployment that gates by other means says so explicitly).
+    conversation_suites_require_model: bool = True
     #: The organisation egress allowlist (S39-22, ADR 0066). `CHOREGOS_EGRESS_MODE` is `enforce`,
     #: `warn` (log `egress.would_refuse` and pass) or `off`; empty means `enforce`, and `warn` under
     #: `CHOREGOS_FAKES=1`.
@@ -356,10 +388,27 @@ class Settings(BaseSettings):
     #: Used only without `trusted_proxy_cidrs`: the number of proxies in front of the API that each
     #: append one `X-Forwarded-For` entry. 0: the TCP peer is the client.
     trusted_proxy_hops: int = Field(default=0, ge=0, le=10)
+    #: What the API does with a request for the run's API (`/api/v1/internal/*`) that arrives under one
+    #: of its public hostnames (ADR 0144): `off` (nothing), `warn` (log `internal_api.would_refuse` and
+    #: serve it) or `enforce` (answer 404, as an unknown route does). See `internal_api_guard.py`.
+    internal_api_guard: Literal["off", "warn", "enforce"] = "warn"
+    #: The run doors, as a JSON list (`CHOREGOS_RUN_DOOR_HOSTS='["runs.example.com"]'`): the hostnames
+    #: runs call back on when they run outside the cluster. The run's API answers there even when the
+    #: name is also a public one.
+    run_door_hosts: list[str] = Field(default_factory=list)
+    #: Hostnames this API is published under beyond those of `public_url`, `api_url` and `cors_origins`,
+    #: as a JSON list (`CHOREGOS_PUBLIC_HOSTS`): the chart passes its ingress hostnames.
+    public_hosts: list[str] = Field(default_factory=list)
+    #: Where runs call back (`CHOREGOS_INTERNAL_API_URL`, the setting the workers build
+    #: `callbacks.api_url` from). The guard reads it so that it never refuses the address runs are sent
+    #: to. Empty: `api_url`.
+    internal_api_url: str = ""
     #: Period of the recomputation of the Prometheus metrics from the database (see `metrics.py`).
     metrics_refresh_seconds: float = 15.0
     #: Seconds between two passes of the approved-actions relay, in every replica (ADR 0085).
     action_relay_interval_s: float = 30.0
+    #: Seconds between two passes of the assistants' retention purge (S63-16): daily.
+    assistant_retention_interval_s: float = 86400.0
     #: Tempo's query address, read by the nightly ledger-vs-trace job (`trace_drift.py`, ADR 0018
     #: point 3). Empty: the job refuses to run.
     tempo_url: str = ""
@@ -422,6 +471,21 @@ class Settings(BaseSettings):
                 raise ValueError(f"CHOREGOS_TRUSTED_PROXY_CIDRS: `{entry}` is not a network") from None
         if self.trusted_proxy_cidrs and self.trusted_proxy_hops > 0:
             raise ValueError("set CHOREGOS_TRUSTED_PROXY_CIDRS or CHOREGOS_TRUSTED_PROXY_HOPS, not both")
+        return self
+
+    @model_validator(mode="after")
+    def _guard_hosts_are_hostnames(self) -> Settings:
+        """A URL or a port where a hostname goes would never equal a `Host` header: the door would stay
+        shut, or the public name open, without a word. Refused, in every process (the workers set neither)."""
+        for name, entries in (
+            ("CHOREGOS_RUN_DOOR_HOSTS", self.run_door_hosts),
+            ("CHOREGOS_PUBLIC_HOSTS", self.public_hosts),
+        ):
+            for entry in entries:
+                if not HOSTNAME.fullmatch(entry.strip()):
+                    raise ValueError(
+                        f"{name}: `{entry}` is not a hostname (no scheme, port or path; `*.` may lead)"
+                    )
         return self
 
     @model_validator(mode="after")

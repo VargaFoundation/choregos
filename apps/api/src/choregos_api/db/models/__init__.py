@@ -35,7 +35,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..base import Base, Json, PkMixin, TimestampMixin, utcnow, uuid7
-from .agent_sessions import AgentSessionEvent, AgentSessionRecord
+from .agent_sessions import AgentSessionEvent, AgentSessionRecord, ConversationFeedback
 from .agents import (
     Agent,
     AgentCredential,
@@ -45,6 +45,8 @@ from .agents import (
     HostedBuildRecord,
     ProjectAgent,
 )
+from .assistant_reads import AssistantRead
+from .assistants import AssistantInstallation, AssistantToolBinding, ConnectedAccount, ConversationAction
 from .audit import AuditLog, NetworkDecision
 from .connectors import (
     ConnectorOperation,
@@ -73,9 +75,12 @@ from .knowledge import (
     KnowledgeDocument,
     KnowledgeGrant,
     KnowledgeSource,
+    KnowledgeUpdateProposal,
     MemoryFact,
+    MemoryProfile,
     MemoryStore,
 )
+from .offered_knowledge import KnowledgeSeedTombstone
 from .plugins import OrgPlugin, OrgPluginApproval, OrgPluginFile
 from .projects import Connector, ModelProfileRow, OrgWorkflow, PolicyDef, Project, Template, WorkflowDef
 from .releases import Deployment, Release
@@ -92,6 +97,7 @@ from .runs import (
 )
 from .secrets import OrgSecret, RemoteCredential
 from .skills import Skill, SkillVersion
+from .tasks import Delegation, TaskSubscription
 from .work_items import Event, Finding, HumanRequest, Run, RunEvent, WorkItem
 
 ALL_TABLES = [
@@ -100,6 +106,12 @@ ALL_TABLES = [
     Membership,
     Project,
     MachineAccount,
+    AssistantInstallation,
+    AssistantRead,
+    AssistantToolBinding,
+    TaskSubscription,
+    Delegation,
+    ConnectedAccount,
     Connector,
     WorkflowDef,
     PolicyDef,
@@ -128,6 +140,8 @@ ALL_TABLES = [
     AgentCredential,
     KnowledgeBase,
     KnowledgeDocument,
+    KnowledgeSeedTombstone,
+    KnowledgeUpdateProposal,
     KnowledgeChunk,
     KnowledgeSource,
     OrgPlugin,
@@ -169,6 +183,9 @@ __all__ = [
     "Any",
     "ApiToken",
     "ArtifactRecord",
+    "AssistantInstallation",
+    "AssistantRead",
+    "AssistantToolBinding",
     "AuditLog",
     "BackendRegistryRow",
     "Base",
@@ -176,11 +193,15 @@ __all__ = [
     "Boolean",
     "BudgetAlert",
     "CheckConstraint",
+    "ConnectedAccount",
     "Connector",
     "ConnectorOperation",
+    "ConversationAction",
+    "ConversationFeedback",
     "CostLedger",
     "DateTime",
     "DecisionRecordRow",
+    "Delegation",
     "Deployment",
     "Event",
     "Finding",
@@ -199,12 +220,15 @@ __all__ = [
     "KnowledgeDistillationPart",
     "KnowledgeDocument",
     "KnowledgeGrant",
+    "KnowledgeSeedTombstone",
     "KnowledgeSource",
+    "KnowledgeUpdateProposal",
     "LargeBinary",
     "MachineAccount",
     "Mapped",
     "Membership",
     "MemoryFact",
+    "MemoryProfile",
     "MemoryStore",
     "ModelCatalogueRow",
     "ModelProfileRow",
@@ -232,6 +256,7 @@ __all__ = [
     "Skill",
     "SkillVersion",
     "String",
+    "TaskSubscription",
     "Template",
     "Text",
     "TimestampMixin",

@@ -36,6 +36,7 @@ from sqlalchemy import func, select
 from . import __version__
 from .edition import current as current_edition
 from .logging import get_logger
+from .services.personal_spaces import PERSONAL, is_personal
 
 logger = get_logger("choregos.metrics")
 
@@ -228,8 +229,11 @@ async def refresh() -> Snapshot:
     now = utcnow()
     fresh = Snapshot()
     async with session_scope(orgs="*") as session:
-        projects = {p.id: p for p in (await session.execute(select(Project))).scalars()}
-        slug = {pid: p.slug for pid, p in projects.items()}
+        everything = list((await session.execute(select(Project))).scalars())
+        # A personal space is one person's (ADR 0134): never a label of its own, which would name a
+        # person and grow with every user; their spend is summed under `personal`.
+        slug = {p.id: (PERSONAL if is_personal(p) else p.slug) for p in everything}
+        projects = {p.id: p for p in everything if not is_personal(p)}
 
         active = await session.execute(
             select(func.count()).select_from(Run).where(Run.status.in_(["queued", "running"]))

@@ -27,6 +27,7 @@ from ...knowledge.formats import DocumentRefusedError, accept
 from ...schemas.knowledge import (
     KnowledgeDocumentDto,
 )
+from ...services import offered_knowledge
 from ._common import _base, _document_dto, _member, _require
 from ._router import Slug, router
 
@@ -79,6 +80,35 @@ async def upload_knowledge_document(
     if existing is not None:
         response.status_code = status.HTTP_200_OK
         return _document_dto(existing)
+    if base.installation_id is not None:
+        # An assistant's base (S63-06): a file of the same name is an edit of that document, by its owners.
+        edited = (
+            await session.execute(
+                select(KnowledgeDocument).where(
+                    KnowledgeDocument.knowledge_base_id == base.id,
+                    KnowledgeDocument.filename == accepted.filename,
+                )
+            )
+        ).scalar_one_or_none()
+        if edited is not None:
+            edited.mime, edited.size_bytes, edited.digest, edited.content = (
+                accepted.mime,
+                len(data),
+                digest,
+                data,
+            )
+            edited.status, edited.error, edited.markdown = PENDING, None, None
+            edited.origin = "local"
+            await session.flush()
+            await record(
+                session, principal, "knowledge.document.edit", org_id=base.org_id,
+                target_type="knowledge_document", target_id=edited.id, knowledge_base=base.slug,
+                digest=digest,
+            )  # fmt: skip
+            dto = _document_dto(edited)
+            await session.commit()
+            conversions.schedule(org, edited.id)
+            return dto
     count = (
         await session.execute(select(func.count()).where(KnowledgeDocument.knowledge_base_id == base.id))
     ).scalar_one()
@@ -161,6 +191,7 @@ async def delete_knowledge_document(
     base = await _base(session, principal, org, slug)
     _require(principal, org, base, KnowledgeAction.EDIT)
     document = await _document(session, base, document_id)
+    await offered_knowledge.remember_deleted(session, base, document, principal.email)
     await session.delete(document)
     await record(
         session,

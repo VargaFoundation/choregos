@@ -39,9 +39,15 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // brings 29 kB where a library would bring megabytes.
 // 2026-11-10 (S59-14): 2250 -> 2275 kB. S60-03's agent Access tab and the knowledge base page's status banner,
 // "who uses it" and source rows take the console to 2253 kB, with no new dependency.
-// 2026-11-11 (S62-11): 2275 -> 2300 kB. The A2A page of Integrations (four steps, the snippet builder and its
-// name list), the Help entry and the "Learn more" links take the console to 2290 kB, with no new dependency.
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2300);
+// 2026-11-11 (S63, assistants): 2275 -> 2350 kB. The assistants' screens (catalogue, installation, conversation
+// with its stream, memory page, tasks and delegations, the embedded component and its sign-in) take the console
+// to 2339 kB, with no new dependency.
+// 2026-11-11 (S63 waves E and F): 2350 -> 2375 kB. The memory export and owners' memory, the action's diff, the
+// richer configuration forms and the embedded token bring 2350 kB (shared JSX already folded): no headroom left.
+// 2026-11-11 (S62-11): 2375 -> 2400 kB. The A2A page of Integrations (four steps, the snippet builder and its
+// name list), the Help entry and the "Learn more" links add 19 kB: 2369 kB with the assistants, no new
+// dependency. S62-08's CLI page, written the same day, adds 6 kB more: the two together would sit at 2375.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2400);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* files(dir) {
