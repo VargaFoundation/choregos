@@ -1412,6 +1412,7 @@ chart's job as usual; what an operator does:
 | The identity provider | `user_exchange` needs token exchange (RFC 8693) enabled for the API's client and limited to the sources' audiences; a standing delegation (ADR 0137) needs `offline_access`, bounded and revocable offline sessions. | Configure the realm; nothing changes for deployments without assistants. |
 | Open sessions of `/responses` | The migration that makes sessions durable closes the sessions open at upgrade time (`reason: migrated`, their spend booked). | Upgrade outside working hours if hosted prompt agents are in use. |
 | Connected accounts | Accounts are now bound to the authorization server the person consented to (`provider_digest`). | Accounts made before 0.26 (none outside a test deployment) are connected again once. |
+| Conversation suites (ADR 0140) | An installed assistant's conversation suites gate the promotion of its agent version: the platform plays them through the gateway and a judge model scores their rubrics (`conversation_judge_model`, else the `strong` model profile). | With no gateway key, a version whose assistant ships suites is refused promotion with the reason; `conversation_suites_require_model=false` opts out (no check then). |
 | The embedded component | A host page frames `/embed/assistants/{org}/{installation}` only from the installation's `config.embed_origins`. | List the host origins in the installation's configuration; nothing else to deploy. |
 
 The standing delegation (ADR 0137) is shipped but its ADR stays `proposed` until the works council's
