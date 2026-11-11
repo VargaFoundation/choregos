@@ -3477,6 +3477,79 @@ there. Clicking a step opens its panel: one tab per attempt, what the agent did 
 refusals first, files changed), its log — live while it runs — and, for a person still awaited, the
 decision itself.
 
+### What is running, and stopping it
+
+**Activity** (in the *Work* group of the navigation, `/activity`) lists what is running in the
+organisation now: runs `queued` or `running` and open agent sessions, newest first, then what ended in
+the last hour (at most 50), so that a stop is seen to have taken effect. Each entry says what it is (the
+work item's key and stage, or the session), its agent and model, how long it has been running, and its
+**tokens and cost so far**. A run's spend so far is the gateway's count for the run's key, read at most
+every 30 seconds and never booked: the ledger line is still written when the run ends. A run whose
+gateway cannot say reads `—`, never 0. A run opens onto its steps (its events). Filters keep one
+workflow, one agent or one kind (runs, sessions); a project's *Activity* entry opens the same screen
+narrowed to it (`/activity?project=<slug>`). The list follows what happens live. You see only the
+entries of the projects you can read.
+
+```bash
+curl "$API/orgs/acme/activity?project=billing&agent=developer"   # {"in_flight": [...], "finished": [...]}
+curl -N "$API/orgs/acme/activity/stream?kind=run"                  # the same entries, as server-sent events
+```
+
+Every stop asks **why** (1 to 500 characters), and the reason is audited with who asked
+([ADR 0142](adr/0142-a-stop-interrupts-what-is-in-flight.md)):
+
+- **Stop a run** (*Stop* on its entry, or `POST /runs/{id}/cancel` with `{"reason": "..."}`;
+  `item:control` on the project). The run is cancelled where it stands, within one poll of the
+  orchestrator (`heartbeat_seconds`): its executor is stopped, its logs archived, its key closed and
+  its spend booked once. The stage is not retried and does not count as an attempt; the work item waits
+  for a person with "run stopped by <who>: <reason>", who reruns the stage (`rerun_stage`), stops the
+  work item or moves it on. A run that has just ended keeps how it ended: the stop answers `409`.
+- **Stop a work item** (*Stop* on its page, or its `stop` action with a reason). The work item stops
+  **and** its run in flight is cancelled with the same reason; until S64 the run went on to the end of
+  its stage. The `pause` action still leaves the run in flight alone and holds the next stage.
+- **Stop an agent** (*Stop the agent…* on its page, or `POST /orgs/{org}/agents/{slug}/stop`; whoever
+  may change the agent's status). The agent is **suspended** first, so nothing new starts; then its
+  runs `queued` or `running` in every project are cancelled as above (their work items wait for a
+  person) and its open sessions are closed. The answer counts what was stopped and lists what could not
+  be stopped yet, which the reconciliation retries. *Reactivate* resumes the agent and restarts nothing
+  on its own. Stopping an agent that is already suspended stops what is still running and is audited
+  again.
+
+### Tokens, and what fills the context
+
+Spend is read in **tokens** as well as money
+([ADR 0141](adr/0141-tokens-and-the-context-are-read-per-scope.md)). A **Tokens and cost** panel sits on
+the project's overview, on a workflow's *Tokens and cost* tab and on an agent's page (the agent in every
+project): its totals give the input tokens, the part of them read from the model's cache, and the output
+tokens, next to the cost; one grouping at a time (by model, stage, agent, workflow or run), in money or in
+tokens, with the CSV of exactly what is shown. The organisation's **Spend** page (`/costs`) has the same
+*Measure* switch for each breakdown, and adds *Top runs*; tool calls stay in money, as they spend no
+model token.
+
+The panels read the cost report with a filter: `agent` (its slug), `workflow` (its name) and `work_item`
+narrow it, combined with each other and with `kind`, `since` and `until`; `group_by=run` names each run by
+its work item's key and stage (`PAY-12 · review #2` for a second attempt). The report's `total` carries
+`tokens_in`, `tokens_out` and `tokens_cached` next to the money.
+
+```bash
+curl "$API/orgs/acme/costs?agent=developer&group_by=model"
+curl "$API/projects/$P/costs?workflow=default&group_by=run&since=2026-11-01"
+```
+
+A run's page has a **Context** card: what filled the model's input on the run's last call, section by
+section (system prompt, platform tools, MCP tools, skills, knowledge, memory, messages, and what the
+backend added that the platform did not write), against the model's input window, with the free space
+left. The **total is exact** (the model's own count); the **split is estimated** (characters / 4, scaled
+to the total). A model whose window the catalogue does not know shows the free space as unknown. Where it
+is measured depends on the backend: every section for `prompt` agents and sessions, from the request the
+container sends for `hosted` agents, and from the gateway for the coding CLIs (Claude Code, Codex,
+Gemini CLI, Goose, OpenCode, Copilot CLI), which attributes what the platform wrote (playbook, `task.md`,
+`CLAUDE.md`, skills, MCP tools) and counts the rest as *added by the backend*. `code` and `remote` agents
+are not measurable: the platform does not see their model calls. Only numbers are kept, never the
+prompt: at most one measurement per call and one per 5 seconds per run (the first, the largest of each
+window and the last). `GET /runs/{id}/context-breakdown` returns the last one and the series of totals,
+with the run's read right.
+
 ## 7. Day-2 knobs
 
 | Symptom | Knob |
@@ -3488,8 +3561,8 @@ decision itself.
 | An agent wandering outside its scope | `scope.max_diff_files`, `scope.deny_paths`, gate `scope_respected` |
 | Too many findings from one run | `findings.max_per_run` |
 
-Costs export as CSV from the project overview, grouped by day, stage, model, backend, size
-or kind.
+Costs export as CSV from the project overview, grouped by day, stage, model, backend, size,
+kind, agent, workflow, work item or run, and narrowed to one agent, workflow or work item.
 
 **Your roles.** The administration overview (Session card) lists your roles by scope instead of
 repeating the organisation: `platform : org_admin` on the community edition (one organisation, whose
