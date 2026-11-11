@@ -26,24 +26,20 @@ const MEASURES: Array<{ id: Measure; label: string }> = [
   { id: "tokens", label: "Tokens" },
 ];
 
-/** The organisation's currency, as the session knows it; euros until it says otherwise. */
-export function useOrgCurrency(): { org: string; currency: Currency } {
-  const session = useSession();
-  const currency = session.orgs?.find((o) => o.slug === session.org)?.currency === "USD" ? "USD" : "EUR";
-  return { org: session.org, currency };
-}
-
 /**
  * Tokens and cost (S64-07, ADR 0141 §1): the same cost report every spend screen reads, narrowed to
  * what the page is about — a project, one of its workflows, an agent — over the last `days` days.
  * Its totals say the input, output and cached tokens next to the money; one grouping at a time,
- * in money or in tokens; the CSV is exactly the grouping and the filter shown.
+ * in money or in tokens; the CSV is exactly the grouping and the filter shown. The money is in
+ * dollars by default, as on every project, work item and agent screen (S23-10: the currency of
+ * everything an agent spends); only the organisation's Spend page reads its own currency.
  */
 export function TokensAndCostPanel({
   project = null,
   filter = {},
   groups,
   days = 30,
+  currency = "USD",
 }: {
   /** A project's slug, or `null` for the organisation's report. */
   project?: string | null;
@@ -51,8 +47,9 @@ export function TokensAndCostPanel({
   filter?: Pick<CostFilter, "agent" | "workflow" | "work_item">;
   groups: PanelGroup[];
   days?: number;
+  currency?: Currency;
 }) {
-  const { org, currency } = useOrgCurrency();
+  const { org } = useSession();
   const scope: Scope = { org, project };
   // Fixed once per mount: the period does not slide under the reader's eyes.
   const [since] = useState(() => new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10));

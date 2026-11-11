@@ -21,7 +21,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => params.current,
   usePathname: () => "/costs",
 }));
-vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme", orgs: [{ slug: "acme", currency: "USD" }], me: null }) }));
+vi.mock("@/lib/session", () => ({ useSession: () => ({ org: "acme", orgs: [{ slug: "acme", currency: "EUR" }], me: null }) }));
 vi.mock("@/lib/api", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/api")>();
   return { ...real, api: { ...real.api, costs: vi.fn(), orgCosts: vi.fn(), projects: vi.fn() } };
@@ -97,6 +97,15 @@ describe("the tokens-and-cost panel", () => {
     expect(within(totals).getByTestId("total-output")).toHaveTextContent("10,000");
     expect(within(totals).getByTestId("total-cached")).toHaveTextContent("60,000");
     expect(within(totals).getByTestId("total-cost")).toHaveTextContent("US$8.00");
+  });
+
+  it("reads money in dollars on a project's, a workflow's or an agent's page, even in a euro organisation (S23-10)", async () => {
+    vi.mocked(api.costs).mockResolvedValue(REPORT);
+    await show(<TokensAndCostPanel project="billing-api" groups={["model"]} />);
+    const panel = await screen.findByTestId("tokens-and-cost");
+    await screen.findByTestId("panel-model");
+    expect(panel).not.toHaveTextContent("€");
+    expect(screen.getByTestId("panel-model")).toHaveTextContent("US$5.00");
   });
 
   it("switches its breakdown from money to tokens", async () => {
