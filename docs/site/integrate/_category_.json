@@ -1,0 +1,9 @@
+{
+  "label": "Integrate",
+  "position": 5,
+  "link": {
+    "type": "generated-index",
+    "slug": "/choregos/integrate",
+    "description": "Connect assistants, applications, other systems and scripts to Choregos."
+  }
+}
