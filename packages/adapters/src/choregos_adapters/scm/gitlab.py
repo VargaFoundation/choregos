@@ -22,7 +22,7 @@ from choregos_contracts import InboundEvent
 from choregos_core.domain import CheckRun, DiffFile, DiffSummary, PrRef, PrState
 
 from ..ci.gitlab import _JOB_RUN
-from ..errors import ConfigurationError, UpstreamError
+from ..errors import ConfigurationError, HeadMovedError, UpstreamError
 from ..http import RestClient
 from ..tracker.gitlab_events import parse_gitlab_event
 
@@ -38,6 +38,9 @@ DRAFT_PREFIX = "Draft: "
 
 class GitLabScm:
     """SCM on one GitLab project. The `repo` argument of the protocol is the configured project."""
+
+    #: A merge names its commit: `sha` on the merge request's merge.
+    capabilities: frozenset[str] = frozenset({"merge_at_commit"})
 
     def __init__(self, client: RestClient, project: str, default_branch: str = "main") -> None:
         if not project:
@@ -112,6 +115,22 @@ class GitLabScm:
                 return False
             raise
         return True
+
+    async def head_of(self, repo: str, branch: str) -> str | None:
+        """The commit `branch` points at now, `None` when there is no such branch (ADR 0152). Any
+        other error is raised: an outage is not an absence."""
+        try:
+            found = await self.client.request(
+                "GET", f"{self._base}/repository/branches/{quote(branch, safe='')}"
+            )
+        except UpstreamError as exc:
+            if exc.status_code == 404:
+                return None
+            raise
+        sha = ((found or {}).get("commit") or {}).get("id")
+        if not sha:
+            raise UpstreamError("gitlab", f"the branch `{branch}` names no commit")
+        return str(sha)
 
     async def commit_files(self, repo: str, branch: str, files: dict[str, str], message: str) -> str:
         """One commit for all the files: `create` or `update` per file. Idempotent: files already
@@ -230,14 +249,30 @@ class GitLabScm:
         if ids:
             await self.client.request("PUT", self._mr(ref), json={"reviewer_ids": ids})
 
-    async def enqueue_merge(self, ref: PrRef) -> None:
-        """Merge when the pipeline succeeds. Recent GitLab reads `auto_merge`, older reads
-        `merge_when_pipeline_succeeds`: both are sent."""
-        await self.client.request(
-            "PUT",
-            f"{self._mr(ref)}/merge",
-            json={"auto_merge": True, "merge_when_pipeline_succeeds": True},
-        )
+    async def enqueue_merge(self, ref: PrRef, sha: str) -> None:
+        """Merge the merge request at `sha`, the commit the gates judged (ADR 0152), when the
+        pipeline succeeds. Recent GitLab reads `auto_merge`, older reads
+        `merge_when_pipeline_succeeds`: both are sent, with the `sha` its head must be at.
+
+        A head that is elsewhere is a `HeadMovedError` and nothing is merged; a merge request
+        already merged at `sha` is left as it is, so a replayed merge is not a second one."""
+        mr = await self.client.request("GET", self._mr(ref))
+        head = str((mr or {}).get("sha") or "")
+        if head != sha:
+            raise HeadMovedError("gitlab", expected=sha, actual=head or None)
+        if mr.get("state") == "merged":
+            return
+        try:
+            await self.client.request(
+                "PUT",
+                f"{self._mr(ref)}/merge",
+                json={"sha": sha, "auto_merge": True, "merge_when_pipeline_succeeds": True},
+            )
+        except UpstreamError as exc:
+            # 409: "SHA does not match HEAD of source branch" (GitLab's API reference).
+            if exc.status_code == 409:
+                raise HeadMovedError("gitlab", expected=sha) from exc
+            raise
 
     async def compare(self, repo: str, base: str, head: str) -> DiffSummary:
         payload = await self.client.request(

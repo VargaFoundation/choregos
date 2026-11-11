@@ -16,6 +16,7 @@ from choregos_core.gates import ADR_PATTERN, ALREADY_FIXED_GATE, DIFF_GATES, unc
 from temporalio import activity
 
 from .base import db, load_work_item, project_bundle, scm_for
+from .judged import record_judged
 from .repositories import repo_slug as _repo_slug
 from .repositories import target_or_none
 
@@ -56,10 +57,17 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
         branch = (result.artifacts.branch if result else None) or (
             bundle.config.branch_for(item.tracker_key, repo=repo_config) if repo_config is not None else ""
         )
+        # The commit this evaluation judges (ADR 0152): the head of the branch, read once. Every read
+        # of the branch below is a read of THAT commit, never of what the name designates by then.
+        head, head_unread = await _head(scm, repo_config, branch)
         if needs_diff and repo_config is not None:
             repo = _repo_slug(repo_config.url)
             try:
-                diff = await scm.compare(repo, repo_config.default_branch, branch)
+                if head is None:
+                    # No commit to compare: the branch is not there — what a comparison by name
+                    # answered with a 404 — or its head could not be read.
+                    raise head_unread or UpstreamError("scm", f"no branch `{branch}`", status_code=404)
+                diff = await scm.compare(repo, repo_config.default_branch, head)
             except Exception as exc:
                 # A run that changed nothing pushed no branch: its diff is EMPTY, not unreadable
                 # (#536). Any other failure stays "diff unavailable" and the guarantee refuses.
@@ -86,14 +94,18 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
             if number:
                 try:
                     pr = await scm.get_pr(PrRef(repo=repo, number=number))
-                    ci_status = pr.checks_conclusion()
-                    review_state = pr.review_conclusion()
-                    scans = {
-                        check.name: ("ok" if check.conclusion == "success" else "failed")
-                        for check in pr.checks
-                        if check.name in {"semgrep", "trivy", "gitleaks"}
-                    }
-                    signed = _provenance(pr.checks)
+                    # The checks, the review and the scans count when they are those of the judged
+                    # commit. A pull request whose head is elsewhere says nothing of it: the
+                    # guarantees stay pending and are read again.
+                    if head is not None and pr.head_sha == head:
+                        ci_status = pr.checks_conclusion()
+                        review_state = pr.review_conclusion()
+                        scans = {
+                            check.name: ("ok" if check.conclusion == "success" else "failed")
+                            for check in pr.checks
+                            if check.name in {"semgrep", "trivy", "gitleaks"}
+                        }
+                        signed = _provenance(pr.checks)
                 except Exception:
                     ci_status = None
 
@@ -113,7 +125,7 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
         # The scope is judged on what the RUN wrote, since the commit where it began (S22-11): from
         # the base, it counted the work of the earlier steps. On the dev tenant, on 10/09, the ADR of
         # study #5 turned red on the Makefile that the framing step had pushed.
-        run_scope = await _run_diff(scm, repo_config, result, branch, gates) if diff is not None else None
+        run_scope = await _run_diff(scm, repo_config, result, head, gates) if diff is not None else None
         context = GateContext(
             result=result,
             tool_calls=calls,
@@ -143,9 +155,12 @@ async def evaluate_gates(payload: dict[str, Any]) -> list[dict[str, Any]]:
             for gate in gates
         ]
 
-        await _publish_check_runs(scm, repo_config, item, outcomes, result)
+        await _publish_check_runs(scm, repo_config, item, outcomes, head)
         if run is not None:
-            await _journal(session, run, outcomes)
+            await _journal(session, run, outcomes, head)
+        if head is not None and repo_config is not None:
+            # What the merge will name: the commit these verdicts are about, and no other.
+            record_judged(item, repository=_repo_slug(repo_config.url), branch=branch, sha=head)
         return [
             {
                 "name": o.name,
@@ -203,6 +218,23 @@ def empty_diff_of_unchanged_run(
     return DiffSummary(base=base, head=branch)
 
 
+async def _head(scm: Any, repo_config: Any, branch: str) -> tuple[str | None, Exception | None]:
+    """The commit the head of `branch` is at, read once per evaluation (ADR 0152).
+
+    `(sha, None)`; `(None, None)` when there is no such branch, or no repository; `(None, error)`
+    when the SCM cannot say — a connector that cannot read a head, a 403, an outage. Without a
+    commit nothing is judged on the branch: the diff is unavailable, and no merge is named."""
+    if repo_config is None or not branch:
+        return None, None
+    head_of = getattr(scm, "head_of", None)
+    if head_of is None:
+        return None, UpstreamError("scm", f"the `{type(scm).__name__}` SCM cannot read the head of a branch")
+    try:
+        return await head_of(_repo_slug(repo_config.url), branch), None
+    except Exception as exc:
+        return None, exc
+
+
 def _reads_branch(gates: list[dict[str, Any]]) -> bool:
     return any(g["name"] == ALREADY_FIXED_GATE for g in gates)
 
@@ -222,15 +254,18 @@ async def _branch_pushed(scm: Any, repo_config: Any, branch: str) -> bool | None
 
 
 async def _run_diff(
-    scm: Any, repo_config: Any, result: StageResult | None, branch: str, gates: list[dict[str, Any]]
+    scm: Any, repo_config: Any, result: StageResult | None, head: str | None, gates: list[dict[str, Any]]
 ) -> list[str] | None:
-    """The files the run changed, since the commit where it began; `None` when the run does not
-    say (a runner older than S22-11) or the comparison fails: the work item's diff then holds."""
+    """The files the run changed, from the commit where it began to the judged one (`head`); `None`
+    when the run does not say (a runner older than S22-11), no commit is judged, or the comparison
+    fails: the work item's diff then holds."""
     start = (result.artifacts.reports.get("start_commit") if result else None) or ""
     if not start or not any(g["name"] == "scope_respected" for g in gates) or repo_config is None:
         return None
+    if head is None:  # no commit judged: nothing to measure the run against
+        return None
     try:
-        diff = await scm.compare(_repo_slug(repo_config.url), start, branch)
+        diff = await scm.compare(_repo_slug(repo_config.url), start, head)
     except Exception:
         return None
     return list(diff.paths())
@@ -281,8 +316,9 @@ def added_text_of(patch: str) -> str:
     )
 
 
-async def _journal(session: Any, run: Run, outcomes: list[GateOutcome]) -> None:
-    """File each verdict in the run's journal (`gate.outcome`).
+async def _journal(session: Any, run: Run, outcomes: list[GateOutcome], head: str | None = None) -> None:
+    """File each verdict in the run's journal (`gate.outcome`), with the commit it was given on
+    (`head_sha`, ADR 0152) when the evaluation judged one.
 
     The verdicts were only returned to the workflow, which decided and then forgot them: no screen
     could say WHICH guarantees had run nor what they had answered, and the product's central promise
@@ -308,6 +344,7 @@ async def _journal(session: Any, run: Run, outcomes: list[GateOutcome]) -> None:
                     "pending": outcome.pending,
                     "detail": outcome.detail,
                     "annotations": list(outcome.annotations),
+                    **({"head_sha": head} if head else {}),
                 },
                 ts=utcnow(),
             )
@@ -315,14 +352,14 @@ async def _journal(session: Any, run: Run, outcomes: list[GateOutcome]) -> None:
 
 
 async def _publish_check_runs(
-    scm: Any, repo_config: Any, item: Any, outcomes: list[GateOutcome], result: Any
+    scm: Any, repo_config: Any, item: Any, outcomes: list[GateOutcome], head: str | None
 ) -> None:
     """Check-runs `choregos/scope` and `choregos/evidence` (S3-05): the verdict is visible in the PR,
-    on the work item's target repository (ADR 0124)."""
-    if not item.pr_url or repo_config is None or not hasattr(scm, "create_check_run"):
+    on the work item's target repository (ADR 0124), on the commit it was given on (`head`, ADR
+    0152) — never on a commit a run declared. Without a judged commit there is nothing to mark."""
+    if not item.pr_url or repo_config is None or head is None or not hasattr(scm, "create_check_run"):
         return
     repo = _repo_slug(repo_config.url)
-    sha = (result.artifacts.commits[-1] if result and result.artifacts.commits else None) or "HEAD"
     mapping = {"scope_respected": "choregos/scope", "evidence_present": "choregos/evidence"}
     for outcome in outcomes:
         name = mapping.get(outcome.name)
@@ -330,7 +367,7 @@ async def _publish_check_runs(
             continue
         await scm.create_check_run(
             repo,
-            sha,
+            head,
             name,
             "success" if outcome.passed else "failure",
             outcome.detail,
@@ -355,7 +392,12 @@ async def check_scope_violations(payload: dict[str, Any]) -> list[str]:
         repo = _repo_slug(repo_config.url)
         branch = bundle.config.branch_for(item.tracker_key, repo=repo_config)
         scm = await scm_for(session, bundle, repo_config.url)
-        diff = await scm.compare(repo, repo_config.default_branch, branch)
+        # The commit at the head of the branch, read once (ADR 0152); a branch that is not there is
+        # compared by its name, and the SCM answers as it did.
+        head, unread = await _head(scm, repo_config, branch)
+        if unread is not None:
+            raise unread
+        diff = await scm.compare(repo, repo_config.default_branch, head or branch)
         return [
             path
             for path in diff.paths()

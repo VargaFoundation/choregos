@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from choregos_adapters.errors import UpstreamError
+from choregos_adapters.errors import HeadMovedError, UpstreamError
 from choregos_adapters.github.client import GitHubClient
 from choregos_adapters.scm.github import GitHubScm
 
@@ -11,6 +11,15 @@ from ._transport import Wire
 
 API = "https://api.github.test"
 REPO = "varga/billing"
+
+
+#: The commit the gates judged, and the one a later push put at the head.
+JUDGED = "a" * 40
+LATER = "b" * 40
+
+
+def _pull_request(head: str) -> dict[str, object]:
+    return {"node_id": "PR_x", "head": {"sha": head}}
 
 
 def scm(wire: Wire, **kwargs: object) -> GitHubScm:
@@ -159,21 +168,28 @@ async def test_the_merge_queue_or_the_direct_merge_depending_on_the_configuratio
 
     wire = Wire(
         {
-            ("GET", f"/repos/{REPO}/pulls/8"): (200, {"node_id": "PR_x"}),
+            ("GET", f"/repos/{REPO}/pulls/8"): (200, _pull_request(JUDGED)),
             ("POST", "/graphql"): (200, {"data": {}}),
         }
     )
-    await scm(wire).enqueue_merge(PrRef(repo=REPO, number=8))
-    assert wire.body(-1)["variables"] == {"pullRequestId": "PR_x", "method": "SQUASH"}
+    await scm(wire).enqueue_merge(PrRef(repo=REPO, number=8), JUDGED)
+    assert wire.body(-1)["variables"] == {
+        "pullRequestId": "PR_x",
+        "method": "SQUASH",
+        "expectedHeadOid": JUDGED,
+    }
+    assert "expectedHeadOid: $expectedHeadOid" in wire.body(-1)["query"]
 
     direct = Wire(
         {
-            ("GET", f"/repos/{REPO}/pulls/8"): (200, {"node_id": "PR_x"}),
+            ("GET", f"/repos/{REPO}/pulls/8"): (200, _pull_request(JUDGED)),
             ("PUT", f"/repos/{REPO}/pulls/8/merge"): (200, {}),
         }
     )
-    await scm(direct, use_merge_queue=False, merge_method="REBASE").enqueue_merge(PrRef(repo=REPO, number=8))
-    assert direct.body(-1) == {"merge_method": "rebase"}
+    await scm(direct, use_merge_queue=False, merge_method="REBASE").enqueue_merge(
+        PrRef(repo=REPO, number=8), JUDGED
+    )
+    assert direct.body(-1) == {"merge_method": "rebase", "sha": JUDGED}
 
 
 async def test_the_scope_check_run_annotates_at_most_fifty_files() -> None:
@@ -348,7 +364,7 @@ async def test_a_repository_that_refuses_auto_merge_is_merged_directly() -> None
 
     wire = Wire(
         {
-            ("GET", f"/repos/{REPO}/pulls/8"): (200, {"node_id": "PR_x"}),
+            ("GET", f"/repos/{REPO}/pulls/8"): (200, _pull_request(JUDGED)),
             ("POST", "/graphql"): (
                 200,
                 {
@@ -360,9 +376,9 @@ async def test_a_repository_that_refuses_auto_merge_is_merged_directly() -> None
             ("PUT", f"/repos/{REPO}/pulls/8/merge"): (200, {"merged": True}),
         }
     )
-    await scm(wire).enqueue_merge(PrRef(repo=REPO, number=8))
+    await scm(wire).enqueue_merge(PrRef(repo=REPO, number=8), JUDGED)
     assert ("PUT", f"/repos/{REPO}/pulls/8/merge") in wire.sent()
-    assert wire.body(-1) == {"merge_method": "squash"}
+    assert wire.body(-1) == {"merge_method": "squash", "sha": JUDGED}, "the direct merge names the commit too"
 
 
 async def test_another_graphql_refusal_is_not_merged_around() -> None:
@@ -370,13 +386,93 @@ async def test_another_graphql_refusal_is_not_merged_around() -> None:
 
     wire = Wire(
         {
-            ("GET", f"/repos/{REPO}/pulls/8"): (200, {"node_id": "PR_x"}),
+            ("GET", f"/repos/{REPO}/pulls/8"): (200, _pull_request(JUDGED)),
             ("POST", "/graphql"): (
                 200,
                 {"errors": [{"type": "FORBIDDEN", "message": "Resource not accessible"}]},
             ),
         }
     )
-    with pytest.raises(UpstreamError):
-        await scm(wire).enqueue_merge(PrRef(repo=REPO, number=8))
+    with pytest.raises(UpstreamError) as refused:
+        await scm(wire).enqueue_merge(PrRef(repo=REPO, number=8), JUDGED)
+    assert not isinstance(refused.value, HeadMovedError), "the head did not move: the refusal is GitHub's own"
     assert ("PUT", f"/repos/{REPO}/pulls/8/merge") not in wire.sent()
+
+
+# ───────────────────────── the merge names the judged commit (ADR 0152) ─────────────────────────
+
+
+async def test_the_head_of_a_branch_is_the_commit_of_its_ref() -> None:
+    present = Wire(
+        {("GET", f"/repos/{REPO}/git/ref/heads/choregos/12-x"): (200, {"object": {"sha": JUDGED}})}
+    )
+    assert await scm(present).head_of(REPO, "choregos/12-x") == JUDGED
+    absent = Wire({})
+    assert await scm(absent).head_of(REPO, "choregos/12-x") is None, "no branch is no commit"
+    for status in (403, 502):
+        failing = Wire({("GET", f"/repos/{REPO}/git/ref/heads/x"): (status, {"message": "nope"})})
+        with pytest.raises(UpstreamError):
+            await scm(failing).head_of(REPO, "x")
+
+
+async def test_a_head_that_moved_is_refused_before_anything_is_asked() -> None:
+    from choregos_core.domain import PrRef
+
+    wire = Wire({("GET", f"/repos/{REPO}/pulls/8"): (200, _pull_request(LATER))})
+    with pytest.raises(HeadMovedError) as moved:
+        await scm(wire).enqueue_merge(PrRef(repo=REPO, number=8), JUDGED)
+    assert (moved.value.expected, moved.value.actual) == (JUDGED, LATER)
+    assert wire.sent("POST") == [] and wire.sent("PUT") == [], "nothing was asked of the forge"
+
+
+async def test_a_direct_merge_the_forge_refuses_on_its_sha_is_a_moved_head() -> None:
+    """The head moves between the read and the merge: GitHub answers 409 to the `sha` it was sent."""
+    from choregos_core.domain import PrRef
+
+    wire = Wire(
+        {
+            ("GET", f"/repos/{REPO}/pulls/8"): (200, _pull_request(JUDGED)),
+            ("PUT", f"/repos/{REPO}/pulls/8/merge"): (409, {"message": "Head branch was modified."}),
+        }
+    )
+    with pytest.raises(HeadMovedError) as moved:
+        await scm(wire, use_merge_queue=False).enqueue_merge(PrRef(repo=REPO, number=8), JUDGED)
+    assert moved.value.expected == JUDGED
+    assert wire.body(-1)["sha"] == JUDGED, "the forge refused the commit it was sent"
+    assert wire.sent("PUT") == [("PUT", f"/repos/{REPO}/pulls/8/merge")], "one merge, not a second without it"
+
+
+async def test_a_merge_queue_that_refuses_a_stale_head_is_a_moved_head_not_a_direct_merge() -> None:
+    """Whatever words GitHub puts on a stale `expectedHeadOid`, the head is read again: elsewhere, it
+    is a moved head, and the pull request is not merged directly instead."""
+    from choregos_core.domain import PrRef
+
+    wire = Wire(
+        {
+            ("GET", f"/repos/{REPO}/pulls/8"): [(200, _pull_request(JUDGED)), (200, _pull_request(LATER))],
+            ("POST", "/graphql"): (200, {"errors": [{"type": "UNPROCESSABLE", "message": "head changed"}]}),
+        }
+    )
+    with pytest.raises(HeadMovedError) as moved:
+        await scm(wire).enqueue_merge(PrRef(repo=REPO, number=8), JUDGED)
+    assert (moved.value.expected, moved.value.actual) == (JUDGED, LATER)
+    assert wire.sent("PUT") == []
+
+
+async def test_a_pull_request_already_merged_at_the_commit_is_not_merged_again() -> None:
+    from choregos_core.domain import PrRef
+
+    wire = Wire({("GET", f"/repos/{REPO}/pulls/8"): (200, {**_pull_request(JUDGED), "merged": True})})
+    await scm(wire).enqueue_merge(PrRef(repo=REPO, number=8), JUDGED)
+    assert wire.sent("POST") == [] and wire.sent("PUT") == [], "a replayed merge asks nothing"
+
+    elsewhere = Wire({("GET", f"/repos/{REPO}/pulls/8"): (200, {**_pull_request(LATER), "merged": True})})
+    with pytest.raises(HeadMovedError):
+        await scm(elsewhere).enqueue_merge(PrRef(repo=REPO, number=8), JUDGED)
+
+
+def test_the_adapter_says_it_merges_at_a_commit() -> None:
+    from choregos_adapters.base import SCM_CAPABILITIES, merge_at_commit_refusal
+
+    assert GitHubScm.capabilities <= SCM_CAPABILITIES
+    assert merge_at_commit_refusal(scm(Wire({}))) is None

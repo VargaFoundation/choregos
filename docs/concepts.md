@@ -274,6 +274,19 @@ template (version 2) declares it as `t-already-fixed`.
 diff, `scope_respected` does not pass — it declines. A guarantee that passes blindly is worse
 than no guarantee, because it reassures.
 
+**A gate judges a commit, and the merge names it** (ADR 0152). An evaluation reads the head of the
+work item's branch once: the diff and the run's scope are compared at that commit, the pull request's
+checks, review and scans count only when its head is that commit (otherwise they stay pending and are
+read again), and each verdict is journaled with it (`head_sha`); `choregos/scope` and
+`choregos/evidence` are published on it. `does: merge_pr` then merges the pull request **at the commit
+its transition's gates judged**: a head that has moved since is refused by the forge, nothing is
+merged, and the work item's workflow stops with that reason — started again (the `mark_agent_ready`
+action), its gates judge the new head. A merge transition without gates names the head it reads when it
+merges. A guarantee therefore
+holds on what is merged when the merge transition carries it: one judged at an earlier step holds on
+the commit it judged, so a workflow that wants `no_secrets` or `scope_respected` held to the merge
+declares them there too, as the `study` workflow does with `adr_number_free`.
+
 ## Evidence
 
 What a step leaves behind, in the result: tests run and passed, lint, typing, coverage delta,
