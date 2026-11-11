@@ -597,11 +597,22 @@ async def test_a_need_bound_for_user_consent_calls_under_the_persons_connected_a
     assert turn.status_code == 200, turn.text
     assert [h for m, h, _ in server.received if m == "tools/call"] == [], "no account: no call"
     assert any("account_not_connected" in t for t in _told(upstream))
+    # What the MCP door answers as `missing_accounts`: the need and where the person connects it.
+    from choregos_api.config import get_settings
+    from choregos_api.db.session import session_scope
+    from choregos_api.services.conversation_signals import signals_of
+
+    async with session_scope(orgs="*") as session:
+        citations, missing = await signals_of(session, conversation)
+    url = f"{get_settings().public_url.rstrip('/')}/me/connected-accounts/broker/connect?org=varga"
+    assert citations == [] and missing == [{"need": "brokerage", "connect_url": url}]
 
     await _consent(reader, provider, [], "broker")
     upstream.model.call("brokerage__list_positions", {}).say("Here they are.")
     again = await reader.post(f"{ME}/conversations/{conversation}/messages", json={"input": "Again?"})
     assert again.status_code == 200, again.text
+    async with session_scope(orgs="*") as session:
+        assert (await signals_of(session, conversation))[1] == [], "the account is connected: none missing"
     (headers,) = [h for m, h, _ in server.received if m == "tools/call"]
     bearer = headers["authorization"].removeprefix("Bearer ")
     assert provider.access_tokens[bearer] == PROVIDER_USER, "the person's own token, not the connector's key"

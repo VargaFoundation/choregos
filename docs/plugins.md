@@ -482,7 +482,9 @@ group is answered 404 before the model is called, and nothing is deleted, so ret
 the conversation. Three caps, from the manifest's `policy.budget` overridden key by key by the installation's
 `policy_overrides.budget`, bound each turn's key reservation: `per_conversation_usd`, `per_user_month_usd` (the
 person's spend on this installation since the first of the month, UTC) and `per_installation_month_usd`. A
-turn that has less than the floor left under any of them is a 409 before the model. The month sums read the
+turn that has less than the floor left under any of them is a 409 before the model; the two month caps also
+subtract what the turns in flight reserved, under a lock on the installation, so two turns racing one cap cannot
+both be admitted. The month sums read the
 ledger lines, which carry the installation and the person, so deleting a conversation does not give its spend
 back.
 #### Memory spaces of an assistant

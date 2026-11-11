@@ -61,8 +61,12 @@ class ConversationExtras:
 
             return await call_memory_tool(session, self.record, name, arguments)
         from .conversation_knowledge import serve
+        from .conversation_signals import note_citations
 
-        return await serve(session, self.knowledge, name, arguments)
+        cited: list[dict[str, str]] = []
+        text = await serve(session, self.knowledge, name, arguments, cited)
+        await note_citations(session, self.record, cited)
+        return text
 
 
 async def conversation_extras(

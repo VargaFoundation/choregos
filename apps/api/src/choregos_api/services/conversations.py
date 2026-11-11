@@ -14,8 +14,8 @@ in the journal (`conversation.resumed`). It keeps the agent revision it started 
 A turn streams: with `on_delta`, every model call of the turn is read as server-sent chunks (S63-04b). Limits
 (`max_turns`, `retention_until`, compression, one turn at a time, cancel) are in `conversation_turns`.
 
-Not done here: the limits' defaults are the conversation's own (no installation policy exists yet), and the
-title is a deterministic cut of the first message, not a model's.
+The title is written by the model from the first exchange, on the turn's key (`conversation_title`); the
+first message cut at 60 characters stands in when the model cannot.
 """
 
 from __future__ import annotations
@@ -34,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..db.models import (
     AgentSessionEvent,
     AgentSessionRecord,
+    AssistantInstallation,
     CostLedger,
     GatewayKeyRow,
     Organization,
@@ -61,6 +62,9 @@ from .agent_sessions import (
     respond,
     session_gateway,
 )
+from .budgets import lock_budget_scopes
+from .conversation_installation import apply_installation
+from .conversation_title import model_title
 from .conversation_turns import (
     claim_turn,
     compress_history,
@@ -107,6 +111,17 @@ async def open_conversation(  # noqa: PLR0913 - the terms of a conversation, one
     if user is None:
         raise not_found("User", principal.user_id)
     space = await personal_space(session, organisation, user)
+    if installation_id is not None:
+        # The installation's policy (manifest, then its overrides) bounds the conversation; what the
+        # caller names itself wins.
+        from .assistant_access import conversation_policy
+        from .assistants import manifest
+
+        row = await session.get(AssistantInstallation, installation_id)
+        policy = conversation_policy(await manifest(session, row), row) if row is not None else {}
+        max_turns = max_turns or policy.get("max_turns")
+        retention_days = retention_days or policy.get("retention_days")
+        idle_close_minutes = idle_close_minutes or policy.get("idle_close_minutes")
     return await open_session(
         session,
         principal,
@@ -139,8 +154,8 @@ def effective_status(record: AgentSessionRecord) -> str:
 
 
 def derive_title(text: str) -> str:
-    """A title cut from the first message: its first line, cut at a word. Deterministic, costs nothing
-    (ADR 0134 asks for the model's own title within the turn's key; that is not done yet)."""
+    """A title cut from the first message: its first line, cut at a word. Deterministic, costs nothing:
+    what stands in when the model's own title (`conversation_title`) cannot be had."""
     line = " ".join(text.strip().splitlines()[0].split()) if text.strip() else ""
     if len(line) <= TITLE_CHARS:
         return line or "Untitled conversation"
@@ -176,6 +191,9 @@ async def _turn(
     if project is None:
         raise not_found("Project", record.project_id)
     now = utcnow()
+    # The installation's state and policy, read again at every turn (an installation that became
+    # `incomplete` or `suspended` since the opening refuses the turn), then what is refused first.
+    await apply_installation(session, record)
     refuse_if_not_allowed(record, now)  # before anything is written: no key, no model call
     if is_idle(record, now) or record.status == "idle":
         idle_for = int((now - last_activity(record)).total_seconds())
@@ -195,6 +213,10 @@ async def _turn(
     resolved = await resolve_agent(
         session, record.org_id, project.id, f"{record.agent_slug}@{record.agent_version}"
     )
+    if record.installation_id is not None:
+        # Two turns of one installation read its month and reserve from it one after the other: the lock
+        # is held until the turn's key is written (below), so the second sees the first's reservation.
+        await lock_budget_scopes(session, [f"assistant:{record.installation_id}"])
     reservation = await reserve_budget(
         session,
         record.org_id,
@@ -208,7 +230,6 @@ async def _turn(
         raise ApiError(409, "Budget exhausted", f"the turn does not start: {reservation.describe()}")
     # The number, the lease and `retention_until`, under the row's lock, committed before anything slow.
     number = await claim_turn(session, record)
-    await release_connection(session)
     try:
         gateway = await session_gateway(session, record.org_id)
         key = await mint_key(
@@ -220,6 +241,7 @@ async def _turn(
             ttl_s=TURN_KEY_TTL_S,
             run_id=f"turn:{record.id}:{number}",
         )
+        await release_connection(session)  # the number, the lease and the key's row, and the locks, end here
         compressed = compress_history(record, text)
         if compressed:
             await journal(session, record, "conversation.compressed", {"turns_summarised": compressed})
@@ -237,6 +259,10 @@ async def _turn(
     answer: AgentResponse | None = None
     try:
         answer = await respond(session, record, project, [text], turn_key=str(key.key), on_delta=on_delta)
+        if first and answer.status == "completed" and record.title is None:
+            # The same model, on the turn's key: its cost is the turn's. The cut message stands in.
+            written = await model_title(session, record, str(key.key), text, answer.output_text)
+            record.title = written or derive_title(text)
     except asyncio.CancelledError:
         cancelled = True
         # Tool calls already made are journaled as they happen; the half answer is not kept.
@@ -254,7 +280,7 @@ async def _turn(
         )
     assert answer is not None
     if first and answer.status == "completed" and record.title is None:
-        record.title = derive_title(text)
+        record.title = derive_title(text)  # the turn was cancelled before the title was written
     stamped = utcnow()
     record.last_activity_at = stamped
     record.retention_until = retention_until(record, stamped)

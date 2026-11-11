@@ -6,11 +6,16 @@ from __future__ import annotations
 import json
 from typing import Any
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
 from .kits.conversations import _open, _say
+from .kits.synthetic_installation import synthetic_installation  # noqa: F401
 from .test_agent_sessions import Upstream, _agent, upstream  # noqa: F401
+
+# The installation of these tests is a row, not a plugin: its readiness is not their subject.
+pytestmark = pytest.mark.usefixtures("synthetic_installation")
 
 POLICY = "# Refund policy\n\n## Delay\n\nA customer is refunded within 14 days of the return.\n"
 AUDIENCE = "coaches"

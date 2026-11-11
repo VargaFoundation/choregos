@@ -41,10 +41,11 @@ class Slow(httpx.AsyncBaseTransport):
         self.waiting = asyncio.Event()
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
-        self.calls += 1
         await request.aread()
+        side = bool((json.loads(request.content).get("metadata") or {}).get("purpose"))
+        self.calls += 0 if side else 1
         answer = self.model.handle(request)
-        if self.calls > self.after:
+        if self.calls > self.after and not side:
             self.waiting.set()
             await asyncio.sleep(self.delay)
         return answer

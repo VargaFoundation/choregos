@@ -113,7 +113,6 @@ async def open_assistant_conversation(
         raise not_found("Assistant", slug)
     _check_context(document, context)
     cap = caps_of(document, row).get("per_conversation_usd", DEFAULT_CONVERSATION_USD)
-    idle = ((document.get("policy") or {}).get("conversation") or {}).get("idle_close_minutes")
     record = await open_conversation(
         session,
         principal,
@@ -122,7 +121,6 @@ async def open_assistant_conversation(
         max_usd=cap,
         context=context,
         installation_id=row.id,
-        idle_close_minutes=idle,
     )
     if context is not None:
         # Data the host passed, framed as such: the agent reads it, it is never a subject nor a command.

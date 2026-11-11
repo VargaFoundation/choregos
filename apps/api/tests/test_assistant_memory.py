@@ -39,7 +39,11 @@ from .kits.assistant_memory import (  # noqa: F401
     _tool,
     markets,
 )
+from .kits.synthetic_installation import synthetic_installation  # noqa: F401
 from .test_agent_sessions import Upstream, upstream  # noqa: F401
+
+# The installation of these tests is a row, not a plugin: its readiness is not their subject.
+pytestmark = pytest.mark.usefixtures("synthetic_installation")
 
 
 @pytest.fixture

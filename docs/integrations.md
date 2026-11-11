@@ -44,8 +44,10 @@ path answers `404`. A conversation opened here is one of your `/me/conversations
 An answer is `{conversation_id, status, text, citations, pending_actions, missing_accounts}`. A turn longer than
 `CHOREGOS_MCP_ASSISTANT_WAIT_S` (25 s) answers `status: working` and goes on in the background; call
 `get_conversation` again until it is `completed` (or `failed`). The assistant never decides for you: a proposal
-is confirmed in the console. Until their sources land (citations, proposals S63-05, accounts to connect), the
-three lists are empty.
+is confirmed in the console. `citations` are the knowledge documents the turn's knowledge tools returned
+(`document_id`, `title`, `version`, `base`); `pending_actions` the writes it proposed and you have not decided;
+`missing_accounts` the accounts a tool needed and you have not connected (`need`, `connect_url`). Each list is
+the latest turn's, read from the conversation's journal.
 
 ### Embedding an assistant in your application (ADR 0139 point 6)
 
