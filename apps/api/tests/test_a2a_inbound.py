@@ -559,7 +559,8 @@ async def test_tasks_cancel_stops_the_work_item(client: AsyncClient, project: di
     token = await _ready(client, project)
     task = await _send(client, token)
     answer = (await _rpc(client, token, "tasks/cancel", {"id": task["id"]})).json()
-    assert "result" in answer, answer
+    assert answer["result"]["status"]["state"] == "canceled", "the answer is the task as the stop leaves it"
+    assert "closes in a moment" in answer["result"]["status"]["message"]["parts"][0]["text"]
     controls = [s[2] for s in get_temporal().signals if s[1] == "control"]  # type: ignore[attr-defined]
     assert [c["action"] for c in controls] == ["stop"]
 
