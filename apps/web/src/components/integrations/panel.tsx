@@ -8,6 +8,7 @@ import { Alert, Button, Card, Code, ErrorNote, Tabs, Select, tabClasses } from "
 import { api, qualify } from "@/lib/api";
 import { shortDate } from "@/lib/format";
 import {
+  A2A_ENTRY,
   CLIENTS,
   type ClientId,
   clientOAuth,
@@ -66,17 +67,7 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
 
   return (
     <div className="space-y-6">
-      <Tabs aria-label="Clients">
-        {CLIENTS.map((c) => {
-          const href = `${base}/${c.id}`;
-          const active = c.id === client;
-          return (
-            <Link key={c.id} href={href} aria-current={active ? "page" : undefined} className={tabClasses(active)}>
-              {c.label}
-            </Link>
-          );
-        })}
-      </Tabs>
+      <ClientTabs client={client} base={base} />
 
       {erreur && <ErrorNote>{erreur}</ErrorNote>}
 
@@ -231,15 +222,35 @@ export function IntegrationsPanel({ client, projet, base }: { client: ClientId; 
   );
 }
 
+/**
+ * The row of clients, and the A2A entry after them (S62-11): an application or another agent is not
+ * an MCP client, so it has a page of its own rather than a row of the capability table.
+ */
+export function ClientTabs({ client, base }: { client: string; base: string }) {
+  return (
+    <Tabs aria-label="Clients">
+      {[...CLIENTS, A2A_ENTRY].map((c) => {
+        const href = `${base}/${c.id}`;
+        const active = c.id === client;
+        return (
+          <Link key={c.id} href={href} aria-current={active ? "page" : undefined} className={tabClasses(active)}>
+            {c.label}
+          </Link>
+        );
+      })}
+    </Tabs>
+  );
+}
+
 /** A block to copy. Without `navigator.clipboard` (a page over HTTP), the text stays selectable. */
-function Extrait({ code }: { code: string }) {
+export function Extrait({ code, testId = "snippet" }: { code: string; testId?: string }) {
   const [copie, setCopie] = useState(false);
   const pressePapier = typeof navigator !== "undefined" ? navigator.clipboard : undefined;
   return (
     <div className="relative">
       {/* Lines wrap rather than scroll: a block that scrolls would have to be
               reachable by keyboard (axe), and the copy keeps the exact text. */}
-      <pre className="whitespace-pre-wrap break-all bg-surface-sunken p-3 text-xs" data-testid="snippet">
+      <pre className="whitespace-pre-wrap break-all bg-surface-sunken p-3 text-xs" data-testid={testId}>
         <code>{code}</code>
       </pre>
       {pressePapier && (

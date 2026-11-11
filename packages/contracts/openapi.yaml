@@ -4459,6 +4459,13 @@ paths:
                         type: [string, "null"]
                         pattern: "^[0-9a-f]{7,40}$"
                         description: the source revision the image was built from; null when the build did not record it
+                  docs_url:
+                    type: string
+                    pattern: "^https?://"
+                    description: >-
+                      the user documentation's base URL, without a trailing slash (`CHOREGOS_DOCS_URL`,
+                      `https://docs.varga.foundation/choregos` by default): the console's help and
+                      "Learn more" links append a page's slug to it (S62-11)
   /theme:
     get:
       tags: [session]

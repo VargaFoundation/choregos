@@ -23,7 +23,7 @@ from . import __version__
 from .a2a.push import push_loop
 from .adapter_wiring import attach_lexical_memory
 from .bootstrap import bootstrap_installation
-from .config import get_settings
+from .config import DEFAULT_DOCS_URL, get_settings
 from .db.session import create_all, dispose_engine
 from .errors import REQUEST_ID_PATTERN, install_error_handlers, internal_error
 from .events import PostgresRelay
@@ -432,6 +432,15 @@ def create_app() -> FastAPI:
         value = os.environ.get("CHOREGOS_BUILD_REVISION", "").strip()
         return value if re.fullmatch(r"[0-9a-f]{7,40}", value) else None
 
+    def _docs_url() -> str:
+        """Where the console's help links point (`CHOREGOS_DOCS_URL`, S62-11), without a trailing slash.
+
+        Only an `http(s)` address is served: the console puts it in an `href`, and a `javascript:`
+        value set by mistake must not become a link. Anything else gives the public site.
+        """
+        value = get_settings().docs_url.strip().rstrip("/")
+        return value if re.fullmatch(r"https?://[^\s\"'<>]+", value) else DEFAULT_DOCS_URL
+
     async def running_edition() -> dict[str, Any]:
         """Which edition runs, and what it allows itself (ADR 0024).
 
@@ -441,6 +450,7 @@ def create_app() -> FastAPI:
         from .edition import CORE_LICENCE, current, edition_licence, edition_version, features, publisher
 
         return {
+            "docs_url": _docs_url(),
             "edition": current(),
             "features": sorted(features()),
             "version": __version__,

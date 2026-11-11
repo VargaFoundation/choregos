@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
+import { LearnMore } from "@/components/docs-link";
 import { Heading } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { HUE_CLASSES, type Hue } from "@/lib/workflow-hue";
@@ -9,6 +10,9 @@ import { HUE_CLASSES, type Hue } from "@/lib/workflow-hue";
  * The head of a page (S55-02): an icon on a tint of its family's hue, the title, an eyebrow above it
  * (where the page is) and one line below it (what it is for). The colour says where one stands before
  * the words do (ADR 0120); the words still say it.
+ *
+ * A page's own header (`h1`) ends with "Learn more" when the documentation has a page for the screen
+ * (S62-11, `DOCS_BY_ROUTE`): one map, so no screen names a page the site does not have.
  */
 export function PageHeader({
   icon: Icon,
@@ -61,8 +65,11 @@ export function PageHeader({
           </p>
         )}
       </div>
-      {actions && (
-        <div className="flex flex-wrap items-center gap-2">{actions}</div>
+      {(actions || as === "h1") && (
+        <div className="flex flex-wrap items-center gap-2">
+          {as === "h1" && <LearnMore />}
+          {actions}
+        </div>
       )}
     </header>
   );

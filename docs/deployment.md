@@ -790,6 +790,23 @@ A refused file is logged (`procedures.file.refused`) and skipped: the API still 
 files still apply. A plugin can supply the same directory through a `choregos.procedures` entry point
 whose value is a path. Outside the chart, the setting is `CHOREGOS_PROCEDURES_EXTRA`.
 
+## Where the console's help links point
+
+The console's **Help** entry, in the top bar, and the "Learn more" links of its pages open the user
+documentation, `https://docs.varga.foundation/choregos` by default. An installation that cannot reach it
+(air-gapped) or serves its own copy sets `CHOREGOS_DOCS_URL` on the API, with the chart's `extraEnv`:
+
+```yaml
+global:
+  extraEnv:
+    - name: CHOREGOS_DOCS_URL
+      value: https://docs.intranet.example/choregos
+```
+
+The API serves it as `docs_url` in `GET /edition`, without its trailing slash; the console appends the
+page's path to it (`/integrate/a2a`, `/cli/install`…). A value that is not an `http(s)` address is
+ignored and the public site is used.
+
 ## Plugins
 
 A plugin packages agents, skills, templates, evals, procedures and MCP servers in one signed format

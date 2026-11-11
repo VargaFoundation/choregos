@@ -268,9 +268,25 @@ the door does:
   expired token ends the registration; so does the final state, once delivered. Registering inline
   in `message/send` is refused: its answer has no place for the secret.
 
-The organisation's card and endpoint are also on the console's **Integrations** page, which creates
-an `a2a` token for the person (30 days, shown once) and lists each project's file limit, with a link
-to the setting.
+The console walks through the same steps with the instance's own values: **Integrations › An
+application or another agent (A2A)** (`/integrations/a2a`, or `/p/<project>/integrations/a2a` for one
+project). It shows the organisation's card and endpoint, then:
+
+1. **the workflows exposed**: per project, which workflows carry `a2a:` (skill id, input modes,
+   required fields from `metadata.inputs`) and which do not, with the block to add, prefilled with the
+   workflow's name, and a link to its YAML tab; each project's file limit, with a link to the setting;
+2. **who calls**: an application's own account (create one or pick one, then issue its token, shown
+   once), which takes `member:manage` on the project, and says so to whoever lacks it; and, second, an
+   `a2a` token of one's own (30 days, shown once) to try the door;
+3. **the calls**, in three tabs (the CLI, `curl` in A2A 0.3.0, A2A 1.0) with the instance's address,
+   the organisation, the chosen skill and its required fields, and the token just issued, or a
+   placeholder; `tests/web/test_a2a_snippets_match_the_door.py` holds every method and command they
+   name to the door's tables and the CLI;
+4. **the follow-up**: each task is a work item of the project, started by `machine:<address>` for an
+   application; a decision is taken in the inbox; a token is revoked in **Settings › People ›
+   Applications** or **My account › Access tokens**.
+
+Each step links to the public documentation (`/integrate/a2a`, `/cli/install`).
 
 The card needs the token too, since its skills depend on who asks. Calls are audited (`a2a.call`),
 each stored file too (`workitem.input_file`, with its name, size and digest); they are rate-limited

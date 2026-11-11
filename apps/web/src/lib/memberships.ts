@@ -66,3 +66,20 @@ export function canControlItems(
 ): boolean {
   return memberships.some((m) => m.org === org && m.role !== "viewer" && (!m.project_slug || m.project_slug === project));
 }
+
+/**
+ * Whether the person may manage a project's members and applications: the API's `member:manage`, held by
+ * an organisation administrator, and by a project owner on the organisation or on that project. The API
+ * stays the judge; this only says, before a click, why a gesture will be refused.
+ */
+export function canManageMembers(
+  memberships: Array<Pick<Membership, "org" | "project_slug" | "role">>,
+  org: string,
+  project: string,
+): boolean {
+  return memberships.some(
+    (m) =>
+      m.org === org &&
+      (m.role === "org_admin" || (m.role === "project_owner" && (!m.project_slug || m.project_slug === project))),
+  );
+}
