@@ -163,6 +163,20 @@ def test_every_section_has_its_category_in_the_contract_order() -> None:
     assert len(set(positions)) == len(positions), "two sections share a position"
 
 
+def test_git_keeps_every_section_folder() -> None:
+    """`.gitignore` ignores `build/`: without its exception, `docs/site/build/` never reaches the repo."""
+    import shutil
+    import subprocess
+
+    if shutil.which("git") is None or not (ROOT / ".git").exists():
+        pytest.skip("not a git checkout")
+    probes = [f"docs/site/{section}/a-page.md" for section in SECTIONS] + ["docs/site/a-page.md"]
+    result = subprocess.run(
+        ["git", "check-ignore", "--no-index", *probes], cwd=ROOT, capture_output=True, text=True, check=False
+    )
+    assert result.stdout.strip() == "", f"git ignores pages of the documentation: {result.stdout.split()}"
+
+
 # ───────────────────────────── links ─────────────────────────────
 
 
