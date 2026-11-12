@@ -25,8 +25,9 @@ applies to you. Look there first:
 
 - **No program of the platform runs in your network.** The gateway is a product you already operate,
   behind an entrance you already have: a DMZ, or an outbound tunnel of your own.
-- **It carries more today.** A write through the gateway is a governed action like any other.
-  Through an outpost, this version opens reads only ([below](#what-is-not-there-yet)).
+- **It promises more for a write.** A write through the gateway is a governed action like any
+  other. Through an outpost, a write is delivered at most once and may end in doubt
+  ([Integrations](integrations.md#a-tool-server-at-an-outpost-adr-0149)): weaker, and never implied.
 - **The upstream credentials stay on your side either way**: at the gateway in one case, in the
   outpost's policy file in the other.
 
@@ -207,11 +208,18 @@ gives the operator's.
 
 ## What is not there yet
 
-- **Writes.** A write through an outpost is opened only under the rule that it is delivered at most
-  once and may end in doubt ([ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md) §5-6). This
-  version does not carry that rule; it is a story of its own (S65-14). So it opens no such write: a
-  write operation of an `mcp-outpost` connector cannot be set to `allowed` or `approval` (a 422 that
-  says why) and stays `forbidden`. A read of the same connector is opened like any other.
+- **Writes, from the console.** A write through an outpost is delivered at most once and may end in
+  doubt ([ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md) §5-6;
+  [Integrations](integrations.md#a-tool-server-at-an-outpost-adr-0149)). It is opened only when its
+  operation's rule says one of two things: that the tool takes the platform's idempotency key
+  (`platform_arguments: ["action_key"]`), or that an in-doubt outcome is accepted
+  (`in_doubt_accepted: true`). The console's operation editor does not offer these two statements
+  yet: an administrator gives them with the policy, through the API
+  (`PATCH /orgs/{org}/connectors/{name}/operations/{operation}`); without either, the change is a 422
+  that names both.
+- **Closing an action in doubt.** No route closes it by hand: a person checks the system behind the
+  outpost and records what they found where the team keeps such records
+  ([Usage](usage.md#4-bis-governed-actions)).
 - **Runs at an outpost.** A whole run executing at an outpost is not decided: ADR 0149 §12 lists
   what would have to be true first. `tools` is the only capability an instance announces.
 - **A person's identity.** A call reaches the server under the credential the outpost holds for the

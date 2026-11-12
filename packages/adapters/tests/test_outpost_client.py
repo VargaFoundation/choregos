@@ -341,6 +341,31 @@ async def test_a_caller_that_gives_up_cancels_its_call() -> None:
     assert rendezvous.cancelled == ["call-1"] and rendezvous.forgotten == []
 
 
+async def test_a_caller_that_goes_away_leaves_its_write_waiting() -> None:
+    """A write is delivered at most once, under a key: whoever plays its effect again meets the same
+    call and reads its answer. Cancelling it because a worker stopped would put a claimed write in
+    doubt (S65-14, ADR 0149 §5): the call's own time closes it."""
+    rendezvous = _Scripted(hang=True)
+    writing = asyncio.create_task(_client(rendezvous, write_key="a-1:0").call_tool("create_issue", {}))
+    await rendezvous.waiting.wait()
+    writing.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await writing
+    assert rendezvous.cancelled == [] and rendezvous.forgotten == []
+
+
+async def test_a_write_whose_answer_is_gone_is_said_answered_not_late() -> None:
+    answered = port.Outcome(OutpostCallState.ANSWERED, write=True, instance_id="i-1")
+    with pytest.raises(OutpostInDoubt) as gone:
+        await _client(_Scripted(outcome=answered), write_key="k").call_tool("create_issue", {})
+    assert "answered the write" in str(gone.value) and "no longer holds its answer" in str(gone.value)
+    lost = port.Outcome(OutpostCallState.IN_DOUBT, write=True, instance_id="i-1")
+    with pytest.raises(OutpostInDoubt) as late:
+        await _client(_Scripted(outcome=lost), write_key="k").call_tool("create_issue", {})
+    assert "did not answer in time" in str(late.value)
+    assert "never asked again" in str(gone.value) and "never asked again" in str(late.value)
+
+
 async def test_an_answer_that_is_not_what_was_asked_is_unreadable_not_a_result() -> None:
     listing = OutpostAnswer.model_validate({"id": "call-1", "outcome": "result", "tools": []})
     rendezvous = _Scripted(outcome=port.Outcome(OutpostCallState.ANSWERED, answer=listing))

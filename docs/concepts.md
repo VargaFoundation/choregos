@@ -326,7 +326,8 @@ leaves, and bounds and books the result when it comes back. What moves to the ou
 call, not the agent: no prompt, no model key and no run reaches it. An outpost does not give data
 residency, since a tool's result still travels to the platform; and an organisation that already
 exposes its tools through an MCP gateway of its own needs none. Outposts are off unless the
-deployment turns them on, and carry reads only for now: see [Outposts](outposts.md).
+deployment turns them on, and deliver a write at most once, which may leave its action in doubt:
+see [Outposts](outposts.md).
 
 ## Findings and trains
 

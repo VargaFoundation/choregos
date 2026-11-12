@@ -1933,7 +1933,7 @@
   {
     "id": "connector.mcp.mcp-outpost",
     "title": "Connect an MCP server that lives at an outpost",
-    "version": 1,
+    "version": 2,
     "audience": "org_admin",
     "applies_to": {
       "connector": "mcp/mcp-outpost"
@@ -1954,12 +1954,12 @@
       {
         "key": "permissions",
         "title": "Permissions",
-        "markdown": "- The connector's tools act with the credential **the outpost** holds for that alias; nothing in\n  Choregos can widen it. Prefer an account whose rights are exactly what the agents should have.\n- Tools are **born closed**: after discovery each tool is `forbidden` until an administrator opens\n  it. A read can be `allowed`.\n- **A write cannot be opened yet.** A write through an outpost is opened only under the rule that it\n  is delivered at most once, and this version of the platform does not carry that rule: a write\n  operation of this connector stays `forbidden`.\n- A project sees only the tools its groups are opened to, and can only tighten them."
+        "markdown": "- The connector's tools act with the credential **the outpost** holds for that alias; nothing in\n  Choregos can widen it. Prefer an account whose rights are exactly what the agents should have.\n- Tools are **born closed**: after discovery each tool is `forbidden` until an administrator opens\n  it. A read can be `allowed`.\n- **A write is delivered at most once, and may end in doubt.** Choregos does not see the outpost's\n  server: when an instance took a write and its answer never comes back, nobody knows whether the\n  server made it. Choregos then never sends it again and undoes nothing by itself: the action stops\n  as `in doubt`, for a person to check. So a write is opened only when its rule says one of two\n  things, and the request that says neither is refused:\n  - **the tool takes Choregos's idempotency key**: it has an argument named `action_key` and makes\n    the same call harmless when it arrives twice with the same key. Choregos fills the key, and after\n    a doubt it sends the write again with it;\n  - **an in-doubt outcome is accepted** for this tool, explicitly.\n- A project sees only the tools its groups are opened to, and can only tighten them."
       },
       {
         "key": "in_choregos",
         "title": "In Choregos",
-        "markdown": "1. Administration, **Connectors**, **Declare**: capability **MCP**, type **MCP server at an\n   outpost**, a lowercase name.\n2. `outpost`: the outpost's name. `endpoint`: the alias from its policy file. There is no URL and no\n   token to give.\n3. `timeout_s`: optional. It bounds the whole call: the wait for an instance of the outpost to take\n   it, then the server's answer.\n4. Press **Discover**, then open the read operations the agents need, one by one."
+        "markdown": "1. Administration, **Connectors**, **Declare**: capability **MCP**, type **MCP server at an\n   outpost**, a lowercase name.\n2. `outpost`: the outpost's name. `endpoint`: the alias from its policy file. There is no URL and no\n   token to give.\n3. `timeout_s`: optional. It bounds the whole call: the wait for an instance of the outpost to take\n   it, then the server's answer.\n4. Press **Discover**, then open the read operations the agents need, one by one.\n5. To open a write, set its policy together with one of the two statements of its rule (the API's\n   `updateConnectorOperation`): `{\"policy\": \"approval\", \"platform_arguments\": [\"action_key\"]}` for a\n   tool that takes the key, or `{\"policy\": \"approval\", \"in_doubt_accepted\": true}`."
       },
       {
         "key": "test",
@@ -1969,7 +1969,7 @@
       {
         "key": "fails",
         "title": "When it fails",
-        "markdown": "- `422` at declaration: the outpost's name is not an outpost of your organisation, or an address or\n  a secret was typed where an alias is expected.\n- `409 outpost_paused`: the outpost is paused or revoked, or outposts are switched off on this\n  deployment. Nothing was sent.\n- `409 outpost_offline`: no instance of the outpost that serves this alias polled lately, or none\n  took the call in time. Check that the daemon runs and that `choregos-outpost doctor` passes.\n- `409 outpost_refused`: the outpost's own policy refused, and its `refusal` says which kind:\n  `unknown_endpoint` (the policy file has no such alias), `tool_not_allowed`, `write_denied`,\n  `endpoint_unavailable` (the outpost cannot reach or open its server), `signature_refused` (the\n  policy file does not pin the key the platform's door signs with).\n- `409 outpost_timeout`: an instance took the call and its server did not answer in time. Raise the\n  timeout here and in the outpost's policy file.\n- \"No tools\", or only a few: the patterns of the alias let no more through."
+        "markdown": "- `422` at declaration: the outpost's name is not an outpost of your organisation, or an address or\n  a secret was typed where an alias is expected.\n- `409 outpost_paused`: the outpost is paused or revoked, or outposts are switched off on this\n  deployment. Nothing was sent.\n- `409 outpost_offline`: no instance of the outpost that serves this alias polled lately, or none\n  took the call in time. Check that the daemon runs and that `choregos-outpost doctor` passes.\n- `409 outpost_refused`: the outpost's own policy refused, and its `refusal` says which kind:\n  `unknown_endpoint` (the policy file has no such alias), `tool_not_allowed`, `write_denied`,\n  `endpoint_unavailable` (the outpost cannot reach or open its server), `signature_refused` (the\n  policy file does not pin the key the platform's door signs with).\n- `409 outpost_timeout`: an instance took the call and its server did not answer in time. Raise the\n  timeout here and in the outpost's policy file.\n- `422` when a write is opened: its rule says neither that the tool takes the idempotency key nor\n  that an in-doubt outcome is accepted; or it names `action_key` for a tool that has no such argument.\n- An action **in doubt**: an instance took the write and never answered. Nothing replays it and\n  nothing was undone. Look at the system behind the outpost to see whether the write was made (the\n  action's page says which tool, which instance and when), then note what you found where your team\n  keeps such records: the action itself stays in doubt.\n- \"No tools\", or only a few: the patterns of the alias let no more through."
       }
     ],
     "values": {},

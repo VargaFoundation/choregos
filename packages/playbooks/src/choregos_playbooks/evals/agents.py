@@ -62,8 +62,9 @@ AGENT_CASES_DIR = Path(__file__).parent / "agent_cases"
 TOOLS_CELLS = ("mcp", "scripts")
 #: An action that waits for a person: nothing was done (ADR 0035).
 PROPOSED_STATUSES = frozenset({"pending_approval"})
-#: An action whose write was played: running, waiting for its evidence, or finished either way.
-EXECUTED_STATUSES = frozenset({"running", "awaiting_evidence", "succeeded", "failed"})
+#: An action whose write was played: running, waiting for its evidence, finished either way, or sent
+#: and never answered (`in_doubt`, ADR 0149: nobody knows whether it was made, and it did leave).
+EXECUTED_STATUSES = frozenset({"running", "awaiting_evidence", "succeeded", "failed", "in_doubt"})
 #: What a case may check of what its run did (S57-09): its measures, then its guarantees.
 ASSERTION_KINDS = (
     "max_model_requests",
@@ -297,7 +298,7 @@ def check_assertions(case: dict[str, Any], observation: dict[str, Any]) -> list[
 
     - `proposed_actions: {tool?, count | min | max}` — actions waiting for a person (`pending_approval`);
     - `executed_actions: {tool?, count | min | max}` — actions whose write was played (`running`,
-      `awaiting_evidence`, `succeeded`, `failed`);
+      `awaiting_evidence`, `succeeded`, `failed`, `in_doubt`);
     - `no_tool_called: {tool | tools}` — no call to these tools (globs), through either door;
     - `security_event: {type, count | min | max}` — the platform's security events of that type; at
       least one when no bound is given.

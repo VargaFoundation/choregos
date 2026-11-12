@@ -225,11 +225,17 @@ of an alias whose `writes` is `deny`.
 It follows that `writes: deny` is as good as your server's declarations: a server that marks a tool
 read-only while it writes is believed. Behind `deny`, prefer an account that cannot write.
 
-In this version the platform opens no write through an outpost at all
-([below](#what-is-not-there-and-what-is-not-proven)): it hands over only calls to tools it recorded
-as reads when it discovered them. `writes` still matters, because the daemon reads the declaration
-again at each call: if your server no longer declares such a tool read-only, `deny` refuses the call
-and `allow` makes it. `allow` also makes a listing show the tools that write.
+The platform's side has its own lock: it hands a write over only when the organisation's
+administrator opened that operation saying either that the tool takes the platform's idempotency
+key (an argument `action_key` your server uses to make a second delivery harmless) or that an
+in-doubt outcome is accepted. It sends a write **once**: if your daemon took it and its answer never
+reached the platform, the platform's action ends in doubt and is not sent again; with `action_key`,
+a retry may deliver it again under the same key. The daemon's journal answers a call id it has
+already seen from what it recorded, and a daemon restarted in the middle of a write reports it
+`unanswered` and does not make it again ([When the disk refuses a record](#when-the-disk-refuses-a-record)
+says what happens when it cannot record a write before making it). `writes` still decides at your
+end: under `deny`, a write the platform hands over is refused `write_denied` and your server
+receives nothing. `allow` also makes a listing show the tools that write.
 
 ### What the daemon refuses
 
@@ -599,9 +605,11 @@ shared-responsibility statement is theirs to write, outside this repository.
 
 Not there in this version:
 
-- **Writes.** The platform opens a write through an outpost only under the rule that it is delivered
-  at most once, and it does not carry that rule yet: it opens no such write. The daemon's half is
-  there (the journal, `writes`), and has nothing to apply it to.
+- **A way for the platform to know what became of a write in doubt.** The platform sends a write
+  once; when your daemon took it and its answer never came back, the platform's action ends **in
+  doubt** and is never sent again (ADR 0149 §5). Your audit log and the system behind the alias are
+  where the answer is: a person on the platform's side checks it with you. Nothing closes such an
+  action automatically.
 - **Runs.** A whole run executing at an outpost is not decided
   ([ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md) §12). The daemon announces one capability,
   `tools`.

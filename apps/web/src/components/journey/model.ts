@@ -358,7 +358,10 @@ const RUNNING = new Set([
   "verifying",
   "staged",
 ]);
-const FAILURES = new Set(["failed", "timed_out", "cancelled", "rejected", "rolled_back", "aborted"]);
+// `in_doubt` (ADR 0149): an action that was sent and never answered. It did not succeed; while the work
+// item is still at its step it is not a failure either, it waits for a person (`atInstant`).
+const IN_DOUBT = "in_doubt";
+const FAILURES = new Set(["failed", "timed_out", "cancelled", "rejected", "rolled_back", "aborted", IN_DOUBT]);
 const SENT_BACK = new Set(["reject", "changes_requested", "retry", "escalate"]);
 
 function isEnd(model: JourneyModel, state: string): boolean {
@@ -394,6 +397,10 @@ export function atInstant(journey: Pick<WorkItemJourney, "moves" | "steps">, mod
         step.kind === "human" || running.some((p) => WAITING.has(p.status) && Number.isNaN(ms(p.ended_at)))
           ? "waiting"
           : "running";
+    } else if (last?.status === IN_DOUBT && state === step.from) {
+      // The step's action is in doubt and the work item has not moved: nothing replays the action, and
+      // the step runs nothing. It waits for a person who checks what the write did.
+      status = "waiting";
     } else if (state === step.from && !isEnd(model, state)) {
       // The work item is where this step starts: it is the next one to play, even if it was
       // already crossed (a review that sends back makes the tests run again). A platform

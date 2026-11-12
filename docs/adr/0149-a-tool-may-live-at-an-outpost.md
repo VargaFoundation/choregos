@@ -121,14 +121,45 @@ promises about it. Read on `main` at `9f646fda4`:
      had already done. It is never replayed automatically, and nothing the action had done is compensated
      automatically either: both would act on a state nobody knows. No route replays an `in_doubt` action.
      An agent that repeats the call finds the same action (`call_id`) and is told it is in doubt.
+     An in-doubt action is closed by no route either: a person checks the system at the outpost and
+     records what they found outside the platform. Recording it on the action (a decision of its own,
+     with its rights and its audit) is not decided here.
+   - **What ends in doubt, exactly** (S65-14). The effect's journal row takes the status `in_doubt`
+     with what was sent, before anything is said to the workflow, and it is not attempted again: a
+     task Temporal delivers twice is answered from the row. The workflow closes the action `in_doubt`
+     on a patched branch that compensates nothing; the activities hold the same line by themselves (a
+     compensation asked for an action that has an effect in doubt undoes nothing, and such an action
+     is never closed `failed`), so a workflow task answered by code that predates the status does
+     not compensate either. Once a delivery of an effect is in doubt, nothing that follows makes the
+     effect a failure: a refusal or an outage met by a later attempt still ends in doubt. A retry
+     that comes after the rendezvous emptied an answer nobody recorded (ADR 0148 §11) finds a
+     delivered write whose answer is gone: it is in doubt too, never a second call. Until the
+     effect's result is recorded the answer waits on its row; it is emptied in the transaction that
+     records the result. Two things are not a doubt and must not become one. A worker that stops
+     while its write waits does not give the call up, as it does for a read: the instance still
+     answers, and the effect played again by another worker meets the same call. And an effect
+     played again that is refused before it leaves (its outpost paused, its operation closed since)
+     is a refusal only when no instance claimed the delivery of the attempt before it; when one
+     did, and what became of it was never recorded, the effect ends in doubt instead of failing,
+     since failing would compensate what the action had done around a write that may have been made.
+   - **A work item waits for its action in doubt.** The action of a workflow's transition that ends
+     in doubt does not settle the transition: its `action_succeeded` guarantee waits, as it waits
+     for an approval nobody gave. Read as a failure it would follow `on_fail`, whose retry proposes
+     the action again under a new attempt, which is a second delivery of the write. A person moves
+     the work item on.
    - **The one exception is an operation that declares an idempotency key.** When its rule lists
      `action_key` as a platform argument, the platform fills that key as it does today, and the write may
      be delivered again with the same key: the server, not the platform, makes the second delivery
-     harmless.
+     harmless. The doubt is then one the effect's existing policy retries: each attempt that follows a
+     doubt places one more delivery, a call of its own at the rendezvous (a claimed write is never
+     handed over twice under one id), and a doubt that outlives the policy's attempts is still a
+     doubt, never a failure.
    - **A deterministic call id under a `UNIQUE` constraint.** A write's call id is derived from its
      effect's key, which `execute_effect` records before each attempt. The table refuses a second row for
      it, so a retry of the effect meets the first row (answered: the stored outcome; claimed and
-     unanswered: in doubt) and creates no second delivery.
+     unanswered: in doubt) and creates no second delivery. A compensation is played under its effect's
+     key and is a call of its own (`<key>:compensation`): through the connector its effect went
+     through, it never meets its effect's row.
    - **The daemon keeps a persisted journal of call ids.** It records a write's id on disk before it
      executes it, and the answer after. An id it has seen is answered from the journal, never executed
      again; a daemon restarted in the middle of a write finds the id without an answer and reports
@@ -142,6 +173,17 @@ promises about it. Read on `main` at `9f646fda4`:
    organisation's operation rule (`PATCH /orgs/{org}/connectors/{name}/operations/{operation}`) is where
    this is said, by the administrator who opens the write. A guarantee the platform cannot give, exactly
    once on a server it cannot see, is not implied by silence.
+
+   The two statements are fields of the rule (S65-14). `platform_arguments` is the list a connector
+   type and a plugin server's descriptor already declare, said here by the organisation for a
+   discovered tool: listing `action_key` is the first statement, and it is refused for a tool whose
+   input schema has no such argument, for a read, and for an operation whose type declares its own.
+   `in_doubt_accepted` is the second, and is refused for anything but a write of an `mcp-outpost`
+   connector: nothing else ends in doubt. The rule is judged as a change would leave it, so
+   withdrawing the last statement of an open write is refused as opening it with neither is; a tool
+   whose schema drifts is closed again (ADR 0034) and loses both; and the effect reads the rule
+   again before a write leaves, as it reads the policy. The platform does not verify that a server
+   honours the key its rule says it takes.
 7. **Typed refusals**, in the manner of `GatewayRefusal`: a class per code, never a crash, never a 500.
 
    | Refusal | When | Executed at the outpost? |
@@ -156,8 +198,11 @@ promises about it. Read on `main` at `9f646fda4`:
    Each caller turns a refusal into its own: a tool error that names the outpost for a read; a refusal
    that leaves no action behind where the route is checked before the action exists (`propose_call`,
    `write_through_action`); a 409 at declaration and at discovery; a final refusal without a Temporal retry
-   in the workers, except `OutpostInDoubt`, which is neither a refusal nor a retry. A call that reached no
-   server is not booked in the ledger, as a call the network policy stopped is not.
+   in the workers, with two exceptions that are a write's (5): a write nobody claimed (`OutpostOffline`,
+   a quota of the door) is retried by the effect's policy, and `OutpostInDoubt` is neither a refusal nor
+   a retry. A call that reached no server is not booked in the ledger, as a call the network policy
+   stopped is not. The agent whose write ended in doubt is told so with the action's id, as a claim
+   that got no answer (504, `action_in_doubt`), and told the same each time it repeats the call.
 
    For a read, the tool error carries the refusal's code, the outpost and the alias, under a status
    that says its class: 403 paused, 503 offline, 422 refused (with the outpost's own code), 429 a
@@ -246,13 +291,17 @@ promises about it. Read on `main` at `9f646fda4`:
 
 - Contract changes: the connector type and the connector's shape (S65-10, S65-13), `ActionStatus`
   `in_doubt` and the operation rule's two new statements (S65-14), the access answer's fields (S65-17).
-- Decisions 5 and 6 arrive after the route (S65-14 after S65-13). In between, a write through an
-  outpost is not opened at all: a write operation of an `mcp-outpost` connector cannot be set to
-  `allowed` or `approval` (422), and the rendezvous places no write without the key of the governed
-  effect that plays it. The refusal of decision 6 replaces the first; the second stays.
+- Decisions 5 and 6 arrived after the route (S65-14 after S65-13). In between, a write through an
+  outpost was not opened at all. The refusal of decision 6 replaced that one; the rendezvous still
+  places no write without the key of the governed effect that plays it.
 - `workflows/action.py` is concerned, not only activities: its retry policy and its failure branch are
-  what a claimed write must not go through. The change is a patched branch, and the replay suite has to
-  stay green with the histories recorded before it.
+  what a claimed write must not go through. The change is a patched branch (`action-in-doubt`), and
+  the replay suite stays green with the histories recorded before it; `action-in-doubt-S65-14` covers
+  the branch. No activity result is final for that workflow, so the outcome could not be carried
+  without it: a failure is final only through the compensation it must not run.
+- `ActionStatus` gains a terminal status that no route leaves. Until a person can record on the
+  action what they found, an action in doubt stays in doubt, and a work item that waits for one is
+  moved on by a person.
 - A plugin's declared floor (ADR 0096 §5: `human_approval` never lowered, an undeclared tool refused)
   does not follow its server to an outpost: there the tools are discovered, and the administrator sets
   each operation's policy.

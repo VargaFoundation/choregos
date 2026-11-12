@@ -7,7 +7,10 @@ The journal (`action_effects`) is the memory that makes a resume safe:
 - it is CONFIRMED (`done`, with its response) after;
 - a replayed activity that finds its key `done` returns the recorded response and redoes nothing;
 - a `started` key that was never confirmed (a worker killed in between) is retried: effects are
-  idempotent by construction (`declare_effect`).
+  idempotent by construction (`declare_effect`);
+- an effect that was sent and never answered is recorded `in_doubt` with what was sent (ADR 0149
+  §5): it is not attempted again, nothing the action had done is compensated, and the action is
+  closed `in_doubt`, whatever the workflow that plays it asks for.
 """
 
 from __future__ import annotations
@@ -16,7 +19,7 @@ import contextlib
 from typing import Any
 
 from choregos_api.db.models import Action, ActionEffect, Project, WorkItem
-from choregos_api.effects import EffectContext, EffectRefused, effect, render
+from choregos_api.effects import EffectContext, EffectInDoubt, EffectRefused, effect, render
 from choregos_api.logging import get_logger
 from choregos_api.services import persist_event
 from choregos_contracts import ActionOrigin, ActionStatus, EventType
@@ -39,6 +42,11 @@ EXECUTABLE = frozenset({ActionStatus.APPROVED.value, ActionStatus.RUNNING.value}
 ACTION_NOT_FOUND = "ActionNotFound"
 ACTION_NOT_VISIBLE_YET = "ActionNotYetVisible"
 EFFECT_REFUSED = "EffectRefused"
+#: The effect was sent and nobody knows whether it was executed (ADR 0149 §5). The `ActionWorkflow`
+#: reads this type: it compensates nothing and closes the action in doubt.
+EFFECT_IN_DOUBT = "EffectInDoubt"
+#: The status of an effect, and of its action, that ended in doubt.
+IN_DOUBT = ActionStatus.IN_DOUBT.value
 
 
 async def _load(session: Any, action_id: str) -> tuple[Action, Project]:
@@ -101,6 +109,15 @@ async def execute_effect(payload: dict[str, Any]) -> dict[str, Any]:
         if row is not None and row.status == "done":
             # Already done: the recorded response, nothing redone. That is the whole guarantee.
             return {"key": key, "replayed": True, "result": row.result}
+        doubts = _doubts(row)
+        if doubts and not _may_be_sent_again(row):
+            # In doubt, and final (ADR 0149 §5): the effect is not attempted again, by a task Temporal
+            # delivers twice no more than by anything else.
+            raise ApplicationError(
+                str(row.error if row is not None else "") or f"the effect {key} is in doubt",
+                type=EFFECT_IN_DOUBT,
+                non_retryable=True,
+            )
         spec = (action.effects or [])[position]
         context = {
             "params": action.params or {},
@@ -123,21 +140,46 @@ async def execute_effect(payload: dict[str, Any]) -> dict[str, Any]:
             )
             session.add(row)
         row.attempts += 1
-        row.params, row.status, row.error = params, "started", None
+        row.params, row.error = params, None
+        if not doubts:
+            # A doubt is not forgotten by the attempt that follows it: the row stays `in_doubt` until
+            # a delivery is answered, so that whatever ends the action in between finds it there.
+            row.status = "started"
     # Recorded and committed BEFORE the attempt: a worker killed here leaves a `started` key.
+    once_durable: list[Any] = []
     try:
         async with db() as session:
             action, project = await _load(session, action_id)
-            result = await effect(str(spec["effect"]))(EffectContext(session, action, project), params)
+            played = EffectContext(
+                session, action, project, key=key, doubts=tuple(doubts), once_durable=once_durable
+            )
+            result = await effect(str(spec["effect"]))(played, params)
+    except EffectInDoubt as doubt:
+        # Neither a refusal nor a failure: recorded with what was sent, before anything is said to
+        # the workflow. Retried only when the effect says the same key may be delivered again.
+        recorded = await _note_doubt(key, doubt, doubts, once_durable)
+        if recorded is not None:
+            # Another attempt of this effect recorded its outcome while this one waited, and emptied the
+            # answer with that record: this attempt read an answer already kept, not a doubt.
+            return {"key": key, "replayed": True, "result": recorded["result"]}
+        raise ApplicationError(str(doubt), type=EFFECT_IN_DOUBT, non_retryable=not doubt.again) from doubt
     except EffectRefused as refused:
         await _note_failure(key, str(refused))
-        raise ApplicationError(str(refused), type=EFFECT_REFUSED, non_retryable=True) from refused
+        kind = EFFECT_IN_DOUBT if doubts else EFFECT_REFUSED
+        raise ApplicationError(str(refused), type=kind, non_retryable=True) from refused
     except Exception as failure:
         await _note_failure(key, f"{type(failure).__name__}: {failure}")
+        if doubts:
+            # An earlier delivery is still in doubt: whatever this attempt met, the effect is not a
+            # failure the action may compensate. As retryable as the failure itself was.
+            raise ApplicationError(f"{type(failure).__name__}: {failure}", type=EFFECT_IN_DOUBT) from failure
         raise
     async with db() as session:
         row = (await session.execute(select(ActionEffect).where(ActionEffect.key == key))).scalar_one()
         row.status, row.result, row.finished_at = "done", result, utcnow()
+        # The result is recorded: what the effect kept elsewhere until now goes with this commit.
+        for settle in once_durable:
+            await settle(session)
         action, project = await _load(session, action_id)
         await persist_event(
             session,
@@ -161,6 +203,55 @@ async def _note_failure(key: str, error: str) -> None:
             row.error = error[:2000]
 
 
+def _doubts(row: ActionEffect | None) -> list[dict[str, Any]]:
+    """What this effect's earlier attempts sent and never saw answered, one entry per delivery."""
+    if row is None or row.status != IN_DOUBT:
+        return []
+    return [dict(sent) for sent in (row.result or {}).get("in_doubt") or []]
+
+
+def _may_be_sent_again(row: ActionEffect | None) -> bool:
+    """The effect said its doubt is not final: the same key may be delivered again."""
+    return row is not None and bool((row.result or {}).get("again"))
+
+
+async def _note_doubt(
+    key: str, doubt: EffectInDoubt, before: list[dict[str, Any]], once_durable: list[Any]
+) -> dict[str, Any] | None:
+    """Record that the effect is in doubt, with every delivery that was sent and never answered:
+    what a person is shown (ADR 0149 §5). What the effect kept elsewhere goes with this record.
+
+    Unless another attempt of the same effect recorded it done first: an attempt Temporal gave up on
+    may still be waiting when the next begins, and the one that records the outcome empties the answer
+    in the same transaction, so the other wakes to an answer that is gone. The record stands, and its
+    result is returned (`{"result": ...}`) instead of a doubt that would overwrite it."""
+    async with db() as session:
+        row = (await session.execute(select(ActionEffect).where(ActionEffect.key == key))).scalar_one()
+        if row.status == "done":
+            return {"result": row.result}
+        row.status, row.error = IN_DOUBT, str(doubt)[:2000]
+        row.result = {"in_doubt": [*before, dict(doubt.sent)], "again": doubt.again}
+        for settle in once_durable:
+            await settle(session)
+    return None
+
+
+async def _in_doubt(session: Any, action_id: str) -> ActionEffect | None:
+    """The effect of an action that is in doubt, if one is."""
+    found: ActionEffect | None = (
+        (
+            await session.execute(
+                select(ActionEffect)
+                .where(ActionEffect.action_id == action_id, ActionEffect.status == IN_DOUBT)
+                .order_by(ActionEffect.position)
+            )
+        )
+        .scalars()
+        .first()
+    )
+    return found
+
+
 @activity.defn(name="compensate_effect")
 async def compensate_effect(payload: dict[str, Any]) -> dict[str, Any]:
     """Undo a done effect, with what the action declared for it. Never raises: what it could not
@@ -172,6 +263,10 @@ async def compensate_effect(payload: dict[str, Any]) -> dict[str, Any]:
         row = (
             await session.execute(select(ActionEffect).where(ActionEffect.key == key))
         ).scalar_one_or_none()
+        if await _in_doubt(session, action_id) is not None:
+            # One of the action's effects is in doubt: undoing what came before it would act on a
+            # state nobody knows (ADR 0149 §5). Nothing is compensated automatically, whoever asks.
+            return {"key": key, "undone": False, "reason": "the action is in doubt: nothing is compensated"}
         if row is None or row.status != "done":
             return {"key": key, "undone": False, "reason": "not done"}
         compensation = (action.effects or [])[position].get("compensate")
@@ -184,13 +279,18 @@ async def compensate_effect(payload: dict[str, Any]) -> dict[str, Any]:
             "effects": await _done_effects(session, action_id, position),
             "result": row.result or {},
         }
+        # The effect's key, and another call: through the connector its effect went through, a
+        # compensation is a write of its own and must not meet its effect's id (ADR 0149 §5).
+        undoing = EffectContext(session, action, project, key=f"{key}:compensation")
         try:
             params = render(compensation.get("with") or {}, context)
-            await effect(str(compensation["effect"]))(EffectContext(session, action, project), params)
+            await effect(str(compensation["effect"]))(undoing, params)
         except Exception as failure:
             row.status, row.error = "compensation_failed", f"{type(failure).__name__}: {failure}"[:2000]
             return {"key": key, "undone": False, "reason": row.error}
         row.status = "compensated"
+        for settle in undoing.once_durable:
+            await settle(session)
         await persist_event(
             session,
             EventType.ACTION_EFFECT_COMPENSATED,
@@ -210,18 +310,30 @@ async def close_action(payload: dict[str, Any]) -> dict[str, Any]:
     async with db() as session:
         action, project = await _load(session, action_id)
         ticket = await _waiting_interpreter(session, action, project)
+        doubted = await _in_doubt(session, action_id) if status != ActionStatus.SUCCEEDED.value else None
+        if doubted is not None:
+            # An action one of whose effects is in doubt did not fail: it is closed in doubt, whatever
+            # the workflow that plays it asks for (one that predates the status asks for `failed`).
+            status = IN_DOUBT
         action.status = status
         action.error = payload.get("error")
         # Merged: an effect may have recorded what it awaits there, an evidence what it saw (S20-08).
         action.result = {**(action.result or {}), "compensations": payload.get("compensations") or []}
+        if doubted is not None:
+            action.error = action.error or doubted.error
+            sent = list((doubted.result or {}).get("in_doubt") or [])
+            action.result = {**action.result, "in_doubt": {"position": doubted.position, "sent": sent}}
         action.finished_at = utcnow()
         await persist_event(
             session,
+            # No event type of its own for an action in doubt: the terminal event that says "it did
+            # not succeed" carries the status it ended with.
             EventType.ACTION_SUCCEEDED if status == ActionStatus.SUCCEEDED.value else EventType.ACTION_FAILED,
             project_id=project.id,
             work_item_id=action.work_item_id,
             project_slug=project.slug,
             subject=action_id,
+            status=status,
             error=action.error,
         )
     # After the commit: the work item that awaits it will re-read an already written state.
