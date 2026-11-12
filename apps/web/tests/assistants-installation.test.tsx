@@ -24,6 +24,7 @@ vi.mock("@/lib/api", async (importOriginal) => {
       ...real.api,
       plugins: vi.fn(),
       orgConnectors: vi.fn(),
+      knowledgeBases: vi.fn(),
       agents: vi.fn(),
       orgCosts: vi.fn(),
     },
@@ -41,6 +42,7 @@ const mocks = vi.hoisted(() => ({
   uninstall: vi.fn(),
   readiness: vi.fn(),
   bind: vi.fn(),
+  bindKnowledge: vi.fn(),
   knowledgeUpdates: vi.fn(),
   decideKnowledgeUpdate: vi.fn(),
   reads: vi.fn(),
@@ -217,6 +219,48 @@ describe("one installation, for its owners", () => {
     expect(screen.getByText("to fix: the owners")).toBeInTheDocument();
     fireEvent.change(await screen.findByLabelText("Connector for news"), { target: { value: "news-feed" } });
     await waitFor(() => expect(mocks.bind).toHaveBeenCalledWith("varga", "invest", "news", { connector: "news-feed", enabled: true, approval: null }));
+  });
+
+  it("binds a knowledge need to bases the owner reads, keeps one another owner bound, and shows a refusal", async () => {
+    mocks.pluginAssistants.mockResolvedValue({
+      items: [
+        {
+          ...shipped.items[0],
+          knowledge_needs: [{ name: "house_research", description: "The house's research notes.", required: true }],
+        },
+      ],
+    });
+    mocks.installation.mockResolvedValue(
+      installed({ knowledge_bindings: [{ name: "house_research", bases: ["board-notes"], enabled: true }] }),
+    );
+    vi.mocked(api.knowledgeBases).mockResolvedValue([
+      { slug: "house-notes", name: "House notes", scope: "org", serving_mode: "index", status: "active" },
+      { slug: "old-notes", name: "Old notes", scope: "org", serving_mode: "index", status: "archived" },
+    ] as never);
+    mocks.bindKnowledge.mockRejectedValueOnce(new Error("`house-notes` is not a knowledge base of varga you may read"));
+    mocks.bindKnowledge.mockResolvedValue(installed());
+    wrap(<InstallationDetail slug="invest" />);
+    expect(await screen.findByText("The house's research notes.")).toBeInTheDocument();
+    // The base another owner bound stays listed and checked; an archived base is not offered.
+    expect(await screen.findByLabelText("board-notes for house_research")).toBeChecked();
+    expect(screen.queryByLabelText("old-notes for house_research")).not.toBeInTheDocument();
+    fireEvent.click(await screen.findByLabelText("house-notes for house_research"));
+    fireEvent.click(screen.getByRole("button", { name: "Bind house_research" }));
+    expect(await screen.findByText("`house-notes` is not a knowledge base of varga you may read")).toBeInTheDocument();
+    expect(mocks.bindKnowledge).toHaveBeenCalledWith("varga", "invest", "house_research", {
+      bases: ["board-notes", "house-notes"],
+    });
+    fireEvent.click(screen.getByLabelText("board-notes for house_research"));
+    fireEvent.click(screen.getByRole("button", { name: "Bind house_research" }));
+    await waitFor(() =>
+      expect(mocks.bindKnowledge).toHaveBeenLastCalledWith("varga", "invest", "house_research", { bases: ["house-notes"] }),
+    );
+  });
+
+  it("shows no knowledge card for an assistant without a knowledge need", async () => {
+    wrap(<InstallationDetail slug="invest" />);
+    expect(await screen.findByText("need `news` is not bound")).toBeInTheDocument();
+    expect(screen.queryByText("Knowledge from the organisation")).not.toBeInTheDocument();
   });
 
   it("lists the installation's own memory for its owners, decides proposals and adds a fact", async () => {

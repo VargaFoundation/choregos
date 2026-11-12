@@ -22,6 +22,7 @@ from ..schemas.assistants import (
     Assistant,
     AssistantBind,
     AssistantInstall,
+    AssistantKnowledgeBind,
     AssistantLaunchBind,
     AssistantList,
     AssistantReadiness,
@@ -163,4 +164,19 @@ async def bind_launch(
     organisation = await organisation_by_slug(session, org)
     row = await service.installation(session, organisation.id, slug)
     row = await service.bind_launch(session, organisation.id, org, row, launch, body, principal)
+    return await service.to_dto(session, row)
+
+
+@router.put(
+    "/orgs/{org}/assistants/{slug}/knowledge-bindings/{name}",
+    response_model=Assistant,
+    operation_id="bindAssistantKnowledge",
+)
+async def bind_knowledge(
+    org: str, slug: Slug, name: Need, body: AssistantKnowledgeBind, session: Db, principal: Me
+) -> Assistant:
+    """A knowledge need bound to existing bases of the organisation, by reference (ADR 0159)."""
+    organisation = await organisation_by_slug(session, org)
+    row = await service.installation(session, organisation.id, slug)
+    row = await service.bind_knowledge(session, org, row, name, body, principal)
     return await service.to_dto(session, row)

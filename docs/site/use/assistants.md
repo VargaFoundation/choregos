@@ -49,6 +49,10 @@ The assistant is asked to cite what it uses from its knowledge. The badges under
 documents. A figure that comes from a source should carry its date. If an answer has neither, ask the
 assistant where it comes from, and treat it as unchecked.
 
+Some of an assistant's knowledge may be your organisation's own knowledge bases, which its owners pointed
+it at. The assistant answers you from such a base only if you may read that base yourself: a colleague with
+access to it may get a fuller answer than you. Ask the base's owners for access, not the assistant's.
+
 ### Thumbs and feedback
 
 Under the last answer, press the thumb up (**Good answer**) or the thumb down (**Bad answer**). A text

@@ -2472,6 +2472,145 @@
    ]
   ]
  },
+ "assistant_knowledge_bindings": {
+  "checks": [],
+  "columns": [
+   {
+    "default": null,
+    "name": "org_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "installation_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": null,
+    "name": "name",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=63)"
+   },
+   {
+    "default": null,
+    "name": "knowledge_base_id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": "True",
+    "name": "enabled",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.elements.True_ object>",
+    "type": "Boolean()"
+   },
+   {
+    "default": null,
+    "name": "bound_by",
+    "nullable": true,
+    "server_default": null,
+    "type": "String(length=320)"
+   },
+   {
+    "default": "<function uuid7>",
+    "name": "id",
+    "nullable": false,
+    "server_default": null,
+    "type": "String(length=36)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "created_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   },
+   {
+    "default": "<function utcnow>",
+    "name": "updated_at",
+    "nullable": false,
+    "server_default": "<sqlalchemy.sql.functions.now; now>",
+    "type": "DateTime(timezone=True)"
+   }
+  ],
+  "foreign_keys": [
+   [
+    [
+     "installation_id"
+    ],
+    [
+     "assistant_installations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_assistant_knowledge_bindings_installation_id_assistant_installations"
+   ],
+   [
+    [
+     "knowledge_base_id"
+    ],
+    [
+     "knowledge_bases.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_assistant_knowledge_bindings_knowledge_base_id_knowledge_bases"
+   ],
+   [
+    [
+     "org_id"
+    ],
+    [
+     "organizations.id"
+    ],
+    "CASCADE",
+    null,
+    "fk_assistant_knowledge_bindings_org_id_organizations"
+   ]
+  ],
+  "indexes": [
+   [
+    "ix_assistant_knowledge_bindings_installation_id",
+    [
+     "assistant_knowledge_bindings.installation_id"
+    ],
+    false
+   ],
+   [
+    "ix_assistant_knowledge_bindings_knowledge_base_id",
+    [
+     "assistant_knowledge_bindings.knowledge_base_id"
+    ],
+    false
+   ],
+   [
+    "ix_assistant_knowledge_bindings_org_id",
+    [
+     "assistant_knowledge_bindings.org_id"
+    ],
+    false
+   ]
+  ],
+  "primary_key": [
+   "id"
+  ],
+  "uniques": [
+   [
+    "uq_assistant_knowledge_bindings_base",
+    [
+     "installation_id",
+     "name",
+     "knowledge_base_id"
+    ]
+   ]
+  ]
+ },
  "assistant_launch_bindings": {
   "columns": [
    {
