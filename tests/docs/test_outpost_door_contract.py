@@ -842,3 +842,44 @@ def test_the_records_name_this_contract() -> None:
         assert name in door, name
     outposts = (ROOT / "docs" / "adr" / "0147-an-outpost-only-dials-out.md").read_text(encoding="utf-8")
     assert "ADR 0148 §13" in outposts and f'door_keys: ["{SEALED["door"]["signing_key"]}"]' in outposts
+
+
+def _decision(record: str, number: int) -> str:
+    """One numbered decision of a record, as one line of text."""
+    text = (ROOT / "docs" / "adr" / record).read_text(encoding="utf-8")
+    start = text.index(f"\n{number}. **")
+    end = text.find(f"\n{number + 1}. **", start)
+    return " ".join(text[start : end if end != -1 else None].split())
+
+
+def test_the_records_say_what_building_against_the_contract_found() -> None:
+    """S65-10b: the two implementations met the records where they were silent or said too much."""
+    door = "0148-the-outpost-door-is-a-third-door-with-its-own-contract.md"
+    # ADR 0148 §6: the door reads one organisation in one statement, then never works under all of them.
+    scope = _decision(door, 6)
+    assert "The door never works under the all-organisations scope" in scope
+    assert "never sets the all-organisations scope" not in scope
+    assert "in one statement under the all-organisations scope" in scope
+    assert "names the outpost first" in scope and "carry the outpost's id" in scope
+    assert "narrows to that organisation before anything else runs" in scope
+    assert "`outposts` is the organisation's registry" in scope
+    assert "listed under the organisation scope" in scope and "one row once an outpost is named" in scope
+    for table in ("`outpost_instances`", "`outpost_enrolments`", "`outpost_calls`"):
+        assert table in scope, table
+    assert scope.index("`outpost_calls`") < scope.index("require the outpost setting")
+    assert "answers 404, never 403" in scope  # what the decision already said still stands
+    # ADR 0147 §5: a revoked key does not come back for as long as its outpost exists.
+    revocation = _decision("0147-an-outpost-only-dials-out.md", 5)
+    assert "A revoked key does not come back: that holds for as long as its outpost exists" in revocation
+    assert "deletes its instances, and with them the memory of their keys" in revocation
+    assert "a new enrolment like any other" in revocation and "approval against its fingerprint" in revocation
+    assert "for as long as its outpost exists (ADR 0147 §5)" in _decision(door, 3)
+    # ADR 0148 §13: the journal decides first, and a lapsed id is refused without being verified.
+    signed = _decision(door, 13)
+    assert "The journal decides first, always" in signed
+    assert "refused without being verified" in signed
+    # The decisions kept their numbers: other pages cite §5, §8, §12 and §13.
+    assert _decision(door, 5).startswith("5. **Requests and answers are sealed end to end.**")
+    assert _decision(door, 8).startswith("8. **Its own Deployment and pool")
+    assert _decision(door, 12).startswith("12. **Why this door does not make Choregos a gateway**")
+    assert _decision(door, 13).startswith("13. **A call is signed by the door.**")

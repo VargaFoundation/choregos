@@ -22,7 +22,7 @@
     "token": {
       "type": "string",
       "pattern": "^[A-Za-z0-9._~-]{16,256}$",
-      "description": "The enrolment token a person created for one outpost: single use, valid 15 minutes at most."
+      "description": "The enrolment token a person created for one outpost: single use, valid 15 minutes at most. Opaque to a daemon; the door reads in it which outpost it is for (ADR 0148 §6)."
     },
     "signing_key": {
       "type": "string",

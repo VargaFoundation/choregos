@@ -348,7 +348,8 @@ class OutpostAnswerOutcome(StrEnum):
     #: The server answered a JSON-RPC error: it says it did not do the call.
     ERROR = "error"
     #: The call was sent, or begun, and the daemon holds no answer (a timeout at the endpoint, a lost
-    #: connection, a restart in the middle): executed or not, nobody knows.
+    #: connection, a restart in the middle, a read abandoned because the door cancelled it): executed
+    #: or not, nobody knows.
     UNANSWERED = "unanswered"
     #: The server answered and its result weighs more than the outpost's ceiling or the door's cap: the
     #: call was executed and its result is not sent.
@@ -368,10 +369,14 @@ class OutpostRefusalCode(StrEnum):
     WRITE_DENIED = "write_denied"
     #: The arguments weigh more than the endpoint's ceiling.
     PAYLOAD_TOO_LARGE = "payload_too_large"
-    #: The outpost cannot take the call now: its concurrency ceiling is reached, or it is stopping.
+    #: The outpost cannot take the call now: its concurrency ceiling is reached, or it is stopping. It
+    #: also covers a call the daemon claimed and never began because it was stopping or was restarted.
     BUSY = "busy"
     #: The outpost could not reach or open its own server, and sent it nothing.
     ENDPOINT_UNAVAILABLE = "endpoint_unavailable"
+    #: The outpost could not write its journal or its audit line, so it did not make the call: what it
+    #: cannot record, it does not do.
+    CANNOT_RECORD = "cannot_record"
     #: The daemon does not know this kind of call (a kind later than its protocol).
     UNSUPPORTED_KIND = "unsupported_kind"
     #: The call is not signed by a key the outpost's policy file pins, or its signature binds another
@@ -405,7 +410,9 @@ class OutpostDoorCode(StrEnum):
     #: 401: the enrolment token is unknown, already used or expired; the door does not say which.
     INVALID_ENROLMENT_TOKEN = "invalid_enrolment_token"  # noqa: S105 - a problem code, not a secret
     #: 409: this signing key is already an approved or revoked instance, or is pending at another outpost.
-    #: A key still pending at the token's own outpost is enrolled again as the same instance.
+    #: A key still pending at the token's own outpost is enrolled again as the same instance. A revoked
+    #: key does not come back for as long as its outpost exists; once that outpost is deleted the key is
+    #: unknown again (ADR 0147 §5).
     KEY_ALREADY_ENROLLED = "key_already_enrolled"
     #: 403: nobody has approved this instance yet; it is handed nothing.
     INSTANCE_PENDING = "instance_pending"

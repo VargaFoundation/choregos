@@ -69,8 +69,9 @@ x-request-signature:
       The door compares it with its own public URL, scheme and host in lower case, a default port left out.
     body_sha256: The SHA-256 of the body exactly as sent, lowercase hex.
     iat: >-
-      When the signature was made, in seconds. Refused when it is more than 60 seconds from the door's clock,
-      either way; that refusal, like every problem, carries `server_time`.
+      When the signature was made, in seconds, by the daemon's own clock. Refused when it is more than 60
+      seconds from the door's clock, either way; that refusal, like every problem, carries `server_time`. A
+      daemon never corrects `iat` from `server_time`: a clock that drifts is its operator's to set right.
     nonce: >-
       The last value the door sent in `Outpost-Nonce`. Not in the enrolment's signature. The door issues it
       without storing anything (an authenticated timestamp it checks alone, RFC 9449 §8) and takes it for 300
@@ -80,7 +81,11 @@ x-request-signature:
       enrolment's signature. The door keeps the last one it took on the instance's row and refuses a request
       whose `seq` is not above it, at whichever replica it arrives. Gaps are allowed. A request the door refused
       before this check took no sequence; the daemon signs it again under a higher one. Two requests sent at
-      once may arrive out of order: the higher sequence wins and the other is signed again.
+      once may arrive out of order: the higher sequence wins and the other is signed again. A daemon is
+      expected to number from its clock in milliseconds, and never below its last sequence plus one: a
+      daemon that lost its state file is then not left behind for good, its clock being past every number
+      it sent. The door keeps a 64-bit integer. A `replayed_sequence` carries no hint of the number the
+      door holds.
   enrolment_claims: [htm, htu, body_sha256, iat]
   session_claims: [htm, htu, body_sha256, iat, nonce, seq]
   nonce_header: Outpost-Nonce
@@ -90,8 +95,9 @@ x-request-signature:
     is refused `stale_nonce`, and the daemon signs again with the nonce that refusal carries.
   server_time: >-
     The door's clock comes back in `server_time`: in the answers of `enrol` and `poll`, and in every problem.
-    It tells a daemon its own clock drifts; it is not signed, and a daemon decides nothing on it that the
-    path could turn to its advantage (`x-call-signature`, `not_signed`).
+    It is information, and it is not signed: it tells `doctor` that the outpost's clock drifts, and it may
+    bring a call's deadline closer, never further (`x-call-signature`, `not_signed`). A daemon never corrects
+    `iat` from it.
   checks: >-
     A request that fails several checks is answered for the first that fails, in this order: the body's size
     (413, before anything is parsed); the signature (401 `invalid_signature`: absent, malformed, made by a key
@@ -134,13 +140,17 @@ x-call-signature:
     are shown where a person creates the outpost and its enrolment token (`door_keys` in the management API),
     never in an answer of this door.
   checks: >-
-    A call whose id the daemon's journal already holds gets what the journal holds (`x-bounds`, `delivery`).
-    For any other, before it opens the envelope and in this order: the header is the one above and its `kid`
-    is one of the pinned keys, compared as written; the signature verifies under that key; `call` is the
-    envelope's `id`; `instance` is the daemon's own id; `sealed_sha256` is the digest of `sealed`; the claims
-    are these three and no other. If one fails, the daemon does not open the envelope and does not call its
-    server: it writes a line to its audit log and refuses the call with `signature_refused`, a code that
-    names the class and never which check failed. A call that carries no `signature` is refused the same way.
+    The journal decides first, always (`x-bounds`, `delivery`); where that sentence and the order below seem
+    to disagree, the journal's sentence wins. A call whose id the journal holds in a live entry gets what
+    the journal holds, and no refusal is sent for the copy. A call whose id it holds in a lapsed entry, its
+    deadline behind, is refused `deadline_passed` without being verified. Only for an id the journal does
+    not hold does the daemon check, before it opens the envelope and in this order: the header is the one
+    above and its `kid` is one of the pinned keys, compared as written; the signature verifies under that
+    key; `call` is the envelope's `id`; `instance` is the daemon's own id; `sealed_sha256` is the digest of
+    `sealed`; the claims are these three and no other. If one fails, the daemon does not open the envelope
+    and does not call its server: it writes a line to its audit log and refuses the call with
+    `signature_refused`, a code that names the class and never which check failed. A call that carries no
+    `signature` is refused the same way.
   refusal: >-
     A forged call's refusal meets a 404 at the door, which is harmless. A real call refused this way is how
     the platform learns that an outpost does not pin the key in service.
@@ -179,8 +189,9 @@ x-sealing:
     its size and its timing.
   answer: >-
     An answer is sealed to the `answer_key` found inside the call it answers, never to a key read from a field
-    a proxy could rewrite. Its plaintext is `schemas/outpost-answer.schema.json`. A refusal is not sealed: it
-    is a code.
+    a proxy could rewrite. Its plaintext is `schemas/outpost-answer.schema.json`. The door cannot open it: it
+    records the envelope, and the side that placed the call, which holds the key, opens it. A refusal is not
+    sealed: it is a code.
   origin: >-
     Sealing hides a call from whoever is not its recipient. Alone it proves no origin: anyone who knows a
     public key can seal to it. What proves a call is the door's is the door's signature (`x-call-signature`),
@@ -196,6 +207,21 @@ x-bounds:
   max_concurrency: 64
   max_door_keys: 4
   max_body_bytes: { enrol: 16384, poll: 65536, answer: 2097152, refuse: 4096 }
+  max_sealed_call_bytes: 2097152
+  max_poll_answer_rest_bytes: 65536
+  max_running: 256
+  handed_over: >-
+    No call the door hands over weighs more than `max_sealed_call_bytes` as a poll's answer carries it, its
+    id, its envelope and its signature together: the same 2 MiB as an answer. A poll's answer holds at most
+    `capacity` calls, and everything else in it (the window, the clock, the stop flag, at most 256
+    cancellations) fits in `max_poll_answer_rest_bytes`. A daemon can therefore bound what it reads to 64 KiB
+    plus `capacity` times 2 MiB, before it parses anything. A call whose envelope would be larger is refused
+    where it is admitted, on the platform's side: it is never handed over, and never cut.
+  cancel: >-
+    `cancel` names calls among `running` the door waits for no more. A call not yet started is refused
+    `cancelled`. A read in flight is abandoned and answered `unanswered`. A cancel never interrupts a write
+    that has reached its server: the write finishes, the daemon records its answer and sends it, and the
+    door answers `lease_lost` to it.
   wait: >-
     A poll is answered within `wait_s` seconds, 25 at most, sooner when the door has something to hand over,
     and a little sooner than asked with nothing (jitter). The daemon polls again at once. One poll per
@@ -207,17 +233,23 @@ x-bounds:
     deadline, once.
   delivery: >-
     A read whose lease ended without an answer may be handed over again; a claimed write is never handed over
-    again, to any instance (ADR 0149 §5). On the outpost's side there is one decision per call id. The first
-    thing an instance decides for an id, to make the call or to refuse it, is written to its journal and
-    stands for every later envelope under that id, whoever sent it: a call under way or done is answered
-    from the journal and its server is not called again (a write begun and left without an answer is
-    reported `unanswered`), and an id that was refused is refused again with the same code. Once it has
-    accepted a call, a daemon sends no refusal for a copy of it that does not verify. The journal keeps an
-    id at least until the call's deadline has passed, 300 seconds when the envelope was not opened, and a
-    write's for as long as the journal lives. A call whose deadline is behind is refused `deadline_passed`.
-    So a signed call replayed to the same instance by whoever sits on the path reaches no server: it meets
-    the journal before its deadline, and `deadline_passed` after it. A read's entry no longer counts once
-    its deadline has passed: handed over again with a later deadline, the read is made again.
+    again, to any instance (ADR 0149 §5). On the outpost's side there is one decision per call id, and the
+    journal decides first, always: before a signature is verified, before an envelope is opened. The first
+    thing an instance decides for an id, to make the call or to refuse it, is written to its journal with
+    the call's deadline, or 300 seconds from then when the envelope was not opened. Until that deadline the
+    entry is live and stands for every later envelope under that id, whoever sent it: a call done is
+    answered again from the journal, a call under way gets nothing yet, an id that was refused is refused
+    again with the same code, and its server is not called again (a write the daemon began before a restart
+    and holds no answer for is reported `unanswered`). No refusal is sent for a copy as such: once it has
+    accepted a call, a daemon does not refuse a copy of it that does not verify. After that deadline the
+    entry has lapsed: a copy is refused `deadline_passed` without being verified, because there is nothing
+    left to protect, and that refusal is harmless at the door (a 404 or `lease_lost`). The journal keeps an
+    entry at least while it is live, and a write's for as long as the journal lives. An id the journal does
+    not hold is a new call: verified, opened, and refused `deadline_passed` if the deadline inside is
+    behind. So a signed call replayed to the same instance by whoever sits on the path reaches no server: it
+    meets the journal before its deadline, and `deadline_passed` after it. A read handed over again to the
+    same instance under the same id meets its entry too: a door that wants a read made again hands it to
+    another instance, or under a new id.
 
 x-vectors:
   description: >-
@@ -245,7 +277,10 @@ paths:
         instance, once. A signing key that is already a pending instance of the token's outpost is that
         instance again, under the new token: a daemon whose first answer was lost enrols again and keeps its
         keys. A key that was ever approved or revoked, or that is pending at another outpost, is a 409
-        `key_already_enrolled`: a revoked key does not come back.
+        `key_already_enrolled`: a revoked key does not come back, for as long as its outpost exists. Deleting
+        a revoked outpost deletes its instances and with them the memory of their keys: the same key is then
+        a new enrolment like any other, with a token and a person's approval against its fingerprint
+        (ADR 0147 §5).
       x-max-body-bytes: 16384
       requestBody:
         required: true
@@ -324,7 +359,8 @@ paths:
         The body is the answer sealed to the call's `answer_key`. It is taken from the instance that claimed
         the call, under the epoch of the claim, before the call's deadline, and recorded once: the same
         instance sending again under the same epoch reads what was recorded, whatever it sends. The door
-        does not need to open an answer to record it. A call that is not this outpost's is a 404, never a 403.
+        cannot open an answer: it records the envelope as it came, and the side that placed the call opens
+        it. A call that is not this outpost's is a 404, never a 403.
       x-max-body-bytes: 2097152
       requestBody:
         required: true
@@ -481,7 +517,10 @@ components:
         sealed:
           type: string
           pattern: "^[A-Za-z0-9_-]{80,}$"
-          description: The envelope; once open, `schemas/outpost-call.schema.json`
+          maxLength: 2097152
+          description: >-
+            The envelope; once open, `schemas/outpost-call.schema.json`. With the call's id and signature it
+            weighs 2 MiB at most (`x-bounds`, `handed_over`)
           x-sealed-to: the claiming instance's `sealing_key`
           x-plaintext: { $ref: "./schemas/outpost-call.schema.json" }
         signature:
@@ -502,8 +541,8 @@ components:
         protocol: { $ref: "#/components/schemas/ProtocolWindow" }
         server_time: { type: string, format: date-time }
         stop: { type: boolean, description: "The outpost is paused: nothing is handed over until it is resumed; what the instance holds may finish, and it keeps polling" }
-        calls: { type: array, items: { $ref: "#/components/schemas/SealedCall" }, description: "Claimed by this instance from this answer on; at most `capacity`" }
-        cancel: { type: array, items: { type: string }, description: "Calls among `running` the door waits for no more: an answer to one would be a 409 `lease_lost`" }
+        calls: { type: array, maxItems: 64, items: { $ref: "#/components/schemas/SealedCall" }, description: "Claimed by this instance from this answer on; at most `capacity`, none heavier than 2 MiB (`x-bounds`, `handed_over`)" }
+        cancel: { type: array, maxItems: 256, items: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$" }, description: "Calls among `running` the door waits for no more: an answer to one would be a 409 `lease_lost`. A call not yet started is refused `cancelled`, a read in flight is abandoned and answered `unanswered`, and a write that has reached its server is never interrupted (`x-bounds`, `cancel`)" }
     SealedAnswer:
       type: object
       additionalProperties: false

@@ -89,6 +89,18 @@ MAX_BODY_BYTES: Final[dict[str, int]] = {
     "answer": 2_097_152,
     "refuse": 4_096,
 }
+#: The most one call weighs as a poll's answer carries it: its id, its envelope and its signature
+#: together. A call whose envelope would be larger is refused where it is admitted, on the platform's
+#: side, and never handed over.
+MAX_SEALED_CALL_BYTES: Final = 2_097_152
+#: The most a poll's answer weighs beside its calls (the window, the clock, the stop flag, the
+#: cancellations, whatever a later door adds).
+MAX_POLL_ANSWER_REST_BYTES: Final = 65_536
+#: The most calls an instance reports as held, hence the most a poll's answer cancels.
+MAX_RUNNING: Final = 256
+#: The highest sequence a request's signature carries: a whole number JSON keeps exact. The door keeps
+#: it as a 64-bit integer.
+MAX_SEQUENCE: Final = 2**53 - 1
 #: `HKDF` `info` of `choregos_adapters.sealing`, reused as it is (ADR 0148 §5).
 SEALING_INFO: Final = "choregos/assignment/v1"
 
@@ -321,7 +333,8 @@ class OutpostAnswer(Strict):
     tools: Annotated[list[OutpostTool], Field(max_length=1024)] | None = None
     #: Outcome `error`.
     error: OutpostServerError | None = None
-    #: What the outpost read from its own server: the tool does not declare itself read-only.
+    #: What the outpost read from its own server: the tool does not declare itself read-only. Null for
+    #: a kind that calls no tool (`list_tools`), and when the outpost did not get that far.
     write: bool | None = None
     #: The answer comes from the daemon's journal: the server was not called again (ADR 0149 §5).
     replayed: bool = False
@@ -338,6 +351,8 @@ class OutpostAnswer(Strict):
                 raise ValueError("outcome `error` carries `error` and nothing else")
         elif carried:
             raise ValueError(f"outcome `{self.outcome.value}` carries no {', '.join(sorted(carried))}")
+        if self.tools is not None and self.write is not None:
+            raise ValueError("a tool listing calls no tool: its `write` is null")
         return self
 
 
@@ -371,7 +386,8 @@ class OutpostAuditLine(Strict):
     #: `arguments_sha256` of the call's arguments: the digest the platform's `tool.called` event keeps.
     arguments_sha256: Sha256 | None = None
     write: bool | None = None
-    #: `executed` and `replayed`: what was reported.
+    #: `executed`: what was reported. `replayed`: what the journal held for the call, null while the
+    #: call it repeats is still under way and has no answer to replay yet.
     outcome: OutpostAnswerOutcome | None = None
     #: `refused`: why.
     refusal: OutpostRefusalCode | None = None
@@ -386,8 +402,11 @@ class OutpostAuditLine(Strict):
         elif self.event is OutpostAuditEvent.RECEIVED:
             if self.refusal is not None or self.outcome is not None:
                 raise ValueError("a `received` line carries no `outcome` and no `refusal`")
-        elif self.outcome is None or self.refusal is not None:
-            raise ValueError(f"an `{self.event.value}` line carries `outcome` and no `refusal`")
+        elif self.event is OutpostAuditEvent.EXECUTED:
+            if self.outcome is None or self.refusal is not None:
+                raise ValueError("an `executed` line carries `outcome` and no `refusal`")
+        elif self.refusal is not None:
+            raise ValueError("a `replayed` line carries no `refusal`")
         if self.refusal is OutpostRefusalCode.SIGNATURE_REFUSED:
             opened = [name for name in UNOPENED if getattr(self, name) is not None]
             if opened:
@@ -455,7 +474,7 @@ class OutpostPollRequest(Strict):
     #: The aliases its policy file serves: names only (ADR 0147 §7, §10).
     endpoints: Annotated[list[EndpointAlias], Field(max_length=64)] = Field(default_factory=list)
     #: The calls it holds and has not answered.
-    running: Annotated[list[OutpostId], Field(max_length=256)] = Field(default_factory=list)
+    running: Annotated[list[OutpostId], Field(max_length=MAX_RUNNING)] = Field(default_factory=list)
 
 
 class OutpostSealedCall(Lenient):
@@ -467,7 +486,7 @@ class OutpostSealedCall(Lenient):
     losing the whole answer; it never opens such an envelope."""
 
     id: OutpostId
-    sealed: Annotated[str, Field(pattern=SEALED_PATTERN)]
+    sealed: Annotated[str, Field(pattern=SEALED_PATTERN, max_length=MAX_SEALED_CALL_BYTES)]
     signature: Annotated[str, Field(max_length=2048)] | None = None
 
 
@@ -478,9 +497,12 @@ class OutpostPollAnswer(Lenient):
     server_time: datetime
     #: The outpost is paused: nothing is handed over; what the instance holds may finish.
     stop: bool = False
-    calls: list[OutpostSealedCall] = Field(default_factory=list)
-    #: Calls among `running` the door waits for no more: their answer would be refused `lease_lost`.
-    cancel: list[OutpostId] = Field(default_factory=list)
+    #: At most `capacity` calls, none heavier than `MAX_SEALED_CALL_BYTES`.
+    calls: Annotated[list[OutpostSealedCall], Field(max_length=MAX_CONCURRENCY)] = Field(default_factory=list)
+    #: Calls among `running` the door waits for no more: their answer would be refused `lease_lost`. A
+    #: call not yet started is refused `cancelled`; a read in flight is abandoned and answered
+    #: `unanswered`; a write that has reached its server is never interrupted: it finishes.
+    cancel: Annotated[list[OutpostId], Field(max_length=MAX_RUNNING)] = Field(default_factory=list)
 
 
 class OutpostSealedAnswer(Strict):
@@ -590,6 +612,25 @@ def call_signature_header(door_key: str) -> dict[str, str]:
     """The protected header of a call's signature: `kid` is the door's signing key itself, which the
     daemon looks for among the keys its policy file pins before it verifies anything."""
     return {"alg": SIGNATURE_ALGORITHM, "typ": CALL_SIGNATURE_TYPE, "kid": door_key}
+
+
+def max_poll_answer_bytes(capacity: int) -> int:
+    """The most a poll's answer weighs for a daemon that asked for `capacity` calls: what a daemon may
+    bound its reading to. No call the door hands over is heavier than `MAX_SEALED_CALL_BYTES`, and
+    everything else in the answer fits in `MAX_POLL_ANSWER_REST_BYTES`."""
+    if not 0 <= capacity <= MAX_CONCURRENCY:
+        raise ValueError(f"a poll asks for 0 to {MAX_CONCURRENCY} calls")
+    return MAX_POLL_ANSWER_REST_BYTES + capacity * MAX_SEALED_CALL_BYTES
+
+
+def next_sequence(last: int | None, now_ms: int) -> int:
+    """The `seq` of a daemon's next request: its clock in milliseconds, and never below its last
+    sequence plus one. A daemon that lost its state file (`last` is `None`) is therefore not left
+    behind the sequence the door keeps: its clock is already past every number it ever sent."""
+    sequence = now_ms if last is None else max(now_ms, last + 1)
+    if not 1 <= sequence <= MAX_SEQUENCE:
+        raise ValueError("a sequence is a whole number from 1 to 2^53 - 1")
+    return sequence
 
 
 def arguments_sha256(arguments: dict[str, Any]) -> str:

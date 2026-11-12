@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hmac
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -419,6 +420,24 @@ async def run_claims(
 RunAuth = Annotated[RunClaims, Depends(run_claims)]
 
 
+def _network_token(id: str, authorization: str | None) -> tuple[RunClaims, bool]:
+    """The run's claims from its run token or its egress token, and whether it was the egress one."""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise unauthorized("missing run token")
+    token = authorization.split(" ", 1)[1].strip()
+    egress = False
+    try:
+        claims = verify_run_token(token)
+    except jwt.PyJWTError:
+        try:
+            claims, egress = verify_egress_token(token), True
+        except jwt.PyJWTError as exc:
+            raise forbidden(f"invalid run or egress token: {exc}") from exc
+    if claims.run_id != id:
+        raise forbidden("this token belongs to another run")
+    return claims, egress
+
+
 async def network_claims(
     id: str,
     session: Db,
@@ -426,24 +445,35 @@ async def network_claims(
 ) -> RunClaims:
     """A run's network routes (ADR 0115): its run token, or its egress token — the one the proxy
     variables carry, which the agent inherits. Every other internal route takes the run token only."""
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise unauthorized("missing run token")
-    token = authorization.split(" ", 1)[1].strip()
-    try:
-        claims = verify_run_token(token)
-    except jwt.PyJWTError:
-        try:
-            claims = verify_egress_token(token)
-        except jwt.PyJWTError as exc:
-            raise forbidden(f"invalid run or egress token: {exc}") from exc
-    if claims.run_id != id:
-        raise forbidden("this token belongs to another run")
+    claims, _ = _network_token(id, authorization)
     bind(run_id=claims.run_id, project=claims.project_slug, work_item=claims.work_item_key)
     await limit_to_organisations(session, ALL_ORGS)
     return claims
 
 
 NetworkAuth = Annotated[RunClaims, Depends(network_claims)]
+
+
+async def report_claims(
+    id: str,
+    session: Db,
+    authorization: Annotated[str | None, Header()] = None,
+    x_choregos_egress_key: Annotated[str | None, Header()] = None,
+) -> RunClaims:
+    """The proxy's report (ADR 0145): the run token, or the egress token WITH the proxy's own key.
+
+    The agent inherits the egress token, not the key: without this, it could post its own run's
+    counters. A deployment that configured no key accepts the egress token alone, as before."""
+    claims, egress = _network_token(id, authorization)
+    key = get_settings().egress_report_key
+    if egress and key and not hmac.compare_digest((x_choregos_egress_key or "").encode(), key.encode()):
+        raise forbidden("a report made with the egress token needs the egress proxy's key")
+    bind(run_id=claims.run_id, project=claims.project_slug, work_item=claims.work_item_key)
+    await limit_to_organisations(session, ALL_ORGS)
+    return claims
+
+
+ReportAuth = Annotated[RunClaims, Depends(report_claims)]
 
 
 async def refuse_closed_run(session: AsyncSession, run_id: str) -> None:

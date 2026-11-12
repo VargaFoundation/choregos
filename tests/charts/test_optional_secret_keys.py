@@ -46,6 +46,8 @@ FEATURE = {
     "secrets-keks",
     # The previous session key during a rotation (S47-01): absent, there is no rotation.
     "session-secret-previous",
+    # The egress proxy's report key (ADR 0145): absent, the egress token alone reports, as before.
+    "egress-report-key",
 }
 
 pytestmark = pytest.mark.skipif(shutil.which("helm") is None, reason="helm absent")
