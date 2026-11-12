@@ -228,6 +228,10 @@ class EventType(StrEnum):
     ACTION_EFFECT_DONE = "choregos.action.effect_done"
     ACTION_EFFECT_COMPENSATED = "choregos.action.effect_compensated"
     ACTION_SUCCEEDED = "choregos.action.succeeded"
+    #: An action that ended and did not succeed. Its data carries the `status` it ended with:
+    #: `failed` (what it had done was compensated, and it says what it could not undo) or `in_doubt`
+    #: (nothing was compensated, ADR 0149 §5). A consumer that reads the type alone reads "not
+    #: succeeded", which is true of both.
     ACTION_FAILED = "choregos.action.failed"
 
 
@@ -243,6 +247,11 @@ class ActionStatus(StrEnum):
     AWAITING_EVIDENCE = "awaiting_evidence"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
+    #: One of its effects was sent and nobody knows whether it was executed: a write through an
+    #: outpost that an instance claimed and never answered (ADR 0149 §5). Terminal: it is never
+    #: replayed and nothing it had done is compensated automatically; a person checks the system the
+    #: write was for.
+    IN_DOUBT = "in_doubt"
 
 
 class ActionOrigin(StrEnum):

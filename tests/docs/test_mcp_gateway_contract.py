@@ -207,7 +207,8 @@ def _responses(op_id: str) -> dict[str, Any]:
 
 def test_the_connector_routes_say_what_an_outpost_changes() -> None:
     """S65-13: a discovery the outposts' quotas do not admit is a 429, and a write operation of a
-    connector at an outpost is not opened before the at-most-once rule exists (422, ADR 0149 §5-6)."""
+    connector at an outpost is opened only under the at-most-once rule (422, ADR 0149 §5-6); what the
+    rule asks of whoever opens it is S65-14's (`test_action_in_doubt_contract.py`)."""
     assert "429" in _responses("discoverConnectorOperations")
     assert _responses("updateConnectorOperation")["422"] == {"$ref": "#/components/responses/ValidationError"}
     described = {

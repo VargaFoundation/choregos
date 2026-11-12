@@ -616,12 +616,21 @@ paths:
       tags: [connectors]
       operationId: updateConnectorOperation
       description: >-
-        An operation's policy, project groups and price — the decision of the organisation's administrator (the
-        second lock of ADR 0014). 422 for a policy the operation cannot take: `allowed` for an operation its type
-        declares approved by a person, always (ADR 0052); and `allowed` or `approval` for a WRITE operation of a
-        connector reached through an outpost (type `mcp-outpost`), which stays `forbidden`: a write through an
-        outpost is opened only under the rule that it is delivered at most once (ADR 0149 §5-6, ADR 0101), and that
-        rule arrives with S65-14. A read of such a connector is opened like any other.
+        An operation's policy, project groups and price, and what the organisation states of how it is delivered —
+        the decision of the organisation's administrator (the second lock of ADR 0014). 422 for a policy the
+        operation cannot take: `allowed` for an operation its type declares approved by a person, always
+        (ADR 0052); and `allowed` or `approval` for a WRITE operation of a connector reached through an outpost
+        (type `mcp-outpost`) whose rule says neither of two things. A write through an outpost is delivered at most
+        once: when the instance that claimed it never answers, nobody knows whether the outpost's server executed
+        it (ADR 0149 §5-6). So the administrator who opens it says one of the two, and silence opens nothing
+        (ADR 0101): `platform_arguments` lists `action_key` (the operation takes the platform's idempotency key,
+        and may then be delivered again with the same key), or `in_doubt_accepted` is true (the action may end
+        `in_doubt`, never replayed and never compensated automatically). The refusal names both fields. It is
+        also the answer to a change that would leave an open write of such a connector with neither. A read of
+        such a connector is opened like any other. 422 as well for a statement the platform would not act on:
+        `in_doubt_accepted` for anything but a write of a connector at an outpost; `platform_arguments` for a
+        read, for an operation whose type or plugin server declares its own, or naming an argument the operation's
+        input schema does not have.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: "#/components/schemas/OperationPatch" } } }
@@ -6056,6 +6065,12 @@ components:
         approver_group: { type: [string, "null"], description: "the identity-provider group whose members approve the actions this operation proposes; none: the project's owners" }
         result_max_bytes: { type: [integer, "null"], minimum: 1024, description: "the most one result of this operation may weigh, as JSON bytes, when it reaches the agent; none: the platform's default. Never above the platform's ceiling" }
         arguments: { type: [object, "null"], additionalProperties: true, description: "a JSON Schema (2020-12, no $ref, at most 8 KiB) the arguments of every call must also satisfy, whichever agent calls; `{project}` is the run's project slug (ADR 0128)" }
+        platform_arguments: { type: array, uniqueItems: true, items: { $ref: "#/components/schemas/PlatformArgument" }, default: [], description: "the arguments the organisation's rule says the PLATFORM fills on a governed call of this operation, never the agent: what a connector type or a plugin's server declares for its own operations (`platform_arguments` of `plugin-server.schema.json`), said here by the administrator for a discovered tool, which declares nothing. Empty for an operation whose type or plugin server declares them. For a write through an outpost, listing `action_key` is the statement that the operation takes the platform's idempotency key: after a doubt it may be delivered again with the same key (ADR 0149 §5-6)" }
+        in_doubt_accepted: { type: boolean, default: false, description: "the administrator's explicit statement that an in-doubt outcome is accepted for this operation: a write through an outpost is delivered at most once, and when the instance that claimed it never answers, its action ends `in_doubt` (ADR 0149 §5-6). True only for a write of a connector of type `mcp-outpost`" }
+    PlatformArgument:
+      type: string
+      enum: [action_key, work_item_key]
+      description: "An argument the platform fills, never the agent; whatever was written under its name is dropped first. `action_key`: an idempotency key, stable for one governed action and call (the same at every retry and at every delivery, another for another call). `work_item_key`: the work item the action belongs to. The same list as `platform_arguments` of a plugin server's operation (`plugin-server.schema.json`)."
     ConnectorDiscovery:
       type: object
       properties:
@@ -6319,6 +6334,8 @@ components:
         approver_group: { type: [string, "null"], description: "an identity-provider group; null clears it" }
         result_max_bytes: { type: [integer, "null"], minimum: 1024, description: "the most one result may weigh, as JSON bytes; above the platform's ceiling is refused (422); null clears it" }
         arguments: { type: [object, "null"], additionalProperties: true, description: "a JSON Schema the arguments of every call must also satisfy (ADR 0128); refused (422) when it is not a schema the platform reads (2020-12, no $ref, at most 8 KiB) or names an argument the operation does not have; null clears it" }
+        platform_arguments: { type: [array, "null"], uniqueItems: true, items: { $ref: "#/components/schemas/PlatformArgument" }, description: "the arguments the platform fills on a governed call of this operation (see `ConnectorOperation`); absent leaves them, null or an empty list clears them. Refused (422) for a read, for an operation whose type or plugin server declares its own, when it names an argument the operation's input schema does not have, and when clearing `action_key` would leave an open write of a connector at an outpost with neither statement (ADR 0149 §6)" }
+        in_doubt_accepted: { type: [boolean, "null"], description: "true: an in-doubt outcome is accepted for this operation, explicitly (see `ConnectorOperation`); absent leaves it, null or false withdraws it. Refused (422) for anything but a write of a connector at an outpost, and when withdrawing it would leave an open write of such a connector with neither statement (ADR 0149 §6)" }
     ProjectOperation:
       type: object
       required: [connector, operation, access, org_policy, effective_policy]
@@ -6383,9 +6400,9 @@ components:
         position: { type: integer }
         key: { type: string }
         effect: { type: string }
-        status: { type: string, enum: [started, done, compensated, compensation_failed] }
+        status: { type: string, enum: [started, done, compensated, compensation_failed, in_doubt], description: "`in_doubt`: the effect was sent and nobody knows whether it was executed (a write through an outpost that was claimed and never answered, ADR 0149 §5). It is not attempted again and not compensated" }
         attempts: { type: integer }
-        result: { type: [object, "null"], additionalProperties: true }
+        result: { type: [object, "null"], additionalProperties: true, description: "what a done effect returned. For an effect `in_doubt`, `in_doubt` lists what was sent and never answered, one entry per delivery (`outpost`, `endpoint`, `operation`, `call_id`, `instance_id`, `claimed_at`, `arguments_sha256`), and `again` says whether the effect's own retries may deliver it again: true only for an operation that takes the platform's idempotency key" }
         error: { type: [string, "null"] }
         finished_at: { type: [string, "null"], format: date-time }
     Action:
@@ -6403,7 +6420,7 @@ components:
         proposed_by: { type: object, additionalProperties: true }
         approval: { type: object, additionalProperties: true }
         decisions: { type: array, items: { type: object, additionalProperties: true } }
-        status: { type: string, enum: [pending_approval, rejected, approved, running, awaiting_evidence, succeeded, failed] }
+        status: { type: string, enum: [pending_approval, rejected, approved, running, awaiting_evidence, succeeded, failed, in_doubt], description: "`in_doubt` is terminal, like `succeeded`, `failed` and `rejected`: one of the action's effects was sent and nobody knows whether it was executed (ADR 0149 §5). The action is never replayed, by no route, and nothing it had done is compensated automatically: a person checks the system the write was for. The journal says which effect, and what was sent" }
         result: { type: [object, "null"], additionalProperties: true }
         error: { type: [string, "null"] }
         temporal_wf_id: { type: [string, "null"] }

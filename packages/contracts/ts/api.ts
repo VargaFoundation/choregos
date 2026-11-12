@@ -453,7 +453,14 @@ export type ConnectorOperation = {
   arguments?: {
     [key: string]: unknown;
   } | null;
+  /** the arguments the organisation's rule says the PLATFORM fills on a governed call of this operation, never the agent: what a connector type or a plugin's server declares for its own operations (`platform_arguments` of `plugin-server.schema.json`), said here by the administrator for a discovered tool, which declares nothing. Empty for an operation whose type or plugin server declares them. For a write through an outpost, listing `action_key` is the statement that the operation takes the platform's idempotency key: after a doubt it may be delivered again with the same key (ADR 0149 §5-6) */
+  platform_arguments?: Array<PlatformArgument>;
+  /** the administrator's explicit statement that an in-doubt outcome is accepted for this operation: a write through an outpost is delivered at most once, and when the instance that claimed it never answers, its action ends `in_doubt` (ADR 0149 §5-6). True only for a write of a connector of type `mcp-outpost` */
+  in_doubt_accepted?: boolean;
 };
+
+/** An argument the platform fills, never the agent; whatever was written under its name is dropped first. `action_key`: an idempotency key, stable for one governed action and call (the same at every retry and at every delivery, another for another call). `work_item_key`: the work item the action belongs to. The same list as `platform_arguments` of a plugin server's operation (`plugin-server.schema.json`). */
+export type PlatformArgument = "action_key" | "work_item_key";
 
 export type ConnectorDiscovery = {
   added?: Array<string>;
@@ -781,6 +788,10 @@ export type OperationPatch = {
   arguments?: {
     [key: string]: unknown;
   } | null;
+  /** the arguments the platform fills on a governed call of this operation (see `ConnectorOperation`); absent leaves them, null or an empty list clears them. Refused (422) for a read, for an operation whose type or plugin server declares its own, when it names an argument the operation's input schema does not have, and when clearing `action_key` would leave an open write of a connector at an outpost with neither statement (ADR 0149 §6) */
+  platform_arguments?: Array<PlatformArgument> | null;
+  /** true: an in-doubt outcome is accepted for this operation, explicitly (see `ConnectorOperation`); absent leaves it, null or false withdraws it. Refused (422) for anything but a write of a connector at an outpost, and when withdrawing it would leave an open write of such a connector with neither statement (ADR 0149 §6) */
+  in_doubt_accepted?: boolean | null;
 };
 
 export type ProjectOperation = {
@@ -855,8 +866,10 @@ export type ActionEffect = {
   position: number;
   key: string;
   effect: string;
-  status: "started" | "done" | "compensated" | "compensation_failed";
+  /** `in_doubt`: the effect was sent and nobody knows whether it was executed (a write through an outpost that was claimed and never answered, ADR 0149 §5). It is not attempted again and not compensated */
+  status: "started" | "done" | "compensated" | "compensation_failed" | "in_doubt";
   attempts?: number;
+  /** what a done effect returned. For an effect `in_doubt`, `in_doubt` lists what was sent and never answered, one entry per delivery (`outpost`, `endpoint`, `operation`, `call_id`, `instance_id`, `claimed_at`, `arguments_sha256`), and `again` says whether the effect's own retries may deliver it again: true only for an operation that takes the platform's idempotency key */
   result?: {
     [key: string]: unknown;
   } | null;
@@ -886,7 +899,8 @@ export type Action = {
   decisions?: Array<{
     [key: string]: unknown;
   }>;
-  status: "pending_approval" | "rejected" | "approved" | "running" | "awaiting_evidence" | "succeeded" | "failed";
+  /** `in_doubt` is terminal, like `succeeded`, `failed` and `rejected`: one of the action's effects was sent and nobody knows whether it was executed (ADR 0149 §5). The action is never replayed, by no route, and nothing it had done is compensated automatically: a person checks the system the write was for. The journal says which effect, and what was sent */
+  status: "pending_approval" | "rejected" | "approved" | "running" | "awaiting_evidence" | "succeeded" | "failed" | "in_doubt";
   result?: {
     [key: string]: unknown;
   } | null;
