@@ -59,16 +59,23 @@ def machine(tmp_path: Path) -> Iterator[Machine]:
         background.close()
 
 
+#: A terminal's styling sequence (colour, bold), as the help prints them on a terminal.
+ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
 def test_the_command_has_three_verbs_and_says_its_version() -> None:
     runner = CliRunner()
     helped = runner.invoke(app, ["--help"])
     assert helped.exit_code == 0
+    # The help is styled where the terminal is said to take it (a CI runner forces it): the verbs
+    # are read from the text, without its escape sequences.
+    text = ANSI.sub("", helped.output)
     for verb in ("enrol", "run", "doctor"):
-        assert re.search(rf"^\W*{verb}\b", helped.output, re.M), verb
-    assert "only dials out" in helped.output
+        assert re.search(rf"^\W*{verb}\b", text, re.M), verb
+    assert "only dials out" in " ".join(text.split())
     assert runner.invoke(app, ["--version"]).output.strip() == f"choregos-outpost {__version__} (protocol 1)"
     # Nothing that would make the daemon fetch or run something: no such verb exists (ADR 0147 §9).
-    assert not re.search(r"upgrade|update|install|exec", helped.output, re.I)
+    assert not re.search(r"upgrade|update|install|exec", text, re.I)
 
 
 def test_enrol_makes_the_keys_and_prints_the_fingerprint_a_person_compares(machine: Machine) -> None:
