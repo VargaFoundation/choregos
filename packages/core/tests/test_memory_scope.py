@@ -61,9 +61,7 @@ class _Org:
 def test_the_memory_key_is_the_first_slug_else_the_slug() -> None:
     assert memory_key(_Org("varga", None)) == "varga"
     assert memory_key(_Org("varga", {})) == "varga"
-    assert memory_key(_Org("diametral", {MEMORY_KEY_SETTING: "varga"})) == "varga"
-    assert memory_key(_Org("diametral", {MEMORY_KEY_SETTING: ""})) == "diametral"
-    namespace = global_store_namespace(
-        memory_key(_Org("diametral", {MEMORY_KEY_SETTING: "varga"})), "lessons"
-    )
+    assert memory_key(_Org("globex", {MEMORY_KEY_SETTING: "varga"})) == "varga"
+    assert memory_key(_Org("globex", {MEMORY_KEY_SETTING: ""})) == "globex"
+    namespace = global_store_namespace(memory_key(_Org("globex", {MEMORY_KEY_SETTING: "varga"})), "lessons")
     assert parse_namespace(namespace).org == "varga"

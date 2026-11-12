@@ -1,9 +1,9 @@
 """The runner image checks a project that develops with uv (S59-04).
 
-A Python project with a `uv.lock` and a `requires-python` above the image's 3.12 (Diametral's iris:
-`>=3.13`) could not be checked: `uv` was absent and no 3.13 existed, so every check failed and the agents
-were told to fix a build they could not run. uv is pinned, Python 3.13 is installed at build time and
-found without a download, and a run never fetches an interpreter.
+A Python project with a `uv.lock` and a `requires-python` above the image's 3.12 (an operator's
+project: `>=3.13`) could not be checked: `uv` was absent and no 3.13 existed, so every check failed and
+the agents were told to fix a build they could not run. uv is pinned, Python 3.13 is installed at build
+time and found without a download, and a run never fetches an interpreter.
 """
 
 from __future__ import annotations

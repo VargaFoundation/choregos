@@ -290,13 +290,11 @@ async def test_a_sharepoint_source_names_an_existing_documents_connector(
 ) -> None:
     await client.post(BASE, json={"slug": "framework", "name": "Framework"})
     # No connector at all: the message says who declares one.
-    assert "none: an org admin declares one in /admin/connectors" in await _source_refused(
-        client, "Diametral"
-    )
+    assert "none: an org admin declares one in /admin/connectors" in await _source_refused(client, "Globex")
     # An `identity` connector of that name is named for what it is.
-    await _declare(client, "diametral", "identity", "fake")
-    assert "`diametral` is a identity/fake connector, not a documents one" in await _source_refused(
-        client, "diametral"
+    await _declare(client, "globex", "identity", "fake")
+    assert "`globex` is a identity/fake connector, not a documents one" in await _source_refused(
+        client, "globex"
     )
     # A documents connector under another name: the message lists the ones that exist.
     await _declare(client, "wiki", "documents", "fake")
@@ -689,7 +687,7 @@ async def test_a_web_source_keeps_its_exclusions_and_refuses_a_bad_one(
     assert bad.status_code == 422 and "exclude" in bad.json()["detail"]
 
 
-async def _git_connector(client: AsyncClient, name: str = "diametral-github") -> None:
+async def _git_connector(client: AsyncClient, name: str = "globex-github") -> None:
     created = await client.post(
         "/api/v1/orgs/varga/connectors",
         json={"name": name, "kind": "documents", "type": "git", "config": {"host": "github.com"},
@@ -709,11 +707,11 @@ async def test_a_git_source_names_a_git_connector_for_a_private_repository(
     await _git_connector(client)
     created = await client.post(
         f"{BASE}/framework/sources",
-        json={"kind": "git", "name": "brand", "connector": "diametral-github",
+        json={"kind": "git", "name": "brand", "connector": "globex-github",
               "config": {"url": "https://github.com/acme/private.git"}},
     )  # fmt: skip
     assert created.status_code == 201, created.text
-    assert created.json()["connector"] == "diametral-github"
+    assert created.json()["connector"] == "globex-github"
     fake_source(created.json()["id"]).put("brand.md", "brand.md", b"# Brand\n")
     assert (await _sync(created.json()["id"]))["added"] == 1, "through the connector, here its fake"
 

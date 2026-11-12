@@ -3,7 +3,7 @@
 The right, for the orchestrator, to launch its agents in ITS namespace — and nothing else.
 
 Off by default, and this is not decorative caution: on a shared platform,
-this Role is laid down by the platform team (at Diametral, `tenant-base`), because a
+this Role is laid down by the platform team (by its tenant baseline), because a
 tenant that writes its own RBAC has no ceiling a reviewer can see. On a
 local bench, nobody lays it down — hence this option, which makes the chart self-sufficient where it is
 allowed to be.

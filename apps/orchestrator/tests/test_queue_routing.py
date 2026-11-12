@@ -1,6 +1,6 @@
 """Is the split of activities by queue **applied**, or only declared?
 
-On 2026-09-27, on Diametral's dev tenant, a run stayed `queued` and the ticket died on a
+On 2026-09-27, on an operator's dev tenant, a run stayed `queued` and the ticket died on a
 `ConnectTimeout` to the Kubernetes API. The platform's Cilium policy opens the API only to pods
 carrying `choregos/queue: executor`, the queue that, according to `queues`, creates the
 Jobs. But `workflow.execute_activity` without `task_queue` schedules on the *workflow*'s queue:
@@ -46,7 +46,7 @@ async def test_the_history_says_on_which_queue_each_activity_is_scheduled(
 ) -> None:
     """`start_run` on `executor`, `mirror_state` on `tracker`, `load_context` on the workflow queue.
 
-    This is the assertion the Diametral network policy depends on. Without the routing, the three
+    This is the assertion that operator's network policy depends on. Without the routing, the three
     values are `test`, the workflow queue.
 
     The history carries the queue from the **scheduling**, before a worker has taken the task:

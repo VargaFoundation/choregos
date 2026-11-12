@@ -39,7 +39,7 @@ def block(reporter: str = "Camille Martin") -> dict[str, Any]:
         "kind": "jira",
         "key": "FON-270",
         "reporter": {"account_id": "712020:aa", "display_name": reporter, "email": None},
-        "creator": {"account_id": "557058:bot", "display_name": "Portal", "email": "bot@fondation.example"},
+        "creator": {"account_id": "557058:bot", "display_name": "Portal", "email": "bot@acme.example"},
         "labels": ["agent-ready"],
         "answers": {"Project name": "peredur"},
     }

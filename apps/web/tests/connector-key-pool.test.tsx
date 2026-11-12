@@ -53,11 +53,11 @@ const jira = {
 } as unknown as ConnectorType;
 
 const declared: OrgConnector = {
-  name: "diametral-sharepoint",
+  name: "globex-sharepoint",
   kind: "documents",
   type: "sharepoint",
   config: { tenant_id: "acme" },
-  secret_refs: { client_secret: "store:connector/diametral-sharepoint/client_secret" },
+  secret_refs: { client_secret: "store:connector/globex-sharepoint/client_secret" },
   secrets: [{ field: "client_secret", source: "store", version: 1, rotated_at: WHEN, rotated_by: "lea@acme.dev" }],
   status: "ok",
   operations: [],
@@ -134,7 +134,7 @@ describe("admin connectors: a pooled field takes another key (S39-30c)", () => {
 
   it("offers no second key where the type holds one", async () => {
     wrap(<OrgConnectorsPage />);
-    const panel = await screen.findByTestId("secrets-diametral-sharepoint");
+    const panel = await screen.findByTestId("secrets-globex-sharepoint");
     expect(within(panel).queryByRole("button", { name: /Add a key/ })).toBeNull();
   });
 });

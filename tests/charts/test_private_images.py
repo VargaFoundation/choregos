@@ -57,8 +57,8 @@ def test_without_a_value_no_secret_is_rendered() -> None:
 
 @pytest.mark.parametrize("profile", (None, "local"))
 def test_every_pod_of_the_chart_carries_the_requested_secret(profile: str | None) -> None:
-    """Including the embedded dependencies: a platform that admits only one registry -- the
-    Diametral case, Kyverno `only-harbor-images` in Enforce -- routes ALL images through it,
+    """Including the embedded dependencies: a platform that admits only one registry -- one
+    operator's case, Kyverno `only-harbor-images` in Enforce -- routes ALL images through it,
     not only Choregos's."""
     surcharges = [f"global.imagePullSecrets={{{SECRET}}}"]
     docs = (

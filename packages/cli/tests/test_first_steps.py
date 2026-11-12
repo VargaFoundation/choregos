@@ -139,8 +139,8 @@ def test_no_default_organisation_is_invented(tmp_path: Path, monkeypatch: pytest
 def test_the_environment_names_the_organisation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("choregos_cli.client.CONFIG_PATH", tmp_path / "absent.json")
     monkeypatch.setenv("CHOREGOS_API_URL", API)
-    monkeypatch.setenv("CHOREGOS_ORG", "diametral")
-    route = respx.get(f"{API}/api/v1/orgs/diametral/projects").mock(
+    monkeypatch.setenv("CHOREGOS_ORG", "globex")
+    route = respx.get(f"{API}/api/v1/orgs/globex/projects").mock(
         return_value=Response(200, json={"items": []})
     )
     assert _run("projects", "list").exit_code == 0

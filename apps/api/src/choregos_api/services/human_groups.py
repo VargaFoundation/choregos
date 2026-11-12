@@ -33,7 +33,7 @@ def groups_for_org(groups: Iterable[Any] | None, org_slug: str) -> set[str]:
     """The groups a person carries **for one organisation** (S40-27).
 
     The identity provider may send a group bare (`architects`) or namespaced for an organisation
-    (`choregos:diametral:architects`, the same prefix that carries the role). For `org_slug` both count,
+    (`choregos:acme:architects`, the same prefix that carries the role). For `org_slug` both count,
     as the bare name; a group namespaced for **another** organisation does not, so two organisations of
     one instance never confuse their `architects`. `User.groups` stays as sent.
     """

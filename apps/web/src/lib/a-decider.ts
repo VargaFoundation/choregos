@@ -139,7 +139,7 @@ export function useADecider(org: string, project?: string) {
       (!!project || !!projects.data) &&
       tickets.every((lecture) => !lecture.isPending) &&
       // A list that could not be read is said in `erreur`, not waited for: one refused read used to
-      // hold every panel of the inbox on "Reading…" (agentic.diametral.com, 2026-11-05).
+      // hold every panel of the inbox on "Reading…" (an instance in production, 2026-11-05).
       (!!actions.data || !!actions.error) &&
       (!!budgets.data || !!budgets.error) &&
       (!!project || !!egress.data || !!egress.error),

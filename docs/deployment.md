@@ -1444,7 +1444,7 @@ global:
 
 The network policies open port 4318 and Tempo's query port in the namespace each address names
 (`<service>.<namespace>.svc…`), `monitoring` when the host names none (S40-20e). A platform that
-already runs Tempo needs no collector of its own: Tempo receives OTLP itself. The Diametral dev
+already runs Tempo needs no collector of its own: Tempo receives OTLP itself. One operator's dev
 tenant points both values at `tempo.tempo.svc.cluster.local` (ports 4318 and 3200); its chart network
 policies are off and the tenant's own policies open those two ports to the API, the workers, the
 gateway and the drift job only, never to the agent pods (#946): `choregos-egress-traces-otlp` and
@@ -1468,7 +1468,7 @@ overrides:
       processors: [service-graphs, span-metrics]
 ```
 
-On the Diametral dev tenant, Tempo is DiametralGroup/infra's `platform/tempo` (infra#1355).
+On that tenant, Tempo is the platform's own, deployed by its infrastructure repository.
 
 `global.tracing.tempoUrl` renders the CronJob `choregos-trace-drift` (`api.traceDrift.schedule`,
 03:17 by default) and a network policy that opens that port to its pods only. Each
@@ -1934,7 +1934,7 @@ activity as `unreachable`. A `403` names the reason (`not_allowed`, `denied:<pat
 `port_not_allowed`, `private_address`), a `429` comes with `Retry-After`, and a `407` means the proxy
 credentials are not a live run's.
 
-**On the Diametral platform** the infra owns egress with Cilium FQDN policies: runner pods may reach eight
+**On a platform whose infrastructure owns egress** with Cilium FQDN policies (one operator's case), runner pods may reach eight
 hosts directly, identically for every project and agent, so the Choregos proxy is a net there until infra
 (1) gives the `choregos-egress` pods an FQDN egress rule for the hosts the instance allows and (2) removes
 the runner entry's direct FQDNs. Until then a `502 unreachable` also appears if the proxy pod itself has no

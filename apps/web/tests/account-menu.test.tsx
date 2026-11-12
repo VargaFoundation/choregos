@@ -38,18 +38,18 @@ function wrap() {
   );
 }
 
-const accountButton = () => screen.getByRole("button", { name: "Account of Vincent Devillers" });
+const accountButton = () => screen.getByRole("button", { name: "Account of Ada Lovelace" });
 
 describe("the account menu", () => {
   beforeEach(() => {
-    session.me = { id: "u1", display_name: "Vincent Devillers", email: "vdevillers@diametral.test", memberships: [] };
+    session.me = { id: "u1", display_name: "Ada Lovelace", email: "ada@globex.test", memberships: [] };
     session.deconnecter.mockClear();
   });
 
   it("shows the person's name, not a menu's worth of controls, in the header", () => {
     wrap();
     expect(accountButton()).toHaveAttribute("aria-expanded", "false");
-    expect(accountButton()).toHaveTextContent("Vincent Devillers");
+    expect(accountButton()).toHaveTextContent("Ada Lovelace");
     // The theme and the sign-out wait in the menu: the header no longer carries them loose.
     expect(screen.queryByRole("radio", { name: "Light" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Sign out" })).toBeNull();
@@ -60,7 +60,7 @@ describe("the account menu", () => {
     fireEvent.click(accountButton());
     expect(accountButton()).toHaveAttribute("aria-expanded", "true");
     const panel = document.getElementById(accountButton().getAttribute("aria-controls")!)!;
-    expect(within(panel).getByText("vdevillers@diametral.test")).toBeInTheDocument();
+    expect(within(panel).getByText("ada@globex.test")).toBeInTheDocument();
     expect(within(panel).getByRole("link", { name: "My account" })).toHaveAttribute("href", "/account");
     expect(within(panel).getByRole("link", { name: "My sessions" })).toHaveAttribute("href", "/account#sessions");
     expect(within(panel).getByRole("link", { name: "My access tokens" })).toHaveAttribute("href", "/account#tokens");
@@ -89,7 +89,7 @@ describe("the account menu", () => {
   });
 
   it("names a person by their name, else by their address", () => {
-    expect(personName({ display_name: "Vincent Devillers", email: "v@x.test" })).toBe("Vincent Devillers");
+    expect(personName({ display_name: "Ada Lovelace", email: "v@x.test" })).toBe("Ada Lovelace");
     expect(personName({ display_name: "  ", email: "v@x.test" })).toBe("v@x.test");
   });
 });

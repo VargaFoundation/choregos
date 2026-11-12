@@ -2814,11 +2814,11 @@ export const projectRequirements: ProjectRequirement[] = [
 
 /** The Choregos GitHub App on the mock: two accounts it is installed on, three repositories. */
 const githubInstallations = [
-  { id: 1001, account_login: "DiametralGroup", account_type: "Organization", repository_selection: "selected", suspended: false, claimed: true, settings_url: "https://github.com/organizations/DiametralGroup/settings/installations/1001" },
+  { id: 1001, account_login: "globex", account_type: "Organization", repository_selection: "selected", suspended: false, claimed: true, settings_url: "https://github.com/organizations/globex/settings/installations/1001" },
   { id: 1002, account_login: "acme", account_type: "Organization", repository_selection: "all", suspended: false, claimed: true, settings_url: "https://github.com/organizations/acme/settings/installations/1002" },
 ];
 const githubRepositories = [
-  { full_name: "DiametralGroup/choregos-sandbox-dev", private: true, default_branch: "main", installation_id: 1001 },
+  { full_name: "globex/choregos-sandbox-dev", private: true, default_branch: "main", installation_id: 1001 },
   { full_name: "acme/billing-api", private: true, default_branch: "main", installation_id: 1002 },
   { full_name: "acme/checkout-web", private: false, default_branch: "main", installation_id: 1002 },
 ];
@@ -2842,8 +2842,8 @@ const checkoutWebConnectors = [
  * a CD that is the demo stand-in, never tested. The runtime is the deployment's own (agent-sandbox).
  */
 const devConnectors = [
-  { id: "c-dev-tracker", kind: "tracker", type: "github-issues", config: { repo: "DiametralGroup/choregos-sandbox-dev" }, secret_refs: {}, status: "ok", last_check_at: "2026-10-16T08:00:00Z" },
-  { id: "c-dev-scm", kind: "scm", type: "github", config: { repo: "DiametralGroup/choregos-sandbox-dev" }, secret_refs: {}, status: "ok", last_check_at: "2026-10-16T08:00:00Z" },
+  { id: "c-dev-tracker", kind: "tracker", type: "github-issues", config: { repo: "globex/choregos-sandbox-dev" }, secret_refs: {}, status: "ok", last_check_at: "2026-10-16T08:00:00Z" },
+  { id: "c-dev-scm", kind: "scm", type: "github", config: { repo: "globex/choregos-sandbox-dev" }, secret_refs: {}, status: "ok", last_check_at: "2026-10-16T08:00:00Z" },
   { id: "c-dev-cd", kind: "cd", type: "demo", config: { url: "http://choregos-demo-fakes:8090/cd/mcp" }, secret_refs: {}, status: "unknown" },
 ];
 /** The project `dev`: the sandbox project, as configured before anyone opens its settings. */
@@ -2857,7 +2857,7 @@ const devProject = (): ProjectDto => ({
     slug: "dev",
     org: "acme",
     template_ref: "github-tekton-argo-k8s@1.0.0",
-    repo: { url: "https://github.com/DiametralGroup/choregos-sandbox-dev.git", default_branch: "main", language: "python" },
+    repo: { url: "https://github.com/globex/choregos-sandbox-dev.git", default_branch: "main", language: "python" },
     envs: ["dev", "staging", "prod"],
     agent: { default_backend: "claude-code", allowed_backends: [] },
     notify: {},

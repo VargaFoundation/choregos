@@ -421,7 +421,7 @@ async def test_a_renamed_organisation_keeps_its_global_namespaces_at_run_time(se
     async with session_scope(orgs="*") as session:
         org = (await session.execute(select(Organization))).scalar_one()
         org.settings = {**(org.settings or {}), "memory_key": "varga"}
-        org.slug = "diametral"
+        org.slug = "globex"
         project = await session.get(Project, setup.project_id)
         assert project is not None
     prepared = await prepare_stage(_plan(setup))

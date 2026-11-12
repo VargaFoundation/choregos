@@ -1,7 +1,7 @@
 {{- /*
 Two observability flavours, because "rendering a ServiceMonitor" is not "being scraped".
 
-On 2026-09-26, Diametral's dev tenant had been running for an hour with a ServiceMonitor and
+On 2026-09-26, an operator's dev tenant had been running for an hour with a ServiceMonitor and
 a PrometheusRule present in its namespace — and not one series collected, not one alert
 evaluated: the platform runs on VictoriaMetrics, whose operator does not look at the
 `monitoring.coreos.com` types. An inert object says nothing, and that is worse than a missing object: it gives

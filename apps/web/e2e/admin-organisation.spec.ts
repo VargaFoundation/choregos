@@ -8,7 +8,7 @@ test("an organisation is renamed from the administration page", async ({ page })
   await page.goto("/admin");
   const name = page.getByLabel("Display name");
   await expect(name).toHaveValue("Varga Foundation");
-  await name.fill("Diametral");
+  await name.fill("Globex");
   await page.getByLabel("Currency").selectOption("USD");
   await page.getByRole("button", { name: "Save the organisation" }).click();
   await expect(page.getByText("Organisation saved")).toBeVisible();
@@ -17,9 +17,9 @@ test("an organisation is renamed from the administration page", async ({ page })
     () => (window as unknown as { __mockWrites?: { method: string; path: string; body: unknown }[] }).__mockWrites ?? [],
   );
   const patch = writes.filter((w) => w.method === "PATCH" && /\/orgs\/[^/]+$/.test(w.path)).at(-1)!;
-  expect(patch.body).toEqual({ name: "Diametral", currency: "USD" });
+  expect(patch.body).toEqual({ name: "Globex", currency: "USD" });
 
   await page.getByRole("link", { name: "All of acme" }).click();
   await page.getByRole("link", { name: "Admin", exact: true }).first().click();
-  await expect(page.getByLabel("Display name")).toHaveValue("Diametral");
+  await expect(page.getByLabel("Display name")).toHaveValue("Globex");
 });

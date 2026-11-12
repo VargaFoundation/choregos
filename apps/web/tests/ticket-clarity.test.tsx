@@ -5,7 +5,7 @@ import { RequestCard } from "@/components/ticket/request-card";
 import { runOutcome } from "@/components/ticket/run-outcome";
 
 /**
- * S59-07, from the first diametral-dev ticket in production (FON-276): the tracker's facts were one line
+ * S59-07, from the first ticket of an operator's dev instance in production: the tracker's facts were one line
  * of JSON, a step resumed by a person read "round 5 of 2", and four failed triage runs looked alike.
  */
 const TRACKER = {

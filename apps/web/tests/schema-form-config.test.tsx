@@ -9,9 +9,9 @@ const COACH: JsonSchema = {
   type: "object",
   required: ["company_name", "hr_contact"],
   properties: {
-    company_name: { type: "string", default: "Diametral" },
+    company_name: { type: "string", default: "Globex" },
     hr_contact: { type: "string", description: "Who to refer sensitive matters to" },
-    embed_origins: { type: "array", items: { type: "string", format: "uri" }, default: ["https://scorecard.diametral.com"] },
+    embed_origins: { type: "array", items: { type: "string", format: "uri" }, default: ["https://scorecard.example.com"] },
   },
 };
 
@@ -28,7 +28,7 @@ const value = () => JSON.parse(screen.getByTestId("value").textContent ?? "{}");
 
 describe("a config_schema form", () => {
   it("seeds the defaults and says what is missing", () => {
-    expect(defaultValues(COACH)).toEqual({ company_name: "Diametral", embed_origins: ["https://scorecard.diametral.com"] });
+    expect(defaultValues(COACH)).toEqual({ company_name: "Globex", embed_origins: ["https://scorecard.example.com"] });
     expect(missingFields(COACH, defaultValues(COACH))).toEqual(["hr_contact"]);
   });
 
@@ -36,10 +36,10 @@ describe("a config_schema form", () => {
     render(<Harness schema={COACH} start={defaultValues(COACH)} />);
     const origins = screen.getByLabelText(/embed origins/i);
     expect(origins).toHaveAttribute("type", "url");
-    fireEvent.change(origins, { target: { value: "https://scorecard.diametral.com," } });
-    expect(origins).toHaveValue("https://scorecard.diametral.com,");
-    fireEvent.change(origins, { target: { value: "https://scorecard.diametral.com, https://hr.example.org" } });
-    expect(value().embed_origins).toEqual(["https://scorecard.diametral.com", "https://hr.example.org"]);
+    fireEvent.change(origins, { target: { value: "https://scorecard.example.com," } });
+    expect(origins).toHaveValue("https://scorecard.example.com,");
+    fireEvent.change(origins, { target: { value: "https://scorecard.example.com, https://hr.example.org" } });
+    expect(value().embed_origins).toEqual(["https://scorecard.example.com", "https://hr.example.org"]);
   });
 
   it("types the items of a list of numbers", () => {

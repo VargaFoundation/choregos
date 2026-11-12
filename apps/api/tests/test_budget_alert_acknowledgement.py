@@ -100,7 +100,7 @@ async def test_owning_one_project_does_not_acknowledge_an_agents_alert(
 async def test_a_member_of_one_project_only_reads_that_projects_alerts(
     client: AsyncClient, project: dict[str, Any]
 ) -> None:
-    """A member of a project with no organisation role (agentic.diametral.com, 2026-11-05): the inbox
+    """A member of a project with no organisation role (an instance in production, 2026-11-05): the inbox
     of their project used to answer 403 and stay on "Reading…". They read their project's alerts, not
     an agent's, which spans the organisation."""
     await _agent_alert(client, project)
