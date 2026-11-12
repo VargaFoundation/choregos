@@ -71,9 +71,7 @@ def _writable(group: OrgGroup) -> None:
         )
 
 
-def _in_the_organisation(
-    user_id: _Column, org_id: _Column | str
-) -> ColumnElement[bool]:
+def _in_the_organisation(user_id: _Column, org_id: _Column | str) -> ColumnElement[bool]:
     """The person still has a role in the organisation or on one of its projects."""
     return exists().where(Membership.user_id == user_id, Membership.org_id == org_id)
 
