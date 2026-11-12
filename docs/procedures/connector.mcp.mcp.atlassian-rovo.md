@@ -58,6 +58,7 @@ Press **Discover**. The list should include Jira and Confluence tools, not only 
 | Field | What to put in it |
 | :-- | :-- |
 | `auth_scheme` | basic for a personal API token, bearer for a service account API key |
+| `client_secret` | not used: Rovo takes an API token, not an OAuth client |
 | `token` | the API token or key, typed once |
 | `url` | https://mcp.atlassian.com/v2/mcp |
 | `username` | the account's email, for basic |

@@ -176,14 +176,17 @@ def connector_types() -> list[tuple[str, str, ConnectorTypeSpec]]:
 def account_of(kind: str, type_name: str, config: dict[str, Any] | None) -> str | None:
     """The account a connector writes under, when its configuration names one (ADR 0107 point 4).
 
-    Never a secret: a Jira email, an MCP `basic` username, a plugin's server. `None` when the
-    configuration names none (a GitHub App installation, a GitLab or a bearer token): the console
-    then says which credential it is instead."""
+    Never a secret: a Jira email, an MCP `basic` username, the OAuth client of an MCP connector signed in
+    with `oauth_client_credentials` (a client id is an identifier, RFC 6749 §2.2), a plugin's server.
+    `None` when the configuration names none (a GitHub App installation, a GitLab or a bearer token): the
+    console then says which credential it is instead."""
     cfg = config or {}
     if type_name in {"jira", "confluence"}:
         return str(cfg.get("email") or "") or None
     if kind == "mcp" and cfg.get("auth_scheme") == "basic":
         return str(cfg.get("username") or "") or None
+    if kind == "mcp" and cfg.get("auth_scheme") == "oauth_client_credentials":
+        return str(cfg.get("client_id") or "") or None
     if type_name == "plugin" and cfg.get("plugin") and cfg.get("server"):
         return f"{cfg['plugin']}/{cfg['server']}"
     return None

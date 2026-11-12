@@ -2,7 +2,7 @@
 
 # Connect an MCP server
 
-For an organisation administrator. Procedure `connector.mcp.mcp`, version 1, reviewed 2026-10-16 against the vendor's own pages.
+For an organisation administrator. Procedure `connector.mcp.mcp`, version 2, reviewed 2026-11-12 against the vendor's own pages.
 
 ## Before you start
 
@@ -19,6 +19,10 @@ Create the credential in the vendor's own settings: an API token, a service acco
 access token. The catalogue entry for a known server says where. Prefer a token of a dedicated account
 whose rights are exactly what the agents should have, and the narrowest scopes the vendor offers.
 
+A server that only accepts short-lived OAuth tokens (an enterprise MCP server behind its identity
+provider) needs an **OAuth client** allowed the `client_credentials` grant instead: its identifier, its
+secret, the token endpoint's address, and the scope or audience the server expects in its tokens.
+
 ## Permissions
 
 - The connector's tools act with **that account's permissions**, nothing in Choregos can widen them.
@@ -32,16 +36,28 @@ whose rights are exactly what the agents should have, and the narrowest scopes t
 2. `url`: the endpoint.
 3. `auth_scheme`: `bearer` (the default) sends `Authorization: Bearer <token>`. `basic` sends
    `Authorization: Basic base64(username:token)`; it needs `username`, usually an email.
-4. `token`: paste it in the password field. It is sealed and shown once; **Replace** rotates it.
-5. Press **Discover**, then open the operations the agents need, one by one.
+   `oauth_client_credentials` has the platform fetch a token from `token_url` with `client_id` and
+   `client_secret`, keep it until shortly before it expires, and fetch a new one when the server
+   answers 401; `scope` and `audience` are sent only when filled in.
+4. `token` (bearer, basic) or `client_secret` (oauth_client_credentials): paste it in the password
+   field. It is sealed and shown once; **Replace** rotates it. Neither the secret nor a token ever
+   reaches an agent: the platform signs each call itself.
+5. Allow the hosts the connector reaches when asked: the server's, and with
+   `oauth_client_credentials` the token endpoint's.
+6. Press **Discover**, then open the operations the agents need, one by one.
 
 ## Test it
 
-**Discover** asks the server for its tools. A list of tools proves the URL, the scheme and the token.
+**Discover** asks the server for its tools. A list of tools proves the URL, the scheme and the token
+(with `oauth_client_credentials`: the token endpoint, the client and its secret too).
 
 ## When it fails
 
 - `401` or `403`: the token is wrong, expired, or sent with the wrong scheme (Bearer versus Basic).
+- "the token endpoint `<host>` refused the OAuth client": the client id or secret is wrong, the client
+  is not allowed the `client_credentials` grant, or the scope is refused; the OAuth error code follows
+  (`invalid_client`, `unauthorized_client`, `invalid_scope`).
+- "egress refused" naming the token endpoint's host: the organisation has not opened it.
 - `406 Not Acceptable`: the server wants an `Accept: application/json, text/event-stream` header and
   rejected the request; check that the URL is the Streamable HTTP endpoint and not an SSE one.
 - A timeout or a connection refused: the egress allowlist does not open the server's host.
@@ -52,8 +68,13 @@ whose rights are exactly what the agents should have, and the narrowest scopes t
 
 | Field | What to put in it |
 | :-- | :-- |
-| `auth_scheme` | bearer, or basic (username plus token) |
-| `token` | the token or key the vendor gave you, typed once |
+| `audience` | the audience to ask for, when the token endpoint needs one |
+| `auth_scheme` | bearer, basic (username plus token), or oauth_client_credentials |
+| `client_id` | the OAuth client's identifier (oauth_client_credentials) |
+| `client_secret` | the OAuth client's secret, typed once (oauth_client_credentials) |
+| `scope` | the scopes to ask for, space-separated, when the server needs them |
+| `token` | the token or key the vendor gave you, typed once (bearer and basic) |
+| `token_url` | the OAuth token endpoint, https (oauth_client_credentials) |
 | `url` | the server's Streamable HTTP endpoint, https |
 | `username` | the account, for basic |
 
@@ -62,7 +83,9 @@ whose rights are exactly what the agents should have, and the narrowest scopes t
 Hosts the platform must be allowed to reach:
 
 - `the server's host`
+- `the token endpoint's host, with oauth_client_credentials`
 
 ## Vendor documentation
 
 - [MCP specification: transports (Streamable HTTP)](https://modelcontextprotocol.io/specification/2025-06-18/basic/transports)
+- [RFC 6749 §4.4: Client Credentials Grant](https://www.rfc-editor.org/rfc/rfc6749#section-4.4)

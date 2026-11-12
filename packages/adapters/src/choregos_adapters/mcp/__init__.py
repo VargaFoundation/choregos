@@ -9,12 +9,17 @@ from .client import (
     McpTool,
     schema_digest,
 )
+from .client_credentials import CONNECTOR_TOKENS, ClientCredentials, TokenCache, TokenRefused
 
 __all__ = [
     "CLIENT_VERSIONS",
+    "CONNECTOR_TOKENS",
+    "ClientCredentials",
     "HeadersProvider",
     "McpClient",
     "McpError",
     "McpTool",
+    "TokenCache",
+    "TokenRefused",
     "schema_digest",
 ]

@@ -4959,9 +4959,9 @@ export type Run = RunSummary & {
 export type ToolConnector = {
   name: string;
   type: string;
-  /** bearer or basic, for an `mcp` connector */
+  /** bearer, basic or oauth_client_credentials, for an `mcp` connector */
   auth_scheme?: string | null;
-  /** The account the connector calls as, when its configuration names one (a `basic` username). */
+  /** The account the connector calls as, when its configuration names one (a `basic` username, an OAuth client id). */
   account?: string | null;
 };
 

@@ -10722,8 +10722,8 @@ components:
       properties:
         name: { type: string }
         type: { type: string }
-        auth_scheme: { type: [string, "null"], description: "bearer or basic, for an `mcp` connector" }
-        account: { type: [string, "null"], description: "The account the connector calls as, when its configuration names one (a `basic` username)." }
+        auth_scheme: { type: [string, "null"], description: "bearer, basic or oauth_client_credentials, for an `mcp` connector" }
+        account: { type: [string, "null"], description: "The account the connector calls as, when its configuration names one (a `basic` username, an OAuth client id)." }
     RunEvent:
       type: object
       required: [seq, type, ts]

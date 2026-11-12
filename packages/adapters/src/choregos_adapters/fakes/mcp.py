@@ -25,6 +25,9 @@ class FakeMcpServer:
     tools: list[dict[str, Any]] = field(default_factory=list)
     #: the expected token; empty: none
     token: str = ""
+    #: who issues the tokens this server takes, when they are not one static token: an OAuth provider's
+    #: `accepts` (a short-lived `client_credentials` token); a refused or absent bearer is a 401
+    accepts: Callable[[str], bool] | None = None
     page_size: int = 2
     sse: bool = False
     #: (method, headers, body) of every request received
@@ -48,6 +51,10 @@ class FakeMcpServer:
         self.received.append((method, headers, body))
         if self.token and headers.get("authorization") != f"Bearer {self.token}":
             return httpx.Response(401, json={"error": "unauthorized"})
+        if self.accepts is not None:
+            scheme, _, bearer = headers.get("authorization", "").partition(" ")
+            if scheme.lower() != "bearer" or not self.accepts(bearer):
+                return httpx.Response(401, json={"error": "invalid_token"})
         if "id" not in body:
             return httpx.Response(202)
         if method != "initialize" and headers.get("mcp-session-id") != self.session:
