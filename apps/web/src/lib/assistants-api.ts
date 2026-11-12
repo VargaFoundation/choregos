@@ -37,9 +37,12 @@ import type {
   PluginAssistantList,
   SubjectErasure,
   SubjectErasureRequest,
+  TaskEventKey,
+  TaskEventList,
   TaskRun,
   TaskSubscription,
   TaskSubscriptionPut,
+  TeamsDelivery,
   UserErasure,
   WebhookSecret,
 } from "@choregos/contracts/api";
@@ -65,6 +68,7 @@ export type {
   MyAssistant,
   PluginAssistant,
   SubjectErasure,
+  TaskEventLine,
   TaskSubscription,
   AssistantReadiness,
   AssistantReadPage,
@@ -261,6 +265,20 @@ export const assistantsApi = {
     request<SubjectErasure>(`/orgs/${enc(org)}/assistants/${enc(slug)}/erasure`, post(body)),
   webhookSecret: (org: string, slug: string, rotate = false) =>
     request<WebhookSecret>(`/orgs/${enc(org)}/assistants/${enc(slug)}/webhook-secret`, post({ rotate })),
+  // The door of a `trigger` task and its journal (S63-21), the Teams channel of the deliveries (S63-25).
+  taskEventKey: (org: string, slug: string, task: string) =>
+    request<TaskEventKey>(`/orgs/${enc(org)}/assistants/${enc(slug)}/tasks/${enc(task)}/event-key`, post()),
+  taskEvents: (org: string, slug: string) =>
+    request<TaskEventList>(`/orgs/${enc(org)}/assistants/${enc(slug)}/task-events`),
+  teamsDelivery: (org: string, slug: string) =>
+    request<TeamsDelivery>(`/orgs/${enc(org)}/assistants/${enc(slug)}/delivery/teams`),
+  putTeamsDelivery: (org: string, slug: string, webhook_url: string) =>
+    request<TeamsDelivery>(`/orgs/${enc(org)}/assistants/${enc(slug)}/delivery/teams`, {
+      method: "PUT",
+      body: JSON.stringify({ webhook_url }),
+    }),
+  deleteTeamsDelivery: (org: string, slug: string) =>
+    request<void>(`/orgs/${enc(org)}/assistants/${enc(slug)}/delivery/teams`, { method: "DELETE" }),
   feedbackCandidates: (org: string, agent: string) =>
     request<ConversationCandidate[]>(`/orgs/${enc(org)}/agents/${enc(agent)}/feedback-candidates`),
   acceptCandidate: (org: string, agent: string, id: string, body: ConversationCandidateAccept) =>

@@ -103,7 +103,7 @@ export type AssistantKnowledge = {
   upstream?: "follow" | "propose_updates" | "frozen";
 };
 
-export type AssistantTrigger = unknown & unknown;
+export type AssistantTrigger = unknown & unknown & unknown;
 
 export type AssistantTask = unknown;
 

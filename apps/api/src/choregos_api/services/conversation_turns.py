@@ -14,8 +14,12 @@ one turn at a time, and cancelling the one that runs.
   no other turn holds the lease (`turn_lease_until`), takes the lease and the next turn number, and
   commits, so a concurrent turn is refused with 409 and never takes the same number. The lease also lapses
   by itself after `TURN_KEY_TTL_S`, so a crashed process does not lock a conversation for ever.
-- Cancel: a running turn is a task registered by conversation id in THIS process; `cancel_turn` cancels it.
-  Several API replicas would need the cancel to reach the replica that runs the turn: not done here.
+- Cancel: a running turn is a task registered by conversation id in the process that runs it;
+  `cancel_turn` cancels it there. A cancel that reaches another replica (S63-23, PostgreSQL) finds the turn
+  by its lease, sets `turn_cancel_requested_at` on the conversation's row and waits for the lease to end; the
+  replica that runs the turn polls that flag every `CANCEL_POLL_S` (`watch_cancel`) and cancels its task,
+  which settles as a local cancel does (tool calls stay journaled, the key revoked, the spend booked).
+  SQLite has one process: it keeps the in-process path only.
 """
 
 from __future__ import annotations
@@ -25,13 +29,18 @@ import json
 from datetime import datetime, timedelta
 from typing import Any
 
+import structlog
 from choregos_core import utcnow
 from choregos_core.domain import aware
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..config import get_settings
 from ..db.models import AgentSessionRecord
+from ..db.session import release_connection, session_scope
 from ..errors import ApiError, conflict
+
+log = structlog.get_logger()
 
 #: Turns a conversation may take in all when it names no limit.
 DEFAULT_CONVERSATION_TURNS = 200
@@ -46,6 +55,8 @@ SUMMARY_CHARS = 2000
 SUMMARY_PREFIX = "Summary of the earlier conversation"
 #: How long a turn holds the conversation: its key's own lifetime.
 LEASE_S = 1800
+#: How often the replica that runs a turn looks for a cancel another replica asked for.
+CANCEL_POLL_S = 0.5
 
 
 def estimate_tokens(messages: list[dict[str, Any]]) -> int:
@@ -92,6 +103,7 @@ async def claim_turn(session: AsyncSession, record: AgentSessionRecord) -> int:
     refuse_if_not_allowed(row, now)
     row.turns += 1
     row.turn_lease_until = now + timedelta(seconds=LEASE_S)
+    row.turn_cancel_requested_at = None  # a cancel asked of an earlier turn is not this one's
     row.retention_until = retention_until(row, now)
     return int(row.turns)
 
@@ -160,12 +172,71 @@ def forget_turn(conversation_id: str, task: asyncio.Task[Any]) -> None:
         del _RUNNING[conversation_id]
 
 
-async def cancel_turn(conversation_id: str, *, wait_s: float = 30.0) -> bool:
-    """Cancels the turn running in this process and waits until it settled (its spend booked, its key
-    revoked). False when none runs here."""
+async def cancel_turn(
+    conversation_id: str, session: AsyncSession | None = None, *, wait_s: float = 30.0
+) -> bool:
+    """Cancels the turn of `conversation_id` and waits until it settled (its spend booked, its key revoked).
+    In this process when it runs here; otherwise, given a `session` on PostgreSQL, through the flag the
+    running replica polls. False when no turn runs."""
     task = _RUNNING.get(conversation_id)
-    if task is None or task.done():
+    if task is not None and not task.done():
+        task.cancel()
+        await asyncio.wait({task}, timeout=wait_s)
+        return True
+    if session is None or get_settings().is_sqlite:
         return False
-    task.cancel()
-    await asyncio.wait({task}, timeout=wait_s)
+    return await _cancel_elsewhere(session, conversation_id, wait_s)
+
+
+async def _cancel_elsewhere(session: AsyncSession, conversation_id: str, wait_s: float) -> bool:
+    asked = await session.execute(
+        update(AgentSessionRecord)
+        .where(AgentSessionRecord.id == conversation_id, AgentSessionRecord.turn_lease_until > utcnow())
+        .values(turn_cancel_requested_at=utcnow())
+    )
+    if not getattr(asked, "rowcount", 0):
+        return False  # no turn holds the conversation
+    await release_connection(session)  # committed: the replica that runs the turn must see it
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + wait_s
+    while loop.time() < deadline:
+        await asyncio.sleep(CANCEL_POLL_S / 2)
+        lease = (
+            await session.execute(
+                select(AgentSessionRecord.turn_lease_until).where(AgentSessionRecord.id == conversation_id)
+            )
+        ).scalar_one_or_none()
+        await release_connection(session)
+        if lease is None or (aware(lease) or utcnow()) <= utcnow():
+            break
     return True
+
+
+async def watch_cancel(conversation_id: str, task: asyncio.Task[Any]) -> None:
+    """Runs beside a turn on PostgreSQL: cancels `task` once another replica asked for it."""
+    while not task.done():
+        await asyncio.sleep(CANCEL_POLL_S)
+        try:
+            async with session_scope(orgs="*") as session:
+                asked = (
+                    await session.execute(
+                        select(AgentSessionRecord.turn_cancel_requested_at).where(
+                            AgentSessionRecord.id == conversation_id
+                        )
+                    )
+                ).scalar_one_or_none()
+        except Exception as failure:  # a failing poll is tried again, the turn goes on
+            log.warning("conversation.cancel_poll_failed", error=type(failure).__name__)
+            continue
+        if asked is not None and not task.done():
+            task.cancel()
+            return
+
+
+async def clear_cancel_request(session: AsyncSession, conversation_id: str) -> None:
+    """The turn ended: its flag goes with its lease (an explicit UPDATE, the row in memory never saw it)."""
+    await session.execute(
+        update(AgentSessionRecord)
+        .where(AgentSessionRecord.id == conversation_id)
+        .values(turn_cancel_requested_at=None)
+    )

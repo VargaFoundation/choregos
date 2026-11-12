@@ -789,6 +789,15 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
         _object_schema({"channel": {"type": "string", "default": "#choregos"}, "public_url": _TEXT}),
         ("webhook_url", "bot_token"),
     ),
+    # The URL is the credential: a sealed secret, never a configuration value. The host is not known
+    # until it is resolved, so the organisation's list opens it when the first card is refused.
+    ("notify", "teams"): ConnectorTypeSpec(
+        "Microsoft Teams (incoming webhook or Workflows URL)",
+        ("notify",),
+        _object_schema({}),
+        ("webhook_url",),
+        egress=lambda cfg: [],
+    ),
     # SMTP does not go through the httpx egress guard: the spec declares its egress, and the
     # operator's network policy must open it.
     ("notify", "email"): ConnectorTypeSpec(
