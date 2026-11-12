@@ -2,7 +2,7 @@
 
 - **Status**: accepted, 2026-11-11; S62-07 implements it, S62-08 serves the files from the instance
 - **Concerns**: `packages/cli`, `packages/core` (its `telemetry` extra), `tools/cli_binary/`,
-  `release.yml`, `docker/api.Dockerfile`
+  `release.yml`, `cli-binaries-weekly.yml`, `docker/api.Dockerfile`
 
 ## Context
 
@@ -30,7 +30,8 @@ the API, the orchestrator and the runner — none of which the CLI emits.
 4. **A binary is released only if it passed its smoke test where no Python is available**: version,
    templates, a valid and two broken workflows, an A2A card read from a fake door, a size and a
    start-up budget. The CI runs the same on the Linux x86_64 binary for every change to the CLI or
-   the core.
+   the core; `cli-binaries-weekly.yml` runs the release's build and smoke test on the five targets
+   on `main` every week, unsigned and unpublished.
 5. **Every file is signed with cosign (keyless, the release workflow's identity)** and attached to the
    GitHub release; the API image carries the same files in `/opt/choregos/cli/`. Authenticode and
    Apple notarization run when their certificates exist as repository secrets.
@@ -39,7 +40,8 @@ the API, the orchestrator and the runner — none of which the CLI emits.
 
 - A user downloads one file and runs it; the first call unpacks it into the user's cache directory.
 - A dependency Nuitka cannot follow, or a data file the CLI reads at run time and the build leaves
-  out, fails a pull request, not a release.
+  out, fails a pull request, not a release. A change that breaks only Linux arm64, macOS or Windows fails the weekly
+  run on `main`, within a week, not the pull request.
 - Until the certificates exist (BLOCKERS, owner: the Varga Foundation), Windows SmartScreen warns and
   a macOS browser download is quarantined.
 - The release's images wait for the five binaries: a target that does not build stops the release.

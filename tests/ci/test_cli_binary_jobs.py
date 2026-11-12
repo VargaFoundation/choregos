@@ -3,7 +3,8 @@
 The release builds the five targets on runners of their own OS and architecture, smoke-tests each
 where no Python is available, signs every file, attaches them to the GitHub release and puts them in
 the API image under /opt/choregos/cli/; the CI builds the Linux x86_64 one on every pull request that
-touches what goes into it. These tests read the workflows and the Dockerfile: a job dropped, a step
+touches what goes into it, and `cli-binaries-weekly.yml` builds the five on main every week with the
+release's steps minus the signatures. These tests read the workflows and the Dockerfile: a job dropped, a step
 that no longer runs the smoke test, or an image built before its binaries turns them red.
 """
 
@@ -17,6 +18,7 @@ import yaml
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 RELEASE = ROOT / ".github" / "workflows" / "release.yml"
 CI = ROOT / ".github" / "workflows" / "ci.yml"
+WEEKLY = ROOT / ".github" / "workflows" / "cli-binaries-weekly.yml"
 DOCKERFILE = ROOT / "docker" / "api.Dockerfile"
 BLOCKERS = ROOT / "docs" / "plan" / "BLOCKERS.md"
 #: The fixed file names, shared with S62-08 (`tools/cli_binary/build.py` holds the same five).
@@ -149,3 +151,82 @@ def test_the_ci_builds_and_smoke_tests_the_linux_binary_on_pull_requests() -> No
         filters["cli-binary"]
     )
     assert "cli-binary" in jobs["ci-ok"]["needs"]
+
+
+def _workflow(path: pathlib.Path) -> dict:  # type: ignore[type-arg]
+    return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
+def _release_steps_without_signing() -> list[dict]:  # type: ignore[type-arg]
+    steps = _jobs(RELEASE)["cli-binaries"]["steps"]
+    return [step for step in steps if "env.HAS_" not in step.get("if", "")]
+
+
+def test_the_five_targets_are_built_every_week_on_main_and_on_demand() -> None:
+    workflow = _workflow(WEEKLY)
+    triggers = workflow[True]  # PyYAML reads the bare key `on` as True.
+    assert set(triggers) == {"schedule", "workflow_dispatch"}, "no push or pull_request trigger"
+    (cron,) = (entry["cron"] for entry in triggers["schedule"])
+    minute, hour, day_of_month, month, day_of_week = cron.split()
+    assert minute.isdigit() and hour.isdigit(), cron
+    assert (day_of_month, month) == ("*", "*") and day_of_week.isdigit(), f"not weekly: {cron}"
+    assert "weekly" in workflow["name"] and "CLI" in workflow["name"]
+
+
+def test_the_weekly_job_has_the_release_s_matrix_runners_and_cache() -> None:
+    release = _jobs(RELEASE)["cli-binaries"]
+    weekly = _jobs(WEEKLY)["cli-binaries"]
+    assert weekly["strategy"] == release["strategy"]
+    assert {entry["name"] for entry in weekly["strategy"]["matrix"]["include"]} == NAMES
+    assert weekly["runs-on"] == release["runs-on"] == "${{ matrix.runner }}"
+    assert weekly["name"] == release["name"]
+    assert weekly["defaults"] == release["defaults"]
+    release_env = {k: v for k, v in release["env"].items() if not k.startswith("HAS_")}
+    assert weekly["env"] == release_env
+    assert weekly["env"]["NUITKA_CACHE_DIR"] == "${{ github.workspace }}/build/cli-binary/cache/nuitka"
+
+
+def test_the_weekly_job_runs_the_release_s_steps_minus_the_signatures() -> None:
+    release = _release_steps_without_signing()
+    weekly = _jobs(WEEKLY)["cli-binaries"]["steps"]
+    assert len(release) == len(_jobs(RELEASE)["cli-binaries"]["steps"]) - 3, "three signing steps"
+    assert [s.get("name", s.get("uses")) for s in weekly] == [s.get("name", s.get("uses")) for s in release]
+    for ours, theirs in zip(weekly, release, strict=True):
+        if ours.get("name") == "smoke test, where no Python is available":
+            # The one difference: no tag on main, so the version is the CLI package's.
+            assert ours["env"] == theirs["env"]
+            assert "if" not in ours and "continue-on-error" not in ours
+            assert (
+                theirs["run"].replace(
+                    '--expect-version "${GITHUB_REF_NAME#v}"', '--expect-version "$version"'
+                )
+                in ours["run"]
+            )
+            assert ours["run"].startswith(
+                """version="$(sed -n 's/^version = "\\(.*\\)"$/\\1/p' packages/cli/pyproject.toml)"\n"""
+            )
+        else:
+            assert ours == theirs, ours.get("name", ours.get("uses"))
+
+
+def test_the_weekly_workflow_reads_only_and_neither_signs_nor_publishes() -> None:
+    workflow = _workflow(WEEKLY)
+    assert workflow["permissions"] == {"contents": "read"}
+    for name, job in workflow["jobs"].items():
+        assert job.get("permissions", {"contents": "read"}) == {"contents": "read"}, name
+    # What runs, without the comments that say what is left out.
+    text = yaml.safe_dump(workflow)
+    assert "secrets." not in text and "secrets:" not in text
+    for marker in (
+        "cosign",
+        "id-token",
+        "signtool",
+        "codesign",
+        "notarytool",
+        "keychain",
+        "action-gh-release",
+        "docker/login-action",
+        "release.py",
+    ):
+        assert marker not in text, marker
+    assert set(workflow["jobs"]) == {"cli-binaries"}

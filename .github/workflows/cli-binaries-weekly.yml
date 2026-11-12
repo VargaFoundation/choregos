@@ -1,0 +1,83 @@
+# Every week on main: the five native `choregos` CLI binaries (S62-07, ADR 0151) built and
+# smoke-tested on the runners `release.yml` builds them on, with the steps of its `cli-binaries` job
+# minus the signatures and minus anything published (no release, no cosign, no secret). The pull
+# request CI builds the Linux x86_64 binary only (`ci.yml`, job `cli-binary`): without this, a change
+# that breaks Linux arm64, macOS or Windows would first be seen on a release tag. A red run of this
+# workflow on main is the signal; it stays red until a run passes.
+#
+# `tests/ci/test_cli_binary_jobs.py` holds this job in step with `release.yml`'s: same matrix, same
+# runners, same steps once the signing ones are removed. Change both together.
+name: cli-binaries-weekly (five native CLI targets on main)
+
+on:
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cli-binaries-weekly-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  cli-binaries:
+    name: cli binary (${{ matrix.name }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: choregos-linux-x86_64, runner: ubuntu-24.04, build: --manylinux, smoke: --container debian:bookworm-slim }
+          - { name: choregos-linux-arm64, runner: ubuntu-24.04-arm, build: --manylinux, smoke: --container debian:bookworm-slim }
+          - { name: choregos-macos-arm64, runner: macos-15, build: "", smoke: "" }
+          - { name: choregos-macos-x86_64, runner: macos-15-intel, build: "", smoke: "" }
+          - { name: choregos-windows-x86_64.exe, runner: windows-2022, build: "", smoke: "" }
+    env:
+      NUITKA_CACHE_DIR: ${{ github.workspace }}/build/cli-binary/cache/nuitka
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-python@v6
+        id: python
+        with: { python-version: "3.12" }
+      # The release's key: a cache saved here, on the default branch, is one a tag can restore.
+      - uses: actions/cache@v5
+        with:
+          path: build/cli-binary/cache
+          key: cli-binary-${{ matrix.name }}-${{ hashFiles('uv.lock', 'tools/cli_binary/requirements.txt') }}
+          restore-keys: cli-binary-${{ matrix.name }}-
+      - name: ccache (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ccache
+      - name: build
+        env:
+          PYTHON: ${{ steps.python.outputs.python-path }}
+        run: |
+          if [ -n "${{ matrix.build }}" ]; then
+            python3 tools/cli_binary/build.py ${{ matrix.build }}
+          else
+            "$PYTHON" tools/cli_binary/build.py --python "$PYTHON"
+          fi
+          test -f "dist/cli/${{ matrix.name }}"
+      - name: smoke test, where no Python is available
+        # No tag here: the version expected is the CLI package's, as in `ci.yml`.
+        env:
+          PYTHON: ${{ steps.python.outputs.python-path }}
+        run: |
+          version="$(sed -n 's/^version = "\(.*\)"$/\1/p' packages/cli/pyproject.toml)"
+          "$PYTHON" tools/cli_binary/smoke.py "dist/cli/${{ matrix.name }}" \
+            --expect-version "$version" ${{ matrix.smoke }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cli-${{ matrix.name }}
+          path: dist/cli/${{ matrix.name }}
+          if-no-files-found: error
+          retention-days: 1

@@ -1014,7 +1014,8 @@ jobs:
     # Python is available — a bare environment, then `debian:bookworm-slim`. A change that breaks the
     # build (a dependency Nuitka cannot follow, a data file read at run time and left out) is seen on
     # its pull request, not on the tag. Nuitka's cache, with ccache's inside it, is kept between runs:
-    # a run that changes little recompiles little. The four other targets are built at release only.
+    # a run that changes little recompiles little. The four other targets are built on a tag
+    # (`release.yml`) and every week on main (`cli-binaries-weekly.yml`), not on pull requests.
     needs: changes
     if: needs.changes.outputs.cli-binary == 'true' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
