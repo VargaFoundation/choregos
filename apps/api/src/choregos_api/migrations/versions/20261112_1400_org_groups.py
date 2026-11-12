@@ -5,8 +5,8 @@ An organisation's groups, each with one source (`internal` or `scim`), and who i
 are under forced RLS like `machine_accounts`. The downgrade drops both tables and loses the groups and
 their members; the identity provider's groups (`users.groups`) are not touched.
 
-Revision ID: f9b1d3e5a7c0
-Revises: e8a0c2d4f6b9
+Revision ID: d4a6c8e0f2b5
+Revises: f9b1d3e5a7c0
 Create Date: 2026-11-12 14:00:00+00:00
 """
 
@@ -17,8 +17,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "f9b1d3e5a7c0"
-down_revision: str | None = "e8a0c2d4f6b9"
+revision: str = "d4a6c8e0f2b5"
+down_revision: str | None = "f9b1d3e5a7c0"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
