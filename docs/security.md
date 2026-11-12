@@ -604,9 +604,9 @@ An outpost is a place an organisation's administrator enrols, which only dials o
 door of the API beside `/mcp` and `/a2a`
 ([ADR 0148](adr/0148-the-outpost-door-is-a-third-door-with-its-own-contract.md)); its contract is
 `packages/contracts/outpost-door.yaml`. It is not mounted unless `CHOREGOS_OUTPOSTS` is on
-([Deployment](deployment.md#outposts-adrs-0147-0149)). This is what it changes for security. Nothing
-routes a call to an outpost yet: the connector that does is a later change, so today the door enrols,
-authenticates and waits.
+([Deployment](deployment.md#outposts-adrs-0147-0149)). This is what it changes for security. What is
+handed over there is what a connector of type `mcp-outpost` routes to the outpost
+([A connector at an outpost](#a-connector-at-an-outpost), below).
 
 **Who is at the door.** No session, no API token and no OAuth token opens it, and the signature that
 opens it opens no other door: the REST API, the MCP door and the A2A door answer 403 to whatever
@@ -661,6 +661,39 @@ other. Protection against whoever holds the control plane and its signing key: a
 can be asked of it, it does not remove it. A limit on requests that carry no valid signature: each
 costs the door one lookup, and bounding them by source is the entrance's (the door has a hostname of
 its own for that).
+
+## A connector at an outpost
+
+A connector of type `mcp-outpost` reaches a tool server through an outpost
+([ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md); `services/outpost_route.py`). It changes the
+transport of a tool call and nothing of what governs it.
+
+- **The platform decides first, as for any connector.** The agent's selection, the operation's
+  policy and groups, the argument schema, the grants that bind arguments and the approval are judged
+  before anything is written for an outpost to claim; the result is bounded and screened, and the
+  ledger line and the digests are written, when it comes back
+  (`apps/api/tests/test_broker_via_outpost.py`). The outpost decides nothing the platform decides; it
+  may refuse what its own policy refuses.
+- **What the platform holds.** A name and an alias. No address and no credential of the outpost's
+  side: the type has no URL and no secret field, and a declaration that carries one is refused.
+- **What the outpost is told.** The alias, the tool and its arguments, sealed to the instance that
+  claims the call; and who the call is made for (the organisation, the project, the run, the agent,
+  the person who started it, the action and its approvers): names the platform asserts, which an
+  outpost may log and must not decide on. No prompt, no model key, no run token.
+- **Whose identity.** The credential the outpost holds for the alias, and no other. No person's
+  token travels to an outpost: the type declares no identity mode, a need that must be called as the
+  person cannot be bound to it, and a direct build of its client with a person's token builds nothing.
+- **Writes.** Not opened in this version: a write through an outpost must be delivered at most once
+  and may end in doubt (ADR 0149 §5-6), and the platform does not open a write under a guarantee it
+  does not carry yet (ADR 0101). The rendezvous itself places no write without the key of the governed
+  effect that plays it.
+- **The network bounds.** The platform opens no connection for such a call, so the organisation's
+  allowed hosts, its deny list and its per-host rate have no host to judge: the alias is a name in the
+  outpost's policy file, never read as one. The call is bounded by the outpost's own ceilings and by
+  the door's quotas (calls in flight and calls per minute, per outpost and per organisation), and it
+  is a line of the network activity under `outpost:<name>/<alias>`.
+- **A refusal is typed**, names the outpost and is never a crash; one that reached no server is not
+  booked ([Integrations](integrations.md#a-tool-server-at-an-outpost-adr-0149)).
 
 ## Secrets
 

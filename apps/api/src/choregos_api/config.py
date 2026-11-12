@@ -432,6 +432,13 @@ class Settings(BaseSettings):
     #: is refused where it is admitted, before anything is written.
     outposts_calls_in_flight_per_outpost: int = Field(default=128, ge=1)
     outposts_calls_in_flight_per_organisation: int = Field(default=512, ge=1)
+    #: The most calls an outpost, and all the outposts of an organisation, are handed in a minute
+    #: (`CHOREGOS_OUTPOSTS_CALLS_PER_MINUTE_PER_OUTPOST`, `…_PER_ORGANISATION`, ADR 0148 §10): counted
+    #: over the last sixty seconds from the calls' own rows, where a call is admitted, so every replica
+    #: reads the same number; one more is refused before anything is written. A call counts from the
+    #: moment it is placed, whatever becomes of it.
+    outposts_calls_per_minute_per_outpost: int = Field(default=600, ge=1)
+    outposts_calls_per_minute_per_organisation: int = Field(default=2400, ge=1)
 
     # Webhooks
     github_webhook_secret: str = ""

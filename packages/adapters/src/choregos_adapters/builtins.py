@@ -21,10 +21,14 @@ from .http.pool import strategy_of
 from .registry import fakes_enabled, register
 from .specs import (
     _GATEWAY_ONLY_PLATFORM,
+    _OUTPOST_ONLY_PLATFORM,
+    _OUTPOST_STORED_KEYS,
     _SHIPPED_SPECS,
     MCP_GATEWAY_TYPE,
+    MCP_OUTPOST_TYPE,
     _check_plugin_tracker,
     _gateway_server_check,
+    _mcp_outpost_check,
 )
 
 
@@ -200,6 +204,29 @@ def _mcp_gateway_client(cfg: dict[str, Any]) -> Any:
     if cfg.get("route") != "gateway" or not cfg.get("gateway_url"):
         raise AdapterError(_GATEWAY_ONLY_PLATFORM)
     return _gateway_client(cfg, transport=cfg.get("transport"))
+
+
+def fake_outpost() -> Any:
+    """The fake outpost of CHOREGOS_FAKES=1: one, whose every alias is served by the CURRENT `FAKE_MCP`."""
+    from .fakes.outpost import FakeOutpost
+
+    if _package.FAKE_OUTPOST is None:
+        # The function itself, not its result: tests replace `FAKE_MCP`, and the outpost follows.
+        _package.FAKE_OUTPOST = FakeOutpost(fallback=_current_fake_mcp)
+    return _package.FAKE_OUTPOST
+
+
+def _mcp_outpost_client(cfg: dict[str, Any]) -> Any:
+    """The tool client of a connector at an outpost, over the rendezvous the platform injects. There
+    is none to build it with otherwise, under fakes or not: the platform registers the factory that
+    supplies its own (`choregos_api.adapter_wiring`)."""
+    from .outpost import client_of
+
+    _mcp_outpost_check({key: cfg[key] for key in _OUTPOST_STORED_KEYS if key in cfg})
+    rendezvous = cfg.get("rendezvous")
+    if cfg.get("route") != "outpost" or rendezvous is None:
+        raise AdapterError(_OUTPOST_ONLY_PLATFORM)
+    return client_of(cfg, rendezvous)
 
 
 def _fake_entra_directory(cfg: dict[str, Any]) -> Any:
@@ -740,6 +767,9 @@ def _register_mcp_and_notifiers() -> None:
     # A real MCP server (ADR 0034): its operations are DISCOVERED, and are born closed.
     register("mcp", "mcp", _SHIPPED_SPECS[("mcp", "mcp")])(_mcp_client)
     register("mcp", MCP_GATEWAY_TYPE, _SHIPPED_SPECS[("mcp", MCP_GATEWAY_TYPE)])(_mcp_gateway_client)
+    # A tool server at an outpost (ADR 0149): the platform replaces this factory with the one that
+    # supplies its rendezvous.
+    register("mcp", MCP_OUTPOST_TYPE, _SHIPPED_SPECS[("mcp", MCP_OUTPOST_TYPE)])(_mcp_outpost_client)
     register("notify", "slack", _SHIPPED_SPECS[("notify", "slack")])(
         lambda cfg: SlackNotifier(
             webhook_url=cfg.get("webhook_url", _env("CHOREGOS_SLACK_WEBHOOK", "")),

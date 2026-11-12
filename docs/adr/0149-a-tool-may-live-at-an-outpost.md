@@ -70,13 +70,20 @@ promises about it. Read on `main` at `9f646fda4`:
    secret field, like `mcp-gateway`: the address and the credential are the outpost's (ADR 0147 §7).
    Because the kind stays `mcp`, discovery, drift detection, the per-operation policy and governed writes
    are unchanged; discovery returns the tools the outpost's policy lets through, each born closed.
-   Declaring one needs an outpost of the same organisation that is enabled and announces `tools`, and an
-   outpost that still has connectors is not deleted (409, as `gateway_in_use` is for the gateway).
+   Declaring one needs an outpost of the same organisation that is enabled for `tools` and is handed
+   calls: an outpost the organisation does not have is a 422, one that is paused or revoked a 409 (7),
+   and an edit is judged as a declaration. An instance that announces `tools` need not be there yet: an
+   administrator may declare before the outpost's operator has one running, and discovery then says
+   that the outpost is offline. An outpost that still has connectors is not deleted (409, as
+   `gateway_in_use` is for the gateway).
 2. **The `service` identity only.** The call reaches the outpost's server under the credential the outpost
    holds for that endpoint: what ADR 0107 calls the *assigned* identity. The type supports no other. An
    assistant's needs are bound to connectors and reach them through the same broker, so a need that must
    be called as the person cannot be bound to an `mcp-outpost` connector: it is refused when it is bound,
-   not at the first call. Carrying a person's token to an outpost is left for later, with a security
+   not at the first call. A connector declares the identities it carries in its configuration
+   (`identity_modes`, ADR 0135), and this type's declared schema is closed and has no such key; the one
+   function that answers the question (`services/connector_identity.py`) says `service` alone for the
+   type, whatever a row holds. Carrying a person's token to an outpost is left for later, with a security
    review of its own: such a token must not rest in a row of the platform nor cross a process that is not
    its audience, so it is sealed directly to the claiming instance's key, or it does not travel.
 3. **`Route` gains "through an outpost", and the client keeps its interface.** For an `mcp-outpost`
@@ -84,7 +91,8 @@ promises about it. Read on `main` at `9f646fda4`:
    `connector_client` returns a client with the two methods the callers use, backed by the rendezvous (4)
    instead of an HTTP connection. It does not extend the MCP client: the boundary test keeps that to the
    platform-run plugin servers. The broker, the governed-write effect and discovery therefore do not
-   change, and every guarantee holds as for a direct connector: selection, policy, groups, argument schema,
+   change, beyond turning one more family of refusals into their own where they already turn the
+   gateway's (7), and every guarantee holds as for a direct connector: selection, policy, groups, argument schema,
    argument-bound grants and approval are decided **before** anything leaves; the result is bounded and
    screened, the ledger line and the digests are written, when it comes back. The outpost sees a call
    after the platform has decided it. It decides nothing the platform decides; it may refuse what its own
@@ -93,7 +101,10 @@ promises about it. Read on `main` at `9f646fda4`:
 4. **A rendezvous, not a second durable queue.** A call through an outpost is a row with a short life
    (`outpost_calls`): written by the caller, claimed by one instance at its next poll, answered, then
    emptied (ADR 0148 §11). A read is a synchronous call of under a minute: when no instance claims it in
-   time it fails fast, with a typed refusal that names the outpost. A write already has its durable
+   time it fails fast, with a typed refusal that names the outpost; and when no instance that serves the
+   alias polled within the poll window, it fails at once and nothing is written. The caller places the
+   row in its own transaction and commits it, whoever called: the row must be visible before an instance
+   can claim it. It then waits with no transaction and no pooled connection. A write already has its durable
    outbox, the approved `actions` row: ADR 0085 made that row the outbox and rejected a separate outbox
    table beside it, because the two could disagree. The rendezvous adds no durability and promises none.
    What survives a crash is the action, not the row.
@@ -136,8 +147,9 @@ promises about it. Read on `main` at `9f646fda4`:
    | Refusal | When | Executed at the outpost? |
    |:--|:--|:--|
    | `OutpostPaused` | the outpost is paused or revoked, or outposts are switched off | no: nothing is written |
-   | `OutpostOffline` | no active instance claimed the call in time | no |
-   | `OutpostRefused(code)` | the outpost's own policy refused: unknown alias, tool outside its patterns, write denied, a ceiling | no |
+   | `OutpostNotAdmitted(reason)` | a quota of the door is reached (ADR 0148 §10), or the call is too large to cross it | no: nothing is written |
+   | `OutpostOffline` | no instance that serves the alias polled within the poll window, or none claimed the call in time | no |
+   | `OutpostRefused(code)` | the outpost's own policy refused: unknown alias, tool outside its patterns, write denied, a ceiling; or the door could not carry the call to its claimer (`payload_too_large`) | no |
    | `OutpostTimeout` | a claimed read got no answer in time | unknown; a read may be asked again |
    | `OutpostInDoubt` | a claimed write got no answer in time | unknown; never asked again (5) |
 
@@ -146,6 +158,16 @@ promises about it. Read on `main` at `9f646fda4`:
    `write_through_action`); a 409 at declaration and at discovery; a final refusal without a Temporal retry
    in the workers, except `OutpostInDoubt`, which is neither a refusal nor a retry. A call that reached no
    server is not booked in the ledger, as a call the network policy stopped is not.
+
+   For a read, the tool error carries the refusal's code, the outpost and the alias, under a status
+   that says its class: 403 paused, 503 offline, 422 refused (with the outpost's own code), 429 a
+   quota, 413 a call too large, 504 a claim that got no answer. The first five reached no server and
+   carry the type every booking of a tool call already skips (`network_policy`; `rate_limited` for a
+   quota), so no caller of the broker had to learn a new one; the last may have been executed, carries
+   none and is booked. At declaration and at discovery a quota is a 429 that says when to come back,
+   not a 409: it is not a state of the outpost. A deployment that has outposts switched on and no key
+   to seal a call's arguments under while they wait hands nothing to an outpost: that is
+   `OutpostPaused`, said with its reason.
 8. **The gateway's mode `required` does not apply** (amends ADR 0105 §5). An `mcp-outpost` connector is
    not a direct `mcp` connector and is exempt, as a plugin's server is (ADR 0105 §9). `required` exists so
    that the gateway is the one place that holds upstream credentials and decides the upstream network;
@@ -167,11 +189,19 @@ promises about it. Read on `main` at `9f646fda4`:
     from the function that computes the run's own listing (`services/agent_reach.py`).
 11. **The network bounds.** A call through an outpost is not an egress of the organisation (ADR 0066) nor
     of a run (ADR 0070): the platform opens no connection for it, so the allowlist, the ceiling and the
-    per-host rate have no host to look at. `enforce_connector_call` already checks nothing for a connector
-    without an address, and the type declares no egress host, as `mcp-gateway` does not. It is not
+    per-host rate have no host to look at. `enforce_connector_call` checks nothing for a connector
+    without an address, and this one has none: its `endpoint` is an alias. The platform reads a
+    connector's address from a list of configuration keys that `endpoint` is one of, so the alias is
+    told apart there (`connector_host` answers none for a configuration that names an outpost);
+    otherwise it would be judged by the organisation's deny list, rate-limited with any direct
+    connector whose host bears the same name, and journaled as a place the platform reached. The type
+    declares no egress host, as `mcp-gateway` does not. It is not
     unbounded for that: the outpost's ceilings and the door's quotas bound it (ADR 0147 §6, ADR 0148 §10),
     and each call is written to `network_decisions` under the outpost and the alias where a host would be
-    (`outpost:<name>/<alias>`), so the journal shows that the tool was reached, and where.
+    (`outpost:<name>/<alias>`), so the journal shows that the tool was reached, and where: `allowed`
+    when it was answered, `denied` when the outpost or the door refused it, `rate_limited` at a quota,
+    `unreachable` when no instance claimed it or the claim got no answer. The line is the call's
+    project's; a discovery belongs to none and is in the audit log.
 12. **Runs at an outpost are not decided here.** A whole run executing at an outpost is justified only
     when a build or its tests need dependencies only the outpost has, and on a named need. Before a record
     could decide it, all of this would have to be true:
@@ -216,6 +246,10 @@ promises about it. Read on `main` at `9f646fda4`:
 
 - Contract changes: the connector type and the connector's shape (S65-10, S65-13), `ActionStatus`
   `in_doubt` and the operation rule's two new statements (S65-14), the access answer's fields (S65-17).
+- Decisions 5 and 6 arrive after the route (S65-14 after S65-13). In between, a write through an
+  outpost is not opened at all: a write operation of an `mcp-outpost` connector cannot be set to
+  `allowed` or `approval` (422), and the rendezvous places no write without the key of the governed
+  effect that plays it. The refusal of decision 6 replaces the first; the second stays.
 - `workflows/action.py` is concerned, not only activities: its retry policy and its failure branch are
   what a claimed write must not go through. The change is a patched branch, and the replay suite has to
   stay green with the histories recorded before it.

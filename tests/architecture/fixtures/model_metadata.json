@@ -12987,6 +12987,14 @@
     false
    ],
    [
+    "ix_outpost_calls_outpost_created",
+    [
+     "outpost_calls.outpost_id",
+     "outpost_calls.created_at"
+    ],
+    false
+   ],
+   [
     "ix_outpost_calls_outpost_state",
     [
      "outpost_calls.outpost_id",

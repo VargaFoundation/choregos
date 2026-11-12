@@ -136,7 +136,12 @@ class OutpostCall(Base, TimestampMixin):
     emptied once the caller has read the answer."""
 
     __tablename__ = "outpost_calls"
-    __table_args__ = (Index("ix_outpost_calls_outpost_state", "outpost_id", "state"),)
+    __table_args__ = (
+        Index("ix_outpost_calls_outpost_state", "outpost_id", "state"),
+        # What the cap of calls per minute reads (ADR 0148 §10): an outpost's calls of the last minute,
+        # without walking every call it ever took.
+        Index("ix_outpost_calls_outpost_created", "outpost_id", "created_at"),
+    )
 
     id: Mapped[str] = mapped_column(String(128), primary_key=True)
     org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)

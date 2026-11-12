@@ -21,7 +21,7 @@ from fastapi.responses import JSONResponse
 
 from . import __version__
 from .a2a.push import push_loop
-from .adapter_wiring import attach_lexical_memory
+from .adapter_wiring import attach_lexical_memory, attach_outposts
 from .bootstrap import bootstrap_installation
 from .config import DEFAULT_DOCS_URL, get_settings
 from .db.session import create_all, dispose_engine
@@ -350,6 +350,7 @@ def _mount_the_outposts_door(app: FastAPI, settings: Any) -> None:
 def create_app() -> FastAPI:
     settings = get_settings()
     attach_lexical_memory()
+    attach_outposts()
     # The extensions installed alongside (enterprise edition, house connectors) register
     # themselves. A declared extension that does not load stops the startup, on purpose.
     load_extensions()
