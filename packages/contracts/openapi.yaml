@@ -3336,7 +3336,8 @@ paths:
       description: >-
         What one version of the agent reaches in one project, component by component, with the origin of each
         (ADR 0127): the version's own, inherited from the project, the platform's frame, or named by the version and
-        refused, with the reason. Computed by the same function as a run's tool listing.
+        refused, with the reason. Computed by the same function as a run's tool listing. A connector tool reached through
+        an outpost also says where it lives: the outpost, the alias, and whether it is online now (ADR 0149 §10).
       parameters:
         - { name: project, in: query, required: true, schema: { type: string } }
         - { name: version, in: query, required: false, description: "Absent: the version a run of the project takes (pin, channel, production)", schema: { type: integer, minimum: 1 } }
@@ -7895,6 +7896,22 @@ components:
         origin: { $ref: "#/components/schemas/AgentAccessOrigin" }
         access: { type: [string, "null"], enum: [read, write, approval, null] }
         reason: { type: [string, "null"], description: "why a named tool is refused" }
+        outpost: { $ref: "#/components/schemas/AgentAccessOutpost" }
+    AgentAccessOutpost:
+      type: object
+      additionalProperties: false
+      description: >-
+        Where a connector tool reached through an outpost lives (ADR 0149 §10, amending ADR 0127 §6): the outpost,
+        the alias of the endpoint in its policy file, and whether a call made now would be handed to an instance.
+        Present on the tool of an `mcp-outpost` connector and on no other: a tool of a direct connector carries no
+        `outpost` key. Read when the access is asked, never promised: a person reads before a run that a tool its
+        agent names will not answer.
+      required: [name, endpoint, status, online]
+      properties:
+        name: { type: [string, "null"], description: "the outpost's slug; null when the connector routes to no outpost of the organisation (a call is then refused `outpost_paused`). An outpost of another organisation is never named" }
+        endpoint: { type: string, description: "the alias of the endpoint in the outpost's policy file, as the connector names it" }
+        status: { oneOf: [{ $ref: "#/components/schemas/OutpostStatus" }, { type: "null" }], description: "the outpost's status: a call is handed to it only while it is `active`; null when the connector routes to no outpost of the organisation" }
+        online: { type: boolean, description: "an active instance that serves the alias polled within the poll window: the presence the call's own route reads. false when none did (a call fails at once, `outpost_offline`), when the connector routes to no outpost of the organisation, and while outposts are switched off on the deployment" }
     AgentAccessItem:
       type: object
       required: [name, origin]
