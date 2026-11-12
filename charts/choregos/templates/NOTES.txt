@@ -9,6 +9,17 @@ Check that everything responds:
   kubectl -n {{ .Release.Namespace }} get pods -l app.kubernetes.io/part-of=choregos
   kubectl -n {{ .Release.Namespace }} logs deploy/choregos-api --tail=50
 
+{{- if include "choregos.outpostsEnabled" . }}
+
+Outposts are on. Their door: {{ include "choregos.outpostsDoorUrl" . }}/outposts/v1
+{{- if eq (toString .Values.global.outposts.door.dedicated) "true" }} (served by deploy/choregos-outposts-door){{ end }}
+{{- if not ((.Values.global.outposts.door.signingKey | default dict).existingSecret) }}
+
+Its signing key is in the Secret {{ include "choregos.outpostsDoorKeySecret" . }}, drawn once by this
+chart, immutable and kept on uninstall. Every outpost pins its public half: back it up, and never
+delete it outside a rotation (docs/deployment.md, "Outposts").
+{{- end }}
+{{- end }}
 {{- if .Values.global.fakes }}
 
 ⚠ `global.fakes` is on: the connectors are simulated. Use only in development.

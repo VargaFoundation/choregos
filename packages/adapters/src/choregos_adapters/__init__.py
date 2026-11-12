@@ -30,6 +30,7 @@ from .builtins import (  # noqa: F401 - names the root has always exposed
     _jira_tracker,
     _register_builtins,
     fake_mcp_gateway,
+    fake_outpost,
 )
 from .registry import (
     POLICIES,
@@ -51,7 +52,12 @@ from .registry import (
     spec_of,
     validate_config,
 )
-from .specs import _SHIPPED_SPECS, GATEWAY_SERVER_PATTERN, MCP_GATEWAY_TYPE  # noqa: F401 - root names
+from .specs import (  # noqa: F401 - root names
+    _SHIPPED_SPECS,
+    GATEWAY_SERVER_PATTERN,
+    MCP_GATEWAY_TYPE,
+    MCP_OUTPOST_TYPE,
+)
 
 __version__ = "0.1.0"
 
@@ -78,6 +84,7 @@ __all__ = [
     "deployment_default_type",
     "egress_hosts",
     "fake_mcp_gateway",
+    "fake_outpost",
     "fakes_enabled",
     "load_extensions",
     "offered_connector_types",
@@ -94,9 +101,11 @@ FAKE_MCP: Any = None  # the fake MCP server
 FAKE_IDP: Any = None  # the fake identity provider (ADR 0135), served under CHOREGOS_FAKES=1
 FAKE_OAUTH: Any = None  # the fake OAuth provider of a `user_consent` source (ADR 0135)
 FAKE_MCP_GATEWAY: Any = None  # the fake MCP gateway, whose fallback is always the CURRENT `FAKE_MCP`
+FAKE_OUTPOST: Any = None  # the fake outpost (ADR 0149), whose every alias is served by the CURRENT `FAKE_MCP`
 FAKE_ENTRA: Any = None  # the fake Graph
 FAKE_MARKETDATA: Any = None  # the fake of the `marketdata` family
 FAKE_WEB_SEARCH: Any = None  # the fake of the `web_search` family
+FAKE_TEAMS: Any = None  # the fake Teams webhook (S63-25)
 #: The netops fakes (ADR 0052): one pfSense, one cluster, one recorded Hubble trace, one GitOps repository.
 FAKE_NETOPS: dict[str, Any] = {}
 #: The fakes of the business families, one per family.

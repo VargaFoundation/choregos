@@ -217,6 +217,7 @@ export type {
   AgentAccess,
   AgentAccessModel,
   AgentAccessTool,
+  AgentAccessOutpost,
   AgentAccessItem,
   AgentAccessOrigin,
   AgentComponent,
@@ -333,6 +334,25 @@ export type {
   PluginUninstallResult,
   PluginUpgrade,
   PluginUpgradeResult,
+} from "@choregos/contracts/api";
+
+/** Outposts (ADR 0147): places a person enrols, which only dial out, their instances and their calls. */
+export type {
+  Outpost,
+  OutpostCallPage,
+  OutpostCallRecord,
+  OutpostCallState,
+  OutpostConflict,
+  OutpostCreate,
+  OutpostEnrolmentCreate,
+  OutpostEnrolmentCreated,
+  OutpostInstance,
+  OutpostInstanceApprove,
+  OutpostInstanceList,
+  OutpostInstanceStatus,
+  OutpostList,
+  OutpostRefusalCode,
+  OutpostStatus,
 } from "@choregos/contracts/api";
 
 // The embedded assistant (S63-12).

@@ -112,3 +112,14 @@ review remain the guard.
 version could never approve it. When the importer is the only administrator of the organisation (same
 rule as ADR 0093 §4, `services/second_person.py`), they may approve their own version; the `skill.approve`
 audit event carries `sole_admin: true`. With two or more administrators, the importer is still refused.
+
+## Amendment (2026-11-12): a forced approval
+
+With two or more administrators, a second one may still not be reachable when a version is needed, and
+the product gave the importer no way through but writing to its database. The importer may now force
+the approval of their own version: `POST …/versions/{n}/approve` with `force: true` and a written
+`reason` (10 characters at least, else 422). The `skill.approve` audit event carries `forced: true` and
+the reason, so the second look the gate asks for can still happen, after the fact, from the audit. A
+reason alone does not force, and nothing changes for an administrator who is not the importer. The
+console offers it under the approve button, to the importer only. Decided by the product owner for an
+organisation of three administrators, one of them waiting on another's review to show a workflow.

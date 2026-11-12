@@ -68,6 +68,11 @@ Only the API reads and writes the object store: a runner hands its files to the 
 under its run token and never holds the store's keys. Under `CHOREGOS_FAKES=1` (or with a
 `memory://` URL) the store is in memory and lost on restart.
 
+Since 0.27 the API also deletes objects (the bytes of a task artifact when a person or a subject is erased,
+and when the retention purge removes an expired one): the store's credentials need `s3:DeleteObject` on the
+prefix. Without it an erasure of an assistant's data that holds a file artifact answers 502 and erases
+nothing, and the purge keeps the expired rows and retries them at every pass.
+
 An empty `endpoint` means AWS, and without `secretRef` the calls are unsigned: nothing fails at install, and
 the first run that writes a file loses its run. The project's readiness (`object-store` item, `docs/usage.md`)
 probes the bucket when a workflow declares a file output and names the cause.
@@ -86,6 +91,7 @@ The chart never writes production secrets. It expects them to exist:
 | `global.apiSecretRef`, entry `session-secret-previous` (optional) | the previous session key during a rotation, `CHOREGOS_SESSION_SECRET_PREVIOUS`: verification only | API only |
 | `global.apiSecretRef`, entries `github-app-client-id`, `github-app-client-secret` (optional) | the App's OAuth client: needed only to claim an installation when the instance has several organisations ([the GitHub App](#the-github-app)) | API |
 | `global.apiSecretRef`, entry `secrets-keks` (optional) | `CHOREGOS_SECRETS_KEKS`, see below | API **and** orchestrator |
+| `global.apiSecretRef`, entry `egress-report-key` (optional) | `CHOREGOS_EGRESS_REPORT_KEY`: the egress proxy's own key, a random string (48 characters or more). Its reports need it on top of the run's egress token, so an agent cannot rewrite its run's network counters ([ADR 0145](adr/0145-the-proxy-reports-with-a-key-the-agent-does-not-hold.md)); absent, the API logs `egress.report_key_missing` at start-up and accepts the egress token alone. Rotate it by replacing it and restarting the API and `choregos-egress` together | API **and** egress proxy |
 | `global.oidc.secretRef` | `client-secret` | API |
 | `global.database.secretRef` | `url` (or `passwordSecret` holding the password) | API, orchestrator |
 | `global.gateway.secretRef` | `master-key` | orchestrator |
@@ -719,6 +725,248 @@ global:
     cidrs: [203.0.113.0/24]
 ```
 
+## Outposts (ADRs 0147-0149)
+
+An outpost is a place an organisation's administrator enrols, which only dials out to the platform
+([ADR 0147](adr/0147-an-outpost-only-dials-out.md)): the platform never connects to it and stores no
+address of it. Outposts are off unless you turn them on. What is in place is the platform's side of
+the record (the tables, the `outpost:manage` right of the organisation's administrator and the
+management API, `/api/v1/orgs/{org}/outposts…`), the door an outpost dials (`/outposts/v1`,
+[ADR 0148](adr/0148-the-outpost-door-is-a-third-door-with-its-own-contract.md)): an instance enrols
+there, is approved by a person, and polls; and the connector type that routes a tool call to one
+(`mcp-outpost`, [ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md);
+[Integrations](integrations.md#a-tool-server-at-an-outpost-adr-0149)). The daemon is a separate package
+with a chart of its own (below).
+
+This section holds the settings and the values. When to want an outpost, and when an organisation's
+own MCP gateway serves better; what an outpost gives and what it does not; and each gesture of its
+life, from the enrolment to the rotation of the door's key, are in [Outposts](outposts.md). The
+guide for whoever runs an outpost in their own network is [Running an outpost](outpost-operator.md).
+
+| Setting | Default | What it does |
+| :-- | :-- | :-- |
+| `CHOREGOS_OUTPOSTS` | `off` | `on`: the door is mounted, outposts can be created and enrolment tokens issued. `off`: the door is not served at all (a daemon meets a plain 404), creating an outpost or a token is refused (409 `outposts_disabled`), and what exists can still be listed, revoked and deleted. It is the one switch that stops every outpost. Read when the API starts: changing it takes a restart |
+| `CHOREGOS_OUTPOSTS_DOOR_URL` | empty | the public origin of the outposts' door: a scheme and a host, no path (`https://outposts.example.com`). It is returned with each enrolment token as `control_plane`, which is what the outpost's operator writes in the policy file; a request an outpost signs binds its URL under that origin (`packages/contracts/outpost-door.yaml`). Give the door a hostname of its own: it is the one name an outpost's firewall opens |
+| `CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY` | empty | **a secret.** The Ed25519 private key (PEM, PKCS#8) the door signs every call it hands over with ([ADR 0148](adr/0148-the-outpost-door-is-a-third-door-with-its-own-contract.md) §13). Only its public half is ever shown. Without it no enrolment token is issued (409 `door_key_missing`): an outpost makes only calls signed by a key it pins, so an instance enrolled with nothing to pin could never be handed anything |
+| `CHOREGOS_OUTPOSTS_DOOR_ANNOUNCED_KEYS` | `[]` | public keys shown beside the one that signs, for a rotation, as a JSON list; three at most, since a policy file pins four keys. Each is the unpadded base64url of the key's 32 raw bytes |
+| `CHOREGOS_OUTPOSTS_DOOR_RATE_PER_MINUTE` | `1200` | the most requests one instance sends the door in a minute, counted in memory and per replica: beyond it the door answers 429 `rate_limited` with `retry_after`. `0` lifts the limit. It bounds an instance that authenticated; requests that carry no valid signature are bounded at the entrance, by source |
+| `CHOREGOS_OUTPOSTS_CALLS_IN_FLIGHT_PER_OUTPOST` | `128` | the most calls one outpost has in flight (placed, and not yet answered, refused or out of time). One more is refused where it is admitted, before anything is written |
+| `CHOREGOS_OUTPOSTS_CALLS_IN_FLIGHT_PER_ORGANISATION` | `512` | the same bound over all the outposts of one organisation |
+| `CHOREGOS_OUTPOSTS_CALLS_PER_MINUTE_PER_OUTPOST` | `600` | the most calls one outpost is handed in a minute: the calls placed in the last sixty seconds, counted from their rows where the next one is admitted, so every replica reads the same number. One more is refused before anything is written, and the caller is told to come back (a tool error `outpost_not_admitted`, 429) |
+| `CHOREGOS_OUTPOSTS_CALLS_PER_MINUTE_PER_ORGANISATION` | `2400` | the same bound over all the outposts of one organisation |
+
+**With the chart.** `global.outposts` renders these settings, the door's route and, if you ask for it,
+the door's own Deployment. Nothing of it is rendered while `global.outposts.enabled` is false, which
+is the default.
+
+```yaml
+global:
+  outposts:
+    enabled: true
+    callsInFlight: { perOutpost: 128, perOrganisation: 512 }
+    door:
+      hostnames: [outposts.example.com]   # the door's own; the origin is https://<the first one>
+      signingKey:
+        existingSecret: outposts-door-key # empty: the chart draws one, once
+        key: signing-key
+      announcedKeys: []                   # for a rotation
+      ratePerMinute: 1200
+      dedicated: false                    # true: a Deployment that serves the door alone
+```
+
+| Value (under `global.outposts`) | Default | What it renders |
+| :-- | :-- | :-- |
+| `enabled` | `false` | `CHOREGOS_OUTPOSTS=on` for the API and for every worker (whoever places a call reads the switch), the door's settings for the API, the door's route, and the alert rule below |
+| `callsInFlight.perOutpost`, `.perOrganisation` | `128`, `512` | the two quotas, for the API and the workers |
+| `door.hostnames` | `[]` | the hostnames of the route `choregos-outposts-door`, which serves `/outposts` and nothing else, in the entry form of `choregos-api.ingress` (an HTTPRoute or an Ingress, the API's class and gateway). A hostname that is also the console's (`choregos-web.ingress.hostnames`, `global.publicUrl`), the API's (`choregos-api.ingress.hostnames`, `global.apiUrl`) or a run door's fails the render: the one name an outpost's firewall opens is a name of its own |
+| `door.url` | empty | `CHOREGOS_OUTPOSTS_DOOR_URL`. Empty: `https://` and the first hostname. Enabled with neither a hostname nor a URL, or with a URL that has a path, the render fails and names the value, before the API would refuse to start |
+| `door.signingKey.existingSecret`, `.key` | empty, `signing-key` | the Secret the API (and the door's Deployment) reads `CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY` from, by reference and not optional. Empty: the chart's own Secret, below |
+| `door.announcedKeys` | `[]` | `CHOREGOS_OUTPOSTS_DOOR_ANNOUNCED_KEYS`. A key that is not one, a key listed twice or a fourth one fails the render |
+| `door.ratePerMinute` | `1200` | `CHOREGOS_OUTPOSTS_DOOR_RATE_PER_MINUTE`; `0` lifts the limit |
+| `door.requestTimeout` | `60s` | the HTTPRoute's `timeouts.request` (Gateway API v1.2 and later); empty leaves the field out |
+| `door.annotations` | ingress-nginx's read timeout and buffering | the door Ingress's own annotations: its timeout, and its rate limit or source restriction |
+| `door.dedicated` and what follows it | `false` | the door's own Deployment, below |
+
+`global.extraEnv` may not set one of these variables once `global.outposts.enabled` is true: the
+render fails and names it. While it is false, an installation that passed them through
+`global.extraEnv` (the way before this chart rendered them) renders as before.
+
+**The workers read the switch too.** A governed action's effect that calls a connector at an outpost
+is played by the orchestrator, which places the call itself: with the switch off there, such an effect
+is refused `outpost_paused`. The chart gives the switch and the quotas of calls in flight to every
+worker for that reason (and the workers already hold `CHOREGOS_SECRETS_KEKS`). The workers hold no
+`LISTEN` connection: a call a worker placed is read at its next look, up to 10 seconds after the
+outpost answered. The two caps per minute (`CHOREGOS_OUTPOSTS_CALLS_PER_MINUTE_PER_OUTPOST`, 600, and
+`CHOREGOS_OUTPOSTS_CALLS_PER_MINUTE_PER_ORGANISATION`, 2400) are not values of the chart yet: set them
+with `global.extraEnv`, for the API and the workers alike.
+
+**The signing key's Secret.** Either you create it and name it:
+
+```bash
+openssl genpkey -algorithm ed25519 -out door.pem          # PEM, PKCS#8: CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY
+kubectl -n <namespace> create secret generic outposts-door-key --from-file signing-key=door.pem
+openssl pkey -in door.pem -pubout -outform DER | tail -c 32 | basenc --base64url | tr -d '='   # its public half
+```
+
+or you leave `door.signingKey.existingSecret` empty and the chart draws a key at the first
+installation, in the Secret `<release>-outposts-door`. That Secret is read back at every upgrade
+(Helm's `lookup`), is `immutable`, and carries `helm.sh/resource-policy: keep`: no upgrade changes
+the key, and an uninstall does not delete it. Every outpost pins its public half, so back it up.
+`lookup` needs the cluster. **Under Argo CD, or any `helm template | kubectl apply`, the chart
+cannot read the Secret back and would draw a new key at every render**; the immutable Secret makes
+that apply fail instead of changing the key under every outpost. There, create the Secret yourself.
+
+**The keys an operator pins.** `GET /api/v1/orgs/{org}/outposts/{slug}` and the answer that issues an
+enrolment token both carry `door_keys`: the public half of the key that signs, then the announced
+keys. Whoever runs the outpost copies them into the `door_keys` of its policy file, which is the only
+place an outpost reads them from: nothing the platform sends later adds a key to that list or changes
+it. `door_keys` is empty while the deployment has no signing key.
+
+**Rotating the signing key** is an overlap that the operators of outposts take part in, in this order:
+
+1. generate the next key and put its public half in `CHOREGOS_OUTPOSTS_DOOR_ANNOUNCED_KEYS`. The
+   management API now shows both keys; each operator adds the new one to the policy file;
+2. once every outpost pins it, make it `CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY` and move the former public
+   key to the announced list. By the door's contract, an outpost that did not pin the new key makes
+   none of the calls signed with it and refuses each with `signature_refused`;
+3. when the operators have dropped the former key from their files, remove it from the announced list.
+
+With the chart, each step is a change of values, and the key itself never changes in place: a Secret
+is one key for its whole life (the chart's own is immutable).
+
+1. Create a **second** Secret with the next key (the three commands above, under another name, say
+   `outposts-door-key-2`), and set `global.outposts.door.announcedKeys` to its public half. Upgrade:
+   the API restarts and shows both keys.
+2. When every outpost pins the next key, set `global.outposts.door.signingKey.existingSecret` to
+   `outposts-door-key-2` and `announcedKeys` to the FORMER public half. Upgrade: the door signs with
+   the next key. The former Secret is no longer read; the chart's own one stays in the namespace,
+   since it is kept. Leave it there until step 3 is done: it is the way back.
+3. When the operators have dropped the former key, empty `announcedKeys`, upgrade, and delete the
+   former Secret.
+
+An outpost whose operator uses the `choregos-outpost` chart follows by adding the next key to
+`policy.door_keys` at step 1 and removing the former one after step 3: each change restarts its pods.
+
+The API refuses to start on a door URL that is not an origin, on a signing key that is not an Ed25519
+private key in PEM, and on an announced key that is not a public key in that spelling, is listed
+twice, is the public half of the signing key, or is a fourth one
+(`apps/api/tests/test_outposts_settings.py`). With `CHOREGOS_OUTPOSTS` on it also refuses to start
+without `CHOREGOS_OUTPOSTS_DOOR_URL` or without `CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY`, naming the one
+that is missing: a door could not compare the URL a request signs without the first, and no outpost
+would make a call it handed over without the second (`apps/api/tests/test_outpost_door.py`).
+
+**The door.** `/outposts/v1` is served at the root of the API, beside `/mcp` and `/a2a` and outside
+`/api/v1` and the OpenAPI document: four `POST` routes, `enrol`, `poll`, `calls/{id}/answer` and
+`calls/{id}/refuse` (`packages/contracts/outpost-door.yaml`). What whoever runs the platform has to
+arrange for it:
+
+- **A hostname of its own**, the one `CHOREGOS_OUTPOSTS_DOOR_URL` names, routed to `/outposts` and to
+  nothing else. It is the one name an outpost's firewall opens (port 443, outbound), and the one you can
+  rate-limit or restrict by source apart from the console's. The door compares the URL each request
+  signs with that origin, never with the `Host` header: behind a proxy that rewrites the host, nothing
+  changes. The chart renders this route from `global.outposts.door.hostnames`
+  (`tests/charts/test_outpost_door_routed.py`); the DNS record and the certificate of that hostname
+  are yours to arrange, as the console's are.
+- **Long requests.** A poll waits up to 25 seconds before it answers with nothing. Give the route an
+  idle timeout above that (30 seconds or more), and do not buffer the answer. The chart's HTTPRoute
+  carries `timeouts.request` (60 seconds); its Ingress carries the door's own annotations, whose
+  defaults are ingress-nginx's: under another controller, write its equivalents in
+  `global.outposts.door.annotations`. While a poll waits it
+  holds no database connection: a hundred waiting instances cost a hundred open requests and no pool
+  (`apps/api/tests/test_outpost_long_poll_holds_no_connection.py`).
+- **What the process that serves the door needs**: the database, as every API process; the signing
+  key; `CHOREGOS_SECRETS_KEKS` (or the key wrapper your edition supplies), with which a call's arguments
+  wait at rest until an instance claims them, and without which no call can be placed; and, on
+  PostgreSQL, the `LISTEN` connection every replica already holds, which now also carries the
+  outposts' wake-ups (channel `choregos_outpost_calls`, ids only). Where that connection is down, a
+  poll still finds a call at its next look, 5 to 10 seconds later.
+- **One poll per instance.** The slot is on the instance's row and is given back when the poll answers
+  or its client goes away. If a replica is killed, the slots of the polls it held lapse within 30
+  seconds; until then those instances read 409 `poll_conflict` with `retry_after`, and each raises one
+  alert (below). Stop replicas gracefully.
+
+**The alert to wire.** A second poll under a key that already has one waiting is what a stolen key
+looks like. The door refuses it and writes the audit event `outpost.poll_conflict` in the
+organisation's audit log, once a minute at most for an instance, under the actor kind `outpost`.
+`/metrics` counts those events per organisation as `choregos_outpost_poll_conflicts_total{org}`: alert
+on its increase, and answer by revoking the instance
+(`POST /api/v1/orgs/{org}/outposts/{slug}/instances/{instance_id}/revoke`), which holds from its next
+request. With `monitoring.alerts` and outposts on, the chart ships the rule
+`ChoregosOutpostPollConflict` (critical, per organisation) in its one rule group, in both monitoring
+flavours. A daemon that restarts while the door still holds its former poll raises it too: read the
+audit event before you revoke.
+
+**Rotating the signing key also rotates the nonces.** The key that authenticates the door's nonces is
+derived from the signing key. After a rotation a daemon's next request is refused once
+(401 `stale_nonce`) with a fresh nonce, and it signs again: nothing to do. While replicas with the
+former and the new key run side by side, a daemon may be refused a few times in a row.
+
+**The door's own Deployment** (`global.outposts.door.dedicated: true`,
+[ADR 0148](adr/0148-the-outpost-door-is-a-third-door-with-its-own-contract.md) §8). Polls wait by the
+hundred. Split out, they take no worker and no pooled connection from the console and the runs: the
+chart renders a Deployment `choregos-outposts-door` from the API image, started as
+`python -m choregos_api.outposts` (`apps/api/src/choregos_api/outposts/alone.py`), a Service of the
+same name, a disruption budget, and the route then leads there.
+
+| Value (under `global.outposts.door`) | Default | What it does |
+| :-- | :-- | :-- |
+| `dedicated` | `false` | false: the API serves the door. true: the Deployment below does, and the route leads to it |
+| `replicas` | `2` | its replicas; `podDisruptionBudget.minAvailable` (1) keeps one through a drain |
+| `pool.size`, `pool.maxOverflow`, `pool.timeoutSeconds` | `5`, `5`, `10` | this Deployment's own connection pool (`CHOREGOS_DB_POOL_SIZE`, `CHOREGOS_DB_MAX_OVERFLOW`): each replica holds at most `size + maxOverflow` connections. Add `replicas × (size + maxOverflow)` to what you size PostgreSQL's `max_connections` for |
+| `terminationGracePeriodSeconds` | `45` | how long a pod has to stop. The process lets the polls it holds end by themselves, 30 seconds at most, then cancels what is left; a value that is not above 30 fails the render |
+| `extraEnv` | `[]` | variables for this Deployment only. It does not receive `global.extraEnv`, which carries connector secrets |
+| `resources` | 100m / 256Mi, 1 / 512Mi | its requests and limits |
+
+- **What that process serves**: the four verbs, `/healthz` and `/readyz` (the database answers), and
+  no other route of the API (`apps/api/tests/test_outpost_door_alone.py`). It listens for the
+  outposts' wake-ups on its own `LISTEN` connection, and for nothing else of the platform's events.
+- **What it holds**: the database's URL, the door's signing key, and `CHOREGOS_SECRETS_KEKS`. A
+  database credential in a pod that faces other parties' machines is new, and it is all it holds: not
+  the session secret, the run-token key, the gateway's key, the object store's or the identity
+  provider's. It mounts no service account token.
+- **The sweep stays in the API.** What ran out of time at an outpost nobody polls any more is closed
+  by a loop that lists every outpost under the platform's scope, which the door never takes. The API
+  runs it in both layouts, and the door's own process never does: keep the API running.
+- **The API still mounts the door**, in both layouts: `CHOREGOS_OUTPOSTS` is one switch. With the door
+  split out no route leads to the API's copy from outside the cluster.
+- **Network policies** (`networkPolicies.enabled`): the door's pods get a policy of their own,
+  `choregos-outposts-door-net`. They take requests from the entrance's namespace
+  (`choregos-api.ingress.gatewayNamespace`) and reach DNS and the database, nothing else; they are
+  left out of the platform's own egress policy. Nothing in this chart opens a way to an outpost,
+  because there is none to open: an outpost dials out.
+- **Not there**: the door's own process exposes no `/metrics`. The poll-conflict series is the API's
+  (it counts audit events), but the door's request counts are not in `http_requests_total` once it is
+  split out.
+
+### The outpost's side: the chart `choregos-outpost`
+
+Whoever runs an outpost installs the daemon in THEIR cluster with a chart of its own, published
+beside the platform's (`oci://ghcr.io/vargafoundation/charts/choregos-outpost`). It is not a subchart
+of this one and shares no value with it: its page is `charts/choregos-outpost/README.md`, and a
+complete example is `charts/choregos-outpost/values/example.yaml`. What you hand its operator is
+what the management API returns with an enrolment token: the door's origin (`policy.control_plane`),
+the door's keys (`policy.door_keys`), and the token itself. Hand them
+[Running an outpost](outpost-operator.md) with it: that page is written for them, and says first
+that an outpost does not give data residency.
+
+| Value | Default | What it does |
+| :-- | :-- | :-- |
+| `image.digest`, `image.tag` | empty | the daemon's image, by digest when one is given; else by tag, the chart's own version |
+| `replicas` | `1` | instances of the outpost: a StatefulSet, each replica with a claim of its own for its keys, its journal and its audit log (`persistence.size`, `.storageClass`) |
+| `policy.control_plane`, `policy.door_keys` | required | the door's origin and the keys the outpost obeys; without either the render fails and says where they come from |
+| `policy.endpoints.<alias>` | `{}` | the policy file's own fields (`url`, `tools`, `writes`, `timeout_s`, `max_payload_kb`), plus `auth.secretName` and `auth.secretKey`: the credential is a Secret the operator creates, mounted as a file whose path the chart writes as `auth.from_file`. A credential typed as a value fails the render |
+| `policy.concurrency`, `policy.audit.file` | `4`, `/var/log/choregos-outpost/audit.jsonl` | the ceiling of calls at once, and the local audit log, on the instance's claim |
+| `enrolment.existingSecret`, `.key` | `<name>-enrolment`, `token` | the Secret that holds the single-use token. An init container enrols the instance only when it has no identity yet |
+| `proxy.url` or `proxy.existingSecret`; `ca.configMap` or `ca.secret` | empty | the outbound proxy towards the door, and an authority to trust besides the system's |
+| `graceSeconds`, `terminationGracePeriodSeconds` | `20`, `30` | how long calls in progress have to finish, and the pod's own period, which must be above it |
+| `networkPolicy.enabled`, `.controlPlane.cidrs` | `true`, `[]` | egress to DNS, the door and the servers the endpoints name; no ingress at all. Without the door's addresses its port is opened to public addresses only, since a NetworkPolicy cannot name a host |
+| `servers` | `[]` | MCP servers the operator chooses to run beside the daemon, each admitted to by the daemon's pods only ([ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md) §9). The platform deploys none |
+
+The daemon's pod is locked down as a plugin server's is (no service account token, not root, a
+read-only root filesystem, no capability), and only its state and its audit log are writable
+(`tests/charts/test_outpost_chart.py`). An instance that exits with code 3 (the door no longer
+serves its protocol) or 4 (revoked) restarts in a loop on purpose: the chart's notes say so.
+
 ## Extra volumes for the API
 
 `choregos-api.extraVolumes` and `choregos-api.extraVolumeMounts` are appended verbatim to the
@@ -789,6 +1037,23 @@ choregos-api:
 A refused file is logged (`procedures.file.refused`) and skipped: the API still starts and the other
 files still apply. A plugin can supply the same directory through a `choregos.procedures` entry point
 whose value is a path. Outside the chart, the setting is `CHOREGOS_PROCEDURES_EXTRA`.
+
+## Where the console's help links point
+
+The console's **Help** entry, in the top bar, and the "Learn more" links of its pages open the user
+documentation, `https://docs.varga.foundation/choregos` by default. An installation that cannot reach it
+(air-gapped) or serves its own copy sets `CHOREGOS_DOCS_URL` on the API, with the chart's `extraEnv`:
+
+```yaml
+global:
+  extraEnv:
+    - name: CHOREGOS_DOCS_URL
+      value: https://docs.intranet.example/choregos
+```
+
+The API serves it as `docs_url` in `GET /edition`, without its trailing slash; the console appends the
+page's path to it (`/integrate/a2a`, `/cli/install`…). A value that is not an `http(s)` address is
+ignored and the public site is used.
 
 ## Plugins
 
@@ -1410,6 +1675,15 @@ value>` on the first model call. Nothing said the key had never resolved.
 If the API refuses to start with `réglages non résolus`, fix the source of the secret — the key
 is missing where it is stored, not where it is read.
 
+## Upgrading to 0.27
+
+One permission changes. The API now deletes the objects of a task artifact it erases or purges (an assistant's
+task output, S63-24), where 0.26 left them to the bucket's lifecycle rule.
+
+| What | Why | What to do |
+| :-- | :-- | :-- |
+| `s3:DeleteObject` on the object store's bucket and prefix | The erasure of a person's or a subject's data (S63-16) and the retention purge delete the bytes before the rows. A store that refuses the delete fails the erasure (502, nothing erased) and keeps the expired rows for the next purge pass. | Add the permission to the credentials of `objectStore.secretRef` (an IAM policy, or the MinIO/RustFS policy of the key). A lifecycle rule on the bucket is no longer needed for this, and stays harmless. No migration. |
+
 ## Upgrading to 0.26
 
 0.26.0 brings assistants (stream S63, ADRs 0133-0140): a plugin may ship one, an organisation installs it
@@ -1830,6 +2104,33 @@ Service's name: the tokens and `networkPolicies` do. A hostname routed to the AP
 stays served until it is in `publicHostnames`, and a proxy in front of the API that rewrites `Host`
 without writing `X-Forwarded-Host` hides the public name from the guard. A run door is as public as
 its route.
+
+### The CLI served by the instance (S62-08)
+
+The API image carries the native `choregos` binaries (S62-07) in `/opt/choregos/cli/`, with their
+`SHA256SUMS` and `manifest.json` (`CHOREGOS_CLI_DIR` points elsewhere). The instance serves them on the
+console's host, so a person installs the CLI of the exact version it runs without reaching GitHub:
+
+| Path | What it answers |
+| :-- | :-- |
+| `/downloads/cli/manifest.json` | the manifest: `version`, and per file its `name`, `os`, `arch`, `sha256`, `size` |
+| `/downloads/cli/<name>` | a file the manifest lists, or `SHA256SUMS`: `Content-Length`, a strong `ETag` (`"sha256-<hex>"`), `Range` honoured. Any other name is a 404: names are looked up in the manifest, never joined to a path |
+| `/cli/install.sh` | the Linux and macOS install script (`curl -fsSL <instance>/cli/install.sh \| sh`) |
+| `/cli/install.ps1` | the Windows install script (`irm <instance>/cli/install.ps1 \| iex`) |
+
+The scripts carry `CHOREGOS_PUBLIC_URL` (refused with a 503 when it is not a plain `http(s)` URL), read
+the manifest and the binary from that host, and check the sha256 before installing. A build without a
+bundle answers `404` with `code: no_cli_bundled` and the GitHub release of the running version
+(`release_url`); a manifest that does not parse, or a file whose size is not the manifest's, answers
+`503`, never a doubtful file. The chart routes `/downloads` (prefix) and the two scripts (exact paths)
+to the API, beside `/api` and `/mcp`.
+
+**Public, on purpose**, like `/healthz` and `/edition`: the CLI is open source and carries no secret, the
+scripts must work with plain `curl` and `irm` before the person holds a token, and the manifest says
+only the version `/edition` already says. An instance behind a single sign-on proxy must let these four
+paths through it, as it does the probes. What needs guarding is the bandwidth: these routes have a rate
+limit of their own, `CHOREGOS_DOWNLOAD_RATE_LIMIT_PER_MINUTE` (60 requests per minute and per address by
+default, per replica, keyed as below; 0 switches it off), separate from the sign-in budget.
 
 ## Gateways and what each can do
 

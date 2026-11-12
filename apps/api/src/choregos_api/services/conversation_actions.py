@@ -64,8 +64,7 @@ from .broker import (
 from .conversation_needs import need_identities, previews, write_tools
 from .events import persist_event
 from .identity_exchange import SERVICE, USER_CONSENT, USER_EXCHANGE, Acting
-from .mcp_gateway import route_of
-from .mcp_gateway_identity import GatewayRefusal
+from .mcp_gateway import RouteRefusal, route_of
 
 #: A proposal nobody decided in this time is `expired`.
 EXPIRES_AFTER = timedelta(hours=24)
@@ -232,7 +231,7 @@ async def _propose_governed(
         return "action not proposed: the conversation has no space to act in"
     try:
         await route_of(session, entry.tool.connector)
-    except GatewayRefusal as refused:
+    except RouteRefusal as refused:
         return f"action not proposed: {refused}"
     governed = await tool_action(
         session,

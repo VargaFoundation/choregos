@@ -105,5 +105,10 @@
  "utcnow",
  "uuid7",
  "TaskSubscription",
- "Delegation"
+ "Delegation",
+ "TaskEvent",
+ "Outpost",
+ "OutpostCall",
+ "OutpostEnrolment",
+ "OutpostInstance"
 ]

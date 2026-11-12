@@ -50,7 +50,14 @@ spec:
         app.kubernetes.io/component: api
       annotations:
         # A secret rotation redeploys the pods: otherwise the key rotates to no effect.
-        checksum/config: {{ toJson .Values | sha256sum }}
+        {{- /* Outposts switched off are no part of this pod: nothing of `global.outposts` is rendered
+             here, so it is left out of what the checksum covers, and a change to a door nobody runs
+             restarts no API. Switched on, the whole block counts like any other value. */}}
+        {{- $hashed := .Values }}
+        {{- if not (include "choregos.outpostsEnabled" .) }}
+        {{- $hashed = set (deepCopy .Values) "global" (omit .Values.global "outposts") }}
+        {{- end }}
+        checksum/config: {{ toJson $hashed | sha256sum }}
     spec:
       serviceAccountName: choregos-api
       {{- include "choregos.imagePullSecrets" $ | nindent 6 }}
@@ -231,7 +238,12 @@ spec:
             {{- end }}
             {{- /* A name this chart sets for the API must not also come from global.extraEnv.
                    S47-02/03/04 add their names to this dict. */}}
-            {{- $apiOwned := dict "CHOREGOS_SESSION_SECRET_PREVIOUS" "the session-secret-previous key of global.apiSecretRef" "CHOREGOS_TRUSTED_PROXY_CIDRS" "choregos-api.trustedProxyCidrs" "CHOREGOS_TRUSTED_PROXY_HOPS" "choregos-api.trustedProxyHops" "CHOREGOS_CORS_ORIGINS" "choregos-api.corsOrigins (a list)" "CHOREGOS_OIDC_AUTHORIZATION_ENDPOINT" "choregos-api.oidcEndpoints.authorization" "CHOREGOS_OIDC_TOKEN_ENDPOINT" "choregos-api.oidcEndpoints.token" "CHOREGOS_OIDC_USERINFO_ENDPOINT" "choregos-api.oidcEndpoints.userinfo" "CHOREGOS_OIDC_REQUIRE_EMAIL_VERIFIED" "choregos-api.oidcRequireEmailVerified" "CHOREGOS_OIDC_RELINK_VERIFIED_EMAIL" "choregos-api.oidcRelinkVerifiedEmail" "CHOREGOS_INTERNAL_API_GUARD" "choregos-api.internalApiGuard" "CHOREGOS_RUN_DOOR_HOSTS" "choregos-api.runDoor.hostnames" "CHOREGOS_PUBLIC_HOSTS" "choregos-api.publicHostnames" }}
+            {{- $apiOwned := dict "CHOREGOS_SESSION_SECRET_PREVIOUS" "the session-secret-previous key of global.apiSecretRef" "CHOREGOS_EGRESS_REPORT_KEY" "the egress-report-key key of global.apiSecretRef" "CHOREGOS_TRUSTED_PROXY_CIDRS" "choregos-api.trustedProxyCidrs" "CHOREGOS_TRUSTED_PROXY_HOPS" "choregos-api.trustedProxyHops" "CHOREGOS_CORS_ORIGINS" "choregos-api.corsOrigins (a list)" "CHOREGOS_OIDC_AUTHORIZATION_ENDPOINT" "choregos-api.oidcEndpoints.authorization" "CHOREGOS_OIDC_TOKEN_ENDPOINT" "choregos-api.oidcEndpoints.token" "CHOREGOS_OIDC_USERINFO_ENDPOINT" "choregos-api.oidcEndpoints.userinfo" "CHOREGOS_OIDC_REQUIRE_EMAIL_VERIFIED" "choregos-api.oidcRequireEmailVerified" "CHOREGOS_OIDC_RELINK_VERIFIED_EMAIL" "choregos-api.oidcRelinkVerifiedEmail" "CHOREGOS_INTERNAL_API_GUARD" "choregos-api.internalApiGuard" "CHOREGOS_RUN_DOOR_HOSTS" "choregos-api.runDoor.hostnames" "CHOREGOS_PUBLIC_HOSTS" "choregos-api.publicHostnames" }}
+            {{- if include "choregos.outpostsEnabled" . }}
+            {{- range $name := splitList " " (include "choregos.outpostsOwnedEnv" "all") }}
+            {{- $_ := set $apiOwned $name "global.outposts (its switch, its quotas, the door's url, signingKey, announcedKeys and ratePerMinute)" }}
+            {{- end }}
+            {{- end }}
             {{- range ($.Values.global.extraEnv | default list) }}
             {{- if hasKey $apiOwned .name }}
             {{- fail (printf "global.extraEnv: %s is set by the choregos-api chart; use %s instead (two values for one name: Kubernetes keeps the last one without saying so)" .name (get $apiOwned .name)) }}
@@ -305,6 +317,14 @@ spec:
               value: {{ toJson (compact (concat (ternary (.Values.ingress.hostnames | default list) list (.Values.ingress.enabled | default false)) (.Values.publicHostnames | default list))) | quote }}
             - name: CHOREGOS_INTERNAL_API_URL
               value: {{ .Values.global.internalApiUrl | default "http://choregos-api:8000" | quote }}
+            {{- if include "choregos.outpostsEnabled" . }}
+            # The outposts' door (ADR 0148): its public origin, the key it signs every call with, the
+            # keys announced for a rotation and the rate per instance. The API serves the door unless
+            # `global.outposts.door.dedicated` splits it out, and in both layouts it shows the keys to
+            # pin and the origin with an outpost and its enrolment token. The switch and the quotas of
+            # calls in flight come with `choregos.commonEnv`: the workers read them too.
+            {{- include "choregos.outpostsDoorEnv" . | nindent 12 }}
+            {{- end }}
             # STRUCTURAL, never optional: an API that starts without a session
             # secret signs cookies with an empty value, and a missing run-token key
             # sends every process back to an ephemeral pair — the agent then receives
@@ -323,6 +343,10 @@ spec:
             - name: CHOREGOS_RUN_TOKEN_PUBLIC_KEY
               # Optional: it is DERIVED from the private one (`public_from_private`).
               valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: run-token-public-key, optional: true } }
+            - name: CHOREGOS_EGRESS_REPORT_KEY
+              # Optional: the egress proxy's own key (ADR 0145), which the proxy receives too. Absent,
+              # an agent can rewrite its run's network counters, and the API says so at start-up.
+              valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: egress-report-key, optional: true } }
             - name: CHOREGOS_GITHUB_WEBHOOK_SECRET
               # Optional: no GitHub, no secret — and when empty, the API refuses in staging/prod.
               valueFrom: { secretKeyRef: { name: {{ .Values.global.apiSecretRef }}, key: github-webhook-secret, optional: true } }

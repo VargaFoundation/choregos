@@ -81,6 +81,7 @@ from .knowledge import (
     MemoryStore,
 )
 from .offered_knowledge import KnowledgeSeedTombstone
+from .outposts import Outpost, OutpostCall, OutpostEnrolment, OutpostInstance
 from .plugins import OrgPlugin, OrgPluginApproval, OrgPluginFile
 from .projects import Connector, ModelProfileRow, OrgWorkflow, PolicyDef, Project, Template, WorkflowDef
 from .releases import Deployment, Release
@@ -97,7 +98,7 @@ from .runs import (
 )
 from .secrets import OrgSecret, RemoteCredential
 from .skills import Skill, SkillVersion
-from .tasks import Delegation, TaskSubscription
+from .tasks import Delegation, TaskEvent, TaskSubscription
 from .work_items import Event, Finding, HumanRequest, Run, RunEvent, WorkItem
 
 ALL_TABLES = [
@@ -110,6 +111,7 @@ ALL_TABLES = [
     AssistantRead,
     AssistantToolBinding,
     TaskSubscription,
+    TaskEvent,
     Delegation,
     ConnectedAccount,
     Connector,
@@ -147,6 +149,10 @@ ALL_TABLES = [
     OrgPlugin,
     OrgPluginFile,
     OrgPluginApproval,
+    Outpost,
+    OutpostInstance,
+    OutpostEnrolment,
+    OutpostCall,
 ]
 
 
@@ -243,6 +249,10 @@ __all__ = [
     "OrgSlugAlias",
     "OrgWorkflow",
     "Organization",
+    "Outpost",
+    "OutpostCall",
+    "OutpostEnrolment",
+    "OutpostInstance",
     "PkMixin",
     "PolicyDef",
     "Project",
@@ -256,6 +266,7 @@ __all__ = [
     "Skill",
     "SkillVersion",
     "String",
+    "TaskEvent",
     "TaskSubscription",
     "Template",
     "Text",

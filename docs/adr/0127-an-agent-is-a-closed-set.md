@@ -97,6 +97,14 @@ authorship attestation (ADR 0015) cannot see.
   installing them changes no run (S60-04); their evals stay the gate.
 - A project that relied on opening a catalogue tool to every agent must now find it named by the agents
   that use it; the access endpoint lists the projects' tools no complete version names.
+- Amendment (S60-20): an organisation's knowledge bases survive a catalogue or plugin upgrade. A public
+  plugin cannot name an organisation's base, so the organisation adds it in a version of its own; when
+  that version equals the last one the catalogue wrote except for `knowledge` entries added to it, the
+  agent is not divergent ([ADR 0040](0040-a-built-in-agent-catalogue.md)): the upgrade publishes the new
+  catalogue text with those entries merged in (no duplicate) and the version message says the
+  organisation's knowledge was kept. Both upgrade paths share one function (`kept_knowledge`). `skills`
+  are not kept: a skill grants tools and instructions, which the catalogue vouches for; a base only adds
+  data. Any other difference stays divergent.
 - Not covered: the coding agent's own tools (shell, file edits of an `acp` backend) are bounded by the
   workspace (ADR 0119) and the kernel's confinement (ADR 0094), not by this list.
 

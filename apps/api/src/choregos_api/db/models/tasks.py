@@ -63,3 +63,28 @@ class Delegation(Base, PkMixin, TimestampMixin):
     suspended_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     #: When the person was told it ends soon (`assistant_delegations.remind_expiring`): once per delegation.
     reminded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class TaskEvent(Base, PkMixin):
+    """The journal of the events routed to an installation's `trigger` tasks (S63-21, ADR 0137 point 2).
+
+    One row per delivery that reached the door and was authentic, refused ones included, so that "why did
+    nothing start?" has an answer. Never the payload and never the value that named the subscriber: the
+    summary holds what the platform decided. `user_id` is the subscriber the event was routed to, or nothing
+    (unmatched, ambiguous); it is cleared when that person is erased. `outcome`: `started`, `duplicate`
+    or `refused`."""
+
+    __tablename__ = "task_events"
+    __table_args__ = (Index("ix_task_events_installation_received", "installation_id", "received_at"),)
+
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), index=True)
+    installation_id: Mapped[str] = mapped_column(
+        ForeignKey("assistant_installations.id", ondelete="CASCADE"), index=True
+    )
+    task: Mapped[str] = mapped_column(String(63))
+    user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    event_id: Mapped[str] = mapped_column(String(255))
+    outcome: Mapped[str] = mapped_column(String(16))
+    summary: Mapped[str] = mapped_column(String(300), default="")
+    work_item_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

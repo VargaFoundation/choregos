@@ -1866,7 +1866,7 @@
           "additionalProperties": false,
           "properties": {
             "rule": {
-              "description": "pfrest v2 rule fields: type, interface, ipprotocol, protocol, source, destination, destination_port, descr\u2026",
+              "description": "pfrest v2 rule fields: type, interface, ipprotocol, protocol, source, destination, destination_port, descr…",
               "type": "object"
             }
           },
@@ -1893,7 +1893,7 @@
           "additionalProperties": false,
           "properties": {
             "changes": {
-              "description": "pfrest v2 rule fields: type, interface, ipprotocol, protocol, source, destination, destination_port, descr\u2026",
+              "description": "pfrest v2 rule fields: type, interface, ipprotocol, protocol, source, destination, destination_port, descr…",
               "type": "object"
             },
             "tracker": {
@@ -2276,7 +2276,7 @@
       "properties": {
         "key_rotation": {
           "default": "failover",
-          "description": "with several keys (`api_key.2` \u2026): `failover` uses the first that answers, `round_robin` spreads the calls",
+          "description": "with several keys (`api_key.2` …): `failover` uses the first that answers, `round_robin` spreads the calls",
           "enum": [
             "failover",
             "round_robin"
@@ -2455,7 +2455,7 @@
       "properties": {
         "key_rotation": {
           "default": "failover",
-          "description": "with several keys (`api_key.2` \u2026): `failover` uses the first that answers, `round_robin` spreads the calls",
+          "description": "with several keys (`api_key.2` …): `failover` uses the first that answers, `round_robin` spreads the calls",
           "enum": [
             "failover",
             "round_robin"
@@ -2641,7 +2641,7 @@
         },
         "key_rotation": {
           "default": "failover",
-          "description": "with several keys (`api_key.2` \u2026): `failover` uses the first that answers, `round_robin` spreads the calls",
+          "description": "with several keys (`api_key.2` …): `failover` uses the first that answers, `round_robin` spreads the calls",
           "enum": [
             "failover",
             "round_robin"
@@ -2800,7 +2800,7 @@
         },
         "key_rotation": {
           "default": "failover",
-          "description": "with several keys (`api_key.2` \u2026): `failover` uses the first that answers, `round_robin` spreads the calls",
+          "description": "with several keys (`api_key.2` …): `failover` uses the first that answers, `round_robin` spreads the calls",
           "enum": [
             "failover",
             "round_robin"
@@ -2869,7 +2869,7 @@
         },
         "key_rotation": {
           "default": "failover",
-          "description": "with several keys (`api_key.2` \u2026): `failover` uses the first that answers, `round_robin` spreads the calls",
+          "description": "with several keys (`api_key.2` …): `failover` uses the first that answers, `round_robin` spreads the calls",
           "enum": [
             "failover",
             "round_robin"
@@ -3085,6 +3085,49 @@
   },
   {
     "capabilities": [
+      "mcp"
+    ],
+    "config_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "endpoint": {
+          "description": "the alias of an endpoint in that outpost's policy file",
+          "pattern": "^[a-z][a-z0-9-]{0,62}$",
+          "type": "string"
+        },
+        "outpost": {
+          "description": "an outpost of the same organisation",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+          "type": "string"
+        },
+        "timeout_s": {
+          "default": 30,
+          "description": "seconds before a call is abandoned, the wait for an instance to claim it included",
+          "maximum": 120,
+          "minimum": 1,
+          "type": "number"
+        }
+      },
+      "required": [
+        "outpost",
+        "endpoint"
+      ],
+      "type": "object"
+    },
+    "deprecated": false,
+    "dev_only": false,
+    "display": "MCP server at an outpost",
+    "has_check_config": true,
+    "has_egress": true,
+    "has_factory": true,
+    "kind": "mcp",
+    "operations": [],
+    "pooled_fields": [],
+    "secret_fields": [],
+    "type": "mcp-outpost"
+  },
+  {
+    "capabilities": [
       "notify"
     ],
     "config_schema": {
@@ -3113,6 +3156,28 @@
       "bot_token"
     ],
     "type": "slack"
+  },
+  {
+    "kind": "notify",
+    "type": "teams",
+    "display": "Microsoft Teams (incoming webhook or Workflows URL)",
+    "capabilities": [
+      "notify"
+    ],
+    "config_schema": {
+      "type": "object",
+      "properties": {}
+    },
+    "secret_fields": [
+      "webhook_url"
+    ],
+    "deprecated": false,
+    "pooled_fields": [],
+    "dev_only": false,
+    "has_egress": true,
+    "has_check_config": false,
+    "has_factory": true,
+    "operations": []
   },
   {
     "capabilities": [

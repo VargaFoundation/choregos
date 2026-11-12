@@ -29,8 +29,20 @@ and `2025-03-26`.
 | `summarize_run` | One agent run: stage, backend, model, status, cost, summary | `mcp:read` |
 | `list_pending_decisions` | What waits for a person, with the link where it is decided | `mcp:read` |
 | `create_work_item` | Opens a work item in a project (in its tracker first when external, ADR 0059) | `mcp:write` and the right to control work items |
+| `docs_search` | Searches this platform's user documentation: ranked pages with title, slug, public URL and a snippet | `mcp:read` |
+| `docs_read` | One documentation page as Markdown, by slug, or one of its sections by heading anchor; a long page comes in parts (`offset`) | `mcp:read` |
 
 A tool you are not allowed to use is not announced, and calling it answers like an unknown tool.
+
+**The documentation, from the platform itself** ([ADR 0150](adr/0150-the-instance-serves-its-own-documentation-over-mcp.md)).
+The API image carries the Markdown of the user documentation (`docs/site/` in the repository) of its
+own version, at `/opt/choregos/docs` (`CHOREGOS_DOCS_DIR` overrides). `docs_search` and `docs_read`
+read it, so your assistant answers from the documentation of the version you run, behind your firewall,
+without internet. The links they give point to the public site, `CHOREGOS_DOCS_URL` (default
+`https://docs.varga.foundation/choregos`). Every token that opens the door may use them, bound to a
+project or not; they are audited (`mcp.call`) and rate limited like the other reads. A build without
+documentation answers so, with the public URL. Ask *"how do gates work in Choregos?"*: the client
+should call `docs_search`, then `docs_read`.
 
 ### Assistants (ADR 0139)
 
@@ -253,6 +265,16 @@ Point it at `https://<console-host>/mcp` with the header `Authorization: Bearer 
 Streamable HTTP. The door has no SSE stream and no session: a `GET` answers 405, which the protocol
 allows.
 
+## The CLI
+
+The `choregos` CLI is installed from the instance itself (S62-08): **Integrations › CLI** shows the
+one-line install for the browser's system (`curl -fsSL <instance>/cli/install.sh | sh`, or
+`irm <instance>/cli/install.ps1 | iex` on Windows), the version, every file with its sha256, and the
+first commands (`choregos login --api-url <instance> --token <full-access token> --org <org>`, or the
+`CHOREGOS_API_URL` / `CHOREGOS_TOKEN` / `CHOREGOS_ORG` variables). `choregos self update` replaces the
+binary with the instance's current one. A build that bundles no CLI says so there and links the GitHub
+release of the version it runs. The routes and why they are public: [deployment.md](deployment.md#the-cli-served-by-the-instance-s62-08).
+
 ## An external agent
 
 A client of the door can be **registered as an agent** of the organisation
@@ -337,9 +359,25 @@ the door does:
   expired token ends the registration; so does the final state, once delivered. Registering inline
   in `message/send` is refused: its answer has no place for the secret.
 
-The organisation's card and endpoint are also on the console's **Integrations** page, which creates
-an `a2a` token for the person (30 days, shown once) and lists each project's file limit, with a link
-to the setting.
+The console walks through the same steps with the instance's own values: **Integrations › An
+application or another agent (A2A)** (`/integrations/a2a`, or `/p/<project>/integrations/a2a` for one
+project). It shows the organisation's card and endpoint, then:
+
+1. **the workflows exposed**: per project, which workflows carry `a2a:` (skill id, input modes,
+   required fields from `metadata.inputs`) and which do not, with the block to add, prefilled with the
+   workflow's name, and a link to its YAML tab; each project's file limit, with a link to the setting;
+2. **who calls**: an application's own account (create one or pick one, then issue its token, shown
+   once), which takes `member:manage` on the project, and says so to whoever lacks it; and, second, an
+   `a2a` token of one's own (30 days, shown once) to try the door;
+3. **the calls**, in three tabs (the CLI, `curl` in A2A 0.3.0, A2A 1.0) with the instance's address,
+   the organisation, the chosen skill and its required fields, and the token just issued, or a
+   placeholder; `tests/web/test_a2a_snippets_match_the_door.py` holds every method and command they
+   name to the door's tables and the CLI;
+4. **the follow-up**: each task is a work item of the project, started by `machine:<address>` for an
+   application; a decision is taken in the inbox; a token is revoked in **Settings › People ›
+   Applications** or **My account › Access tokens**.
+
+Each step links to the public documentation (`/integrate/a2a`, `/cli/install`).
 
 The card needs the token too, since its skills depend on who asks. Calls are audited (`a2a.call`),
 each stored file too (`workitem.input_file`, with its name, size and digest); they are rate-limited
@@ -526,6 +564,62 @@ organisation connector with `plugin_server` set, run by the platform in-cluster 
 namespace; `services/plugin_servers.py`) is not an upstream. It is never reached through the gateway
 and `required` mode does not refuse it. See [Servers](plugins.md#servers) and
 [Plugin servers](deployment.md#plugin-servers).
+
+## A tool server at an outpost (ADR 0149)
+
+Some servers live where nothing outside may connect: a production network, an internal tracker or
+forge, a database behind a firewall whose rule is "no inbound". If your organisation already exposes
+them through its own MCP gateway, use the section above: it needs nothing more. Otherwise an
+**outpost** is installed inside that network ([ADR 0147](adr/0147-an-outpost-only-dials-out.md)): a
+daemon that only dials out to Choregos and makes the calls it is handed. A connector of type
+`mcp-outpost` is how an organisation uses a server through one
+([ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md)).
+
+**What it is declared with.** An outpost's name, the alias of an endpoint in that outpost's policy
+file, and a timeout (`McpOutpostConnectorConfig` in `packages/contracts/openapi.yaml`). No URL and no
+secret: the address and the credential are the outpost's and exist in its file only. A declaration
+that carries either is a 422, and so is the name of an outpost the organisation does not have. The
+walk-through is the procedure
+[Connect an MCP server that lives at an outpost](procedures/connector.mcp.mcp-outpost.md).
+
+**What changes for agents, and what does not.** An agent names the same tools as before. The agent's
+selection, the operation's policy and groups, its argument schema, the grants that bind its
+arguments, the approval, the result cap and the injection guard apply as for a direct connector
+(`services/broker.py`): they are decided before a call leaves, and what the platform refuses writes
+nothing an outpost could claim. A call is booked in the cost ledger under `mcp:<connector>` and its
+`tool.called` event carries the same digests. What changes is the transport: instead of an HTTP call,
+the call waits in the platform's database until an instance of the outpost claims it at its next poll
+(`services/outpost_route.py`), sealed to that instance and signed by the door. The outpost is told
+who the call is made for, as names it may log and decides nothing on; it reads from its own server
+whether a tool writes. Each call is a line of the network activity under `outpost:<name>/<alias>`:
+the platform opened no connection, so the organisation's allowed hosts and per-host rate do not
+apply to it; the outpost's own ceilings and the door's quotas do.
+
+**What it can refuse**, each a tool error that names the outpost, never a crash:
+
+| Code | When | Booked |
+| :-- | :-- | :-- |
+| `outpost_paused` | the outpost is paused or revoked, or outposts are switched off | no |
+| `outpost_offline` | no instance that serves the alias polled in the last minute, or none took the call within the connector's timeout | no |
+| `outpost_refused` | the outpost's own policy refused; `refusal` is its code (`tool_not_allowed`, `write_denied`, `unknown_endpoint`…) | no |
+| `outpost_not_admitted` | a quota of calls in flight or per minute is reached, or the call is too large to cross the door | no |
+| `outpost_timeout` | an instance took the read and its server did not answer in time | yes: it may have been executed |
+
+At declaration and at discovery the same refusals are a 409 that carries the code (a quota is a 429).
+A call that reached no server is not booked.
+
+**Limits of this version.**
+
+- **Reads only.** A write through an outpost is opened only under the rule that it is delivered at
+  most once (ADR 0149 §5-6); until the platform carries that rule, a write operation of an
+  `mcp-outpost` connector cannot be set to `allowed` or `approval`.
+- **The connector's own identity only.** The call reaches the server under the credential the
+  outpost holds for the alias. A need that must be called as the person cannot be bound to such a
+  connector.
+- **Mode `required` of the MCP gateway does not refuse it** (ADR 0149 §8): through an outpost
+  Choregos holds no upstream credential and opens no upstream connection.
+- **An outpost does not keep data where it is.** A tool's result travels to Choregos, is bounded and
+  screened there, and is read by a model.
 
 ## Limits
 

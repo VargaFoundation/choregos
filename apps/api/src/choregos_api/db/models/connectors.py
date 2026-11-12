@@ -54,6 +54,12 @@ class OrgConnector(Base, PkMixin, TimestampMixin):
     #: `operations`, the Service URL). Written by the installer only, never by the connector routes:
     #: the broker reads its operations as the governance floor. `NULL` for any other connector.
     plugin_server: Mapped[dict[str, Any] | None] = mapped_column(Json, nullable=True)
+    #: The outpost an `mcp-outpost` connector routes to (ADR 0149 §1): how the platform's own paths
+    #: learn which outpost to name before they touch its rows (ADR 0148 §6), and why an outpost that
+    #: still has connectors is not deleted. `NULL` for any other connector.
+    outpost_id: Mapped[str | None] = mapped_column(
+        ForeignKey("outposts.id", ondelete="RESTRICT"), nullable=True, index=True
+    )
 
 
 class OrgConnectorProject(Base, PkMixin, TimestampMixin):

@@ -70,7 +70,15 @@ def host_of(url: str | None) -> str | None:
 
 
 def connector_host(config: Mapping[str, Any] | None) -> str | None:
-    """The host a connector's configuration points at, when it points at one."""
+    """The host a connector's configuration points at, when it points at one.
+
+    A connector reached through an outpost points at none (ADR 0149 §11): its `endpoint` is an alias
+    in that outpost's policy file, never an address, and the platform opens no connection for it.
+    Read as a host, the alias would be judged by the organisation's network policy, rate-limited
+    with whatever direct connector happens to bear the same name, and journaled as a place the
+    platform reached."""
+    if (config or {}).get("outpost"):
+        return None
     for key in URL_KEYS:
         host = host_of((config or {}).get(key))
         if host:

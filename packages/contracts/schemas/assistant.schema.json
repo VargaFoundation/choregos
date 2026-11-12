@@ -179,7 +179,13 @@
         "idempotency": {
           "type": "string",
           "maxLength": 255,
-          "description": "for `poll`: the pointer of the objects' identity, so that one object never starts twice"
+          "description": "for `poll`: the pointer of the objects' identity, so that one object never starts twice; for `trigger`: the pointer of the event's identifier (else the sender's `Idempotency-Key`, else the body's digest), so that one event never starts twice"
+        },
+        "subscriber": {
+          "type": "string",
+          "pattern": "^/",
+          "maxLength": 255,
+          "description": "for `trigger`: the JSON pointer, in the event's payload, of the email of the person it is for; matched, case-insensitively, against the enabled subscriptions to the task. An event that names none, several, or nobody subscribed is refused and journaled"
         }
       },
       "additionalProperties": false,
@@ -191,6 +197,10 @@
         {
           "if": { "properties": { "kind": { "const": "poll" } } },
           "then": { "required": ["cron", "operation", "when"] }
+        },
+        {
+          "if": { "properties": { "kind": { "const": "trigger" } } },
+          "then": { "required": ["subscriber"], "not": { "anyOf": [{ "required": ["cron"] }, { "required": ["operation"] }] } }
         }
       ]
     },

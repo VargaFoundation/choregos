@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://choregos.dev/schemas/outpost-refusal.schema.json",
+  "title": "OutpostRefusal",
+  "description": "Why an outpost did not execute a call it received: the body of the door's `refuse` verb. A code from a closed list and nothing else (ADR 0148 §9): it names a class of refusal and never the rule that produced it (ADR 0147 §10). Whatever the code, the endpoint's server did not receive the call.",
+  "type": "object",
+  "required": [
+    "code"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "code": {
+      "enum": [
+        "unknown_endpoint",
+        "tool_not_allowed",
+        "write_denied",
+        "payload_too_large",
+        "busy",
+        "endpoint_unavailable",
+        "cannot_record",
+        "unsupported_kind",
+        "signature_refused",
+        "call_unreadable",
+        "deadline_passed",
+        "cancelled"
+      ],
+      "description": "`unknown_endpoint`: the policy file has no endpoint under this alias. `tool_not_allowed`: the tool is outside the endpoint's patterns. `write_denied`: the endpoint denies writes and its server does not declare the tool read-only. `payload_too_large`: the arguments weigh more than the endpoint's ceiling. `busy`: the concurrency ceiling is reached, or the outpost is stopping; it also covers a call the daemon claimed and never began because it was stopping or was restarted. `endpoint_unavailable`: the outpost could not reach or open its own server, and sent it nothing. `cannot_record`: the outpost could not write its journal or its audit line, so it did not make the call. `unsupported_kind`: the daemon does not know this kind of call. `signature_refused`: the call is not signed by a key the outpost's policy file pins, or its signature binds another call, another instance or another envelope; the envelope was not opened. `call_unreadable`: the envelope does not open with this instance's key, or what it holds is not a call. `deadline_passed`: the deadline had passed before the outpost could start, or the call's id met an entry of the journal that had lapsed. `cancelled`: the door cancelled the call before the outpost started it."
+    }
+  }
+}

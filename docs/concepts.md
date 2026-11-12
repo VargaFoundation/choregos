@@ -99,7 +99,9 @@ before the ADR runs as it did. The project only tightens; it never widens a vers
 allowed is not offered, and calling it answers 404 like an unknown tool. The platform's own tools (the
 frame) are always there. `GET /orgs/{org}/agents/{slug}/access?project=` shows the result with an origin
 for each item (`agent`, `project`, `frame`, `refused` and why), and which parts the version still
-inherits. The run and that page read the same function.
+inherits. The run and that page read the same function. A tool that lives at an outpost also says where:
+the outpost, the alias, and whether it is online now, so that a tool that will not answer is seen before a
+run ([ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md) §10).
 
 ## Agent kinds and runtimes
 
@@ -309,6 +311,22 @@ that host and its subdomains, `*.example.com` only its subdomains, `*` any publi
 addresses are never allowed. An agent that asks for a host its project or organisation does not allow
 is refused when published, and its run is refused at admission. What each layer can and cannot stop is
 in [security](security.md).
+
+## Outposts
+
+A connector's tools may live in a network the platform cannot connect to. An **outpost** is a place
+of one organisation, enrolled by a person, where a daemon runs that **only dials out**
+([ADR 0147](adr/0147-an-outpost-only-dials-out.md)): it polls the platform for the tool calls routed
+to it, makes them against servers of its own network, and answers. The platform holds an alias,
+never an address or a credential of that side. The outpost holds a policy file the platform cannot
+write, and makes only the calls that file allows and the platform signed.
+
+Where a tool lives changes nothing of what governs its call: the platform decides it before anything
+leaves, and bounds and books the result when it comes back. What moves to the outpost is the tool
+call, not the agent: no prompt, no model key and no run reaches it. An outpost does not give data
+residency, since a tool's result still travels to the platform; and an organisation that already
+exposes its tools through an MCP gateway of its own needs none. Outposts are off unless the
+deployment turns them on, and carry reads only for now: see [Outposts](outposts.md).
 
 ## Findings and trains
 

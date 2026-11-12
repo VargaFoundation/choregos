@@ -33,9 +33,68 @@ HEADER = """# CLI reference
 Generated from the CLI itself by `tools/gen_cli_reference.py` — do not edit by hand
 (`make docs-cli` regenerates it, a test checks it is current).
 
+## Installing the CLI
+
+`choregos` ships as one native, self-contained file per platform: nothing to install first, no
+Python, no SDK, no runtime. Each release attaches them to its GitHub release, under names that
+never change, and the API image carries the same files in `/opt/choregos/cli/`:
+
+| Platform | File |
+|:--|:--|
+| Linux x86_64 (glibc 2.28 or later: RHEL 8, Debian 10, Ubuntu 18.10 on) | `choregos-linux-x86_64` |
+| Linux arm64 (same) | `choregos-linux-arm64` |
+| macOS, Apple silicon | `choregos-macos-arm64` |
+| macOS, Intel | `choregos-macos-x86_64` |
+| Windows x86_64 | `choregos-windows-x86_64.exe` |
+
+Beside them, `SHA256SUMS`, `manifest.json` (the version, and each file's platform, digest and
+size) and a cosign bundle per file (`<file>.sigstore.json`). Download one, check it, put it on the
+PATH:
+
+```sh
+curl -fsSLO https://github.com/VargaFoundation/choregos/releases/download/v<version>/choregos-linux-x86_64
+curl -fsSLO https://github.com/VargaFoundation/choregos/releases/download/v<version>/SHA256SUMS
+sha256sum --ignore-missing -c SHA256SUMS          # macOS: shasum -a 256 --ignore-missing -c SHA256SUMS
+install -m 0755 choregos-linux-x86_64 ~/.local/bin/choregos
+choregos --version
+```
+
+`cosign verify-blob --bundle SHA256SUMS.sigstore.json --certificate-identity
+https://github.com/VargaFoundation/choregos/.github/workflows/release.yml@refs/tags/v<version>
+--certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS` proves the sums
+come from the release workflow. The Windows and macOS files are not yet signed by a platform
+vendor (`docs/plan/BLOCKERS.md`): Windows SmartScreen warns, and a macOS browser download needs
+`xattr -d com.apple.quarantine choregos-macos-arm64` once. The first call unpacks the binary into
+the user's cache directory (`~/.cache/choregos`, `~/Library/Caches/choregos`,
+`%LOCALAPPDATA%\\choregos`); later calls start from there.
+
+From a checkout, `make cli-binary` builds the binary of the machine it runs on into `dist/cli/`
+(Nuitka; on Linux in the `manylinux_2_28` image, so docker is needed) and `make cli-binary-smoke`
+runs the release's smoke test on it. The Python package (`packages/cli`, `uv run choregos`)
+remains the way to work on the CLI itself.
+
+## Profile
+
 The profile lives in `~/.config/choregos/config.json` (`CHOREGOS_CONFIG` overrides the
 path): `api_url`, `token`, `org`. `choregos login` writes it; `CHOREGOS_API_URL`,
 `CHOREGOS_TOKEN` and `CHOREGOS_ORG` are read when no profile exists.
+
+## Install from your instance
+
+Every Choregos instance serves the CLI in the exact version it runs, through the console's host:
+no Python, no access to GitHub needed. The console shows the command for your system under
+Integrations › CLI.
+
+```sh
+curl -fsSL https://<your-instance>/cli/install.sh | sh        # Linux, macOS: ~/.local/bin/choregos
+irm https://<your-instance>/cli/install.ps1 | iex             # Windows: %LOCALAPPDATA%\\Programs\\choregos
+```
+
+The scripts check the binary's sha256 against the instance's manifest
+(`/downloads/cli/manifest.json`) and never use sudo; `sh -s -- --prefix DIR` installs into `DIR/bin`.
+`choregos self update` later replaces the binary with the instance's current one. When the CLI
+talks to an instance that runs another version, it says so in one line on stderr, at most once a
+day (`CHOREGOS_NO_VERSION_CHECK=1` silences it).
 
 """
 
@@ -68,6 +127,8 @@ def _render(command: Any, path: list[str], output: list[str]) -> None:
             if command.help:
                 output.append(command.help.strip() + "\n")
         for sub_name in sorted(subcommands):
+            if getattr(subcommands[sub_name], "hidden", False):
+                continue  # not for people (`binary-info` is the binaries' smoke test's)
             _render(subcommands[sub_name], [*path, sub_name], output)
         return
     context = command.make_context(name, [], resilient_parsing=True)

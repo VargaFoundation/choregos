@@ -183,6 +183,37 @@ async def test_the_only_administrator_approves_their_own_high_risk_skill(
     assert event["sole_admin"] is True, event
 
 
+async def test_the_importer_forces_the_approval_with_a_reason_and_the_audit_says_so(
+    client: AsyncClient, admin: str
+) -> None:
+    """With a second administrator who cannot read it in time, the importer may force it: never
+    silently, never without a reason."""
+    created = await client.post("/api/v1/orgs/varga/skills", json={"files": WITH_SCRIPT})
+    assert created.json()["review_status"] == "pending_review"
+    await _second_admin()
+    url = "/api/v1/orgs/varga/skills/fill-forms/versions/1/approve"
+
+    refused = await client.post(url)
+    assert refused.status_code == 403 and "force it with a reason" in refused.text
+    short = await client.post(url, json={"force": True, "reason": "go"})
+    assert short.status_code == 422 and "reason" in short.text
+    unforced = await client.post(url, json={"reason": "the second admin is away this week"})
+    assert unforced.status_code == 403, "a reason alone does not force"
+
+    forced = await client.post(url, json={"force": True, "reason": "demo for the board, second admin away"})
+    assert forced.status_code == 200, forced.text
+    assert forced.json()["review_status"] == "approved"
+    from choregos_api.db.models import AuditLog
+    from choregos_api.db.session import session_scope
+    from sqlalchemy import select
+
+    async with session_scope() as session:
+        rows = (await session.execute(select(AuditLog).where(AuditLog.action == "skill.approve"))).scalars()
+        (event,) = [dict(r.payload) for r in rows]
+    assert (event["forced"], event["reason"]) == (True, "demo for the board, second admin away"), event
+    assert "sole_admin" not in event
+
+
 async def test_a_low_or_medium_skill_is_usable_at_once(client: AsyncClient, admin: str) -> None:
     created = await client.post(
         "/api/v1/orgs/varga/skills", json={"files": {**PLAIN, "references/fields.md": "- name\n"}}

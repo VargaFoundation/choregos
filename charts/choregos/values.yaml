@@ -15,7 +15,7 @@ global:
   # `choregos-api.runDoor.hostnames`, and write that URL here (ADR 0144).
   internalApiUrl: ""
   imageRegistry: ghcr.io/vargafoundation
-  imageTag: "0.25.3"
+  imageTag: "0.27.0"
   imagePullPolicy: IfNotPresent
   # Images are referenced by digest in staging and prod (Kyverno policy).
   imageDigest: ""
@@ -259,6 +259,91 @@ global:
     # External gateway: the CIDRs the API and the workers may reach.
     cidrs: []
     ports: [443]
+  # Outposts (ADRs 0147-0149, docs/deployment.md#outposts-adrs-0147-0149): places an organisation enrols,
+  # which only dial out to this platform, through a door of their own (`/outposts/v1`). Off by default:
+  # nothing of the door is rendered and no process is told to serve it. It lives under `global` because
+  # the API, the workers and this chart's own templates all read it.
+  outposts:
+    # `CHOREGOS_OUTPOSTS` for the API and the workers. It is also the one switch that stops every outpost.
+    enabled: false
+    # The most calls an outpost, and all the outposts of one organisation, have in flight at once
+    # (`CHOREGOS_OUTPOSTS_CALLS_IN_FLIGHT_PER_OUTPOST`, `…_PER_ORGANISATION`): given to whoever places a
+    # call, the API and the workers.
+    callsInFlight:
+      perOutpost: 128
+      perOrganisation: 512
+    door:
+      # The door's OWN hostnames: the one name an outpost's firewall opens (port 443, outbound), and
+      # the one you can rate-limit or restrict by source apart from the console's. The chart routes
+      # them to `/outposts` and to nothing else, in a route named `choregos-outposts-door` beside the
+      # API's (same `choregos-api.ingress` kind, class and gateway). A hostname that is also the
+      # console's, the API's or a run door's fails the render: a door is a name of its own.
+      hostnames: []
+      # The door's public origin (`CHOREGOS_OUTPOSTS_DOOR_URL`): scheme and host, no path. It is what
+      # an outpost's operator writes as `control_plane`, and what every request an outpost signs is
+      # compared with. Empty: `https://<the first hostname>`. Set it when the public name is not one
+      # the chart routes (a route made outside this chart), or for a bench over `http`.
+      url: ""
+      # The door's signing key (`CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY`, ADR 0148 §13): an Ed25519 private
+      # key, PEM (PKCS#8), a secret of the installation. Every outpost pins its public half, so it must
+      # never change without the overlap of a rotation (docs/deployment.md).
+      signingKey:
+        # A Secret of the release's namespace that you create and keep, and name here:
+        #   openssl genpkey -algorithm ed25519 -out door.pem
+        #   kubectl create secret generic outposts-door-key --from-file signing-key=door.pem
+        # Empty: the chart draws one at the first installation, in the Secret
+        # `<release>-outposts-door`, reads it back at every upgrade (`lookup`), and marks it immutable
+        # and kept: an upgrade cannot change it, an uninstall does not delete it. `lookup` needs the
+        # cluster: Argo CD and `helm template | kubectl apply` render without it and would draw a new
+        # key at every render, which the immutable Secret then refuses. There, create the Secret.
+        existingSecret: ""
+        key: signing-key
+      # Public keys announced beside the one that signs, for a rotation
+      # (`CHOREGOS_OUTPOSTS_DOOR_ANNOUNCED_KEYS`): the next key before the door signs with it, the
+      # former one after. Each is the unpadded base64url of 32 raw bytes; three at most.
+      announcedKeys: []
+      # The most requests one instance sends the door in a minute, counted per replica
+      # (`CHOREGOS_OUTPOSTS_DOOR_RATE_PER_MINUTE`); 0 lifts the limit.
+      ratePerMinute: 1200
+      # A poll waits up to 25 seconds before it answers with nothing: the entrance must not cut a
+      # request before that, nor hold its answer back in a buffer.
+      # `kind: httproute`: the route's `timeouts.request` (Gateway API v1.2 and later). Without it an
+      # implementation applies its own default, and some cut a request at 15 seconds. Empty: the
+      # field is not rendered, for a Gateway API whose HTTPRoute has no `timeouts` yet.
+      requestTimeout: 60s
+      # `kind: ingress`: the door Ingress's own annotations. There is no portable one for a timeout:
+      # these two are ingress-nginx's and say nothing to another controller. Write your controller's
+      # equivalents here (a read timeout above 25 seconds, no response buffering), and its rate
+      # limit or its source restriction for this entrance.
+      annotations:
+        nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+        nginx.ingress.kubernetes.io/proxy-buffering: "off"
+      # false: the API serves the door, as one more router. true: the door has its own Deployment,
+      # `choregos-outposts-door` (the API image, `python -m choregos_api.outposts`): the four verbs
+      # and nothing else of the API, with its own bounded connection pool, so that polls waiting by
+      # the hundred take no worker and no connection from the console and the runs (ADR 0148 §8).
+      # The route then leads to it. The sweep that ends leases stays in the API, in both layouts.
+      dedicated: false
+      replicas: 2
+      # This Deployment's own pool: each replica holds at most size + maxOverflow connections. A
+      # poll that waits holds none; a connection is taken for the length of a look or of an answer.
+      pool:
+        size: 5
+        maxOverflow: 5
+        timeoutSeconds: 10
+      # A pod told to stop lets the polls it holds end by themselves: 30 seconds at most (the longest
+      # poll and the margin of its slot). The render refuses a value that is not above that.
+      terminationGracePeriodSeconds: 45
+      # Variables for this Deployment only. It does NOT receive `global.extraEnv`: that list carries
+      # connector secrets, and the door reaches no connector. An edition whose key wrapper needs a
+      # setting gives it here. Same shape: `name` and one of `value` or `valueFrom`.
+      extraEnv: []
+      resources:
+        requests: { cpu: 100m, memory: 256Mi }
+        limits: { cpu: "1", memory: 512Mi }
+      podDisruptionBudget:
+        enabled: true
+        minAvailable: 1
   logLevel: INFO
   # Anti-affinity between the replicas of a same component: `soft` (preferred), `hard`
   # (one replica per node, otherwise no pod) or `none`.

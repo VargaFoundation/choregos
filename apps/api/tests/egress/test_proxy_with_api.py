@@ -261,3 +261,28 @@ async def test_end_to_end_the_proxy_stops_serving_a_run_that_was_closed(
             refused.close()
         finally:
             await proxy.close()
+
+
+async def test_the_proxys_reports_carry_its_key_and_land_when_the_api_requires_it(
+    client: AsyncClient,
+    project: dict[str, Any],
+    edge: tuple[Counting, AsyncClient],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ADR 0145: the API refuses a report made with the egress token alone; the proxy's carry its key."""
+    from choregos_api.config import reset_settings_cache
+
+    monkeypatch.setenv("CHOREGOS_EGRESS_REPORT_KEY", "the-proxys-own-key")
+    reset_settings_cache()
+    headers = await _run(project, "run-edge-key", agent_slug="pip", agent_version=1)
+    _, http = edge
+    minted = await http.post("/api/v1/internal/runs/run-edge-key/egress-token", headers=headers)
+    assert minted.status_code == 200, minted.text
+    egress = minted.json()["token"]
+
+    without = Reporter(HttpDecisionSink(BASE, client=http))
+    without.record("run-edge-key", egress, "pypi.org", 443, "allowed", "allowed:pypi.org")
+    assert await without.flush() == 0
+    with_key = Reporter(HttpDecisionSink(BASE, client=http, report_key="the-proxys-own-key"))
+    with_key.record("run-edge-key", egress, "pypi.org", 443, "allowed", "allowed:pypi.org")
+    assert await with_key.flush() == 1

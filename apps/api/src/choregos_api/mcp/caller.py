@@ -13,7 +13,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..config import Settings
 from ..db.models import ApiToken, MachineAccount, Organization, Project, User
 from ..db.session import ALL_ORGS, limit_to_organisations
-from ..deps import _aware, _principal_from_user, record_usage
+from ..deps import (
+    OUTPOST_REFUSAL,
+    _aware,
+    _principal_from_user,
+    presents_outpost_signature,
+    record_usage,
+)
 from ..rbac import Principal
 from ..schemas.agents import grant_name
 from ..security import hash_api_token
@@ -99,6 +105,10 @@ async def identify(
 
     `scopes` are those of the door asking: the MCP door's, or the A2A door's (ADR 0078), which
     shares everything else — OAuth, agents, revocation — and refuses `*` the same way."""
+    if presents_outpost_signature(request):
+        # An outpost takes its assignments at its own door and calls no tool or task of the platform
+        # (ADR 0147 §3, ADR 0148 §1): refused here whatever token comes with the signature.
+        raise Refusal(403, OUTPOST_REFUSAL)
     header = request.headers.get("authorization", "")
     if not header.lower().startswith("bearer "):
         wanted = " or ".join(sorted(scopes))

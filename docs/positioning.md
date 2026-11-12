@@ -89,6 +89,14 @@ servers' side. Choregos can sit behind the one an organisation already runs: its
 servers with the same approvals, ledger and journal as for any other connector, and Choregos holds none of
 the credentials of the servers it serves. It never replaces a gateway and never becomes one ([ADR 0105](adr/0105-choregos-consumes-an-mcp-gateway-it-never-is-one.md)).
 
+For tools in a network nothing outside may connect to, and for an organisation with no gateway there,
+Choregos ships an **outpost** ([ADR 0147](adr/0147-an-outpost-only-dials-out.md); [Outposts](outposts.md)).
+Like a forge's self-hosted runner, it is a program installed inside that connects out; unlike one, it
+runs no job and no code the platform sends, only the tool calls its own policy file allows, against
+MCP servers its operator runs. It is not a tunnel either: the platform names an alias and a tool,
+never a host. Runners and tunnels are mature and do more. An outpost does one thing, carries reads
+only so far, gives no data residency, and has not run on a real network yet.
+
 ## Standards
 
 - **ACP**: adopted (ADR 0002); more than fifty agents speak it.

@@ -12,10 +12,14 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from . import __version__
 from .a2a import a2a_app
+from .binary_info import binary_info
 from .client import ApiError, Client, NoOrganisationError, Profile
 from .knowledge import knowledge_app
+from .outposts import outposts_app
 from .plugins import plugin_app
+from .self_update import self_app
 
 app = typer.Typer(
     add_completion=True, help="Choregos — a work item comes in, a controlled release comes out."
@@ -36,6 +40,7 @@ admin_app.add_typer(secrets_app, name="secrets")
 app.add_typer(orgs_app, name="orgs")
 app.add_typer(tokens_app, name="tokens")
 app.add_typer(machines_app, name="machines")
+app.add_typer(outposts_app, name="outposts")
 app.add_typer(admin_app, name="admin")
 app.add_typer(projects_app, name="projects")
 app.add_typer(items_app, name="items")
@@ -47,8 +52,29 @@ app.add_typer(dev_app, name="dev")
 app.add_typer(knowledge_app, name="knowledge")
 app.add_typer(plugin_app, name="plugin")
 app.add_typer(a2a_app, name="a2a")
+app.add_typer(self_app, name="self")
 
 console = Console()
+
+
+def _print_version(value: bool) -> None:
+    if value:
+        typer.echo(f"choregos {__version__}")
+        raise typer.Exit()
+
+
+@app.callback()
+def _root(
+    version: Annotated[
+        bool,
+        typer.Option("--version", callback=_print_version, is_eager=True, help="Print the version and exit."),
+    ] = False,
+) -> None:
+    """Options of `choregos` itself, before any command."""
+
+
+# Hidden: the native binaries' smoke test asks the binary what it knows about itself (S62-07).
+app.command("binary-info", hidden=True)(binary_info)
 
 
 class TransportSafeClient(Client):

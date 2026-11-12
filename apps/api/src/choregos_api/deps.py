@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 
 import jwt
-from choregos_contracts import Role
+from choregos_contracts import SIGNATURE_HEADER, Role
 from choregos_core import utcnow
 from choregos_core.run_closure import run_is_closed
 from fastapi import Depends, Header, Query
@@ -145,6 +145,23 @@ async def principal_for_user(session: AsyncSession, user: User, *, narrow: bool 
     return await _principal_from_user(session, user, narrow=narrow)
 
 
+#: What the REST API, the MCP door and the A2A door answer a request that carries an outpost's signature.
+OUTPOST_REFUSAL = (
+    "an outpost's signature opens the outposts' door only: this request carries one "
+    f"(`{SIGNATURE_HEADER}`), and an outpost holds no session, no API token and no permission"
+)
+
+
+def presents_outpost_signature(request: HTTPConnection) -> bool:
+    """Whether the request says it is an outpost's (ADR 0147 §3).
+
+    A request signed by an instance resolves to a principal of kind `outpost`, and only the outposts'
+    door reads that signature (ADR 0148 §4). The REST API, the MCP door and the A2A door do not verify
+    it: they refuse whatever presents it, before they read a session or a token, so that a request is
+    never an outpost's and a person's at once."""
+    return SIGNATURE_HEADER in request.headers
+
+
 def is_rest_token(token: ApiToken) -> bool:
     """Does this token open the REST API? A token older than scopes (empty list) counts as `*`."""
     return "*" in (token.scopes or ["*"])
@@ -169,6 +186,8 @@ async def current_principal(
     The token and the user are read in PLATFORM scope: `api_tokens` and `users` are under RLS since
     0.11, and we do not yet know who is speaking. `_principal_from_user` narrows afterwards.
     """
+    if presents_outpost_signature(request):
+        raise forbidden(OUTPOST_REFUSAL)
     await limit_to_organisations(session, ALL_ORGS)
     if authorization and authorization.lower().startswith("bearer "):
         raw = authorization.split(" ", 1)[1].strip()
@@ -427,6 +446,24 @@ async def run_claims(
 RunAuth = Annotated[RunClaims, Depends(run_claims)]
 
 
+def _network_token(id: str, authorization: str | None) -> tuple[RunClaims, bool]:
+    """The run's claims from its run token or its egress token, and whether it was the egress one."""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise unauthorized("missing run token")
+    token = authorization.split(" ", 1)[1].strip()
+    egress = False
+    try:
+        claims = verify_run_token(token)
+    except jwt.PyJWTError:
+        try:
+            claims, egress = verify_egress_token(token), True
+        except jwt.PyJWTError as exc:
+            raise forbidden(f"invalid run or egress token: {exc}") from exc
+    if claims.run_id != id:
+        raise forbidden("this token belongs to another run")
+    return claims, egress
+
+
 async def network_claims(
     id: str,
     session: Db,
@@ -434,24 +471,35 @@ async def network_claims(
 ) -> RunClaims:
     """A run's network routes (ADR 0115): its run token, or its egress token — the one the proxy
     variables carry, which the agent inherits. Every other internal route takes the run token only."""
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise unauthorized("missing run token")
-    token = authorization.split(" ", 1)[1].strip()
-    try:
-        claims = verify_run_token(token)
-    except jwt.PyJWTError:
-        try:
-            claims = verify_egress_token(token)
-        except jwt.PyJWTError as exc:
-            raise forbidden(f"invalid run or egress token: {exc}") from exc
-    if claims.run_id != id:
-        raise forbidden("this token belongs to another run")
+    claims, _ = _network_token(id, authorization)
     bind(run_id=claims.run_id, project=claims.project_slug, work_item=claims.work_item_key)
     await limit_to_organisations(session, ALL_ORGS)
     return claims
 
 
 NetworkAuth = Annotated[RunClaims, Depends(network_claims)]
+
+
+async def report_claims(
+    id: str,
+    session: Db,
+    authorization: Annotated[str | None, Header()] = None,
+    x_choregos_egress_key: Annotated[str | None, Header()] = None,
+) -> RunClaims:
+    """The proxy's report (ADR 0145): the run token, or the egress token WITH the proxy's own key.
+
+    The agent inherits the egress token, not the key: without this, it could post its own run's
+    counters. A deployment that configured no key accepts the egress token alone, as before."""
+    claims, egress = _network_token(id, authorization)
+    key = get_settings().egress_report_key
+    if egress and key and not hmac.compare_digest((x_choregos_egress_key or "").encode(), key.encode()):
+        raise forbidden("a report made with the egress token needs the egress proxy's key")
+    bind(run_id=claims.run_id, project=claims.project_slug, work_item=claims.work_item_key)
+    await limit_to_organisations(session, ALL_ORGS)
+    return claims
+
+
+ReportAuth = Annotated[RunClaims, Depends(report_claims)]
 
 
 async def refuse_closed_run(session: AsyncSession, run_id: str) -> None:

@@ -1931,6 +1931,65 @@
     "origin": "shipped"
   },
   {
+    "id": "connector.mcp.mcp-outpost",
+    "title": "Connect an MCP server that lives at an outpost",
+    "version": 1,
+    "audience": "org_admin",
+    "applies_to": {
+      "connector": "mcp/mcp-outpost"
+    },
+    "link": null,
+    "reviewed": "2026-11-12",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- The server lives in a network nothing outside may connect to. An **outpost** is installed there:\n  the daemon `choregos-outpost`, which only dials out to Choregos and makes the calls it is handed.\n- An organisation administrator has created the outpost in Choregos, and a person has approved an\n  instance of it against the fingerprint the daemon printed. Without an approved instance that\n  polls, the connector answers \"offline\".\n- **An outpost does not keep data where it is.** A tool's result travels to Choregos, is bounded and\n  screened there, and is read by a model. A result that must not leave that network must not be a\n  tool's answer.\n- An organisation administrator declares the connector. What an agent may then call is decided tool\n  by tool, below."
+      },
+      {
+        "key": "at",
+        "title": "At your outpost",
+        "markdown": "The address of the server and the credential that opens it are written in the outpost's own policy\nfile, by whoever runs the outpost. **Choregos never holds either**: it names an alias, and the\noutpost decides alone what that alias reaches.\n\n1. In the policy file, under `endpoints`, give the server an alias: its `url` (reachable from the\n   outpost), where its credential is read (`auth.from_file`), and the tool-name patterns the outpost\n   lets through (`tools`).\n2. `writes` is `deny` unless the file says `allow`: a tool the server does not declare read-only is\n   refused by the outpost itself.\n3. Restart the daemon, then run `choregos-outpost doctor`: it checks the door, the policy file and\n   every alias."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "- The connector's tools act with the credential **the outpost** holds for that alias; nothing in\n  Choregos can widen it. Prefer an account whose rights are exactly what the agents should have.\n- Tools are **born closed**: after discovery each tool is `forbidden` until an administrator opens\n  it. A read can be `allowed`.\n- **A write cannot be opened yet.** A write through an outpost is opened only under the rule that it\n  is delivered at most once, and this version of the platform does not carry that rule: a write\n  operation of this connector stays `forbidden`.\n- A project sees only the tools its groups are opened to, and can only tighten them."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Administration, **Connectors**, **Declare**: capability **MCP**, type **MCP server at an\n   outpost**, a lowercase name.\n2. `outpost`: the outpost's name. `endpoint`: the alias from its policy file. There is no URL and no\n   token to give.\n3. `timeout_s`: optional. It bounds the whole call: the wait for an instance of the outpost to take\n   it, then the server's answer.\n4. Press **Discover**, then open the read operations the agents need, one by one."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "**Discover** asks the outpost for the tools of the alias. A list of tools proves that an instance of\nthe outpost is polling, that its policy file has the alias, and that the outpost reaches its server."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- `422` at declaration: the outpost's name is not an outpost of your organisation, or an address or\n  a secret was typed where an alias is expected.\n- `409 outpost_paused`: the outpost is paused or revoked, or outposts are switched off on this\n  deployment. Nothing was sent.\n- `409 outpost_offline`: no instance of the outpost that serves this alias polled lately, or none\n  took the call in time. Check that the daemon runs and that `choregos-outpost doctor` passes.\n- `409 outpost_refused`: the outpost's own policy refused, and its `refusal` says which kind:\n  `unknown_endpoint` (the policy file has no such alias), `tool_not_allowed`, `write_denied`,\n  `endpoint_unavailable` (the outpost cannot reach or open its server), `signature_refused` (the\n  policy file does not pin the key the platform's door signs with).\n- `409 outpost_timeout`: an instance took the call and its server did not answer in time. Raise the\n  timeout here and in the outpost's policy file.\n- \"No tools\", or only a few: the patterns of the alias let no more through."
+      }
+    ],
+    "values": {},
+    "egress": [
+      "none: Choregos opens no connection for it; the outpost calls the server from inside its own network"
+    ],
+    "fields": {
+      "outpost": "the name of an outpost of your organisation",
+      "endpoint": "the alias the outpost's policy file gives the server (a name, never an address)",
+      "timeout_s": "seconds before a call is abandoned, the wait for the outpost to take it included; empty: 30"
+    },
+    "vendor_docs": [
+      {
+        "title": "MCP specification: transports (Streamable HTTP)",
+        "url": "https://modelcontextprotocol.io/specification/2025-06-18/basic/transports"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
     "id": "connector.mcp.mcp.atlassian-rovo",
     "title": "Connect Atlassian's Rovo MCP Server",
     "version": 2,
@@ -2396,6 +2455,65 @@
       {
         "title": "chat:write scope",
         "url": "https://api.slack.com/scopes/chat:write"
+      }
+    ],
+    "origin": "shipped"
+  },
+  {
+    "id": "connector.notify.teams",
+    "title": "Connect Microsoft Teams for an assistant's deliveries",
+    "version": 1,
+    "audience": "project_owner",
+    "applies_to": {
+      "connector": "notify/teams"
+    },
+    "link": null,
+    "reviewed": "2026-11-12",
+    "sections": [
+      {
+        "key": "before",
+        "title": "Before you start",
+        "markdown": "- A Teams channel where the assistant's task outputs and its owners' notices should appear.\n- The right to add a workflow to that channel (otherwise a Teams administrator does it).\n- Management of the assistant's installation in Choregos (`assistant:manage`)."
+      },
+      {
+        "key": "at",
+        "title": "At Microsoft Teams",
+        "markdown": "1. In the channel, open **Workflows** and pick the template **Post to a channel when a webhook request is\n   received**.\n2. Name it, choose the team and the channel, and finish: Teams shows the workflow's URL. Copy it.\n3. An older incoming webhook (Office 365 connector) URL works too, while your tenant still allows them."
+      },
+      {
+        "key": "permissions",
+        "title": "Permissions",
+        "markdown": "- The URL is the credential: whoever holds it can post to the channel. Choregos seals it and never shows it\n  again.\n- Nothing is read from Teams; Choregos only posts message cards."
+      },
+      {
+        "key": "in_choregos",
+        "title": "In Choregos",
+        "markdown": "1. Open the assistant's installation (**Assistants**, the installation's page) as one of its managers.\n2. In the **Microsoft Teams** card, paste the URL and save it. It is sealed and the field empties.\n3. In the task's `deliver` list of the assistant's manifest, `teams` now posts to that channel; the\n   installation's owners' notices (plugin upgrades, knowledge updates) go there too.\n4. Open the URL's host in the organisation's egress allowlist: `*.logic.azure.com` or\n   `*.environment.api.powerplatform.com` for a Workflows URL, `*.webhook.office.com` for an incoming webhook."
+      },
+      {
+        "key": "test",
+        "title": "Test it",
+        "markdown": "Run a task on demand whose `deliver` lists `teams`, and look at the channel: a card with the task's title\nand its output appears."
+      },
+      {
+        "key": "fails",
+        "title": "When it fails",
+        "markdown": "- The card never appears and the run's delivery says the host is refused: open the URL's host in the egress\n  allowlist.\n- `webhook answered 400`: the workflow expects another payload; recreate it from the template above.\n- `webhook answered 404` or `401`: the workflow was deleted or turned off; create a new one and save its URL.\n- The installation shows Teams as not configured: the URL was removed; paste it again."
+      }
+    ],
+    "values": {},
+    "egress": [],
+    "fields": {
+      "webhook_url": "the Workflows (or incoming webhook) URL that posts to the channel"
+    },
+    "vendor_docs": [
+      {
+        "title": "Create incoming webhooks with Workflows for Microsoft Teams",
+        "url": "https://support.microsoft.com/office/create-incoming-webhooks-with-workflows-for-microsoft-teams-8ae491c7-0394-4861-ba59-055e33f75498"
+      },
+      {
+        "title": "Create an Incoming Webhook",
+        "url": "https://learn.microsoft.com/microsoftteams/platform/webhooks-and-connectors/how-to/add-incoming-webhook"
       }
     ],
     "origin": "shipped"

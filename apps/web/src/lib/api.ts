@@ -5,6 +5,7 @@
  * Two modes: `live` (the real API, relayed by Next) and `mock` (local fixtures, so that the front
  * end moves on without the API: `NEXT_PUBLIC_API_MODE=mock`).
  */
+import { type CliManifest, MANIFEST_PATH } from "./cli-download";
 import { clearEmbedToken, embedHeaders, isFrameSession } from "./embed-token";
 import type {
   Action,
@@ -180,6 +181,17 @@ import type {
   OutboundProxyPut,
   OutboundProxyState,
   OutboundProxyTest,
+  Outpost,
+  OutpostCallPage,
+  OutpostCallState,
+  OutpostCreate,
+  OutpostEnrolmentCreate,
+  OutpostEnrolmentCreated,
+  OutpostInstance,
+  OutpostInstanceApprove,
+  OutpostInstanceList,
+  OutpostList,
+  OutpostRefusalCode,
   NetworkActivity,
   ProjectNetwork,
   ProjectDto,
@@ -263,8 +275,17 @@ export type Problem = {
   latest_version?: number;
   latest_author?: string | null;
   verdicts?: EgressVerdict[];
-  /** `gateway_in_use` (ADR 0105): the connectors that still go through the MCP gateway. */
+  /** `gateway_in_use` (ADR 0105): the connectors that still go through the MCP gateway; `outpost_in_use`
+   * (ADR 0149): the connectors that still route to the outpost. */
   connectors?: string[];
+  /** The outpost a 409 of `OutpostConflict` concerns (ADR 0147), when it names one. */
+  outpost?: string;
+  /** The alias a refusal of a connector at an outpost was for (ADR 0149 §7). */
+  endpoint?: string;
+  /** `outpost_refused`: the outpost's own code for why it did not make the call (ADR 0147 §10). */
+  refusal?: OutpostRefusalCode;
+  /** Seconds before asking again, on a 429 (an outpost's quota at discovery, ADR 0148 §10). */
+  retry_after?: number;
 };
 
 export class ApiError extends Error {
@@ -390,8 +411,22 @@ async function artifactContent(id: string, ref: string): Promise<Blob> {
   return response.blob();
 }
 
+/**
+ * The CLI this instance bundles (S62-08), read at the root (`/downloads/cli/manifest.json`), outside
+ * `/api/v1`: the install scripts and `choregos self update` read the same file. `null` when the build
+ * bundles none (the API's 404), and in the demo, which has no binaries to offer.
+ */
+async function cliManifest(): Promise<CliManifest | null> {
+  if (IS_MOCK) return null;
+  const response = await fetch(MANIFEST_PATH, { cache: "no-store" });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new ApiError(response.status, await problemOf(response));
+  return (await response.json()) as CliManifest;
+}
+
 export const api = {
   me: () => request<MeDto>("/me"),
+  cliManifest,
   /** The embedded component (S63-12, ADR 0139 point 6): who may frame it (public), and its conversation. */
   assistantEmbed: (org: string, slug: string) =>
     request<AssistantEmbed>(`/public/assistants/${org}/${slug}/embed`),
@@ -710,8 +745,11 @@ export const api = {
     request<Skill[]>(`/orgs/${org}/skills/import-git`, { method: "POST", body: JSON.stringify(body) }),
   skillSources: (org: string) => request<SkillSources>(`/orgs/${org}/skill-sources`),
   checkSkillUpdate: (org: string, slug: string) => request<SkillUpdate>(`/orgs/${org}/skills/${slug}/update`),
-  approveSkillVersion: (org: string, slug: string, version: number) =>
-    request<SkillVersion>(`/orgs/${org}/skills/${slug}/versions/${version}/approve`, { method: "POST" }),
+  approveSkillVersion: (org: string, slug: string, version: number, force?: { reason: string }) =>
+    request<SkillVersion>(`/orgs/${org}/skills/${slug}/versions/${version}/approve`, {
+      method: "POST",
+      ...(force ? { body: JSON.stringify({ force: true, reason: force.reason }) } : {}),
+    }),
 
   searchKnowledgeBase: (org: string, slug: string, query: string, k = 5) =>
     request<KnowledgeSearchResult>(`/orgs/${org}/knowledge/${slug}/search`, {
@@ -851,6 +889,42 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  /**
+   * The organisation's outposts (ADR 0147): places a person enrols, which only dial out. Every route is
+   * `outpost:manage`, the organisation administrator's. The platform stores no address and no
+   * credential of an outpost's side, so none is ever here.
+   */
+  outposts: (org: string) => request<OutpostList>(`/orgs/${org}/outposts`),
+  createOutpost: (org: string, body: OutpostCreate) =>
+    request<Outpost>(`/orgs/${org}/outposts`, { method: "POST", body: JSON.stringify(body) }),
+  outpost: (org: string, slug: string) => request<Outpost>(`/orgs/${org}/outposts/${slug}`),
+  /** Refused (409) while connectors still route to it (`outpost_in_use`), then while it is not revoked. */
+  deleteOutpost: (org: string, slug: string) => request<void>(`/orgs/${org}/outposts/${slug}`, { method: "DELETE" }),
+  pauseOutpost: (org: string, slug: string) => request<Outpost>(`/orgs/${org}/outposts/${slug}/pause`, { method: "POST" }),
+  resumeOutpost: (org: string, slug: string) => request<Outpost>(`/orgs/${org}/outposts/${slug}/resume`, { method: "POST" }),
+  /** Final: every instance is revoked and the epoch moves. */
+  revokeOutpost: (org: string, slug: string) => request<Outpost>(`/orgs/${org}/outposts/${slug}/revoke`, { method: "POST" }),
+  /** An enrolment token for one instance, shown once, with the door's origin and the keys to pin (ADR 0148). */
+  createOutpostEnrolment: (org: string, slug: string, body: OutpostEnrolmentCreate = {}) =>
+    request<OutpostEnrolmentCreated>(`/orgs/${org}/outposts/${slug}/enrolments`, { method: "POST", body: JSON.stringify(body) }),
+  outpostInstances: (org: string, slug: string) => request<OutpostInstanceList>(`/orgs/${org}/outposts/${slug}/instances`),
+  /**
+   * A person approves a pending instance by sending the fingerprint they compared. It needs a recent
+   * session, as a decision on an action does: a 401 `step_up_required` goes back through the IdP.
+   */
+  approveOutpostInstance: (org: string, slug: string, instanceId: string, body: OutpostInstanceApprove) =>
+    request<OutpostInstance>(`/orgs/${org}/outposts/${slug}/instances/${instanceId}/approve`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  /** Final: the instance's key does not come back, and the outpost's epoch moves. */
+  revokeOutpostInstance: (org: string, slug: string, instanceId: string) =>
+    request<OutpostInstance>(`/orgs/${org}/outposts/${slug}/instances/${instanceId}/revoke`, { method: "POST" }),
+  /** The recent calls routed to an outpost, newest first: digests only, never arguments or a result. */
+  outpostCalls: (org: string, slug: string, params: { state?: OutpostCallState; cursor?: string; limit?: number } = {}) =>
+    request<OutpostCallPage>(
+      `/orgs/${org}/outposts/${slug}/calls${query(compact({ state: params.state, cursor: params.cursor, limit: params.limit?.toString() }))}`,
+    ),
   /** The organisation's connectors and the policy of each operation (ADR 0034). */
   orgConnectors: (org: string) => request<OrgConnector[]>(`/orgs/${org}/connectors`),
   createOrgConnector: (org: string, body: OrgConnectorCreate) =>

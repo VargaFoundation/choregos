@@ -453,7 +453,14 @@ export type ConnectorOperation = {
   arguments?: {
     [key: string]: unknown;
   } | null;
+  /** the arguments the organisation's rule says the PLATFORM fills on a governed call of this operation, never the agent: what a connector type or a plugin's server declares for its own operations (`platform_arguments` of `plugin-server.schema.json`), said here by the administrator for a discovered tool, which declares nothing. Empty for an operation whose type or plugin server declares them. For a write through an outpost, listing `action_key` is the statement that the operation takes the platform's idempotency key: after a doubt it may be delivered again with the same key (ADR 0149 §5-6) */
+  platform_arguments?: Array<PlatformArgument>;
+  /** the administrator's explicit statement that an in-doubt outcome is accepted for this operation: a write through an outpost is delivered at most once, and when the instance that claimed it never answers, its action ends `in_doubt` (ADR 0149 §5-6). True only for a write of a connector of type `mcp-outpost` */
+  in_doubt_accepted?: boolean;
 };
+
+/** An argument the platform fills, never the agent; whatever was written under its name is dropped first. `action_key`: an idempotency key, stable for one governed action and call (the same at every retry and at every delivery, another for another call). `work_item_key`: the work item the action belongs to. The same list as `platform_arguments` of a plugin server's operation (`plugin-server.schema.json`). */
+export type PlatformArgument = "action_key" | "work_item_key";
 
 export type ConnectorDiscovery = {
   added?: Array<string>;
@@ -466,6 +473,7 @@ export type OrgConnector = {
   name: string;
   kind: string;
   type: string;
+  /** the type's configuration, as `GET /connectors/types` gives its schema; for the type `mcp-outpost` it is `McpOutpostConnectorConfig`: an outpost and an endpoint alias, no URL and no secret (ADR 0149) */
   config?: {
     [key: string]: unknown;
   };
@@ -735,6 +743,7 @@ export type OrgConnectorCreate = {
   name: string;
   type: string;
   kind?: string | null;
+  /** the type's configuration; for the type `mcp-outpost`, `McpOutpostConnectorConfig` */
   config?: {
     [key: string]: unknown;
   };
@@ -779,6 +788,10 @@ export type OperationPatch = {
   arguments?: {
     [key: string]: unknown;
   } | null;
+  /** the arguments the platform fills on a governed call of this operation (see `ConnectorOperation`); absent leaves them, null or an empty list clears them. Refused (422) for a read, for an operation whose type or plugin server declares its own, when it names an argument the operation's input schema does not have, and when clearing `action_key` would leave an open write of a connector at an outpost with neither statement (ADR 0149 §6) */
+  platform_arguments?: Array<PlatformArgument> | null;
+  /** true: an in-doubt outcome is accepted for this operation, explicitly (see `ConnectorOperation`); absent leaves it, null or false withdraws it. Refused (422) for anything but a write of a connector at an outpost, and when withdrawing it would leave an open write of such a connector with neither statement (ADR 0149 §6) */
+  in_doubt_accepted?: boolean | null;
 };
 
 export type ProjectOperation = {
@@ -853,8 +866,10 @@ export type ActionEffect = {
   position: number;
   key: string;
   effect: string;
-  status: "started" | "done" | "compensated" | "compensation_failed";
+  /** `in_doubt`: the effect was sent and nobody knows whether it was executed (a write through an outpost that was claimed and never answered, ADR 0149 §5). It is not attempted again and not compensated */
+  status: "started" | "done" | "compensated" | "compensation_failed" | "in_doubt";
   attempts?: number;
+  /** what a done effect returned. For an effect `in_doubt`, `in_doubt` lists what was sent and never answered, one entry per delivery (`outpost`, `endpoint`, `operation`, `call_id`, `instance_id`, `claimed_at`, `arguments_sha256`), and `again` says whether the effect's own retries may deliver it again: true only for an operation that takes the platform's idempotency key */
   result?: {
     [key: string]: unknown;
   } | null;
@@ -884,7 +899,8 @@ export type Action = {
   decisions?: Array<{
     [key: string]: unknown;
   }>;
-  status: "pending_approval" | "rejected" | "approved" | "running" | "awaiting_evidence" | "succeeded" | "failed";
+  /** `in_doubt` is terminal, like `succeeded`, `failed` and `rejected`: one of the action's effects was sent and nobody knows whether it was executed (ADR 0149 §5). The action is never replayed, by no route, and nothing it had done is compensated automatically: a person checks the system the write was for. The journal says which effect, and what was sent */
+  status: "pending_approval" | "rejected" | "approved" | "running" | "awaiting_evidence" | "succeeded" | "failed" | "in_doubt";
   result?: {
     [key: string]: unknown;
   } | null;
@@ -2373,6 +2389,19 @@ export type AgentAccessTool = {
   access?: "read" | "write" | "approval" | null;
   /** why a named tool is refused */
   reason?: string | null;
+  outpost?: AgentAccessOutpost;
+};
+
+/** Where a connector tool reached through an outpost lives (ADR 0149 §10, amending ADR 0127 §6): the outpost, the alias of the endpoint in its policy file, and whether a call made now would be handed to an instance. Present on the tool of an `mcp-outpost` connector and on no other: a tool of a direct connector carries no `outpost` key. Read when the access is asked, never promised: a person reads before a run that a tool its agent names will not answer. */
+export type AgentAccessOutpost = {
+  /** the outpost's slug; null when the connector routes to no outpost of the organisation (a call is then refused `outpost_paused`). An outpost of another organisation is never named */
+  name: string | null;
+  /** the alias of the endpoint in the outpost's policy file, as the connector names it */
+  endpoint: string;
+  /** the outpost's status: a call is handed to it only while it is `active`; null when the connector routes to no outpost of the organisation */
+  status: OutpostStatus | null;
+  /** an active instance that serves the alias polled within the poll window: the presence the call's own route reads. false when none did (a call fails at once, `outpost_offline`), when the connector routes to no outpost of the organisation, and while outposts are switched off on the deployment */
+  online: boolean;
 };
 
 export type AgentAccessItem = {
@@ -2654,6 +2683,12 @@ export type ProjectAgent = {
   effective: AgentSpec;
   /** said when the agent is deprecated */
   warning?: string | null;
+};
+
+/** Optional body of an approval: the importer forces the approval of their own version, with a written reason the audit keeps (ADR 0050 amendment). */
+export type SkillApproval = {
+  force?: boolean;
+  reason?: string | null;
 };
 
 export type SkillFiles = {
@@ -3032,7 +3067,7 @@ export type KnowledgeSourceCreate = {
   name: string;
   /** `sharepoint`, `confluence`: the organisation connector of capability `documents` */
   connector?: string | null;
-  /** `sharepoint`: `site_id` or `drive_id`, optional `folder` and `exclude` (≤ 50 path globs under the folder, each starting with `/`, case-insensitive, `*` crossing `/`); `confluence`: `space_key`, optional `page_id` (that page and its descendants), `include_root` (default true), `include_attachments` (default false), `labels` (≤ 20); `web`: `url` (https), `max_depth` (≤ 5), `max_pages` (≤ 500); `git`: `url` (https), `ref`, `paths` (globs, default `*.md`) */
+  /** `sharepoint`: `site_id` or `drive_id`, optional `folder` and `exclude` (≤ 50 path globs under the folder, each starting with `/`, case-insensitive, `*` crossing `/`); `confluence`: `space_key`, optional `page_id` (that page and its descendants), `include_root` (default true), `include_attachments` (default false), `labels` (≤ 20); `web`: `url` (https), `max_depth` (≤ 5), `max_pages` (≤ 500); `git`: `url` (https), `ref`, `paths` (globs, default `*.md`), and `github_app: true` to read a github.com repository through the deployment's GitHub App (no `connector`; an organisation administrator, and an installation the organisation claimed on the repository's owner: 403 or 409 otherwise); on a patch, absent keeps what the source had while its URL stays, `false` removes it */
   config?: {
     [key: string]: unknown;
   };
@@ -3405,6 +3440,202 @@ export type McpGatewayTest = {
   elapsed_ms: number;
   /** names the gateway; never a credential */
   error: string | null;
+};
+
+/** `paused`: nothing more is handed to it, what its instances hold may finish. `revoked`: final; its instances are revoked and its epoch moved (ADR 0147 §5). */
+export type OutpostStatus = "active" | "paused" | "revoked";
+
+/** `pending`: enrolled with a token and handed nothing until a person approves it against its fingerprint (ADR 0147 §4). */
+export type OutpostInstanceStatus = "pending" | "active" | "revoked";
+
+/** What an outpost may be used for (ADR 0147 §11). `tools` is the one capability of this version. `runs` is reserved: no daemon announces it and no organisation can enable it (ADR 0149 §12). */
+export type OutpostCapability = "tools" | "runs";
+
+/** A tool call, or a tool listing (discovery). */
+export type OutpostCallKind = "call_tool" | "list_tools";
+
+/** `pending`: claimed by no instance yet. `claimed`: leased to one instance. `answered`: that instance answered within its lease. `refused`: the outpost's own policy refused it, and nothing reached its server. `expired`: no active instance claimed it in time, and nothing reached any server. `timed_out`: a claimed read got no answer within its lease; it may be asked again. `in_doubt`: a claimed write got no answer within its lease; nobody knows whether the server executed it, and it is never handed over again (ADR 0149 §5). */
+export type OutpostCallState = "pending" | "claimed" | "answered" | "refused" | "expired" | "timed_out" | "in_doubt";
+
+/** What the instance reported of a call it took to its server. `result`: the server answered. `error`: it answered a JSON-RPC error. `unanswered`: the call was sent, or begun, and the instance holds no answer. `oversized`: the server answered and its result was above a ceiling; it was executed and its result was not sent. */
+export type OutpostAnswerOutcome = "result" | "error" | "unanswered" | "oversized";
+
+/** Why an outpost did not execute a call: a closed list that names a class of refusal and never the rule that produced it (ADR 0147 §10). Whatever the code, the outpost's server did not receive the call. `signature_refused` on a call the platform did hand over says that the outpost's policy file does not pin the key the door signs with (ADR 0148 §13). `cannot_record` says that the outpost could not write its journal or its audit line, and so did not make the call. `busy` also covers a call claimed and never begun because the daemon was stopping or was restarted. */
+export type OutpostRefusalCode = "unknown_endpoint" | "tool_not_allowed" | "write_denied" | "payload_too_large" | "busy" | "endpoint_unavailable" | "cannot_record" | "unsupported_kind" | "signature_refused" | "call_unreadable" | "deadline_passed" | "cancelled";
+
+export type OutpostCreate = {
+  /** the name connectors route by and the journal shows (`outpost:<slug>/<alias>`) */
+  slug: string;
+  display_name?: string | null;
+  /** what the organisation enables this outpost for; `tools` is the one capability that can be enabled */
+  capabilities?: Array<"tools">;
+};
+
+export type OutpostInstanceCounts = {
+  pending: number;
+  active: number;
+  revoked: number;
+};
+
+/** An outpost as its organisation keeps it (ADR 0147). Nothing of the outpost's side is stored: no address, no credential (ADR 0147 §7). */
+export type Outpost = {
+  slug: string;
+  display_name: string;
+  status: OutpostStatus;
+  /** what the organisation enabled; an outpost is used only for what its instances also announce */
+  capabilities: Array<OutpostCapability>;
+  /** moved by every revocation, of the outpost or of one instance: an answer is taken only under the epoch its call was claimed in (ADR 0147 §5) */
+  epoch: number;
+  /** an active instance polled within the poll window */
+  online: boolean;
+  /** the last poll of any of its instances */
+  last_seen_at: string | null;
+  instances: OutpostInstanceCounts;
+  /** the endpoint aliases its active instances announce: names only, which a connector's `endpoint` picks from */
+  endpoints: Array<string>;
+  /** the `mcp-outpost` connectors that route to it; it is not deleted while one remains */
+  connectors: Array<string>;
+  /** the door's public signing keys an operator pins in the outpost's policy file (`door_keys`), which is the only place an outpost reads them from (ADR 0148 §13): the first is the one that signs now, the others are announced for a rotation. Public keys, each the unpadded base64url of 32 raw bytes; empty while the deployment has no door */
+  door_keys: Array<string>;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type OutpostList = {
+  items: Array<Outpost>;
+};
+
+export type OutpostEnrolmentCreate = {
+  expires_in_minutes?: number;
+};
+
+/** An enrolment token, shown once. The platform keeps its digest. */
+export type OutpostEnrolmentCreated = {
+  id: string;
+  /** The plaintext token, returned only once: what `choregos-outpost enrol` presents. */
+  token: string;
+  expires_at: string;
+  /** the door's origin, as the outpost's policy file names it (`control_plane`); null when the deployment declares none */
+  control_plane: string | null;
+  /** the door's public signing keys to pin in the outpost's policy file (`door_keys`) before the daemon starts: the first is the one that signs now, the others are announced for a rotation. The console and the CLI print them beside the enrolment command; no answer of the door itself carries them (ADR 0148 §13) */
+  door_keys: Array<string>;
+};
+
+/** One copy of the daemon `choregos-outpost`, with keys made on the spot (ADR 0147 §2). Only public data: the platform never holds a private key of an instance. */
+export type OutpostInstance = {
+  id: string;
+  status: OutpostInstanceStatus;
+  /** `SHA256:` and the unpadded base64url SHA-256 of its raw Ed25519 signing key: what the daemon printed at enrolment and a person compares before approving */
+  fingerprint: string;
+  /** the daemon's own release, as it announced it last */
+  daemon_version: string;
+  /** the door protocol it spoke last */
+  protocol: number;
+  /** what it announces */
+  capabilities: Array<OutpostCapability>;
+  /** the aliases its policy file serves, as its last poll announced them; empty before its first */
+  endpoints: Array<string>;
+  /** what it said of itself at enrolment (a host name, a platform): stored as data, never interpreted */
+  facts: {
+    [key: string]: string;
+  };
+  enrolled_at: string;
+  approved_by: string | null;
+  approved_at: string | null;
+  revoked_by: string | null;
+  revoked_at: string | null;
+  last_seen_at: string | null;
+  /** active, and it polled within the poll window */
+  online: boolean;
+  /** the calls it holds and has not answered */
+  in_flight: number;
+};
+
+export type OutpostInstanceList = {
+  items: Array<OutpostInstance>;
+};
+
+export type OutpostInstanceApprove = {
+  /** the fingerprint the daemon printed, as the person read it there */
+  fingerprint: string;
+};
+
+/** What the platform keeps of a call through an outpost: references and digests, never its arguments or its result (ADR 0148 §11). */
+export type OutpostCallRecord = {
+  id: string;
+  kind: OutpostCallKind;
+  state: OutpostCallState;
+  /** the connector that routed it; null once that connector is gone */
+  connector: string | null;
+  /** the alias it was sent to */
+  endpoint: string;
+  /** null for a tool listing */
+  tool: string | null;
+  /** the platform took it for a write: it is delivered at most once */
+  write: boolean;
+  /** the instance that claimed it */
+  instance_id: string | null;
+  /** the outpost's epoch when it was claimed */
+  epoch: number | null;
+  /** what the instance reported, for an answered call */
+  outcome: OutpostAnswerOutcome | null;
+  /** outcome `result`: the server's own result says it is an error */
+  is_error: boolean | null;
+  /** why the outpost refused it, for a refused call */
+  refusal: OutpostRefusalCode | null;
+  /** the SHA-256 of the canonical JSON of its arguments, as a `tool.called` event keeps it and as the outpost's own audit log writes it */
+  arguments_sha256: string | null;
+  /** the SHA-256 of the canonical JSON of the result, written by whoever opens the answer: the side that placed the call, never the door, which cannot open one. Null for a call nobody opened */
+  result_sha256: string | null;
+  project: string | null;
+  run_id: string | null;
+  /** the governed action a write belongs to */
+  action_id: string | null;
+  created_at: string;
+  claimed_at: string | null;
+  finished_at: string | null;
+};
+
+export type OutpostCallPage = {
+  items: Array<OutpostCallRecord>;
+  meta: PageMeta;
+};
+
+/** The `config` of an organisation connector of type `mcp-outpost` (kind `mcp`, ADR 0149 §1): a tool server that lives at an outpost. It names the outpost and the alias of an endpoint in that outpost's policy file. It has no URL and no secret field: the address and the credential are the outpost's and exist in its file only (ADR 0147 §7), and a declaration that carries either is a 422. */
+export type McpOutpostConnectorConfig = {
+  /** an outpost of the same organisation */
+  outpost: string;
+  /** the alias of an endpoint in that outpost's policy file */
+  endpoint: string;
+  /** seconds before a call is abandoned, the wait for an instance to claim it included */
+  timeout_s?: number;
+};
+
+/** The 409 body of the refusals that concern an outpost (ADRs 0147 and 0149): an RFC 9457 problem with a `code`. On the outposts' own routes: `outposts_disabled` (the deployment keeps outposts switched off), `door_key_missing` (outposts are on and the door has no signing key, so no enrolment token can be created: an outpost could pin nothing, ADR 0148 §13), `outpost_exists`, `outpost_revoked`, `outpost_not_revoked` and `outpost_in_use` (the outpost is not deleted while connectors route to it; `connectors` names them), `instance_not_pending` and `fingerprint_mismatch`. Where a connector is reached through an outpost, the refusals of ADR 0149 §7 that a 409 carries: `outpost_paused` (paused, revoked, or outposts switched off: nothing was written), `outpost_offline` (no active instance claimed the call in time), `outpost_refused` (the outpost's own policy refused; `refusal` is its code) and `outpost_timeout` (a claimed read got no answer in time). Each of these four names the `outpost`. */
+export type OutpostConflict = {
+  type: string;
+  title: string;
+  status: number;
+  detail?: string;
+  /** the request path, as the API always sets it on a problem */
+  instance?: string;
+  /** the problem's `errors` list, as on `Problem` (an API refusal may carry it) */
+  errors?: Array<{
+    loc?: Array<string>;
+    msg?: string;
+    code?: string;
+    line?: number;
+    column?: number;
+  }>;
+  retry_after?: number;
+  code: "outposts_disabled" | "door_key_missing" | "outpost_exists" | "outpost_revoked" | "outpost_not_revoked" | "outpost_in_use" | "instance_not_pending" | "fingerprint_mismatch" | "outpost_paused" | "outpost_offline" | "outpost_refused" | "outpost_timeout";
+  /** the outpost the refusal is about */
+  outpost?: string;
+  /** the alias the call was for */
+  endpoint?: string;
+  refusal?: OutpostRefusalCode;
+  /** the connectors that route to the outpost (`outpost_in_use`) */
+  connectors?: Array<string>;
 };
 
 /** A JSON Web Key Set (RFC 7517): public keys only. */
@@ -4168,7 +4399,7 @@ export type MyAssistantList = {
 };
 
 export type TaskSubscriptionPut = {
-  kind?: "on_demand" | "schedule" | "poll";
+  kind?: "on_demand" | "schedule" | "poll" | "trigger";
   cron?: string | null;
   /** An IANA time zone, e.g. Europe/Paris. */
   timezone?: string | null;
@@ -4176,7 +4407,7 @@ export type TaskSubscriptionPut = {
 };
 
 export type TaskTrigger = {
-  kind: "on_demand" | "schedule" | "poll";
+  kind: "on_demand" | "schedule" | "poll" | "trigger";
   cron?: string | null;
   timezone?: string;
 };
@@ -4250,6 +4481,42 @@ export type Delegation = {
 
 export type DelegationList = {
   items: Array<Delegation>;
+};
+
+export type TaskEventAck = {
+  accepted: boolean;
+  outcome: "started" | "duplicate";
+  work_item_key?: string | null;
+};
+
+export type TaskEventKey = {
+  url: string;
+  secret: string;
+  generation: number;
+};
+
+export type TaskEventLine = {
+  task: string;
+  event_id: string;
+  outcome: "started" | "duplicate" | "refused";
+  summary: string;
+  work_item_key?: string | null;
+  received_at: string;
+};
+
+export type TaskEventList = {
+  items: Array<TaskEventLine>;
+};
+
+export type TeamsDeliveryPut = {
+  /** The credential itself: an https URL, sealed and never shown again. */
+  webhook_url: string;
+};
+
+export type TeamsDelivery = {
+  configured: boolean;
+  version?: number | null;
+  updated_at?: string | null;
 };
 
 export type WebhookSecretRequest = {
@@ -5369,11 +5636,12 @@ export interface Operations {
   [key: string]: unknown;
 }; response: WebhookAck };
   approveOrgEgressRequest: { method: "POST"; path: "/orgs/{org}/egress/requests/{rule_id}/approve"; body: EgressDecision; response: EgressRule };
+  approveOutpostInstance: { method: "POST"; path: "/orgs/{org}/outposts/{slug}/instances/{instance_id}/approve"; body: OutpostInstanceApprove; response: OutpostInstance };
   approvePluginInstall: { method: "POST"; path: "/orgs/{org}/plugin-approvals/{approval_id}/approve"; body: never; response: PluginApproval };
   approveRelease: { method: "POST"; path: "/releases/{id}/approve"; body: {
   note?: string;
 }; response: void };
-  approveSkillVersion: { method: "POST"; path: "/orgs/{org}/skills/{slug}/versions/{version}/approve"; body: never; response: SkillVersion };
+  approveSkillVersion: { method: "POST"; path: "/orgs/{org}/skills/{slug}/versions/{version}/approve"; body: SkillApproval; response: SkillVersion };
   argocdWebhook: { method: "POST"; path: "/webhooks/argocd"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };
@@ -5420,6 +5688,8 @@ export interface Operations {
   createOrg: { method: "POST"; path: "/orgs"; body: OrgCreate; response: Org };
   createOrgConnector: { method: "POST"; path: "/orgs/{org}/connectors"; body: OrgConnectorCreate; response: OrgConnector };
   createOrgEgressRule: { method: "POST"; path: "/orgs/{org}/egress/rules"; body: EgressRuleCreate; response: EgressRule };
+  createOutpost: { method: "POST"; path: "/orgs/{org}/outposts"; body: OutpostCreate; response: Outpost };
+  createOutpostEnrolment: { method: "POST"; path: "/orgs/{org}/outposts/{slug}/enrolments"; body: OutpostEnrolmentCreate; response: OutpostEnrolmentCreated };
   createProject: { method: "POST"; path: "/orgs/{org}/projects"; body: ProjectCreate; response: Project };
   createProjectKnowledgeBase: { method: "POST"; path: "/projects/{id}/knowledge"; body: ProjectKnowledgeBaseCreate; response: KnowledgeBase };
   createProjectMemory: { method: "POST"; path: "/projects/{id}/memories"; body: ProjectMemoryCreate; response: MemoryStore };
@@ -5444,7 +5714,9 @@ export interface Operations {
   deleteMyTaskSubscription: { method: "DELETE"; path: "/me/assistants/{org}/{slug}/tasks/{task}"; body: never; response: void };
   deleteOrgConnector: { method: "DELETE"; path: "/orgs/{org}/connectors/{name}"; body: never; response: void };
   deleteOutboundProxy: { method: "DELETE"; path: "/orgs/{org}/outbound-proxy"; body: never; response: void };
+  deleteOutpost: { method: "DELETE"; path: "/orgs/{org}/outposts/{slug}"; body: never; response: void };
   deleteProject: { method: "DELETE"; path: "/projects/{id}"; body: never; response: void };
+  deleteTeamsDelivery: { method: "DELETE"; path: "/orgs/{org}/assistants/{slug}/delivery/teams"; body: never; response: void };
   deleteTrackerIdentity: { method: "DELETE"; path: "/orgs/{org}/members/{user_id}/tracker-identities/{tracker}"; body: never; response: void };
   departTrain: { method: "POST"; path: "/projects/{id}/trains/{env}/depart"; body: never; response: void };
   describeBuiltinAgent: { method: "GET"; path: "/projects/{id}/builtin-agent"; body: never; response: BuiltinAgent };
@@ -5475,6 +5747,8 @@ export interface Operations {
     /** the source revision the image was built from; null when the build did not record it */
     revision: string | null;
   };
+  /** the user documentation's base URL, without a trailing slash (`CHOREGOS_DOCS_URL`, `https://docs.varga.foundation/choregos` by default): the console's help and "Learn more" links append a page's slug to it (S62-11) */
+  docs_url?: string;
 } };
   enableOrgConnector: { method: "PUT"; path: "/projects/{id}/org-connectors/{connector}/enablement"; body: never; response: ProjectOrgConnector };
   endMyOtherSessions: { method: "POST"; path: "/me/sessions/end-others"; body: never; response: EndedSessions };
@@ -5527,6 +5801,7 @@ export interface Operations {
   getOrgCosts: { method: "GET"; path: "/orgs/{org}/costs"; body: never; response: CostReport };
   getOrgEgress: { method: "GET"; path: "/orgs/{org}/egress"; body: never; response: EgressOverview };
   getOutboundProxy: { method: "GET"; path: "/orgs/{org}/outbound-proxy"; body: never; response: OutboundProxyState };
+  getOutpost: { method: "GET"; path: "/orgs/{org}/outposts/{slug}"; body: never; response: Outpost };
   getPlatformIdentity: { method: "GET"; path: "/platform/identity"; body: never; response: PlatformIdentity };
   getPolicy: { method: "GET"; path: "/projects/{id}/policy"; body: never; response: PolicyDef };
   getPolicyCeiling: { method: "GET"; path: "/orgs/{org}/policy-ceiling"; body: never; response: PolicyCeilingState };
@@ -5635,6 +5910,7 @@ export interface Operations {
   getSkillSources: { method: "GET"; path: "/orgs/{org}/skill-sources"; body: never; response: SkillSources };
   getSkillVersion: { method: "GET"; path: "/orgs/{org}/skills/{slug}/versions/{version}"; body: never; response: SkillVersion };
   getStepCalibration: { method: "GET"; path: "/projects/{id}/workflows/{name}/steps/{step}/calibration"; body: never; response: StepCalibration };
+  getTeamsDelivery: { method: "GET"; path: "/orgs/{org}/assistants/{slug}/delivery/teams"; body: never; response: TeamsDelivery };
   getTemplate: { method: "GET"; path: "/templates/{name}"; body: never; response: TemplateDetail };
   getTrainStatus: { method: "GET"; path: "/projects/{id}/trains/{env}"; body: never; response: TrainStatus };
   getWorkItem: { method: "GET"; path: "/work-items/{id}"; body: never; response: WorkItem };
@@ -5713,6 +5989,9 @@ export interface Operations {
   listOrgAgentReleases: { method: "GET"; path: "/orgs/{org}/agent-releases"; body: never; response: Array<AgentRelease> };
   listOrgConnectors: { method: "GET"; path: "/orgs/{org}/connectors"; body: never; response: Array<OrgConnector> };
   listOrgs: { method: "GET"; path: "/orgs"; body: never; response: Array<Org> };
+  listOutpostCalls: { method: "GET"; path: "/orgs/{org}/outposts/{slug}/calls"; body: never; response: OutpostCallPage };
+  listOutpostInstances: { method: "GET"; path: "/orgs/{org}/outposts/{slug}/instances"; body: never; response: OutpostInstanceList };
+  listOutposts: { method: "GET"; path: "/orgs/{org}/outposts"; body: never; response: OutpostList };
   listPendingMemory: { method: "GET"; path: "/projects/{id}/memory/pending"; body: never; response: Array<Memory> };
   listPlatformModels: { method: "GET"; path: "/platform/models"; body: never; response: Array<GatewayModel> };
   listPluginApprovals: { method: "GET"; path: "/orgs/{org}/plugin-approvals"; body: never; response: PluginApprovalList };
@@ -5732,6 +6011,7 @@ export interface Operations {
   listRuns: { method: "GET"; path: "/work-items/{id}/runs"; body: never; response: Array<Run> };
   listSkillCatalogue: { method: "GET"; path: "/orgs/{org}/skill-catalogue"; body: never; response: SkillCatalogue };
   listSkills: { method: "GET"; path: "/orgs/{org}/skills"; body: never; response: Array<Skill> };
+  listTaskEvents: { method: "GET"; path: "/orgs/{org}/assistants/{slug}/task-events"; body: never; response: TaskEventList };
   listTemplates: { method: "GET"; path: "/templates"; body: never; response: Array<TemplateSummary> };
   listTrackerIdentities: { method: "GET"; path: "/orgs/{org}/members/{user_id}/tracker-identities"; body: never; response: Array<TrackerIdentity> };
   listTriggers: { method: "GET"; path: "/projects/{id}/triggers"; body: never; response: Array<Trigger> };
@@ -5747,6 +6027,7 @@ export interface Operations {
   nextAgentSessionSocketFrames: { method: "GET"; path: "/internal/agent-sessions/{id}/socket/next"; body: never; response: AgentSessionSocketNext };
   nextAgentSessionTurn: { method: "GET"; path: "/internal/agent-sessions/{id}/turns/next"; body: never; response: AgentSessionTurn };
   openMyAssistantConversation: { method: "POST"; path: "/me/assistants/{org}/{slug}/conversations"; body: AssistantConversationOpen; response: Conversation };
+  pauseOutpost: { method: "POST"; path: "/orgs/{org}/outposts/{slug}/pause"; body: never; response: Outpost };
   pinProjectAgent: { method: "PUT"; path: "/projects/{id}/agents/{slug}"; body: ProjectAgentPut; response: ProjectAgent };
   pluginWebhook: { method: "POST"; path: "/webhooks/plugins/{org}/{plugin}/{server}"; body: {
   [key: string]: unknown;
@@ -5799,6 +6080,7 @@ export interface Operations {
   putProjectModels: { method: "PUT"; path: "/projects/{id}/models"; body: ProjectModels; response: ProjectModels };
   putRunOutput: { method: "PUT"; path: "/internal/runs/{id}/outputs/{name}"; body: void; response: Artifact };
   putSkillSources: { method: "PUT"; path: "/orgs/{org}/skill-sources"; body: SkillSources; response: SkillSources };
+  putTeamsDelivery: { method: "PUT"; path: "/orgs/{org}/assistants/{slug}/delivery/teams"; body: TeamsDeliveryPut; response: TeamsDelivery };
   putWorkflow: { method: "PUT"; path: "/projects/{id}/workflow"; body: WorkflowPut; response: WorkflowDef };
   putWorkflowRouting: { method: "PUT"; path: "/projects/{id}/workflow-routing"; body: WorkflowRouting; response: WorkflowRouting };
   readyz: { method: "GET"; path: "/readyz"; body: never; response: void };
@@ -5821,11 +6103,15 @@ export interface Operations {
   restoreAgentVersion: { method: "POST"; path: "/orgs/{org}/agents/{slug}/versions/{version}/restore"; body: AgentVersionRestore; response: AgentVersion };
   restoreWorkflowVersion: { method: "POST"; path: "/projects/{id}/workflows/{name}/versions/{version}/restore"; body: never; response: WorkflowDef };
   resumeAssistant: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/resume"; body: never; response: Assistant };
+  resumeOutpost: { method: "POST"; path: "/orgs/{org}/outposts/{slug}/resume"; body: never; response: Outpost };
   revealAssistantWebhookSecret: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/webhook-secret"; body: WebhookSecretRequest; response: WebhookSecret };
+  revealTaskEventKey: { method: "POST"; path: "/orgs/{org}/assistants/{slug}/tasks/{task}/event-key"; body: never; response: TaskEventKey };
   revokeMachineToken: { method: "DELETE"; path: "/projects/{id}/machine-accounts/{slug}/tokens/{token_id}"; body: never; response: void };
   revokeMyDelegation: { method: "DELETE"; path: "/me/delegations/{delegation_id}"; body: never; response: void };
   revokeMyToken: { method: "DELETE"; path: "/me/tokens/{id}"; body: never; response: void };
   revokeOrgEgressRule: { method: "DELETE"; path: "/orgs/{org}/egress/rules/{rule_id}"; body: never; response: EgressRule };
+  revokeOutpost: { method: "POST"; path: "/orgs/{org}/outposts/{slug}/revoke"; body: never; response: Outpost };
+  revokeOutpostInstance: { method: "POST"; path: "/orgs/{org}/outposts/{slug}/instances/{instance_id}/revoke"; body: never; response: OutpostInstance };
   revokeRemoteCredential: { method: "DELETE"; path: "/orgs/{org}/remote-credentials/{name}"; body: never; response: void };
   rewrapSecrets: { method: "POST"; path: "/platform/secrets/rewrap"; body: never; response: SecretsRewrap };
   rotateMcpGatewayAssertionKey: { method: "POST"; path: "/orgs/{org}/mcp-gateway/assertion-key"; body: never; response: McpGatewayAssertion };
@@ -5856,6 +6142,9 @@ export interface Operations {
   syncKnowledgeBase: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sync"; body: never; response: KnowledgeBase };
   syncKnowledgeSource: { method: "POST"; path: "/orgs/{org}/knowledge/{slug}/sources/{source_id}/sync"; body: never; response: KnowledgeSource };
   syncModelCatalogue: { method: "POST"; path: "/orgs/{org}/models/sync"; body: never; response: ModelSyncResult };
+  taskEventWebhook: { method: "POST"; path: "/webhooks/assistants/{org}/{slug}/tasks/{task}/events"; body: {
+  [key: string]: unknown;
+}; response: TaskEventAck };
   tektonWebhook: { method: "POST"; path: "/webhooks/tekton"; body: {
   [key: string]: unknown;
 }; response: WebhookAck };

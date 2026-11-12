@@ -49,6 +49,8 @@ def _routes(project_id: str, workflow_yaml: str, policy_yaml: str) -> list[tuple
         ("platform:admin", "PUT", "/api/v1/platform/backends", {"name": "claude-code", "enabled": True}),
         ("project:delete", "DELETE", f"/api/v1/projects/{project_id}", None),
         ("agent:manage", "POST", "/api/v1/orgs/varga/agent-catalogue/triager/install", {}),
+        # Outposts (S65-11, ADR 0147 §4): the organisation administrator's, read or written.
+        ("outpost:manage", "GET", "/api/v1/orgs/varga/outposts", None),
         # Agent scopes (S39-09, ADR 0061): a personal agent is every working role's, a project's agent
         # its owner's, an organisation agent (`agent:manage`, above) the administrator's.
         (

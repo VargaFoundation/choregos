@@ -67,7 +67,7 @@ from ..rbac import SYSTEM, Principal
 from ..schemas.agents import MAX_TAGS, AgentCreate, AgentEvalCase
 from ..schemas.plugins import InstalledPlugin, PluginContents
 from . import plugin_servers
-from .agent_catalogue import DIVERGE
+from .agent_catalogue import DIVERGE, kept_knowledge, kept_note
 from .agent_evals import evaluate as evaluate_cases
 from .agent_releases import after_publish
 from .agents import digest, require_complete, version_errors
@@ -402,9 +402,13 @@ async def _upgrade_agent(
         return "absent"
     if not _ours(versions[0].created_by if versions else None, prepared.name):
         return "foreign"
-    if _diverged(versions, prepared.name):
-        return "offered"
     entry, spec = prepared.agents[slug], prepared.specs[slug].spec
+    kept = kept_knowledge(versions, spec, lambda by: _ours(by, prepared.name))
+    if kept is None and _diverged(versions, prepared.name):
+        return "offered"
+    kept_by_org: list[str] = []
+    if kept is not None:  # the organisation only added knowledge bases (ADR 0127): they stay
+        spec, kept_by_org = kept
     new_tags = [t for t in entry.tags if t not in (agent.tags or [])]
     agent.tags = [*(agent.tags or []), *new_tags][:MAX_TAGS]
     if versions[-1].checksum == digest(spec):
@@ -419,12 +423,13 @@ async def _upgrade_agent(
             spec=spec.model_dump(mode="json"),
             checksum=digest(spec),
             created_by=author,
-            message=f"Plugin update to {prepared.name} {prepared.plugin.version} ({slug}@{entry.version})",
+            message=f"Plugin update to {prepared.name} {prepared.plugin.version} ({slug}@{entry.version})"
+            + kept_note(kept_by_org),
         )
     )
     await session.flush()
     await record(session, principal, "agent.publish", org_id=org_id, target_type="agent", target_id=agent.id,
-                 version=version, via=author)  # fmt: skip
+                 version=version, via=author, kept_knowledge=kept_by_org or None)  # fmt: skip
     await after_publish(session, principal, agent, version, author)
     return "published"
 
@@ -657,6 +662,13 @@ async def upgrade(
         return previous, []
     prepared = await _prepare(session, org_id, plugin, settings, replacing=row)
     offered: list[str] = []
+    from . import assistants
+
+    needs_before = {
+        r.slug: await assistants.manifest(session, r)
+        for r in await assistants.installations(session, org_id)
+        if r.plugin == row.name
+    }  # S63-22: the needs as the installations read them before the files change
     kept: dict[str, list[str]] = {"agents": [], "skills": []}
     skipped: dict[str, list[str]] = {"skills": [], "agents": []}
     old = PluginContents.model_validate(row.contents or {})
@@ -713,6 +725,7 @@ async def upgrade(
     from .offered_knowledge import upgrade_plugin
 
     await upgrade_plugin(session, org_id, row, principal)  # S63-06: the installations' offered knowledge
+    await assistants.upgrade_plugin_bindings(session, org_id, row.name, needs_before, principal)  # S63-22
     await record(session, principal, "plugin.upgrade", org_id=org_id, target_type="plugin",
                  target_id=row.name, previous_version=previous, version=plugin.version,
                  digest=plugin.digest, offered=offered, kept=kept,

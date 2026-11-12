@@ -4,7 +4,7 @@
 
 One procedure per connector type, knowledge source kind, MCP-door client and external agent kind ([ADR 0067](../adr/0067-a-procedure-per-connector-and-agent-type.md)). The console shows the same text beside the form where you add the thing, with this deployment's own URLs filled in. A deployment adds its own notes (`<id>.site.md`) or procedures through `CHOREGOS_PROCEDURES_EXTRA`; see [deployment](../deployment.md#site-notes-on-the-setup-procedures).
 
-62 procedures.
+64 procedures.
 
 ## Connectors
 
@@ -31,6 +31,7 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | [Use Yahoo Finance for daily market data](connector.marketdata.yahoo.md) | a project owner | `marketdata/yahoo` | 2026-10-16 |
 | [Connect an MCP server](connector.mcp.mcp.md) | an organisation administrator | `mcp/mcp` | 2026-10-16 |
 | [Connect an MCP server through your organisation's MCP gateway](connector.mcp.mcp-gateway.md) | an organisation administrator | `mcp/mcp-gateway` | 2026-10-27 |
+| [Connect an MCP server that lives at an outpost](connector.mcp.mcp-outpost.md) | an organisation administrator | `mcp/mcp-outpost` | 2026-11-12 |
 | [Connect Atlassian's Rovo MCP Server](connector.mcp.mcp.atlassian-rovo.md) | an organisation administrator | `mcp/mcp` (preset `atlassian-rovo`) | 2026-10-28 |
 | [The demo device management (demonstration only)](connector.mdm.demo.md) | anyone | `mdm/demo` | 2026-10-16 |
 | [Connect Ecphoria, the platform's memory](connector.memory.ecphoria.md) | the person who operates the platform | `memory/ecphoria` | 2026-10-16 |
@@ -39,6 +40,7 @@ One procedure per connector type, knowledge source kind, MCP-door client and ext
 | [Connect Cilium and Hubble](connector.network_policy.cilium.md) | an organisation administrator | `network_policy/cilium` | 2026-10-16 |
 | [Connect an SMTP relay for e-mail notifications](connector.notify.email.md) | a project owner | `notify/email` | 2026-11-03 |
 | [Connect Slack for notifications and decisions](connector.notify.slack.md) | a project owner | `notify/slack` | 2026-10-16 |
+| [Connect Microsoft Teams for an assistant's deliveries](connector.notify.teams.md) | a project owner | `notify/teams` | 2026-11-12 |
 | [Run agent stages as Azure Container Apps jobs](connector.runtime.aca.md) | the person who operates the platform | `runtime/aca` | 2026-10-16 |
 | [Run agent stages in warm sandboxes (opt-in)](connector.runtime.agent_sandbox.md) | the person who operates the platform | `runtime/agent_sandbox` | 2026-10-16 |
 | [Run agent stages as Kubernetes Jobs](connector.runtime.k8s_job.md) | the person who operates the platform | `runtime/k8s_job` | 2026-10-16 |

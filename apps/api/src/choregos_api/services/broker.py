@@ -53,8 +53,8 @@ from .identity_exchange import (
     IdentityUnavailable,
     exchanged_token,
 )
-from .mcp_gateway import connector_client, route_of
-from .mcp_gateway_identity import GatewayRefusal, identity_of_run
+from .mcp_gateway import RouteRefusal, connector_client, route_of, tool_error
+from .mcp_gateway_identity import identity_of_run
 from .platform_network import (
     WHERE,
     PlatformNetworkRefused,
@@ -273,13 +273,16 @@ async def propose_call(
     (separation of roles)."""
     from ..errors import ApiError
 
-    # ADR 0105: the route is judged BEFORE the action exists, so a refused connector (mode `required`,
-    # `off`, no gateway) leaves no pending action for a person to approve.
+    # ADR 0105, ADR 0149 §7: the route is judged BEFORE the action exists, so a refused connector (mode
+    # `required`, `off`, no gateway; an outpost that is paused or revoked) leaves no pending action for a
+    # person to approve.
     try:
         await route_of(session, tool.connector)
-    except GatewayRefusal as refused:
+    except RouteRefusal as refused:
+        status, body = tool_error(refused)
+        named = {name: value for name, value in body.items() if name not in ("error", "type")}
         raise ApiError(
-            403, "Network policy", str(refused), type_="network_policy", extra={"code": refused.code}
+            status, "Network policy", str(refused), type_="network_policy", extra=named
         ) from refused
     # The same call is the same action (#1379, ADR 0035), as for an allowed write: a model retrying or a
     # script run again (ADR 0122) finds its proposal instead of putting a second one before a person.
@@ -435,8 +438,8 @@ async def write_through_action(
     # workers, an action and a priced line would already exist.
     try:
         await route_of(session, tool.connector)
-    except GatewayRefusal as refused:
-        return 403, {"error": str(refused), "type": "network_policy", "code": refused.code}, False
+    except RouteRefusal as refused:
+        return (*tool_error(refused), False)
     from choregos_contracts import ActionStatus
 
     from ..config import get_settings
@@ -635,11 +638,12 @@ async def _call(
     from choregos_core.secrets import SecretNotFound
 
     instance = tool.connector
-    # ADR 0105: how the connector is reached is decided first; a gateway refusal leaves nothing behind.
+    # ADR 0105, ADR 0149: how the connector is reached is decided first; a refusal of the route (the
+    # gateway's, an outpost's) leaves nothing behind.
     try:
         route = await route_of(session, instance)
-    except GatewayRefusal as refused:
-        return 403, {"error": str(refused), "type": "network_policy", "code": refused.code}
+    except RouteRefusal as refused:
+        return tool_error(refused)
     try:
         await enforce_connector_call(
             session,
@@ -657,7 +661,8 @@ async def _call(
         return 429, {"error": str(rate_limited), "type": "rate_limited"}
     try:
         # A gateway connector (ADR 0105) goes through the gateway, signed with this call's identity; a
-        # plugin's server (ADR 0096), its Service and bearer token; any other, its type's adapter.
+        # connector at an outpost (ADR 0149), through that outpost's rendezvous; a plugin's server
+        # (ADR 0096), its Service and bearer token; any other, its type's adapter.
         client = await _client_for(session, tool, route.via_gateway, run, project, acting)
         # A server may take thirty seconds to answer: the caller's transaction, when it allows it,
         # does not wait for it on a pooled connection (#1354).
@@ -675,8 +680,10 @@ async def _call(
         return 422, {"error": str(unavailable), "type": UNAVAILABLE}
     except McpError as mcp_error:
         return 502, {"error": redact(str(mcp_error))}
-    except GatewayRefusal as refused:  # a lost assertion key or credential: refused, never a 500
-        return 403, {"error": str(refused), "type": "network_policy", "code": refused.code}
+    except RouteRefusal as refused:
+        # A lost assertion key or credential of the gateway; an outpost that is offline, that refused,
+        # that did not answer in time, or a call its door did not admit: refused, never a 500.
+        return tool_error(refused)
     except AdapterError as adapter_refusal:
         return 422, {"error": redact(str(adapter_refusal))}
     except (SecretNotFound, httpx.HTTPError) as failure:

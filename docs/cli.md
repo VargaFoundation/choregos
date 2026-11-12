@@ -3,9 +3,68 @@
 Generated from the CLI itself by `tools/gen_cli_reference.py` — do not edit by hand
 (`make docs-cli` regenerates it, a test checks it is current).
 
+## Installing the CLI
+
+`choregos` ships as one native, self-contained file per platform: nothing to install first, no
+Python, no SDK, no runtime. Each release attaches them to its GitHub release, under names that
+never change, and the API image carries the same files in `/opt/choregos/cli/`:
+
+| Platform | File |
+|:--|:--|
+| Linux x86_64 (glibc 2.28 or later: RHEL 8, Debian 10, Ubuntu 18.10 on) | `choregos-linux-x86_64` |
+| Linux arm64 (same) | `choregos-linux-arm64` |
+| macOS, Apple silicon | `choregos-macos-arm64` |
+| macOS, Intel | `choregos-macos-x86_64` |
+| Windows x86_64 | `choregos-windows-x86_64.exe` |
+
+Beside them, `SHA256SUMS`, `manifest.json` (the version, and each file's platform, digest and
+size) and a cosign bundle per file (`<file>.sigstore.json`). Download one, check it, put it on the
+PATH:
+
+```sh
+curl -fsSLO https://github.com/VargaFoundation/choregos/releases/download/v<version>/choregos-linux-x86_64
+curl -fsSLO https://github.com/VargaFoundation/choregos/releases/download/v<version>/SHA256SUMS
+sha256sum --ignore-missing -c SHA256SUMS          # macOS: shasum -a 256 --ignore-missing -c SHA256SUMS
+install -m 0755 choregos-linux-x86_64 ~/.local/bin/choregos
+choregos --version
+```
+
+`cosign verify-blob --bundle SHA256SUMS.sigstore.json --certificate-identity
+https://github.com/VargaFoundation/choregos/.github/workflows/release.yml@refs/tags/v<version>
+--certificate-oidc-issuer https://token.actions.githubusercontent.com SHA256SUMS` proves the sums
+come from the release workflow. The Windows and macOS files are not yet signed by a platform
+vendor (`docs/plan/BLOCKERS.md`): Windows SmartScreen warns, and a macOS browser download needs
+`xattr -d com.apple.quarantine choregos-macos-arm64` once. The first call unpacks the binary into
+the user's cache directory (`~/.cache/choregos`, `~/Library/Caches/choregos`,
+`%LOCALAPPDATA%\choregos`); later calls start from there.
+
+From a checkout, `make cli-binary` builds the binary of the machine it runs on into `dist/cli/`
+(Nuitka; on Linux in the `manylinux_2_28` image, so docker is needed) and `make cli-binary-smoke`
+runs the release's smoke test on it. The Python package (`packages/cli`, `uv run choregos`)
+remains the way to work on the CLI itself.
+
+## Profile
+
 The profile lives in `~/.config/choregos/config.json` (`CHOREGOS_CONFIG` overrides the
 path): `api_url`, `token`, `org`. `choregos login` writes it; `CHOREGOS_API_URL`,
 `CHOREGOS_TOKEN` and `CHOREGOS_ORG` are read when no profile exists.
+
+## Install from your instance
+
+Every Choregos instance serves the CLI in the exact version it runs, through the console's host:
+no Python, no access to GitHub needed. The console shows the command for your system under
+Integrations › CLI.
+
+```sh
+curl -fsSL https://<your-instance>/cli/install.sh | sh        # Linux, macOS: ~/.local/bin/choregos
+irm https://<your-instance>/cli/install.ps1 | iex             # Windows: %LOCALAPPDATA%\Programs\choregos
+```
+
+The scripts check the binary's sha256 against the instance's manifest
+(`/downloads/cli/manifest.json`) and never use sudo; `sh -s -- --prefix DIR` installs into `DIR/bin`.
+`choregos self update` later replaces the binary with the instance's current one. When the CLI
+talks to an instance that runs another version, it says so in one line on stderr, at most once a
+day (`CHOREGOS_NO_VERSION_CHECK=1` silences it).
 
 
 ## `choregos a2a`
@@ -514,6 +573,234 @@ Options:
   --help  Show this message and exit.
 ```
 
+## `choregos outposts`
+
+Outposts: places that only dial out to the platform, and their instances
+
+### `choregos outposts approve`
+
+```text
+Usage: choregos outposts approve [OPTIONS] {slug} {instance}
+
+  Approve a pending instance against the fingerprint its daemon printed.
+
+  The API takes an approval from a person's session that carries a recent
+  sign-in, and refuses an API token (403). The CLI signs in with a token: this
+  command is therefore refused, and prints the API's refusal as it is. Approve
+  the instance in the console, under Administration → Outposts.
+
+Arguments:
+  slug      [required]
+  instance  the instance's id, as `choregos outposts instances` shows it
+            [required]
+
+Options:
+  --fingerprint <str>  the fingerprint `choregos-outpost enrol` printed on the
+                       outpost's machine, as read there  [required]
+  --org <str>          the organisation; the profile's otherwise
+  --help               Show this message and exit.
+```
+
+### `choregos outposts calls`
+
+```text
+Usage: choregos outposts calls [OPTIONS] {slug}
+
+  The recent calls routed to the outpost, newest first: their state and the
+  code of a refusal.
+
+  Digests only: the platform keeps no arguments and no result of a call.
+
+Arguments:
+  slug  [required]
+
+Options:
+  --state <str>   pending, claimed, answered, refused, expired, timed_out or
+                  in_doubt
+  --limit <int>   how many calls to read, 200 at most  [default: 50]
+  --cursor <str>  where the previous page stopped
+  --org <str>     the organisation; the profile's otherwise
+  --help          Show this message and exit.
+```
+
+### `choregos outposts create`
+
+```text
+Usage: choregos outposts create [OPTIONS] {slug}
+
+  Create an outpost of the organisation, with no instance yet.
+
+  An instance comes from an enrolment token (`choregos outposts token`) and a
+  person's approval. Refused while the deployment keeps outposts switched off.
+
+Arguments:
+  slug  [required]
+
+Options:
+  --display-name <str>  what people read; the slug otherwise
+  --org <str>           the organisation; the profile's otherwise
+  --help                Show this message and exit.
+```
+
+### `choregos outposts delete`
+
+```text
+Usage: choregos outposts delete [OPTIONS] {slug}
+
+  Delete a revoked outpost, with its instances and what is left of its calls.
+
+  Refused while connectors still route to it (`choregos outposts show` names
+  them), and while it is not revoked.
+
+Arguments:
+  slug  [required]
+
+Options:
+  --org <str>  the organisation; the profile's otherwise
+  --help       Show this message and exit.
+```
+
+### `choregos outposts instances`
+
+```text
+Usage: choregos outposts instances [OPTIONS] {slug}
+
+  The outpost's instances, pending ones first, each with the fingerprint of
+  its signing key.
+
+Arguments:
+  slug  [required]
+
+Options:
+  --org <str>  the organisation; the profile's otherwise
+  --help       Show this message and exit.
+```
+
+### `choregos outposts list`
+
+```text
+Usage: choregos outposts list [OPTIONS]
+
+  The organisation's outposts: status, instances and presence.
+
+Options:
+  --org <str>  the organisation; the profile's otherwise
+  --help       Show this message and exit.
+```
+
+### `choregos outposts pause`
+
+```text
+Usage: choregos outposts pause [OPTIONS] {slug}
+
+  Pause the outpost: nothing more is handed to it, and what its instances hold
+  may finish.
+
+  This is how a healthy outpost is held or retired; `revoke` answers a key
+  that may be stolen.
+
+Arguments:
+  slug  [required]
+
+Options:
+  --org <str>  the organisation; the profile's otherwise
+  --help       Show this message and exit.
+```
+
+### `choregos outposts resume`
+
+```text
+Usage: choregos outposts resume [OPTIONS] {slug}
+
+  Resume a paused outpost.
+
+Arguments:
+  slug  [required]
+
+Options:
+  --org <str>  the organisation; the profile's otherwise
+  --help       Show this message and exit.
+```
+
+### `choregos outposts revoke`
+
+```text
+Usage: choregos outposts revoke [OPTIONS] {slug}
+
+  Revoke the outpost and every instance of it. This is final.
+
+  Nothing its instances had in flight is taken, and a write among it ends in
+  doubt. Connectors that route to it are refused until they are routed
+  elsewhere.
+
+Arguments:
+  slug  [required]
+
+Options:
+  --org <str>  the organisation; the profile's otherwise
+  --help       Show this message and exit.
+```
+
+### `choregos outposts revoke-instance`
+
+```text
+Usage: choregos outposts revoke-instance [OPTIONS] {slug} {instance}
+
+  Revoke one instance of the outpost, pending or approved. This is final.
+
+  The outpost's epoch moves: nothing in flight at the outpost is taken, from
+  this instance or another. Its key does not come back for as long as the
+  outpost exists.
+
+Arguments:
+  slug      [required]
+  instance  the instance's id, as `choregos outposts instances` shows it
+            [required]
+
+Options:
+  --org <str>  the organisation; the profile's otherwise
+  --help       Show this message and exit.
+```
+
+### `choregos outposts show`
+
+```text
+Usage: choregos outposts show [OPTIONS] {slug}
+
+  One outpost, and the door's keys to pin in its policy file.
+
+Arguments:
+  slug  [required]
+
+Options:
+  --org <str>  the organisation; the profile's otherwise
+  --help       Show this message and exit.
+```
+
+### `choregos outposts token`
+
+```text
+Usage: choregos outposts token [OPTIONS] {slug}
+
+  Issue an enrolment token for one instance of the outpost. The token is shown
+  HERE, once.
+
+  Single use, valid 15 minutes at most. It is printed with what the outpost's
+  operator needs: the lines of the policy file (the door's origin and the
+  door's keys to pin) and the `choregos-outpost enrol` command to run there.
+  The instance it enrols is born pending, and is handed nothing until a person
+  approves it in the console.
+
+Arguments:
+  slug  [required]
+
+Options:
+  --expires-in-minutes <int>  how long the token lives: 1 to 15 minutes, 15 by
+                              default
+  --org <str>                 the organisation; the profile's otherwise
+  --help                      Show this message and exit.
+```
+
 ## `choregos plugin`
 
 Plugins: validate, pack and index them (ADR 0093)
@@ -684,6 +971,30 @@ Arguments:
 
 Options:
   --help  Show this message and exit.
+```
+
+## `choregos self`
+
+The CLI itself: keep it in step with the instance
+
+### `choregos self update`
+
+```text
+Usage: choregos self update [OPTIONS]
+
+  Replace this CLI with the instance's own build, for this OS and processor.
+
+  The binary comes from the instance (`/downloads/cli/`), in the version it
+  runs, and is checked against the sha256 of its manifest before it replaces
+  the running one in a single rename. A CLI installed from Python packages has
+  no binary to replace: upgrade the package, or install the binary with the
+  instance's install script.
+
+Options:
+  --api-url <str>  The instance to update from (default: the profile's)
+  --path <path>    The binary to replace (default: the running one)
+  --force          Download even when the versions are the same
+  --help           Show this message and exit.
 ```
 
 ## `choregos tokens`

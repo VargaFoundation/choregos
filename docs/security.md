@@ -18,7 +18,7 @@ organisations must assume **a member of one will try to read another**.
 | a skill that carries an attack (injection, exfiltration, a vulnerable dependency) | the supply-chain gate's pattern scan ([ADR 0050](adr/0050-skill-supply-chain-gate.md)), then SkillSpector offline on every version a person publishes ([ADR 0095](adr/0095-skillspector-behind-the-skill-gate-offline.md)): AST, taint, YARA, MCP tool poisoning, OSV advisories from a local mirror, no call leaving the pod; a HIGH finding or `DO_NOT_INSTALL` holds the version for a second administrator, a failed scan holds it too | `services/skill_gate.py`, `services/skill_scanner.py`, `scanners/`, `apps/api/tests/test_skill_gate.py`, `apps/api/tests/test_skill_scanner.py` |
 | exfiltrating data, or polluting the internet | egress is closed and bounded in three scopes that only narrow one another — organisation ceiling, project policy, agent version — with a deny list that always wins and IP literals refused (ADR 0070). **Enforced by layer**: a **per-run egress proxy** (S40-01c) is the wall for host, port and connection rate; the tool broker and the platform's own fetchers (MCP connectors, knowledge crawls, git skill sources) are a wall for what the platform requests: the ceiling is read at declaration and again at every call, a refusal is a 403 journaled with layer `broker`, calls to one host are throttled organisation-wide and carry an identifying User-Agent (S40-01d); the built-in `web_fetch` tool is the one place where method, robots.txt, User-Agent and politeness hold for what an agent reads (S40-01f); the runner's guardrails and the backend's settings are a net (S40-01b). Every decision is journaled per run (`network_decisions`), and `network` is part of an agent version's digest only when set. The per-project Squid of the GitOps provisioning (allowlist = `allow_domains`, `CONNECT` to 443 only) stays for per-project namespaces: host-level, project-level | `choregos_core/network.py`, `services/network.py`, `services/platform_network.py`, `services/web_fetch.py`, `apps/api/tests/test_platform_network.py`, `apps/api/tests/test_web_fetch_tool.py`, `gitops.py` (`render_egress_proxy`), `tests/cluster/test_egress_proxy.py`, `tests/cluster/test_sandbox_egress.py` |
 | deciding from a tracker comment | a `/choregos approve\|reject\|answer\|scope\|pause\|resume\|stop` comment is answered on the tracker with a console link, audited as `tracker.command.redirected`, and never signalled to the workflow: a tracker login is not a Choregos principal, and decisions need the console and its fresh sign-in ([ADR 0102](adr/0102-a-tracker-comment-carries-no-decision.md)) | `routers/webhooks.py` (`_answer_tracker_command`), `apps/api/tests/test_tracker_commands.py` |
-| using credentials | there are none in the workspace; the agent never holds the run token: the proxy variables it inherits carry an egress token that opens its run's network routes and no other ([ADR 0115](adr/0115-the-agent-never-holds-the-run-token.md)), and on every executor the agent, the project's checks (which run the code it wrote) and the runner's git start from the runner's environment without any `CHOREGOS_RUN_*` variable but the run id (`agent_base_environment`, S57-02); a job (ADR 0056) receives the run token on purpose, by name, and it never leaves for a third party (tool catalogue, ADR 0014) | `docker/runner.Dockerfile`, `catalogue.py`, `apps/api/tests/test_egress_token.py`, `packages/runner/tests/test_egress_env.py`, `packages/runner/tests/test_agent_holds_no_run_token.py` |
+| using credentials | there are none in the workspace; the agent never holds the run token: the proxy variables it inherits carry an egress token that opens its run's network routes and no other ([ADR 0115](adr/0115-the-agent-never-holds-the-run-token.md)), and the proxy's reports also need the proxy's own key, which no run's pod receives, so the agent cannot rewrite its run's network counters ([ADR 0145](adr/0145-the-proxy-reports-with-a-key-the-agent-does-not-hold.md)); and on every executor the agent, the project's checks (which run the code it wrote) and the runner's git start from the runner's environment without any `CHOREGOS_RUN_*` variable but the run id (`agent_base_environment`, S57-02); a job (ADR 0056) receives the run token on purpose, by name, and it never leaves for a third party (tool catalogue, ADR 0014) | `docker/runner.Dockerfile`, `catalogue.py`, `apps/api/tests/test_egress_token.py`, `tests/charts/test_egress_proxy_chart.py`, `packages/runner/tests/test_egress_env.py`, `packages/runner/tests/test_agent_holds_no_run_token.py` |
 | pushing a secret | `no_secrets` on the diff, sensitive files refused, gitleaks in CI | `gates/`, `guardrails.py`, `.gitleaks.toml` |
 | leaking a secret through a pod log | the tail of a run's pod log is archived only after `redact` (known token shapes, bearer/basic credentials, URL user-info, values of secret-named keys) — a floor, not a scanner (ADR 0054) | `choregos_core/redaction.py`, `executor/log_archive.py` |
 | a run writing to a third party without a governed action | a deployment catalogue tool that may write (an http POST, or a remote MCP tool) is neither listed nor called unless the deployment marks it `read_only: true`; a direct call answers 409 `catalogue_write_refused`; writes go through organisation MCP connectors, whose operations are governed (ADR 0034 §7) | `choregos_core/catalogue.py` (`may_write`), `catalogue.py`, `apps/api/tests/test_catalogue_write_is_refused.py` |
@@ -596,6 +596,132 @@ process (API, workers): nothing is shared.
   ([Deployment](deployment.md#an-mcp-gateway-adr-0105)). The gateway's own egress rules (origin
   `mcp-gateway`) are revoked when it moves or is deleted; a rule merged with another origin keeps its
   other families.
+
+## The outposts' door
+
+An outpost is a place an organisation's administrator enrols, which only dials out
+([ADR 0147](adr/0147-an-outpost-only-dials-out.md)). The door it dials, `/outposts/v1`, is a third
+door of the API beside `/mcp` and `/a2a`
+([ADR 0148](adr/0148-the-outpost-door-is-a-third-door-with-its-own-contract.md)); its contract is
+`packages/contracts/outpost-door.yaml`. It is not mounted unless `CHOREGOS_OUTPOSTS` is on
+([Deployment](deployment.md#outposts-adrs-0147-0149)). This is what it changes for security. What is
+handed over there is what a connector of type `mcp-outpost` routes to the outpost
+([A connector at an outpost](#a-connector-at-an-outpost), below).
+
+**Who is at the door.** No session, no API token and no OAuth token opens it, and the signature that
+opens it opens no other door: the REST API, the MCP door and the A2A door answer 403 to whatever
+presents `Outpost-Signature`. Every request is signed with the Ed25519 key the instance enrolled; the
+signature binds the method, the URL under the door's public origin, the SHA-256 of the body as sent, an
+`iat` within 60 seconds, a nonce the door issued and a sequence the instance raises. A request is
+answered for the first check that fails, in the contract's order (`apps/api/src/choregos_api/outposts/auth.py`).
+
+- *A replay.* The last sequence the door took is on the instance's row, on 64 bits: a request whose
+  sequence is not above it is refused at whichever replica it arrives. The API has no shared store, by
+  decision, and a row is what the replicas share. The nonce is an authenticated timestamp the door
+  checks alone and keeps for 300 seconds; it proves freshness, the sequence refuses the replay.
+- *A proxy on the path.* An organisation's outbound proxy often terminates TLS. It reads ids, sizes and
+  timing; it does not read a call or its answer, which are sealed end to end; it cannot hand the
+  outpost a call of its own, because every call is signed by the door with a key the outpost's own
+  policy file pins; and it cannot swap a key at enrolment, because the enrolment is signed with the key
+  it enrols. It can stop, starve or mislead a daemon about versions and time, as it can by dropping
+  packets.
+- *A stolen key.* An instance holds one poll at a time. A second poll while one waits is refused
+  (409 `poll_conflict`) and raises an alert: the audit event `outpost.poll_conflict` of the
+  organisation, once a minute at most for an instance, which `/metrics` counts as
+  `choregos_outpost_poll_conflicts_total`. Revoking the instance holds from its next request and moves
+  the outpost's epoch: nothing it had in flight is taken.
+- *A hostile outpost.* A body above its verb's cap is refused before it is parsed, on the bytes
+  received; an instance's requests are rate-limited (429 with `retry_after`); a lease lasts 300 seconds
+  at most, whatever the daemon asks for; an answer is taken only from the instance that claimed the
+  call, under the epoch of the claim, before the deadline, once; a refusal is a code from a closed
+  list. The door does not open an answer: it stores the envelope for whoever placed the call, who
+  treats one that does not open as no answer.
+- *Another organisation's outpost.* The door resolves a signature to one instance of one outpost of one
+  organisation and never works under the all-organisations scope. The outposts' tables are under forced
+  row-level security that also requires the session to name the outpost: whatever is not this outpost's
+  answers 404, never 403 (`apps/api/tests/test_outpost_rendezvous_postgres.py`).
+
+**What is at rest.** A call's row holds references and digests. Its arguments wait for their claim
+sealed under the deployment's key wrapper (`CHOREGOS_SECRETS_KEKS`, ADR 0103), with the private half of
+a key made for that one call's answer; both are emptied when the call completes, and a sealed answer
+nobody came to read is emptied after 15 minutes. Nothing of the outpost's side is stored: the platform
+has no address and no credential of it.
+
+**The door's own secret** is its signing key (`CHOREGOS_OUTPOSTS_DOOR_SIGNING_KEY`). Whoever holds it
+can sign calls that the outposts which pin it will make, within what each outpost's policy allows. The
+key that authenticates the nonces is derived from it, so replicas agree with no further secret; after a
+rotation a daemon's nonce is stale once, and the refusal that says so carries a fresh one.
+
+**Why this door does not make Choregos a gateway** (ADR 0148 §12): it serves assignments and never MCP,
+it has no route that names a connector or a server, and it imports no broker module. Each of the three
+is a test (`tests/licences/test_mcp_gateway_boundary.py`).
+
+**What it does not give.** Data residency: a tool's result travels to the control plane like any
+other. Protection against whoever holds the control plane and its signing key: an outpost bounds what
+can be asked of it, it does not remove it. A limit on requests that carry no valid signature: each
+costs the door one lookup, and bounding them by source is the entrance's (the door has a hostname of
+its own for that).
+
+## A connector at an outpost
+
+A connector of type `mcp-outpost` reaches a tool server through an outpost
+([ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md); `services/outpost_route.py`). It changes the
+transport of a tool call and nothing of what governs it.
+
+- **The platform decides first, as for any connector.** The agent's selection, the operation's
+  policy and groups, the argument schema, the grants that bind arguments and the approval are judged
+  before anything is written for an outpost to claim; the result is bounded and screened, and the
+  ledger line and the digests are written, when it comes back
+  (`apps/api/tests/test_broker_via_outpost.py`). The outpost decides nothing the platform decides; it
+  may refuse what its own policy refuses.
+- **What the platform holds.** A name and an alias. No address and no credential of the outpost's
+  side: the type has no URL and no secret field, and a declaration that carries one is refused.
+- **What the outpost is told.** The alias, the tool and its arguments, sealed to the instance that
+  claims the call; and who the call is made for (the organisation, the project, the run, the agent,
+  the person who started it, the action and its approvers): names the platform asserts, which an
+  outpost may log and must not decide on. No prompt, no model key, no run token.
+- **Whose identity.** The credential the outpost holds for the alias, and no other. No person's
+  token travels to an outpost: the type declares no identity mode, a need that must be called as the
+  person cannot be bound to it, and a direct build of its client with a person's token builds nothing.
+- **Writes.** Not opened in this version: a write through an outpost must be delivered at most once
+  and may end in doubt (ADR 0149 §5-6), and the platform does not open a write under a guarantee it
+  does not carry yet (ADR 0101). The rendezvous itself places no write without the key of the governed
+  effect that plays it.
+- **The network bounds.** The platform opens no connection for such a call, so the organisation's
+  allowed hosts, its deny list and its per-host rate have no host to judge: the alias is a name in the
+  outpost's policy file, never read as one. The call is bounded by the outpost's own ceilings and by
+  the door's quotas (calls in flight and calls per minute, per outpost and per organisation), and it
+  is a line of the network activity under `outpost:<name>/<alias>`.
+- **A refusal is typed**, names the outpost and is never a crash; one that reached no server is not
+  booked ([Integrations](integrations.md#a-tool-server-at-an-outpost-adr-0149)).
+
+## What an outpost protects against, and what it does not
+
+For whoever decides whether to rely on one. The whole picture is in [Outposts](outposts.md), and
+what the person who runs an outpost is told is in [Running an outpost](outpost-operator.md).
+
+- **It protects a network's map and its credentials.** The platform holds an alias: no address and
+  no credential of the outpost's side, at rest or on the way. A compromised control plane learns
+  neither.
+- **A compromised control plane can ask for what the local policy allows, and no more.** Whoever
+  holds the control plane, or the door's signing key, can have an outpost make the calls its own
+  policy file allows: at the aliases it lists, for the tools their patterns let through, and a write
+  only where the file says `allow`, judged from what the outpost's own server declares. They cannot
+  add an alias, widen a pattern or pin another key, because nothing the door sends changes that
+  file; and they cannot send the outpost anything to run, because no message of the door makes the
+  daemon download or execute anything. An outpost is therefore as exposed as its policy is wide.
+- **A party on the path reads and forges nothing that matters.** An outbound proxy that terminates
+  TLS reads ids, sizes and timing: calls and answers are sealed end to end, and every call is signed
+  by the door with a key the outpost pins. It can still stop, starve or mislead a daemon about
+  versions and time.
+- **It does not give data residency.** Arguments and results cross the door. A result is bounded
+  and screened at the platform, read by a model through the model gateway, and kept where the
+  platform keeps what a tool returned. A result that must not leave the outpost's network must not
+  be a tool's answer.
+- **It does not vouch for the outpost.** A result is what an approved instance says its server
+  answered. The platform bounds it, screens it and treats it as any tool's result.
+- **None of it has run on a real network yet.** The daemon and the door are each tested against the
+  door's contract and against a scripted stand-in for the other; the end-to-end proof is S65-19.
 
 ## Secrets
 

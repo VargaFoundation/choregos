@@ -173,4 +173,7 @@ with the layer that decided.
 - [Write a skill](skills.md): knowledge, where a tool is an action.
 - Bringing an organisation's own MCP gateway:
   [the gateway reference](../../integrations.md#your-organisations-mcp-gateway-adr-0105).
+- Tools in a network the platform cannot reach, for an organisation with no gateway there:
+  [outposts](../../outposts.md). They are off unless your operator turns them on, and carry reads
+  only for now.
 - [Host: security model](../host/security.md), for what the sandbox and the egress proxy enforce.

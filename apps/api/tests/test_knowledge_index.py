@@ -154,6 +154,43 @@ async def test_the_fake_embedder_is_deterministic() -> None:
     assert cosine(one, two) == pytest.approx(1.0) and cosine(one, other) < 0.5
 
 
+async def test_the_gateway_embedder_tries_a_timed_out_batch_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A slow answer from the gateway (seen in production: a reindex lost to one `ReadTimeout`)."""
+    import httpx
+    from choregos_api.knowledge.embeddings import GatewayEmbedder
+
+    calls: list[int] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        if len(calls) == 1:
+            raise httpx.ReadTimeout("slow", request=request)
+        return httpx.Response(200, json={"data": [{"index": 0, "embedding": [0.5, 0.5]}]})
+
+    monkeypatch.setattr(GatewayEmbedder, "RETRY_DELAYS", (0.0, 0.0))
+    embedder = GatewayEmbedder("http://gateway", "key", "embed", transport=httpx.MockTransport(answer))
+    assert await embedder.embed(["one"]) == [[0.5, 0.5]]
+    assert len(calls) == 2
+
+
+async def test_the_gateway_embedder_does_not_retry_a_refusal(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A 422 (a budget exceeded, a refused key) would only be refused again."""
+    import httpx
+    from choregos_api.knowledge.embeddings import GatewayEmbedder
+
+    calls: list[int] = []
+
+    def answer(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        return httpx.Response(422, json={"error": {"type": "budget_exceeded"}})
+
+    monkeypatch.setattr(GatewayEmbedder, "RETRY_DELAYS", (0.0, 0.0))
+    embedder = GatewayEmbedder("http://gateway", "key", "embed", transport=httpx.MockTransport(answer))
+    with pytest.raises(httpx.HTTPStatusError):
+        await embedder.embed(["one"])
+    assert len(calls) == 1
+
+
 # ───────────────────────────── the API ─────────────────────────────
 
 
@@ -194,6 +231,36 @@ async def test_a_search_whose_embedding_the_gateway_refuses_ranks_by_words(
     found = await client.post(f"{BASE}/framework/search", json={"query": "Which TLS version in transit?"})
     assert found.status_code == 200, found.text
     assert found.json()["hits"][0]["filename"] == "encryption.docx"
+
+
+async def test_a_reindex_keeps_every_document_it_can_embed(
+    client: AsyncClient, admin: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One document the gateway cannot embed leaves only that document out, not the whole base."""
+    import httpx
+    from choregos_api.db.models import KnowledgeBase
+    from choregos_api.db.session import session_scope
+    from choregos_api.knowledge import index
+    from sqlalchemy import select
+
+    base = await _indexed_base(client)
+    real = index.index_document
+    failing: list[str] = []
+
+    async def index_document(org: str, document_id: str, embedder: object = None) -> int:
+        if not failing:
+            failing.append(document_id)
+            raise httpx.ReadTimeout("slow")
+        return await real(org, document_id)
+
+    monkeypatch.setattr(index, "index_document", index_document)
+    async with session_scope() as session:
+        base_id = (
+            await session.execute(select(KnowledgeBase.id).where(KnowledgeBase.slug == base["slug"]))
+        ).scalar_one()
+    assert await index.reindex_base("varga", base_id) > 0
+    rebuilt = (await client.get(f"{BASE}/framework")).json()
+    assert rebuilt["index"]["documents"] == 4, rebuilt["index"]
 
 
 async def test_recall_at_5_on_the_eval_set_is_reported(client: AsyncClient, admin: str) -> None:

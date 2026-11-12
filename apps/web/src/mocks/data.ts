@@ -90,6 +90,7 @@ import type {
 import { normalizeSpec } from "@/lib/agent-diff";
 import { ApiError } from "@/lib/api";
 import type {
+  MachineAccount,
   McpGatewayPut,
   McpGatewayState,
   OutboundProxyPut,
@@ -106,6 +107,7 @@ import { egressApi } from "./egress";
 import { activityApi } from "./activity";
 import { peopleOps, peopleOpsApi, peopleOpsFixtures } from "./joiners-leavers";
 import mcpCatalogueFile from "./mcp-catalogue.json";
+import { checkOutpostConnector, discoverAtOutpost, outpostsApi, whereItLivesNow } from "./outposts";
 import { pluginsApi, serverConnectorOf } from "./plugins";
 import skillCatalogueFile from "./skill-catalogue.json";
 import { proceduresApi } from "./procedures";
@@ -1355,6 +1357,9 @@ export const workflowSummaries: WorkflowSummary[] = [
   { name: "hotfix", version: 2, is_default: false, open_items: 0, created_by: "marc@acme.dev", updated_at: iso(60 * 5) },
 ];
 
+/** The demo project's applications (ADR 0131): none until one is created on the page. */
+const mockMachineAccounts: MachineAccount[] = [];
+
 export const workflowRouting: WorkflowRouting = {
   default: "default-simple",
   rules: [{ when: { labels_any: ["incident"], labels_all: [], item_type: null }, workflow: "hotfix" }],
@@ -1448,6 +1453,12 @@ export const hotfix: WorkflowDef = {
           detected_on: { type: "string", format: "date", title: "detected on" },
         },
       },
+    },
+    // Served over the A2A door (ADR 0078): the Integrations page's A2A steps show it as a skill (S62-11).
+    a2a: {
+      skill: "open-incident",
+      description: "Open an incident and ship its fix.",
+      input_modes: ["text/plain", "application/json"],
     },
   } as unknown as WorkflowDef["json"],
 };
@@ -2487,6 +2498,30 @@ export const connectorTypes: ConnectorType[] = [
     capabilities: ["mcp"],
     secret_fields: [],
   },
+  {
+    // The contract's `McpOutpostConnectorConfig`, closed: an outpost, an alias, a timeout; no URL, no secret (ADR 0149).
+    kind: "mcp",
+    type: "mcp-outpost",
+    display: "MCP server at an outpost",
+    config_schema: {
+      type: "object",
+      additionalProperties: false,
+      required: ["outpost", "endpoint"],
+      properties: {
+        outpost: { type: "string", pattern: "^[a-z0-9][a-z0-9-]{0,62}$", description: "an outpost of the same organisation" },
+        endpoint: { type: "string", pattern: "^[a-z][a-z0-9-]{0,62}$", description: "the alias of an endpoint in that outpost's policy file" },
+        timeout_s: {
+          type: "number",
+          minimum: 1,
+          maximum: 120,
+          default: 30,
+          description: "seconds before a call is abandoned, the wait for an instance to claim it included",
+        },
+      },
+    },
+    capabilities: ["mcp"],
+    secret_fields: [],
+  },
 ];
 
 /**
@@ -2653,6 +2688,39 @@ orgConnectors.push({
 
 // The server of the default plugin `servicenow` (S43-08): an organisation connector named after it, not configured yet.
 orgConnectors.push(serverConnectorOf("servicenow", "0.1.0", "servicenow"));
+
+// Two connectors at an outpost (ADR 0149): one where an instance polls for its alias, one at an outpost
+// nobody enrolled yet. No URL and no secret: the address and the credential are the outpost's.
+orgConnectors.push(
+  {
+    name: "tracker-onsite",
+    kind: "mcp",
+    type: "mcp-outpost",
+    config: { outpost: "factory-floor", endpoint: "tracker", timeout_s: 30 },
+    secret_refs: {},
+    secrets: [],
+    status: "ok",
+    availability: "all_projects",
+    enabled_projects: [],
+    operations: [
+      { name: "search_issues", access: "read", policy: "allowed", groups: [], description: "the issues that match" },
+      { name: "get_issue", access: "read", policy: "allowed", groups: [] },
+      { name: "create_issue", access: "write", policy: "forbidden", groups: [], description: "opens an issue" },
+    ],
+  },
+  {
+    name: "erp-branch",
+    kind: "mcp",
+    type: "mcp-outpost",
+    config: { outpost: "branch-office", endpoint: "erp" },
+    secret_refs: {},
+    secrets: [],
+    status: "unknown",
+    availability: "all_projects",
+    enabled_projects: [],
+    operations: [{ name: "stock_level", access: "read", policy: "allowed", groups: [], description: "what is in stock" }],
+  },
+);
 
 export const projectOperations: ProjectOperation[] = [
   { connector: "entra-acme", operation: "read_user", access: "read", org_policy: "allowed", project_policy: "approval", effective_policy: "approval" },
@@ -3186,6 +3254,20 @@ function agentAccessFixture(agent: string, project: string): AgentAccess {
       { name: "read_file", source: "catalogue", origin: "agent", access: "read" },
       { name: "shell", source: "catalogue", origin: "refused", access: "write", reason: "the project does not open shell" },
       { name: "track_order", source: "connector", origin: "project", access: "read" },
+      // The tools of the connectors at an outpost (ADR 0149 §10): where they live, and whether they answer now.
+      ...orgConnectors
+        .filter((c) => c.type === "mcp-outpost")
+        .flatMap((c) =>
+          (c.operations ?? [])
+            .filter((o) => o.policy !== "forbidden")
+            .map((o) => ({
+              name: `${c.name}__${o.name}`,
+              source: "connector" as const,
+              origin: "agent" as const,
+              access: o.access === "write" ? ("write" as const) : ("read" as const),
+              outpost: whereItLivesNow(c),
+            })),
+        ),
       { name: "fetch", source: "web", origin: "agent" },
     ],
     knowledge: [{ name: "billing-runbooks", origin: "agent" }],
@@ -3294,6 +3376,10 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
   if (activity !== undefined) return activity as T;
   const plugins = pluginsApi(method, bare, body, orgConnectors);
   if (plugins !== undefined) return plugins as T;
+  // The organisation's outposts (ADR 0147): the list, one outpost, its instances and its recent calls.
+  if (/^\/orgs\/[^/]+\/outposts(\/|$)/.test(bare)) {
+    return structuredClone(outpostsApi(method, bare, path.split("?")[1] ?? "", body, orgConnectors, me.email)) as T;
+  }
   const filed = /^\/projects\/([^/]+)\/work-items$/.exec(path.split("?")[0] ?? path);
   if (method === "POST" && filed) {
     // Filing on a project whose tracker is external: the issue is created there, the work item takes its key (ADR 0059).
@@ -3371,6 +3457,37 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     const id = decodeURIComponent(path.split("/").at(-1)!);
     mySessions = mySessions.filter((s) => s.id !== id);
     return undefined as T;
+  }
+  // Applications (ADR 0131), for the A2A steps of Integrations (S62-11): created, then a token shown once.
+  const machineToken = /^\/projects\/[^/]+\/machine-accounts\/([^/]+)\/tokens$/.exec(path);
+  if (method === "POST" && machineToken) {
+    const reqBody = (body ?? {}) as { name?: string };
+    const account = mockMachineAccounts.find((a) => a.slug === machineToken[1]);
+    const token = {
+      id: `tok-machine-${(account?.tokens.length ?? 0) + 1}`,
+      name: reqBody.name ?? "token",
+      created_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 90 * 86_400_000).toISOString(),
+      last_used_at: null,
+      scopes: ["a2a" as const],
+      project: "acme:billing-api",
+    };
+    account?.tokens.push(token);
+    return { ...token, token: "chg_demo_application_token_shown_once" } as T;
+  }
+  if (method === "POST" && /^\/projects\/[^/]+\/machine-accounts$/.test(path)) {
+    const reqBody = (body ?? {}) as { slug: string; display_name?: string | null };
+    const account: MachineAccount = {
+      slug: reqBody.slug,
+      display_name: reqBody.display_name ?? reqBody.slug,
+      address: `${reqBody.slug}.p1@machines.choregos.invalid`,
+      writes_per_day: 500,
+      created_by: me.email,
+      created_at: new Date().toISOString(),
+      tokens: [],
+    };
+    mockMachineAccounts.push(account);
+    return account as T;
   }
   if (method === "POST" && path === "/me/tokens") {
     // The token is returned only once, at creation: the Integrations page slips it into its snippets.
@@ -3759,6 +3876,9 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
       rotated_at: maintenant,
       rotated_by: me.email,
     });
+    // A connector at an outpost is judged as the API judges it, at its declaration and at every edit (ADR 0149 §1).
+    if (method === "POST" && !wfName && reqBody.type === "mcp-outpost") checkOutpostConnector(reqBody.config);
+    if (method === "PATCH" && reqBody.config && orgConnectors.find((c) => c.name === wfName)?.type === "mcp-outpost") checkOutpostConnector(reqBody.config);
     if (method === "POST" && !wfName) {
       const cree: OrgConnector = {
         name: reqBody.name ?? "new",
@@ -3898,6 +4018,8 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     return connector as T;
   }
   if (method === "POST" && /^\/orgs\/[^/]+\/connectors\/[^/]+\/discover$/.test(chemin ?? "")) {
+    const atOutpost = orgConnectors.find((c) => c.name === decodeURIComponent((chemin ?? "").split("/")[4] ?? "") && c.type === "mcp-outpost");
+    if (atOutpost) return discoverAtOutpost(atOutpost) as T;
     return { added: ["annuler_commande"], changed: ["order_laptop"], removed: [], unchanged: 1 } as T;
   }
   const catalogueEcrit = /^\/orgs\/[^/]+\/models(?:\/([^/?]+))?$/.exec(chemin ?? "");
@@ -4203,7 +4325,7 @@ export async function mockApi<T>(path: string, init: RequestInit = {}): Promise<
     [/^\/projects\/[^/]+\/workflows\/[^/]+$/, workflow],
     [/^\/projects\/[^/]+\/workflow-routing$/, workflowRouting],
     // HTTP triggers (S56-02): one declared trigger, its token minted once, a manual firing.
-    [/^\/projects\/[^/]+\/machine-accounts$/, []],
+    [/^\/projects\/[^/]+\/machine-accounts$/, mockMachineAccounts],
     [/^\/projects\/[^/]+\/triggers\/[^/]+\/token$/, mockTriggerToken],
     [/^\/projects\/[^/]+\/triggers\/[^/]+\/fire$/, mockTriggerAck],
     [/^\/projects\/[^/]+\/triggers$/, mockTriggers],

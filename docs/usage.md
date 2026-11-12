@@ -1455,7 +1455,10 @@ tools of the group `rh`). A tool that is named but not open to the project is no
 calling it answers 404, as an unknown tool does. A version that leaves a list out keeps today's
 behaviour for that source. To see what a version reaches in a project, with the origin of each item and
 the reason of each refusal: `GET /api/v1/orgs/{org}/agents/{slug}/access?project={project}` (add
-`&version=` for a version other than the one the project is served).
+`&version=` for a version other than the one the project is served). A tool of a connector at an outpost
+also carries `outpost`: the outpost's `name`, the `endpoint` alias, the outpost's `status` and whether it is
+`online` now; a tool of a direct connector carries no such key
+([ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md) §10).
 
 ## 3 ter. Register your agents
 
@@ -2803,6 +2806,80 @@ default; letters, digits, dots, dashes and underscores); it sends the route and 
 result is a connector of type `mcp-gateway` with the config `{server}`. **Administration → Connectors** marks it
 *via gateway* with its server name, and declaring an `mcp-gateway` connector there is refused, with a link to
 **Administration**, while the organisation has no gateway or its mode is `off`.
+
+**Outposts.** [ADR 0147](adr/0147-an-outpost-only-dials-out.md): an outpost is a place of the organisation that
+the platform cannot reach, a network behind a firewall for example. A program installed there
+(`choregos-outpost`) opens every connection itself and takes the tool calls routed to it; the platform never
+connects to it and stores no address of it. An organisation whose MCP gateway the platform can reach needs
+none: use the gateway above. Outposts are off unless the deployment turns them on
+([deployment](deployment.md#outposts-adrs-0147-0149)).
+
+**Administration → Outposts** (`/admin/outposts`) is the organisation administrator's: the entry is listed
+for whoever holds `outpost:manage`, and the API refuses anyone else. The page lists the outposts with their
+status, their instances (approved, pending, revoked) and their presence (*Online*, or when one was last seen),
+and creates one from a slug and a name. An outpost's page shows:
+
+- **Instances**, the pending ones first. A pending instance shows the fingerprint of its signing key, and
+  **Approve the instance** stays disabled until you tick that it is the fingerprint `choregos-outpost enrol`
+  printed on the outpost's machine; the request carries the fingerprint you confirmed. Approving needs a
+  recent sign-in: with an older one you are sent to sign in again and come back to the page, where the
+  fingerprint is confirmed again. **Revoke** is final, and says so before it is done;
+- **Enrol an instance**: *Create an enrolment token* shows, once, the token (single use, 15 minutes), when it
+  expires, the door's origin, the keys to pin, the two lines to put in the outpost's policy file
+  (`control_plane` and `door_keys`) and the command to run there;
+- **Keys to pin**: the `door_keys` line again, at any time;
+- **Pause** and **Resume** (a paused outpost says so at the top of its page), **Revoke** (final: every
+  instance is revoked) and **Delete**, which the API refuses while the outpost is not revoked or while
+  connectors still route to it: the refusal is shown as the API wrote it, with the connectors it names;
+- **Recent calls**, newest first, with their state and the code of a refusal. Digests only: the platform
+  keeps no arguments and no result of a call.
+
+A deployment where outposts are off, or whose door has no signing key, says which when a creation or a token
+is refused, in the API's own words.
+
+The same from the CLI ([reference](cli.md)):
+
+```bash
+choregos outposts create factory-floor --display-name "Factory floor"
+choregos outposts list
+choregos outposts show factory-floor              # the door_keys line to pin, again
+choregos outposts token factory-floor             # the token, once, with the policy lines and the enrol command
+choregos outposts instances factory-floor         # ids and fingerprints, pending ones first
+choregos outposts revoke-instance factory-floor <instance>
+choregos outposts pause factory-floor             # then resume, revoke (final) and delete
+choregos outposts calls factory-floor --state refused
+```
+
+`choregos outposts approve <slug> <instance> --fingerprint SHA256:…` exists and is refused: the API takes an
+approval from a person's session that carries a recent sign-in, never from an API token, and the CLI holds a
+token. It prints the API's refusal; approve in the console.
+
+**A connector at an outpost** ([ADR 0149](adr/0149-a-tool-may-live-at-an-outpost.md)). In **Administration →
+Connectors**, *Declare a connector* with the type *MCP server at an outpost* asks for three things, and for no
+URL and no secret (the server's address and its credential are in the outpost's policy file):
+
+- **Outpost**, chosen among the organisation's outposts, never typed. Each says whether it is online, paused,
+  or when it was last seen; a revoked outpost, or one not enabled for tools, cannot be chosen. With no outpost
+  yet, the form leads to **Outposts**;
+- **Endpoint**, chosen among the aliases that outpost's approved instances announce from their policy file.
+  While none announces one (an outpost created before its operator started an instance), the alias is typed,
+  and the form says so: an alias, never an address;
+- **Timeout (seconds)**, between 1 and 120, 30 when left empty. It bounds the whole call: the wait for an
+  instance to take it, then the server's answer.
+
+**Edit settings** on the connector shows the same fields, and an edit is judged as a declaration. The card is
+marked *at outpost: factory-floor/tracker*. The API's refusals are shown as it gives them: an outpost the
+organisation does not have is a 422 shown on the *Outpost* field; an outpost that is paused or revoked, or
+outposts switched off, is a 409 `outpost_paused`. **Discover** may also meet `outpost_offline` (no instance that
+serves the alias polled within the poll window), `outpost_refused` (the outpost's own policy refused, with its
+code, such as `unknown_endpoint`) and `outpost_timeout`: each is shown with its code, the outpost, the alias and
+the outpost's own words. When the outposts' quotas refuse a discovery, the 429 says when to try again.
+
+**Where a tool lives, before a run.** An agent's **Access** tab names, for each tool of a connector at an
+outpost, the outpost and the alias, and says *Online* or *Offline*: online when an instance that serves the
+alias polled within the poll window, the presence the call's own route reads. An offline tool's call fails at
+once, so the tab says it before a run does. A paused or revoked outpost says so beside it, and a connector that
+routes to no outpost of the organisation names none. A tool of a direct connector is listed as before.
 
 **Network activity.** What the egress proxy and the runner let through or refused is journaled per run;
 `GET /orgs/{org}/network-activity` (`audit:read`: the organisation's administrators and owners) groups

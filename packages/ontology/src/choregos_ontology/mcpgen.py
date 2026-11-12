@@ -25,6 +25,9 @@ RESERVED_TOOLS = frozenset(
         "get_work_item",
         "summarize_run",
         "list_pending_decisions",
+        # The documentation the image carries (S62-10, ADR 0150).
+        "docs_search",
+        "docs_read",
     }
 )
 RESERVED_LINK_NAMES = frozenset({"search", "get", "aggregate", "describe"})

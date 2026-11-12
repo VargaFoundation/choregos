@@ -84,6 +84,10 @@
   "type": "mcp-gateway"
  },
  {
+  "kind": "mcp",
+  "type": "mcp-outpost"
+ },
+ {
   "kind": "mdm",
   "type": "demo"
  },
@@ -106,6 +110,10 @@
  {
   "kind": "notify",
   "type": "slack"
+ },
+ {
+  "kind": "notify",
+  "type": "teams"
  },
  {
   "kind": "runtime",

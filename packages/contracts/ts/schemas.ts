@@ -103,7 +103,7 @@ export type AssistantKnowledge = {
   upstream?: "follow" | "propose_updates" | "frozen";
 };
 
-export type AssistantTrigger = unknown & unknown;
+export type AssistantTrigger = unknown & unknown & unknown;
 
 export type AssistantTask = unknown;
 
@@ -341,6 +341,225 @@ export type InboundEvent = {
   payload?: {
     [key: string]: unknown;
   };
+};
+
+/** A tool as the MCP client reads a `tools/list` entry. */
+export type OutpostAnswerTool = {
+  name: string;
+  description?: string;
+  input_schema?: {
+    [key: string]: unknown;
+  };
+  /** The server's `annotations.readOnlyHint`; without a declaration a tool is taken for a write. */
+  read_only?: boolean;
+  output_schema?: {
+    [key: string]: unknown;
+  } | null;
+};
+
+/** The JSON-RPC error the endpoint's server answered. */
+export type OutpostAnswerError = {
+  message: string;
+  code?: number | null;
+};
+
+/** What a daemon reports of a call it took to its server, before it seals it to the call's `answer_key` (ADR 0148 §5). An answer says the call passed the outpost's own checks; a call that did not is a refusal (`outpost-refusal.schema.json`), never an answer. */
+export type OutpostAnswer = {
+  /** The call's id. */
+  id: string;
+  /** `result`: the server answered. `error`: it answered a JSON-RPC error, so it says it did not do the call. `unanswered`: the call was sent, or begun, and the daemon holds no answer (a timeout at the endpoint, a lost connection, a restart in the middle, a read abandoned because the door cancelled it): executed or not, nobody knows. `oversized`: the server answered and its result is above the outpost's ceiling or the door's cap; it was executed and its result is not sent. */
+  outcome: "result" | "error" | "unanswered" | "oversized";
+  /** `call_tool`, outcome `result`: the server's result as it answered it (`content`, `structuredContent`, `isError`), untouched. */
+  result?: {
+    [key: string]: unknown;
+  } | null;
+  /** `list_tools`, outcome `result`: the tools the server lists and the outpost's policy lets through. */
+  tools?: Array<OutpostAnswerTool> | null;
+  error?: null | OutpostAnswerError;
+  /** What the outpost read from its own server: the tool does not declare itself read-only. Null for a kind that calls no tool (`list_tools`), and when the outpost did not get that far. */
+  write?: boolean | null;
+  /** The answer comes from the daemon's journal of call ids: the server was not called again (ADR 0149 §5). */
+  replayed?: boolean;
+  duration_ms?: number | null;
+};
+
+/** The asserted names the call carried, as the control plane wrote them: assertions, logged as such (ADR 0147 §6). Only the names this contract lists are kept. */
+export type OutpostAuditLineAsserted = {
+  /** The caller the platform acts for: a run, an action, a person. */
+  sub?: string | null;
+  /** The organisation's slug, for display. */
+  org?: string | null;
+  /** The organisation's id, which survives a rename. */
+  org_id?: string | null;
+  purpose?: string | null;
+  project?: string | null;
+  run?: string | null;
+  work_item?: string | null;
+  agent?: string | null;
+  initiator?: string | null;
+  /** The governed action a write belongs to. */
+  action?: string | null;
+  /** The connector that routed the call. */
+  connector?: string | null;
+  approved_by?: Array<string>;
+};
+
+/** One line of the outpost's own audit log (ADR 0147 §8), a file of JSON lines: one line when an assignment is received, one when it is executed, refused or answered from the journal. It is the operator's record, independent of the platform's, so that the two can be compared. It holds digests, never arguments or results. A call refused for its signature has one line, which says nothing of what the envelope held: it was not opened. */
+export type OutpostAuditLine = {
+  at: string;
+  /** `replayed`: a call id the journal already held got what the journal held; the server was not called again. */
+  event: "received" | "executed" | "refused" | "replayed";
+  call_id: string;
+  /** The pinned key (`door_keys`) that verified the call's signature; null on the line of a call refused `signature_refused`, which no pinned key verified. */
+  signed_by?: string | null;
+  /** Null when the envelope was not opened, or did not open. */
+  kind?: string | null;
+  endpoint?: string | null;
+  tool?: string | null;
+  /** The SHA-256 of the canonical JSON of the arguments (sorted keys, compact separators, UTF-8), lowercase hex: the digest the platform's `tool.called` event keeps for the same call. */
+  arguments_sha256?: string | null;
+  /** What the outpost read from its own server; null when it did not get that far. */
+  write?: boolean | null;
+  /** `executed`: what was reported to the door. `replayed`: what the journal held for the call; null while the call it repeats is still under way and has no answer to replay yet. */
+  outcome?: "result" | "error" | "unanswered" | "oversized" | null;
+  /** `refused`: why. */
+  refusal?: "unknown_endpoint" | "tool_not_allowed" | "write_denied" | "payload_too_large" | "busy" | "endpoint_unavailable" | "cannot_record" | "unsupported_kind" | "signature_refused" | "call_unreadable" | "deadline_passed" | "cancelled" | null;
+  duration_ms?: number | null;
+  asserted?: OutpostAuditLineAsserted;
+};
+
+/** The kinds of protocol 1: a tool call, and a tool listing (discovery). */
+export type OutpostCallKnownKind = "call_tool" | "list_tools";
+
+/** Who the platform says the call is made for: the claims the gateway route signs (ADR 0149 §3). They are assertions of the control plane: an outpost may log them and decides nothing on them (ADR 0147 §6). */
+export type OutpostCallAsserted = {
+  /** The caller the platform acts for: a run, an action, a person. */
+  sub?: string | null;
+  /** The organisation's slug, for display. */
+  org?: string | null;
+  /** The organisation's id, which survives a rename. */
+  org_id?: string | null;
+  purpose?: string | null;
+  project?: string | null;
+  run?: string | null;
+  work_item?: string | null;
+  agent?: string | null;
+  initiator?: string | null;
+  /** The governed action a write belongs to. */
+  action?: string | null;
+  /** The connector that routed the call. */
+  connector?: string | null;
+  approved_by?: Array<string>;
+};
+
+/** A call as the daemon sees it once it has opened the envelope with its sealing key (ADR 0148 §5, ADR 0149). Only `id` and `kind` are common to every kind: a daemon refuses a kind it does not know with `unsupported_kind`, and ignores a field it does not know. The call says nothing of whether the tool writes: the outpost reads that from its own server (ADR 0147 §6). */
+export type OutpostCall = {
+  /** The call's id: the envelope's too, and the associated data it was sealed under. A daemon refuses `call_unreadable` a call whose id is not its envelope's. */
+  id: string;
+  /** `call_tool` or `list_tools` in protocol 1 (`#/$defs/known_kind`). A later kind is refused `unsupported_kind` by a daemon that does not know it. */
+  kind: string;
+  /** The alias of an endpoint in the outpost's policy file. */
+  endpoint?: string | null;
+  /** `call_tool`: the tool's name at the endpoint's server. */
+  tool?: string | null;
+  /** `call_tool`: the arguments, after the platform decided the call. */
+  arguments?: {
+    [key: string]: unknown;
+  } | null;
+  /** The door takes no answer after it, and the outpost makes no call after it; nothing a daemon sends moves it. A daemon judges it by its own clock: `server_time` is not signed, and may bring a deadline closer, never push it away. */
+  deadline?: string | null;
+  /** The X25519 public key the answer is sealed to (raw, base64url without padding). It travels inside the envelope, where no proxy can rewrite it. */
+  answer_key?: string | null;
+  asserted?: OutpostCallAsserted;
+};
+
+/** The protocol versions the door serves; a daemon below `minimum` is refused. */
+export type OutpostEnrolmentAnswerWindow = {
+  current: number;
+  minimum: number;
+};
+
+/** The door's answer to an enrolment (ADR 0147 §4): a pending instance, handed nothing until a person approves it by comparing its fingerprint. A daemon ignores a field it does not know. */
+export type OutpostEnrolmentAnswer = {
+  /** The `kid` of every later signature of this instance. Opaque to a daemon; the door reads in it which outpost the instance is of, before it knows anything else (ADR 0148 §6). */
+  instance_id: string;
+  /** The organisation the token belonged to, for the operator to check. */
+  organisation: string;
+  /** The outpost the token belonged to. */
+  outpost: string;
+  status: "pending";
+  /** `SHA256:` and the unpadded base64url SHA-256 of the raw signing key, as the door computed it: what the console shows, and what the daemon prints from its own key. */
+  fingerprint: string;
+  protocol: OutpostEnrolmentAnswerWindow;
+  server_time: string;
+};
+
+/** The body of `POST /outposts/v1/enrol` (ADR 0148 §3): an enrolment token and the public halves of the keys the instance made on the spot (ADR 0147 §2, §4). The private halves never leave the machine. The request is signed with the key it enrols, which ties the sealing key to the signing key whose fingerprint a person compares. */
+export type OutpostEnrolmentRequest = {
+  /** The protocol the daemon speaks: 1 for this contract. */
+  protocol: number;
+  /** The enrolment token a person created for one outpost: single use, valid 15 minutes at most. Opaque to a daemon; the door reads in it which outpost it is for (ADR 0148 §6). */
+  token: string;
+  /** Ed25519, raw 32 bytes, base64url without padding: verifies every later request of this instance. */
+  signing_key: string;
+  /** X25519, raw 32 bytes, base64url without padding: the calls this instance claims are sealed to it. */
+  sealing_key: string;
+  /** The daemon's own release, as a fact to show. */
+  daemon_version: string;
+  /** What the instance can do. `tools` is the one capability of protocol 1; `runs` is reserved and announced by no daemon of this protocol (ADR 0147 §11, ADR 0149 §12). */
+  capabilities: Array<"tools">;
+  /** Facts about the instance for the person who approves it (a host name, a platform): bounded, stored as data, never interpreted (ADR 0148 §9). */
+  facts?: {
+    [key: string]: string;
+  };
+};
+
+/** One MCP server, reached from the outpost with a credential the outpost holds. */
+export type OutpostPolicyEndpoint = {
+  /** The server's MCP endpoint, known to the outpost only; no credentials, query or fragment. */
+  url: string;
+  /** The credential that opens the endpoint, which exists in the outpost's files only (ADR 0147 §7); absent, the server is called without one. */
+  auth?: {
+    /** `Authorization` sends `Bearer` and the file's content; another name sends the content raw, as the direct `mcp` connector does. */
+    header?: string;
+    /** An absolute path the daemon reads the credential from; its content never leaves the outpost. */
+    from_file: string;
+  } | null;
+  /** The tools a call may name. `*` stands for any run of characters, nothing else is special, and the whole name must match. A tool outside the patterns is refused `tool_not_allowed`; an empty list serves none. */
+  tools: Array<string>;
+  /** `deny` refuses `write_denied` any tool the endpoint's own server does not declare read-only (`readOnlyHint`): whether a tool writes is never read from the call. */
+  writes?: "deny" | "allow";
+  /** Seconds the outpost waits for its server; past it the call is reported `unanswered`. */
+  timeout_s?: number;
+  /** The most a call's arguments, or its result, may weigh, in KiB of JSON: arguments above it are refused `payload_too_large`, a result above it is reported `oversized`. */
+  max_payload_kb?: number;
+};
+
+/** The outpost's own audit log (ADR 0147 §8). */
+export type OutpostPolicyAudit = {
+  /** An absolute path; the daemon appends one JSON line per event (`outpost-audit-line.schema.json`). */
+  file: string;
+};
+
+/** The local policy file of an outpost (ADR 0147 §6): what the daemon `choregos-outpost` checks alone, from a file the control plane cannot write. It pins the keys whose calls the outpost makes (ADR 0148 §13) and holds the only copy of each endpoint's address and credential (ADR 0147 §7). A file without `door_keys` is not a policy: an outpost that cannot check who orders it does not serve. Nothing in it names a project, an agent or a version: those are names the control plane asserts, and a rule on them would stop nobody who holds it. */
+export type OutpostPolicy = {
+  /** The door's origin: scheme and host, with a port if any, and no path. Every connection the outpost opens goes there, and a request's signature binds this origin followed by the verb's path (`outpost-door.yaml`). `http` is for a local bench. */
+  control_plane: string;
+  /** The door's Ed25519 signing keys this outpost obeys, each the unpadded base64url of its 32 raw bytes: a call signed by no key of this list is not made, and its envelope is not opened (ADR 0148 §13). This file is the only place the set lives: nothing the door sends, at enrolment or later, adds a key to it or changes it. More than one key is a rotation under way: the operator adds the next key before the door signs with it. */
+  door_keys: Array<string>;
+  /** The MCP servers this outpost may call, each under the alias a connector names (ADR 0149 §1). An alias the file does not hold is refused `unknown_endpoint`. */
+  endpoints: {
+    [key: string]: OutpostPolicyEndpoint;
+  };
+  /** Calls in progress at once, all endpoints together; beyond it a call is refused `busy`. */
+  concurrency?: number;
+  audit: OutpostPolicyAudit;
+};
+
+/** Why an outpost did not execute a call it received: the body of the door's `refuse` verb. A code from a closed list and nothing else (ADR 0148 §9): it names a class of refusal and never the rule that produced it (ADR 0147 §10). Whatever the code, the endpoint's server did not receive the call. */
+export type OutpostRefusal = {
+  /** `unknown_endpoint`: the policy file has no endpoint under this alias. `tool_not_allowed`: the tool is outside the endpoint's patterns. `write_denied`: the endpoint denies writes and its server does not declare the tool read-only. `payload_too_large`: the arguments weigh more than the endpoint's ceiling. `busy`: the concurrency ceiling is reached, or the outpost is stopping; it also covers a call the daemon claimed and never began because it was stopping or was restarted. `endpoint_unavailable`: the outpost could not reach or open its own server, and sent it nothing. `cannot_record`: the outpost could not write its journal or its audit line, so it did not make the call. `unsupported_kind`: the daemon does not know this kind of call. `signature_refused`: the call is not signed by a key the outpost's policy file pins, or its signature binds another call, another instance or another envelope; the envelope was not opened. `call_unreadable`: the envelope does not open with this instance's key, or what it holds is not a call. `deadline_passed`: the deadline had passed before the outpost could start, or the call's id met an entry of the journal that had lapsed. `cancelled`: the door cancelled the call before the outpost started it. */
+  code: "unknown_endpoint" | "tool_not_allowed" | "write_denied" | "payload_too_large" | "busy" | "endpoint_unavailable" | "cannot_record" | "unsupported_kind" | "signature_refused" | "call_unreadable" | "deadline_passed" | "cancelled";
 };
 
 export type PluginEvalsNeedles = Array<string>;
@@ -1747,6 +1966,13 @@ export type ChoregosContract =
   | Finding
   | HumanDecision
   | InboundEvent
+  | OutpostAnswer
+  | OutpostAuditLine
+  | OutpostCall
+  | OutpostEnrolmentAnswer
+  | OutpostEnrolmentRequest
+  | OutpostPolicy
+  | OutpostRefusal
   | PluginEvals
   | PluginIndex
   | PluginServer

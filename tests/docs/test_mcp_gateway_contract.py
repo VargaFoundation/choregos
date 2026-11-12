@@ -130,23 +130,100 @@ def _409(op_id: str) -> dict[str, Any]:
     raise AssertionError(op_id)
 
 
+def _branches(op_id: str) -> list[dict[str, str]]:
+    """The schemas a 409 of the operation is one of."""
+    found: list[dict[str, str]] = _409(op_id)["content"]["application/problem+json"]["schema"]["oneOf"]
+    return found
+
+
 def test_gateway_conflicts_name_their_code() -> None:
     assert SCHEMAS["McpGatewayConflict"]["properties"]["code"]["enum"] == CODES
     assert SCHEMAS["EgressRequired"]["properties"]["code"]["enum"] == ["egress_required"]
     ref = {"$ref": "#/components/responses/McpGatewayConflict"}
     assert _409("deleteMcpGateway") == ref
-    assert _409("discoverConnectorOperations") == ref
-    both = [
-        {"$ref": "#/components/schemas/EgressRequired"},
-        {"$ref": "#/components/schemas/McpGatewayConflict"},
-    ]
-    for op_id in ("createOrgConnector", "installMcpCatalogueEntry"):
-        assert _409(op_id)["content"]["application/problem+json"]["schema"]["oneOf"] == both, op_id
+    egress = {"$ref": "#/components/schemas/EgressRequired"}
+    gateway = {"$ref": "#/components/schemas/McpGatewayConflict"}
+    # A connector may also be reached through an outpost (ADR 0149 §7, S65-13): where its route is
+    # judged, a 409 is the gateway's or the outpost's, never both.
+    outpost = {"$ref": "#/components/schemas/OutpostConflict"}
+    assert _branches("discoverConnectorOperations") == [gateway, outpost]
+    assert _branches("createOrgConnector") == [egress, gateway, outpost]
+    assert _branches("updateOrgConnector") == [egress, outpost]
+    # The catalogue installs a direct connector or one behind the gateway, never one at an outpost.
+    assert _branches("installMcpCatalogueEntry") == [egress, gateway]
     assert _409("putMcpGateway") == {"$ref": "#/components/responses/EgressRequired"}
     v = _validator("McpGatewayConflict")
     problem = {"type": "about:blank", "title": "Conflict", "status": 409, "code": "gateway_in_use"}
     assert not list(v.iter_errors(problem | {"connectors": ["github"]}))
     assert list(v.iter_errors(problem | {"code": "egress_required"}))
+
+
+def _matching(op_id: str, body: dict[str, Any]) -> list[str]:
+    """The branches of the operation's 409 that `body` satisfies: `oneOf` asks for exactly one."""
+    return [
+        branch["$ref"]
+        for branch in _branches(op_id)
+        if not list(
+            jsonschema.Draft202012Validator({"components": SPEC["components"], **branch}).iter_errors(body)
+        )
+    ]
+
+
+def test_a_refusal_of_an_outpost_matches_the_outpost_conflict_alone() -> None:
+    """What the connector routes answer when the outpost a connector is reached through refuses
+    (ADR 0149 §7, S65-13): the problem the API sends is one branch of each route's 409, and one only."""
+    from choregos_api.errors import conflict
+
+    paused = conflict("x", extra={"code": "outpost_paused", "outpost": "factory-floor"})
+    body = paused.to_problem("/api/v1/orgs/acme/connectors")
+    for op_id in ("createOrgConnector", "updateOrgConnector", "discoverConnectorOperations"):
+        assert _matching(op_id, body) == ["#/components/schemas/OutpostConflict"], op_id
+    refused = conflict(
+        "x",
+        extra={
+            "code": "outpost_refused",
+            "outpost": "factory-floor",
+            "endpoint": "tracker",
+            "refusal": "endpoint_unavailable",
+        },
+    ).to_problem("/api/v1/orgs/acme/connectors/tracker/discover")
+    assert _matching("discoverConnectorOperations", refused) == ["#/components/schemas/OutpostConflict"]
+    for code in ("outpost_offline", "outpost_timeout"):
+        body = conflict("x", extra={"code": code, "outpost": "factory-floor", "endpoint": "tracker"})
+        problem = body.to_problem("/api/v1/orgs/acme/connectors/tracker/discover")
+        assert _matching("discoverConnectorOperations", problem) == ["#/components/schemas/OutpostConflict"]
+    # A refusal the outpost's own policy did not make carries no `refusal` it could not have made.
+    invented = refused | {"refusal": "the rule on line 4"}
+    assert _matching("discoverConnectorOperations", invented) == []
+
+
+def _responses(op_id: str) -> dict[str, Any]:
+    for item in PATHS.values():
+        for op in item.values():
+            if isinstance(op, dict) and op.get("operationId") == op_id:
+                return dict(op["responses"])
+    raise AssertionError(op_id)
+
+
+def test_the_connector_routes_say_what_an_outpost_changes() -> None:
+    """S65-13: a discovery the outposts' quotas do not admit is a 429, and a write operation of a
+    connector at an outpost is opened only under the at-most-once rule (422, ADR 0149 §5-6); what the
+    rule asks of whoever opens it is S65-14's (`test_action_in_doubt_contract.py`)."""
+    assert "429" in _responses("discoverConnectorOperations")
+    assert _responses("updateConnectorOperation")["422"] == {"$ref": "#/components/responses/ValidationError"}
+    described = {
+        op["operationId"]: " ".join(str(op.get("description", "")).split())
+        for item in PATHS.values()
+        for op in item.values()
+        if isinstance(op, dict) and "operationId" in op
+    }
+    rule = described["updateConnectorOperation"]
+    assert "`mcp-outpost`" in rule and "at most once" in rule and "ADR 0149" in rule
+    listing = described["discoverConnectorOperations"]
+    for code in ("outpost_paused", "outpost_offline", "outpost_refused", "outpost_timeout"):
+        assert f"`{code}`" in listing, code
+    assert "`outpost_paused`" in described["createOrgConnector"]
+    assert "`outpost_paused`" in described["updateOrgConnector"]
 
 
 def test_catalogue_entries_say_their_routes_and_installs_take_one() -> None:
@@ -172,15 +249,8 @@ def test_a_problem_body_the_api_sends_matches_the_gateway_conflict_alone() -> No
     body = conflict("x", extra={"code": "gateway_required"}).to_problem("/api/v1/orgs/acme/connectors")
     assert body["instance"] == "/api/v1/orgs/acme/connectors"
     assert not list(_validator("McpGatewayConflict").iter_errors(body))
-    branches = _409("createOrgConnector")["content"]["application/problem+json"]["schema"]["oneOf"]
-    matching = [
-        branch["$ref"]
-        for branch in branches
-        if not list(
-            jsonschema.Draft202012Validator({"components": SPEC["components"], **branch}).iter_errors(body)
-        )
-    ]
-    assert matching == ["#/components/schemas/McpGatewayConflict"]
+    for op_id in ("createOrgConnector", "discoverConnectorOperations"):
+        assert _matching(op_id, body) == ["#/components/schemas/McpGatewayConflict"], op_id
     # `errors` and `retry_after` are members the API may add to any problem.
     fuller = body | {"errors": [{"loc": ["body"], "msg": "m"}], "retry_after": 3}
     assert not list(_validator("McpGatewayConflict").iter_errors(fuller))

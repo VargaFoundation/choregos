@@ -28,3 +28,6 @@ class EgressSettings(BaseSettings):
     #: Seconds a client has to send its request head.
     head_timeout_s: float = Field(default=30, gt=0)
     connect_timeout_s: float = Field(default=10, gt=0)
+    #: The proxy's own key, sent with every report (ADR 0145, `CHOREGOS_EGRESS_REPORT_KEY`): the
+    #: API's copy of it, never a run's pod.
+    report_key: str = ""

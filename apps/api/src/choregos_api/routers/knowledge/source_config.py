@@ -9,10 +9,12 @@ from urllib.parse import urlsplit
 
 import httpx
 from choregos_adapters.registry import fakes_enabled
+from choregos_contracts import Role
 from choregos_core.outbound_proxy import OutboundProxyError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ...config import get_settings
 from ...db.models import (
     KnowledgeBase,
     KnowledgeSource,
@@ -20,12 +22,14 @@ from ...db.models import (
     OrgConnector,
 )
 from ...deps import Me
-from ...errors import not_found, unprocessable
+from ...errors import conflict, forbidden, not_found, unprocessable
 from ...knowledge.sync import CONNECTED_KINDS, OPTIONALLY_CONNECTED, SOURCE_CONNECTOR_TYPES
 from ...secret_store import resolved_configuration
 from ...services.egress import egress_scope, ensure_or_409, knowledge_source_targets, targets_of_connector
+from ...services.github_app import claimed_installation_for, implicit_claim_enabled
 from ...services.outbound_proxy import proxy_scope
 from ...services.platform_network import check_platform_host
+from ...services.template_knowledge import github_repository
 from ...temporal import get_temporal, knowledge_sync_id
 
 _HTTPS = ("https://",)
@@ -378,3 +382,62 @@ async def _start_sync_loop(org: str, source: KnowledgeSource) -> None:
         knowledge_sync_id(source.id),
         {"org": org, "source_id": source.id, "interval_seconds": source.interval_minutes * 60},
     )
+
+
+async def checked_github_app(
+    session: AsyncSession,
+    principal: Me,
+    organisation: Organization,
+    kind: str,
+    connector: str | None,
+    asked: dict[str, object],
+    checked: dict[str, object],
+    previous: dict[str, object] | None = None,
+) -> dict[str, object]:
+    """`checked` with `github_app: true` when it may carry it, without the key otherwise.
+
+    The sync reads such a source through the deployment's GitHub App (`github_app_credential`): a
+    one-hour token, `contents: read`, scoped to the repository, only through the installation THIS
+    organisation claimed on the repository's owner (ADR 0073, ADR 0117 amendment). The App reads every
+    repository it is installed on, so asking for it is an organisation administrator's decision (403),
+    on a GitHub repository (422) of a source with no connector (422) whose owner the organisation
+    claimed (409). A single-organisation instance (`implicit_claim_enabled`) needs no claim, exactly
+    as the sync does. `asked` is what the person sent (the validators drop what they do not know);
+    without the key, what `previous` had stays while the URL does; `false` removes it. What a source
+    already had is not a new grant: an editor may change its `ref` and keep it."""
+    flag = asked.get("github_app")
+    if flag is not None and not isinstance(flag, bool):
+        raise unprocessable("`github_app` is true or false")
+    url = str(checked.get("url") or "")
+    kept = bool(previous and previous.get("github_app") and previous.get("url") == url)
+    if not (kept if flag is None else flag):
+        return checked
+    if kept:
+        return {**checked, "github_app": True}
+    if kind != "git" or connector:
+        raise unprocessable(
+            "`github_app` reads a git repository with the deployment's GitHub App: "
+            "it is for a git source that names no connector"
+        )
+    repository = github_repository(url)
+    if repository is None:
+        raise unprocessable(f"`{url}` is not a github.com repository: the GitHub App cannot read it")
+    if principal.org_roles.get(organisation.slug) != Role.ORG_ADMIN:
+        raise forbidden(
+            "reading a repository through the GitHub App is decided by an administrator of "
+            f"{organisation.slug} (the App reads every repository it is installed on): ask one"
+        )
+    settings = get_settings()
+    if not (settings.github_app_id and settings.github_app_private_key):
+        raise conflict(
+            "this deployment has no GitHub App (CHOREGOS_GITHUB_APP_ID): name a `documents/git` connector"
+        )
+    owner = repository.split("/", 1)[0]
+    if await claimed_installation_for(
+        session, organisation.id, owner
+    ) is None and not await implicit_claim_enabled(session):
+        raise conflict(
+            f"{organisation.slug} has not claimed a GitHub App installation on `{owner}`: "
+            f"install the App on `{owner}` from Settings, Connections, GitHub, then ask again"
+        )
+    return {**checked, "github_app": True}

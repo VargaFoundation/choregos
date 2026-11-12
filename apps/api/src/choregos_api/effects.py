@@ -27,8 +27,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .db.models import Action, ConnectorOperation, OrgConnector, Project
-from .services.mcp_gateway import route_of
-from .services.mcp_gateway_identity import GatewayRefusal
+from .services.mcp_gateway import RouteRefusal, route_of
 from .services.platform_network import PlatformNetworkRefused, enforce_connector_call
 
 
@@ -119,10 +118,11 @@ async def _connector_call(ctx: EffectContext, params: dict[str, Any]) -> dict[st
 async def _within_the_network_bounds(ctx: EffectContext, instance: OrgConnector, label: str) -> None:
     """The organisation's network bounds are read again at the moment of the call (ADR 0070): they
     may have been tightened since the action was approved. A refusal is final, the action compensates."""
-    # ADR 0105: the route first (mode `required`, `off`, no gateway: final), then the host it reaches.
+    # ADR 0105, ADR 0149: the route first (mode `required`, `off`, no gateway; an outpost that is paused
+    # or revoked: final), then the host it reaches, when it reaches one.
     try:
         route = await route_of(ctx.session, instance)
-    except GatewayRefusal as refusal:
+    except RouteRefusal as refusal:
         raise EffectRefused(f"{label} : {refusal}") from refusal
     try:
         await enforce_connector_call(
@@ -184,8 +184,9 @@ async def _call_the_connector(ctx: EffectContext, params: dict[str, Any]) -> dic
     await _within_the_network_bounds(ctx, instance, f"{name}/{operation}")
     try:
         # A gateway connector (ADR 0105) goes through the gateway, signed with the action's identity and
-        # its approvers; a plugin's server (ADR 0096), its Service; any other, its type's adapter. A
-        # `GatewayRefusal` is an `AdapterError`: the clause below makes it a final refusal, no retry.
+        # its approvers; a connector at an outpost (ADR 0149), through that outpost's rendezvous; a
+        # plugin's server (ADR 0096), its Service; any other, its type's adapter. A `GatewayRefusal` and
+        # an outpost's refusal are `AdapterError`s: the clause below makes each a final refusal, no retry.
         client: Any = await connector_client(
             ctx.session,
             instance,

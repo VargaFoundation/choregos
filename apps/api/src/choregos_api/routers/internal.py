@@ -45,7 +45,7 @@ from ..db.models import (
 )
 from ..db.models import Finding as FindingRow
 from ..db.session import allow_release_during_calls, outside_the_transaction
-from ..deps import Db, GatewayAuth, NetworkAuth, OpenNetworkAuth, OpenRunAuth, RunAuth
+from ..deps import Db, GatewayAuth, OpenNetworkAuth, OpenRunAuth, ReportAuth, RunAuth
 from ..errors import ApiError, conflict, not_found, unprocessable
 from ..logging import get_logger
 from ..object_store import object_store
@@ -222,7 +222,7 @@ async def get_run_network(id: str, session: Db, claims: OpenNetworkAuth) -> RunN
     operation_id="postRunNetworkDecisions",
 )
 async def post_network_decisions(
-    id: str, body: NetworkDecisionBatch, session: Db, claims: NetworkAuth
+    id: str, body: NetworkDecisionBatch, session: Db, claims: ReportAuth
 ) -> dict[str, int]:
     """What the proxy or the runner let through or refused: cumulative totals, replay-safe. It is
     a journal: a closed run's decisions are accepted too (ADR 0143). A session's decisions are not

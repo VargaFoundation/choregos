@@ -240,6 +240,12 @@ async def record_inline_outputs(
             log.warning("output under a reserved name not recorded", work_item=item.tracker_key, name=name)
             continue
         declared = (types or {}).get(name)
+        if declared in ARTIFACT_TYPES and not ARTIFACT_TYPES[declared].inline:
+            # A file-typed output is the file the agent wrote in `.choregos/outputs/` (ADR 0049); an
+            # inline value under its name (often the file's path) would become its latest revision
+            # and hide the file.
+            log.warning("inline value of a file output not recorded", work_item=item.tracker_key, name=name)
+            continue
         display = displays.get(name) or resolve_display(name)
         if display is None and declared in CHECKED_TYPES:
             display = ArtifactDisplay(type=declared)

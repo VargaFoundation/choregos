@@ -11,6 +11,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from choregos_contracts.outpost import ENDPOINT_ALIAS_PATTERN, OUTPOST_SLUG_PATTERN
+
 from .errors import AdapterError, ConfigurationError
 from .families import FAMILIES as _FAMILIES
 from .families import OPERATIONS_MARKETDATA as _OPERATIONS_MARKETDATA
@@ -70,6 +72,73 @@ def _mcp_gateway_check(config: dict[str, Any]) -> None:
             "it stores only `server` and `timeout_s`; the organisation's MCP gateway holds the "
             "server's address and credential, and the platform supplies the rest"
         )
+
+
+#: The `mcp-outpost` connector type: a tool server that lives at an outpost (ADR 0149 §1).
+MCP_OUTPOST_TYPE = "mcp-outpost"
+#: The only keys a stored `mcp-outpost` configuration may hold; every other key is the platform's.
+_OUTPOST_STORED_KEYS = ("outpost", "endpoint", "timeout_s")
+_OUTPOST_TIMEOUT_S = (1, 120)
+_OUTPOST_ONLY_PLATFORM = (
+    "an `mcp-outpost` connector is reached through its outpost's rendezvous, which only the platform "
+    "supplies: it cannot be built from its configuration alone"
+)
+#: The declared schema is the contract's `McpOutpostConnectorConfig`, closed: an outpost's name and an
+#: endpoint alias, no URL and no secret field (ADR 0147 §7).
+_OUTPOST_CONFIGURATION: dict[str, Any] = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["outpost", "endpoint"],
+    "properties": {
+        "outpost": {
+            "type": "string",
+            "pattern": OUTPOST_SLUG_PATTERN,
+            "description": "an outpost of the same organisation",
+        },
+        "endpoint": {
+            "type": "string",
+            "pattern": ENDPOINT_ALIAS_PATTERN,
+            "description": "the alias of an endpoint in that outpost's policy file",
+        },
+        "timeout_s": {
+            "type": "number",
+            "minimum": _OUTPOST_TIMEOUT_S[0],
+            "maximum": _OUTPOST_TIMEOUT_S[1],
+            "default": 30,
+            "description": "seconds before a call is abandoned, the wait for an instance to claim it "
+            "included",
+        },
+    },
+}
+
+
+def _mcp_outpost_check(config: dict[str, Any]) -> None:
+    """A stored configuration: an outpost's name, an endpoint alias and a timeout, nothing else. The
+    address and the credential are the outpost's and exist in its policy file only (ADR 0147 §7)."""
+    extra = sorted(str(key) for key in config if key not in _OUTPOST_STORED_KEYS)
+    if extra:
+        raise AdapterError(
+            f"{', '.join(f'`{key}`' for key in extra)} has no place in an `mcp-outpost` connector: it "
+            "stores only `outpost`, `endpoint` and `timeout_s`; the server's address and its credential "
+            "are the outpost's and live in its policy file, and the platform supplies the rest"
+        )
+    outpost, endpoint = config.get("outpost"), config.get("endpoint")
+    if not isinstance(outpost, str) or not re.fullmatch(OUTPOST_SLUG_PATTERN, outpost):
+        raise AdapterError(
+            "`outpost` is the name of an outpost of the organisation: lowercase letters, digits or '-', "
+            "63 at most"
+        )
+    if not isinstance(endpoint, str) or not re.fullmatch(ENDPOINT_ALIAS_PATTERN, endpoint):
+        raise AdapterError(
+            "`endpoint` is the alias of an endpoint in the outpost's policy file, never an address: a "
+            "lowercase letter, then lowercase letters, digits or '-', 63 at most"
+        )
+    timeout = config.get("timeout_s")
+    low, high = _OUTPOST_TIMEOUT_S
+    if timeout is not None and (
+        isinstance(timeout, bool) or not isinstance(timeout, int | float) or not low <= timeout <= high
+    ):
+        raise AdapterError(f"`timeout_s` is a number of seconds between {low} and {high}")
 
 
 def _firecrawl_check(config: dict[str, Any]) -> None:
@@ -783,11 +852,30 @@ _SHIPPED_SPECS: dict[tuple[str, str], ConnectorTypeSpec] = {
         egress=lambda config: [],
         check_config=_mcp_gateway_check,
     ),
+    # A tool server that lives where the platform cannot reach (ADR 0149): no URL, no secret field, no
+    # host of its own. The platform opens no connection for it, so it declares no egress.
+    ("mcp", MCP_OUTPOST_TYPE): ConnectorTypeSpec(
+        "MCP server at an outpost",
+        ("mcp",),
+        _OUTPOST_CONFIGURATION,
+        (),
+        egress=lambda config: [],
+        check_config=_mcp_outpost_check,
+    ),
     ("notify", "slack"): ConnectorTypeSpec(
         "Slack",
         ("notify",),
         _object_schema({"channel": {"type": "string", "default": "#choregos"}, "public_url": _TEXT}),
         ("webhook_url", "bot_token"),
+    ),
+    # The URL is the credential: a sealed secret, never a configuration value. The host is not known
+    # until it is resolved, so the organisation's list opens it when the first card is refused.
+    ("notify", "teams"): ConnectorTypeSpec(
+        "Microsoft Teams (incoming webhook or Workflows URL)",
+        ("notify",),
+        _object_schema({}),
+        ("webhook_url",),
+        egress=lambda cfg: [],
     ),
     # SMTP does not go through the httpx egress guard: the spec declares its egress, and the
     # operator's network policy must open it.

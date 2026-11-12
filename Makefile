@@ -88,6 +88,20 @@ plugins-check:  ## No network: the archives of plugins/offline/ are what plugins
 docs-cli:  ## Regenerate docs/cli.md and docs/site/cli/reference.md from the CLI (to commit)
 	$(UV) run python tools/gen_cli_reference.py
 
+# The native CLI binary of this machine (S62-07, `tools/cli_binary/`): on Linux in the manylinux_2_28
+# image (docker), as the release builds it; elsewhere with this machine's compiler.
+CLI_BINARY_FLAGS ?= $(if $(filter Linux,$(shell uname -s)),--manylinux,)
+
+.PHONY: cli-binary
+cli-binary:  ## Build the native `choregos` binary of this machine into dist/cli/ (Nuitka)
+	python3 tools/cli_binary/build.py $(CLI_BINARY_FLAGS)
+
+.PHONY: cli-binary-smoke
+cli-binary-smoke:  ## Smoke-test it where no Python is available (Linux: also in debian:bookworm-slim)
+	python3 tools/cli_binary/smoke.py dist/cli/$$(python3 -c "import sys; sys.path.insert(0, 'tools/cli_binary'); import build; print(build.file_name(*build.host_target()))") \
+	  --expect-version $$(sed -n 's/^version = "\(.*\)"$$/\1/p' packages/cli/pyproject.toml) \
+	  $(if $(filter Linux,$(shell uname -s)),--container debian:bookworm-slim,)
+
 .PHONY: headroom-lock
 # certifi is exempt from the 14 days: 2026.10.19 removes root CAs with compromised keys
 # (GHSA-6q48-6c7w-9gw2, CRITICAL, #856), and Trivy refuses the image without it. The exemption
@@ -147,6 +161,12 @@ charts-lint:  ## helm lint + kubeconform (skipped if helm is missing)
 	@command -v kubeconform >/dev/null 2>&1 \
 		&& helm template choregos charts/choregos --set choregos-orchestrator.runner.skipOperatorCheck=true | kubeconform -strict -ignore-missing-schemas -summary \
 		|| echo "kubeconform is missing — schema validation skipped"
+	@# The outpost's chart (S65-16), beside the platform's: it renders nothing without a policy, so it
+	@# is linted and validated on its complete example.
+	helm lint charts/choregos-outpost -f charts/choregos-outpost/values/example.yaml
+	@if command -v kubeconform >/dev/null 2>&1; then \
+	  helm template outpost charts/choregos-outpost -f charts/choregos-outpost/values/example.yaml | kubeconform -strict -ignore-missing-schemas -summary; \
+	else echo "kubeconform is missing — schema validation skipped"; fi
 
 .PHONY: charts-test
 charts-test:  ## helm unittest
@@ -189,10 +209,11 @@ policies-test:  ## The Kyverno engine judges infra/policies against infra/polici
 # `--target` is not optional on `api.Dockerfile`: without it, Docker builds the last stage of
 # the file, which is `worker`.
 .PHONY: images
-images:  ## Build the platform's five images locally (tag `:dev`)
+images:  ## Build the platform's five images and the outpost daemon's locally (tag `:dev`)
 	docker build -f docker/api.Dockerfile    --target api    -t choregos-api:dev .
 	docker build -f docker/api.Dockerfile    --target worker -t choregos-orchestrator:dev .
 	docker build -f docker/tools.Dockerfile                  -t choregos-tools:dev .
+	docker build -f docker/outpost.Dockerfile                -t choregos-outpost:dev .
 	docker build -f docker/web.Dockerfile                    -t choregos-web:dev .
 	docker build -f docker/runner.Dockerfile                 -t choregos-runner:dev .
 

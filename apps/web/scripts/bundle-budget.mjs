@@ -44,11 +44,16 @@ const CHUNKS = join(process.cwd(), ".next", "static", "chunks");
 // to 2339 kB, with no new dependency.
 // 2026-11-11 (S63 waves E and F): 2350 -> 2375 kB. The memory export and owners' memory, the action's diff, the
 // richer configuration forms and the embedded token bring 2350 kB (shared JSX already folded): no headroom left.
-// 2026-11-11 (S64-06, S64-07, S64-08): 2375 -> 2400 kB. Main measures 2350 kB with the assistants. S64-06 adds the
-// Activity screen, the agent's stop and the work item's stop reason (15 kB; the project's Activity entry links to
-// `/activity?project=` instead of a second route, which saved 8 kB), S64-07's tokens-and-cost panel 5 kB and
-// S64-08's run Context card 4 kB: about 2374 kB together. No new dependency in any of them.
-const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2400);
+// 2026-11-11 (S62-11): 2375 -> 2400 kB. The A2A page of Integrations (four steps, the snippet builder and its
+// name list), the Help entry and the "Learn more" links add 19 kB: 2369 kB with the assistants, no new
+// dependency. S62-08's CLI page, written the same day, adds 6 kB more: the two together would sit at 2375.
+// 2026-11-12 (S65-17a): 2400 -> 2425 kB. Main at cb4d94d4c measures 2383 kB; the Outposts pages (the list, and
+// one outpost with its instances and their approval, the enrolment, the keys to pin and the recent calls) and
+// their twelve client operations bring 29 kB: 2412 kB, with no new dependency.
+// 2026-11-12 (S64-06, S64-07, S64-08): 2425 -> 2450 kB. S64 adds the Activity screen, the agent's stop and the work
+// item's stop reason (15 kB), the tokens-and-cost panel (5 kB) and the run's Context card (4 kB): about 24 kB on top
+// of main's 2412 kB, with no new dependency.
+const TOTAL_MAX_KB = Number(process.env.BUNDLE_TOTAL_MAX_KB ?? 2450);
 const CHUNK_MAX_KB = Number(process.env.BUNDLE_CHUNK_MAX_KB ?? 600);
 
 function* files(dir) {

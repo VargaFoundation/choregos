@@ -95,6 +95,26 @@ def test_enabled_tells_the_runners_to_authenticate_and_carries_the_deployments_d
     ]
 
 
+def test_the_proxys_report_key_goes_to_the_api_and_the_proxy_and_to_no_run() -> None:
+    """ADR 0145: the agent inherits what a run's pod receives, so the key must reach no run's pod."""
+    docs = _docs("global.egress.enabled=true", "global.devSecrets=true")
+    holders = {
+        key for key, doc in docs.items() if key[0] != "Secret" and "egress-report-key" in json.dumps(doc)
+    }
+    assert holders == {("Deployment", "choregos-api"), ("Deployment", "choregos-egress")}
+    for name in ("choregos-api", "choregos-egress"):
+        containers = docs[("Deployment", name)]["spec"]["template"]["spec"]["containers"]
+        refs = [
+            v["valueFrom"]["secretKeyRef"]
+            for c in containers
+            for v in c.get("env", [])
+            if v["name"] == "CHOREGOS_EGRESS_REPORT_KEY"
+        ]
+        assert refs == [{"name": "choregos-api-secrets", "key": "egress-report-key", "optional": True}], name
+    # A bench draws one, as it draws the other application secrets.
+    assert docs[("Secret", "choregos-api-secrets")]["stringData"]["egress-report-key"]
+
+
 def test_the_guard_refuses_a_proxy_nobody_would_use() -> None:
     refused = _render("global.egress.enabled=true", "choregos-orchestrator.runner.egressProxy=")
     assert refused.returncode != 0
