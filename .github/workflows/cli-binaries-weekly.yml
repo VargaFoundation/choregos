@@ -13,9 +13,6 @@ on:
   schedule:
     - cron: "17 4 * * 1"
   workflow_dispatch:
-  # TEMPORARY: one trial run on this branch before the workflow exists on main; removed next commit.
-  push:
-    branches: [ci/cli-binaries-weekly]
 
 permissions:
   contents: read
