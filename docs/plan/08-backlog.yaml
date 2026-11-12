@@ -4719,7 +4719,7 @@ stories:
     priority: 1
     size: S
     depends_on: [S64-04, S64-05, S64-09a]
-    notes: "Installation.stopped (migration), the derived status reads it first; conversation.cancel_requested_at read by the turn between model and tool calls; kind=turn and the assistant filter in the activity list."
+    notes: "Installation.stopped (migration), the derived status reads it first; agent_sessions.turn_cancel_requested_at (S63-23) read by the turn between model and tool calls; kind=turn and the assistant filter in the activity list."
   - id: S64-09d
     title: "feat(web): an assistant's tokens, its turns on the Activity screen, its stop and resume"
     stream: S64

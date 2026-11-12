@@ -19,7 +19,9 @@ one turn at a time, and cancelling the one that runs.
   by its lease, sets `turn_cancel_requested_at` on the conversation's row and waits for the lease to end; the
   replica that runs the turn polls that flag every `CANCEL_POLL_S` (`watch_cancel`) and cancels its task,
   which settles as a local cancel does (tool calls stay journaled, the key revoked, the spend booked).
-  SQLite has one process: it keeps the in-process path only.
+  The turn itself also reads that flag before each model call and each tool call (`cancel_if_requested`,
+  S64-09c): a stop of its assistant or of its agent (ADR 0142 §4 bis) writes it, on any database, and the
+  turn ends at its next call even when no poller runs (SQLite).
 """
 
 from __future__ import annotations
@@ -231,6 +233,22 @@ async def watch_cancel(conversation_id: str, task: asyncio.Task[Any]) -> None:
         if asked is not None and not task.done():
             task.cancel()
             return
+
+
+async def cancel_if_requested(session: AsyncSession, record: AgentSessionRecord) -> None:
+    """Between a turn's calls: raises `CancelledError` when a cancel was asked on the conversation's row
+    (another replica, a stop of its assistant or its agent), so the turn settles as a cancelled one. A
+    session that is not a conversation has no turn to cancel."""
+    if record.kind != "conversation":
+        return
+    asked = (
+        await session.execute(
+            select(AgentSessionRecord.turn_cancel_requested_at).where(AgentSessionRecord.id == record.id)
+        )
+    ).scalar_one_or_none()
+    if asked is not None:
+        log.info("conversation.turn_cancel_read", session_id=record.id)
+        raise asyncio.CancelledError("the turn's cancel was requested")
 
 
 async def clear_cancel_request(session: AsyncSession, conversation_id: str) -> None:
